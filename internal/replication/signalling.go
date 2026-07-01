@@ -31,9 +31,7 @@ func (s *ControlSignal) IsSnapshot() bool {
 
 // TableNames extracts the table name portion from each DataCollections entry that
 // belongs to the given schema. Entries for a different schema are skipped. If
-// DataCollections is empty, nil is returned. Unlike FilterTables, the returned
-// names are not constrained to a pre-existing list, so they may include tables
-// that are not tracked by the replication slot publication.
+// DataCollections is empty, nil is returned.
 func (s *ControlSignal) TableNames(schema string) []string {
 	if len(s.DataCollections) == 0 {
 		return nil
@@ -50,34 +48,6 @@ func (s *ControlSignal) TableNames(schema string) []string {
 		tables = append(tables, table)
 	}
 	return tables
-}
-
-// FilterTables returns the subset of tables from the provided list that appear
-// in DataCollections for the given schema. Matching is case-insensitive.
-// If DataCollections is empty, all tables are returned unchanged.
-func (s *ControlSignal) FilterTables(schema string, tables []string) []string {
-	if len(s.DataCollections) == 0 {
-		return tables
-	}
-	target := make(map[string]struct{}, len(s.DataCollections))
-	for _, dc := range s.DataCollections {
-		// DataCollections entries are "schema.table"; strip the schema prefix.
-		table := dc
-		if idx := strings.LastIndex(dc, "."); idx >= 0 {
-			if !strings.EqualFold(dc[:idx], schema) {
-				continue
-			}
-			table = dc[idx+1:]
-		}
-		target[strings.ToLower(table)] = struct{}{}
-	}
-	filtered := make([]string, 0, len(tables))
-	for _, t := range tables {
-		if _, ok := target[strings.ToLower(t)]; ok {
-			filtered = append(filtered, t)
-		}
-	}
-	return filtered
 }
 
 // Signaller detects and communicates signal events from a configured signal channel.
