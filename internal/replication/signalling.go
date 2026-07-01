@@ -13,9 +13,6 @@ import (
 	"strings"
 )
 
-// DefaultSignalTableName is the default name of the table used to send signals to the connector.
-var DefaultSignalTableName = "rpcn_signal_table"
-
 // ControlSignal represents a insert into the signal table.
 type ControlSignal struct {
 	ID              string

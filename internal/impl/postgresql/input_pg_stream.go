@@ -192,11 +192,14 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 		).
 			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
 			Advanced().
-			Optional()).
+			Optional(),
+		).
 		Field(service.NewStringField(fieldSignalTableName).
 			Description("The name of the table used to send signals to the connector, such as triggering a re-snapshot. The table must exist in the schema configured via the `schema` field.").
-			Default(replication.DefaultSignalTableName).
-			Advanced()).
+			Default("").
+			Advanced().
+			Version("4.99.0"),
+		).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
