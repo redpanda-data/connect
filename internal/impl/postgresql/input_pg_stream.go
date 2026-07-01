@@ -195,7 +195,40 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Optional(),
 		).
 		Field(service.NewStringField(fieldSignalTableName).
-			Description("The name of the table used to send signals to the connector, such as triggering a re-snapshot. The table must exist in the schema configured via the `schema` field.").
+			Description(`The name of the table used to send control signals to the connector. The table must
+exist in the schema configured via the ` + "`schema`" + ` field and must have exactly these columns:
+
+- **id** — any type representable as a string (e.g. ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
+- **type** — ` + "`VARCHAR`" + ` — the signal type (see supported signals below)
+- **data** — ` + "`TEXT`" + ` — a JSON object containing signal parameters
+
+Create the table with:
+
+` + "```sql" + `
+CREATE TABLE <schema>.<signal_table_name> (
+    id   SERIAL PRIMARY KEY,
+    type VARCHAR(32),
+    data TEXT
+);
+` + "```" + `
+
+**Supported signals**
+
+**` + "`execute-snapshot`" + `** — triggers a re-snapshot of one or more tables without dropping the
+replication slot. The ` + "`data`" + ` column must contain a JSON object with an optional
+` + "`data-collections`" + ` key listing fully-qualified tables (` + "`schema.table`" + `) to snapshot. If
+` + "`data-collections`" + ` is omitted or empty, all configured tables are re-snapshotted.
+
+` + "```sql" + `
+-- Re-snapshot specific tables:
+INSERT INTO dbo.rpcn_signal_table (type, data)
+VALUES ('execute-snapshot', '{"data-collections": ["dbo.events", "dbo.products"]}');
+
+-- Re-snapshot all configured tables:
+INSERT INTO dbo.rpcn_signal_table (type, data)
+VALUES ('execute-snapshot', '{}');
+` + "```").
+			Example("rpcn_signal_table").
 			Default("").
 			Advanced().
 			Version("4.99.0"),
