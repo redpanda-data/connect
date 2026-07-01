@@ -99,6 +99,7 @@ input:
       role: "" # No default (optional)
       role_external_id: "" # No default (optional)
       roles: [] # No default (optional)
+    signal_table_name: ""
     auto_replay_nacks: true
     batching:
       count: 0
@@ -560,6 +561,16 @@ Optional external ID for the role assumption.
 *Type*: `string`
 
 *Default*: `""`
+
+=== `signal_table_name`
+
+The name of the table used to send signals to the connector, such as triggering a re-snapshot. The table must exist in the schema configured via the `schema` field.
+
+
+*Type*: `string`
+
+*Default*: `""`
+Requires version 4.99.0 or newer
 
 === `auto_replay_nacks`
 
