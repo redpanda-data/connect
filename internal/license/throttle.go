@@ -49,41 +49,51 @@ func newThrottler(res *service.Resources, direction string) *Throttler {
 // registered component name (e.g. "sap_hana") used in the throttle warning.
 // If the cap is reached, a WARN is logged once and the metric is set to 1
 // until throughput drops back below the limit.
+//
+// Oversized batches (n > burst) are billed in burst-sized chunks so that the
+// full byte count is always charged — batching larger cannot bypass the cap.
 func (t *Throttler) Wait(ctx context.Context, n int, connector string) error {
 	if n <= 0 {
 		return nil
 	}
-	// Cap n to burst to avoid a panic in ReserveN when a single batch exceeds
-	// the 30 MB window. Very large batches are undercharged slightly; the cap
-	// remains effective at sustained rates.
-	if n > testLicenseBurstBytes {
-		n = testLicenseBurstBytes
+
+	anyDelay := false
+	for n > 0 {
+		charge := n
+		if charge > testLicenseBurstBytes {
+			charge = testLicenseBurstBytes
+		}
+		n -= charge
+
+		r := t.limiter.ReserveN(time.Now(), charge)
+		delay := r.Delay()
+		if delay <= 0 {
+			continue
+		}
+
+		anyDelay = true
+		if t.throttling.CompareAndSwap(false, true) {
+			t.logger.Warnf("Throughput cap reached under embedded test license (1 MB/s). Throttling enterprise %s %q. Apply a production license to remove the cap: https://docs.redpanda.com/redpanda-connect/get-started/licensing/", t.direction, connector)
+			t.throttleGauge.Set(1)
+		}
+
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			r.Cancel()
+			if t.throttling.CompareAndSwap(true, false) {
+				t.throttleGauge.Set(0)
+			}
+			return ctx.Err()
+		}
 	}
 
-	r := t.limiter.ReserveN(time.Now(), n)
-	delay := r.Delay()
-	if delay <= 0 {
+	if !anyDelay {
 		if t.throttling.CompareAndSwap(true, false) {
 			t.throttleGauge.Set(0)
 		}
-		return nil
 	}
-
-	if t.throttling.CompareAndSwap(false, true) {
-		t.logger.Warnf("Throughput cap reached under embedded test license (1 MB/s). Throttling enterprise %s %q. Apply a production license to remove the cap: https://docs.redpanda.com/redpanda-connect/get-started/licensing/", t.direction, connector)
-		t.throttleGauge.Set(1)
-	}
-
-	select {
-	case <-time.After(delay):
-		return nil
-	case <-ctx.Done():
-		r.Cancel()
-		if t.throttling.CompareAndSwap(true, false) {
-			t.throttleGauge.Set(0)
-		}
-		return ctx.Err()
-	}
+	return nil
 }
 
 // throttledBatchOutput wraps a service.BatchOutput and enforces the dev
