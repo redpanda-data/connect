@@ -36,12 +36,6 @@ func TestIntegrationSignallingConfiguration(t *testing.T) {
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
 
-	var elements []any
-	elements = append(elements,
-		map[string]any{"operation": "read", "table": "events"},
-		map[string]any{"operation": "read", "table": "events"},
-	)
-
 	template := fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
