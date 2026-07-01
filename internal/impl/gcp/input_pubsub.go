@@ -21,7 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/iam/apiv1/iampb"
+	"cloud.google.com/go/pubsub/v2"
+	"cloud.google.com/go/pubsub/v2/apiv1/pubsubpb"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -124,8 +126,9 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Example("us-west3-pubsub.googleapis.com:443").
 				Default(""),
 			service.NewBoolField(pbiFieldSync).
-				Description("Enable synchronous pull mode.").
-				Default(false),
+				Description("Enable synchronous pull mode. This field is deprecated and no longer has any effect: the underlying GCP Pub/Sub client only supports streaming pull.").
+				Default(false).
+				Deprecated(),
 			service.NewIntField(pbiFieldMaxOutstandingMessages).
 				Description("The maximum number of outstanding pending messages to be consumed at a given time.").
 				Default(1000), // pubsub.DefaultReceiveSettings.MaxOutstandingMessages)
@@ -156,13 +159,17 @@ func init() {
 }
 
 func createSubscription(conf pbiConfig, client *pubsub.Client, log *service.Logger) {
-	subsExists, err := client.Subscription(conf.SubscriptionID).Exists(context.Background())
-	if err != nil {
+	subName := client.Subscriber(conf.SubscriptionID).String()
+
+	_, err := client.SubscriptionAdminClient.GetSubscription(context.Background(), &pubsubpb.GetSubscriptionRequest{
+		Subscription: subName,
+	})
+	if err != nil && status.Code(err) != codes.NotFound {
 		log.Errorf("Error checking if subscription exists: %v", err)
 		return
 	}
 
-	if subsExists {
+	if err == nil {
 		log.Infof("Subscription '%v' already exists", conf.SubscriptionID)
 		return
 	}
@@ -173,7 +180,10 @@ func createSubscription(conf pbiConfig, client *pubsub.Client, log *service.Logg
 	}
 
 	log.Infof("Creating subscription '%v' on topic '%v'\n", conf.SubscriptionID, conf.CreateTopicID)
-	_, err = client.CreateSubscription(context.Background(), conf.SubscriptionID, pubsub.SubscriptionConfig{Topic: client.Topic(conf.CreateTopicID)})
+	_, err = client.SubscriptionAdminClient.CreateSubscription(context.Background(), &pubsubpb.Subscription{
+		Name:  subName,
+		Topic: client.Publisher(conf.CreateTopicID).String(),
+	})
 	if err != nil {
 		log.Errorf("Error creating subscription %v", err)
 	}
@@ -182,7 +192,7 @@ func createSubscription(conf pbiConfig, client *pubsub.Client, log *service.Logg
 type gcpPubSubReader struct {
 	conf pbiConfig
 
-	subscription *pubsub.Subscription
+	subscription *pubsub.Subscriber
 	msgsChan     chan *pubsub.Message
 	closeFunc    context.CancelFunc
 	subMut       sync.Mutex
@@ -210,6 +220,10 @@ func newGCPPubSubReader(conf pbiConfig, res *service.Resources) (*gcpPubSubReade
 		return nil, err
 	}
 
+	if conf.Sync {
+		res.Logger().Warn("The 'sync' field is deprecated and no longer has any effect: the GCP Pub/Sub client only supports streaming pull.")
+	}
+
 	if conf.CreateEnabled {
 		if conf.CreateTopicID == "" {
 			return nil, errors.New("must specify a topic_id when create_subscription is enabled")
@@ -232,18 +246,20 @@ func (c *gcpPubSubReader) Connect(context.Context) error {
 		return nil
 	}
 
-	sub := c.client.Subscription(c.conf.SubscriptionID)
+	sub := c.client.Subscriber(c.conf.SubscriptionID)
 	sub.ReceiveSettings.MaxOutstandingMessages = c.conf.MaxOutstandingMessages
 	sub.ReceiveSettings.MaxOutstandingBytes = c.conf.MaxOutstandingBytes
-	sub.ReceiveSettings.Synchronous = c.conf.Sync
 
-	p, err := sub.IAM().TestPermissions(context.Background(), []string{"pubsub.subscriptions.consume"})
+	p, err := c.client.SubscriptionAdminClient.TestIamPermissions(context.Background(), &iampb.TestIamPermissionsRequest{
+		Resource:    sub.String(),
+		Permissions: []string{"pubsub.subscriptions.consume"},
+	})
 	// Ignore these checks when running against the emulator
 	if status.Code(err) != codes.Unimplemented {
 		if err != nil {
 			return service.NewErrBackOff(err, 5*time.Second)
 		}
-		if len(p) == 0 {
+		if len(p.GetPermissions()) == 0 {
 			return service.NewErrBackOff(errors.New("missing subscription permissions"), 5*time.Second)
 		}
 	}
