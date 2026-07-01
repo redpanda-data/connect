@@ -79,6 +79,21 @@ func (o *controlSignaller) Listen(_ context.Context, signal any) (bool, error) {
 	sig.Type = evType
 
 	log := o.log.With("id", sig.ID, "type", sig.Type)
+
+	// Validate snapshot signals before triggering a stream interruption.
+	// Invalid or no-op signals still return true (the row is filtered from output)
+	// but are not stored as pending, so streaming continues uninterrupted.
+	if sig.IsSnapshot() {
+		if len(sig.DataCollections) == 0 {
+			log.Warnf("Signal %q received but data-collections is empty — ignoring, streaming continues uninterrupted", sig.Type)
+			return true, nil
+		}
+		if len(sig.TableNames(o.schema)) == 0 {
+			log.Warnf("Signal %q received but data-collections %v matched no tables for schema %q — ignoring, streaming continues uninterrupted", sig.Type, sig.DataCollections, o.schema)
+			return true, nil
+		}
+	}
+
 	log.Infof("Signal %q received: operation=%s lsn=%v", sig.Type, msg.Operation, msg.LSN)
 
 	o.signalPending.Store(&sig)
