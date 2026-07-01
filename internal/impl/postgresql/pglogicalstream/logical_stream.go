@@ -47,7 +47,6 @@ type Stream struct {
 
 	includeTxnMarkers       bool
 	slotName                string
-	tables                  []TableFQN
 	snapshotBatchSize       int
 	decodingPluginArguments []string
 	logger                  *service.Logger
@@ -104,6 +103,19 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
 	}
+
+	snapshotTables := tables
+	if len(config.SnapshotTables) > 0 {
+		snapshotTables = make([]TableFQN, 0, len(config.SnapshotTables))
+		for _, table := range config.SnapshotTables {
+			normalized, err := sanitize.NormalizePostgresIdentifier(table)
+			if err != nil {
+				return nil, fmt.Errorf("invalid snapshot table name %q: %w", table, err)
+			}
+			snapshotTables = append(snapshotTables, TableFQN{Schema: schema, Table: normalized})
+		}
+	}
+
 	batchSize := 1000
 	if config.BatchSize > 0 {
 		batchSize = config.BatchSize
@@ -114,7 +126,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		errors:                make(chan error, 1),
 		slotName:              config.ReplicationSlotName,
 		snapshotBatchSize:     batchSize,
-		tables:                tables,
 		maxSnapshotWorkers:    config.MaxSnapshotWorkers,
 		logger:                config.Logger,
 		shutSig:               shutdown.NewSignaller(),
@@ -168,9 +179,18 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	stream.decodingPluginArguments = pluginArguments
 
+	tablesForPublication := tables
+	if config.SignalTableName != "" {
+		normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(config.SignalTableName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid signal table name %q: %w", config.SignalTableName, err)
+		}
+		tablesForPublication = append(slices.Clone(tables), TableFQN{Schema: schema, Table: normalizedSignalTable})
+	}
+
 	pubName := "pglog_stream_" + config.ReplicationSlotName
-	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tables)
-	if err = CreatePublication(ctx, stream.pgConn, pubName, tables); err != nil {
+	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
+	if err = CreatePublication(ctx, stream.pgConn, pubName, tablesForPublication); err != nil {
 		return nil, err
 	}
 	cleanups = append(cleanups, func() {
@@ -202,21 +222,47 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			stream.ackedLSN = confirmedLSNFromDB
 			stream.ackedLSNMu.Unlock()
 		}
-		if config.StreamOldData {
-			for _, table := range tables {
-				stream.monitor.MarkSnapshotComplete(table)
+		if config.ForceSnapshot && config.StreamOldData {
+			snapshotter, err := newSnapshotter(config, config.DBRawDSN, config.Logger, "", config.MaxSnapshotWorkers)
+			if err != nil {
+				return nil, fmt.Errorf("creating snapshotter for re-snapshot: %w", err)
 			}
-		}
-		stream.logger.Debugf("starting stream from LSN %s", confirmedLSNFromDB.String())
-		if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
-			return nil, err
-		}
-		go func() {
-			defer stream.shutSig.TriggerHasStopped()
-			if err := stream.streamMessages(confirmedLSNFromDB); err != nil {
-				stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
+			go func() {
+				defer stream.shutSig.TriggerHasStopped()
+				ctx, done := stream.shutSig.SoftStopCtx(context.Background())
+				defer done()
+				if err := stream.processSnapshot(ctx, snapshotTables, snapshotter); err != nil {
+					stream.errors <- fmt.Errorf("processing snapshot: %w", err)
+					return
+				}
+				for _, table := range snapshotTables {
+					stream.monitor.MarkSnapshotComplete(table)
+				}
+				if err := stream.startLr(ctx, confirmedLSNFromDB); err != nil {
+					stream.errors <- fmt.Errorf("starting logical replication: %w", err)
+					return
+				}
+				if err := stream.streamMessages(confirmedLSNFromDB); err != nil {
+					stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
+				}
+			}()
+		} else {
+			if config.StreamOldData {
+				for _, table := range tables {
+					stream.monitor.MarkSnapshotComplete(table)
+				}
 			}
-		}()
+			stream.logger.Debugf("starting stream from LSN %s", confirmedLSNFromDB.String())
+			if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
+				return nil, err
+			}
+			go func() {
+				defer stream.shutSig.TriggerHasStopped()
+				if err := stream.streamMessages(confirmedLSNFromDB); err != nil {
+					stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
+				}
+			}()
+		}
 		cleanups = nil
 		return stream, nil
 	}
@@ -247,11 +293,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		defer done()
 		var startLSN LSN
 		if snapshotter != nil {
-			if err = stream.processSnapshot(ctx, snapshotter); err != nil {
+			if err = stream.processSnapshot(ctx, snapshotTables, snapshotter); err != nil {
 				stream.errors <- fmt.Errorf("processing snapshot: %w", err)
 				return
 			}
-			for _, table := range tables {
+			for _, table := range snapshotTables {
 				stream.monitor.MarkSnapshotComplete(table)
 			}
 			// TODO: Do we want to ensure all snapshot messages are ack'd before moving
@@ -572,7 +618,7 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	}
 }
 
-func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) error {
+func (s *Stream) processSnapshot(ctx context.Context, tables []TableFQN, snapshotter *snapshotter) error {
 	if err := snapshotter.Prepare(ctx); err != nil {
 		return fmt.Errorf("unable to prepare snapshot: %w", err)
 	}
@@ -584,7 +630,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 
 	snapshotTasks := []func(context.Context) error{}
 
-	for _, table := range s.tables {
+	for _, table := range tables {
 		s.logger.Infof("Planning snapshot scan for table: %v", table)
 		planStartTime := time.Now()
 		primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
