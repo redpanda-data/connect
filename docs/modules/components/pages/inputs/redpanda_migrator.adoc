@@ -427,6 +427,72 @@ Key/value pairs to add to OAUTHBEARER authentication requests.
 *Type*: `object`
 
 
+=== `sasl[].oauth2`
+
+Allows you to specify OAuth2 client credentials for automatic token renewal on OAUTHBEARER. Compatible with any OAuth2 identity provider including Microsoft Entra, Okta, Auth0, and Keycloak.
+
+
+*Type*: `object`
+
+
+=== `sasl[].oauth2.enabled`
+
+Whether to use OAuth2 client credentials for dynamic token renewal.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `sasl[].oauth2.client_key`
+
+The OAuth2 client ID.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `sasl[].oauth2.client_secret`
+
+The OAuth2 client secret.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `sasl[].oauth2.token_url`
+
+The URL of the token provider.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `sasl[].oauth2.scopes`
+
+Optional list of requested permissions.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `sasl[].oauth2.endpoint_params`
+
+Optional additional parameters for the token endpoint (e.g. audience).
+
+
+*Type*: `object`
+
+
 === `sasl[].aws`
 
 Contains AWS specific fields for when the `mechanism` is set to `AWS_MSK_IAM`.
