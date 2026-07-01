@@ -431,19 +431,23 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		}
 	}
 
-	if pending, signal := p.controlSig.IsPending(); pending && signal != nil {
-		if signal.IsSnapshot() {
-			p.logger.Infof("%s signal pending, dropping replication slot for re-snapshot", signal.Type)
+	// handle launching snapshots via control signals
+	if pending, signal := p.controlSig.IsPending(); pending && signal.IsSnapshot() {
+		snapshotTables := signal.TableNames(p.streamConfig.DBSchema)
+		if len(signal.DataCollections) > 0 && len(snapshotTables) == 0 {
+			// data-collections was non-empty but nothing matched the configured schema - skip rather than silently snapshotting all tables.
+			p.logger.Warnf("%s signal data-collections %v matched no tables for schema %q — skipping re-snapshot", signal.Type, signal.DataCollections, p.streamConfig.DBSchema)
+			p.controlSig.Reset()
+		} else {
+			p.logger.Infof("%s signal pending, triggering re-snapshot", signal.Type)
 			p.streamConfig.StreamOldData = true
 			p.streamConfig.ForceSnapshot = true
 			defer func() { p.streamConfig.ForceSnapshot = false }()
-			p.controlSig.Reset()
-
-			// ensure we only snapshot tables specified in control signal
-			if len(signal.DataCollections) > 0 {
-				p.streamConfig.SnapshotTables = signal.FilterTables(p.streamConfig.DBSchema, p.streamConfig.DBTables)
+			if len(snapshotTables) > 0 {
+				p.streamConfig.SnapshotTables = snapshotTables
 				defer func() { p.streamConfig.SnapshotTables = nil }()
 			}
+			p.controlSig.Reset()
 		}
 	} else {
 		p.streamConfig.StreamOldData = p.streamSnapshot

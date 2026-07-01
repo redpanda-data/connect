@@ -120,6 +120,7 @@ func TestIntegrationSignalling(t *testing.T) {
 	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
 	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
 	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.products (id SERIAL PRIMARY KEY, name TEXT)`)
+	// dbo.newtable table doesn't exist in replication slot
 	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.newtable (id SERIAL PRIMARY KEY, name TEXT)`)
 
 	// Pre-insert an events row so the snapshot phase produces a message.
@@ -301,6 +302,54 @@ postgres_cdc:
 
 		mu.Lock()
 		require.ElementsMatch(t, received, elements)
+		mu.Unlock()
+	})
+
+	t.Run("Can resnapshot new tables but not append to the replication slot", func(t *testing.T) {
+		mu.Lock()
+		received = nil
+		mu.Unlock()
+
+		db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.temptable (id SERIAL PRIMARY KEY, name TEXT)`)
+
+		// Insert streaming records and let them arrive via WAL before firing the
+		// signal, so they don't get counted as snapshot reads.
+		db.MustExec(`INSERT INTO dbo.temptable (name) VALUES ('evt1')`)
+		db.MustExec(`INSERT INTO dbo.temptable (name) VALUES ('evt2')`)
+		// db.MustExec(`INSERT INTO dbo.products (name) VALUES ('evt1')`)
+
+		// elements = append(elements,
+		// 	map[string]any{"operation": "read", "table": "events"},
+		// 	map[string]any{"operation": "read", "table": "products"},
+		// )
+
+		// assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		// 	mu.Lock()
+		// 	defer mu.Unlock()
+		// 	assert.Len(c, received, 1)
+		// }, 25*time.Second, 100*time.Millisecond)
+
+		// // Reset once WAL inserts are consumed so the snapshot reads are isolated.
+		// mu.Lock()
+		// received = nil
+		// mu.Unlock()
+
+		// expected := len(elements)
+
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', '{"data-collections": ["dbo.temptable"]}')`)
+
+		// Wait for the re-snapshot reads: one per row across both tables.
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			mu.Lock()
+			defer mu.Unlock()
+			assert.Len(c, received, 2)
+		}, 25*time.Second, 100*time.Millisecond)
+
+		mu.Lock()
+		require.ElementsMatch(t, received, []any{
+			map[string]any{"operation": "read", "table": "temptable"},
+			map[string]any{"operation": "read", "table": "temptable"},
+		})
 		mu.Unlock()
 	})
 

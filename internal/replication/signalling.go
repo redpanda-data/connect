@@ -22,7 +22,34 @@ type ControlSignal struct {
 
 // IsSnapshot returns true if the ControlSignal is a snapshot signal.
 func (s *ControlSignal) IsSnapshot() bool {
+	if s == nil {
+		return false
+	}
+
 	return s.Type == "execute-snapshot"
+}
+
+// TableNames extracts the table name portion from each DataCollections entry that
+// belongs to the given schema. Entries for a different schema are skipped. If
+// DataCollections is empty, nil is returned. Unlike FilterTables, the returned
+// names are not constrained to a pre-existing list, so they may include tables
+// that are not tracked by the replication slot publication.
+func (s *ControlSignal) TableNames(schema string) []string {
+	if len(s.DataCollections) == 0 {
+		return nil
+	}
+	tables := make([]string, 0, len(s.DataCollections))
+	for _, dc := range s.DataCollections {
+		table := dc
+		if idx := strings.LastIndex(dc, "."); idx >= 0 {
+			if !strings.EqualFold(dc[:idx], schema) {
+				continue
+			}
+			table = dc[idx+1:]
+		}
+		tables = append(tables, table)
+	}
+	return tables
 }
 
 // FilterTables returns the subset of tables from the provided list that appear

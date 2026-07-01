@@ -53,8 +53,7 @@ func GetFakeFlightRecord() FakeFlightRecord {
 	return flightRecord
 }
 
-// TestDB wraps sql.DB with testing utilities for Oracle database integration tests.
-// It provides helper methods for table creation, supplemental logging enablement, and assertions.
+// TestDB wraps sql.DB with testing utilities for database integration tests.
 type TestDB struct {
 	*sql.DB
 
