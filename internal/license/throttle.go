@@ -32,21 +32,24 @@ type Throttler struct {
 	limiter       *rate.Limiter
 	throttleGauge *service.MetricGauge
 	logger        *service.Logger
+	direction     string // "input" or "output"
 	throttling    atomic.Bool
 }
 
-func newThrottler(res *service.Resources) *Throttler {
+func newThrottler(res *service.Resources, direction string) *Throttler {
 	return &Throttler{
 		limiter:       rate.NewLimiter(rate.Limit(testLicenseBytesPerSec), testLicenseBurstBytes),
 		throttleGauge: res.Metrics().NewGauge("redpanda_connect_test_license_throttle_active"),
 		logger:        res.Logger(),
+		direction:     direction,
 	}
 }
 
-// Wait blocks until the token bucket allows n bytes through. If the cap is
-// reached, a WARN is logged once and the metric is set to 1 until throughput
-// drops back below the limit.
-func (t *Throttler) Wait(ctx context.Context, n int) error {
+// Wait blocks until the token bucket allows n bytes through. connector is the
+// registered component name (e.g. "sap_hana") used in the throttle warning.
+// If the cap is reached, a WARN is logged once and the metric is set to 1
+// until throughput drops back below the limit.
+func (t *Throttler) Wait(ctx context.Context, n int, connector string) error {
 	if n <= 0 {
 		return nil
 	}
@@ -67,7 +70,7 @@ func (t *Throttler) Wait(ctx context.Context, n int) error {
 	}
 
 	if t.throttling.CompareAndSwap(false, true) {
-		t.logger.Warn("Throughput cap reached under embedded test license (1 MB/s). Throttling enterprise output. Apply a production license to remove the cap: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
+		t.logger.Warnf("Throughput cap reached under embedded test license (1 MB/s). Throttling enterprise %s %q. Apply a production license to remove the cap: https://docs.redpanda.com/redpanda-connect/get-started/licensing/", t.direction, connector)
 		t.throttleGauge.Set(1)
 	}
 
@@ -88,6 +91,7 @@ func (t *Throttler) Wait(ctx context.Context, n int) error {
 type throttledBatchOutput struct {
 	wrapped   service.BatchOutput
 	throttler *Throttler
+	name      string
 }
 
 func (o *throttledBatchOutput) Connect(ctx context.Context) error {
@@ -102,7 +106,7 @@ func (o *throttledBatchOutput) WriteBatch(ctx context.Context, batch service.Mes
 			n += len(b)
 		}
 	}
-	if err := o.throttler.Wait(ctx, n); err != nil {
+	if err := o.throttler.Wait(ctx, n, o.name); err != nil {
 		return err
 	}
 	return o.wrapped.WriteBatch(ctx, batch)
@@ -117,6 +121,7 @@ func (o *throttledBatchOutput) Close(ctx context.Context) error {
 type throttledInput struct {
 	wrapped   service.Input
 	throttler *Throttler
+	name      string
 }
 
 func (i *throttledInput) Connect(ctx context.Context) error { return i.wrapped.Connect(ctx) }
@@ -127,7 +132,7 @@ func (i *throttledInput) Read(ctx context.Context) (*service.Message, service.Ac
 		return msg, ackFn, err
 	}
 	if b, berr := msg.AsBytes(); berr == nil {
-		if err := i.throttler.Wait(ctx, len(b)); err != nil {
+		if err := i.throttler.Wait(ctx, len(b), i.name); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -141,6 +146,7 @@ func (i *throttledInput) Close(ctx context.Context) error { return i.wrapped.Clo
 type throttledBatchInput struct {
 	wrapped   service.BatchInput
 	throttler *Throttler
+	name      string
 }
 
 func (i *throttledBatchInput) Connect(ctx context.Context) error {
@@ -158,7 +164,7 @@ func (i *throttledBatchInput) ReadBatch(ctx context.Context) (service.MessageBat
 			n += len(b)
 		}
 	}
-	if err := i.throttler.Wait(ctx, n); err != nil {
+	if err := i.throttler.Wait(ctx, n, i.name); err != nil {
 		return nil, nil, err
 	}
 	return batch, ackFn, nil

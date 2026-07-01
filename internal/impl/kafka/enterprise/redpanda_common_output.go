@@ -63,7 +63,7 @@ func init() {
 						func(context.Context) error { return nil }),
 			)
 			if err == nil {
-				output = license.WrapBatchOutput(mgr, output)
+				output = license.WrapBatchOutput(mgr, "redpanda_common", output)
 			}
 			return
 		})

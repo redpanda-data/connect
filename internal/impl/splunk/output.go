@@ -110,7 +110,7 @@ func init() {
 
 			out, err = outputFromParsed(conf, mgr.Logger())
 			if err == nil {
-				out = license.WrapBatchOutput(mgr, out)
+				out = license.WrapBatchOutput(mgr, "splunk_hec", out)
 			}
 			return
 		})

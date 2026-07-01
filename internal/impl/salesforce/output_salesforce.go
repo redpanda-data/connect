@@ -119,7 +119,7 @@ func init() {
 			if err != nil {
 				return nil, service.BatchPolicy{}, 0, err
 			}
-			return license.WrapBatchOutput(mgr, out), service.BatchPolicy{Count: batchSize, Period: batchPeriod.String()}, maxInFlight, nil
+			return license.WrapBatchOutput(mgr, "salesforce_sink", out), service.BatchPolicy{Count: batchSize, Period: batchPeriod.String()}, maxInFlight, nil
 		},
 	)
 }

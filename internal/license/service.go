@@ -79,8 +79,8 @@ func RegisterService(res *service.Resources, conf Config) {
 		} else {
 			res.Logger().Info("Running under embedded dev license — enterprise features subject to 1 MB/s throughput cap per process. Apply a production license to remove the cap: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
 		}
-		registerEgressThrottler(res, newThrottler(res))
-		registerIngressThrottler(res, newThrottler(res))
+		registerEgressThrottler(res, newThrottler(res, "output"))
+		registerIngressThrottler(res, newThrottler(res, "input"))
 	}
 
 	s.setLicense(res, l)

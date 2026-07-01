@@ -48,8 +48,9 @@ func CheckRunningEnterprise(res *service.Resources) error {
 
 // WrapBatchOutput wraps output with egress throttling when running under
 // the embedded dev license. Returns output unchanged under a production license
-// or when no license service is registered.
-func WrapBatchOutput(res *service.Resources, output service.BatchOutput) service.BatchOutput {
+// or when no license service is registered. name is the registered component
+// name used in throttle warnings.
+func WrapBatchOutput(res *service.Resources, name string, output service.BatchOutput) service.BatchOutput {
 	svc := getSharedService(res)
 	if svc == nil || !svc.isTestLicense {
 		return output
@@ -58,13 +59,14 @@ func WrapBatchOutput(res *service.Resources, output service.BatchOutput) service
 	if t == nil {
 		return output
 	}
-	return &throttledBatchOutput{wrapped: output, throttler: t}
+	return &throttledBatchOutput{wrapped: output, throttler: t, name: name}
 }
 
 // WrapBatchInput wraps input with ingress throttling when running under
 // the embedded dev license. Returns input unchanged under a production license
-// or when no license service is registered.
-func WrapBatchInput(res *service.Resources, input service.BatchInput) service.BatchInput {
+// or when no license service is registered. name is the registered component
+// name used in throttle warnings.
+func WrapBatchInput(res *service.Resources, name string, input service.BatchInput) service.BatchInput {
 	svc := getSharedService(res)
 	if svc == nil || !svc.isTestLicense {
 		return input
@@ -73,7 +75,7 @@ func WrapBatchInput(res *service.Resources, input service.BatchInput) service.Ba
 	if t == nil {
 		return input
 	}
-	return &throttledBatchInput{wrapped: input, throttler: t}
+	return &throttledBatchInput{wrapped: input, throttler: t, name: name}
 }
 
 // MustRegisterEnterpriseBatchOutput registers an enterprise batch output.
@@ -92,7 +94,7 @@ func MustRegisterEnterpriseBatchOutput(
 			}
 			out, bp, mif, err := ctor(conf, mgr)
 			if err == nil {
-				out = WrapBatchOutput(mgr, out)
+				out = WrapBatchOutput(mgr, name, out)
 			}
 			return out, bp, mif, err
 		})
@@ -100,8 +102,9 @@ func MustRegisterEnterpriseBatchOutput(
 
 // WrapInput wraps input with ingress throttling when running under
 // the embedded dev license. Returns input unchanged under a production license
-// or when no license service is registered.
-func WrapInput(res *service.Resources, input service.Input) service.Input {
+// or when no license service is registered. name is the registered component
+// name used in throttle warnings.
+func WrapInput(res *service.Resources, name string, input service.Input) service.Input {
 	svc := getSharedService(res)
 	if svc == nil || !svc.isTestLicense {
 		return input
@@ -110,7 +113,7 @@ func WrapInput(res *service.Resources, input service.Input) service.Input {
 	if t == nil {
 		return input
 	}
-	return &throttledInput{wrapped: input, throttler: t}
+	return &throttledInput{wrapped: input, throttler: t, name: name}
 }
 
 // MustRegisterEnterpriseInput registers an enterprise input.
@@ -129,7 +132,7 @@ func MustRegisterEnterpriseInput(
 			}
 			in, err := ctor(conf, mgr)
 			if err == nil {
-				in = WrapInput(mgr, in)
+				in = WrapInput(mgr, name, in)
 			}
 			return in, err
 		})
@@ -151,7 +154,7 @@ func MustRegisterEnterpriseBatchInput(
 			}
 			in, err := ctor(conf, mgr)
 			if err == nil {
-				in = WrapBatchInput(mgr, in)
+				in = WrapBatchInput(mgr, name, in)
 			}
 			return in, err
 		})

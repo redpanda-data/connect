@@ -60,7 +60,7 @@ func TestWrapBatchOutput_NoopUnderProductionLicense(t *testing.T) {
 	InjectTestService(res) // enterprise, but NOT isTestLicense
 
 	inner := &mockBatchOutput{}
-	wrapped := WrapBatchOutput(res, inner)
+	wrapped := WrapBatchOutput(res, "test_output", inner)
 
 	// Should be the same pointer — no wrapper applied.
 	assert.Same(t, inner, wrapped.(*mockBatchOutput))
@@ -70,7 +70,7 @@ func TestWrapBatchOutput_ThrottlesUnderDevLicense(t *testing.T) {
 	res := devLicenseResources(t)
 
 	inner := &mockBatchOutput{}
-	wrapped := WrapBatchOutput(res, inner)
+	wrapped := WrapBatchOutput(res, "test_output", inner)
 
 	_, ok := wrapped.(*throttledBatchOutput)
 	assert.True(t, ok, "expected throttledBatchOutput wrapper under dev license")
@@ -82,7 +82,7 @@ func TestWrapBatchInput_NoopUnderProductionLicense(t *testing.T) {
 
 	msg := service.NewMessage([]byte("hello"))
 	inner := &mockBatchInput{batch: service.MessageBatch{msg}}
-	wrapped := WrapBatchInput(res, inner)
+	wrapped := WrapBatchInput(res, "test_input", inner)
 
 	assert.Same(t, inner, wrapped.(*mockBatchInput))
 }
@@ -92,7 +92,7 @@ func TestWrapBatchInput_ThrottlesUnderDevLicense(t *testing.T) {
 
 	msg := service.NewMessage([]byte("hello"))
 	inner := &mockBatchInput{batch: service.MessageBatch{msg}}
-	wrapped := WrapBatchInput(res, inner)
+	wrapped := WrapBatchInput(res, "test_input", inner)
 
 	_, ok := wrapped.(*throttledBatchInput)
 	assert.True(t, ok, "expected throttledBatchInput wrapper under dev license")
@@ -100,61 +100,61 @@ func TestWrapBatchInput_ThrottlesUnderDevLicense(t *testing.T) {
 
 func TestThrottler_PassthroughBelowCap(t *testing.T) {
 	res := service.MockResources()
-	throttler := newThrottler(res)
+	throttler := newThrottler(res, "output")
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 
 	// Small batch well under 1 MB/s cap — should pass with no delay.
 	start := time.Now()
-	err := throttler.Wait(ctx, 1024) // 1 KB
+	err := throttler.Wait(ctx, 1024, "test") // 1 KB
 	require.NoError(t, err)
 	assert.Less(t, time.Since(start), 100*time.Millisecond)
 }
 
 func TestThrottler_ZeroBytesNoBlock(t *testing.T) {
 	res := service.MockResources()
-	throttler := newThrottler(res)
+	throttler := newThrottler(res, "output")
 
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 
-	err := throttler.Wait(ctx, 0)
+	err := throttler.Wait(ctx, 0, "test")
 	require.NoError(t, err)
 }
 
 func TestThrottler_CancelledContextReturnsError(t *testing.T) {
 	res := service.MockResources()
-	throttler := newThrottler(res)
+	throttler := newThrottler(res, "output")
 
 	// Drain the entire burst bucket so the next Wait will block.
 	ctx := t.Context()
-	err := throttler.Wait(ctx, testLicenseBurstBytes)
+	err := throttler.Wait(ctx, testLicenseBurstBytes, "test")
 	require.NoError(t, err)
 
 	// Now the bucket is empty; any further bytes will block.
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel() // cancel immediately
 
-	err = throttler.Wait(cancelled, 1024)
+	err = throttler.Wait(cancelled, 1024, "test")
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestThrottler_EnforcesCap(t *testing.T) {
 	res := service.MockResources()
-	throttler := newThrottler(res)
+	throttler := newThrottler(res, "output")
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	// Drain the entire burst bucket.
-	err := throttler.Wait(ctx, testLicenseBurstBytes)
+	err := throttler.Wait(ctx, testLicenseBurstBytes, "test")
 	require.NoError(t, err)
 
 	// At 1 MB/s, sending 2 MB more must take at least ~2s.
 	const extraBytes = 2 * testLicenseBytesPerSec
 	start := time.Now()
-	err = throttler.Wait(ctx, extraBytes)
+	err = throttler.Wait(ctx, extraBytes, "test")
 	require.NoError(t, err)
 	elapsed := time.Since(start)
 

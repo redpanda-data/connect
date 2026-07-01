@@ -280,7 +280,7 @@ func init() {
 				return
 			}
 
-			o = license.WrapBatchOutput(mgr, o)
+			o = license.WrapBatchOutput(mgr, "otlp_http", o)
 			return
 		})
 }

@@ -57,7 +57,7 @@ func init() {
 				return
 			}
 
-			output = license.WrapBatchOutput(mgr, output)
+			output = license.WrapBatchOutput(mgr, "iceberg", output)
 			return
 		})
 }
