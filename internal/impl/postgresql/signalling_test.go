@@ -316,25 +316,6 @@ postgres_cdc:
 		// signal, so they don't get counted as snapshot reads.
 		db.MustExec(`INSERT INTO dbo.temptable (name) VALUES ('evt1')`)
 		db.MustExec(`INSERT INTO dbo.temptable (name) VALUES ('evt2')`)
-		// db.MustExec(`INSERT INTO dbo.products (name) VALUES ('evt1')`)
-
-		// elements = append(elements,
-		// 	map[string]any{"operation": "read", "table": "events"},
-		// 	map[string]any{"operation": "read", "table": "products"},
-		// )
-
-		// assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		// 	mu.Lock()
-		// 	defer mu.Unlock()
-		// 	assert.Len(c, received, 1)
-		// }, 25*time.Second, 100*time.Millisecond)
-
-		// // Reset once WAL inserts are consumed so the snapshot reads are isolated.
-		// mu.Lock()
-		// received = nil
-		// mu.Unlock()
-
-		// expected := len(elements)
 
 		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', '{"data-collections": ["dbo.temptable"]}')`)
 
@@ -349,6 +330,30 @@ postgres_cdc:
 		require.ElementsMatch(t, received, []any{
 			map[string]any{"operation": "read", "table": "temptable"},
 			map[string]any{"operation": "read", "table": "temptable"},
+		})
+		mu.Unlock()
+	})
+
+	t.Run("Ignores signal and continues streaming when data-collections is empty", func(t *testing.T) {
+		mu.Lock()
+		received = nil
+		mu.Unlock()
+
+		// A signal with an empty data-collections is a no-op: no snapshot runs and
+		// WAL streaming continues. Verify by confirming only the subsequent streaming
+		// insert arrives — no snapshot reads.
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', '{}')`)
+		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('post-noop')`)
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			mu.Lock()
+			defer mu.Unlock()
+			assert.Len(c, received, 1)
+		}, 25*time.Second, 100*time.Millisecond)
+
+		mu.Lock()
+		require.ElementsMatch(t, received, []any{
+			map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
 		})
 		mu.Unlock()
 	})

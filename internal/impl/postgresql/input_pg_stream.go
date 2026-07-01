@@ -215,18 +215,14 @@ CREATE TABLE <schema>.<signal_table_name> (
 **Supported signals**
 
 **` + "`execute-snapshot`" + `** — triggers a re-snapshot of one or more tables without dropping the
-replication slot. The ` + "`data`" + ` column must contain a JSON object with an optional
-` + "`data-collections`" + ` key listing fully-qualified tables (` + "`schema.table`" + `) to snapshot. If
-` + "`data-collections`" + ` is omitted or empty, all configured tables are re-snapshotted.
+replication slot. The ` + "`data`" + ` column must contain a JSON object with a
+` + "`data-collections`" + ` key listing the fully-qualified tables (` + "`schema.table`" + `) to snapshot.
+` + "`data-collections`" + ` must be non-empty; a signal with an empty or absent ` + "`data-collections`" + `
+is ignored and streaming continues uninterrupted.
 
 ` + "```sql" + `
--- Re-snapshot specific tables:
 INSERT INTO dbo.rpcn_signal_table (type, data)
 VALUES ('execute-snapshot', '{"data-collections": ["dbo.events", "dbo.products"]}');
-
--- Re-snapshot all configured tables:
-INSERT INTO dbo.rpcn_signal_table (type, data)
-VALUES ('execute-snapshot', '{}');
 ` + "```").
 			Example("rpcn_signal_table").
 			Default("").
@@ -467,19 +463,23 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	// handle launching snapshots via control signals
 	if pending, signal := p.controlSig.IsPending(); pending && signal.IsSnapshot() {
 		snapshotTables := signal.TableNames(p.streamConfig.DBSchema)
-		if len(signal.DataCollections) > 0 && len(snapshotTables) == 0 {
-			// data-collections was non-empty but nothing matched the configured schema - skip rather than silently snapshotting all tables.
+		switch {
+		case len(signal.DataCollections) == 0:
+			// No tables specified — ignore the signal and continue streaming.
+			p.logger.Warnf("%s signal received with no data-collections — skipping re-snapshot and continuing stream", signal.Type)
+			p.controlSig.Reset()
+		case len(snapshotTables) == 0:
+			// data-collections was non-empty but nothing matched the configured schema — skip
+			// rather than silently snapshotting all tables.
 			p.logger.Warnf("%s signal data-collections %v matched no tables for schema %q — skipping re-snapshot", signal.Type, signal.DataCollections, p.streamConfig.DBSchema)
 			p.controlSig.Reset()
-		} else {
-			p.logger.Infof("%s signal pending, triggering re-snapshot", signal.Type)
+		default:
+			p.logger.Infof("%s signal pending, triggering re-snapshot without dropping replication slot", signal.Type)
 			p.streamConfig.StreamOldData = true
 			p.streamConfig.ForceSnapshot = true
 			defer func() { p.streamConfig.ForceSnapshot = false }()
-			if len(snapshotTables) > 0 {
-				p.streamConfig.SnapshotTables = snapshotTables
-				defer func() { p.streamConfig.SnapshotTables = nil }()
-			}
+			p.streamConfig.SnapshotTables = snapshotTables
+			defer func() { p.streamConfig.SnapshotTables = nil }()
 			p.controlSig.Reset()
 		}
 	} else {
