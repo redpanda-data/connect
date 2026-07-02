@@ -156,7 +156,7 @@ https://cloud.google.com/spanner/docs/change-streams
 }
 
 func init() {
-	service.MustRegisterBatchInput("gcp_spanner_cdc", spannerCDCInputSpec(),
+	license.MustRegisterEnterpriseBatchInput("gcp_spanner_cdc", spannerCDCInputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			r, err := newSpannerCDCReaderFromParsed(conf, mgr)
 			if err != nil {
@@ -188,10 +188,6 @@ type spannerCDCReader struct {
 var _ service.BatchInput = (*spannerCDCReader)(nil)
 
 func newSpannerCDCReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*spannerCDCReader, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
-
 	conf, err := spannerCDCInputConfigFromParsed(pConf)
 	if err != nil {
 		return nil, err

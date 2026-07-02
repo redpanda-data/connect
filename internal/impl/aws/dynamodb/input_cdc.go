@@ -33,6 +33,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	baws "github.com/redpanda-data/connect/v4/internal/impl/aws"
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 type asyncMessage struct {
@@ -337,14 +338,11 @@ input:
 }
 
 func init() {
-	err := service.RegisterBatchInput(
+	license.MustRegisterEnterpriseBatchInput(
 		"aws_dynamodb_cdc", dynamoDBCDCInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			return newDynamoDBCDCInputFromConfig(conf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type snapshotConfig struct {

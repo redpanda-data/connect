@@ -33,7 +33,7 @@ const (
 )
 
 func init() {
-	service.MustRegisterInput("salesforce", salesforceInputConfigSpec(), newSalesforceInput)
+	license.MustRegisterEnterpriseInput("salesforce", salesforceInputConfigSpec(), newSalesforceInput)
 }
 
 func salesforceInputConfigSpec() *service.ConfigSpec {
@@ -202,10 +202,6 @@ type salesforceInput struct {
 }
 
 func newSalesforceInput(pConf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
-
 	conf, err := NewInputConfigFromParsed(pConf)
 	if err != nil {
 		return nil, err

@@ -15,10 +15,12 @@ import (
 	"github.com/slack-go/slack"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 func init() {
-	service.MustRegisterOutput("slack_reaction", reactionSpec(), newReaction)
+	license.MustRegisterEnterpriseOutput("slack_reaction", reactionSpec(), newReaction)
 }
 
 const (

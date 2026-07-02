@@ -197,6 +197,7 @@ func init() {
 				return
 			}
 
+			o = license.WrapBatchOutput(mgr, "otlp_grpc", o)
 			return
 		})
 }

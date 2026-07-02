@@ -381,6 +381,9 @@ func init() {
 				return
 			}
 			output, err = newSnowflakeStreamer(conf, mgr)
+			if err == nil {
+				output = license.WrapBatchOutput(mgr, "snowflake_streaming", output)
+			}
 			return
 		})
 }

@@ -216,10 +216,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		iamAuthTokenBuilder       TokenBuilder
 	)
 
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
-
 	if dsn, err = conf.FieldString(fieldDSN); err != nil {
 		return nil, err
 	}
@@ -379,9 +375,9 @@ func validateSimpleString(s string) error {
 }
 
 func init() {
-	service.MustRegisterBatchInput("postgres_cdc", newPostgresCDCConfig(), newPgStreamInput)
+	license.MustRegisterEnterpriseBatchInput("postgres_cdc", newPostgresCDCConfig(), newPgStreamInput)
 	// Legacy naming
-	service.MustRegisterBatchInput("pg_stream", newPostgresCDCConfig().Deprecated(), newPgStreamInput)
+	license.MustRegisterEnterpriseBatchInput("pg_stream", newPostgresCDCConfig().Deprecated(), newPgStreamInput)
 }
 
 type pgStreamInput struct {

@@ -62,6 +62,9 @@ func init() {
 					WithYieldClientFn(
 						func(context.Context) error { return nil }),
 			)
+			if err == nil {
+				output = license.WrapBatchOutput(mgr, "redpanda_common", output)
+			}
 			return
 		})
 }

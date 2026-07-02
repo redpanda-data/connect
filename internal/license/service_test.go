@@ -18,17 +18,22 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-func TestLicenseEnterpriseNoLicense(t *testing.T) {
+func TestLicenseDevLicenseDefault(t *testing.T) {
 	tmpDir := t.TempDir()
-	tmpBadLicensePath := filepath.Join(tmpDir, "bad.license")
-
 	res := service.MockResources()
 	RegisterService(res, Config{
-		customDefaultLicenseFilepath: tmpBadLicensePath,
+		customDefaultLicenseFilepath: filepath.Join(tmpDir, "missing.license"),
 	})
 
 	loaded, err := LoadFromResources(res)
 	require.NoError(t, err)
 
-	assert.False(t, loaded.AllowsEnterpriseFeatures())
+	// No production license → embedded dev license with enterprise access and throttler.
+	assert.True(t, loaded.AllowsEnterpriseFeatures())
+
+	svc := getSharedService(res)
+	require.NotNil(t, svc)
+	assert.True(t, svc.isTestLicense)
+	assert.NotNil(t, getEgressThrottler(res))
+	assert.NotNil(t, getIngressThrottler(res))
 }
