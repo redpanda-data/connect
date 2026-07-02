@@ -160,6 +160,44 @@ func MustRegisterEnterpriseBatchInput(
 		})
 }
 
+// WrapOutput wraps output with egress throttling when running under
+// the embedded dev license. Returns output unchanged under a production license
+// or when no license service is registered. name is the registered component
+// name used in throttle warnings.
+func WrapOutput(res *service.Resources, name string, output service.Output) service.Output {
+	svc := getSharedService(res)
+	if svc == nil || !svc.isTestLicense {
+		return output
+	}
+	t := getEgressThrottler(res)
+	if t == nil {
+		return output
+	}
+	return &throttledOutput{wrapped: output, throttler: t, name: name}
+}
+
+// MustRegisterEnterpriseOutput registers an enterprise plain output.
+// The license check and dev-license egress throttle wrapping are applied
+// automatically; the ctor must not call CheckRunningEnterprise or
+// WrapOutput itself.
+func MustRegisterEnterpriseOutput(
+	name string,
+	spec *service.ConfigSpec,
+	ctor func(*service.ParsedConfig, *service.Resources) (service.Output, int, error),
+) {
+	service.MustRegisterOutput(name, spec,
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
+			if err := CheckRunningEnterprise(mgr); err != nil {
+				return nil, 0, err
+			}
+			out, mif, err := ctor(conf, mgr)
+			if err == nil {
+				out = WrapOutput(mgr, name, out)
+			}
+			return out, mif, err
+		})
+}
+
 // RegisterServiceFrom copies the license service and throttlers from src to dst.
 // Use in agent mode so all per-stream Resources share one Service and Throttler
 // rather than each getting an independent token bucket.

@@ -59,10 +59,7 @@ func (t *Throttler) Wait(ctx context.Context, n int, connector string) error {
 
 	anyDelay := false
 	for n > 0 {
-		charge := n
-		if charge > testLicenseBurstBytes {
-			charge = testLicenseBurstBytes
-		}
+		charge := min(n, testLicenseBurstBytes)
 		n -= charge
 
 		r := t.limiter.ReserveN(time.Now(), charge)
@@ -183,3 +180,24 @@ func (i *throttledBatchInput) ReadBatch(ctx context.Context) (service.MessageBat
 func (i *throttledBatchInput) Close(ctx context.Context) error {
 	return i.wrapped.Close(ctx)
 }
+
+// throttledOutput wraps a service.Output and enforces the dev
+// license egress cap before each Write call.
+type throttledOutput struct {
+	wrapped   service.Output
+	throttler *Throttler
+	name      string
+}
+
+func (o *throttledOutput) Connect(ctx context.Context) error { return o.wrapped.Connect(ctx) }
+
+func (o *throttledOutput) Write(ctx context.Context, msg *service.Message) error {
+	if b, err := msg.AsBytes(); err == nil {
+		if err := o.throttler.Wait(ctx, len(b), o.name); err != nil {
+			return err
+		}
+	}
+	return o.wrapped.Write(ctx, msg)
+}
+
+func (o *throttledOutput) Close(ctx context.Context) error { return o.wrapped.Close(ctx) }

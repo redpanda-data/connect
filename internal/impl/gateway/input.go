@@ -34,6 +34,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 	"github.com/redpanda-data/common-go/authz"
 	"github.com/redpanda-data/connect/v4/internal/gateway"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -162,7 +163,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 }
 
 func init() {
-	service.MustRegisterBatchInput(
+	license.MustRegisterEnterpriseBatchInput(
 		"gateway", InputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			return InputFromParsed(conf, mgr)
