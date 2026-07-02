@@ -27,7 +27,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "pgx", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos", "spanner", "databricks").
+var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "pgx", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos", "spanner", "databricks", "hana").
 	Description("A database <<drivers, driver>> to use.")
 
 var dsnField = service.NewStringField("dsn").
@@ -74,6 +74,9 @@ The following is a list of supported drivers, their placeholder style, and their
 
 ` + "| `databricks` " + `
 ` + "| `token:<access-token>@<server-hostname>:<port>/<http-path>` " + `
+
+` + "| `hana` " + `
+` + "| `hdb://[user[:password]@]host[:port][?param1=value1&...]` " + `
 |===
 
 Please note that the ` + "`postgres`" + ` and ` + "`pgx`" + ` drivers enforce SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.
@@ -307,6 +310,9 @@ func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, er
 
 		logger.Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
 		dsn = newDSN
+	}
+	if driver == "hana" {
+		driver = "hdb"
 	}
 	return sql.Open(driver, dsn)
 }

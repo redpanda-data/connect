@@ -1,0 +1,290 @@
+version: "3"
+
+silent: true
+
+vars:
+  HANA_DSN: '{{.HANA_DSN | default (env "HANA_DSN")}}'
+
+tasks:
+  up:
+    desc: Start Kafka
+    cmds:
+      - docker compose up -d
+      - until docker exec rpcns-hana-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 2; done
+      - echo "Kafka ready"
+
+  down:
+    desc: Stop and remove containers and volumes
+    cmds:
+      - docker compose -f docker-compose.yaml -f docker-compose.kc.yaml down -v --remove-orphans 2>/dev/null || docker compose down -v --remove-orphans
+
+  kc:build:
+    desc: Build the Kafka Connect image (downloads JDBC plugin — requires internet)
+    cmds:
+      - docker compose -f docker-compose.kc.yaml build kafka-connect
+      - echo "Kafka Connect image built"
+
+  kc:up:
+    desc: Start Kafka Connect (requires bench/ngdbc.jar and Kafka already running via bulk task up)
+    cmds:
+      - |
+        if [ ! -f "../../ngdbc.jar" ]; then
+          echo "ERROR: SAP HANA JDBC driver not found at bench/ngdbc.jar"
+          echo "       Copy ngdbc.jar from the HANA server or SAP Support Portal, then retry."
+          exit 1
+        fi
+        docker compose -f docker-compose.kc.yaml up -d kafka-connect
+        echo "Waiting for Kafka Connect REST API..."
+        ATTEMPTS=0
+        until curl -sf http://localhost:8083/connectors >/dev/null 2>&1 || [ $ATTEMPTS -ge 60 ]; do
+          sleep 3; ATTEMPTS=$((ATTEMPTS+1))
+        done
+        if [ $ATTEMPTS -ge 60 ]; then echo "ERROR: Kafka Connect did not start within 3 min"; exit 1; fi
+        echo "Kafka Connect ready at http://localhost:8083"
+
+  bench:build:
+    desc: Build the redpanda-connect and loader binaries
+    cmds:
+      - go build -o /tmp/rpcns-hana-query-bench ../../../../../../cmd/redpanda-connect/
+      - go build -o /tmp/rpcns-hana-query-bench-load ./load/
+      - echo "Binaries built"
+
+  bench:load:
+    desc: "Create BENCH_ORDERS_QUERY table and load COUNT rows (e.g. task bench:load COUNT=2000000 WORKERS=20)"
+    vars:
+      COUNT: '{{.COUNT | default "2000000"}}'
+      WORKERS: '{{.WORKERS | default "20"}}'
+      BATCH: '{{.BATCH | default "5000"}}'
+    cmds:
+      - |
+        if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
+        if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" \
+          /tmp/rpcns-hana-query-bench-load -count {{.COUNT}} -workers {{.WORKERS}} -batch {{.BATCH}}
+
+  bench:run:
+    desc: "Run query benchmark (e.g. task bench:run CORES=4 FETCH_SIZE=10000 BATCH_COUNT=1000)"
+    vars:
+      CORES: '{{.CORES | default ""}}'
+      INTERVAL: '{{.INTERVAL | default "2"}}'
+      FETCH_SIZE: '{{.FETCH_SIZE | default "10000"}}'
+      BATCH_COUNT: '{{.BATCH_COUNT | default "1000"}}'
+      MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "10"}}'
+    cmds:
+      - |
+        if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
+        if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
+        if [ -z "$HANA_QUERY" ]; then
+          HANA_QUERY="SELECT * FROM \"${HANA_SCHEMA}\".\"BENCH_ORDERS_QUERY\""
+        fi
+        CORES="{{.CORES}}"
+        INTERVAL={{.INTERVAL}}
+        TOPIC="rpcns-hana-bench-query"
+        CORES_LABEL="${CORES:-unbounded}"
+
+        pkill -9 -f "/tmp/rpcns-hana-query-bench run" 2>/dev/null || true
+
+        get_kafka_abs() {
+          timeout 5 docker exec rpcns-hana-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic "$TOPIC" 2>/dev/null \
+            | awk -F: '{sum += $3} END {print sum+0}' || echo 0
+        }
+
+        CORES_LABEL="${CORES:-unbounded}"
+        printf "cores=%-10s  fetch=%-8s\n" "$CORES_LABEL" "{{.FETCH_SIZE}}"
+
+        START_OFFSET=$(get_kafka_abs)
+        START=$(date +%s)
+        PREV_COUNT=0
+        PREV_TIME=$START
+
+        BENCH_FETCH_SIZE="{{.FETCH_SIZE}}" BENCH_BATCH_COUNT="{{.BATCH_COUNT}}" BENCH_MAX_IN_FLIGHT="{{.MAX_IN_FLIGHT}}" \
+          HANA_DSN="$HANA_DSN" HANA_QUERY="$HANA_QUERY" KAFKA_TOPIC="$TOPIC" GOMAXPROCS="$CORES" \
+          REDPANDA_LICENSE="$REDPANDA_LICENSE" REDPANDA_LICENSE_FILEPATH="$REDPANDA_LICENSE_FILEPATH" \
+          /tmp/rpcns-hana-query-bench run ./benchmark_config.yaml > /tmp/rpcns_hana_query_bench.log 2>&1 &
+        RPCN_PID=$!
+
+        printf "%-10s  %-14s  %s\n" "TIME" "IN KAFKA" "MSG/S"
+
+        while kill -0 $RPCN_PID 2>/dev/null; do
+          sleep "$INTERVAL"
+          COUNT=$(( $(get_kafka_abs) - START_OFFSET ))
+          COUNT=${COUNT:-0}
+          NOW=$(date +%s)
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_COUNT=$((COUNT - PREV_COUNT))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_COUNT / DELTA_T))
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$COUNT" "$RATE"
+          PREV_COUNT=$COUNT
+          PREV_TIME=$NOW
+        done
+
+        wait $RPCN_PID || true
+        END=$(date +%s)
+        ELAPSED=$((END - START))
+        FINAL=$(( $(get_kafka_abs) - START_OFFSET ))
+        AVG=$(awk "BEGIN { printf \"%.0f\", ${FINAL:-0} / ($ELAPSED > 0 ? $ELAPSED : 1) }")
+        echo "---"
+        printf "cores=%-10s  fetch=%-8s\n" "$CORES_LABEL" "{{.FETCH_SIZE}}"
+        echo "Total messages : $FINAL"
+        echo "Elapsed        : ${ELAPSED}s"
+        echo "Avg throughput : ${AVG} msg/s"
+        echo "RESULT cores=$CORES_LABEL fetch={{.FETCH_SIZE}} total=$FINAL elapsed=${ELAPSED}s avg=$AVG"
+
+  bench:matrix:
+    desc: "Sweep fetch_size x cores (e.g. task bench:matrix OUT=results.txt)"
+    vars:
+      OUT: '{{.OUT | default ""}}'
+      MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "10"}}'
+      BATCH_COUNT: '{{.BATCH_COUNT | default "1000"}}'
+    cmds:
+      - |
+        OUT_FILE="{{.OUT}}"
+        HEADER=$(printf "%-10s  %-8s  %-12s  %-10s  %s\n" "FETCH" "CORES" "TOTAL" "ELAPSED" "AVG_MSG_S")
+        echo "$HEADER"
+        if [ -n "$OUT_FILE" ]; then
+          printf "# max_in_flight={{.MAX_IN_FLIGHT}}  batch_count={{.BATCH_COUNT}}\n" > "$OUT_FILE"
+          echo "$HEADER" >> "$OUT_FILE"
+        fi
+        for fetch in 1000 10000 100000; do
+          for cores in 1 2 4 8; do
+            OUTPUT=$(task bench:run FETCH_SIZE=$fetch CORES=$cores BATCH_COUNT={{.BATCH_COUNT}} MAX_IN_FLIGHT={{.MAX_IN_FLIGHT}} 2>&1) || true
+            R=$(echo "$OUTPUT" | grep "^RESULT " || true)
+            TOTAL=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOTAL=${TOTAL:-ERROR}
+            ELAPSED=$(echo "$R" | grep -o 'elapsed=[^ ]*' | cut -d= -f2 || true); ELAPSED=${ELAPSED:-?}
+            AVG=$(echo "$R" | grep -o 'avg=[^ ]*' | cut -d= -f2 || true); AVG=${AVG:-0}
+            ROW=$(printf "%-10s  %-8s  %-12s  %-10s  %s\n" "$fetch" "$cores" "$TOTAL" "$ELAPSED" "$AVG")
+            echo "$ROW"
+            if [ -n "$OUT_FILE" ]; then echo "$ROW" >> "$OUT_FILE"; fi
+          done
+        done
+
+  bench:kc:run:
+    desc: "Run query read via Kafka Connect JDBC Source (e.g. task bench:kc:run FETCH_SIZE=10000 BATCH_MAX_ROWS=10000 TOTAL=2000000)"
+    vars:
+      FETCH_SIZE: '{{.FETCH_SIZE | default "10000"}}'
+      BATCH_MAX_ROWS: '{{.BATCH_MAX_ROWS | default "10000"}}'
+      TOTAL: '{{.TOTAL | default "2000000"}}'
+      INTERVAL: '{{.INTERVAL | default "2"}}'
+    cmds:
+      - |
+        if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
+        if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
+        if [ ! -f "../../ngdbc.jar" ]; then echo "ERROR: place SAP HANA JDBC driver at bench/ngdbc.jar"; exit 1; fi
+
+        # Parse DSN: hdb://user:pass@host:port
+        _S="${HANA_DSN#hdb://}"; KC_USER="${_S%%:*}"; _R="${_S#*:}"; KC_PASS="${_R%@*}"; KC_HP="${_S##*@}"
+        KC_JDBC="jdbc:sap://${KC_HP}"
+
+        CONN="hana-bench-query-kc-$(date +%s)"; TOPIC="rpcns-hana-kc-query"
+        FETCH={{.FETCH_SIZE}}; BATCH={{.BATCH_MAX_ROWS}}; TOTAL={{.TOTAL}}; INTERVAL={{.INTERVAL}}
+
+        # ngdbc 2.x hangs on SELECT * with DECIMAL+NVARCHAR+TIMESTAMP — cast PRICE to DOUBLE
+        KC_TABLE=$(printf '"%s"."%s"' "$HANA_SCHEMA" "BENCH_ORDERS_QUERY" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+        KC_REST="http://localhost:8083"
+        ATTEMPTS=0
+        until curl -sf "${KC_REST}/connectors" >/dev/null 2>&1 || [ $ATTEMPTS -ge 30 ]; do
+          sleep 2; ATTEMPTS=$((ATTEMPTS+1))
+        done
+        if [ $ATTEMPTS -ge 30 ]; then echo "ERROR: Kafka Connect not ready — run: task kc:up"; exit 1; fi
+
+        curl -sf -X DELETE "${KC_REST}/connectors/${CONN}" >/dev/null 2>&1 || true
+        sleep 1
+
+        get_kafka_abs() {
+          timeout 5 docker exec rpcns-hana-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 --topic "$TOPIC" 2>/dev/null \
+            | awk -F: '{sum+=$3} END{print sum+0}' || echo 0
+        }
+
+        START_OFFSET=$(get_kafka_abs)
+        printf "kc  fetch=%-8s  batch_max_rows=%-6s\n" "$FETCH" "$BATCH"
+
+        curl -sf -X POST "${KC_REST}/connectors" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"name\":\"${CONN}\",
+            \"config\":{
+              \"connector.class\":\"com.sap.kafka.connect.source.hana.HANASourceConnector\",
+              \"connection.url\":\"${KC_JDBC}\",
+              \"connection.user\":\"${KC_USER}\",
+              \"connection.password\":\"${KC_PASS}\",
+              \"topics\":\"${TOPIC}\",
+              \"${TOPIC}.table.name\":\"${KC_TABLE}\",
+              \"${TOPIC}.poll.interval.ms\":\"86400000\",
+              \"${TOPIC}.fetch.size\":\"${FETCH}\",
+              \"${TOPIC}.batch.max.rows\":\"${BATCH}\",
+              \"tasks.max\":\"1\",
+              \"key.converter\":\"org.apache.kafka.connect.json.JsonConverter\",
+              \"value.converter\":\"org.apache.kafka.connect.json.JsonConverter\",
+              \"key.converter.schemas.enable\":\"false\",
+              \"value.converter.schemas.enable\":\"false\"
+            }
+          }" >/dev/null
+
+        START=$(date +%s); PREV_COUNT=0; PREV_TIME=$START
+        printf "%-10s  %-14s  %s\n" "TIME" "IN KAFKA" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          COUNT=$(( $(get_kafka_abs) - START_OFFSET )); COUNT=${COUNT:-0}; NOW=$(date +%s)
+          DELTA_T=$((NOW-PREV_TIME)); DELTA_C=$((COUNT-PREV_COUNT)); RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_C/DELTA_T))
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$COUNT" "$RATE"
+          CONN_STATE=$(curl -sf "${KC_REST}/connectors/${CONN}/status" 2>/dev/null \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['connector']['state'])" 2>/dev/null || echo "UNKNOWN")
+          if [ "$CONN_STATE" = "FAILED" ]; then
+            TRACE=$(curl -sf "${KC_REST}/connectors/${CONN}/status" 2>/dev/null \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['connector'].get('trace','')[:300])" 2>/dev/null || echo "")
+            curl -sf -X DELETE "${KC_REST}/connectors/${CONN}" >/dev/null 2>&1 || true
+            echo "ERROR: connector FAILED — $TRACE"; exit 1
+          fi
+          if [ "${COUNT:-0}" -ge "$TOTAL" ]; then
+            ELAPSED=$((NOW-START))
+            AVG=$(awk "BEGIN{printf \"%.0f\",$TOTAL/($ELAPSED>0?$ELAPSED:1)}")
+            curl -sf -X DELETE "${KC_REST}/connectors/${CONN}" >/dev/null 2>&1 || true
+            echo "---"
+            printf "kc  fetch=%-8s  batch_max_rows=%-6s\n" "$FETCH" "$BATCH"
+            echo "Total messages : $COUNT / $TOTAL"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            echo "RESULT_KC_QUERY fetch=$FETCH batch=$BATCH total=$COUNT elapsed=${ELAPSED}s avg=$AVG"
+            break
+          fi
+          PREV_COUNT=$COUNT; PREV_TIME=$NOW
+        done
+
+  bench:kc:matrix:
+    desc: "Sweep fetch_size x batch_max_rows over Kafka Connect JDBC query (e.g. task bench:kc:matrix TOTAL=2000000 OUT=kc_query.txt)"
+    vars:
+      TOTAL: '{{.TOTAL | default "2000000"}}'
+      OUT: '{{.OUT | default ""}}'
+    cmds:
+      - |
+        OUT_FILE="{{.OUT}}"
+        HDR=$(printf "%-10s  %-10s  %-12s  %-10s  %s\n" "FETCH" "BATCH" "TOTAL" "ELAPSED" "AVG_MSG_S")
+        echo "$HDR"
+        if [ -n "$OUT_FILE" ]; then
+          printf "# kafka-connect jdbc query  total={{.TOTAL}}\n" >"$OUT_FILE"
+          echo "$HDR" >>"$OUT_FILE"
+        fi
+        for fetch in 1000 10000 100000; do
+          for batch in 1000 5000 10000; do
+            OUTPUT=$(task bench:kc:run FETCH_SIZE=$fetch BATCH_MAX_ROWS=$batch TOTAL={{.TOTAL}} 2>&1) || true
+            R=$(echo "$OUTPUT" | grep "^RESULT_KC_QUERY " || true)
+            TOT=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOT=${TOT:-ERROR}
+            EL=$(echo "$R" | grep -o 'elapsed=[^ ]*' | cut -d= -f2 || true); EL=${EL:-?}
+            AV=$(echo "$R" | grep -o 'avg=[^ ]*' | cut -d= -f2 || true); AV=${AV:-0}
+            ROW=$(printf "%-10s  %-10s  %-12s  %-10s  %s\n" "$fetch" "$batch" "$TOT" "$EL" "$AV")
+            echo "$ROW"
+            if [ -n "$OUT_FILE" ]; then echo "$ROW" >>"$OUT_FILE"; fi
+          done
+        done
+
+  logs:
+    desc: Tail the last benchmark run log
+    cmds:
+      - tail -f /tmp/rpcns_hana_query_bench.log

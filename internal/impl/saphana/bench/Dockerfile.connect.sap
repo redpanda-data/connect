@@ -1,0 +1,8 @@
+FROM confluentinc/cp-kafka-connect:7.7.8
+
+# Download SAP HANA Kafka Connect connector (kafka-connect-sap)
+USER root
+RUN mkdir -p /usr/share/kafka-connect-sap/lib && \
+    curl -fsSL -o /usr/share/kafka-connect-sap/lib/kafka-connector-hana_2.13-0.9.4.jar \
+    https://github.com/SAP/kafka-connect-sap/releases/download/0.9.4/kafka-connector-hana_2.13-0.9.4.jar
+USER appuser
