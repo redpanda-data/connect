@@ -40,6 +40,7 @@ label: ""
 aws_bedrock_embeddings:
   model: amazon.titan-embed-text-v1 # No default (required)
   text: "" # No default (optional)
+  input_type: "" # No default (optional)
 ```
 
 --
@@ -70,6 +71,7 @@ aws_bedrock_embeddings:
     role_external_id: "" # No default (optional)
   model: amazon.titan-embed-text-v1 # No default (required)
   text: "" # No default (optional)
+  input_type: "" # No default (optional)
 ```
 
 --
@@ -282,6 +284,8 @@ model: amazon.titan-embed-text-v2:0
 model: cohere.embed-english-v3
 
 model: cohere.embed-multilingual-v3
+
+model: cohere.embed-v4:0
 ```
 
 === `text`
@@ -291,5 +295,27 @@ The prompt you want to generate a response for. By default, the processor submit
 
 *Type*: `string`
 
+
+=== `input_type`
+
+Specifies the type of input passed to the model. Required by Cohere embedding models; ignored by Amazon Titan models.
+
+
+*Type*: `string`
+
+
+|===
+| Option | Summary
+
+| `classification`
+| Used for embeddings passed through a text classifier.
+| `clustering`
+| Used for the embeddings run through a clustering algorithm.
+| `search_document`
+| Used for embeddings stored in a vector database for search use-cases.
+| `search_query`
+| Used for embeddings of search queries run against a vector DB to find relevant documents.
+
+|===
 
 

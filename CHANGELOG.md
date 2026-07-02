@@ -3,6 +3,84 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.98.0 - 2026-06-26
+
+### Added
+
+- postgres_cdc: PostgreSQL CDC events now include commit_ts_ms metadata field with the transaction commit timestamp for insert, update, and delete operations. ([@josephwoodward](https://github.com/josephwoodward), [#4554](https://github.com/redpanda-data/connect/pull/4554))
+
+### Fixed
+
+- aws_dynamodb_cdc: DynamoDB Streams connector now recovers from expired shard iterators by re-acquiring fresh iterators from the last read position, eliminating data gaps on prolonged backpressure or idle periods. ([@squiidz](https://github.com/squiidz), [#4545](https://github.com/redpanda-data/connect/pull/4545))
+- file: File output now validates paths to reject OS-specific invalid characters (colons on macOS, control characters and special chars on Windows, NUL on all platforms) that cause silent data loss. ([@twmb](https://github.com/twmb), [#4053](https://github.com/redpanda-data/connect/pull/4053))
+- oracledb_cdc: Fixed goroutine leak in streaming reconnect loop and added time-to-first-row metric for LogMiner performance tracking. ([@josephwoodward](https://github.com/josephwoodward), [#4540](https://github.com/redpanda-data/connect/pull/4540))
+
+### Changed
+
+- general: try_catch processor is now available in cloud distributions alongside other try/catch processors. ([@josephwoodward](https://github.com/josephwoodward), [#4562](https://github.com/redpanda-data/connect/pull/4562))
+- oracledb_cdc: Snapshot messages now include the current SCN in metadata, improving CDC standard conformance for change data capture operations. ([@josephwoodward](https://github.com/josephwoodward), [#4542](https://github.com/redpanda-data/connect/pull/4542))
+- sentry: Migrated sentry_capture processor to sentry-go v0.47.0 by attaching extras as a context instead of the removed SetExtras API. ([@twmb](https://github.com/twmb), [#4549](https://github.com/redpanda-data/connect/pull/4549))
+
+## Unreleased
+
+### Fixed
+
+- aws_dynamodb_cdc: The CDC input now recovers automatically from an expired DynamoDB Streams shard iterator (`ExpiredIteratorException`), which previously caused an affected shard to retry the dead iterator indefinitely and stall until a pod restart. The shard now obtains a fresh iterator and resumes from the last read position without a data gap.
+
+## 4.97.0 - 2026-06-18
+
+### Added
+
+- elasticsearch: Added support for using Elasticsearch API keys for authentication. ([@dbason](https://github.com/dbason), [#4492](https://github.com/redpanda-data/connect/pull/4492))
+- oracledb_cdc: Oracle CDC connector now publishes an oracledb_cdc_publish_lag_ns metric tracking latency between database commits and event publication. ([@josephwoodward](https://github.com/josephwoodward), [#4520](https://github.com/redpanda-data/connect/pull/4520))
+- oracledb_cdc: Oracle CDC connector now supports a configurable min_scn_window_size parameter to skip mining cycles when the SCN gap is too small. ([@josephwoodward](https://github.com/josephwoodward), [#4530](https://github.com/redpanda-data/connect/pull/4530))
+- aws_bedrock_embeddings: Support Cohere input_type and v4 response. ([@squiidz](https://github.com/squiidz), [#4473](https://github.com/redpanda-data/connect/pull/4473))
+- aws_dynamodb_cdc: The auto-created checkpoint table can now be provisioned as a DynamoDB Global Table via `global_table` / `global_table_replicas`, enabling low-RPO multi-region failover. ([@squiidz](https://github.com/squiidz), [#4529](https://github.com/redpanda-data/connect/pull/4529))
+
+### Fixed
+
+- bigquery: BigQuery CDC now rejects writes to pre-existing tables that lack a PRIMARY KEY, with a clear error message guiding users to add one. ([@squiidz](https://github.com/squiidz), [#4503](https://github.com/redpanda-data/connect/pull/4503))
+- bigquery: Fix CDC row-error indexing and metric consistency.  ([@squiidz](https://github.com/squiidz), [#4504](https://github.com/redpanda-data/connect/pull/4504))
+- doris: Corrected the Doris Stream Load connector release version from 4.86.0 to 4.96.0. ([@josephwoodward](https://github.com/josephwoodward), [#4523](https://github.com/redpanda-data/connect/pull/4523))
+- oracledb_cdc: Oracle CDC connector now gracefully handles log recycle errors (ORA-01368) by logging a warning and retrying. ([@josephwoodward](https://github.com/josephwoodward), [#4516](https://github.com/redpanda-data/connect/pull/4516))
+- postgresql_cdc: PostgreSQL CDC connector now correctly passes sslmode=require in the DSN instead of having it overwritten by TLS configuration. ([@josephwoodward](https://github.com/josephwoodward), [#4518](https://github.com/redpanda-data/connect/pull/4518))
+- protobuf: Disabled hyperpb profile-guided recompilation in protobuf and schema_registry_decode processors to prevent unbounded heap growth from profile-retention memory leaks. ([@squiidz](https://github.com/squiidz), [#4527](https://github.com/redpanda-data/connect/pull/4527))
+- aws_dynamodb_cdc: Only checkpoint contiguously acked positions. ([@squiidz](https://github.com/squiidz), [#4510](https://github.com/redpanda-data/connect/pull/4510))
+
+### Changed
+
+- oracledb_cdc: Oracle CDC connector now begins at the current SCN upon connector start, with SCN fetching moved into the Connect function. ([@josephwoodward](https://github.com/josephwoodward), [#4509](https://github.com/redpanda-data/connect/pull/4509))
+- oracledb_cdc: Oracle CDC connector implements adaptive SCN windowing and improves LogMiner session reuse. ([@josephwoodward](https://github.com/josephwoodward), [#4531](https://github.com/redpanda-data/connect/pull/4531))
+- oracledb_cdc: Reduce allocations of parsing redo log queries to increase throughput. ([@josephwoodward](https://github.com/josephwoodward), [#4533](https://github.com/redpanda-data/connect/pull/4533))
+
+## 4.96.2 - 2026-06-16
+
+### Added
+
+- oracledb_cdc: oracledb_cdc: Add oracledb_cdc_publish_lag_ns metric to track publish latency. ([@josephwoodward](https://github.com/josephwoodward), [#4520](https://github.com/redpanda-data/connect/pull/4520))
+
+### Fixed
+
+- postgresql_cdc: Fix issue where defaults tls block would overwrite DSN configured params. ([@josephwoodward](https://github.com/josephwoodward), [#4518](https://github.com/redpanda-data/connect/pull/4518))
+
+## 4.96.1 - 2026-06-12
+
+
+### Changed
+
+- oracledb_cdc: Connector now starts streaming from current SCN ([@josephwoodward](https://github.com/josephwoodward), [#4509](https://github.com/redpanda-data/connect/pull/4509))
+
+## 4.96.0 - 2026-06-11
+
+### Added
+
+- bigquery: Added CDC upsert and upsert_delete write modes to BigQuery connector with automatic _CHANGE_TYPE and _CHANGE_SEQUENCE_NUMBER injection for Change Data Capture workflows. ([@squiidz](https://github.com/squiidz), [#4453](https://github.com/redpanda-data/connect/pull/4453))
+- Doris: Added new stream load output. ([@xylaaaaa](https://github.com/xylaaaaa), [#4218](https://github.com/redpanda-data/connect/pull/4218))
+
+### Fixed
+
+- dynamodb_cdc: Paginate DescribeStream to discover all shards. ([@squiidz](https://github.com/squiidz), [#4489](https://github.com/redpanda-data/connect/pull/4489))
+
 ## 4.95.0 - 2026-06-04
 
 ### Fixed

@@ -10,6 +10,7 @@ package logminer
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"testing"
 
@@ -232,14 +233,194 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 	})
 }
 
+func TestSessionManagerFilesChanged(t *testing.T) {
+	tests := []struct {
+		name        string
+		loaded      []*LogFile
+		incoming    []*LogFile
+		wantChanged bool
+	}{
+		{
+			name:        "no files loaded yet",
+			loaded:      nil,
+			incoming:    []*LogFile{{FileName: "redo01.log"}},
+			wantChanged: true,
+		},
+		{
+			name:        "same files in same order reports unchanged",
+			loaded:      []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			incoming:    []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			wantChanged: false,
+		},
+		{
+			name:        "more files incoming than loaded",
+			loaded:      []*LogFile{{FileName: "redo01.log"}},
+			incoming:    []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			wantChanged: true,
+		},
+		{
+			name:        "fewer files incoming than loaded",
+			loaded:      []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			incoming:    []*LogFile{{FileName: "redo01.log"}},
+			wantChanged: true,
+		},
+		{
+			name:        "same count but different filename",
+			loaded:      []*LogFile{{FileName: "redo01.log"}},
+			incoming:    []*LogFile{{FileName: "redo02.log"}},
+			wantChanged: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sm := &SessionManager{loadedFiles: tt.loaded}
+			assert.Equal(t, tt.wantChanged, sm.logFilesChanged(tt.incoming))
+		})
+	}
+}
+
+func TestShouldDeferMiningCycle(t *testing.T) {
+	tests := []struct {
+		name          string
+		currentSCN    uint64
+		dbSCN         uint64
+		minWindowSize int
+		shouldDefer   bool
+	}{
+		{
+			name:          "gap smaller than min window defers the cycle",
+			currentSCN:    1000,
+			dbSCN:         1005,
+			minWindowSize: 100,
+			shouldDefer:   true,
+		},
+		{
+			name:          "gap equal to min window does not defer",
+			currentSCN:    1000,
+			dbSCN:         1100,
+			minWindowSize: 100,
+			shouldDefer:   false,
+		},
+		{
+			name:          "gap larger than min window does not defer",
+			currentSCN:    1000,
+			dbSCN:         2000,
+			minWindowSize: 100,
+			shouldDefer:   false,
+		},
+		{
+			name:          "min window of zero disables the guard",
+			currentSCN:    1000,
+			dbSCN:         1001,
+			minWindowSize: 0,
+			shouldDefer:   false,
+		},
+		{
+			name:          "scns equal does not defer (existing guard handles this)",
+			currentSCN:    1000,
+			dbSCN:         1000,
+			minWindowSize: 100,
+			shouldDefer:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := deferMiningCycle(tt.currentSCN, tt.dbSCN, tt.minWindowSize)
+			assert.Equal(t, tt.shouldDefer, got)
+		})
+	}
+}
+
+// TestBasicfileOORInferFromLOBOnlyUpdate covers the exact CI failure scenario where:
+//   - A BASICFILE DISABLE STORAGE IN ROW LOB column (OOL_COL) has its LOB_WRITE events
+//     arrive before any DML event; all are deferred.
+//   - Oracle emits a LOB-only UPDATE for a SecureFile column (SECUREFILE_COL) that does
+//     NOT include OOL_COL in its SET clause (BASICFILE OOR columns are absent).
+//   - There is no INSERT event in the transaction cache.
+//   - At COMMIT time, inferLOBLocator must treat OOL_COL as a BASICFILE OOR candidate
+//     from the LOB-only UPDATE (absent from SET = BASICFILE OOR, not a disqualifier).
+func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	lm.lobColTypes = map[string]string{
+		"TESTDB.T.OOL_COL":        "CLOB",
+		"TESTDB.T.SECUREFILE_COL": "CLOB",
+	}
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+
+	// OOL_COL LOB_WRITEs arrive with no DML events in txnCache yet — all deferred.
+	for _, write := range []string{
+		" buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);",
+		" buf_c := 'world';\n  dbms_lob.write(loc_c, 5, 6, buf_c);",
+	} {
+		require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+			SCN:           101,
+			Operation:     sqlredo.OpLobWrite,
+			TransactionID: "txA",
+			SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+			TableName:     sql.NullString{String: "T", Valid: true},
+			SQLRedo:       sql.NullString{String: write, Valid: true},
+		}))
+	}
+	assert.Len(t, lm.pendingLOBWrites["txA"], 2, "OOL_COL LOB_WRITEs should be deferred")
+
+	// Oracle emits a LOB-only UPDATE for SECUREFILE_COL. OOL_COL (BASICFILE OOR) is
+	// absent from the SET clause — this is the case that triggered the CI failure.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           102,
+		Operation:     sqlredo.OpUpdate,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "SECUREFILE_COL" = 'X' where "ID" = '42'`, Valid: true},
+	}))
+
+	// SECUREFILE_COL gets its real data via SELECT_LOB_LOCATOR + LOB_WRITE.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           103,
+		Operation:     sqlredo.OpSelectLobLocator,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `declare lob_1 clob; begin select "SECUREFILE_COL" into lob_1 from "TESTDB"."T" where "ID" = '42';`, Valid: true},
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           104,
+		Operation:     sqlredo.OpLobWrite,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: " buf_c := 'securedata';\n  dbms_lob.write(loc_c, 10, 1, buf_c);", Valid: true},
+	}))
+
+	// COMMIT — replay deferred LOB_WRITEs; inferLOBLocator must find OOL_COL as a
+	// candidate from the LOB-only UPDATE (absent from SET = BASICFILE OOR, not a skip).
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	require.Len(t, pub.messages, 1)
+	data, ok := pub.messages[0].Data.(map[string]any)
+	require.True(t, ok, "Data should be map[string]any")
+	assert.Equal(t, "helloworld", data["OOL_COL"], "BASICFILE OOR column should have deferred LOB_WRITEs assembled")
+	assert.Equal(t, "securedata", data["SECUREFILE_COL"], "SecureFile column should have its LOB_WRITE data")
+	assert.Empty(t, lm.pendingLOBWrites, "no LOB_WRITEs should remain deferred after COMMIT")
+}
+
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
 	return &LogMiner{
-		publisher: pub,
-		txnCache:  cache,
-		dmlParser: sqlredo.NewParser(),
-		log:       service.NewLoggerFromSlog(slog.Default()),
-		cfg:       NewDefaultConfig(),
-		lobStates: make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		publisher:        pub,
+		txnCache:         cache,
+		dmlParser:        sqlredo.NewParser(),
+		log:              service.NewLoggerFromSlog(slog.Default()),
+		cfg:              NewDefaultConfig(),
+		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
 	}
 }
 

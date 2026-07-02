@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -45,12 +46,15 @@ const (
 	ociFieldCheckpointCacheTableName  = "checkpoint_cache_table_name"
 	ociFieldBatching                  = "batching"
 	ociFieldPDBName                   = "pdb_name"
+	ociFieldSnapshotMode              = "snapshot_mode"
 
 	shutdownTimeout = 5 * time.Second
 
 	//-- logminer specific
 	ociFieldLogMiner             = "logminer"
 	ociFieldSCNWindowSize        = "scn_window_size"
+	ociFieldMinSCNWindowSize     = "min_scn_window_size"
+	ociFieldMaxSCNWindowSize     = "max_scn_window_size"
 	ociFieldBackoffInterval      = "backoff_interval"
 	ociFieldMiningInterval       = "mining_interval"
 	ociFieldMiningStrategy       = "strategy"
@@ -78,10 +82,10 @@ This input adds the following metadata fields to each message:
 - database_schema: The database schema for the table where the message originates from.
 - table_name: Name of the table that the message originated from.
 - operation: Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.
-- scn: the System Change Number in Oracle.
+- scn: The System Change Number in Oracle. Messages published as part of a snapshot will contain Oracle's current SCN captured at time of snapshot.
 - transaction_id: The Oracle transaction ID in ` + "`USN.SLOT.SEQ`" + ` format, identifying the transaction that produced the change. Not present on snapshot (` + "`read`" + `) messages.
 - source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
-- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Not present on snapshot (` + "`read`" + `) messages.
+- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from ` + "`V$LOGMNR_CONTENTS.TIMESTAMP`" + ` on the COMMIT redo record — this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. For snapshot (` + "`read`" + `) messages, this reflects Oracle's ` + "`SYSTIMESTAMP`" + ` at the moment the snapshot SCN was captured, so all snapshot messages share the same value.
 - schema: The table schema, for use with schema-aware downstream processors such as ` + "`schema_registry_encode`" + `. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
@@ -106,7 +110,16 @@ When using the default Oracle based cache, the Connect user requires permission 
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
 		Example(true).
-		Default(false),
+		Default(false).
+		Deprecated(),
+	).
+	Field(service.NewStringEnumField(ociFieldSnapshotMode,
+		string(SnapshotModeNone),
+		string(SnapshotModeSnapshotOnly),
+		string(SnapshotModeSnapshotAndStream)).
+		Description("Controls snapshot behaviour. `none` (default) skips snapshotting and starts streaming from the current SCN. `snapshot_only` performs a full snapshot, persists the SCN checkpoint, then stops without streaming. `snapshot_and_stream` performs a full snapshot then transitions to streaming.").
+		Optional().
+		Version("4.99.0"),
 	).
 	Field(service.NewIntField(ociFieldMaxParallelSnapshotTables).
 		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
@@ -118,8 +131,14 @@ When using the default Oracle based cache, the Connect user requires permission 
 	// logminer config
 	Field(service.NewObjectField(ociFieldLogMiner,
 		service.NewIntField(ociFieldSCNWindowSize).
-			Description("The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + scn_window_size. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.").
+			Description(`The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + `+ociFieldSCNWindowSize+`. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.`).
 			Default(logminer.DefaultSCNWindowSize),
+		service.NewIntField(ociFieldMinSCNWindowSize).
+			Description("The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.").
+			Default(logminer.DefaultMinSCNWindowSize),
+		service.NewIntField(ociFieldMaxSCNWindowSize).
+			Description(`The maximum SCN range that can be mined in a single cycle. The window starts at `+ociFieldSCNWindowSize+` and grows by `+ociFieldSCNWindowSize+` each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.`).
+			Default(logminer.DefaultMaxSCNWindowSize),
 		service.NewDurationField(ociFieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
 			Default(logminer.DefaultMiningBackoffInterval.String()).
@@ -194,7 +213,7 @@ type asyncMessage struct {
 // Config is the configuration for a Oracle connector.
 type Config struct {
 	ConnectionString     string
-	StreamSnapshot       bool
+	SnapshotMode         SnapshotMode
 	SnapshotMaxBatchSize int
 	SnapshotMaxWorkers   int
 	TablesFilter         *confx.RegexpFilter
@@ -213,15 +232,16 @@ type oracleDBCDCInput struct {
 	publisher *batchPublisher
 	metrics   *service.Metrics
 
-	stopSig *shutdown.Signaller
-	log     *service.Logger
-	cpCache service.Cache
+	stopSig          *shutdown.Signaller
+	snapshotOnlyDone atomic.Bool
+	log              *service.Logger
+	cpCache          service.Cache
 }
 
 func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
 	var (
 		connectionString     string
-		streamSnapshot       bool
+		snapshotMode         SnapshotMode
 		snapshotMaxWorkers   int
 		snapshotMaxBatchSize int
 
@@ -242,7 +262,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if connectionString, err = conf.FieldString(ociFieldConnectionString); err != nil {
 		return nil, err
 	}
-	if streamSnapshot, err = conf.FieldBool(ociFieldStreamSnapshot); err != nil {
+	if snapshotMode, err = parseSnapshotMode(conf); err != nil {
 		return nil, err
 	}
 	if snapshotMaxWorkers, err = conf.FieldInt(ociFieldMaxParallelSnapshotTables); err != nil {
@@ -327,7 +347,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	o := oracleDBCDCInput{
 		cfg: Config{
 			ConnectionString:     connectionString,
-			StreamSnapshot:       streamSnapshot,
+			SnapshotMode:         snapshotMode,
 			SnapshotMaxWorkers:   snapshotMaxWorkers,
 			SnapshotMaxBatchSize: snapshotMaxBatchSize,
 			SCNCache:             scnCache,
@@ -493,7 +513,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	)
 
 	// no cached SCN means we're not recovering from a restart
-	if o.cfg.StreamSnapshot && cachedSCN == replication.InvalidSCN {
+	if !o.cfg.SnapshotMode.IsSnapshotNone() && cachedSCN == replication.InvalidSCN {
 		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
@@ -516,19 +536,28 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		return errors.New("logminer configuration required for streaming")
 	}
 
-	// Reset our stop signal
+	if cachedSCN == replication.InvalidSCN && snapshotter == nil {
+		if cachedSCN, err = streaming.FindStartPos(ctx); err != nil {
+			return fmt.Errorf("fetching current SCN: %w", err)
+		}
+		o.log.Infof("No cached SCN found, fetched current position from database: %d", cachedSCN)
+	}
+
+	// Reset our stop signal and snapshot-only completion flag
 	o.stopSig = shutdown.NewSignaller()
+	o.snapshotOnlyDone.Store(false)
 
 	go func() {
 		var (
-			err    error
-			maxSCN = cachedSCN
+			err      error
+			startSCN = cachedSCN
 		)
-		softCtx, _ := o.stopSig.SoftStopCtx(context.Background())
+		softCtx, cancel := o.stopSig.SoftStopCtx(context.Background())
+		defer cancel()
 
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {
-			if maxSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
+			if startSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					o.log.Infof("Snapshotting stopped: %s", err)
 				} else {
@@ -538,32 +567,29 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 				return
 			}
 
-			if err = o.cacheSCN(softCtx, maxSCN); err != nil {
+			if err = o.cacheSCN(softCtx, startSCN); err != nil {
 				o.log.Errorf("Failed to capture SCN after snapshot completion. Snapshot will re-run on restart (may cause duplicate data): %s", err)
 				o.stopSig.TriggerHasStopped()
 				return
 			}
 
-			o.log.Infof("Successfully captured SCN following snapshot: %d", maxSCN)
+			o.log.Infof("Successfully captured SCN following snapshot: %d", startSCN)
 		}
 
-		// If no SCN is available (no snapshot and no cached position), so get the start position from the DB
-		if maxSCN == replication.InvalidSCN {
-			if maxSCN, err = streaming.FindStartPos(softCtx); err != nil {
-				o.log.Errorf("Failed to get start SCN from database: %s", err)
-				o.stopSig.TriggerHasStopped()
-				return
+		if o.cfg.SnapshotMode.IsSnapshotOnly() {
+			if err = o.publisher.FlushRemaining(softCtx); err != nil {
+				o.log.Errorf("Failed to flush remaining snapshot events: %s", err)
 			}
-			o.log.Infof("No cached SCN found, fetched starting position from database: %d", maxSCN)
-			if err = o.cacheSCN(softCtx, maxSCN); err != nil {
-				o.log.Warnf("Failed to cache initial SCN (non-critical): %s", err)
-			}
+			o.log.Infof("Snapshot-only mode complete, stopping at SCN %s", startSCN)
+			o.snapshotOnlyDone.Store(true)
+			o.stopSig.TriggerHasStopped()
+			return
 		}
 
 		// streaming
 		wg, _ := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChanges(softCtx, maxSCN); err != nil {
+			if err := streaming.ReadChanges(softCtx, startSCN); err != nil {
 				return fmt.Errorf("streaming from logminer: %w", err)
 			}
 			return nil
@@ -641,6 +667,9 @@ func (o *oracleDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 	case m := <-o.publisher.msgs():
 		return m.msg, m.ackFn, nil
 	case <-o.stopSig.HasStoppedChan():
+		if o.snapshotOnlyDone.Load() {
+			return nil, nil, service.ErrEndOfInput
+		}
 		return nil, nil, service.ErrNotConnected
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
@@ -723,6 +752,18 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.SCNWindowSize <= 0 {
 			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldSCNWindowSize, cfg.SCNWindowSize)
+		}
+		if cfg.MinSCNWindowSize, err = lmConf.FieldInt(ociFieldMinSCNWindowSize); err != nil {
+			return nil, err
+		}
+		if cfg.MinSCNWindowSize < 0 {
+			return nil, fmt.Errorf("logminer.%s must be 0 or greater, got %d", ociFieldMinSCNWindowSize, cfg.MinSCNWindowSize)
+		}
+		if cfg.MaxSCNWindowSize, err = lmConf.FieldInt(ociFieldMaxSCNWindowSize); err != nil {
+			return nil, err
+		}
+		if cfg.MaxSCNWindowSize < cfg.SCNWindowSize {
+			return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldMaxSCNWindowSize, cfg.MaxSCNWindowSize, ociFieldSCNWindowSize, cfg.SCNWindowSize)
 		}
 		if cfg.MiningBackoffInterval, err = lmConf.FieldDuration(ociFieldBackoffInterval); err != nil {
 			return nil, err

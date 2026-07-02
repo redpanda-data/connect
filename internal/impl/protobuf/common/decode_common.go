@@ -35,7 +35,18 @@ type ProfilingOptions struct {
 
 // DefaultProfilingOptions are the standard profiling settings used across all
 // hyperpb decoder call sites.
+//
+// Profile-guided recompilation is currently disabled (RecompileInterval: 0)
+// because hyperpb v0.1.3 leaks profile data across recompiles: MessageType.Recompile
+// clones the previous type's compile options and appends another WithProfile, and
+// CompileMessageDescriptor stores that growing slice in the new type's
+// Library.Metadata. The live type therefore pins every prior generation's profile
+// recorder (a 32 KB ring buffer per field), so memory grows unbounded under
+// sustained throughput. Only the final profile is ever used during compilation, so
+// the retained generations serve no purpose. With recompilation off there is nothing
+// to record into, so Rate is 0 as well to avoid the per-message recording overhead.
+// Re-enable once the upstream leak is fixed.
 var DefaultProfilingOptions = ProfilingOptions{
-	Rate:              0.01,
-	RecompileInterval: 100_000,
+	Rate:              0,
+	RecompileInterval: 0,
 }

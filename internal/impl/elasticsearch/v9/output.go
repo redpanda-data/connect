@@ -53,6 +53,7 @@ const (
 	esFieldAuthEnabled     = "enabled"
 	esFieldAuthUsername    = "username"
 	esFieldAuthPassword    = "password"
+	esFieldAPIKey          = "api_key"
 	esFieldBatching        = "batching"
 )
 
@@ -128,6 +129,9 @@ func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
 	if conf.retryOnConflict, err = pConf.FieldInt(esFieldRetryOnConflict); err != nil {
 		return nil, err
 	}
+	if conf.clientOpts.APIKey, err = pConf.FieldString(esFieldAPIKey); err != nil {
+		return nil, err
+	}
 
 	return conf, nil
 }
@@ -164,6 +168,9 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 				Default(0),
 			service.NewTLSToggledField(esFieldTLS),
 			service.NewOutputMaxInFlightField(),
+			service.NewStringField(esFieldAPIKey).
+				Description("An API key to authenticate with. If set, it supersedes basic authentication.").
+				Default("").Secret(),
 		).
 		Fields(
 			service.NewObjectField(esFieldAuth,
@@ -254,6 +261,15 @@ output:
     index: "cool-bug-facts"
     action: "index"
     id: ${! meta("s3_key") }
+`).
+		Example("Authenticating with an API key", "Set the `api_key` field to authenticate requests with an Elasticsearch API key. If `api_key` is set, it supersedes the `basic_auth` configuration.", `
+output:
+  elasticsearch_v9:
+    urls: ['https://localhost:9200']
+    index: "things"
+    action: "index"
+    id: ${! json("id") }
+    api_key: "${ELASTICSEARCH_API_KEY}"
 `).
 		Example("Create Documents", "When using the `create` action, a new document will be created if the document ID does not already exist. If the document ID already exists, the operation will fail.", `
 output:

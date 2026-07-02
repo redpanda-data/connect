@@ -15,15 +15,24 @@ input:
       count: 1000
       period: 1s
 
+# pipeline:
+#   processors:
+#     - mapping: |
+#         root.payload = this
+#         root.metadata = @
+
 output:
   processors:
     - benchmark:
         interval: 1s
         count_bytes: true
+  # file:
+  #   path: "./benchmark_results.json"
+  #   codec: lines
   drop: {}
 
 logger:
-  level: WARN
+  level: INFO
 
 metrics:
   prometheus:
