@@ -5,8 +5,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.99.0 - 2026-07-02
+
+### Added
+
+- aws_dynamodb_cdc: DynamoDB CDC now supports Global Tables for checkpoint tables, enabling multi-region failover with low RPO by replicating shard checkpoints across regions. ([@squiidz](https://github.com/squiidz), [#4529](https://github.com/redpanda-data/connect/pull/4529))
+- iceberg: Iceberg output now supports row-level operations (insert/upsert/delete) with configurable mappings and equality-delete files for mutable workloads. ([@Jeffail](https://github.com/Jeffail), [#4567](https://github.com/redpanda-data/connect/pull/4567))
+- oracledb_cdc: Oracle CDC now supports snapshot_only mode via a new snapshot_mode enum, replacing the deprecated boolean stream_snapshot option. ([@josephwoodward](https://github.com/josephwoodward), [#4570](https://github.com/redpanda-data/connect/pull/4570))
+- oracledb_cdc: Oracle CDC snapshot reads now emit commit_ts_ms metadata captured from SYSTIMESTAMP for consistent timestamp tracking. ([@josephwoodward](https://github.com/josephwoodward), [#4571](https://github.com/redpanda-data/connect/pull/4571))
+- postgres_cdc: Postgres CDC now emits 'before' metadata for update and delete events, enabling change data capture to track previous values. ([@josephwoodward](https://github.com/josephwoodward), [#4555](https://github.com/redpanda-data/connect/pull/4555))
+
 ### Fixed
 
+- oracledb_cdc: Oracle CDC now correctly handles out-of-order LOB writes by deferring and replaying them at commit time. ([@josephwoodward](https://github.com/josephwoodward), [#4574](https://github.com/redpanda-data/connect/pull/4574))
+- salesforce: Salesforce sink now correctly includes createable fields in the writable field set and makes field cache operation-aware. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4553](https://github.com/redpanda-data/connect/pull/4553))
 - kafka: Broker connectivity failures (connection, read, and write errors such as `i/o timeout`) from the franz-go client are now logged at WARN instead of only at debug level, so they can be alerted on without enabling debug logging. Emissions are throttled per broker. Affects all franz-based connectors (`kafka_franz`, `redpanda`, `redpanda_migrator`, ...).
 
 ## 4.98.0 - 2026-06-26
