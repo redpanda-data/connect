@@ -275,6 +275,133 @@ pg_stream:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
+// TestIntegrationPostgresSnapshotAckBarrier verifies that a crash during the
+// snapshot->stream handoff (after snapshot rows are emitted but before they are
+// acknowledged) does not lose data: because the replication slot is only
+// promoted once every snapshot message is acked, the snapshot must re-run on
+// restart. See CON-489.
+func TestIntegrationPostgresSnapshotAckBarrier(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	const rowCount = 5
+	for i := range rowCount {
+		f := GetFakeFlightRecord()
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+
+	// batching.count == rowCount forces all snapshot rows into a single output
+	// batch, so the run-1 consumer receives them all at once and can then block
+	// without acking - reproducing the "emitted but not yet acked" handoff state.
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_snapshot_ack_barrier
+    stream_snapshot: true
+    snapshot_batch_size: 1000
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+    batching:
+      count: %d
+      period: 1h
+`, databaseURL, rowCount)
+
+	// Run 1: receive the snapshot rows but never acknowledge them, then simulate
+	// a crash by cancelling the run before the slot can be promoted.
+	received := make(chan struct{}, 1)
+	run1Builder := service.NewStreamBuilder()
+	require.NoError(t, run1Builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, run1Builder.AddInputYAML(template))
+	require.NoError(t, run1Builder.AddBatchConsumerFunc(func(ctx context.Context, _ service.MessageBatch) error {
+		select {
+		case received <- struct{}{}:
+		default:
+		}
+		// Block without acking until the simulated crash cancels our context.
+		<-ctx.Done()
+		return ctx.Err()
+	}))
+	run1, err := run1Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run1.Resources())
+
+	run1Ctx, crash := context.WithCancel(context.Background())
+	run1Done := make(chan struct{})
+	go func() {
+		defer close(run1Done)
+		_ = run1.Run(run1Ctx)
+	}()
+
+	select {
+	case <-received:
+	case <-time.After(30 * time.Second):
+		t.Fatal("snapshot rows were never delivered to the run-1 output")
+	}
+	// Give the stream time to reach the ack barrier (and, in the buggy version,
+	// to promote the slot) before we crash.
+	time.Sleep(2 * time.Second)
+	crash()
+	select {
+	case <-run1Done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("run 1 did not stop after the simulated crash")
+	}
+
+	// The barrier must have prevented the temporary slot from being promoted to
+	// a permanent one, since the snapshot was never acknowledged. This is the
+	// core guarantee: without it the permanent slot would exist here and the
+	// snapshot would be skipped on restart.
+	var permanentSlots int
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_ack_barrier'`).Scan(&permanentSlots))
+	require.Zero(t, permanentSlots, "replication slot must not be promoted before snapshot rows are acknowledged")
+
+	// A real process crash drops the connection, so postgres releases the
+	// temporary snapshot slot. Our in-process cancel does not tear the
+	// replication connection down promptly, so terminate the backend still
+	// holding the temporary slot to faithfully model the crash, and wait for the
+	// slot to be released before restarting.
+	require.Eventually(t, func() bool {
+		_, _ = db.Exec(`SELECT pg_terminate_backend(active_pid) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_ack_barrier_tmp' AND active_pid IS NOT NULL`)
+		var tmpSlots int
+		if err := db.QueryRow(`SELECT count(*) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_ack_barrier_tmp'`).Scan(&tmpSlots); err != nil {
+			return false
+		}
+		return tmpSlots == 0
+	}, 30*time.Second, 500*time.Millisecond, "temporary snapshot slot from the crashed run was not released")
+
+	// Run 2: restart against the same slot. Since run 1 never acked the snapshot,
+	// the slot must not have been promoted, so the snapshot re-runs and every row
+	// is delivered again.
+	var mu sync.Mutex
+	var reads int
+	run2Builder := service.NewStreamBuilder()
+	require.NoError(t, run2Builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, run2Builder.AddInputYAML(template))
+	require.NoError(t, run2Builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		if op, _ := m.MetaGet("operation"); op == "read" { // ReadOpType: snapshot row
+			mu.Lock()
+			reads++
+			mu.Unlock()
+		}
+		return nil
+	}))
+	run2, err := run2Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run2.Resources())
+	go func() { _ = run2.Run(t.Context()) }()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Equal(c, rowCount, reads, "snapshot should have re-run and re-delivered every row after the crash")
+	}, 30*time.Second, 100*time.Millisecond)
+
+	require.NoError(t, run2.StopWithin(10*time.Second))
+}
+
 func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
 	t.Skip("This test requires a remote database to run. Aimed to test remote databases")
 
