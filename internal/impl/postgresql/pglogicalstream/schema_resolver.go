@@ -31,7 +31,9 @@ import (
 // System schemas (pg_* and information_schema) are always excluded so that
 // wildcard patterns like "*" do not attempt to replicate catalog tables.
 //
-// Returns an error if the query fails or if no schemas match the pattern.
+// Returns an error if the query fails. Returns (nil, nil) if no schemas match.
+// The caller is responsible for treating an empty result as an error.
+
 // schemaPatternToLike converts a schema name or glob pattern into the LIKE
 // pattern used by resolveSchemas. Extracted for unit testing.
 //

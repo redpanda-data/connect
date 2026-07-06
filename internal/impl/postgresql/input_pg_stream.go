@@ -387,7 +387,7 @@ func validateSchemaPattern(s string) error {
 		return errors.New("schema cannot be empty")
 	}
 	if strings.HasPrefix(s, `"`) {
-		if !strings.HasSuffix(s, `"`) || len(s) < 2 {
+		if !strings.HasSuffix(s, `"`) || len(s) < 3 {
 			return errors.New("unterminated quoted identifier in schema")
 		}
 		if strings.ContainsRune(s, '*') {
