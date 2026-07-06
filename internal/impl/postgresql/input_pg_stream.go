@@ -14,6 +14,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -81,6 +83,7 @@ Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then th
 
 This input adds the following metadata fields to each message:
 - table: Name of the table that the message originated from
+- pg_schema: The PostgreSQL schema name that the table belongs to (e.g. "public", "tenant_foo"). Useful for per-schema routing when using schema patterns.
 - operation: Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled
 - lsn: the log sequence number in postgres
 - schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
@@ -105,8 +108,12 @@ This input adds the following metadata fields to each message:
 			Example(10000).
 			Default(1000)).
 		Field(service.NewStringField(fieldSchema).
-			Description("The PostgreSQL schema from which to replicate data.").
-			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`),
+			Description(`The PostgreSQL schema to replicate data from. Accepts an exact schema name or a glob pattern using ` + "`*`" + ` as a wildcard to match multiple schemas.
+
+When a pattern is used, all schemas whose names match the pattern are replicated using a single replication slot and publication. This is useful for multi-tenant databases where each tenant has its own schema (e.g. ` + "`tenant_*`" + ` matches ` + "`tenant_foo`" + `, ` + "`tenant_bar`" + `, etc.).
+
+Double-quoted identifiers are treated as exact names and do not support wildcards.`).
+			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`, "tenant_*", "*"),
 		).
 		Field(service.NewStringListField(fieldTables).
 			Description("A list of table names to include in the logical replication. Each table should be specified as a separate item.").
@@ -242,6 +249,15 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	if schema, err = conf.FieldString(fieldSchema); err != nil {
 		return nil, err
 	}
+	if err = validateSchemaPattern(schema); err != nil {
+		return nil, fmt.Errorf("invalid schema: %w", err)
+	}
+	// Normalize unquoted patterns to lower-case: PostgreSQL folds unquoted
+	// identifiers at creation time, so TENANT_* and tenant_* resolve identically.
+	// Normalizing early avoids silent case-folding surprises in resolveSchemas.
+	if !strings.HasPrefix(schema, `"`) {
+		schema = strings.ToLower(schema)
+	}
 
 	if tables, err = conf.FieldStringList(fieldTables); err != nil {
 		return nil, err
@@ -321,8 +337,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			DBConfig:         pgConnConfig,
 			TLSConfig:        pgConnConfig.TLSConfig,
 			DBRawDSN:         dsn,
-			DBSchema:         schema,
-			DBTables:         tables,
+			DBSchemaPattern: schema,
+			DBTables:        tables,
 			RefreshAuthToken: iamAuthTokenBuilder,
 
 			IncludeTxnMarkers:        includeTxnMarkers,
@@ -359,6 +375,37 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	return conf.WrapBatchInputExtractTracingSpanMapping("postgres_cdc", r)
+}
+
+// validateSchemaPattern validates a schema name or glob pattern.
+// Accepts exact postgres identifiers (letters/digits/underscores) and glob
+// patterns that additionally allow '*' as a wildcard character.
+// Double-quoted identifiers (e.g. "MySchema") are accepted as exact names;
+// wildcards are not allowed inside quotes.
+func validateSchemaPattern(s string) error {
+	if s == "" {
+		return errors.New("schema cannot be empty")
+	}
+	if strings.HasPrefix(s, `"`) {
+		if !strings.HasSuffix(s, `"`) || len(s) < 2 {
+			return errors.New("unterminated quoted identifier in schema")
+		}
+		if strings.ContainsRune(s, '*') {
+			return errors.New("wildcard '*' is not allowed inside a quoted schema identifier")
+		}
+		return nil
+	}
+	for i, ch := range s {
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '*' {
+			continue
+		}
+		return fmt.Errorf("invalid character %q at position %d in schema pattern %q", ch, i, s)
+	}
+	first := rune(s[0])
+	if !(first == '_' || first == '*' || (first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z')) {
+		return fmt.Errorf("schema pattern %q must start with a letter, underscore, or '*'", s)
+	}
+	return nil
 }
 
 // validateSimpleString ensures we aren't vuln to SQL injection.
@@ -475,6 +522,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				}
 				batchMsg := service.NewMessage(mb)
 				batchMsg.MetaSet("table", msg.Table)
+				batchMsg.MetaSet("pg_schema", msg.Schema)
 				batchMsg.MetaSet("operation", string(msg.Operation))
 				if msg.LSN != nil {
 					batchMsg.MetaSet("lsn", *msg.LSN)

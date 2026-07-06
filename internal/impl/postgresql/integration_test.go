@@ -1052,13 +1052,20 @@ postgres_cdc:
 
 	_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, 2, "bravo", "2006-01-02T15:04:05Z07:00")
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ($1, $2);`, "bravo", "2006-01-02T15:04:05Z07:00")
+	var flightsID int
+	err = db.QueryRow(`INSERT INTO flights (name, created_at) VALUES ($1, $2) RETURNING id;`, "bravo", "2006-01-02T15:04:05Z07:00").Scan(&flightsID)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`UPDATE flights SET name = $1 WHERE id = $2;`, "charlie", flightsID)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`DELETE FROM flights WHERE id = $1;`, flightsID)
 	require.NoError(t, err)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		assert.Len(c, outBatches, 4, "got: %#v", outBatches)
+		assert.Len(c, outBatches, 6, "got: %#v", outBatches)
 	}, time.Second*25, time.Millisecond*100)
 
 	require.ElementsMatch(
@@ -1068,20 +1075,42 @@ postgres_cdc:
 			map[string]any{
 				"operation": "read",
 				"table":     "FlightsCompositePK",
+				"pg_schema": "public",
 			},
 			map[string]any{
 				"operation": "read",
 				"table":     "flights",
+				"pg_schema": "public",
 			},
 			map[string]any{
-				"operation": "insert",
-				"table":     "flights",
-				"lsn":       "XXX/XXX",
+				"operation":    "insert",
+				"table":        "FlightsCompositePK",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+				"pg_schema":    "public",
 			},
 			map[string]any{
-				"operation": "insert",
-				"table":     "FlightsCompositePK",
-				"lsn":       "XXX/XXX",
+				"operation":    "insert",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+				"pg_schema":    "public",
+			},
+			map[string]any{
+				"operation":    "update",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+				"before":       "SET",
+				"pg_schema":    "public",
+			},
+			map[string]any{
+				"operation":    "delete",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+				"before":       "SET",
+				"pg_schema":    "public",
 			},
 		},
 	)
@@ -1428,4 +1457,125 @@ postgres_cdc:
 		byName[child["name"].(string)] = child["type"].(string)
 	}
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
+}
+
+func TestIntegrationMultiSchemaSnapshotAndCDC(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	// Two tenant schemas with the same table name, replicated on a single slot.
+	for _, schema := range []string{"tenant_a", "tenant_b"} {
+		_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA %s", schema))
+		require.NoError(t, err)
+		_, err = db.Exec(fmt.Sprintf(
+			"CREATE TABLE %s.events (id SERIAL PRIMARY KEY, name TEXT)", schema))
+		require.NoError(t, err)
+	}
+
+	// Pre-load snapshot data: 2 rows in tenant_a, 1 in tenant_b.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('alice'), ('bob')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('carol')")
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		pgSchema  string
+		table     string
+		operation string
+		lsn       string
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: multi_schema_test_slot
+    stream_snapshot: true
+    schema: tenant_*
+    tables:
+      - events
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			m := msgMeta{}
+			m.pgSchema, _ = msg.MetaGet("pg_schema")
+			m.table, _ = msg.MetaGet("table")
+			m.operation, _ = msg.MetaGet("operation")
+			m.lsn, _ = msg.MetaGet("lsn")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() { _ = stream.Run(t.Context()) }()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	// Wait for all 3 snapshot rows.
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected) >= 3
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot rows")
+
+	// Insert CDC rows.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('dave')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('eve')")
+	require.NoError(t, err)
+
+	// Wait for 2 CDC rows (total 5).
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Len(c, collected, 5)
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for CDC rows")
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	var snapshots, cdcMsgs []msgMeta
+	for _, m := range collected {
+		if m.operation == "read" {
+			snapshots = append(snapshots, m)
+		} else {
+			cdcMsgs = append(cdcMsgs, m)
+		}
+	}
+
+	// Snapshot assertions.
+	require.Len(t, snapshots, 3)
+	snapshotSchemas := make(map[string]int)
+	for _, m := range snapshots {
+		assert.Equal(t, "events", m.table, "snapshot: table should be bare name without schema prefix")
+		assert.Empty(t, m.lsn, "snapshot rows have no LSN")
+		snapshotSchemas[m.pgSchema]++
+	}
+	assert.Equal(t, 2, snapshotSchemas["tenant_a"], "expected 2 snapshot rows from tenant_a")
+	assert.Equal(t, 1, snapshotSchemas["tenant_b"], "expected 1 snapshot row from tenant_b")
+
+	// CDC assertions.
+	require.Len(t, cdcMsgs, 2)
+	cdcSchemas := make(map[string]int)
+	for _, m := range cdcMsgs {
+		assert.Equal(t, "insert", m.operation)
+		assert.Equal(t, "events", m.table)
+		assert.NotEmpty(t, m.lsn, "CDC rows must have an LSN")
+		cdcSchemas[m.pgSchema]++
+	}
+	assert.Equal(t, 1, cdcSchemas["tenant_a"], "expected 1 CDC row from tenant_a")
+	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
 }

@@ -91,18 +91,29 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return nil, err
 	}
 
-	schema, err := sanitize.NormalizePostgresIdentifier(config.DBSchema)
+	schemas, err := resolveSchemas(ctx, dbConn, config.DBSchemaPattern)
 	if err != nil {
-		return nil, fmt.Errorf("invalid schema name %q: %w", config.DBSchema, err)
+		return nil, fmt.Errorf("resolving schema pattern %q: %w", config.DBSchemaPattern, err)
 	}
+	if len(schemas) == 0 {
+		return nil, fmt.Errorf("no schemas found matching pattern %q", config.DBSchemaPattern)
+	}
+	config.Logger.Infof("Schema pattern %q resolved to %d schema(s): %v", config.DBSchemaPattern, len(schemas), schemas)
 
-	tables := []TableFQN{}
+	normalizedTables := make([]string, 0, len(config.DBTables))
 	for _, table := range config.DBTables {
 		normalized, err := sanitize.NormalizePostgresIdentifier(table)
 		if err != nil {
 			return nil, fmt.Errorf("invalid table name %q: %w", table, err)
 		}
-		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
+		normalizedTables = append(normalizedTables, normalized)
+	}
+
+	tables := make([]TableFQN, 0, len(schemas)*len(normalizedTables))
+	for _, schema := range schemas {
+		for _, table := range normalizedTables {
+			tables = append(tables, TableFQN{Schema: schema, Table: table})
+		}
 	}
 	batchSize := 1000
 	if config.BatchSize > 0 {

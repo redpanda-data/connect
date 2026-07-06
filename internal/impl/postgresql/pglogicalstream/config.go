@@ -24,8 +24,10 @@ type Config struct {
 	DBConfig  *pgconn.Config
 	DBRawDSN  string
 	TLSConfig *tls.Config
-	DBSchema  string
-	DBTables  []string
+	// DBSchemaPattern is the schema to replicate from. Accepts an exact schema
+	// name or a glob pattern using '*' as a wildcard (e.g. "tenant_*", "*").
+	DBSchemaPattern string
+	DBTables        []string
 	// Refreshes short lived IAM auth token that is treated as a password
 	RefreshAuthToken func(ctx context.Context) error
 	// ReplicationSlotName is the name of the replication slot to use
