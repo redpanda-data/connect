@@ -1,0 +1,98 @@
+version: "3"
+
+vars:
+  PG_DSN: '{{.PG_DSN | default "postgres://postgres:postgres@localhost:5433/testdb?sslmode=disable"}}'
+
+tasks:
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  up:
+    desc: Start PostgreSQL and run schema/data setup
+    cmds:
+      - docker compose up -d postgres
+      - docker compose run --rm setup
+
+  down:
+    desc: Stop and remove all containers and volumes
+    cmds:
+      - docker compose down -v
+
+  reset:
+    desc: Full teardown + bring back up (also drops and recreates the replication slot)
+    cmds:
+      - task: down
+      - task: up
+
+  # ── Slot management ───────────────────────────────────────────────────────────
+
+  slot:drop:
+    desc: Drop the replication slot so the test can be re-run from scratch
+    cmds:
+      - |
+        psql "{{.PG_DSN}}" -c \
+          "SELECT pg_drop_replication_slot('multi_schema_test_slot')
+           FROM pg_replication_slots
+           WHERE slot_name = 'multi_schema_test_slot';"
+
+  # ── Run the pipeline ──────────────────────────────────────────────────────────
+
+  run:
+    desc: Run the multi-schema CDC pipeline (streams snapshot then live CDC)
+    env:
+      PG_DSN: '{{.PG_DSN}}'
+    cmds:
+      - task: slot:drop
+      - go run ../../../../../cmd/redpanda-connect/main.go run ./test_config.yaml
+
+  # ── Test data ─────────────────────────────────────────────────────────────────
+
+  data:insert:
+    desc: Insert CDC rows into both tenant schemas (triggers insert events)
+    cmds:
+      - psql "{{.PG_DSN}}" -c "INSERT INTO tenant_a.events (name) VALUES ('dave'), ('eve');"
+      - psql "{{.PG_DSN}}" -c "INSERT INTO tenant_b.events (name) VALUES ('frank');"
+
+  data:update:
+    desc: Update a row in tenant_a (triggers update event with 'before' field)
+    cmds:
+      - psql "{{.PG_DSN}}" -c "UPDATE tenant_a.events SET status = 'updated' WHERE name = 'dave';"
+
+  data:delete:
+    desc: Delete a row from tenant_b (triggers delete event with 'before' field)
+    cmds:
+      - psql "{{.PG_DSN}}" -c "DELETE FROM tenant_b.events WHERE name = 'frank';"
+
+  data:all:
+    desc: Run all test data mutations in sequence (insert → update → delete)
+    cmds:
+      - task: data:insert
+      - task: data:update
+      - task: data:delete
+
+  # ── Schema validation smoke test ──────────────────────────────────────────────
+
+  test:invalid-schema:
+    desc: Confirm that an empty quoted schema identifier is rejected at startup
+    env:
+      PG_DSN: '{{.PG_DSN}}'
+    cmds:
+      - |
+        set +e
+        go run ../../../../../cmd/redpanda-connect/main.go run \
+          --set 'input.postgres_cdc.schema=""' \
+          ./test_config.yaml 2>&1 | head -5
+        echo "exit $?"
+    # Expects: "invalid schema" error printed, process exits non-zero.
+
+  # ── Quick sanity ──────────────────────────────────────────────────────────────
+
+  psql:
+    desc: Open a psql shell to the test database
+    cmds:
+      - psql "{{.PG_DSN}}"
+
+  status:
+    desc: Show active replication slots and publications
+    cmds:
+      - psql "{{.PG_DSN}}" -c "SELECT slot_name, active FROM pg_replication_slots;"
+      - psql "{{.PG_DSN}}" -c "SELECT pubname FROM pg_publication;"
