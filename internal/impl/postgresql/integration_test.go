@@ -1029,6 +1029,12 @@ postgres_cdc:
 			if _, ok := d["lsn"]; ok {
 				d["lsn"] = "XXX/XXX" // Consistent LSN for assertions below
 			}
+			if _, ok := d["commit_ts_ms"]; ok {
+				d["commit_ts_ms"] = "SET"
+			}
+			if _, ok := d["before"]; ok {
+				d["before"] = "SET"
+			}
 			delete(d, "schema") // Schema metadata tested separately in TestIntegrationPostgresCDCSchemaMetadata
 			outBatches = append(outBatches, data)
 		}

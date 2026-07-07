@@ -530,6 +530,14 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if msg.ColumnSchema != nil {
 					batchMsg.MetaSetImmut("schema", service.ImmutableAny{V: msg.ColumnSchema})
 				}
+				if msg.CommitTs != nil {
+					batchMsg.MetaSet("commit_ts_ms", strconv.FormatInt(msg.CommitTs.UnixMilli(), 10))
+				}
+				if msg.Before != nil {
+					if beforeBytes, err := json.Marshal(msg.Before); err == nil {
+						batchMsg.MetaSet("before", string(beforeBytes))
+					}
+				}
 				if batcher.Add(batchMsg) {
 					flush = true
 				}

@@ -55,6 +55,7 @@ type Stream struct {
 	heartbeat               *heartbeat
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
+	currentTxCommitTime     *time.Time
 }
 
 // NewPgStream creates a new instance of the Stream struct.
@@ -517,6 +518,14 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 		delete(schemaCache, rel.RelationID)
 	}
 
+	// Track commit timestamp: set on BEGIN (available for DML), clear on COMMIT.
+	if begin, ok := logicalMsg.(*BeginMessage); ok {
+		t := begin.CommitTime
+		s.currentTxCommitTime = &t
+	} else if _, ok := logicalMsg.(*CommitMessage); ok {
+		s.currentTxCommitTime = nil
+	}
+
 	// parse changes inside the transaction
 	message, err := toStreamMessage(logicalMsg, relations, typeMap, s.unchangedToastValue)
 	if err != nil {
@@ -560,6 +569,11 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 			schemaCache[relID] = schema
 			message.ColumnSchema = schema
 		}
+	}
+
+	switch message.Operation {
+	case InsertOpType, UpdateOpType, DeleteOpType:
+		message.CommitTs = s.currentTxCommitTime
 	}
 
 	lsn := msgLSN.String()

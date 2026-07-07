@@ -8,6 +8,8 @@
 
 package pglogicalstream
 
+import "time"
+
 // StreamMode represents the mode of the stream at the time of the message
 type StreamMode string
 
@@ -47,4 +49,8 @@ type StreamMessage struct {
 	// ColumnSchema contains the table's column schema in benthos common schema format.
 	// It is set as message metadata and excluded from JSON serialization.
 	ColumnSchema any `json:"-"`
+	// CommitTs is the commit timestamp of the enclosing transaction. Nil for snapshot reads.
+	CommitTs *time.Time `json:"-"`
+	// Before holds the pre-change row state for update and delete operations. Nil otherwise.
+	Before any `json:"-"`
 }
