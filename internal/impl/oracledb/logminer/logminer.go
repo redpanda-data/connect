@@ -301,6 +301,8 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		// Parse sql insert/update/delete sql statements into key/value object
 		event, err := lm.dmlParser.RedoEventToDMLEvent(redoEvent)
 		if err != nil {
+			lm.log.Debugf("failed to parse SQL_REDO (scn=%d, op=%s, table=%s.%s, txn=%s): %s",
+				redoEvent.SCN, redoEvent.Operation, redoEvent.SchemaName.String, redoEvent.TableName.String, redoEvent.TransactionID, redoEvent.SQLRedo.String)
 			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
 		}
 
