@@ -37,6 +37,10 @@ func init() {
 		Version("3.48.0").
 		Field(service.NewStringField("query").Description("A PartiQL query to execute for each message.")).
 		Field(service.NewBoolField("unsafe_dynamic_query").Description("Whether to enable dynamic queries that support interpolation functions.").Advanced().Default(false)).
+		Field(service.NewBoolField("use_batch").
+			Description("Whether to execute all messages in a batch as a single `BatchExecuteStatement` call. Set this to `false` to execute one `ExecuteStatement` call per message instead, which is required for PartiQL `SELECT` queries against a global secondary index (GSI) — `BatchExecuteStatement` does not support querying a GSI. Only the first result row is used when a query returns multiple items.").
+			Advanced().
+			Default(true)).
 		Field(service.NewBloblangField("args_mapping").
 			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that, for each message, creates a list of arguments to use with the query.").Default("")).
 		Example(
@@ -52,6 +56,21 @@ pipeline:
             { "S": this.foo },
             { "S": meta("kafka_topic") },
             { "S": this.document.content },
+          ]
+`,
+		).
+		Example(
+			"Query a GSI for a single record",
+			`The following example looks up a single record from the table footable using the global secondary index index_name, matching on the field bar. BatchExecuteStatement can't query a GSI, so use_batch is disabled:`,
+			`
+pipeline:
+  processors:
+    - aws_dynamodb_partiql:
+        query: "SELECT * FROM \"footable\".\"index_name\" WHERE bar = ?"
+        use_batch: false
+        args_mapping: |
+          root = [
+            { "S": this.bar },
           ]
 `,
 		)
@@ -87,7 +106,11 @@ pipeline:
 					return nil, fmt.Errorf("parsing query: %v", err)
 				}
 			}
-			return newDynamoDBPartiQL(mgr.Logger(), client, query, dynQuery, args), nil
+			useBatch, err := conf.FieldBool("use_batch")
+			if err != nil {
+				return nil, err
+			}
+			return newDynamoDBPartiQL(mgr.Logger(), client, query, dynQuery, args, useBatch), nil
 		})
 }
 
@@ -98,6 +121,7 @@ type dynamoDBPartiQL struct {
 	query    string
 	dynQuery *service.InterpolatedString
 	args     *bloblang.Executor
+	useBatch bool
 }
 
 func newDynamoDBPartiQL(
@@ -106,6 +130,7 @@ func newDynamoDBPartiQL(
 	query string,
 	dynQuery *service.InterpolatedString,
 	args *bloblang.Executor,
+	useBatch bool,
 ) *dynamoDBPartiQL {
 	return &dynamoDBPartiQL{
 		logger:   logger,
@@ -113,48 +138,88 @@ func newDynamoDBPartiQL(
 		query:    query,
 		dynQuery: dynQuery,
 		args:     args,
+		useBatch: useBatch,
 	}
+}
+
+func (d *dynamoDBPartiQL) resolveStatement(batch service.MessageBatch, argsExec *service.MessageBatchBloblangExecutor, i int) (string, []types.AttributeValue, error) {
+	statement := d.query
+	if d.dynQuery != nil {
+		query, err := batch.TryInterpolatedString(i, d.dynQuery)
+		if err != nil {
+			return "", nil, fmt.Errorf("query interpolation error: %w", err)
+		}
+		statement = query
+	}
+
+	argMsg, err := argsExec.Query(i)
+	if err != nil {
+		return "", nil, fmt.Errorf("error evaluating arg mapping at index %d: %v", i, err)
+	}
+
+	argStructured, err := argMsg.AsStructured()
+	if err != nil {
+		return "", nil, fmt.Errorf("error evaluating arg mapping as structured at index %d: %v", i, err)
+	}
+
+	argsSlice, ok := argStructured.([]any)
+	if !ok {
+		return "", nil, fmt.Errorf("arg mapping resulted in non-array value at index %d: %T", i, argStructured)
+	}
+
+	var params []types.AttributeValue
+	for j, a := range argsSlice {
+		tmp, err := objFormToAttributeValue(a)
+		if err != nil {
+			return "", nil, fmt.Errorf("arg mapping index %d mapping to an attribute value: %v", j, err)
+		}
+		params = append(params, tmp)
+	}
+
+	return statement, params, nil
 }
 
 func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	argsExec := batch.BloblangExecutor(d.args)
 
+	if !d.useBatch {
+		for i := range batch {
+			statement, params, err := d.resolveStatement(batch, argsExec, i)
+			if err != nil {
+				return nil, err
+			}
+
+			out, err := d.client.ExecuteStatement(ctx, &dynamodb.ExecuteStatementInput{
+				Statement:  &statement,
+				Parameters: params,
+			})
+			if err != nil {
+				batch[i].SetError(fmt.Errorf("executing statement: %w", err))
+				continue
+			}
+
+			if len(out.Items) > 0 {
+				resMap := map[string]any{}
+				for k, v := range out.Items[0] {
+					resMap[k] = attributeValueToObjForm(v)
+				}
+				batch[i].SetStructuredMut(resMap)
+			}
+		}
+
+		return []service.MessageBatch{batch}, nil
+	}
+
 	stmts := []types.BatchStatementRequest{}
 	for i := range batch {
-		req := types.BatchStatementRequest{}
-		req.Statement = &d.query
-		if d.dynQuery != nil {
-			query, err := batch.TryInterpolatedString(i, d.dynQuery)
-			if err != nil {
-				return nil, fmt.Errorf("query interpolation error: %w", err)
-			}
-			req.Statement = &query
-		}
-
-		argMsg, err := argsExec.Query(i)
+		statement, params, err := d.resolveStatement(batch, argsExec, i)
 		if err != nil {
-			return nil, fmt.Errorf("error evaluating arg mapping at index %d: %v", i, err)
+			return nil, err
 		}
-
-		argStructured, err := argMsg.AsStructured()
-		if err != nil {
-			return nil, fmt.Errorf("error evaluating arg mapping as structured at index %d: %v", i, err)
-		}
-
-		argsSlice, ok := argStructured.([]any)
-		if !ok {
-			return nil, fmt.Errorf("arg mapping resulted in non-array value at index %d: %T", i, argStructured)
-		}
-
-		for i, a := range argsSlice {
-			tmp, err := objFormToAttributeValue(a)
-			if err != nil {
-				return nil, fmt.Errorf("arg mapping index %d mapping to an attribute value: %v", i, err)
-			}
-			req.Parameters = append(req.Parameters, tmp)
-		}
-
-		stmts = append(stmts, req)
+		stmts = append(stmts, types.BatchStatementRequest{
+			Statement:  &statement,
+			Parameters: params,
+		})
 	}
 
 	batchResult, err := d.client.BatchExecuteStatement(ctx, &dynamodb.BatchExecuteStatementInput{

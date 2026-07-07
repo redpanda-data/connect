@@ -16,6 +16,7 @@ package dynamodb
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -31,10 +32,15 @@ import (
 type mockProcDynamoDB struct {
 	dynamoDBAPI
 	pbatchFn func(context.Context, *dynamodb.BatchExecuteStatementInput) (*dynamodb.BatchExecuteStatementOutput, error)
+	pexecFn  func(context.Context, *dynamodb.ExecuteStatementInput) (*dynamodb.ExecuteStatementOutput, error)
 }
 
 func (m *mockProcDynamoDB) BatchExecuteStatement(ctx context.Context, params *dynamodb.BatchExecuteStatementInput, _ ...func(*dynamodb.Options)) (*dynamodb.BatchExecuteStatementOutput, error) {
 	return m.pbatchFn(ctx, params)
+}
+
+func (m *mockProcDynamoDB) ExecuteStatement(ctx context.Context, params *dynamodb.ExecuteStatementInput, _ ...func(*dynamodb.Options)) (*dynamodb.ExecuteStatementOutput, error) {
+	return m.pexecFn(ctx, params)
 }
 
 func assertBatchMatches(t *testing.T, exp service.MessageBatch, act []service.MessageBatch) {
@@ -66,7 +72,7 @@ root."-".S = json("content")
 		},
 	}
 
-	db := newDynamoDBPartiQL(nil, client, query, nil, mapping)
+	db := newDynamoDBPartiQL(nil, client, query, nil, mapping, true)
 
 	reqBatch := service.MessageBatch{
 		service.NewMessage([]byte(`{"content":"foo stuff","id":"foo"}`)),
@@ -128,7 +134,7 @@ root."-".S = json("id")
 		},
 	}
 
-	db := newDynamoDBPartiQL(nil, client, query, nil, mapping)
+	db := newDynamoDBPartiQL(nil, client, query, nil, mapping, true)
 
 	reqBatch := service.MessageBatch{
 		service.NewMessage([]byte(`{"id":"foo","content":"foo stuff"}`)),
@@ -204,7 +210,7 @@ root."-".S = json("content")
 		},
 	}
 
-	db := newDynamoDBPartiQL(nil, client, query, nil, mapping)
+	db := newDynamoDBPartiQL(nil, client, query, nil, mapping, true)
 
 	reqBatch := service.MessageBatch{
 		service.NewMessage([]byte(`{"content":"foo stuff","id":"foo"}`)),
@@ -253,4 +259,135 @@ root."-".S = json("content")
 	}
 
 	assert.Equal(t, expected, requests)
+}
+
+func TestDynamoDBPartiqlExecuteStatementRead(t *testing.T) {
+	query := `SELECT * FROM "Orders"."gsi_index" WHERE OrderID = ?`
+	mapping, err := bloblang.Parse(`
+root = []
+root."-".S = json("id")
+`)
+	require.NoError(t, err)
+
+	var requests []*dynamodb.ExecuteStatementInput
+	client := &mockProcDynamoDB{
+		pexecFn: func(_ context.Context, input *dynamodb.ExecuteStatementInput) (*dynamodb.ExecuteStatementOutput, error) {
+			requests = append(requests, input)
+			return &dynamodb.ExecuteStatementOutput{
+				Items: []map[string]types.AttributeValue{
+					{
+						"meow":  &types.AttributeValueMemberS{Value: "meow1"},
+						"meow2": &types.AttributeValueMemberS{Value: "meow2"},
+					},
+				},
+			}, nil
+		},
+	}
+
+	db := newDynamoDBPartiQL(nil, client, query, nil, mapping, false)
+
+	reqBatch := service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"foo","content":"foo stuff"}`)),
+		service.NewMessage([]byte(`{"id":"bar","content":"bar stuff"}`)),
+	}
+	expBatch := service.MessageBatch{
+		service.NewMessage([]byte(`{"meow":{"S":"meow1"},"meow2":{"S":"meow2"}}`)),
+		service.NewMessage([]byte(`{"meow":{"S":"meow1"},"meow2":{"S":"meow2"}}`)),
+	}
+
+	resBatch, err := db.ProcessBatch(t.Context(), reqBatch)
+	require.NoError(t, err)
+	assertBatchMatches(t, expBatch, resBatch)
+
+	require.Len(t, requests, 2)
+	assert.Equal(t, aws.String(query), requests[0].Statement)
+	assert.Equal(t, []types.AttributeValue{&types.AttributeValueMemberS{Value: "foo"}}, requests[0].Parameters)
+	assert.Equal(t, aws.String(query), requests[1].Statement)
+	assert.Equal(t, []types.AttributeValue{&types.AttributeValueMemberS{Value: "bar"}}, requests[1].Parameters)
+}
+
+func TestDynamoDBPartiqlExecuteStatementWrite(t *testing.T) {
+	query := `INSERT INTO "FooTable" VALUE {'id':'?','content':'?'}`
+	mapping, err := bloblang.Parse(`
+root = []
+root."-".S = json("id")
+root."-".S = json("content")
+`)
+	require.NoError(t, err)
+
+	var requests []*dynamodb.ExecuteStatementInput
+	client := &mockProcDynamoDB{
+		pexecFn: func(_ context.Context, input *dynamodb.ExecuteStatementInput) (*dynamodb.ExecuteStatementOutput, error) {
+			requests = append(requests, input)
+			return &dynamodb.ExecuteStatementOutput{}, nil
+		},
+	}
+
+	db := newDynamoDBPartiQL(nil, client, query, nil, mapping, false)
+
+	reqBatch := service.MessageBatch{
+		service.NewMessage([]byte(`{"content":"foo stuff","id":"foo"}`)),
+		service.NewMessage([]byte(`{"content":"bar stuff","id":"bar"}`)),
+	}
+
+	resBatch, err := db.ProcessBatch(t.Context(), reqBatch)
+	require.NoError(t, err)
+	assertBatchMatches(t, reqBatch, resBatch)
+
+	require.Len(t, requests, 2)
+	assert.Equal(t, []types.AttributeValue{
+		&types.AttributeValueMemberS{Value: "foo"},
+		&types.AttributeValueMemberS{Value: "foo stuff"},
+	}, requests[0].Parameters)
+	assert.Equal(t, []types.AttributeValue{
+		&types.AttributeValueMemberS{Value: "bar"},
+		&types.AttributeValueMemberS{Value: "bar stuff"},
+	}, requests[1].Parameters)
+}
+
+func TestDynamoDBPartiqlExecuteStatementSadToGood(t *testing.T) {
+	query := `SELECT * FROM "Orders"."gsi_index" WHERE OrderID = ?`
+	mapping, err := bloblang.Parse(`
+root = []
+root."-".S = json("id")
+`)
+	require.NoError(t, err)
+
+	client := &mockProcDynamoDB{
+		pexecFn: func(_ context.Context, input *dynamodb.ExecuteStatementInput) (*dynamodb.ExecuteStatementOutput, error) {
+			if input.Parameters[0].(*types.AttributeValueMemberS).Value == "bar" {
+				return nil, errors.New("it all went wrong")
+			}
+			return &dynamodb.ExecuteStatementOutput{
+				Items: []map[string]types.AttributeValue{
+					{"meow": &types.AttributeValueMemberS{Value: "meow1"}},
+				},
+			}, nil
+		},
+	}
+
+	db := newDynamoDBPartiQL(nil, client, query, nil, mapping, false)
+
+	reqBatch := service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"foo"}`)),
+		service.NewMessage([]byte(`{"id":"bar"}`)),
+		service.NewMessage([]byte(`{"id":"baz"}`)),
+	}
+
+	resBatch, err := db.ProcessBatch(t.Context(), reqBatch)
+	require.NoError(t, err)
+	require.Len(t, resBatch, 1)
+	require.Len(t, resBatch[0], 3)
+
+	assert.NoError(t, resBatch[0][0].GetError())
+	foo, _ := resBatch[0][0].AsBytes()
+	assert.Equal(t, `{"meow":{"S":"meow1"}}`, string(foo))
+
+	err = resBatch[0][1].GetError()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "it all went wrong")
+
+	assert.NoError(t, resBatch[0][2].GetError())
+	baz, _ := resBatch[0][2].AsBytes()
+	assert.Equal(t, `{"meow":{"S":"meow1"}}`, string(baz))
 }
