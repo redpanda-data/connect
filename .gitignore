@@ -29,3 +29,5 @@ rpcn.license
 
 # Stray binaries that go-run sometimes drops at the repo root
 /runner
+
+benchmark_results.json

@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -67,6 +67,48 @@ type icebergOutput struct {
 	logger *service.Logger
 }
 
+// opMetrics holds counters for row-level operations and commit health. Row
+// operations share a single counter labelled by operation (insert/upsert/
+// delete), following the Prometheus convention of one metric with a label
+// rather than one metric per verb, so they aggregate cleanly. The holder is nil
+// in tests that construct writers/committers directly; the incr* methods are
+// nil-safe so callers need not check.
+type opMetrics struct {
+	rowOps         *service.MetricCounter // labelled by "operation"
+	commitFailures *service.MetricCounter
+}
+
+func newOpMetrics(m *service.Metrics) *opMetrics {
+	return &opMetrics{
+		rowOps:         m.NewCounter("iceberg_row_operations_total", "operation"),
+		commitFailures: m.NewCounter("iceberg_commit_failures_total"),
+	}
+}
+
+func (m *opMetrics) incrInserted(n int64) {
+	if m != nil && n > 0 {
+		m.rowOps.Incr(n, "insert")
+	}
+}
+
+func (m *opMetrics) incrUpserted(n int64) {
+	if m != nil && n > 0 {
+		m.rowOps.Incr(n, "upsert")
+	}
+}
+
+func (m *opMetrics) incrDeleted(n int64) {
+	if m != nil && n > 0 {
+		m.rowOps.Incr(n, "delete")
+	}
+}
+
+func (m *opMetrics) incrCommitFailure() {
+	if m != nil {
+		m.commitFailures.Incr(1)
+	}
+}
+
 // newIcebergOutputFromConfig creates a new Iceberg output from parsed configuration.
 func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*icebergOutput, error) {
 	// Parse catalog configuration
@@ -103,6 +145,24 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		return nil, fmt.Errorf("parsing commit config: %w", err)
 	}
 
+	// Parse row-level operation config
+	rowOpCfg, err := parseRowOpConfig(conf)
+	if err != nil {
+		return nil, fmt.Errorf("parsing row operation config: %w", err)
+	}
+
+	// Keyed (upsert/delete) writes rely on per-key ordering, but with more than
+	// one batch in flight concurrent batches can commit out of order, letting a
+	// stale upsert overwrite a newer one. Config linting flags this, but linting
+	// is advisory and easily skipped, so warn at startup too. mutating() is
+	// conservative — an interpolated row_operation is treated as potentially
+	// mutating.
+	if rowOpCfg.mutating() {
+		if maxInFlight, err := conf.FieldInt(ioFieldMaxInFlight); err == nil && maxInFlight > 1 {
+			mgr.Logger().Warnf("row_operation can produce upsert/delete operations but max_in_flight is %d; concurrent batches may commit out of order and corrupt the last-writer-wins result. Set max_in_flight: 1 for keyed (change-data-capture) workloads.", maxInFlight)
+		}
+	}
+
 	// Parse parquet config
 	var writerOpts []parquet.WriterOption
 	if conf.Contains(ioFieldParquet) {
@@ -120,7 +180,8 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		}
 	}
 
-	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, caseSensitive, schemaEvoCfg, commitCfg, writerOpts, mgr.Logger())
+	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, caseSensitive, schemaEvoCfg, commitCfg, rowOpCfg, writerOpts, mgr.Logger())
+	rtr.metrics = newOpMetrics(mgr.Metrics())
 	return &icebergOutput{
 		router: rtr,
 		logger: mgr.Logger(),
@@ -492,6 +553,39 @@ func parseSchemaEvolutionConfig(conf *service.ParsedConfig) (SchemaEvolutionConf
 	}
 	if cfg.RequireSchemaMetadata && cfg.SchemaMetadata == "" {
 		return cfg, fmt.Errorf("%s.%s requires %s.%s to be set", ioFieldSchemaEvolution, ioFieldSchemaEvolutionRequireSchemaMetadata, ioFieldSchemaEvolution, ioFieldSchemaEvolutionSchemaMetadata)
+	}
+
+	return cfg, nil
+}
+
+// parseRowOpConfig parses the row-level operation configuration and validates
+// the static case at startup. When row_operation is a static literal it must be
+// a known operation, and a static upsert/delete requires identifier_fields.
+// Dynamic (interpolated) operations cannot be checked here, so they are
+// validated per message at write time (a hard error on an unknown value or a
+// missing identifier_fields key, never a silent insert).
+func parseRowOpConfig(conf *service.ParsedConfig) (RowOpConfig, error) {
+	cfg := RowOpConfig{}
+
+	op, err := conf.FieldInterpolatedString(ioFieldRowOperation)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.Operation = op
+
+	cfg.IdentifierFields, err = conf.FieldStringList(ioFieldIdentifierFields)
+	if err != nil {
+		return cfg, err
+	}
+
+	if static, ok := op.Static(); ok {
+		parsed, err := parseRowOperation(static)
+		if err != nil {
+			return cfg, err
+		}
+		if (parsed == rowOpUpsert || parsed == rowOpDelete) && len(cfg.IdentifierFields) == 0 {
+			return cfg, fmt.Errorf("%s %q requires %s to be set", ioFieldRowOperation, parsed, ioFieldIdentifierFields)
+		}
 	}
 
 	return cfg, nil

@@ -100,22 +100,38 @@ loop:
 	sc.ws()
 }
 
-// readIdent reads a double-quoted identifier and returns its content without the quotes.
-// It skips an optional alias prefix such as `a.` in `a."COL1"`.
+// readIdent reads a column identifier and returns its name.
+// It handles three forms:
+//   - double-quoted: "COL1"
+//   - alias-prefixed: a."COL1"  (the alias is discarded)
+//   - bare (unquoted): ROWID  (produced by LogMiner for tables without supplemental logging)
 func (sc *redoScanner) readIdent() (string, error) {
 	sc.ws()
-	// skip optional table-alias prefix (e.g. `a.` in `a."COL1"`)
-	if !sc.done() && sc.s[sc.i] != '"' {
-		for !sc.done() && sc.s[sc.i] != '"' {
-			sc.i++
-		}
+	if sc.done() {
+		return "", errors.New("expected identifier, got end of input")
 	}
-	if sc.done() || sc.s[sc.i] != '"' {
-		snippet := sc.s[sc.i:]
-		if len(snippet) > 20 {
-			snippet = snippet[:20]
+	if sc.s[sc.i] != '"' {
+		// Peek ahead: if a '"' appears before any whitespace or '=', the leading
+		// text is a table-alias prefix (e.g. `a.`) — skip it and fall through to
+		// the quoted read. Otherwise it's a bare identifier (e.g. ROWID) — return it.
+		j := sc.i
+		for j < len(sc.s) && sc.s[j] != '"' && !isSpaceByte(sc.s[j]) && sc.s[j] != '=' && sc.s[j] != ',' && sc.s[j] != ')' {
+			j++
 		}
-		return "", fmt.Errorf("expected quoted identifier, got %.20q", snippet)
+		if j < len(sc.s) && sc.s[j] == '"' {
+			sc.i = j // skip alias prefix, fall through to quoted read below
+		} else {
+			if j == sc.i {
+				snippet := sc.s[sc.i:]
+				if len(snippet) > 20 {
+					snippet = snippet[:20]
+				}
+				return "", fmt.Errorf("expected identifier, got %.20q", snippet)
+			}
+			name := sc.s[sc.i:j]
+			sc.i = j
+			return name, nil
+		}
 	}
 	sc.i++ // skip opening "
 	start := sc.i

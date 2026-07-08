@@ -164,3 +164,65 @@ func TestBuildConnectionURL(t *testing.T) {
 		})
 	}
 }
+
+func TestParseSnapshotMode(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+logminer: {}
+`
+	tests := []struct {
+		name string
+		yaml string
+		want SnapshotMode
+	}{
+		{
+			name: "omitted defaults to none",
+			yaml: minimalOracleCDCYAML,
+			want: SnapshotModeNone,
+		},
+		{
+			name: "explicit none",
+			yaml: minimalOracleCDCYAML + "snapshot_mode: none\n",
+			want: SnapshotModeNone,
+		},
+		{
+			name: "snapshot_only",
+			yaml: minimalOracleCDCYAML + "snapshot_mode: snapshot_only\n",
+			want: SnapshotModeSnapshotOnly,
+		},
+		{
+			name: "snapshot_and_stream",
+			yaml: minimalOracleCDCYAML + "snapshot_mode: snapshot_and_stream\n",
+			want: SnapshotModeSnapshotAndStream,
+		},
+		{
+			// backward compat: stream_snapshot: true with no snapshot_mode set
+			name: "stream_snapshot true upgrades to snapshot_and_stream",
+			yaml: minimalOracleCDCYAML + "stream_snapshot: true\n",
+			want: SnapshotModeSnapshotAndStream,
+		},
+		{
+			// explicit snapshot_mode: none must win over stream_snapshot: true
+			name: "explicit snapshot_mode none overrides stream_snapshot true",
+			yaml: minimalOracleCDCYAML + "snapshot_mode: none\nstream_snapshot: true\n",
+			want: SnapshotModeNone,
+		},
+		{
+			// explicit snapshot_mode wins over stream_snapshot: true
+			name: "explicit snapshot_mode snapshot_only overrides stream_snapshot true",
+			yaml: minimalOracleCDCYAML + "snapshot_mode: snapshot_only\nstream_snapshot: true\n",
+			want: SnapshotModeSnapshotOnly,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := oracleDBStreamConfigSpec.ParseYAML(tt.yaml, nil)
+			require.NoError(t, err)
+			got, err := parseSnapshotMode(conf)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

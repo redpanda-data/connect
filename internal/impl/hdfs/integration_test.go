@@ -15,7 +15,7 @@
 package hdfs
 
 import (
-	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,25 +30,46 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
+// hdfsSiteXML overrides the image's default hdfs-site.xml so the datanode is
+// reachable from the host. By default the datanode registers under its
+// container hostname (e.g. "d9abe2180ff7"), which the HDFS client resolves and
+// dials directly for block transfers - this fails from the host with "no such
+// host". Setting dfs.datanode.hostname to localhost and pinning the transfer
+// port lets the client reach it via a fixed host-mapped port on every platform,
+// including Docker Desktop on macOS. See CON-377.
+const hdfsSiteXML = `<configuration>
+    <property><name>dfs.replication</name><value>1</value></property>
+    <property><name>dfs.data.dir</name><value>/data/hadoop/data</value></property>
+    <property><name>dfs.name.dir</name><value>/data/hadoop/name</value></property>
+    <property><name>dfs.namenode.rpc-bind-host</name><value>0.0.0.0</value></property>
+    <property><name>dfs.namenode.servicerpc-bind-host</name><value>0.0.0.0</value></property>
+    <property><name>dfs.namenode.datanode.registration.ip-hostname-check</name><value>false</value></property>
+    <property><name>dfs.datanode.hostname</name><value>localhost</value></property>
+    <property><name>dfs.datanode.address</name><value>0.0.0.0:19010</value></property>
+</configuration>
+`
+
 func TestIntegrationHDFS(t *testing.T) {
 	integration.CheckSkip(t)
-	if runtime.GOOS == "darwin" {
-		t.Skip("CON-377: HDFS datanode networking incompatible with Docker on macOS")
-	}
 
-	// Not parallel: HDFS requires fixed port bindings because the namenode
-	// reports localhost as the datanode address, and the client connects
-	// to the datanode directly on the host-mapped ports.
+	// Not parallel: HDFS requires fixed port bindings because the datanode is
+	// configured to advertise localhost (see hdfsSiteXML) and the client
+	// connects to it directly on a host-mapped port matching its transfer port.
 
 	ctr, err := testcontainers.Run(t.Context(), "cybermaggedon/hadoop:2.8.2",
 		testcontainers.WithImagePlatform("linux/amd64"),
-		testcontainers.WithExposedPorts("9000/tcp", "50070/tcp", "50075/tcp", "50010/tcp"),
+		testcontainers.WithFiles(testcontainers.ContainerFile{
+			Reader:            strings.NewReader(hdfsSiteXML),
+			ContainerFilePath: "/usr/local/hadoop/etc/hadoop/hdfs-site.xml",
+			FileMode:          0o644,
+		}),
+		testcontainers.WithExposedPorts("9000/tcp", "50070/tcp", "50075/tcp", "19010/tcp"),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
 			hc.PortBindings = mobynet.PortMap{
 				mobynet.MustParsePort("9000/tcp"):  {{HostPort: "19000"}},
 				mobynet.MustParsePort("50070/tcp"): {{HostPort: "19070"}},
 				mobynet.MustParsePort("50075/tcp"): {{HostPort: "19075"}},
-				mobynet.MustParsePort("50010/tcp"): {{HostPort: "19010"}},
+				mobynet.MustParsePort("19010/tcp"): {{HostPort: "19010"}},
 			}
 		}),
 		testcontainers.WithWaitStrategy(

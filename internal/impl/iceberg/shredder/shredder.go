@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -74,6 +74,13 @@ type Sink interface {
 // and definition levels that allow perfect reconstruction.
 type RecordShredder struct {
 	schema *iceberg.Schema
+	// rootFields caches schema.Fields() once. iceberg-go's (*Schema).Fields()
+	// defensively clones the whole NestedField slice on every call, so calling
+	// it per-record in Shred was the single largest allocator on the write path
+	// (a 1-vCPU alloc profile attributed ~6.5% of all bytes to that clone). The
+	// schema is immutable for the shredder's lifetime and shredStruct only reads
+	// the slice, so caching one clone is safe.
+	rootFields []iceberg.NestedField
 	// caseSensitive controls how input record keys are matched against schema
 	// field names. When true (the historical default) names are matched
 	// exactly; when false, matching is case-insensitive — which aligns with
@@ -110,6 +117,7 @@ type RecordShredder struct {
 func NewRecordShredder(schema *iceberg.Schema, caseSensitive bool) *RecordShredder {
 	return &RecordShredder{
 		schema:        schema,
+		rootFields:    schema.Fields(),
 		caseSensitive: caseSensitive,
 	}
 }
@@ -133,7 +141,7 @@ func (rs *RecordShredder) SetFieldSchemaMetadata(byID map[int]*schema.Common) {
 // The record should be a map[string]any matching the schema structure.
 // The sink receives each leaf value and notifications of unknown fields.
 func (rs *RecordShredder) Shred(record map[string]any, sink Sink) error {
-	return rs.shredStruct(rs.schema.Fields(), record, nil, 0, 0, 0, sink)
+	return rs.shredStruct(rs.rootFields, record, nil, 0, 0, 0, sink)
 }
 
 // shredStruct processes a struct value.

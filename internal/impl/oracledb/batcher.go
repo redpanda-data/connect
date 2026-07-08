@@ -54,12 +54,7 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 // loop creates a long-running process that periodically flushes batches by configured interval.
 // lifted from internal/impl/kafka/franz_reader_ordered.go
 func (p *batchPublisher) loop() {
-	defer func() {
-		if p.batcher != nil {
-			p.batcher.Close(context.Background())
-		}
-		p.shutSig.TriggerHasStopped()
-	}()
+	defer p.shutSig.TriggerHasStopped()
 
 	// No need to loop when there's no batcher for async writes.
 	if p.batcher == nil {
@@ -90,7 +85,10 @@ func (p *batchPublisher) loop() {
 		flushBatch = flushBatchTicker.C
 	}
 
-	closeAtLeisureCtx, done := p.shutSig.SoftStopCtx(context.Background())
+	// hardStopCtx survives a soft stop so that an in-flight publishBatch send can
+	// complete before the loop exits. Only a hard stop (triggered by Close)
+	// cancels it, which is the forced-shutdown last resort.
+	hardStopCtx, done := p.shutSig.HardStopCtx(context.Background())
 	defer done()
 
 	for {
@@ -112,13 +110,13 @@ func (p *batchPublisher) loop() {
 					return
 				}
 
-				if sendBatch, _ = p.batcher.Flush(closeAtLeisureCtx); len(sendBatch) == 0 {
+				if sendBatch, _ = p.batcher.Flush(hardStopCtx); len(sendBatch) == 0 {
 					return
 				}
 			}()
 
 			if len(sendBatch) > 0 {
-				if err := p.publishBatch(closeAtLeisureCtx, sendBatch); err != nil {
+				if err := p.publishBatch(hardStopCtx, sendBatch); err != nil {
 					return
 				}
 			}
@@ -275,8 +273,32 @@ func (b *batchPublisher) msgs() <-chan asyncMessage {
 	return b.msgChan
 }
 
-// Close signals the publisher's loop goroutine to stop and waits for it to exit.
-func (b *batchPublisher) Close() {
+// FlushRemaining stops the loop goroutine and then flushes any partial batch
+// still held in the batcher, blocking until it is consumed by ReadBatch.
+func (b *batchPublisher) FlushRemaining(ctx context.Context) error {
+	if b.batcher == nil {
+		return nil
+	}
 	b.shutSig.TriggerSoftStop()
 	<-b.shutSig.HasStoppedChan()
+
+	b.batcherMu.Lock()
+	remaining, err := b.batcher.Flush(ctx)
+	b.batcherMu.Unlock()
+	if err != nil || len(remaining) == 0 {
+		return err
+	}
+	return b.publishBatch(ctx, remaining)
+}
+
+// Close signals the publisher's loop goroutine to stop and waits for it to exit.
+// TriggerHardStop cancels the HardStopCtx used by publishBatch, unblocking any
+// send that is waiting on msgChan when no consumer is left.
+func (b *batchPublisher) Close() {
+	b.shutSig.TriggerSoftStop()
+	b.shutSig.TriggerHardStop()
+	<-b.shutSig.HasStoppedChan()
+	if b.batcher != nil {
+		_ = b.batcher.Close(context.Background())
+	}
 }
