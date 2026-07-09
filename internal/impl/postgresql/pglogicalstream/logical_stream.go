@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -230,6 +231,15 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	var snapshotter *snapshotter
 	if config.StreamOldData {
+		// A crash between snapshot completion and slot promotion leaves <slot>_tmp
+		// behind, owned by the dead session. We only get here when no permanent
+		// slot exists, so any leftover _tmp slot is necessarily stale - drop it
+		// first so CREATE_REPLICATION_SLOT doesn't fail with "already exists" and
+		// crash-loop until the dead session's slot is otherwise reaped.
+		if err := DropReplicationSlot(ctx, stream.pgConn, stream.slotName+"_tmp", DropReplicationSlotOptions{}); err != nil && !strings.Contains(err.Error(), "does not exist") {
+			return nil, fmt.Errorf("dropping stale temporary replication slot: %w", err)
+		}
+
 		var snapshotName string
 		_, snapshotName, err = CreateReplicationSlot(
 			ctx,

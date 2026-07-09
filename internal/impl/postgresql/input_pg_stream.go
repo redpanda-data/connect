@@ -482,10 +482,15 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				flushedBatch, err := batcher.Flush(ctx)
 				if err != nil {
 					p.logger.Debugf("error flushing snapshot completion batch: %s", err)
+					// The sentinel is a one-shot signal; if we bail here without
+					// acking, the barrier's snapshot goroutine blocks on
+					// snapshotAcked forever. Trigger a restart instead of stalling.
+					p.stopSig.TriggerSoftStop()
 					break
 				}
 				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
 					p.logger.Debugf("failed to flush snapshot completion batch: %s", err)
+					p.stopSig.TriggerSoftStop()
 					break
 				}
 				drained := make(chan struct{})

@@ -359,10 +359,13 @@ pg_stream:
 	require.Zero(t, permanentSlots, "replication slot must not be promoted before snapshot rows are acknowledged")
 
 	// A real process crash drops the connection, so postgres releases the
-	// temporary snapshot slot. Our in-process cancel does not tear the
-	// replication connection down promptly, so terminate the backend still
-	// holding the temporary slot to faithfully model the crash, and wait for the
-	// slot to be released before restarting.
+	// temporary snapshot slot promptly (the socket close is immediate at the
+	// OS level). Our in-process cancel does not: confirmed empirically, the
+	// slot still reports "active for PID ..." 30+ seconds after run1Ctx is
+	// cancelled, since Go's graceful shutdown path doesn't force-close the
+	// underlying connection that fast. Terminate the backend still holding the
+	// temporary slot to faithfully model the crash's prompt socket teardown,
+	// and wait for the slot to be released before restarting.
 	require.Eventually(t, func() bool {
 		_, _ = db.Exec(`SELECT pg_terminate_backend(active_pid) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_ack_barrier_tmp' AND active_pid IS NOT NULL`)
 		var tmpSlots int
@@ -372,9 +375,16 @@ pg_stream:
 		return tmpSlots == 0
 	}, 30*time.Second, 500*time.Millisecond, "temporary snapshot slot from the crashed run was not released")
 
-	// Run 2: restart against the same slot. Since run 1 never acked the snapshot,
-	// the slot must not have been promoted, so the snapshot re-runs and every row
-	// is delivered again.
+	// Run 2: restart against the same slot. Since run 1 never acked the
+	// snapshot, the slot must not have been promoted, so the snapshot re-runs
+	// and every row is delivered again. The temporary slot is already gone by
+	// this point, so Connect's drop-before-create guard (added for CON-489's
+	// review) takes its "does not exist" path here and proceeds straight to
+	// creating a fresh one - the guard's other path, dropping a slot that
+	// still exists but whose owning session has died without yet being
+	// reaped, isn't reachable from this harness (see comment above: emulating
+	// that state needs the same terminate-then-wait this test already does,
+	// which collapses it into the "does not exist" case by construction).
 	var mu sync.Mutex
 	var reads int
 	run2Builder := service.NewStreamBuilder()
