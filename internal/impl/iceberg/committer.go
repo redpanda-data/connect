@@ -121,11 +121,27 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 		allFiles = append(allFiles, input.Files...)
 	}
 
-	if err := c.commitLocked(ctx, func(txn *table.Transaction, props iceberg.Properties) error {
+	if err := c.commitLocked(ctx, true, func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error {
+		files := allFiles
+		if reloaded {
+			// A prior attempt can land server-side yet report failure (a lost
+			// or ambiguous response). The reload then already references those
+			// files, so re-adding them with the duplicate check disabled would
+			// register the same path in two snapshots and produce conflicting
+			// sequence numbers for downstream readers. Drop any file the
+			// reloaded table already has; if all are present the previous
+			// attempt succeeded and AddDataFiles + Commit become a no-op.
+			remaining, err := c.dropAlreadyCommitted(ctx, allFiles)
+			if err != nil {
+				return err
+			}
+			files = remaining
+		}
 		// WithoutDuplicateCheck: writer.Write stamps each path with a fresh uuid,
 		// so iceberg-go's default O(snapshot) manifest collision scan is wasted
-		// work on the commit hot path (T6692).
-		return txn.AddDataFiles(ctx, allFiles, props,
+		// work on the commit hot path (T6692). On a reloaded retry we run the
+		// targeted dropAlreadyCommitted check above instead.
+		return txn.AddDataFiles(ctx, files, props,
 			table.WithoutAutoNameMapping(),
 			table.WithoutDuplicateCheck(),
 		)
@@ -147,7 +163,12 @@ func (c *committer) commitRowDelta(ctx context.Context, input CommitInput) error
 	if input.SchemaID != currentSchemaID {
 		return &StaleSchemaError{WriterSchemaID: input.SchemaID, CurrentSchemaID: currentSchemaID}
 	}
-	if err := c.commitLocked(ctx, func(txn *table.Transaction, props iceberg.Properties) error {
+	// retryOnUnknownState is false here: this path does not yet dedupe against a
+	// reloaded snapshot on retry, so retrying a possibly-landed commit could
+	// duplicate it. RowDelta commits carry equality-delete files alongside
+	// inserts, so idempotent replay must reconcile both; that is tracked
+	// separately.
+	if err := c.commitLocked(ctx, false, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
 		// RowDelta derives the snapshot operation automatically
 		// (append/delete/overwrite).
 		rd := txn.NewRowDelta(props)
@@ -165,8 +186,16 @@ func (c *committer) commitRowDelta(ctx context.Context, input CommitInput) error
 
 // commitLocked stages a transaction via stage and commits it, retrying on
 // concurrent-commit conflicts and reloading table metadata between attempts.
-// Callers must hold c.commitMu.
-func (c *committer) commitLocked(ctx context.Context, stage func(*table.Transaction, iceberg.Properties) error) error {
+// The stage callback's reloaded argument is false on the first attempt and
+// true once the table has been reloaded after a failed attempt, so callers can
+// guard against re-adding files a lost-but-landed attempt already committed.
+//
+// retryOnUnknownState controls whether an ErrCommitStateUnknown result (the
+// commit may have landed server-side, e.g. a 5xx/timeout response) is retried.
+// It is only safe to set when stage is idempotent across a reload — i.e. it
+// drops files the reloaded snapshot already references — otherwise a retry of a
+// commit that actually landed would duplicate it. Callers must hold c.commitMu.
+func (c *committer) commitLocked(ctx context.Context, retryOnUnknownState bool, stage func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error) error {
 	props := iceberg.Properties{
 		table.ManifestMergeEnabledKey: strconv.FormatBool(c.cfg.ManifestMergeEnabled),
 	}
@@ -176,6 +205,7 @@ func (c *committer) commitLocked(ctx context.Context, stage func(*table.Transact
 
 	var commitErr error
 	attempt := 0
+	reloaded := false
 	for range c.cfg.MaxRetries {
 		attempt++
 		txn := c.table.NewTransaction()
@@ -187,15 +217,22 @@ func (c *committer) commitLocked(ctx context.Context, stage func(*table.Transact
 				return fmt.Errorf("upgrading version: %w", err)
 			}
 		}
-		if err := stage(txn, props); err != nil {
+		if err := stage(txn, props, reloaded); err != nil {
 			return err
 		}
 		tbl, err := txn.Commit(ctx)
-		if errors.Is(err, rest.ErrCommitFailed) {
+		// ErrCommitFailed is a clean conflict (our commit did not land), so a
+		// reload-and-retry re-adds our files exactly once. ErrCommitStateUnknown
+		// means the commit may have landed; retrying is only safe when stage
+		// dedupes against the reloaded snapshot (retryOnUnknownState), in which
+		// case a landed attempt becomes a no-op and an unlanded one re-adds once.
+		if errors.Is(err, rest.ErrCommitFailed) ||
+			(retryOnUnknownState && errors.Is(err, rest.ErrCommitStateUnknown)) {
 			commitErr = err
 			c.logger.Warnf("Commit attempt %d/%d failed: %v", attempt, c.cfg.MaxRetries, err)
-			if reloaded, reloadErr := c.reloadTable(ctx); reloadErr == nil {
-				c.table = reloaded
+			if reloadedTbl, reloadErr := c.reloadTable(ctx); reloadErr == nil {
+				c.table = reloadedTbl
+				reloaded = true
 			} else {
 				c.logger.Warnf("Failed to reload table during commit retry: %v", reloadErr)
 			}
@@ -213,6 +250,68 @@ func (c *committer) commitLocked(ctx context.Context, stage func(*table.Transact
 	}
 	c.incrCommitFailure()
 	return fmt.Errorf("committing transaction after %d attempts: %w", attempt, commitErr)
+}
+
+// dropAlreadyCommitted returns the subset of files whose paths are not already
+// referenced by the current snapshot of c.table, which the caller must have just
+// reloaded. It exists because commit retries re-add the same DataFile objects
+// (identical paths) after a reload: if a prior attempt actually landed
+// server-side but reported failure, the reloaded snapshot already contains those
+// files, and re-adding them with AddDataFiles' duplicate check disabled would
+// register the same path in two snapshots (the "conflicting sequence numbers"
+// corruption). The scan is O(current snapshot) but only runs on the rare retry
+// path, keeping the first-attempt hot path free of the duplicate scan.
+func (c *committer) dropAlreadyCommitted(ctx context.Context, files []iceberg.DataFile) ([]iceberg.DataFile, error) {
+	snap := c.table.CurrentSnapshot()
+	if snap == nil {
+		return files, nil
+	}
+	fs, err := c.table.FS(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolving table filesystem for duplicate check: %w", err)
+	}
+	manifests, err := snap.Manifests(fs)
+	if err != nil {
+		return nil, fmt.Errorf("loading manifests for duplicate check: %w", err)
+	}
+
+	// Match against our candidate paths only, so the lookup set stays O(files)
+	// regardless of table size.
+	want := make(map[string]struct{}, len(files))
+	for _, f := range files {
+		want[f.FilePath()] = struct{}{}
+	}
+	committed := make(map[string]struct{}, len(files))
+	for _, m := range manifests {
+		if m.ManifestContent() != iceberg.ManifestContentData {
+			continue
+		}
+		for entry, err := range m.Entries(fs, true) {
+			if err != nil {
+				return nil, fmt.Errorf("reading manifest entries for duplicate check: %w", err)
+			}
+			path := entry.DataFile().FilePath()
+			if _, ok := want[path]; ok {
+				committed[path] = struct{}{}
+			}
+		}
+		if len(committed) == len(want) {
+			break // every candidate already present; no need to scan further.
+		}
+	}
+
+	if len(committed) == 0 {
+		return files, nil
+	}
+	remaining := make([]iceberg.DataFile, 0, len(files)-len(committed))
+	for _, f := range files {
+		if _, ok := committed[f.FilePath()]; ok {
+			c.logger.Warnf("Skipping re-add of data file already committed by a prior attempt: %s", f.FilePath())
+			continue
+		}
+		remaining = append(remaining, f)
+	}
+	return remaining, nil
 }
 
 func (c *committer) incrCommitFailure() {

@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/catalog/rest"
 	iceio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
@@ -144,6 +145,175 @@ func TestCommitterSkipsDuplicateCheck(t *testing.T) {
 	// Second commit at the same path: only succeeds if the dup check is off.
 	df2 := synthDataFile(t, tbl.Spec(), dupPath)
 	require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df2}, SchemaID: c.currentSchemaID()}))
+}
+
+// commitOutcome scripts how scriptedCatalog handles a single CommitTable call.
+type commitOutcome int
+
+const (
+	commitSucceed         commitOutcome = iota // apply the update and report success
+	commitLandThenFail                         // apply the update but report ErrCommitFailed (lost/ambiguous ack)
+	commitConflict                             // do NOT apply the update and report ErrCommitFailed (clean 409)
+	commitLandThenUnknown                      // apply the update but report ErrCommitStateUnknown (landed, ambiguous 5xx)
+	commitUnknownNoLand                        // do NOT apply the update and report ErrCommitStateUnknown (5xx before applying)
+)
+
+// scriptedCatalog drives per-call CommitTable outcomes so tests can model the
+// two ways a commit "fails" from the client's point of view: a genuine conflict
+// where nothing landed, and a lost response where the write actually landed.
+// Calls beyond the scripted outcomes succeed normally.
+type scriptedCatalog struct {
+	*memCatalog
+	outcomes []commitOutcome
+	calls    int
+}
+
+func (c *scriptedCatalog) CommitTable(ctx context.Context, ident table.Identifier, reqs []table.Requirement, updates []table.Update) (table.Metadata, string, error) {
+	outcome := commitSucceed
+	if c.calls < len(c.outcomes) {
+		outcome = c.outcomes[c.calls]
+	}
+	c.calls++
+
+	var applies bool
+	var retErr error
+	switch outcome {
+	case commitSucceed:
+		applies, retErr = true, nil
+	case commitLandThenFail:
+		applies, retErr = true, rest.ErrCommitFailed
+	case commitLandThenUnknown:
+		applies, retErr = true, rest.ErrCommitStateUnknown
+	case commitConflict:
+		applies, retErr = false, rest.ErrCommitFailed
+	case commitUnknownNoLand:
+		applies, retErr = false, rest.ErrCommitStateUnknown
+	}
+
+	if applies {
+		if _, _, err := c.memCatalog.CommitTable(ctx, ident, reqs, updates); err != nil {
+			return nil, "", err
+		}
+	}
+	if retErr != nil {
+		return nil, "", retErr
+	}
+	return c.meta, c.metadataLocation, nil
+}
+
+func (c *scriptedCatalog) snapshot() *table.Table {
+	return table.New(
+		c.ident,
+		c.meta,
+		c.metadataLocation,
+		func(context.Context) (iceio.IO, error) { return iceio.LocalFS{}, nil },
+		c,
+	)
+}
+
+// countDataFileRefs counts how many live data-file entries in the table's
+// current snapshot reference path. A correctly committed file appears exactly
+// once; a duplicate-registration bug shows up as two.
+func countDataFileRefs(tb testing.TB, ctx context.Context, tbl *table.Table, path string) int {
+	tb.Helper()
+	snap := tbl.CurrentSnapshot()
+	if snap == nil {
+		return 0
+	}
+	fs, err := tbl.FS(ctx)
+	require.NoError(tb, err)
+	manifests, err := snap.Manifests(fs)
+	require.NoError(tb, err)
+
+	n := 0
+	for _, m := range manifests {
+		if m.ManifestContent() != iceberg.ManifestContentData {
+			continue
+		}
+		for entry, err := range m.Entries(fs, true) {
+			require.NoError(tb, err)
+			if entry.DataFile().FilePath() == path {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func newScriptedCommitter(tb testing.TB, outcomes ...commitOutcome) (*committer, *scriptedCatalog) {
+	tb.Helper()
+	_, mem := newTestTable(tb)
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: outcomes}
+	logger := service.MockResources().Logger()
+	c, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3},
+		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+	require.NoError(tb, err)
+	tb.Cleanup(c.Close)
+	return c, cat
+}
+
+// TestCommitterRetryDoesNotDuplicateLandedFile is the regression test for the
+// "conflicting sequence numbers" corruption: a commit attempt lands server-side
+// but reports failure (a lost/ambiguous response), and connect's retry reloads
+// the table — which now already references the file — then re-adds it with the
+// duplicate check disabled. The file must end up registered exactly once.
+func TestCommitterRetryDoesNotDuplicateLandedFile(t *testing.T) {
+	ctx := t.Context()
+	c, cat := newScriptedCommitter(t, commitLandThenFail)
+
+	path := fmt.Sprintf("%s/data/landed.parquet", cat.location)
+	df := synthDataFile(t, cat.snapshot().Spec(), path)
+	require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: c.currentSchemaID()}))
+
+	require.Equal(t, 1, countDataFileRefs(t, ctx, cat.snapshot(), path),
+		"a file that landed on the failed attempt must not be re-added by the retry")
+}
+
+// TestCommitterRetryReAddsOnGenuineConflict guards against the idempotency fix
+// over-filtering: on a clean conflict nothing landed, so the retry MUST re-add
+// the file. The file must end up committed exactly once (not dropped).
+func TestCommitterRetryReAddsOnGenuineConflict(t *testing.T) {
+	ctx := t.Context()
+	c, cat := newScriptedCommitter(t, commitConflict)
+
+	path := fmt.Sprintf("%s/data/retried.parquet", cat.location)
+	df := synthDataFile(t, cat.snapshot().Spec(), path)
+	require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: c.currentSchemaID()}))
+
+	require.Equal(t, 1, countDataFileRefs(t, ctx, cat.snapshot(), path),
+		"a file that did not land must be re-added by the retry")
+}
+
+// TestCommitterRetriesUnknownStateAndDedupes covers the landed-but-ambiguous
+// case (5xx/timeout -> ErrCommitStateUnknown): the append path must retry
+// rather than surface an error, and the dedupe must keep the landed file
+// registered exactly once. Before ErrCommitStateUnknown was retried this
+// Commit returned an error and the batch was redelivered under a new path.
+func TestCommitterRetriesUnknownStateAndDedupes(t *testing.T) {
+	ctx := t.Context()
+	c, cat := newScriptedCommitter(t, commitLandThenUnknown)
+
+	path := fmt.Sprintf("%s/data/landed-unknown.parquet", cat.location)
+	df := synthDataFile(t, cat.snapshot().Spec(), path)
+	require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: c.currentSchemaID()}))
+
+	require.Equal(t, 1, countDataFileRefs(t, ctx, cat.snapshot(), path),
+		"a file that landed before an unknown-state response must be registered exactly once")
+}
+
+// TestCommitterRetriesUnknownStateWithoutLanding covers the other unknown-state
+// branch: a 5xx before the write landed. The retry must still commit the file
+// (exactly once), proving the unknown-state retry does not drop legitimate work.
+func TestCommitterRetriesUnknownStateWithoutLanding(t *testing.T) {
+	ctx := t.Context()
+	c, cat := newScriptedCommitter(t, commitUnknownNoLand)
+
+	path := fmt.Sprintf("%s/data/unknown-noland.parquet", cat.location)
+	df := synthDataFile(t, cat.snapshot().Spec(), path)
+	require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: c.currentSchemaID()}))
+
+	require.Equal(t, 1, countDataFileRefs(t, ctx, cat.snapshot(), path),
+		"a file that did not land before an unknown-state response must be committed once on retry")
 }
 
 // BenchmarkAddDataFilesDupCheck measures the cost of Transaction.AddDataFiles
