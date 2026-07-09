@@ -1,0 +1,12 @@
+# Converted from Kafka Connect connector "debezium-pg" (class=io.debezium.connector.postgresql.PostgresConnector). Review # TODO markers.
+input:
+  postgres_cdc:
+    dsn: postgres://pguser:pgpass@pghost:5432/mydb # TODO: password is inlined — move to a secret/env-var reference
+    tables:
+      - public.orders
+      - public.customers
+    schema: public
+    slot_name: my_slot
+    stream_snapshot: true # TODO: Debezium snapshot.mode=initial — verify this maps to stream_snapshot correctly
+output:
+  stdout: {} # TODO: set the output destination
