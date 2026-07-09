@@ -58,7 +58,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 			Default("10s").
 			Advanced(),
 		service.NewStringField(kfwFieldMaxMessageBytes).
-			Description("The maximum size of a produced record batch in bytes. " +
+			Description("The maximum size of a produced record batch in bytes, measured before compression is applied. " +
 				"A `MESSAGE_TOO_LARGE` error is returned if a batch exceeds this limit. " +
 				"This field maps to the `max.message.bytes` Kafka property. " +
 				"Ensure the Redpanda broker's `kafka_batch_max_bytes` property is at least as large as this value, " +
