@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,6 +45,12 @@ type Stream struct {
 	standbyMessageTimeout time.Duration
 	messages              chan []StreamMessage
 	errors                chan error
+
+	// snapshotAcked is closed (once) by the input layer via
+	// MarkSnapshotAcknowledged once every snapshot message has been acknowledged
+	// downstream, unblocking promotion of the replication slot.
+	snapshotAcked     chan struct{}
+	snapshotAckedOnce sync.Once
 
 	includeTxnMarkers       bool
 	slotName                string
@@ -112,6 +119,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		pgConn:                dbConn,
 		messages:              make(chan []StreamMessage),
 		errors:                make(chan error, 1),
+		snapshotAcked:         make(chan struct{}),
 		slotName:              config.ReplicationSlotName,
 		snapshotBatchSize:     batchSize,
 		tables:                tables,
@@ -223,6 +231,15 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	var snapshotter *snapshotter
 	if config.StreamOldData {
+		// A crash between snapshot completion and slot promotion leaves <slot>_tmp
+		// behind, owned by the dead session. We only get here when no permanent
+		// slot exists, so any leftover _tmp slot is necessarily stale - drop it
+		// first so CREATE_REPLICATION_SLOT doesn't fail with "already exists" and
+		// crash-loop until the dead session's slot is otherwise reaped.
+		if err := DropReplicationSlot(ctx, stream.pgConn, stream.slotName+"_tmp", DropReplicationSlotOptions{}); err != nil && !strings.Contains(err.Error(), "does not exist") {
+			return nil, fmt.Errorf("dropping stale temporary replication slot: %w", err)
+		}
+
 		var snapshotName string
 		_, snapshotName, err = CreateReplicationSlot(
 			ctx,
@@ -254,12 +271,27 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			for _, table := range tables {
 				stream.monitor.MarkSnapshotComplete(table)
 			}
-			// TODO: Do we want to ensure all snapshot messages are ack'd before moving
-			// onto the replication stream?
 
-			// Now that the snapshot has been processed, we can copy the replication
-			// slot, represerving the LSN but making it not temporary.
-			// This action also expires the snapshot.
+			// Emit a sentinel so the input layer knows the snapshot is fully
+			// emitted, then block until it confirms every snapshot message has
+			// been acknowledged downstream before promoting the replication
+			// slot. This guarantees a crash during the handoff re-runs the
+			// snapshot on restart instead of losing the un-acked rows: the
+			// permanent slot is only created past this barrier.
+			select {
+			case stream.messages <- []StreamMessage{{Operation: SnapshotCompleteOpType}}:
+			case <-ctx.Done():
+				return
+			}
+			select {
+			case <-stream.snapshotAcked:
+			case <-ctx.Done():
+				return
+			}
+
+			// Now that the snapshot has been processed and durably delivered, we
+			// can copy the replication slot, preserving the LSN but making it not
+			// temporary. This action also expires the snapshot.
 			startLSN, err = CopyReplicationSlot(
 				ctx,
 				stream.pgConn,
@@ -774,6 +806,13 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 // Messages is a channel that can be used to consume messages from the plugin. It will contain LSN nil for snapshot messages.
 func (s *Stream) Messages() chan []StreamMessage {
 	return s.messages
+}
+
+// MarkSnapshotAcknowledged is called by the input layer once every snapshot
+// message has been acknowledged downstream, unblocking promotion of the
+// replication slot. Safe to call multiple times.
+func (s *Stream) MarkSnapshotAcknowledged() {
+	s.snapshotAckedOnce.Do(func() { close(s.snapshotAcked) })
 }
 
 // Errors is a channel that can be used to see if and error has occurred internally and the stream should be restarted.

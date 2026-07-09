@@ -36,6 +36,11 @@ const (
 	BeginOpType OpType = "begin"
 	// CommitOpType is a database transaction commit
 	CommitOpType OpType = "commit"
+	// SnapshotCompleteOpType is an internal sentinel emitted after all snapshot
+	// rows have been sent. It signals the input layer to block promotion of the
+	// replication slot until every snapshot message has been acknowledged
+	// downstream; it is never forwarded downstream.
+	SnapshotCompleteOpType OpType = "snapshot_complete"
 )
 
 // StreamMessage represents a single change from the database
