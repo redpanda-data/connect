@@ -1,0 +1,59 @@
+version: "3"
+
+silent: true
+
+# Required env vars:
+#   SNOWFLAKE_ACCOUNT       ORG-ACCOUNT identifier
+#   SNOWFLAKE_USER          Snowflake user
+#   SNOWFLAKE_DB            Target database
+#   SNOWFLAKE_PRIVATE_KEY   PEM-encoded RSA private key content
+#
+# Optional:
+#   SNOWFLAKE_ROLE           default: ACCOUNTADMIN
+#   SNOWFLAKE_SCHEMA         default: PUBLIC
+#   SNOWFLAKE_BUILD_PARALLELISM  parquet build parallelism, default: 1
+#   SNOWFLAKE_CHUNK_SIZE         parquet chunk size, default: 50000
+#   SNOWFLAKE_MAX_IN_FLIGHT      concurrent channels, default: 4
+
+vars:
+  RPCN: "go run ../../../../../../cmd/redpanda-connect/main.go"
+  BATCH: '{{.BATCH | default "1000"}}'
+  PERIOD: '{{.PERIOD | default "5s"}}'
+  MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "4"}}'
+  PARALLELISM: '{{.PARALLELISM | default "1"}}'
+  CHUNK_SIZE: '{{.CHUNK_SIZE | default "50000"}}'
+
+tasks:
+  bench:run:
+    desc: |
+      Run Snowpipe Streaming write benchmark.
+      Params: BATCH (default 1000), PERIOD (default 5s), MAX_IN_FLIGHT (default 4),
+              PARALLELISM (default 1), CHUNK_SIZE (default 50000)
+      Example: task bench:run BATCH=5000 PARALLELISM=4
+    cmds:
+      - |
+        {{.RPCN}} run \
+          --set "output.snowflake_streaming.batching.count={{.BATCH}}" \
+          --set "output.snowflake_streaming.batching.period={{.PERIOD}}" \
+          --set "output.snowflake_streaming.max_in_flight={{.MAX_IN_FLIGHT}}" \
+          --set "output.snowflake_streaming.build_options.parallelism={{.PARALLELISM}}" \
+          --set "output.snowflake_streaming.build_options.chunk_size={{.CHUNK_SIZE}}" \
+          ./benchmark_config.yaml
+
+  bench:matrix:
+    desc: |
+      Sweep batch sizes and parallelism. Ctrl-C each run after a stable throughput reading.
+      Example: task bench:matrix
+    cmds:
+      - |
+        for batch in 1000 5000 10000; do
+          for p in 1 4; do
+            echo "=== batch=$batch parallelism=$p ==="
+            task bench:run BATCH=$batch PARALLELISM=$p || true
+          done
+        done
+
+  bench:truncate:
+    desc: Truncate BENCH_EVENTS table (requires snowsql in PATH)
+    cmds:
+      - snowsql -a "$SNOWFLAKE_ACCOUNT" -u "$SNOWFLAKE_USER" -r "${SNOWFLAKE_ROLE:-ACCOUNTADMIN}" -d "$SNOWFLAKE_DB" -s "${SNOWFLAKE_SCHEMA:-PUBLIC}" -q "TRUNCATE TABLE BENCH_EVENTS;"

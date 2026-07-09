@@ -1,0 +1,45 @@
+http:
+  debug_endpoints: true
+
+input:
+  generate:
+    count: 0
+    interval: ""
+    mapping: |
+      root.ID = counter()
+      root.USER_ID = (counter() % 10000) + 1
+      root.EVENT_TYPE = ["click", "view", "purchase", "scroll", "hover"].index(counter() % 5)
+      root.VALUE = (counter() % 1000) + random_int(max: 100)
+      root.INFO = "event info for record " + counter().string()
+      root.TS = now()
+
+pipeline:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+
+output:
+  snowflake_streaming:
+    account: "${SNOWFLAKE_ACCOUNT}"
+    user: "${SNOWFLAKE_USER}"
+    role: "${SNOWFLAKE_ROLE:ACCOUNTADMIN}"
+    database: "${SNOWFLAKE_DB}"
+    schema: "${SNOWFLAKE_SCHEMA:PUBLIC}"
+    table: BENCH_EVENTS
+    private_key: "${SNOWFLAKE_PRIVATE_KEY}"
+    build_options:
+      parallelism: ${SNOWFLAKE_BUILD_PARALLELISM:1}
+      chunk_size: ${SNOWFLAKE_CHUNK_SIZE:50000}
+    max_in_flight: ${SNOWFLAKE_MAX_IN_FLIGHT:4}
+    batching:
+      count: ${SNOWFLAKE_BATCH_COUNT:1000}
+      period: ${SNOWFLAKE_BATCH_PERIOD:5s}
+
+logger:
+  level: WARN
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true

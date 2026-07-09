@@ -1,0 +1,51 @@
+version: "3"
+
+silent: true
+
+# Required env vars:
+#   SNOWFLAKE_ACCOUNT       ORG-ACCOUNT identifier
+#   SNOWFLAKE_USER          Snowflake user
+#   SNOWFLAKE_DB            Target database
+#   SNOWFLAKE_WAREHOUSE     Snowflake warehouse
+#   SNOWFLAKE_PRIVATE_KEY   PEM-encoded RSA private key content
+#
+# Optional:
+#   SNOWFLAKE_ROLE              default: ACCOUNTADMIN
+#   SNOWFLAKE_SCHEMA            default: PUBLIC
+#   SNOWFLAKE_UPLOAD_THREADS    parallel upload threads, default: 4
+
+vars:
+  RPCN: "go run ../../../../../../cmd/redpanda-connect/main.go"
+  BATCH: '{{.BATCH | default "1000"}}'
+  PERIOD: '{{.PERIOD | default "5s"}}'
+  UPLOAD_THREADS: '{{.UPLOAD_THREADS | default "4"}}'
+
+tasks:
+  bench:run:
+    desc: |
+      Run Snowflake PUT + Snowpipe bulk write benchmark.
+      Params: BATCH (default 1000), PERIOD (default 5s), UPLOAD_THREADS (default 4)
+      Example: task bench:run BATCH=5000 UPLOAD_THREADS=8
+    cmds:
+      - |
+        {{.RPCN}} run \
+          --set "output.snowflake_put.batching.count={{.BATCH}}" \
+          --set "output.snowflake_put.batching.period={{.PERIOD}}" \
+          --set "output.snowflake_put.upload_parallel_threads={{.UPLOAD_THREADS}}" \
+          ./benchmark_config.yaml
+
+  bench:matrix:
+    desc: Sweep batch sizes and upload thread counts
+    cmds:
+      - |
+        for batch in 1000 5000 10000; do
+          for threads in 1 4 8; do
+            echo "=== batch=$batch upload_threads=$threads ==="
+            task bench:run BATCH=$batch UPLOAD_THREADS=$threads || true
+          done
+        done
+
+  bench:truncate:
+    desc: Truncate BENCH_EVENTS_JSON table (requires snowsql in PATH)
+    cmds:
+      - snowsql -a "$SNOWFLAKE_ACCOUNT" -u "$SNOWFLAKE_USER" -r "${SNOWFLAKE_ROLE:-ACCOUNTADMIN}" -d "$SNOWFLAKE_DB" -s "${SNOWFLAKE_SCHEMA:-PUBLIC}" -q "TRUNCATE TABLE BENCH_EVENTS_JSON;"

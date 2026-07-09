@@ -1,0 +1,37 @@
+version: "3"
+
+silent: true
+
+# Required env vars:
+#   SNOWFLAKE_ACCOUNT       ORG-ACCOUNT identifier  (e.g. MYORG-MYACCOUNT)
+#   SNOWFLAKE_USER          Snowflake user
+#   SNOWFLAKE_DB            Target database
+#   SNOWFLAKE_PRIVATE_KEY   PEM-encoded RSA private key content
+#   SNOWFLAKE_WAREHOUSE     Required for write/bulk only
+#
+# Optional:
+#   SNOWFLAKE_ROLE      default: ACCOUNTADMIN
+#   SNOWFLAKE_SCHEMA    default: PUBLIC
+
+tasks:
+  setup:
+    desc: Create benchmark tables, stage, and pipe in Snowflake (requires snowsql in PATH)
+    cmds:
+      - snowsql -a "$SNOWFLAKE_ACCOUNT" -u "$SNOWFLAKE_USER" -r "${SNOWFLAKE_ROLE:-ACCOUNTADMIN}" -d "$SNOWFLAKE_DB" -s "${SNOWFLAKE_SCHEMA:-PUBLIC}" -f create.sql
+
+  teardown:
+    desc: Drop all benchmark objects (requires snowsql in PATH)
+    cmds:
+      - snowsql -a "$SNOWFLAKE_ACCOUNT" -u "$SNOWFLAKE_USER" -r "${SNOWFLAKE_ROLE:-ACCOUNTADMIN}" -d "$SNOWFLAKE_DB" -s "${SNOWFLAKE_SCHEMA:-PUBLIC}" -q "DROP TABLE IF EXISTS BENCH_EVENTS; DROP TABLE IF EXISTS BENCH_EVENTS_JSON; DROP STAGE IF EXISTS BENCH_STAGE; DROP PIPE IF EXISTS BENCH_PIPE;"
+
+  bench:streaming:
+    desc: "Run Snowpipe Streaming benchmark (delegates to write/streaming/Taskfile.yaml)"
+    dir: write/streaming
+    cmds:
+      - task bench:run {{.CLI_ARGS}}
+
+  bench:bulk:
+    desc: "Run staged PUT + Snowpipe benchmark (delegates to write/bulk/Taskfile.yaml)"
+    dir: write/bulk
+    cmds:
+      - task bench:run {{.CLI_ARGS}}
