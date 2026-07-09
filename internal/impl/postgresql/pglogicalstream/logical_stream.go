@@ -55,7 +55,6 @@ type Stream struct {
 	heartbeat               *heartbeat
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
-	currentTxCommitTime     *time.Time
 }
 
 // NewPgStream creates a new instance of the Stream struct.
@@ -387,17 +386,20 @@ func (s *Stream) commitAckedLSN(ctx context.Context, lsn LSN) error {
 }
 
 func (s *Stream) streamMessages(currentLSN LSN) error {
-	relations := map[uint32]*RelationMessage{}
-	typeMap := pgtype.NewMap()
-	// schemaCache maps relation ID to its serialized schema. It is keyed by relation ID
-	// and invalidated whenever a RelationMessage for that ID is received (which PostgreSQL
-	// sends before any DML when the table definition changes).
-	schemaCache := map[uint32]any{}
-	// If we don't stream commit messages we could not ack them, which means postgres will replay the whole transaction
-	// so if we're at the end of a stream and we get an ack for the last message in a txn, we need to ack the txn not the
-	// last message.
-	lastEmittedLSN := currentLSN
-	lastEmittedCommitLSN := currentLSN
+	var (
+		relations = map[uint32]*RelationMessage{}
+		typeMap   = pgtype.NewMap()
+		// schemaCache maps relation ID to its serialized schema. It is keyed by relation ID
+		// and invalidated whenever a RelationMessage for that ID is received (which PostgreSQL
+		// sends before any DML when the table definition changes).
+		schemaCache = map[uint32]any{}
+		// If we don't stream commit messages we could not ack them, which means postgres will replay the whole transaction
+		// so if we're at the end of a stream and we get an ack for the last message in a txn, we need to ack the txn not the
+		// last message.
+		lastEmittedLSN       = currentLSN
+		lastEmittedCommitLSN = currentLSN
+		currentTxnCommitTime time.Time
+	)
 
 	commitLSN := func(force bool) (committed bool, err error) {
 		ctx, done := s.shutSig.HardStopCtx(context.Background())
@@ -474,7 +476,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 				return fmt.Errorf("parsing XLogData: %w", err)
 			}
 			msgLSN := xld.WALStart + LSN(len(xld.WALData))
-			result, err := s.processChange(ctx, msgLSN, xld, relations, typeMap, schemaCache)
+			result, err := s.processChange(ctx, msgLSN, xld, relations, typeMap, schemaCache, &currentTxnCommitTime)
 			if err != nil {
 				return fmt.Errorf("decoding postgres changes failed: %w", err)
 			}
@@ -505,7 +507,7 @@ const (
 )
 
 // Handle handles the pgoutput output.
-func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any) (processChangeResult, error) {
+func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time) (processChangeResult, error) {
 	logicalMsg, err := Parse(xld.WALData)
 	if err != nil {
 		return changeResultNoMessage, err
@@ -518,12 +520,11 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 		delete(schemaCache, rel.RelationID)
 	}
 
-	// Track commit timestamp: set on BEGIN (available for DML), clear on COMMIT.
+	// capture transaction commit time for insert, update and delete events
 	if begin, ok := logicalMsg.(*BeginMessage); ok {
-		t := begin.CommitTime
-		s.currentTxCommitTime = &t
+		*currentTxnCommitTime = begin.CommitTime
 	} else if _, ok := logicalMsg.(*CommitMessage); ok {
-		s.currentTxCommitTime = nil
+		*currentTxnCommitTime = time.Time{}
 	}
 
 	// parse changes inside the transaction
@@ -571,11 +572,7 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 		}
 	}
 
-	switch message.Operation {
-	case InsertOpType, UpdateOpType, DeleteOpType:
-		message.CommitTs = s.currentTxCommitTime
-	}
-
+	message.CommitTime = *currentTxnCommitTime
 	lsn := msgLSN.String()
 	message.LSN = &lsn
 	select {

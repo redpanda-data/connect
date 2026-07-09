@@ -41,6 +41,13 @@ type httpDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
+// CallAPI is the exported entry point that input/processor callers use to
+// dispatch arbitrary Jira REST requests. It is a thin wrapper around the
+// internal callJiraApi helper.
+func (j *Client) CallAPI(ctx context.Context, u *url.URL) ([]byte, error) {
+	return j.callJiraApi(ctx, u)
+}
+
 // callJiraApi calls the Jira API at the given URL. Auth, retry, metrics, and
 // rate limiting are handled by the underlying httpDoer (*http.Client assembled
 // by httpclient.NewClient in production). This method sets Jira-specific headers and performs the

@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -36,6 +36,13 @@ const (
 	ioFieldNamespace            = "namespace"
 	ioFieldTable                = "table"
 	ioFieldCaseSensitiveColumns = "case_sensitive_columns"
+
+	// Row-operation fields for row-level mutations (insert / upsert / delete).
+	// `row_operation` is named to avoid colliding with Iceberg's snapshot-level
+	// "operation" (append/replace/overwrite/delete); `identifier_fields` matches
+	// the Iceberg spec's identifier-field-ids (primary-key columns).
+	ioFieldRowOperation     = "row_operation"
+	ioFieldIdentifierFields = "identifier_fields"
 
 	// Storage fields - common
 	ioFieldStorage = "storage"
@@ -91,6 +98,39 @@ const (
 	ioFieldParquet               = "parquet"
 	ioFieldParquetStringEncoding = "string_encoding"
 )
+
+// rowOperationDocs is the long-form documentation for the row-level operation
+// feature. It lives in the component description rather than inline in the
+// `row_operation` / `identifier_fields` field descriptions because the field
+// table on the docs site renders long, multi-paragraph cells poorly; those
+// field descriptions stay short and link here via the `row-level-operations`
+// anchor. Written as a double-quoted string so inline `code` spans can use
+// literal backticks.
+const rowOperationDocs = "\n" +
+	"== Row-level operations\n" +
+	"\n" +
+	"By default this output is append-only — every message becomes a new row (`row_operation: insert`), and existing configurations are unaffected. Set `row_operation` to apply a per-message operation, with `identifier_fields` defining the row identity:\n" +
+	"\n" +
+	"* `insert` — append the row. This is an unconditional append: it is *not* keyed or de-duplicated.\n" +
+	"* `upsert` — replace any existing rows matching `identifier_fields`, then append this row (equivalent to Iceberg's Flink UPSERT mode).\n" +
+	"* `delete` — remove rows matching `identifier_fields`.\n" +
+	"\n" +
+	"`row_operation` supports interpolation, so the operation can be driven by the data itself — for example by mapping a change-data-capture stream's operation field — but no CDC-specific format is assumed (see the change-data-capture example below). It is named `row_operation` to distinguish it from Iceberg's snapshot-level operation.\n" +
+	"\n" +
+	"`upsert` and `delete` require `identifier_fields` and use Iceberg merge-on-read equality deletes, which require table format version 2. A version-1 table is automatically upgraded to version 2 on the first `upsert`/`delete`; *this upgrade is irreversible*.\n" +
+	"\n" +
+	"*Identifier fields.* `identifier_fields` must reference existing table columns of a primitive, non-floating-point type. A static `upsert`/`delete` is validated at startup; an interpolated `row_operation` is validated per message at write time, so an empty `identifier_fields` is not caught until the first `upsert`/`delete` message arrives. Identifier columns of a temporal type (`timestamp`, `timestamptz`, `date`, `time`) must arrive as time values, not bare numbers — a numeric epoch is ambiguous as a delete key and is rejected at write time; convert it to a timestamp upstream. If the table is partitioned, every partition source column must be one of the `identifier_fields`, since equality deletes are partition-scoped.\n" +
+	"\n" +
+	"When this output auto-creates a table (via `schema_evolution`), the `identifier_fields` columns are created as *required* and registered as the table's Iceberg identifier-field-ids, so downstream engines and other writers see the primary key. A consequence is that a null or missing value in an identifier column is rejected on write, even for `insert`. Identifier columns must therefore be present at creation — in the first message or declared via `schema_metadata`. Pre-existing tables are never modified.\n" +
+	"\n" +
+	"*Batching and ordering.* Within a single batch the last `upsert`/`delete` per `identifier_fields` key wins. Each batch containing an `upsert`/`delete` is committed as its own snapshot (these commits are never coalesced, which is required for correctness), so a high-throughput mutation workload produces one snapshot per batch. Size batches accordingly and run regular table maintenance (snapshot expiry and compaction) to keep metadata manageable. Pure `insert`-only batches keep the original append fast path, which does coalesce commits.\n" +
+	"\n" +
+	"Ordering only holds *within* a batch. With more than one batch in flight, concurrent batches can commit out of order, so a stale `upsert` may overwrite a newer one for the same key. Set `max_in_flight: 1` for keyed (change-data-capture) workloads to preserve per-key order — this is enforced by config linting whenever `row_operation` is anything other than a static `insert`.\n" +
+	"\n" +
+	"[CAUTION]\n" +
+	"====\n" +
+	"`insert` is an unconditional append and is *not* keyed or de-duplicated. For keyed data (including change-data-capture), map create/read events to `upsert`, never `insert` — mixing `insert` with `upsert`/`delete` on the same key in one batch produces duplicate rows.\n" +
+	"====\n"
 
 // icebergOutputConfig returns the configuration spec for the Iceberg output.
 func icebergOutputConfig() *service.ConfigSpec {
@@ -150,7 +190,7 @@ object:struct
 array:list
 |===
 
-`+service.OutputPerformanceDocs(true, true)).
+`+rowOperationDocs+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			// Catalog configuration
 			service.NewObjectField(ioFieldCatalog,
@@ -217,6 +257,22 @@ array:list
 			service.NewBoolField(ioFieldCaseSensitiveColumns).
 				Description("Controls how message field names are matched against table column names, and how column references in the partition spec are resolved. When `true` (the default), names must match exactly. When `false`, matching is case-insensitive — set this when your downstream catalog or query engine treats column names as case-insensitive (the iceberg specification's recommended convention) so that, for example, a message keyed `\"COLUMN\"` lands in an existing `column` rather than triggering schema evolution. Ambiguous case-only duplicates in the input are rejected.").
 				Default(true).
+				Advanced(),
+
+			// Row-level operation mapping (insert / upsert / delete).
+			service.NewInterpolatedStringField(ioFieldRowOperation).
+				Description("The row-level operation to apply for each message: `insert` (append), `upsert` (replace rows matching `identifier_fields`, then append), or `delete` (remove rows matching `identifier_fields`). Supports interpolation so the operation can be driven by the data — e.g. a change-data-capture stream's operation field. Defaults to `insert`, preserving the original append-only behaviour.\n\nSee the <<row-level-operations,Row-level operations>> section above for the full semantics, the format-version-2 upgrade, batching behaviour, and important caveats.").
+				Example("insert").
+				Example(`${! metadata("op") }`).
+				Example(`${! this.op == "d" ? "delete" : "upsert" }`).
+				Default("insert").
+				Advanced(),
+
+			service.NewStringListField(ioFieldIdentifierFields).
+				Description("The columns forming the row identity (the Iceberg identifier fields / equality-delete key) used by `upsert` and `delete`. Required when `row_operation` can evaluate to `upsert` or `delete`, and must reference existing table columns of a primitive, non-floating-point type.\n\nSee the <<row-level-operations,Row-level operations>> section above for the full constraints, including the temporal-type and partitioning rules and when the requirement is enforced.").
+				Example([]string{"id"}).
+				Example([]string{"tenant_id", "user_id"}).
+				Default([]string{}).
 				Advanced(),
 
 			// Storage configuration - one of s3, gcs, or azure must be specified
@@ -368,5 +424,51 @@ array:list
 			// Batching
 			service.NewBatchPolicyField(ioFieldBatching),
 			service.NewOutputMaxInFlightField().Default(4),
+		).
+		// Keyed (upsert/delete) writes rely on per-key ordering. With more than
+		// one batch in flight, concurrent batches can commit out of order and
+		// corrupt the last-writer-wins result, so require max_in_flight: 1 for
+		// any non-insert row_operation. A static `insert` (the default) is
+		// append-only and unaffected; an interpolated row_operation is treated
+		// conservatively as potentially mutating.
+		LintRule(`root = if this.row_operation.or("insert") != "insert" && this.max_in_flight.or(4) > 1 {
+  [ "row_operation can resolve to upsert/delete, which rely on per-key write ordering; with max_in_flight > 1 concurrent batches may commit out of order and corrupt the last-writer-wins result. Set max_in_flight: 1 for keyed (change-data-capture) workloads, or use a static row_operation: insert for append-only writes." ]
+}`).
+		Example(
+			"Change-data-capture upsert/delete",
+			"Materialize a change-data-capture stream into an Iceberg table. A mapping derives the row operation from the source's operation field (here Debezium's `op`: `c`reate / `r`ead / `u`pdate map to `upsert`, `d`elete maps to `delete`) and selects the row image, while `identifier_fields` is the primary key. Note that creates map to `upsert`, never `insert`, so re-delivered or snapshot rows do not duplicate.",
+			`
+input:
+  redpanda:
+    seed_brokers: [ localhost:9092 ]
+    topics: [ dbserver.inventory.customers ]
+    consumer_group: iceberg_sink
+
+pipeline:
+  processors:
+    - mapping: |
+        meta op = match this.op {
+          "d" => "delete",
+          _   => "upsert",
+        }
+        # Debezium puts the row image in 'after' (or 'before' for deletes).
+        root = this.after | this.before
+
+output:
+  iceberg:
+    catalog:
+      url: http://localhost:8181/api/catalog
+    namespace: inventory
+    table: customers
+    row_operation: ${! metadata("op") }
+    identifier_fields: [ id ]
+    # Keyed writes must stay ordered: a single batch in flight prevents
+    # concurrent batches from committing a stale update over a newer one.
+    max_in_flight: 1
+    storage:
+      aws_s3:
+        bucket: my-iceberg-data
+        region: us-east-1
+`,
 		)
 }

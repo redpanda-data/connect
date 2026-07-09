@@ -17,3 +17,4 @@ __pycache__
 *.test.exe
 compile_out.txt
 test_output.txt
+benchmark_results.json

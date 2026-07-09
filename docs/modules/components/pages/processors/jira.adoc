@@ -1,6 +1,6 @@
 = jira
 :type: processor
-:status: stable
+:status: deprecated
 :categories: ["Services"]
 
 
@@ -22,6 +22,12 @@
 
 component_type_dropdown::[]
 
+
+[WARNING]
+.Deprecated
+====
+This component is deprecated in favour of the xref:components:inputs/jira.adoc[`jira` input], which streams issues, comments, and changelog entries with cursor-based incremental polling. The processor remains available for enrichment and lookup style operations.
+====
 
 Queries Jira resources and returns structured data
 

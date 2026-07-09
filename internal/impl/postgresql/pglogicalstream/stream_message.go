@@ -48,9 +48,7 @@ type StreamMessage struct {
 	Data any `json:"data"`
 	// ColumnSchema contains the table's column schema in benthos common schema format.
 	// It is set as message metadata and excluded from JSON serialization.
-	ColumnSchema any `json:"-"`
-	// CommitTs is the commit timestamp of the enclosing transaction. Nil for snapshot reads.
-	CommitTs *time.Time `json:"-"`
-	// Before holds the pre-change row state for update and delete operations. Nil otherwise.
-	Before any `json:"-"`
+	ColumnSchema any       `json:"-"`
+	CommitTime   time.Time `json:"-"`
+	BeforeData   any       `json:"-"`
 }

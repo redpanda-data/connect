@@ -158,6 +158,7 @@ func (d *FranzConnectionDetails) IsConfigured() bool {
 func (d *FranzConnectionDetails) FranzOpts() []kgo.Opt {
 	opts := []kgo.Opt{
 		kgo.WithLogger(&KGoLogger{d.Logger}),
+		kgo.WithHooks(newConnHooks(d.Logger)),
 		kgo.SeedBrokers(d.SeedBrokers...),
 		kgo.SASL(d.SASL...),
 		kgo.ClientID(d.ClientID),

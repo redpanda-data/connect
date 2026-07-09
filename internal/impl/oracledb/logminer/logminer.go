@@ -59,6 +59,10 @@ type LogMiner struct {
 	// lob types are split between redo log lines, we use lobStates to track them
 	// until we have all data to merge into published INSERT or UPDATE event.
 	lobStates map[sqlredo.TransactionID]*sqlredo.TxnLOBState
+	// pendingLOBWrites holds LOB_WRITE events that arrived before their INSERT
+	// (BASICFILE DISABLE STORAGE IN ROW ordering from Oracle LogMiner). They are
+	// replayed after the INSERT is buffered so inferLOBLocator can find it.
+	pendingLOBWrites map[sqlredo.TransactionID][]*sqlredo.RedoEvent
 	// suppresses repeated "caught up" log lines within a single idle stretch
 	caughtUpLogged bool
 
@@ -121,13 +125,14 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		log:                  logger,
 
 		// logminer specific
-		logMinerQuery: logMinerQuery,
-		logCollector:  NewLogFileCollector(),
-		sessionMgr:    NewSessionManager(cfg, logger),
-		txnCache:      txnCache,
-		dmlParser:     sqlredo.NewParser(),
-		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
-		windowSize:    cfg.SCNWindowSize,
+		logMinerQuery:    logMinerQuery,
+		logCollector:     NewLogFileCollector(),
+		sessionMgr:       NewSessionManager(cfg, logger),
+		txnCache:         txnCache,
+		dmlParser:        sqlredo.NewParser(),
+		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
+		windowSize:       cfg.SCNWindowSize,
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -296,6 +301,8 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		// Parse sql insert/update/delete sql statements into key/value object
 		event, err := lm.dmlParser.RedoEventToDMLEvent(redoEvent)
 		if err != nil {
+			lm.log.Debugf("failed to parse SQL_REDO (scn=%d, op=%s, table=%s.%s, txn=%s): %s",
+				redoEvent.SCN, redoEvent.Operation, redoEvent.SchemaName.String, redoEvent.TableName.String, redoEvent.TransactionID, redoEvent.SQLRedo.String)
 			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
 		}
 
@@ -414,7 +421,10 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		state, exists := lm.lobStates[redoEvent.TransactionID]
 		if !exists || state.ActiveKey == nil {
 			if !lm.inferLOBLocator(ctx, redoEvent) {
-				lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+				// INSERT may arrive later in the same LogMiner batch (BASICFILE
+				// DISABLE STORAGE IN ROW ordering). Defer and replay after DML.
+				lm.log.Debugf("LOB_WRITE before INSERT (scn=%d, txn=%s): deferring", redoEvent.SCN, redoEvent.TransactionID)
+				lm.pendingLOBWrites[redoEvent.TransactionID] = append(lm.pendingLOBWrites[redoEvent.TransactionID], redoEvent)
 				return nil
 			}
 			state = lm.lobStates[redoEvent.TransactionID]
@@ -456,6 +466,14 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			}
 
 			if lm.cfg.LOBEnabled {
+				// Replay deferred LOB_WRITEs (BASICFILE DISABLE STORAGE IN ROW) before
+				// merging. At commit time, SELECT_LOB_LOCATOR has already claimed all
+				// SecureFile LOB columns, so inferLOBLocator can identify the unclaimed
+				// BASICFILE column by excluding columns that already have accumulators.
+				if err := lm.replayDeferredLOBWrites(ctx, redoEvent.TransactionID); err != nil {
+					return err
+				}
+
 				// Merge any accumulated LOB data into DML events before publishing.
 				if state, ok := lm.lobStates[redoEvent.TransactionID]; ok {
 					unmerged := sqlredo.MergeLOBsIntoDMLEvents(state, txn.Events, lm.log)
@@ -548,12 +566,20 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		// lobStates and are never freed.
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
+			if pending := lm.pendingLOBWrites[redoEvent.TransactionID]; len(pending) > 0 {
+				for _, p := range pending {
+					lm.log.Warnf("Dropping deferred LOB_WRITE on commit: txn=%s scn=%d schema=%s table=%s sql=%.200s",
+						redoEvent.TransactionID, p.SCN, p.SchemaName.String, p.TableName.String, p.SQLRedo.String)
+				}
+				delete(lm.pendingLOBWrites, redoEvent.TransactionID)
+			}
 		}
 
 	case sqlredo.OpRollback:
 		// Discard all buffered events for this transaction
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
+			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
 		}
 		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
 			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
@@ -632,6 +658,35 @@ func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context) (resErr error) {
 	return rows.Err()
 }
 
+// replayDeferredLOBWrites replays LOB_WRITE events that were buffered because
+// their INSERT had not yet arrived. Called after each DML event is added to the
+// transaction cache so that inferLOBLocator can now find the INSERT.
+func (lm *LogMiner) replayDeferredLOBWrites(ctx context.Context, txnID sqlredo.TransactionID) error {
+	pending := lm.pendingLOBWrites[txnID]
+	if len(pending) == 0 {
+		return nil
+	}
+	lm.log.Debugf("replayDeferredLOBWrites: replaying %d LOB_WRITE(s) for txn %s", len(pending), txnID)
+	// Clear before replaying so re-buffering during the loop appends to a fresh slice.
+	delete(lm.pendingLOBWrites, txnID)
+	// Clear ActiveKey so inferLOBLocator is invoked for the first deferred write.
+	// The prior SELECT_LOB_LOCATOR may have left ActiveKey pointing at a SecureFile
+	// column; without this reset, deferred LOB_WRITEs would land on that column
+	// instead of the unclaimed BASICFILE out-of-row column.
+	if state, ok := lm.lobStates[txnID]; ok {
+		state.ActiveKey = nil
+	}
+	for _, ev := range pending {
+		if err := lm.processRedoEvent(ctx, ev); err != nil {
+			return err
+		}
+	}
+	if reDeferred := len(lm.pendingLOBWrites[txnID]); reDeferred > 0 {
+		lm.log.Warnf("replayDeferredLOBWrites: %d LOB_WRITE(s) re-deferred after replay for txn %s — inferLOBLocator still failing", reDeferred, txnID)
+	}
+	return nil
+}
+
 func (lm *LogMiner) getOrCreateLOBState(txnID sqlredo.TransactionID) *sqlredo.TxnLOBState {
 	if state, ok := lm.lobStates[txnID]; ok {
 		return state
@@ -663,13 +718,8 @@ func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 // arrived without a preceding SELECT_LOB_LOCATOR. This happens with BASICFILE
 // out-of-line LOBs where Oracle does not emit locator events in LogMiner.
 //
-// The method searches the transaction's buffered DML events for either a
-// LOB-init UPDATE (inline-LOB path) or an INSERT (out-of-line LOB path) whose
-// Data carries a LOB column with an EMPTY_CLOB()/EMPTY_BLOB() placeholder that
-// doesn't yet have an accumulator. For INSERTs on BASICFILE columns with
-// DISABLE STORAGE IN ROW, Oracle emits NULL in SQL_REDO instead of an empty
-// placeholder; in that case the LOB column is absent from Data, so known LOB
-// columns for the table are also considered as inference candidates.
+// The method searches backward through the transaction's buffered DML events for
+// a LOB-only UPDATE or INSERT that can act as an anchor for the LOB data.
 // Returns true if a locator was successfully created.
 func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEvent) bool {
 	if !event.SchemaName.Valid || !event.TableName.Valid {
@@ -687,14 +737,45 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 		return false
 	}
 	if txn == nil {
+		lm.log.Debugf("inferLOBLocator: txn %s not in cache (scn=%d, schema=%s, table=%s) — no DML events yet",
+			event.TransactionID, event.SCN, schema, table)
 		return false
 	}
 
 	prefix := strings.ToUpper(schema + "." + table + ".")
 
-	// Search backwards for the most recent event that can carry a LOB-init
-	// placeholder for this table: LOB-only UPDATE (inline-LOB path) or INSERT
-	// (BASICFILE out-of-line LOB path, where no LOB-init UPDATE is emitted).
+	// claimedCols holds LOB column names that already have an accumulator for this
+	// schema.table, regardless of PKString. At commit time these are columns
+	// claimed by SELECT_LOB_LOCATOR.
+	var (
+		claimedCols           = make(map[string]struct{})
+		emptyClaimedKeys      = make(map[string]sqlredo.LobKey)
+		claimedFragmentCounts = make(map[string]int)
+	)
+	if existingState := lm.lobStates[event.TransactionID]; existingState != nil {
+		for k, acc := range existingState.Accumulators {
+			if k.Schema == schema && k.Table == table {
+				claimedCols[k.Column] = struct{}{}
+				claimedFragmentCounts[k.Column] = len(acc.Fragments)
+				if len(acc.Fragments) == 0 {
+					emptyClaimedKeys[k.Column] = k
+				}
+			}
+		}
+	}
+	{
+		claimed := make([]string, 0, len(claimedCols))
+		for c, n := range claimedFragmentCounts {
+			claimed = append(claimed, fmt.Sprintf("%s(%d)", c, n))
+		}
+		empty := make([]string, 0, len(emptyClaimedKeys))
+		for c := range emptyClaimedKeys {
+			empty = append(empty, c)
+		}
+		lm.log.Debugf("inferLOBLocator: claimedCols=%v emptyClaimedKeys=%v (txn=%s, scn=%d, table=%s.%s)",
+			claimed, empty, event.TransactionID, event.SCN, schema, table)
+	}
+
 	for i := len(txn.Events) - 1; i >= 0; i-- {
 		ev := txn.Events[i]
 		if ev.Schema != schema || ev.Table != table {
@@ -722,25 +803,60 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 		}
 
 		pkString := sqlredo.FormatPKString(pkValues)
+		{
+			evDataCols := make([]string, 0, len(ev.Data))
+			for c := range ev.Data {
+				evDataCols = append(evDataCols, c)
+			}
+			lm.log.Debugf("inferLOBLocator: examining event op=%s nDataCols=%d dataCols=%v (txn=%s, scn=%d)",
+				ev.Operation, len(ev.Data), evDataCols, event.TransactionID, event.SCN)
+		}
 
-		// Candidate LOB columns are those with an EMPTY_CLOB()/EMPTY_BLOB()
-		// placeholder (parsed as empty []byte). For INSERTs, BASICFILE columns
-		// with DISABLE STORAGE IN ROW emit NULL in SQL_REDO instead — the column
-		// is absent from Data — so iterate every known LOB column for the table.
+		// Candidate LOB columns are those:
+		//   - not already claimed by SELECT_LOB_LOCATOR (tracked in claimedCols)
+		//   - absent from ev.Data: INSERT omits BASICFILE OOR columns; LOB-only UPDATE
+		//     omits them from its SET clause (they never appear there for BASICFILE OOR)
+		//   - present with nil (Oracle writes NULL in INSERT SQL_REDO for out-of-row LOBs)
+		//   - present with an empty []byte (EMPTY_CLOB()/EMPTY_BLOB() placeholder)
 		for k, lobType := range lm.lobColTypes {
 			if !strings.HasPrefix(k, prefix) {
 				continue
 			}
 			col := k[len(prefix):]
+			// Skip columns already claimed by SELECT_LOB_LOCATOR, unless the
+			// accumulator has no fragments yet — meaning SELECT_LOB_LOCATOR arrived
+			// after INSERT but the LOB_WRITE events arrived before INSERT and are
+			// sitting in the deferred queue. Route them to the existing accumulator.
+			if _, claimed := claimedCols[col]; claimed {
+				if existingKey, hasEmptyAcc := emptyClaimedKeys[col]; hasEmptyAcc {
+					state := lm.getOrCreateLOBState(event.TransactionID)
+					state.ActiveKey = &existingKey
+					lm.log.Debugf("Inferred LOB locator for %s.%s.%s from empty SELECT_LOB_LOCATOR accumulator (txn=%s)",
+						schema, table, col, event.TransactionID)
+					return true
+				}
+				lm.log.Debugf("inferLOBLocator: skip %s.%s.%s — claimed with %d fragment(s) (txn=%s)",
+					schema, table, col, claimedFragmentCounts[col], event.TransactionID)
+				continue
+			}
 			val, present := ev.Data[col]
 			switch {
 			case present:
-				if b, ok := val.([]byte); !ok || len(b) != 0 {
-					continue
+				// nil means Oracle wrote NULL in INSERT SQL_REDO for this LOB column
+				// (BASICFILE DISABLE STORAGE IN ROW). Treat it as a valid candidate.
+				if val != nil {
+					if b, ok := val.([]byte); !ok || len(b) != 0 {
+						lm.log.Debugf("inferLOBLocator: skip %s.%s.%s — INSERT value type=%T val=%.40v (txn=%s)",
+							schema, table, col, val, val, event.TransactionID)
+						continue
+					}
 				}
 			case ev.Operation != sqlredo.OpInsert:
-				continue
+				// Column absent from a LOB-only UPDATE.
 			}
+
+			lm.log.Debugf("inferLOBLocator: CANDIDATE %s.%s.%s present=%v val=%T (txn=%s)",
+				schema, table, col, present, val, event.TransactionID)
 
 			key := sqlredo.LobKey{
 				Schema:   schema,
@@ -753,6 +869,8 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 			// empty TxnLOBState entries when inference fails.
 			state := lm.getOrCreateLOBState(event.TransactionID)
 			if _, exists := state.Accumulators[key]; exists {
+				lm.log.Debugf("inferLOBLocator: skip %s.%s.%s — accumulator already exists for pkString=%q (txn=%s)",
+					schema, table, col, pkString, event.TransactionID)
 				continue
 			}
 
@@ -771,6 +889,21 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 		}
 	}
 
+	// Log why inference failed: how many events we searched and how many LOB columns we know about.
+	var eventsForTable int
+	for _, ev := range txn.Events {
+		if ev.Schema == schema && ev.Table == table {
+			eventsForTable++
+		}
+	}
+	var knownLOBCols []string
+	for k := range lm.lobColTypes {
+		if strings.HasPrefix(k, prefix) {
+			knownLOBCols = append(knownLOBCols, k)
+		}
+	}
+	lm.log.Debugf("inferLOBLocator: no match for %s.%s (txn=%s, scn=%d): txnEvents=%d, eventsForTable=%d, knownLOBCols=%v",
+		schema, table, event.TransactionID, event.SCN, len(txn.Events), eventsForTable, knownLOBCols)
 	return false
 }
 

@@ -11,6 +11,7 @@ package sqlredo
 import (
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strings"
 
@@ -60,6 +61,20 @@ func (a *LobAccumulator) AddFragment(offset int64, data []byte) {
 	a.Fragments = append(a.Fragments, LobFragment{Offset: offset, Data: data})
 }
 
+// usableOffset reports whether the fragment's 1-based offset can be positioned
+// without indexing negatively (offset < 1) or overflowing int64 when computing its
+// end position. Oracle LOB offsets are 1-based and bounded by the LOB size, so only
+// corrupted redo fails this check.
+//
+// NOTE: this guards the two arithmetic crash paths (negative index, int64 overflow)
+// but does not bound the resulting allocation: a corrupt-but-non-overflowing offset
+// (e.g. 1<<50) still drives Assemble's make([]byte, totalLen) to panic/OOM. Fully
+// closing that requires a maximum-LOB-size policy and is tracked as a follow-up;
+// legitimate Oracle output never produces such an offset.
+func (f LobFragment) usableOffset() bool {
+	return f.Offset >= 1 && f.Offset-1 <= math.MaxInt64-int64(len(f.Data))
+}
+
 // Assemble assembles all fragments into the final column value:
 //   - BLOB → []byte (raw bytes, gaps zero-filled)
 //   - CLOB → string (plain string, gaps space-filled)
@@ -73,6 +88,9 @@ func (a *LobAccumulator) Assemble() any {
 
 	var totalLen int64
 	for _, f := range a.Fragments {
+		if !f.usableOffset() {
+			continue // skip malformed offsets (< 1 or overflowing) rather than crashing
+		}
 		end := (f.Offset - 1) + int64(len(f.Data))
 		if end > totalLen {
 			totalLen = end
@@ -88,6 +106,9 @@ func (a *LobAccumulator) Assemble() any {
 	}
 
 	for _, f := range a.Fragments {
+		if !f.usableOffset() {
+			continue
+		}
 		start := f.Offset - 1 // convert 1-based offset to 0-based
 		copy(result[start:], f.Data)
 	}
@@ -259,7 +280,16 @@ func MergeInlineLOBValues(lobData map[string]any, schema, table string, pkValues
 
 // pkMatches returns true when every key in pkValues is present in data and the
 // string representations are equal.
+//
+// An empty pkValues set returns false rather than vacuously matching: a
+// ROWID-only SELECT_LOB_LOCATOR yields no PK values, and treating that as a match
+// against the first candidate event would merge the LOB into an arbitrary row.
+// Returning false forces callers to fall back to the schema/table disambiguation
+// (see MergeLOBsIntoDMLEvents Pass 3).
 func pkMatches(data map[string]any, pkValues map[string]any) bool {
+	if len(pkValues) == 0 {
+		return false
+	}
 	for k, pkVal := range pkValues {
 		dataVal, ok := data[k]
 		if !ok {

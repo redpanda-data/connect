@@ -11,6 +11,7 @@ package salesforce
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -356,6 +357,87 @@ func TestPartialFailureAllOrNone(t *testing.T) {
 	if len(errs) > 0 {
 		out.log.Warnf("partial failure (expected in test): %v", errs)
 	}
+}
+
+func TestWriteRealtime_PlatformEventCustomFields(t *testing.T) {
+	t.Parallel()
+
+	var capturedBody []byte
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/services/oauth2/token":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","instance_url":"http://` + r.Host + `"}`))
+
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/describe"):
+			// Platform Event: custom fields are createable:true, updateable:false
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"fields": []map[string]any{
+					{"name": "CreatedDate", "createable": false, "updateable": false},
+					{"name": "MyField__c", "createable": true, "updateable": false},
+					{"name": "AnotherField__c", "createable": true, "updateable": false},
+				},
+			})
+
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/composite/sobjects"):
+			b, _ := io.ReadAll(r.Body)
+			capturedBody = b
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"id": "e01xx0000000001AAA", "success": true, "errors": []any{}},
+			})
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	sfClient, err := salesforcehttp.NewClient(salesforcehttp.ClientConfig{
+		OrgURL:         ts.URL,
+		ClientID:       "id",
+		ClientSecret:   "secret",
+		APIVersion:     "v65.0",
+		QueryBatchSize: 2000,
+		HTTPClient:     ts.Client(),
+	})
+	require.NoError(t, err)
+
+	out := &salesforceSinkOutput{
+		log:            service.MockResources().Logger(),
+		client:         sfClient,
+		writableFields: make(map[string]map[string]struct{}),
+		blockedFields:  make(map[string]map[string]struct{}),
+	}
+
+	m := topicMapping{
+		sobject:   "MyPlatformEvent__e",
+		operation: "insert",
+		allOrNone: false,
+	}
+	records := []map[string]any{
+		{
+			"MyField__c":      "hello",
+			"AnotherField__c": "world",
+			"CreatedDate":     "2024-01-01T00:00:00Z",
+		},
+	}
+
+	err = out.writeRealtime(t.Context(), records, m)
+	require.NoError(t, err)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(capturedBody, &payload))
+
+	recs, ok := payload["records"].([]any)
+	require.True(t, ok)
+	require.Len(t, recs, 1)
+
+	rec := recs[0].(map[string]any)
+	assert.Equal(t, "hello", rec["MyField__c"], "createable-only custom field must reach the wire")
+	assert.Equal(t, "world", rec["AnotherField__c"], "createable-only custom field must reach the wire")
+	assert.NotContains(t, rec, "CreatedDate", "non-writable system field must be dropped")
 }
 
 // helpers

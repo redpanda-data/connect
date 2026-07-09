@@ -64,7 +64,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 oracledb_cdc:
   connection_string: ` + cdbConnStr + `
   pdb_name: ` + pdbName + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   max_parallel_snapshot_tables: 2
   snapshot_max_batch_size: 10
   logminer:
@@ -269,7 +269,7 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	}
 
 	var (
-		outBatches   []string
+		outBatches   []*service.Message
 		outBatchesMu sync.Mutex
 		stream       *service.Stream
 		err          error
@@ -279,7 +279,7 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_only
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
   logminer:
@@ -291,15 +291,13 @@ oracledb_cdc:
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
 			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				outBatches = append(outBatches, string(msgBytes))
+				outBatches = append(outBatches, msg)
 			}
 			return nil
 		}))
@@ -325,6 +323,22 @@ oracledb_cdc:
 			return got >= want
 		}, time.Minute*5, time.Second*1)
 		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
+		outBatchesMu.Lock()
+
+		expectedSCN, _ := outBatches[0].MetaGetMut("scn")
+		expectedCommitTs, _ := outBatches[0].MetaGetMut("commit_ts_ms")
+		for i, msg := range outBatches {
+			scn, ok := msg.MetaGet("scn")
+			assert.Truef(t, ok, "Expected snapshot message[%d] to have scn metadata", i)
+			assert.NotEmptyf(t, scn, "Expected snapshot message[%d] scn metadata to be non-empty", i)
+			assert.Equal(t, expectedSCN, scn, "Expected snapshot scn to be identical for all messages but was not")
+
+			commitTs, ok := msg.MetaGet("commit_ts_ms")
+			assert.Truef(t, ok, "Expected snapshot message[%d] to have commit_ts_ms metadata", i)
+			assert.NotEmptyf(t, commitTs, "Expected snapshot message[%d] commit_ts_ms metadata to be non-empty", i)
+			assert.Equal(t, expectedCommitTs, commitTs, "Expected snapshot commit_ts_ms to be identical for all messages but was not")
+		}
+		outBatchesMu.Unlock()
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
@@ -345,7 +359,7 @@ func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -540,7 +554,7 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -648,7 +662,7 @@ oracledb_cdc:
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -784,7 +798,7 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 			cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   logminer:
     lob_enabled: false
     min_scn_window_size: 0
@@ -875,6 +889,7 @@ oracledb_cdc:
 oracledb_cdc:
   connection_string: ` + connStr + `
   stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   logminer:
     lob_enabled: true
     min_scn_window_size: 0
@@ -2258,4 +2273,75 @@ oracledb_cdc:
 
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
+}
+
+// TestIntegrationOracleDBCDCNationalCharset verifies that non-ASCII data in
+// NVARCHAR2 columns — which Oracle LogMiner emits as UNISTR('...\XXXX...') in
+// SQL_REDO — is decoded to the correct UTF-8 string end-to-end.
+func TestIntegrationOracleDBCDCNationalCharset(t *testing.T) {
+	integration.CheckSkip(t)
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	ctx := t.Context()
+
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, "testdb.natchar",
+		"CREATE TABLE testdb.natchar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, nv NVARCHAR2(50))"))
+
+	msgChan := make(chan *service.Message, 64)
+	cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  snapshot_mode: none
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["TESTDB.NATCHAR"]
+  batching:
+    count: 1`
+
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(cfg))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			select {
+			case msgChan <- msg:
+			default:
+			}
+		}
+		return nil
+	}))
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() { _ = stream.Run(ctx) }()
+
+	time.Sleep(10 * time.Second)
+	// café (BMP) and 😀 (U+1F600, requires a UTF-16 surrogate pair).
+	db.MustExec("INSERT INTO testdb.natchar (nv) VALUES (:1)", "café 😀")
+
+	var got string
+	require.Eventually(t, func() bool {
+		select {
+		case msg := <-msgChan:
+			b, err := msg.AsBytes()
+			if err != nil {
+				return false
+			}
+			var row map[string]any
+			if err := json.Unmarshal(b, &row); err != nil {
+				return false
+			}
+			if v, ok := row["NV"].(string); ok && v != "" {
+				got = v
+				return true
+			}
+			return false
+		default:
+			return false
+		}
+	}, 30*time.Second, 250*time.Millisecond, "did not receive the NVARCHAR2 change event")
+
+	assert.Equal(t, "café 😀", got, "NVARCHAR2 value should be decoded from UNISTR to correct UTF-8")
+	_ = stream.StopWithin(10 * time.Second)
 }

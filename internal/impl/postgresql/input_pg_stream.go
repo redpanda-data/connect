@@ -87,6 +87,8 @@ This input adds the following metadata fields to each message:
 - operation: Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled
 - lsn: the log sequence number in postgres
 - schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
+- commit_ts_ms: The commit timestamp of the transaction as a Unix millisecond timestamp. Not set for snapshot reads.
+- before: The pre-change state of the row for update and delete operations, in benthos common schema format. For updates, availability depends on the table's REPLICA IDENTITY setting - with the default identity only key columns are present, with REPLICA IDENTITY FULL all columns are present.
 		`).
 		Field(service.NewStringField(fieldDSN).
 			Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
@@ -527,16 +529,14 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if msg.LSN != nil {
 					batchMsg.MetaSet("lsn", *msg.LSN)
 				}
+				if !msg.CommitTime.IsZero() {
+					batchMsg.MetaSet("commit_ts_ms", strconv.FormatInt(msg.CommitTime.UnixMilli(), 10))
+				}
 				if msg.ColumnSchema != nil {
 					batchMsg.MetaSetImmut("schema", service.ImmutableAny{V: msg.ColumnSchema})
 				}
-				if msg.CommitTs != nil {
-					batchMsg.MetaSet("commit_ts_ms", strconv.FormatInt(msg.CommitTs.UnixMilli(), 10))
-				}
-				if msg.Before != nil {
-					if beforeBytes, err := json.Marshal(msg.Before); err == nil {
-						batchMsg.MetaSet("before", string(beforeBytes))
-					}
+				if msg.BeforeData != nil {
+					batchMsg.MetaSetImmut("before", service.ImmutableAny{V: msg.BeforeData})
 				}
 				if batcher.Add(batchMsg) {
 					flush = true
