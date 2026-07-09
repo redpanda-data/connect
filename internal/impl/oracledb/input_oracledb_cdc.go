@@ -90,7 +90,7 @@ This input adds the following metadata fields to each message:
 
 == Permissions
 
-When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
+When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
 		`).
 	Field(service.NewStringField(ociFieldConnectionString).
 		Description("The connection string of the Oracle database to connect to. Additional connection options can be supplied as URL query parameters, for example: `oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true`.").
