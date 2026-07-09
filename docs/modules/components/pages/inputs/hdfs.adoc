@@ -25,8 +25,15 @@ component_type_dropdown::[]
 
 Reads files from a HDFS directory, where each discrete file will be consumed as a single message payload.
 
+
+[tabs]
+======
+Common::
++
+--
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 input:
   label: ""
   hdfs:
@@ -34,6 +41,32 @@ input:
     user: ""
     directory: "" # No default (required)
 ```
+
+--
+Advanced::
++
+--
+
+```yml
+# All config fields, showing default values
+input:
+  label: ""
+  hdfs:
+    hosts: [] # No default (required)
+    user: ""
+    auth:
+      kerberos:
+        enabled: false
+        krb5_conf: /etc/krb5.conf
+        keytab: ""
+        principal: ""
+        service_principal: nn/_HOST
+        data_transfer_protection: ""
+    directory: "" # No default (required)
+```
+
+--
+======
 
 == Metadata
 
@@ -64,6 +97,76 @@ hosts: localhost:9000
 === `user`
 
 A user ID to connect as.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `auth`
+
+Optional HDFS authentication settings.
+
+
+*Type*: `object`
+
+
+=== `auth.kerberos`
+
+Kerberos authentication settings.
+
+
+*Type*: `object`
+
+
+=== `auth.kerberos.enabled`
+
+Whether to use Kerberos authentication.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `auth.kerberos.krb5_conf`
+
+The path to a krb5.conf file.
+
+
+*Type*: `string`
+
+*Default*: `"/etc/krb5.conf"`
+
+=== `auth.kerberos.keytab`
+
+The path to a Kerberos keytab file. The Connect process must be able to read this file.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `auth.kerberos.principal`
+
+The Kerberos principal to authenticate as, in the form username@REALM. Service principals may include a slash in the username, such as connect/worker@EXAMPLE.COM.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `auth.kerberos.service_principal`
+
+The Kerberos service principal name for HDFS namenodes. The special string _HOST can be used for hostname substitution.
+
+
+*Type*: `string`
+
+*Default*: `"nn/_HOST"`
+
+=== `auth.kerberos.data_transfer_protection`
+
+The HDFS data transfer protection level. HDFS input reads currently support "authentication" or empty. The "integrity" and "privacy" modes are not supported for input reads.
 
 
 *Type*: `string`
