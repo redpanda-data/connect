@@ -1,0 +1,49 @@
+name: iceberg-orders-sink-recipe-b
+description: |
+  Drain a pre-seeded Redpanda topic of flat JSON records into an Apache Iceberg
+  table (AWS Glue REST catalog + S3) and compare Connect's iceberg output against
+  the Kafka Connect Iceberg sink, head-to-head across a vCPU sweep. Throughput is
+  the Iceberg table's committed-bytes growth (total-files-size), polled from Glue.
+  Both engines reach Glue via the same REST endpoint + SigV4 (service=glue), so
+  the comparison is apples-to-apples. Bounded dataset (no sustained workload):
+  the topic is the fixed input; each sweep point re-reads it from the beginning.
+
+  RECIPE B variant of orders-sink (maximum throughput, unordered). See the
+  order-preserving sibling scenario orders-sink.yaml for the Recipe A config.
+
+direction: sink
+connector: iceberg
+stack: iceberg
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 160000000   # ~180 GiB at 1200 B/row → ≥15 min at 200 MB/s (8 vCPU)
+  row_size_bytes: 1200
+  seeder: json-orders
+  expected_peak_mb_s: 200
+
+pipeline:
+  # Recipe B (maximum throughput, unordered) from docs/benchmark-results/iceberg.md
+  # "Tuning Recipes" (upstream e49fdbf7a). No buffer: the redpanda input's
+  # unordered_processing runs per-partition streams that batch in the read-ahead
+  # fetch buffer, feeding many concurrent commits to the iceberg committer's
+  # coalescer. max_in_flight=32 lets those commits parallelize. Trades
+  # cross-partition ordering for throughput (fine for insert-only Iceberg sink).
+  # Validated in the 2026-07-08 1-vCPU smoke (Connect 14.93 MB/s mean, fastest
+  # of the three recipes at 1 vCPU).
+  input_options:
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 1024
+      batching:
+        count: 10000
+        period: 10s
+  output:
+    iceberg:
+      max_in_flight: 32
+
+matrix:
+  cpu_points: [1, 2, 4, 8]

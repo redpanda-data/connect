@@ -24,25 +24,30 @@ dataset:
 
 pipeline:
   # sinkTopology injects the redpanda INPUT (the pre-seeded topic) and the
-  # iceberg catalog/storage/table config from TF outputs + BenchNames. The
-  # scenario supplies a top-level buffer (decouples the input) and output tuning.
+  # iceberg catalog/storage/table config from TF outputs + BenchNames.
   #
-  # FAIR HEAD-TO-HEAD vs Kafka Connect: KC's Tabular sink commits every 10s via
-  # its coordinator. We match that cadence and give Connect a memory buffer so
-  # the fast redpanda input runs ahead, letting each iceberg commit carry ~10s
-  # of records instead of the ~300/commit the defaults backpressure us into.
-  # This is the ORDER-PRESERVING equivalent of input batching (no
-  # unordered_processing) — measured equivalent throughput in isolation
-  # (~39k rec/s vs input batching's ~46k at 1 vCPU, output_sent).
+  # Recipe A (order-preserving) + output batching — the config validated in the
+  # 2026-07-08 1-vCPU smoke (Connect 12.7 MB/s mean, edging KC). A memory buffer
+  # merges all partitions into one ordered stream (decouples the fast input from
+  # the commit-bound output); output-level batching then groups each commit and
+  # lets max_in_flight=16 dispatch concurrent writers, feeding the iceberg
+  # committer's coalescer. FAIR vs KC (whose coordinator commits every 10s): we
+  # match that 10s cadence and preserve cross-partition order (no
+  # unordered_processing).
   buffer:
     memory:
-      limit: 536870912   # 512 MiB
+      limit: 524288000   # 500 MiB; size to throughput x commit interval
+      batch_policy:
+        count: 10000
+        period: 10s
   output:
     iceberg:
-      max_in_flight: 8
+      max_in_flight: 16
       batching:
-        count: 50000
+        count: 10000
         period: 10s
+      commit:
+        max_snapshot_age: 24h
 
 matrix:
   cpu_points: [1, 2, 4, 8]

@@ -20,20 +20,26 @@ dataset:
   expected_peak_mb_s: 15
 
 pipeline:
-  # Decouple the redpanda input (proven ~57k rec/s) from the commit-latency-
-  # bound iceberg output: the input fills this buffer at full speed so each
-  # output batch can pull a full `count` from it, putting ~50k records in each
-  # ~320ms Glue commit instead of ~300. Tests whether config alone closes the
-  # gap to KC (which commits ~1.3M records per snapshot via its coordinator).
+  # 1-vCPU smoke mirroring the primary order-preserving sweep (orders-sink.yaml):
+  # Recipe A memory buffer + output batching. The buffer merges partitions into
+  # one ordered stream; output batching lets max_in_flight=16 feed the iceberg
+  # committer's coalescer (without it, a single buffer stream starves the
+  # committer — measured 0.8 MB/s vs 12.7 with it, 2026-07-08). For the unordered
+  # Recipe B variant see orders-sink-recipe-b.yaml.
   buffer:
     memory:
-      limit: 536870912   # 512 MiB
+      limit: 524288000   # 500 MiB; size to throughput x commit interval
+      batch_policy:
+        count: 10000
+        period: 10s
   output:
     iceberg:
-      max_in_flight: 8
+      max_in_flight: 16
       batching:
-        count: 50000
+        count: 10000
         period: 10s
+      commit:
+        max_snapshot_age: 24h
 
 matrix:
   cpu_points: [1]
