@@ -26,9 +26,6 @@ import (
 const (
 	// defaultCheckpointCache can be configured by the user
 	defaultCheckpointCache = "RPCN.CDC_CHECKPOINT_CACHE"
-	// defaultStoredProcName schema is inferred from the provided checkpoint cache config
-	// the stored procedure name cannot be configured by the user
-	defaultStoredProcName = "CDC_CHECKPOINT_CACHE_UPDATE"
 	// checkpointCacheKeyLimit specifies the maximum length of the checkpoint cache key
 	checkpointCacheKeyLimit = 128
 )
@@ -42,6 +39,10 @@ type cacheTable struct{ schema, name string }
 
 func (t cacheTable) String() string {
 	return fmt.Sprintf("%s.%s", t.schema, t.name)
+}
+
+func (t cacheTable) storedProcName() string {
+	return fmt.Sprintf("%s.%s_UPDATE", t.schema, t.name)
 }
 
 // checkpointCache is an Oracle specific cache created for the CDC component.
@@ -103,7 +104,7 @@ func newCheckpointCache(
 	}
 
 	// create a prepared statement for calling the stored proc (created in same schema as cache table) during Set operations to remove avoidable overhead
-	if cacheSetStmt, err = db.PrepareContext(ctx, fmt.Sprintf("BEGIN %s.%s(:1, :2); END;", cacheTable.schema, defaultStoredProcName)); err != nil {
+	if cacheSetStmt, err = db.PrepareContext(ctx, fmt.Sprintf("BEGIN %s(:1, :2); END;", cacheTable.storedProcName())); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("preparing checkpoint cache statement: %w", err)
 	}
@@ -237,23 +238,12 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey 
 }
 
 func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTable) error {
-	// Check if stored proc already exists
-	var count int
-	q := `SELECT COUNT(*) FROM ALL_PROCEDURES WHERE OWNER = :1 AND OBJECT_NAME = :2 AND OBJECT_TYPE = 'PROCEDURE'`
-	if err := db.QueryRowContext(ctx, q, strings.ToUpper(cacheTable.schema), strings.ToUpper(defaultStoredProcName)).Scan(&count); err != nil {
-		return fmt.Errorf("checking if stored procedure exists: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-
-	// Create the upsert procedure
 	// Note: go-ora driver handles []byte parameters as RAW type
-	storedProcFullName := fmt.Sprintf("%s.%s", cacheTable.schema, defaultStoredProcName)
+	storedProcFullName := cacheTable.storedProcName()
 	tableName := cacheTable.String()
 
 	createQuery := fmt.Sprintf(`
-		CREATE PROCEDURE %s (
+		CREATE OR REPLACE PROCEDURE %s (
 			p_key IN VARCHAR2,
 			p_value IN RAW
 		)
