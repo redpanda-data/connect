@@ -1,0 +1,26 @@
+-- Reset block for {{CONNECTOR}} between sweep points.
+--
+-- This SQL goes inside the scenario YAML's `reset:` array, one statement
+-- per array entry. The runner runs these BEFORE EVERY sweep point.
+--
+-- Pattern for postgres-shaped engines (slot-based replication):
+--
+-- - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
+-- - sql: "SELECT pg_drop_replication_slot('kc_bench_slot') FROM pg_replication_slots WHERE slot_name='kc_bench_slot'"
+-- - sql: "TRUNCATE TABLE {{TABLE}}"
+--
+-- Pattern for mysql-shaped engines (binlog, no slots):
+--
+-- - sql: "TRUNCATE TABLE {{TABLE}}"
+--
+-- Pattern for SQL Server (similar to mysql -- no slots, but you may need to disable+re-enable CDC):
+--
+-- - sql: "EXEC sys.sp_cdc_disable_table @source_schema='dbo', @source_name='{{TABLE}}', @capture_instance='all'"
+-- - sql: "TRUNCATE TABLE {{TABLE}}"
+-- - sql: "EXEC sys.sp_cdc_enable_table @source_schema='dbo', @source_name='{{TABLE}}', @role_name=null"
+--
+-- Key invariants:
+-- 1. The table MUST be truncated (avoid Trap 8 -- see references/traps.md#truncate-between-points)
+-- 2. Both Connect AND KC replication state must be cleared (each engine may have its own slot/offset)
+-- 3. For KC, the per-vCPU connector naming (in the bench script) handles offset isolation --
+--    you don't need an explicit DELETE; combineReset injects connector DELETE + topic deletes.

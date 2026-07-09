@@ -22,6 +22,28 @@ Last updated: 2026-03-16
 
 **Oracle CDC** has two operating modes. Snapshot mode (bulk reading existing data) processes ~140,000 messages per second. Streaming mode (real-time changes via Oracle's LogMiner) processes 50,000–90,000 messages per second. The streaming throughput is limited by Oracle's LogMiner subsystem itself, not by Redpanda Connect — competing products (e.g. Debezium) show similar numbers on the same workload.
 
+<!-- bench:aws:start - auto-generated, do not edit by hand -->
+<!-- Copyright 2025 Redpanda Data, Inc. -->
+## AWS Bench Results
+
+Last refreshed: 2026-07-09
+
+| Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
+|-----------------------|-----------|--------------|---------|--------------------|-------------|
+| dynamodb / cdc        |         8 |           82 |      —    |                   —  | 2026-06-15  |
+| iceberg / orders-sink ⚠ |         4 |          135 |      70 | +65 MB/s (+48%)    | 2026-07-09  |
+| iceberg / orders-sink-recipe-b |         8 |          128 |      75 | +53 MB/s (+42%)    | 2026-07-09  |
+| iceberg / orders-sink-smoke |     —      |         —      |      —    |                   —  | 2026-07-08  |
+| mysql / orders-cdc ⚠  |         8 |          111 |      39 | +72 MB/s (+65%)    | 2026-06-02  |
+| oracle / orders-cdc   |         1 |           13 |      —    |                   —  | 2026-06-22  |
+| postgres / orders-cdc ⚠ |         4 |          102 |      17 | +85 MB/s (+83%)    | 2026-06-01  |
+
+Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
+
+To regenerate without running a bench: `task aws:summary`
+
+<!-- bench:aws:end -->
+
 ## Test Conditions
 
 All benchmarks were run on developer laptops with the source databases running in Docker containers. Production deployments on dedicated hardware with properly sized databases will typically perform better.

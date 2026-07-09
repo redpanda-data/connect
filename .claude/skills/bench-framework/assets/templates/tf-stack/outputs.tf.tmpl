@@ -1,0 +1,29 @@
+# Outputs consumed by engineSpec[<connector>] in runner/scenario.go.
+#
+# The module is always named "rds" in main.tf (never the engine name).
+# Output names are engine-prefixed so engineSpec[DSNOutputKey] can look them up.
+#
+# DSNOutputKey: full connection-string URL the runner exports as DSNEnvVar
+# Reset*OutputKey: discrete fields used when the engine CLI does not accept a DSN URL
+#   (e.g. mysql client wants -h/-P/-u/-p, not a URL). For DSN-accepting CLIs (psql),
+#   leave the Reset*OutputKey fields empty in engineSpec and the discrete outputs unused.
+#
+# The RDS module's output names are also engine-prefixed (e.g. module.rds.mysql_dsn).
+# When creating a new module (modules/rds-{{ENGINE}}/), give its outputs the same
+# {{ENGINE}}_<field> names to keep this forwarding mechanical.
+
+output "{{ENGINE}}_dsn" {
+  value     = module.rds.{{ENGINE}}_dsn
+  sensitive = true
+}
+
+# Discrete fields — populate ONLY if the engine CLI doesn't accept a DSN URL.
+# Delete this block if your engineSpec leaves Reset*OutputKey empty.
+output "{{ENGINE}}_host"     { value = module.rds.{{ENGINE}}_host }
+output "{{ENGINE}}_port"     { value = module.rds.{{ENGINE}}_port }
+output "{{ENGINE}}_user"     { value = module.rds.{{ENGINE}}_user }
+output "{{ENGINE}}_password" {
+  value     = module.rds.{{ENGINE}}_password
+  sensitive = true
+}
+output "{{ENGINE}}_db"       { value = module.rds.{{ENGINE}}_db }

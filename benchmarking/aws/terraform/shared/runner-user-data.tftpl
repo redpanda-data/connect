@@ -1,0 +1,98 @@
+#cloud-config
+package_update: true
+packages:
+  - postgresql15
+  - mariadb1011
+  - jq
+  - unzip
+  - tar
+%{ if install_kc ~}
+  - java-21-amazon-corretto-headless
+%{ endif ~}
+write_files:
+  - path: /opt/bench/.gitkeep
+    content: ""
+%{ if install_kc ~}
+  - path: /opt/kafka-connect/worker.properties
+    permissions: '0644'
+    content: |
+      bootstrap.servers=${redpanda_brokers}
+      group.id=kc-bench-workers
+      key.converter=org.apache.kafka.connect.json.JsonConverter
+      value.converter=org.apache.kafka.connect.json.JsonConverter
+      key.converter.schemas.enable=false
+      value.converter.schemas.enable=false
+      offset.storage.topic=_kc_offsets
+      config.storage.topic=_kc_configs
+      status.storage.topic=_kc_status
+      offset.storage.replication.factor=3
+      config.storage.replication.factor=3
+      status.storage.replication.factor=3
+      plugin.path=/opt/kafka-connect/plugins
+      rest.port=8083
+  - path: /etc/systemd/system/kafka-connect.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Kafka Connect (single-worker distributed)
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      Environment=KAFKA_HEAP_OPTS=-Xmx2G
+      ExecStart=/opt/kafka/bin/connect-distributed.sh /opt/kafka-connect/worker.properties
+      Restart=on-failure
+      # Back off between restarts so a transient port-8083 collision with the
+      # bench script's own taskset JVM cannot tight-loop (it previously logged
+      # 600+ BindException restarts in seconds). TimeoutStopSec gives the JVM
+      # room to flush transactional/commit state and release the socket on a
+      # clean stop before the bench script spawns its pinned worker.
+      RestartSec=10
+      TimeoutStopSec=120
+      User=root
+
+      [Install]
+      WantedBy=multi-user.target
+%{ endif ~}
+runcmd:
+  - mkdir -p /opt/bench
+  - chmod 0755 /opt/bench
+%{ if install_kc ~}
+  - mkdir -p /opt/kafka /opt/kafka-connect/plugins
+
+  # Apache Kafka tarball (we only need its libs + connect-distributed.sh).
+  - curl -sSL https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz | tar -xz --strip-components=1 -C /opt/kafka
+
+  # Debezium connectors.
+  - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/2.7.3.Final/debezium-connector-postgres-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
+  - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/2.7.3.Final/debezium-connector-mysql-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
+
+  # Debezium Oracle connector + Oracle JDBC driver. Unlike the postgres/mysql
+  # plugins, ojdbc is NOT bundled in the Debezium archive and is not Apache-
+  # licensed, so it's pulled separately from Maven Central into the connector's
+  # plugin dir. The archive unpacks to debezium-connector-oracle/. Both Connect
+  # (oracledb_cdc) and Debezium mine the same RDS redo logs via LogMiner, so
+  # this is a fair head-to-head comparator.
+  - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-oracle/2.7.3.Final/debezium-connector-oracle-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
+  - curl -sSL -o /opt/kafka-connect/plugins/debezium-connector-oracle/ojdbc11.jar https://repo1.maven.org/maven2/com/oracle/database/jdbc/ojdbc11/21.13.0.0/ojdbc11-21.13.0.0.jar
+
+  # Aiven JDBC sink + JDBC drivers (postgres + mariadb). Repo was renamed in 2024;
+  # archive unpacks to jdbc-connector-for-apache-kafka-6.10.0/, not the old aiven-* name.
+  - curl -sSL -o /tmp/aiven-jdbc.zip https://github.com/Aiven-Open/jdbc-connector-for-apache-kafka/releases/download/v6.10.0/jdbc-connector-for-apache-kafka-6.10.0.zip
+  - unzip -q /tmp/aiven-jdbc.zip -d /opt/kafka-connect/plugins/
+  - curl -sSL -o /opt/kafka-connect/plugins/jdbc-connector-for-apache-kafka-6.10.0/postgresql.jar https://jdbc.postgresql.org/download/postgresql-42.7.4.jar
+  - curl -sSL -o /opt/kafka-connect/plugins/jdbc-connector-for-apache-kafka-6.10.0/mariadb.jar https://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/3.4.1/mariadb-java-client-3.4.1.jar
+  - rm -f /tmp/aiven-jdbc.zip
+
+  # Iceberg sink connector (Databricks build of the Tabular connector; ships
+  # class io.tabular.iceberg.connect.IcebergSinkConnector — see kcConnectorSpecs["iceberg"]).
+  - curl -sSL -o /tmp/iceberg-kc.zip https://github.com/databricks/iceberg-kafka-connect/releases/download/v0.6.19/iceberg-kafka-connect-runtime-0.6.19.zip
+  - unzip -q /tmp/iceberg-kc.zip -d /opt/kafka-connect/plugins/
+  - rm -f /tmp/iceberg-kc.zip
+
+  # Enable + start the worker. systemd retries on failure if Redpanda isn't yet
+  # reachable (which is fine — the bench start waits for the runner anyway).
+  - systemctl daemon-reload
+  - systemctl enable --now kafka-connect.service
+%{ endif ~}
