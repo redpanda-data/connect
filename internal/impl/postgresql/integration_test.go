@@ -1600,3 +1600,36 @@ postgres_cdc:
 	assert.Equal(t, 1, cdcSchemas["tenant_a"], "expected 1 CDC row from tenant_a")
 	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
 }
+
+func TestIntegrationNoSchemasMatchedError(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: no_schema_match_slot
+    schema: nonexistent_schema_zzz_*
+    tables:
+      - events
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: ERROR`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, _ service.MessageBatch) error {
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err = stream.Run(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no schemas found matching pattern")
+}

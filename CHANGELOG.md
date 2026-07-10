@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- postgres_cdc: Postgres CDC now accepts a glob pattern for the `schema` field (e.g. `tenant_*`), replicating all matching schemas through a single replication slot. Useful for multi-tenant databases where each tenant has its own schema. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4589](https://github.com/redpanda-data/connect/pull/4589))
+
 ### Fixed
 
 - general: The CGO-enabled distribution binary now embeds the IANA time zone database via the `timetzdata` build tag, matching the other distributions, so `time.LoadLocation` works in minimal runtimes without system tzdata instead of silently falling back to UTC (which shifts JQL date predicates in the `jira` input). ([@squiidz](https://github.com/squiidz), [#4583](https://github.com/redpanda-data/connect/pull/4583))

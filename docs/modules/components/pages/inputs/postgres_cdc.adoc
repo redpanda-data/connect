@@ -176,6 +176,8 @@ When a pattern is used, all schemas whose names match the pattern are replicated
 
 Double-quoted identifiers are treated as exact names and do not support wildcards.
 
+Schema pattern matching runs once at pipeline startup. Schemas created after the pipeline starts will not be picked up until the pipeline is restarted.
+
 
 *Type*: `string`
 

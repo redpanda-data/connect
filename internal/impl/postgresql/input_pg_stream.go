@@ -26,6 +26,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -114,7 +115,9 @@ This input adds the following metadata fields to each message:
 
 When a pattern is used, all schemas whose names match the pattern are replicated using a single replication slot and publication. This is useful for multi-tenant databases where each tenant has its own schema (e.g. `+"`tenant_*`"+` matches `+"`tenant_foo`"+`, `+"`tenant_bar`"+`, etc.).
 
-Double-quoted identifiers are treated as exact names and do not support wildcards.`).
+Double-quoted identifiers are treated as exact names and do not support wildcards.
+
+Schema pattern matching runs once at pipeline startup. Schemas created after the pipeline starts will not be picked up until the pipeline is restarted.`).
 			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`, "tenant_*", "*"),
 		).
 		Field(service.NewStringListField(fieldTables).
@@ -389,8 +392,8 @@ func validateSchemaPattern(s string) error {
 		return errors.New("schema cannot be empty")
 	}
 	if strings.HasPrefix(s, `"`) {
-		if !strings.HasSuffix(s, `"`) || len(s) < 3 {
-			return errors.New("unterminated quoted identifier in schema")
+		if _, err := sanitize.UnquotePostgresIdentifier(s); err != nil {
+			return fmt.Errorf("invalid quoted schema identifier: %w", err)
 		}
 		if strings.ContainsRune(s, '*') {
 			return errors.New("wildcard '*' is not allowed inside a quoted schema identifier")
