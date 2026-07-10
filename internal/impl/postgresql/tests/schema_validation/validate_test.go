@@ -21,11 +21,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure" // registers none tracer and other built-ins
+	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/license"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/postgresql" // registers postgres_cdc
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // postgresStream builds a postgres_cdc stream with the given YAML schema value

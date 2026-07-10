@@ -360,7 +360,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	// Batch DROP: single ALTER statement for all removed tables.
 	if len(tablesToRemove) > 0 {
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE ", publicationName))
+		fmt.Fprintf(&sb, "ALTER PUBLICATION %s DROP TABLE ", publicationName)
 		for i, t := range tablesToRemove {
 			if i > 0 {
 				sb.WriteString(", ")
@@ -380,7 +380,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	// Batch ADD: single ALTER statement for all new tables.
 	if len(tablesToAdd) > 0 {
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE ", publicationName))
+		fmt.Fprintf(&sb, "ALTER PUBLICATION %s ADD TABLE ", publicationName)
 		for i, t := range tablesToAdd {
 			if i > 0 {
 				sb.WriteString(", ")

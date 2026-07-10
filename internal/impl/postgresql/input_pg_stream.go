@@ -110,9 +110,9 @@ This input adds the following metadata fields to each message:
 			Example(10000).
 			Default(1000)).
 		Field(service.NewStringField(fieldSchema).
-			Description(`The PostgreSQL schema to replicate data from. Accepts an exact schema name or a glob pattern using ` + "`*`" + ` as a wildcard to match multiple schemas.
+			Description(`The PostgreSQL schema to replicate data from. Accepts an exact schema name or a glob pattern using `+"`*`"+` as a wildcard to match multiple schemas.
 
-When a pattern is used, all schemas whose names match the pattern are replicated using a single replication slot and publication. This is useful for multi-tenant databases where each tenant has its own schema (e.g. ` + "`tenant_*`" + ` matches ` + "`tenant_foo`" + `, ` + "`tenant_bar`" + `, etc.).
+When a pattern is used, all schemas whose names match the pattern are replicated using a single replication slot and publication. This is useful for multi-tenant databases where each tenant has its own schema (e.g. `+"`tenant_*`"+` matches `+"`tenant_foo`"+`, `+"`tenant_bar`"+`, etc.).
 
 Double-quoted identifiers are treated as exact names and do not support wildcards.`).
 			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`, "tenant_*", "*"),
@@ -339,8 +339,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			DBConfig:         pgConnConfig,
 			TLSConfig:        pgConnConfig.TLSConfig,
 			DBRawDSN:         dsn,
-			DBSchemaPattern: schema,
-			DBTables:        tables,
+			DBSchemaPattern:  schema,
+			DBTables:         tables,
 			RefreshAuthToken: iamAuthTokenBuilder,
 
 			IncludeTxnMarkers:        includeTxnMarkers,

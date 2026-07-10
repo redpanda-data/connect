@@ -170,7 +170,11 @@ snapshot_batch_size: 10000
 
 === `schema`
 
-The PostgreSQL schema from which to replicate data.
+The PostgreSQL schema to replicate data from. Accepts an exact schema name or a glob pattern using `*` as a wildcard to match multiple schemas.
+
+When a pattern is used, all schemas whose names match the pattern are replicated using a single replication slot and publication. This is useful for multi-tenant databases where each tenant has its own schema (e.g. `tenant_*` matches `tenant_foo`, `tenant_bar`, etc.).
+
+Double-quoted identifiers are treated as exact names and do not support wildcards.
 
 
 *Type*: `string`
@@ -182,6 +186,10 @@ The PostgreSQL schema from which to replicate data.
 schema: public
 
 schema: '"MyCaseSensitiveSchemaNeedingQuotes"'
+
+schema: tenant_*
+
+schema: '*'
 ```
 
 === `tables`
