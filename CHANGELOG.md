@@ -3,6 +3,25 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.100.0 - 2026-07-09
+
+### Added
+
+- jira: Added a new Jira input component that streams issues, comments, and changelog events into Connect pipelines with cursor-based incremental polling and deduplication of boundary issues. ([@squiidz](https://github.com/squiidz), [#4484](https://github.com/redpanda-data/connect/pull/4484))
+
+### Fixed
+
+- general: Embedded the IANA timezone database in the CGO-enabled build to ensure timezone-aware features work correctly in minimal container runtimes. ([@squiidz](https://github.com/squiidz), [#4583](https://github.com/redpanda-data/connect/pull/4583))
+- iceberg: Made Iceberg commit retries idempotent to prevent duplicate data files when a commit lands server-side but the client observes a transient failure. ([@Jeffail](https://github.com/Jeffail), [#4591](https://github.com/redpanda-data/connect/pull/4591))
+- oracledb_cdc: Added support for bare rowid-based predicates in Oracle LogMiner SQL_REDO parsing and improved debug logging for query failures. ([@josephwoodward](https://github.com/josephwoodward), [#4585](https://github.com/redpanda-data/connect/pull/4585))
+- oracledb_cdc: Hardened Oracle LogMiner SQL_REDO parser and LOB assembly against panics and data corruption by fixing hex decoding, adding UNISTR national character support, validating LOB offsets, and preventing empty primary key sets from matching vacuously. ([@Jeffail](https://github.com/Jeffail), [#4586](https://github.com/redpanda-data/connect/pull/4586))
+- postgres_cdc: Fixed data loss during crashes by adding an acknowledgement barrier that ensures snapshot rows are fully acknowledged before promoting the replication slot. ([@squiidz](https://github.com/squiidz), [#4584](https://github.com/redpanda-data/connect/pull/4584))
+- splunk: Fixed Splunk integration test TLS configuration and startup timeout to properly verify certificates and allow sufficient time for Splunk to boot. ([@squiidz](https://github.com/squiidz), [#4582](https://github.com/redpanda-data/connect/pull/4582))
+
+### Changed
+
+- iceberg: Optimized Iceberg sink performance by caching schema field metadata to reduce per-record allocations, and added tuning documentation with recommended configuration for throughput optimization. ([@Jeffail](https://github.com/Jeffail), [#4590](https://github.com/redpanda-data/connect/pull/4590))
+
 ## Unreleased
 
 ### Added
