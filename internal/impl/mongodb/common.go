@@ -454,6 +454,18 @@ func extJSONFromMap(i int, m *service.MessageBatchBloblangExecutor) (any, error)
 	return ejsonVal, nil
 }
 
+func structuredFromMap(i int, m *service.MessageBatchBloblangExecutor) (any, error) {
+	msg, err := m.Query(i)
+	if err != nil {
+		return nil, err
+	}
+	if msg == nil {
+		return nil, nil
+	}
+
+	return msg.AsStructured()
+}
+
 func (w writeMapsExec) extractFromMessage(operation Operation, i int) (
 	docJSON, filterJSON, hintJSON any, err error,
 ) {
@@ -468,7 +480,7 @@ func (w writeMapsExec) extractFromMessage(operation Operation, i int) (
 	}
 
 	if documentValWanted && w.documentMap != nil {
-		if docJSON, err = extJSONFromMap(i, w.documentMap); err != nil {
+		if docJSON, err = structuredFromMap(i, w.documentMap); err != nil {
 			err = fmt.Errorf("executing document_map: %v", err)
 			return
 		}
