@@ -14,6 +14,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -84,6 +86,8 @@ This input adds the following metadata fields to each message:
 - operation: Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled
 - lsn: the log sequence number in postgres
 - schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
+- commit_ts_ms: The commit timestamp of the transaction as a Unix millisecond timestamp. Not set for snapshot reads.
+- before: The pre-change state of the row for update and delete operations, in benthos common schema format. For updates, availability depends on the table's REPLICA IDENTITY setting - with the default identity only key columns are present, with REPLICA IDENTITY FULL all columns are present.
 		`).
 		Field(service.NewStringField(fieldDSN).
 			Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
@@ -393,6 +397,12 @@ type pgStreamInput struct {
 	replicationLag  *service.MetricGauge
 	stopSig         *shutdown.Signaller
 
+	// snapshotAckWG tracks in-flight snapshot batches: incremented when a
+	// snapshot batch (nil LSN) is enqueued and decremented when it is
+	// acknowledged. The snapshot->stream handoff blocks until it drains so the
+	// replication slot is not promoted before snapshot rows are durable.
+	snapshotAckWG sync.WaitGroup
+
 	// IAM authentication fields
 	iamAuthEnabled bool
 }
@@ -463,6 +473,40 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				break
 			}
 		case batch := <-pgStream.Messages():
+			if len(batch) == 1 && batch[0].Operation == pglogicalstream.SnapshotCompleteOpType {
+				// Snapshot fully emitted. Flush any buffered rows, then block
+				// until every snapshot batch is acknowledged downstream before
+				// signalling the stream to promote the replication slot. Blocks
+				// until acks drain or soft-stop (no timeout, by design).
+				nextTimedBatchChan = nil
+				flushedBatch, err := batcher.Flush(ctx)
+				if err != nil {
+					p.logger.Debugf("error flushing snapshot completion batch: %s", err)
+					// The sentinel is a one-shot signal; if we bail here without
+					// acking, the barrier's snapshot goroutine blocks on
+					// snapshotAcked forever. Trigger a restart instead of stalling.
+					p.stopSig.TriggerSoftStop()
+					break
+				}
+				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
+					p.logger.Debugf("failed to flush snapshot completion batch: %s", err)
+					p.stopSig.TriggerSoftStop()
+					break
+				}
+				drained := make(chan struct{})
+				go func() {
+					// May outlive the select below if soft-stop fires while the
+					// downstream is stalled; bounded by process lifetime.
+					p.snapshotAckWG.Wait()
+					close(drained)
+				}()
+				select {
+				case <-drained:
+					pgStream.MarkSnapshotAcknowledged()
+				case <-p.stopSig.SoftStopChan():
+				}
+				break
+			}
 			var (
 				flush bool
 				mb    []byte
@@ -479,8 +523,14 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if msg.LSN != nil {
 					batchMsg.MetaSet("lsn", *msg.LSN)
 				}
+				if !msg.CommitTime.IsZero() {
+					batchMsg.MetaSet("commit_ts_ms", strconv.FormatInt(msg.CommitTime.UnixMilli(), 10))
+				}
 				if msg.ColumnSchema != nil {
 					batchMsg.MetaSetImmut("schema", service.ImmutableAny{V: msg.ColumnSchema})
+				}
+				if msg.BeforeData != nil {
+					batchMsg.MetaSetImmut("before", service.ImmutableAny{V: msg.BeforeData})
 				}
 				if batcher.Add(batchMsg) {
 					flush = true
@@ -534,7 +584,15 @@ func (p *pgStreamInput) flushBatch(
 		return fmt.Errorf("unable to checkpoint: %w", err)
 	}
 
+	// Snapshot batches carry no LSN. Track them so the snapshot->stream handoff
+	// can block until they are acknowledged downstream (see the sentinel handling
+	// in the read loop).
+	isSnapshot := lsn == nil
+
 	ackFn := func(ctx context.Context, _ error) error {
+		if isSnapshot {
+			defer p.snapshotAckWG.Done()
+		}
 		maxOffset := resolveFn()
 		if maxOffset == nil {
 			return nil
@@ -548,9 +606,15 @@ func (p *pgStreamInput) flushBatch(
 		}
 		return nil
 	}
+	if isSnapshot {
+		p.snapshotAckWG.Add(1)
+	}
 	select {
 	case p.msgChan <- asyncMessage{msg: batch, ackFn: ackFn}:
 	case <-ctx.Done():
+		if isSnapshot {
+			p.snapshotAckWG.Done()
+		}
 		return ctx.Err()
 	}
 	return nil

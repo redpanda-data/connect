@@ -38,17 +38,22 @@ func createTestMessages(count int, shardID string, startSeq int) service.Message
 type mockCheckpointer struct {
 	mu              sync.Mutex
 	checkpoints     map[string]string
+	timestamps      map[string]string
 	checkpointLimit int
 	setCallCount    int
 }
 
-func (m *mockCheckpointer) Set(_ context.Context, shardID, sequenceNumber string) error {
+func (m *mockCheckpointer) Set(_ context.Context, shardID, sequenceNumber, approxCreationTime string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.checkpoints == nil {
 		m.checkpoints = make(map[string]string)
 	}
+	if m.timestamps == nil {
+		m.timestamps = make(map[string]string)
+	}
 	m.checkpoints[shardID] = sequenceNumber
+	m.timestamps[shardID] = approxCreationTime
 	m.setCallCount++
 	return nil
 }
@@ -63,10 +68,64 @@ func (m *mockCheckpointer) get(shardID string) string {
 	return m.checkpoints[shardID]
 }
 
+func (m *mockCheckpointer) timestamp(shardID string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.timestamps[shardID]
+}
+
 func (m *mockCheckpointer) calls() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.setCallCount
+}
+
+// msgWithTime builds a single-message batch carrying both a sequence number and
+// an approximate creation time, for exercising timestamp persistence.
+func msgWithTime(shardID, seq, approxTime string) service.MessageBatch {
+	msg := service.NewMessage(nil)
+	msg.MetaSetMut("dynamodb_shard_id", shardID)
+	msg.MetaSetMut("dynamodb_sequence_number", seq)
+	msg.MetaSetMut("dynamodb_approximate_creation_time", approxTime)
+	return service.MessageBatch{msg}
+}
+
+// Global-table mode persists the record timestamp alongside the frontier
+// sequence so a failed-over region can resume by time.
+func TestBatcher_PersistsApproxCreationTimeWithFrontier(t *testing.T) {
+	b := NewRecordBatcher(10000, 1, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1}
+
+	batch := msgWithTime("shard-001", "00001", "2026-06-16T10:00:00Z")
+	b.AddMessages(batch, "shard-001")
+	require.NoError(t, b.AckMessages(context.Background(), cp, batch))
+
+	assert.Equal(t, "00001", cp.get("shard-001"))
+	assert.Equal(t, "2026-06-16T10:00:00Z", cp.timestamp("shard-001"))
+}
+
+// When acks complete out of order, the persisted timestamp must be the one of
+// the contiguous frontier record, not of the batch whose ack moved the
+// frontier.
+func TestBatcher_FrontierTimestampFollowsContiguousSequence(t *testing.T) {
+	b := NewRecordBatcher(10000, 1, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1}
+
+	b1 := msgWithTime("shard-001", "00001", "2026-06-16T10:00:00Z")
+	b2 := msgWithTime("shard-001", "00002", "2026-06-16T10:01:00Z")
+	b.AddMessages(b1, "shard-001")
+	b.AddMessages(b2, "shard-001")
+
+	// Ack the second batch first: frontier is pinned (b1 still outstanding), so
+	// nothing is persisted yet.
+	require.NoError(t, b.AckMessages(context.Background(), cp, b2))
+	assert.Equal(t, 0, cp.calls(), "frontier pinned until the earlier batch acks")
+
+	// Ack the first batch: frontier jumps to 00002, and the persisted timestamp
+	// must be 00002's (10:01), not b1's (10:00).
+	require.NoError(t, b.AckMessages(context.Background(), cp, b1))
+	assert.Equal(t, "00002", cp.get("shard-001"))
+	assert.Equal(t, "2026-06-16T10:01:00Z", cp.timestamp("shard-001"))
 }
 
 func TestBatcherAddMessages(t *testing.T) {
@@ -281,9 +340,9 @@ func TestBatcherPendingCheckpointsFlush(t *testing.T) {
 	require.NoError(t, batcher.AckMessages(t.Context(), checkpointer, batch2))
 
 	pending := batcher.PendingCheckpoints()
-	assert.Equal(t, map[string]string{
-		"shard-001": "00002",
-		"shard-002": "00002",
+	assert.Equal(t, map[string]CheckpointValue{
+		"shard-001": {SequenceNumber: "00002"},
+		"shard-002": {SequenceNumber: "00002"},
 	}, pending)
 
 	// Low limit: the next ack persists immediately, leaving nothing pending
@@ -295,7 +354,7 @@ func TestBatcherPendingCheckpointsFlush(t *testing.T) {
 	assert.Equal(t, "00004", lowLimit.get("shard-001"))
 
 	pending = batcher.PendingCheckpoints()
-	assert.Equal(t, map[string]string{"shard-002": "00002"}, pending)
+	assert.Equal(t, map[string]CheckpointValue{"shard-002": {SequenceNumber: "00002"}}, pending)
 }
 
 // Test concurrent access to batcher.

@@ -3,6 +3,71 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.100.0 - 2026-07-09
+
+### Added
+
+- jira: Added a new Jira input component that streams issues, comments, and changelog events into Connect pipelines with cursor-based incremental polling and deduplication of boundary issues. ([@squiidz](https://github.com/squiidz), [#4484](https://github.com/redpanda-data/connect/pull/4484))
+
+### Fixed
+
+- general: Embedded the IANA timezone database in the CGO-enabled build to ensure timezone-aware features work correctly in minimal container runtimes. ([@squiidz](https://github.com/squiidz), [#4583](https://github.com/redpanda-data/connect/pull/4583))
+- iceberg: Made Iceberg commit retries idempotent to prevent duplicate data files when a commit lands server-side but the client observes a transient failure. ([@Jeffail](https://github.com/Jeffail), [#4591](https://github.com/redpanda-data/connect/pull/4591))
+- oracledb_cdc: Added support for bare rowid-based predicates in Oracle LogMiner SQL_REDO parsing and improved debug logging for query failures. ([@josephwoodward](https://github.com/josephwoodward), [#4585](https://github.com/redpanda-data/connect/pull/4585))
+- oracledb_cdc: Hardened Oracle LogMiner SQL_REDO parser and LOB assembly against panics and data corruption by fixing hex decoding, adding UNISTR national character support, validating LOB offsets, and preventing empty primary key sets from matching vacuously. ([@Jeffail](https://github.com/Jeffail), [#4586](https://github.com/redpanda-data/connect/pull/4586))
+- postgres_cdc: Fixed data loss during crashes by adding an acknowledgement barrier that ensures snapshot rows are fully acknowledged before promoting the replication slot. ([@squiidz](https://github.com/squiidz), [#4584](https://github.com/redpanda-data/connect/pull/4584))
+- splunk: Fixed Splunk integration test TLS configuration and startup timeout to properly verify certificates and allow sufficient time for Splunk to boot. ([@squiidz](https://github.com/squiidz), [#4582](https://github.com/redpanda-data/connect/pull/4582))
+
+### Changed
+
+- iceberg: Optimized Iceberg sink performance by caching schema field metadata to reduce per-record allocations, and added tuning documentation with recommended configuration for throughput optimization. ([@Jeffail](https://github.com/Jeffail), [#4590](https://github.com/redpanda-data/connect/pull/4590))
+
+## Unreleased
+
+### Fixed
+
+- general: The CGO-enabled distribution binary now embeds the IANA time zone database via the `timetzdata` build tag, matching the other distributions, so `time.LoadLocation` works in minimal runtimes without system tzdata instead of silently falling back to UTC (which shifts JQL date predicates in the `jira` input). ([@squiidz](https://github.com/squiidz), [#4583](https://github.com/redpanda-data/connect/pull/4583))
+
+## 4.99.0 - 2026-07-02
+
+### Added
+
+- aws_dynamodb_cdc: DynamoDB CDC now supports Global Tables for checkpoint tables, enabling multi-region failover with low RPO by replicating shard checkpoints across regions. ([@squiidz](https://github.com/squiidz), [#4529](https://github.com/redpanda-data/connect/pull/4529))
+- iceberg: Iceberg output now supports row-level operations (insert/upsert/delete) with configurable mappings and equality-delete files for mutable workloads. ([@Jeffail](https://github.com/Jeffail), [#4567](https://github.com/redpanda-data/connect/pull/4567))
+- oracledb_cdc: Oracle CDC now supports snapshot_only mode via a new snapshot_mode enum, replacing the deprecated boolean stream_snapshot option. ([@josephwoodward](https://github.com/josephwoodward), [#4570](https://github.com/redpanda-data/connect/pull/4570))
+- oracledb_cdc: Oracle CDC snapshot reads now emit commit_ts_ms metadata captured from SYSTIMESTAMP for consistent timestamp tracking. ([@josephwoodward](https://github.com/josephwoodward), [#4571](https://github.com/redpanda-data/connect/pull/4571))
+- postgres_cdc: Postgres CDC now emits 'before' metadata for update and delete events, enabling change data capture to track previous values. ([@josephwoodward](https://github.com/josephwoodward), [#4555](https://github.com/redpanda-data/connect/pull/4555))
+
+### Fixed
+
+- oracledb_cdc: Oracle CDC now correctly handles out-of-order LOB writes by deferring and replaying them at commit time. ([@josephwoodward](https://github.com/josephwoodward), [#4574](https://github.com/redpanda-data/connect/pull/4574))
+- salesforce: Salesforce sink now correctly includes createable fields in the writable field set and makes field cache operation-aware. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4553](https://github.com/redpanda-data/connect/pull/4553))
+- kafka: Broker connectivity failures (connection, read, and write errors such as `i/o timeout`) from the franz-go client are now logged at WARN instead of only at debug level, so they can be alerted on without enabling debug logging. Emissions are throttled per broker. Affects all franz-based connectors (`kafka_franz`, `redpanda`, `redpanda_migrator`, ...).
+
+## 4.98.0 - 2026-06-26
+
+### Added
+
+- postgres_cdc: PostgreSQL CDC events now include commit_ts_ms metadata field with the transaction commit timestamp for insert, update, and delete operations. ([@josephwoodward](https://github.com/josephwoodward), [#4554](https://github.com/redpanda-data/connect/pull/4554))
+
+### Fixed
+
+- aws_dynamodb_cdc: DynamoDB Streams connector now recovers from expired shard iterators by re-acquiring fresh iterators from the last read position, eliminating data gaps on prolonged backpressure or idle periods. ([@squiidz](https://github.com/squiidz), [#4545](https://github.com/redpanda-data/connect/pull/4545))
+- file: File output now validates paths to reject OS-specific invalid characters (colons on macOS, control characters and special chars on Windows, NUL on all platforms) that cause silent data loss. ([@twmb](https://github.com/twmb), [#4053](https://github.com/redpanda-data/connect/pull/4053))
+- oracledb_cdc: Fixed goroutine leak in streaming reconnect loop and added time-to-first-row metric for LogMiner performance tracking. ([@josephwoodward](https://github.com/josephwoodward), [#4540](https://github.com/redpanda-data/connect/pull/4540))
+
+### Changed
+
+- general: try_catch processor is now available in cloud distributions alongside other try/catch processors. ([@josephwoodward](https://github.com/josephwoodward), [#4562](https://github.com/redpanda-data/connect/pull/4562))
+- oracledb_cdc: Snapshot messages now include the current SCN in metadata, improving CDC standard conformance for change data capture operations. ([@josephwoodward](https://github.com/josephwoodward), [#4542](https://github.com/redpanda-data/connect/pull/4542))
+- sentry: Migrated sentry_capture processor to sentry-go v0.47.0 by attaching extras as a context instead of the removed SetExtras API. ([@twmb](https://github.com/twmb), [#4549](https://github.com/redpanda-data/connect/pull/4549))
+
+## Unreleased
+
+### Fixed
+
+- aws_dynamodb_cdc: The CDC input now recovers automatically from an expired DynamoDB Streams shard iterator (`ExpiredIteratorException`), which previously caused an affected shard to retry the dead iterator indefinitely and stall until a pod restart. The shard now obtains a fresh iterator and resumes from the last read position without a data gap.
+
 ## 4.97.0 - 2026-06-18
 
 ### Added
@@ -11,6 +76,7 @@ All notable changes to this project will be documented in this file.
 - oracledb_cdc: Oracle CDC connector now publishes an oracledb_cdc_publish_lag_ns metric tracking latency between database commits and event publication. ([@josephwoodward](https://github.com/josephwoodward), [#4520](https://github.com/redpanda-data/connect/pull/4520))
 - oracledb_cdc: Oracle CDC connector now supports a configurable min_scn_window_size parameter to skip mining cycles when the SCN gap is too small. ([@josephwoodward](https://github.com/josephwoodward), [#4530](https://github.com/redpanda-data/connect/pull/4530))
 - aws_bedrock_embeddings: Support Cohere input_type and v4 response. ([@squiidz](https://github.com/squiidz), [#4473](https://github.com/redpanda-data/connect/pull/4473))
+- aws_dynamodb_cdc: The auto-created checkpoint table can now be provisioned as a DynamoDB Global Table via `global_table` / `global_table_replicas`, enabling low-RPO multi-region failover. ([@squiidz](https://github.com/squiidz), [#4529](https://github.com/redpanda-data/connect/pull/4529))
 
 ### Fixed
 

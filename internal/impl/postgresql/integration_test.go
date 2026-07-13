@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -272,6 +273,143 @@ pg_stream:
 	}, time.Second*20, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
+// TestIntegrationPostgresSnapshotAckBarrier verifies that a crash during the
+// snapshot->stream handoff (after snapshot rows are emitted but before they are
+// acknowledged) does not lose data: because the replication slot is only
+// promoted once every snapshot message is acked, the snapshot must re-run on
+// restart. See CON-489.
+func TestIntegrationPostgresSnapshotAckBarrier(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	const rowCount = 5
+	for i := range rowCount {
+		f := GetFakeFlightRecord()
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+
+	// batching.count == rowCount forces all snapshot rows into a single output
+	// batch, so the run-1 consumer receives them all at once and can then block
+	// without acking - reproducing the "emitted but not yet acked" handoff state.
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_snapshot_ack_barrier
+    stream_snapshot: true
+    snapshot_batch_size: 1000
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+    batching:
+      count: %d
+      period: 1h
+`, databaseURL, rowCount)
+
+	// Run 1: receive the snapshot rows but never acknowledge them, then simulate
+	// a crash by cancelling the run before the slot can be promoted.
+	received := make(chan struct{}, 1)
+	run1Builder := service.NewStreamBuilder()
+	require.NoError(t, run1Builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, run1Builder.AddInputYAML(template))
+	require.NoError(t, run1Builder.AddBatchConsumerFunc(func(ctx context.Context, _ service.MessageBatch) error {
+		select {
+		case received <- struct{}{}:
+		default:
+		}
+		// Block without acking until the simulated crash cancels our context.
+		<-ctx.Done()
+		return ctx.Err()
+	}))
+	run1, err := run1Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run1.Resources())
+
+	run1Ctx, crash := context.WithCancel(context.Background())
+	run1Done := make(chan struct{})
+	go func() {
+		defer close(run1Done)
+		_ = run1.Run(run1Ctx)
+	}()
+
+	select {
+	case <-received:
+	case <-time.After(30 * time.Second):
+		t.Fatal("snapshot rows were never delivered to the run-1 output")
+	}
+	// Give the stream time to reach the ack barrier (and, in the buggy version,
+	// to promote the slot) before we crash.
+	time.Sleep(2 * time.Second)
+	crash()
+	select {
+	case <-run1Done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("run 1 did not stop after the simulated crash")
+	}
+
+	// The barrier must have prevented the temporary slot from being promoted to
+	// a permanent one, since the snapshot was never acknowledged. This is the
+	// core guarantee: without it the permanent slot would exist here and the
+	// snapshot would be skipped on restart.
+	var permanentSlots int
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_ack_barrier'`).Scan(&permanentSlots))
+	require.Zero(t, permanentSlots, "replication slot must not be promoted before snapshot rows are acknowledged")
+
+	// A real process crash drops the connection, so postgres releases the
+	// temporary snapshot slot promptly (the socket close is immediate at the
+	// OS level). Our in-process cancel does not: confirmed empirically, the
+	// slot still reports "active for PID ..." 30+ seconds after run1Ctx is
+	// cancelled, since Go's graceful shutdown path doesn't force-close the
+	// underlying connection that fast. Terminate the backend still holding the
+	// temporary slot to faithfully model the crash's prompt socket teardown,
+	// and wait for the slot to be released before restarting.
+	require.Eventually(t, func() bool {
+		_, _ = db.Exec(`SELECT pg_terminate_backend(active_pid) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_ack_barrier_tmp' AND active_pid IS NOT NULL`)
+		var tmpSlots int
+		if err := db.QueryRow(`SELECT count(*) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_ack_barrier_tmp'`).Scan(&tmpSlots); err != nil {
+			return false
+		}
+		return tmpSlots == 0
+	}, 30*time.Second, 500*time.Millisecond, "temporary snapshot slot from the crashed run was not released")
+
+	// Run 2: restart against the same slot. Since run 1 never acked the
+	// snapshot, the slot must not have been promoted, so the snapshot re-runs
+	// and every row is delivered again. The temporary slot is already gone by
+	// this point, so Connect's drop-before-create guard (added for CON-489's
+	// review) takes its "does not exist" path here and proceeds straight to
+	// creating a fresh one - the guard's other path, dropping a slot that
+	// still exists but whose owning session has died without yet being
+	// reaped, isn't reachable from this harness (see comment above: emulating
+	// that state needs the same terminate-then-wait this test already does,
+	// which collapses it into the "does not exist" case by construction).
+	var mu sync.Mutex
+	var reads int
+	run2Builder := service.NewStreamBuilder()
+	require.NoError(t, run2Builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, run2Builder.AddInputYAML(template))
+	require.NoError(t, run2Builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		if op, _ := m.MetaGet("operation"); op == "read" { // ReadOpType: snapshot row
+			mu.Lock()
+			reads++
+			mu.Unlock()
+		}
+		return nil
+	}))
+	run2, err := run2Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run2.Resources())
+	go func() { _ = run2.Run(t.Context()) }()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Equal(c, rowCount, reads, "snapshot should have re-run and re-delivered every row after the crash")
+	}, 30*time.Second, 100*time.Millisecond)
+
+	require.NoError(t, run2.StopWithin(10*time.Second))
 }
 
 func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
@@ -995,6 +1133,9 @@ func TestIntegrationPostgresMetadata(t *testing.T) {
 
 	require.NoError(t, err)
 
+	_, err = db.Exec(`ALTER TABLE flights REPLICA IDENTITY FULL`)
+	require.NoError(t, err)
+
 	_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, 1, "delta", "2006-01-02T15:04:05Z07:00")
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ($1, $2);`, "delta", "2006-01-02T15:04:05Z07:00")
@@ -1029,6 +1170,22 @@ postgres_cdc:
 			if _, ok := d["lsn"]; ok {
 				d["lsn"] = "XXX/XXX" // Consistent LSN for assertions below
 			}
+			if ct, ok := d["commit_ts_ms"].(string); ok {
+				ms, err := strconv.ParseInt(ct, 10, 64)
+				assert.NoError(t, err, "commit_ts_ms should be a valid integer")
+				assert.Positive(t, ms, "commit_ts_ms should be a positive Unix ms timestamp")
+				d["commit_ts_ms"] = "SET"
+			}
+			if before, ok := d["before"].(map[string]any); ok {
+				op, _ := d["operation"].(string)
+				switch op {
+				case "update":
+					assert.Equal(t, "bravo", before["name"], "update: before.name should be the pre-update value")
+				case "delete":
+					assert.Equal(t, "charlie", before["name"], "delete: before.name should be the post-update, pre-delete value")
+				}
+				d["before"] = "SET"
+			}
 			delete(d, "schema") // Schema metadata tested separately in TestIntegrationPostgresCDCSchemaMetadata
 			outBatches = append(outBatches, data)
 		}
@@ -1052,13 +1209,21 @@ postgres_cdc:
 
 	_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, 2, "bravo", "2006-01-02T15:04:05Z07:00")
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ($1, $2);`, "bravo", "2006-01-02T15:04:05Z07:00")
+
+	var flightsID int
+	err = db.QueryRow(`INSERT INTO flights (name, created_at) VALUES ($1, $2) RETURNING id;`, "bravo", "2006-01-02T15:04:05Z07:00").Scan(&flightsID)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`UPDATE flights SET name = $1 WHERE id = $2;`, "charlie", flightsID)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`DELETE FROM flights WHERE id = $1;`, flightsID)
 	require.NoError(t, err)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		assert.Len(c, outBatches, 4, "got: %#v", outBatches)
+		assert.Len(c, outBatches, 6, "got: %#v", outBatches)
 	}, time.Second*25, time.Millisecond*100)
 
 	require.ElementsMatch(
@@ -1074,14 +1239,30 @@ postgres_cdc:
 				"table":     "flights",
 			},
 			map[string]any{
-				"operation": "insert",
-				"table":     "flights",
-				"lsn":       "XXX/XXX",
+				"operation":    "insert",
+				"table":        "FlightsCompositePK",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
 			},
 			map[string]any{
-				"operation": "insert",
-				"table":     "FlightsCompositePK",
-				"lsn":       "XXX/XXX",
+				"operation":    "insert",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+			},
+			map[string]any{
+				"operation":    "update",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+				"before":       "SET",
+			},
+			map[string]any{
+				"operation":    "delete",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+				"before":       "SET",
 			},
 		},
 	)

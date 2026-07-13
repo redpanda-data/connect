@@ -11,12 +11,19 @@ package iceberg
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"math"
 	"path"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/apache/arrow-go/v18/arrow/array"
+	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/apache/iceberg-go"
 	icebergio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
@@ -30,6 +37,55 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/shredder"
 )
 
+// rowOperation is the row-level mutation applied to a message when written to
+// the table. It is deliberately distinct from Iceberg's snapshot-level
+// operation (append/replace/overwrite/delete).
+type rowOperation string
+
+const (
+	rowOpInsert rowOperation = "insert"
+	rowOpUpsert rowOperation = "upsert"
+	rowOpDelete rowOperation = "delete"
+)
+
+// parseRowOperation validates s against the supported row operations. Unknown
+// values are a hard error rather than a silent fallback to insert, so that a
+// misconfigured mapping (e.g. an unmapped Debezium "c"/"u"/"d") fails loudly
+// instead of silently appending duplicates.
+func parseRowOperation(s string) (rowOperation, error) {
+	switch op := rowOperation(s); op {
+	case rowOpInsert, rowOpUpsert, rowOpDelete:
+		return op, nil
+	default:
+		return "", fmt.Errorf("invalid %s %q: must be one of %q, %q, or %q", ioFieldRowOperation, s, rowOpInsert, rowOpUpsert, rowOpDelete)
+	}
+}
+
+// RowOpConfig configures per-message row-level operations.
+type RowOpConfig struct {
+	// Operation resolves per message to insert, upsert, or delete. When it
+	// resolves to the empty string the default (insert) is assumed.
+	Operation *service.InterpolatedString
+	// IdentifierFields are the table column names forming the equality-delete
+	// key (the Iceberg identifier fields) used by upsert and delete. Empty for
+	// append-only (insert) workloads.
+	IdentifierFields []string
+}
+
+// mutating reports whether the configuration can ever produce a non-insert
+// operation. A purely static insert (or unset) configuration takes the
+// untouched append-only fast path.
+func (c RowOpConfig) mutating() bool {
+	if c.Operation == nil {
+		return false
+	}
+	if static, ok := c.Operation.Static(); ok {
+		return static != "" && rowOperation(static) != rowOpInsert
+	}
+	// Dynamic: assume it may resolve to a mutation.
+	return true
+}
+
 // writer handles writing batches of messages to a single Iceberg table.
 type writer struct {
 	table                 *table.Table
@@ -38,6 +94,8 @@ type writer struct {
 	writerOpts            []parquet.WriterOption
 	resolver              *typeResolver
 	requireSchemaMetadata bool
+	rowOpCfg              RowOpConfig
+	metrics               *opMetrics
 	logger                *service.Logger
 
 	// coerceLoggedFieldIDs tracks the iceberg field IDs we have already
@@ -56,7 +114,7 @@ type writer struct {
 // to interpret numeric inputs into time-typed columns; pass nil to disable.
 // requireSchemaMetadata enables shredder strict mode — see
 // [shredder.RecordShredder.StrictTemporalMode].
-func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, resolver *typeResolver, requireSchemaMetadata bool, logger *service.Logger) *writer {
+func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, resolver *typeResolver, requireSchemaMetadata bool, rowOpCfg RowOpConfig, logger *service.Logger) *writer {
 	return &writer{
 		table:                 tbl,
 		committer:             comm,
@@ -64,6 +122,7 @@ func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts
 		writerOpts:            writerOpts,
 		resolver:              resolver,
 		requireSchemaMetadata: requireSchemaMetadata,
+		rowOpCfg:              rowOpCfg,
 		logger:                logger,
 		coerceLoggedFieldIDs:  map[int]struct{}{},
 	}
@@ -75,39 +134,110 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 		return nil
 	}
 
+	// Append-only fast path: when the configuration can never produce a
+	// non-insert operation, write the whole batch as data files exactly as
+	// before, with no per-message operation evaluation.
+	if !w.rowOpCfg.mutating() {
+		files, err := w.writeDataFiles(ctx, batch)
+		if err != nil {
+			return fmt.Errorf("writing data files: %w", err)
+		}
+		if err := w.committer.Commit(ctx, CommitInput{Files: files, SchemaID: w.table.Schema().ID}); err != nil {
+			w.cleanupFiles(ctx, files)
+			return fmt.Errorf("committing: %w", err)
+		}
+		// Metrics reflect successfully committed rows, so they are incremented
+		// only after the commit succeeds.
+		w.metrics.incrInserted(int64(len(batch)))
+		return nil
+	}
+
+	// Row-level mutations: split the batch by operation, write inserted rows as
+	// data files and deleted/upserted keys as equality-delete files, then commit
+	// them together so a single snapshot reflects the whole batch.
+	inserts, deletes, counts, err := w.splitByOperation(batch)
+	if err != nil {
+		return fmt.Errorf("splitting batch by row operation: %w", err)
+	}
+
+	var files, deleteFiles []iceberg.DataFile
+	if len(inserts) > 0 {
+		if files, err = w.writeDataFiles(ctx, inserts); err != nil {
+			return fmt.Errorf("writing data files: %w", err)
+		}
+	}
+	if len(deletes) > 0 {
+		if deleteFiles, err = w.writeEqualityDeletes(ctx, deletes); err != nil {
+			return fmt.Errorf("writing equality deletes: %w", err)
+		}
+	}
+	if len(files) == 0 && len(deleteFiles) == 0 {
+		return nil
+	}
+	if err := w.committer.Commit(ctx, CommitInput{Files: files, DeleteFiles: deleteFiles, SchemaID: w.table.Schema().ID}); err != nil {
+		w.cleanupFiles(ctx, files, deleteFiles)
+		return fmt.Errorf("committing: %w", err)
+	}
+	// Increment only after the commit succeeds, using the post-collapse counts.
+	w.metrics.incrInserted(counts.inserted)
+	w.metrics.incrUpserted(counts.upserted)
+	w.metrics.incrDeleted(counts.deleted)
+	return nil
+}
+
+// cleanupFiles best-effort removes written-but-uncommitted parquet files after a
+// failed commit, to limit orphaned objects in storage. Failures are logged at
+// debug and otherwise ignored (table maintenance / remove_orphan_files remains
+// the backstop).
+func (w *writer) cleanupFiles(ctx context.Context, groups ...[]iceberg.DataFile) {
+	fs, err := w.table.FS(ctx)
+	if err != nil {
+		w.logger.Debugf("Skipping cleanup of uncommitted files: could not obtain table filesystem: %v", err)
+		return
+	}
+	for _, group := range groups {
+		for _, f := range group {
+			if rmErr := fs.Remove(f.FilePath()); rmErr != nil {
+				w.logger.Debugf("Failed to clean up uncommitted file %q: %v", f.FilePath(), rmErr)
+			}
+		}
+	}
+}
+
+// writeDataFiles shreds a batch into parquet data files, writes them to table
+// storage and returns the resulting iceberg data files (uncommitted).
+func (w *writer) writeDataFiles(ctx context.Context, batch service.MessageBatch) ([]iceberg.DataFile, error) {
 	// Convert messages to parquet (grouped by partition)
 	parquetFiles, err := w.messagesToParquet(batch)
 	if err != nil {
-		return fmt.Errorf("converting messages to parquet: %w", err)
+		return nil, fmt.Errorf("converting messages to parquet: %w", err)
 	}
 
 	// Get location provider for the table
 	locProvider, err := w.table.LocationProvider()
 	if err != nil {
-		return fmt.Errorf("getting location provider: %w", err)
+		return nil, fmt.Errorf("getting location provider: %w", err)
 	}
 
 	// Write file using table's IO
 	tableIO, err := w.table.FS(ctx)
 	if err != nil {
-		return fmt.Errorf("getting table IO: %w", err)
+		return nil, fmt.Errorf("getting table IO: %w", err)
 	}
 	writeIO, ok := tableIO.(icebergio.WriteFileIO)
 	if !ok {
-		return fmt.Errorf("table IO does not support writing (got %T)", tableIO)
+		return nil, fmt.Errorf("table IO does not support writing (got %T)", tableIO)
 	}
-
-	schemaID := w.table.Schema().ID
 
 	// Build field ID mappings for stats extraction and partition data
 	_, fieldToCol, err := icebergx.BuildParquetSchema(w.table.Schema())
 	if err != nil {
-		return fmt.Errorf("building parquet schema: %w", err)
+		return nil, fmt.Errorf("building parquet schema: %w", err)
 	}
 	colToFieldID := icebergx.ReverseFieldIDMap(fieldToCol)
 	fieldIDToLogicalType, fieldIDToFixedSize := icebergx.PartitionFieldMaps(w.table.Spec(), w.table.Schema())
 
-	// Write each partition file and submit to committer
+	// Write each partition file
 	var files []iceberg.DataFile
 	for _, pf := range parquetFiles {
 		fileName := uuid.New().String() + ".parquet"
@@ -118,13 +248,13 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 		} else {
 			partitionPath, err := icebergx.PartitionKeyToPath(w.table.Spec(), pf.partitionKey)
 			if err != nil {
-				return fmt.Errorf("unable to compute partition key path: %w", err)
+				return nil, fmt.Errorf("unable to compute partition key path: %w", err)
 			}
 			filePath = locProvider.NewDataLocation(path.Join(partitionPath, fileName))
 		}
 
 		if err := writeIO.WriteFile(filePath, pf.result.data); err != nil {
-			return fmt.Errorf("writing parquet file %q: %w", filePath, err)
+			return nil, fmt.Errorf("writing parquet file %q: %w", filePath, err)
 		}
 
 		w.logger.Debugf("Wrote parquet file: %s (%d bytes, %d rows)", filePath, len(pf.result.data), pf.result.footer.NumRows)
@@ -144,13 +274,13 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 			int64(len(pf.result.data)),
 		)
 		if err != nil {
-			return fmt.Errorf("unable to create data file builder: %w", err)
+			return nil, fmt.Errorf("unable to create data file builder: %w", err)
 		}
 
 		// Extract parquet statistics
 		stats, err := icebergx.ExtractParquetStats(pf.result.footer, w.table.Schema(), colToFieldID)
 		if err != nil {
-			return fmt.Errorf("extracting parquet stats: %w", err)
+			return nil, fmt.Errorf("extracting parquet stats: %w", err)
 		}
 		builder = builder.
 			ColumnSizes(stats.ColumnSizes).
@@ -163,12 +293,346 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 		files = append(files, builder.Build())
 	}
 
-	// Submit all files to committer
-	if err := w.committer.Commit(ctx, CommitInput{Files: files, SchemaID: schemaID}); err != nil {
-		return fmt.Errorf("committing: %w", err)
+	return files, nil
+}
+
+// splitByOperation partitions a batch by its per-message row_operation. Rows to
+// insert go into inserts; messages whose identifier key should be equality-
+// deleted go into deletes. Unknown operations, and upsert/delete without
+// identifier_fields, are hard errors so a misconfiguration fails loudly rather
+// than silently dropping or duplicating rows.
+//
+// Keyed operations (upsert/delete) are collapsed per identifier key to the last
+// one in batch order. This is required for correctness: merge-on-read equality
+// deletes only remove rows from earlier snapshots, never rows added in the same
+// commit, so emitting more than one keyed operation per key in a single commit
+// would otherwise leave duplicates (repeated upserts) or fail to delete (a
+// delete following a same-batch upsert). `insert` is an unconditional append
+// and is deliberately not keyed; mixing it with upsert/delete on the same key
+// within one batch is not de-duplicated (map create events to `upsert`, not
+// `insert`, for keyed data).
+func (w *writer) splitByOperation(batch service.MessageBatch) (service.MessageBatch, service.MessageBatch, opCounts, error) {
+	var inserts service.MessageBatch
+
+	type keyedOp struct {
+		op  rowOperation
+		msg *service.Message
+	}
+	order := make([]string, 0, len(batch))
+	latest := make(map[string]keyedOp, len(batch))
+
+	var nInsert int64
+	for i, msg := range batch {
+		opStr, err := w.rowOpCfg.Operation.TryString(msg)
+		if err != nil {
+			return nil, nil, opCounts{}, fmt.Errorf("evaluating %s for message %d: %w", ioFieldRowOperation, i, err)
+		}
+		if opStr == "" {
+			opStr = string(rowOpInsert)
+		}
+		op, err := parseRowOperation(opStr)
+		if err != nil {
+			return nil, nil, opCounts{}, err
+		}
+		if op == rowOpInsert {
+			nInsert++
+			inserts = append(inserts, msg)
+			continue
+		}
+		if len(w.rowOpCfg.IdentifierFields) == 0 {
+			return nil, nil, opCounts{}, fmt.Errorf("%s %q requires %s to be set", ioFieldRowOperation, op, ioFieldIdentifierFields)
+		}
+		key, err := w.dedupKey(msg)
+		if err != nil {
+			return nil, nil, opCounts{}, fmt.Errorf("message %d: %w", i, err)
+		}
+		if _, seen := latest[key]; !seen {
+			order = append(order, key)
+		}
+		latest[key] = keyedOp{op: op, msg: msg}
 	}
 
-	return nil
+	// Count upsert/delete after collapsing per key, so the metrics reflect the
+	// operations actually committed (one per identifier key) rather than every
+	// message in the batch.
+	deletes := make(service.MessageBatch, 0, len(order))
+	var nUpsert, nDelete int64
+	for _, key := range order {
+		ko := latest[key]
+		// Every keyed operation removes any prior version of the row.
+		deletes = append(deletes, ko.msg)
+		// An upsert also (re)writes the row; a delete does not.
+		if ko.op == rowOpUpsert {
+			inserts = append(inserts, ko.msg)
+			nUpsert++
+		} else {
+			nDelete++
+		}
+	}
+
+	return inserts, deletes, opCounts{inserted: nInsert, upserted: nUpsert, deleted: nDelete}, nil
+}
+
+// opCounts is the per-operation tally for a batch, counted after per-key
+// collapse so it matches what is committed. Metrics are incremented from it
+// only once the commit succeeds.
+type opCounts struct {
+	inserted int64
+	upserted int64
+	deleted  int64
+}
+
+// dedupKey builds a stable identity string from a message's identifier_fields
+// values, used to collapse multiple keyed operations on the same row within a
+// batch. A missing or null identifier value is a hard error.
+func (w *writer) dedupKey(msg *service.Message) (string, error) {
+	structured, err := msg.AsStructured()
+	if err != nil {
+		return "", fmt.Errorf("reading structured message for delete key: %w", err)
+	}
+	row, ok := structured.(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("message for upsert/delete must be an object, got %T", structured)
+	}
+	values := make([]any, len(w.rowOpCfg.IdentifierFields))
+	for i, name := range w.rowOpCfg.IdentifierFields {
+		v, ok := lookupField(row, name, w.caseSensitive)
+		if !ok || v == nil {
+			return "", fmt.Errorf("%s %q is missing or null", ioFieldIdentifierFields, name)
+		}
+		values[i] = v
+	}
+	b, err := json.Marshal(values)
+	if err != nil {
+		return "", fmt.Errorf("encoding delete key: %w", err)
+	}
+	return string(b), nil
+}
+
+// deleteKeyJSONValue converts a Go identifier value into a JSON-encodable form
+// that array.RecordFromJSON parses losslessly for the column's iceberg type.
+// Integers and decimals are emitted as strings to avoid the float64 precision
+// loss that JSON number parsing would otherwise incur, and temporal time.Time
+// values are formatted to the canonical string forms the Arrow JSON reader
+// accepts. Other primitives (string, bool, float, binary, uuid) pass through
+// json.Marshal unchanged.
+func deleteKeyJSONValue(t iceberg.Type, v any) (any, error) {
+	switch t.(type) {
+	case iceberg.Int32Type, iceberg.Int64Type:
+		switch n := v.(type) {
+		case json.Number:
+			return n.String(), nil
+		case int:
+			return strconv.FormatInt(int64(n), 10), nil
+		case int32:
+			return strconv.FormatInt(int64(n), 10), nil
+		case int64:
+			return strconv.FormatInt(n, 10), nil
+		case float64:
+			if n != math.Trunc(n) {
+				return nil, fmt.Errorf("integer column given non-integer value %v", n)
+			}
+			// A float64 only represents integers exactly up to 2^53; beyond that
+			// int64(n) loses precision or overflows, silently producing a wrong
+			// delete key. Reject rather than corrupt — pass large integers as an
+			// int64/json.Number/string instead.
+			if math.Abs(n) >= 1<<53 {
+				return nil, fmt.Errorf("integer column given value %v outside the range representable exactly as a float64 (provide it as an integer or string)", n)
+			}
+			return strconv.FormatInt(int64(n), 10), nil
+		case string:
+			return n, nil
+		default:
+			return nil, fmt.Errorf("unsupported value type %T for integer column", v)
+		}
+	case iceberg.DecimalType:
+		// Format to the column's exact scale so the encoded key matches the
+		// stored decimal; the shortest float representation would not.
+		scale := t.(iceberg.DecimalType).Scale()
+		switch n := v.(type) {
+		case json.Number:
+			return n.String(), nil
+		case string:
+			return n, nil
+		case float64:
+			return strconv.FormatFloat(n, 'f', scale, 64), nil
+		case int:
+			return strconv.Itoa(n), nil
+		case int64:
+			return strconv.FormatInt(n, 10), nil
+		default:
+			return nil, fmt.Errorf("unsupported value type %T for decimal column", v)
+		}
+	// Temporal keys must arrive as time.Time. A bare number is ambiguous (the
+	// data path interprets it via schema_metadata or a seconds fallback, which
+	// the delete path cannot reproduce), so accepting one would silently fail to
+	// match the intended rows — reject it loudly instead.
+	case iceberg.DateType:
+		if tm, ok := v.(time.Time); ok {
+			return tm.UTC().Format("2006-01-02"), nil
+		}
+		return nil, fmt.Errorf("date identifier column requires a time value, got %T", v)
+	case iceberg.TimeType:
+		if tm, ok := v.(time.Time); ok {
+			return tm.UTC().Format("15:04:05.999999999"), nil
+		}
+		return nil, fmt.Errorf("time identifier column requires a time value, got %T", v)
+	case iceberg.TimestampType, iceberg.TimestampTzType:
+		if tm, ok := v.(time.Time); ok {
+			return tm.UTC().Format(time.RFC3339Nano), nil
+		}
+		return nil, fmt.Errorf("timestamp identifier column requires a time value, got %T (a bare numeric timestamp is ambiguous as a delete key — convert it to a timestamp upstream)", v)
+	default:
+		return v, nil
+	}
+}
+
+// deleteRecordFields returns the schema fields that must appear in an
+// equality-delete record — the identifier fields (the equality key) plus, for
+// partitioned tables, the partition source columns needed to route each delete
+// to its partition — together with the identifier field IDs (the equality key).
+// The field list is ordered and de-duplicated (an identifier field that is also
+// a partition source appears once). Every contributing column must be a
+// primitive type (a fundamental Iceberg constraint on identifier fields).
+func (w *writer) deleteRecordFields(tableSchema *iceberg.Schema, spec *iceberg.PartitionSpec) ([]iceberg.NestedField, []int, error) {
+	var (
+		fields     []iceberg.NestedField
+		seen       = map[int]struct{}{}
+		eqFieldIDs = make([]int, 0, len(w.rowOpCfg.IdentifierFields))
+	)
+
+	for _, name := range w.rowOpCfg.IdentifierFields {
+		field, ok := tableSchema.FindFieldByName(name)
+		if !ok && !w.caseSensitive {
+			field, ok = tableSchema.FindFieldByNameCaseInsensitive(name)
+		}
+		if !ok {
+			return nil, nil, fmt.Errorf("%s column %q not found in table schema", ioFieldIdentifierFields, name)
+		}
+		if _, ok := field.Type.(iceberg.PrimitiveType); !ok {
+			return nil, nil, fmt.Errorf("%s column %q has non-primitive type %s; equality-delete keys must be primitive", ioFieldIdentifierFields, field.Name, field.Type)
+		}
+		switch field.Type.(type) {
+		case iceberg.Float32Type, iceberg.Float64Type:
+			// Floating-point equality is unreliable (NaN, -0.0, rounding), so a
+			// float key would intermittently fail to match — Iceberg disallows
+			// floats as identifier fields for the same reason.
+			return nil, nil, fmt.Errorf("%s column %q has floating-point type %s, which is not a valid equality-delete key", ioFieldIdentifierFields, field.Name, field.Type)
+		}
+		eqFieldIDs = append(eqFieldIDs, field.ID)
+		if _, dup := seen[field.ID]; !dup {
+			seen[field.ID] = struct{}{}
+			fields = append(fields, field)
+		}
+	}
+
+	// Equality deletes are partition-scoped: a delete only matches data in the
+	// same partition. If a partition is derived from a column outside
+	// identifier_fields, that column can differ between a row's insert and a
+	// later upsert/delete, routing the delete to the wrong partition and silently
+	// missing the row. Require every partition source column to be an identifier
+	// field (so it is part of the key and cannot vary for a given key). This
+	// matches Iceberg/Flink's rule that partition sources must be a subset of the
+	// equality fields. Identifier partition sources are already in `fields`.
+	for _, pf := range spec.Fields() {
+		for _, srcID := range pf.SourceIDs {
+			if _, ok := seen[srcID]; ok {
+				continue
+			}
+			name, _ := tableSchema.FindColumnName(srcID)
+			return nil, nil, fmt.Errorf("table is partitioned by column %q (field %d), which is not in %s; upsert/delete is only supported when every partition source column is an identifier field (equality deletes are partition-scoped)", name, srcID, ioFieldIdentifierFields)
+		}
+	}
+
+	return fields, eqFieldIDs, nil
+}
+
+// writeEqualityDeletes builds equality-delete files for the given messages,
+// keyed on identifier_fields. The identifier columns are projected into Arrow
+// records and written via the iceberg-go equality-delete writer, which owns the
+// on-disk delete-file format. The returned files are uncommitted.
+func (w *writer) writeEqualityDeletes(ctx context.Context, msgs service.MessageBatch) ([]iceberg.DataFile, error) {
+	tableSchema := w.table.Schema()
+	spec := w.table.Spec()
+
+	delFields, eqFieldIDs, err := w.deleteRecordFields(tableSchema, &spec)
+	if err != nil {
+		return nil, err
+	}
+
+	// Project each message to its identifier columns, keyed by the canonical
+	// schema field name so the JSON keys line up with the Arrow schema.
+	rows := make([]map[string]any, 0, len(msgs))
+	for i, msg := range msgs {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return nil, fmt.Errorf("reading structured message %d for delete key: %w", i, err)
+		}
+		row, ok := structured.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("message %d for upsert/delete must be an object, got %T", i, structured)
+		}
+		key := make(map[string]any, len(delFields))
+		for _, field := range delFields {
+			v, ok := lookupField(row, field.Name, w.caseSensitive)
+			if !ok || v == nil {
+				return nil, fmt.Errorf("%s %q is missing or null in message %d", ioFieldIdentifierFields, field.Name, i)
+			}
+			jv, err := deleteKeyJSONValue(field.Type, v)
+			if err != nil {
+				return nil, fmt.Errorf("%s %q in message %d: %w", ioFieldIdentifierFields, field.Name, i, err)
+			}
+			key[field.Name] = jv
+		}
+		rows = append(rows, key)
+	}
+
+	jsonRows, err := json.Marshal(rows)
+	if err != nil {
+		return nil, fmt.Errorf("encoding delete keys: %w", err)
+	}
+
+	delSchema := iceberg.NewSchema(0, delFields...)
+	arrowSc, err := table.SchemaToArrowSchema(delSchema, nil, true, false)
+	if err != nil {
+		return nil, fmt.Errorf("building delete arrow schema: %w", err)
+	}
+
+	rec, _, err := array.RecordFromJSON(memory.DefaultAllocator, arrowSc, bytes.NewReader(jsonRows))
+	if err != nil {
+		return nil, fmt.Errorf("building delete records: %w", err)
+	}
+	defer rec.Release()
+
+	records := func(yield func(arrow.RecordBatch, error) bool) {
+		yield(rec, nil)
+	}
+
+	// WriteEqualityDeletes is functionally pure w.r.t. the transaction (it only
+	// reads metadata and writes files), so a throwaway transaction is safe; the
+	// committer commits the returned files via a RowDelta.
+	deleteFiles, err := w.table.NewTransaction().WriteEqualityDeletes(ctx, eqFieldIDs, records)
+	if err != nil {
+		return nil, fmt.Errorf("writing equality deletes: %w", err)
+	}
+	return deleteFiles, nil
+}
+
+// lookupField finds a value in a structured row by column name, honouring case
+// sensitivity the same way the shredder matches message keys to columns.
+func lookupField(row map[string]any, name string, caseSensitive bool) (any, bool) {
+	if v, ok := row[name]; ok {
+		return v, true
+	}
+	if caseSensitive {
+		return nil, false
+	}
+	for k, v := range row {
+		if strings.EqualFold(k, name) {
+			return v, true
+		}
+	}
+	return nil, false
 }
 
 // parquetResult holds the output of parquet conversion for a partition.

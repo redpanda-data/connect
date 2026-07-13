@@ -8,6 +8,8 @@
 
 package pglogicalstream
 
+import "time"
+
 // StreamMode represents the mode of the stream at the time of the message
 type StreamMode string
 
@@ -34,6 +36,11 @@ const (
 	BeginOpType OpType = "begin"
 	// CommitOpType is a database transaction commit
 	CommitOpType OpType = "commit"
+	// SnapshotCompleteOpType is an internal sentinel emitted after all snapshot
+	// rows have been sent. It signals the input layer to block promotion of the
+	// replication slot until every snapshot message has been acknowledged
+	// downstream; it is never forwarded downstream.
+	SnapshotCompleteOpType OpType = "snapshot_complete"
 )
 
 // StreamMessage represents a single change from the database
@@ -46,5 +53,7 @@ type StreamMessage struct {
 	Data any `json:"data"`
 	// ColumnSchema contains the table's column schema in benthos common schema format.
 	// It is set as message metadata and excluded from JSON serialization.
-	ColumnSchema any `json:"-"`
+	ColumnSchema any       `json:"-"`
+	CommitTime   time.Time `json:"-"`
+	BeforeData   any       `json:"-"`
 }
