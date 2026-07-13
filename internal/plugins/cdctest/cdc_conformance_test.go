@@ -92,13 +92,6 @@ var knownNonConformant = map[string]map[string]string{
 	"salesforce_cdc": {
 		"max_parallel_snapshot_tables": "uses max_parallel_snapshot_objects; migrate",
 	},
-	"tigerbeetle_cdc": {
-		"checkpoint_cache":             "non-relational; §5 applicability under triage",
-		"checkpoint_limit":             "non-relational; §5 applicability under triage",
-		"snapshot_max_batch_size":      "non-relational; §5 applicability under triage",
-		"max_parallel_snapshot_tables": "non-relational; §5 applicability under triage",
-		"stream_snapshot":              "non-relational; §5 applicability under triage",
-	},
 }
 
 // componentSchema is the subset of the docs.ComponentSpec JSON emitted by
