@@ -54,6 +54,13 @@ var canonicalFields = []string{
 	"stream_snapshot",
 }
 
+// conditionalConnectors lists CDC inputs that are only registered under specific
+// build tags (e.g. cgo). They are exempt from the stale-entry guard when not
+// registered, but are still subject to conformance checks when they are.
+var conditionalConnectors = map[string]bool{
+	"tigerbeetle_cdc": true, // requires cgo
+}
+
 // knownNonConformant waives specific (connector → field → reason) checks that
 // have not yet been migrated. New connectors default to strict. Populated from
 // the actual registry state; shrink it as connectors converge.
@@ -91,6 +98,13 @@ var knownNonConformant = map[string]map[string]string{
 	},
 	"salesforce_cdc": {
 		"max_parallel_snapshot_tables": "uses max_parallel_snapshot_objects; migrate",
+	},
+	"tigerbeetle_cdc": {
+		"checkpoint_cache":             "uses progress_cache; migrate to checkpoint_cache",
+		"checkpoint_limit":             "no discrete checkpoint limit; TigerBeetle CDC is pure streaming",
+		"snapshot_max_batch_size":      "no snapshot phase; TigerBeetle CDC is pure streaming with no initial snapshot",
+		"max_parallel_snapshot_tables": "no snapshot phase; TigerBeetle CDC is pure streaming with no initial snapshot",
+		"stream_snapshot":              "no snapshot phase; TigerBeetle CDC is pure streaming with no initial snapshot",
 	},
 }
 
@@ -172,6 +186,10 @@ func TestCDCConformance(t *testing.T) {
 	}
 	for name := range knownNonConformant {
 		if _, ok := registered[name]; !ok {
+			if conditionalConnectors[name] {
+				t.Logf("SKIPPED stale check for %q: not registered in this build (conditional build tag)", name)
+				continue
+			}
 			t.Errorf("stale knownNonConformant entry %q is not a registered CDC input; remove it", name)
 		}
 	}
