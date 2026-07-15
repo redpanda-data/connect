@@ -408,7 +408,7 @@ func validateSchemaPattern(s string) error {
 		return fmt.Errorf("invalid character %q at position %d in schema pattern %q", ch, i, s)
 	}
 	first := rune(s[0])
-	if !(first == '_' || first == '*' || (first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z')) {
+	if first != '_' && first != '*' && (first < 'a' || first > 'z') && (first < 'A' || first > 'Z') {
 		return fmt.Errorf("schema pattern %q must start with a letter, underscore, or '*'", s)
 	}
 	return nil
