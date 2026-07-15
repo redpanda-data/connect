@@ -41,6 +41,7 @@ input:
   aws_dynamodb_cdc:
     tables: []
     checkpoint_table: redpanda_dynamodb_checkpoints
+    checkpoint_namespace: ""
     start_from: trim_horizon
     snapshot_mode: none
 ```
@@ -60,6 +61,7 @@ input:
     table_tag_filter: ""
     table_discovery_interval: 5m
     checkpoint_table: redpanda_dynamodb_checkpoints
+    checkpoint_namespace: ""
     global_table: false
     global_table_replicas: []
     batch_size: 1000
@@ -140,6 +142,8 @@ NOTE: Snapshots use eventually consistent reads and do not provide point-in-time
 ### Checkpointing
 
 Checkpoints are stored in a separate DynamoDB table (configured via `checkpoint_table`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures.
+
+Multiple independent pipelines can share a single checkpoint table by giving each one a distinct `checkpoint_namespace` (for example one namespace per developer or environment). Namespaces isolate checkpoints from each other: a pipeline only sees checkpoints written under its own namespace, so changing (or removing) the namespace causes the pipeline to restart from `start_from`. Note that namespaces do not coordinate consumers — two pipelines sharing the *same* namespace will still overwrite each other's checkpoints.
 
 ### Alternative
 
@@ -330,6 +334,15 @@ DynamoDB table name for storing checkpoints. Will be created if it doesn't exist
 *Type*: `string`
 
 *Default*: `"redpanda_dynamodb_checkpoints"`
+
+=== `checkpoint_namespace`
+
+An optional namespace for checkpoints, allowing multiple independent pipelines (for example one per developer or environment) to share a single checkpoint table without overwriting each other's positions. Checkpoints written under one namespace are invisible to pipelines using a different namespace (or none), so changing this value causes the pipeline to restart from `start_from`. Must not contain `#`.
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `global_table`
 

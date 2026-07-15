@@ -24,6 +24,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- aws_dynamodb_cdc: DynamoDB CDC now supports an optional checkpoint_namespace field, allowing multiple independent pipelines to share a single checkpoint table without overwriting each other's checkpoints. ([@squiidz](https://github.com/squiidz), [#4602](https://github.com/redpanda-data/connect/pull/4602))
+
 ### Fixed
 
 - general: The CGO-enabled distribution binary now embeds the IANA time zone database via the `timetzdata` build tag, matching the other distributions, so `time.LoadLocation` works in minimal runtimes without system tzdata instead of silently falling back to UTC (which shifts JQL date predicates in the `jira` input). ([@squiidz](https://github.com/squiidz), [#4583](https://github.com/redpanda-data/connect/pull/4583))
