@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - general: The CGO-enabled distribution binary now embeds the IANA time zone database via the `timetzdata` build tag, matching the other distributions, so `time.LoadLocation` works in minimal runtimes without system tzdata instead of silently falling back to UTC (which shifts JQL date predicates in the `jira` input). ([@squiidz](https://github.com/squiidz), [#4583](https://github.com/redpanda-data/connect/pull/4583))
+- snowflake_streaming: BDEC parquet files are now verified for internally consistent row counts (footer, row groups, and column chunks) before upload, so an inconsistent file fails the batch instead of being registered with Snowflake. ([@squiidz](https://github.com/squiidz))
 
 ## 4.99.0 - 2026-07-02
 

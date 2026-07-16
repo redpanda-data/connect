@@ -394,6 +394,16 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 		return bdecPart{}, err
 	}
 
+	// Guard against uploading an internally inconsistent file: the footer
+	// must agree with the rows we actually serialized into each row group.
+	expectedRows := make([]int64, len(chunks))
+	for i, chunk := range chunks {
+		expectedRows[i] = int64(len(chunk))
+	}
+	if err := verifyRowCounts(expectedRows, fileMetadata); err != nil {
+		return bdecPart{}, err
+	}
+
 	// Merge stats from all row groups
 	combinedStats := make([]*statsBuffer, len(c.schema.Fields()))
 	for i := range combinedStats {

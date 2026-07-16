@@ -15,6 +15,7 @@ import (
 
 	"github.com/aws/smithy-go/ptr"
 	"github.com/parquet-go/parquet-go"
+	"github.com/parquet-go/parquet-go/format"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -121,4 +122,78 @@ func readGeneric(r io.ReaderAt, size int64, schema *parquet.Schema) (rows []map[
 	}
 	reader.Close()
 	return rows[:n], err
+}
+
+func TestVerifyRowCounts(t *testing.T) {
+	// Build a real two-row-group file through the same write path as
+	// constructBdecPart so the happy path checks genuine footer metadata.
+	batches := []service.MessageBatch{
+		{msg(`{"a":2}`), msg(`{"a":12353}`), msg(`{"a":7}`)},
+		{msg(`{"a":42}`)},
+	}
+	inputDataSchema := parquet.Group{
+		"A": parquet.Decimal(0, 18, parquet.Int64Type),
+	}
+	transformers := []*dataTransformer{
+		{
+			name: "A",
+			converter: numberConverter{
+				nullable:  true,
+				scale:     0,
+				precision: 38,
+			},
+			column: &columnMetadata{
+				Name:         "A",
+				Ordinal:      1,
+				Type:         "NUMBER(18,0)",
+				LogicalType:  "fixed",
+				PhysicalType: "SB8",
+				Precision:    ptr.Int32(18),
+				Scale:        ptr.Int32(0),
+				Nullable:     true,
+			},
+			bufferFactory: int64TypedBufferFactory,
+		},
+	}
+	schema := parquet.NewSchema("bdec", inputDataSchema)
+	w := newParquetWriter("latest", schema)
+	w.Reset(nil)
+	rowGroups := make([]*parquet.ConcurrentRowGroupWriter, len(batches))
+	for i, batch := range batches {
+		rowGroups[i] = w.BeginRowGroup()
+		_, err := writeRowGroupFromObject(batch, schema, transformers, SchemaModeIgnoreExtra, rowGroups[i])
+		require.NoError(t, err)
+	}
+	for _, rg := range rowGroups {
+		_, err := rg.Commit()
+		require.NoError(t, err)
+	}
+	_, md, err := w.Close()
+	require.NoError(t, err)
+
+	require.NoError(t, verifyRowCounts([]int64{3, 1}, md))
+
+	// Every mismatch between what was serialized and what the footer claims
+	// must be rejected.
+	require.ErrorContains(t, verifyRowCounts([]int64{3}, md), "expected 3")
+	require.ErrorContains(t, verifyRowCounts([]int64{2, 2}, md), "row group 0")
+	require.ErrorContains(t, verifyRowCounts([]int64{3, 2}, md), "expected 5")
+	require.ErrorContains(t, verifyRowCounts([]int64{2, 1, 1}, md), "row groups")
+
+	corrupt := *md
+	corrupt.NumRows = 5
+	require.ErrorContains(t, verifyRowCounts([]int64{3, 1}, &corrupt), "5")
+
+	corrupt = *md
+	corrupt.RowGroups = append([]format.RowGroup{}, md.RowGroups...)
+	corrupt.RowGroups[1].NumRows = 9
+	err = verifyRowCounts([]int64{3, 1}, &corrupt)
+	require.ErrorContains(t, err, "9")
+
+	corrupt = *md
+	corrupt.RowGroups = append([]format.RowGroup{}, md.RowGroups...)
+	corrupt.RowGroups[0].Columns = append([]format.ColumnChunk{}, md.RowGroups[0].Columns...)
+	corrupt.RowGroups[0].Columns[0].MetaData.NumValues = 2
+	err = verifyRowCounts([]int64{3, 1}, &corrupt)
+	require.ErrorContains(t, err, "column")
 }
