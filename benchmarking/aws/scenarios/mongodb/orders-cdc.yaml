@@ -1,0 +1,87 @@
+name: mongodb-orders-cdc
+description: |
+  Stream changes from a self-hosted MongoDB replica set (single-node rs0). Both
+  mongodb_cdc and the Debezium MongoDB connector consume change streams, so the
+  head-to-head is fair. stream_snapshot:false means each point streams from the
+  current change-stream position (no backfill).
+
+  MongoDB is not an RDS engine, so the source is a self-hosted mongod on EC2
+  (modules/mongodb-ec2) with its dbPath on local NVMe.
+
+  WORKLOAD RATE — unlike slot-based CDC (postgres) or binlog (mysql), MongoDB's
+  oplog is a CAPPED collection: if the CDC consumer falls behind and the oplog
+  wraps past its resume point, the change stream is INVALIDATED and throughput
+  collapses to zero. So the workload rate is set to a level the consumer can
+  sustain (no perpetual lag → no wrap) rather than the 150K/sec saturation the
+  RDS scenarios use. Observed 1-vCPU mongodb_cdc consume ceiling ≈ 25K msg/sec
+  (≈33 MB/s); 20K/sec keeps the consumer current. The 100 GB oplog (mongod.conf)
+  is an additional buffer against transient lag. For the multi-vCPU sweep this
+  rate likely needs to rise per point (higher vCPU consumes faster) — see
+  references/scenario-sizing.md; a fixed low rate flattens the scaling curve.
+
+connector: mongodb_cdc
+stack: mongodb
+
+infra:
+  source:
+    # Non-RDS: a single EC2 instance_type (not instance_class/storage_gb/iops).
+    # im4gn.4xlarge = 16 vCPU + a large local NVMe so mongod can absorb the write
+    # load without becoming the bottleneck at the top sweep point.
+    instance_type: im4gn.4xlarge
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0          # drop-collection before every point makes a seed pointless
+  row_size_bytes: 1200
+  tables: [orders]         # the collection name; drives KC collection.include.list (benchdb.orders)
+  seeder: cdc-rows-mongodb
+
+workload:
+  write_rate_per_sec: 20000   # sustainable for 1-vCPU mongodb_cdc; see rate note above
+  duration: 18m               # covers warmup (2m) + full window (15m) with margin
+  warmup: 2m
+
+pipeline:
+  cache_resources:
+    # mongodb_cdc requires a checkpoint cache. A memory cache is sufficient: each
+    # sweep point starts fresh from the current change-stream position, so no
+    # cross-restart persistence is needed (same choice as mysql_cdc's checkpoint).
+    - label: bench_checkpoint
+      memory: {}
+  input:
+    mongodb_cdc:
+      url: ${MONGODB_DSN}          # mongodb://<ip>:27017/?replicaSet=rs0 (no auth; private subnet only)
+      database: benchdb
+      collections: [orders]
+      stream_snapshot: false
+      checkpoint_cache: bench_checkpoint
+      checkpoint_key: mongodb_bench
+      read_batch_size: 5000
+      read_max_wait: 1s
+
+matrix:
+  # Pinned to [1] for the first 1-vCPU smoke (~$1.50). Restore the full sweep for
+  # the real run:
+  #   cpu_points: [1, 2, 4, 8]
+  cpu_points: [1]
+
+reset:
+  # No replication slot to drop (change streams are slotless) and the checkpoint
+  # is a memory cache that resets on restart, so reset just truncates the
+  # collection (drop + recreate — the recreate keeps an empty collection in place
+  # so the change stream, opened before the workload starts, has a namespace to
+  # watch; see the seeder's execDrop).
+  # There is no mongosh on the runner, so this runs through the seeder's `exec`
+  # subcommand (mongo-go-driver) rather than a sql: step — mirroring the oracle
+  # scenario's bash reset. ${MONGODB_DSN} / ${RESULTS_BUCKET} are substituted from
+  # terraform outputs.
+  #
+  # Reset runs on the RUNNER host, but the seeder is only staged on the LOAD-GEN
+  # host during the seed phase. So self-stage the seeder from the same S3 key the
+  # seed phase uploaded it to. The binary is GOARCH=arm64 and the runner is
+  # Graviton (c8g), so it runs as-is.
+  - bash: |
+      aws s3 cp s3://${RESULTS_BUCKET}/stage/cdc-rows-mongodb /opt/bench/cdc-rows-mongodb
+      chmod +x /opt/bench/cdc-rows-mongodb
+      /opt/bench/cdc-rows-mongodb exec --dsn "${MONGODB_DSN}" --database benchdb --drop-collection orders

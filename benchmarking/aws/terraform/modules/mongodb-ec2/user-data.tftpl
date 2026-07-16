@@ -1,0 +1,95 @@
+#cloud-config
+package_update: true
+runcmd:
+  # Whole setup under `set -euo pipefail` so any single failing step (dnf
+  # install, mkfs, rs.initiate) aborts cloud-init loudly rather than the default
+  # runcmd behavior of logging + continuing. Mirrors the redpanda module.
+  #
+  # NOTE ON ESCAPING: this file is rendered by terraform's templatefile(), so a
+  # doubled dollar ($${...}) emits a literal bash variable reference, while a
+  # single dollar is a TF interpolation resolved at plan time (${db_name} /
+  # ${mongodb_version}). This applies inside comments too — hence the doubling.
+  - |
+    set -euo pipefail
+
+    # 1. Install mongodb-org from the official repo for Amazon Linux 2023 arm64.
+    cat > /etc/yum.repos.d/mongodb-org-${mongodb_version}.repo <<'REPO'
+    [mongodb-org-${mongodb_version}]
+    name=MongoDB Repository
+    baseurl=https://repo.mongodb.org/yum/amazon/2023/mongodb-org/${mongodb_version}/aarch64/
+    gpgcheck=1
+    enabled=1
+    gpgkey=https://pgp.mongodb.com/server-${mongodb_version}.asc
+    REPO
+    dnf install -y mongodb-org
+
+    # 2. Put the mongod dbPath on the local NVMe instance store for the highest
+    # sustained write throughput (same strategy as the redpanda brokers). The
+    # im4gn family exposes the instance store as /dev/nvme1n1 (root EBS is
+    # nvme0n1). If you change to a non-NVMe instance family, remove this block.
+    systemctl stop mongod || true
+    mkfs.xfs -f /dev/nvme1n1
+    mkdir -p /var/lib/mongo
+    mount /dev/nvme1n1 /var/lib/mongo
+    echo "/dev/nvme1n1 /var/lib/mongo xfs defaults,noatime 0 0" >> /etc/fstab
+    chown -R mongod:mongod /var/lib/mongo
+
+    # 3. Configure a single-node replica set. Change streams (which BOTH the
+    # Connect mongodb_cdc input and Debezium's MongoDB connector consume)
+    # require a replica set — a standalone mongod cannot open one. No auth: the
+    # host is only reachable from the bench client SGs on a private subnet.
+    cat > /etc/mongod.conf <<'CONF'
+    storage:
+      dbPath: /var/lib/mongo
+    systemLog:
+      destination: file
+      logAppend: true
+      path: /var/log/mongodb/mongod.log
+    net:
+      port: 27017
+      bindIp: 0.0.0.0
+    replication:
+      replSetName: rs0
+      # Large oplog so it does not WRAP during the bench window. The workload
+      # inserts faster than the CDC consumers (Connect mongodb_cdc / Debezium)
+      # read, so the consumers lag; if the capped oplog wraps past their resume
+      # point the change stream is INVALIDATED and throughput collapses to zero
+      # (observed ~2.5 min in on the default oplog). 100 GB on the local NVMe
+      # (7.5 TB) holds well over the 15-min window at the observed change rate.
+      oplogSizeMB: 102400
+    CONF
+
+    # 4. Start mongod and wait until it accepts connections. Bounded loop (not
+    # `until`): if mongod never comes up, abort loudly so cloud-final terminates
+    # (an unbounded wait hangs cloud-init forever, which also blocks SSM agent
+    # registration and makes the box impossible to debug via SSM).
+    systemctl enable --now mongod
+    for i in $(seq 1 150); do
+      mongosh --quiet --eval 'db.runCommand({ping:1}).ok' | grep -q 1 && break
+      sleep 2
+      if [ "$${i}" -eq 150 ]; then
+        echo "FATAL: mongod did not accept connections within 300s"
+        journalctl -u mongod --no-pager | tail -50 || true
+        exit 1
+      fi
+    done
+
+    # 5. Discover our own private IP from IMDSv2 and initiate the replica set
+    # with it as the member host, so clients that connect via the mongodb_dsn
+    # output (which resolves to this same IP) can discover the RS member.
+    TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+    PRIVATE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $${TOKEN}" http://169.254.169.254/latest/meta-data/local-ipv4)
+    mongosh --quiet --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: '$${PRIVATE_IP}:27017'}]})"
+
+    # 6. Wait for this node to become PRIMARY (bounded — see step 4), then
+    # materialize the bench db so change streams have a namespace to watch.
+    for i in $(seq 1 150); do
+      mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true && break
+      sleep 2
+      if [ "$${i}" -eq 150 ]; then
+        echo "FATAL: replica set did not elect a primary within 300s"
+        mongosh --quiet --eval 'rs.status()' || true
+        exit 1
+      fi
+    done
+    mongosh --quiet --eval "db.getSiblingDB('${db_name}').createCollection('_bench_init')"

@@ -77,6 +77,11 @@ runcmd:
   - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-oracle/2.7.3.Final/debezium-connector-oracle-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
   - curl -sSL -o /opt/kafka-connect/plugins/debezium-connector-oracle/ojdbc11.jar https://repo1.maven.org/maven2/com/oracle/database/jdbc/ojdbc11/21.13.0.0/ojdbc11-21.13.0.0.jar
 
+  # Debezium MongoDB connector. Consumes MongoDB change streams (oplog), the
+  # same source the Connect mongodb_cdc input reads — fair head-to-head. The
+  # archive unpacks to debezium-connector-mongodb/. See kcConnectorSpecs["mongodb_cdc"].
+  - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-mongodb/2.7.3.Final/debezium-connector-mongodb-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
+
   # Aiven JDBC sink + JDBC drivers (postgres + mariadb). Repo was renamed in 2024;
   # archive unpacks to jdbc-connector-for-apache-kafka-6.10.0/, not the old aiven-* name.
   - curl -sSL -o /tmp/aiven-jdbc.zip https://github.com/Aiven-Open/jdbc-connector-for-apache-kafka/releases/download/v6.10.0/jdbc-connector-for-apache-kafka-6.10.0.zip

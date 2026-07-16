@@ -135,6 +135,32 @@ var kcConnectorSpecs = map[string]kcConnectorSpec{
 }`,
 		RequiredPlugins: []string{"debezium-connector-oracle*"},
 	},
+	"mongodb_cdc": {
+		Class:     "io.debezium.connector.mongodb.MongoDbConnector",
+		Direction: kcSource,
+		// Debezium MongoDB consumes change streams — the same source the Connect
+		// mongodb_cdc input reads, so the head-to-head is fair. mongodb.connection.string
+		// points at the single-node replica set (no auth, private-subnet-only, so no
+		// credentials in the URI). snapshot.mode=never streams from the current oplog
+		// position without a backfill, matching the Connect side's stream_snapshot:false.
+		// capture.mode=change_streams_update_full delivers the full post-image on updates
+		// (parity with mongodb_cdc's default document output). collection.include.list is
+		// <db>.<collection> ({{.SchemaTables}}, formatted in buildKCRenderInputs).
+		PropsTemplate: `{
+  "connector.class": "io.debezium.connector.mongodb.MongoDbConnector",
+  "tasks.max": "1",
+  "mongodb.connection.string": "mongodb://{{.Host}}:{{.Port}}/?replicaSet=rs0",
+  "topic.prefix": "{{.TopicPrefix}}",
+  "collection.include.list": "{{.SchemaTables}}",
+  "capture.mode": "change_streams_update_full",
+  "snapshot.mode": "never",
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "false",
+  "value.converter.schemas.enable": "false"
+}`,
+		RequiredPlugins: []string{"debezium-connector-mongodb*"},
+	},
 	"iceberg": {
 		Class:     "io.tabular.iceberg.connect.IcebergSinkConnector",
 		Direction: kcSink,

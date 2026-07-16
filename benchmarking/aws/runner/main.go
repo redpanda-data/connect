@@ -684,6 +684,14 @@ func buildKCRenderInputs(s *Scenario, es engineSpec, outs map[string]string, ses
 			parts = append(parts, schema+"."+strings.ToUpper(t))
 		}
 		in.SchemaTables = strings.Join(parts, ",")
+	case "mongodb_cdc":
+		// Debezium MongoDB collection.include.list is <db>.<collection>. The db is
+		// the connecting database (in.Database, from the mongodb_db output).
+		parts := make([]string, 0, len(in.Tables))
+		for _, t := range in.Tables {
+			parts = append(parts, in.Database+"."+t)
+		}
+		in.SchemaTables = strings.Join(parts, ",")
 	}
 
 	return in, nil

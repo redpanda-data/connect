@@ -114,6 +114,30 @@ func TestEngineSpecFor_MySQL(t *testing.T) {
 	}
 }
 
+func TestEngineSpecFor_MongoDB(t *testing.T) {
+	es, ok := engineSpecFor("mongodb_cdc")
+	if !ok {
+		t.Fatalf("mongodb_cdc should be registered")
+	}
+	if es.DSNOutputKey != "mongodb_dsn" {
+		t.Errorf("DSNOutputKey = %q, want mongodb_dsn", es.DSNOutputKey)
+	}
+	if es.DSNEnvVar != "MONGODB_DSN" {
+		t.Errorf("DSNEnvVar = %q, want MONGODB_DSN", es.DSNEnvVar)
+	}
+	// Discrete reset keys drive buildKCRenderInputs' Host/Port (no mongosh on the
+	// runner; reset is a bash: step, so these feed the KC render, not a psql/mysql
+	// CLI). NoDSN must stay false — mongodb_cdc uses a DSN (MONGODB_DSN).
+	if es.NoDSN {
+		t.Errorf("mongodb_cdc must not set NoDSN (it uses MONGODB_DSN); got %+v", es)
+	}
+	if es.ResetHostOutputKey != "mongodb_host" || es.ResetPortOutputKey != "mongodb_port" ||
+		es.ResetUserOutputKey != "mongodb_user" || es.ResetPassOutputKey != "mongodb_password" ||
+		es.ResetDBOutputKey != "mongodb_db" {
+		t.Errorf("mongodb reset output keys incomplete: %+v", es)
+	}
+}
+
 func TestEngineSpecFor_Unknown(t *testing.T) {
 	if _, ok := engineSpecFor("kafka_franz_in_disguise"); ok {
 		t.Error("unknown connector should not resolve")

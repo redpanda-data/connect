@@ -73,6 +73,84 @@ func TestKCConnectorSpecFor_MySQLCDC(t *testing.T) {
 	}
 }
 
+func TestKCConnectorSpecFor_MongoDB(t *testing.T) {
+	es, ok := kcConnectorSpecFor("mongodb_cdc")
+	if !ok {
+		t.Fatal("mongodb_cdc should be registered")
+	}
+	if es.Class != "io.debezium.connector.mongodb.MongoDbConnector" {
+		t.Errorf("Class = %q, want Debezium MongoDB class", es.Class)
+	}
+	if es.Direction != kcSource {
+		t.Errorf("Direction should be kcSource")
+	}
+	// Mongo Debezium is connection-string based (no discrete host/port keys like
+	// the JDBC connectors) and captures change streams from a collection list.
+	if !strings.Contains(es.PropsTemplate, "mongodb.connection.string") {
+		t.Errorf("Mongo Debezium config must set mongodb.connection.string; got:\n%s", es.PropsTemplate)
+	}
+	if !strings.Contains(es.PropsTemplate, "collection.include.list") {
+		t.Errorf("Mongo Debezium config must set collection.include.list; got:\n%s", es.PropsTemplate)
+	}
+	if !strings.Contains(es.PropsTemplate, "{{.SchemaTables}}") {
+		t.Errorf("template should interpolate {{.SchemaTables}}; got:\n%s", es.PropsTemplate)
+	}
+	if len(es.RequiredPlugins) == 0 || !strings.Contains(es.RequiredPlugins[0], "mongodb") {
+		t.Errorf("RequiredPlugins should list the debezium-connector-mongodb glob; got %v", es.RequiredPlugins)
+	}
+}
+
+// TestBuildKCRenderInputs_MongoDB exercises the mongodb_cdc branch of
+// buildKCRenderInputs (collection.include.list is <db>.<collection>) and
+// confirms the rendered connection string carries no credentials (mongod runs
+// without auth), the failure mode being an "mongodb://:@host" URI.
+func TestBuildKCRenderInputs_MongoDB(t *testing.T) {
+	es, ok := engineSpecFor("mongodb_cdc")
+	if !ok {
+		t.Fatal("mongodb_cdc should be registered")
+	}
+	s := &Scenario{
+		Connector: "mongodb_cdc",
+		Dataset:   DatasetSpec{Tables: []string{"orders"}},
+		Pipeline: map[string]any{
+			"input": map[string]any{
+				// mongodb_cdc selects via `collections`, not `tables`, so the
+				// table list must fall back to dataset.Tables.
+				"mongodb_cdc": map[string]any{
+					"collections": []any{"orders"},
+				},
+			},
+		},
+	}
+	outs := map[string]string{
+		"mongodb_host":     "10.0.0.5",
+		"mongodb_port":     "27017",
+		"mongodb_user":     "",
+		"mongodb_password": "",
+		"mongodb_db":       "benchdb",
+	}
+	in, err := buildKCRenderInputs(s, es, outs, "sess123")
+	if err != nil {
+		t.Fatalf("buildKCRenderInputs: %v", err)
+	}
+	if in.SchemaTables != "benchdb.orders" {
+		t.Errorf("SchemaTables = %q, want benchdb.orders", in.SchemaTables)
+	}
+	cfg, err := renderKCConfig(s, in)
+	if err != nil {
+		t.Fatalf("renderKCConfig: %v", err)
+	}
+	if got := cfg["mongodb.connection.string"]; got != "mongodb://10.0.0.5:27017/?replicaSet=rs0" {
+		t.Errorf("connection string = %v, want credential-free mongodb://10.0.0.5:27017/?replicaSet=rs0", got)
+	}
+	if cfg["collection.include.list"] != "benchdb.orders" {
+		t.Errorf("collection.include.list = %v, want benchdb.orders", cfg["collection.include.list"])
+	}
+	if cfg["snapshot.mode"] != "never" {
+		t.Errorf("snapshot.mode = %v, want never (stream from current, matching stream_snapshot:false)", cfg["snapshot.mode"])
+	}
+}
+
 func TestRenderKCConfig_PostgresBasic(t *testing.T) {
 	s := &Scenario{
 		Connector: "postgres_cdc",

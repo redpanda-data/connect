@@ -164,6 +164,22 @@ var engineSpecs = map[string]engineSpec{
 		ResetPassOutputKey: "oracle_password",
 		ResetDBOutputKey:   "oracle_db",
 	},
+	// mongodb_cdc streams MongoDB change streams from a self-hosted single-node
+	// replica set (terraform modules/mongodb-ec2). mongod runs without auth, so
+	// the mongodb_user / mongodb_password terraform outputs are empty strings and
+	// the KC connection-string template omits credentials; the discrete
+	// Reset*OutputKey fields still feed Host/Port into buildKCRenderInputs. There
+	// is no mongosh on the runner, so the scenario's reset is a bash: step that
+	// shells out to the cdc-rows-mongodb seeder's `exec` subcommand.
+	"mongodb_cdc": {
+		DSNOutputKey:       "mongodb_dsn",
+		DSNEnvVar:          "MONGODB_DSN",
+		ResetHostOutputKey: "mongodb_host",
+		ResetPortOutputKey: "mongodb_port",
+		ResetUserOutputKey: "mongodb_user",
+		ResetPassOutputKey: "mongodb_password",
+		ResetDBOutputKey:   "mongodb_db",
+	},
 	// aws_dynamodb_cdc uses IAM auth (no DSN). The seeder reads AWS_REGION and
 	// DDB_TABLE from its env, and the bash reset steps reference them via
 	// ${AWS_REGION} / ${DYNAMODB_TABLE_NAME} placeholders. No KC counterpart —
