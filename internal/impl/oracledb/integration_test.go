@@ -374,10 +374,9 @@ func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
 oracledb_cdc:
   connection_string: %s
   stream_snapshot: true
-  snapshot:
-    filters:
-      testdb.foo: "SELECT ID, NAME FROM TESTDB.FOO WHERE ID > 500"
-      TESTDB.FOO2: "SELECT ID, NAME FROM TESTDB.FOO2 WHERE ID > 500"
+  snapshot_filters:
+    testdb.foo: "SELECT ID, NAME FROM TESTDB.FOO WHERE ID > 500"
+    TESTDB.FOO2: "SELECT ID, NAME FROM TESTDB.FOO2 WHERE ID > 500"
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
   logminer:

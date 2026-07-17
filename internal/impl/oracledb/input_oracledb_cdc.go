@@ -64,8 +64,7 @@ const (
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
 
 	//-- snapshot specific
-	ociFieldSnapshot        = "snapshot"
-	ociFieldSnapshotFilters = "filters"
+	ociFieldSnapshotFilters = "snapshot_filters"
 )
 
 func init() {
@@ -173,18 +172,14 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 			Optional(),
 	).Description("LogMiner configuration settings."),
 	).
-	// snapshot config
-	Field(service.NewObjectField(ociFieldSnapshot,
-		service.NewStringMapField(ociFieldSnapshotFilters).
-			Description(`A map of fully-qualified table names (e.g. SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
+	Field(service.NewStringMapField(ociFieldSnapshotFilters).
+		Description(`A map of fully-qualified table names (e.g. SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
 
 Each query must project every column of the table's primary key, if the table has a composite primary key - even if it otherwise selects only a subset of columns. Snapshotting pages through a table's rows by filtering and sorting on its full primary key, against the query's own result set - if any primary key column isn't projected, this fails part-way through the snapshot, once the first batch of rows has been read.`).
-			Example(map[string]any{
-				"TESTDB.USERS":    "SELECT * FROM TESTDB.USERS",
-				"TESTDB.PRODUCTS": "SELECT * FROM TESTDB.PRODUCTS WHERE ID > 1000",
-			}).
-			Optional(),
-	).Description("Snapshot configuration settings.").
+		Example(map[string]any{
+			"TESTDB.USERS":    "SELECT * FROM TESTDB.USERS",
+			"TESTDB.PRODUCTS": "SELECT * FROM TESTDB.PRODUCTS WHERE ID > 1000",
+		}).
 		Optional(),
 	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
@@ -296,18 +291,15 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 
 	// snapshot filters
 	var snapshotFilters map[string]string
-	if conf.Contains(ociFieldSnapshot) {
-		snapshotConf := conf.Namespace(ociFieldSnapshot)
-		if snapshotConf.Contains(ociFieldSnapshotFilters) {
-			if snapshotFilters, err = snapshotConf.FieldStringMap(ociFieldSnapshotFilters); err != nil {
-				return nil, err
-			}
-			if snapshotFilters, err = replication.NormalizeSnapshotFilterKeys(snapshotFilters); err != nil {
-				return nil, fmt.Errorf("validating snapshot filters: %w", err)
-			}
-			if err := replication.ValidateSnapshotFilters(snapshotFilters); err != nil {
-				return nil, fmt.Errorf("validating snapshot filters: %w", err)
-			}
+	if conf.Contains(ociFieldSnapshotFilters) {
+		if snapshotFilters, err = conf.FieldStringMap(ociFieldSnapshotFilters); err != nil {
+			return nil, err
+		}
+		if snapshotFilters, err = replication.NormalizeSnapshotFilterKeys(snapshotFilters); err != nil {
+			return nil, fmt.Errorf("validating snapshot filters: %w", err)
+		}
+		if err := replication.ValidateSnapshotFilters(snapshotFilters); err != nil {
+			return nil, fmt.Errorf("validating snapshot filters: %w", err)
 		}
 	}
 
