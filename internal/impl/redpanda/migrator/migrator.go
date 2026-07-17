@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -143,7 +143,7 @@ What gets synchronised:
 How it runs:
 
 - Topics: synced on demand. The first write triggers discovery and creation; subsequent writes create on first encounter per topic.
-- Schema Registry: one sync at connect, then triggered when topic record has unknown schema; optional background loop controlled by `+"`schema_registry.interval`"+`.
+- Schema Registry: one sync at connect, then periodic syncing via the background loop controlled by `+"`schema_registry.interval`"+` (set to `+"`0s`"+` to sync only once at connect). Schema IDs unknown at write time are not resynced on demand; they are handled per `+"`schema_registry.strict`"+`.
 - Consumer Groups: background loop controlled by `+"`consumer_groups.interval`"+` and filtered by the current topic mappings.
 
 Guarantees:
