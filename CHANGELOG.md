@@ -3,6 +3,17 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.101.0 - 2026-07-17
+
+### Added
+
+- aws_dynamodb_cdc: Added optional checkpoint_namespace field to allow multiple independent pipelines to safely share a single DynamoDB checkpoint table without overwriting each other's state. ([@squiidz](https://github.com/squiidz), [#4602](https://github.com/redpanda-data/connect/pull/4602))
+- oracledb_cdc: Added snapshot_filters configuration to enable per-table SQL SELECT overrides during initial snapshot capture. ([@josephwoodward](https://github.com/josephwoodward), [#4606](https://github.com/redpanda-data/connect/pull/4606))
+
+### Fixed
+
+- snowflake_streaming: Fixed potential silent data corruption by verifying parquet row counts match actual serialized rows before upload to Snowflake. ([@squiidz](https://github.com/squiidz), [#4605](https://github.com/redpanda-data/connect/pull/4605))
+
 ## 4.100.0 - 2026-07-09
 
 ### Added
