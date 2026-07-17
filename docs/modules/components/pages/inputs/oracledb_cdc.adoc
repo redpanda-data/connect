@@ -339,7 +339,7 @@ The key prefix used when storing transactions in `transaction_cache`. An alterna
 
 A map of fully-qualified table names (e.g. SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
 
-Each query must project every column of the table's primary key, if the table has a composite primary key - even if it otherwise selects only a subset of columns. Snapshotting pages through a table's rows by filtering and sorting on its full primary key, against the query's own result set - if any primary key column isn't projected, this fails part-way through the snapshot, once the first batch of rows has been read.
+Each query must project every column of the table's primary key - all of them, for a composite key - even if it otherwise selects only a subset of columns. Snapshotting pages through a table's rows by filtering and sorting on its full primary key, against the query's own result set - if any primary key column isn't projected, this fails part-way through the snapshot, once the first batch of rows has been read.
 
 
 *Type*: `object`
