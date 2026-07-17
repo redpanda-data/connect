@@ -56,6 +56,8 @@ input:
       lob_enabled: true
       transaction_cache: "" # No default (optional)
       transaction_cache_key: oracledb_cdc
+    snapshot:
+      filters: {} # No default (optional)
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -98,6 +100,8 @@ input:
       lob_enabled: true
       transaction_cache: "" # No default (optional)
       transaction_cache_key: oracledb_cdc
+    snapshot:
+      filters: {} # No default (optional)
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -332,6 +336,30 @@ The key prefix used when storing transactions in `transaction_cache`. An alterna
 *Type*: `string`
 
 *Default*: `"oracledb_cdc"`
+
+=== `snapshot`
+
+Snapshot configuration settings.
+
+
+*Type*: `object`
+
+
+=== `snapshot.filters`
+
+A map of fully-qualified table names (e.g. SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
+
+
+*Type*: `object`
+
+
+```yml
+# Examples
+
+filters:
+  TESTDB.PRODUCTS: SELECT * FROM TESTDB.PRODUCTS WHERE ID > 1000
+  TESTDB.USERS: SELECT * FROM TESTDB.USERS
+```
 
 === `include`
 
