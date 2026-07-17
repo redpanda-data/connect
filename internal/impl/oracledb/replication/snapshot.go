@@ -138,7 +138,11 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 			tableName = table.FullName()
 		)
 		l := s.log.With("src_table", tableName)
-		l.Infof("Launching snapshot of table '%s'", tableName)
+		if _, hasFilter := s.filters[tableName]; hasFilter {
+			l.Infof("Launching snapshot of table '%s' with snapshot filter", tableName)
+		} else {
+			l.Infof("Launching snapshot of table '%s'", tableName)
+		}
 
 		switch {
 		case s.pdbName != "":
