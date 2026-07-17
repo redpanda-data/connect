@@ -169,7 +169,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `action`
 
-The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`.
+The action to take on the document. This field must resolve to one of the following action types: `index`, `create`, `update` or `delete`. The `create` action fails for documents that already exist and is required when writing to data streams.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 

@@ -160,7 +160,7 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewInterpolatedStringField(esoFieldIndex).
 				Description("The index to place messages."),
 			service.NewInterpolatedStringField(esoFieldAction).
-				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`."),
+				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `create`, `update` or `delete`. The `create` action fails for documents that already exist and is required when writing to data streams."),
 			service.NewInterpolatedStringField(esoFieldID).
 				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
 				Example(`${!counter()}-${!timestamp_unix()}`),
@@ -388,6 +388,18 @@ func buildBulkableRequest(p *pendingBulkIndex, onError func(err error)) (r *open
 		r = &opensearchutil.BulkIndexerItem{
 			Index:  p.Index,
 			Action: "index",
+			Body:   bytes.NewReader(p.Payload),
+		}
+		if p.ID != "" {
+			r.DocumentID = p.ID
+		}
+		if p.Routing != "" {
+			r.Routing = &p.Routing
+		}
+	case "create":
+		r = &opensearchutil.BulkIndexerItem{
+			Index:  p.Index,
+			Action: "create",
 			Body:   bytes.NewReader(p.Payload),
 		}
 		if p.ID != "" {

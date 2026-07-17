@@ -133,6 +133,10 @@ func TestIntegrationOpensearch(t *testing.T) {
 		testOpenSearchConnect(urls, client, te)
 	})
 
+	t.Run("TestOpenSearchCreate", func(te *testing.T) {
+		testOpenSearchCreate(urls, client, te)
+	})
+
 	t.Run("TestOpenSearchWriteBatchUnreachable", func(te *testing.T) {
 		testOpenSearchWriteBatchUnreachable(unreachableUrls, te)
 	})
@@ -249,6 +253,39 @@ action: index
 
 		resEqualsJSON(t, get, exp)
 	}
+}
+
+func testOpenSearchCreate(urls []string, client *os.Client, t *testing.T) {
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
+	defer done()
+
+	m := outputFromConf(t, `
+index: test_create_index
+id: 'create-${!json("user")}'
+urls: %v
+action: create
+`, urls)
+
+	require.NoError(t, m.Connect(ctx))
+	defer func() {
+		require.NoError(t, m.Close(ctx))
+	}()
+
+	require.NoError(t, m.WriteBatch(ctx, service.MessageBatch{
+		service.NewMessage([]byte(`{"message":"hello world","user":"1"}`)),
+	}))
+
+	get, err := client.Do(ctx, osapi.DocumentGetReq{
+		Index:      "test_create_index",
+		DocumentID: "create-1",
+	}, nil)
+	require.NoError(t, err)
+	assert.False(t, get.IsError())
+
+	// The create action must reject documents whose ID already exists.
+	require.Error(t, m.WriteBatch(ctx, service.MessageBatch{
+		service.NewMessage([]byte(`{"message":"hello again","user":"1"}`)),
+	}))
 }
 
 func testOpenSearchErrorHandling(urls []string, t *testing.T) {
