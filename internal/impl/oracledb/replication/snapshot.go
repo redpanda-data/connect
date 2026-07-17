@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	goora "github.com/sijms/go-ora/v2/network"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
@@ -25,11 +26,17 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
+// errCodeInvalidIdentifier is Oracle's ORA-00904, raised when a query references a
+// column that doesn't exist in its source. Used to detect a custom snapshot filter
+// that doesn't project all of a table's primary key columns - see querySnapshotTable.
+const errCodeInvalidIdentifier = 904
+
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables
 // configuration value.
 type Snapshot struct {
 	dbPool                  *sql.DB
 	tables                  []UserTable
+	filters                 map[string]string
 	publisher               ChangePublisher
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
@@ -46,6 +53,7 @@ type Snapshot struct {
 func NewSnapshot(ctx context.Context,
 	connectionString string,
 	tables []UserTable,
+	filters map[string]string,
 	publisher ChangePublisher,
 	lobEnabled bool,
 	pdbName string,
@@ -65,6 +73,7 @@ func NewSnapshot(ctx context.Context,
 	s := &Snapshot{
 		dbPool:                  db,
 		tables:                  tables,
+		filters:                 filters,
 		publisher:               publisher,
 		lobEnabled:              lobEnabled,
 		pdbName:                 pdbName,
@@ -129,7 +138,11 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 			tableName = table.FullName()
 		)
 		l := s.log.With("src_table", tableName)
-		l.Infof("Launching snapshot of table '%s'", tableName)
+		if _, hasFilter := s.filters[tableName]; hasFilter {
+			l.Infof("Launching snapshot of table '%s' with snapshot filter", tableName)
+		} else {
+			l.Infof("Launching snapshot of table '%s'", tableName)
+		}
 
 		switch {
 		case s.pdbName != "":
@@ -229,7 +242,8 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 // lastSeenPksValues is mutated in place with the PK values from the last row of the batch,
 // so the caller can pass it as pksForQuery on the next iteration.
 func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable, tablePks []string, pksForQuery map[string]any, lastSeenPksValues map[string]any, maxBatchSize int, tableName string) (batchCount int, err error) {
-	batchRows, err := querySnapshotTable(ctx, tx, table, tablePks, pksForQuery, maxBatchSize)
+	customQuery := s.filters[table.FullName()]
+	batchRows, err := querySnapshotTable(ctx, tx, table, tablePks, pksForQuery, maxBatchSize, customQuery)
 	if err != nil {
 		return 0, fmt.Errorf("execute snapshot table query: %w", err)
 	}
@@ -342,18 +356,30 @@ func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]st
 	return pks, nil
 }
 
-func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []string, lastSeenPkVal map[string]any, limit int) (*sql.Rows, error) {
+func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []string, lastSeenPkVal map[string]any, limit int, customQuery string) (*sql.Rows, error) {
 	// Oracle uses FETCH FIRST instead of TOP, and it comes at the end
-	snapshotQueryParts := []string{
-		fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name),
+	if lastSeenPkVal == nil {
+		// No cursor: use custom query directly to avoid a redundant wrapping subquery.
+		var base string
+		if customQuery != "" {
+			base = customQuery
+		} else {
+			base = fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name)
+		}
+		q := strings.Join([]string{base, buildOrderByClause(pk), fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit)}, " ")
+		return tx.QueryContext(ctx, q)
 	}
 
-	if lastSeenPkVal == nil {
-		snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
-		snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit))
-
-		q := strings.Join(snapshotQueryParts, " ")
-		return tx.QueryContext(ctx, q)
+	// Cursor pagination requires a WHERE clause; wrap the custom query in a subquery so the
+	// added WHERE does not conflict with any WHERE already present in customQuery.
+	var tableSource string
+	if customQuery != "" {
+		tableSource = fmt.Sprintf("(%s) t", customQuery)
+	} else {
+		tableSource = fmt.Sprintf(`"%s"."%s"`, table.Schema, table.Name)
+	}
+	snapshotQueryParts := []string{
+		"SELECT * FROM " + tableSource,
 	}
 
 	// Build lexicographic comparison for composite keys
@@ -395,7 +421,18 @@ func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []s
 	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
 	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit))
 	q := strings.Join(snapshotQueryParts, " ")
-	return tx.QueryContext(ctx, q, lastSeenPkVals...)
+	rows, err := tx.QueryContext(ctx, q, lastSeenPkVals...)
+	if err != nil {
+		var oraErr *goora.OracleError
+		if customQuery != "" && errors.As(err, &oraErr) && oraErr.ErrCode == errCodeInvalidIdentifier {
+			return nil, fmt.Errorf("%w\n\nThis usually means the snapshot filter for table '%s' doesn't project all of its primary key columns (%s). "+
+				"Cursor-based pagination filters and sorts on the full primary key against the filter's own result set, "+
+				"so every primary key column must be included in the filter's SELECT list even if it otherwise selects only a subset of columns",
+				err, table.FullName(), strings.Join(pk, ", "))
+		}
+		return nil, err
+	}
+	return rows, nil
 }
 
 // Close safely closes all open connections opened for the snapshotting process.
