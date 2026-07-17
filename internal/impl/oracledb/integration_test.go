@@ -376,7 +376,7 @@ oracledb_cdc:
   stream_snapshot: true
   snapshot:
     filters:
-      TESTDB.FOO: "SELECT ID, NAME FROM TESTDB.FOO WHERE ID > 500"
+      testdb.foo: "SELECT ID, NAME FROM TESTDB.FOO WHERE ID > 500"
       TESTDB.FOO2: "SELECT ID, NAME FROM TESTDB.FOO2 WHERE ID > 500"
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3

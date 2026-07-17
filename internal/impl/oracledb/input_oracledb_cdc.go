@@ -302,6 +302,9 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 			if snapshotFilters, err = snapshotConf.FieldStringMap(ociFieldSnapshotFilters); err != nil {
 				return nil, err
 			}
+			if snapshotFilters, err = replication.NormalizeSnapshotFilterKeys(snapshotFilters); err != nil {
+				return nil, fmt.Errorf("validating snapshot filters: %w", err)
+			}
 			if err := replication.ValidateSnapshotFilters(snapshotFilters); err != nil {
 				return nil, fmt.Errorf("validating snapshot filters: %w", err)
 			}

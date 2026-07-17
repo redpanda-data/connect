@@ -16,6 +16,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestNormalizeSnapshotFilterKeys(t *testing.T) {
+	t.Run("uppercases keys, leaves queries untouched", func(t *testing.T) {
+		normalized, err := replication.NormalizeSnapshotFilterKeys(map[string]string{
+			"testdb.foo": "select * from testdb.foo",
+			"TestDB.Bar": "SELECT * FROM TESTDB.BAR",
+		})
+		require.NoError(t, err)
+		require.Equal(t, map[string]string{
+			"TESTDB.FOO": "select * from testdb.foo",
+			"TESTDB.BAR": "SELECT * FROM TESTDB.BAR",
+		}, normalized)
+	})
+
+	t.Run("empty map", func(t *testing.T) {
+		normalized, err := replication.NormalizeSnapshotFilterKeys(map[string]string{})
+		require.NoError(t, err)
+		require.Empty(t, normalized)
+	})
+
+	t.Run("case-insensitive duplicate keys rejected", func(t *testing.T) {
+		_, err := replication.NormalizeSnapshotFilterKeys(map[string]string{
+			"testdb.foo": "SELECT * FROM TESTDB.FOO",
+			"TESTDB.FOO": "SELECT * FROM TESTDB.FOO WHERE ID > 1",
+		})
+		require.ErrorContains(t, err, "specified more than once")
+	})
+}
+
 func TestValidateSnapshotFilters(t *testing.T) {
 	tests := []struct {
 		name       string

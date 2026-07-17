@@ -24,6 +24,21 @@ var clauseKeywords = map[string]bool{
 	"model": true, "pivot": true, "unpivot": true,
 }
 
+// NormalizeSnapshotFilterKeys uppercases every key in filters, returning a new map.
+// Returns an error if two keys collide once uppercased (e.g. "testdb.foo" and
+// "TESTDB.FOO" both present), since silently keeping only one would be surprising.
+func NormalizeSnapshotFilterKeys(filters map[string]string) (map[string]string, error) {
+	normalized := make(map[string]string, len(filters))
+	for table, query := range filters {
+		key := strings.ToUpper(table)
+		if _, exists := normalized[key]; exists {
+			return nil, fmt.Errorf("snapshot filter table %q is specified more than once (case-insensitive)", key)
+		}
+		normalized[key] = query
+	}
+	return normalized, nil
+}
+
 // ValidateSnapshotFilters validates that the snapshot filters are SELECT statements
 // referencing exactly one simple table - no joins, subqueries, or UNION/INTERSECT/MINUS
 // combinations - and that each filter's table matches its map key.
