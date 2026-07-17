@@ -38,8 +38,15 @@ dataset:
   seeder: cdc-rows-mongodb
 
 workload:
-  write_rate_per_sec: 20000   # sustainable for 1-vCPU mongodb_cdc; see rate note above
-  duration: 18m               # covers warmup (2m) + full window (15m) with margin
+  # CALIBRATION config (connect-only) to measure per-vCPU consume ceilings AND
+  # mongod's insert ceiling. Saturating rate (200K/sec) pushes every sweep point
+  # to its ceiling; the 500 GB oplog (mongod.conf) holds the resulting backlog
+  # for the whole window without wrapping. Shorter 10m window bounds per-point
+  # collection growth (~137 GB) and oplog pressure. After calibration, set
+  # matrix.overrides per point to ~1.2x each point's ceiling and restore a
+  # steadier config for the published sweep.
+  write_rate_per_sec: 200000
+  duration: 15m               # framework minimum; ~205 GB collection + ~250 GB oplog per point (fits)
   warmup: 2m
 
 pipeline:
@@ -61,10 +68,7 @@ pipeline:
       read_max_wait: 1s
 
 matrix:
-  # Pinned to [1] for the first 1-vCPU smoke (~$1.50). Restore the full sweep for
-  # the real run:
-  #   cpu_points: [1, 2, 4, 8]
-  cpu_points: [1]
+  cpu_points: [1, 2, 4, 8]
 
 reset:
   # No replication slot to drop (change streams are slotless) and the checkpoint

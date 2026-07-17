@@ -53,10 +53,11 @@ runcmd:
       # Large oplog so it does not WRAP during the bench window. The workload
       # inserts faster than the CDC consumers (Connect mongodb_cdc / Debezium)
       # read, so the consumers lag; if the capped oplog wraps past their resume
-      # point the change stream is INVALIDATED and throughput collapses to zero
-      # (observed ~2.5 min in on the default oplog). 100 GB on the local NVMe
-      # (7.5 TB) holds well over the 15-min window at the observed change rate.
-      oplogSizeMB: 102400
+      # point the change stream is INVALIDATED and throughput collapses to zero.
+      # Sized to hold a full saturating window of backlog at the 1-vCPU worst
+      # case (slowest consumer → most lag): ~250 MB/s oplog growth × ~14 min ≈
+      # 210 GB, so 500 GB on the local NVMe (7.5 TB) leaves headroom.
+      oplogSizeMB: 512000
     CONF
 
     # 4. Start mongod and wait until it accepts connections. Bounded loop (not

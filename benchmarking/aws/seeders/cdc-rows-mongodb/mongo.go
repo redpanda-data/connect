@@ -152,17 +152,16 @@ func bulkInsert(ctx context.Context, db *mongo.Database, collection string, rows
 	coll := db.Collection(collection)
 	start := time.Now()
 
+	// Distinct payloads (built once, not per doc) so the change events aren't
+	// trivially compressible — see payloadPoolSize.
+	pool := randomPayloadPool(rowSize, payloadPoolSize)
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers)
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			// Precompute the payload once per worker (crypto/rand per document
-			// can't keep up at bench write rates; identical payloads are fine —
-			// the bench measures bytes flowing, not uniqueness). Mirrors the
-			// postgres/oracle seeders.
-			payload := randomPayload(rowSize)
+			p := 0
 			done := int64(0)
 			for done < rowsPerWorker {
 				n := int64(batchSize)
@@ -171,7 +170,8 @@ func bulkInsert(ctx context.Context, db *mongo.Database, collection string, rows
 				}
 				docs := make([]any, n)
 				for i := range docs {
-					docs[i] = newDocument(payload)
+					docs[i] = newDocument(pool[p%len(pool)])
+					p++
 				}
 				if _, err := coll.InsertMany(ctx, docs); err != nil {
 					errCh <- err
@@ -207,6 +207,9 @@ func workload(ctx context.Context, database string, tables []string, rowSize, ra
 		perWorkerPer100ms = 1
 	}
 	deadline := time.Now().Add(dur)
+	// Distinct payloads (built once) so change events aren't trivially
+	// compressible — see payloadPoolSize.
+	pool := randomPayloadPool(rowSize, payloadPoolSize)
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers)
 	for w := 0; w < workers; w++ {
@@ -214,8 +217,7 @@ func workload(ctx context.Context, database string, tables []string, rowSize, ra
 		workerIdx := w
 		go func() {
 			defer wg.Done()
-			// Precompute the payload once per worker — see bulkInsert.
-			payload := randomPayload(rowSize)
+			p := 0
 			ticker := time.NewTicker(100 * time.Millisecond)
 			defer ticker.Stop()
 			tIdx := workerIdx
@@ -233,7 +235,8 @@ func workload(ctx context.Context, database string, tables []string, rowSize, ra
 					tIdx++
 					docs := make([]any, perWorkerPer100ms)
 					for i := range docs {
-						docs[i] = newDocument(payload)
+						docs[i] = newDocument(pool[p%len(pool)])
+						p++
 					}
 					if _, err := coll.InsertMany(ctx, docs); err != nil {
 						errCh <- err
@@ -270,4 +273,27 @@ func randomPayload(size int) string {
 		s = s[:size]
 	}
 	return s
+}
+
+// payloadPoolSize is the number of distinct random payloads cycled per worker.
+// A single reused payload (cheap for the producer) is trivially compressible, so
+// the Connect redpanda output — which compresses on the wire — sends far fewer
+// bytes than Debezium's uncompressed producer, making the broker-derived
+// head-to-head metric apples-to-oranges. Cycling a pool of distinct random
+// payloads defeats batch compression for BOTH engines (a compression batch is
+// ~1 MB ≈ 850 docs; a pool larger than that leaves few repeats per batch) while
+// staying cheap — the pool is built once, not per document. 4096 comfortably
+// exceeds a single compression batch (~1 MB ≈ 850 docs), so every batch is
+// effectively unique and neither engine's producer can compress it — closing
+// the residual self-report-vs-broker gap (calibration showed a 1024 pool still
+// left Connect ~1.5x compressible while Debezium's producer doesn't compress).
+const payloadPoolSize = 4096
+
+// randomPayloadPool builds n distinct random payloads of ~size bytes.
+func randomPayloadPool(size, n int) []string {
+	pool := make([]string, n)
+	for i := range pool {
+		pool[i] = randomPayload(size)
+	}
+	return pool
 }
