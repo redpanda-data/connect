@@ -192,6 +192,40 @@ use_histogram_timing: true
 	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 1.4e-08")
 }
 
+// In histogram mode timings are recorded in seconds, so a `_ns`-suffixed metric
+// is renamed to `_seconds` to reflect the unit. This also ensures the histogram
+// variant uses a distinct series name from the summary variant emitted by nodes
+// with use_histogram_timing disabled, avoiding remote-write metric-kind
+// conflicts in a mixed fleet. See INC-1095.
+func TestPrometheusHistMetricsNanosecondSuffixRenamedToSeconds(t *testing.T) {
+	nm := promFromYAML(t, `
+use_histogram_timing: true
+`)
+
+	tmr := nm.NewTimerCtor("processor_latency_ns")()
+	tmr.Timing(2_000_000_000) // 2s expressed in nanoseconds
+
+	body := getPage(t, nm.HandlerFunc())
+
+	assert.Contains(t, body, "\n# TYPE processor_latency_seconds histogram")
+	assert.Contains(t, body, "\nprocessor_latency_seconds_sum 2")
+	assert.Contains(t, body, "\nprocessor_latency_seconds_count 1")
+	assert.NotContains(t, body, "processor_latency_ns")
+}
+
+func TestPrometheusSummaryMetricsKeepNanosecondSuffix(t *testing.T) {
+	nm := promFromYAML(t, ``) // use_histogram_timing defaults to false
+
+	tmr := nm.NewTimerCtor("processor_latency_ns")()
+	tmr.Timing(2_000_000_000)
+
+	body := getPage(t, nm.HandlerFunc())
+
+	assert.Contains(t, body, "\n# TYPE processor_latency_ns summary")
+	assert.Contains(t, body, "\nprocessor_latency_ns_sum 2e+09")
+	assert.NotContains(t, body, "processor_latency_seconds")
+}
+
 func TestPrometheusWithFileOutputPath(t *testing.T) {
 	fPath := t.TempDir() + "/benthos_metrics.prom"
 

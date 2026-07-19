@@ -83,6 +83,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - aws_dynamodb_cdc: The CDC input now recovers automatically from an expired DynamoDB Streams shard iterator (`ExpiredIteratorException`), which previously caused an affected shard to retry the dead iterator indefinitely and stall until a pod restart. The shard now obtains a fresh iterator and resumes from the last read position without a data gap.
+- metrics/prometheus: When `use_histogram_timing` is `true`, timing metrics with a `_ns` suffix are now exported as `_seconds` (for example `processor_latency_ns` becomes `processor_latency_seconds`), reflecting that histogram timings are recorded in seconds. This also keeps the histogram series distinct from the summary series emitted when the setting is `false`, preventing Prometheus remote-write "multiple metric kinds" rejections when a fleet mixes the setting.
 
 ## 4.97.0 - 2026-06-18
 
