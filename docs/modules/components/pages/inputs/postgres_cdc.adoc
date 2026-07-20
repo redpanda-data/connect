@@ -92,7 +92,7 @@ input:
     aws:
       enabled: false
       region: "" # No default (optional)
-      endpoint: "" # No default (required)
+      endpoint: ""
       id: "" # No default (optional)
       secret: "" # No default (optional)
       token: "" # No default (optional)
@@ -484,11 +484,12 @@ The AWS region where the PostgreSQL instance is located. If no region is specifi
 
 === `aws.endpoint`
 
-The PostgreSQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com).
+The PostgreSQL endpoint as `host:port` (for example `mydb.abc123.us-east-1.rds.amazonaws.com:5432`). The AWS IAM token signer requires the port; if it is omitted the port from the DSN is used, falling back to `5432`. When this field is empty the address from the DSN is used.
 
 
 *Type*: `string`
 
+*Default*: `""`
 
 === `aws.id`
 
