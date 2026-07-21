@@ -53,6 +53,7 @@ output:
     filter_map: ""
     hint_map: ""
     upsert: false
+    preserve_binary: false
     max_in_flight: 64
     batching:
       count: 0
@@ -86,6 +87,7 @@ output:
     filter_map: ""
     hint_map: ""
     upsert: false
+    preserve_binary: false
     max_in_flight: 64
     batching:
       count: 0
@@ -282,6 +284,15 @@ The upsert setting is optional and only applies for update-one and replace-one o
 
 *Default*: `false`
 Requires version 3.60.0 or newer
+
+=== `preserve_binary`
+
+Whether to preserve raw binary fields ([]byte) as native MongoDB BinData. When false, they are encoded as base64 strings.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `max_in_flight`
 

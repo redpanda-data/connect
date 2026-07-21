@@ -106,7 +106,7 @@ func generateCollectionName(testID string) string {
 	return regexp.MustCompile("[^a-zA-Z]+").ReplaceAllString(testID, "")
 }
 
-func TestIntegrationMongoDBBinaryOutputField(t *testing.T) {
+func TestIntegrationMongoDBDoesNotPreserveBinaryOutputFieldByDefault(t *testing.T) {
 	integration.CheckSkip(t)
 
 	ctr, err := testcontainers.Run(t.Context(), "mongo:latest",
@@ -153,6 +153,92 @@ username: mongoadmin
 password: secret
 operation: insert-one
 document_map: "root = this"
+`, mp.Port(), collName)
+
+	parsedConf, err := outputSpec().ParseYAML(config, nil)
+	require.NoError(t, err)
+
+	outputWriter, err := newOutputWriter(parsedConf, service.MockResources())
+	require.NoError(t, err)
+
+	err = outputWriter.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = outputWriter.Close(t.Context()) })
+
+	rawBytes := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	msg := service.NewMessage(nil)
+	msg.SetStructured(map[string]any{
+		"id":             "bin_test",
+		"binary_payload": rawBytes,
+	})
+	batch := service.MessageBatch{msg}
+
+	err = outputWriter.WriteBatch(t.Context(), batch)
+	require.NoError(t, err)
+
+	filter := bson.M{"id": "bin_test"}
+	var doc bson.M
+	err = collection.FindOne(t.Context(), filter).Decode(&doc)
+	require.NoError(t, err)
+
+	payload, exists := doc["binary_payload"]
+	require.True(t, exists)
+
+	payloadString, isString := payload.(string)
+	require.True(t, isString)
+
+	expectedPayloadString := base64.StdEncoding.EncodeToString(rawBytes)
+	require.Equal(t, expectedPayloadString, payloadString)
+}
+
+func TestIntegrationMongoDBPreserveBinaryOutputField(t *testing.T) {
+	integration.CheckSkip(t)
+
+	ctr, err := testcontainers.Run(t.Context(), "mongo:latest",
+		testcontainers.WithExposedPorts("27017/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"MONGO_INITDB_ROOT_USERNAME": "mongoadmin",
+			"MONGO_INITDB_ROOT_PASSWORD": "secret",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("27017/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+
+	mp, err := ctr.MappedPort(t.Context(), "27017/tcp")
+	require.NoError(t, err)
+
+	var mongoClient *mongo.Client
+	require.Eventually(t, func() bool {
+		mongoClient, err = mongo.Connect(options.Client().
+			SetConnectTimeout(10 * time.Second).
+			SetTimeout(30 * time.Second).
+			SetServerSelectionTimeout(30 * time.Second).
+			SetAuth(options.Credential{
+				Username: "mongoadmin",
+				Password: "secret",
+			}).
+			ApplyURI("mongodb://localhost:" + mp.Port()))
+		return err == nil
+	}, time.Minute, time.Second)
+
+	db := mongoClient.Database("TestDB")
+	collName := generateCollectionName(t.Name())
+
+	require.NoError(t, db.CreateCollection(t.Context(), collName))
+	collection := db.Collection(collName)
+
+	config := fmt.Sprintf(`
+url: mongodb://localhost:%v
+database: TestDB
+collection: %v
+username: mongoadmin
+password: secret
+operation: insert-one
+document_map: "root = this"
+preserve_binary: true
 `, mp.Port(), collName)
 
 	parsedConf, err := outputSpec().ParseYAML(config, nil)

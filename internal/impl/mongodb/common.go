@@ -71,6 +71,22 @@ func clientFields() []*service.ConfigField {
 	}
 }
 
+//------------------------------------------------------------------------------
+
+const (
+	fieldPreserveBinary = "preserve_binary"
+)
+
+func compatibilityFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		service.NewBoolField(fieldPreserveBinary).
+			Description("Whether to preserve raw binary fields ([]byte) as native MongoDB BinData. When false, they are encoded as base64 strings.").
+			Default(false),
+	}
+}
+
+//------------------------------------------------------------------------------
+
 func getClient(parsedConf *service.ParsedConfig) (client *mongo.Client, database *mongo.Database, err error) {
 	var url string
 	if url, err = parsedConf.FieldString(commonFieldClientURL); err != nil {
@@ -353,10 +369,11 @@ func writeMapsFields() []*service.ConfigField {
 }
 
 type writeMaps struct {
-	filterMap   *bloblang.Executor
-	documentMap *bloblang.Executor
-	hintMap     *bloblang.Executor
-	upsert      bool
+	filterMap      *bloblang.Executor
+	documentMap    *bloblang.Executor
+	hintMap        *bloblang.Executor
+	upsert         bool
+	preserveBinary bool
 }
 
 func writeMapsFromParsed(conf *service.ParsedConfig, operation Operation) (maps writeMaps, err error) {
@@ -376,6 +393,9 @@ func writeMapsFromParsed(conf *service.ParsedConfig, operation Operation) (maps 
 		}
 	}
 	if maps.upsert, err = conf.FieldBool(commonFieldUpsert); err != nil {
+		return
+	}
+	if maps.preserveBinary, err = conf.FieldBool(fieldPreserveBinary); err != nil {
 		return
 	}
 
@@ -413,10 +433,11 @@ func writeMapsFromParsed(conf *service.ParsedConfig, operation Operation) (maps 
 }
 
 type writeMapsExec struct {
-	filterMap   *service.MessageBatchBloblangExecutor
-	documentMap *service.MessageBatchBloblangExecutor
-	hintMap     *service.MessageBatchBloblangExecutor
-	upsert      bool
+	filterMap      *service.MessageBatchBloblangExecutor
+	documentMap    *service.MessageBatchBloblangExecutor
+	hintMap        *service.MessageBatchBloblangExecutor
+	upsert         bool
+	preserveBinary bool
 }
 
 func (w writeMaps) exec(b service.MessageBatch) (e writeMapsExec) {
@@ -430,6 +451,7 @@ func (w writeMaps) exec(b service.MessageBatch) (e writeMapsExec) {
 		e.hintMap = b.BloblangExecutor(w.hintMap)
 	}
 	e.upsert = w.upsert
+	e.preserveBinary = w.preserveBinary
 	return
 }
 
@@ -480,7 +502,12 @@ func (w writeMapsExec) extractFromMessage(operation Operation, i int) (
 	}
 
 	if documentValWanted && w.documentMap != nil {
-		if docJSON, err = structuredFromMap(i, w.documentMap); err != nil {
+		if w.preserveBinary {
+			docJSON, err = structuredFromMap(i, w.documentMap)
+		} else {
+			docJSON, err = extJSONFromMap(i, w.documentMap)
+		}
+		if err != nil {
 			err = fmt.Errorf("executing document_map: %v", err)
 			return
 		}
