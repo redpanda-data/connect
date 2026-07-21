@@ -28,6 +28,8 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/go-sql-driver/mysql"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -195,6 +197,7 @@ type mysqlStreamInput struct {
 
 	logger                     *service.Logger
 	res                        *service.Resources
+	tracer                     trace.Tracer
 	snapshotRowsProcessedTotal *service.MetricCounter
 
 	rawMessageEvents chan MessageEvent
@@ -225,6 +228,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		rawMessageEvents: make(chan MessageEvent),
 		msgChan:          make(chan asyncMessage),
 		res:              res,
+		tracer:           res.OtelTracer().Tracer("mysql_cdc"),
 		tableSchemas:     make(map[string]any),
 	}
 
@@ -346,6 +350,28 @@ func init() {
 }
 
 // ---- Redpanda Connect specific methods----
+
+// CDC tracing span names, emitted per CONTRIBUTING.md §5.4.4 around the
+// snapshot, stream, and checkpoint-commit paths.
+const (
+	traceSnapshot         = "mysql_cdc.snapshot"
+	traceStream           = "mysql_cdc.stream"
+	traceCheckpointCommit = "mysql_cdc.checkpoint_commit"
+)
+
+// spanned runs fn within a tracing span named for a CDC phase, recording any
+// error onto the span. It is the seam used to instrument the snapshot and
+// stream paths (CONTRIBUTING.md §5.4.4).
+func (i *mysqlStreamInput) spanned(ctx context.Context, name string, fn func(context.Context) error) error {
+	ctx, span := i.tracer.Start(ctx, name)
+	defer span.End()
+	if err := fn(ctx); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return nil
+}
 
 func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	// If IAM authentication is enabled, generate a new token
@@ -476,7 +502,9 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 			_ = snapshot.close()
 			return fmt.Errorf("unable to prepare snapshot: %w", err)
 		}
-		if err = i.readSnapshot(ctx, snapshot); err != nil {
+		if err = i.spanned(ctx, traceSnapshot, func(ctx context.Context) error {
+			return i.readSnapshot(ctx, snapshot)
+		}); err != nil {
 			_ = snapshot.close()
 			return fmt.Errorf("failed reading snapshot: %w", err)
 		}
@@ -511,7 +539,9 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 	i.logger.Infof("starting MySQL CDC stream from binlog %s at offset %d", pos.Name, pos.Pos)
 	i.currentBinlogName = pos.Name
 	i.canal.SetEventHandler(i)
-	if err := i.canal.RunFrom(*pos); err != nil {
+	if err := i.spanned(ctx, traceStream, func(context.Context) error {
+		return i.canal.RunFrom(*pos)
+	}); err != nil {
 		return fmt.Errorf("starting streaming: %w", err)
 	}
 	return nil
@@ -961,6 +991,9 @@ func (i *mysqlStreamInput) getCachedBinlogPosition(ctx context.Context) (*positi
 }
 
 func (i *mysqlStreamInput) setCachedBinlogPosition(ctx context.Context, binLogPos position) error {
+	ctx, span := i.tracer.Start(ctx, traceCheckpointCommit)
+	defer span.End()
+
 	var cErr error
 	if err := i.res.AccessCache(ctx, i.binLogCache, func(c service.Cache) {
 		cErr = c.Set(
@@ -973,6 +1006,8 @@ func (i *mysqlStreamInput) setCachedBinlogPosition(ctx context.Context, binLogPo
 		return fmt.Errorf("unable to access cache for writing: %w", err)
 	}
 	if cErr != nil {
+		span.RecordError(cErr)
+		span.SetStatus(codes.Error, cErr.Error())
 		return fmt.Errorf("unable persist checkpoint to cache: %w", cErr)
 	}
 	return nil

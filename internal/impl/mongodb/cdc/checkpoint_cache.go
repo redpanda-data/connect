@@ -12,6 +12,7 @@ import (
 	"context"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -23,8 +24,13 @@ type checkpointCache struct {
 }
 
 func (c *checkpointCache) Store(ctx context.Context, resumeToken bson.Raw) error {
+	ctx, span := c.resources.OtelTracer().Tracer("mongodb_cdc").Start(ctx, traceCheckpointCommit)
+	defer span.End()
+
 	b, err := bson.MarshalExtJSON(resumeToken, true, false)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	var cErr error
@@ -33,6 +39,10 @@ func (c *checkpointCache) Store(ctx context.Context, resumeToken bson.Raw) error
 	})
 	if err == nil {
 		err = cErr
+	}
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 	}
 	return err
 }

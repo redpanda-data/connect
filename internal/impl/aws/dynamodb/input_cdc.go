@@ -29,6 +29,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
 	smithytime "github.com/aws/smithy-go/time"
 	"github.com/cenkalti/backoff/v4"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	baws "github.com/redpanda-data/connect/v4/internal/impl/aws"
@@ -398,12 +400,22 @@ type tableStream struct {
 //
 // Lock hierarchy: always acquire d.mu before ts.mu to prevent deadlocks.
 // Never hold ts.mu when acquiring d.mu.
+
+// CDC tracing span names, emitted per CONTRIBUTING.md §5.4.4 around the
+// snapshot, stream, and checkpoint-commit paths.
+const (
+	traceSnapshot         = "aws_dynamodb_cdc.snapshot"
+	traceStream           = "aws_dynamodb_cdc.stream"
+	traceCheckpointCommit = "aws_dynamodb_cdc.checkpoint_commit"
+)
+
 type dynamoDBCDCInput struct {
 	conf          dynamoDBCDCConfig
 	awsConf       aws.Config
 	dynamoClient  *dynamodb.Client
 	streamsClient *dynamodbstreams.Client
 	log           *service.Logger
+	tracer        trace.Tracer
 	metrics       dynamoDBCDCMetrics
 
 	mu           sync.RWMutex            // Level 1 lock - acquire before tableStream.mu (protects tableStreams map only)
@@ -800,6 +812,7 @@ func newDynamoDBCDCInputFromConfig(pConf *service.ParsedConfig, mgr *service.Res
 		tableStreams: make(map[string]*tableStream),
 		shutSig:      shutdown.NewSignaller(),
 		log:          mgr.Logger(),
+		tracer:       mgr.OtelTracer().Tracer("aws_dynamodb_cdc"),
 		metrics: dynamoDBCDCMetrics{
 			shardsTracked:           mgr.Metrics().NewGauge(metricShardsTracked),
 			shardsActive:            mgr.Metrics().NewGauge(metricShardsActive),
@@ -971,8 +984,11 @@ func (d *dynamoDBCDCInput) Connect(ctx context.Context) error {
 		return d.connectSingleTable(ctx, tables[0])
 	}
 
-	// Multi-table mode (includelist with >1 table, or tag discovery)
-	return d.connectMultipleTables(ctx, tables)
+	// Multi-table mode (includelist with >1 table, or tag discovery). Snapshot
+	// is not supported here (validated at config time), so this is the stream path.
+	return d.spanned(ctx, traceStream, func(ctx context.Context) error {
+		return d.connectMultipleTables(ctx, tables)
+	})
 }
 
 // connectSingleTable handles the single table mode (legacy behavior)
@@ -1015,16 +1031,19 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 
 	// Initialize record batcher
 	d.recordBatcher = NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
+	d.recordBatcher.tracer = d.tracer
 
 	d.log.Infof("Connected to DynamoDB stream: %s", *d.streamArn)
 
 	// Handle snapshot mode
 	if d.conf.snapshot.mode != snapshotModeNone {
-		return d.connectWithSnapshot(ctx, tableName)
+		return d.spanned(ctx, traceSnapshot, func(ctx context.Context) error {
+			return d.connectWithSnapshot(ctx, tableName)
+		})
 	}
 
 	// CDC-only mode (existing behavior)
-	return d.connectCDCOnly(ctx)
+	return d.spanned(ctx, traceStream, d.connectCDCOnly)
 }
 
 // connectMultipleTables handles streaming from multiple tables simultaneously
@@ -1128,6 +1147,7 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 
 	// Initialize record batcher for this table
 	recordBatcher := NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
+	recordBatcher.tracer = d.tracer
 
 	// Re-check under write lock before inserting (another goroutine may have
 	// initialized this table concurrently during periodic discovery).
@@ -2304,6 +2324,20 @@ func convertTableRecordsToBatch(records []types.Record, tableName, shardID strin
 	return batch
 }
 
+// spanned runs fn within a tracing span named for a CDC phase, recording any
+// error onto the span. It is the seam used to instrument the snapshot and
+// stream paths (CONTRIBUTING.md §5.4.4).
+func (d *dynamoDBCDCInput) spanned(ctx context.Context, name string, fn func(context.Context) error) error {
+	ctx, span := d.tracer.Start(ctx, name)
+	defer span.End()
+	if err := fn(ctx); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return nil
+}
+
 // flushCheckpoint flushes pending checkpoints for a given checkpointer/batcher pair.
 // Returns true if any error occurred during flush.
 func (d *dynamoDBCDCInput) flushCheckpoint(ctx context.Context, cp *Checkpointer, batcher *RecordBatcher, label string) bool {
@@ -2316,8 +2350,13 @@ func (d *dynamoDBCDCInput) flushCheckpoint(ctx context.Context, cp *Checkpointer
 		return false
 	}
 
+	ctx, span := d.tracer.Start(ctx, traceCheckpointCommit)
+	defer span.End()
+
 	d.log.Infof("Flushing %d pending checkpoints for %s on close", len(pending), label)
 	if err := cp.FlushCheckpoints(ctx, pending); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		d.log.Errorf("Failed to flush checkpoints for %s: %v", label, err)
 		d.metrics.checkpointFailures.Incr(1)
 		return true
