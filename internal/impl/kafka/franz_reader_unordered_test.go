@@ -18,6 +18,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -145,6 +146,48 @@ func TestUnorderedReassignedPartitionUsesFreshTracker(t *testing.T) {
 	oldBatch.onAck()
 	assert.Equal(t, []int64{100}, rec.offsetsFor("t", 0), "stale ack from revoked tracker must not commit")
 	assert.NotContains(t, rec.offsetsFor("t", 0), int64(5), "old offset 5 must never be committed")
+}
+
+// TestUnorderedRevokeNotBlockedByBackpressuredSend is a regression test for a
+// deadlock: addRecord used to hold the checkpointTracker lock across the
+// dispatch of a batch, which blocks on the (unbuffered) output channel whenever
+// the pipeline is backpressured. A concurrent revoke (removeTopicPartitions,
+// invoked from franz-go's OnPartitionsRevoked/OnPartitionsLost) needs the same
+// lock, so a stalled output blocked the revoke indefinitely — wedging franz-go's
+// heartbeat/rejoin loop with the client still alive, recoverable only by a full
+// connector restart.
+//
+// The unbuffered channel that nothing drains models the stalled downstream. The
+// revoke must still complete promptly.
+func TestUnorderedRevokeNotBlockedByBackpressuredSend(t *testing.T) {
+	rec := newCommitRecorder()
+	batchChan := make(chan batchWithAckFn) // unbuffered: models a stalled output
+	ct := newCheckpointTracker(service.MockResources(), batchChan, rec.commitFunc, service.BatchPolicy{})
+
+	const limit = 1024
+
+	// Dispatch a record whose send blocks because nothing drains batchChan. The
+	// partition's tracker is registered (under the lock) before the send begins.
+	// The cancelable context lets the parked goroutine exit at the end of the
+	// test.
+	sendCtx, cancelSend := context.WithCancel(context.Background())
+	defer cancelSend()
+	go ct.addRecord(sendCtx, unorderedRecord("t", 0, 0), limit)
+
+	// Let the dispatch reach its blocking channel send.
+	time.Sleep(100 * time.Millisecond)
+
+	done := make(chan struct{})
+	go func() {
+		ct.removeTopicPartitions(context.Background(), map[string][]int32{"t": {0}})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("removeTopicPartitions deadlocked behind a backpressured send")
+	}
 }
 
 // TestUnorderedRevokeRaceNoCommitLeak exercises concurrent acks racing against a
