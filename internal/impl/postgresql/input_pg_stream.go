@@ -25,6 +25,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/cdcfield"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -35,6 +36,7 @@ const (
 	fieldStreamSnapshot            = "stream_snapshot"
 	fieldSnapshotMemSafetyFactor   = "snapshot_memory_safety_factor"
 	fieldSnapshotBatchSize         = "snapshot_batch_size"
+	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
 	fieldSchema                    = "schema"
 	fieldTables                    = "tables"
 	fieldCheckpointLimit           = "checkpoint_limit"
@@ -104,10 +106,15 @@ This input adds the following metadata fields to each message:
 			Example(0.2).
 			Default(1).
 			Deprecated()).
+		Field(service.NewIntField(fieldSnapshotMaxBatchSize).
+			Description("The number of rows to fetch in each batch when querying the snapshot. Defaults to 1000.").
+			Example(10000).
+			Optional()).
 		Field(service.NewIntField(fieldSnapshotBatchSize).
 			Description("The number of rows to fetch in each batch when querying the snapshot.").
 			Example(10000).
-			Default(1000)).
+			Optional().
+			Deprecated()).
 		Field(service.NewStringField(fieldSchema).
 			Description("The PostgreSQL schema from which to replicate data.").
 			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`),
@@ -259,7 +266,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
-	if snapshotBatchSize, err = conf.FieldInt(fieldSnapshotBatchSize); err != nil {
+	if snapshotBatchSize, err = cdcfield.ResolveInt(conf, fieldSnapshotMaxBatchSize, fieldSnapshotBatchSize, 1000); err != nil {
 		return nil, err
 	}
 

@@ -62,13 +62,10 @@ var canonicalFields = []string{
 // mysql_cdc, oracledb_cdc.
 var knownNonConformant = map[string]map[string]string{
 	"aws_dynamodb_cdc": {
-		"checkpoint_cache":             "uses checkpoint_table; migrate to checkpoint_cache",
-		"snapshot_max_batch_size":      "uses snapshot_batch_size; migrate",
-		"max_parallel_snapshot_tables": "uses snapshot segments; migrate",
-		"stream_snapshot":              "uses enum snapshot_mode; pending OD-2 (bool vs enum)",
+		"checkpoint_cache": "self-managed DynamoDB checkpoint table (auto-created, with global-table replication and namespace sharing); not a benthos cache resource — permanent exemption, cf. postgres_cdc native slot",
+		"stream_snapshot":  "uses enum snapshot_mode; pending OD-2 (bool vs enum)",
 	},
 	"cockroachdb_changefeed": {
-		"checkpoint_cache":             "uses cursor_cache; migrate to checkpoint_cache",
 		"checkpoint_limit":             "not yet exposed under the canonical name",
 		"snapshot_max_batch_size":      "no distinct snapshot phase (changefeed initial scan)",
 		"max_parallel_snapshot_tables": "no distinct snapshot phase (changefeed initial scan)",
@@ -81,16 +78,8 @@ var knownNonConformant = map[string]map[string]string{
 		"max_parallel_snapshot_tables": "not yet exposed under the canonical name",
 		"stream_snapshot":              "not yet exposed under the canonical name",
 	},
-	"mongodb_cdc": {
-		"snapshot_max_batch_size":      "snapshot batch size not exposed under the canonical name",
-		"max_parallel_snapshot_tables": "uses snapshot_parallelism; migrate",
-	},
 	"postgres_cdc": {
-		"checkpoint_cache":        "uses native replication-slot checkpointing by design",
-		"snapshot_max_batch_size": "uses snapshot_batch_size; migrate",
-	},
-	"salesforce_cdc": {
-		"max_parallel_snapshot_tables": "uses max_parallel_snapshot_objects; migrate",
+		"checkpoint_cache": "uses native replication-slot checkpointing by design",
 	},
 	"tigerbeetle_cdc": {
 		"checkpoint_cache":             "non-relational; §5 applicability under triage",
