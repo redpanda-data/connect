@@ -1031,6 +1031,7 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 
 	// Initialize record batcher
 	d.recordBatcher = NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
+	d.recordBatcher.tracer = d.tracer
 
 	d.log.Infof("Connected to DynamoDB stream: %s", *d.streamArn)
 
@@ -1146,6 +1147,7 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 
 	// Initialize record batcher for this table
 	recordBatcher := NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
+	recordBatcher.tracer = d.tracer
 
 	// Re-check under write lock before inserting (another goroutine may have
 	// initialized this table concurrently during periodic discovery).

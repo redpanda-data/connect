@@ -18,6 +18,8 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // TestCDCTracingSpans verifies that the snapshot and stream phases emit tracing
@@ -72,4 +74,32 @@ func TestCDCTracingSpans(t *testing.T) {
 		require.Len(t, spans[0].Events, 1)
 		assert.Equal(t, "exception", spans[0].Events[0].Name)
 	})
+}
+
+// TestCDCTracingLiveCheckpointCommitSpan verifies that the live checkpoint
+// commit during normal streaming (RecordBatcher.AckMessages, not just the flush
+// on close) emits an aws_dynamodb_cdc.checkpoint_commit span.
+func TestCDCTracingLiveCheckpointCommitSpan(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	defer func() { _ = tp.Shutdown(context.Background()) }()
+
+	batcher := NewRecordBatcher(10000, 1000, service.MockResources().Logger())
+	batcher.tracer = tp.Tracer("aws_dynamodb_cdc")
+
+	checkpointer := &mockCheckpointer{checkpointLimit: 5}
+
+	// Ack enough contiguous messages to cross the checkpoint limit, which
+	// triggers the live commit path.
+	batch1 := createTestMessages(3, "shard-001", 0)
+	batch2 := createTestMessages(3, "shard-001", 3)
+	batcher.AddMessages(batch1, "shard-001")
+	batcher.AddMessages(batch2, "shard-001")
+	require.NoError(t, batcher.AckMessages(context.Background(), checkpointer, batch1))
+	require.NoError(t, batcher.AckMessages(context.Background(), checkpointer, batch2))
+	require.Equal(t, 1, checkpointer.calls(), "expected one live checkpoint commit")
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+	assert.Equal(t, traceCheckpointCommit, spans[0].Name)
 }
