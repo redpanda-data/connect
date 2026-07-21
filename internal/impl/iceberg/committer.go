@@ -63,6 +63,12 @@ type CommitConfig struct {
 	ManifestMergeEnabled bool
 	MaxSnapshotAge       time.Duration
 	MaxRetries           int
+	// SkipFormatUpgrade leaves the table at its existing format version instead
+	// of upgrading to v2. Set for copy-on-write, which only ever writes plain
+	// data files (no v2 delete files) and so works on a v1 table — avoiding an
+	// unnecessary, irreversible v1->v2 upgrade. Merge-on-read/append leave this
+	// false: their equality-delete path requires v2.
+	SkipFormatUpgrade bool
 }
 
 // StaleSchemaError is returned when data was written with a schema
@@ -381,7 +387,7 @@ func (c *committer) commitLocked(ctx context.Context, retryOnUnknownState bool, 
 	for range c.cfg.MaxRetries {
 		attempt++
 		txn := c.table.NewTransaction()
-		if c.table.Metadata().Version() < CurrentIcebergVersion {
+		if !c.cfg.SkipFormatUpgrade && c.table.Metadata().Version() < CurrentIcebergVersion {
 			c.upgradeWarnOnce.Do(func() {
 				c.logger.Warnf("Upgrading iceberg table to format version %d to support row-level deletes; this change is irreversible", CurrentIcebergVersion)
 			})

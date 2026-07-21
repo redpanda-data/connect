@@ -731,8 +731,12 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 		return rc.LoadTable(ctx, key.table)
 	}
 
-	// Create committer with its own table reference
-	comm, err := NewCommitter(committerTbl, r.commitCfg, reloadTable, r.logger)
+	// Create committer with its own table reference. Copy-on-write writes only
+	// plain data files, so it works on a v1 table and must not trigger the
+	// irreversible v1->v2 upgrade the merge-on-read path needs.
+	commitCfg := r.commitCfg
+	commitCfg.SkipFormatUpgrade = r.rowOpCfg.MergeStrategy == mergeStrategyCOW
+	comm, err := NewCommitter(committerTbl, commitCfg, reloadTable, r.logger)
 	if err != nil {
 		return nil, fmt.Errorf("creating committer: %w", err)
 	}

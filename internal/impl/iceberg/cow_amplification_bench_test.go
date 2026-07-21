@@ -27,6 +27,7 @@ import (
 	"io/fs"
 	"math/rand"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -344,4 +345,162 @@ func TestCOWWriteAmplification(t *testing.T) {
 	t.Log("")
 	t.Log("amp(x)   = bytes written by the mutation / bytes logically changed (~K rows)")
 	t.Log("tblRewr% = removed-files-size / total seeded bytes (fraction of table COW rewrote)")
+}
+
+// TestCOWWriteAmplificationScale confirms the K/M model holds at larger,
+// production-like per-file sizes (up to a few MB per data file) and measures the
+// per-MB rewrite cost, from which 128-512 MB file behaviour extrapolates
+// linearly. TestCOWWriteAmplification above characterises tiny (~80 KB) files;
+// this one holds M fixed and grows R so each data file reaches ~1-4 MB, then:
+//
+//   - "within" (K=1): touches one key in one file, so exactly ONE file (1/M of
+//     the table) is rewritten regardless of file size — the K/M model.
+//   - "perfile" (K=M): touches one key in every file, so ALL M files (the whole
+//     table) are rewritten.
+//
+// For each case it reports the bytes COW rewrote (removed-files-size), which
+// tracks the touched files' on-disk size, and the wall-clock MB/s of the
+// rewrite. We deliberately do NOT seed literal 512 MB files (far too slow for a
+// unit test); the per-MB cost measured here is the extrapolation constant.
+func TestCOWWriteAmplificationScale(t *testing.T) {
+	if testing.Short() {
+		t.Skip("amplification harness is slow; skipped under -short")
+	}
+	ctx := t.Context()
+
+	const (
+		M            = 4   // data files in the table
+		payloadBytes = 512 // larger payload so a few thousand rows already spans MBs
+	)
+	// rows/file chosen so each file lands around ~1, ~2 and ~4 MB on disk.
+	rowCounts := []int{2000, 4000, 8000}
+
+	type scen struct {
+		scatter string
+		k       int
+		want    int64 // files expected to be rewritten
+	}
+	scatters := []scen{
+		{"within", 1, 1},  // K/M: one key, one file rewritten
+		{"perfile", M, M}, // whole table: one key per file, all files rewritten
+	}
+
+	t.Log("")
+	t.Logf("Scale layout: M=%d files, payload=%d bytes/row, contiguous clustered id ranges per file", M, payloadBytes)
+	t.Log("")
+	t.Logf("%-22s | %8s %9s | %8s | %9s %9s | %9s | %8s | %8s",
+		"scenario", "fileMB", "seedMB", "filesRw", "rewroteMB", "wroteMB", "wall", "MB/s", "tblRewr%")
+	t.Log(strings.Repeat("-", 120))
+
+	for _, R := range rowCounts {
+		for _, s := range scatters {
+			res := runAmpScenario(t, ctx, table.WriteModeCopyOnWrite, M, R, s.k, payloadBytes, s.scatter)
+
+			// K/M model: the number of files rewritten equals the number of
+			// distinct files that held a touched key, independent of file size.
+			require.Equalf(t, s.want, res.deletedDataFiles,
+				"COW must rewrite exactly %d file(s) for %s (K/M model)", s.want, res.name)
+			require.Zerof(t, res.deleteManifestFiles, "COW must produce zero delete files")
+
+			const mb = 1024.0 * 1024.0
+			fileMB := float64(res.seedBytes) / float64(M) / mb
+			seedMB := float64(res.seedBytes) / mb
+			rewroteMB := float64(res.removedFilesSize) / mb
+			wroteMB := float64(res.addedFilesSize) / mb
+			var mbPerSec float64
+			if res.elapsed > 0 {
+				mbPerSec = rewroteMB / res.elapsed.Seconds()
+			}
+			tblRewrPct := 100 * float64(res.removedFilesSize) / float64(res.seedBytes)
+
+			t.Logf("%-22s | %8.2f %9.2f | %8d | %9.2f %9.2f | %9s | %8.1f | %8.2f",
+				res.name, fileMB, seedMB, res.deletedDataFiles, rewroteMB, wroteMB,
+				res.elapsed.Round(time.Millisecond).String(), mbPerSec, tblRewrPct)
+		}
+	}
+
+	t.Log("")
+	t.Log("K/M model: filesRw = number of files holding a touched key; a K-key batch scattered")
+	t.Log("over M files rewrites ~K/M of the table. rewroteMB tracks those files' on-disk size,")
+	t.Log("so a 1-key touch in a 512 MB file rewrites the whole 512 MB. Extrapolate cost via MB/s.")
+}
+
+// TestCOWRecordFactoryMemory quantifies the peak memory of the copy-on-write
+// new-row path so we can state a batch-size guideline. buildCOWRecordFactory
+// projects the whole batch into JSON (retained by the returned closure for
+// retries) and every factory() call materialises the entire batch as one
+// in-memory Arrow record via array.RecordFromJSON. Both scale linearly with the
+// batch's total row bytes, so an over-large keyed batch can dominate RSS.
+//
+// It measures, for growing batch sizes: total bytes allocated (churn) building
+// the factory + one reader, and the heap retained while that reader is live
+// (the closure's JSON plus the live Arrow record), and derives bytes/row.
+func TestCOWRecordFactoryMemory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("memory harness allocates hundreds of MB; skipped under -short")
+	}
+
+	tbl, _ := newAmpTable(t, table.WriteModeCopyOnWrite) // schema: id int64, payload string
+	w := cowWriter(t, tbl, "id")
+	sc := tbl.Schema()
+
+	const payloadBytes = 256 // per-row payload; representative CDC row body
+
+	t.Log("")
+	t.Logf("Row layout: id int64 + payload string (%d bytes/row); COW materialises the whole batch as Arrow", payloadBytes)
+	t.Log("")
+	t.Logf("%8s | %10s | %12s %10s | %12s %10s",
+		"rows", "rawMB", "churnMB", "churn B/row", "retainedMB", "ret B/row")
+	t.Log(strings.Repeat("-", 84))
+
+	rng := rand.New(rand.NewSource(42))
+	for _, n := range []int{10_000, 50_000, 100_000} {
+		rows := make([]map[string]any, n)
+		buf := make([]byte, payloadBytes)
+		for i := range rows {
+			for j := range buf {
+				buf[j] = byte('a' + rng.Intn(26))
+			}
+			rows[i] = map[string]any{"id": int64(i), "payload": string(buf)}
+		}
+		batch := toBatch(t, rows)
+		rawBytes := int64(n) * int64(payloadBytes+8) // payload + int64 id, logical size
+
+		runtime.GC()
+		var before runtime.MemStats
+		runtime.ReadMemStats(&before)
+
+		factory, err := w.buildCOWRecordFactory(sc, batch)
+		require.NoError(t, err)
+		rdr, err := factory()
+		require.NoError(t, err)
+		var got int64
+		for rdr.Next() {
+			got += rdr.RecordBatch().NumRows()
+		}
+
+		// Read while the reader (and the closure's JSON) is still alive so the
+		// retained-heap delta reflects what a live COW commit holds.
+		var live runtime.MemStats
+		runtime.ReadMemStats(&live)
+		require.EqualValues(t, n, got)
+		rdr.Release()
+
+		const mb = 1024.0 * 1024.0
+		churn := live.TotalAlloc - before.TotalAlloc
+		retained := max(int64(live.HeapAlloc)-int64(before.HeapAlloc), 0)
+
+		t.Logf("%8d | %10.2f | %12.2f %10.1f | %12.2f %10.1f",
+			n, float64(rawBytes)/mb,
+			float64(churn)/mb, float64(churn)/float64(n),
+			float64(retained)/mb, float64(retained)/float64(n))
+
+		runtime.KeepAlive(factory)
+	}
+
+	t.Log("")
+	t.Log("churnMB    = total bytes allocated to build the JSON + one Arrow record (transient, GC-reclaimed)")
+	t.Log("retainedMB = live heap held during a commit: the closure's JSON batch + the materialised Arrow record")
+	t.Log("Guideline: budget ~retained B/row per row of a keyed batch (plus the inbound message bodies);")
+	t.Log("size batches so this stays within the process memory budget, since the whole batch is held at once.")
 }

@@ -12,11 +12,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
@@ -67,14 +67,24 @@ func (w *writer) writeCOW(ctx context.Context, batch service.MessageBatch) error
 		return nil
 	}
 
-	// The remaining paths rewrite data files. Partitioned copy-on-write is not
-	// yet validated in this prototype: iceberg-go's Overwrite routes rewritten
-	// rows to partitions internally, but we have only proven the unpartitioned
-	// case end-to-end, so fail loudly rather than risk mis-partitioned rewrites.
-	spec := w.table.Spec()
-	if spec.NumFields() > 0 {
-		return errors.New("copy-on-write merge_strategy does not support upsert/delete on partitioned tables in this prototype; use merge-on-read, or an unpartitioned table")
-	}
+	// The remaining paths rewrite data files. Partitioned tables are supported:
+	// iceberg-go's Overwrite/Delete route rows to partitions correctly end-to-end.
+	//   - New/rewritten rows: recordsToDataFiles sends a partitioned spec through
+	//     the partitioned fanout writer (partitioned_fanout_writer.go), which
+	//     derives each row's partition tuple from the actual source-column value
+	//     via PartitionField.Transform.Apply — so every transform (identity,
+	//     bucket, truncate, year/month/day/hour) routes correctly. This is not the
+	//     stats-inference path (fileToDataFile) that panics on non-order-preserving
+	//     transforms; that path is only used by AddFiles.
+	//   - Deletions: classifyFilesForFilteredDeletions evaluates the filter against
+	//     every data file's stats across all partitions. A merge key on a
+	//     non-partition column projects to AlwaysTrue in the partition space, so no
+	//     partition is pruned and matching rows are found in every partition.
+	// Unlike merge-on-read equality deletes (which are partition-scoped and so
+	// require the partition source columns to be a subset of identifier_fields, see
+	// writer.deleteRecordFields), copy-on-write rewrites whole files by filter and
+	// appends real rows routed by value, so it carries no such constraint — the
+	// merge key need not include (or be) the partition column.
 
 	// The rewrite builds records through the Arrow JSON round-trip, so the whole
 	// table schema must be faithfully representable that way.
@@ -125,28 +135,68 @@ func (w *writer) writeCOW(ctx context.Context, batch service.MessageBatch) error
 	return nil
 }
 
-// checkCOWSchemaSupported rejects table schemas the prototype's copy-on-write
-// path cannot faithfully round-trip through Arrow. The custom shredder handles
-// nested/complex types on the append path, but the copy-on-write rewrite builds
-// records via array.RecordFromJSON, which we have only verified for flat,
-// primitive columns. Rather than silently mis-write, fail loudly with an
-// actionable message.
+// checkCOWSchemaSupported rejects table schemas the copy-on-write path cannot
+// faithfully round-trip through Arrow. The rewrite builds records via
+// array.RecordFromJSON from the JSON produced by cowMassage; that projection is
+// recursive, so nested struct/list/map columns are supported as long as every
+// leaf is a supported primitive. Each type kind is checked by walking the type
+// tree; any unsupported leaf fails loudly with an actionable message rather than
+// risking a silent mis-write.
 func checkCOWSchemaSupported(s *iceberg.Schema) error {
 	for _, f := range s.Fields() {
-		if _, ok := f.Type.(iceberg.PrimitiveType); !ok {
-			return fmt.Errorf("copy-on-write merge_strategy does not support column %q of non-primitive type %s; this prototype only supports tables whose columns are all flat primitive types (use merge-on-read for nested schemas)", f.Name, f.Type)
-		}
-		if !cowSupportedColumnType(f.Type) {
-			return fmt.Errorf("copy-on-write merge_strategy does not support column %q of type %s; supported column types are boolean, int, long, float, double, string, date, time, timestamp, timestamptz, decimal, and uuid", f.Name, f.Type)
+		if err := checkCOWTypeSupported(f.Name, f.Type); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-// cowSupportedColumnType reports whether a primitive iceberg type is known to
-// round-trip faithfully through deleteKeyJSONValue + array.RecordFromJSON. The
-// set is deliberately conservative for the prototype; binary/fixed are excluded
-// because we have not verified their JSON encoding.
+// checkCOWTypeSupported recurses an iceberg type, accepting nested
+// struct/list/map whose leaves are all supported primitives and rejecting any
+// unsupported leaf. path names the column position (dotted for nested fields) so
+// the error points at the offending leaf.
+func checkCOWTypeSupported(path string, t iceberg.Type) error {
+	switch tt := t.(type) {
+	case *iceberg.StructType:
+		for _, f := range tt.FieldList {
+			if err := checkCOWTypeSupported(path+"."+f.Name, f.Type); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *iceberg.ListType:
+		return checkCOWTypeSupported(path+".element", tt.Element)
+	case *iceberg.MapType:
+		if err := checkCOWTypeSupported(path+".key", tt.KeyType); err != nil {
+			return err
+		}
+		return checkCOWTypeSupported(path+".value", tt.ValueType)
+	default:
+		if _, ok := t.(iceberg.PrimitiveType); !ok {
+			return fmt.Errorf("copy-on-write merge_strategy does not support column %q of unsupported non-primitive type %s (use merge-on-read for this schema)", path, t)
+		}
+		if !cowSupportedColumnType(t) {
+			return fmt.Errorf("copy-on-write merge_strategy does not support column %q of type %s; supported leaf types are boolean, int, long, float, double, string, date, time, timestamp, timestamptz, decimal, uuid, binary, and fixed", path, t)
+		}
+		return nil
+	}
+}
+
+// cowSupportedColumnType reports whether a primitive iceberg type round-trips
+// faithfully through deleteKeyJSONValue + array.RecordFromJSON, as used by
+// cowMassage/buildCOWRecordFactory. Every type in this set is guarded by a
+// faithful round-trip in TestCOWColumnTypeRoundTrip (cow_type_roundtrip_test.go).
+//
+// binary and fixed are included: deleteKeyJSONValue passes a []byte through
+// unchanged, json.Marshal base64-encodes it, and the Arrow Binary /
+// FixedSizeBinary JSON readers base64-decode it back to the exact bytes.
+//
+// Nested struct/list/map are supported by recursing the type tree (see
+// checkCOWTypeSupported) down to these primitive leaves: cowMassage produces the
+// correct JSON shape at every depth — integers are emitted as strings at every
+// leaf (fixing the historical >2^53 nested truncation) and maps are reshaped to
+// Arrow's array-of-{key,value}-entries encoding. See cow_type_roundtrip_test.go
+// for the round-trip evidence at each nesting.
 func cowSupportedColumnType(t iceberg.Type) bool {
 	switch t.(type) {
 	case iceberg.BooleanType,
@@ -156,7 +206,8 @@ func cowSupportedColumnType(t iceberg.Type) bool {
 		iceberg.DateType, iceberg.TimeType,
 		iceberg.TimestampType, iceberg.TimestampTzType,
 		iceberg.DecimalType,
-		iceberg.UUIDType:
+		iceberg.UUIDType,
+		iceberg.BinaryType, iceberg.FixedType:
 		return true
 	default:
 		return false
@@ -169,9 +220,12 @@ func cowSupportedColumnType(t iceberg.Type) bool {
 // per-tuple ANDs — `(a=a1 AND b=b1) OR (a=a2 AND b=b2) ...` — which is the
 // correct semantics (an AND of per-column INs would match the cross product).
 //
-// For the prototype, merge-key columns are restricted to int/long/string/
-// boolean so the filter literals are unambiguous; other key types return a
-// clear error.
+// Merge-key columns may be int/long/string/boolean, the temporal types
+// (date/time/timestamp/timestamptz), or uuid. Every key literal is built so its
+// encoding matches how buildCOWRecordFactory stores the same value (see
+// cowKeyLiteral). decimal is intentionally excluded (a vendored-library bug
+// panics on a decimal overwrite filter — use merge-on-read for a decimal key);
+// other key types return a clear error.
 func (w *writer) buildCOWFilter(tableSchema *iceberg.Schema, keyed service.MessageBatch) (iceberg.BooleanExpression, error) {
 	idFields, err := w.cowKeyFields(tableSchema)
 	if err != nil {
@@ -265,9 +319,36 @@ func (w *writer) lookupKeyValue(msg *service.Message, field iceberg.NestedField,
 	return v, nil
 }
 
-// cowKeyLiteral builds an iceberg filter literal for a merge-key value. Only
-// int/long/string/boolean key columns are supported by the prototype's
-// copy-on-write filter; other types return a clear, actionable error.
+// cowKeyLiteral builds an iceberg filter literal for a merge-key value.
+//
+// The overriding invariant is that the literal's encoding MUST match how
+// buildCOWRecordFactory stores the same value, or the overwrite filter selects
+// no rows and the upsert/delete silently becomes a no-op (the CON-490 hazard).
+// The rewrite stores every value by running it through deleteKeyJSONValue and
+// then array.RecordFromJSON, so this function derives each literal from that
+// same canonicalisation:
+//
+//   - int/long/string/boolean: built directly, mirroring the append path.
+//   - date/time/uuid: canonicalised by deleteKeyJSONValue to the exact string
+//     the data path stores, then parsed into the typed literal by iceberg's own
+//     StringLiteral.To — so filter and storage share an encoding by construction
+//     (date days, microsecond time-of-day, uuid bytes).
+//   - timestamp/timestamptz: deleteKeyJSONValue requires a time.Time and rejects
+//     a bare number (a numeric timestamp is ambiguous — the exact CON-490 silent
+//     no-match), so it is reused for that validation. The literal is then built
+//     directly from the time.Time as UnixMicro, because StringLiteral.To's
+//     timestamp parser does not accept the RFC3339 form the data path stores;
+//     both encode microseconds since the epoch, so they still agree.
+//
+// decimal is deliberately NOT a supported merge key: iceberg-go's overwrite
+// applies the filter through its substrait conversion, which panics on a decimal
+// literal (toDecimalLiteral asserts *iceberg.DecimalType, but DecimalLiteral.Type
+// returns a value DecimalType — a bug in the vendored library). Rather than let
+// that panic reach a real table, decimal keys are rejected here with an
+// actionable error. decimal remains valid as a merge-on-read equality-delete key
+// (that path does not go through substrait).
+//
+// Other key types return a clear, actionable error.
 func cowKeyLiteral(t iceberg.Type, name string, v any) (iceberg.Literal, error) {
 	switch t.(type) {
 	case iceberg.Int32Type:
@@ -294,8 +375,37 @@ func cowKeyLiteral(t iceberg.Type, name string, v any) (iceberg.Literal, error) 
 			return nil, fmt.Errorf("%s %q: boolean column given %T", ioFieldIdentifierFields, name, v)
 		}
 		return iceberg.NewLiteral(b), nil
+	case iceberg.TimestampType, iceberg.TimestampTzType:
+		// Reuse deleteKeyJSONValue purely for its validation: it requires a
+		// time.Time and rejects a bare number with an actionable error.
+		if _, err := deleteKeyJSONValue(t, v); err != nil {
+			return nil, fmt.Errorf("%s %q: %w", ioFieldIdentifierFields, name, err)
+		}
+		tm := v.(time.Time)
+		return iceberg.NewLiteral(iceberg.Timestamp(tm.UTC().UnixMicro())), nil
+	case iceberg.DecimalType:
+		// See the doc comment: an overwrite filter on a decimal column panics
+		// inside iceberg-go's substrait conversion, so refuse loudly here.
+		return nil, fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; decimal is not a supported copy-on-write merge key (a known limitation in the underlying iceberg library's overwrite filter) — use merge-on-read for a decimal key", name, t)
+	case iceberg.DateType, iceberg.TimeType, iceberg.UUIDType:
+		jv, err := deleteKeyJSONValue(t, v)
+		if err != nil {
+			return nil, fmt.Errorf("%s %q: %w", ioFieldIdentifierFields, name, err)
+		}
+		s, ok := jv.(string)
+		if !ok {
+			// deleteKeyJSONValue canonicalises all of these to a string; a
+			// non-string means the incoming value could not be canonicalised
+			// (e.g. a non-string uuid value), which cannot key a row.
+			return nil, fmt.Errorf("%s %q: %s column requires a value convertible to its canonical string form, got %T", ioFieldIdentifierFields, name, t, v)
+		}
+		lit, err := iceberg.StringLiteral(s).To(t)
+		if err != nil {
+			return nil, fmt.Errorf("%s %q: %w", ioFieldIdentifierFields, name, err)
+		}
+		return lit, nil
 	default:
-		return nil, fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; supported merge-key types are int, long, string, and boolean (use merge-on-read for other key types)", name, t)
+		return nil, fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; supported merge-key types are boolean, int, long, string, date, time, timestamp, timestamptz, and uuid (use merge-on-read for other key types)", name, t)
 	}
 }
 
@@ -331,8 +441,10 @@ func cowValueToInt64(v any) (int64, error) {
 // copy-on-write rewrite projects rows onto the current schema, so an unknown
 // column would otherwise be dropped without trace; returning this error lets the
 // router evolve the table and retry, matching the shredder-based append path
-// (writer.go writeDataFiles). Copy-on-write is gated to flat-primitive schemas,
-// so every new field is at the schema root.
+// (writer.go writeDataFiles). Only top-level columns are detected here; new
+// fields appearing inside an existing nested struct/list/map are not surfaced
+// for evolution (nested schema evolution is out of scope for copy-on-write) —
+// they are projected onto the current nested type by cowMassage.
 func (w *writer) cowDetectNewColumns(tableSchema *iceberg.Schema, rows service.MessageBatch) error {
 	var newErrs []*UnknownFieldError
 	seen := make(map[string]struct{})
@@ -399,7 +511,7 @@ func (w *writer) buildCOWRecordFactory(tableSchema *iceberg.Schema, rows service
 				// Absent/null columns are left out so Arrow reads them as null.
 				continue
 			}
-			jv, err := deleteKeyJSONValue(field.Type, v)
+			jv, err := w.cowMassage(field.Type, v)
 			if err != nil {
 				return nil, fmt.Errorf("column %q in message %d: %w", field.Name, i, err)
 			}
@@ -427,4 +539,96 @@ func (w *writer) buildCOWRecordFactory(tableSchema *iceberg.Schema, rows service
 		rec.Release()
 		return rdr, nil
 	}, nil
+}
+
+// cowMassage recursively projects a CDC value onto the JSON shape that
+// SchemaToArrowSchema + array.RecordFromJSON expects for the given iceberg type,
+// at every depth of the type tree. It is the nested generalisation of the flat
+// deleteKeyJSONValue projection and exists so that copy-on-write can faithfully
+// (re)write struct/list/map columns rather than either corrupting them or
+// rejecting them outright.
+//
+// Each type kind is handled as follows:
+//
+//   - primitive: delegate to deleteKeyJSONValue, which applies the int->string,
+//     temporal, decimal and uuid canonicalisation at every leaf. Doing this at
+//     every leaf (not just the top level) is what fixes the historical silent
+//     truncation of integers nested beyond 2^53: a nested int64 is emitted as a
+//     JSON string, which the Arrow Int32/Int64 JSON builder parses back exactly,
+//     instead of decoding through a lossy float64.
+//   - struct: the value is a map[string]any keyed by field name; recurse per
+//     struct field, honouring the writer's case sensitivity, and emit a
+//     map[string]any. Absent/null fields are omitted so Arrow reads them as null,
+//     mirroring the top-level behaviour.
+//   - list: the value is a []any; recurse per element with the element type and
+//     emit a []any (nil elements pass through as JSON null).
+//   - map: the CDC value is a map[string]any (the natural {"k": v} shape), but
+//     Arrow encodes a map as List<Struct<key, value>> (see arrow.MapOf: the entry
+//     struct fields are literally named "key" and "value", with value nullable).
+//     So reshape to []any of {"key": k, "value": v} objects, recursing the key
+//     and value types. A null map value stays null under its "value" key.
+func (w *writer) cowMassage(t iceberg.Type, v any) (any, error) {
+	switch tt := t.(type) {
+	case *iceberg.StructType:
+		m, ok := v.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("struct value must be an object, got %T", v)
+		}
+		out := make(map[string]any, len(tt.FieldList))
+		for _, f := range tt.FieldList {
+			fv, ok := lookupField(m, f.Name, w.caseSensitive)
+			if !ok || fv == nil {
+				// Absent/null field: omit so Arrow reads it as null.
+				continue
+			}
+			mv, err := w.cowMassage(f.Type, fv)
+			if err != nil {
+				return nil, fmt.Errorf("struct field %q: %w", f.Name, err)
+			}
+			out[f.Name] = mv
+		}
+		return out, nil
+	case *iceberg.ListType:
+		l, ok := v.([]any)
+		if !ok {
+			return nil, fmt.Errorf("list value must be an array, got %T", v)
+		}
+		out := make([]any, len(l))
+		for i, e := range l {
+			if e == nil {
+				out[i] = nil
+				continue
+			}
+			me, err := w.cowMassage(tt.Element, e)
+			if err != nil {
+				return nil, fmt.Errorf("list element %d: %w", i, err)
+			}
+			out[i] = me
+		}
+		return out, nil
+	case *iceberg.MapType:
+		m, ok := v.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("map value must be an object, got %T", v)
+		}
+		entries := make([]any, 0, len(m))
+		for k, mv := range m {
+			mk, err := w.cowMassage(tt.KeyType, k)
+			if err != nil {
+				return nil, fmt.Errorf("map key %q: %w", k, err)
+			}
+			var vv any
+			if mv != nil {
+				vv, err = w.cowMassage(tt.ValueType, mv)
+				if err != nil {
+					return nil, fmt.Errorf("map value for key %q: %w", k, err)
+				}
+			}
+			entries = append(entries, map[string]any{"key": mk, "value": vv})
+		}
+		return entries, nil
+	default:
+		// Primitive leaf: apply the same canonicalisation the flat path uses.
+		return deleteKeyJSONValue(t, v)
+	}
 }

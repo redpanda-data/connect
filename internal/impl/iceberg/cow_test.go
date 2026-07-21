@@ -120,25 +120,86 @@ func TestCheckCOWSchemaSupported(t *testing.T) {
 		require.NoError(t, checkCOWSchemaSupported(sc))
 	})
 
-	t.Run("nested struct rejected", func(t *testing.T) {
+	t.Run("nested struct accepted", func(t *testing.T) {
+		// Nested struct/list/map are now supported: the gate recurses the type
+		// tree and cowMassage produces the correct JSON shape at every depth. The
+		// faithful round-trips live in cow_type_roundtrip_test.go.
 		sc := iceberg.NewSchema(0,
 			iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64},
 			iceberg.NestedField{ID: 2, Name: "nested", Type: &iceberg.StructType{
 				FieldList: []iceberg.NestedField{{ID: 3, Name: "inner", Type: iceberg.PrimitiveTypes.String}},
 			}},
 		)
-		err := checkCOWSchemaSupported(sc)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "non-primitive")
+		require.NoError(t, checkCOWSchemaSupported(sc))
 	})
 
-	t.Run("binary rejected", func(t *testing.T) {
+	t.Run("binary and fixed accepted", func(t *testing.T) {
+		// binary and fixed are flat primitives that round-trip faithfully through
+		// the Arrow JSON base64 encoding (see TestCOWColumnTypeRoundTrip), so the
+		// gate accepts them.
 		sc := iceberg.NewSchema(0,
 			iceberg.NestedField{ID: 1, Name: "b", Type: iceberg.PrimitiveTypes.Binary},
+			iceberg.NestedField{ID: 2, Name: "f", Type: iceberg.FixedTypeOf(16)},
+		)
+		require.NoError(t, checkCOWSchemaSupported(sc))
+	})
+
+	t.Run("nested list accepted", func(t *testing.T) {
+		sc := iceberg.NewSchema(0,
+			iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64},
+			iceberg.NestedField{ID: 2, Name: "l", Type: &iceberg.ListType{
+				ElementID: 3, Element: iceberg.PrimitiveTypes.String, ElementRequired: false,
+			}},
+		)
+		require.NoError(t, checkCOWSchemaSupported(sc))
+	})
+
+	t.Run("map accepted", func(t *testing.T) {
+		sc := iceberg.NewSchema(0,
+			iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64},
+			iceberg.NestedField{ID: 2, Name: "m", Type: &iceberg.MapType{
+				KeyID: 3, KeyType: iceberg.PrimitiveTypes.String,
+				ValueID: 4, ValueType: iceberg.PrimitiveTypes.Int64, ValueRequired: false,
+			}},
+		)
+		require.NoError(t, checkCOWSchemaSupported(sc))
+	})
+
+	t.Run("deeply nested primitives accepted", func(t *testing.T) {
+		// struct<list<map<string, struct<...>>>> — every leaf is a supported
+		// primitive, so the recursive gate accepts the whole tree.
+		sc := iceberg.NewSchema(0,
+			cowIDField(),
+			iceberg.NestedField{ID: 2, Name: "deep", Type: &iceberg.StructType{FieldList: []iceberg.NestedField{
+				{ID: 3, Name: "items", Type: &iceberg.ListType{
+					ElementID: 4, ElementRequired: false, Element: &iceberg.MapType{
+						KeyID: 5, KeyType: iceberg.PrimitiveTypes.String,
+						ValueID: 6, ValueRequired: false, ValueType: &iceberg.StructType{FieldList: []iceberg.NestedField{
+							{ID: 7, Name: "n", Type: iceberg.PrimitiveTypes.Int64},
+						}},
+					},
+				}},
+			}}},
+		)
+		require.NoError(t, checkCOWSchemaSupported(sc))
+	})
+
+	t.Run("unsupported leaf inside nested type rejected", func(t *testing.T) {
+		// A genuinely unsupported leaf (timestamp_ns is not in the supported set)
+		// nested inside a list-of-struct still fails loudly, and the error names
+		// the dotted path to the offending leaf.
+		sc := iceberg.NewSchema(0,
+			cowIDField(),
+			iceberg.NestedField{ID: 2, Name: "events", Type: &iceberg.ListType{
+				ElementID: 3, ElementRequired: false, Element: &iceberg.StructType{FieldList: []iceberg.NestedField{
+					{ID: 4, Name: "at", Type: iceberg.PrimitiveTypes.TimestampNs},
+				}},
+			}},
 		)
 		err := checkCOWSchemaSupported(sc)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "supported column types")
+		assert.Contains(t, err.Error(), "events.element.at")
+		assert.Contains(t, err.Error(), "timestamp_ns")
 	})
 }
 
@@ -201,14 +262,38 @@ func TestBuildCOWFilterCompositeKey(t *testing.T) {
 }
 
 func TestBuildCOWFilterUnsupportedKeyType(t *testing.T) {
+	// binary is a supported COW *column* type but not a sensible merge key, so
+	// it must be rejected by the filter path with an actionable error.
 	sc := iceberg.NewSchema(0,
-		iceberg.NestedField{ID: 1, Name: "ts", Type: iceberg.PrimitiveTypes.Timestamp},
+		iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Binary},
 	)
 	tbl := newTypedKeyTableFromSchema(t, sc)
-	w := cowWriter(t, tbl, "ts")
-	_, err := w.buildCOWFilter(sc, service.MessageBatch{structuredMsg(t, map[string]any{"ts": 1})})
+	w := cowWriter(t, tbl, "k")
+	_, err := w.buildCOWFilter(sc, service.MessageBatch{structuredMsg(t, map[string]any{"k": []byte{0x01}})})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "merge key")
+	assert.Contains(t, err.Error(), "does not support merge key column")
+}
+
+// TestBuildCOWFilterBareNumberTemporalKeyRejected pins the CON-490 guard on the
+// merge-key path: a temporal key given as a bare number is ambiguous (the data
+// path cannot reproduce how a number would be interpreted), so it must be
+// rejected loudly rather than silently building a literal that matches nothing.
+func TestBuildCOWFilterBareNumberTemporalKeyRejected(t *testing.T) {
+	for _, typ := range []iceberg.Type{
+		iceberg.PrimitiveTypes.Timestamp,
+		iceberg.PrimitiveTypes.TimestampTz,
+		iceberg.PrimitiveTypes.Date,
+		iceberg.PrimitiveTypes.Time,
+	} {
+		t.Run(typ.String(), func(t *testing.T) {
+			sc := iceberg.NewSchema(0, iceberg.NestedField{ID: 1, Name: "k", Type: typ})
+			tbl := newTypedKeyTableFromSchema(t, sc)
+			w := cowWriter(t, tbl, "k")
+			_, err := w.buildCOWFilter(sc, service.MessageBatch{structuredMsg(t, map[string]any{"k": 1})})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "requires a time value")
+		})
+	}
 }
 
 // --- record factory ------------------------------------------------------------
@@ -306,6 +391,48 @@ func newTypedKeyTableFromSchema(t testing.TB, sc *iceberg.Schema) *table.Table {
 func newCOWTable(t testing.TB, sc *iceberg.Schema) (*table.Table, *memCatalog) {
 	t.Helper()
 	return newAmpTableWithSchema(t, sc)
+}
+
+// TestCOWv1TableStaysV1 pins Tier 3.1: copy-on-write writes only plain data
+// files, so it works on a v1 table and must NOT trigger the irreversible v1->v2
+// upgrade the merge-on-read path forces. The mutation must still round-trip.
+func TestCOWv1TableStaysV1(t *testing.T) {
+	ctx := t.Context()
+	location := filepath.ToSlash(t.TempDir())
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: false},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	meta, err := table.NewMetadata(sc, iceberg.UnpartitionedSpec, table.UnsortedSortOrder,
+		location, iceberg.Properties{table.PropertyFormatVersion: "1"})
+	require.NoError(t, err)
+	cat := &memCatalog{
+		meta:             meta,
+		metadataLocation: fmt.Sprintf("%s/metadata/00001-%s.metadata.json", location, uuid.New()),
+		ident:            table.Identifier{"default", "t"},
+		location:         location,
+	}
+	tbl := cat.snapshot()
+	require.EqualValues(t, 1, tbl.Metadata().Version(), "precondition: table starts at v1")
+
+	tbl = appendCOWRows(t, ctx, tbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+	require.EqualValues(t, 1, cat.snapshot().Metadata().Version(), "seeding must not upgrade the table")
+
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3, SkipFormatUpgrade: true}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, tbl, "id")
+	w.committer = comm
+
+	require.NoError(t, w.Write(ctx, service.MessageBatch{
+		cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"}),
+		cowMsg(t, "delete", map[string]any{"id": 3}),
+	}))
+
+	final := cat.snapshot()
+	assert.EqualValues(t, 1, final.Metadata().Version(), "copy-on-write must not upgrade a v1 table to v2")
+	assertAllManifestsData(t, ctx, final)
+	assert.Equal(t, map[int64]string{1: "one", 2: "TWO"}, scanRows(t, ctx, final))
 }
 
 // TestCOWUpsertDeleteRoundTrip drives a full copy-on-write upsert+delete batch
@@ -407,13 +534,13 @@ func TestCOWOnlyInsertsUsesAppend(t *testing.T) {
 	assert.Equal(t, map[int64]string{10: "ten", 11: "eleven"}, scanRows(t, ctx, final))
 }
 
-// --- partition gate ------------------------------------------------------------
+// --- partitioned copy-on-write --------------------------------------------------
 
 // newPartitionedCOWTable builds a partitioned v2 table for the given schema and
 // spec, backed by an in-memory catalog and the local filesystem. It mirrors
 // newAmpTableWithSchema but installs a real partition spec so
 // tbl.Spec().NumFields() > 0.
-func newPartitionedCOWTable(t testing.TB, sc *iceberg.Schema, spec iceberg.PartitionSpec) *table.Table {
+func newPartitionedCOWTable(t testing.TB, sc *iceberg.Schema, spec iceberg.PartitionSpec) (*table.Table, *memCatalog) {
 	t.Helper()
 	location := filepath.ToSlash(t.TempDir())
 	meta, err := table.NewMetadata(sc, &spec, table.UnsortedSortOrder, location,
@@ -425,15 +552,70 @@ func newPartitionedCOWTable(t testing.TB, sc *iceberg.Schema, spec iceberg.Parti
 		ident:            table.Identifier{"default", "cow_partitioned"},
 		location:         location,
 	}
-	return cat.snapshot()
+	return cat.snapshot(), cat
 }
 
-// TestCOWPartitionedTableRejectsMutation pins the copy-on-write partition gate:
-// writeCOW must refuse a mutating (upsert/delete) batch on a partitioned table
-// rather than risk a mis-partitioned rewrite, and it must do so with an
-// actionable error. Only the file-rewrite paths are gated, so an upsert — a
-// keyed operation — is the trigger that reaches the gate.
-func TestCOWPartitionedTableRejectsMutation(t *testing.T) {
+// appendPartitionedCOWRows appends (id, region, payload) rows as one plain-data-
+// file snapshot, routed to partitions by iceberg-go's partitioned fanout writer,
+// and returns the updated table handle.
+func appendPartitionedCOWRows(t testing.TB, ctx context.Context, tbl *table.Table, rows []map[string]any) *table.Table {
+	t.Helper()
+	arrowSc, err := table.SchemaToArrowSchema(tbl.Schema(), nil, false, false)
+	require.NoError(t, err)
+
+	b, err := json.Marshal(rows)
+	require.NoError(t, err)
+
+	rec, _, err := array.RecordFromJSON(memory.DefaultAllocator, arrowSc, bytes.NewReader(b))
+	require.NoError(t, err)
+	rdr, err := array.NewRecordReader(arrowSc, []arrow.RecordBatch{rec})
+	require.NoError(t, err)
+	rec.Release()
+	defer rdr.Release()
+
+	tx := tbl.NewTransaction()
+	require.NoError(t, tx.Append(ctx, rdr, nil))
+	next, err := tx.Commit(ctx)
+	require.NoError(t, err)
+	return next
+}
+
+// scanPartitionedRows scans the table into id -> {region, payload}, honouring any
+// deletes.
+func scanPartitionedRows(t testing.TB, ctx context.Context, tbl *table.Table) map[int64][2]string {
+	t.Helper()
+	at, err := tbl.Scan().ToArrowTable(ctx)
+	require.NoError(t, err)
+	defer at.Release()
+
+	out := map[int64][2]string{}
+	tr := array.NewTableReader(at, 0)
+	defer tr.Release()
+	for tr.Next() {
+		rec := tr.RecordBatch()
+		idArr := rec.Column(rec.Schema().FieldIndices("id")[0]).(*array.Int64)
+		regArr := rec.Column(rec.Schema().FieldIndices("region")[0]).(*array.String)
+		payArr := rec.Column(rec.Schema().FieldIndices("payload")[0]).(*array.String)
+		for r := 0; r < int(rec.NumRows()); r++ {
+			pay := ""
+			if payArr.IsValid(r) {
+				pay = payArr.Value(r)
+			}
+			out[idArr.Value(r)] = [2]string{regArr.Value(r), pay}
+		}
+	}
+	return out
+}
+
+// TestCOWPartitionedUpsertDeleteRoundTrip proves copy-on-write works end-to-end
+// on a partitioned table (partition by region, merge key id — a NON-partition
+// column). A single mutating batch touches multiple partitions: it updates a row
+// in eu, deletes a row in eu, and inserts a new row in apac. The result must have
+// the correct per-partition state AND zero delete files (the copy-on-write
+// invariant). The merge key is not the partition column, which merge-on-read
+// could not support (equality deletes are partition-scoped) — copy-on-write can,
+// because it rewrites whole files by filter and re-routes appended rows by value.
+func TestCOWPartitionedUpsertDeleteRoundTrip(t *testing.T) {
 	ctx := t.Context()
 
 	sc := iceberg.NewSchema(0,
@@ -445,20 +627,136 @@ func TestCOWPartitionedTableRejectsMutation(t *testing.T) {
 	spec := iceberg.NewPartitionSpec(iceberg.PartitionField{
 		SourceIDs: []int{2}, FieldID: 1000, Name: "region", Transform: iceberg.IdentityTransform{},
 	})
-	tbl := newPartitionedCOWTable(t, sc, spec)
-	tblSpec := tbl.Spec()
-	require.Positive(t, tblSpec.NumFields(), "table must be partitioned for this test to be meaningful")
+	seedTbl, cat := newPartitionedCOWTable(t, sc, spec)
+	seedSpec := seedTbl.Spec()
+	require.Positive(t, seedSpec.NumFields(), "table must be partitioned for this test to be meaningful")
 
-	w := cowWriter(t, tbl, "id")
-
-	// An upsert is a keyed operation, so writeCOW reaches the file-rewrite path
-	// where the partition gate lives. No committer is wired because the gate must
-	// fire before any commit is attempted.
-	err := w.Write(ctx, service.MessageBatch{
-		cowMsg(t, "upsert", map[string]any{"id": 2, "region": "eu", "payload": "TWO"}),
+	// Seed rows across three partitions.
+	seedTbl = appendPartitionedCOWRows(t, ctx, seedTbl, []map[string]any{
+		{"id": 1, "region": "us", "payload": "one"},
+		{"id": 2, "region": "eu", "payload": "two"},
+		{"id": 3, "region": "eu", "payload": "three"},
+		{"id": 4, "region": "apac", "payload": "four"},
 	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "does not support upsert/delete on partitioned tables")
+
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, seedTbl, "id")
+	w.committer = comm
+
+	// One batch spanning multiple partitions: upsert id=2 (eu), delete id=3 (eu),
+	// upsert id=5 (new row in apac).
+	require.NoError(t, w.Write(ctx, service.MessageBatch{
+		cowMsg(t, "upsert", map[string]any{"id": 2, "region": "eu", "payload": "TWO"}),
+		cowMsg(t, "delete", map[string]any{"id": 3, "region": "eu"}),
+		cowMsg(t, "upsert", map[string]any{"id": 5, "region": "apac", "payload": "FIVE"}),
+	}))
+
+	final := cat.snapshot()
+
+	// (a) zero delete files: the copy-on-write invariant.
+	assert.Zero(t, countDeleteManifestFiles(t, ctx, final), "copy-on-write must leave no delete files")
+	assertAllManifestsData(t, ctx, final)
+
+	// (b) correct final state, per partition.
+	got := scanPartitionedRows(t, ctx, final)
+	want := map[int64][2]string{
+		1: {"us", "one"},    // untouched
+		2: {"eu", "TWO"},    // upserted in place (no duplicate)
+		4: {"apac", "four"}, // untouched
+		5: {"apac", "FIVE"}, // inserted into a different partition
+	}
+	assert.Equal(t, want, got, "id=3 must be deleted; id=2 updated once; id=5 landed in apac")
+}
+
+// TestCOWPartitionKeyChangeRoundTrip covers the case merge-on-read cannot: an
+// upsert that moves a keyed row to a DIFFERENT partition. Copy-on-write deletes
+// the old row wherever it lives (the filter matches across all partitions) and
+// appends the new row into its new partition, leaving exactly one row.
+func TestCOWPartitionKeyChangeRoundTrip(t *testing.T) {
+	ctx := t.Context()
+
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "region", Type: iceberg.PrimitiveTypes.String, Required: true},
+		iceberg.NestedField{ID: 3, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	spec := iceberg.NewPartitionSpec(iceberg.PartitionField{
+		SourceIDs: []int{2}, FieldID: 1000, Name: "region", Transform: iceberg.IdentityTransform{},
+	})
+	seedTbl, cat := newPartitionedCOWTable(t, sc, spec)
+
+	seedTbl = appendPartitionedCOWRows(t, ctx, seedTbl, []map[string]any{
+		{"id": 1, "region": "us", "payload": "one"},
+	})
+
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, seedTbl, "id")
+	w.committer = comm
+
+	// Move id=1 from us to eu via upsert.
+	require.NoError(t, w.Write(ctx, service.MessageBatch{
+		cowMsg(t, "upsert", map[string]any{"id": 1, "region": "eu", "payload": "ONE"}),
+	}))
+
+	final := cat.snapshot()
+	assert.Zero(t, countDeleteManifestFiles(t, ctx, final), "copy-on-write must leave no delete files")
+	got := scanPartitionedRows(t, ctx, final)
+	assert.Equal(t, map[int64][2]string{1: {"eu", "ONE"}}, got,
+		"the row must move to eu with no stale copy left in us")
+}
+
+// TestCOWBucketPartitionRoundTrip exercises a NON-order-preserving transform
+// (bucket) on the copy-on-write write path. The partitioned fanout writer derives
+// each row's partition from Transform.Apply on the actual value, so bucket works
+// exactly like identity — this is distinct from the stats-inference path
+// (fileToDataFile), which panics on non-order-preserving transforms but is only
+// used by AddFiles, never by the record-writing path copy-on-write uses.
+func TestCOWBucketPartitionRoundTrip(t *testing.T) {
+	ctx := t.Context()
+
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "region", Type: iceberg.PrimitiveTypes.String, Required: true},
+		iceberg.NestedField{ID: 3, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	// Partition by bucket(4, region) — a non-order-preserving transform.
+	spec := iceberg.NewPartitionSpec(iceberg.PartitionField{
+		SourceIDs: []int{2}, FieldID: 1000, Name: "region_bucket", Transform: iceberg.BucketTransform{NumBuckets: 4},
+	})
+	seedTbl, cat := newPartitionedCOWTable(t, sc, spec)
+
+	seedTbl = appendPartitionedCOWRows(t, ctx, seedTbl, []map[string]any{
+		{"id": 1, "region": "us", "payload": "one"},
+		{"id": 2, "region": "eu", "payload": "two"},
+		{"id": 3, "region": "apac", "payload": "three"},
+	})
+
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, seedTbl, "id")
+	w.committer = comm
+
+	require.NoError(t, w.Write(ctx, service.MessageBatch{
+		cowMsg(t, "upsert", map[string]any{"id": 2, "region": "eu", "payload": "TWO"}),
+		cowMsg(t, "delete", map[string]any{"id": 3, "region": "apac"}),
+		cowMsg(t, "upsert", map[string]any{"id": 4, "region": "us", "payload": "FOUR"}),
+	}))
+
+	final := cat.snapshot()
+	assert.Zero(t, countDeleteManifestFiles(t, ctx, final), "copy-on-write must leave no delete files")
+	assertAllManifestsData(t, ctx, final)
+	got := scanPartitionedRows(t, ctx, final)
+	want := map[int64][2]string{
+		1: {"us", "one"},
+		2: {"eu", "TWO"},
+		4: {"us", "FOUR"},
+	}
+	assert.Equal(t, want, got, "id=3 deleted; id=2 updated; id=4 inserted — all bucket-partitioned")
 }
 
 // --- test helpers --------------------------------------------------------------
