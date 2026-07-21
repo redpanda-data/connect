@@ -41,7 +41,8 @@ const (
 	fieldMySQLDSN                  = "dsn"
 	fieldMySQLTables               = "tables"
 	fieldStreamSnapshot            = "stream_snapshot"
-	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
+	fieldMaxParallelSnapshotTables  = "max_parallel_snapshot_tables"
+	fieldSnapshotChunksPerTable     = "snapshot_chunks_per_table"
 	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
 	fieldMaxReconnectAttempts      = "max_reconnect_attempts"
 	fieldBatching                  = "batching"
@@ -115,6 +116,11 @@ This input adds the following metadata fields to each message:
 			Description("Specifies the number of tables that will be snapshotted in parallel.").
 			Default(1).
 			LintRule(`root = if this < 1 { [ "`+fieldMaxParallelSnapshotTables+` must be at least 1" ] }`),
+		service.NewIntField(fieldSnapshotChunksPerTable).
+			Description("Splits each table into this many PK-range chunks during snapshot, allowing parallel workers to read different portions of the same table concurrently. Only effective for tables with a single numeric primary key; other tables fall back to a single whole-table read. Requires max_parallel_snapshot_tables > 1 to benefit from parallelism.").
+			Default(1).
+			Advanced().
+			LintRule(`root = if this < 1 { [ "`+fieldSnapshotChunksPerTable+` must be at least 1" ] }`),
 		service.NewAutoRetryNacksToggleField(),
 		service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
@@ -183,10 +189,11 @@ type mysqlStreamInput struct {
 	binLogCacheKey       string
 	currentBinlogName    string
 
-	dsn                string
-	tables             []string
-	streamSnapshot     bool
-	snapshotMaxWorkers int
+	dsn                    string
+	tables                 []string
+	streamSnapshot         bool
+	snapshotMaxWorkers     int
+	snapshotChunksPerTable int
 
 	batching                  service.BatchPolicy
 	batchPolicy               *service.Batcher
@@ -285,6 +292,10 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	}
 
 	if i.snapshotMaxWorkers, err = conf.FieldInt(fieldMaxParallelSnapshotTables); err != nil {
+		return nil, err
+	}
+
+	if i.snapshotChunksPerTable, err = conf.FieldInt(fieldSnapshotChunksPerTable); err != nil {
 		return nil, err
 	}
 
@@ -471,7 +482,11 @@ func (i *mysqlStreamInput) refreshIAMAuthToken(ctx context.Context) error {
 func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, snapshot *Snapshot) error {
 	// If we are given a snapshot, then we need to read it.
 	if snapshot != nil {
-		startPos, err := snapshot.prepareSnapshot(ctx, i.tables, i.snapshotMaxWorkers)
+		// Open enough worker connections to cover all chunks across all tables,
+		// capped at snapshotMaxWorkers. Using tables*chunks rather than len(tables)
+		// allows parallel reads within a single table when chunks_per_table > 1.
+		effectiveWorkers := min(i.snapshotMaxWorkers, len(i.tables)*i.snapshotChunksPerTable)
+		startPos, err := snapshot.prepareSnapshot(ctx, i.tables, effectiveWorkers)
 		if err != nil {
 			_ = snapshot.close()
 			return fmt.Errorf("unable to prepare snapshot: %w", err)
@@ -518,17 +533,25 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 }
 
 func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot) error {
-	tableQueue := make(chan string, len(i.tables))
-	for _, table := range i.tables {
-		tableQueue <- table
+	// Plan work units — tables are split into PK-range chunks where possible.
+	units, err := planSnapshotWork(ctx, snapshot.workerTxs[0], i.tables, i.snapshotChunksPerTable)
+	if err != nil {
+		return fmt.Errorf("planning snapshot work: %w", err)
 	}
-	close(tableQueue)
+	i.logger.Infof("Snapshot plan: %d work units across %d workers", len(units), len(snapshot.workerTxs))
+
+	unitQueue := make(chan snapshotWorkUnit, len(units))
+	for _, u := range units {
+		unitQueue <- u
+	}
+	close(unitQueue)
 
 	wg, wgCtx := errgroup.WithContext(ctx)
 	for _, tx := range snapshot.workerTxs {
+		tx := tx
 		wg.Go(func() error {
-			for table := range tableQueue {
-				if err := i.snapshotTable(wgCtx, snapshot, tx, table); err != nil {
+			for unit := range unitQueue {
+				if err := i.snapshotTable(wgCtx, snapshot, tx, unit.table, unit.bounds); err != nil {
 					return err
 				}
 			}
@@ -538,8 +561,12 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 	return wg.Wait()
 }
 
-func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot, tx *sql.Tx, table string) error {
-	i.logger.Infof("Starting snapshot of table '%s'", table)
+func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot, tx *sql.Tx, table string, bounds *chunkBounds) error {
+	if bounds != nil {
+		i.logger.Infof("Starting snapshot chunk of table '%s' [lo=%v, hi=%v)", table, bounds.lowerIncl, bounds.upperExcl)
+	} else {
+		i.logger.Infof("Starting snapshot of table '%s'", table)
+	}
 	// Pre-populate schema cache so snapshot messages carry schema metadata.
 	if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
 		if _, err := i.getTableSchema(tbl); err != nil {
@@ -563,9 +590,9 @@ func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot
 	for {
 		var batchRows *sql.Rows
 		if numRowsProcessed == 0 {
-			batchRows, err = snapshot.querySnapshotTable(ctx, tx, table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
+			batchRows, err = snapshot.querySnapshotTable(ctx, tx, table, tablePks, bounds, nil, i.fieldSnapshotMaxBatchSize)
 		} else {
-			batchRows, err = snapshot.querySnapshotTable(ctx, tx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
+			batchRows, err = snapshot.querySnapshotTable(ctx, tx, table, tablePks, bounds, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
 		}
 		if err != nil {
 			return fmt.Errorf("executing snapshot table query: %s", err)
