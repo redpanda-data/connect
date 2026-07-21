@@ -322,39 +322,32 @@ func (p *partitionTracker) sendBatch(ctx context.Context, b service.MessageBatch
 	return nil
 }
 
-func (p *partitionTracker) add(ctx context.Context, m *msgWithRecord, limit int) (pauseFetch bool) {
-	var sendBatch service.MessageBatch
-	if p.batcher != nil {
-		// Wrap this in a closure to make locking/unlocking easier.
-		func() {
-			p.batcherLock.Lock()
-			defer p.batcherLock.Unlock()
-
-			if p.batcher.Add(m.msg) {
-				// Batch triggered, we flush it here synchronously.
-				sendBatch, _ = p.batcher.Flush(ctx)
-			} else {
-				// Otherwise store the latest record as the representative of the
-				// pending batch offset. This will be used by the timer based
-				// flushing mechanism within loop() if applicable.
-				p.topBatchRecord = m.r
-			}
-		}()
-	} else {
-		sendBatch = service.MessageBatch{m.msg}
+// stage feeds a record into the partition's batcher and returns a batch to
+// dispatch if one is ready (nil otherwise). It never blocks.
+//
+// It must be called with the owning checkpointTracker's lock held, but the
+// returned batch must be dispatched (via sendBatch) *after* that lock is
+// released: dispatching can block on the output channel under backpressure, and
+// blocking there while holding the checkpointTracker lock would deadlock a
+// concurrent revoke. See checkpointTracker.addRecord for the full rationale.
+func (p *partitionTracker) stage(ctx context.Context, m *msgWithRecord) service.MessageBatch {
+	if p.batcher == nil {
+		return service.MessageBatch{m.msg}
 	}
 
-	if len(sendBatch) > 0 {
-		// Ignoring in the error here is fine, it implies shut down has been
-		// triggered and we would only acknowledge the message by committing it
-		// if it were successfully delivered.
-		_ = p.sendBatch(ctx, sendBatch, m.r)
-	}
+	p.batcherLock.Lock()
+	defer p.batcherLock.Unlock()
 
-	p.checkpointerLock.Lock()
-	pauseFetch = p.checkpointer.Pending() >= int64(limit)
-	p.checkpointerLock.Unlock()
-	return
+	if p.batcher.Add(m.msg) {
+		// Batch triggered, we flush it here synchronously.
+		sendBatch, _ := p.batcher.Flush(ctx)
+		return sendBatch
+	}
+	// Otherwise store the latest record as the representative of the pending
+	// batch offset. This will be used by the timer based flushing mechanism
+	// within loop() if applicable.
+	p.topBatchRecord = m.r
+	return nil
 }
 
 func (p *partitionTracker) pauseFetch(limit int) (pauseFetch bool) {
@@ -428,8 +421,18 @@ func (c *checkpointTracker) close() {
 }
 
 func (c *checkpointTracker) addRecord(ctx context.Context, m *msgWithRecord, limit int) (pauseFetch bool) {
+	// We hold c.mut only for the map bookkeeping and the non-blocking batcher
+	// work (stage), then release it before dispatching the batch.
+	//
+	// Dispatching blocks on the (unbuffered) output channel whenever the
+	// pipeline is backpressured. OnPartitionsRevoked/OnPartitionsLost ->
+	// removeTopicPartitions also needs c.mut, so holding it across the dispatch
+	// would let a backpressured output block a rebalance indefinitely. That
+	// wedges franz-go's heartbeat/rejoin loop (it spins waiting for the revoke
+	// callback to return) with the client still alive — a state only a full
+	// connector restart recovers from. Staging under the lock and dispatching
+	// without it keeps revokes responsive.
 	c.mut.Lock()
-	defer c.mut.Unlock()
 
 	topicTracker := c.topics[m.r.Topic]
 	if topicTracker == nil {
@@ -451,7 +454,18 @@ func (c *checkpointTracker) addRecord(ctx context.Context, m *msgWithRecord, lim
 		topicTracker[m.r.Partition] = partTracker
 	}
 
-	return partTracker.add(ctx, m, limit)
+	sendBatch := partTracker.stage(ctx, m)
+
+	c.mut.Unlock()
+
+	if len(sendBatch) > 0 {
+		// Ignoring the error here is fine, it implies shut down has been
+		// triggered and we would only acknowledge the message by committing it
+		// if it were successfully delivered.
+		_ = partTracker.sendBatch(ctx, sendBatch, m.r)
+	}
+
+	return partTracker.pauseFetch(limit)
 }
 
 func (c *checkpointTracker) pauseFetch(topic string, partition int32, limit int) bool {
