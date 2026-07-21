@@ -85,6 +85,19 @@ func newOpMetrics(m *service.Metrics) *opMetrics {
 	}
 }
 
+// NOTE(CON-490, item 3.2): there is no importable seam here to assert emitted
+// counter *values* in a unit test. service.MockResources() backs its Metrics
+// with metrics.Noop() (which discards writes), and the only readable in-memory
+// implementation (metrics.NewLocal) lives in benthos-internal
+// internal/component/metrics, which a different module cannot import; nor is
+// there a public constructor for *service.Metrics that accepts a recording
+// MetricsExporter. Reading a value would therefore require either putting
+// opMetrics behind an interface (the refactor deliberately avoided) or standing
+// up a full stream + Prometheus scrape (disproportionate). Instead the row-count
+// values that feed rowOps are pinned by TestSplitByOperationCOWCountsFeedMetrics
+// on the writer side; the incr* label wiring is covered by the incr* methods'
+// own trivial mapping. Revisit if benthos exposes a public readable metrics mock.
+
 func (m *opMetrics) incrInserted(n int64) {
 	if m != nil && n > 0 {
 		m.rowOps.Incr(n, "insert")
@@ -161,6 +174,15 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		if maxInFlight, err := conf.FieldInt(ioFieldMaxInFlight); err == nil && maxInFlight > 1 {
 			mgr.Logger().Warnf("row_operation can produce upsert/delete operations but max_in_flight is %d; concurrent batches may commit out of order and corrupt the last-writer-wins result. Set max_in_flight: 1 for keyed (change-data-capture) workloads.", maxInFlight)
 		}
+	}
+
+	// Copy-on-write trades write amplification for engine-readable (delete-file-
+	// free) tables. Surface that characteristic and its mitigations once at
+	// startup so it is not a surprise in production. This is distinct from the
+	// max_in_flight ordering warning above (which is about correctness, not cost)
+	// and stays silent for merge-on-read and append-only configs.
+	if msg, ok := rowOpCfg.cowAmplificationWarning(); ok {
+		mgr.Logger().Infof("%s", msg)
 	}
 
 	// Parse parquet config

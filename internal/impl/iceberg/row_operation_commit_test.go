@@ -415,6 +415,106 @@ func TestWriteCleansUpFilesOnCommitFailure(t *testing.T) {
 	})
 }
 
+// morUpsertInput builds an upsert-shaped merge-on-read CommitInput (one data
+// file plus one equality-delete file for the given id) against tbl. It mirrors
+// the shape TestCommitUpsertProducesOverwriteSnapshot uses, so the RowDelta
+// commit derives an overwrite snapshot.
+func morUpsertInput(t testing.TB, ctx context.Context, tbl *table.Table, id int) CommitInput {
+	t.Helper()
+	w := newDeleteWriter(t, tbl)
+	deleteFiles, err := w.writeEqualityDeletes(ctx, service.MessageBatch{structuredMsg(t, map[string]any{"id": id})})
+	require.NoError(t, err)
+	dataFile := synthDataFile(t, tbl.Spec(), fmt.Sprintf("%s/data/mor-%s.parquet", tbl.Location(), uuid.New()))
+	return CommitInput{Files: []iceberg.DataFile{dataFile}, DeleteFiles: deleteFiles, SchemaID: tbl.Schema().ID}
+}
+
+// TestCommitRowDeltaIdempotentOnUnknownState pins the merge-on-read half of the
+// commit-id idempotency guarantee: a RowDelta commit is safe to retry after an
+// ambiguous (ErrCommitStateUnknown) catalog response because the commit-id
+// stamped into the snapshot summary lets the retry tell a landed commit from a
+// lost one. Both danger paths must leave the mutation applied exactly once.
+func TestCommitRowDeltaIdempotentOnUnknownState(t *testing.T) {
+	logger := service.MockResources().Logger()
+
+	// (A) landed-but-reported-unknown: the first CommitTable applies the RowDelta
+	// server-side, then reports ErrCommitStateUnknown. The retry must find the
+	// commit-id in the reloaded snapshot and return success WITHOUT committing a
+	// second time — exactly one snapshot carries the token, and CommitTable is
+	// called exactly once (no re-apply).
+	t.Run("landed then unknown applies once", func(t *testing.T) {
+		ctx := t.Context()
+		_, mem := newTestTable(t)
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitLandThenUnknown}}
+		c, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, cat.snapshot(), 2)))
+
+		assert.Equal(t, 1, cat.calls, "a landed commit must not be re-committed after an unknown-state response")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+			"exactly one snapshot must carry the commit-id (mutation applied once)")
+	})
+
+	// (B) not-landed-unknown: the first CommitTable returns ErrCommitStateUnknown
+	// WITHOUT applying. The commit-id is therefore absent on reload, so the retry
+	// must re-apply and succeed — still exactly once.
+	t.Run("unknown without landing re-applies once", func(t *testing.T) {
+		ctx := t.Context()
+		_, mem := newTestTable(t)
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitUnknownNoLand}}
+		c, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, cat.snapshot(), 2)))
+
+		assert.Equal(t, 2, cat.calls, "a commit that did not land must be retried")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+			"the mutation must be committed exactly once on the successful retry")
+	})
+
+	// Clean conflict (ErrCommitFailed, nothing landed): the commit-id is absent on
+	// reload, so the genuine-conflict retry still re-applies exactly once — the
+	// idempotency check must not over-filter a legitimate retry.
+	t.Run("clean conflict re-applies once", func(t *testing.T) {
+		ctx := t.Context()
+		_, mem := newTestTable(t)
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitConflict}}
+		c, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, cat.snapshot(), 2)))
+
+		assert.Equal(t, 2, cat.calls, "a genuine conflict must be retried")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+			"the mutation must be committed exactly once after the conflict")
+	})
+}
+
+// TestCommitRowDeltaWritesCommitIDToSummary is the direct round-trip test for the
+// idempotency token: a normal (non-flaky) merge-on-read commit must write a
+// commit-id into the snapshot summary that is still readable after a catalog
+// reload (and is a valid UUID).
+func TestCommitRowDeltaWritesCommitIDToSummary(t *testing.T) {
+	ctx := t.Context()
+	tbl, cat := newTestTable(t)
+	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer c.Close()
+
+	require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, tbl, 2)))
+
+	snap := cat.snapshot().CurrentSnapshot()
+	require.NotNil(t, snap)
+	require.NotNil(t, snap.Summary)
+	id := snap.Summary.Properties[commitIDProp]
+	require.NotEmpty(t, id, "the mutation snapshot must carry the commit-id after reload")
+	_, err = uuid.Parse(id)
+	assert.NoError(t, err, "the commit-id must be a valid UUID")
+}
+
 // BenchmarkCommitterAppend measures the append fast path (no delete files),
 // which existing append-only users hit. It is the baseline for confirming the
 // row-operation work did not regress the commit hot path: the only added cost

@@ -378,6 +378,78 @@ func TestCommitOverwriteCleansUpOrphansOnFailure(t *testing.T) {
 		"the failed copy-on-write commit's parquet files must be cleaned up, leaving only the seed files")
 }
 
+// TestCommitOverwriteIdempotentOnUnknownState pins the copy-on-write half of the
+// commit-id idempotency guarantee. A copy-on-write overwrite is safe to retry
+// after an ambiguous (ErrCommitStateUnknown) catalog response because the
+// commit-id stamped into the snapshot summary lets the retry tell a landed
+// overwrite from a lost one. Every path must leave the mutation applied exactly
+// once — no duplicate snapshot, correct final rows.
+func TestCommitOverwriteIdempotentOnUnknownState(t *testing.T) {
+	logger := service.MockResources().Logger()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+
+	// setup seeds id=1,2,3 through a plain catalog, then wraps it in a
+	// scriptedCatalog so only the mutation under test is subject to the scripted
+	// outcome. The writer and committer share that scripted catalog.
+	setup := func(t *testing.T, outcome commitOutcome) (*scriptedCatalog, *writer) {
+		ctx := t.Context()
+		seedTbl, mem := newCOWTable(t, sc)
+		_ = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{outcome}}
+		comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		t.Cleanup(comm.Close)
+		w := cowWriter(t, cat.snapshot(), "id")
+		w.committer = comm
+		return cat, w
+	}
+
+	want := map[int64]string{1: "one", 2: "TWO", 3: "three"}
+	upsert := func() service.MessageBatch {
+		return service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}
+	}
+
+	// (A) landed-but-reported-unknown: the first CommitTable applies the overwrite
+	// server-side, then reports ErrCommitStateUnknown. The retry must find the
+	// commit-id in the reloaded snapshot and short-circuit to success without
+	// re-committing (CommitTable called exactly once).
+	t.Run("landed then unknown applies once", func(t *testing.T) {
+		ctx := t.Context()
+		cat, w := setup(t, commitLandThenUnknown)
+		require.NoError(t, w.Write(ctx, upsert()))
+		assert.Equal(t, 1, cat.calls, "a landed overwrite must not be re-committed after an unknown-state response")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()), "overwrite applied exactly once")
+		assert.Equal(t, want, scanRows(t, ctx, cat.snapshot()))
+	})
+
+	// (B) not-landed-unknown: the first CommitTable returns ErrCommitStateUnknown
+	// WITHOUT applying, so the commit-id is absent on reload and the retry must
+	// re-apply and succeed — still exactly once.
+	t.Run("unknown without landing re-applies once", func(t *testing.T) {
+		ctx := t.Context()
+		cat, w := setup(t, commitUnknownNoLand)
+		require.NoError(t, w.Write(ctx, upsert()))
+		assert.Equal(t, 2, cat.calls, "an overwrite that did not land must be retried")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()), "overwrite committed exactly once on the retry")
+		assert.Equal(t, want, scanRows(t, ctx, cat.snapshot()))
+	})
+
+	// Clean conflict (ErrCommitFailed, nothing landed): the commit-id is absent on
+	// reload, so the genuine-conflict retry still re-applies exactly once — the
+	// idempotency check must not over-filter a legitimate retry.
+	t.Run("clean conflict re-applies once", func(t *testing.T) {
+		ctx := t.Context()
+		cat, w := setup(t, commitConflict)
+		require.NoError(t, w.Write(ctx, upsert()))
+		assert.Equal(t, 2, cat.calls, "a genuine conflict must be retried")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()), "overwrite committed exactly once after the conflict")
+		assert.Equal(t, want, scanRows(t, ctx, cat.snapshot()))
+	})
+}
+
 // --- committer-level round trip ------------------------------------------------
 
 // newTypedKeyTableFromSchema builds an unpartitioned v2 table for the given

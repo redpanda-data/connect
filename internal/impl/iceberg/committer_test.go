@@ -240,6 +240,21 @@ func countDataFileRefs(tb testing.TB, ctx context.Context, tbl *table.Table, pat
 	return n
 }
 
+// countSnapshotsWithCommitID counts how many snapshots in the table's metadata
+// carry the mutation idempotency token (commitIDProp) in their summary. Only the
+// copy-on-write and merge-on-read mutation paths stamp it — plain appends and
+// seed writes do not — so for an exactly-once mutation this is exactly 1. A
+// duplicate-apply bug (a landed commit re-applied on retry) shows up as 2.
+func countSnapshotsWithCommitID(tbl *table.Table) int {
+	n := 0
+	for _, s := range tbl.Metadata().Snapshots() {
+		if s.Summary != nil && s.Summary.Properties[commitIDProp] != "" {
+			n++
+		}
+	}
+	return n
+}
+
 func newScriptedCommitter(tb testing.TB, outcomes ...commitOutcome) (*committer, *scriptedCatalog) {
 	tb.Helper()
 	_, mem := newTestTable(tb)

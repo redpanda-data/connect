@@ -107,6 +107,21 @@ func (c RowOpConfig) mutating() bool {
 	return true
 }
 
+// cowAmplificationWarning returns one-time startup guidance (and ok=true) when
+// the configuration uses copy-on-write for a mutating (upsert/delete) workload,
+// and ok=false otherwise (append-only, or merge-on-read). Copy-on-write rewrites
+// every data file that contains a touched identifier key, so an operator who has
+// opted into it for a keyed workload benefits from being pointed once at the two
+// mitigations that keep that write amplification bounded — sorting the table by
+// the identifier key and using large batches. It stays silent for a purely
+// static insert (no mutation, so no amplification) and for merge-on-read.
+func (c RowOpConfig) cowAmplificationWarning() (string, bool) {
+	if c.MergeStrategy != mergeStrategyCOW || !c.mutating() {
+		return "", false
+	}
+	return "merge_strategy: copy-on-write rewrites every data file that contains a touched identifier_fields key, so a scattered keyed workload can rewrite a large fraction of the table per batch. To keep this write amplification bounded, sort the table by the identifier key so each batch's keys cluster into as few data files as possible, and use large batches. See the copy-on-write section of the iceberg output docs for details.", true
+}
+
 // writer handles writing batches of messages to a single Iceberg table.
 type writer struct {
 	table                 *table.Table

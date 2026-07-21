@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +24,7 @@ import (
 	"github.com/apache/iceberg-go/catalog/rest"
 	iceio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
+	"github.com/google/uuid"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
@@ -32,6 +34,18 @@ import (
 // TODO(iceberg): When iceberg-go supports v3, add a config knob on moving to v3.
 // For now we assume everything works with at least v2
 const CurrentIcebergVersion = 2
+
+// commitIDProp is a namespaced idempotency token written into a mutation
+// commit's snapshot summary. iceberg-go copies any custom key in the snapshot
+// props into the committed snapshot's Summary.Properties (snapshot_producers.go
+// summary() does maps.Copy(summaryProps, props)), and Summary marshals/unmarshals
+// through the catalog, so the token survives a table reload. On a retry after an
+// ambiguous catalog response (ErrCommitStateUnknown) the committer can then look
+// for the token in a reloaded snapshot: if present, the prior attempt actually
+// landed server-side, so the retry returns success instead of applying the
+// mutation a second time. This makes copy-on-write (Overwrite/Delete) and
+// merge-on-read (RowDelta) commits safe to retry on an unknown state.
+const commitIDProp = "redpanda-connect.commit-id"
 
 // CommitInput holds data files and the schema ID they were written with.
 //
@@ -143,7 +157,11 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 		allFiles = append(allFiles, input.Files...)
 	}
 
-	if err := c.commitLocked(ctx, true, func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error {
+	// The append path is idempotent across a reload via dropAlreadyCommitted
+	// (keyed on file paths), not via a commit-id token, so it passes an empty
+	// commitID and keeps its existing dedupe behaviour while still retrying on an
+	// unknown state.
+	if err := c.commitLocked(ctx, "", true, func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error {
 		files := allFiles
 		if reloaded {
 			// A prior attempt can land server-side yet report failure (a lost
@@ -185,12 +203,15 @@ func (c *committer) commitRowDelta(ctx context.Context, input CommitInput) error
 	if input.SchemaID != currentSchemaID {
 		return &StaleSchemaError{WriterSchemaID: input.SchemaID, CurrentSchemaID: currentSchemaID}
 	}
-	// retryOnUnknownState is false here: this path does not yet dedupe against a
-	// reloaded snapshot on retry, so retrying a possibly-landed commit could
-	// duplicate it. RowDelta commits carry equality-delete files alongside
-	// inserts, so idempotent replay must reconcile both; that is tracked
-	// separately.
-	if err := c.commitLocked(ctx, false, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
+	// A stable commit-id, generated once before the retry loop, makes this
+	// merge-on-read commit idempotent across a reload: commitLocked stamps it into
+	// the snapshot summary and, on a retry after a failed or ambiguous
+	// (ErrCommitStateUnknown) response, detects a prior attempt that actually
+	// landed by finding the id in a reloaded snapshot — returning success instead
+	// of applying the RowDelta (and its equality deletes) a second time. That is
+	// why retryOnUnknownState is safe to enable here.
+	commitID := uuid.NewString()
+	if err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
 		// RowDelta derives the snapshot operation automatically
 		// (append/delete/overwrite).
 		rd := txn.NewRowDelta(props)
@@ -229,10 +250,15 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 	// removed. nil means the filesystem can't be listed, so cleanup is skipped.
 	before := c.dataFilePaths(ctx)
 
-	// retryOnUnknownState is false, matching commitRowDelta: the overwrite is
-	// not yet idempotent across a reload, so retrying a possibly-landed commit
-	// could duplicate it.
-	err := c.commitLocked(ctx, false, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
+	// A stable commit-id, generated once before the retry loop, makes this
+	// copy-on-write commit idempotent across a reload: commitLocked stamps it into
+	// the snapshot summary and, on a retry after a failed or ambiguous
+	// (ErrCommitStateUnknown) response, detects a prior attempt that actually
+	// landed by finding the id in a reloaded snapshot — returning success instead
+	// of re-applying the overwrite. That is why retryOnUnknownState is safe to
+	// enable here.
+	commitID := uuid.NewString()
+	err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
 		// txn.Delete branches on the table's write.delete.mode; the library
 		// default is already copy-on-write, but set it explicitly for safety so
 		// the delete-only path can never fall into merge-on-read. txn.Overwrite
@@ -370,15 +396,38 @@ func (c *committer) referencedDataFilePaths(ctx context.Context) map[string]stru
 //
 // retryOnUnknownState controls whether an ErrCommitStateUnknown result (the
 // commit may have landed server-side, e.g. a 5xx/timeout response) is retried.
-// It is only safe to set when stage is idempotent across a reload — i.e. it
-// drops files the reloaded snapshot already references — otherwise a retry of a
-// commit that actually landed would duplicate it. Callers must hold c.commitMu.
-func (c *committer) commitLocked(ctx context.Context, retryOnUnknownState bool, stage func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error) error {
+// It is only safe to set when stage is idempotent across a reload — otherwise a
+// retry of a commit that actually landed would duplicate it. Two mechanisms
+// provide that idempotency:
+//   - a non-empty commitID: it is stamped into the snapshot summary
+//     (commitIDProp) so that, after a reload, committedSnapshotHasID can detect a
+//     prior attempt that landed and short-circuit to success. Used by the
+//     mutation paths (copy-on-write Overwrite/Delete and merge-on-read RowDelta),
+//     whose stage callbacks are not path-idempotent on their own.
+//   - stage dropping files the reloaded snapshot already references (the append
+//     path's dropAlreadyCommitted), in which case commitID is empty.
+//
+// Callers must hold c.commitMu.
+func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUnknownState bool, stage func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error) error {
 	props := iceberg.Properties{
 		table.ManifestMergeEnabledKey: strconv.FormatBool(c.cfg.ManifestMergeEnabled),
 	}
 	if c.cfg.MaxSnapshotAge > 0 {
 		props[table.MaxSnapshotAgeMsKey] = strconv.FormatInt(c.cfg.MaxSnapshotAge.Milliseconds(), 10)
+	}
+	// Stamp the idempotency token into the snapshot props so the committed
+	// snapshot carries it. props is reused across attempts, so this holds for
+	// every stage attempt. iceberg-go copies it verbatim into Summary.Properties.
+	if commitID != "" {
+		props[commitIDProp] = commitID
+	}
+
+	// Record the snapshot current before our first attempt so the post-reload
+	// idempotency scan can stop once it walks past it: any snapshot our commit
+	// created is strictly newer than this one.
+	var startSnapshotID int64 = -1
+	if snap := c.table.CurrentSnapshot(); snap != nil {
+		startSnapshotID = snap.SnapshotID
 	}
 
 	var commitErr error
@@ -411,6 +460,16 @@ func (c *committer) commitLocked(ctx context.Context, retryOnUnknownState bool, 
 			if reloadedTbl, reloadErr := c.reloadTable(ctx); reloadErr == nil {
 				c.table = reloadedTbl
 				reloaded = true
+				// Idempotency: a failed or ambiguous response may still have
+				// landed the commit server-side. If the reloaded table already
+				// carries our commit-id, the prior attempt succeeded — return
+				// success rather than re-applying the mutation (which would
+				// duplicate it). Only the mutation paths pass a commitID; the
+				// append path relies on dropAlreadyCommitted in its stage instead.
+				if commitID != "" && c.committedSnapshotHasID(commitID, startSnapshotID) {
+					c.logger.Debugf("Commit %s already landed on a prior attempt (found in reloaded snapshot); treating retry as success", commitID)
+					return nil
+				}
 			} else {
 				c.logger.Warnf("Failed to reload table during commit retry: %v", reloadErr)
 			}
@@ -490,6 +549,32 @@ func (c *committer) dropAlreadyCommitted(ctx context.Context, files []iceberg.Da
 		remaining = append(remaining, f)
 	}
 	return remaining, nil
+}
+
+// committedSnapshotHasID reports whether any snapshot in c.table's current
+// metadata carries commitID under commitIDProp in its summary. The caller must
+// have just reloaded c.table. It backs the mutation paths' idempotent retry: a
+// commit that failed or returned an ambiguous state may still have landed
+// server-side, and finding our (UUID) commit-id in a reloaded snapshot proves it
+// did — so the retry returns success instead of applying the mutation twice.
+//
+// Snapshots are scanned newest-first (Metadata().Snapshots() is oldest-first, so
+// we walk it in reverse) because a just-landed commit is the most recent. The
+// scan stops once it reaches stopAtSnapshotID — the snapshot that was current
+// when the commit began — since any snapshot our attempt created is strictly
+// newer than that. commitIDs are unique per call, so only a snapshot our own
+// attempt produced can match.
+func (c *committer) committedSnapshotHasID(commitID string, stopAtSnapshotID int64) bool {
+	snaps := c.table.Metadata().Snapshots()
+	for _, s := range slices.Backward(snaps) {
+		if s.SnapshotID == stopAtSnapshotID {
+			break
+		}
+		if s.Summary != nil && s.Summary.Properties[commitIDProp] == commitID {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *committer) incrCommitFailure() {
