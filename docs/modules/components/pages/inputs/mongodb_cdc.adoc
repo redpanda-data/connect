@@ -41,6 +41,8 @@ input:
     username: ""
     password: ""
     collections: [] # No default (required)
+    include: []
+    exclude: []
     checkpoint_key: mongodb_cdc_checkpoint
     checkpoint_cache: "" # No default (required)
     checkpoint_interval: 5s
@@ -67,6 +69,8 @@ input:
     username: ""
     password: ""
     collections: [] # No default (required)
+    include: []
+    exclude: []
     checkpoint_key: mongodb_cdc_checkpoint
     checkpoint_cache: "" # No default (required)
     checkpoint_interval: 5s
@@ -168,6 +172,36 @@ The collections to stream changes from.
 
 *Type*: `array`
 
+
+=== `include`
+
+Regular expressions matched against the collection name to further restrict which of the configured `collections` are streamed. When set, a collection is only streamed if it matches at least one of these patterns.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+include: orders
+```
+
+=== `exclude`
+
+Regular expressions matched against the collection name to exclude collections from streaming. A collection matching any of these patterns is dropped even if it matches an `include` pattern.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+exclude: audit_log
+```
 
 === `checkpoint_key`
 
