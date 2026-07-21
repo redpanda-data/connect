@@ -10,8 +10,8 @@ silent: true
 #   SNOWFLAKE_PRIVATE_KEY   PEM-encoded RSA private key content
 #
 # Optional:
-#   SNOWFLAKE_ROLE              default: ACCOUNTADMIN
-#   SNOWFLAKE_SCHEMA            default: PUBLIC
+#   SNOWFLAKE_ROLE              required, no default (must match a role granted to the user)
+#   SNOWFLAKE_SCHEMA            default: RAW
 #   SNOWFLAKE_UPLOAD_THREADS    parallel upload threads, default: 4
 
 vars:
@@ -19,16 +19,20 @@ vars:
   BATCH: '{{.BATCH | default "1000"}}'
   PERIOD: '{{.PERIOD | default "5s"}}'
   UPLOAD_THREADS: '{{.UPLOAD_THREADS | default "4"}}'
+  COUNT: '{{.COUNT | default "0"}}'
 
 tasks:
   bench:run:
     desc: |
       Run Snowflake PUT + Snowpipe bulk write benchmark.
-      Params: BATCH (default 1000), PERIOD (default 5s), UPLOAD_THREADS (default 4)
-      Example: task bench:run BATCH=5000 UPLOAD_THREADS=8
+      Params: BATCH (default 1000), PERIOD (default 5s), UPLOAD_THREADS (default 4),
+              COUNT (default 0, unlimited)
+      Set COUNT to a fixed number to stop after that many messages and print a total summary.
+      Example: task bench:run BATCH=5000 UPLOAD_THREADS=8 COUNT=1000000
     cmds:
       - |
         {{.RPCN}} run \
+          --set "input.generate.count={{.COUNT}}" \
           --set "output.snowflake_put.batching.count={{.BATCH}}" \
           --set "output.snowflake_put.batching.period={{.PERIOD}}" \
           --set "output.snowflake_put.upload_parallel_threads={{.UPLOAD_THREADS}}" \
@@ -48,4 +52,4 @@ tasks:
   bench:truncate:
     desc: Truncate BENCH_EVENTS_JSON table (requires snowsql in PATH)
     cmds:
-      - snowsql -a "$SNOWFLAKE_ACCOUNT" -u "$SNOWFLAKE_USER" -r "${SNOWFLAKE_ROLE:-ACCOUNTADMIN}" -d "$SNOWFLAKE_DB" -s "${SNOWFLAKE_SCHEMA:-PUBLIC}" -q "TRUNCATE TABLE BENCH_EVENTS_JSON;"
+      - snowsql -a "$SNOWFLAKE_ACCOUNT" -u "$SNOWFLAKE_USER" ${SNOWFLAKE_ROLE:+-r "$SNOWFLAKE_ROLE"} -d "$SNOWFLAKE_DB" -s "${SNOWFLAKE_SCHEMA:-RAW}" -q "TRUNCATE TABLE BENCH_EVENTS_JSON;"

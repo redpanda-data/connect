@@ -316,6 +316,7 @@ For a non-technical overview suitable for sales, marketing, and other non-engine
 | SQL Server CDC | [`internal/impl/mssqlserver/bench/`](../internal/impl/mssqlserver/bench/) | [results](benchmark-results/mssqlserver-cdc.md) | ~135 MB/sec, 100K msg/sec | Single connection bottleneck |
 | Oracle CDC | [`internal/impl/oracledb/bench/`](../internal/impl/oracledb/bench/) | [results](benchmark-results/oracledb-cdc.md) | ~50K msg/sec (streaming) | LogMiner single-threaded limitation |
 | DynamoDB CDC | [`internal/impl/aws/dynamodb/bench/`](../internal/impl/aws/dynamodb/bench/) | [results](benchmark-results/dynamodb-cdc.md) | ~200 MB/sec, 100K msg/sec | DynamoDB Local, 3 tables x 150K items |
+| Snowflake Snowpipe Streaming | [`internal/impl/snowflake/bench/`](../internal/impl/snowflake/bench/) | [results](benchmark-results/snowflake-streaming.md) | ~40K msg/sec, 5.8 MB/sec | BATCH/MAX_IN_FLIGHT are the tunable knobs; PARALLELISM/CHUNK_SIZE are noise |
 
 ## Keeping Results Up to Date
 

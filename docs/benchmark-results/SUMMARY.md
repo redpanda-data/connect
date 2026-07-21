@@ -1,6 +1,6 @@
 # Redpanda Connect Performance Summary
 
-Last updated: 2026-03-16
+Last updated: 2026-07-17
 
 ## At a Glance
 
@@ -11,6 +11,7 @@ Last updated: 2026-03-16
 | **SQL Server CDC** | **154 MB/s** | 119,000 | Change data capture from SQL Server |
 | **Oracle CDC (snapshot)** | — | 140,000 | Initial table snapshot from Oracle DB |
 | **Oracle CDC (streaming)** | — | 50,000–90,000 | Real-time change streaming via LogMiner |
+| **Snowflake Snowpipe Streaming** | **5.8 MB/s** | 40,000 | Write throughput into Snowflake via Snowpipe Streaming |
 
 ## What These Numbers Mean
 
@@ -22,11 +23,13 @@ Last updated: 2026-03-16
 
 **Oracle CDC** has two operating modes. Snapshot mode (bulk reading existing data) processes ~140,000 messages per second. Streaming mode (real-time changes via Oracle's LogMiner) processes 50,000–90,000 messages per second. The streaming throughput is limited by Oracle's LogMiner subsystem itself, not by Redpanda Connect — competing products (e.g. Debezium) show similar numbers on the same workload.
 
+**Snowflake Snowpipe Streaming** writes data into Snowflake at up to 40,000 messages per second (5.8 MB/s) using Snowpipe Streaming's low-latency ingestion API. Unlike the connectors above, this is a **write** benchmark, not a read benchmark — see Test Conditions below.
+
 ## Test Conditions
 
 All benchmarks were run on developer laptops with the source databases running in Docker containers. Production deployments on dedicated hardware with properly sized databases will typically perform better.
 
-These numbers represent **read throughput** — how fast Redpanda Connect can ingest data from each source. Write throughput to destination systems depends on the target and is benchmarked separately.
+Most numbers above represent **read throughput** — how fast Redpanda Connect can ingest data from each source. The Snowflake result is the exception: it measures **write throughput** into a destination system, benchmarked separately from the read-side connectors.
 
 ## Detailed Results
 
@@ -36,6 +39,7 @@ For full methodology, raw output, environment details, and bottleneck analysis, 
 - [SQL Server CDC](mssqlserver-cdc.md)
 - [Oracle CDC](oracledb-cdc.md)
 - [DynamoDB CDC](dynamodb-cdc.md)
+- [Snowflake Snowpipe Streaming](snowflake-streaming.md)
 
 ## How Benchmarks Are Run
 

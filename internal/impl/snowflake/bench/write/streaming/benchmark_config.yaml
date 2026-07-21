@@ -16,16 +16,16 @@ input:
 pipeline:
   processors:
     - benchmark:
-        interval: 1s
+        interval: 0s
         count_bytes: true
 
 output:
   snowflake_streaming:
     account: "${SNOWFLAKE_ACCOUNT}"
     user: "${SNOWFLAKE_USER}"
-    role: "${SNOWFLAKE_ROLE:ACCOUNTADMIN}"
+    role: "${SNOWFLAKE_ROLE}"
     database: "${SNOWFLAKE_DB}"
-    schema: "${SNOWFLAKE_SCHEMA:PUBLIC}"
+    schema: "${SNOWFLAKE_SCHEMA:RAW}"
     table: BENCH_EVENTS
     private_key: "${SNOWFLAKE_PRIVATE_KEY}"
     build_options:
@@ -37,7 +37,7 @@ output:
       period: ${SNOWFLAKE_BATCH_PERIOD:5s}
 
 logger:
-  level: WARN
+  level: INFO
 
 metrics:
   prometheus:
