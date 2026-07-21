@@ -52,6 +52,7 @@ mongodb:
   filter_map: ""
   hint_map: ""
   upsert: false
+  preserve_binary: false
 ```
 
 --
@@ -78,6 +79,7 @@ mongodb:
   filter_map: ""
   hint_map: ""
   upsert: false
+  preserve_binary: false
   json_marshal_mode: canonical
 ```
 
@@ -262,6 +264,15 @@ The upsert setting is optional and only applies for update-one and replace-one o
 
 *Default*: `false`
 Requires version 3.60.0 or newer
+
+=== `preserve_binary`
+
+Whether to preserve raw binary fields ([]byte) as native MongoDB BinData. When false, they are encoded as base64 strings.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `json_marshal_mode`
 
