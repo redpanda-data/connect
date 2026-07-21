@@ -496,8 +496,14 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 // With no identifier_fields configured the schema is created exactly as before
 // (all columns optional, no identifier-field-ids), so append-only table
 // creation is unchanged.
+//
+// Under copy-on-write (merge_strategy: copy-on-write) the identifier_fields are
+// the connector-side merge key only and are deliberately NOT registered as the
+// table's Iceberg identifier-field-ids, nor are the columns forced required:
+// this is what lets engine-backed catalogs (e.g. the Databricks Unity Catalog)
+// accept the CREATE TABLE. Merge-on-read (the default) keeps registering them.
 func (r *Router) schemaWithIdentifierFields(fields []iceberg.NestedField) (*iceberg.Schema, error) {
-	if len(r.rowOpCfg.IdentifierFields) == 0 {
+	if len(r.rowOpCfg.IdentifierFields) == 0 || r.rowOpCfg.MergeStrategy == mergeStrategyCOW {
 		return iceberg.NewSchema(0, fields...), nil
 	}
 

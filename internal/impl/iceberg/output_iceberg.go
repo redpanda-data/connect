@@ -578,6 +578,19 @@ func parseRowOpConfig(conf *service.ParsedConfig) (RowOpConfig, error) {
 		return cfg, err
 	}
 
+	// merge_strategy carries Default(merge-on-read) and is a validated enum, so
+	// FieldString returns a known value without a Contains guard.
+	strategy, err := conf.FieldString(ioFieldMergeStrategy)
+	if err != nil {
+		return cfg, err
+	}
+	switch mergeStrategy(strategy) {
+	case mergeStrategyMOR, mergeStrategyCOW:
+		cfg.MergeStrategy = mergeStrategy(strategy)
+	default:
+		return cfg, fmt.Errorf("invalid %s %q: must be %q or %q", ioFieldMergeStrategy, strategy, mergeStrategyMOR, mergeStrategyCOW)
+	}
+
 	if static, ok := op.Static(); ok {
 		parsed, err := parseRowOperation(static)
 		if err != nil {

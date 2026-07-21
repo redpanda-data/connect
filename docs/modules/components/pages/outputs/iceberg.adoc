@@ -122,6 +122,7 @@ output:
     case_sensitive_columns: true
     row_operation: insert
     identifier_fields: []
+    merge_strategy: merge-on-read
     storage:
       aws_s3:
         bucket: my-iceberg-data # No default (required)
@@ -231,7 +232,9 @@ By default this output is append-only — every message becomes a new row (`row_
 
 `row_operation` supports interpolation, so the operation can be driven by the data itself — for example by mapping a change-data-capture stream's operation field — but no CDC-specific format is assumed (see the change-data-capture example below). It is named `row_operation` to distinguish it from Iceberg's snapshot-level operation.
 
-`upsert` and `delete` require `identifier_fields` and use Iceberg merge-on-read equality deletes, which require table format version 2. A version-1 table is automatically upgraded to version 2 on the first `upsert`/`delete`; *this upgrade is irreversible*.
+`upsert` and `delete` require `identifier_fields`. By default (`merge_strategy: merge-on-read`) they use Iceberg merge-on-read equality deletes, which require table format version 2. A version-1 table is automatically upgraded to version 2 on the first `upsert`/`delete`; *this upgrade is irreversible*.
+
+*Merge strategy.* `merge_strategy` controls how mutations are materialised. `merge-on-read` (the default) writes equality-delete files and is the streaming path, but only catalog-only/Flink-world engines can read the result. `copy-on-write` instead rewrites whole data files so the table only ever holds plain data files that every engine can read — including engine-backed catalogs such as Snowflake and the Databricks Unity Catalog — at the cost of heavy write amplification (each mutating batch rewrites every data file holding a touched key). Treat `copy-on-write` as a batch / moderate-throughput mode: sort the table by the identifier key and use large batches. Under `copy-on-write` the `identifier_fields` are the connector-side merge key only and are not registered as the table's Iceberg identifier-field-ids, so auto-created tables carry no identifier-field spec and columns are not forced required. This prototype's `copy-on-write` path supports tables whose columns are all flat, primitive types; a table with nested (struct/list/map) columns, or a merge key that is not an `int`/`long`/`string`/`boolean` column, is rejected with a clear error at write time.
 
 *Identifier fields.* `identifier_fields` must reference existing table columns of a primitive, non-floating-point type. A static `upsert`/`delete` is validated at startup; an interpolated `row_operation` is validated per message at write time, so an empty `identifier_fields` is not caught until the first `upsert`/`delete` message arrives. Identifier columns of a temporal type (`timestamp`, `timestamptz`, `date`, `time`) must arrive as time values, not bare numbers — a numeric epoch is ambiguous as a delete key and is rejected at write time; convert it to a timestamp upstream. If the table is partitioned, every partition source column must be one of the `identifier_fields`, since equality deletes are partition-scoped.
 
@@ -682,6 +685,27 @@ identifier_fields:
   - tenant_id
   - user_id
 ```
+
+=== `merge_strategy`
+
+How `upsert` and `delete` are materialised on disk.
+
+* `merge-on-read` (the default) writes Iceberg v2 equality-delete files. Deletes are applied at read time, so writes stay cheap and streaming-friendly, but only catalog-only/Flink-world engines can read the result — engine-backed catalogs such as Snowflake and the Databricks Unity Catalog cannot read equality deletes.
+* `copy-on-write` rewrites whole data files so the table only ever contains plain data files (no delete files), which every engine can read — including Snowflake and Databricks Unity Catalog. The trade-off is heavy write amplification: each mutating batch rewrites every data file that contains a touched key. This is a batch / moderate-throughput mode, not a streaming one. Sort the table by the identifier key and use large batches so each rewrite touches as few files as possible.
+
+Under `copy-on-write` the `identifier_fields` are used only connector-side as the merge key and are *not* registered as the table's Iceberg identifier-field-ids, so auto-created tables carry no identifier-field spec (this is what lets the Databricks Unity Catalog accept the `CREATE TABLE`). `merge-on-read` continues to register them.
+
+See the <<row-level-operations,Row-level operations>> section above for more detail.
+
+
+*Type*: `string`
+
+*Default*: `"merge-on-read"`
+
+Options:
+`merge-on-read`
+, `copy-on-write`
+.
 
 === `storage`
 

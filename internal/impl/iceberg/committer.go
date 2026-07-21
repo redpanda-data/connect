@@ -12,12 +12,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/catalog/rest"
+	iceio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -40,6 +44,18 @@ type CommitInput struct {
 	Files       []iceberg.DataFile
 	DeleteFiles []iceberg.DataFile
 	SchemaID    int
+}
+
+// OverwriteInput describes a copy-on-write mutation applied as one atomic
+// snapshot. Filter selects the existing rows to remove. NewReader, when
+// non-nil, is a factory that builds the rows to (re)write; it is a factory
+// rather than a reader because array.RecordReader is consumed once and the
+// commit stage may run more than once on retry. A nil NewReader is a
+// delete-only mutation (no rows written).
+type OverwriteInput struct {
+	Filter    iceberg.BooleanExpression
+	NewReader func() (array.RecordReader, error)
+	SchemaID  int
 }
 
 // CommitConfig holds configuration for the committer.
@@ -182,6 +198,162 @@ func (c *committer) commitRowDelta(ctx context.Context, input CommitInput) error
 	}
 	c.logger.Debugf("Committed row delta: %d data files, %d delete files", len(input.Files), len(input.DeleteFiles))
 	return nil
+}
+
+// commitOverwrite applies a copy-on-write mutation as one atomic snapshot,
+// outside the batcher so it is never coalesced with another commit. When
+// input.NewReader is nil it is a delete-only mutation (txn.Delete); otherwise
+// it is an overwrite that deletes the rows matching input.Filter and appends
+// the reader's rows in a single snapshot (txn.Overwrite). Both produce only
+// plain data files — no equality- or positional-delete files — so the result
+// is readable by engine-backed catalogs (Snowflake, Databricks Unity Catalog).
+func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) error {
+	c.commitMu.Lock()
+	defer c.commitMu.Unlock()
+
+	currentSchemaID := c.currentSchemaID()
+	if input.SchemaID != currentSchemaID {
+		return &StaleSchemaError{WriterSchemaID: input.SchemaID, CurrentSchemaID: currentSchemaID}
+	}
+
+	// Copy-on-write writes its rewritten and new data files to storage before the
+	// catalog commit (inside txn.Overwrite/Delete), and — unlike the writer-
+	// authored append/row-delta paths — we never hold their paths. Snapshot the
+	// data files present beforehand so a failed commit's leftovers can be
+	// removed. nil means the filesystem can't be listed, so cleanup is skipped.
+	before := c.dataFilePaths(ctx)
+
+	// retryOnUnknownState is false, matching commitRowDelta: the overwrite is
+	// not yet idempotent across a reload, so retrying a possibly-landed commit
+	// could duplicate it.
+	err := c.commitLocked(ctx, false, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
+		// txn.Delete branches on the table's write.delete.mode; the library
+		// default is already copy-on-write, but set it explicitly for safety so
+		// the delete-only path can never fall into merge-on-read. txn.Overwrite
+		// is always copy-on-write regardless of the property.
+		if c.table.Properties()[table.WriteDeleteModeKey] != table.WriteModeCopyOnWrite {
+			if err := txn.SetProperties(iceberg.Properties{table.WriteDeleteModeKey: table.WriteModeCopyOnWrite}); err != nil {
+				return fmt.Errorf("setting %s: %w", table.WriteDeleteModeKey, err)
+			}
+		}
+		if input.NewReader == nil {
+			return txn.Delete(ctx, input.Filter, props)
+		}
+		rdr, err := input.NewReader()
+		if err != nil {
+			return err
+		}
+		defer rdr.Release()
+		return txn.Overwrite(ctx, rdr, props, table.WithOverwriteFilter(input.Filter))
+	})
+	if err != nil {
+		// Clean up orphaned files only when the commit definitely did not land.
+		// On an unknown/ambiguous state the written files may belong to a
+		// snapshot that committed server-side, so removing them would corrupt the
+		// table — leave those for Iceberg orphan-file maintenance.
+		if before != nil && !errors.Is(err, rest.ErrCommitStateUnknown) {
+			c.cleanupOrphanedOverwriteFiles(ctx, before)
+		}
+		return err
+	}
+	c.logger.Debugf("Committed copy-on-write mutation (delete-only=%t)", input.NewReader == nil)
+	return nil
+}
+
+// dataFilePaths returns the set of .parquet paths currently under the table's
+// data directory, or nil if the filesystem doesn't support listing (in which
+// case copy-on-write orphan cleanup is skipped). Best-effort: any walk error
+// yields nil. The scan is O(files), but the copy-on-write commit it guards
+// already scans every file's metadata, so it does not change that path's order.
+func (c *committer) dataFilePaths(ctx context.Context) map[string]struct{} {
+	fsys, err := c.table.FS(ctx)
+	if err != nil {
+		return nil
+	}
+	lister, ok := fsys.(iceio.ListableIO)
+	if !ok {
+		return nil
+	}
+	paths := make(map[string]struct{})
+	if walkErr := lister.WalkDir(c.table.Location()+"/data", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(p, ".parquet") {
+			paths[p] = struct{}{}
+		}
+		return nil
+	}); walkErr != nil {
+		return nil
+	}
+	return paths
+}
+
+// cleanupOrphanedOverwriteFiles removes .parquet files a failed copy-on-write
+// commit left under the data directory: those that appeared since the `before`
+// snapshot and are not referenced by the current snapshot. The reference check
+// is a safety net so a file a committed snapshot still points to is never
+// deleted. Best-effort — errors are logged, not returned. The caller must have
+// established that the failed commit did not land.
+func (c *committer) cleanupOrphanedOverwriteFiles(ctx context.Context, before map[string]struct{}) {
+	fsys, err := c.table.FS(ctx)
+	if err != nil {
+		return
+	}
+	lister, ok := fsys.(iceio.ListableIO)
+	if !ok {
+		return
+	}
+	referenced := c.referencedDataFilePaths(ctx)
+	_ = lister.WalkDir(c.table.Location()+"/data", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(p, ".parquet") {
+			return nil
+		}
+		if _, existed := before[p]; existed {
+			return nil
+		}
+		if _, ref := referenced[p]; ref {
+			return nil
+		}
+		if rmErr := fsys.Remove(p); rmErr != nil {
+			c.logger.Warnf("Failed to remove orphaned copy-on-write file %s: %v", p, rmErr)
+		} else {
+			c.logger.Debugf("Removed orphaned copy-on-write file %s", p)
+		}
+		return nil
+	})
+}
+
+// referencedDataFilePaths returns the paths referenced by the table's current
+// snapshot, used to guard orphan cleanup. Best-effort: on any error it returns
+// what it has so far, and an empty set simply disables the reference guard
+// (leaving the appeared-since-`before` guard to do the work).
+func (c *committer) referencedDataFilePaths(ctx context.Context) map[string]struct{} {
+	refs := make(map[string]struct{})
+	snap := c.table.CurrentSnapshot()
+	if snap == nil {
+		return refs
+	}
+	fsys, err := c.table.FS(ctx)
+	if err != nil {
+		return refs
+	}
+	manifests, err := snap.Manifests(fsys)
+	if err != nil {
+		return refs
+	}
+	for _, m := range manifests {
+		for entry, err := range m.Entries(fsys, true) {
+			if err != nil {
+				return refs
+			}
+			refs[entry.DataFile().FilePath()] = struct{}{}
+		}
+	}
+	return refs
 }
 
 // commitLocked stages a transaction via stage and commits it, retrying on

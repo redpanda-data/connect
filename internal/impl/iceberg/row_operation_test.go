@@ -514,6 +514,12 @@ iceberg:
 		{"static upsert at default in-flight", "  row_operation: upsert\n  identifier_fields: [id]\n", true},
 		{"static upsert with in-flight 1", "  row_operation: upsert\n  identifier_fields: [id]\n  max_in_flight: 1\n", false},
 		{"dynamic operation at default in-flight", "  row_operation: '${! metadata(\"op\") }'\n  identifier_fields: [id]\n", true},
+		// The ordering guard is merge_strategy-agnostic: copy-on-write commits
+		// are serialized per-commit, but with more than one batch in flight two
+		// batches can still land out of order and let a stale overwrite win, so
+		// the lint must fire for a mutating copy-on-write config too.
+		{"copy-on-write upsert at default in-flight", "  row_operation: upsert\n  identifier_fields: [id]\n  merge_strategy: copy-on-write\n", true},
+		{"copy-on-write upsert with in-flight 1", "  row_operation: upsert\n  identifier_fields: [id]\n  merge_strategy: copy-on-write\n  max_in_flight: 1\n", false},
 	}
 
 	for _, tc := range cases {

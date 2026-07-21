@@ -61,15 +61,36 @@ func parseRowOperation(s string) (rowOperation, error) {
 	}
 }
 
+// mergeStrategy selects how upsert/delete mutations are materialised on disk.
+type mergeStrategy string
+
+const (
+	// mergeStrategyMOR (merge-on-read) writes Iceberg v2 equality-delete files.
+	// This is the default and preserves all pre-existing behaviour.
+	mergeStrategyMOR mergeStrategy = "merge-on-read"
+	// mergeStrategyCOW (copy-on-write) rewrites whole data files so the table
+	// only ever contains plain data files (no delete files), readable by
+	// engine-backed catalogs such as Snowflake and the Databricks Unity Catalog.
+	mergeStrategyCOW mergeStrategy = "copy-on-write"
+)
+
+// MergeStrategyCOW is the copy-on-write merge strategy, exported so a
+// RowOpConfig can select it programmatically (the merge_strategy type itself is
+// internal). This mirrors the merge_strategy: copy-on-write YAML value.
+const MergeStrategyCOW = mergeStrategyCOW
+
 // RowOpConfig configures per-message row-level operations.
 type RowOpConfig struct {
 	// Operation resolves per message to insert, upsert, or delete. When it
 	// resolves to the empty string the default (insert) is assumed.
 	Operation *service.InterpolatedString
-	// IdentifierFields are the table column names forming the equality-delete
-	// key (the Iceberg identifier fields) used by upsert and delete. Empty for
-	// append-only (insert) workloads.
+	// IdentifierFields are the table column names forming the merge key (the
+	// Iceberg identifier fields / equality-delete key) used by upsert and
+	// delete. Empty for append-only (insert) workloads.
 	IdentifierFields []string
+	// MergeStrategy selects how upsert/delete are materialised: merge-on-read
+	// (equality deletes, the default) or copy-on-write (whole-file rewrite).
+	MergeStrategy mergeStrategy
 }
 
 // mutating reports whether the configuration can ever produce a non-insert
@@ -152,9 +173,16 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 		return nil
 	}
 
-	// Row-level mutations: split the batch by operation, write inserted rows as
-	// data files and deleted/upserted keys as equality-delete files, then commit
-	// them together so a single snapshot reflects the whole batch.
+	// Copy-on-write: rewrite whole data files (no delete files) so the result is
+	// readable by engine-backed catalogs. Handled on its own path.
+	if w.rowOpCfg.MergeStrategy == mergeStrategyCOW {
+		return w.writeCOW(ctx, batch)
+	}
+
+	// Row-level mutations (merge-on-read): split the batch by operation, write
+	// inserted rows as data files and deleted/upserted keys as equality-delete
+	// files, then commit them together so a single snapshot reflects the whole
+	// batch.
 	inserts, deletes, counts, err := w.splitByOperation(batch)
 	if err != nil {
 		return fmt.Errorf("splitting batch by row operation: %w", err)
