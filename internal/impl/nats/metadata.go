@@ -29,14 +29,19 @@ const (
 	metaKVCreated   = "nats_kv_created"
 )
 
-func newMessageFromKVEntry(entry jetstream.KeyValueEntry) *service.Message {
-	msg := service.NewMessage(entry.Value())
+// addKVEntryMetadata adds the KV entry's metadata fields to the provided message.
+func addKVEntryMetadata(msg *service.Message, entry jetstream.KeyValueEntry) {
 	msg.MetaSetMut(metaKVKey, entry.Key())
 	msg.MetaSetMut(metaKVBucket, entry.Bucket())
 	msg.MetaSetMut(metaKVRevision, entry.Revision())
 	msg.MetaSetMut(metaKVDelta, entry.Delta())
 	msg.MetaSetMut(metaKVOperation, entry.Operation().String())
 	msg.MetaSetMut(metaKVCreated, entry.Created())
+}
+
+func newMessageFromKVEntry(entry jetstream.KeyValueEntry) *service.Message {
+	msg := service.NewMessage(entry.Value())
+	addKVEntryMetadata(msg, entry)
 
 	return msg
 }
