@@ -66,6 +66,7 @@ const (
 	dciFieldTableTagFilter         = "table_tag_filter"
 	dciFieldTableDiscoveryInterval = "table_discovery_interval"
 	dciFieldCheckpointTable        = "checkpoint_table"
+	dciFieldCheckpointNamespace    = "checkpoint_namespace"
 	dciFieldGlobalTable            = "global_table"
 	dciFieldGlobalTableReplicas    = "global_table_replicas"
 	dciFieldBatchSize              = "batch_size"
@@ -150,6 +151,8 @@ NOTE: Snapshots use eventually consistent reads and do not provide point-in-time
 
 Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures.
 
+Multiple independent pipelines can share a single checkpoint table by giving each one a distinct `+"`checkpoint_namespace`"+` (for example one namespace per developer or environment). Namespaces isolate checkpoints from each other: a pipeline only sees checkpoints written under its own namespace, so changing (or removing) the namespace causes the pipeline to restart from `+"`start_from`"+`. Note that namespaces do not coordinate consumers — two pipelines sharing the *same* namespace will still overwrite each other's checkpoints.
+
 ### Alternative
 
 For better performance and longer retention (up to 1 year vs 24 hours), consider using Kinesis Data Streams for DynamoDB with the `+"`aws_kinesis`"+` input instead.
@@ -203,6 +206,9 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 			service.NewStringField(dciFieldCheckpointTable).
 				Description("DynamoDB table name for storing checkpoints. Will be created if it doesn't exist.").
 				Default("redpanda_dynamodb_checkpoints"),
+			service.NewStringField(dciFieldCheckpointNamespace).
+				Description("An optional namespace for checkpoints, allowing multiple independent pipelines (for example one per developer or environment) to share a single checkpoint table without overwriting each other's positions. Checkpoints written under one namespace are invisible to pipelines using a different namespace (or none), so changing this value causes the pipeline to restart from `start_from`. Must not contain `#`.").
+				Default(""),
 			service.NewBoolField(dciFieldGlobalTable).
 				Description("Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. When the table is auto-created it is created as a global table; when it already exists, its replicas are reconciled (missing regions are added via `UpdateTable`). The existing table must have been created in global mode (`TableId` hash key) — enabling this against a pre-existing non-global checkpoint table fails fast with a clear error.").
 				Default(false).
@@ -363,6 +369,7 @@ type dynamoDBCDCConfig struct {
 	parsedTagFilter        map[string][]string // Parsed filter for efficient matching
 	tableDiscoveryInterval time.Duration
 	checkpointTable        string
+	checkpointNamespace    string
 	globalTable            bool
 	globalTableReplicas    []string
 	batchSize              int
@@ -668,6 +675,10 @@ func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 		return errors.New("global_table requires at least one replica region in global_table_replicas")
 	}
 
+	if strings.Contains(conf.checkpointNamespace, "#") {
+		return errors.New("checkpoint_namespace must not contain '#'")
+	}
+
 	// Validate snapshot configuration
 	if conf.snapshot.segments < 1 || conf.snapshot.segments > 10 {
 		return errors.New("snapshot_segments must be between 1 and 10")
@@ -713,6 +724,9 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 		return
 	}
 	if conf.checkpointTable, err = pConf.FieldString(dciFieldCheckpointTable); err != nil {
+		return
+	}
+	if conf.checkpointNamespace, err = pConf.FieldString(dciFieldCheckpointNamespace); err != nil {
 		return
 	}
 	if conf.globalTable, err = pConf.FieldBool(dciFieldGlobalTable); err != nil {
@@ -989,6 +1003,7 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 		TableName:       d.conf.checkpointTable,
 		SourceTable:     tableName,
 		StreamArn:       *d.streamArn,
+		Namespace:       d.conf.checkpointNamespace,
 		CheckpointLimit: d.conf.checkpointLimit,
 		GlobalTable:     d.conf.globalTable,
 		Region:          d.awsConf.Region,
@@ -1101,6 +1116,7 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 		TableName:       d.conf.checkpointTable,
 		SourceTable:     tableName,
 		StreamArn:       streamArn,
+		Namespace:       d.conf.checkpointNamespace,
 		CheckpointLimit: d.conf.checkpointLimit,
 		GlobalTable:     d.conf.globalTable,
 		Region:          d.awsConf.Region,

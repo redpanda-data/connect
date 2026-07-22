@@ -271,6 +271,15 @@ func (r *Router) doWrite(ctx context.Context, key tableKey, entry *tableEntry, b
 }
 
 // createNamespace creates the namespace for a table.
+// tableLocationFor joins the configured table-location prefix with a table's
+// namespace path and name, tolerating a prefix with or without a trailing
+// slash. Bare concatenation previously required the trailing slash: a prefix
+// of `s3://bucket` produced `s3://bucketns/table`, which fails table creation
+// against a nonexistent bucket.
+func tableLocationFor(prefix string, nsParts []string, table string) string {
+	return strings.TrimSuffix(prefix, "/") + "/" + strings.Join(nsParts, "/") + "/" + table
+}
+
 func (r *Router) createNamespace(ctx context.Context, key tableKey, entry *tableEntry) error {
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
@@ -369,7 +378,7 @@ func (r *Router) createTable(ctx context.Context, key tableKey, batch service.Me
 		createOpts = append(createOpts, catalog.WithPartitionSpec(partitionSpec))
 	}
 	if r.schemaEvoCfg.TableLocation != "" {
-		location := r.schemaEvoCfg.TableLocation + strings.Join(nsParts, "/") + "/" + key.table
+		location := tableLocationFor(r.schemaEvoCfg.TableLocation, nsParts, key.table)
 		createOpts = append(createOpts, catalog.WithLocation(location))
 	}
 

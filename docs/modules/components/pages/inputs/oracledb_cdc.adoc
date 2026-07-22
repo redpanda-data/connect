@@ -56,6 +56,7 @@ input:
       lob_enabled: true
       transaction_cache: "" # No default (optional)
       transaction_cache_key: oracledb_cdc
+    snapshot_filters: {} # No default (optional)
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -98,6 +99,7 @@ input:
       lob_enabled: true
       transaction_cache: "" # No default (optional)
       transaction_cache_key: oracledb_cdc
+    snapshot_filters: {} # No default (optional)
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -332,6 +334,24 @@ The key prefix used when storing transactions in `transaction_cache`. An alterna
 *Type*: `string`
 
 *Default*: `"oracledb_cdc"`
+
+=== `snapshot_filters`
+
+A map of fully-qualified table names (e.g. SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
+
+Each query must project every column of the table's primary key - all of them, for a composite key - even if it otherwise selects only a subset of columns. Snapshotting pages through a table's rows by filtering and sorting on its full primary key, against the query's own result set - if any primary key column isn't projected, this fails part-way through the snapshot, once the first batch of rows has been read.
+
+
+*Type*: `object`
+
+
+```yml
+# Examples
+
+snapshot_filters:
+  TESTDB.PRODUCTS: SELECT * FROM TESTDB.PRODUCTS WHERE ID > 1000
+  TESTDB.USERS: SELECT * FROM TESTDB.USERS
+```
 
 === `include`
 

@@ -166,7 +166,7 @@ To use with AWS Glue Data Catalog:
 
 * Set `+"`catalog.url`"+` to `+"`https://glue.<region>.amazonaws.com/iceberg`"+` (the REST client appends the API version automatically).
 * Set `+"`catalog.warehouse`"+` to your AWS account ID (the Glue catalog identifier).
-* Set `+"`schema_evolution.table_location`"+` to an S3 prefix (e.g., `+"`s3://my-bucket/`"+`) since Glue does not automatically assign table locations.
+* Set `+"`schema_evolution.table_location`"+` to an S3 prefix (e.g., `+"`s3://my-bucket/`"+` — a trailing slash is optional) since Glue does not automatically assign table locations.
 * Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
 * Configure `+"`storage.aws_s3`"+` with the same bucket and region.
 

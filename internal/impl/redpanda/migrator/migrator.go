@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ const (
 	rmoFieldSyncTopicInterval      = "sync_topic_interval"
 	rmoFieldSyncTopicACLs          = "sync_topic_acls"
 	rmoFieldServerless             = "serverless"
+	rmoFieldHeaders                = "headers"
 	rmoFieldProvenanceHeader       = "provenance_header"
 	rmoFieldOffsetHeader           = "offset_header"
 	rmoFieldMaxInFlight            = "max_in_flight"
@@ -143,7 +144,7 @@ What gets synchronised:
 How it runs:
 
 - Topics: synced on demand. The first write triggers discovery and creation; subsequent writes create on first encounter per topic.
-- Schema Registry: one sync at connect, then triggered when topic record has unknown schema; optional background loop controlled by `+"`schema_registry.interval`"+`.
+- Schema Registry: one sync at connect, then periodic syncing via the background loop controlled by `+"`schema_registry.interval`"+` (set to `+"`0s`"+` to sync only once at connect). Schema IDs unknown at write time are not resynced on demand; they are handled per `+"`schema_registry.strict`"+`.
 - Consumer Groups: background loop controlled by `+"`consumer_groups.interval`"+` and filtered by the current topic mappings.
 
 Guarantees:
@@ -273,6 +274,15 @@ output:
 			Description("Enable serverless mode for Redpanda Cloud serverless clusters. This restricts topic configurations and schema features to those supported by serverless environments.").
 			Default(false).
 			Advanced()).
+		Field(service.NewInterpolatedStringMapField(rmoFieldHeaders).
+			Description("Custom headers to add to migrated records, keyed by header name with interpolated string values. " +
+				"Useful for injecting metadata such as processing timestamps or latency measurements that should surface as header values on the destination cluster. " +
+				"A custom header name that collides with `" + rmoFieldProvenanceHeader + "` or `" + rmoFieldOffsetHeader + "` is ignored, so those migration-critical headers are always protected.").
+			Example(map[string]any{
+				"x-migration-processed-at": "${! timestamp_unix_milli() }",
+				"x-migration-latency-ms":   "${! timestamp_unix_milli() - meta(\"kafka_timestamp_ms\") }",
+			}).
+			Optional()).
 		Field(service.NewStringField(rmoFieldProvenanceHeader).
 			Description("Header name to add to migrated records indicating their source cluster. If empty, no provenance header is added.").
 			Default(DefaultProvenanceHeader).
@@ -419,6 +429,7 @@ type Migrator struct {
 	groups groupsMigrator
 	log    *service.Logger
 
+	headers          map[string]*service.InterpolatedString
 	provenanceHeader string
 	offsetHeader     string
 	plumbing         uint8
@@ -480,6 +491,13 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 
 	if err := m.topic.conf.initFromParsed(pConf); err != nil {
 		return err
+	}
+
+	if pConf.Contains(rmoFieldHeaders) {
+		m.headers, err = pConf.FieldInterpolatedStringMap(rmoFieldHeaders)
+		if err != nil {
+			return err
+		}
 	}
 
 	m.provenanceHeader, err = pConf.FieldString(rmoFieldProvenanceHeader)
@@ -676,6 +694,22 @@ func (m *Migrator) messageBatchToFranzRecords(batch service.MessageBatch) ([]kgo
 
 		// Headers (optional)
 		r.Headers = kafka.ExtractHeaders(msg)
+
+		// Custom headers (optional). Names matching provenance_header or
+		// offset_header are skipped so a colliding custom header can never
+		// masquerade as (or overwrite) those migration-critical headers,
+		// which are set below.
+		for name, interp := range m.headers {
+			if name == m.provenanceHeader || name == m.offsetHeader {
+				continue
+			}
+			val, err := interp.TryString(msg)
+			if err != nil {
+				return nil, fmt.Errorf("headers interpolation: %w", err)
+			}
+			r.Headers = kafka.SetHeaderValue(r.Headers, name, []byte(val))
+		}
+
 		if m.provenanceHeader != "" {
 			origin, ok := kafka.GetHeaderValue(r.Headers, m.provenanceHeader)
 			if ok {

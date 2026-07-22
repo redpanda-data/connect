@@ -27,6 +27,7 @@
   {"path":"./internal/impl/hdfs"},
   {"path":"./internal/impl/iceberg/integration"},
   {"path":"./internal/impl/influxdb"},
+  {"path":"./internal/impl/jira"},
   {"path":"./internal/impl/kafka","timeout":"10m"},
   {"path":"./internal/impl/kafka/enterprise"},
   {"path":"./internal/impl/memcached"},

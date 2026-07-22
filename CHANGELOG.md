@@ -3,6 +3,17 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.101.0 - 2026-07-17
+
+### Added
+
+- aws_dynamodb_cdc: Added optional checkpoint_namespace field to allow multiple independent pipelines to safely share a single DynamoDB checkpoint table without overwriting each other's state. ([@squiidz](https://github.com/squiidz), [#4602](https://github.com/redpanda-data/connect/pull/4602))
+- oracledb_cdc: Added snapshot_filters configuration to enable per-table SQL SELECT overrides during initial snapshot capture. ([@josephwoodward](https://github.com/josephwoodward), [#4606](https://github.com/redpanda-data/connect/pull/4606))
+
+### Fixed
+
+- snowflake_streaming: Fixed potential silent data corruption by verifying parquet row counts match actual serialized rows before upload to Snowflake. ([@squiidz](https://github.com/squiidz), [#4605](https://github.com/redpanda-data/connect/pull/4605))
+
 ## 4.100.0 - 2026-07-09
 
 ### Added
@@ -27,10 +38,12 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - postgres_cdc: Postgres CDC now accepts a glob pattern for the `schema` field (e.g. `tenant_*`), replicating all matching schemas through a single replication slot. Useful for multi-tenant databases where each tenant has its own schema. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4589](https://github.com/redpanda-data/connect/pull/4589))
+- aws_dynamodb_cdc: DynamoDB CDC now supports an optional checkpoint_namespace field, allowing multiple independent pipelines to share a single checkpoint table without overwriting each other's checkpoints. ([@squiidz](https://github.com/squiidz), [#4602](https://github.com/redpanda-data/connect/pull/4602))
 
 ### Fixed
 
 - general: The CGO-enabled distribution binary now embeds the IANA time zone database via the `timetzdata` build tag, matching the other distributions, so `time.LoadLocation` works in minimal runtimes without system tzdata instead of silently falling back to UTC (which shifts JQL date predicates in the `jira` input). ([@squiidz](https://github.com/squiidz), [#4583](https://github.com/redpanda-data/connect/pull/4583))
+- snowflake_streaming: BDEC parquet files are now verified for internally consistent row counts (footer, row groups, and column chunks) before upload, so an inconsistent file fails the batch instead of being registered with Snowflake. ([@squiidz](https://github.com/squiidz))
 
 ## 4.99.0 - 2026-07-02
 
