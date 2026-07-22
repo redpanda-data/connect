@@ -33,9 +33,9 @@ output:
     path: bench
     compression: AUTO
     upload_parallel_threads: ${SNOWFLAKE_UPLOAD_THREADS:16}
-    max_in_flight: ${SNOWFLAKE_MAX_IN_FLIGHT:1}
+    max_in_flight: ${SNOWFLAKE_MAX_IN_FLIGHT:8}
     batching:
-      count: ${SNOWFLAKE_BATCH_COUNT:10000}
+      count: ${SNOWFLAKE_BATCH_COUNT:5000}
       period: ${SNOWFLAKE_BATCH_PERIOD:10s}
       processors:
         - archive:

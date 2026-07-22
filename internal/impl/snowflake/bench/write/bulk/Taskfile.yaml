@@ -16,25 +16,25 @@ silent: true
 
 vars:
   RPCN: "go run ../../../../../../cmd/redpanda-connect/main.go"
-  BATCH: '{{.BATCH | default "10000"}}'
+  BATCH: '{{.BATCH | default "5000"}}'
   PERIOD: '{{.PERIOD | default "10s"}}'
   UPLOAD_THREADS: '{{.UPLOAD_THREADS | default "16"}}'
-  MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "1"}}'
+  MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "8"}}'
   COUNT: '{{.COUNT | default "0"}}'
 
 tasks:
   bench:run:
     desc: |
       Run Snowflake PUT + Snowpipe bulk write benchmark.
-      Params: BATCH (default 10000), PERIOD (default 10s), UPLOAD_THREADS (default 16),
-              MAX_IN_FLIGHT (default 1), COUNT (default 0, unlimited)
-      WriteBatch is fully serialized under one connection lock, so raising MAX_IN_FLIGHT
-      just queues extra batches without extra throughput; the two levers that actually
-      speed up bulk writes are BATCH (fewer, larger PUT/Snowpipe round trips) and
-      UPLOAD_THREADS (Snowflake's PUT PARALLEL=N, which chunks a single file's upload
-      across N threads inside one call, so it isn't blocked by the lock).
+      Params: BATCH (default 5000), PERIOD (default 10s), UPLOAD_THREADS (default 16),
+              MAX_IN_FLIGHT (default 8), COUNT (default 0, unlimited)
+      WriteBatch's connection lock now only guards the db pointer, not the whole write,
+      so batches run concurrently up to MAX_IN_FLIGHT -- that's the main throughput
+      lever now. BATCH (fewer, larger PUT/Snowpipe round trips) and UPLOAD_THREADS
+      (Snowflake's PUT PARALLEL=N, chunking one file's upload across N threads) still
+      matter but MAX_IN_FLIGHT is what actually overlaps batches on the wire.
       Set COUNT to a fixed number to stop after that many messages and print a total summary.
-      Example: task bench:run BATCH=20000 UPLOAD_THREADS=32 COUNT=1000000
+      Example: task bench:run BATCH=5000 UPLOAD_THREADS=8 MAX_IN_FLIGHT=16 COUNT=500000
     cmds:
       - |
         {{.RPCN}} run \
@@ -46,13 +46,13 @@ tasks:
           ./benchmark_config.yaml
 
   bench:matrix:
-    desc: Sweep batch sizes and upload thread counts (max_in_flight held at 1; see bench:run notes)
+    desc: Sweep batch sizes and max_in_flight (upload_threads held at 16, the prior best)
     cmds:
       - |
-        for batch in 5000 10000 20000 50000; do
-          for threads in 4 8 16 32; do
-            echo "=== batch=$batch upload_threads=$threads ==="
-            task bench:run BATCH=$batch UPLOAD_THREADS=$threads COUNT={{.COUNT}} || true
+        for batch in 1000 5000 10000 20000; do
+          for flight in 1 4 8 16 32; do
+            echo "=== batch=$batch max_in_flight=$flight ==="
+            task bench:run BATCH=$batch MAX_IN_FLIGHT=$flight COUNT={{.COUNT}} || true
           done
         done
 

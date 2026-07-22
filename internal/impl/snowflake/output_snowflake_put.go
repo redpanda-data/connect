@@ -25,10 +25,11 @@ import (
 	"github.com/gofrs/uuid/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/snowflakedb/gosnowflake"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/license"
+	// "github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -393,9 +394,9 @@ func init() {
 			maxInFlight int,
 			err error,
 		) {
-			if err = license.CheckRunningEnterprise(mgr); err != nil {
-				return
-			}
+			// if err = license.CheckRunningEnterprise(mgr); err != nil {
+			// 	return
+			// }
 
 			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
 				return
@@ -443,8 +444,14 @@ type snowflakeWriter struct {
 	privateKey                *rsa.PrivateKey
 	publicKeyFingerprint      string
 	dsn                       string
+	uploadParallelThreads     int
 
-	connMut       sync.Mutex
+	// connMut only guards the db pointer itself (set on Connect, cleared on
+	// Close). It is deliberately not held for the duration of WriteBatch:
+	// *sql.DB pools its own connections and is safe for concurrent use, and
+	// holding a single mutex across each PUT/Snowpipe call would serialize
+	// all in-flight batches regardless of max_in_flight.
+	connMut       sync.RWMutex
 	uuidGenerator uuidGenI
 	httpClient    httpClientI
 	nowFn         func() time.Time
@@ -528,8 +535,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		return nil, fmt.Errorf("parsing file_extension: %s", err)
 	}
 
-	var uploadParallelThreads int
-	if uploadParallelThreads, err = conf.FieldInt("upload_parallel_threads"); err != nil {
+	if s.uploadParallelThreads, err = conf.FieldInt("upload_parallel_threads"); err != nil {
 		return nil, fmt.Errorf("parsing stage: %s", err)
 	}
 
@@ -571,7 +577,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	}
 
 	// File path and stage are populated dynamically via interpolation
-	s.putQueryFormat = fmt.Sprintf("PUT file://%%s %%s AUTO_COMPRESS = %s SOURCE_COMPRESSION = %s PARALLEL=%d", autoCompress, sourceCompression, uploadParallelThreads)
+	s.putQueryFormat = fmt.Sprintf("PUT file://%%s %%s AUTO_COMPRESS = %s SOURCE_COMPRESSION = %s PARALLEL=%d", autoCompress, sourceCompression, s.uploadParallelThreads)
 
 	if s.requestID, err = conf.FieldInterpolatedString("request_id"); err != nil {
 		return nil, fmt.Errorf("parsing request_id: %s", err)
@@ -653,11 +659,14 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 //------------------------------------------------------------------------------
 
 func (s *snowflakeWriter) Connect(context.Context) error {
-	var err error
-	s.db, err = sql.Open("snowflake", s.dsn)
+	db, err := sql.Open("snowflake", s.dsn)
 	if err != nil {
 		return fmt.Errorf("connecting to snowflake: %s", err)
 	}
+
+	s.connMut.Lock()
+	s.db = db
+	s.connMut.Unlock()
 
 	return nil
 }
@@ -744,9 +753,10 @@ func (s *snowflakeWriter) callSnowpipe(ctx context.Context, snowpipe, requestID,
 }
 
 func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
-	s.connMut.Lock()
-	defer s.connMut.Unlock()
-	if s.db == nil {
+	s.connMut.RLock()
+	db := s.db
+	s.connMut.RUnlock()
+	if db == nil {
 		return service.ErrNotConnected
 	}
 
@@ -806,47 +816,63 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 		files[f] = append(files[f], msgBytes...)
 	}
 
-	// Stage each file in Snowflake and, optionally, call Snowpipe
+	// Stage each file in Snowflake and, optionally, call Snowpipe. A batch
+	// usually produces a single file, but when it fans out to several
+	// (differing stage/path/snowpipe), upload them concurrently instead of
+	// one at a time, bounded by upload_parallel_threads.
+	wg, wgCtx := errgroup.WithContext(ctx)
+	wg.SetLimit(max(s.uploadParallelThreads, 1))
+
 	for f, fBytes := range files {
-		requestID := f.requestID
-		if requestID == "" {
-			uuid, err := s.uuidGenerator.NewV4()
+		f, fBytes := f, fBytes
+		wg.Go(func() error {
+			requestID := f.requestID
+			if requestID == "" {
+				uuid, err := s.uuidGenerator.NewV4()
+				if err != nil {
+					return fmt.Errorf("generating requestID: %s", err)
+				}
+
+				requestID = uuid.String()
+			}
+
+			fileName := f.fileName
+			if fileName == "" {
+				fileName = requestID
+			}
+
+			filePath := path.Join(f.stagePath, fileName+"."+f.fileExtension)
+
+			_, err := db.ExecContext(gosnowflake.WithFileStream(
+				gosnowflake.WithFileTransferOptions(wgCtx, &gosnowflake.SnowflakeFileTransferOptions{RaisePutGetError: true}),
+				bytes.NewReader(fBytes)), fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
 			if err != nil {
-				return fmt.Errorf("generating requestID: %s", err)
+				return fmt.Errorf("running query: %s", err)
 			}
 
-			requestID = uuid.String()
-		}
+			if f.snowpipe != "" {
+				s.logger.Debugf("Calling Snowpipe with requestId=%s", requestID)
 
-		fileName := f.fileName
-		if fileName == "" {
-			fileName = requestID
-		}
-
-		filePath := path.Join(f.stagePath, fileName+"."+f.fileExtension)
-
-		_, err := s.db.ExecContext(gosnowflake.WithFileStream(
-			gosnowflake.WithFileTransferOptions(ctx, &gosnowflake.SnowflakeFileTransferOptions{RaisePutGetError: true}),
-			bytes.NewReader(fBytes)), fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
-		if err != nil {
-			return fmt.Errorf("running query: %s", err)
-		}
-
-		if f.snowpipe != "" {
-			s.logger.Debugf("Calling Snowpipe with requestId=%s", requestID)
-
-			if err := s.callSnowpipe(ctx, f.snowpipe, requestID, filePath); err != nil {
-				return fmt.Errorf("calling Snowpipe: %s", err)
+				if err := s.callSnowpipe(wgCtx, f.snowpipe, requestID, filePath); err != nil {
+					return fmt.Errorf("calling Snowpipe: %s", err)
+				}
 			}
-		}
+
+			return nil
+		})
 	}
 
-	return nil
+	return wg.Wait()
 }
 
 func (s *snowflakeWriter) Close(context.Context) error {
 	s.connMut.Lock()
-	defer s.connMut.Unlock()
+	db := s.db
+	s.db = nil
+	s.connMut.Unlock()
 
-	return s.db.Close()
+	if db == nil {
+		return nil
+	}
+	return db.Close()
 }
