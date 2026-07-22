@@ -118,9 +118,20 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	tables := make([]TableFQN, 0, len(schemas)*len(normalizedTables))
 	for _, schema := range schemas {
+		existingTables, err := resolveExistingTables(ctx, dbConn, schema)
+		if err != nil {
+			return nil, fmt.Errorf("resolving tables in schema %q: %w", schema, err)
+		}
 		for _, table := range normalizedTables {
+			if _, ok := existingTables[table]; !ok {
+				config.Logger.Warnf("table %s.%s not found, skipping (schema %s matched pattern %q but does not contain this table)", schema, table, schema, config.DBSchemaPattern)
+				continue
+			}
 			tables = append(tables, TableFQN{Schema: schema, Table: table})
 		}
+	}
+	if len(tables) == 0 && len(normalizedTables) > 0 {
+		return nil, fmt.Errorf("none of the configured tables %v were found in any schema matching pattern %q", config.DBTables, config.DBSchemaPattern)
 	}
 	batchSize := 1000
 	if config.BatchSize > 0 {

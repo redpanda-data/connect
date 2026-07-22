@@ -1738,6 +1738,81 @@ postgres_cdc:
 	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
 }
 
+func TestIntegrationMultiSchemaMissingTableDegradesGracefully(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	// tenant_a is fully provisioned with the "events" table; tenant_b matches
+	// the schema glob but is missing it (e.g. still being migrated). Before
+	// this fix, CreatePublication's FOR TABLE clause would reference the
+	// non-existent tenant_b.events relation and fail publication setup for
+	// every matched schema, not just the drifted one.
+	_, err = db.Exec("CREATE SCHEMA tenant_a")
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE TABLE tenant_a.events (id SERIAL PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE SCHEMA tenant_b")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('alice')")
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		pgSchema string
+		table    string
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: missing_table_degrade_slot
+    stream_snapshot: true
+    schema: tenant_*
+    tables:
+      - events
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			m := msgMeta{}
+			m.pgSchema, _ = msg.MetaGet("pg_schema")
+			m.table, _ = msg.MetaGet("table")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() { _ = stream.Run(t.Context()) }()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	// tenant_a should keep streaming even though tenant_b is missing the table.
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected) >= 1
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for tenant_a snapshot row; a missing table in tenant_b should not block replication")
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, collected, 1)
+	assert.Equal(t, "tenant_a", collected[0].pgSchema)
+	assert.Equal(t, "events", collected[0].table)
+}
+
 func TestIntegrationNoSchemasMatchedError(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")

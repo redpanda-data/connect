@@ -82,6 +82,43 @@ func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) ([
 	return schemas, nil
 }
 
+// resolveExistingTables returns the set of quoted table identifiers that
+// actually exist in the given (already quoted) schema.
+//
+// This is used to resolve a schema glob × table list combination per-schema
+// rather than assuming every matched schema contains every listed table. A
+// schema matching the glob but missing one of the configured tables (e.g. a
+// tenant schema that's still being provisioned) would otherwise cause
+// CreatePublication's FOR TABLE clause to reference a non-existent relation,
+// failing publication setup for every schema, not just the drifted one.
+func resolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchema string) (map[string]struct{}, error) {
+	schema, err := sanitize.UnquotePostgresIdentifier(quotedSchema)
+	if err != nil {
+		return nil, fmt.Errorf("unquoting schema identifier %q: %w", quotedSchema, err)
+	}
+
+	q, err := sanitize.SQLQuery(
+		"SELECT table_name FROM information_schema.tables WHERE table_schema = $1",
+		schema,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("building table resolution query for schema %q: %w", quotedSchema, err)
+	}
+
+	results, err := conn.Exec(ctx, q).ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("querying tables in schema %q: %w", quotedSchema, err)
+	}
+
+	existing := map[string]struct{}{}
+	if len(results) > 0 {
+		for _, row := range results[0].Rows {
+			existing[sanitize.QuotePostgresIdentifier(string(row[0]))] = struct{}{}
+		}
+	}
+	return existing, nil
+}
+
 // globToLike converts an unquoted glob pattern (using '*' as wildcard) into a
 // PostgreSQL LIKE pattern that uses '!' as the escape character.
 //

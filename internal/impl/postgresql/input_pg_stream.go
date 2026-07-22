@@ -122,7 +122,9 @@ Schema pattern matching runs once at pipeline startup. Schemas created after the
 			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`, "tenant_*", "*"),
 		).
 		Field(service.NewStringListField(fieldTables).
-			Description("A list of table names to include in the logical replication. Each table should be specified as a separate item.").
+			Description(`A list of table names to include in the logical replication. Each table should be specified as a separate item.
+
+When `+"`schema`"+` is a glob pattern, this list is resolved against each matched schema independently: a table missing from a given schema is skipped (with a warning logged) rather than failing replication for every matched schema.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
