@@ -149,7 +149,7 @@ const rowOperationDocs = "\n" +
 	"*Copy-on-write support matrix.*\n" +
 	"\n" +
 	"* *Column types:* all flat primitives (`boolean`, `int`, `long`, `float`, `double`, `string`, `date`, `time`, `timestamp`, `timestamptz`, `decimal`, `uuid`, `binary`, `fixed`), and nested `struct`/`list`/`map` columns whose leaves are all supported primitives.\n" +
-	"* *Merge-key (`identifier_fields`) types:* `boolean`, `int`, `long`, `string`, `date`, `time`, `timestamp`, `timestamptz` and `uuid`. A `decimal` merge key is *not* supported and errors with a message pointing you at `merge-on-read` (an upstream limitation in the Iceberg library's overwrite filter); `decimal` as a non-key column is fine.\n" +
+	"* *Merge-key (`identifier_fields`) types:* `int`, `long`, `string`, `date`, `time`, `timestamp`, `timestamptz` and `uuid`. `decimal` and `boolean` merge keys are *not* supported and error with a message pointing you at `merge-on-read` (an upstream limitation in the Iceberg library's overwrite filter — it cannot apply a `decimal` or `boolean` predicate when rewriting files); both are fine as non-key columns.\n" +
 	"* *Partitioned tables:* supported, with no requirement that the partition columns be a subset of `identifier_fields`. A `copy-on-write` `upsert` can even move a key from one partition to another.\n" +
 	"* *Table format:* version 1 or version 2, with no forced upgrade.\n" +
 	"\n" +
@@ -456,7 +456,11 @@ array:list
 					Default("24h"),
 				service.NewIntField(ioFieldMaxCommitRetries).
 					Description("Maximum number of times to retry a failed transaction commit.").
-					Default(3),
+					Default(3).
+					// A commit needs at least one attempt: the retry loop runs
+					// `max_retries` times, so 0 or a negative value would never
+					// attempt the commit at all. Require >= 1.
+					LintRule(`root = if this < 1 { [ "max_retries must be at least 1" ] }`),
 			).Description("Commit behavior configuration.").
 				Advanced().
 				Optional(),

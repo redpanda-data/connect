@@ -14,11 +14,90 @@ import (
 	"math"
 	"time"
 
+	"github.com/apache/iceberg-go"
 	"github.com/parquet-go/parquet-go"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/schema"
 )
+
+// secondsPerDay is the number of seconds in a UTC day, used to turn a
+// days-since-epoch DATE value into an absolute instant.
+const secondsPerDay = 86400
+
+// NumericTemporalToTime interprets a bare numeric value destined for a temporal
+// Iceberg column (DATE / TIME / TIMESTAMP / TIMESTAMPTZ) exactly as the
+// shredder's insert path (convertLeafValue -> convertDate / convertTime /
+// convertTimestamp) would, returning the equivalent UTC time.Time.
+//
+// It exists so the copy-on-write rewrite path (which encodes values through
+// deleteKeyJSONValue + array.RecordFromJSON, and historically required a
+// time.Time) can share the shredder's unit interpretation instead of diverging
+// from it. The unit scaling is delegated to the very same helpers the insert
+// path uses — numericToTimeMicros for TIME and scaleTimestampNumeric for
+// TIMESTAMP, with DATE treated as already-days like convertDate — so the two
+// paths cannot drift on how a bare number is scaled. That drift was the source
+// of the year-50000 corruption when copy-on-write rejected the numeric the
+// insert path happily interpreted. TestNumericTemporalToTimeMatchesConvert pins
+// the equivalence.
+//
+// ok is false when value is not a bare number (NaN/±Inf included, so the
+// caller's existing type check rejects them) or typ is not one of the four
+// supported temporal types; the caller then keeps its existing time.Time-only
+// handling. strict mirrors [RecordShredder.StrictTemporalMode]: when true and
+// the metadata required to disambiguate the unit is absent, it returns the same
+// error the insert path returns, so copy-on-write honours require_schema_metadata
+// identically to inserts.
+//
+// This handles only the microsecond temporal types, which are exactly the ones
+// copy-on-write supports as columns; the V3 nanosecond variants are out of
+// scope (they are not copy-on-write-supported column types).
+func NumericTemporalToTime(value any, typ iceberg.Type, common *schema.Common, strict bool) (time.Time, bool, error) {
+	n, isNum := numericInt64(value)
+	switch typ.(type) {
+	case iceberg.DateType:
+		if !isNum {
+			return time.Time{}, false, nil
+		}
+		if strict && (common == nil || common.Type != schema.Date) {
+			return time.Time{}, true, errors.New("date column received numeric value without matching schema.Common (Type=Date); require_schema_metadata=true demands a Date metadata entry to disambiguate the unit")
+		}
+		// DATE numerics are days since the epoch (convertDate applies no unit
+		// scaling); midnight UTC of that day formats back to the same day.
+		return time.Unix(n*secondsPerDay, 0).UTC(), true, nil
+	case iceberg.TimeType:
+		if !isNum {
+			return time.Time{}, false, nil
+		}
+		if strict && (common == nil || common.Type != schema.TimeOfDay || common.Logical == nil || common.Logical.TimeOfDay == nil) {
+			return time.Time{}, true, errors.New("time column received numeric value without matching schema.Common (Type=TimeOfDay with Logical.TimeOfDay); require_schema_metadata=true demands a TimeOfDay metadata entry with declared unit")
+		}
+		micros := numericToTimeMicros(n, common)
+		// 1970-01-01 + micros; its UTC wall-clock is the time-of-day, which the
+		// writer formats as HH:MM:SS.ffffff.
+		return time.UnixMicro(micros).UTC(), true, nil
+	case iceberg.TimestampType, iceberg.TimestampTzType:
+		if !isNum {
+			return time.Time{}, false, nil
+		}
+		if common != nil && common.Type == schema.Timestamp {
+			micros := scaleTimestampNumeric(n, common.EffectiveTimestamp().Unit, false)
+			return time.UnixMicro(micros).UTC(), true, nil
+		}
+		if strict {
+			return time.Time{}, true, errors.New("timestamp column received numeric value with no Timestamp schema metadata; require_schema_metadata=true demands a schema.Common with Type=Timestamp to disambiguate the unit")
+		}
+		// No metadata: match convertTimestamp's bloblang seconds-default
+		// fallback so the two paths agree even absent metadata.
+		t, err := bloblang.ValueAsTimestamp(value)
+		if err != nil {
+			return time.Time{}, true, err
+		}
+		return t.UTC(), true, nil
+	default:
+		return time.Time{}, false, nil
+	}
+}
 
 // commonForField returns the upstream schema.Common registered for the given
 // iceberg field ID, or nil when no metadata has been registered for that

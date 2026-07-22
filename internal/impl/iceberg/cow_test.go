@@ -18,11 +18,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/catalog/rest"
+	iceio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -53,8 +56,15 @@ func TestParseMergeStrategyConfig(t *testing.T) {
 	})
 
 	t.Run("invalid value rejected", func(t *testing.T) {
-		// An unknown enum value is rejected somewhere along the parse pipeline
-		// (spec validation or the defensive switch in parseRowOpConfig).
+		// FINDING (T-20/G4): the merge_strategy StringEnumField enum is NOT
+		// enforced by ParseYAML — parsing an unknown value succeeds without error,
+		// so the enum constraint is advisory (surfaced only by a separate config
+		// lint pass, which ParseYAML does not run). The only hard rejection at
+		// runtime is the defensive switch in parseRowOpConfig. This subtest pins
+		// exactly that: ParseYAML admits the bogus value, and parseRowOpConfig is
+		// what rejects it. If the StringEnumField ever starts rejecting at
+		// ParseYAML time, the first assertion flips and this test should be
+		// tightened to require the earlier rejection.
 		conf, yamlErr := icebergOutputConfig().ParseYAML(`
 catalog:
   url: http://localhost:8181/api/catalog
@@ -65,11 +75,11 @@ storage:
     bucket: bucket
 merge_strategy: sideways
 `, nil)
-		if yamlErr != nil {
-			return // rejected at spec-validation time
-		}
+		require.NoError(t, yamlErr,
+			"the merge_strategy enum is not enforced at ParseYAML time; if this ever changes, tighten this test to require the earlier rejection")
+
 		_, err := parseRowOpConfig(conf)
-		require.Error(t, err)
+		require.Error(t, err, "parseRowOpConfig's defensive switch must reject the unknown merge_strategy")
 		assert.Contains(t, err.Error(), ioFieldMergeStrategy)
 	})
 }
@@ -219,6 +229,38 @@ func cowWriter(t testing.TB, tbl *table.Table, idFields ...string) *writer {
 		},
 		logger: service.MockResources().Logger(),
 	}
+}
+
+// cowWriterCI is cowWriter with case-insensitive matching, for the case-fold
+// tests.
+func cowWriterCI(t testing.TB, tbl *table.Table, idFields ...string) *writer {
+	t.Helper()
+	w := cowWriter(t, tbl, idFields...)
+	w.caseSensitive = false
+	return w
+}
+
+// countRowsWithID counts how many rows carry the given int64 key in column
+// idCol — used to detect duplicates that an id->value map would silently
+// collapse.
+func countRowsWithID(t testing.TB, ctx context.Context, tbl *table.Table, idCol string, id int64) int {
+	t.Helper()
+	at, err := tbl.Scan().ToArrowTable(ctx)
+	require.NoError(t, err)
+	defer at.Release()
+	tr := array.NewTableReader(at, 0)
+	defer tr.Release()
+	n := 0
+	for tr.Next() {
+		rec := tr.RecordBatch()
+		idArr := rec.Column(rec.Schema().FieldIndices(idCol)[0]).(*array.Int64)
+		for r := 0; r < int(rec.NumRows()); r++ {
+			if idArr.Value(r) == id {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 // cowMsg builds a message whose body is the row image and whose "op" metadata
@@ -446,6 +488,20 @@ func TestCommitOverwriteIdempotentOnUnknownState(t *testing.T) {
 		require.NoError(t, w.Write(ctx, upsert()))
 		assert.Equal(t, 2, cat.calls, "a genuine conflict must be retried")
 		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()), "overwrite committed exactly once after the conflict")
+		assert.Equal(t, want, scanRows(t, ctx, cat.snapshot()))
+	})
+
+	// (T-13) landed-but-reported-failed (a lost ack on a 409): the first CommitTable
+	// applies the overwrite server-side, then reports ErrCommitFailed as if it had
+	// been a clean conflict. The retry must find the commit-id in the reloaded
+	// snapshot and short-circuit to success WITHOUT re-committing — exactly one
+	// CommitTable call, one snapshot with the token, correct rows.
+	t.Run("landed then failed applies once", func(t *testing.T) {
+		ctx := t.Context()
+		cat, w := setup(t, commitLandThenFail)
+		require.NoError(t, w.Write(ctx, upsert()))
+		assert.Equal(t, 1, cat.calls, "a landed overwrite must not be re-committed after a lost-ack conflict")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()), "overwrite applied exactly once")
 		assert.Equal(t, want, scanRows(t, ctx, cat.snapshot()))
 	})
 }
@@ -831,6 +887,212 @@ func TestCOWBucketPartitionRoundTrip(t *testing.T) {
 	assert.Equal(t, want, got, "id=3 deleted; id=2 updated; id=4 inserted — all bucket-partitioned")
 }
 
+// TestCOWCaseInsensitiveUpsert (T-3) proves copy-on-write matches a merge key
+// case-insensitively end-to-end: the table column is "Id", the mutating messages
+// key it as "ID" and "id", and caseSensitive is false. The upsert must rewrite
+// the intended row (no duplicate, no missed match), exercising both cowKeyFields
+// (filter side) and lookupField in buildCOWRecordFactory (storage side) under
+// case folding.
+func TestCOWCaseInsensitiveUpsert(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "Id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String},
+	)
+	seedTbl, cat := newCOWTable(t, sc)
+
+	// Seed id=1,2 (canonical "Id" casing) via a case-insensitive writer.
+	seedW := cowWriterCI(t, cat.snapshot(), "Id")
+	factory, err := seedW.buildCOWRecordFactory(seedTbl.Schema(), toBatch(t, []map[string]any{
+		{"Id": int64(1), "payload": "one"},
+		{"Id": int64(2), "payload": "two"},
+	}))
+	require.NoError(t, err)
+	rdr, err := factory()
+	require.NoError(t, err)
+	tx := seedTbl.NewTransaction()
+	require.NoError(t, tx.Append(ctx, rdr, nil))
+	rdr.Release()
+	_, err = tx.Commit(ctx)
+	require.NoError(t, err)
+
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriterCI(t, cat.snapshot(), "Id")
+	w.committer = comm
+
+	// Upsert keyed as "ID", another as "id" — both must fold onto column "Id".
+	require.NoError(t, w.Write(ctx, service.MessageBatch{
+		cowMsg(t, "upsert", map[string]any{"ID": int64(1), "payload": "ONE"}),
+		cowMsg(t, "upsert", map[string]any{"id": int64(2), "payload": "TWO"}),
+	}))
+
+	final := cat.snapshot()
+	assert.Zero(t, countDeleteManifestFiles(t, ctx, final), "copy-on-write must leave no delete files")
+	assert.Equal(t, 1, countRowsWithID(t, ctx, final, "Id", 1), "id=1 must be rewritten in place, not duplicated")
+	assert.Equal(t, 1, countRowsWithID(t, ctx, final, "Id", 2), "id=2 must be rewritten in place, not duplicated")
+	assert.Equal(t, map[int64]string{1: "ONE", 2: "TWO"}, scanRowsBy(t, ctx, final, "Id"))
+}
+
+// scanRowsBy scans an {idCol int64, payload string} table into id->payload.
+func scanRowsBy(t testing.TB, ctx context.Context, tbl *table.Table, idCol string) map[int64]string {
+	t.Helper()
+	at, err := tbl.Scan().ToArrowTable(ctx)
+	require.NoError(t, err)
+	defer at.Release()
+	out := map[int64]string{}
+	tr := array.NewTableReader(at, 0)
+	defer tr.Release()
+	for tr.Next() {
+		rec := tr.RecordBatch()
+		idArr := rec.Column(rec.Schema().FieldIndices(idCol)[0]).(*array.Int64)
+		payArr := rec.Column(rec.Schema().FieldIndices("payload")[0]).(*array.String)
+		for r := 0; r < int(rec.NumRows()); r++ {
+			pay := ""
+			if payArr.IsValid(r) {
+				pay = payArr.Value(r)
+			}
+			out[idArr.Value(r)] = pay
+		}
+	}
+	return out
+}
+
+// TestCOWDetectNewColumnsCaseFold (T-3) proves cowDetectNewColumns folds case: a
+// message field "Extra" against table column "extra" is NOT flagged as new,
+// while a genuinely absent "brand_new" IS flagged for schema evolution.
+func TestCOWDetectNewColumnsCaseFold(t *testing.T) {
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "Id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "extra", Type: iceberg.PrimitiveTypes.String},
+	)
+	tbl := newTypedKeyTableFromSchema(t, sc)
+	w := cowWriterCI(t, tbl, "Id")
+
+	// "Extra" folds onto "extra": not a new column.
+	require.NoError(t, w.cowDetectNewColumns(sc, service.MessageBatch{
+		structuredMsg(t, map[string]any{"Id": int64(1), "Extra": "x"}),
+	}))
+
+	// "brand_new" has no case-folded match: flagged for evolution.
+	err := w.cowDetectNewColumns(sc, service.MessageBatch{
+		structuredMsg(t, map[string]any{"Id": int64(1), "brand_new": "y"}),
+	})
+	require.Error(t, err)
+	var evo *BatchSchemaEvolutionError
+	require.ErrorAs(t, err, &evo)
+	assert.Contains(t, err.Error(), "brand_new")
+}
+
+// TestCOWMassageMalformedInput (T-18) pins cowMassage's shape-mismatch branches:
+// a scalar where a struct is expected, a map where a list is expected, and a
+// scalar where a map is expected each return a descriptive error rather than
+// panicking or silently mis-encoding.
+func TestCOWMassageMalformedInput(t *testing.T) {
+	w := &writer{caseSensitive: true}
+
+	structT := &iceberg.StructType{FieldList: []iceberg.NestedField{{ID: 3, Name: "a", Type: iceberg.PrimitiveTypes.Int64}}}
+	_, err := w.cowMassage(structT, 2, "scalar-not-object", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "struct value must be an object")
+
+	listT := &iceberg.ListType{ElementID: 3, Element: iceberg.PrimitiveTypes.String, ElementRequired: false}
+	_, err = w.cowMassage(listT, 2, map[string]any{"x": 1}, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "list value must be an array")
+
+	mapT := &iceberg.MapType{KeyID: 3, KeyType: iceberg.PrimitiveTypes.String, ValueID: 4, ValueType: iceberg.PrimitiveTypes.Int64, ValueRequired: false}
+	_, err = w.cowMassage(mapT, 2, "scalar-not-object", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "map value must be an object")
+
+	// A nested malformed leaf is reported with its path context.
+	_, err = w.cowMassage(structT, 2, map[string]any{"a": []any{"list-into-int"}}, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "struct field \"a\"")
+}
+
+// TestCOWWriteEmptyBatchNoOp (T-19) proves an empty batch through writeCOW is a
+// no-op: it must not create a snapshot or touch the committer (nil here would
+// panic if used).
+func TestCOWWriteEmptyBatchNoOp(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+	)
+	tbl, cat := newCOWTable(t, sc)
+	w := cowWriter(t, tbl, "id") // no committer wired
+
+	require.NoError(t, w.writeCOW(ctx, service.MessageBatch{}))
+	assert.Nil(t, cat.snapshot().CurrentSnapshot(), "an empty batch must not produce a snapshot")
+}
+
+// TestCOWUnsupportedColumnGateThroughWrite (T-19) proves a copy-on-write mutating
+// write against a table with an unsupported column type surfaces the schema-gate
+// error through Write (before any commit), rather than corrupting or dropping the
+// column. timestamp_ns is a valid Iceberg type but outside the copy-on-write
+// supported set.
+func TestCOWUnsupportedColumnGateThroughWrite(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "at", Type: iceberg.PrimitiveTypes.TimestampNs},
+	)
+	// timestamp_ns is only valid in a v3 table, so build one directly (the v2
+	// helper would reject the schema before we could reach the copy-on-write gate).
+	location := filepath.ToSlash(t.TempDir())
+	meta, err := table.NewMetadata(sc, iceberg.UnpartitionedSpec, table.UnsortedSortOrder, location,
+		iceberg.Properties{table.PropertyFormatVersion: "3"})
+	require.NoError(t, err)
+	cat := &memCatalog{
+		meta:             meta,
+		metadataLocation: fmt.Sprintf("%s/metadata/00001-%s.metadata.json", location, uuid.New()),
+		ident:            table.Identifier{"default", "cow_ns"},
+		location:         location,
+	}
+	tbl := cat.snapshot()
+	w := cowWriter(t, tbl, "id") // no committer: the gate must fire first
+
+	err = w.Write(ctx, service.MessageBatch{
+		cowMsg(t, "upsert", map[string]any{"id": int64(1), "at": time.Now()}),
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not support column")
+	assert.Contains(t, err.Error(), "timestamp_ns")
+}
+
+// TestCOWInsertPlusUpsertSameKeyDuplicates (CORR-6) pins the documented contract
+// that an insert and an upsert of the SAME key in one batch produce a duplicate:
+// insert is an unconditional append and is deliberately not keyed, so it is not
+// collapsed against the upsert (splitByOperation). Operators must map create
+// events to upsert, not insert, for keyed data. This test fixes that behaviour
+// so a future change to it is a conscious decision.
+func TestCOWInsertPlusUpsertSameKeyDuplicates(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String},
+	)
+	seedTbl, cat := newCOWTable(t, sc)
+
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, seedTbl, "id")
+	w.committer = comm
+
+	// insert id=1 and upsert id=1 in the same batch.
+	require.NoError(t, w.Write(ctx, service.MessageBatch{
+		cowMsg(t, "insert", map[string]any{"id": int64(1), "payload": "A"}),
+		cowMsg(t, "upsert", map[string]any{"id": int64(1), "payload": "B"}),
+	}))
+
+	final := cat.snapshot()
+	assert.Equal(t, 2, countRowsWithID(t, ctx, final, "id", 1),
+		"insert + upsert of the same key in one batch is not de-duplicated — the contract in splitByOperation")
+}
+
 // --- test helpers --------------------------------------------------------------
 
 // newAmpTableWithSchema builds an unpartitioned v2 table for the given schema,
@@ -907,6 +1169,248 @@ func scanRows(t testing.TB, ctx context.Context, tbl *table.Table) map[int64]str
 		}
 	}
 	return out
+}
+
+// TestCommitOverwriteNoLeakOnConflictThenSuccess (T-7, CORR-2) proves the fix for
+// the orphan-parquet leak on a clean-conflict-then-success retry. commitLocked
+// re-runs the overwrite stage on every attempt, writing a fresh set of parquet
+// files each time; here attempt 1 loses a clean 409 (nothing lands) and attempt 2
+// succeeds. The winning snapshot's files must survive while attempt 1's files are
+// cleaned, so the final on-disk parquet count is exactly the seed files (protected
+// because they existed before the commit) plus the winning snapshot's files — no
+// leak. Before CORR-2 (cleanup ran only on the error path) attempt 1's files
+// leaked and this count was higher.
+func TestCommitOverwriteNoLeakOnConflictThenSuccess(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, mem := newCOWTable(t, sc)
+	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+	seedCount := countParquetFiles(t, seedTbl.Location())
+	require.Positive(t, seedCount)
+
+	// attempt 1 = clean conflict (nothing lands), attempt 2 = success.
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitConflict}}
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3},
+		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, cat.snapshot(), "id")
+	w.committer = comm
+
+	require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}))
+	assert.Equal(t, 2, cat.calls, "a clean conflict must force a second attempt")
+
+	final := cat.snapshot()
+	assert.Equal(t, map[int64]string{1: "one", 2: "TWO", 3: "three"}, scanRows(t, ctx, final))
+
+	// On-disk parquet must be exactly the seed files (in the before-snapshot, so
+	// protected) plus the files the winning snapshot references (disjoint from the
+	// seed, since the overwrite rewrote them into fresh files). If attempt 1's
+	// files had leaked, the count would be strictly larger.
+	referenced := comm.referencedDataFilePaths(ctx)
+	require.NotEmpty(t, referenced)
+	assert.Equal(t, seedCount+len(referenced), countParquetFiles(t, final.Location()),
+		"attempt 1's orphaned parquet must have been cleaned even though the overall commit succeeded")
+}
+
+// TestCommitOverwritePreservesFilesOnTerminalUnknown (T-6, CORR-2) proves the
+// durability-critical skip: when a copy-on-write commit exhausts its retries with
+// ErrCommitStateUnknown, commitOverwrite must return the wrapped unknown error AND
+// leave the written parquet files in place. A possibly-landed commit's files may
+// belong to a snapshot that committed server-side, so deleting them could corrupt
+// the table — they are left for Iceberg orphan-file maintenance instead.
+func TestCommitOverwritePreservesFilesOnTerminalUnknown(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, mem := newCOWTable(t, sc)
+	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+	seedCount := countParquetFiles(t, seedTbl.Location())
+
+	// Every attempt returns ErrCommitStateUnknown WITHOUT landing, so the commit-id
+	// never appears on reload and the loop runs to exhaustion. (A landed unknown
+	// would instead be detected by the commit-id and short-circuit to success, so
+	// it could not exhaust — hence commitUnknownNoLand here.)
+	const maxRetries = 3
+	outcomes := make([]commitOutcome, maxRetries)
+	for i := range outcomes {
+		outcomes[i] = commitUnknownNoLand
+	}
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: outcomes}
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: maxRetries},
+		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, cat.snapshot(), "id")
+	w.committer = comm
+
+	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, rest.ErrCommitStateUnknown, "the terminal error must be ErrCommitStateUnknown")
+	assert.Equal(t, maxRetries, cat.calls, "the commit must exhaust every retry")
+	assert.Greater(t, countParquetFiles(t, seedTbl.Location()), seedCount,
+		"the overwrite's parquet files must be preserved (NOT cleaned) on a possibly-landed unknown state")
+}
+
+// TestCommitOverwriteResumesAfterReloadFailures (T-12, CORR-3) proves the commit-id
+// idempotency check resumes correctly even when the reload after a lost-ack
+// conflict fails several times before recovering. Attempt 1 lands the overwrite
+// server-side but reports a conflict; the next reloads fail, and each retry cleanly
+// conflicts (nothing lands) so no double-apply is possible. Once a reload finally
+// succeeds, the token is found in the reloaded snapshot and the commit returns
+// success — the mutation lands exactly once, with no duplicate rows.
+func TestCommitOverwriteResumesAfterReloadFailures(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, mem := newCOWTable(t, sc)
+	_ = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+
+	// attempt 1 lands but reports ErrCommitFailed; later attempts cleanly conflict.
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitLandThenFail, commitConflict, commitConflict}}
+
+	// Reload fails its first two calls, then recovers. Commits are serialized under
+	// the committer's lock and reload runs inside it, so a plain counter is safe.
+	var reloadCalls int
+	reload := func(context.Context) (*table.Table, error) {
+		reloadCalls++
+		if reloadCalls <= 2 {
+			return nil, errors.New("catalog reload unavailable")
+		}
+		return cat.snapshot(), nil
+	}
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 5}, reload, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, cat.snapshot(), "id")
+	w.committer = comm
+
+	require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}))
+
+	final := cat.snapshot()
+	assert.Equal(t, 1, countSnapshotsWithCommitID(final),
+		"the mutation must land exactly once even though the first reloads failed")
+	assert.Equal(t, map[int64]string{1: "one", 2: "TWO", 3: "three"}, scanRows(t, ctx, final),
+		"no duplicate rows: the landed commit was detected once reload recovered")
+}
+
+// nonListableFS forwards reads and writes to the local filesystem but deliberately
+// omits WalkDir, so it satisfies iceio.IO / WriteFileIO but NOT iceio.ListableIO.
+// It lets a copy-on-write commit write real parquet while forcing the orphan-
+// cleanup path down its can't-list branch.
+type nonListableFS struct{ inner iceio.LocalFS }
+
+func (f nonListableFS) Open(name string) (iceio.File, error)         { return f.inner.Open(name) }
+func (f nonListableFS) Create(name string) (iceio.FileWriter, error) { return f.inner.Create(name) }
+func (f nonListableFS) WriteFile(name string, p []byte) error        { return f.inner.WriteFile(name, p) }
+func (f nonListableFS) Remove(name string) error                     { return f.inner.Remove(name) }
+
+// TestCommitOverwriteGracefulWithoutListableFS (T-14) proves graceful degradation
+// when the filesystem cannot be listed: a failing copy-on-write commit must return
+// its error without panicking, and orphan cleanup is silently skipped (dataFilePaths
+// returns nil for a non-listable FS, so the before-snapshot guard short-circuits)
+// rather than attempting a WalkDir it cannot perform.
+func TestCommitOverwriteGracefulWithoutListableFS(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	// Seed via the normal (listable) handle so real data files exist to rewrite.
+	seedTbl, mem := newCOWTable(t, sc)
+	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+	seedCount := countParquetFiles(t, seedTbl.Location())
+
+	// A catalog that always fails the commit with a non-retryable error, and a
+	// table handle whose FS is writable but non-listable.
+	fc := &flakyCatalog{memCatalog: mem, failuresLeft: 1 << 30, failErr: errors.New("storage unavailable")}
+	nlSnap := table.New(fc.ident, fc.meta, fc.metadataLocation,
+		func(context.Context) (iceio.IO, error) { return nonListableFS{}, nil }, fc)
+	comm, err := NewCommitter(nlSnap, CommitConfig{MaxRetries: 2},
+		func(context.Context) (*table.Table, error) { return nlSnap, nil }, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, nlSnap, "id")
+	w.committer = comm
+
+	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})})
+	require.Error(t, err, "the failing commit must surface an error, not panic")
+
+	// Cleanup was skipped (FS not listable), so the overwrite's parquet remains.
+	assert.Greater(t, countParquetFiles(t, seedTbl.Location()), seedCount,
+		"a non-listable FS must skip cleanup (no WalkDir), leaving the written files in place")
+}
+
+// TestCleanupOverwriteReferenceGuard (T-15) proves cleanup never deletes a file the
+// current snapshot still references, even when that file "appeared since" the
+// before-snapshot. With an empty before set every file counts as appeared-since, so
+// only the referenced[p] guard can protect the live seed files; a genuinely
+// unreferenced orphan is still removed.
+func TestCleanupOverwriteReferenceGuard(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, cat := newCOWTable(t, sc)
+	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two"})
+
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+
+	referenced := comm.referencedDataFilePaths(ctx)
+	require.NotEmpty(t, referenced, "the seeded snapshot must reference at least one data file")
+
+	// A genuine orphan under data/ that no snapshot references.
+	orphan := filepath.Join(seedTbl.Location(), "data", "orphan-"+uuid.NewString()+".parquet")
+	require.NoError(t, os.WriteFile(orphan, []byte("not a real parquet"), 0o644))
+
+	// Empty before set: only the reference guard can save the live seed files.
+	comm.cleanupOrphanedOverwriteFiles(ctx, map[string]struct{}{})
+
+	for p := range referenced {
+		_, statErr := os.Stat(p)
+		assert.NoError(t, statErr, "a file referenced by the current snapshot must survive cleanup: %s", p)
+	}
+	_, statErr := os.Stat(orphan)
+	assert.True(t, os.IsNotExist(statErr), "an unreferenced orphan must be removed")
+}
+
+// TestCommitOverwriteReturnsNewReaderError (T-17) proves a factory error from
+// OverwriteInput.NewReader is surfaced by commitOverwrite (the stage fails before
+// any file is written), and because that error is not an ambiguous unknown state,
+// the cleanup path runs — with no new files written it leaves the seed untouched.
+func TestCommitOverwriteReturnsNewReaderError(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, cat := newCOWTable(t, sc)
+	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two"})
+	seedCount := countParquetFiles(t, seedTbl.Location())
+
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+
+	readerErr := errors.New("reader factory boom")
+	err = comm.commitOverwrite(ctx, OverwriteInput{
+		Filter:    nil, // unused: NewReader errors before the filter is applied
+		NewReader: func() (array.RecordReader, error) { return nil, readerErr },
+		SchemaID:  comm.currentSchemaID(),
+	})
+	require.ErrorIs(t, err, readerErr, "the NewReader factory error must propagate")
+	assert.Equal(t, seedCount, countParquetFiles(t, seedTbl.Location()),
+		"cleanup runs on a non-unknown failure; with no new files written the seed is untouched")
 }
 
 // assertAllManifestsData asserts every manifest in the current snapshot is

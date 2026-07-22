@@ -114,6 +114,14 @@ type committer struct {
 
 // NewCommitter creates a new committer for a specific table.
 func NewCommitter(tbl *table.Table, cfg CommitConfig, reloadTable func(ctx context.Context) (*table.Table, error), logger *service.Logger) (*committer, error) {
+	// Defensively clamp MaxRetries to at least 1: commitLocked's retry loop is
+	// `for range cfg.MaxRetries`, so a zero or negative value would never run a
+	// single attempt and return a "committing transaction after 0 attempts"
+	// error wrapping a nil cause. Config lint rejects it at startup (config.go),
+	// but callers constructing a committer directly get the same safety here.
+	if cfg.MaxRetries < 1 {
+		cfg.MaxRetries = 1
+	}
 	c := &committer{
 		table:       tbl,
 		cfg:         cfg,
@@ -161,7 +169,7 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 	// (keyed on file paths), not via a commit-id token, so it passes an empty
 	// commitID and keeps its existing dedupe behaviour while still retrying on an
 	// unknown state.
-	if err := c.commitLocked(ctx, "", true, func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error {
+	if _, err := c.commitLocked(ctx, "", true, func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error {
 		files := allFiles
 		if reloaded {
 			// A prior attempt can land server-side yet report failure (a lost
@@ -211,7 +219,7 @@ func (c *committer) commitRowDelta(ctx context.Context, input CommitInput) error
 	// of applying the RowDelta (and its equality deletes) a second time. That is
 	// why retryOnUnknownState is safe to enable here.
 	commitID := uuid.NewString()
-	if err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
+	if _, err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
 		// RowDelta derives the snapshot operation automatically
 		// (append/delete/overwrite).
 		rd := txn.NewRowDelta(props)
@@ -245,9 +253,12 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 
 	// Copy-on-write writes its rewritten and new data files to storage before the
 	// catalog commit (inside txn.Overwrite/Delete), and — unlike the writer-
-	// authored append/row-delta paths — we never hold their paths. Snapshot the
-	// data files present beforehand so a failed commit's leftovers can be
-	// removed. nil means the filesystem can't be listed, so cleanup is skipped.
+	// authored append/row-delta paths — we never hold their paths. commitLocked
+	// re-runs the stage (and so re-writes fresh parquet) on EACH attempt, so even
+	// a commit that ultimately succeeds can leave earlier attempts' files behind.
+	// Snapshot the data files present beforehand so any attempt's leftovers can be
+	// diffed out once the commit resolves. nil means the filesystem can't be
+	// listed, so cleanup is skipped.
 	before := c.dataFilePaths(ctx)
 
 	// A stable commit-id, generated once before the retry loop, makes this
@@ -258,7 +269,7 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 	// of re-applying the overwrite. That is why retryOnUnknownState is safe to
 	// enable here.
 	commitID := uuid.NewString()
-	err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
+	retried, err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
 		// txn.Delete branches on the table's write.delete.mode; the library
 		// default is already copy-on-write, but set it explicitly for safety so
 		// the delete-only path can never fall into merge-on-read. txn.Overwrite
@@ -278,14 +289,36 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 		defer rdr.Release()
 		return txn.Overwrite(ctx, rdr, props, table.WithOverwriteFilter(input.Filter))
 	})
+
+	// Diff-based orphan cleanup runs after commitLocked resolves. commitLocked
+	// re-runs the stage on every retry, and each stage attempt writes a fresh set
+	// of parquet files, so a clean-conflict-then-success sequence lands the winning
+	// snapshot's files but leaves the earlier attempt's files orphaned — running
+	// cleanup only on error (as we used to) would leak them.
+	//
+	// Two guards keep this safe:
+	//   - Terminal ErrCommitStateUnknown is never cleaned: the commit may have
+	//     landed server-side, so its files could belong to a committed snapshot and
+	//     deleting them would corrupt the table. Those are left for Iceberg
+	//     orphan-file maintenance.
+	//   - On SUCCESS we only clean when the commit was retried. A first-attempt
+	//     success wrote exactly the files it committed (no orphans of ours), and —
+	//     critically — under concurrent committers on the same table our snapshot
+	//     view does not reference a racing committer's just-written files, so a
+	//     first-attempt winner running diff cleanup would delete another committer's
+	//     live/in-flight files. Only a retried commit can have left our own
+	//     orphans, and by the time it succeeds c.table has been reloaded onto the
+	//     latest committed state, so referencedDataFilePaths protects every live
+	//     file while removing only our earlier attempts' leftovers. On FAILURE we
+	//     still clean unconditionally (our commit did not land, so its files are
+	//     genuine orphans), preserving the original failure-path behaviour.
+	//
+	// Cleanup is best-effort: skipped when the filesystem can't be listed
+	// (before == nil).
+	if before != nil && !errors.Is(err, rest.ErrCommitStateUnknown) && (err != nil || retried) {
+		c.cleanupOrphanedOverwriteFiles(ctx, before)
+	}
 	if err != nil {
-		// Clean up orphaned files only when the commit definitely did not land.
-		// On an unknown/ambiguous state the written files may belong to a
-		// snapshot that committed server-side, so removing them would corrupt the
-		// table — leave those for Iceberg orphan-file maintenance.
-		if before != nil && !errors.Is(err, rest.ErrCommitStateUnknown) {
-			c.cleanupOrphanedOverwriteFiles(ctx, before)
-		}
 		return err
 	}
 	c.logger.Debugf("Committed copy-on-write mutation (delete-only=%t)", input.NewReader == nil)
@@ -321,12 +354,17 @@ func (c *committer) dataFilePaths(ctx context.Context) map[string]struct{} {
 	return paths
 }
 
-// cleanupOrphanedOverwriteFiles removes .parquet files a failed copy-on-write
-// commit left under the data directory: those that appeared since the `before`
-// snapshot and are not referenced by the current snapshot. The reference check
-// is a safety net so a file a committed snapshot still points to is never
-// deleted. Best-effort — errors are logged, not returned. The caller must have
-// established that the failed commit did not land.
+// cleanupOrphanedOverwriteFiles removes .parquet files a copy-on-write commit
+// left orphaned under the data directory: those that appeared since the `before`
+// snapshot and are not referenced by the current snapshot. It runs after the
+// commit resolves whether it succeeded or failed — a retried commit re-writes
+// files on each attempt, so even a successful commit can leave an earlier
+// attempt's files behind. The reference check against the current snapshot is
+// what makes the success case safe: a file the committed snapshot still points
+// to is never deleted, so only genuinely unreferenced leftovers are removed.
+// Best-effort — errors are logged, not returned. The caller must have
+// established that the commit did not terminate in an ambiguous (possibly-
+// landed) state, since deleting a possibly-committed file would corrupt the table.
 func (c *committer) cleanupOrphanedOverwriteFiles(ctx context.Context, before map[string]struct{}) {
 	fsys, err := c.table.FS(ctx)
 	if err != nil {
@@ -407,8 +445,15 @@ func (c *committer) referencedDataFilePaths(ctx context.Context) map[string]stru
 //   - stage dropping files the reloaded snapshot already references (the append
 //     path's dropAlreadyCommitted), in which case commitID is empty.
 //
+// The first return value is retried: true when more than one attempt ran, i.e.
+// the stage executed more than once and so may have written data files that are
+// not part of the final committed snapshot. commitOverwrite uses this to decide
+// whether success-path orphan cleanup is warranted: a first-attempt success has
+// no such leftovers, and cleaning then would be unsafe under concurrent
+// committers (see commitOverwrite).
+//
 // Callers must hold c.commitMu.
-func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUnknownState bool, stage func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error) error {
+func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUnknownState bool, stage func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error) (bool, error) {
 	props := iceberg.Properties{
 		table.ManifestMergeEnabledKey: strconv.FormatBool(c.cfg.ManifestMergeEnabled),
 	}
@@ -441,11 +486,11 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 				c.logger.Warnf("Upgrading iceberg table to format version %d to support row-level deletes; this change is irreversible", CurrentIcebergVersion)
 			})
 			if err := txn.UpgradeFormatVersion(CurrentIcebergVersion); err != nil {
-				return fmt.Errorf("upgrading version: %w", err)
+				return attempt > 1, fmt.Errorf("upgrading version: %w", err)
 			}
 		}
 		if err := stage(txn, props, reloaded); err != nil {
-			return err
+			return attempt > 1, err
 		}
 		tbl, err := txn.Commit(ctx)
 		// ErrCommitFailed is a clean conflict (our commit did not land), so a
@@ -468,7 +513,7 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 				// append path relies on dropAlreadyCommitted in its stage instead.
 				if commitID != "" && c.committedSnapshotHasID(commitID, startSnapshotID) {
 					c.logger.Debugf("Commit %s already landed on a prior attempt (found in reloaded snapshot); treating retry as success", commitID)
-					return nil
+					return attempt > 1, nil
 				}
 			} else {
 				c.logger.Warnf("Failed to reload table during commit retry: %v", reloadErr)
@@ -480,13 +525,13 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 				c.table = reloaded
 			}
 			c.incrCommitFailure()
-			return fmt.Errorf("committing transaction: %w", err)
+			return attempt > 1, fmt.Errorf("committing transaction: %w", err)
 		}
 		c.table = tbl
-		return nil
+		return attempt > 1, nil
 	}
 	c.incrCommitFailure()
-	return fmt.Errorf("committing transaction after %d attempts: %w", attempt, commitErr)
+	return attempt > 1, fmt.Errorf("committing transaction after %d attempts: %w", attempt, commitErr)
 }
 
 // dropAlreadyCommitted returns the subset of files whose paths are not already

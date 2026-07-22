@@ -12,13 +12,17 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/catalog/rest"
 	iceio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -329,6 +333,148 @@ func TestCommitterRetriesUnknownStateWithoutLanding(t *testing.T) {
 
 	require.Equal(t, 1, countDataFileRefs(t, ctx, cat.snapshot(), path),
 		"a file that did not land before an unknown-state response must be committed once on retry")
+}
+
+// TestStaleSchemaErrorOnAllEntryPoints (T-16) proves every commit entry point
+// rejects an input whose SchemaID no longer matches the table's current schema
+// with a StaleSchemaError carrying the right field values, and exercises the
+// error's message.
+func TestStaleSchemaErrorOnAllEntryPoints(t *testing.T) {
+	ctx := t.Context()
+
+	assertStale := func(t *testing.T, err error, writerID, currentID int) {
+		t.Helper()
+		require.Error(t, err)
+		var se *StaleSchemaError
+		require.ErrorAs(t, err, &se)
+		assert.Equal(t, writerID, se.WriterSchemaID)
+		assert.Equal(t, currentID, se.CurrentSchemaID)
+	}
+
+	t.Run("doCommit (append path)", func(t *testing.T) {
+		tbl, cat := newTestTable(t)
+		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+		require.NoError(t, err)
+		defer c.Close()
+		cur := c.currentSchemaID()
+		df := synthDataFile(t, tbl.Spec(), fmt.Sprintf("%s/data/stale-%s.parquet", tbl.Location(), uuid.New()))
+		assertStale(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: cur + 1}), cur+1, cur)
+	})
+
+	t.Run("commitRowDelta (merge-on-read path)", func(t *testing.T) {
+		tbl, cat := newTestTable(t)
+		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+		require.NoError(t, err)
+		defer c.Close()
+		cur := c.currentSchemaID()
+		// A delete file present routes c.Commit through commitRowDelta.
+		w := newDeleteWriter(t, tbl)
+		dels, err := w.writeEqualityDeletes(ctx, service.MessageBatch{structuredMsg(t, map[string]any{"id": 2})})
+		require.NoError(t, err)
+		assertStale(t, c.Commit(ctx, CommitInput{DeleteFiles: dels, SchemaID: cur + 1}), cur+1, cur)
+	})
+
+	t.Run("commitOverwrite (copy-on-write path)", func(t *testing.T) {
+		tbl, cat := newTestTable(t)
+		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+		require.NoError(t, err)
+		defer c.Close()
+		cur := c.currentSchemaID()
+		// The schema check fires before any filesystem or reader work, so an empty
+		// OverwriteInput is enough to reach it.
+		assertStale(t, c.commitOverwrite(ctx, OverwriteInput{SchemaID: cur + 1}), cur+1, cur)
+	})
+
+	t.Run("Error message", func(t *testing.T) {
+		e := &StaleSchemaError{WriterSchemaID: 5, CurrentSchemaID: 3}
+		assert.Equal(t, "stale schema: data written with schema 5 but table is at schema 3", e.Error())
+	})
+}
+
+// TestCommitStampsMaxSnapshotAge (T-20) proves a committer configured with a
+// non-zero MaxSnapshotAge stamps MaxSnapshotAgeMsKey into the committed snapshot's
+// summary (via the shared props map in commitLocked).
+func TestCommitStampsMaxSnapshotAge(t *testing.T) {
+	ctx := t.Context()
+	tbl, cat := newTestTable(t)
+	const age = 48 * time.Hour
+	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer c.Close()
+
+	df := synthDataFile(t, tbl.Spec(), fmt.Sprintf("%s/data/age-%s.parquet", tbl.Location(), uuid.New()))
+	require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: c.currentSchemaID()}))
+
+	snap := cat.snapshot().CurrentSnapshot()
+	require.NotNil(t, snap)
+	require.NotNil(t, snap.Summary)
+	assert.Equal(t, strconv.FormatInt(age.Milliseconds(), 10), snap.Summary.Properties[table.MaxSnapshotAgeMsKey],
+		"the committed snapshot summary must carry the configured max snapshot age")
+}
+
+// TestNewCommitterClampsMaxRetries (CORR-4) proves a configured MaxRetries below 1
+// is clamped up to 1, so the retry loop runs at least one attempt rather than
+// returning a "committing transaction after 0 attempts" error wrapping nil.
+func TestNewCommitterClampsMaxRetries(t *testing.T) {
+	ctx := t.Context()
+	for _, n := range []int{0, -3} {
+		t.Run(fmt.Sprintf("max_retries_%d", n), func(t *testing.T) {
+			tbl, cat := newTestTable(t)
+			c, err := NewCommitter(tbl, CommitConfig{MaxRetries: n}, reloadFn(cat), service.MockResources().Logger())
+			require.NoError(t, err)
+			defer c.Close()
+			assert.Equal(t, 1, c.cfg.MaxRetries, "MaxRetries must be clamped to at least 1")
+
+			df := synthDataFile(t, tbl.Spec(), fmt.Sprintf("%s/data/clamp-%s.parquet", tbl.Location(), uuid.New()))
+			require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: c.currentSchemaID()}),
+				"a clamped committer must still perform the commit")
+		})
+	}
+}
+
+// TestMaxRetriesLint (CORR-4) pins the config lint rule: max_retries below 1 must
+// produce a lint error, while the default and any value >= 1 must not.
+func TestMaxRetriesLint(t *testing.T) {
+	linter := service.GlobalEnvironment().NewComponentConfigLinter()
+	base := func(extra string) string {
+		return `
+iceberg:
+  catalog:
+    url: http://localhost:8181/api/catalog
+  namespace: ns
+  table: t
+  storage:
+    aws_s3:
+      bucket: b
+` + extra
+	}
+	cases := []struct {
+		name     string
+		extra    string
+		wantLint bool
+	}{
+		{"default (no commit block)", "", false},
+		{"explicit valid", "  commit:\n    max_retries: 2\n", false},
+		{"zero", "  commit:\n    max_retries: 0\n", true},
+		{"negative", "  commit:\n    max_retries: -1\n", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lints, err := linter.LintOutputYAML([]byte(base(tc.extra)))
+			require.NoError(t, err)
+			var found []string
+			for _, l := range lints {
+				if strings.Contains(l.Error(), "max_retries") {
+					found = append(found, l.Error())
+				}
+			}
+			if tc.wantLint {
+				assert.NotEmpty(t, found, "expected a max_retries lint, got: %v", lints)
+			} else {
+				assert.Empty(t, found, "expected no max_retries lint, got: %v", found)
+			}
+		})
+	}
 }
 
 // BenchmarkAddDataFilesDupCheck measures the cost of Transaction.AddDataFiles

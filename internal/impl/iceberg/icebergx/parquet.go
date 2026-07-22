@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Redpanda Data, Inc.
+ * Copyright 2026 Redpanda Data, Inc.
  *
  * Licensed as a Redpanda Enterprise file under the Redpanda Community
  * License (the "License"); you may not use this file except in compliance with
@@ -145,9 +145,18 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 	case iceberg.TimeType:
 		return parquet.Time(parquet.Microsecond), nil
 	case iceberg.TimestampType:
-		return parquet.Timestamp(parquet.Microsecond), nil
+		// A no-timezone Iceberg `timestamp` must be written with the parquet
+		// logical-type annotation isAdjustedToUTC=false (per the Iceberg spec).
+		// parquet.Timestamp defaults this to true, which would round-trip back
+		// through iceberg-go as `timestamptz` and break copy-on-write file
+		// rewrites (the strict rewrite visitor refuses timestamptz -> timestamp).
+		// This mirrors iceberg-go's own Arrow writer, which encodes a no-tz
+		// timestamp with an empty Arrow time zone (isAdjustedToUTC=false).
+		return parquet.TimestampAdjusted(parquet.Microsecond, false), nil
 	case iceberg.TimestampTzType:
-		return parquet.Timestamp(parquet.Microsecond), nil
+		// A `timestamptz` is UTC-adjusted: isAdjustedToUTC=true (parquet.Timestamp's
+		// default). iceberg-go reads this back as arrow timestamp[tz=UTC] -> timestamptz.
+		return parquet.TimestampAdjusted(parquet.Microsecond, true), nil
 	case iceberg.UUIDType:
 		return parquet.UUID(), nil
 	case iceberg.DecimalType:

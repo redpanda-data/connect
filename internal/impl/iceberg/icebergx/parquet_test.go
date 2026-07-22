@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Redpanda Data, Inc.
+ * Copyright 2026 Redpanda Data, Inc.
  *
  * Licensed as a Redpanda Enterprise file under the Redpanda Community
  * License (the "License"); you may not use this file except in compliance with
@@ -17,6 +17,36 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestIcebergTimestampParquetAnnotation pins the parquet logical-type annotation
+// for the two Iceberg timestamp types. A no-timezone `timestamp` must be written
+// with isAdjustedToUTC=false and `timestamptz` with isAdjustedToUTC=true, so that
+// iceberg-go reads each back as the matching Arrow/Iceberg type (an empty vs. UTC
+// time zone). Getting `timestamp` wrong (the historical default of true) makes it
+// round-trip as `timestamptz` and breaks copy-on-write file rewrites.
+func TestIcebergTimestampParquetAnnotation(t *testing.T) {
+	cases := []struct {
+		name           string
+		typ            iceberg.Type
+		wantAdjustedTZ bool
+	}{
+		{"timestamp", iceberg.TimestampType{}, false},
+		{"timestamptz", iceberg.TimestampTzType{}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			node, err := icebergTypeToParquet(tc.typ)
+			require.NoError(t, err)
+
+			lt := node.Type().LogicalType()
+			require.NotNil(t, lt, "expected a logical type annotation")
+			require.NotNil(t, lt.Timestamp, "expected a TIMESTAMP logical type")
+			assert.Equal(t, tc.wantAdjustedTZ, lt.Timestamp.IsAdjustedToUTC,
+				"isAdjustedToUTC annotation mismatch for %s", tc.name)
+			require.NotNil(t, lt.Timestamp.Unit.Micros, "expected microsecond precision")
+		})
+	}
+}
 
 func TestBuildParquetSchema_SimpleFlat(t *testing.T) {
 	// Schema: { id: int64, name: string }

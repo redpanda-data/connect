@@ -11,6 +11,7 @@ package iceberg
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -204,6 +205,201 @@ func TestCOWMergeKeyRoundTrip(t *testing.T) {
 			assert.NotContains(t, finalByPay, "two", "the pre-upsert k2 value must be overwritten, not duplicated")
 		})
 	}
+}
+
+// driveCOWKeyed seeds a "k"/"payload" table with seed rows, then runs a single
+// copy-on-write batch of the given upsert and (optional) delete messages through
+// writer.Write, returning the final key-JSON -> payload map. It is the shared
+// driver for the merge-key representation and type round-trip tests below.
+func driveCOWKeyed(t testing.TB, ctx context.Context, sc *iceberg.Schema, seed []map[string]any, batch service.MessageBatch) map[string]string {
+	t.Helper()
+	tbl, cat := newCOWTable(t, sc)
+	_ = seedMergeKeyRows(t, ctx, tbl, cat, seed)
+
+	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, cat.snapshot(), "k")
+	w.committer = comm
+	require.NoError(t, w.Write(ctx, batch))
+
+	final := cat.snapshot()
+	assert.Zero(t, countDeleteManifestFiles(t, ctx, final), "copy-on-write must leave no delete files")
+	return scanKeyPayload(t, ctx, final)
+}
+
+// TestCOWInt64KeyRepresentationsRoundTrip (T-2) drives real copy-on-write
+// upsert+delete on an int64-keyed table where the mutating message supplies the
+// key in each JSON-decoded representation an upstream might produce —
+// json.Number beyond 2^53, float64, and string. Each must match the intended
+// seeded row (no duplicate, no missed delete), proving cowValueToInt64's
+// canonicalisation agrees with the stored integer encoding.
+func TestCOWInt64KeyRepresentationsRoundTrip(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String},
+	)
+
+	cases := []struct {
+		name          string
+		upKey, delKey any
+		upWant        int64 // canonical key expected to carry "UP"
+	}{
+		// 2^53+1 and 2^53+3, exact only as json.Number/string, never float64.
+		{"json.Number beyond 2^53", json.Number("9007199254740993"), json.Number("9007199254740995"), 9007199254740993},
+		{"float64 within 2^53", float64(42), float64(43), 42},
+		{"string", "100", "101", 100},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Seed the two touched keys plus a distinct untouched key.
+			seed := []map[string]any{
+				{"k": c.upWant, "payload": "up-old"},
+				{"k": mustInt64(t, c.delKey), "payload": "del"},
+				{"k": int64(7), "payload": "untouched"},
+			}
+			final := driveCOWKeyed(t, ctx, sc, seed, service.MessageBatch{
+				cowMsg(t, "upsert", map[string]any{"k": c.upKey, "payload": "UP"}),
+				cowMsg(t, "delete", map[string]any{"k": c.delKey}),
+			})
+			byPay := invertByPayload(t, final)
+			require.Len(t, final, 2, "exactly the upserted and untouched rows must remain")
+			assert.Contains(t, byPay, "UP")
+			assert.Contains(t, byPay, "untouched")
+			assert.NotContains(t, byPay, "up-old", "the upsert must overwrite in place, not duplicate")
+			assert.NotContains(t, byPay, "del", "the delete must remove the intended row")
+			assert.JSONEq(t, fmt.Sprintf("%d", c.upWant), byPay["UP"], "the upserted row must carry the intended key")
+		})
+	}
+}
+
+// mustInt64 converts a test key representation to its canonical int64 so the seed
+// stores the same logical key the mutating message references.
+func mustInt64(t testing.TB, v any) int64 {
+	t.Helper()
+	switch n := v.(type) {
+	case json.Number:
+		i, err := n.Int64()
+		require.NoError(t, err)
+		return i
+	case float64:
+		return int64(n)
+	case string:
+		var i int64
+		_, err := fmt.Sscan(n, &i)
+		require.NoError(t, err)
+		return i
+	default:
+		t.Fatalf("unsupported key representation %T", v)
+		return 0
+	}
+}
+
+// TestCOWFloatKeyValueRejected pins that a non-integer or out-of-exact-range
+// float64 int-key value is rejected loudly by the filter path rather than
+// silently corrupting the merge key (cowValueToInt64).
+func TestCOWFloatKeyValueRejected(t *testing.T) {
+	sc := iceberg.NewSchema(0, iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Int64, Required: true})
+	tbl := newTypedKeyTableFromSchema(t, sc)
+	w := cowWriter(t, tbl, "k")
+
+	for _, v := range []float64{1.5, 1e300} {
+		_, err := w.buildCOWFilter(sc, service.MessageBatch{structuredMsg(t, map[string]any{"k": v})})
+		require.Error(t, err, "float64 %v must be rejected as an int64 key", v)
+	}
+}
+
+// TestCOWInt32KeyRoundTrip proves an int32 merge key round-trips through a real
+// copy-on-write upsert+delete (previously untested as a key type).
+func TestCOWInt32KeyRoundTrip(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Int32, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String},
+	)
+	final := driveCOWKeyed(t, ctx, sc,
+		[]map[string]any{
+			{"k": int64(1), "payload": "one"},
+			{"k": int64(2), "payload": "two"},
+			{"k": int64(3), "payload": "three"},
+		},
+		service.MessageBatch{
+			cowMsg(t, "upsert", map[string]any{"k": int64(2), "payload": "TWO"}),
+			cowMsg(t, "delete", map[string]any{"k": int64(3)}),
+		})
+	byPay := invertByPayload(t, final)
+	require.Len(t, final, 2)
+	assert.Equal(t, "2", byPay["TWO"])
+	assert.Equal(t, "1", byPay["one"])
+	assert.NotContains(t, byPay, "three")
+	assert.NotContains(t, byPay, "two")
+}
+
+// TestCOWBooleanMergeKeyGated pins the deliberate gate on boolean merge keys.
+// Investigating the "boolean-key round-trip" ask (T-2) surfaced that a boolean
+// key cannot round-trip: iceberg-go's copy-on-write rewrite
+// (rewriteFilesWithFilter) evaluates the negated key predicate against each data
+// file's rows, and that row-level evaluation is unimplemented for BOOL, failing
+// the whole overwrite mid-commit ("not implemented: unsupported type BOOL").
+// Rather than let that reach a real table, cowKeyLiteral rejects a boolean key
+// up front — the same treatment as decimal. boolean remains fine as a non-key
+// column (see TestCOWColumnTypeRoundTrip) and as a merge-on-read key.
+func TestCOWBooleanMergeKeyGated(t *testing.T) {
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Bool, Required: true},
+	)
+	tbl := newTypedKeyTableFromSchema(t, sc)
+	w := cowWriter(t, tbl, "k")
+	_, err := w.buildCOWFilter(sc, service.MessageBatch{structuredMsg(t, map[string]any{"k": true})})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "boolean is not a supported copy-on-write merge key")
+	assert.Contains(t, err.Error(), "merge-on-read")
+}
+
+// TestCOWSubMicrosecondTimestampKeyTruncation (CORR-5) documents and verifies the
+// truncation behaviour of a timestamp merge key carrying sub-microsecond
+// (nanosecond) precision. Iceberg TIMESTAMP is microsecond-resolution, so the
+// nanoseconds are dropped — but the invariant that matters is that the filter
+// literal and the stored value truncate IDENTICALLY, so the key still matches its
+// row. cowKeyLiteral builds the literal from time.Time.UnixMicro (truncating),
+// while the stored value goes RFC3339Nano -> Arrow timestamp[us] (also
+// truncating); this test proves they agree by matching the intended row exactly.
+//
+// Consequence (documented, not a bug): two instants differing only below the
+// microsecond collapse to the same key. That is inherent to a microsecond column
+// and is consistent between filter and storage, so it never causes the CON-490
+// silent-no-match — it only means sub-microsecond precision is not part of the
+// key identity.
+func TestCOWSubMicrosecondTimestampKeyTruncation(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Timestamp, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String},
+	)
+	// A key with nanosecond precision beyond microseconds (…123456789).
+	key := time.Date(2026, 6, 15, 10, 20, 30, 123456789, time.UTC)
+	other := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	final := driveCOWKeyed(t, ctx, sc,
+		[]map[string]any{
+			{"k": key, "payload": "old"},
+			{"k": other, "payload": "untouched"},
+		},
+		service.MessageBatch{
+			// Upsert the SAME nanosecond-precision instant: it must match the
+			// seeded row, proving filter and storage truncate identically.
+			cowMsg(t, "upsert", map[string]any{"k": key, "payload": "NEW"}),
+		})
+	byPay := invertByPayload(t, final)
+	require.Len(t, final, 2, "the sub-microsecond key must match its row (no duplicate) — filter and storage truncate identically")
+	assert.Contains(t, byPay, "NEW")
+	assert.Contains(t, byPay, "untouched")
+	assert.NotContains(t, byPay, "old")
+	// The stored key is the microsecond truncation of the nanosecond input.
+	wantKeyJSON, err := json.Marshal(key.UTC().Truncate(time.Microsecond))
+	require.NoError(t, err)
+	assert.JSONEq(t, string(wantKeyJSON), byPay["NEW"], "the stored key is the nanosecond input truncated to microseconds")
 }
 
 // TestCOWDecimalMergeKeyGated pins the deliberate gate on decimal merge keys.

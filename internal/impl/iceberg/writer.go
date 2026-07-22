@@ -506,25 +506,32 @@ func deleteKeyJSONValue(t iceberg.Type, v any) (any, error) {
 		default:
 			return nil, fmt.Errorf("unsupported value type %T for decimal column", v)
 		}
-	// Temporal keys must arrive as time.Time. A bare number is ambiguous (the
-	// data path interprets it via schema_metadata or a seconds fallback, which
-	// the delete path cannot reproduce), so accepting one would silently fail to
-	// match the intended rows — reject it loudly instead.
+	// Temporal values must arrive as time.Time here. A bare number is ambiguous
+	// (its unit — seconds/millis/micros — cannot be recovered without schema
+	// metadata), so accepting one blindly would silently mismatch what the
+	// insert path wrote. Merge-key callers keep this strict on purpose (an
+	// unambiguous key must round-trip exactly, the CON-490 guarantee); the
+	// copy-on-write data-column path (cowMassage) resolves a numeric temporal to
+	// a time.Time via the shredder's unit-aware conversion BEFORE calling this,
+	// so a numeric only reaches here for a merge key or a genuinely
+	// unconvertible value. The message is deliberately neutral about
+	// key-vs-column: callers add that context (identifier_fields for keys, the
+	// column name for data).
 	case iceberg.DateType:
 		if tm, ok := v.(time.Time); ok {
 			return tm.UTC().Format("2006-01-02"), nil
 		}
-		return nil, fmt.Errorf("date identifier column requires a time value, got %T", v)
+		return nil, fmt.Errorf("date column requires a time value, got %T", v)
 	case iceberg.TimeType:
 		if tm, ok := v.(time.Time); ok {
 			return tm.UTC().Format("15:04:05.999999999"), nil
 		}
-		return nil, fmt.Errorf("time identifier column requires a time value, got %T", v)
+		return nil, fmt.Errorf("time column requires a time value, got %T", v)
 	case iceberg.TimestampType, iceberg.TimestampTzType:
 		if tm, ok := v.(time.Time); ok {
 			return tm.UTC().Format(time.RFC3339Nano), nil
 		}
-		return nil, fmt.Errorf("timestamp identifier column requires a time value, got %T (a bare numeric timestamp is ambiguous as a delete key — convert it to a timestamp upstream)", v)
+		return nil, fmt.Errorf("timestamp column requires a time value, got %T (a bare numeric timestamp is ambiguous without schema metadata)", v)
 	default:
 		return v, nil
 	}

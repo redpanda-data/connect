@@ -491,6 +491,26 @@ func TestCommitRowDeltaIdempotentOnUnknownState(t *testing.T) {
 		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
 			"the mutation must be committed exactly once after the conflict")
 	})
+
+	// (T-13) landed-but-reported-failed (a lost ack on a 409): the first CommitTable
+	// applies the RowDelta server-side, then reports ErrCommitFailed as if it had
+	// been a clean conflict. The retry must find the commit-id in the reloaded
+	// snapshot and short-circuit to success WITHOUT committing a second time —
+	// exactly one CommitTable call, exactly one snapshot carrying the token.
+	t.Run("landed then failed applies once", func(t *testing.T) {
+		ctx := t.Context()
+		_, mem := newTestTable(t)
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitLandThenFail}}
+		c, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, cat.snapshot(), 2)))
+
+		assert.Equal(t, 1, cat.calls, "a landed commit must not be re-committed after a lost-ack conflict")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+			"exactly one snapshot must carry the commit-id (mutation applied once)")
+	})
 }
 
 // TestCommitRowDeltaWritesCommitIDToSummary is the direct round-trip test for the

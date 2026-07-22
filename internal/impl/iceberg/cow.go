@@ -24,7 +24,9 @@ import (
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/table"
 
+	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/shredder"
 )
 
 // writeCOW materialises a mutating batch as copy-on-write: it rewrites whole
@@ -220,12 +222,13 @@ func cowSupportedColumnType(t iceberg.Type) bool {
 // per-tuple ANDs — `(a=a1 AND b=b1) OR (a=a2 AND b=b2) ...` — which is the
 // correct semantics (an AND of per-column INs would match the cross product).
 //
-// Merge-key columns may be int/long/string/boolean, the temporal types
+// Merge-key columns may be int/long/string, the temporal types
 // (date/time/timestamp/timestamptz), or uuid. Every key literal is built so its
 // encoding matches how buildCOWRecordFactory stores the same value (see
-// cowKeyLiteral). decimal is intentionally excluded (a vendored-library bug
-// panics on a decimal overwrite filter — use merge-on-read for a decimal key);
-// other key types return a clear error.
+// cowKeyLiteral). decimal and boolean are intentionally excluded (iceberg-go's
+// overwrite filter cannot apply either — decimal panics, boolean is
+// unimplemented; use merge-on-read for those keys); other key types return a
+// clear error.
 func (w *writer) buildCOWFilter(tableSchema *iceberg.Schema, keyed service.MessageBatch) (iceberg.BooleanExpression, error) {
 	idFields, err := w.cowKeyFields(tableSchema)
 	if err != nil {
@@ -328,7 +331,7 @@ func (w *writer) lookupKeyValue(msg *service.Message, field iceberg.NestedField,
 // then array.RecordFromJSON, so this function derives each literal from that
 // same canonicalisation:
 //
-//   - int/long/string/boolean: built directly, mirroring the append path.
+//   - int/long/string: built directly, mirroring the append path.
 //   - date/time/uuid: canonicalised by deleteKeyJSONValue to the exact string
 //     the data path stores, then parsed into the typed literal by iceberg's own
 //     StringLiteral.To — so filter and storage share an encoding by construction
@@ -370,11 +373,14 @@ func cowKeyLiteral(t iceberg.Type, name string, v any) (iceberg.Literal, error) 
 		}
 		return iceberg.NewLiteral(s), nil
 	case iceberg.BooleanType:
-		b, ok := v.(bool)
-		if !ok {
-			return nil, fmt.Errorf("%s %q: boolean column given %T", ioFieldIdentifierFields, name, v)
-		}
-		return iceberg.NewLiteral(b), nil
+		// Like decimal, a boolean merge key cannot be applied by iceberg-go's
+		// copy-on-write rewrite: rewriteFilesWithFilter evaluates the (negated)
+		// key predicate against each data file's rows to keep survivors, and that
+		// row-level evaluation is unimplemented for BOOL ("not implemented:
+		// unsupported type BOOL"), failing the whole overwrite. Refuse up front
+		// with an actionable error rather than let it surface mid-commit. boolean
+		// remains valid as a non-key column and as a merge-on-read key.
+		return nil, fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; boolean is not a supported copy-on-write merge key (a known limitation in the underlying iceberg library's overwrite filter) — use merge-on-read for a boolean key", name, t)
 	case iceberg.TimestampType, iceberg.TimestampTzType:
 		// Reuse deleteKeyJSONValue purely for its validation: it requires a
 		// time.Time and rejects a bare number with an actionable error.
@@ -405,7 +411,7 @@ func cowKeyLiteral(t iceberg.Type, name string, v any) (iceberg.Literal, error) 
 		}
 		return lit, nil
 	default:
-		return nil, fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; supported merge-key types are boolean, int, long, string, date, time, timestamp, timestamptz, and uuid (use merge-on-read for other key types)", name, t)
+		return nil, fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; supported merge-key types are int, long, string, date, time, timestamp, timestamptz, and uuid (use merge-on-read for other key types)", name, t)
 	}
 }
 
@@ -493,6 +499,16 @@ func (w *writer) buildCOWRecordFactory(tableSchema *iceberg.Schema, rows service
 		return nil, fmt.Errorf("building arrow schema: %w", err)
 	}
 
+	// Resolve the batch's schema metadata into the same fieldID -> schema.Common
+	// map the insert path (messagesToParquet) hands the shredder, so a numeric
+	// temporal DATA column is interpreted with the identical unit-aware
+	// conversion rather than being rejected. We sample rows[0] and apply it to
+	// every row, matching messagesToParquet's batch[0] assumption (Connect's
+	// iceberg router groups by table before this point, so a batch shares one
+	// schema). A parse failure is non-fatal: we log and fall back to the
+	// schema-agnostic conversion, exactly as the insert path does.
+	fieldCommons := w.cowFieldCommons(tableSchema, rows)
+
 	fields := tableSchema.Fields()
 	encoded := make([]map[string]any, 0, len(rows))
 	for i, msg := range rows {
@@ -511,7 +527,7 @@ func (w *writer) buildCOWRecordFactory(tableSchema *iceberg.Schema, rows service
 				// Absent/null columns are left out so Arrow reads them as null.
 				continue
 			}
-			jv, err := w.cowMassage(field.Type, v)
+			jv, err := w.cowMassage(field.Type, field.ID, v, fieldCommons)
 			if err != nil {
 				return nil, fmt.Errorf("column %q in message %d: %w", field.Name, i, err)
 			}
@@ -541,6 +557,31 @@ func (w *writer) buildCOWRecordFactory(tableSchema *iceberg.Schema, rows service
 	}, nil
 }
 
+// cowFieldCommons resolves the batch's schema_metadata into a leaf-field-ID ->
+// schema.Common map, reusing exactly the parse + walk the insert path uses
+// (typeResolver.parseSchemaMetadata + buildShredderFieldCommons). Returns nil
+// when no resolver/metadata is configured, when the sampled message carries no
+// metadata, or when the metadata does not parse — in every such case cowMassage
+// falls back to the historical schema-agnostic conversion, matching
+// messagesToParquet. Sampling rows[0] mirrors the insert path's batch[0]
+// assumption.
+func (w *writer) cowFieldCommons(tableSchema *iceberg.Schema, rows service.MessageBatch) map[int]*schema.Common {
+	if w.resolver == nil || len(rows) == 0 {
+		return nil
+	}
+	common, err := w.resolver.parseSchemaMetadata(rows[0])
+	if err != nil {
+		if w.logger != nil {
+			w.logger.Warnf("parsing schema metadata for copy-on-write rewrite: %v (falling back to schema-agnostic conversion)", err)
+		}
+		return nil
+	}
+	if common == nil {
+		return nil
+	}
+	return buildShredderFieldCommons(tableSchema, common, w.caseSensitive)
+}
+
 // cowMassage recursively projects a CDC value onto the JSON shape that
 // SchemaToArrowSchema + array.RecordFromJSON expects for the given iceberg type,
 // at every depth of the type tree. It is the nested generalisation of the flat
@@ -548,14 +589,25 @@ func (w *writer) buildCOWRecordFactory(tableSchema *iceberg.Schema, rows service
 // (re)write struct/list/map columns rather than either corrupting them or
 // rejecting them outright.
 //
+// fieldID names the current leaf's iceberg field ID and fieldCommons carries the
+// batch's schema metadata keyed by leaf field ID (see cowFieldCommons); together
+// they let a temporal leaf interpret a numeric epoch value using the declared
+// unit, exactly as the insert path's shredder does.
+//
 // Each type kind is handled as follows:
 //
-//   - primitive: delegate to deleteKeyJSONValue, which applies the int->string,
-//     temporal, decimal and uuid canonicalisation at every leaf. Doing this at
-//     every leaf (not just the top level) is what fixes the historical silent
-//     truncation of integers nested beyond 2^53: a nested int64 is emitted as a
-//     JSON string, which the Arrow Int32/Int64 JSON builder parses back exactly,
-//     instead of decoding through a lossy float64.
+//   - primitive: for a temporal column (date/time/timestamp/timestamptz) a bare
+//     numeric value is first resolved to a time.Time via
+//     shredder.NumericTemporalToTime — the SAME unit-aware conversion the insert
+//     path applies — so copy-on-write accepts the same numeric-epoch inputs as
+//     inserts (CORR-1) instead of hard-erroring, and honours
+//     require_schema_metadata identically. A time.Time value is unchanged. The
+//     (possibly converted) value is then handed to deleteKeyJSONValue, which
+//     applies the int->string, temporal, decimal and uuid canonicalisation at
+//     every leaf. Doing this at every leaf (not just the top level) is what
+//     fixes the historical silent truncation of integers nested beyond 2^53: a
+//     nested int64 is emitted as a JSON string, which the Arrow Int32/Int64 JSON
+//     builder parses back exactly, instead of decoding through a lossy float64.
 //   - struct: the value is a map[string]any keyed by field name; recurse per
 //     struct field, honouring the writer's case sensitivity, and emit a
 //     map[string]any. Absent/null fields are omitted so Arrow reads them as null,
@@ -567,7 +619,7 @@ func (w *writer) buildCOWRecordFactory(tableSchema *iceberg.Schema, rows service
 //     struct fields are literally named "key" and "value", with value nullable).
 //     So reshape to []any of {"key": k, "value": v} objects, recursing the key
 //     and value types. A null map value stays null under its "value" key.
-func (w *writer) cowMassage(t iceberg.Type, v any) (any, error) {
+func (w *writer) cowMassage(t iceberg.Type, fieldID int, v any, fieldCommons map[int]*schema.Common) (any, error) {
 	switch tt := t.(type) {
 	case *iceberg.StructType:
 		m, ok := v.(map[string]any)
@@ -581,7 +633,7 @@ func (w *writer) cowMassage(t iceberg.Type, v any) (any, error) {
 				// Absent/null field: omit so Arrow reads it as null.
 				continue
 			}
-			mv, err := w.cowMassage(f.Type, fv)
+			mv, err := w.cowMassage(f.Type, f.ID, fv, fieldCommons)
 			if err != nil {
 				return nil, fmt.Errorf("struct field %q: %w", f.Name, err)
 			}
@@ -599,7 +651,7 @@ func (w *writer) cowMassage(t iceberg.Type, v any) (any, error) {
 				out[i] = nil
 				continue
 			}
-			me, err := w.cowMassage(tt.Element, e)
+			me, err := w.cowMassage(tt.Element, tt.ElementID, e, fieldCommons)
 			if err != nil {
 				return nil, fmt.Errorf("list element %d: %w", i, err)
 			}
@@ -613,13 +665,13 @@ func (w *writer) cowMassage(t iceberg.Type, v any) (any, error) {
 		}
 		entries := make([]any, 0, len(m))
 		for k, mv := range m {
-			mk, err := w.cowMassage(tt.KeyType, k)
+			mk, err := w.cowMassage(tt.KeyType, tt.KeyID, k, fieldCommons)
 			if err != nil {
 				return nil, fmt.Errorf("map key %q: %w", k, err)
 			}
 			var vv any
 			if mv != nil {
-				vv, err = w.cowMassage(tt.ValueType, mv)
+				vv, err = w.cowMassage(tt.ValueType, tt.ValueID, mv, fieldCommons)
 				if err != nil {
 					return nil, fmt.Errorf("map value for key %q: %w", k, err)
 				}
@@ -628,7 +680,28 @@ func (w *writer) cowMassage(t iceberg.Type, v any) (any, error) {
 		}
 		return entries, nil
 	default:
-		// Primitive leaf: apply the same canonicalisation the flat path uses.
+		// Primitive leaf. For a temporal column, resolve a numeric epoch value to
+		// a time.Time using the shredder's unit-aware conversion (honouring the
+		// field's schema metadata and require_schema_metadata) so the encoded
+		// value matches what the insert path stores; a time.Time passes through
+		// untouched. Non-temporal leaves and time.Time values fall straight
+		// through to the shared canonicalisation.
+		if tm, ok, err := shredder.NumericTemporalToTime(v, t, fieldCommons[fieldID], w.requireSchemaMetadata); err != nil {
+			return nil, err
+		} else if ok {
+			v = tm
+		}
+		// Iceberg date/time/timestamp columns are microsecond resolution, and the
+		// Arrow JSON readers for those columns reject sub-microsecond strings. A
+		// time.Time carrying nanoseconds is therefore truncated to microseconds so
+		// it both encodes and matches exactly what the insert path stores (the
+		// shredder uses UnixMicro, which truncates identically) — and, for a merge
+		// key, what cowKeyLiteral's UnixMicro literal filters on. Truncation is the
+		// only lossy step, and it is consistent across filter and storage, so it
+		// never causes a silent no-match.
+		if tm, ok := v.(time.Time); ok {
+			v = tm.Truncate(time.Microsecond)
+		}
 		return deleteKeyJSONValue(t, v)
 	}
 }

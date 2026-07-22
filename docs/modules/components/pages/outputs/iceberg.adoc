@@ -263,7 +263,7 @@ Ordering only holds *within* a batch. With more than one batch in flight, concur
 *Copy-on-write support matrix.*
 
 * *Column types:* all flat primitives (`boolean`, `int`, `long`, `float`, `double`, `string`, `date`, `time`, `timestamp`, `timestamptz`, `decimal`, `uuid`, `binary`, `fixed`), and nested `struct`/`list`/`map` columns whose leaves are all supported primitives.
-* *Merge-key (`identifier_fields`) types:* `boolean`, `int`, `long`, `string`, `date`, `time`, `timestamp`, `timestamptz` and `uuid`. A `decimal` merge key is *not* supported and errors with a message pointing you at `merge-on-read` (an upstream limitation in the Iceberg library's overwrite filter); `decimal` as a non-key column is fine.
+* *Merge-key (`identifier_fields`) types:* `int`, `long`, `string`, `date`, `time`, `timestamp`, `timestamptz` and `uuid`. `decimal` and `boolean` merge keys are *not* supported and error with a message pointing you at `merge-on-read` (an upstream limitation in the Iceberg library's overwrite filter — it cannot apply a `decimal` or `boolean` predicate when rewriting files); both are fine as non-key columns.
 * *Partitioned tables:* supported, with no requirement that the partition columns be a subset of `identifier_fields`. A `copy-on-write` `upsert` can even move a key from one partition to another.
 * *Table format:* version 1 or version 2, with no forced upgrade.
 
