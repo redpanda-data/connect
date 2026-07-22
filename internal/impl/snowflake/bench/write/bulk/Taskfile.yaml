@@ -16,19 +16,25 @@ silent: true
 
 vars:
   RPCN: "go run ../../../../../../cmd/redpanda-connect/main.go"
-  BATCH: '{{.BATCH | default "1000"}}'
-  PERIOD: '{{.PERIOD | default "5s"}}'
-  UPLOAD_THREADS: '{{.UPLOAD_THREADS | default "4"}}'
+  BATCH: '{{.BATCH | default "10000"}}'
+  PERIOD: '{{.PERIOD | default "10s"}}'
+  UPLOAD_THREADS: '{{.UPLOAD_THREADS | default "16"}}'
+  MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "1"}}'
   COUNT: '{{.COUNT | default "0"}}'
 
 tasks:
   bench:run:
     desc: |
       Run Snowflake PUT + Snowpipe bulk write benchmark.
-      Params: BATCH (default 1000), PERIOD (default 5s), UPLOAD_THREADS (default 4),
-              COUNT (default 0, unlimited)
+      Params: BATCH (default 10000), PERIOD (default 10s), UPLOAD_THREADS (default 16),
+              MAX_IN_FLIGHT (default 1), COUNT (default 0, unlimited)
+      WriteBatch is fully serialized under one connection lock, so raising MAX_IN_FLIGHT
+      just queues extra batches without extra throughput; the two levers that actually
+      speed up bulk writes are BATCH (fewer, larger PUT/Snowpipe round trips) and
+      UPLOAD_THREADS (Snowflake's PUT PARALLEL=N, which chunks a single file's upload
+      across N threads inside one call, so it isn't blocked by the lock).
       Set COUNT to a fixed number to stop after that many messages and print a total summary.
-      Example: task bench:run BATCH=5000 UPLOAD_THREADS=8 COUNT=1000000
+      Example: task bench:run BATCH=20000 UPLOAD_THREADS=32 COUNT=1000000
     cmds:
       - |
         {{.RPCN}} run \
@@ -36,16 +42,17 @@ tasks:
           --set "output.snowflake_put.batching.count={{.BATCH}}" \
           --set "output.snowflake_put.batching.period={{.PERIOD}}" \
           --set "output.snowflake_put.upload_parallel_threads={{.UPLOAD_THREADS}}" \
+          --set "output.snowflake_put.max_in_flight={{.MAX_IN_FLIGHT}}" \
           ./benchmark_config.yaml
 
   bench:matrix:
-    desc: Sweep batch sizes and upload thread counts
+    desc: Sweep batch sizes and upload thread counts (max_in_flight held at 1; see bench:run notes)
     cmds:
       - |
-        for batch in 1000 5000 10000; do
-          for threads in 1 4 8; do
+        for batch in 5000 10000 20000 50000; do
+          for threads in 4 8 16 32; do
             echo "=== batch=$batch upload_threads=$threads ==="
-            task bench:run BATCH=$batch UPLOAD_THREADS=$threads || true
+            task bench:run BATCH=$batch UPLOAD_THREADS=$threads COUNT={{.COUNT}} || true
           done
         done
 

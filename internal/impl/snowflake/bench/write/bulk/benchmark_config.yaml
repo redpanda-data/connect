@@ -28,14 +28,15 @@ output:
     schema: "${SNOWFLAKE_SCHEMA:RAW}"
     warehouse: "${SNOWFLAKE_WAREHOUSE}"
     private_key: "${SNOWFLAKE_PRIVATE_KEY}"
-    stage: BENCH_STAGE
+    stage: "@BENCH_STAGE"
     snowpipe: BENCH_PIPE
     path: bench
     compression: AUTO
-    upload_parallel_threads: ${SNOWFLAKE_UPLOAD_THREADS:4}
+    upload_parallel_threads: ${SNOWFLAKE_UPLOAD_THREADS:16}
+    max_in_flight: ${SNOWFLAKE_MAX_IN_FLIGHT:1}
     batching:
-      count: ${SNOWFLAKE_BATCH_COUNT:1000}
-      period: ${SNOWFLAKE_BATCH_PERIOD:5s}
+      count: ${SNOWFLAKE_BATCH_COUNT:10000}
+      period: ${SNOWFLAKE_BATCH_PERIOD:10s}
       processors:
         - archive:
             format: json_array
