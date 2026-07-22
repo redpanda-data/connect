@@ -385,6 +385,95 @@ postgres_cdc:
 		mu.Unlock()
 	})
 
+	t.Run("Drops signal row with malformed JSON data and continues streaming", func(t *testing.T) {
+		mu.Lock()
+		received = nil
+		mu.Unlock()
+
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', 'not-valid-json{')`)
+		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-bad-json')`)
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			mu.Lock()
+			defer mu.Unlock()
+			assert.Len(c, received, 1)
+		}, 25*time.Second, 100*time.Millisecond)
+
+		mu.Lock()
+		require.ElementsMatch(t, received, []any{
+			map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
+		})
+		mu.Unlock()
+	})
+
+	t.Run("Drops signal row with NULL data column and continues streaming", func(t *testing.T) {
+		mu.Lock()
+		received = nil
+		mu.Unlock()
+
+		// Omitting data leaves it NULL, so row["data"].(string) fails, Listen
+		// returns an error, and the row is skipped entirely by the caller.
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type) VALUES ('execute-snapshot')`)
+		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-null-data')`)
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			mu.Lock()
+			defer mu.Unlock()
+			assert.Len(c, received, 1)
+		}, 25*time.Second, 100*time.Millisecond)
+
+		mu.Lock()
+		require.ElementsMatch(t, received, []any{
+			map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
+		})
+		mu.Unlock()
+	})
+
+	t.Run("Drops signal row with NULL type column and continues streaming", func(t *testing.T) {
+		mu.Lock()
+		received = nil
+		mu.Unlock()
+
+		// Omitting type leaves it NULL, so row["type"].(string) fails, Listen
+		// returns an error, and the row is skipped entirely by the caller.
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (data) VALUES ('{"data-collections": ["dbo.events"]}')`)
+		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-null-type')`)
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			mu.Lock()
+			defer mu.Unlock()
+			assert.Len(c, received, 1)
+		}, 25*time.Second, 100*time.Millisecond)
+
+		mu.Lock()
+		require.ElementsMatch(t, received, []any{
+			map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
+		})
+		mu.Unlock()
+	})
+
+	t.Run("Forwards signal row with unrecognized type without triggering a re-snapshot", func(t *testing.T) {
+		mu.Lock()
+		received = nil
+		mu.Unlock()
+
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('unsupported-signal', '{"data-collections": ["dbo.events"]}')`)
+		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-unsupported-type')`)
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			mu.Lock()
+			defer mu.Unlock()
+			assert.Len(c, received, 2)
+		}, 25*time.Second, 100*time.Millisecond)
+
+		mu.Lock()
+		require.ElementsMatch(t, received, []any{
+			map[string]any{"operation": "insert", "table": "rpcn_signal_table", "lsn": "XXX/XXX"},
+			map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
+		})
+		mu.Unlock()
+	})
+
 	require.NoError(t, streamOut.StopWithin(10*time.Second))
 }
 
