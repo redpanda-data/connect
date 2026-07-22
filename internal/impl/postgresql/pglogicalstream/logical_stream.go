@@ -266,6 +266,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				case <-ctx.Done():
 					return
 				}
+				// confirmedLSNFromDB is unchanged from before the snapshot - the
+				// triggering signal was never acked, so resuming here redelivers
+				// it. The input layer recognizes and drops that redelivery.
 				if err := stream.startLr(ctx, confirmedLSNFromDB); err != nil {
 					stream.errors <- fmt.Errorf("starting logical replication: %w", err)
 					return

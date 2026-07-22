@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -25,85 +26,116 @@ import (
 
 var _ replication.Signaller = (*postgresSignaller)(nil)
 
+// errSignalAlreadyHandled marks a redelivery of a signal already fully
+// processed (Postgres resends unacked rows on reconnect - see markHandled).
+// Callers should drop it rather than treat it as a failure.
+var errSignalAlreadyHandled = errors.New("signal already handled")
+
 type postgresSignaller struct {
 	*replication.ControlSignaller
 
 	schema    string
 	tableName string
+
+	// lastHandledID is the most recently completed signal's ID. Its LSN is
+	// never acked to Postgres (see StoreSignal), so it keeps redelivering
+	// until Listen recognizes and drops it via isHandled. Postgres-specific,
+	// so it lives here rather than in the generic ControlSignaller.
+	lastHandledID atomic.Pointer[string]
 }
 
 // NewControlSignaller creates a replication.Signaller that detects signal INSERTs on the given schema.tableName.
 func NewControlSignaller(schema, tableName string, log *service.Logger) *postgresSignaller {
 	s := replication.NewControlSignaller(log)
-	return &postgresSignaller{s, schema, tableName}
+	return &postgresSignaller{ControlSignaller: s, schema: schema, tableName: tableName}
 }
 
-// Listen checks for signal related events and stores any valid pending signal.
-// Signal rows are published as normal messages; callers should not suppress them.
-func (s *postgresSignaller) Listen(_ context.Context, signal any) error {
+// markHandled records that the signal with this ID has fully completed - its
+// action (e.g. a re-snapshot) has finished and been acknowledged downstream.
+func (s *postgresSignaller) markHandled(id string) {
+	s.lastHandledID.Store(&id)
+}
+
+// isHandled reports whether this signal ID was already fully processed (see markHandled).
+func (s *postgresSignaller) isHandled(id string) bool {
+	p := s.lastHandledID.Load()
+	return p != nil && *p == id
+}
+
+// Listen returns any actionable signal found; it does not call StoreSignal -
+// that's the caller's job once delivery is confirmed. Signal rows are always
+// forwarded downstream as normal messages regardless of the outcome here.
+//
+// Only validated execute-snapshot signals return non-nil, since only their
+// action (a re-snapshot) can be interrupted by a crash and needs the
+// hold-back-and-retry treatment. Everything else - an unsupported type, or a
+// validated no-op - returns (nil, nil) and is acked immediately like any
+// other message.
+func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.ControlSignal, error) {
 	msg, ok := signal.(pglogicalstream.StreamMessage)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	if msg.Schema != s.schema || msg.Table != s.tableName {
-		return nil
+		return nil, nil
 	}
 	if msg.Operation != pglogicalstream.InsertOpType {
-		return nil
+		return nil, nil
 	}
 
 	row, ok := msg.Data.(map[string]any)
 	if !ok {
-		return fmt.Errorf("expected map for %s message data, got %T", s.tableName, msg.Data)
+		return nil, fmt.Errorf("expected map for %s message data, got %T", s.tableName, msg.Data)
 	}
 
 	dataStr, ok := row["data"].(string)
 	if !ok {
-		return fmt.Errorf("expected string for %s.data column, got %T", s.tableName, row["data"])
+		return nil, fmt.Errorf("expected string for %s.data column, got %T", s.tableName, row["data"])
 	}
 
 	var sig replication.ControlSignal
 	if err := json.Unmarshal([]byte(dataStr), &sig); err != nil {
-		return fmt.Errorf("unmarshaling signal %s.data: %w", s.tableName, err)
+		return nil, fmt.Errorf("unmarshaling signal %s.data: %w", s.tableName, err)
 	}
 
 	sig.ID = fmt.Sprintf("%v", row["id"])
 
 	evType, ok := row["type"].(string)
 	if !ok {
-		return errors.New("parsing 'type' data")
+		return nil, errors.New("parsing 'type' data")
 	}
 	sig.Type = evType
 
 	log := s.Log.With("id", sig.ID, "type", sig.Type)
 
-	// Validate snapshot signals before triggering a stream interruption.
-	// Invalid or no-op signals are not stored as pending, so streaming continues uninterrupted.
-	if sig.IsSnapshot() {
-		if len(sig.DataCollections) == 0 {
-			log.Warnf("Signal %q received but data-collections is empty — ignoring, streaming continues uninterrupted", sig.Type)
-			return nil
-		}
-		if len(tableNamesFromSchema(sig.DataCollections, s.schema)) == 0 {
-			log.Warnf("Signal %q received but data-collections %v matched no tables for schema %q — ignoring, streaming continues uninterrupted", sig.Type, sig.DataCollections, s.schema)
-			return nil
-		}
+	if !sig.IsSnapshot() {
+		log.Infof("Signal %q received but not a recognized action, forwarding as a regular message", sig.Type)
+		return nil, nil
+	}
+
+	if s.isHandled(sig.ID) {
+		// Redelivery of an already-processed signal (never acked, so
+		// Postgres keeps resending it) - drop it, don't re-run its action.
+		return nil, errSignalAlreadyHandled
+	}
+
+	// Validate before triggering a stream interruption. Invalid or no-op
+	// signals are not returned as actionable, so streaming continues uninterrupted.
+	if len(sig.DataCollections) == 0 {
+		log.Warnf("Signal %q received but data-collections is empty — ignoring, streaming continues uninterrupted", sig.Type)
+		return nil, nil
+	}
+	if len(tableNamesFromSchema(sig.DataCollections, s.schema)) == 0 {
+		log.Warnf("Signal %q received but data-collections %v matched no tables for schema %q — ignoring, streaming continues uninterrupted", sig.Type, sig.DataCollections, s.schema)
+		return nil, nil
 	}
 
 	log.Infof("Signal %q received: operation=%s lsn=%v", sig.Type, msg.Operation, msg.LSN)
 
-	// Notify the pending signal but don't StoreSignal it yet: IsPending drives
-	// whether Connect re-runs a snapshot on the next reconnect, and that must
-	// only happen once the caller confirms this signal (and anything batched
-	// ahead of it) has actually been acknowledged downstream.
 	if msg.LSN != nil {
 		sig.LSN = []byte(*msg.LSN)
 	}
-	select {
-	case s.SignalChan <- &sig:
-	default:
-	}
-	return nil
+	return &sig, nil
 }
 
 // awaitCheckpointLSN blocks until checkpointer's highest resolved offset has reached or passed target,

@@ -40,9 +40,20 @@ func (s *ControlSignal) IsSnapshot() bool {
 }
 
 // Signaller is implemented by connector-specific control signal handlers.
-// Listen inspects a decoded replication message in whatever shape that
-// connector's stream produces and, if it recognizes a signal insert, records
-// it as pending and notifies OnSignal.
+// Listen inspects a decoded replication message and, if it recognizes an
+// actionable signal, returns it directly - in the same call that detected it
+// - so the caller can flush and hold back acking exactly that batch, rather
+// than reacting to a separately-scheduled notification a differently-timed
+// flush could race ahead of. Only signals whose action could be interrupted
+// by a crash need this: anything else should return (nil, nil) and be
+// acknowledged like an ordinary message.
+//
+// Because such a signal's position stays unacknowledged until its action
+// completes, a source that redelivers unacked events will keep resending it
+// on every reconnect. Listen implementations must recognize and drop that
+// redelivery themselves - how is connector-specific (see
+// internal/impl/postgresql/signaller.go for an example) - or the signal
+// would retrigger its action forever.
 //
 // ControlSignaller intentionally does not implement Listen itself: it has no
 // way to know the shape of a connector's replication messages, so embedding
@@ -52,22 +63,20 @@ func (s *ControlSignal) IsSnapshot() bool {
 // connector that forgets to do so fails to compile rather than panicking at
 // runtime.
 type Signaller interface {
-	Listen(ctx context.Context, event any) error
-	OnSignal() <-chan *ControlSignal
+	Listen(ctx context.Context, event any) (*ControlSignal, error)
 	IsPending() (bool, *ControlSignal)
 	Reset()
 }
 
 // ControlSignaller can be used to handle and process control signals.
 //
-// Listen implementations should notify via SignalChan as soon as a signal is
-// observed, but must not call StoreSignal until the signal (and anything
-// batched ahead of it) has actually been acknowledged downstream — otherwise
-// a caller relying on IsPending to decide whether to act on the signal (e.g.
-// re-running a snapshot) could act on it before it's durably delivered.
+// Listen implementations must not call StoreSignal until the signal (and
+// anything batched ahead of it) has actually been acknowledged downstream —
+// otherwise a caller relying on IsPending to decide whether to act on the
+// signal (e.g. re-running a snapshot) could act on it before it's durably
+// delivered.
 type ControlSignaller struct {
-	SignalChan chan *ControlSignal
-	Log        *service.Logger
+	Log *service.Logger
 
 	signalPending atomic.Pointer[ControlSignal]
 }
@@ -77,14 +86,8 @@ type ControlSignaller struct {
 // that implements Listen to obtain a full Signaller.
 func NewControlSignaller(log *service.Logger) *ControlSignaller {
 	return &ControlSignaller{
-		SignalChan: make(chan *ControlSignal, 1),
-		Log:        log,
+		Log: log,
 	}
-}
-
-// OnSignal indicates whether a signal has been received.
-func (o *ControlSignaller) OnSignal() <-chan *ControlSignal {
-	return o.SignalChan
 }
 
 // IsPending determines if there's a signal current pending.

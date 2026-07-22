@@ -50,7 +50,9 @@ const (
 	fieldAWSIAMAuth                = "aws"
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
-	shutdownTimeout        = 5 * time.Second
+
+	shutdownTimeout          = 5 * time.Second
+	signalStallWarnThreshold = 3
 )
 
 func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *pgconn.Config, _ *service.Logger) (TokenBuilder, error) {
@@ -465,6 +467,9 @@ type pgStreamInput struct {
 	// IAM authentication fields
 	iamAuthEnabled bool
 	streamSnapshot bool // original value of streamConfig.StreamOldData, preserved for reconnects
+
+	// signalStallCount counts consecutive reconnects with a signal still pending.
+	signalStallCount int
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -477,6 +482,10 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 
 	// determine if we hane a pending signal and handle it
 	if pending, signal := p.controlSig.IsPending(); pending && signal.IsSnapshot() {
+		p.signalStallCount++
+		if p.signalStallCount >= signalStallWarnThreshold {
+			p.logger.Warnf("%q signal has been pending across %d reconnects without its re-snapshot completing; check for a crash loop or a persistent error preventing the snapshot from finishing", signal.Type, p.signalStallCount)
+		}
 		p.logger.Infof("%q signal pending, triggering re-snapshots", signal.Type)
 
 		p.streamConfig.StreamOldData = true
@@ -543,7 +552,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				p.logger.Debugf("timed flush batch error: %s", err)
 				break
 			}
-			if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
+			if err := p.flushBatch(ctx, pgStream, cp, flushedBatch, false); err != nil {
 				p.logger.Debugf("failed to flush batch: %s", err)
 				break
 			}
@@ -563,7 +572,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					p.stopSig.TriggerSoftStop()
 					break
 				}
-				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
+				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch, false); err != nil {
 					p.logger.Debugf("failed to flush snapshot completion batch: %s", err)
 					p.stopSig.TriggerSoftStop()
 					break
@@ -578,19 +587,39 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				select {
 				case <-drained:
 					pgStream.MarkSnapshotAcknowledged()
+					// Mark handled before clearing pending: its redelivery is
+					// guaranteed (never acked - see below) and must be
+					// recognized rather than retriggered.
+					if _, pendingSig := p.controlSig.IsPending(); pendingSig != nil {
+						p.controlSig.markHandled(pendingSig.ID)
+					}
 					p.controlSig.Reset()
+					p.signalStallCount = 0
 				case <-p.stopSig.SoftStopChan():
 				}
 				break
 			}
 			var (
-				flush bool
-				mb    []byte
-				err   error
+				flush         bool
+				mb            []byte
+				signalHandled bool
 			)
 			for _, msg := range batch {
-				if err := p.controlSig.Listen(ctx, msg); err != nil {
-					p.logger.Errorf("failed to detect snapshot signal in change event, skipping message: %s", err)
+				sig, err := p.controlSig.Listen(ctx, msg)
+				if err != nil {
+					if errors.Is(err, errSignalAlreadyHandled) {
+						// Already handled; ack its own LSN directly so Stream's
+						// normal commit-boundary tracking bumps it past the
+						// transaction and it's never redelivered again.
+						if msg.LSN != nil {
+							if ackErr := pgStream.AckLSN(ctx, *msg.LSN); ackErr != nil {
+								p.logger.Warnf("failed to acknowledge already-handled signal, it may be redelivered again: %s", ackErr)
+							}
+						}
+						p.logger.Debugf("dropping redelivered signal already handled: %s", err)
+					} else {
+						p.logger.Errorf("failed to detect snapshot signal in change event, skipping message: %s", err)
+					}
 					continue
 				}
 
@@ -613,9 +642,55 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if msg.BeforeData != nil {
 					batchMsg.MetaSetImmut("before", service.ImmutableAny{V: msg.BeforeData})
 				}
-				if batcher.Add(batchMsg) {
-					flush = true
+
+				if sig == nil {
+					if batcher.Add(batchMsg) {
+						flush = true
+					}
+					continue
 				}
+
+				// Signal detected: flush what preceded it normally, then flush
+				// the signal alone with its ack held back, so only its own
+				// position stays unconfirmed - not anything batched alongside it.
+				p.logger.Infof("snapshot signal received (lsn=%s), pausing stream to re-run snapshot", sig.LSN)
+				if precedingBatch, ferr := batcher.Flush(ctx); ferr == nil {
+					if ferr := p.flushBatch(ctx, pgStream, cp, precedingBatch, false); ferr != nil {
+						p.logger.Debugf("failed to flush batch preceding signal: %s", ferr)
+					}
+				}
+
+				batcher.Add(batchMsg)
+				signalBatch, ferr := batcher.Flush(ctx)
+				if ferr != nil {
+					p.logger.Warnf("failed to flush signal message, signal will be retried on redelivery: %s", ferr)
+					continue
+				}
+				if ferr := p.flushBatch(ctx, pgStream, cp, signalBatch, true); ferr != nil {
+					p.logger.Warnf("failed to flush signal message, signal will be retried on redelivery: %s", ferr)
+					continue
+				}
+
+				// Wait for downstream delivery (not a Postgres ack - that's
+				// held back above) before tearing down to snapshot.
+				const waitInterval = 100 * time.Millisecond
+				if werr := awaitCheckpointLSN(ctx, cp, sig.LSN, waitInterval); werr != nil {
+					p.logger.Warnf("gave up waiting to acknowledge signal LSN, streaming continues uninterrupted: %s", werr)
+					continue
+				}
+
+				// Store so Connect re-runs the snapshot on reconnect. Its LSN
+				// stays unacked, so it redelivers until markHandled lets
+				// Listen drop it.
+				p.controlSig.StoreSignal(sig)
+				p.stopSig.TriggerSoftStop()
+				signalHandled = true
+				// Abandon the rest of this batch - never acked, so it
+				// redelivers once replication resumes after the snapshot.
+				break
+			}
+			if signalHandled {
+				break
 			}
 			if flush {
 				nextTimedBatchChan = nil
@@ -624,7 +699,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					p.logger.Debugf("error flushing batch: %s", err)
 					break
 				}
-				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
+				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch, false); err != nil {
 					p.logger.Debugf("failed to flush batch: %s", err)
 					break
 				}
@@ -633,24 +708,6 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if ok {
 					nextTimedBatchChan = time.After(d)
 				}
-			}
-		case sig := <-p.controlSig.OnSignal():
-			p.logger.Infof("snapshot signal received (lsn=%s), pausing stream to re-run snapshot", sig.LSN)
-			// Flush any batcher contents (including the signal row itself) so they
-			// are tracked in the checkpointer and delivered downstream.
-			if flushedBatch, err := batcher.Flush(ctx); err == nil {
-				_ = p.flushBatch(ctx, pgStream, cp, flushedBatch)
-			}
-
-			// Wait for inflight messages (and signal) to be acked before we start snapshotting.
-			// Given the rareity of signals it doesn't feel valuable to make configurable.
-			const waitInterval = 100 * time.Millisecond
-			if err := awaitCheckpointLSN(ctx, cp, sig.LSN, waitInterval); err != nil {
-				p.logger.Warnf("gave up waiting to acknowledge signal LSN, streaming continues uninterrupted: %s", err)
-			} else {
-				// Store the signal so Connect re-runs the snapshot on reconnect.
-				p.controlSig.StoreSignal(sig)
-				p.stopSig.TriggerSoftStop()
 			}
 		case err := <-pgStream.Errors():
 			p.logger.Warnf("logical replication stream error: %s", err)
@@ -667,6 +724,7 @@ func (p *pgStreamInput) flushBatch(
 	pgStream *pglogicalstream.Stream,
 	checkpointer *checkpoint.Capped[*string],
 	batch service.MessageBatch,
+	holdAck bool,
 ) error {
 	if len(batch) == 0 {
 		return nil
@@ -698,6 +756,11 @@ func (p *pgStreamInput) flushBatch(
 		}
 		maxLSN := *maxOffset
 		if maxLSN == nil {
+			return nil
+		}
+		if holdAck {
+			// Held back deliberately: this is the signal's own flush, and its
+			// LSN must stay unconfirmed until its re-snapshot durably completes.
 			return nil
 		}
 		if err = pgStream.AckLSN(ctx, *maxLSN); err != nil {
