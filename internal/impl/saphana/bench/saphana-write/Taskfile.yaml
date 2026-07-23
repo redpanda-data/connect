@@ -1,0 +1,187 @@
+version: "3"
+
+silent: true
+
+vars:
+  HANA_DSN: '{{.HANA_DSN | default (env "HANA_DSN")}}'
+
+tasks:
+  up:
+    desc: Start Kafka
+    cmds:
+      - docker compose up -d
+      - until docker exec rpcns-hana-write-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 2; done
+      - echo "Kafka ready"
+
+  down:
+    desc: Stop and remove containers and volumes
+    cmds:
+      - docker compose down -v --remove-orphans
+
+  bench:build:
+    desc: Build the redpanda-connect and loader binaries
+    cmds:
+      - go build -o /tmp/rpcns-hana-write-bench ../../../../../cmd/redpanda-connect/
+      - go build -o /tmp/rpcns-hana-write-bench-load ./load/
+      - echo "Binaries built"
+
+  bench:setup:
+    desc: Create BENCH_WRITES table in HANA (drop + recreate)
+    cmds:
+      - |
+        if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
+        if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-write-bench-load -setup
+
+  bench:load:
+    desc: "Produce COUNT messages to Kafka topic (e.g. task bench:load COUNT=100000)"
+    vars:
+      COUNT: '{{.COUNT | default "100000"}}'
+      BATCH: '{{.BATCH | default "1000"}}'
+    cmds:
+      - |
+        docker exec rpcns-hana-write-kafka kafka-topics \
+          --bootstrap-server localhost:9092 \
+          --create --if-not-exists \
+          --topic rpcns-hana-bench-write \
+          --partitions 1 --replication-factor 1 > /dev/null 2>&1 || true
+        /tmp/rpcns-hana-write-bench-load \
+          -count {{.COUNT}} \
+          -batch {{.BATCH}} \
+          -brokers localhost:9092 \
+          -topic rpcns-hana-bench-write
+
+  bench:run:
+    desc: "Run write benchmark — reads from Kafka, inserts to HANA (e.g. task bench:run TOTAL=100000 BATCH_COUNT=1000 MAX_IN_FLIGHT=1)"
+    vars:
+      TOTAL: '{{.TOTAL | default "100000"}}'
+      BATCH_COUNT: '{{.BATCH_COUNT | default "10000"}}'
+      MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "8"}}'
+      CORES: '{{.CORES | default ""}}'
+      RECREATE_TABLE: '{{.RECREATE_TABLE | default "true"}}'
+    cmds:
+      - |
+        set +e
+        if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
+        if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
+
+        CORES="{{.CORES}}"
+        CORES_LABEL="${CORES:-unbounded}"
+        TOTAL={{.TOTAL}}
+        TOPIC="${KAFKA_TOPIC:-rpcns-hana-bench-write}"
+        GROUP="${KAFKA_CONSUMER_GROUP:-rpcns-hana-write-bench-$(date +%s)}"
+
+        # Gracefully stop previous instance so go-hdb can roll back its HANA transaction.
+        # kill -9 bypasses rollback and leaves row locks on BENCH_WRITES (HANA default
+        # lock timeout is 7200s). The bench:setup DROP TABLE below clears any remaining
+        # locks even if the process is force-killed.
+        pkill -TERM -f "/tmp/rpcns-hana-write-bench run" 2>/dev/null || true
+        for _i in $(seq 1 30); do
+          pkill -0 -f "/tmp/rpcns-hana-write-bench run" 2>/dev/null || break
+          sleep 1
+        done
+        pkill -9 -f "/tmp/rpcns-hana-write-bench run" 2>/dev/null || true
+
+        # DROP + CREATE releases any residual HANA row locks and gives a clean baseline.
+        if [ "{{.RECREATE_TABLE}}" = "true" ]; then
+          HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-write-bench-load -setup
+        fi
+
+        printf "batch=%-6s  max_in_flight=%-4s  cores=%s\n" "{{.BATCH_COUNT}}" "{{.MAX_IN_FLIGHT}}" "$CORES_LABEL"
+
+        BENCH_BATCH_COUNT={{.BATCH_COUNT}} BENCH_MAX_IN_FLIGHT={{.MAX_IN_FLIGHT}} \
+          HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" \
+          KAFKA_TOPIC="$TOPIC" KAFKA_CONSUMER_GROUP="$GROUP" \
+          GOMAXPROCS="$CORES" \
+          REDPANDA_LICENSE="$REDPANDA_LICENSE" REDPANDA_LICENSE_FILEPATH="$REDPANDA_LICENSE_FILEPATH" \
+          /tmp/rpcns-hana-write-bench run ./benchmark_config.yaml > /tmp/rpcns_hana_write_bench.log 2>&1 &
+        RPCN_PID=$!
+
+        START=$(date +%s)
+        printf "%-10s  %-12s  %s\n" "TIME" "KAFKA_LAG" "BENCH_MSG/S" >&2
+
+        # Monitor via Kafka consumer group lag. kafka_franz commits offsets only after
+        # WriteBatch returns nil, so LAG=0 guarantees all rows are committed in HANA.
+        # Rolling-stats "0 for N ticks" is unreliable: WriteBatch can block for many
+        # seconds (serialized via bulkMu × max_in_flight), causing extended 0-rate gaps
+        # mid-run that would trigger a false "done" signal.
+        MAX_WAIT=600
+        ELAPSED=0
+        while kill -0 "$RPCN_PID" 2>/dev/null && [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
+          sleep 1
+          ELAPSED=$((ELAPSED + 1))
+
+          LOG_RATE=$(grep "rolling stats" /tmp/rpcns_hana_write_bench.log 2>/dev/null \
+            | tail -1 | grep -o 'msg/sec=[0-9]*' | cut -d= -f2)
+          LOG_RATE=${LOG_RATE:-0}
+
+          CG_RAW=$(docker exec rpcns-hana-write-kafka kafka-consumer-groups \
+            --bootstrap-server localhost:9092 --group "$GROUP" --describe 2>/dev/null)
+          if echo "$CG_RAW" | grep -qF "$TOPIC" 2>/dev/null; then
+            # Return "?" if no numeric LAG yet (uncommitted partition shows "-").
+            LAG=$(echo "$CG_RAW" | awk '
+              NR>1 && $6~/^[0-9]+$/ {sum+=$6; n++}
+              END {if (n>0) print sum; else print "?"}')
+          else
+            LAG="?"
+          fi
+
+          printf "%-10s  %-12s  %s msg/s\n" "$(date +%H:%M:%S)" "$LAG" "$LOG_RATE" >&2
+
+          if [ "${LAG}" = "0" ] 2>/dev/null; then break; fi
+        done
+
+        # SIGTERM: when LAG=0, no WriteBatch in flight → benthos exits in <1s.
+        # 3s grace is generous; SIGKILL cleans up edge cases (crash, long batch).
+        # Avoid kill-0 loop: kill -0 returns 0 for zombie processes, causing a
+        # spurious 30s wait even when the process has already exited cleanly.
+        kill "$RPCN_PID" 2>/dev/null || true
+        sleep 3
+        kill -9 "$RPCN_PID" 2>/dev/null || true
+        # Brief bounded wait; don't block on D-state (zombie reaped when shell exits).
+        for _i in $(seq 1 3); do
+          kill -0 "$RPCN_PID" 2>/dev/null || break
+          sleep 1
+        done
+
+        END=$(date +%s)
+        ELAPSED=$((END - START))
+        AVG=$(awk "BEGIN{printf \"%.0f\",${TOTAL}/($ELAPSED>0?$ELAPSED:1)}")
+        echo "---"
+        printf "batch=%-6s  max_in_flight=%-4s  cores=%s\n" "{{.BATCH_COUNT}}" "{{.MAX_IN_FLIGHT}}" "$CORES_LABEL"
+        echo "Total messages : $TOTAL"
+        echo "Elapsed        : ${ELAPSED}s"
+        echo "Avg throughput : ${AVG} msg/s"
+        echo "RESULT batch={{.BATCH_COUNT}} max_in_flight={{.MAX_IN_FLIGHT}} cores=$CORES_LABEL total=$TOTAL elapsed=${ELAPSED}s avg=$AVG"
+
+  bench:matrix:
+    desc: "Sweep batch_count x max_in_flight (e.g. task bench:matrix TOTAL=100000 OUT=results.txt)"
+    vars:
+      TOTAL: '{{.TOTAL | default "100000"}}'
+      OUT: '{{.OUT | default ""}}'
+    cmds:
+      - |
+        OUT_FILE="{{.OUT}}"
+        HDR=$(printf "%-8s  %-14s  %-12s  %-10s  %s\n" "BATCH" "MAX_IN_FLIGHT" "TOTAL" "ELAPSED" "AVG_MSG_S")
+        echo "$HDR"
+        if [ -n "$OUT_FILE" ]; then
+          printf "# sql_insert hdb write  total={{.TOTAL}}\n" > "$OUT_FILE"
+          echo "$HDR" >> "$OUT_FILE"
+        fi
+        for batch in 1000 5000 10000 50000; do
+          for mif in 1 4 8 16; do
+            OUTPUT=$(task bench:run TOTAL={{.TOTAL}} BATCH_COUNT=$batch MAX_IN_FLIGHT=$mif 2>&1) || true
+            R=$(echo "$OUTPUT" | grep "^RESULT " || true)
+            TOT=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOT=${TOT:-ERROR}
+            EL=$(echo "$R" | grep -o 'elapsed=[^ ]*' | cut -d= -f2 || true); EL=${EL:-?}
+            AV=$(echo "$R" | grep -o 'avg=[^ ]*' | cut -d= -f2 || true); AV=${AV:-0}
+            ROW=$(printf "%-8s  %-14s  %-12s  %-10s  %s\n" "$batch" "$mif" "$TOT" "$EL" "$AV")
+            echo "$ROW"
+            if [ -n "$OUT_FILE" ]; then echo "$ROW" >> "$OUT_FILE"; fi
+          done
+        done
+
+  logs:
+    desc: Tail the last benchmark run log
+    cmds:
+      - tail -f /tmp/rpcns_hana_write_bench.log
