@@ -46,13 +46,49 @@ tasks:
           ./benchmark_config.yaml
 
   bench:matrix:
-    desc: Sweep batch sizes and max_in_flight (upload_threads held at 16, the prior best)
+    desc: |
+      Full cross-product sweep of BATCH x MAX_IN_FLIGHT x UPLOAD_THREADS.
+      Each combo runs COUNT messages and prints one summary line.
+      Params: COUNT (default 500000), BATCHES (default "1000 5000 10000 20000 50000"),
+              MAX_IN_FLIGHTS (default "1 4 8 16 32 64"), UPLOAD_THREADS (default "4 8 16 32")
+      Example: task bench:matrix BATCHES="10000 20000" MAX_IN_FLIGHTS="16 32" UPLOAD_THREADS="8 16" COUNT=500000
+    vars:
+      COUNT: '{{.COUNT | default "500000"}}'
+      BATCHES: '{{.BATCHES | default "1000 5000 10000 20000 50000"}}'
+      MAX_IN_FLIGHTS: '{{.MAX_IN_FLIGHTS | default "1 4 8 16 32 64"}}'
+      UPLOAD_THREADS: '{{.UPLOAD_THREADS | default "4 8 16 32"}}'
     cmds:
       - |
-        for batch in 1000 5000 10000 20000; do
-          for flight in 1 4 8 16 32; do
-            echo "=== batch=$batch max_in_flight=$flight ==="
-            task bench:run BATCH=$batch MAX_IN_FLIGHT=$flight COUNT={{.COUNT}} || true
+        header() {
+          printf "%-8s %-14s %-15s %-10s %-10s\n" "BATCH" "MAX_IN_FLIGHT" "UPLOAD_THREADS" "MSG/SEC" "MB/SEC"
+        }
+
+        run_bench() {
+          local batch="$1" max_in_flight="$2" upload_threads="$3" count="$4"
+          local out
+          out=$(task bench:run BATCH="$batch" MAX_IN_FLIGHT="$max_in_flight" UPLOAD_THREADS="$upload_threads" COUNT="$count" 2>&1) || true
+          local line
+          line=$(echo "$out" | grep "total stats" | tail -1)
+          if [ -z "$line" ]; then
+            printf "%-8s %-14s %-15s %-10s %-10s   (FAILED, see log below)\n" "$batch" "$max_in_flight" "$upload_threads" "-" "-"
+            echo "$out" | tail -20
+            return
+          fi
+          local msgs bytes msgs_fmt mb
+          msgs=$(echo "$line" | grep -oP 'msg/sec=\K[0-9.eE+-]+')
+          bytes=$(echo "$line" | grep -oP 'bytes/sec=\K[0-9.eE+-]+')
+          msgs_fmt=$(awk "BEGIN{printf \"%.1f\", $msgs}")
+          mb=$(awk "BEGIN{printf \"%.2f\", $bytes/1000000}")
+          printf "%-8s %-14s %-15s %-10s %-10s\n" "$batch" "$max_in_flight" "$upload_threads" "$msgs_fmt" "$mb"
+        }
+
+        printf "\n### BATCH x MAX_IN_FLIGHT x UPLOAD_THREADS ###\n"
+        header
+        for batch in {{.BATCHES}}; do
+          for flight in {{.MAX_IN_FLIGHTS}}; do
+            for threads in {{.UPLOAD_THREADS}}; do
+              run_bench "$batch" "$flight" "$threads" "{{.COUNT}}"
+            done
           done
         done
 

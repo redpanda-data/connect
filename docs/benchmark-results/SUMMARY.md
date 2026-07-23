@@ -4,14 +4,14 @@ Last updated: 2026-07-17
 
 ## At a Glance
 
-| Connector | Peak Throughput | Messages/sec | What Was Tested |
-|---|---|---|---|
-| **Redpanda Migrator** | **1 GB/s** | 1,035,000 | Cluster-to-cluster data migration (30GB) |
-| **DynamoDB CDC** | **216 MB/s** | 102,000 | Change data capture from 3 DynamoDB tables |
-| **SQL Server CDC** | **154 MB/s** | 119,000 | Change data capture from SQL Server |
-| **Oracle CDC (snapshot)** | — | 140,000 | Initial table snapshot from Oracle DB |
-| **Oracle CDC (streaming)** | — | 50,000–90,000 | Real-time change streaming via LogMiner |
-| **Snowflake Snowpipe Streaming** | **5.8 MB/s** | 40,000 | Write throughput into Snowflake via Snowpipe Streaming |
+| Connector                        | Peak Throughput | Messages/sec  | What Was Tested                                        |
+| -------------------------------- | --------------- | ------------- | ------------------------------------------------------ |
+| **Redpanda Migrator**            | **1 GB/s**      | 1,035,000     | Cluster-to-cluster data migration (30GB)               |
+| **DynamoDB CDC**                 | **216 MB/s**    | 102,000       | Change data capture from 3 DynamoDB tables             |
+| **SQL Server CDC**               | **154 MB/s**    | 119,000       | Change data capture from SQL Server                    |
+| **Oracle CDC (snapshot)**        | —               | 140,000       | Initial table snapshot from Oracle DB                  |
+| **Oracle CDC (streaming)**       | —               | 50,000–90,000 | Real-time change streaming via LogMiner                |
+| **Snowflake Snowpipe Streaming** | **5.8 MB/s**    | 40,000        | Write throughput into Snowflake via Snowpipe Streaming |
 
 ## What These Numbers Mean
 
@@ -39,7 +39,7 @@ For full methodology, raw output, environment details, and bottleneck analysis, 
 - [SQL Server CDC](mssqlserver-cdc.md)
 - [Oracle CDC](oracledb-cdc.md)
 - [DynamoDB CDC](dynamodb-cdc.md)
-- [Snowflake Snowpipe Streaming](snowflake-streaming.md)
+- [Snowflake (write)](snowflake.md)
 
 ## How Benchmarks Are Run
 

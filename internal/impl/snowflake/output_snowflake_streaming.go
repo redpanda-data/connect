@@ -24,7 +24,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
-	// "github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/pool"
 )
 
@@ -370,9 +370,9 @@ func init() {
 			maxInFlight int,
 			err error,
 		) {
-			// if err = license.CheckRunningEnterprise(mgr); err != nil {
-			// 	return
-			// }
+			if err = license.CheckRunningEnterprise(mgr); err != nil {
+				return
+			}
 
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return

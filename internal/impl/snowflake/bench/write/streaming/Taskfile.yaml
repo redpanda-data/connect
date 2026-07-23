@@ -110,6 +110,61 @@ tasks:
           run_bench "{{.DEFAULT_BATCH}}" "{{.DEFAULT_PARALLELISM}}" "{{.DEFAULT_MAX_IN_FLIGHT}}" "$c" "{{.COUNT}}"
         done
 
+  bench:matrix:full:
+    desc: |
+      Full cross-product sweep of BATCH x PARALLELISM x MAX_IN_FLIGHT x CHUNK_SIZE
+      (unlike bench:matrix, which sweeps one dimension at a time holding the rest at
+      default). Every combination runs COUNT messages and prints one summary line.
+      Defaults are a small grid, not bench:matrix's full default lists -- the full
+      cross product of those (7x8x7x7 = 2,744 combos) is impractical against live
+      Snowflake. Pass your own space-separated lists to go bigger.
+      Params: COUNT (default 2000000), BATCHES (default "1000 8000 64000"),
+              PARALLELS (default "1 4"), MAX_IN_FLIGHTS (default "4 16"),
+              CHUNK_SIZES (default "50000")
+      Example: task bench:matrix:full BATCHES="1000 8000 64000" MAX_IN_FLIGHTS="4 16 32"
+    vars:
+      COUNT: '{{.COUNT | default "2000000"}}'
+      BATCHES: '{{.BATCHES | default "1000 8000 64000"}}'
+      PARALLELS: '{{.PARALLELS | default "1 4"}}'
+      MAX_IN_FLIGHTS: '{{.MAX_IN_FLIGHTS | default "4 16"}}'
+      CHUNK_SIZES: '{{.CHUNK_SIZES | default "50000"}}'
+    cmds:
+      - |
+        header() {
+          printf "%-8s %-12s %-14s %-11s %-15s %-15s\n" "BATCH" "PARALLELISM" "MAX_IN_FLIGHT" "CHUNK_SIZE" "MSG/SEC" "KB/SEC"
+        }
+
+        run_bench() {
+          local batch="$1" parallelism="$2" max_in_flight="$3" chunk_size="$4" count="$5"
+          local out
+          out=$(task bench:run BATCH="$batch" PARALLELISM="$parallelism" MAX_IN_FLIGHT="$max_in_flight" CHUNK_SIZE="$chunk_size" COUNT="$count" 2>&1) || true
+          local line
+          line=$(echo "$out" | grep "total stats" | tail -1)
+          if [ -z "$line" ]; then
+            printf "%-8s %-12s %-14s %-11s %-15s %-15s   (FAILED, see log below)\n" "$batch" "$parallelism" "$max_in_flight" "$chunk_size" "-" "-"
+            echo "$out" | tail -20
+            return
+          fi
+          local msgs bytes msgs_fmt kb
+          msgs=$(echo "$line" | grep -oP 'msg/sec=\K[0-9.eE+-]+')
+          bytes=$(echo "$line" | grep -oP 'bytes/sec=\K[0-9.eE+-]+')
+          msgs_fmt=$(awk "BEGIN{printf \"%.1f\", $msgs}")
+          kb=$(awk "BEGIN{printf \"%.1f\", $bytes/1000}")
+          printf "%-8s %-12s %-14s %-11s %-15s %-15s\n" "$batch" "$parallelism" "$max_in_flight" "$chunk_size" "$msgs_fmt" "$kb"
+        }
+
+        printf "\n### full cross product: BATCH x PARALLELISM x MAX_IN_FLIGHT x CHUNK_SIZE ###\n"
+        header
+        for batch in {{.BATCHES}}; do
+          for p in {{.PARALLELS}}; do
+            for m in {{.MAX_IN_FLIGHTS}}; do
+              for c in {{.CHUNK_SIZES}}; do
+                run_bench "$batch" "$p" "$m" "$c" "{{.COUNT}}"
+              done
+            done
+          done
+        done
+
   bench:truncate:
     desc: Truncate BENCH_EVENTS table (requires snowsql in PATH)
     cmds:

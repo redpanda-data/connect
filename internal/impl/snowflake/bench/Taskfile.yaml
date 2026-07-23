@@ -63,6 +63,24 @@ tasks:
     cmds:
       - task bench:matrix COUNT={{.COUNT}} BATCHES="{{.BATCHES}}" PARALLELS="{{.PARALLELS}}" MAX_IN_FLIGHTS="{{.MAX_IN_FLIGHTS}}" CHUNK_SIZES="{{.CHUNK_SIZES}}" DEFAULT_BATCH={{.DEFAULT_BATCH}} DEFAULT_PARALLELISM={{.DEFAULT_PARALLELISM}} DEFAULT_MAX_IN_FLIGHT={{.DEFAULT_MAX_IN_FLIGHT}} DEFAULT_CHUNK_SIZE={{.DEFAULT_CHUNK_SIZE}}
 
+  bench:streaming:matrix:full:
+    desc: |
+      Full cross-product sweep of BATCH/PARALLELISM/MAX_IN_FLIGHT/CHUNK_SIZE for
+      Snowpipe Streaming (delegates to write/streaming/Taskfile.yaml bench:matrix:full).
+      Unlike bench:streaming:matrix (one dimension at a time), this runs every
+      combination of the given lists -- defaults are a small grid, override to go bigger.
+      Params: COUNT, BATCHES, PARALLELS, MAX_IN_FLIGHTS, CHUNK_SIZES
+      Example: task bench:streaming:matrix:full BATCHES="1000 8000 64000" MAX_IN_FLIGHTS="4 16 32"
+    vars:
+      COUNT: '{{.COUNT | default "2000000"}}'
+      BATCHES: '{{.BATCHES | default "1000 8000 64000"}}'
+      PARALLELS: '{{.PARALLELS | default "1 4"}}'
+      MAX_IN_FLIGHTS: '{{.MAX_IN_FLIGHTS | default "4 16"}}'
+      CHUNK_SIZES: '{{.CHUNK_SIZES | default "50000"}}'
+    dir: write/streaming
+    cmds:
+      - task bench:matrix:full COUNT={{.COUNT}} BATCHES="{{.BATCHES}}" PARALLELS="{{.PARALLELS}}" MAX_IN_FLIGHTS="{{.MAX_IN_FLIGHTS}}" CHUNK_SIZES="{{.CHUNK_SIZES}}"
+
   bench:bulk:
     desc: |
       Run staged PUT + Snowpipe benchmark (delegates to write/bulk/Taskfile.yaml).
@@ -76,3 +94,18 @@ tasks:
     dir: write/bulk
     cmds:
       - task bench:run COUNT={{.COUNT}} BATCH={{.BATCH}} PERIOD={{.PERIOD}} UPLOAD_THREADS={{.UPLOAD_THREADS}}
+
+  bench:bulk:matrix:
+    desc: |
+      Full cross-product sweep of BATCH x MAX_IN_FLIGHT x UPLOAD_THREADS for staged
+      PUT + Snowpipe (delegates to write/bulk/Taskfile.yaml bench:matrix).
+      Params: COUNT, BATCHES, MAX_IN_FLIGHTS, UPLOAD_THREADS
+      Example: task bench:bulk:matrix BATCHES="10000 20000" MAX_IN_FLIGHTS="16 32" UPLOAD_THREADS="8 16" COUNT=500000
+    vars:
+      COUNT: '{{.COUNT | default "500000"}}'
+      BATCHES: '{{.BATCHES | default "1000 5000 10000 20000 50000"}}'
+      MAX_IN_FLIGHTS: '{{.MAX_IN_FLIGHTS | default "1 4 8 16 32 64"}}'
+      UPLOAD_THREADS: '{{.UPLOAD_THREADS | default "4 8 16 32"}}'
+    dir: write/bulk
+    cmds:
+      - task bench:matrix COUNT={{.COUNT}} BATCHES="{{.BATCHES}}" MAX_IN_FLIGHTS="{{.MAX_IN_FLIGHTS}}" UPLOAD_THREADS="{{.UPLOAD_THREADS}}"
