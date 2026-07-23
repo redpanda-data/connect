@@ -88,7 +88,7 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
-=== Credentials
+== Credentials
 
 By default Redpanda Connect will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].`).
 		Fields(
