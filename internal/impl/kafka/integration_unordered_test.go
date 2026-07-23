@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import (
 func TestIntegrationUnordered(t *testing.T) {
 	integration.CheckSkip(t)
 
-	brokerAddr, kafkaPortStr := startRedpanda(t)
+	brokerAddr, kafkaPortStr := sharedRedpanda(t)
 
 	require.Eventually(t, func() bool {
 		return createKafkaTopic(t.Context(), brokerAddr, "testingconnection", 1) == nil
@@ -229,7 +229,7 @@ input:
 func BenchmarkIntegrationUnordered(b *testing.B) {
 	integration.CheckSkip(b)
 
-	brokerAddr, kafkaPortStr := startRedpanda(b)
+	brokerAddr, kafkaPortStr := sharedRedpanda(b)
 
 	require.Eventually(b, func() bool {
 		return createKafkaTopic(b.Context(), brokerAddr, "testingconnection", 1) == nil

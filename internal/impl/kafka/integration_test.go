@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -94,7 +94,13 @@ func doCreateKafkaTopic(ctx context.Context, address, topicName string, partitio
 	if len(res.Topics) != 1 {
 		return fmt.Errorf("expected one topic in response, saw %d", len(res.Topics))
 	}
-	return kerr.ErrorForCode(res.Topics[0].ErrorCode)
+	// Tolerate a pre-existing topic: tests now share a single package-wide
+	// Redpanda container (see sharedRedpanda), so a fixed-name topic — e.g. a
+	// readiness probe — may already have been created by an earlier test.
+	if err := kerr.ErrorForCode(res.Topics[0].ErrorCode); err != nil && !errors.Is(err, kerr.TopicAlreadyExists) {
+		return err
+	}
+	return nil
 }
 
 func createKafkaTopicSasl(address, id string, partitions int32) error {
@@ -138,7 +144,7 @@ func createKafkaTopicSasl(address, id string, partitions int32) error {
 func TestRedpandaIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	brokerAddr, kafkaPortStr := startRedpanda(t)
+	brokerAddr, kafkaPortStr := sharedRedpanda(t)
 
 	require.Eventually(t, func() bool {
 		return createKafkaTopic(t.Context(), brokerAddr, "testingconnection", 1) == nil
@@ -401,7 +407,7 @@ output:
 func TestRedpandaSaslIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	brokerAddr, kafkaPortStr := startRedpanda(t)
+	brokerAddr, kafkaPortStr := sharedRedpanda(t)
 
 	require.Eventually(t, func() bool {
 		return createKafkaTopic(t.Context(), brokerAddr, "testingconnection", 1) == nil
@@ -440,7 +446,7 @@ input:
 func BenchmarkRedpandaIntegration(b *testing.B) {
 	integration.CheckSkip(b)
 
-	brokerAddr, kafkaPortStr := startRedpanda(b)
+	brokerAddr, kafkaPortStr := sharedRedpanda(b)
 
 	require.Eventually(b, func() bool {
 		return createKafkaTopic(b.Context(), brokerAddr, "testingconnection", 1) == nil
