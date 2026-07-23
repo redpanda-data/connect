@@ -824,7 +824,6 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	wg.SetLimit(max(s.uploadParallelThreads, 1))
 
 	for f, fBytes := range files {
-		f, fBytes := f, fBytes
 		wg.Go(func() error {
 			requestID := f.requestID
 			if requestID == "" {
