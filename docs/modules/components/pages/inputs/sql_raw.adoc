@@ -129,6 +129,7 @@ Options:
 , `gocosmos`
 , `spanner`
 , `databricks`
+, `hana`
 .
 
 === `dsn`
@@ -176,6 +177,9 @@ The following is a list of supported drivers, their placeholder style, and their
 
 | `databricks` 
 | `token:<access-token>@<server-hostname>:<port>/<http-path>` 
+
+| `hana` 
+| `hdb://[user[:password]@]host[:port][?param1=value1&...]` 
 |===
 
 Please note that the `postgres` and `pgx` drivers enforce SSL by default, you can override this with the parameter `sslmode=disable` if required.
@@ -219,6 +223,7 @@ The query to execute. The style of placeholder to use depends on the driver, som
 | `snowflake` | Question mark |
 | `trino` | Question mark |
 | `gocosmos` | Colon |
+| `hana` | Question mark |
 
 
 *Type*: `string`
