@@ -941,8 +941,8 @@ func TestIntegrationSnapshotConsistency(t *testing.T) {
 
 	template := fmt.Sprintf(`
 read_until:
-  # Stop when we're idle for 3 seconds, which means our writer stopped
-  idle_timeout: 3s
+  # Stop when we're idle for 10 seconds, which means our writer stopped
+  idle_timeout: 10s
   input:
     pg_stream:
         dsn: %s
@@ -978,9 +978,16 @@ read_until:
 	}))
 
 	// Continuously write so there is a chance we skip data between snapshot and stream hand off.
+	var (
+		writerMu       sync.Mutex
+		lastInsertedID int64
+	)
 	writer := asyncroutine.NewPeriodic(time.Microsecond, func() {
-		_, err := db.Exec("INSERT INTO seq DEFAULT VALUES")
-		require.NoError(t, err)
+		var id int64
+		require.NoError(t, db.QueryRow("INSERT INTO seq DEFAULT VALUES RETURNING id").Scan(&id))
+		writerMu.Lock()
+		lastInsertedID = id
+		writerMu.Unlock()
 	})
 	writer.Start()
 	t.Cleanup(writer.Stop)
@@ -1001,13 +1008,24 @@ read_until:
 	// Let the writer write a little more
 	time.Sleep(5 * time.Second)
 	writer.Stop()
-	// Okay now wait for the stream to finish (the stream auto closes after it gets nothing for 3 seconds)
+
+	writerMu.Lock()
+	targetID := lastInsertedID
+	writerMu.Unlock()
+
+	// Wait for the consumer to actually observe the last write.
+	require.Eventually(t, func() bool {
+		batchMu.Lock()
+		defer batchMu.Unlock()
+		return len(sequenceNumbers) > 0 && sequenceNumbers[len(sequenceNumbers)-1] >= targetID
+	}, 30*time.Second, 50*time.Millisecond, "stream did not catch up to last write")
+
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
 	select {
 	case <-streamStopped:
 	case <-time.After(30 * time.Second):
 		require.Fail(t, "stream did not complete in time")
 	}
-	require.NoError(t, streamOut.StopWithin(10*time.Second))
 
 	// Read the actual committed count from the database rather than
 	// relying on the atomic counter, which can race with the last
