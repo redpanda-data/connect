@@ -138,7 +138,12 @@ goal: make every commit carry a large batch (roughly a commit interval's worth o
 ### Recipe A — Order-preserving (memory buffer)
 
 Use when cross-partition ordering must be preserved. A memory buffer decouples the fast input from
-the commit-bound output and accumulates large batches into a single merged stream.
+the commit-bound output and accumulates large batches into a single merged stream. **Set `batching`
+on the output as well as `batch_policy` on the buffer** — the output batch is what lets
+`max_in_flight` dispatch concurrent writers into the committer's commit-coalescer. Without output
+batching the single buffer stream feeds the committer one commit at a time, the coalescer never
+engages, and throughput collapses (measured ~0.8 → ~12.7 MB/s at 1 vCPU against a Glue REST catalog
+once output batching was added).
 
 ```yaml
 buffer:
@@ -151,6 +156,9 @@ output:
   iceberg:
     # ...catalog / storage / table...
     max_in_flight: 16
+    batching:                # feed the commit-coalescer so max_in_flight can parallelize
+      count: 10000
+      period: 10s
     commit:
       max_snapshot_age: 24h  # keep snapshot expiry on (see "Avoid over-committing")
 ```
