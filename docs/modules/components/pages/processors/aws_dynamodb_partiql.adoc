@@ -53,6 +53,7 @@ label: ""
 aws_dynamodb_partiql:
   query: "" # No default (required)
   unsafe_dynamic_query: false
+  use_batch: true
   args_mapping: ""
   region: "" # No default (optional)
   endpoint: "" # No default (optional)
@@ -102,6 +103,25 @@ pipeline:
 ```
 
 --
+Query a GSI for a single record::
++
+--
+
+The following example looks up a single record from the table footable using the global secondary index index_name, matching on the field bar. BatchExecuteStatement can't query a GSI, so use_batch is disabled:
+
+```yaml
+pipeline:
+  processors:
+    - aws_dynamodb_partiql:
+        query: "SELECT * FROM \"footable\".\"index_name\" WHERE bar = ?"
+        use_batch: false
+        args_mapping: |
+          root = [
+            { "S": this.bar },
+          ]
+```
+
+--
 ======
 
 == Fields
@@ -122,6 +142,15 @@ Whether to enable dynamic queries that support interpolation functions.
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `use_batch`
+
+Whether to execute all messages in a batch as a single `BatchExecuteStatement` call. Set this to `false` to execute one `ExecuteStatement` call per message instead, which is required for PartiQL `SELECT` queries against a global secondary index (GSI) — `BatchExecuteStatement` does not support querying a GSI. Only the first result row is used when a query returns multiple items.
+
+
+*Type*: `bool`
+
+*Default*: `true`
 
 === `args_mapping`
 
