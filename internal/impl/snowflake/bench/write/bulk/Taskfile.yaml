@@ -1,0 +1,98 @@
+version: "3"
+
+silent: true
+
+# Required env vars:
+#   SNOWFLAKE_ACCOUNT       ORG-ACCOUNT identifier
+#   SNOWFLAKE_USER          Snowflake user
+#   SNOWFLAKE_DB            Target database
+#   SNOWFLAKE_WAREHOUSE     Snowflake warehouse
+#   SNOWFLAKE_PRIVATE_KEY   PEM-encoded RSA private key content
+#
+# Optional:
+#   SNOWFLAKE_ROLE              required, no default (must match a role granted to the user)
+#   SNOWFLAKE_SCHEMA            default: RAW
+#   SNOWFLAKE_UPLOAD_THREADS    parallel upload threads, default: 4
+
+vars:
+  RPCN: "go run ../../../../../../cmd/redpanda-connect/main.go"
+  BATCH: '{{.BATCH | default "5000"}}'
+  PERIOD: '{{.PERIOD | default "10s"}}'
+  UPLOAD_THREADS: '{{.UPLOAD_THREADS | default "16"}}'
+  MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "8"}}'
+  COUNT: '{{.COUNT | default "0"}}'
+
+tasks:
+  bench:run:
+    desc: |
+      Run Snowflake PUT + Snowpipe bulk write benchmark.
+      Params: BATCH (default 5000), PERIOD (default 10s), UPLOAD_THREADS (default 16),
+              MAX_IN_FLIGHT (default 8), COUNT (default 0, unlimited)
+      WriteBatch's connection lock now only guards the db pointer, not the whole write,
+      so batches run concurrently up to MAX_IN_FLIGHT -- that's the main throughput
+      lever now. BATCH (fewer, larger PUT/Snowpipe round trips) and UPLOAD_THREADS
+      (Snowflake's PUT PARALLEL=N, chunking one file's upload across N threads) still
+      matter but MAX_IN_FLIGHT is what actually overlaps batches on the wire.
+      Set COUNT to a fixed number to stop after that many messages and print a total summary.
+      Example: task bench:run BATCH=5000 UPLOAD_THREADS=8 MAX_IN_FLIGHT=16 COUNT=500000
+    cmds:
+      - |
+        {{.RPCN}} run \
+          --set "input.generate.count={{.COUNT}}" \
+          --set "output.snowflake_put.batching.count={{.BATCH}}" \
+          --set "output.snowflake_put.batching.period={{.PERIOD}}" \
+          --set "output.snowflake_put.upload_parallel_threads={{.UPLOAD_THREADS}}" \
+          --set "output.snowflake_put.max_in_flight={{.MAX_IN_FLIGHT}}" \
+          ./benchmark_config.yaml
+
+  bench:matrix:
+    desc: |
+      Full cross-product sweep of BATCH x MAX_IN_FLIGHT x UPLOAD_THREADS.
+      Each combo runs COUNT messages and prints one summary line.
+      Params: COUNT (default 500000), BATCHES (default "1000 5000 10000 20000 50000"),
+              MAX_IN_FLIGHTS (default "1 4 8 16 32 64"), UPLOAD_THREADS (default "4 8 16 32")
+      Example: task bench:matrix BATCHES="10000 20000" MAX_IN_FLIGHTS="16 32" UPLOAD_THREADS="8 16" COUNT=500000
+    vars:
+      COUNT: '{{.COUNT | default "500000"}}'
+      BATCHES: '{{.BATCHES | default "1000 5000 10000 20000 50000"}}'
+      MAX_IN_FLIGHTS: '{{.MAX_IN_FLIGHTS | default "1 4 8 16 32 64"}}'
+      UPLOAD_THREADS: '{{.UPLOAD_THREADS | default "4 8 16 32"}}'
+    cmds:
+      - |
+        header() {
+          printf "%-8s %-14s %-15s %-10s %-10s\n" "BATCH" "MAX_IN_FLIGHT" "UPLOAD_THREADS" "MSG/SEC" "MB/SEC"
+        }
+
+        run_bench() {
+          local batch="$1" max_in_flight="$2" upload_threads="$3" count="$4"
+          local out
+          out=$(task bench:run BATCH="$batch" MAX_IN_FLIGHT="$max_in_flight" UPLOAD_THREADS="$upload_threads" COUNT="$count" 2>&1) || true
+          local line
+          line=$(echo "$out" | grep "total stats" | tail -1)
+          if [ -z "$line" ]; then
+            printf "%-8s %-14s %-15s %-10s %-10s   (FAILED, see log below)\n" "$batch" "$max_in_flight" "$upload_threads" "-" "-"
+            echo "$out" | tail -20
+            return
+          fi
+          local msgs bytes msgs_fmt mb
+          msgs=$(echo "$line" | grep -oP 'msg/sec=\K[0-9.eE+-]+')
+          bytes=$(echo "$line" | grep -oP 'bytes/sec=\K[0-9.eE+-]+')
+          msgs_fmt=$(awk "BEGIN{printf \"%.1f\", $msgs}")
+          mb=$(awk "BEGIN{printf \"%.2f\", $bytes/1000000}")
+          printf "%-8s %-14s %-15s %-10s %-10s\n" "$batch" "$max_in_flight" "$upload_threads" "$msgs_fmt" "$mb"
+        }
+
+        printf "\n### BATCH x MAX_IN_FLIGHT x UPLOAD_THREADS ###\n"
+        header
+        for batch in {{.BATCHES}}; do
+          for flight in {{.MAX_IN_FLIGHTS}}; do
+            for threads in {{.UPLOAD_THREADS}}; do
+              run_bench "$batch" "$flight" "$threads" "{{.COUNT}}"
+            done
+          done
+        done
+
+  bench:truncate:
+    desc: Truncate BENCH_EVENTS_JSON table (requires snowsql in PATH)
+    cmds:
+      - snowsql -a "$SNOWFLAKE_ACCOUNT" -u "$SNOWFLAKE_USER" ${SNOWFLAKE_ROLE:+-r "$SNOWFLAKE_ROLE"} -d "$SNOWFLAKE_DB" -s "${SNOWFLAKE_SCHEMA:-RAW}" -q "TRUNCATE TABLE BENCH_EVENTS_JSON;"

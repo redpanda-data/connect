@@ -1,0 +1,171 @@
+version: "3"
+
+silent: true
+
+# Required env vars:
+#   SNOWFLAKE_ACCOUNT       ORG-ACCOUNT identifier
+#   SNOWFLAKE_USER          Snowflake user
+#   SNOWFLAKE_DB            Target database
+#   SNOWFLAKE_PRIVATE_KEY   PEM-encoded RSA private key content
+#
+# Optional:
+#   SNOWFLAKE_ROLE           required, no default (must match a role granted to the user)
+#   SNOWFLAKE_SCHEMA         default: RAW
+#   SNOWFLAKE_BUILD_PARALLELISM  parquet build parallelism, default: 1
+#   SNOWFLAKE_CHUNK_SIZE         parquet chunk size, default: 50000
+#   SNOWFLAKE_MAX_IN_FLIGHT      concurrent channels, default: 4
+
+vars:
+  RPCN: "go run ../../../../../../cmd/redpanda-connect/main.go"
+  BATCH: '{{.BATCH | default "1000"}}'
+  PERIOD: '{{.PERIOD | default "5s"}}'
+  MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "4"}}'
+  PARALLELISM: '{{.PARALLELISM | default "1"}}'
+  CHUNK_SIZE: '{{.CHUNK_SIZE | default "50000"}}'
+  COUNT: '{{.COUNT | default "2000000"}}'
+
+tasks:
+  bench:run:
+    desc: |
+      Run Snowpipe Streaming write benchmark.
+      Params: BATCH (default 1000), PERIOD (default 5s), MAX_IN_FLIGHT (default 4),
+              PARALLELISM (default 1), CHUNK_SIZE (default 50000), COUNT (default 0, unlimited)
+      Set COUNT to a fixed number to stop after that many messages and print a total summary.
+      Example: task bench:run BATCH=5000 PARALLELISM=4 COUNT=1000000
+    cmds:
+      - |
+        {{.RPCN}} run \
+          --set "input.generate.count={{.COUNT}}" \
+          --set "output.snowflake_streaming.batching.count={{.BATCH}}" \
+          --set "output.snowflake_streaming.batching.period={{.PERIOD}}" \
+          --set "output.snowflake_streaming.max_in_flight={{.MAX_IN_FLIGHT}}" \
+          --set "output.snowflake_streaming.build_options.parallelism={{.PARALLELISM}}" \
+          --set "output.snowflake_streaming.build_options.chunk_size={{.CHUNK_SIZE}}" \
+          ./benchmark_config.yaml
+
+  bench:matrix:
+    desc: |
+      Sweep one parameter at a time (others held at default), each run stopping after
+      COUNT messages and printing a total summary (no Ctrl-C needed).
+      Params: COUNT (default 2000000), BATCHES (default "1000 2000 4000 8000 16000 32000 64000"),
+              PARALLELS (default "1 2 3 4 5 6 7 8"), MAX_IN_FLIGHTS (default "1 2 4 8 16 32 64"),
+              CHUNK_SIZES (default "6250 12500 25000 50000 100000 200000 400000")
+      Example: task bench:matrix COUNT=1000000 PARALLELS="1 2 4 8"
+    vars:
+      COUNT: '{{.COUNT | default "2000000"}}'
+      BATCHES: '{{.BATCHES | default "1000 2000 4000 8000 16000 32000 64000"}}'
+      PARALLELS: '{{.PARALLELS | default "1 2 3 4 5 6 7 8"}}'
+      MAX_IN_FLIGHTS: '{{.MAX_IN_FLIGHTS | default "1 2 4 8 16 32 64"}}'
+      CHUNK_SIZES: '{{.CHUNK_SIZES | default "6250 12500 25000 50000 100000 200000 400000"}}'
+      DEFAULT_BATCH: '{{.DEFAULT_BATCH | default "1000"}}'
+      DEFAULT_PARALLELISM: '{{.DEFAULT_PARALLELISM | default "1"}}'
+      DEFAULT_MAX_IN_FLIGHT: '{{.DEFAULT_MAX_IN_FLIGHT | default "4"}}'
+      DEFAULT_CHUNK_SIZE: '{{.DEFAULT_CHUNK_SIZE | default "50000"}}'
+    cmds:
+      - |
+        header() {
+          printf "%-8s %-12s %-14s %-11s %-15s %-15s\n" "BATCH" "PARALLELISM" "MAX_IN_FLIGHT" "CHUNK_SIZE" "MSG/SEC" "KB/SEC"
+        }
+
+        run_bench() {
+          local batch="$1" parallelism="$2" max_in_flight="$3" chunk_size="$4" count="$5"
+          local out
+          out=$(task bench:run BATCH="$batch" PARALLELISM="$parallelism" MAX_IN_FLIGHT="$max_in_flight" CHUNK_SIZE="$chunk_size" COUNT="$count" 2>&1) || true
+          local line
+          line=$(echo "$out" | grep "total stats" | tail -1)
+          if [ -z "$line" ]; then
+            printf "%-8s %-12s %-14s %-11s %-15s %-15s   (FAILED, see log below)\n" "$batch" "$parallelism" "$max_in_flight" "$chunk_size" "-" "-"
+            echo "$out" | tail -20
+            return
+          fi
+          local msgs bytes msgs_fmt kb
+          msgs=$(echo "$line" | grep -oP 'msg/sec=\K[0-9.eE+-]+')
+          bytes=$(echo "$line" | grep -oP 'bytes/sec=\K[0-9.eE+-]+')
+          msgs_fmt=$(awk "BEGIN{printf \"%.1f\", $msgs}")
+          kb=$(awk "BEGIN{printf \"%.1f\", $bytes/1000}")
+          printf "%-8s %-12s %-14s %-11s %-15s %-15s\n" "$batch" "$parallelism" "$max_in_flight" "$chunk_size" "$msgs_fmt" "$kb"
+        }
+
+        printf "\n### sweeping BATCH (others at default) ###\n"
+        header
+        for batch in {{.BATCHES}}; do
+          run_bench "$batch" "{{.DEFAULT_PARALLELISM}}" "{{.DEFAULT_MAX_IN_FLIGHT}}" "{{.DEFAULT_CHUNK_SIZE}}" "{{.COUNT}}"
+        done
+
+        printf "\n### sweeping PARALLELISM (others at default) ###\n"
+        header
+        for p in {{.PARALLELS}}; do
+          run_bench "{{.DEFAULT_BATCH}}" "$p" "{{.DEFAULT_MAX_IN_FLIGHT}}" "{{.DEFAULT_CHUNK_SIZE}}" "{{.COUNT}}"
+        done
+
+        printf "\n### sweeping MAX_IN_FLIGHT (others at default) ###\n"
+        header
+        for m in {{.MAX_IN_FLIGHTS}}; do
+          run_bench "{{.DEFAULT_BATCH}}" "{{.DEFAULT_PARALLELISM}}" "$m" "{{.DEFAULT_CHUNK_SIZE}}" "{{.COUNT}}"
+        done
+
+        printf "\n### sweeping CHUNK_SIZE (others at default) ###\n"
+        header
+        for c in {{.CHUNK_SIZES}}; do
+          run_bench "{{.DEFAULT_BATCH}}" "{{.DEFAULT_PARALLELISM}}" "{{.DEFAULT_MAX_IN_FLIGHT}}" "$c" "{{.COUNT}}"
+        done
+
+  bench:matrix:full:
+    desc: |
+      Full cross-product sweep of BATCH x PARALLELISM x MAX_IN_FLIGHT x CHUNK_SIZE
+      (unlike bench:matrix, which sweeps one dimension at a time holding the rest at
+      default). Every combination runs COUNT messages and prints one summary line.
+      Defaults are a small grid, not bench:matrix's full default lists -- the full
+      cross product of those (7x8x7x7 = 2,744 combos) is impractical against live
+      Snowflake. Pass your own space-separated lists to go bigger.
+      Params: COUNT (default 2000000), BATCHES (default "1000 8000 64000"),
+              PARALLELS (default "1 4"), MAX_IN_FLIGHTS (default "4 16"),
+              CHUNK_SIZES (default "50000")
+      Example: task bench:matrix:full BATCHES="1000 8000 64000" MAX_IN_FLIGHTS="4 16 32"
+    vars:
+      COUNT: '{{.COUNT | default "2000000"}}'
+      BATCHES: '{{.BATCHES | default "1000 8000 64000"}}'
+      PARALLELS: '{{.PARALLELS | default "1 4"}}'
+      MAX_IN_FLIGHTS: '{{.MAX_IN_FLIGHTS | default "4 16"}}'
+      CHUNK_SIZES: '{{.CHUNK_SIZES | default "50000"}}'
+    cmds:
+      - |
+        header() {
+          printf "%-8s %-12s %-14s %-11s %-15s %-15s\n" "BATCH" "PARALLELISM" "MAX_IN_FLIGHT" "CHUNK_SIZE" "MSG/SEC" "KB/SEC"
+        }
+
+        run_bench() {
+          local batch="$1" parallelism="$2" max_in_flight="$3" chunk_size="$4" count="$5"
+          local out
+          out=$(task bench:run BATCH="$batch" PARALLELISM="$parallelism" MAX_IN_FLIGHT="$max_in_flight" CHUNK_SIZE="$chunk_size" COUNT="$count" 2>&1) || true
+          local line
+          line=$(echo "$out" | grep "total stats" | tail -1)
+          if [ -z "$line" ]; then
+            printf "%-8s %-12s %-14s %-11s %-15s %-15s   (FAILED, see log below)\n" "$batch" "$parallelism" "$max_in_flight" "$chunk_size" "-" "-"
+            echo "$out" | tail -20
+            return
+          fi
+          local msgs bytes msgs_fmt kb
+          msgs=$(echo "$line" | grep -oP 'msg/sec=\K[0-9.eE+-]+')
+          bytes=$(echo "$line" | grep -oP 'bytes/sec=\K[0-9.eE+-]+')
+          msgs_fmt=$(awk "BEGIN{printf \"%.1f\", $msgs}")
+          kb=$(awk "BEGIN{printf \"%.1f\", $bytes/1000}")
+          printf "%-8s %-12s %-14s %-11s %-15s %-15s\n" "$batch" "$parallelism" "$max_in_flight" "$chunk_size" "$msgs_fmt" "$kb"
+        }
+
+        printf "\n### full cross product: BATCH x PARALLELISM x MAX_IN_FLIGHT x CHUNK_SIZE ###\n"
+        header
+        for batch in {{.BATCHES}}; do
+          for p in {{.PARALLELS}}; do
+            for m in {{.MAX_IN_FLIGHTS}}; do
+              for c in {{.CHUNK_SIZES}}; do
+                run_bench "$batch" "$p" "$m" "$c" "{{.COUNT}}"
+              done
+            done
+          done
+        done
+
+  bench:truncate:
+    desc: Truncate BENCH_EVENTS table (requires snowsql in PATH)
+    cmds:
+      - snowsql -a "$SNOWFLAKE_ACCOUNT" -u "$SNOWFLAKE_USER" ${SNOWFLAKE_ROLE:+-r "$SNOWFLAKE_ROLE"} -d "$SNOWFLAKE_DB" -s "${SNOWFLAKE_SCHEMA:-RAW}" ${SNOWFLAKE_PRIVATE_KEY_PATH:+--private-key-path "$SNOWFLAKE_PRIVATE_KEY_PATH"} -q "TRUNCATE TABLE BENCH_EVENTS;"
