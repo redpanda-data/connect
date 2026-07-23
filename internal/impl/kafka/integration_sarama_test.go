@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ import (
 func TestIntegrationSaramaCheckpointOneLockUp(t *testing.T) {
 	integration.CheckSkipExact(t)
 
-	brokerAddr, kafkaPortStr := startRedpanda(t)
+	brokerAddr, kafkaPortStr := sharedRedpanda(t)
 	require.Eventually(t, func() bool {
 		return createKafkaTopic(t.Context(), brokerAddr, "wcotesttopic", 20) == nil
 	}, time.Minute, time.Second)
@@ -161,7 +161,7 @@ kafka:
 func TestIntegrationSaramaRedpanda(t *testing.T) {
 	integration.CheckSkip(t)
 
-	brokerAddr, kafkaPortStr := startRedpanda(t)
+	brokerAddr, kafkaPortStr := sharedRedpanda(t)
 
 	require.Eventually(t, func() bool {
 		return createKafkaTopic(t.Context(), brokerAddr, "pls_ignore_just_testing_connection", 1) == nil
@@ -379,7 +379,7 @@ input:
 func TestIntegrationSaramaOutputFixedTimestamp(t *testing.T) {
 	integration.CheckSkip(t)
 
-	brokerAddr, kafkaPortStr := startRedpanda(t)
+	brokerAddr, kafkaPortStr := sharedRedpanda(t)
 
 	require.Eventually(t, func() bool {
 		return createKafkaTopic(t.Context(), brokerAddr, "testingconnection", 1) == nil
