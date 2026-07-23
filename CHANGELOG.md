@@ -3,6 +3,17 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.102.0 - 2026-07-23
+
+### Added
+
+- aws_dynamodb_partiql: Added `use_batch` field (default true) to enable single ExecuteStatement calls for PartiQL SELECT queries against Global Secondary Indexes, since BatchExecuteStatement does not support GSI queries. ([@squiidz](https://github.com/squiidz), [#4588](https://github.com/redpanda-data/connect/pull/4588))
+- migrator: Support ability to set headers via config. ([@josephwoodward](https://github.com/josephwoodward), [#4615](https://github.com/redpanda-data/connect/pull/4615))
+
+### Fixed
+
+- iceberg: Fixed table_location prefix handling to work correctly both with and without trailing slashes, resolving CreateTable failures on schema-evolved tables. ([@david-yu](https://github.com/david-yu), [#4604](https://github.com/redpanda-data/connect/pull/4604))
+
 ## 4.101.0 - 2026-07-17
 
 ### Added
