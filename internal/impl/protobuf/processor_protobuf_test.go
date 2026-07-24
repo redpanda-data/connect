@@ -51,7 +51,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c" //nolint:staticcheck
+	"golang.org/x/net/http2/h2c"
 	"google.golang.org/protobuf/types/descriptorpb"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -463,7 +463,7 @@ func runMockBSRServer(t *testing.T, importPath string) string {
 	fileDescriptorSetServer := &fileDescriptorSetServer{fileDescriptorSet: files}
 	mux.Handle(reflectv1beta1connect.NewFileDescriptorSetServiceHandler(fileDescriptorSetServer))
 	go func() {
-		if err := http.Serve(listener, h2c.NewHandler(mux, &http2.Server{})); err != nil && !errors.Is(err, http.ErrServerClosed) { //nolint:staticcheck
+		if err := http.Serve(listener, h2c.NewHandler(mux, &http2.Server{})); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			require.NoError(t, err)
 		}
 	}()

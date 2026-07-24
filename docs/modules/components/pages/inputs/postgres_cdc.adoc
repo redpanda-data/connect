@@ -170,7 +170,13 @@ snapshot_batch_size: 10000
 
 === `schema`
 
-The PostgreSQL schema from which to replicate data.
+The PostgreSQL schema to replicate data from. Accepts an exact schema name or a glob pattern using `*` as a wildcard to match multiple schemas.
+
+When a pattern is used, all schemas whose names match the pattern are replicated using a single replication slot and publication. This is useful for multi-tenant databases where each tenant has its own schema (e.g. `tenant_*` matches `tenant_foo`, `tenant_bar`, etc.).
+
+Double-quoted identifiers are treated as exact names and do not support wildcards.
+
+Schema pattern matching runs once at pipeline startup. Schemas created after the pipeline starts will not be picked up until the pipeline is restarted.
 
 
 *Type*: `string`
@@ -182,11 +188,17 @@ The PostgreSQL schema from which to replicate data.
 schema: public
 
 schema: '"MyCaseSensitiveSchemaNeedingQuotes"'
+
+schema: tenant_*
+
+schema: '*'
 ```
 
 === `tables`
 
 A list of table names to include in the logical replication. Each table should be specified as a separate item.
+
+When `schema` is a glob pattern, this list is resolved against each matched schema independently: a table missing from a given schema is skipped (with a warning logged) rather than failing replication for every matched schema.
 
 
 *Type*: `array`

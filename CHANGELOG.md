@@ -48,6 +48,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- postgres_cdc: Postgres CDC now accepts a glob pattern for the `schema` field (e.g. `tenant_*`), replicating all matching schemas through a single replication slot. Useful for multi-tenant databases where each tenant has its own schema. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4589](https://github.com/redpanda-data/connect/pull/4589))
 - aws_dynamodb_cdc: DynamoDB CDC now supports an optional checkpoint_namespace field, allowing multiple independent pipelines to share a single checkpoint table without overwriting each other's checkpoints. ([@squiidz](https://github.com/squiidz), [#4602](https://github.com/redpanda-data/connect/pull/4602))
 
 ### Fixed

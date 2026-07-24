@@ -1,0 +1,41 @@
+input:
+  postgres_cdc:
+    dsn: ${PG_DSN:postgres://postgres:postgres@localhost:5433/testdb?sslmode=disable}
+    slot_name: multi_schema_test_slot
+    stream_snapshot: true
+    # Glob pattern: replicates both tenant_a and tenant_b via one slot.
+    schema: tenant_*
+    tables:
+      - events
+
+pipeline:
+  processors:
+    # Annotate each message with all new metadata fields so the output clearly
+    # shows what the feature delivers.
+    - mapping: |
+        let op        = @operation
+        let tbl       = @table
+        let schema    = @pg_schema
+        let lsn       = @lsn
+        let ts_ms     = @commit_ts_ms
+        let before    = @before
+
+        root = {
+          "operation":    $op,
+          "pg_schema":    $schema,
+          "table":        $tbl,
+          "payload":      this,
+          "lsn":          if $lsn != null { $lsn } else { null },
+          "commit_ts_ms": if $ts_ms != null { $ts_ms } else { null },
+          "before":       if $before != null { $before.string().parse_json() } else { null },
+        }
+
+output:
+  stdout:
+    codec: lines
+
+logger:
+  level: INFO
+
+metrics:
+  none: {}
