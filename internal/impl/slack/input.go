@@ -18,10 +18,12 @@ import (
 	"github.com/slack-go/slack/socketmode"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 func init() {
-	service.MustRegisterInput("slack", inputSpec(), newInput)
+	license.MustRegisterEnterpriseInput("slack", inputSpec(), newInput)
 }
 
 const (

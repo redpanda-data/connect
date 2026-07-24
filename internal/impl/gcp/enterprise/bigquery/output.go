@@ -87,6 +87,9 @@ func init() {
 				return
 			}
 			out, err = bigQueryWriteAPIOutputFromConfig(conf, mgr)
+			if err == nil {
+				out = license.WrapBatchOutput(mgr, "gcp_bigquery_write_api", out)
+			}
 			return
 		})
 }

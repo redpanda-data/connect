@@ -159,10 +159,6 @@ type grpcOTLPInput struct {
 
 // GRPCInputFromParsed creates an OTLP gRPC input from a parsed config.
 func GRPCInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
-
 	var (
 		conf grpcInputConfig
 		err  error
@@ -239,7 +235,7 @@ func GRPCInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 }
 
 func init() {
-	service.MustRegisterBatchInput("otlp_grpc", GRPCInputSpec(), GRPCInputFromParsed)
+	license.MustRegisterEnterpriseBatchInput("otlp_grpc", GRPCInputSpec(), GRPCInputFromParsed)
 }
 
 //------------------------------------------------------------------------------

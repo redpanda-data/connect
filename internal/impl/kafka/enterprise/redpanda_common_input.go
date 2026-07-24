@@ -130,6 +130,6 @@ func init() {
 				return nil, err
 			}
 
-			return rdr, nil
+			return license.WrapBatchInput(mgr, "redpanda_common", rdr), nil
 		})
 }

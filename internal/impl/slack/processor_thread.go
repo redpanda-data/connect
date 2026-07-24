@@ -16,10 +16,18 @@ import (
 	"github.com/slack-go/slack"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 func init() {
-	service.MustRegisterProcessor("slack_thread", threadProcessorSpec(), newThreadProcessor)
+	service.MustRegisterProcessor("slack_thread", threadProcessorSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.Processor, error) {
+			if err := license.CheckRunningEnterprise(res); err != nil {
+				return nil, err
+			}
+			return newThreadProcessor(conf, res)
+		})
 }
 
 const (

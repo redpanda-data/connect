@@ -189,10 +189,6 @@ type httpOTLPInput struct {
 
 // HTTPInputFromParsed creates an OTLP HTTP input from a parsed config.
 func HTTPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
-
 	var (
 		conf httpInputConfig
 		err  error
@@ -276,7 +272,7 @@ func HTTPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 }
 
 func init() {
-	service.MustRegisterBatchInput("otlp_http", HTTPInputSpec(), HTTPInputFromParsed)
+	license.MustRegisterEnterpriseBatchInput("otlp_http", HTTPInputSpec(), HTTPInputFromParsed)
 }
 
 //------------------------------------------------------------------------------

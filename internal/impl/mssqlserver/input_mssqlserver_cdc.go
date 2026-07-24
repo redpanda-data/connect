@@ -46,7 +46,7 @@ const (
 )
 
 func init() {
-	service.MustRegisterBatchInput("microsoft_sql_server_cdc", msSQLServerStreamConfigSpec, newMSSQLServerCDCInput)
+	license.MustRegisterEnterpriseBatchInput("microsoft_sql_server_cdc", msSQLServerStreamConfigSpec, newMSSQLServerCDCInput)
 }
 
 var msSQLServerStreamConfigSpec = service.NewConfigSpec().
@@ -174,9 +174,6 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 		cpCacheTableName             string
 	)
 
-	if err := license.CheckRunningEnterprise(resources); err != nil {
-		return nil, err
-	}
 	if connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
 		return nil, err
 	}
