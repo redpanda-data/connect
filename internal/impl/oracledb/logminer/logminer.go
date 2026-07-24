@@ -1127,7 +1127,11 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	if err != nil {
 		return fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
-	lm.log.Debugf("Collected %d redo log file(s) for LogMiner", len(logFiles))
+	types := make([]string, len(logFiles))
+	for i, f := range logFiles {
+		types[i] = f.Type
+	}
+	lm.log.Debugf("Collected %d redo log file(s) for LogMiner: %v", len(logFiles), types)
 
 	if lm.sessionMgr.logFilesChanged(logFiles) {
 		// Log files have changed (first start or log switch) — full reload required.
