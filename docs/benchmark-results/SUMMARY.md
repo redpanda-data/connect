@@ -26,7 +26,7 @@ Last updated: 2026-03-16
 <!-- Copyright 2025 Redpanda Data, Inc. -->
 ## AWS Bench Results
 
-Last refreshed: 2026-07-09
+Last refreshed: 2026-07-17
 
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
@@ -34,6 +34,7 @@ Last refreshed: 2026-07-09
 | iceberg / orders-sink ⚠ |         4 |          135 |      70 | +65 MB/s (+48%)    | 2026-07-09  |
 | iceberg / orders-sink-recipe-b |         8 |          128 |      75 | +53 MB/s (+42%)    | 2026-07-09  |
 | iceberg / orders-sink-smoke |     —      |         —      |      —    |                   —  | 2026-07-08  |
+| mongodb / orders-cdc  |         2 |           33 |      17 | +16 MB/s (+50%)    | 2026-07-17  |
 | mysql / orders-cdc ⚠  |         8 |          111 |      39 | +72 MB/s (+65%)    | 2026-06-02  |
 | oracle / orders-cdc   |         1 |           13 |      —    |                   —  | 2026-06-22  |
 | postgres / orders-cdc ⚠ |         4 |          102 |      17 | +85 MB/s (+83%)    | 2026-06-01  |
