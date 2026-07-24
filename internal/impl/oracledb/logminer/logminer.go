@@ -28,7 +28,7 @@ import (
 var (
 	// captures the time between DB commit and publish
 	publishLatencyMetric = "oracledb_cdc_publish_lag_ns"
-	// captures the time from query execution to the first row being returned by LogMiner
+	// captures the time from query execution to zero or more rows being returned by LogMiner
 	timeToFirstRowMetric = "oracledb_cdc_logminer_time_to_first_row_ns"
 	// https://docs.oracle.com/en/error-help/db/ora-01291/
 	errCodeMissingLogFile = 1291
@@ -926,7 +926,9 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	)
 	for rows.Next() {
 		if firstRow {
-			lm.timeToFirstRowMetric.Timing(time.Since(queryStart).Nanoseconds())
+			elapsed := time.Since(queryStart)
+			lm.timeToFirstRowMetric.Timing(elapsed.Nanoseconds())
+			lm.log.Debugf("LogMiner query returned first row after %s (scn=%d to %d)", elapsed, startSCN, endSCN)
 			firstRow = false
 		}
 		event := &sqlredo.RedoEvent{}
@@ -981,6 +983,13 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 
 	if err := rows.Err(); err != nil {
 		return err
+	}
+
+	// capture timings if 0 rows
+	if firstRow {
+		elapsed := time.Since(queryStart)
+		lm.timeToFirstRowMetric.Timing(elapsed.Nanoseconds())
+		lm.log.Debugf("LogMiner query returned no rows after %s (scn=%d to %d)", elapsed, startSCN, endSCN)
 	}
 
 	// Flush any incomplete pending event (shouldn't happen in practice).
@@ -1118,7 +1127,11 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	if err != nil {
 		return fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
-	lm.log.Debugf("Collected %d redo log file(s) for LogMiner", len(logFiles))
+	types := make([]string, len(logFiles))
+	for i, f := range logFiles {
+		types[i] = f.Type
+	}
+	lm.log.Debugf("Collected %d redo log file(s) for LogMiner: %v", len(logFiles), types)
 
 	if lm.sessionMgr.logFilesChanged(logFiles) {
 		// Log files have changed (first start or log switch) — full reload required.
