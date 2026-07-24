@@ -45,7 +45,7 @@ func (s *ControlSignal) IsSnapshot() bool {
 // ControlSignaller does not implement Listen itself, since it has no way to
 // know the shape of a connector's replication messages - connectors must
 // embed it and provide their own Listen (see
-// internal/impl/postgresql/signaller.go for an example).
+// internal/impl/postgresql/control_signal.go for an example).
 type Signaller interface {
 	Listen(ctx context.Context, event any) (*ControlSignal, error)
 }

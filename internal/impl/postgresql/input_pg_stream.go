@@ -459,7 +459,7 @@ type pgStreamInput struct {
 
 	// signalQueue hands a detected signal off to runSignalWorker. Capacity 1
 	// is enough: processStream pauses WAL forwarding before enqueueing (see
-	// PauseWALStreaming), so it can't detect another signal until the
+	// PauseStreaming), so it can't detect another signal until the
 	// current one's re-snapshot completes and resumes it.
 	signalQueue chan *replication.ControlSignal
 
@@ -613,6 +613,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				}
 
 				if sig != nil {
+					batchMsg.MetaSet("operation", string(pglogicalstream.ControlSignalOpType))
 					p.handleControlSignal(ctx, pgStream, cp, batcher, sig, batchMsg)
 					continue
 				}
@@ -792,7 +793,7 @@ func (p *pgStreamInput) handleControlSignal(
 }
 
 // runSignalWorker runs each detected signal's re-snapshot on pgStream's
-// live connection. Must run on its own goroutine: RunForcedSnapshot sends
+// live connection. Must run on its own goroutine: RunSnapshot sends
 // scanned rows and its completion sentinel on the same channel processStream
 // drains, so processStream must stay free to keep receiving from it.
 func (p *pgStreamInput) runSignalWorker(pgStream *pglogicalstream.Stream) {

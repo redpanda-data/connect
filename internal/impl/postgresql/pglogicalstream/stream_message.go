@@ -41,6 +41,8 @@ const (
 	// replication slot until every snapshot message has been acknowledged
 	// downstream; it is never forwarded downstream.
 	SnapshotCompleteOpType OpType = "snapshot_complete"
+	// ControlSignalOpType indicates the event is a control signal from the configured signalling table.
+	ControlSignalOpType OpType = "control_signal"
 )
 
 // StreamMessage represents a single change from the database

@@ -51,12 +51,12 @@ type Stream struct {
 	// snapshotAcked is the completion signal for the snapshot round in
 	// flight, if any. beginSnapshotAck creates it before that round's
 	// sentinel is sent; MarkSnapshotAcknowledged closes it once acked
-	// downstream. A fresh channel per round lets RunForcedSnapshot run
+	// downstream. A fresh channel per round lets RunSnapshot run
 	// repeatedly over the Stream's life.
 	snapshotAckMu sync.Mutex
 	snapshotAcked chan struct{}
 
-	// walPause tracks WAL forwarding pause state - see PauseWALStreaming.
+	// walPause tracks WAL forwarding pause state - see PauseStreaming.
 	walPause walPause
 
 	includeTxnMarkers       bool
@@ -859,7 +859,7 @@ func (s *Stream) MarkSnapshotAcknowledged() {
 }
 
 // walPause guards whether WAL forwarding is paused and the satellite
-// keepalive goroutine running for the duration - see PauseWALStreaming.
+// keepalive goroutine running for the duration - see PauseStreaming.
 type walPause struct {
 	sync.Mutex
 	ch     chan struct{}
@@ -894,7 +894,7 @@ func (p *walPause) waitChan() chan struct{} {
 }
 
 // PauseStreaming holds back forwarding of new WAL messages until
-// ResumeWALStreaming is called: streamMessages stops receiving from Postgres
+// ResumeStreaming is called: streamMessages stops receiving from Postgres
 // entirely. A satellite goroutine sends standby status updates in the
 // meantime, so Postgres doesn't hit wal_sender_timeout. Call synchronously
 // before handing a signal off to run its re-snapshot.
@@ -919,7 +919,7 @@ func (s *Stream) PauseStreaming() {
 	}()
 }
 
-// ResumeStreaming releases a pause started by PauseWALStreaming, waiting
+// ResumeStreaming releases a pause started by PauseStreaming, waiting
 // for the satellite keepalive goroutine to exit first so it never writes to
 // pgConn concurrently with streamMessages resuming.
 func (s *Stream) ResumeStreaming() {
@@ -935,7 +935,7 @@ func (s *Stream) ResumeStreaming() {
 	}
 }
 
-// waitIfWALPaused blocks until any pause started by PauseWALStreaming
+// waitIfWALPaused blocks until any pause started by PauseStreaming
 // resumes, or ctx is done. Returns immediately if nothing is paused.
 func (s *Stream) waitIfWALPaused(ctx context.Context) error {
 	ch := s.walPause.waitChan()
@@ -956,7 +956,7 @@ func (s *Stream) waitIfWALPaused(ctx context.Context) error {
 // like ordinary WAL changes, terminated by the SnapshotCompleteOpType
 // sentinel.
 //
-// Callers must call PauseWALStreaming themselves before handing off to this
+// Callers must call PauseStreaming themselves before handing off to this
 // method (see its doc for why) - this method resumes it via defer.
 //
 // Callers must keep draining Messages() from a different goroutine while
@@ -1008,7 +1008,7 @@ func (s *Stream) Errors() chan error {
 }
 
 // getPrimaryKeyColumn queries through snapshotter's own connection pool, not
-// s.pgConn: RunForcedSnapshot runs alongside an active streamMessages loop
+// s.pgConn: RunSnapshot runs alongside an active streamMessages loop
 // that also uses s.pgConn, so this can't safely share it.
 func (*Stream) getPrimaryKeyColumn(ctx context.Context, snapshotter *snapshotter, table TableFQN) ([]string, error) {
 	/// Query to get all primary key columns in their correct order
