@@ -1,0 +1,43 @@
+input:
+  kafka_franz:
+    seed_brokers:
+      - localhost:9092
+    topics: [ ${KAFKA_TOPIC:rpcns-hana-bench-write} ]
+    consumer_group: ${KAFKA_CONSUMER_GROUP:rpcns-hana-write-bench}
+    start_from_oldest: true
+
+output:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+  sql_insert:
+    driver: hana
+    dsn: ${HANA_DSN}
+    table: '"${HANA_SCHEMA}"."BENCH_WRITES"'
+    columns: [ MSG_ID, USER_ID, PRODUCT_ID, QUANTITY, PRICE, STATUS, NOTES ]
+    args_mapping: |
+      root = [
+        this.msg_id,
+        this.user_id,
+        this.product_id,
+        this.quantity,
+        this.price,
+        this.status,
+        this.notes
+      ]
+    upsert: true
+    max_in_flight: ${BENCH_MAX_IN_FLIGHT:8}
+    batching:
+      count: ${BENCH_BATCH_COUNT:10000}
+      period: 1s
+
+shutdown_timeout: 10s
+
+logger:
+  level: INFO
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true

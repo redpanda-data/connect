@@ -70,6 +70,7 @@ output:
     prefix: "" # No default (optional)
     suffix: ON CONFLICT (name) DO NOTHING # No default (optional)
     options: [] # No default (optional)
+    upsert: false
     max_in_flight: 64
     init_files: [] # No default (optional)
     init_statement: | # No default (optional)
@@ -146,6 +147,7 @@ Options:
 , `gocosmos`
 , `spanner`
 , `databricks`
+, `hana`
 .
 
 === `dsn`
@@ -193,6 +195,9 @@ The following is a list of supported drivers, their placeholder style, and their
 
 | `databricks` 
 | `token:<access-token>@<server-hostname>:<port>/<http-path>` 
+
+| `hana` 
+| `hdb://[user[:password]@]host[:port][?param1=value1&...]` 
 |===
 
 Please note that the `postgres` and `pgx` drivers enforce SSL by default, you can override this with the parameter `sslmode=disable` if required.
@@ -304,6 +309,15 @@ options:
   - DELAYED
   - IGNORE
 ```
+
+=== `upsert`
+
+When true and driver is `hana`, emit `UPSERT … WITH PRIMARY KEY` instead of `INSERT INTO`. The table must have a primary key; matching rows are updated rather than inserted, preventing duplicates on retry.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `max_in_flight`
 

@@ -18,9 +18,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/Masterminds/squirrel"
+	hdbdriver "github.com/SAP/go-hdb/driver"
 
 	"github.com/Jeffail/shutdown"
 
@@ -60,6 +63,10 @@ func sqlInsertOutputConfig() *service.ConfigSpec {
 			Optional().
 			Advanced().
 			Example([]string{"DELAYED", "IGNORE"})).
+		Field(service.NewBoolField("upsert").
+			Description("When true and driver is `hana`, emit `UPSERT … WITH PRIMARY KEY` instead of `INSERT INTO`. The table must have a primary key; matching rows are updated rather than inserted, preventing duplicates on retry.").
+			Default(false).
+			Advanced()).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of inserts to run in parallel.").
 			Default(64))
@@ -118,6 +125,7 @@ type sqlInsertOutput struct {
 	dbMut   sync.RWMutex
 
 	useTxStmt     bool
+	hana          *hanaWriter // non-nil when driver == "hana"
 	argsMapping   *bloblang.Executor
 	argsConverter argsConverter
 
@@ -213,6 +221,14 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		s.builder = s.builder.Options(options...)
 	}
 
+	if s.driver == "hana" {
+		upsert, err := conf.FieldBool("upsert")
+		if err != nil {
+			return nil, err
+		}
+		s.hana = newHANAWriter(tableStr, columns, upsert)
+	}
+
 	if s.connSettings, err = connSettingsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
@@ -228,8 +244,14 @@ func (s *sqlInsertOutput) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	if s.db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
-		return err
+	if s.hana != nil {
+		if s.db, err = openHANADB(s.dsn); err != nil {
+			return err
+		}
+	} else {
+		if s.db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+			return err
+		}
 	}
 
 	s.connSettings.apply(ctx, s.db, s.logger)
@@ -260,6 +282,10 @@ func (s *sqlInsertOutput) Connect(ctx context.Context) error {
 func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	s.dbMut.RLock()
 	defer s.dbMut.RUnlock()
+
+	if s.hana != nil {
+		return s.hana.writeBatch(ctx, s.db, batch, s.argsMapping)
+	}
 
 	insertBuilder := s.builder
 
@@ -335,4 +361,111 @@ func (s *sqlInsertOutput) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 	return nil
+}
+
+//------------------------------------------------------------------------------
+// SAP HANA bulk insert/upsert support.
+//
+// go-hdb (github.com/SAP/go-hdb) is used directly instead of the generic
+// sql.Open path because HANA's MT_EXECUTE bulk protocol needs driver-specific
+// connector options (BulkSize) that database/sql's generic interface can't
+// express. Only active when driver == "hana"; every other driver above is
+// unaffected.
+//------------------------------------------------------------------------------
+
+// hanaWriter holds state for go-hdb bulk-insert/upsert operations.
+// It is only created when driver == "hana".
+type hanaWriter struct {
+	execSQL string
+	mu      sync.Mutex
+}
+
+func newHANAWriter(table string, columns []string, upsert bool) *hanaWriter {
+	phs := make([]string, len(columns))
+	for i := range phs {
+		phs[i] = "?"
+	}
+	colList := strings.Join(columns, ", ")
+	phList := strings.Join(phs, ", ")
+	var execSQL string
+	if upsert {
+		execSQL = "UPSERT " + table + " (" + colList + ") VALUES (" + phList + ") WITH PRIMARY KEY"
+	} else {
+		execSQL = "INSERT INTO " + table + " (" + colList + ") VALUES (" + phList + ")"
+	}
+	return &hanaWriter{execSQL: execSQL}
+}
+
+// openHANADB opens a go-hdb connection tuned for bulk insert.
+//
+// We bypass sql.Open and use a DSN connector directly so we can set BulkSize
+// (guarantees one MT_EXECUTE per WriteBatch call) and restore the TCP timeout
+// that NewDSNConnector zeros when the DSN has no timeout= parameter.
+// MaxIdleConns=0 closes the connection after each batch, avoiding HANA
+// server-side post-commit state that can block the next MT_EXECUTE.
+func openHANADB(dsn string) (*sql.DB, error) {
+	ctr, err := hdbdriver.NewDSNConnector(dsn)
+	if err != nil {
+		return nil, err
+	}
+	ctr.SetTimeout(30 * time.Second)
+	ctr.SetBulkSize(100_000)
+	db := sql.OpenDB(ctr)
+	db.SetMaxIdleConns(0)
+	return db, nil
+}
+
+// writeBatch performs a go-hdb bulk insert/upsert for one benthos batch.
+//
+// mu serialises concurrent calls: concurrent MT_EXECUTE to the same table
+// causes HANA row-level lock contention. (*sql.Conn).ExecContext is used
+// instead of (*sql.DB).ExecContext to avoid the DB-level retry loop that
+// re-invokes the callback with idx already exhausted, silently writing 0 rows.
+func (h *hanaWriter) writeBatch(ctx context.Context, db *sql.DB, batch service.MessageBatch, argsMapping *bloblang.Executor) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	var argsExec *service.MessageBatchBloblangExecutor
+	if argsMapping != nil {
+		argsExec = batch.BloblangExecutor(argsMapping)
+	}
+	batchArgs := make([][]any, 0, len(batch))
+	for i := range batch {
+		if argsExec == nil {
+			break
+		}
+		resMsg, err := argsExec.Query(i)
+		if err != nil {
+			return err
+		}
+		iargs, err := resMsg.AsStructured()
+		if err != nil {
+			return err
+		}
+		args, ok := iargs.([]any)
+		if !ok {
+			return fmt.Errorf("mapping returned non-array result: %T", iargs)
+		}
+		batchArgs = append(batchArgs, args)
+	}
+
+	execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	conn, err := db.Conn(execCtx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	idx := 0
+	_, err = conn.ExecContext(execCtx, h.execSQL, func(args []any) error {
+		if idx >= len(batchArgs) {
+			return hdbdriver.ErrEndOfRows
+		}
+		copy(args, batchArgs[idx])
+		idx++
+		return nil
+	})
+	return err
 }

@@ -312,6 +312,8 @@ github.com/ProtonMail/go-crypto v1.4.1/go.mod h1:e1OaTyu5SYVrO9gKOEhTc+5UcXtTUa+
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMzGrKSKYe4AqU6PDYYpjk=
 github.com/RoaringBitmap/roaring/v2 v2.15.0 h1:gCbixa3UiG7g6WUZNVOfEEg2HTc1vR4OVdMkX8t1ZFc=
 github.com/RoaringBitmap/roaring/v2 v2.15.0/go.mod h1:eq4wdNXxtJIS/oikeCzdX1rBzek7ANzbth041hrU8Q4=
+github.com/SAP/go-hdb v1.16.8 h1:izRAvO1spNilhxSlYWTVrEkR6DCB8Jn7/8A0McN9Rhc=
+github.com/SAP/go-hdb v1.16.8/go.mod h1:5WEaZ//t+F8iogKaS49KiZLjDJeZLeaLWHsDaN64Htw=
 github.com/a2aproject/a2a-go v0.3.12 h1:l5Yd0UgZrZyEuiMRlj3ybiqxmqXvVhJ8bTyWB7ZlJ2o=
 github.com/a2aproject/a2a-go v0.3.12/go.mod h1:I7Cm+a1oL+UT6zMoP+roaRE5vdfUa1iQGVN8aSOuZ0I=
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d h1:licZJFw2RwpHMqeKTCYkitsPqHNxTmd4SNR5r94FGM8=
