@@ -58,22 +58,17 @@ func wireFormPostgresIdentifier(name string) (string, error) {
 }
 
 // Listen returns any actionable signal found; it does not call StoreSignal -
-// that's the caller's job once delivery is confirmed. Signal rows are always
+// that's the caller's job once delivery is confirmed. Signal rows should always be
 // forwarded downstream as normal messages regardless of the outcome here.
-//
-// Only validated execute-snapshot signals return non-nil, since only their
-// action (a re-snapshot) needs the caller to know about it at all. Everything
-// else - an unsupported type, or a validated no-op - returns (nil, nil) and is
-// acked immediately like any other message.
 func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.ControlSignal, error) {
 	msg, ok := signal.(pglogicalstream.StreamMessage)
 	if !ok {
 		return nil, nil
 	}
-	if msg.Schema != s.schema || msg.Table != s.tableName {
+	if msg.Operation != pglogicalstream.InsertOpType {
 		return nil, nil
 	}
-	if msg.Operation != pglogicalstream.InsertOpType {
+	if msg.Schema != s.schema || msg.Table != s.tableName {
 		return nil, nil
 	}
 
@@ -81,7 +76,6 @@ func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.
 	if !ok {
 		return nil, fmt.Errorf("expected map for %s message data, got %T", s.tableName, msg.Data)
 	}
-
 	dataStr, ok := row["data"].(string)
 	if !ok {
 		return nil, fmt.Errorf("expected string for %s.data column, got %T", s.tableName, row["data"])
@@ -89,36 +83,36 @@ func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.
 
 	var sig replication.ControlSignal
 	if err := json.Unmarshal([]byte(dataStr), &sig); err != nil {
-		return nil, fmt.Errorf("unmarshaling signal %s.data: %w", s.tableName, err)
+		return nil, fmt.Errorf("unmarshaling control signal %s.data: %w", s.tableName, err)
 	}
 
 	sig.ID = fmt.Sprintf("%v", row["id"])
 
 	evType, ok := row["type"].(string)
 	if !ok {
-		return nil, errors.New("parsing 'type' data")
+		return nil, errors.New("parsing control signals's 'type' data")
 	}
 	sig.Type = evType
 
 	log := s.Log.With("id", sig.ID, "type", sig.Type)
 
 	if !sig.IsSnapshot() {
-		log.Infof("Signal %q received but not a recognized action, forwarding as a regular message", sig.Type)
+		log.Warnf("Control signal %q received but not a recognized action, forwarding as a regular message", sig.Type)
 		return nil, nil
 	}
 
 	// Invalid or no-op signals are not returned as actionable, so streaming
 	// continues uninterrupted.
 	if len(sig.DataCollections) == 0 {
-		log.Warnf("Signal %q received but data-collections is empty — ignoring, streaming continues uninterrupted", sig.Type)
+		log.Warnf("Control signal %q received but data-collections is empty — ignoring, streaming continues uninterrupted", sig.Type)
 		return nil, nil
 	}
 	if len(tableNamesFromSchema(sig.DataCollections, s.schema)) == 0 {
-		log.Warnf("Signal %q received but data-collections %v matched no tables for schema %q — ignoring, streaming continues uninterrupted", sig.Type, sig.DataCollections, s.schema)
+		log.Warnf("Control signal %q received but data-collections %v matched no tables for schema %q — ignoring, streaming continues uninterrupted", sig.Type, sig.DataCollections, s.schema)
 		return nil, nil
 	}
 
-	log.Infof("Signal %q received: operation=%s lsn=%v", sig.Type, msg.Operation, msg.LSN)
+	log.Infof("Control signal %q received: operation=%s lsn=%v", sig.Type, msg.Operation, msg.LSN)
 
 	if msg.LSN != nil {
 		sig.LSN = []byte(*msg.LSN)
