@@ -44,9 +44,11 @@ type Config struct {
 	// The publication always tracks DBTables regardless of this field.
 	SnapshotTables []string
 	// ForceSnapshot forces a snapshot to run even when the replication slot already exists.
-	// When true and the slot exists, a snapshot is taken against current DB state using a
-	// REPEATABLE READ transaction rather than an EXPORT_SNAPSHOT. Used for signal-triggered
-	// re-snapshots that do not need to drop and recreate the slot.
+	// When true and the slot exists, a snapshot is taken against current DB state: one
+	// REPEATABLE READ transaction exports its snapshot via pg_export_snapshot(), and every
+	// reader transaction (there can be more than one, per MaxSnapshotWorkers) imports it via
+	// SET TRANSACTION SNAPSHOT, so all readers see the same consistent point in time. Used for
+	// signal-triggered re-snapshots that do not need to drop and recreate the slot.
 	ForceSnapshot bool
 	// SignalTableName is the name of the signal table. Rows inserted into this
 	// table are treated as control signals rather than data, and the table is

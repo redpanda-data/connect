@@ -10,6 +10,7 @@ package pglogicalstream
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"slices"
@@ -234,12 +235,49 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				}
 			}
 
-			snapshotter, err := newSnapshotter(config, config.DBRawDSN, config.Logger, "", config.MaxSnapshotWorkers)
+			// With more than one snapshot worker, each reader transaction would
+			// otherwise take its own independent REPEATABLE READ snapshot at its
+			// first query, rather than sharing one - letting concurrent writes
+			// produce a torn read across table ranges (a row seen twice, or not
+			// at all, or in inconsistent pre/post-update states across ranges).
+			// Exporting one snapshot here and importing it into every reader
+			// (via newSnapshotter's snapshotName, same mechanism the initial
+			// snapshot uses) keeps a forced re-snapshot consistent regardless of
+			// max_parallel_snapshot_tables. The exporting transaction must stay
+			// open for as long as readers may still import it, so it's only
+			// closed once processSnapshot below has finished with the pool.
+			exportConn, err := openPgConnectionFromConfig(config)
 			if err != nil {
+				return nil, fmt.Errorf("opening connection to export snapshot for re-snapshot: %w", err)
+			}
+			exportTxn, err := exportConn.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+			if err != nil {
+				exportConn.Close()
+				return nil, fmt.Errorf("starting snapshot export transaction for re-snapshot: %w", err)
+			}
+			var snapshotName string
+			if err := exportTxn.QueryRowContext(ctx, "SELECT pg_export_snapshot()").Scan(&snapshotName); err != nil {
+				_ = exportTxn.Rollback()
+				exportConn.Close()
+				return nil, fmt.Errorf("exporting snapshot for re-snapshot: %w", err)
+			}
+
+			snapshotter, err := newSnapshotter(config, config.DBRawDSN, config.Logger, snapshotName, config.MaxSnapshotWorkers)
+			if err != nil {
+				_ = exportTxn.Rollback()
+				exportConn.Close()
 				return nil, fmt.Errorf("creating snapshotter for re-snapshot: %w", err)
 			}
 			go func() {
 				defer stream.shutSig.TriggerHasStopped()
+				defer func() {
+					if err := exportTxn.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+						stream.logger.Warnf("failed to release snapshot export transaction: %v", err)
+					}
+					if err := exportConn.Close(); err != nil {
+						stream.logger.Warnf("failed to close snapshot export connection: %v", err)
+					}
+				}()
 
 				ctx, done := stream.shutSig.SoftStopCtx(context.Background())
 				defer done()
