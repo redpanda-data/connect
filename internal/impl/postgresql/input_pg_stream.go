@@ -230,13 +230,13 @@ pipeline:
 
 **` + "`trigger-snapshot`" + `** — triggers a re-snapshot of one or more tables without dropping the
 replication slot. The ` + "`data`" + ` column must contain a JSON object with a
-` + "`data-collections`" + ` key listing the fully-qualified tables (` + "`schema.table`" + `) to snapshot.
-` + "`data-collections`" + ` must be non-empty; a signal with an empty or absent ` + "`data-collections`" + `
+` + "`dataset`" + ` key listing the fully-qualified tables (` + "`schema.table`" + `) to snapshot.
+` + "`dataset`" + ` must be non-empty; a signal with an empty or absent ` + "`dataset`" + `
 is ignored and streaming continues uninterrupted.
 
 ` + "```sql" + `
 INSERT INTO dbo.rpcn_signal_table (type, data)
-VALUES ('trigger-snapshot', '{"data-collections": ["dbo.events", "dbo.products"]}');
+VALUES ('trigger-snapshot', '{"dataset": ["dbo.events", "dbo.products"]}');
 ` + "```").
 			Example("rpcn_signal_table").
 			Default("").
@@ -488,7 +488,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		p.streamConfig.ForceSnapshot = true
 		defer func() { p.streamConfig.ForceSnapshot = false }()
 
-		p.streamConfig.SnapshotTables = tableNamesFromSchema(signal.DataCollections, p.streamConfig.DBSchema)
+		p.streamConfig.SnapshotTables = tableNamesFromSchema(signal.Dataset, p.streamConfig.DBSchema)
 		defer func() { p.streamConfig.SnapshotTables = nil }()
 	} else {
 		p.streamConfig.StreamOldData = p.streamSnapshot

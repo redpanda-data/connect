@@ -192,7 +192,7 @@ postgres_cdc:
 	// dbo.events. With signal_table_name unset, it must be forwarded as an
 	// ordinary message rather than detected as a signal, and must not
 	// trigger a re-snapshot of dbo.events.
-	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"data-collections": ["dbo.events"]}')`)
+	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"dataset": ["dbo.events"]}')`)
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -330,7 +330,7 @@ postgres_cdc:
 		received = nil // reset to assert for this test
 		mu.Unlock()
 
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"data-collections": ["dbo.events"]}')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"dataset": ["dbo.events"]}')`)
 
 		// Wait for the re-snapshot to complete: the signal row is published as a
 		// normal message plus two snapshot reads of the events table.
@@ -348,7 +348,7 @@ postgres_cdc:
 		})
 		mu.Unlock()
 
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"data-collections": ["dbo.events"]}')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"dataset": ["dbo.events"]}')`)
 
 		// Wait for the second re-snapshot: another signal row plus two snapshot reads,
 		// accumulated on top of the previous three.
@@ -401,7 +401,7 @@ postgres_cdc:
 		elements = append(elements, map[string]any{"operation": "insert", "table": "rpcn_signal_table", "lsn": "XXX/XXX"})
 		expected := len(elements)
 
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"data-collections": ["dbo.events", "dbo.products"]}')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"dataset": ["dbo.events", "dbo.products"]}')`)
 
 		// Wait for the re-snapshot reads: one per row across both tables.
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -447,7 +447,7 @@ postgres_cdc:
 		db.MustExec(`INSERT INTO dbo.temptable (name) VALUES ('evt1')`)
 		db.MustExec(`INSERT INTO dbo.temptable (name) VALUES ('evt2')`)
 
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"data-collections": ["dbo.temptable"]}')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"dataset": ["dbo.temptable"]}')`)
 
 		// Wait for the signal row plus one snapshot read per temptable row.
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -465,12 +465,12 @@ postgres_cdc:
 		mu.Unlock()
 	})
 
-	t.Run("Ignores signal and continues streaming when data-collections is empty", func(t *testing.T) {
+	t.Run("Ignores signal and continues streaming when dataset is empty", func(t *testing.T) {
 		mu.Lock()
 		received = nil
 		mu.Unlock()
 
-		// A signal with an empty data-collections is a no-op: no snapshot runs and
+		// A signal with an empty dataset is a no-op: no snapshot runs and
 		// WAL streaming continues. The signal row is still published as a normal
 		// message; only the subsequent streaming insert and the signal row arrive.
 		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{}')`)
@@ -541,7 +541,7 @@ postgres_cdc:
 
 		// Omitting type leaves it NULL, so row["type"].(string) fails, Listen
 		// returns an error, and the row is skipped entirely by the caller.
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (data) VALUES ('{"data-collections": ["dbo.events"]}')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (data) VALUES ('{"dataset": ["dbo.events"]}')`)
 		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-null-type')`)
 
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -562,7 +562,7 @@ postgres_cdc:
 		received = nil
 		mu.Unlock()
 
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('unsupported-signal', '{"data-collections": ["dbo.events"]}')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('unsupported-signal', '{"dataset": ["dbo.events"]}')`)
 		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-unsupported-type')`)
 
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -636,58 +636,58 @@ func TestNewControlSignallerNormalizesIdentifiers(t *testing.T) {
 
 func TestControlSignalTableNames(t *testing.T) {
 	tests := []struct {
-		name            string
-		dataCollections []string
-		schema          string
-		want            []string
+		name    string
+		dataset []string
+		schema  string
+		want    []string
 	}{
 		{
-			name:            "empty data-collections returns nil",
-			dataCollections: nil,
-			schema:          "dbo",
-			want:            nil,
+			name:    "empty dataset returns nil",
+			dataset: nil,
+			schema:  "dbo",
+			want:    nil,
 		},
 		{
-			name:            "matching schema.table extracts table name",
-			dataCollections: []string{"dbo.events"},
-			schema:          "dbo",
-			want:            []string{"events"},
+			name:    "matching schema.table extracts table name",
+			dataset: []string{"dbo.events"},
+			schema:  "dbo",
+			want:    []string{"events"},
 		},
 		{
-			name:            "multiple entries same schema",
-			dataCollections: []string{"dbo.events", "dbo.products"},
-			schema:          "dbo",
-			want:            []string{"events", "products"},
+			name:    "multiple entries same schema",
+			dataset: []string{"dbo.events", "dbo.products"},
+			schema:  "dbo",
+			want:    []string{"events", "products"},
 		},
 		{
-			name:            "cross-schema entry is excluded",
-			dataCollections: []string{"other.events"},
-			schema:          "dbo",
-			want:            []string{},
+			name:    "cross-schema entry is excluded",
+			dataset: []string{"other.events"},
+			schema:  "dbo",
+			want:    []string{},
 		},
 		{
-			name:            "mixed: matching and non-matching schemas",
-			dataCollections: []string{"dbo.events", "other.products"},
-			schema:          "dbo",
-			want:            []string{"events"},
+			name:    "mixed: matching and non-matching schemas",
+			dataset: []string{"dbo.events", "other.products"},
+			schema:  "dbo",
+			want:    []string{"events"},
 		},
 		{
-			name:            "schema match is case-insensitive",
-			dataCollections: []string{"DBO.events"},
-			schema:          "dbo",
-			want:            []string{"events"},
+			name:    "schema match is case-insensitive",
+			dataset: []string{"DBO.events"},
+			schema:  "dbo",
+			want:    []string{"events"},
 		},
 		{
-			name:            "entry without schema prefix is included",
-			dataCollections: []string{"events"},
-			schema:          "dbo",
-			want:            []string{"events"},
+			name:    "entry without schema prefix is included",
+			dataset: []string{"events"},
+			schema:  "dbo",
+			want:    []string{"events"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tableNamesFromSchema(tt.dataCollections, tt.schema)
+			got := tableNamesFromSchema(tt.dataset, tt.schema)
 			assert.Equal(t, tt.want, got)
 		})
 	}

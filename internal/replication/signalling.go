@@ -17,9 +17,9 @@ import (
 
 // ControlSignal represents a insert into the signal table.
 type ControlSignal struct {
-	ID              string
-	Type            string
-	DataCollections []string `json:"data-collections"`
+	ID      string
+	Type    string
+	Dataset []string `json:"dataset"`
 
 	// LSN is the log sequence number/offset the signal was observed at, in
 	// whatever raw form the connector's replication stream represents

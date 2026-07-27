@@ -103,12 +103,12 @@ func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.
 
 	// Invalid or no-op signals are not returned as actionable, so streaming
 	// continues uninterrupted.
-	if len(sig.DataCollections) == 0 {
-		log.Warnf("Control signal %q received but data-collections is empty — ignoring, streaming continues uninterrupted", sig.Type)
+	if len(sig.Dataset) == 0 {
+		log.Warnf("Control signal %q received but dataset is empty — ignoring, streaming continues uninterrupted", sig.Type)
 		return nil, nil
 	}
-	if len(tableNamesFromSchema(sig.DataCollections, s.schema)) == 0 {
-		log.Warnf("Control signal %q received but data-collections %v matched no tables for schema %q — ignoring, streaming continues uninterrupted", sig.Type, sig.DataCollections, s.schema)
+	if len(tableNamesFromSchema(sig.Dataset, s.schema)) == 0 {
+		log.Warnf("Control signal %q received but dataset %v matched no tables for schema %q — ignoring, streaming continues uninterrupted", sig.Type, sig.Dataset, s.schema)
 		return nil, nil
 	}
 
