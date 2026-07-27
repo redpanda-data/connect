@@ -111,18 +111,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
 	}
 
-	snapshotTables := tables
-	if len(config.SnapshotTables) > 0 {
-		snapshotTables = make([]TableFQN, 0, len(config.SnapshotTables))
-		for _, table := range config.SnapshotTables {
-			if normalized, err := sanitize.NormalizePostgresIdentifier(table); err != nil {
-				return nil, fmt.Errorf("invalid snapshot table name %q: %w", table, err)
-			} else {
-				snapshotTables = append(snapshotTables, TableFQN{Schema: schema, Table: normalized})
-			}
-		}
-	}
-
 	batchSize := 1000
 	if config.BatchSize > 0 {
 		batchSize = config.BatchSize
@@ -231,6 +219,21 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			stream.ackedLSNMu.Unlock()
 		}
 		if config.ForceSnapshot && config.StreamOldData {
+			// SnapshotTables narrows a forced re-snapshot to the tables a
+			// signal targeted. It must never affect the fresh-slot initial
+			// snapshot below, which always scans every configured table.
+			forceSnapshotTables := tables
+			if len(config.SnapshotTables) > 0 {
+				forceSnapshotTables = make([]TableFQN, 0, len(config.SnapshotTables))
+				for _, table := range config.SnapshotTables {
+					normalized, err := sanitize.NormalizePostgresIdentifier(table)
+					if err != nil {
+						return nil, fmt.Errorf("invalid snapshot table name %q: %w", table, err)
+					}
+					forceSnapshotTables = append(forceSnapshotTables, TableFQN{Schema: schema, Table: normalized})
+				}
+			}
+
 			snapshotter, err := newSnapshotter(config, config.DBRawDSN, config.Logger, "", config.MaxSnapshotWorkers)
 			if err != nil {
 				return nil, fmt.Errorf("creating snapshotter for re-snapshot: %w", err)
@@ -241,12 +244,12 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				ctx, done := stream.shutSig.SoftStopCtx(context.Background())
 				defer done()
 
-				if err := stream.processSnapshot(ctx, snapshotTables, snapshotter); err != nil {
+				if err := stream.processSnapshot(ctx, forceSnapshotTables, snapshotter); err != nil {
 					stream.errors <- fmt.Errorf("processing snapshot: %w", err)
 					return
 				}
 
-				for _, table := range snapshotTables {
+				for _, table := range forceSnapshotTables {
 					stream.monitor.MarkSnapshotComplete(table)
 				}
 
@@ -332,11 +335,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		defer done()
 		var startLSN LSN
 		if snapshotter != nil {
-			if err = stream.processSnapshot(ctx, snapshotTables, snapshotter); err != nil {
+			if err = stream.processSnapshot(ctx, tables, snapshotter); err != nil {
 				stream.errors <- fmt.Errorf("processing snapshot: %w", err)
 				return
 			}
-			for _, table := range snapshotTables {
+			for _, table := range tables {
 				stream.monitor.MarkSnapshotComplete(table)
 			}
 
