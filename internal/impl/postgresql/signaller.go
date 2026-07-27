@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
@@ -88,48 +87,20 @@ func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.
 	if !ok {
 		return nil, errors.New("parsing control signals's 'type' data")
 	}
-	sig.Type = evType
-
-	log := s.Log.With("id", sig.ID, "type", sig.Type)
-
-	if !sig.IsSnapshot() {
-		log.Warnf("Control signal %q received but not a recognized action, forwarding as a regular message", sig.Type)
-		return nil, nil
-	}
-
-	// Invalid or no-op signals are not returned as actionable, so streaming
-	// continues uninterrupted.
-	if len(sig.Dataset) == 0 {
-		log.Warnf("Control signal %q received but dataset is empty — ignoring, streaming continues uninterrupted", sig.Type)
-		return nil, nil
-	}
-	if len(tableNamesFromSchema(sig.Dataset, s.schema)) == 0 {
-		log.Warnf("Control signal %q received but dataset %v matched no tables for schema %q — ignoring, streaming continues uninterrupted", sig.Type, sig.Dataset, s.schema)
-		return nil, nil
-	}
-
-	log.Infof("Control signal %q received: operation=%s lsn=%v", sig.Type, msg.Operation, msg.LSN)
+	sig.SignalType = evType
+	log := s.Log.With("id", sig.ID, "type", sig.SignalType)
 
 	if msg.LSN != nil {
 		sig.LSN = []byte(*msg.LSN)
 	}
-	return &sig, nil
-}
 
-func tableNamesFromSchema(collections []string, schema string) []string {
-	if len(collections) == 0 {
-		return nil
+	// validate signal type
+	switch sig.SignalType {
+	case replication.LogSignalType:
+		s.Log.Infof("%q control signal received (lsn=%s): %s", sig.Type(), sig.LSN, sig.Message)
+	default:
+		log.Warnf("Control signal %q received but not a recognized type", sig.SignalType)
 	}
-	tables := make([]string, 0, len(collections))
-	for _, dc := range collections {
-		table := dc
-		if idx := strings.LastIndex(dc, "."); idx >= 0 {
-			if !strings.EqualFold(dc[:idx], schema) {
-				continue
-			}
-			table = dc[idx+1:]
-		}
-		tables = append(tables, table)
-	}
-	return tables
+
+	return &sig, nil
 }

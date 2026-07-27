@@ -226,14 +226,11 @@ pipeline:
 
 **Supported signals**
 
-**` + "`trigger-snapshot`" + `** — recognized and logged when received. The ` + "`data`" + ` column must contain
-a JSON object with a ` + "`dataset`" + ` key listing the fully-qualified tables (` + "`schema.table`" + `) intended
-for a future re-snapshot. Acting on this signal is not yet implemented; receiving one currently has no
-effect on streaming beyond a log line.
+**` + "`log`" + `** — recognized and logged when received. The ` + "`data`" + ` column must contain
+a JSON object with a ` + "`message`" + ` key, whose value is written to the connector's log output.
 
 ` + "```sql" + `
-INSERT INTO dbo.rpcn_signal_table (type, data)
-VALUES ('trigger-snapshot', '{"dataset": ["dbo.events", "dbo.products"]}');
+INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Signal message"}');
 ` + "```").
 			Example("rpcn_signal_table").
 			Default("").
@@ -570,7 +567,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				err   error
 			)
 			for _, msg := range batch {
-				sig, sigErr := p.controlSig.Listen(ctx, msg)
+				_, sigErr := p.controlSig.Listen(ctx, msg)
 				if sigErr != nil {
 					p.logger.Errorf("failed to detect control signal in change event, skipping message: %s", sigErr)
 					continue
@@ -594,11 +591,6 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				}
 				if msg.BeforeData != nil {
 					batchMsg.MetaSetImmut("before", service.ImmutableAny{V: msg.BeforeData})
-				}
-				if sig != nil {
-					// Re-snapshotting on a signal is not yet implemented -
-					// forward it as a regular message and keep streaming.
-					p.logger.Infof("%q control signal received (lsn=%s) targeting %v; re-snapshotting on signal is not yet implemented, continuing to stream", sig.Type, sig.LSN, sig.Dataset)
 				}
 				if batcher.Add(batchMsg) {
 					flush = true

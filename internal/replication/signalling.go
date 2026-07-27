@@ -10,11 +10,14 @@ package replication
 
 import "context"
 
+// LogSignalType represents a log signal.
+var LogSignalType = "log"
+
 // ControlSignal represents a insert into the signal table.
 type ControlSignal struct {
-	ID      string
-	Type    string
-	Dataset []string `json:"dataset"`
+	ID         string
+	SignalType string
+	Message    string `json:"message"`
 
 	// LSN is the log sequence number/offset the signal was observed at, in
 	// whatever raw form the connector's replication stream represents
@@ -25,13 +28,12 @@ type ControlSignal struct {
 	LSN []byte `json:"-"`
 }
 
-// IsSnapshot returns true if the ControlSignal is a snapshot signal.
-func (s *ControlSignal) IsSnapshot() bool {
-	if s == nil {
-		return false
+// Type returns the SignalType or an empty string if ControlSignal is nil.
+func (s *ControlSignal) Type() string {
+	if s != nil {
+		return s.SignalType
 	}
-
-	return s.Type == "trigger-snapshot"
+	return ""
 }
 
 // Signaller is implemented by connector-specific control signal handlers.

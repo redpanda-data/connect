@@ -191,10 +191,10 @@ postgres_cdc:
 	received = nil
 	mu.Unlock()
 
-	// This row is shaped exactly like a trigger-snapshot signal targeting
-	// dbo.events. With signal_table_name unset, it must be forwarded as an
-	// ordinary message rather than detected as a signal.
-	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"dataset": ["dbo.events"]}')`)
+	// This row is shaped exactly like a log signal. With signal_table_name
+	// unset, it must be forwarded as an ordinary message rather than detected
+	// as a signal.
+	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Signal message"}')`)
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -212,11 +212,10 @@ postgres_cdc:
 }
 
 // TestIntegrationSignallingDetectedWithoutInterruptingStream verifies that a
-// recognized trigger-snapshot signal is detected and forwarded downstream
-// like any other message, and streaming is never paused, flushed early, or
-// restarted because of it - re-snapshotting on a signal is not implemented
-// yet (see postgresSignaller.Listen and processStream's handling of the
-// detected signal in input_pg_stream.go).
+// recognized log signal is detected and forwarded downstream like any other
+// message, and streaming is never paused, flushed early, or restarted
+// because of it (see postgresSignaller.Listen and processStream's handling
+// of the detected signal in input_pg_stream.go).
 func TestIntegrationSignallingDetectedWithoutInterruptingStream(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
@@ -291,10 +290,10 @@ postgres_cdc:
 	received = nil
 	mu.Unlock()
 
-	// A real trigger-snapshot signal, immediately followed by an ordinary
-	// insert. If detection incorrectly paused or restarted the stream, the
-	// second insert would be delayed well past the assertion window below.
-	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"dataset": ["dbo.events"]}')`)
+	// A real log signal, immediately followed by an ordinary insert. If
+	// detection incorrectly paused or restarted the stream, the second
+	// insert would be delayed well past the assertion window below.
+	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Signal message"}')`)
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-signal')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {

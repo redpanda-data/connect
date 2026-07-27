@@ -596,14 +596,11 @@ pipeline:
 
 **Supported signals**
 
-**`trigger-snapshot`** — recognized and logged when received. The `data` column must contain
-a JSON object with a `dataset` key listing the fully-qualified tables (`schema.table`) intended
-for a future re-snapshot. Acting on this signal is not yet implemented; receiving one currently has no
-effect on streaming beyond a log line.
+**`log`** — recognized and logged when received. The `data` column must contain
+a JSON object with a `message` key, whose value is written to the connector's log output.
 
 ```sql
-INSERT INTO dbo.rpcn_signal_table (type, data)
-VALUES ('trigger-snapshot', '{"dataset": ["dbo.events", "dbo.products"]}');
+INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Signal message"}');
 ```
 
 
