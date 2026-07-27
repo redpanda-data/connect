@@ -422,6 +422,100 @@ postgres_cdc:
 	mu.Unlock()
 }
 
+// TestIntegrationSignalTableNameWithEmptyTablesReplicatesAllTables verifies
+// that setting signal_table_name while leaving tables empty (the documented
+// FOR ALL TABLES mode - see the tables field docs in input_pg_stream.go)
+// does not collapse the publication down to just the signal table.
+func TestIntegrationSignalTableNameWithEmptyTablesReplicatesAllTables(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	db.MustExec(`CREATE SCHEMA IF NOT EXISTS dbo`)
+	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
+	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
+
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_signalling_all_tables
+    signal_table_name: rpcn_signal_table
+    schema: dbo
+`, databaseURL)
+
+	logs := &testLogCapture{}
+	streamOutBuilder := service.NewStreamBuilder()
+	streamOutBuilder.SetLogger(slog.New(logs))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
+
+	var (
+		received []any
+		mu       sync.Mutex
+	)
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			data, err := msg.AsStructured()
+			if err != nil {
+				return err
+			}
+			m := data.(map[string]any)
+			if _, ok := m["lsn"]; ok {
+				m["lsn"] = "XXX/XXX"
+			}
+			delete(m, "schema")
+			delete(m, "commit_ts_ms")
+			received = append(received, m)
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+	t.Cleanup(func() {
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
+
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	// There's no initial snapshot to synchronize on since tables is empty,
+	// so wait for the stream to confirm replication has actually started
+	// before inserting.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		var started bool
+		for _, m := range logs.Messages() {
+			if strings.Contains(m, "Started logical replication on slot") {
+				started = true
+				break
+			}
+		}
+		assert.True(c, started, "expected replication to have started")
+	}, 25*time.Second, 100*time.Millisecond)
+
+	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('hello')`)
+	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "hi"}')`)
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Len(c, received, 2)
+	}, 25*time.Second, 100*time.Millisecond)
+
+	mu.Lock()
+	require.ElementsMatch(t, received, []any{
+		map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
+		map[string]any{"operation": "insert", "table": "rpcn_signal_table", "lsn": "XXX/XXX"},
+	})
+	mu.Unlock()
+}
+
 type testLogCapture struct {
 	mu       sync.Mutex
 	messages []string

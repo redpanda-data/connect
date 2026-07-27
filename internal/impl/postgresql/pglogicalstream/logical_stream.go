@@ -177,7 +177,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	stream.decodingPluginArguments = pluginArguments
 
 	tablesForPublication := tables
-	if config.SignalTableName != "" {
+	// An empty tables list means the publication covers FOR ALL TABLES
+	// (see CreatePublication), which already includes the signal table -
+	// appending it here would collapse that into a single-table publication
+	// and silently stop replicating everything else.
+	if config.SignalTableName != "" && len(tables) > 0 {
 		normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(config.SignalTableName)
 		if err != nil {
 			return nil, fmt.Errorf("invalid signal table name %q: %w", config.SignalTableName, err)
