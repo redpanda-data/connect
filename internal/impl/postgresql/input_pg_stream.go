@@ -631,17 +631,8 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					continue
 				}
 
-				// Signal detected: flush what preceded it normally, then flush
-				// the signal itself with a normal ack, so its LSN is durably
-				// confirmed to Postgres before we restart - it will never be
-				// redelivered, so there's no redelivery loop to guard against.
+				// Flush signal and messages preceeding it before switching to re-snapshot.
 				p.logger.Infof("snapshot signal received (lsn=%s), pausing stream to re-run snapshot", sig.LSN)
-				if precedingBatch, ferr := batcher.Flush(ctx); ferr == nil {
-					if ferr := p.flushBatch(ctx, pgStream, cp, precedingBatch); ferr != nil {
-						p.logger.Debugf("failed to flush batch preceding signal: %s", ferr)
-					}
-				}
-
 				batcher.Add(batchMsg)
 				signalBatch, ferr := batcher.Flush(ctx)
 				if ferr != nil {
@@ -653,14 +644,9 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					continue
 				}
 
+				// Watch for batch to be checkpointed before re-snapshotting, logging then waiting indefinitely
+				// matching the snapshot ack barrier above.
 				p.logger.Infof("waiting to confirm signal LSN %s is acknowledged downstream before restarting to re-run its snapshot", sig.LSN)
-
-				// Wait for the ack above to actually be recorded (not just
-				// downstream delivery) before tearing down, so the stream's
-				// graceful-shutdown flush sends the signal's LSN to Postgres
-				// rather than a stale, earlier one. Blocks until that
-				// resolves or the stream shuts down - no timeout, by design
-				// (matching the snapshot ack barrier above).
 				const waitInterval = 100 * time.Millisecond
 				if werr := awaitCheckpointLSN(ctx, cp, sig.LSN, waitInterval); werr != nil {
 					p.logger.Warnf("stream shutting down while still waiting to confirm the signal's ack; it will be retried once replication resumes: %s", werr)

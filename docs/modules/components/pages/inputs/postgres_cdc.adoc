@@ -611,7 +611,7 @@ VALUES ('execute-snapshot', '{"data-collections": ["dbo.events", "dbo.products"]
 *Type*: `string`
 
 *Default*: `""`
-Requires version 4.102.0 or newer
+Requires version 4.103.0 or newer
 
 ```yml
 # Examples
