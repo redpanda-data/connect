@@ -176,9 +176,18 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	stream.decodingPluginArguments = pluginArguments
 
+	tablesForPublication := tables
+	if config.SignalTableName != "" {
+		normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(config.SignalTableName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid signal table name %q: %w", config.SignalTableName, err)
+		}
+		tablesForPublication = append(slices.Clone(tables), TableFQN{Schema: schema, Table: normalizedSignalTable})
+	}
+
 	pubName := "pglog_stream_" + config.ReplicationSlotName
-	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tables)
-	if err = CreatePublication(ctx, stream.pgConn, pubName, tables); err != nil {
+	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
+	if err = CreatePublication(ctx, stream.pgConn, pubName, tablesForPublication); err != nil {
 		return nil, err
 	}
 	cleanups = append(cleanups, func() {
