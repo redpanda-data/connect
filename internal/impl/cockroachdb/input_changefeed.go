@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -31,6 +32,8 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/confx"
 
 	_ "github.com/lib/pq"
 )
@@ -54,6 +57,14 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 			service.NewStringListField("tables").
 				Description("CSV of tables to be included in the changefeed").
 				Example([]string{"table1", "table2"}),
+			service.NewStringListField("include").
+				Description("Regular expressions matched against the table name to further restrict which of the configured `tables` are included in the changefeed. When set, a table is only included if it matches at least one of these patterns.").
+				Example("table1").
+				Default([]any{}),
+			service.NewStringListField("exclude").
+				Description("Regular expressions matched against the table name to exclude tables from the changefeed. A table matching any of these patterns is dropped even if it matches an `include` pattern.").
+				Example("audit_log").
+				Default([]any{}),
 			service.NewStringField("cursor_cache").
 				Description("A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest cursor that has been successfully delivered, this allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.").
 				Optional(),
@@ -87,6 +98,21 @@ type crdbChangefeedInput struct {
 
 const cursorCacheKey = "crdb_changefeed_cursor"
 
+// filterCRDBTables returns the subset of tables that pass the include/exclude
+// regex filter. Each table is matched by its name as configured.
+func filterCRDBTables(filter *confx.RegexpFilter, tables []string) []string {
+	if filter == nil || (len(filter.Include) == 0 && len(filter.Exclude) == 0) {
+		return tables
+	}
+	kept := make([]string, 0, len(tables))
+	for _, table := range tables {
+		if filter.Matches(table) {
+			kept = append(kept, table)
+		}
+	}
+	return kept
+}
+
 func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.Resources) (*crdbChangefeedInput, error) {
 	c := &crdbChangefeedInput{
 		cursorCheckpointer: checkpoint.NewCapped[string](1024), // TODO: Configure this?
@@ -114,6 +140,22 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 	tables, err := conf.FieldStringList("tables")
 	if err != nil {
 		return nil, err
+	}
+
+	var tableIncludes, tableExcludes []*regexp.Regexp
+	if includes, err := conf.FieldStringList("include"); err != nil {
+		return nil, err
+	} else if tableIncludes, err = confx.ParseRegexpPatterns(includes); err != nil {
+		return nil, err
+	}
+	if excludes, err := conf.FieldStringList("exclude"); err != nil {
+		return nil, err
+	} else if tableExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
+		return nil, err
+	}
+	tables = filterCRDBTables(&confx.RegexpFilter{Include: tableIncludes, Exclude: tableExcludes}, tables)
+	if len(tables) == 0 {
+		return nil, errors.New("the configured include and exclude patterns excluded every entry in tables")
 	}
 
 	tmpOptions, _ := conf.FieldStringList("options")

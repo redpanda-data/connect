@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/confx"
 	"github.com/redpanda-data/connect/v4/internal/httpclient"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcegrpc"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"
@@ -33,9 +35,11 @@ import (
 )
 
 const (
-	sfciFieldTopics         = "topics"
-	sfciFieldStreamSnapshot = "stream_snapshot"
-	sfciFieldReplayPreset   = "replay_preset"
+	sfciFieldTopics          = "topics"
+	sfciFieldSObjectsInclude = "include"
+	sfciFieldSObjectsExclude = "exclude"
+	sfciFieldStreamSnapshot  = "stream_snapshot"
+	sfciFieldReplayPreset    = "replay_preset"
 
 	sfciFieldSnapshotMaxBatchSize    = "snapshot_max_batch_size"
 	sfciFieldStreamBatchSize         = "stream_batch_size"
@@ -114,6 +118,14 @@ Each ` + "`/data/...`" + ` topic requires Change Data Capture to be enabled for 
 			Example([]string{"/data/ChangeEvents"}).
 			Example([]string{"Account", "/event/Order__e"}).
 			Example([]string{"Opportunity", "MyCustom__c", "/event/Sync_Requested__e"})).
+		Field(service.NewStringListField(sfciFieldSObjectsInclude).
+			Description("Regular expressions matched against the sObject name to further restrict which of the configured `" + sfciFieldTopics + "` are subscribed to. When set, an sObject-bearing CDC topic is only kept if its sObject matches at least one of these patterns. The CDC firehose (`/data/ChangeEvents`) and Platform Event (`/event/...`) topics have no single sObject and are not affected by this filter.").
+			Example("Account").
+			Default([]any{})).
+		Field(service.NewStringListField(sfciFieldSObjectsExclude).
+			Description("Regular expressions matched against the sObject name to exclude CDC topics from subscription. An sObject-bearing CDC topic matching any of these patterns is dropped even if it matches an `" + sfciFieldSObjectsInclude + "` pattern.").
+			Example("LoginHistory").
+			Default([]any{})).
 		Field(service.NewBoolField(sfciFieldStreamSnapshot).
 			Description("When true (default), paginate a full REST snapshot of every CDC sObject in `topics` before opening any streaming subscription. When false, skip the snapshot and start streaming immediately. Platform Event topics (`/event/...`) are always skipped — they have no REST equivalent.").
 			Default(true)).
@@ -273,6 +285,28 @@ func parseCDCTopic(entry string) (cdcTopicSpec, error) {
 	}, nil
 }
 
+// filterSalesforceTopics returns the subset of topics that pass the
+// include/exclude regex filter. The filter is matched against the sObject name
+// of each CDC topic that resolves to a concrete sObject. Topics without a single
+// sObject (the CDC firehose and Platform Event topics) are always retained, as
+// there is no sObject name to match against.
+func filterSalesforceTopics(filter *confx.RegexpFilter, topics []string) ([]string, error) {
+	if filter == nil || (len(filter.Include) == 0 && len(filter.Exclude) == 0) {
+		return topics, nil
+	}
+	kept := make([]string, 0, len(topics))
+	for _, t := range topics {
+		spec, err := parseCDCTopic(t)
+		if err != nil {
+			return nil, err
+		}
+		if spec.SObject == "" || filter.Matches(spec.SObject) {
+			kept = append(kept, t)
+		}
+	}
+	return kept, nil
+}
+
 // CDCInputConfig holds the parsed configuration for the salesforce_cdc input.
 type CDCInputConfig struct {
 	Auth       AuthConfig
@@ -321,6 +355,24 @@ func NewCDCInputConfigFromParsed(pConf *service.ParsedConfig) (CDCInputConfig, e
 		if _, err := parseCDCTopic(t); err != nil {
 			return cfg, err
 		}
+	}
+
+	var sObjectIncludes, sObjectExcludes []*regexp.Regexp
+	if includes, err := pConf.FieldStringList(sfciFieldSObjectsInclude); err != nil {
+		return cfg, err
+	} else if sObjectIncludes, err = confx.ParseRegexpPatterns(includes); err != nil {
+		return cfg, err
+	}
+	if excludes, err := pConf.FieldStringList(sfciFieldSObjectsExclude); err != nil {
+		return cfg, err
+	} else if sObjectExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
+		return cfg, err
+	}
+	if cfg.Topics, err = filterSalesforceTopics(&confx.RegexpFilter{Include: sObjectIncludes, Exclude: sObjectExcludes}, cfg.Topics); err != nil {
+		return cfg, err
+	}
+	if len(cfg.Topics) == 0 {
+		return cfg, fmt.Errorf("the configured %s and %s patterns excluded every entry in %s", sfciFieldSObjectsInclude, sfciFieldSObjectsExclude, sfciFieldTopics)
 	}
 
 	if cfg.StreamSnapshot, err = pConf.FieldBool(sfciFieldStreamSnapshot); err != nil {

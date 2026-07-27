@@ -46,6 +46,8 @@ input:
   cockroachdb_changefeed:
     dsn: postgres://user:password@example.com:26257/defaultdb?sslmode=require # No default (required)
     tables: [] # No default (required)
+    include: []
+    exclude: []
     cursor_cache: "" # No default (optional)
     auto_replay_nacks: true
 ```
@@ -68,6 +70,8 @@ input:
       root_cas_file: ""
       client_certs: []
     tables: [] # No default (required)
+    include: []
+    exclude: []
     cursor_cache: "" # No default (optional)
     options: [] # No default (optional)
     auto_replay_nacks: true
@@ -261,6 +265,36 @@ CSV of tables to be included in the changefeed
 tables:
   - table1
   - table2
+```
+
+=== `include`
+
+Regular expressions matched against the table name to further restrict which of the configured `tables` are included in the changefeed. When set, a table is only included if it matches at least one of these patterns.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+include: table1
+```
+
+=== `exclude`
+
+Regular expressions matched against the table name to exclude tables from the changefeed. A table matching any of these patterns is dropped even if it matches an `include` pattern.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+exclude: audit_log
 ```
 
 === `cursor_cache`

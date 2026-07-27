@@ -32,6 +32,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/confx"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
@@ -40,6 +41,8 @@ const (
 	fieldMySQLFlavor               = "flavor"
 	fieldMySQLDSN                  = "dsn"
 	fieldMySQLTables               = "tables"
+	fieldMySQLTablesInclude        = "include"
+	fieldMySQLTablesExclude        = "exclude"
 	fieldStreamSnapshot            = "stream_snapshot"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
@@ -97,6 +100,14 @@ This input adds the following metadata fields to each message:
 			Description("A list of tables to stream from the database.").
 			Example([]string{"table1", "table2"}).
 			LintRule("root = if this.length() == 0 { [ \"field 'tables' must contain at least one table\" ] }"),
+		service.NewStringListField(fieldMySQLTablesInclude).
+			Description("Regular expressions matched against `database.table` to further restrict which of the configured `"+fieldMySQLTables+"` are streamed. When set, a table is only streamed if it matches at least one of these patterns.").
+			Example("mydb.products").
+			Default([]any{}),
+		service.NewStringListField(fieldMySQLTablesExclude).
+			Description("Regular expressions matched against `database.table` to exclude tables from streaming. A table matching any of these patterns is dropped even if it matches an `"+fieldMySQLTablesInclude+"` pattern.").
+			Example("mydb.audit_log").
+			Default([]any{}),
 		service.NewStringField(fieldCheckpointCache).
 			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table."),
 		service.NewStringField(fieldCheckpointKey).
@@ -215,6 +226,22 @@ type mysqlStreamInput struct {
 	tableSchemasMu sync.RWMutex
 }
 
+// filterMySQLTables returns the subset of tables that pass the include/exclude
+// regex filter. Each table is matched in its fully qualified `database.table`
+// form, consistent with how the canal include regexes are constructed.
+func filterMySQLTables(filter *confx.RegexpFilter, db string, tables []string) []string {
+	if filter == nil || (len(filter.Include) == 0 && len(filter.Exclude) == 0) {
+		return tables
+	}
+	kept := make([]string, 0, len(tables))
+	for _, table := range tables {
+		if filter.Matches(db + "." + table) {
+			kept = append(kept, table)
+		}
+	}
+	return kept
+}
+
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
 	if err := license.CheckRunningEnterprise(res); err != nil {
 		return nil, err
@@ -278,6 +305,22 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 
 	if i.tables, err = conf.FieldStringList(fieldMySQLTables); err != nil {
 		return nil, err
+	}
+
+	var tableIncludes, tableExcludes []*regexp.Regexp
+	if includes, err := conf.FieldStringList(fieldMySQLTablesInclude); err != nil {
+		return nil, err
+	} else if tableIncludes, err = confx.ParseRegexpPatterns(includes); err != nil {
+		return nil, err
+	}
+	if excludes, err := conf.FieldStringList(fieldMySQLTablesExclude); err != nil {
+		return nil, err
+	} else if tableExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
+		return nil, err
+	}
+	i.tables = filterMySQLTables(&confx.RegexpFilter{Include: tableIncludes, Exclude: tableExcludes}, i.mysqlConfig.DBName, i.tables)
+	if len(i.tables) == 0 {
+		return nil, fmt.Errorf("the configured %s and %s patterns excluded every entry in %s", fieldMySQLTablesInclude, fieldMySQLTablesExclude, fieldMySQLTables)
 	}
 
 	if i.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {

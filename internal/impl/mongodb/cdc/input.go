@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -32,6 +33,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/confx"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -42,6 +44,8 @@ const (
 	fieldClientPassword      = "password"
 	fieldClientAppName       = "app_name"
 	fieldCollections         = "collections"
+	fieldCollectionsInclude  = "include"
+	fieldCollectionsExclude  = "exclude"
 	fieldStreamSnapshot      = "stream_snapshot"
 	fieldSnapshotParallelism = "snapshot_parallelism"
 	fieldBucketSharding      = "snapshot_auto_bucket_sharding"
@@ -104,6 +108,14 @@ Schema metadata is discovered using a two-tier strategy:
 				Secret(),
 			service.NewStringListField(fieldCollections).
 				Description("The collections to stream changes from."),
+			service.NewStringListField(fieldCollectionsInclude).
+				Description("Regular expressions matched against the collection name to further restrict which of the configured `"+fieldCollections+"` are streamed. When set, a collection is only streamed if it matches at least one of these patterns.").
+				Example("orders").
+				Default([]any{}),
+			service.NewStringListField(fieldCollectionsExclude).
+				Description("Regular expressions matched against the collection name to exclude collections from streaming. A collection matching any of these patterns is dropped even if it matches an `"+fieldCollectionsInclude+"` pattern.").
+				Example("audit_log").
+				Default([]any{}),
 			service.NewStringField(fieldCheckpointKey).
 				Description("Checkpoint cache key name.").
 				Default("mongodb_cdc_checkpoint"),
@@ -178,6 +190,21 @@ func init() {
 	service.MustRegisterBatchInput("mongodb_cdc", spec(), newMongoCDC)
 }
 
+// filterMongoCollections returns the subset of collections that pass the
+// include/exclude regex filter. Each collection is matched by its name.
+func filterMongoCollections(filter *confx.RegexpFilter, collections []string) []string {
+	if filter == nil || (len(filter.Include) == 0 && len(filter.Exclude) == 0) {
+		return collections
+	}
+	kept := make([]string, 0, len(collections))
+	for _, coll := range collections {
+		if filter.Matches(coll) {
+			kept = append(kept, coll)
+		}
+	}
+	return kept
+}
+
 func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.BatchInput, err error) {
 	if err := license.CheckRunningEnterprise(res); err != nil {
 		return nil, err
@@ -209,6 +236,21 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 	}
 	if len(cdc.collections) == 0 {
 		return nil, errors.New("at least one collection must be specified")
+	}
+	var collectionIncludes, collectionExcludes []*regexp.Regexp
+	if includes, err := conf.FieldStringList(fieldCollectionsInclude); err != nil {
+		return nil, err
+	} else if collectionIncludes, err = confx.ParseRegexpPatterns(includes); err != nil {
+		return nil, err
+	}
+	if excludes, err := conf.FieldStringList(fieldCollectionsExclude); err != nil {
+		return nil, err
+	} else if collectionExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
+		return nil, err
+	}
+	cdc.collections = filterMongoCollections(&confx.RegexpFilter{Include: collectionIncludes, Exclude: collectionExcludes}, cdc.collections)
+	if len(cdc.collections) == 0 {
+		return nil, fmt.Errorf("the configured %s and %s patterns excluded every entry in %s", fieldCollectionsInclude, fieldCollectionsExclude, fieldCollections)
 	}
 	var snapshotEnabled bool
 	if snapshotEnabled, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
