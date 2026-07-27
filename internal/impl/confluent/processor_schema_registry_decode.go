@@ -70,6 +70,7 @@ schema_id: the ID of the schema in the schema registry that was associated with 
 `).
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. When true, union values are unwrapped (bare values instead of {\"type\": value} wrappers).").
+			ShortDescription("Decode Avro messages into plain JSON rather than Avro JSON, unwrapping union values.").
 			Advanced().Default(false).Deprecated()).
 		Fields(
 			service.NewObjectField(
@@ -85,8 +86,10 @@ When raw_unions is set to true then the above union schema is decoded as the fol
 - `+"`null` as `null`"+`;
 - the string `+"`\"a\"` as `\"a\"`"+`; and
 - a `+"`Foo` instance as `{...}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
-`).Optional(),
-				service.NewBoolField("preserve_logical_types").Description(`Whether logical types should be preserved or transformed back into their primitive type. By default, decimals are decoded as raw bytes and timestamps are decoded as plain integers. Setting this field to true keeps decimal types as numbers in bloblang and timestamps as time values.`).Default(false),
+`).
+					ShortDescription("Decode Avro messages into plain JSON rather than the Avro spec's JSON encoding.").Optional(),
+				service.NewBoolField("preserve_logical_types").Description(`Whether logical types should be preserved or transformed back into their primitive type. By default, decimals are decoded as raw bytes and timestamps are decoded as plain integers. Setting this field to true keeps decimal types as numbers in bloblang and timestamps as time values.`).
+					ShortDescription("Preserve logical types rather than transforming them back into their primitive type.").Default(false),
 				service.NewBoolField("translate_kafka_connect_types").Description(`Only valid if preserve_logical_types is true. This decodes various Kafka Connect types into their bloblang equivalents when not representable by standard logical types according to the Avro standard.
 
 Types that are currently translated:
@@ -133,8 +136,10 @@ Types that are currently translated:
 
 |===
 
-`).Default(false),
+`).
+					ShortDescription("Decode Kafka Connect types into their Bloblang equivalents. Only valid when preserve_logical_types is true.").Default(false),
 				service.NewBloblangField("mapping").Description(`A custom mapping to apply to Avro schemas JSON representation. This is useful to transform custom types emitted by other tools into standard avro.`).
+					ShortDescription("A custom mapping applied to the JSON representation of Avro schemas.").
 					Optional().
 					Advanced().Example(`
 map isDebeziumTimestampType {
@@ -154,6 +159,7 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 `),
 				service.NewStringField("store_schema_metadata").
 					Description("Optionally store the schema used to decode messages as a metadata field under the given name. This field can later be referenced in other components such as a `parquet_encode` processor in order to automatically infer their schema.").
+					ShortDescription("Store the schema used to decode messages as a metadata field under this name.").
 					Optional(),
 			).Description("Configuration for how to decode schemas that are of type AVRO."),
 		).
@@ -171,9 +177,11 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 					Default(false),
 				service.NewBoolField("emit_default_values").
 					Description("Whether to emit default-valued primitive fields, empty lists, and empty maps. emit_unpopulated takes precedence over emit_default_values ").
+					ShortDescription("Emit default-valued primitive fields, empty lists and maps. emit_unpopulated takes precedence.").
 					Default(false),
 				service.NewBoolField("serialize_to_json").
 					Description("If messages should be serialized to JSON bytes. If false then the message is kept in decoded form, which means that 64 bit integers are not converted to strings and types for bytes and google.protobuf.Timestamp are preserved (as they are not serialized to JSON strings).").
+					ShortDescription("Serialize messages to JSON bytes, rather than keeping them in decoded form.").
 					Default(true),
 			).Description("Configuration for how to decode schemas that are of type PROTOBUF."),
 		).
@@ -182,6 +190,7 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 				"json",
 				service.NewBoolField("coerce_data").
 					Description("Whether decoded values should be coerced to match the types declared in the JSON Schema. By default JSON Schema decoding only validates the message and leaves it untouched, which means numbers are later interpreted as floating point (`double`) and date-time values as strings. When set to `true` the decoder rebuilds the message so that values match the schema: `integer` fields become 64-bit integers, `number` fields stay floating point, `string` fields with `format: date-time` become timestamps, and any `default` values declared in the schema are applied to absent fields. This is useful for downstream components that infer their schema from the decoded values, such as the `iceberg` outputs, which will then create `bigint` columns for integer fields rather than `double`. Note that, unlike the default behaviour, this is no longer a read-only operation: the message contents are transformed. Because coercion is stricter than validation, a message that passes validation may still fail coercion (for example an integer that overflows a 64-bit value, or a `date-time` string that is not valid RFC 3339), in which case the error can be caught using xref:configuration:error_handling.adoc[error handling methods].").
+					ShortDescription("Coerce decoded values to match the types declared in the JSON Schema, rather than only validating.").
 					Default(false).
 					Version("4.97.0"),
 			).Description("Configuration for how to decode schemas that are of type JSON."),
@@ -194,6 +203,7 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewIntField("default_schema_id").
 			Description("If set, this schema ID will be used when a message's schema header cannot be read (ErrBadHeader). If not set, schema header errors will be returned. WARNING: This is configuration does not work with PROTOBUF schemas. You may also use `with_schema_registry_header` bloblang function to add a schema ID to messages.").
+			ShortDescription("Schema ID to use when a message's schema header cannot be read. Header errors are returned if unset.").
 			Optional())
 
 	for _, f := range service.NewHTTPRequestAuthSignerFields() {

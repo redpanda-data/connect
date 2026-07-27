@@ -97,21 +97,25 @@ When using the default Oracle based cache, the Connect user requires permission 
 		`).
 	Field(service.NewStringField(ociFieldConnectionString).
 		Description("The connection string of the Oracle database to connect to. Additional connection options can be supplied as URL query parameters, for example: `oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true`.").
+		ShortDescription("The connection string of the Oracle database. Options may be supplied as URL query parameters.").
 		Example("oracle://username:password@host:port/service_name").
 		Example("oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true"),
 	).
 	Field(service.NewStringField(ociFieldWalletPath).
 		Description("Path to the Oracle Wallet directory. When set, SSL is enabled automatically. The directory must contain either `cwallet.sso` (auto-login, no password required) or `ewallet.p12` (requires `wallet_password`).").
+		ShortDescription("Path to the Oracle Wallet directory, which enables SSL automatically.").
 		Example("/opt/oracle/wallet").
 		Optional(),
 	).
 	Field(service.NewStringField(ociFieldWalletPassword).
 		Secret().
 		Description("Password for the `ewallet.p12` PKCS#12 wallet file. Only required when the wallet directory contains `ewallet.p12` rather than `cwallet.sso`.").
+		ShortDescription("Password for the ewallet.p12 wallet file. Not needed when the wallet directory holds cwallet.sso.").
 		Optional(),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
+		ShortDescription("Query all existing data as a snapshot first. Otherwise streaming starts from the current SCN.").
 		Example(true).
 		Default(false).
 		Deprecated(),
@@ -121,6 +125,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 		string(SnapshotModeSnapshotOnly),
 		string(SnapshotModeSnapshotAndStream)).
 		Description("Controls snapshot behaviour. `none` (default) skips snapshotting and starts streaming from the current SCN. `snapshot_only` performs a full snapshot, persists the SCN checkpoint, then stops without streaming. `snapshot_and_stream` performs a full snapshot then transitions to streaming.").
+		ShortDescription("Controls snapshot behaviour, from skipping it entirely to a full snapshot before streaming.").
 		Optional().
 		Version("4.99.0"),
 	).
@@ -138,26 +143,32 @@ When using the default Oracle based cache, the Connect user requires permission 
 			Default(logminer.DefaultSCNWindowSize),
 		service.NewIntField(ociFieldMinSCNWindowSize).
 			Description("The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.").
+			ShortDescription("The minimum SCN gap required before a new LogMiner session is started.").
 			Default(logminer.DefaultMinSCNWindowSize),
 		service.NewIntField(ociFieldMaxSCNWindowSize).
 			Description(`The maximum SCN range that can be mined in a single cycle. The window starts at `+ociFieldSCNWindowSize+` and grows by `+ociFieldSCNWindowSize+` each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.`).
 			Default(logminer.DefaultMaxSCNWindowSize),
 		service.NewDurationField(ociFieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
+			ShortDescription("Interval between checks for new changes once all data is processed.").
 			Default(logminer.DefaultMiningBackoffInterval.String()).
 			Example("5s").Example("1m"),
 		service.NewDurationField(ociFieldMiningInterval).
 			Description("The interval between mining cycles during normal operation. Controls how frequently LogMiner polls for new changes when not caught up.").
+			ShortDescription("Interval between mining cycles, controlling how often LogMiner polls for new changes.").
 			Default(logminer.DefaultMiningInterval.String()).
 			Example("100ms").Example("1s"),
 		service.NewStringField(ociFieldMiningStrategy).
 			Description("Controls how LogMiner retrieves data dictionary information. `online_catalog` (default) uses the current data dictionary for best performance but cannot capture DDL changes. `online_catalog` currently only supported.").
+			ShortDescription("How LogMiner retrieves data dictionary information. online_catalog performs best but cannot capture DDL.").
 			Default(logminer.DefaultMiningStrategy),
 		service.NewIntField(ociFieldMaxTransactionEvents).
 			Description("The maximum number of events that can be buffered for a single transaction. If a transaction exceeds this limit it is discarded and its events will not be emitted. Set to 0 to disable the limit.").
+			ShortDescription("Maximum events buffered for a single transaction. Exceeding it discards the transaction. Set to 0 to disable.").
 			Default(logminer.DefaultMaxTransactionEvents),
 		service.NewBoolField(ociFieldLOBEnabled).
 			Description("When enabled, large object (CLOB, BLOB) columns are included in both snapshot and streaming change events. When disabled, these columns are still present but contain no values. Enabling this option introduces additional performance overhead and increases memory requirements.").
+			ShortDescription("Include large object (CLOB, BLOB) columns in snapshot and change events. They are empty when disabled.").
 			Default(logminer.DefaultLOBEnabled),
 		service.NewStringField(ociFieldTransactionCache).
 			Description(`A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for buffering in-flight transactions. When set, DML events are serialized and stored in the named cache rather than held in memory, reducing connector memory usage for workloads with large or long-running transactions. If not set, an in-memory buffer is used.
@@ -165,6 +176,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 Each in-flight transaction is stored as N+1 cache entries: one metadata key holding the transaction ID, start SCN, and event count; and one event key per DML event. A transaction with 1000 events occupies 1001 cache entries. Each AddEvent call writes exactly two keys regardless of how many events the transaction has already accumulated.
 
 This cache is designed for low-latency stores with cheap per-operation cost. Redis and Memcached are the recommended backends. The built-in `+"`memory:{}`"+` cache works but provides no durability across restarts. High-latency or per-request-cost stores such as S3 or DynamoDB are not recommended - a transaction with 1000 events generates approximately 3000 cache operations across its lifetime, and because LogMiner processes events on a single goroutine, per-call latency directly reduces throughput. A backend that causes timeouts or errors will also cause the mining cycle to restart from an earlier checkpoint SCN, which can result in duplicate event delivery.`).
+			ShortDescription("A cache resource for buffering in-flight transactions, where DML events are serialized and stored.").
 			Optional(),
 		service.NewStringField(ociFieldTransactionCacheKey).
 			Description("The key prefix used when storing transactions in `"+ociFieldTransactionCache+"`. An alternative prefix must be set if multiple `oracledb_cdc` inputs share the same cache resource, since Oracle transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance and would otherwise collide.").
@@ -176,6 +188,7 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 		Description(`A map of fully-qualified table names (e.g. SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
 
 Each query must project every column of the table's primary key - all of them, for a composite key - even if it otherwise selects only a subset of columns. Snapshotting pages through a table's rows by filtering and sorting on its full primary key, against the query's own result set - if any primary key column isn't projected, this fails part-way through the snapshot, once the first batch of rows has been read.`).
+		ShortDescription("A map of fully-qualified table names to SELECT queries, overriding the default snapshot query per table.").
 		Example(map[string]any{
 			"TESTDB.USERS":    "SELECT * FROM TESTDB.USERS",
 			"TESTDB.PRODUCTS": "SELECT * FROM TESTDB.PRODUCTS WHERE ID > 1000",
@@ -209,10 +222,12 @@ Each query must project every column of the table's primary key - all of them, f
 	).
 	Field(service.NewIntField(ociFieldCheckpointLimit).
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given System Change Number (SCN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+		ShortDescription("The maximum number of messages that can be processed at a given time.").
 		Default(1024),
 	).
 	Field(service.NewStringField(ociFieldPDBName).
 		Description("The name of the pluggable database (PDB) to monitor. When connecting to a CDB root, LogMiner output is scoped to this PDB via SRC_CON_NAME filtering and catalog queries use ALTER SESSION SET CONTAINER to switch context. Requires GRANT SET CONTAINER TO <user> CONTAINER=ALL.").
+		ShortDescription("The name of the pluggable database (PDB) to monitor.").
 		Optional(),
 	).
 	Field(service.NewAutoRetryNacksToggleField()).

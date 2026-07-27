@@ -177,6 +177,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 		Fields(
 			service.NewStringField(s3iFieldBucket).
 				Description("The bucket to consume from. If the field `sqs.url` is specified this field is optional.").
+				ShortDescription("The bucket to consume from. Optional when sqs.url is specified.").
 				Default(""),
 			service.NewStringField(s3iFieldPrefix).
 				Description("An optional path prefix, if set only objects with the prefix are consumed when walking a bucket.").
@@ -186,6 +187,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 		Fields(
 			service.NewBoolField(s3iFieldForcePathStyleURLs).
 				Description("Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints.").
+				ShortDescription("Use path style URLs when downloading keys, often required for custom endpoints.").
 				Default(false).
 				Advanced(),
 			service.NewBoolField(s3iFieldDeleteObjects).
@@ -205,16 +207,20 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Advanced(),
 				service.NewStringField(s3iSQSFieldKeyPath).
 					Description("A xref:configuration:field_paths.adoc[dot path] whereby object keys are found in SQS messages.").
+					ShortDescription("A dot path locating object keys within SQS messages.").
 					Default("Records.*.s3.object.key"),
 				service.NewStringField(s3iSQSFieldBucketPath).
 					Description("A xref:configuration:field_paths.adoc[dot path] whereby the bucket name can be found in SQS messages.").
+					ShortDescription("A dot path locating the bucket name within SQS messages.").
 					Default("Records.*.s3.bucket.name"),
 				service.NewStringField(s3iSQSFieldEnvelopePath).
 					Description("A xref:configuration:field_paths.adoc[dot path] of a field to extract an enveloped JSON payload for further extracting the key and bucket from SQS messages. This is specifically useful when subscribing an SQS queue to an SNS topic that receives bucket events.").
+					ShortDescription("Dot path to a field holding an enveloped JSON payload, from which the key and bucket are extracted.").
 					Default("").
 					Example("Message"),
 				service.NewStringField(s3iSQSFieldDelayPeriod).
 					Description("An optional period of time to wait from when a notification was originally sent to when the target key download is attempted.").
+					ShortDescription("How long to wait after a notification was sent before attempting the target key download.").
 					Example("10s").
 					Example("5m").
 					Default("").

@@ -319,6 +319,7 @@ output:
 					}
 				})...).
 				Description("The object canned ACL value. Leave empty to omit the ACL from upload requests, which is required for buckets that have ACLs disabled (the AWS default since 2023).").
+				ShortDescription("The object canned ACL value. Leave empty for buckets that have ACLs disabled.").
 				Default("").
 				Advanced(),
 			service.NewBatchPolicyField(s3oFieldBatching),

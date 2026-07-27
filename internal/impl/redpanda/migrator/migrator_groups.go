@@ -71,27 +71,32 @@ func groupsMigratorFields() []*service.ConfigField {
 			Default(true),
 		service.NewDurationField(cgFieldInterval).
 			Description("How often to synchronise consumer group offsets. Regular syncing helps maintain offset accuracy during ongoing migration.").
+			ShortDescription("How often to synchronise consumer group offsets.").
 			Example("0s     # Disabled").
 			Example("30s    # Sync every 30 seconds").
 			Example("5m     # Sync every 5 minutes").
 			Default("1m"),
 		service.NewDurationField(cgFieldFetchTime).
 			Description("Maximum time to wait for data when fetching records for timestamp-based offset translation. Increase for clusters with low message throughput.").
+			ShortDescription("Maximum time to wait for data when fetching records for timestamp-based offset translation.").
 			Example("1s     # Fast clusters").
 			Example("10s    # Slower clusters").
 			Default("10s"),
 		service.NewStringListField(cgFieldInclude).
 			Description("Regular expressions for consumer groups to include in offset migration. If empty, all groups are included (unless excluded).").
+			ShortDescription("Regular expressions for consumer groups to include in offset migration. All groups are included if empty.").
 			Example(`["prod-.*", "staging-.*"]`).
 			Example(`["app-.*", "service-.*"]`).
 			Optional(),
 		service.NewStringListField(cgFieldExclude).
 			Description("Regular expressions for consumer groups to exclude from offset migration. Takes precedence over include patterns. Useful for excluding system or temporary groups.").
+			ShortDescription("Regular expressions for consumer groups to exclude from offset migration. Takes precedence over include.").
 			Example(`[".*-test", ".*-temp", "connect-.*"]`).
 			Example(`["dev-.*", "local-.*"]`).
 			Optional(),
 		service.NewBoolField(cgFieldOnlyEmpty).
 			Description("Whether to only migrate Empty consumer groups. When false (default), all statuses except Dead are included; when true, only Empty groups are migrated.").
+			ShortDescription("Whether to migrate only Empty consumer groups. Otherwise all statuses except Dead are included.").
 			Default(false),
 	}
 }

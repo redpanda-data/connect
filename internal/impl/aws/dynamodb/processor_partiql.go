@@ -39,10 +39,12 @@ func init() {
 		Field(service.NewBoolField("unsafe_dynamic_query").Description("Whether to enable dynamic queries that support interpolation functions.").Advanced().Default(false)).
 		Field(service.NewBoolField("use_batch").
 			Description("Whether to execute all messages in a batch as a single `BatchExecuteStatement` call. Set this to `false` to execute one `ExecuteStatement` call per message instead, which is required for PartiQL `SELECT` queries against a global secondary index (GSI) — `BatchExecuteStatement` does not support querying a GSI. Only the first result row is used when a query returns multiple items.").
+			ShortDescription("Execute a whole batch in one BatchExecuteStatement call. Disable for PartiQL SELECT queries.").
 			Advanced().
 			Default(true)).
 		Field(service.NewBloblangField("args_mapping").
-			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that, for each message, creates a list of arguments to use with the query.").Default("")).
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that, for each message, creates a list of arguments to use with the query.").
+			ShortDescription("Bloblang mapping creating the list of arguments to use with the query, per message.").Default("")).
 		Example(
 			"Insert",
 			`The following example inserts rows into the table footable with the columns foo, bar and baz populated with values extracted from messages:`,

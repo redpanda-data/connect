@@ -76,6 +76,7 @@ When using the default Microsoft SQL Server based cache, the Connect user requir
 	).
 	Field(service.NewBoolField(fieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current Log Sequence Number position.").
+		ShortDescription("Query all existing data as a snapshot first. Otherwise streaming starts from the current LSN.").
 		Example(true).
 		Default(false),
 	).
@@ -117,10 +118,12 @@ When using the default Microsoft SQL Server based cache, the Connect user requir
 	).
 	Field(service.NewIntField(fieldCheckpointLimit).
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given Log Sequence Number (LSN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+		ShortDescription("The maximum number of messages that can be processed at a given time.").
 		Default(1024),
 	).
 	Field(service.NewDurationField(fieldStreamBackoffInterval).
 		Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
+		ShortDescription("Interval between checks for new changes once all data is processed.").
 		Default("5s").
 		Example("5s").Example("1m"),
 	).
