@@ -11,7 +11,7 @@ package replication
 import "context"
 
 // LogSignalType represents a log signal.
-var LogSignalType = "log"
+const LogSignalType = "log"
 
 // ControlSignal represents a insert into the signal table.
 type ControlSignal struct {
