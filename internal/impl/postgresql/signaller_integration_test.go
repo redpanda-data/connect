@@ -12,6 +12,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -238,8 +240,9 @@ postgres_cdc:
       - events
 `, databaseURL)
 
+	logs := &testLogCapture{}
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	streamOutBuilder.SetLogger(slog.New(logs))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
 
@@ -293,13 +296,24 @@ postgres_cdc:
 	// A real log signal, immediately followed by an ordinary insert. If
 	// detection incorrectly paused or restarted the stream, the second
 	// insert would be delayed well past the assertion window below.
-	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Signal message"}')`)
+	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Hello World"}')`)
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-signal')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		mu.Lock()
 		defer mu.Unlock()
 		assert.Len(c, received, 2)
+	}, 5*time.Second, 100*time.Millisecond)
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		var found bool
+		for _, m := range logs.Messages() {
+			if strings.Contains(m, "Hello World") {
+				found = true
+				break
+			}
+		}
+		assert.True(c, found, "expected a log entry for the recognized log signal, got: %v", logs.Messages())
 	}, 5*time.Second, 100*time.Millisecond)
 
 	// No re-snapshot should ever follow - give it a moment, then confirm
@@ -313,3 +327,25 @@ postgres_cdc:
 	})
 	mu.Unlock()
 }
+
+type testLogCapture struct {
+	mu       sync.Mutex
+	messages []string
+}
+
+func (c *testLogCapture) Handle(_ context.Context, r slog.Record) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.messages = append(c.messages, r.Message)
+	return nil
+}
+
+func (c *testLogCapture) Messages() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.messages...)
+}
+
+func (c *testLogCapture) WithAttrs([]slog.Attr) slog.Handler       { return c }
+func (c *testLogCapture) WithGroup(string) slog.Handler            { return c }
+func (_ *testLogCapture) Enabled(context.Context, slog.Level) bool { return true }
