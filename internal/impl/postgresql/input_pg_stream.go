@@ -26,6 +26,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -46,6 +47,7 @@ const (
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
+	fieldSignalTableName           = "signal_table_name"
 	fieldAWSIAMAuth                = "aws"
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
@@ -194,6 +196,48 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
 			Advanced().
 			Optional()).
+		Field(service.NewStringField(fieldSignalTableName).
+			Description(`The name of the table used to send control signals to the connector, excluding the schema. The table must
+exist in the schema configured via the ` + "`schema`" + ` field, and must not also appear in ` + "`" + fieldTables + "`" + `
+- the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
+it in both places is rejected at startup. It must have exactly these columns:
+
+- **id** — any type representable as a string (e.g. ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
+- **type** — ` + "`VARCHAR`" + ` — the signal type (see supported signals below)
+- **data** — ` + "`TEXT`" + ` — a JSON object containing signal parameters
+
+Create the table with:
+
+` + "```sql" + `
+CREATE TABLE <schema>.<signal_table_name> (
+    id   SERIAL PRIMARY KEY,
+    type VARCHAR(32),
+    data TEXT
+);
+` + "```" + `
+
+Signal rows are published as regular output messages (` + "`operation=insert`" + `, ` + "`table=<signal_table_name>`" + `).
+To exclude them from downstream processing, filter on the ` + "`table`" + ` metadata field using a
+` + "`mapping`" + ` processor:
+
+` + "```yaml" + `
+pipeline:
+  processors:
+    - mapping: |
+        root = if @table == "rpcn_signal_table" { deleted() } else { this }
+` + "```" + `
+
+**Supported signals**
+
+**` + "`log`" + `** — recognized and logged when received. The ` + "`data`" + ` column must contain
+a JSON object with a ` + "`message`" + ` key, whose value is written to the connector's log output.
+
+` + "```sql" + `
+INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message": "Signal message"}');
+` + "```").
+			Example("rpcn_signal_table").
+			Default("").
+			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
@@ -217,6 +261,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		heartbeatInterval         time.Duration
 		iamAuthEnabled            bool
 		iamAuthTokenBuilder       TokenBuilder
+		signalTableName           string
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -291,6 +336,26 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	if signalTableName, err = conf.FieldString(fieldSignalTableName); err != nil {
+		return nil, err
+	}
+
+	if signalTableName != "" {
+		normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(signalTableName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s %q: %w", fieldSignalTableName, signalTableName, err)
+		}
+		for _, table := range tables {
+			normalizedTable, err := sanitize.NormalizePostgresIdentifier(table)
+			if err != nil {
+				return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+			}
+			if normalizedTable == normalizedSignalTable {
+				return nil, fmt.Errorf("%s %q must not also appear in %s - the signal table is implicitly added to the publication and excluded from snapshot scans", fieldSignalTableName, signalTableName, fieldTables)
+			}
+		}
+	}
+
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
@@ -342,6 +407,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			Logger:                   logger,
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
+			SignalTableName:          signalTableName,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,
@@ -354,6 +420,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		stopSig:         shutdown.NewSignaller(),
 
 		iamAuthEnabled: iamAuthEnabled,
+	}
+
+	if i.controlSig, err = NewControlSignaller(schema, signalTableName, logger); err != nil {
+		return nil, err
 	}
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
@@ -397,6 +467,7 @@ type pgStreamInput struct {
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
+	controlSig      *postgresSignaller
 	stopSig         *shutdown.Signaller
 
 	// snapshotAckWG tracks in-flight snapshot batches: incremented when a
@@ -515,6 +586,11 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				err   error
 			)
 			for _, msg := range batch {
+				if _, err := p.controlSig.Listen(ctx, msg); err != nil {
+					// Log it and fall through to the normal emit path below.
+					p.logger.Errorf("failed to detect control signal in change event: %s", err)
+				}
+
 				if mb, err = json.Marshal(msg.Data); err != nil {
 					p.logger.Errorf("failure to marshal message: %s", err)
 					break

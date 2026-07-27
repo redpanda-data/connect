@@ -6,6 +6,7 @@ input:
     dsn: ${PG_DSN:postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable}
     stream_snapshot: true
     schema: public
+    signal_table_name: rpcn_signal_table
     tables:
       - users
       - products
