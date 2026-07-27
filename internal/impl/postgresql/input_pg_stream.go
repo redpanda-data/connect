@@ -653,13 +653,17 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					continue
 				}
 
+				p.logger.Infof("waiting to confirm signal LSN %s is acknowledged downstream before restarting to re-run its snapshot", sig.LSN)
+
 				// Wait for the ack above to actually be recorded (not just
 				// downstream delivery) before tearing down, so the stream's
 				// graceful-shutdown flush sends the signal's LSN to Postgres
-				// rather than a stale, earlier one.
+				// rather than a stale, earlier one. Blocks until that
+				// resolves or the stream shuts down - no timeout, by design
+				// (matching the snapshot ack barrier above).
 				const waitInterval = 100 * time.Millisecond
 				if werr := awaitCheckpointLSN(ctx, cp, sig.LSN, waitInterval); werr != nil {
-					p.logger.Warnf("gave up waiting to acknowledge signal LSN, streaming continues uninterrupted: %s", werr)
+					p.logger.Warnf("stream shutting down while still waiting to confirm the signal's ack; it will be retried once replication resumes: %s", werr)
 					continue
 				}
 
