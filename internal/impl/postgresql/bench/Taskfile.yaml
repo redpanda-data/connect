@@ -74,7 +74,7 @@ tasks:
     deps: [psql:create:signal-table]
     cmds:
       - |
-        psql {{.PG_DSN}} -c "INSERT INTO public.rpcn_signal_table (type, data) VALUES ('execute-snapshot', '{\"data-collections\": [\"public.Users\"]}');"
+        psql {{.PG_DSN}} -c "INSERT INTO public.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{\"data-collections\": [\"public.Users\"]}');"
 
   # ── CDC / Snapshot benchmarks ────────────────────────────────────────────────
 

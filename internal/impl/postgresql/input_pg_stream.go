@@ -228,7 +228,7 @@ pipeline:
 
 **Supported signals**
 
-**` + "`execute-snapshot`" + `** — triggers a re-snapshot of one or more tables without dropping the
+**` + "`trigger-snapshot`" + `** — triggers a re-snapshot of one or more tables without dropping the
 replication slot. The ` + "`data`" + ` column must contain a JSON object with a
 ` + "`data-collections`" + ` key listing the fully-qualified tables (` + "`schema.table`" + `) to snapshot.
 ` + "`data-collections`" + ` must be non-empty; a signal with an empty or absent ` + "`data-collections`" + `
@@ -236,7 +236,7 @@ is ignored and streaming continues uninterrupted.
 
 ` + "```sql" + `
 INSERT INTO dbo.rpcn_signal_table (type, data)
-VALUES ('execute-snapshot', '{"data-collections": ["dbo.events", "dbo.products"]}');
+VALUES ('trigger-snapshot', '{"data-collections": ["dbo.events", "dbo.products"]}');
 ` + "```").
 			Example("rpcn_signal_table").
 			Default("").

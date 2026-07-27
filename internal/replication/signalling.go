@@ -36,7 +36,7 @@ func (s *ControlSignal) IsSnapshot() bool {
 		return false
 	}
 
-	return s.Type == "execute-snapshot"
+	return s.Type == "trigger-snapshot"
 }
 
 // Signaller is implemented by connector-specific control signal handlers.

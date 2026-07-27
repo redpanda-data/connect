@@ -188,11 +188,11 @@ postgres_cdc:
 	received = nil
 	mu.Unlock()
 
-	// This row is shaped exactly like an execute-snapshot signal targeting
+	// This row is shaped exactly like a trigger-snapshot signal targeting
 	// dbo.events. With signal_table_name unset, it must be forwarded as an
 	// ordinary message rather than detected as a signal, and must not
 	// trigger a re-snapshot of dbo.events.
-	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', '{"data-collections": ["dbo.events"]}')`)
+	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"data-collections": ["dbo.events"]}')`)
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -330,7 +330,7 @@ postgres_cdc:
 		received = nil // reset to assert for this test
 		mu.Unlock()
 
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', '{"data-collections": ["dbo.events"]}')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"data-collections": ["dbo.events"]}')`)
 
 		// Wait for the re-snapshot to complete: the signal row is published as a
 		// normal message plus two snapshot reads of the events table.
@@ -348,7 +348,7 @@ postgres_cdc:
 		})
 		mu.Unlock()
 
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', '{"data-collections": ["dbo.events"]}')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"data-collections": ["dbo.events"]}')`)
 
 		// Wait for the second re-snapshot: another signal row plus two snapshot reads,
 		// accumulated on top of the previous three.
@@ -401,7 +401,7 @@ postgres_cdc:
 		elements = append(elements, map[string]any{"operation": "insert", "table": "rpcn_signal_table", "lsn": "XXX/XXX"})
 		expected := len(elements)
 
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', '{"data-collections": ["dbo.events", "dbo.products"]}')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"data-collections": ["dbo.events", "dbo.products"]}')`)
 
 		// Wait for the re-snapshot reads: one per row across both tables.
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -447,7 +447,7 @@ postgres_cdc:
 		db.MustExec(`INSERT INTO dbo.temptable (name) VALUES ('evt1')`)
 		db.MustExec(`INSERT INTO dbo.temptable (name) VALUES ('evt2')`)
 
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', '{"data-collections": ["dbo.temptable"]}')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{"data-collections": ["dbo.temptable"]}')`)
 
 		// Wait for the signal row plus one snapshot read per temptable row.
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -473,7 +473,7 @@ postgres_cdc:
 		// A signal with an empty data-collections is a no-op: no snapshot runs and
 		// WAL streaming continues. The signal row is still published as a normal
 		// message; only the subsequent streaming insert and the signal row arrive.
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', '{}')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', '{}')`)
 		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('post-noop')`)
 
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -495,7 +495,7 @@ postgres_cdc:
 		received = nil
 		mu.Unlock()
 
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', 'not-valid-json{')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('trigger-snapshot', 'not-valid-json{')`)
 		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-bad-json')`)
 
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -518,7 +518,7 @@ postgres_cdc:
 
 		// Omitting data leaves it NULL, so row["data"].(string) fails, Listen
 		// returns an error, and the row is skipped entirely by the caller.
-		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type) VALUES ('execute-snapshot')`)
+		db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type) VALUES ('trigger-snapshot')`)
 		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-null-data')`)
 
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
