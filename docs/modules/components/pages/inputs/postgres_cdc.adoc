@@ -42,7 +42,7 @@ input:
     dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable # No default (required)
     include_transaction_markers: false
     stream_snapshot: false
-    snapshot_batch_size: 1000
+    snapshot_max_batch_size: 10000 # No default (optional)
     schema: public # No default (required)
     tables: [] # No default (required)
     checkpoint_limit: 1024
@@ -72,7 +72,7 @@ input:
     dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable # No default (required)
     include_transaction_markers: false
     stream_snapshot: false
-    snapshot_batch_size: 1000
+    snapshot_max_batch_size: 10000 # No default (optional)
     schema: public # No default (required)
     tables: [] # No default (required)
     checkpoint_limit: 1024
@@ -153,19 +153,18 @@ When set to true, the plugin will first stream a snapshot of all existing data i
 stream_snapshot: true
 ```
 
-=== `snapshot_batch_size`
+=== `snapshot_max_batch_size`
 
-The number of rows to fetch in each batch when querying the snapshot.
+The number of rows to fetch in each batch when querying the snapshot. Defaults to 1000.
 
 
 *Type*: `int`
 
-*Default*: `1000`
 
 ```yml
 # Examples
 
-snapshot_batch_size: 10000
+snapshot_max_batch_size: 10000
 ```
 
 === `schema`

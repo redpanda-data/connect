@@ -48,7 +48,8 @@ input:
     read_batch_size: 1000
     read_max_wait: 1s
     stream_snapshot: false
-    snapshot_parallelism: 1
+    max_parallel_snapshot_tables: 0 # No default (optional)
+    snapshot_max_batch_size: 1000
     auto_replay_nacks: true
 ```
 
@@ -74,7 +75,8 @@ input:
     read_batch_size: 1000
     read_max_wait: 1s
     stream_snapshot: false
-    snapshot_parallelism: 1
+    max_parallel_snapshot_tables: 0 # No default (optional)
+    snapshot_max_batch_size: 1000
     snapshot_auto_bucket_sharding: false
     document_mode: update_lookup
     json_marshal_mode: canonical
@@ -231,14 +233,22 @@ If to read initial snapshot before streaming changes.
 
 *Default*: `false`
 
-=== `snapshot_parallelism`
+=== `max_parallel_snapshot_tables`
 
-Parallelism for snapshot phase.
+The number of collections to snapshot in parallel during the snapshot phase. Defaults to 1.
 
 
 *Type*: `int`
 
-*Default*: `1`
+
+=== `snapshot_max_batch_size`
+
+The number of documents to fetch in each batch when querying the snapshot.
+
+
+*Type*: `int`
+
+*Default*: `1000`
 
 === `snapshot_auto_bucket_sharding`
 

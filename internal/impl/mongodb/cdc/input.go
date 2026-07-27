@@ -32,27 +32,30 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/cdcfield"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
-	fieldClientURL           = "url"
-	fieldClientDatabase      = "database"
-	fieldClientUsername      = "username"
-	fieldClientPassword      = "password"
-	fieldClientAppName       = "app_name"
-	fieldCollections         = "collections"
-	fieldStreamSnapshot      = "stream_snapshot"
-	fieldSnapshotParallelism = "snapshot_parallelism"
-	fieldBucketSharding      = "snapshot_auto_bucket_sharding"
-	fieldCheckpointKey       = "checkpoint_key"
-	fieldCheckpointCache     = "checkpoint_cache"
-	fieldCheckpointInterval  = "checkpoint_interval"
-	fieldCheckpointLimit     = "checkpoint_limit"
-	fieldReadBatchSize       = "read_batch_size"
-	fieldReadMaxWait         = "read_max_wait"
-	fieldDocumentMode        = "document_mode"
-	fieldJSONMarshalMode     = "json_marshal_mode"
+	fieldClientURL            = "url"
+	fieldClientDatabase       = "database"
+	fieldClientUsername       = "username"
+	fieldClientPassword       = "password"
+	fieldClientAppName        = "app_name"
+	fieldCollections          = "collections"
+	fieldStreamSnapshot       = "stream_snapshot"
+	fieldSnapshotParallelism  = "snapshot_parallelism"
+	fieldMaxParallelSnapshot  = "max_parallel_snapshot_tables"
+	fieldSnapshotMaxBatchSize = "snapshot_max_batch_size"
+	fieldBucketSharding       = "snapshot_auto_bucket_sharding"
+	fieldCheckpointKey        = "checkpoint_key"
+	fieldCheckpointCache      = "checkpoint_cache"
+	fieldCheckpointInterval   = "checkpoint_interval"
+	fieldCheckpointLimit      = "checkpoint_limit"
+	fieldReadBatchSize        = "read_batch_size"
+	fieldReadMaxWait          = "read_max_wait"
+	fieldDocumentMode         = "document_mode"
+	fieldJSONMarshalMode      = "json_marshal_mode"
 
 	marshalModeCanonical string = "canonical"
 	marshalModeRelaxed   string = "relaxed"
@@ -124,12 +127,22 @@ Schema metadata is discovered using a two-tier strategy:
 			service.NewBoolField(fieldStreamSnapshot).
 				Description("If to read initial snapshot before streaming changes.").
 				Default(false),
+			service.NewIntField(fieldMaxParallelSnapshot).
+				Description("The number of collections to snapshot in parallel during the snapshot phase. Defaults to 1.").
+				Optional().
+				LintRule(`match {
+  this < 1 => ["field max_parallel_snapshot_tables must be greater or equal to 1."],
+}`),
 			service.NewIntField(fieldSnapshotParallelism).
 				Description("Parallelism for snapshot phase.").
-				Default(1).
+				Optional().
 				LintRule(`match {
   this < 1 => ["field snapshot_parallelism must be greater or equal to 1."],
-}`),
+}`).
+				Deprecated(),
+			service.NewIntField(fieldSnapshotMaxBatchSize).
+				Description("The number of documents to fetch in each batch when querying the snapshot.").
+				Default(1000),
 			service.NewBoolField(fieldBucketSharding).
 				Description("If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `splitVector` command. This allows parallel collection reading in environments where privileged access to the MongoDB cluster is not allowed such as MongoDB Atlas.").
 				Default(false).
@@ -215,10 +228,13 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 		return
 	}
 	if snapshotEnabled {
-		if cdc.snapshotParallelism, err = conf.FieldInt(fieldSnapshotParallelism); err != nil {
+		if cdc.snapshotParallelism, err = cdcfield.ResolveInt(conf, fieldMaxParallelSnapshot, fieldSnapshotParallelism, 1); err != nil {
 			return
 		}
 		cdc.snapshotSemaphore = semaphore.NewWeighted(int64(cdc.snapshotParallelism))
+	}
+	if cdc.snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
+		return
 	}
 	if cdc.useAutoBucketSnapshots, err = conf.FieldBool(fieldBucketSharding); err != nil {
 		return
@@ -348,6 +364,7 @@ type mongoCDC struct {
 	marshalCanonical bool
 
 	snapshotParallelism    int // if > 0 then enabled
+	snapshotMaxBatchSize   int
 	snapshotSemaphore      *semaphore.Weighted
 	useAutoBucketSnapshots bool
 
@@ -683,11 +700,11 @@ func (m *mongoCDC) readSnapshotRange(
 				{Key: "$lt", Value: end},
 			},
 		},
-	}, options.Find().SetBatchSize(int32(m.readBatchSize)))
+	}, options.Find().SetBatchSize(int32(m.snapshotMaxBatchSize)))
 	if err != nil {
 		return fmt.Errorf("reading snapshot: %w", err)
 	}
-	cursor.SetBatchSize(int32(m.readBatchSize))
+	cursor.SetBatchSize(int32(m.snapshotMaxBatchSize))
 	defer cursor.Close(ctx)
 	var mb service.MessageBatch
 	for cursor.Next(ctx) {

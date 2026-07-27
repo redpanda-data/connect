@@ -71,8 +71,8 @@ input:
     max_tracked_shards: 10000
     throttle_backoff: 100ms
     snapshot_mode: none
-    snapshot_segments: 1
-    snapshot_batch_size: 100
+    max_parallel_snapshot_tables: 0 # No default (optional)
+    snapshot_max_batch_size: 0 # No default (optional)
     snapshot_throttle: 100ms
     snapshot_deduplicate: true
     snapshot_buffer_size: 100000
@@ -135,7 +135,7 @@ When `snapshot_mode` is set to `snapshot_only` or `snapshot_and_cdc`, the input 
 - Syncing historical data to a data warehouse
 - Populating a search index with existing records
 
-WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units (RCUs). For large tables, this can be expensive and take considerable time. Use `snapshot_segments` and `snapshot_throttle` to control RCU consumption.
+WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units (RCUs). For large tables, this can be expensive and take considerable time. Use `max_parallel_snapshot_tables` and `snapshot_throttle` to control RCU consumption.
 
 NOTE: Snapshots use eventually consistent reads and do not provide point-in-time consistency. Records modified during the snapshot may appear in both the snapshot and CDC stream (with different values). Use `snapshot_deduplicate` to minimize duplicates.
 
@@ -224,7 +224,7 @@ input:
   aws_dynamodb_cdc:
     tables: [products]
     snapshot_mode: snapshot_and_cdc
-    snapshot_segments: 5
+    max_parallel_snapshot_tables: 5
     region: us-east-1
 ```
 
@@ -436,23 +436,21 @@ Options:
 , `snapshot_and_cdc`
 .
 
-=== `snapshot_segments`
+=== `max_parallel_snapshot_tables`
 
-Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more RCUs. Start with 1 for safety.
-
-
-*Type*: `int`
-
-*Default*: `1`
-
-=== `snapshot_batch_size`
-
-Records per scan request during snapshot. Maximum 1000. Lower values provide better backpressure control but require more API calls.
+Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more RCUs. Start with 1 for safety. Defaults to 1.
 
 
 *Type*: `int`
 
-*Default*: `100`
+
+=== `snapshot_max_batch_size`
+
+Records per scan request during snapshot. Maximum 1000. Lower values provide better backpressure control but require more API calls. Defaults to 100.
+
+
+*Type*: `int`
+
 
 === `snapshot_throttle`
 
