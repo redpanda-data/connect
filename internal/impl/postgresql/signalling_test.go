@@ -78,6 +78,9 @@ postgres_cdc:
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
 	license.InjectTestService(streamOut.Resources())
+	t.Cleanup(func() {
+		require.NoError(t, streamOut.StopWithin(5*time.Second))
+	})
 
 	go func() {
 		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
@@ -577,6 +580,58 @@ postgres_cdc:
 	})
 
 	require.NoError(t, streamOut.StopWithin(10*time.Second))
+}
+
+func TestNewControlSignallerNormalizesIdentifiers(t *testing.T) {
+	tests := []struct {
+		name          string
+		schema        string
+		tableName     string
+		wantSchema    string
+		wantTableName string
+		wantErr       bool
+	}{
+		{
+			name:          "unquoted mixed-case is folded to lowercase, matching what Postgres reports on the wire",
+			schema:        "dbo",
+			tableName:     "RpcnSignalTable",
+			wantSchema:    "dbo",
+			wantTableName: "rpcnsignaltable",
+		},
+		{
+			name:          "quoted mixed-case preserves case",
+			schema:        "dbo",
+			tableName:     `"RpcnSignalTable"`,
+			wantSchema:    "dbo",
+			wantTableName: "RpcnSignalTable",
+		},
+		{
+			name:          "empty table name disables signalling and is left untouched",
+			schema:        "dbo",
+			tableName:     "",
+			wantSchema:    "dbo",
+			wantTableName: "",
+		},
+		{
+			name:      "invalid schema identifier is rejected",
+			schema:    "",
+			tableName: "rpcn_signal_table",
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewControlSignaller(tt.schema, tt.tableName, nil)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantSchema, s.schema)
+			assert.Equal(t, tt.wantTableName, s.tableName)
+		})
+	}
 }
 
 func TestControlSignalTableNames(t *testing.T) {

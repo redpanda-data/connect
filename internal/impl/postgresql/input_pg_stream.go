@@ -413,7 +413,9 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	// Initialise signaller eagerly so IsPending() is safe to call before the first Connect().
-	i.controlSig = NewControlSignaller(schema, signalTableName, logger)
+	if i.controlSig, err = NewControlSignaller(schema, signalTableName, logger); err != nil {
+		return nil, err
+	}
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
 	i.stopSig.TriggerHasStopped()

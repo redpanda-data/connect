@@ -20,6 +20,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
@@ -32,10 +33,28 @@ type postgresSignaller struct {
 	tableName string
 }
 
-// NewControlSignaller creates a replication.Signaller that detects signal INSERTs on the given schema.tableName.
-func NewControlSignaller(schema, tableName string, log *service.Logger) *postgresSignaller {
-	s := replication.NewControlSignaller(log)
-	return &postgresSignaller{ControlSignaller: s, schema: schema, tableName: tableName}
+// NewControlSignaller creates a replication.Signaller that detects signal
+// INSERTs on the given schema.tableName.
+func NewControlSignaller(schema, tableName string, log *service.Logger) (*postgresSignaller, error) {
+	normalizedSchema, err := wireFormPostgresIdentifier(schema)
+	if err != nil {
+		return nil, fmt.Errorf("invalid schema %q: %w", schema, err)
+	}
+	normalizedTableName := tableName
+	if tableName != "" {
+		if normalizedTableName, err = wireFormPostgresIdentifier(tableName); err != nil {
+			return nil, fmt.Errorf("invalid signal table name %q: %w", tableName, err)
+		}
+	}
+	return &postgresSignaller{ControlSignaller: replication.NewControlSignaller(log), schema: normalizedSchema, tableName: normalizedTableName}, nil
+}
+
+func wireFormPostgresIdentifier(name string) (string, error) {
+	normalized, err := sanitize.NormalizePostgresIdentifier(name)
+	if err != nil {
+		return "", err
+	}
+	return sanitize.UnquotePostgresIdentifier(normalized)
 }
 
 // Listen returns any actionable signal found; it does not call StoreSignal -
