@@ -568,8 +568,8 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			)
 			for _, msg := range batch {
 				if _, err := p.controlSig.Listen(ctx, msg); err != nil {
-					p.logger.Errorf("failed to detect control signal in change event, skipping message: %s", err)
-					continue
+					// Log it and fall through to the normal emit path below.
+					p.logger.Errorf("failed to detect control signal in change event: %s", err)
 				}
 
 				if mb, err = json.Marshal(msg.Data); err != nil {

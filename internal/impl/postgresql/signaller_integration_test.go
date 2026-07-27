@@ -328,6 +328,100 @@ postgres_cdc:
 	mu.Unlock()
 }
 
+func TestIntegrationSignallingMalformedRowStillPublished(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	db.MustExec(`CREATE SCHEMA IF NOT EXISTS dbo`)
+	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
+	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
+
+	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
+
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_signalling_malformed
+    stream_snapshot: true
+    signal_table_name: rpcn_signal_table
+    schema: dbo
+    tables:
+      - events
+`, databaseURL)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
+
+	var (
+		received []any
+		mu       sync.Mutex
+	)
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			data, err := msg.AsStructured()
+			if err != nil {
+				return err
+			}
+			m := data.(map[string]any)
+			if _, ok := m["lsn"]; ok {
+				m["lsn"] = "XXX/XXX"
+			}
+			delete(m, "schema")
+			delete(m, "commit_ts_ms")
+			received = append(received, m)
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+	t.Cleanup(func() {
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
+
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	// Wait for the initial snapshot row from dbo.events.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Len(c, received, 1)
+	}, 25*time.Second, 100*time.Millisecond)
+
+	mu.Lock()
+	received = nil
+	mu.Unlock()
+
+	// data is left NULL, so Listen fails to parse this row as a signal
+	// ("expected string for ...data column, got <nil>"). That must not stop
+	// it from being published like any other row.
+	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type) VALUES ('log')`)
+	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-malformed-signal')`)
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Len(c, received, 2)
+	}, 5*time.Second, 100*time.Millisecond)
+
+	mu.Lock()
+	require.ElementsMatch(t, received, []any{
+		map[string]any{"operation": "insert", "table": "rpcn_signal_table", "lsn": "XXX/XXX"},
+		map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
+	})
+	mu.Unlock()
+}
+
 type testLogCapture struct {
 	mu       sync.Mutex
 	messages []string
@@ -346,6 +440,6 @@ func (c *testLogCapture) Messages() []string {
 	return append([]string(nil), c.messages...)
 }
 
-func (c *testLogCapture) WithAttrs([]slog.Attr) slog.Handler       { return c }
-func (c *testLogCapture) WithGroup(string) slog.Handler            { return c }
-func (_ *testLogCapture) Enabled(context.Context, slog.Level) bool { return true }
+func (c *testLogCapture) WithAttrs([]slog.Attr) slog.Handler     { return c }
+func (c *testLogCapture) WithGroup(string) slog.Handler          { return c }
+func (*testLogCapture) Enabled(context.Context, slog.Level) bool { return true }
