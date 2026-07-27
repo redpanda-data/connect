@@ -600,7 +600,7 @@ pipeline:
 a JSON object with a `message` key, whose value is written to the connector's log output.
 
 ```sql
-INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Signal message"}');
+INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message": "Signal message"}');
 ```
 
 
