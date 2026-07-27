@@ -98,9 +98,12 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return nil, err
 	}
 
-	schemas, err := resolveSchemas(ctx, dbConn, config.DBSchemaPattern)
+	schemas, inaccessibleSchemas, err := resolveSchemas(ctx, dbConn, config.DBSchemaPattern)
 	if err != nil {
 		return nil, fmt.Errorf("resolving schema pattern %q: %w", config.DBSchemaPattern, err)
+	}
+	if len(inaccessibleSchemas) > 0 {
+		config.Logger.Warnf("schema pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", config.DBSchemaPattern, inaccessibleSchemas)
 	}
 	if len(schemas) == 0 {
 		return nil, fmt.Errorf("no schemas found matching pattern %q", config.DBSchemaPattern)

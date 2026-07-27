@@ -51,10 +51,17 @@ func schemaPatternToLike(pattern string) (string, error) {
 	return globToLike(strings.ToLower(pattern)), nil
 }
 
-func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) ([]string, error) {
+// resolveSchemas returns the schemas matching pattern that the connection's
+// role has access to (visibleSchemas), plus any schemas that also match
+// pattern but are hidden from information_schema.schemata by privileges
+// (inaccessibleSchemas). The latter is surfaced separately so callers can
+// warn the user instead of silently dropping schemas they expected to be
+// included, e.g. `"tenant_*"` matching a schema the configured role can't
+// see yet.
+func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (visibleSchemas, inaccessibleSchemas []string, err error) {
 	likePattern, err := schemaPatternToLike(pattern)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	q, err := sanitize.SQLQuery(
@@ -62,24 +69,54 @@ func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) ([
 		likePattern,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("building schema resolution query: %w", err)
+		return nil, nil, fmt.Errorf("building schema resolution query: %w", err)
 	}
 
 	results, err := conn.Exec(ctx, q).ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("querying schemas matching %q: %w", pattern, err)
+		return nil, nil, fmt.Errorf("querying schemas matching %q: %w", pattern, err)
 	}
 
+	visible := map[string]struct{}{}
 	var schemas []string
 	if len(results) > 0 {
 		for _, row := range results[0].Rows {
+			name := string(row[0])
+			visible[name] = struct{}{}
 			// QuotePostgresIdentifier preserves the exact stored name (including
 			// case for case-sensitive schemas), unlike NormalizePostgresIdentifier
 			// which would incorrectly fold to lower-case.
-			schemas = append(schemas, sanitize.QuotePostgresIdentifier(string(row[0])))
+			schemas = append(schemas, sanitize.QuotePostgresIdentifier(name))
 		}
 	}
-	return schemas, nil
+
+	// pg_namespace is not privilege-filtered, so any pattern match here that's
+	// missing from information_schema.schemata means the role lacks USAGE (or
+	// similar) on that schema rather than the schema simply not existing.
+	nsQ, err := sanitize.SQLQuery(
+		"SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE $1 ESCAPE '!' AND nspname NOT LIKE 'pg!_%' ESCAPE '!' AND nspname != 'information_schema'",
+		likePattern,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("building pg_namespace resolution query: %w", err)
+	}
+
+	nsResults, err := conn.Exec(ctx, nsQ).ReadAll()
+	if err != nil {
+		return nil, nil, fmt.Errorf("querying pg_namespace for schemas matching %q: %w", pattern, err)
+	}
+
+	var hidden []string
+	if len(nsResults) > 0 {
+		for _, row := range nsResults[0].Rows {
+			name := string(row[0])
+			if _, ok := visible[name]; !ok {
+				hidden = append(hidden, sanitize.QuotePostgresIdentifier(name))
+			}
+		}
+	}
+
+	return schemas, hidden, nil
 }
 
 // resolveExistingTables returns the set of quoted table identifiers that
