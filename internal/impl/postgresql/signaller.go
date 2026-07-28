@@ -77,17 +77,11 @@ func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.
 	}
 
 	var sig replication.ControlSignal
-	if err := json.Unmarshal([]byte(dataStr), &sig); err != nil {
-		return nil, fmt.Errorf("unmarshaling control signal %s.data: %w", s.tableName, err)
+	if sig.SignalType, ok = row["type"].(string); !ok {
+		return nil, errors.New("parsing control signals's 'type' data")
 	}
 
 	sig.ID = fmt.Sprintf("%v", row["id"])
-
-	evType, ok := row["type"].(string)
-	if !ok {
-		return nil, errors.New("parsing control signals's 'type' data")
-	}
-	sig.SignalType = evType
 	log := s.Log.With("id", sig.ID, "type", sig.SignalType)
 
 	if msg.LSN != nil {
@@ -97,6 +91,9 @@ func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.
 	// validate signal type
 	switch sig.SignalType {
 	case replication.LogSignalType:
+		if err := json.Unmarshal([]byte(dataStr), &sig.LogSignal); err != nil {
+			return nil, fmt.Errorf("unmarshaling control signal %s.data: %w", s.tableName, err)
+		}
 		s.Log.Infof("%q control signal received (lsn=%s): %s", sig.Type(), sig.LSN, sig.Message)
 	default:
 		log.Warnf("Control signal %q received but not a recognized type", sig.SignalType)

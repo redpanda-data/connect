@@ -13,11 +13,16 @@ import "context"
 // LogSignalType represents a log signal.
 const LogSignalType = "log"
 
+// LogSignal is the decoded "data" payload for a LogSignalType signal.
+type LogSignal struct {
+	Message string `json:"message"`
+}
+
 // ControlSignal represents a insert into the signal table.
 type ControlSignal struct {
 	ID         string
 	SignalType string
-	Message    string `json:"message"`
+	LogSignal
 
 	// LSN is the log sequence number/offset the signal was observed at, in
 	// whatever raw form the connector's replication stream represents

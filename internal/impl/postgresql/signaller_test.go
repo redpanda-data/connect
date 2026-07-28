@@ -106,7 +106,7 @@ func TestPostgresSignallerListen(t *testing.T) {
 				LSN:       &lsn,
 				Data:      map[string]any{"id": 1, "type": "log", "data": `{"message": "hello"}`},
 			},
-			want: &replication.ControlSignal{ID: "1", SignalType: "log", Message: "hello", LSN: []byte(lsn)},
+			want: &replication.ControlSignal{ID: "1", SignalType: "log", LogSignal: replication.LogSignal{Message: "hello"}, LSN: []byte(lsn)},
 		},
 		{
 			name: "unrecognized type is still returned",
@@ -117,7 +117,7 @@ func TestPostgresSignallerListen(t *testing.T) {
 				LSN:       &lsn,
 				Data:      map[string]any{"id": 2, "type": "unsupported", "data": `{"message": "hello"}`},
 			},
-			want: &replication.ControlSignal{ID: "2", SignalType: "unsupported", Message: "hello", LSN: []byte(lsn)},
+			want: &replication.ControlSignal{ID: "2", SignalType: "unsupported", LSN: []byte(lsn)},
 		},
 	}
 
