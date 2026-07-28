@@ -11,7 +11,9 @@ package pgtest
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 
@@ -54,36 +56,68 @@ func (r *ReceivedMessages) Reset() {
 	r.msgs = nil
 }
 
-// TestLogCapture is an implemention of the slog.Logger interface
-// to support verifying log output.
+// TestLogCapture is an implemention of the slog.Logger interface to support
+// verifying log output, including attributes bound via With().
 type TestLogCapture struct {
+	sink  *logSink
+	attrs []slog.Attr
+}
+
+type logSink struct {
 	mu       sync.Mutex
 	messages []string
 }
 
-// Handle records the log record's message.
+func (s *logSink) add(msg string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.messages = append(s.messages, msg)
+}
+
+func (s *logSink) snapshot() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.messages...)
+}
+
+// Handle records the log record's message, plus any attributes bound via
+// With() or attached directly to the record.
 func (c *TestLogCapture) Handle(_ context.Context, r slog.Record) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.messages = append(c.messages, r.Message)
+	var b strings.Builder
+	b.WriteString(r.Message)
+	for _, a := range c.attrs {
+		fmt.Fprintf(&b, " %s=%v", a.Key, a.Value)
+	}
+	r.Attrs(func(a slog.Attr) bool {
+		fmt.Fprintf(&b, " %s=%v", a.Key, a.Value)
+		return true
+	})
+	c.sink.add(b.String())
 	return nil
 }
 
 // Messages returns a snapshot of every message logged so far.
 func (c *TestLogCapture) Messages() []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]string(nil), c.messages...)
+	return c.sink.snapshot()
 }
 
-// WithAttrs returns the receiver unchanged; attributes are not recorded.
-func (c *TestLogCapture) WithAttrs([]slog.Attr) slog.Handler { return c }
+// WithAttrs returns a handler carrying the given attributes, sharing this
+// capture's underlying sink so messages logged through it are still visible
+// via Messages().
+func (c *TestLogCapture) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &TestLogCapture{sink: c.sink, attrs: append(append([]slog.Attr{}, c.attrs...), attrs...)}
+}
 
 // WithGroup returns the receiver unchanged; groups are not recorded.
 func (c *TestLogCapture) WithGroup(string) slog.Handler { return c }
 
 // Enabled always returns true so every log record is captured.
 func (*TestLogCapture) Enabled(context.Context, slog.Level) bool { return true }
+
+// NewTestLogCapture creates a TestLogCapture ready to use as a slog.Handler.
+func NewTestLogCapture() *TestLogCapture {
+	return &TestLogCapture{sink: &logSink{}}
+}
 
 // FakeFlightRecord is a fake row shape used to generate test data for
 // integration tests.

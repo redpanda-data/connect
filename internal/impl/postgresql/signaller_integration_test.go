@@ -70,6 +70,52 @@ postgres_cdc:
 		})
 	})
 
+	t.Run("supports string based id column", func(t *testing.T) {
+		db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.uuid_test_events (id SERIAL PRIMARY KEY, name TEXT)`)
+		db.MustExec(t, `INSERT INTO dbo.uuid_test_events (name) VALUES ('initial')`)
+		db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.uuid_signal_table (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), type VARCHAR(32), data TEXT)`)
+
+		received, logs := startSignallingStream(t, fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_signalling_uuid_id
+    stream_snapshot: true
+    signal_table_name: uuid_signal_table
+    schema: dbo
+    tables:
+      - uuid_test_events
+`, databaseURL))
+
+		// Wait for the initial snapshot to complete before inserting a signal.
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			assert.Equal(c, 1, received.Len())
+		}, 25*time.Second, 100*time.Millisecond)
+
+		received.Reset()
+
+		var signalID string
+		require.NoError(t, db.QueryRow(`INSERT INTO dbo.uuid_signal_table (type, data) VALUES ('log', '{"message": "uuid id works"}') RETURNING id`).Scan(&signalID))
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			var found bool
+			for _, m := range logs.Messages() {
+				if strings.Contains(m, "uuid id works") && strings.Contains(m, "id="+signalID) {
+					found = true
+					break
+				}
+			}
+			assert.True(c, found, "expected a log entry propagating id=%s, got: %v", signalID, logs.Messages())
+		}, 5*time.Second, 100*time.Millisecond)
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			assert.Equal(c, 1, received.Len())
+		}, 5*time.Second, 100*time.Millisecond)
+
+		require.ElementsMatch(t, received.All(), []any{
+			map[string]any{"operation": "insert", "table": "uuid_signal_table", "lsn": "XXX/XXX"},
+		})
+	})
+
 	t.Run("errors when signal table does not exist", func(t *testing.T) {
 		_, logs := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
@@ -331,7 +377,7 @@ postgres_cdc:
 func startSignallingStream(t *testing.T, inputYAML string) (*pgtest.ReceivedMessages, *pgtest.TestLogCapture) {
 	t.Helper()
 
-	logs := &pgtest.TestLogCapture{}
+	logs := pgtest.NewTestLogCapture()
 	streamOutBuilder := service.NewStreamBuilder()
 	streamOutBuilder.SetLogger(slog.New(logs))
 	require.NoError(t, streamOutBuilder.AddInputYAML(inputYAML))
