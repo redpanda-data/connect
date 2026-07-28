@@ -200,7 +200,8 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Description(`The name of the table used to send control signals to the connector, excluding the schema. The table must
 exist in the schema configured via the ` + "`schema`" + ` field, and must not also appear in ` + "`" + fieldTables + "`" + `
 - the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
-it in both places is rejected at startup. It must have exactly these columns:
+it in both places is rejected at startup. It must have at least these columns (startup validation checks
+column names only) with the following column types:
 
 - **id** — any type representable as a string (e.g. ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
 - **type** — ` + "`VARCHAR`" + ` — the signal type (see supported signals below)
