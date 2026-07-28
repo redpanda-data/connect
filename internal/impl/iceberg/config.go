@@ -163,7 +163,21 @@ const rowOperationDocs = "\n" +
 	"\n" +
 	"* A `decimal` merge key is not supported — use `merge-on-read` for a decimal key (a `decimal` non-key column is fine).\n" +
 	"* Schema evolution covers new *top-level* columns only; new fields appearing inside an existing nested `struct`/`list`/`map` column are not auto-surfaced for evolution.\n" +
-	"* It is a batch / moderate-throughput mode: expect heavy write amplification under scattered, high-frequency keyed mutations.\n"
+	"* It is a batch / moderate-throughput mode: expect heavy write amplification under scattered, high-frequency keyed mutations.\n" +
+	"* Tables pinned to the legacy timestamp encoding whose schema contains a no-timezone `timestamp` column reject `upsert`/`delete` — see <<timestamp-encoding,Timestamp encoding on existing tables>> for why and for the migration path.\n" +
+	"\n" +
+	"[[timestamp-encoding]]\n" +
+	"=== Timestamp encoding on existing tables\n" +
+	"\n" +
+	"Older versions of this output annotated no-timezone `timestamp` columns in the parquet files they wrote with `isAdjustedToUTC=true` — the annotation the Iceberg spec reserves for `timestamptz`. The stored microsecond instants are correct, and appends and most readers are unaffected, but the annotation makes some readers treat the column as UTC-adjusted, and it prevents `copy-on-write` from rewriting those files (the file's annotation reads back as `timestamptz`, which cannot be written into a `timestamp` column). Current versions write the spec-correct `isAdjustedToUTC=false`.\n" +
+	"\n" +
+	"To guarantee an existing table never ends up with a mix of the two annotations, the encoding is pinned *per table* via the table property `redpanda-connect.timestamp-encoding` (`spec` or `legacy`):\n" +
+	"\n" +
+	"* Tables created by this output carry `redpanda-connect.timestamp-encoding: spec` from creation.\n" +
+	"* For an existing table without the property, the output resolves the encoding automatically on first contact and stamps the result onto the table: if the schema has no no-timezone `timestamp` column, or the table has no data files, it resolves `spec`; otherwise the output inspects one data file's parquet footer and adopts whatever that file already contains (`legacy` for `isAdjustedToUTC=true`). A table that cannot be probed (unreadable file) fails the write rather than risk mixing annotations.\n" +
+	"* Once stamped, the property is authoritative and the probe never runs again. An unrecognised property value is a hard error.\n" +
+	"\n" +
+	"A table pinned `legacy` keeps receiving the legacy annotation on every new file — byte-identical to what previous releases wrote — so appends and `merge-on-read` continue working unchanged forever. The one restriction is mutating `copy-on-write` (`upsert`/`delete`): it must rewrite existing files, which the legacy annotation prevents, so such writes fail upfront with an actionable error (pure `insert` batches still work). To migrate a legacy table to the spec encoding: rewrite/compact the table's data files with an engine that writes the spec annotation (e.g. Spark's `rewrite_data_files`), then set the table property `redpanda-connect.timestamp-encoding` to `spec`. Alternatively, keep the table on `merge-on-read`.\n"
 
 // icebergOutputConfig returns the configuration spec for the Iceberg output.
 func icebergOutputConfig() *service.ConfigSpec {

@@ -26,6 +26,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/shredder"
 )
 
@@ -67,6 +68,18 @@ func (w *writer) writeCOW(ctx context.Context, batch service.MessageBatch) error
 		}
 		w.metrics.incrInserted(counts.inserted)
 		return nil
+	}
+
+	// Mutating (upsert/delete) copy-on-write rewrites existing data files, and
+	// the rewrite cannot read back files whose no-tz `timestamp` columns carry
+	// the legacy UTC-adjusted annotation (iceberg-go reads them as timestamptz
+	// and refuses the timestamptz -> timestamp "promotion"). Fail upfront with
+	// an actionable error — before any file writes — rather than surface the
+	// library's cryptic one mid-commit. Insert-only batches on such a table are
+	// fine (they took the append fast path above and keep writing the table's
+	// own legacy encoding), as is merge-on-read (no file rewrites).
+	if err := w.checkCOWTimestampEncoding(); err != nil {
+		return err
 	}
 
 	// The remaining paths rewrite data files. Partitioned tables are supported:
@@ -135,6 +148,24 @@ func (w *writer) writeCOW(ctx context.Context, batch service.MessageBatch) error
 	w.metrics.incrUpserted(counts.upserted)
 	w.metrics.incrDeleted(counts.deleted)
 	return nil
+}
+
+// checkCOWTimestampEncoding guards mutating copy-on-write against tables
+// pinned to the legacy timestamp encoding: their data files annotate no-tz
+// `timestamp` columns with isAdjustedToUTC=true, which the copy-on-write
+// rewrite cannot read back losslessly (iceberg-go maps the annotation to
+// timestamptz and its strict rewrite visitor refuses timestamptz ->
+// timestamp). Tables without any no-tz timestamp column are unaffected —
+// there is no column the encodings disagree on.
+func (w *writer) checkCOWTimestampEncoding() error {
+	if w.tsEncoding != icebergx.TimestampEncodingLegacy || !icebergx.SchemaHasNoTZTimestamp(w.table.Schema()) {
+		return nil
+	}
+	return fmt.Errorf(
+		"table %s uses the legacy UTC-adjusted parquet encoding for its `timestamp` columns (table property %s=legacy), which copy-on-write cannot rewrite; "+
+			"compact/rewrite the table's data files with an engine that writes the spec encoding and set the table property %s=spec, or use merge_strategy: merge-on-read",
+		strings.Join(w.table.Identifier(), "."), icebergx.TimestampEncodingProperty, icebergx.TimestampEncodingProperty,
+	)
 }
 
 // checkCOWSchemaSupported rejects table schemas the copy-on-write path cannot

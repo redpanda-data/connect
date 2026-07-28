@@ -28,14 +28,22 @@ func TestIcebergTimestampParquetAnnotation(t *testing.T) {
 	cases := []struct {
 		name           string
 		typ            iceberg.Type
+		encoding       TimestampEncoding
 		wantAdjustedTZ bool
 	}{
-		{"timestamp", iceberg.TimestampType{}, false},
-		{"timestamptz", iceberg.TimestampTzType{}, true},
+		// Spec encoding: the Iceberg-spec-correct annotations. This is what
+		// every table created by the connector from now on gets.
+		{"timestamp spec", iceberg.TimestampType{}, TimestampEncodingSpec, false},
+		{"timestamptz spec", iceberg.TimestampTzType{}, TimestampEncodingSpec, true},
+		// Legacy encoding: no-tz `timestamp` keeps the pre-fix
+		// isAdjustedToUTC=true so existing tables never become mixed;
+		// `timestamptz` is UTC-adjusted in BOTH modes.
+		{"timestamp legacy", iceberg.TimestampType{}, TimestampEncodingLegacy, true},
+		{"timestamptz legacy", iceberg.TimestampTzType{}, TimestampEncodingLegacy, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			node, err := icebergTypeToParquet(tc.typ)
+			node, err := icebergTypeToParquet(tc.typ, tc.encoding)
 			require.NoError(t, err)
 
 			lt := node.Type().LogicalType()
@@ -48,6 +56,54 @@ func TestIcebergTimestampParquetAnnotation(t *testing.T) {
 	}
 }
 
+func TestParseTimestampEncoding(t *testing.T) {
+	enc, err := ParseTimestampEncoding("spec")
+	require.NoError(t, err)
+	assert.Equal(t, TimestampEncodingSpec, enc)
+
+	enc, err = ParseTimestampEncoding("legacy")
+	require.NoError(t, err)
+	assert.Equal(t, TimestampEncodingLegacy, enc)
+
+	// Unknown values must fail loud: guessing could mix parquet annotations
+	// within a single table.
+	_, err = ParseTimestampEncoding("bogus")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), TimestampEncodingProperty)
+	assert.Contains(t, err.Error(), "bogus")
+
+	_, err = ParseTimestampEncoding("")
+	require.Error(t, err)
+}
+
+func TestSchemaHasNoTZTimestamp(t *testing.T) {
+	t.Run("none", func(t *testing.T) {
+		sc := iceberg.NewSchema(0,
+			iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64},
+			iceberg.NestedField{ID: 2, Name: "tstz", Type: iceberg.PrimitiveTypes.TimestampTz},
+		)
+		assert.False(t, SchemaHasNoTZTimestamp(sc), "timestamptz alone must not count")
+	})
+
+	t.Run("top level", func(t *testing.T) {
+		sc := iceberg.NewSchema(0,
+			iceberg.NestedField{ID: 1, Name: "ts", Type: iceberg.PrimitiveTypes.Timestamp},
+		)
+		assert.True(t, SchemaHasNoTZTimestamp(sc))
+	})
+
+	t.Run("nested", func(t *testing.T) {
+		sc := iceberg.NewSchema(0,
+			iceberg.NestedField{ID: 1, Name: "events", Type: &iceberg.ListType{
+				ElementID: 2, Element: &iceberg.StructType{FieldList: []iceberg.NestedField{
+					{ID: 3, Name: "at", Type: iceberg.PrimitiveTypes.Timestamp},
+				}},
+			}},
+		)
+		assert.True(t, SchemaHasNoTZTimestamp(sc), "a nested no-tz timestamp leaf must count")
+	})
+}
+
 func TestBuildParquetSchema_SimpleFlat(t *testing.T) {
 	// Schema: { id: int64, name: string }
 	schema := iceberg.NewSchema(1,
@@ -55,7 +111,7 @@ func TestBuildParquetSchema_SimpleFlat(t *testing.T) {
 		iceberg.NestedField{ID: 2, Name: "name", Type: iceberg.PrimitiveTypes.String, Required: false},
 	)
 
-	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema, TimestampEncodingSpec)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -92,7 +148,7 @@ func TestBuildParquetSchema_NestedStruct(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema, TimestampEncodingSpec)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -131,7 +187,7 @@ func TestBuildParquetSchema_List(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema, TimestampEncodingSpec)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -167,7 +223,7 @@ func TestBuildParquetSchema_Map(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema, TimestampEncodingSpec)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -211,7 +267,7 @@ func TestBuildParquetSchema_ListOfStructs(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema, TimestampEncodingSpec)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -260,7 +316,7 @@ func TestBuildParquetSchema_DeeplyNested(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema, TimestampEncodingSpec)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -312,7 +368,7 @@ func TestBuildParquetSchema_NestedListsInStruct(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema, TimestampEncodingSpec)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -369,7 +425,7 @@ func TestBuildParquetSchema_ComplexMixed(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema, TimestampEncodingSpec)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -416,7 +472,7 @@ func TestBuildParquetSchema_AllPrimitiveTypes(t *testing.T) {
 		iceberg.NestedField{ID: 12, Name: "uuid_col", Type: iceberg.PrimitiveTypes.UUID, Required: false},
 	)
 
-	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema, TimestampEncodingSpec)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 

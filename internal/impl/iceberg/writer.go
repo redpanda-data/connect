@@ -134,6 +134,14 @@ type writer struct {
 	metrics               *opMetrics
 	logger                *service.Logger
 
+	// tsEncoding is the table's resolved timestamp encoding: how no-timezone
+	// `timestamp` columns are annotated in the parquet files this writer
+	// produces. It is resolved once per table (from the
+	// redpanda-connect.timestamp-encoding property, footer-probed and stamped
+	// when absent — see resolveTimestampEncoding) so a table's data files
+	// never mix annotations. The zero value is the spec encoding.
+	tsEncoding icebergx.TimestampEncoding
+
 	// coerceLoggedFieldIDs tracks the iceberg field IDs we have already
 	// logged a coerce-on-write notice for, so that a long-running writer
 	// emits the divergence between schema metadata and existing column
@@ -150,7 +158,10 @@ type writer struct {
 // to interpret numeric inputs into time-typed columns; pass nil to disable.
 // requireSchemaMetadata enables shredder strict mode — see
 // [shredder.RecordShredder.StrictTemporalMode].
-func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, resolver *typeResolver, requireSchemaMetadata bool, rowOpCfg RowOpConfig, logger *service.Logger) *writer {
+// tsEncoding is the table's resolved timestamp encoding (see
+// resolveTimestampEncoding); it must match the annotation carried by the
+// table's existing data files.
+func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, resolver *typeResolver, requireSchemaMetadata bool, rowOpCfg RowOpConfig, tsEncoding icebergx.TimestampEncoding, logger *service.Logger) *writer {
 	return &writer{
 		table:                 tbl,
 		committer:             comm,
@@ -159,6 +170,7 @@ func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts
 		resolver:              resolver,
 		requireSchemaMetadata: requireSchemaMetadata,
 		rowOpCfg:              rowOpCfg,
+		tsEncoding:            tsEncoding,
 		logger:                logger,
 		coerceLoggedFieldIDs:  map[int]struct{}{},
 	}
@@ -273,7 +285,7 @@ func (w *writer) writeDataFiles(ctx context.Context, batch service.MessageBatch)
 	}
 
 	// Build field ID mappings for stats extraction and partition data
-	_, fieldToCol, err := icebergx.BuildParquetSchema(w.table.Schema())
+	_, fieldToCol, err := icebergx.BuildParquetSchema(w.table.Schema(), w.tsEncoding)
 	if err != nil {
 		return nil, fmt.Errorf("building parquet schema: %w", err)
 	}
@@ -705,7 +717,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	spec := w.table.Spec()
 
 	// Build parquet schema and field ID to column index mapping
-	pqSchema, fieldToCol, err := icebergx.BuildParquetSchema(schema)
+	pqSchema, fieldToCol, err := icebergx.BuildParquetSchema(schema, w.tsEncoding)
 	if err != nil {
 		return nil, fmt.Errorf("building parquet schema: %w", err)
 	}

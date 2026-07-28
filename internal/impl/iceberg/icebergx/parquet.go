@@ -22,12 +22,15 @@ import (
 )
 
 // BuildParquetSchema builds a parquet schema from an iceberg schema and returns
-// a mapping from field ID to column index.
-func BuildParquetSchema(schema *iceberg.Schema) (_ *parquet.Schema, fieldIDToColIdx map[int]int, err error) {
+// a mapping from field ID to column index. tsEncoding selects the
+// isAdjustedToUTC annotation written for no-timezone `timestamp` columns —
+// it must match the encoding of the table's existing data files so a table
+// never carries mixed annotations (see TimestampEncodingProperty).
+func BuildParquetSchema(schema *iceberg.Schema, tsEncoding TimestampEncoding) (_ *parquet.Schema, fieldIDToColIdx map[int]int, err error) {
 	group := make(parquet.Group)
 
 	for _, field := range schema.Fields() {
-		node, err := icebergFieldToParquet(field)
+		node, err := icebergFieldToParquet(field, tsEncoding)
 		if err != nil {
 			return nil, nil, fmt.Errorf("field %s: %w", field.Name, err)
 		}
@@ -107,8 +110,8 @@ func schemaLeaves(root iceberg.Type, fieldID int, path []string) iter.Seq[schema
 }
 
 // icebergFieldToParquet converts an iceberg field to a parquet node.
-func icebergFieldToParquet(field iceberg.NestedField) (parquet.Node, error) {
-	node, err := icebergTypeToParquet(field.Type)
+func icebergFieldToParquet(field iceberg.NestedField, tsEncoding TimestampEncoding) (parquet.Node, error) {
+	node, err := icebergTypeToParquet(field.Type, tsEncoding)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +127,7 @@ func icebergFieldToParquet(field iceberg.NestedField) (parquet.Node, error) {
 }
 
 // icebergTypeToParquet converts an iceberg type to a parquet node.
-func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
+func icebergTypeToParquet(t iceberg.Type, tsEncoding TimestampEncoding) (parquet.Node, error) {
 	switch t := t.(type) {
 	case iceberg.BooleanType:
 		return parquet.Leaf(parquet.BooleanType), nil
@@ -152,7 +155,14 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 		// rewrites (the strict rewrite visitor refuses timestamptz -> timestamp).
 		// This mirrors iceberg-go's own Arrow writer, which encodes a no-tz
 		// timestamp with an empty Arrow time zone (isAdjustedToUTC=false).
-		return parquet.TimestampAdjusted(parquet.Microsecond, false), nil
+		//
+		// EXCEPT for tables pinned to the legacy encoding
+		// (TimestampEncodingLegacy): released connector versions wrote
+		// isAdjustedToUTC=true, so tables holding such files must keep
+		// receiving it — a table must never carry mixed annotations for one
+		// column. The per-table choice is resolved from
+		// TimestampEncodingProperty (see that constant's doc).
+		return parquet.TimestampAdjusted(parquet.Microsecond, tsEncoding == TimestampEncodingLegacy), nil
 	case iceberg.TimestampTzType:
 		// A `timestamptz` is UTC-adjusted: isAdjustedToUTC=true (parquet.Timestamp's
 		// default). iceberg-go reads this back as arrow timestamp[tz=UTC] -> timestamptz.
@@ -164,7 +174,7 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 	case *iceberg.StructType:
 		group := make(parquet.Group, len(t.Fields()))
 		for _, f := range t.Fields() {
-			node, err := icebergFieldToParquet(f)
+			node, err := icebergFieldToParquet(f, tsEncoding)
 			if err != nil {
 				return nil, err
 			}
@@ -172,7 +182,7 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 		}
 		return group, nil
 	case *iceberg.ListType:
-		elem, err := icebergTypeToParquet(t.Element)
+		elem, err := icebergTypeToParquet(t.Element, tsEncoding)
 		if err != nil {
 			return nil, err
 		}
@@ -182,12 +192,12 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 		elem = parquet.FieldID(elem, t.ElementID)
 		return parquet.List(elem), nil
 	case *iceberg.MapType:
-		key, err := icebergTypeToParquet(t.KeyType)
+		key, err := icebergTypeToParquet(t.KeyType, tsEncoding)
 		if err != nil {
 			return nil, err
 		}
 		key = parquet.FieldID(key, t.KeyID)
-		val, err := icebergTypeToParquet(t.ValueType)
+		val, err := icebergTypeToParquet(t.ValueType, tsEncoding)
 		if err != nil {
 			return nil, err
 		}

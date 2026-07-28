@@ -67,6 +67,13 @@ const maxSchemaEvolutionRetries = 10
 type tableEntry struct {
 	mu     sync.RWMutex
 	writer *writer
+
+	// tsEncoding caches the table's resolved timestamp encoding (see
+	// resolveTimestampEncoding) so the footer-probe/stamp bootstrap runs at
+	// most once per table per process — writer re-creation (schema evolution,
+	// error recovery) reuses it. Guarded by mu; valid when tsEncodingResolved.
+	tsEncoding         icebergx.TimestampEncoding
+	tsEncodingResolved bool
 }
 
 // Router routes message batches to per-table writers.
@@ -259,7 +266,7 @@ func (r *Router) doWrite(ctx context.Context, key tableKey, entry *tableEntry, b
 			entry.mu.Unlock()
 			continue
 		}
-		w, err := r.createWriter(ctx, key)
+		w, err := r.createWriter(ctx, key, entry)
 		if err != nil {
 			entry.mu.Unlock()
 			return err
@@ -381,6 +388,12 @@ func (r *Router) createTable(ctx context.Context, key tableKey, batch service.Me
 		location := tableLocationFor(r.schemaEvoCfg.TableLocation, nsParts, key.table)
 		createOpts = append(createOpts, catalog.WithLocation(location))
 	}
+	// Pin the timestamp encoding at birth: tables created by this connector
+	// are spec-encoded from their first file, so the footer-probe bootstrap
+	// (resolveTimestampEncoding) never has to run for them.
+	createOpts = append(createOpts, catalog.WithProperties(iceberg.Properties{
+		icebergx.TimestampEncodingProperty: icebergx.TimestampEncodingSpec.String(),
+	}))
 
 	// Create the table
 	_, err = client.CreateTable(ctx, key.table, schema, createOpts...)
@@ -393,6 +406,11 @@ func (r *Router) createTable(ctx context.Context, key tableKey, batch service.Me
 		}
 		return err
 	}
+
+	// The property is stamped in the creation commit, so the resolution is
+	// already known — cache it to spare createWriter a parse.
+	entry.tsEncoding = icebergx.TimestampEncodingSpec
+	entry.tsEncodingResolved = true
 
 	r.logger.Infof("Created table: %s.%s with %d columns", key.namespace, key.table, len(schema.Fields()))
 	// Invalidate cached writer so it gets recreated with the new table
@@ -695,8 +713,8 @@ func (*Router) closeWriter(entry *tableEntry) {
 }
 
 // createWriter creates a new writer for a table.
-// Caller must ensure this is only called when entry.writer is nil.
-func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error) {
+// Caller must hold entry.mu.Lock() and ensure entry.writer is nil.
+func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEntry) (*writer, error) {
 	// Parse namespace into parts
 	nsParts := strings.Split(key.namespace, ".")
 
@@ -715,11 +733,6 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 		return nil, err
 	}
 
-	committerTbl, err := client.LoadTable(ctx, key.table)
-	if err != nil {
-		return nil, err
-	}
-
 	// reloadTable creates a fresh catalog client and reloads the table,
 	// allowing the committer to recover from stale metadata or auth errors.
 	reloadTable := func(ctx context.Context) (*table.Table, error) {
@@ -729,6 +742,31 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 		}
 		defer rc.Close()
 		return rc.LoadTable(ctx, key.table)
+	}
+
+	// Resolve the table's timestamp encoding before any file is written, so
+	// every parquet file this writer produces matches the table's existing
+	// annotation. When the pinning property is present on the freshly loaded
+	// table it is authoritative and re-read on every writer (re)creation —
+	// this is metadata already in hand, and it means an operator who migrates
+	// a table (rewrite files, flip the property to spec) is honoured at the
+	// next writer recreation rather than being overridden by a stale cache.
+	// The entry cache (guarded by entry.mu, which we hold) only short-circuits
+	// the property-ABSENT bootstrap, so the footer probe and pinning stamp run
+	// at most once per table per process.
+	if _, propPresent := writerTbl.Properties()[icebergx.TimestampEncodingProperty]; propPresent || !entry.tsEncodingResolved {
+		enc, stampedTbl, err := resolveTimestampEncoding(ctx, writerTbl, reloadTable, r.logger)
+		if err != nil {
+			return nil, err
+		}
+		entry.tsEncoding = enc
+		entry.tsEncodingResolved = true
+		writerTbl = stampedTbl
+	}
+
+	committerTbl, err := client.LoadTable(ctx, key.table)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create committer with its own table reference. Copy-on-write writes only
@@ -745,7 +783,7 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 	// Create writer with its own table reference and the committer.
 	// The resolver is passed so the writer can use schema metadata to
 	// interpret numeric inputs into time-typed columns at shredding time.
-	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, r.logger)
+	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
 	w.metrics = r.metrics
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
