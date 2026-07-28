@@ -298,6 +298,7 @@ postgres_cdc:
     slot_name: test_slot_signalling_all_tables
     signal_table_name: rpcn_signal_table
     schema: dbo
+    tables: []
 `, databaseURL))
 
 	// There's no initial snapshot to synchronize on since tables is empty,
