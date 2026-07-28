@@ -38,7 +38,8 @@ func TestIntegrationSignallingConfiguration(t *testing.T) {
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
 
-	received, _ := startSignallingStream(t, fmt.Sprintf(`
+	t.Run("supports signal tables", func(t *testing.T) {
+		received, _ := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling
@@ -49,23 +50,48 @@ postgres_cdc:
       - events
 `, databaseURL))
 
-	// Wait for the initial snapshot to complete before inserting streaming records.
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.Equal(c, 2, received.Len())
-	}, 25*time.Second, 100*time.Millisecond)
+		// Wait for the initial snapshot to complete before inserting streaming records.
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			assert.Equal(c, 2, received.Len())
+		}, 25*time.Second, 100*time.Millisecond)
 
-	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
-	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
+		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
+		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
 
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.Equal(c, 4, received.Len())
-	}, 25*time.Second, 100*time.Millisecond)
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			assert.Equal(c, 4, received.Len())
+		}, 25*time.Second, 100*time.Millisecond)
 
-	require.ElementsMatch(t, received.All(), []any{
-		map[string]any{"operation": "read", "table": "events"},
-		map[string]any{"operation": "read", "table": "events"},
-		map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
-		map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
+		require.ElementsMatch(t, received.All(), []any{
+			map[string]any{"operation": "read", "table": "events"},
+			map[string]any{"operation": "read", "table": "events"},
+			map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
+			map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
+		})
+	})
+
+	t.Run("errors when signal table does not exist", func(t *testing.T) {
+		_, logs := startSignallingStream(t, fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_signalling_missing_signal_table
+    stream_snapshot: true
+    signal_table_name: does_not_exist
+    schema: dbo
+    tables:
+      - events
+`, databaseURL))
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			var found bool
+			for _, m := range logs.Messages() {
+				if strings.Contains(m, "signal table") && strings.Contains(m, "does not exist") {
+					found = true
+					break
+				}
+			}
+			assert.True(c, found, "expected a connect error naming the missing signal table, got: %v", logs.Messages())
+		}, 25*time.Second, 100*time.Millisecond)
 	})
 }
 

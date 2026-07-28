@@ -177,16 +177,17 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	stream.decodingPluginArguments = pluginArguments
 
 	tablesForPublication := tables
-	// An empty tables list means the publication covers FOR ALL TABLES
-	// (see CreatePublication), which already includes the signal table -
-	// appending it here would collapse that into a single-table publication
-	// and silently stop replicating everything else.
-	if config.SignalTableName != "" && len(tables) > 0 {
-		normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(config.SignalTableName)
+	if config.SignalTableName != "" {
+		signalTable, err := validateSignalTable(ctx, stream, schema, config)
 		if err != nil {
-			return nil, fmt.Errorf("invalid signal table name %q: %w", config.SignalTableName, err)
+			return nil, fmt.Errorf("validating signal table: %w", err)
 		}
-		tablesForPublication = append(slices.Clone(tables), TableFQN{Schema: schema, Table: normalizedSignalTable})
+
+		// An empty tables list means the publication covers FOR ALL TABLES, already including the signal table.
+		// Appending it here would collapse that into a single-table publication and silently stop replicating everything else.
+		if len(tables) > 0 {
+			tablesForPublication = append(slices.Clone(tables), signalTable)
+		}
 	}
 
 	pubName := "pglog_stream_" + config.ReplicationSlotName
@@ -907,4 +908,36 @@ func (s *Stream) Stop(ctx context.Context) error {
 	case <-s.shutSig.HasStoppedChan():
 	}
 	return err
+}
+
+// validateSignalTable verifies the signal table exists
+func validateSignalTable(ctx context.Context, stream *Stream, schema string, config *Config) (TableFQN, error) {
+	normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(config.SignalTableName)
+	if err != nil {
+		return TableFQN{}, fmt.Errorf("invalid signal table name %q: %w", config.SignalTableName, err)
+	}
+	signalTable := TableFQN{Schema: schema, Table: normalizedSignalTable}
+
+	wireSchema, err := sanitize.UnquotePostgresIdentifier(signalTable.Schema)
+	if err != nil {
+		return TableFQN{}, fmt.Errorf("verifying schema: %w", err)
+	}
+	wireSignalTable, err := sanitize.UnquotePostgresIdentifier(signalTable.Table)
+	if err != nil {
+		return TableFQN{}, fmt.Errorf("verifying signal table name: %w", err)
+	}
+	sql := "SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = $2"
+	query, err := sanitize.SQLQuery(sql, wireSchema, wireSignalTable)
+	if err != nil {
+		return TableFQN{}, err
+	}
+	res, err := stream.pgConn.Exec(ctx, query).ReadAll()
+	if err != nil {
+		return TableFQN{}, fmt.Errorf("checking signal table %s exists: %w", signalTable, err)
+	}
+	if len(res) == 0 || len(res[0].Rows) == 0 {
+		return signalTable, fmt.Errorf("signal table %s does not exist", signalTable)
+	}
+
+	return signalTable, nil
 }
