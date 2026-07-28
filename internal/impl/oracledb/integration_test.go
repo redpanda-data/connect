@@ -626,6 +626,11 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 			txID, ok := msg.MetaGet("transaction_id")
 			require.Truef(t, ok, "message %d missing 'transaction_id' metadata", i)
 			assert.Regexpf(t, `^\d+\.\d+\.\d+$`, txID, "message %d: transaction_id %q not in USN.SLOT.SEQ format", i, txID)
+
+			// assert user_name metadata - test DML runs as the SYSTEM user
+			userName, ok := msg.MetaGet("user_name")
+			require.Truef(t, ok, "message %d missing 'user_name' metadata", i)
+			assert.Equalf(t, "SYSTEM", userName, "message %d: expected user_name 'SYSTEM', got %q", i, userName)
 		}
 
 		for _, expectedKey := range []string{"TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"} {
