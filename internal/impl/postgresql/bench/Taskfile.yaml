@@ -69,6 +69,13 @@ tasks:
     cmds:
       - psql {{.PG_DSN}} -c "CREATE TABLE IF NOT EXISTS public.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT);"
 
+  psql:signal:log:
+    desc: Insert a log signal into public.rpcn_signal_table to trigger a log entry
+    deps: [psql:create:signal-table]
+    cmds:
+      - |
+        psql {{.PG_DSN}} -c "INSERT INTO public.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Signal message"}');"
+
   # ── CDC / Snapshot benchmarks ────────────────────────────────────────────────
 
   bench:run:
