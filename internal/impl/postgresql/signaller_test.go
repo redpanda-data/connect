@@ -95,7 +95,7 @@ func TestPostgresSignallerListen(t *testing.T) {
 				Table:     "rpcn_signal_table",
 				Data:      map[string]any{"id": 1, "type": 123, "data": `{"message": "hello"}`},
 			},
-			errContains: "parsing control signals's 'type' data",
+			errContains: "expected string for rpcn_signal_table.type column, got int",
 		},
 		{
 			name: "recognized log type is returned",

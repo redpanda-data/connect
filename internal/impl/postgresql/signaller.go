@@ -11,7 +11,6 @@ package pgstream
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -78,7 +77,7 @@ func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.
 
 	var sig replication.ControlSignal
 	if sig.SignalType, ok = row["type"].(string); !ok {
-		return nil, errors.New("parsing control signals's 'type' data")
+		return nil, fmt.Errorf("expected string for %s.type column, got %T", s.tableName, row["type"])
 	}
 
 	sig.ID = fmt.Sprintf("%v", row["id"])
