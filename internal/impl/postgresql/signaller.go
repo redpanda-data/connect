@@ -94,7 +94,7 @@ func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.
 		if err := json.Unmarshal([]byte(dataStr), &sig.LogSignal); err != nil {
 			return nil, fmt.Errorf("unmarshaling control signal %s.data: %w", s.tableName, err)
 		}
-		s.Log.Infof("%q control signal received (lsn=%s): %s", sig.Type(), sig.LSN, sig.Message)
+		log.Infof("%s (lsn=%s)", sig.Message, sig.LSN)
 	default:
 		log.Warnf("Control signal %q received but not a recognized type", sig.SignalType)
 	}
