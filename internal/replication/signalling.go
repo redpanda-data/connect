@@ -8,8 +8,6 @@
 
 package replication
 
-import "context"
-
 // LogSignalType represents a log signal.
 const LogSignalType = "log"
 
@@ -39,14 +37,4 @@ func (s *ControlSignal) Type() string {
 		return s.SignalType
 	}
 	return ""
-}
-
-// Signaller is implemented by connector-specific control signal handlers.
-// Listen inspects a decoded replication message and, if it recognizes an
-// actionable signal, returns it directly - in the same call that detected it
-// - so the caller can flush exactly that batch before acting on it, rather
-// than reacting to a separately-scheduled notification a differently-timed
-// flush could race ahead of.
-type Signaller interface {
-	Listen(ctx context.Context, event any) (*ControlSignal, error)
 }

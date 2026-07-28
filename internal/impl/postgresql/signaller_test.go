@@ -17,19 +17,25 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
+func TestPostgresSignallerEnabled(t *testing.T) {
+	s, err := NewControlSignaller("dbo", "", nil)
+	require.NoError(t, err)
+	require.False(t, s.Enabled(), "expected Enabled to be false when no signal table is configured")
+
+	s, err = NewControlSignaller("dbo", "rpcn_signal_table", nil)
+	require.NoError(t, err)
+	require.True(t, s.Enabled(), "expected Enabled to be true when a signal table is configured")
+}
+
 func TestPostgresSignallerListen(t *testing.T) {
 	lsn := "0/1"
 
 	tests := []struct {
 		name        string
-		event       any
+		event       pglogicalstream.StreamMessage
 		errContains string
 		want        *replication.ControlSignal
 	}{
-		{
-			name:  "not a StreamMessage is ignored",
-			event: "not-a-stream-message",
-		},
 		{
 			name: "non-insert operation is ignored",
 			event: pglogicalstream.StreamMessage{
@@ -126,7 +132,7 @@ func TestPostgresSignallerListen(t *testing.T) {
 			s, err := NewControlSignaller("dbo", "rpcn_signal_table", nil)
 			require.NoError(t, err)
 
-			got, err := s.Listen(t.Context(), test.event)
+			got, err := s.Listen(&test.event)
 			if test.errContains != "" {
 				require.ErrorContains(t, err, test.errContains)
 				require.Nil(t, got)

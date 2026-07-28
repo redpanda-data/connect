@@ -9,7 +9,6 @@
 package pgstream
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -19,8 +18,6 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
-var _ replication.Signaller = (*postgresSignaller)(nil)
-
 type postgresSignaller struct {
 	Log *service.Logger
 
@@ -28,7 +25,7 @@ type postgresSignaller struct {
 	tableName string
 }
 
-// NewControlSignaller creates a replication.Signaller that detects signal
+// NewControlSignaller creates a postgresSignaller that detects signal
 // INSERTs on the given schema.tableName.
 func NewControlSignaller(schema, tableName string, log *service.Logger) (*postgresSignaller, error) {
 	normalizedSchema, err := wireFormPostgresIdentifier(schema)
@@ -44,21 +41,14 @@ func NewControlSignaller(schema, tableName string, log *service.Logger) (*postgr
 	return &postgresSignaller{Log: log, schema: normalizedSchema, tableName: normalizedTableName}, nil
 }
 
-func wireFormPostgresIdentifier(name string) (string, error) {
-	normalized, err := sanitize.NormalizePostgresIdentifier(name)
-	if err != nil {
-		return "", err
-	}
-	return sanitize.UnquotePostgresIdentifier(normalized)
+// Enabled reports whether a signal table was configured.
+func (s *postgresSignaller) Enabled() bool {
+	return s.tableName != ""
 }
 
 // Listen returns any actionable signal found; signal rows should always be
 // forwarded downstream as normal messages regardless of the outcome here.
-func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.ControlSignal, error) {
-	msg, ok := signal.(pglogicalstream.StreamMessage)
-	if !ok {
-		return nil, nil
-	}
+func (s *postgresSignaller) Listen(msg *pglogicalstream.StreamMessage) (*replication.ControlSignal, error) {
 	if msg.Operation != pglogicalstream.InsertOpType {
 		return nil, nil
 	}
@@ -99,4 +89,12 @@ func (s *postgresSignaller) Listen(_ context.Context, signal any) (*replication.
 	}
 
 	return &sig, nil
+}
+
+func wireFormPostgresIdentifier(name string) (string, error) {
+	normalized, err := sanitize.NormalizePostgresIdentifier(name)
+	if err != nil {
+		return "", err
+	}
+	return sanitize.UnquotePostgresIdentifier(normalized)
 }
