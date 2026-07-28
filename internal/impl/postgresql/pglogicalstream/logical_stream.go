@@ -910,7 +910,10 @@ func (s *Stream) Stop(ctx context.Context) error {
 	return err
 }
 
-// validateSignalTable verifies the signal table exists
+var requiredSignalTableColumns = []string{"id", "type", "data"}
+
+// validateSignalTable verifies the signal table exists and has the
+// documented id/type/data columns.
 func validateSignalTable(ctx context.Context, stream *Stream, schema string, config *Config) (TableFQN, error) {
 	normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(config.SignalTableName)
 	if err != nil {
@@ -926,17 +929,31 @@ func validateSignalTable(ctx context.Context, stream *Stream, schema string, con
 	if err != nil {
 		return TableFQN{}, fmt.Errorf("verifying signal table name: %w", err)
 	}
-	sql := "SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = $2"
+	sql := "SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2"
 	query, err := sanitize.SQLQuery(sql, wireSchema, wireSignalTable)
 	if err != nil {
 		return TableFQN{}, err
 	}
 	res, err := stream.pgConn.Exec(ctx, query).ReadAll()
 	if err != nil {
-		return TableFQN{}, fmt.Errorf("checking signal table %s exists: %w", signalTable, err)
+		return TableFQN{}, fmt.Errorf("checking signal table %s columns: %w", signalTable, err)
 	}
 	if len(res) == 0 || len(res[0].Rows) == 0 {
 		return signalTable, fmt.Errorf("signal table %s does not exist", signalTable)
+	}
+
+	columns := make(map[string]bool, len(res[0].Rows))
+	for _, row := range res[0].Rows {
+		columns[string(row[0])] = true
+	}
+	var missing []string
+	for _, required := range requiredSignalTableColumns {
+		if !columns[required] {
+			missing = append(missing, required)
+		}
+	}
+	if len(missing) > 0 {
+		return signalTable, fmt.Errorf("signal table %s is missing required column(s): %s", signalTable, strings.Join(missing, ", "))
 	}
 
 	return signalTable, nil

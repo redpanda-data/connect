@@ -93,6 +93,32 @@ postgres_cdc:
 			assert.True(c, found, "expected a connect error naming the missing signal table, got: %v", logs.Messages())
 		}, 25*time.Second, 100*time.Millisecond)
 	})
+
+	t.Run("errors when signal table is missing required columns", func(t *testing.T) {
+		db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.wrong_shape_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), payload TEXT)`)
+
+		_, logs := startSignallingStream(t, fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_signalling_wrong_shape_signal_table
+    stream_snapshot: true
+    signal_table_name: wrong_shape_signal_table
+    schema: dbo
+    tables:
+      - events
+`, databaseURL))
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			var found bool
+			for _, m := range logs.Messages() {
+				if strings.Contains(m, "signal table") && strings.Contains(m, "missing required column") && strings.Contains(m, "data") {
+					found = true
+					break
+				}
+			}
+			assert.True(c, found, "expected a connect error naming the missing data column, got: %v", logs.Messages())
+		}, 25*time.Second, 100*time.Millisecond)
+	})
 }
 
 func TestIntegrationSignallingDisabledWhenTableNameEmpty(t *testing.T) {
