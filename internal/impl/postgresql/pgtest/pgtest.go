@@ -10,8 +10,13 @@ package pgtest
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"sync"
+	"testing"
+
+	"github.com/go-faker/faker/v4"
+	"github.com/stretchr/testify/require"
 )
 
 // ReceivedMessages is a thread-safe accessor for messages collected by the
@@ -79,3 +84,37 @@ func (c *TestLogCapture) WithGroup(string) slog.Handler { return c }
 
 // Enabled always returns true so every log record is captured.
 func (*TestLogCapture) Enabled(context.Context, slog.Level) bool { return true }
+
+// FakeFlightRecord is a fake row shape used to generate test data for
+// integration tests.
+type FakeFlightRecord struct {
+	RealAddress faker.RealAddress `faker:"real_address"`
+	CreatedAt   int64             `fake:"unix_time"`
+}
+
+// GetFakeFlightRecord generates a random FakeFlightRecord, panicking if
+// generation fails.
+func GetFakeFlightRecord() FakeFlightRecord {
+	flightRecord := FakeFlightRecord{}
+	err := faker.FakeData(&flightRecord)
+	if err != nil {
+		panic(err)
+	}
+
+	return flightRecord
+}
+
+// TestDB wraps sql.DB with testing utilities for database integration tests.
+type TestDB struct {
+	*sql.DB
+}
+
+// MustExec executes a SQL query and fails t if an error occurs. t is taken
+// per call, not stored on TestDB, so a call made from inside a subtest fails
+// that subtest rather than reaching for FailNow on a parent *testing.T from
+// the wrong goroutine.
+func (db *TestDB) MustExec(t *testing.T, query string, args ...any) {
+	t.Helper()
+	_, err := db.Exec(query, args...)
+	require.NoError(t, err)
+}

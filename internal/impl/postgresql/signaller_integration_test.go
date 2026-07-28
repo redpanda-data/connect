@@ -31,12 +31,12 @@ func TestIntegrationSignallingConfiguration(t *testing.T) {
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	db.MustExec(`CREATE SCHEMA IF NOT EXISTS dbo`)
-	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.custom_signal_table (id VARCHAR(32), type VARCHAR(32), data TEXT)`)
-	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
+	db.MustExec(t, `CREATE SCHEMA IF NOT EXISTS dbo`)
+	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.custom_signal_table (id VARCHAR(32), type VARCHAR(32), data TEXT)`)
+	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
 
-	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
-	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
+	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
+	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
 
 	t.Run("supports signal tables", func(t *testing.T) {
 		received, _ := startSignallingStream(t, fmt.Sprintf(`
@@ -55,8 +55,8 @@ postgres_cdc:
 			assert.Equal(c, 2, received.Len())
 		}, 25*time.Second, 100*time.Millisecond)
 
-		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
-		db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
+		db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('stream')`)
+		db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('stream')`)
 
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
 			assert.Equal(c, 4, received.Len())
@@ -95,7 +95,7 @@ postgres_cdc:
 	})
 
 	t.Run("errors when signal table is missing required columns", func(t *testing.T) {
-		db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.wrong_shape_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), payload TEXT)`)
+		db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.wrong_shape_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), payload TEXT)`)
 
 		_, logs := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
@@ -126,14 +126,14 @@ func TestIntegrationSignallingDisabledWhenTableNameEmpty(t *testing.T) {
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	db.MustExec(`CREATE SCHEMA IF NOT EXISTS dbo`)
+	db.MustExec(t, `CREATE SCHEMA IF NOT EXISTS dbo`)
 	// Shaped exactly like a signal table, and replicated as an ordinary data
 	// table below - with signal_table_name left unset, it must never be
 	// treated as one.
-	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
-	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
+	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
+	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
 
-	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
+	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
 
 	received, _ := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
@@ -156,8 +156,8 @@ postgres_cdc:
 	// This row is shaped exactly like a log signal. With signal_table_name
 	// unset, it must be forwarded as an ordinary message rather than detected
 	// as a signal.
-	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Signal message"}')`)
-	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
+	db.MustExec(t, `INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Signal message"}')`)
+	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('stream')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		assert.Equal(c, 2, received.Len())
@@ -179,11 +179,11 @@ func TestIntegrationSignallingDetectedWithoutInterruptingStream(t *testing.T) {
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	db.MustExec(`CREATE SCHEMA IF NOT EXISTS dbo`)
-	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
-	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
+	db.MustExec(t, `CREATE SCHEMA IF NOT EXISTS dbo`)
+	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
+	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
 
-	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
+	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
 
 	received, logs := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
@@ -206,8 +206,8 @@ postgres_cdc:
 	// A real log signal, immediately followed by an ordinary insert. If
 	// detection incorrectly paused or restarted the stream, the second
 	// insert would be delayed well past the assertion window below.
-	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Hello World"}')`)
-	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-signal')`)
+	db.MustExec(t, `INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "Hello World"}')`)
+	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('after-signal')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		assert.Equal(c, 2, received.Len())
@@ -239,11 +239,11 @@ func TestIntegrationSignallingMalformedRowStillPublished(t *testing.T) {
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	db.MustExec(`CREATE SCHEMA IF NOT EXISTS dbo`)
-	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
-	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
+	db.MustExec(t, `CREATE SCHEMA IF NOT EXISTS dbo`)
+	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
+	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
 
-	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
+	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
 
 	received, _ := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
@@ -266,8 +266,8 @@ postgres_cdc:
 	// data is left NULL, so Listen fails to parse this row as a signal
 	// ("expected string for ...data column, got <nil>"). That must not stop
 	// it from being published like any other row.
-	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type) VALUES ('log')`)
-	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-malformed-signal')`)
+	db.MustExec(t, `INSERT INTO dbo.rpcn_signal_table (type) VALUES ('log')`)
+	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('after-malformed-signal')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		assert.Equal(c, 2, received.Len())
@@ -288,9 +288,9 @@ func TestIntegrationSignalTableNameWithEmptyTablesReplicatesAllTables(t *testing
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	db.MustExec(`CREATE SCHEMA IF NOT EXISTS dbo`)
-	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
-	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
+	db.MustExec(t, `CREATE SCHEMA IF NOT EXISTS dbo`)
+	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
+	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
 
 	received, logs := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
@@ -314,8 +314,8 @@ postgres_cdc:
 		assert.True(c, started, "expected replication to have started")
 	}, 25*time.Second, 100*time.Millisecond)
 
-	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('hello')`)
-	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "hi"}')`)
+	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('hello')`)
+	db.MustExec(t, `INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "hi"}')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		assert.Equal(c, 2, received.Len())

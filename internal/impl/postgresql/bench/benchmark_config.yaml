@@ -6,13 +6,14 @@ input:
     dsn: ${PG_DSN:postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable}
     stream_snapshot: true
     schema: public
-    signal_table_name: ""
+    signal_table_name: rpcn_signal_table
     tables:
       - users
       - products
       - cart
     slot_name: bench_slot
     batching:
+      count: 1000
       period: 1s
 
 # pipeline:
@@ -22,14 +23,14 @@ input:
 #         root.metadata = @
 
 output:
-  processors:
-    - benchmark:
-        interval: 1s
-        count_bytes: true
-  # file:
-  #   path: "./benchmark_results.json"
-  #   codec: lines
-  drop: {}
+  # processors:
+  #   - benchmark:
+  #       interval: 1s
+  #       count_bytes: true
+  file:
+    path: "./benchmark_results.json"
+    codec: lines
+  # drop: {}
 
 logger:
   level: INFO

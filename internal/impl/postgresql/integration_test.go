@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-faker/faker/v4"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,40 +31,14 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pgtest"
 	"github.com/redpanda-data/connect/v4/internal/license"
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-type FakeFlightRecord struct {
-	RealAddress faker.RealAddress `faker:"real_address"`
-	CreatedAt   int64             `fake:"unix_time"`
-}
-
-func GetFakeFlightRecord() FakeFlightRecord {
-	flightRecord := FakeFlightRecord{}
-	err := faker.FakeData(&flightRecord)
-	if err != nil {
-		panic(err)
-	}
-
-	return flightRecord
-}
-
-// TestDB wraps sql.DB with testing utilities for database integration tests.
-type TestDB struct {
-	*sql.DB
-	T *testing.T
-}
-
-// MustExec executes a SQL query and fails the test if an error occurs.
-func (db *TestDB) MustExec(query string, args ...any) {
-	_, err := db.Exec(query, args...)
-	require.NoError(db.T, err)
-}
-
-func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *TestDB, error) {
+func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *pgtest.TestDB, error) {
 	ctr, err := testcontainers.Run(t.Context(), "postgres:"+version,
 		testcontainers.WithExposedPorts("5432/tcp"),
 		testcontainers.WithEnv(map[string]string{
@@ -170,7 +143,7 @@ func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *TestD
 		}
 	})
 
-	testDB := &TestDB{db, t}
+	testDB := &pgtest.TestDB{DB: db}
 	return databaseURL, testDB, nil
 }
 
@@ -182,7 +155,7 @@ func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := range 10 {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
@@ -231,7 +204,7 @@ pg_stream:
 	}, time.Second*25, time.Millisecond*100)
 
 	for i := 10; i < 20; i++ {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 		_, err = db.Exec(`INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);`, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
@@ -274,7 +247,7 @@ pg_stream:
 
 	time.Sleep(time.Second * 5)
 	for i := 20; i < 30; i++ {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
@@ -300,7 +273,7 @@ func TestIntegrationPostgresSnapshotAckBarrier(t *testing.T) {
 
 	const rowCount = 5
 	for i := range rowCount {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
@@ -499,7 +472,7 @@ func TestIntegrationPostgresIncludeTxnMarkers(t *testing.T) {
 	require.NoError(t, err)
 
 	for range 10000 {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
@@ -550,7 +523,7 @@ pg_stream:
 	}, time.Second*25, time.Millisecond*100)
 
 	for range 10 {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
@@ -595,7 +568,7 @@ pg_stream:
 
 	time.Sleep(time.Second * 5)
 	for range 10 {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
@@ -717,7 +690,7 @@ func TestIntegrationMultiplePostgresVersions(t *testing.T) {
 			require.NoError(t, err)
 
 			for range 1000 {
-				f := GetFakeFlightRecord()
+				f := pgtest.GetFakeFlightRecord()
 				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 				require.NoError(t, err)
 			}
@@ -770,7 +743,7 @@ pg_stream:
 			}, time.Minute, time.Millisecond*100)
 
 			for range 1000 {
-				f := GetFakeFlightRecord()
+				f := pgtest.GetFakeFlightRecord()
 				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 				require.NoError(t, err)
 				_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
@@ -815,7 +788,7 @@ pg_stream:
 
 			time.Sleep(time.Second * 5)
 			for range 1000 {
-				f := GetFakeFlightRecord()
+				f := pgtest.GetFakeFlightRecord()
 				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 				require.NoError(t, err)
 			}
