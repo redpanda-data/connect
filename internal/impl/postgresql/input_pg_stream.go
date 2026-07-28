@@ -26,6 +26,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -197,7 +198,9 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Optional()).
 		Field(service.NewStringField(fieldSignalTableName).
 			Description(`The name of the table used to send control signals to the connector, excluding the schema. The table must
-exist in the schema configured via the ` + "`schema`" + ` field and must have exactly these columns:
+exist in the schema configured via the ` + "`schema`" + ` field, and must not also appear in ` + "`" + fieldTables + "`" + `
+- the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
+it in both places is rejected at startup. It must have exactly these columns:
 
 - **id** — any type representable as a string (e.g. ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
 - **type** — ` + "`VARCHAR`" + ` — the signal type (see supported signals below)
@@ -335,6 +338,22 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 	if signalTableName, err = conf.FieldString(fieldSignalTableName); err != nil {
 		return nil, err
+	}
+
+	if signalTableName != "" {
+		normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(signalTableName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s %q: %w", fieldSignalTableName, signalTableName, err)
+		}
+		for _, table := range tables {
+			normalizedTable, err := sanitize.NormalizePostgresIdentifier(table)
+			if err != nil {
+				return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+			}
+			if normalizedTable == normalizedSignalTable {
+				return nil, fmt.Errorf("%s %q must not also appear in %s - the signal table is implicitly added to the publication and excluded from snapshot scans", fieldSignalTableName, signalTableName, fieldTables)
+			}
+		}
 	}
 
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
