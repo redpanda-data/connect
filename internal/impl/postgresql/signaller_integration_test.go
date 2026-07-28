@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +22,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pgtest"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -38,7 +38,7 @@ func TestIntegrationSignallingConfiguration(t *testing.T) {
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
 
-	template := fmt.Sprintf(`
+	received, _ := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling
@@ -47,73 +47,26 @@ postgres_cdc:
     schema: dbo
     tables:
       - events
-`, databaseURL)
-
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
-	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
-
-	var (
-		received []any
-		mu       sync.Mutex
-	)
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-		mu.Lock()
-		defer mu.Unlock()
-		for _, msg := range batch {
-			data, err := msg.AsStructured()
-			if err != nil {
-				return err
-			}
-			m := data.(map[string]any)
-			if _, ok := m["lsn"]; ok {
-				m["lsn"] = "XXX/XXX"
-			}
-			delete(m, "schema")
-			delete(m, "commit_ts_ms")
-			received = append(received, m)
-		}
-		return nil
-	}))
-
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
-	t.Cleanup(func() {
-		require.NoError(t, streamOut.StopWithin(5*time.Second))
-	})
-
-	go func() {
-		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+`, databaseURL))
 
 	// Wait for the initial snapshot to complete before inserting streaming records.
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		mu.Lock()
-		defer mu.Unlock()
-		assert.Len(c, received, 2)
+		assert.Equal(c, 2, received.Len())
 	}, 25*time.Second, 100*time.Millisecond)
 
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		mu.Lock()
-		defer mu.Unlock()
-		assert.Len(c, received, 4)
+		assert.Equal(c, 4, received.Len())
 	}, 25*time.Second, 100*time.Millisecond)
 
-	mu.Lock()
-	require.ElementsMatch(t, received, []any{
+	require.ElementsMatch(t, received.All(), []any{
 		map[string]any{"operation": "read", "table": "events"},
 		map[string]any{"operation": "read", "table": "events"},
 		map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
 		map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
 	})
-	mu.Unlock()
 }
 
 func TestIntegrationSignallingDisabledWhenTableNameEmpty(t *testing.T) {
@@ -130,7 +83,7 @@ func TestIntegrationSignallingDisabledWhenTableNameEmpty(t *testing.T) {
 
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
 
-	template := fmt.Sprintf(`
+	received, _ := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_disabled
@@ -139,59 +92,14 @@ postgres_cdc:
     tables:
       - events
       - rpcn_signal_table
-`, databaseURL)
-
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
-	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
-
-	var (
-		received []any
-		mu       sync.Mutex
-	)
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-		mu.Lock()
-		defer mu.Unlock()
-		for _, msg := range batch {
-			data, err := msg.AsStructured()
-			if err != nil {
-				return err
-			}
-			m := data.(map[string]any)
-			if _, ok := m["lsn"]; ok {
-				m["lsn"] = "XXX/XXX"
-			}
-			delete(m, "schema")
-			delete(m, "commit_ts_ms")
-			received = append(received, m)
-		}
-		return nil
-	}))
-
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
-	t.Cleanup(func() {
-		require.NoError(t, streamOut.StopWithin(10*time.Second))
-	})
-
-	go func() {
-		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+`, databaseURL))
 
 	// Wait for the initial snapshot row from dbo.events.
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		mu.Lock()
-		defer mu.Unlock()
-		assert.Len(c, received, 1)
+		assert.Equal(c, 1, received.Len())
 	}, 25*time.Second, 100*time.Millisecond)
 
-	mu.Lock()
-	received = nil
-	mu.Unlock()
+	received.Reset()
 
 	// This row is shaped exactly like a log signal. With signal_table_name
 	// unset, it must be forwarded as an ordinary message rather than detected
@@ -200,17 +108,13 @@ postgres_cdc:
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('stream')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		mu.Lock()
-		defer mu.Unlock()
-		assert.Len(c, received, 2)
+		assert.Equal(c, 2, received.Len())
 	}, 25*time.Second, 100*time.Millisecond)
 
-	mu.Lock()
-	require.ElementsMatch(t, received, []any{
+	require.ElementsMatch(t, received.All(), []any{
 		map[string]any{"operation": "insert", "table": "rpcn_signal_table", "lsn": "XXX/XXX"},
 		map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
 	})
-	mu.Unlock()
 }
 
 // TestIntegrationSignallingDetectedWithoutInterruptingStream verifies that a
@@ -229,7 +133,7 @@ func TestIntegrationSignallingDetectedWithoutInterruptingStream(t *testing.T) {
 
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
 
-	template := fmt.Sprintf(`
+	received, logs := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_detect_only
@@ -238,60 +142,14 @@ postgres_cdc:
     schema: dbo
     tables:
       - events
-`, databaseURL)
-
-	logs := &testLogCapture{}
-	streamOutBuilder := service.NewStreamBuilder()
-	streamOutBuilder.SetLogger(slog.New(logs))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
-	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
-
-	var (
-		received []any
-		mu       sync.Mutex
-	)
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-		mu.Lock()
-		defer mu.Unlock()
-		for _, msg := range batch {
-			data, err := msg.AsStructured()
-			if err != nil {
-				return err
-			}
-			m := data.(map[string]any)
-			if _, ok := m["lsn"]; ok {
-				m["lsn"] = "XXX/XXX"
-			}
-			delete(m, "schema")
-			delete(m, "commit_ts_ms")
-			received = append(received, m)
-		}
-		return nil
-	}))
-
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
-	t.Cleanup(func() {
-		require.NoError(t, streamOut.StopWithin(10*time.Second))
-	})
-
-	go func() {
-		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+`, databaseURL))
 
 	// Wait for the initial snapshot row from dbo.events.
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		mu.Lock()
-		defer mu.Unlock()
-		assert.Len(c, received, 1)
+		assert.Equal(c, 1, received.Len())
 	}, 25*time.Second, 100*time.Millisecond)
 
-	mu.Lock()
-	received = nil
-	mu.Unlock()
+	received.Reset()
 
 	// A real log signal, immediately followed by an ordinary insert. If
 	// detection incorrectly paused or restarted the stream, the second
@@ -300,9 +158,7 @@ postgres_cdc:
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-signal')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		mu.Lock()
-		defer mu.Unlock()
-		assert.Len(c, received, 2)
+		assert.Equal(c, 2, received.Len())
 	}, 5*time.Second, 100*time.Millisecond)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -320,12 +176,10 @@ postgres_cdc:
 	// nothing beyond the signal row and the one ordinary insert ever arrives.
 	time.Sleep(500 * time.Millisecond)
 
-	mu.Lock()
-	require.ElementsMatch(t, received, []any{
+	require.ElementsMatch(t, received.All(), []any{
 		map[string]any{"operation": "insert", "table": "rpcn_signal_table", "lsn": "XXX/XXX"},
 		map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
 	})
-	mu.Unlock()
 }
 
 func TestIntegrationSignallingMalformedRowStillPublished(t *testing.T) {
@@ -339,7 +193,7 @@ func TestIntegrationSignallingMalformedRowStillPublished(t *testing.T) {
 
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('initial')`)
 
-	template := fmt.Sprintf(`
+	received, _ := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_malformed
@@ -348,59 +202,14 @@ postgres_cdc:
     schema: dbo
     tables:
       - events
-`, databaseURL)
-
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
-	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
-
-	var (
-		received []any
-		mu       sync.Mutex
-	)
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-		mu.Lock()
-		defer mu.Unlock()
-		for _, msg := range batch {
-			data, err := msg.AsStructured()
-			if err != nil {
-				return err
-			}
-			m := data.(map[string]any)
-			if _, ok := m["lsn"]; ok {
-				m["lsn"] = "XXX/XXX"
-			}
-			delete(m, "schema")
-			delete(m, "commit_ts_ms")
-			received = append(received, m)
-		}
-		return nil
-	}))
-
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
-	t.Cleanup(func() {
-		require.NoError(t, streamOut.StopWithin(10*time.Second))
-	})
-
-	go func() {
-		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+`, databaseURL))
 
 	// Wait for the initial snapshot row from dbo.events.
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		mu.Lock()
-		defer mu.Unlock()
-		assert.Len(c, received, 1)
+		assert.Equal(c, 1, received.Len())
 	}, 25*time.Second, 100*time.Millisecond)
 
-	mu.Lock()
-	received = nil
-	mu.Unlock()
+	received.Reset()
 
 	// data is left NULL, so Listen fails to parse this row as a signal
 	// ("expected string for ...data column, got <nil>"). That must not stop
@@ -409,17 +218,13 @@ postgres_cdc:
 	db.MustExec(`INSERT INTO dbo.events (name) VALUES ('after-malformed-signal')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		mu.Lock()
-		defer mu.Unlock()
-		assert.Len(c, received, 2)
+		assert.Equal(c, 2, received.Len())
 	}, 5*time.Second, 100*time.Millisecond)
 
-	mu.Lock()
-	require.ElementsMatch(t, received, []any{
+	require.ElementsMatch(t, received.All(), []any{
 		map[string]any{"operation": "insert", "table": "rpcn_signal_table", "lsn": "XXX/XXX"},
 		map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
 	})
-	mu.Unlock()
 }
 
 // TestIntegrationSignalTableNameWithEmptyTablesReplicatesAllTables verifies
@@ -435,55 +240,13 @@ func TestIntegrationSignalTableNameWithEmptyTablesReplicatesAllTables(t *testing
 	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
 	db.MustExec(`CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
 
-	template := fmt.Sprintf(`
+	received, logs := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_all_tables
     signal_table_name: rpcn_signal_table
     schema: dbo
-`, databaseURL)
-
-	logs := &testLogCapture{}
-	streamOutBuilder := service.NewStreamBuilder()
-	streamOutBuilder.SetLogger(slog.New(logs))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
-	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
-
-	var (
-		received []any
-		mu       sync.Mutex
-	)
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-		mu.Lock()
-		defer mu.Unlock()
-		for _, msg := range batch {
-			data, err := msg.AsStructured()
-			if err != nil {
-				return err
-			}
-			m := data.(map[string]any)
-			if _, ok := m["lsn"]; ok {
-				m["lsn"] = "XXX/XXX"
-			}
-			delete(m, "schema")
-			delete(m, "commit_ts_ms")
-			received = append(received, m)
-		}
-		return nil
-	}))
-
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
-	t.Cleanup(func() {
-		require.NoError(t, streamOut.StopWithin(10*time.Second))
-	})
-
-	go func() {
-		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+`, databaseURL))
 
 	// There's no initial snapshot to synchronize on since tables is empty,
 	// so wait for the stream to confirm replication has actually started
@@ -503,37 +266,54 @@ postgres_cdc:
 	db.MustExec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('log', '{"message": "hi"}')`)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		mu.Lock()
-		defer mu.Unlock()
-		assert.Len(c, received, 2)
+		assert.Equal(c, 2, received.Len())
 	}, 25*time.Second, 100*time.Millisecond)
 
-	mu.Lock()
-	require.ElementsMatch(t, received, []any{
+	require.ElementsMatch(t, received.All(), []any{
 		map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
 		map[string]any{"operation": "insert", "table": "rpcn_signal_table", "lsn": "XXX/XXX"},
 	})
-	mu.Unlock()
 }
 
-type testLogCapture struct {
-	mu       sync.Mutex
-	messages []string
-}
+func startSignallingStream(t *testing.T, inputYAML string) (*pgtest.ReceivedMessages, *pgtest.TestLogCapture) {
+	t.Helper()
 
-func (c *testLogCapture) Handle(_ context.Context, r slog.Record) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.messages = append(c.messages, r.Message)
-	return nil
-}
+	logs := &pgtest.TestLogCapture{}
+	streamOutBuilder := service.NewStreamBuilder()
+	streamOutBuilder.SetLogger(slog.New(logs))
+	require.NoError(t, streamOutBuilder.AddInputYAML(inputYAML))
+	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
 
-func (c *testLogCapture) Messages() []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]string(nil), c.messages...)
-}
+	received := &pgtest.ReceivedMessages{}
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		for _, msg := range batch {
+			data, err := msg.AsStructured()
+			if err != nil {
+				return err
+			}
+			m := data.(map[string]any)
+			if _, ok := m["lsn"]; ok {
+				m["lsn"] = "XXX/XXX"
+			}
+			delete(m, "schema")
+			delete(m, "commit_ts_ms")
+			received.Add(m)
+		}
+		return nil
+	}))
 
-func (c *testLogCapture) WithAttrs([]slog.Attr) slog.Handler     { return c }
-func (c *testLogCapture) WithGroup(string) slog.Handler          { return c }
-func (*testLogCapture) Enabled(context.Context, slog.Level) bool { return true }
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+	t.Cleanup(func() {
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
+
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	return received, logs
+}
