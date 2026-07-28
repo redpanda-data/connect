@@ -32,13 +32,14 @@ func TestIntegrationSignallingConfiguration(t *testing.T) {
 	require.NoError(t, err)
 
 	db.MustExec(t, `CREATE SCHEMA IF NOT EXISTS dbo`)
-	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.custom_signal_table (id VARCHAR(32), type VARCHAR(32), data TEXT)`)
-	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
-
-	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
-	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
 
 	t.Run("supports signal tables", func(t *testing.T) {
+		db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.custom_signal_table (id VARCHAR(32), type VARCHAR(32), data TEXT)`)
+		db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
+
+		db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
+		db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
+
 		received, _ := startSignallingStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
@@ -113,6 +114,58 @@ postgres_cdc:
 
 		require.ElementsMatch(t, received.All(), []any{
 			map[string]any{"operation": "insert", "table": "uuid_signal_table", "lsn": "XXX/XXX"},
+		})
+	})
+
+	t.Run("logs a per-row error when data column has the wrong type", func(t *testing.T) {
+		db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.jsonb_test_events (id SERIAL PRIMARY KEY, name TEXT)`)
+		db.MustExec(t, `INSERT INTO dbo.jsonb_test_events (name) VALUES ('initial')`)
+		db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.jsonb_data_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data JSONB)`)
+
+		received, logs := startSignallingStream(t, fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_signalling_jsonb_data
+    stream_snapshot: true
+    signal_table_name: jsonb_data_signal_table
+    schema: dbo
+    tables:
+      - jsonb_test_events
+`, databaseURL))
+
+		// Wait for the initial snapshot to complete before inserting a signal.
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			assert.Equal(c, 1, received.Len())
+		}, 25*time.Second, 100*time.Millisecond)
+
+		received.Reset()
+
+		// data decodes as a map, not a string, so Listen must reject it with a
+		// clear error - but the row must still be forwarded downstream, per
+		// Listen's own contract (detection failures never suppress a row).
+		db.MustExec(t, `INSERT INTO dbo.jsonb_data_signal_table (type, data) VALUES ('log', '{"message": "wrong type"}'::jsonb)`)
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			var found bool
+			for _, m := range logs.Messages() {
+				if strings.Contains(m, "expected string for") && strings.Contains(m, "jsonb_data_signal_table.data column") {
+					found = true
+					break
+				}
+			}
+			assert.True(c, found, "expected a per-row error naming the wrong-typed data column, got: %v", logs.Messages())
+		}, 5*time.Second, 100*time.Millisecond)
+
+		// The per-row detection failure must not pause or break the stream -
+		db.MustExec(t, `INSERT INTO dbo.jsonb_test_events (name) VALUES ('after-wrong-type-signal')`)
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			assert.Equal(c, 2, received.Len())
+		}, 5*time.Second, 100*time.Millisecond)
+
+		require.ElementsMatch(t, received.All(), []any{
+			map[string]any{"operation": "insert", "table": "jsonb_data_signal_table", "lsn": "XXX/XXX"},
+			map[string]any{"operation": "insert", "table": "jsonb_test_events", "lsn": "XXX/XXX"},
 		})
 	})
 

@@ -200,12 +200,13 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Description(`The name of the table used to send control signals to the connector, excluding the schema. The table must
 exist in the schema configured via the ` + "`schema`" + ` field, and must not also appear in ` + "`" + fieldTables + "`" + `
 - the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
-it in both places is rejected at startup. It must have at least these columns (startup validation checks
-column names only) with the following column types:
+it in both places is rejected at startup. It must have at least these columns - startup validation checks
+column names only, not types, so a wrong column type (e.g. ` + "`data JSONB`" + ` instead of ` + "`TEXT`" + `)
+is only caught at runtime, on the first signal row read:
 
 - **id** — any type representable as a string (e.g. ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
-- **type** — ` + "`VARCHAR`" + ` — the signal type (see supported signals below)
-- **data** — ` + "`TEXT`" + ` — a JSON object containing signal parameters
+- **type** — should be ` + "`VARCHAR`" + ` or another string type — the signal type (see supported signals below)
+- **data** — should be ` + "`TEXT`" + ` — a JSON object containing signal parameters
 
 Create the table with:
 
