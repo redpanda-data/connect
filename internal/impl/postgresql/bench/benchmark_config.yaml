@@ -23,14 +23,14 @@ input:
 #         root.metadata = @
 
 output:
-  # processors:
-  #   - benchmark:
-  #       interval: 1s
-  #       count_bytes: true
-  file:
-    path: "./benchmark_results.json"
-    codec: lines
-  # drop: {}
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+  # file:
+  #   path: "./benchmark_results.json"
+  #   codec: lines
+  drop: {}
 
 logger:
   level: INFO
