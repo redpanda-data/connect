@@ -81,11 +81,6 @@ func newCheckpointCache(
 		return nil, fmt.Errorf("connecting to microsoft sql server for caching checkpoints: %w", err)
 	}
 
-	if err := createUpsertStoredProc(ctx, db, cacheTable); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("creating checkpoint cache write stored procedure: %w", err)
-	}
-
 	if created, err := createCacheTable(ctx, db, cacheTable); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("creating checkpoint cache table '%s': %w", cacheTable.String(), err)
@@ -93,6 +88,15 @@ func newCheckpointCache(
 		log.Infof("Created checkpoint cache table '%s'", cacheTable.String())
 	} else {
 		log.Infof("Found existing checkpoint cache table '%s'", cacheTable.String())
+	}
+
+	if err := validateCacheColumnType(ctx, db, cacheTable.String()); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("validating checkpoint cache table '%s': %w", cacheTable.String(), err)
+	}
+	if err := createUpsertStoredProc(ctx, db, cacheTable); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("creating checkpoint cache write stored procedure: %w", err)
 	}
 
 	// create a prepared statement for calling the stored proc (created in same schema as cache table) during Set operations to remove avoidable overhead
@@ -120,20 +124,35 @@ func newCheckpointCache(
 }
 
 // Get a cache item, we only do this at start up, key can be ignored as we only ever store one entry.
+//
+// cache_val is read via CONVERT(varbinary(10), cache_val), which recovers a legacy
+// varchar column byte-for-byte and is a no-op if already varbinary. DATALENGTH guards
+// against CONVERT silently truncating a too-long source.
 func (c *checkpointCache) Get(ctx context.Context, _ string) ([]byte, error) {
 	if c.db == nil {
 		return nil, fmt.Errorf("checkpoint cache not initialised for get operation: %w", service.ErrNotConnected)
 	}
 
-	var val []byte
-	q := "SELECT cache_val FROM %s WHERE cache_key = ?;"
-	if err := c.db.QueryRowContext(ctx, fmt.Sprintf(q, c.cacheTableName.String()), defaultCacheKey).Scan(&val); err != nil {
+	var (
+		converted []byte
+		rawLen    sql.NullInt64
+	)
+	q := "SELECT CONVERT(varbinary(10), cache_val), DATALENGTH(cache_val) FROM %s WHERE cache_key = ?;"
+	if err := c.db.QueryRowContext(ctx, fmt.Sprintf(q, c.cacheTableName.String()), defaultCacheKey).Scan(&converted, &rawLen); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, service.ErrKeyNotFound
 		}
 		return nil, fmt.Errorf("querying checkpoint cache: %w", err)
 	}
-	return val, nil
+	if !rawLen.Valid {
+		// cache_val is NULL - no checkpoint cached yet
+		return nil, nil
+	}
+	if rawLen.Int64 != 10 {
+		msg := "checkpoint cache table '%s' has a cache_val entry that is not a valid 10-byte LSN and cannot be safely recovered; please drop the cache entry and resnapshot data if necessary."
+		return nil, fmt.Errorf(msg, c.cacheTableName.String(), c.cacheTableName.String(), defaultCacheKey)
+	}
+	return converted, nil
 }
 
 // Set a cache item, specifying an optional TTL. It is okay for caches to
@@ -167,7 +186,7 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 	BEGIN
 		CREATE TABLE %s (
 			cache_key varchar(7) NOT NULL PRIMARY KEY,
-			cache_val varchar(100)
+			cache_val varbinary(10)
 		);
 		SET @created = 1;
 	END;
@@ -179,6 +198,38 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 	return created, nil
 }
 
+// validateCacheColumnType ensures cache_val is a type Get can safely recover a 10-byte
+// LSN from via CONVERT(varbinary(10), cache_val): varchar (the only legacy shape this
+// connector has ever produced), or already varbinary/binary. No DDL is run here - the
+// on-disk bytes of a legacy varchar column are already intact, so CONVERT alone recovers
+// them on read without ever touching the table's schema.
+//
+// nvarchar/nchar are rejected: CONVERT on those truncates UTF-16LE bytes silently,
+// corrupting any value >= 5 characters. char is rejected too: DATALENGTH on a
+// fixed-length char(n) column returns the declared length, not the actual content
+// length, so the length validation Get performs on read would false-positive on it.
+func validateCacheColumnType(ctx context.Context, db *sql.DB, tableName string) error {
+	var typeName string
+	q := `
+	SELECT t.name FROM sys.columns c JOIN sys.types t ON t.user_type_id = c.user_type_id
+	WHERE c.object_id = OBJECT_ID(?) AND c.name = 'cache_val';`
+	if err := db.QueryRowContext(ctx, q, tableName).Scan(&typeName); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// table/column not found is unexpected here since createCacheTable runs first,
+			// but treat as nothing to validate rather than failing startup.
+			return nil
+		}
+		return fmt.Errorf("inspecting checkpoint cache column type: %w", err)
+	}
+
+	switch typeName {
+	case "varchar", "varbinary", "binary":
+		return nil
+	default:
+		return fmt.Errorf("checkpoint cache table '%s' has a cache_val column of unexpected type '%s'; expected varchar (legacy) or varbinary (current) - manual inspection is required", tableName, typeName)
+	}
+}
+
 func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTable) error {
 	storedProcFullName := fmt.Sprintf("[%s].[%s]", cacheTable.schema, defaultStoredProcName)
 	tableName := cacheTable.String()
@@ -186,7 +237,7 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 	q := `
 	CREATE OR ALTER PROCEDURE %s
 		@Key varchar(7),
-		@Value varchar(100)
+		@Value varbinary(10)
 	AS
 	BEGIN
 		SET NOCOUNT ON;
