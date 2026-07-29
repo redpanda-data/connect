@@ -1,0 +1,22 @@
+version: '3'
+
+tasks:
+  init:
+    desc: Initialize Terraform
+    cmds:
+      - terraform init
+
+  plan:
+    desc: Plan infrastructure changes
+    cmds:
+      - terraform plan
+
+  apply:
+    desc: Provision infrastructure
+    cmds:
+      - terraform apply -auto-approve
+
+  destroy:
+    desc: Tear down infrastructure
+    cmds:
+      - terraform destroy -auto-approve
