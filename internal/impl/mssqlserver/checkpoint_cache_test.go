@@ -61,7 +61,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache(t *testing.T) {
 
 		// verify set
 		var wanted replication.LSN
-		require.NoError(t, wanted.Scan([]byte("0x0000002d000004b00003")))
+		require.NoError(t, wanted.Scan([]byte{0x00, 0x00, 0x00, 0x2d, 0x00, 0x00, 0x04, 0xb0, 0x00, 0x03}))
 		require.NoError(t, cache.Set(t.Context(), "", wanted, nil))
 
 		// verify get
@@ -106,6 +106,94 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache(t *testing.T) {
 
 		err = cache.db.PingContext(t.Context())
 		require.Contains(t, err.Error(), "sql: database is closed")
+	})
+}
+
+func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_Migration(t *testing.T) {
+	integration.CheckSkip(t)
+	connStr, db := mssqlservertest.MustSetupTestWithMicrosoftSQLServerVersion(t)
+
+	// highByteLSN contains bytes >= 0x80 (0x8b, 0xe2), which corrupt when round-tripped
+	// through a character column: the driver's varchar decode path reinterprets them via
+	// the column's collation and re-encodes as UTF-8, expanding the value beyond 10 bytes.
+	highByteLSN := replication.LSN{0x00, 0x04, 0x8b, 0x73, 0x00, 0x01, 0x73, 0xe2, 0x00, 0x01}
+
+	t.Run("round trips a high-byte LSN cleanly", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn1;`)
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn1.CdcCheckpointCache"
+		cache, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+
+		require.NoError(t, cache.Set(t.Context(), "", highByteLSN, nil))
+
+		got, err := cache.Get(t.Context(), "")
+		require.NoError(t, err)
+		require.Equal(t, []byte(highByteLSN), got)
+	})
+
+	t.Run("migrates a legacy varchar cache table and recovers the true LSN", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn2;`)
+		require.NoError(t, err)
+
+		// Recreate the table using the pre-fix schema (cache_val varchar(100)) and write the
+		// LSN bytes directly via a varbinary bind so they land on disk intact, mirroring the
+		// real-world bug: writes round-trip fine, only the varchar *read* path corrupts.
+		_, err = db.Exec(`CREATE TABLE rpcn2.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val varchar(100)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn2.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, []byte(highByteLSN))
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn2.CdcCheckpointCache"
+		cache, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+
+		// column should now be varbinary
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn2.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "varbinary", typeName)
+
+		got, err := cache.Get(t.Context(), "")
+		require.NoError(t, err)
+		require.Equal(t, []byte(highByteLSN), got, "migration should recover the true on-disk LSN, not a re-corrupted value")
+	})
+
+	t.Run("is idempotent across multiple constructions", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn3;`)
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn3.CdcCheckpointCache"
+
+		cacheA, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+		require.NoError(t, cacheA.Set(t.Context(), "", highByteLSN, nil))
+
+		// second construction against the same, already-migrated table must not error
+		cacheB, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+
+		got, err := cacheB.Get(t.Context(), "")
+		require.NoError(t, err)
+		require.Equal(t, []byte(highByteLSN), got)
+
+		require.NoError(t, cacheB.Set(t.Context(), "", highByteLSN, nil))
+		got, err = cacheA.Get(t.Context(), "")
+		require.NoError(t, err)
+		require.Equal(t, []byte(highByteLSN), got)
 	})
 }
 
