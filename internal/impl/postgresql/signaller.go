@@ -19,15 +19,14 @@ import (
 )
 
 type postgresSignaller struct {
-	Log *service.Logger
+	log *service.Logger
 
 	schema    string
 	tableName string
 }
 
-// NewControlSignaller creates a postgresSignaller that detects signal
-// INSERTs on the given schema.tableName.
-func NewControlSignaller(schema, tableName string, log *service.Logger) (*postgresSignaller, error) {
+// newControlSignaller creates a signal listener that checks WAL change entries for control signals.
+func newControlSignaller(schema, tableName string, log *service.Logger) (*postgresSignaller, error) {
 	normalizedSchema, err := wireFormPostgresIdentifier(schema)
 	if err != nil {
 		return nil, fmt.Errorf("invalid schema %q: %w", schema, err)
@@ -38,17 +37,17 @@ func NewControlSignaller(schema, tableName string, log *service.Logger) (*postgr
 			return nil, fmt.Errorf("invalid signal table name %q: %w", tableName, err)
 		}
 	}
-	return &postgresSignaller{Log: log, schema: normalizedSchema, tableName: normalizedTableName}, nil
+	return &postgresSignaller{log: log, schema: normalizedSchema, tableName: normalizedTableName}, nil
 }
 
-// Enabled reports whether a signal table was configured.
-func (s *postgresSignaller) Enabled() bool {
+// enabled reports whether a signal table was configured.
+func (s *postgresSignaller) enabled() bool {
 	return s.tableName != ""
 }
 
-// Listen returns any actionable signal found; signal rows should always be
+// listen returns any actionable signal found; signal rows should always be
 // forwarded downstream as normal messages regardless of the outcome here.
-func (s *postgresSignaller) Listen(msg *pglogicalstream.StreamMessage) (*replication.ControlSignal, error) {
+func (s *postgresSignaller) listen(msg *pglogicalstream.StreamMessage) (*replication.ControlSignal, error) {
 	if msg.Operation != pglogicalstream.InsertOpType {
 		return nil, nil
 	}
@@ -71,7 +70,7 @@ func (s *postgresSignaller) Listen(msg *pglogicalstream.StreamMessage) (*replica
 	}
 
 	sig.ID = fmt.Sprintf("%v", row["id"])
-	log := s.Log.With("id", sig.ID, "type", sig.SignalType)
+	log := s.log.With("id", sig.ID, "type", sig.SignalType)
 
 	if msg.LSN != nil {
 		sig.LSN = []byte(*msg.LSN)

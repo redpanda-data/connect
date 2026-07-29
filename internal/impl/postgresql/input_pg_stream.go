@@ -424,7 +424,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		iamAuthEnabled: iamAuthEnabled,
 	}
 
-	if i.controlSig, err = NewControlSignaller(schema, signalTableName, logger); err != nil {
+	if i.controlSig, err = newControlSignaller(schema, signalTableName, logger); err != nil {
 		return nil, err
 	}
 
@@ -588,8 +588,8 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				err   error
 			)
 			for _, msg := range batch {
-				if p.controlSig.Enabled() {
-					if _, err := p.controlSig.Listen(&msg); err != nil {
+				if p.controlSig.enabled() {
+					if _, err := p.controlSig.listen(&msg); err != nil {
 						// Log it and fall through to the normal emit path below.
 						p.logger.Errorf("failed to detect control signal in change event: %s", err)
 					}

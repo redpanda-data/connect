@@ -18,13 +18,13 @@ import (
 )
 
 func TestPostgresSignallerEnabled(t *testing.T) {
-	s, err := NewControlSignaller("dbo", "", nil)
+	s, err := newControlSignaller("dbo", "", nil)
 	require.NoError(t, err)
-	require.False(t, s.Enabled(), "expected Enabled to be false when no signal table is configured")
+	require.False(t, s.enabled(), "expected Enabled to be false when no signal table is configured")
 
-	s, err = NewControlSignaller("dbo", "rpcn_signal_table", nil)
+	s, err = newControlSignaller("dbo", "rpcn_signal_table", nil)
 	require.NoError(t, err)
-	require.True(t, s.Enabled(), "expected Enabled to be true when a signal table is configured")
+	require.True(t, s.enabled(), "expected Enabled to be true when a signal table is configured")
 }
 
 func TestPostgresSignallerListen(t *testing.T) {
@@ -129,10 +129,10 @@ func TestPostgresSignallerListen(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			s, err := NewControlSignaller("dbo", "rpcn_signal_table", nil)
+			s, err := newControlSignaller("dbo", "rpcn_signal_table", nil)
 			require.NoError(t, err)
 
-			got, err := s.Listen(&test.event)
+			got, err := s.listen(&test.event)
 			if test.errContains != "" {
 				require.ErrorContains(t, err, test.errContains)
 				require.Nil(t, got)
