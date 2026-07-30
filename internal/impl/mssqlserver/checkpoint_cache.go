@@ -264,7 +264,7 @@ func cacheTableMigration(ctx context.Context, db *sql.DB, tableName string, log 
 		return fmt.Errorf("validating migrated cache_val length: %w", err)
 	}
 	if invalidRows > 0 {
-		log.Warnf("Checkpoint cache table '%s' had %d recovered LSN value(s) that failed length validation after migration and were reset; affected pipelines will resume from each table's tracked start LSN instead", tableName, invalidRows)
+		log.Warnf("Checkpoint cache table '%s' had %d recovered LSN value(s) that failed length validation after migration and were reset to NULL. On next start, affected pipelines configured with stream_snapshot: true will re-run a full snapshot of every configured table; those with stream_snapshot: false will instead replay each change table from its tracked start LSN.", tableName, invalidRows)
 	}
 
 	return tx.Commit()
