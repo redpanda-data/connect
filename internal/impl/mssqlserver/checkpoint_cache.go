@@ -226,7 +226,7 @@ func validateCacheColumnType(ctx context.Context, db *sql.DB, tableName string, 
 
 	switch typeName {
 	case "varchar":
-		log.Warnf("Checkpoint cache table '%s' has a legacy varchar cache_val column; LSNs will be recovered via CONVERT on read rather than migrated. No action is required. If a cached value is ever found not to be a valid %d-byte LSN, this pipeline will fail to start until the entry is cleared.", tableName, lsnByteLength)
+		log.Infof("Checkpoint cache table '%s' has a legacy varchar cache_val column; LSNs will be recovered via CONVERT on read rather than migrated. No action is required. If a cached value is ever found not to be a valid %d-byte LSN, this pipeline will fail to start until the entry is cleared.", tableName, lsnByteLength)
 		return nil
 	case "varbinary", "binary":
 		return nil
