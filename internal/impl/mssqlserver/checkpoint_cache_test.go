@@ -198,7 +198,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_Migration(t *testing.
 		cacheTableToCreate := "rpcn4.CdcCheckpointCache"
 		_, err = newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
 		require.ErrorContains(t, err, "cannot be safely recovered")
-		require.ErrorContains(t, err, "2 cache_val entry/entries")
+		require.ErrorContains(t, err, "2 cache_val entries")
 
 		// migration must not have touched the table: still legacy varchar, values untouched
 		var typeName string
@@ -211,6 +211,132 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_Migration(t *testing.
 		var shortAfter []byte
 		require.NoError(t, db.QueryRow(`SELECT cache_val FROM rpcn4.CdcCheckpointCache WHERE cache_key = ?;`, defaultCacheKey).Scan(&shortAfter))
 		require.Equal(t, shortVal, shortAfter, "row should be left untouched, not reset, pending manual intervention")
+	})
+
+	t.Run("skips migration for a char legacy column rather than misclassifying it", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn5;`)
+		require.NoError(t, err)
+
+		// char(100) is deliberately NOT treated as a recoverable legacy shape: DATALENGTH
+		// on a fixed-length char column always returns the declared length (blank-padded),
+		// not the actual content length, so the "<> 10" length check would false-positive
+		// on every row. It should land in the "unexpected type, skip" branch instead of
+		// being migrated or hard-failing startup.
+		_, err = db.Exec(`CREATE TABLE rpcn5.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val char(100)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn5.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, []byte(highByteLSN))
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn5.CdcCheckpointCache"
+		_, err = newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err, "unexpected type should be skipped, not fail startup")
+
+		// column type must be left exactly as it was, not migrated
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn5.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "char", typeName)
+	})
+
+	t.Run("skips migration for an nvarchar legacy column rather than corrupting it", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn6;`)
+		require.NoError(t, err)
+
+		_, err = db.Exec(`CREATE TABLE rpcn6.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val nvarchar(100)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn6.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, []byte(highByteLSN))
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn6.CdcCheckpointCache"
+		_, err = newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err, "unexpected type should be skipped, not fail startup")
+
+		// column type must be left exactly as it was, not migrated
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn6.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "nvarchar", typeName)
+	})
+
+	t.Run("skips migration for an nchar legacy column rather than misclassifying it", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn7;`)
+		require.NoError(t, err)
+
+		// nchar shares char's fixed-length DATALENGTH padding problem and nvarchar's
+		// UTF-16LE expansion problem - unrecoverable for two independent reasons.
+		_, err = db.Exec(`CREATE TABLE rpcn7.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val nchar(100)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn7.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, []byte(highByteLSN))
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn7.CdcCheckpointCache"
+		_, err = newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err, "unexpected type should be skipped, not fail startup")
+
+		// column type must be left exactly as it was, not migrated
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn7.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "nchar", typeName)
+	})
+
+	t.Run("treats an existing binary column as already migrated", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn8;`)
+		require.NoError(t, err)
+
+		// binary(10) is a fixed-length binary type, distinct from varbinary(10) but
+		// handled identically by the "already migrated" branch - no read-path corruption
+		// risk since it's binary, not character, storage.
+		_, err = db.Exec(`CREATE TABLE rpcn8.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val binary(10)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn8.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, []byte(highByteLSN))
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn8.CdcCheckpointCache"
+		cache, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+
+		// column type and value must be left exactly as they were - no migration attempted
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn8.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "binary", typeName)
+
+		got, err := cache.Get(t.Context(), "")
+		require.NoError(t, err)
+		require.Equal(t, []byte(highByteLSN), got)
 	})
 
 	t.Run("is idempotent across multiple constructions", func(t *testing.T) {

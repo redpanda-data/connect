@@ -90,8 +90,8 @@ func newCheckpointCache(
 		log.Infof("Found existing checkpoint cache table '%s'", cacheTable.String())
 	}
 
-	// this and its tests can eventually be deleted when we're happy users have migrated.
-	if err := cacheTableMigration(ctx, db, cacheTable.String(), log); err != nil {
+	// TODO(JoeW) this and its tests can eventually be deleted when we're happy users have migrated.
+	if err := migrateCacheTable(ctx, db, cacheTable.String(), log); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrating checkpoint cache table '%s': %w", cacheTable.String(), err)
 	}
@@ -184,14 +184,14 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 	return created, nil
 }
 
-// cacheTableMigration converts a legacy character-typed cache_val column to
+// migrateCacheTable converts a legacy character-typed cache_val column to
 // varbinary(10) in place. On-disk bytes are intact even for legacy rows, so
 // the byte-level CONVERT recovers the true LSN rather than resetting it.
 // No-op if the column is already binary.
 //
 // Guarded by sp_getapplock so pipelines sharing one checkpoint table don't
 // race on the rename when starting concurrently.
-func cacheTableMigration(ctx context.Context, db *sql.DB, tableName string, log *service.Logger) error {
+func migrateCacheTable(ctx context.Context, db *sql.DB, tableName string, log *service.Logger) error {
 	lockResource := tableName
 
 	tx, err := db.BeginTx(ctx, nil)
@@ -200,10 +200,8 @@ func cacheTableMigration(ctx context.Context, db *sql.DB, tableName string, log 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	var (
-		lockRes int
-		query   = "DECLARE @res INT; EXEC @res = sp_getapplock @Resource = ?, @LockMode = 'Exclusive'; SELECT @res;"
-	)
+	var lockRes int
+	query := "DECLARE @res INT; EXEC @res = sp_getapplock @Resource = ?, @LockMode = 'Exclusive'; SELECT @res;"
 	if err := tx.QueryRowContext(ctx, query, lockResource).Scan(&lockRes); err != nil {
 		return fmt.Errorf("acquiring checkpoint cache migration lock: %w", err)
 	}
@@ -226,17 +224,18 @@ func cacheTableMigration(ctx context.Context, db *sql.DB, tableName string, log 
 		return fmt.Errorf("inspecting checkpoint cache column type: %w", err)
 	}
 
-	// varchar/char is the only legacy shape this connector has ever produced, and the
-	// only one where a byte-level CONVERT to varbinary is guaranteed to recover the true
-	// LSN rather than truncating it
+	// varchar is the only legacy shape this connector has ever produced. char is
+	// excluded even though CONVERT can recover it too: DATALENGTH on a fixed-length
+	// char(n) column always returns n (blank-padded), not the actual content length,
+	// so the length check below would false-positive on every row for any n != 10.
 	switch typeName {
 	case "varbinary", "binary":
 		// already migrated - nothing to do
 		return tx.Commit()
-	case "varchar", "char":
+	case "varchar":
 		// handled below
 	default:
-		log.Errorf("Checkpoint cache table '%s' has a cache_val column of unexpected type '%s'; expected varchar/char (legacy) or varbinary (current). Skipping migration - manual inspection is required.", tableName, typeName)
+		log.Errorf("Checkpoint cache table '%s' has a cache_val column of unexpected type '%s'; expected varchar (legacy) or varbinary (current). Skipping migration - manual inspection is required.", tableName, typeName)
 		return tx.Commit()
 	}
 
@@ -251,7 +250,7 @@ func cacheTableMigration(ctx context.Context, db *sql.DB, tableName string, log 
 
 	// unfortunately we can't recover here and user would need to clear their cache.
 	if invalidRows > 0 {
-		return fmt.Errorf("checkpoint cache table '%s' has %d cache_val entry/entries that are not a valid 10-byte LSN and cannot be safely recovered; clear the affected row(s) (e.g. UPDATE %s SET cache_val = NULL WHERE DATALENGTH(cache_val) <> 10) and restart - affected pipelines will resume via a full resnapshot if stream_snapshot is true, or by replaying each change table from its tracked start LSN if false", tableName, invalidRows, tableName)
+		return fmt.Errorf("checkpoint cache table '%s' has %d cache_val entries that are not a valid 10-byte LSN and cannot be safely recovered; clear the affected row(s) (e.g. UPDATE %s SET cache_val = NULL WHERE DATALENGTH(cache_val) <> 10) and restart - affected pipelines will resume via a full resnapshot if stream_snapshot is true, or by replaying each change table from its tracked start LSN if false", tableName, invalidRows, tableName)
 	}
 
 	migrationSteps := []string{
