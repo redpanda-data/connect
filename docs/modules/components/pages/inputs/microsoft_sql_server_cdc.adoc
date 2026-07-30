@@ -108,6 +108,8 @@ This input adds the following metadata fields to each message:
 == Permissions
 
 When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the rpcn  schema must already exist. Refer to `checkpoint_cache_table_name` for more information.
+
+The Connect user also requires `ALTER` permission on the checkpoint cache table, to support schema updates to the checkpoint cache (for example, one-time migrations applied automatically on upgrade).
 		
 
 == Fields

@@ -69,6 +69,8 @@ This input adds the following metadata fields to each message:
 == Permissions
 
 When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + fieldCheckpointCacheTableName + "`" + ` for more information.
+
+The Connect user also requires ` + "`ALTER`" + ` permission on the checkpoint cache table, to support schema updates to the checkpoint cache (for example, one-time migrations applied automatically on upgrade).
 		`).
 	Field(service.NewStringField(fieldConnectionString).
 		Description("The connection string of the Microsoft SQL Server database to connect to.").
