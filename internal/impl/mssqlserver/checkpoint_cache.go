@@ -200,16 +200,12 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 	return created, nil
 }
 
-// validateCacheColumnType ensures cache_val is a type Get can safely recover a 10-byte
-// LSN from via CONVERT(varbinary(10), cache_val): varchar (the only legacy shape this
-// connector has ever produced), or already varbinary/binary. No DDL is run here - the
-// on-disk bytes of a legacy varchar column are already intact, so CONVERT alone recovers
-// them on read without ever touching the table's schema.
-//
-// nvarchar/nchar are rejected: CONVERT on those truncates UTF-16LE bytes silently,
-// corrupting any value >= 5 characters. char is rejected too: DATALENGTH on a
-// fixed-length char(n) column returns the declared length, not the actual content
-// length, so the length validation Get performs on read would false-positive on it.
+// validateCacheColumnType only accepts varchar (legacy) and varbinary (current) - the
+// only two shapes this connector has ever produced. No DDL is run; Get recovers a
+// legacy varchar column via CONVERT on read. nvarchar/nchar are rejected because
+// CONVERT truncates their UTF-16LE bytes silently; char/binary are rejected because
+// DATALENGTH on a fixed-length column returns the declared length, not the actual
+// content length, breaking Get's length check for any n != 10.
 func validateCacheColumnType(ctx context.Context, db *sql.DB, tableName string, log *service.Logger) error {
 	var typeName string
 	q := `
@@ -228,7 +224,7 @@ func validateCacheColumnType(ctx context.Context, db *sql.DB, tableName string, 
 	case "varchar":
 		log.Infof("Checkpoint cache table '%s' has a legacy varchar cache_val column; LSNs will be recovered via CONVERT on read rather than migrated. No action is required. If a cached value is ever found not to be a valid %d-byte LSN, this pipeline will fail to start until the entry is cleared.", tableName, lsnByteLength)
 		return nil
-	case "varbinary", "binary":
+	case "varbinary":
 		return nil
 	default:
 		return fmt.Errorf("checkpoint cache table '%s' has a cache_val column of unexpected type '%s'; expected varchar (legacy) or varbinary (current) - manual inspection is required", tableName, typeName)

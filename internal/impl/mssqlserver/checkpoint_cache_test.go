@@ -113,9 +113,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 	integration.CheckSkip(t)
 	connStr, db := mssqlservertest.MustSetupTestWithMicrosoftSQLServerVersion(t)
 
-	// highByteLSN contains bytes >= 0x80 (0x8b, 0xe2), which corrupt when round-tripped
-	// through a character column: the driver's varchar decode path reinterprets them via
-	// the column's collation and re-encodes as UTF-8, expanding the value beyond 10 bytes.
+	// highByteLSN has bytes >= 0x80, which a character column's collation decode corrupts on read.
 	highByteLSN := replication.LSN{0x00, 0x04, 0x8b, 0x73, 0x00, 0x01, 0x73, 0xe2, 0x00, 0x01}
 
 	t.Run("round trips a high-byte LSN cleanly", func(t *testing.T) {
@@ -141,9 +139,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		_, err := db.Exec(`CREATE SCHEMA rpcn2;`)
 		require.NoError(t, err)
 
-		// Recreate the table using the pre-fix schema (cache_val varchar(100)) and write the
-		// LSN bytes directly via a varbinary bind so they land on disk intact, mirroring the
-		// real-world bug: writes round-trip fine, only the varchar *read* path corrupts.
+		// Legacy schema: cache_val varchar(100), seeded with intact on-disk bytes.
 		_, err = db.Exec(`CREATE TABLE rpcn2.CdcCheckpointCache (
 			cache_key varchar(7) NOT NULL PRIMARY KEY,
 			cache_val varchar(100)
@@ -176,11 +172,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		_, err := db.Exec(`CREATE SCHEMA rpcn11;`)
 		require.NoError(t, err)
 
-		// Legacy varchar(100) table, but empty - no row is seeded via raw SQL here. This
-		// exercises the actual write path: the stored proc's @Value varbinary(10) parameter
-		// implicitly assigned into a varchar(100) column via Set(), then read back via
-		// Get()'s CONVERT. Confirms that implicit assignment is genuinely byte-preserving
-		// through the live code, not just via a manually-seeded row.
+		// Empty legacy varchar(100) table; Set writes through the live proc, not a seeded row.
 		_, err = db.Exec(`CREATE TABLE rpcn11.CdcCheckpointCache (
 			cache_key varchar(7) NOT NULL PRIMARY KEY,
 			cache_val varchar(100)
@@ -241,9 +233,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		_, err := db.Exec(`CREATE SCHEMA rpcn10;`)
 		require.NoError(t, err)
 
-		// CONVERT(varbinary(10), x) truncates a too-long source to exactly 10 bytes with no
-		// error, so this proves DATALENGTH is checked on the raw source alongside the CONVERT
-		// expression, not derived from the (always <= 10 byte) converted result.
+		// DATALENGTH is checked on the raw source, not the always-<=10-byte converted result.
 		overlongVal := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 
 		_, err = db.Exec(`CREATE TABLE rpcn10.CdcCheckpointCache (
@@ -269,12 +259,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		_, err := db.Exec(`CREATE SCHEMA rpcn5;`)
 		require.NoError(t, err)
 
-		// char(100) is deliberately NOT treated as a recoverable legacy shape: DATALENGTH
-		// on a fixed-length char column always returns the declared length (blank-padded),
-		// not the actual content length, so the "<> 10" length check would false-positive
-		// on every row. It must hard-fail startup rather than silently continue: continuing
-		// would still (re)create the stored proc with @Value varbinary(10) against this
-		// unvalidated character column, reproducing the exact corruption this fix exists for.
+		// char: DATALENGTH returns the declared (blank-padded) length, not actual content length.
 		_, err = db.Exec(`CREATE TABLE rpcn5.CdcCheckpointCache (
 			cache_key varchar(7) NOT NULL PRIMARY KEY,
 			cache_val char(100)
@@ -289,7 +274,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		require.ErrorContains(t, err, "unexpected type")
 		require.ErrorContains(t, err, "manual inspection is required")
 
-		// column type must be left exactly as it was, not migrated
+		// column type is left untouched
 		var typeName string
 		require.NoError(t, db.QueryRow(`
 			SELECT t.name FROM sys.columns c
@@ -318,7 +303,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		require.ErrorContains(t, err, "unexpected type")
 		require.ErrorContains(t, err, "manual inspection is required")
 
-		// column type must be left exactly as it was, not migrated
+		// column type is left untouched
 		var typeName string
 		require.NoError(t, db.QueryRow(`
 			SELECT t.name FROM sys.columns c
@@ -333,8 +318,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		_, err := db.Exec(`CREATE SCHEMA rpcn7;`)
 		require.NoError(t, err)
 
-		// nchar shares char's fixed-length DATALENGTH padding problem and nvarchar's
-		// UTF-16LE expansion problem - unrecoverable for two independent reasons.
+		// nchar: has both char's DATALENGTH padding problem and nvarchar's UTF-16LE expansion problem.
 		_, err = db.Exec(`CREATE TABLE rpcn7.CdcCheckpointCache (
 			cache_key varchar(7) NOT NULL PRIMARY KEY,
 			cache_val nchar(100)
@@ -349,7 +333,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		require.ErrorContains(t, err, "unexpected type")
 		require.ErrorContains(t, err, "manual inspection is required")
 
-		// column type must be left exactly as it was, not migrated
+		// column type is left untouched
 		var typeName string
 		require.NoError(t, db.QueryRow(`
 			SELECT t.name FROM sys.columns c
@@ -358,18 +342,16 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		require.Equal(t, "nchar", typeName)
 	})
 
-	t.Run("treats an existing binary column as directly readable", func(t *testing.T) {
+	t.Run("fails startup for a binary(20) legacy column rather than permanently hard-failing Get", func(t *testing.T) {
 		t.Parallel()
 
 		_, err := db.Exec(`CREATE SCHEMA rpcn8;`)
 		require.NoError(t, err)
 
-		// binary(10) is a fixed-length binary type, distinct from varbinary(10) but
-		// handled identically - no read-path corruption risk since it's binary, not
-		// character, storage, and CONVERT(varbinary(10), binaryVal) is a no-op.
+		// binary(20): DATALENGTH reports the padded declared length (20), not the actual 10 bytes.
 		_, err = db.Exec(`CREATE TABLE rpcn8.CdcCheckpointCache (
 			cache_key varchar(7) NOT NULL PRIMARY KEY,
-			cache_val binary(10)
+			cache_val binary(20)
 		);`)
 		require.NoError(t, err)
 		_, err = db.Exec(`INSERT INTO rpcn8.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
@@ -377,14 +359,11 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		require.NoError(t, err)
 
 		cacheTableToCreate := "rpcn8.CdcCheckpointCache"
-		cache, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
-		require.NoError(t, err)
+		_, err = newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.ErrorContains(t, err, "unexpected type")
+		require.ErrorContains(t, err, "manual inspection is required")
 
-		got, err := cache.Get(t.Context(), "")
-		require.NoError(t, err)
-		require.Equal(t, []byte(highByteLSN), got)
-
-		// no DDL is ever run - the column type is left exactly as it was
+		// column type must be left exactly as it was, not touched
 		var typeName string
 		require.NoError(t, db.QueryRow(`
 			SELECT t.name FROM sys.columns c
@@ -405,7 +384,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		require.NoError(t, err)
 		require.NoError(t, cacheA.Set(t.Context(), "", highByteLSN, nil))
 
-		// second construction against the same, already-migrated table must not error
+		// second construction against the same table must not error
 		cacheB, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
 		require.NoError(t, err)
 
