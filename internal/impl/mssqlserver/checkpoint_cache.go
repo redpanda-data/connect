@@ -90,6 +90,7 @@ func newCheckpointCache(
 		log.Infof("Found existing checkpoint cache table '%s'", cacheTable.String())
 	}
 
+	// this and its tests can eventually be deleted when we're happy users have migrated.
 	if err := cacheTableMigration(ctx, db, cacheTable.String(), log); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrating checkpoint cache table '%s': %w", cacheTable.String(), err)
@@ -207,7 +208,7 @@ func cacheTableMigration(ctx context.Context, db *sql.DB, tableName string, log 
 		return fmt.Errorf("acquiring checkpoint cache migration lock: %w", err)
 	}
 	if lockRes < 0 {
-		return fmt.Errorf("aquiring checkpoint cache migration lock (sp_getapplock returned %d)", lockRes)
+		return fmt.Errorf("acquiring checkpoint cache migration lock (sp_getapplock returned %d)", lockRes)
 	}
 
 	var isChar bool
