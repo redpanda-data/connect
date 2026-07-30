@@ -170,6 +170,49 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_Migration(t *testing.
 		require.Equal(t, []byte(highByteLSN), got, "migration should recover the true on-disk LSN, not a re-corrupted value")
 	})
 
+	t.Run("fails startup on a genuinely corrupted legacy value rather than resetting it silently", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn4;`)
+		require.NoError(t, err)
+
+		// Two distinct corruption shapes: a too-short value, and a too-long value.
+		// CONVERT(varbinary(10), x) truncates a too-long source to exactly 10 bytes
+		// with no error, so this also proves the source length is validated before
+		// conversion rather than the (always <= 10 byte) converted result afterward.
+		shortVal := []byte{0x01, 0x02, 0x03, 0x04}
+		overlongVal := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+
+		_, err = db.Exec(`CREATE TABLE rpcn4.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val varchar(100)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn4.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, shortVal)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn4.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			"other", overlongVal)
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn4.CdcCheckpointCache"
+		_, err = newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.ErrorContains(t, err, "cannot be safely recovered")
+		require.ErrorContains(t, err, "2 cache_val entry/entries")
+
+		// migration must not have touched the table: still legacy varchar, values untouched
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn4.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "varchar", typeName)
+
+		var shortAfter []byte
+		require.NoError(t, db.QueryRow(`SELECT cache_val FROM rpcn4.CdcCheckpointCache WHERE cache_key = ?;`, defaultCacheKey).Scan(&shortAfter))
+		require.Equal(t, shortVal, shortAfter, "row should be left untouched, not reset, pending manual intervention")
+	})
+
 	t.Run("is idempotent across multiple constructions", func(t *testing.T) {
 		t.Parallel()
 

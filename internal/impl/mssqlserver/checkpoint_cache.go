@@ -242,6 +242,18 @@ func cacheTableMigration(ctx context.Context, db *sql.DB, tableName string, log 
 
 	log.Warnf("Migrating legacy character-typed cache_val column on checkpoint cache table '%s' to varbinary(10); recovered LSNs will be validated for length", tableName)
 
+	// check length to ensure the source is a genuine 10-byte LSN before converting
+	var invalidRows int64
+	countQ := fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE cache_val IS NOT NULL AND DATALENGTH(cache_val) <> 10;`, tableName)
+	if err := tx.QueryRowContext(ctx, countQ).Scan(&invalidRows); err != nil {
+		return fmt.Errorf("checking legacy cache_val length: %w", err)
+	}
+
+	// unfortunately we can't recover here and user would need to clear their cache.
+	if invalidRows > 0 {
+		return fmt.Errorf("checkpoint cache table '%s' has %d cache_val entry/entries that are not a valid 10-byte LSN and cannot be safely recovered; clear the affected row(s) (e.g. UPDATE %s SET cache_val = NULL WHERE DATALENGTH(cache_val) <> 10) and restart - affected pipelines will resume via a full resnapshot if stream_snapshot is true, or by replaying each change table from its tracked start LSN if false", tableName, invalidRows, tableName)
+	}
+
 	migrationSteps := []string{
 		fmt.Sprintf("ALTER TABLE %s ADD cache_val_bin varbinary(10) NULL;", tableName),
 		fmt.Sprintf("UPDATE %s SET cache_val_bin = CONVERT(varbinary(10), cache_val);", tableName),
@@ -252,19 +264,6 @@ func cacheTableMigration(ctx context.Context, db *sql.DB, tableName string, log 
 		if _, err := tx.ExecContext(ctx, step); err != nil {
 			return fmt.Errorf("converting cache_val column to varbinary: %w", err)
 		}
-	}
-
-	validateQ := fmt.Sprintf(`UPDATE %s SET cache_val = NULL WHERE cache_val IS NOT NULL AND DATALENGTH(cache_val) <> 10;`, tableName)
-	res, err := tx.ExecContext(ctx, validateQ)
-	if err != nil {
-		return fmt.Errorf("updating migrated cache_val length: %w", err)
-	}
-	invalidRows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("validating migrated cache_val length: %w", err)
-	}
-	if invalidRows > 0 {
-		log.Warnf("Checkpoint cache table '%s' had %d recovered LSN value(s) that failed length validation after migration and were reset to NULL. On next start, affected pipelines configured with stream_snapshot: true will re-run a full snapshot of every configured table; those with stream_snapshot: false will instead replay each change table from its tracked start LSN.", tableName, invalidRows)
 	}
 
 	return tx.Commit()
