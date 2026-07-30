@@ -211,13 +211,13 @@ func cacheTableMigration(ctx context.Context, db *sql.DB, tableName string, log 
 		return fmt.Errorf("acquiring checkpoint cache migration lock (sp_getapplock returned %d)", lockRes)
 	}
 
-	var isChar bool
+	var typeName string
 	checkQ := `
-	SELECT CASE WHEN t.name IN ('varchar', 'char', 'nvarchar', 'nchar') THEN 1 ELSE 0 END
+	SELECT t.name
 	FROM sys.columns c
 	JOIN sys.types t ON t.user_type_id = c.user_type_id
 	WHERE c.object_id = OBJECT_ID(?) AND c.name = 'cache_val';`
-	if err := tx.QueryRowContext(ctx, checkQ, tableName).Scan(&isChar); err != nil {
+	if err := tx.QueryRowContext(ctx, checkQ, tableName).Scan(&typeName); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// table/column not found is unexpected here since createCacheTable runs first,
 			// but treat as nothing to migrate rather than failing startup.
@@ -225,8 +225,18 @@ func cacheTableMigration(ctx context.Context, db *sql.DB, tableName string, log 
 		}
 		return fmt.Errorf("inspecting checkpoint cache column type: %w", err)
 	}
-	if !isChar {
-		// already migrated
+
+	// varchar/char is the only legacy shape this connector has ever produced, and the
+	// only one where a byte-level CONVERT to varbinary is guaranteed to recover the true
+	// LSN rather than truncating it
+	switch typeName {
+	case "varbinary", "binary":
+		// already migrated - nothing to do
+		return tx.Commit()
+	case "varchar", "char":
+		// handled below
+	default:
+		log.Errorf("Checkpoint cache table '%s' has a cache_val column of unexpected type '%s'; expected varchar/char (legacy) or varbinary (current). Skipping migration - manual inspection is required.", tableName, typeName)
 		return tx.Commit()
 	}
 
