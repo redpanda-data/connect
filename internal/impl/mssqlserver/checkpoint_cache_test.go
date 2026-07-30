@@ -170,6 +170,42 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *test
 		require.Equal(t, "varchar", typeName)
 	})
 
+	t.Run("Set writes cleanly into a legacy varchar table via the live proc", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn11;`)
+		require.NoError(t, err)
+
+		// Legacy varchar(100) table, but empty - no row is seeded via raw SQL here. This
+		// exercises the actual write path: the stored proc's @Value varbinary(10) parameter
+		// implicitly assigned into a varchar(100) column via Set(), then read back via
+		// Get()'s CONVERT. Confirms that implicit assignment is genuinely byte-preserving
+		// through the live code, not just via a manually-seeded row.
+		_, err = db.Exec(`CREATE TABLE rpcn11.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val varchar(100)
+		);`)
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn11.CdcCheckpointCache"
+		cache, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+
+		require.NoError(t, cache.Set(t.Context(), "", highByteLSN, nil))
+
+		got, err := cache.Get(t.Context(), "")
+		require.NoError(t, err)
+		require.Equal(t, []byte(highByteLSN), got, "Set through the live proc should write byte-preserving data into the still-varchar column")
+
+		// no DDL is ever run - the column must still be varchar
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn11.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "varchar", typeName)
+	})
+
 	t.Run("Get fails on a too-short legacy value rather than resuming from a bogus LSN", func(t *testing.T) {
 		t.Parallel()
 
