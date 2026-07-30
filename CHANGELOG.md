@@ -3,6 +3,17 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.103.0 - 2026-07-30
+
+### Fixed
+
+- agents: Corrected the tools available to godev and tester agents. ([@josephwoodward](https://github.com/josephwoodward), [#4641](https://github.com/redpanda-data/connect/pull/4641))
+
+### Changed
+
+- oracledb_cdc: Improved ability to debug logminer query performance with better debug logging for redo log file loading. ([@josephwoodward](https://github.com/josephwoodward), [#4629](https://github.com/redpanda-data/connect/pull/4629))
+- postgres_cdc: Clarified behavior of postgres_cdc when the tables configuration is empty. ([@josephwoodward](https://github.com/josephwoodward), [#4621](https://github.com/redpanda-data/connect/pull/4621))
+
 ## 4.102.0 - 2026-07-23
 
 ### Added
