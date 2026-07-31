@@ -3,6 +3,21 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.103.0 - 2026-07-30
+
+### Fixed
+
+- mssqlserver_cdc: Convert reading of LSN from checkpoint cache to binary to avoid LSN corruption due to read collation decoding. ([@josephwoodward](https://github.com/josephwoodward), [#4644](https://github.com/redpanda-data/connect/pull/4644))
+
+### Changed
+
+- oracledb_cdc: Improved ability to debug logminer query performance with better debug logging for redo log file loading. ([@josephwoodward](https://github.com/josephwoodward), [#4629](https://github.com/redpanda-data/connect/pull/4629))
+- postgres_cdc: Clarified behavior of postgres_cdc when the tables configuration is empty. ([@josephwoodward](https://github.com/josephwoodward), [#4621](https://github.com/redpanda-data/connect/pull/4621))
+
+### Added
+
+- docs: Add short descriptions to component config fields. ([@prakhargarg105](https://github.com/prakhargarg105), [#4638](https://github.com/redpanda-data/connect/pull/4638))
+
 ## 4.102.0 - 2026-07-23
 
 ### Added
