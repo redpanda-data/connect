@@ -47,11 +47,13 @@ If the query fails to execute then the message will remain unchanged and the err
 			Example([]string{"foo", "bar", "baz"})).
 		Field(service.NewStringField("where").
 			Description("An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Placeholders should always be question marks, and will automatically be converted to dollar syntax when the postgres or clickhouse drivers are used.").
+			ShortDescription("An optional where clause. Placeholders must be question marks, populated from args_mapping.").
 			Example("meow = ? and woof = ?").
 			Example("user_id = ?").
 			Optional()).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
+			ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).

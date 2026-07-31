@@ -71,15 +71,19 @@ func authFieldSpecs() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(sfFieldOrgURL).
 			Description("Salesforce instance base URL for your org, protocol included and no trailing slash. Used as the base for both the OAuth token endpoint and REST queries. Production orgs use `https://{my-domain}.my.salesforce.com`; sandboxes use `https://{my-domain}.sandbox.my.salesforce.com`. Legacy instance URLs (`https://na123.salesforce.com`) still work but My Domain URLs are strongly recommended by Salesforce.").
+			ShortDescription("Salesforce instance base URL for your org, including protocol and without a trailing slash.").
 			Example("https://acme.my.salesforce.com").
 			Example("https://acme--staging.sandbox.my.salesforce.com"),
 		service.NewStringField(sfFieldClientID).
-			Description("Consumer Key of the Salesforce Connected App authorized for the OAuth Client Credentials flow. Create the Connected App under Setup → App Manager → New Connected App, enable OAuth settings, enable the Client Credentials Flow under `Flow Enablement`, then copy the Consumer Key from `Manage Consumer Details`."),
+			Description("Consumer Key of the Salesforce Connected App authorized for the OAuth Client Credentials flow. Create the Connected App under Setup → App Manager → New Connected App, enable OAuth settings, enable the Client Credentials Flow under `Flow Enablement`, then copy the Consumer Key from `Manage Consumer Details`.").
+			ShortDescription("Consumer Key of the Salesforce Connected App authorised for the OAuth Client Credentials flow."),
 		service.NewStringField(sfFieldClientSecret).
 			Description("Consumer Secret of the Salesforce Connected App, paired with `client_id`. Sensitive — prefer environment variable interpolation (`${SALESFORCE_CLIENT_SECRET}`) over inlining.").
+			ShortDescription("Consumer Secret of the Salesforce Connected App, paired with client_id.").
 			Secret(),
 		service.NewStringField(sfFieldAPIVersion).
 			Description("Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/{api_version}/...`) and available fields/objects. Must be supported by your org — check Setup → Company Information. Older versions may lack recent fields.").
+			ShortDescription("Salesforce REST API version to target, prefixed with v.").
 			Default("v65.0").
 			Example("v65.0").
 			Example("v62.0"),

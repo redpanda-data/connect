@@ -45,10 +45,12 @@ In order to merge the result into the original message compose this processor wi
 			Example("return redis.call('set', KEYS[1], ARGV[1])")).
 		Field(service.NewBloblangField("args_mapping").
 			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis script.").
+			ShortDescription("A Bloblang mapping evaluating to an array of values matching the arguments the Redis script requires.").
 			Example("root = [ this.key ]").
 			Example(`root = [ meta("kafka_key"), "hardcoded_value" ]`)).
 		Field(service.NewBloblangField("keys_mapping").
 			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of keys matching in size to the number of arguments required for the specified Redis script.").
+			ShortDescription("A Bloblang mapping evaluating to an array of keys matching the arguments the Redis script requires.").
 			Example("root = [ this.key ]").
 			Example(`root = [ meta("kafka_key"), this.count ]`)).
 		Field(service.NewIntField("retries").

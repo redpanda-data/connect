@@ -64,17 +64,20 @@ func mongoConfigSpec() *service.ConfigSpec {
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewIntField("batch_size").
 			Description("A explicit number of documents to batch up before flushing them for processing. Must be greater than `0`. Operations: `find`, `aggregate`").
+			ShortDescription("Number of documents to batch before flushing for processing. Operations: find, aggregate.").
 			Optional().
 			Example(1000).
 			Version("4.26.0")).
 		Field(service.NewIntMapField("sort").
 			Description("An object specifying fields to sort by, and the respective sort order (`1` ascending, `-1` descending). Note: The driver currently appears to support only one sorting key. Operations: `find`").
+			ShortDescription("Fields to sort by and their order, 1 ascending or -1 descending. Operations: find.").
 			Optional().
 			Example(map[string]int{"name": 1}).
 			Example(map[string]int{"age": -1}).
 			Version("4.26.0")).
 		Field(service.NewIntField("limit").
 			Description("An explicit maximum number of documents to return. Operations: `find`").
+			ShortDescription("Maximum number of documents to return. Operations: find.").
 			Optional().
 			Version("4.26.0"))
 }

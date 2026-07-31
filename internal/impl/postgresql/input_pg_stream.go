@@ -91,16 +91,20 @@ This input adds the following metadata fields to each message:
 		`).
 		Field(service.NewStringField(fieldDSN).
 			Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
+			ShortDescription("The Data Source Name for the PostgreSQL database, in postgres:// URL form.").
 			Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")).
 		Field(service.NewBoolField(fieldIncludeTxnMarkers).
 			Description(`When set to true, empty messages with operation types BEGIN and COMMIT are generated for the beginning and end of each transaction. Messages with operation metadata set to "begin" or "commit" will have null message payloads.`).
+			ShortDescription("Emit empty BEGIN and COMMIT messages at the start and end of each transaction.").
 			Default(false)).
 		Field(service.NewBoolField(fieldStreamSnapshot).
 			Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `" + fieldTables + "` is left empty, since the snapshot is only planned for tables listed there.").
+			ShortDescription("Stream a snapshot of all existing data before streaming changes. Snapshot tables must have a primary key.").
 			Example(true).
 			Default(false)).
 		Field(service.NewFloatField(fieldSnapshotMemSafetyFactor).
 			Description("Determines the fraction of available memory that can be used for streaming the snapshot. Values between 0 and 1 represent the percentage of memory to use. Lower values make initial streaming slower but help prevent out-of-memory errors.").
+			ShortDescription("Fraction of available memory, between 0 and 1, that may be used for streaming the snapshot.").
 			Example(0.2).
 			Default(1).
 			Deprecated()).
@@ -119,6 +123,7 @@ If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TA
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			ShortDescription("The maximum number of messages that can be processed at a given time.").
 			Default(1024)).
 		Field(service.NewBoolField(fieldTemporarySlot).
 			Description("If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.").
@@ -129,6 +134,7 @@ If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TA
 Note: To avoid needing to grant the replication user permission to create publications, you can manually create the publications ahead of time.
 This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name>`" + `, so be sure to create them using this convention.
 			`).
+			ShortDescription("The name of the PostgreSQL logical replication slot to use. A random name is generated if not provided.").
 			Example("my_test_slot")).
 		Field(service.NewDurationField(fieldPgStandbyTimeout).
 			Description("Specify the standby timeout before refreshing an idle connection.").
@@ -143,12 +149,14 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Default(1)).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
 			Description("The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.").
+			ShortDescription("The value to emit when TOAST values are unchanged in the stream.").
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
 			Optional().
 			Advanced()).
 		Field(service.NewDurationField(fieldHeartbeatInterval).
 			Description("The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.").
+			ShortDescription("Interval at which to write heartbeat messages, keeping the replication slot current on low-traffic tables.").
 			Default("1h").
 			Example("0s").
 			Example("24h").
@@ -158,9 +166,11 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 		Field(service.NewObjectField(fieldAWSIAMAuth,
 			service.NewBoolField(FieldAWSIAMAuthEnabled).
 				Description("Enable AWS IAM authentication for PostgreSQL. When enabled, an IAM authentication token is generated and used as the password.").
+				ShortDescription("Enable AWS IAM authentication, generating a temporary token to use as the password.").
 				Default(false),
 			service.NewStringField("region").
 				Description("The AWS region where the PostgreSQL instance is located. If no region is specified then the environment default will be used.").
+				ShortDescription("The AWS region where the PostgreSQL instance is located. Defaults to the environment region.").
 				Optional(),
 			service.NewStringField("endpoint").
 				Description("The PostgreSQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
@@ -175,9 +185,11 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 				Optional().Advanced(),
 			service.NewStringField("role").
 				Description("Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.").
+				ShortDescription("Optional AWS IAM role ARN to assume for authentication.").
 				Optional(),
 			service.NewStringField("role_external_id").
 				Description("Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.").
+				ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
 				Optional(),
 			service.NewObjectListField("roles",
 				service.NewStringField("role").
@@ -189,9 +201,11 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 					Optional(),
 			).
 				Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.").
+				ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
 				Optional(),
 		).
 			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
+			ShortDescription("AWS IAM authentication configuration for PostgreSQL instances.").
 			Advanced().
 			Optional()).
 		Field(service.NewAutoRetryNacksToggleField()).

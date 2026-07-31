@@ -87,6 +87,7 @@ func schemaRegistryOutputConfigFields() []*service.ConfigField {
 		service.NewInterpolatedStringField(sroFieldSubject).Description("Subject."),
 		service.NewInterpolatedStringField(sroFieldSubjectCompatibilityLevel).
 			Description("The compatibility level for the subject. Can be one of BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE.").
+			ShortDescription("The compatibility level for the subject.").
 			Optional().
 			Advanced(),
 		service.NewBoolField(sroFieldBackfillDependencies).Description("Backfill schema references and previous versions.").Default(true).Advanced(),

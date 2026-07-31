@@ -57,6 +57,7 @@ func fileOutputSpec() *service.ConfigSpec {
 				"delim:x":   "Append each message to the output stream followed by a custom delimiter.",
 			}).
 				Description("The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.").
+				ShortDescription("How the bytes of messages are written into the output data stream.").
 				LintRule("").
 				Examples("lines", "delim:\t", "delim:foobar").
 				Default("lines").

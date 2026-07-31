@@ -150,7 +150,8 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewInterpolatedStringField(esFieldIndex).
 				Description("The index to place messages."),
 			service.NewInterpolatedStringField(esFieldAction).
-				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update`, `delete`, `create` or `upsert`. See the `Updating Documents` example for more on how the `update` action works and the `Create Documents` and `Upserting Documents` examples for how to use the `create` and `upsert` actions respectively."),
+				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update`, `delete`, `create` or `upsert`. See the `Updating Documents` example for more on how the `update` action works and the `Create Documents` and `Upserting Documents` examples for how to use the `create` and `upsert` actions respectively.").
+				ShortDescription("The action to take on the document: index, update, delete, create or upsert."),
 			service.NewInterpolatedStringField(esFieldID).
 				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
 				Example(`${!counter()}-${!timestamp_unix()}`),

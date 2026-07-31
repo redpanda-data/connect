@@ -67,11 +67,13 @@ You can access these metadata fields using function interpolation.`
 			service.NewStringListField("include_patterns").
 				Description("A list of file patterns to include (e.g., '**/*.md', 'configs/*.yaml'). If empty, all files will be included. "+
 					"Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.").
+				ShortDescription("Glob patterns for files to include. All files are included if empty.").
 				Default([]any{}).
 				Optional(),
 			service.NewStringListField("exclude_patterns").
 				Description("A list of file patterns to exclude (e.g., '.git/**', '**/*.png'). These patterns take precedence over include_patterns. "+
 					"Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.").
+				ShortDescription("Glob patterns for files to exclude. These take precedence over include_patterns.").
 				Default([]any{}).
 				Optional(),
 			service.NewIntField("max_file_size").
@@ -81,6 +83,7 @@ You can access these metadata fields using function interpolation.`
 			// Checkpoint caching settings
 			service.NewStringField("checkpoint_cache").
 				Description("A cache resource to store the last processed commit hash, allowing the input to resume from where it left off after a restart.").
+				ShortDescription("Cache resource storing the last processed commit hash, so the input resumes after a restart.").
 				Optional(),
 			service.NewStringField("checkpoint_key").
 				Description("The key to use when storing the last processed commit hash in the cache.").

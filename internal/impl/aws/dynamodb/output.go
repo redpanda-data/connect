@@ -142,6 +142,7 @@ This output benefits from sending messages as a batch for improved performance. 
 				}),
 			service.NewStringMapField(ddboFieldJSONMapColumns).
 				Description("A map of column keys to xref:configuration:field_paths.adoc[field paths] pointing to value data within messages.").
+				ShortDescription("A map of column keys to field paths pointing at value data within messages.").
 				Default(map[string]any{}).
 				Example(map[string]any{
 					"user":           "path.to.user",

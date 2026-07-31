@@ -81,6 +81,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Default(false),
 				service.NewDurationField(siFieldWatcherMinimumAge).
 					Description("The minimum period of time since a file was last updated before attempting to consume it. Increasing this period decreases the likelihood that a file will be consumed whilst it is still being written to.").
+					ShortDescription("How long since a file was last updated before it is consumed, avoiding partially written files.").
 					Default("1s").
 					Examples("10s", "1m", "10m"),
 				service.NewDurationField(siFieldWatcherPollInterval).
@@ -89,8 +90,10 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Examples("100ms", "1s"),
 				service.NewStringField(siFieldWatcherCache).
 					Description("A xref:components:caches/about.adoc[cache resource] for storing the paths of files already consumed.").
+					ShortDescription("A cache resource storing the paths of files already consumed.").
 					Default(""),
 			).Description("An experimental mode whereby the input will periodically scan the target paths for new files and consume them, when all files are consumed the input will continue polling for new files.").
+				ShortDescription("An experimental mode that periodically rescans the target paths for new files to consume.").
 				Version("3.42.0"),
 		)
 }

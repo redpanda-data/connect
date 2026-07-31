@@ -120,6 +120,7 @@ Schema metadata is discovered using a two-tier strategy:
 				Default(1000),
 			service.NewDurationField(fieldReadMaxWait).
 				Description("The maximum time MongoDB waits to fulfill `read_batch_size` on the change stream before returning documents.").
+				ShortDescription("Maximum time MongoDB waits to fill read_batch_size on the change stream before returning.").
 				Default("1s"),
 			service.NewBoolField(fieldStreamSnapshot).
 				Description("If to read initial snapshot before streaming changes.").
@@ -132,6 +133,7 @@ Schema metadata is discovered using a two-tier strategy:
 }`),
 			service.NewBoolField(fieldBucketSharding).
 				Description("If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `splitVector` command. This allows parallel collection reading in environments where privileged access to the MongoDB cluster is not allowed such as MongoDB Atlas.").
+				ShortDescription("Use $bucketAuto rather than splitVector to determine parallel snapshot chunks, avoiding privileged access.").
 				Default(false).
 				Advanced(),
 			service.NewStringAnnotatedEnumField(fieldDocumentMode, map[string]string{

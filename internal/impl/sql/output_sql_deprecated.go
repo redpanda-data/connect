@@ -34,6 +34,7 @@ For basic inserts use the ` + "xref:components:outputs/sql.adoc[`sql_insert`]" +
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
+			ShortDescription("An optional Bloblang mapping evaluating to an array of values matching the placeholders in query.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).

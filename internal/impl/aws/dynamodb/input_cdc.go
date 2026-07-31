@@ -190,17 +190,21 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 		Fields(
 			service.NewStringListField(dciFieldTables).
 				Description("List of table names to stream from. For single table mode, provide one table. For multi-table mode, provide multiple tables.").
+				ShortDescription("Table names to stream from. Provide one for single-table mode, or several for multi-table.").
 				Default([]any{}),
 			service.NewStringEnumField(dciFieldTableDiscoveryMode, "single", "tag", "includelist").
 				Description("Table discovery mode. `single`: stream from tables specified in `tables` list. `tag`: auto-discover tables by tags (ignores `tables` field). `includelist`: stream from tables in `tables` list (alias for `single`, kept for compatibility).").
+				ShortDescription("How tables are discovered: single, tag, or includelist.").
 				Default("single").
 				Advanced(),
 			service.NewStringField(dciFieldTableTagFilter).
 				Description("Multi-tag filter: 'key1:v1,v2;key2:v3,v4'. Matches tables with (key1=v1 OR key1=v2) AND (key2=v3 OR key2=v4). Required when `table_discovery_mode` is `tag`.").
+				ShortDescription("Multi-tag filter such as key1:v1,v2;key2:v3. Required when table_discovery_mode is tag.").
 				Default("").
 				Advanced(),
 			service.NewDurationField(dciFieldTableDiscoveryInterval).
 				Description("Interval for rescanning and discovering new tables when using `tag` or `includelist` mode. Set to 0 to disable periodic rescanning.").
+				ShortDescription("How often to rescan for new tables in tag or includelist mode. Set to 0 to disable.").
 				Default("5m").
 				Advanced(),
 			service.NewStringField(dciFieldCheckpointTable).
@@ -208,13 +212,16 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default("redpanda_dynamodb_checkpoints"),
 			service.NewStringField(dciFieldCheckpointNamespace).
 				Description("An optional namespace for checkpoints, allowing multiple independent pipelines (for example one per developer or environment) to share a single checkpoint table without overwriting each other's positions. Checkpoints written under one namespace are invisible to pipelines using a different namespace (or none), so changing this value causes the pipeline to restart from `start_from`. Must not contain `#`.").
+				ShortDescription("Namespace for checkpoints, letting independent pipelines share one checkpoint table without overwriting each other.").
 				Default(""),
 			service.NewBoolField(dciFieldGlobalTable).
 				Description("Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. When the table is auto-created it is created as a global table; when it already exists, its replicas are reconciled (missing regions are added via `UpdateTable`). The existing table must have been created in global mode (`TableId` hash key) — enabling this against a pre-existing non-global checkpoint table fails fast with a clear error.").
+				ShortDescription("Provision the checkpoint table as a DynamoDB Global Table so checkpoints replicate across regions. Requires global_table_replicas.").
 				Default(false).
 				Advanced(),
 			service.NewStringListField(dciFieldGlobalTableReplicas).
 				Description("Regions other than this pipeline's own region to replicate the checkpoint table to. The pipeline's own region is always included. Required when `global_table` is true. Applied both when the checkpoint table is created and, for an existing global table, when reconciling replicas (missing regions are added; this list is not used to remove regions).").
+				ShortDescription("Additional regions to replicate the checkpoint table to. This pipeline's own region is always included.").
 				Default([]any{}).
 				Advanced(),
 			service.NewIntField(dciFieldBatchSize).
@@ -227,9 +234,11 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Advanced(),
 			service.NewStringEnumField(dciFieldStartFrom, "trim_horizon", "latest").
 				Description("Where to start reading when no checkpoint exists. `trim_horizon` starts from the oldest available record, `latest` starts from new records.").
+				ShortDescription("Where to start when no checkpoint exists: trim_horizon for the oldest record, or latest.").
 				Default("trim_horizon"),
 			service.NewIntField(dciFieldCheckpointLimit).
 				Description("Maximum number of unacknowledged messages before forcing a checkpoint update. Lower values provide better recovery guarantees but increase write overhead.").
+				ShortDescription("Maximum unacknowledged messages before a checkpoint update is forced.").
 				Default(1000).
 				Advanced(),
 			service.NewIntField(dciFieldMaxTrackedShards).
@@ -242,14 +251,17 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Advanced(),
 			service.NewStringEnumField(dciFieldSnapshotMode, "none", "snapshot_only", "snapshot_and_cdc").
 				Description("Snapshot behavior. `none`: CDC only (default). `snapshot_only`: one-time table scan, no streaming. `snapshot_and_cdc`: scan entire table then stream changes.").
+				ShortDescription("Snapshot behaviour: none for CDC only, snapshot_only, or snapshot_and_cdc.").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).
 				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more RCUs. Start with 1 for safety.").
+				ShortDescription("Number of parallel scan segments, from 1 to 10. Higher parallelism scans faster but uses more RCUs.").
 				Default(1).
 				LintRule(`root = if this < 1 || this > 10 { ["snapshot_segments must be between 1 and 10"] }`).
 				Advanced(),
 			service.NewIntField(dciFieldSnapshotBatchSize).
 				Description("Records per scan request during snapshot. Maximum 1000. Lower values provide better backpressure control but require more API calls.").
+				ShortDescription("Records per scan request during snapshot, up to 1000.").
 				Default(100).
 				LintRule(`root = if this < 1 || this > 1000 { ["snapshot_batch_size must be between 1 and 1000"] }`).
 				Advanced(),
@@ -260,10 +272,12 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Advanced(),
 			service.NewBoolField(dciFieldSnapshotDedupe).
 				Description("Deduplicate records that appear in both snapshot and CDC stream. Requires buffering CDC events during snapshot. If buffer is exceeded, deduplication is disabled to prevent data loss.").
+				ShortDescription("Deduplicate records appearing in both the snapshot and the CDC stream, which requires buffering CDC events.").
 				Default(true).
 				Advanced(),
 			service.NewIntField(dciFieldSnapshotBufferSize).
 				Description("Maximum CDC events to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted.").
+				ShortDescription("Maximum CDC events buffered for deduplication. Deduplication is disabled if exceeded.").
 				Default(100000).
 				Advanced(),
 		).

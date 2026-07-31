@@ -200,6 +200,7 @@ output:
 			Default(defaultBulkBatchSize)).
 		Field(service.NewIntField(sfsFieldMaxConcurrentBulkJobs).
 			Description("Maximum number of bulk jobs polling concurrently in the background. Each in-flight job buffers its CSV payload in memory; lower this value if memory usage is a concern.").
+			ShortDescription("Maximum bulk jobs polling concurrently. Each in-flight job buffers its CSV payload in memory.").
 			Default(defaultMaxBulkJobs)).
 		Field(service.NewDurationField(sfsFieldBulkPollInterval).
 			Description("How often to poll Salesforce for bulk job completion status.").
