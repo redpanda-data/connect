@@ -257,6 +257,10 @@ jobs:
             ,sdlc/prod/github/actions_bot_token
           parse-json-secrets: true
       - name: Trigger docs updates
+        # Best-effort notifications: a docs dispatch failure must never fail
+        # update-downstream (notify-slack declares needs on this job, so a
+        # failure here would silence the release notification).
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
         run: |
