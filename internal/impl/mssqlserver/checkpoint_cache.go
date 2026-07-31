@@ -202,10 +202,7 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 
 // validateCacheColumnType only accepts varchar (legacy) and varbinary (current) - the
 // only two shapes this connector has ever produced. No DDL is run; Get recovers a
-// legacy varchar column via CONVERT on read. nvarchar/nchar are rejected because
-// CONVERT truncates their UTF-16LE bytes silently; char/binary are rejected because
-// DATALENGTH on a fixed-length column returns the declared length, not the actual
-// content length, breaking Get's length check for any n != 10.
+// legacy varchar column via CONVERT on read.
 func validateCacheColumnType(ctx context.Context, db *sql.DB, tableName string, log *service.Logger) error {
 	var typeName string
 	q := `
