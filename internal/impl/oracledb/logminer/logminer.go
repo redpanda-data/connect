@@ -30,6 +30,10 @@ var (
 	publishLatencyMetric = "oracledb_cdc_publish_lag_ns"
 	// captures the time from query execution to zero or more rows being returned by LogMiner
 	timeToFirstRowMetric = "oracledb_cdc_logminer_time_to_first_row_ns"
+	// captures the count of DML rows successfully published downstream
+	logMinerRowsPublishedMetric = "oracledb_cdc_logminer_rows_published_total"
+	// captures the count of redo rows read from LogMiner that never resulted in a published event
+	logMinerRowsDiscardedMetric = "oracledb_cdc_logminer_rows_discarded_total"
 	// https://docs.oracle.com/en/error-help/db/ora-01291/
 	errCodeMissingLogFile = 1291
 	// https://docs.oracle.com/en/error-help/db/ora-01368/
@@ -68,6 +72,8 @@ type LogMiner struct {
 
 	publishLagMetric     *service.MetricTimer
 	timeToFirstRowMetric *service.MetricTimer
+	publishedRowsMetric  *service.MetricCounter
+	discardedRowsMetric  *service.MetricCounter
 	log                  *service.Logger
 }
 
@@ -100,20 +106,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		fmt.Fprintf(&buf, " AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
 	}
 
-	logMinerQuery := fmt.Sprintf(`
-		SELECT
-			SCN,
-			SQL_REDO,
-			OPERATION_CODE,
-			TABLE_NAME,
-			SEG_OWNER,
-			TIMESTAMP,
-			XID,
-			COMMIT_SCN,
-			CSF
-		FROM V$LOGMNR_CONTENTS
-		WHERE SCN > :1 AND SCN <= :2%s
-	`, buf.String())
+	logMinerQuery := fmt.Sprintf("SELECT SCN, SQL_REDO, OPERATION_CODE, TABLE_NAME, SEG_OWNER, TIMESTAMP, XID, COMMIT_SCN, CSF FROM V$LOGMNR_CONTENTS WHERE SCN > :1 AND SCN <= :2%s", buf.String())
 
 	lm := &LogMiner{
 		cfg:                  cfg,
@@ -122,6 +115,8 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		publisher:            publisher,
 		publishLagMetric:     metrics.NewTimer(publishLatencyMetric),
 		timeToFirstRowMetric: metrics.NewTimer(timeToFirstRowMetric),
+		publishedRowsMetric:  metrics.NewCounter(logMinerRowsPublishedMetric),
+		discardedRowsMetric:  metrics.NewCounter(logMinerRowsDiscardedMetric, "reason"),
 		log:                  logger,
 
 		// logminer specific
@@ -295,6 +290,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
 			lm.log.Warnf("Skipping DML event with no SQL_REDO (operation=%s, table=%s.%s, scn=%d, txn=%s) - likely temporary table or unsupported operation",
 				redoEvent.Operation, redoEvent.SchemaName.String, redoEvent.TableName.String, redoEvent.SCN, redoEvent.TransactionID)
+			lm.discardedRowsMetric.Incr(1, "no_sql_redo")
 			return nil
 		}
 
@@ -545,6 +541,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				if dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent) {
 					if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; hasInsert {
 						lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s — values merged into INSERT", dmlEvent.Schema, dmlEvent.Table)
+						lm.discardedRowsMetric.Incr(1, "lob_merged_into_insert")
 						continue
 					}
 				}
@@ -553,6 +550,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
 				lm.publishLagMetric.Timing(time.Since(redoEvent.Timestamp).Nanoseconds())
+				lm.publishedRowsMetric.Incr(1)
 			}
 
 			if err := lm.txnCache.CommitTransaction(ctx, redoEvent.TransactionID); err != nil {
@@ -580,6 +578,13 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
 			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
+		}
+		txn, err := lm.txnCache.GetTransaction(ctx, redoEvent.TransactionID)
+		if err != nil {
+			return fmt.Errorf("fetching transaction %s on rollback: %w", redoEvent.TransactionID, err)
+		}
+		if txn != nil && len(txn.Events) > 0 {
+			lm.discardedRowsMetric.Incr(int64(len(txn.Events)), "rollback")
 		}
 		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
 			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
@@ -914,6 +919,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 
 	// Use the pre-built query from initialization
 	queryStart := time.Now()
+	lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d): %s", startSCN, endSCN, lm.windowSize, lm.logMinerQuery)
 	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
 		return fmt.Errorf("querying logminer: %w", err)
