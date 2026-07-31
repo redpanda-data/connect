@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## 4.103.2 - TBD
 
+### Added
+
+- gateway: Added an optional `auth.hmac` configuration block that authenticates incoming requests by verifying an HMAC signature (SHA-256 or SHA-512) of the raw request body against a shared secret, replacing the platform-managed authentication for the endpoint. This supports webhook-style callers that sign their payloads, such as Terraform Cloud Run Tasks, and callers that prefix the signature header value with a fixed value, such as GitHub and Meta, via the optional `prefix` field. ([@gousteris](https://github.com/gousteris), [#4652](https://github.com/redpanda-data/connect/pull/4652))
+
 ### Fixed
 
 - redpanda: Enabling `unordered_processing` no longer renames the consumer lag gauge from `redpanda_lag` to `kafka_lag`. The `redpanda` input now emits `redpanda_lag` in both modes, as documented. ([@prakhargarg105](https://github.com/prakhargarg105), [#4663](https://github.com/redpanda-data/connect/issues/4663))

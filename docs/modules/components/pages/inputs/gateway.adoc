@@ -67,6 +67,13 @@ input:
       metadata_headers:
         include_prefixes: []
         include_patterns: []
+    auth:
+      hmac:
+        secret: "" # No default (required)
+        header: X-Tfc-Task-Signature # No default (required)
+        prefix: ""
+        algorithm: sha512
+        max_body_size: 4194304
     tcp:
       reuse_addr: false
       reuse_port: false
@@ -99,6 +106,14 @@ This input adds the following metadata fields to each message:
 ```
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
+
+== Authentication
+
+By default, requests to this endpoint are authenticated using the platform-managed Redpanda Cloud JWT/RBAC mechanism. Setting a mechanism under the `auth` field replaces this default authentication for the endpoint. `hmac` is the currently supported mechanism, which verifies a hex-encoded HMAC signature of the raw request body against a shared secret. This is intended for webhook-style callers that sign their payloads (for example, https://developer.hashicorp.com/terraform/cloud-docs/workspaces/settings/run-tasks[Terraform Cloud Run Tasks], which send a hex-encoded HMAC-SHA512 of the request body in a request header).
+
+The `hmac` mechanism only authenticates the raw request body, and provides no replay protection: since there is no timestamp or nonce validation, anyone who captures a signed payload can resend it later. Request headers, query parameters, path parameters and cookies are not covered by the signature, even though they still become message metadata, so pipelines must not make authorization decisions based on that metadata alone.
+
+Providers that prefix their signature header value with the algorithm name, such as GitHub's and Meta's `sha256=`, are supported via the `prefix` field, which strips the configured prefix before the remainder is hex-decoded.
 
 == Fields
 
@@ -205,6 +220,98 @@ include_patterns:
 include_patterns:
   - _timestamp_unix$
 ```
+
+=== `auth`
+
+Configures how incoming requests to this endpoint are authenticated. At most one authentication mechanism may be set. When a mechanism is set, it replaces the platform-managed (Redpanda Cloud JWT/RBAC) authentication for this endpoint. `hmac` is the currently supported mechanism.
+
+
+*Type*: `object`
+
+
+=== `auth.hmac`
+
+Verifies incoming requests by computing an HMAC of the raw request body using `secret` and comparing it against the hex-encoded signature found in the request header named by `header`.
+
+This is intended for webhook-style callers that sign their payloads, such as Terraform Cloud Run Tasks, which send a hex-encoded HMAC-SHA512 of the request body in a request header. Callers that prefix the signature with a fixed value, such as GitHub's and Meta's `sha256=`, are supported via `prefix`; the algorithm used for verification always comes from `algorithm` and is never inferred from the header.
+
+Only the raw request body is covered by the signature, and there is no replay protection (no timestamp or nonce is validated), so a captured signed payload can be resent. Headers, query parameters, path parameters and cookies are not signed but are still exposed as message metadata, so avoid basing authorization decisions on them.
+
+
+*Type*: `object`
+
+
+=== `auth.hmac.secret`
+
+The shared secret key used to compute and verify the HMAC signature.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `auth.hmac.header`
+
+The name of the request header containing the HMAC signature of the request body. By default, the header value must be the bare hex-encoded signature; use `prefix` if the caller adds a fixed prefix such as `sha256=` before the signature.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+header: X-Tfc-Task-Signature
+
+header: X-Hub-Signature-256
+```
+
+=== `auth.hmac.prefix`
+
+An optional exact-match prefix that the `header` value must begin with; it is stripped before the remaining value is hex-decoded. Some providers, such as GitHub and Meta, prefix their signature header value with the algorithm name (for example `sha256=`). This prefix is matched literally and does not influence which algorithm (`algorithm`) is used to verify the signature.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+prefix: sha256=
+```
+
+=== `auth.hmac.algorithm`
+
+The hash algorithm used to compute the HMAC signature.
+
+
+*Type*: `string`
+
+*Default*: `"sha512"`
+
+|===
+| Option | Summary
+
+| `sha256`
+| Verify signatures computed with HMAC-SHA256.
+| `sha512`
+| Verify signatures computed with HMAC-SHA512.
+
+|===
+
+=== `auth.hmac.max_body_size`
+
+The maximum size of the request body in bytes that will be read and buffered for signature verification. Requests with larger bodies are rejected with 413 Request Entity Too Large.
+
+
+*Type*: `int`
+
+*Default*: `4194304`
 
 === `tcp`
 

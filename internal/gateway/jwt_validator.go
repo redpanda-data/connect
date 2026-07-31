@@ -37,6 +37,13 @@ const (
 	rpEnvJWTOrgID    = "REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID"
 )
 
+// PlatformJWTConfigured reports whether the platform-managed Redpanda Cloud
+// JWT/RBAC authentication is configured for this environment, via the
+// issuer URL environment variable.
+func PlatformJWTConfigured() bool {
+	return os.Getenv(rpEnvJWTIssuer) != ""
+}
+
 // jwtValidator contains the JWT validation logic and is technology-agnostic.
 type jwtValidator struct {
 	orgID     string

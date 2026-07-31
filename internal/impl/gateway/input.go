@@ -43,7 +43,19 @@ const (
 	hsiFieldResponseStatus          = "status"
 	hsiFieldResponseHeaders         = "headers"
 	hsiFieldResponseExtractMetadata = "metadata_headers"
+	hsiFieldAuth                    = "auth"
+	hsiFieldHMAC                    = "hmac"
+	hsiFieldHMACSecret              = "secret"
+	hsiFieldHMACHeader              = "header"
+	hsiFieldHMACPrefix              = "prefix"
+	hsiFieldHMACAlgorithm           = "algorithm"
+	hsiFieldHMACMaxBodySize         = "max_body_size"
 )
+
+// defaultHMACMaxBodySize caps the pre-authentication request body buffering
+// performed by HMAC signature verification, which reads the full body before
+// a caller has proven ownership of the shared secret.
+const defaultHMACMaxBodySize = 4 * 1024 * 1024 // 4MB
 
 // Gateway HTTP authorization permission
 const gatewayPermission authz.PermissionName = "dataplane_pipeline_gateway_invoke"
@@ -52,10 +64,29 @@ type hsiConfig struct {
 	Path      string
 	RateLimit string
 	Response  hsiResponseConfig
+	Auth      authConfig
 
 	// Set via environment variables
 	Address string
 	CORS    gateway.CORSConfig
+}
+
+// authConfig holds the set of supported request authentication mechanisms
+// that, when configured, replace the platform-managed (Redpanda Cloud
+// JWT/RBAC) authentication for this endpoint. Exactly one mechanism may be
+// set at a time. HMAC is the only mechanism supported today; additional
+// mechanisms should be added here as further fields alongside HMAC.
+type authConfig struct {
+	HMAC hmacConfig
+}
+
+type hmacConfig struct {
+	Enabled     bool
+	Secret      string
+	Header      string
+	Prefix      string
+	Algorithm   string
+	MaxBodySize int
 }
 
 type hsiResponseConfig struct {
@@ -72,6 +103,43 @@ func hsiConfigFromParsed(pConf *service.ParsedConfig) (conf hsiConfig, err error
 		return
 	}
 	if conf.Response, err = hsiResponseConfigFromParsed(pConf.Namespace(hsiFieldResponse)); err != nil {
+		return
+	}
+	if pConf.Contains(hsiFieldAuth) {
+		if conf.Auth, err = hsiAuthConfigFromParsed(pConf.Namespace(hsiFieldAuth)); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// hsiAuthConfigFromParsed parses the auth block. With a single supported
+// mechanism (HMAC) "at most one mechanism set" holds trivially; if a second
+// mechanism is added here, add a check that rejects setting more than one.
+func hsiAuthConfigFromParsed(pConf *service.ParsedConfig) (conf authConfig, err error) {
+	if pConf.Contains(hsiFieldHMAC) {
+		if conf.HMAC, err = hsiHMACConfigFromParsed(pConf.Namespace(hsiFieldHMAC)); err != nil {
+			return
+		}
+		conf.HMAC.Enabled = true
+	}
+	return
+}
+
+func hsiHMACConfigFromParsed(pConf *service.ParsedConfig) (conf hmacConfig, err error) {
+	if conf.Secret, err = pConf.FieldString(hsiFieldHMACSecret); err != nil {
+		return
+	}
+	if conf.Header, err = pConf.FieldString(hsiFieldHMACHeader); err != nil {
+		return
+	}
+	if conf.Prefix, err = pConf.FieldString(hsiFieldHMACPrefix); err != nil {
+		return
+	}
+	if conf.Algorithm, err = pConf.FieldString(hsiFieldHMACAlgorithm); err != nil {
+		return
+	}
+	if conf.MaxBodySize, err = pConf.FieldInt(hsiFieldHMACMaxBodySize); err != nil {
 		return
 	}
 	return
@@ -134,7 +202,15 @@ This input adds the following metadata fields to each message:
 - All cookies
 `+"```"+`
 
-You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
+
+== Authentication
+
+By default, requests to this endpoint are authenticated using the platform-managed Redpanda Cloud JWT/RBAC mechanism. Setting a mechanism under the `+"`auth`"+` field replaces this default authentication for the endpoint. `+"`hmac`"+` is the currently supported mechanism, which verifies a hex-encoded HMAC signature of the raw request body against a shared secret. This is intended for webhook-style callers that sign their payloads (for example, https://developer.hashicorp.com/terraform/cloud-docs/workspaces/settings/run-tasks[Terraform Cloud Run Tasks], which send a hex-encoded HMAC-SHA512 of the request body in a request header).
+
+The `+"`hmac`"+` mechanism only authenticates the raw request body, and provides no replay protection: since there is no timestamp or nonce validation, anyone who captures a signed payload can resend it later. Request headers, query parameters, path parameters and cookies are not covered by the signature, even though they still become message metadata, so pipelines must not make authorization decisions based on that metadata alone.
+
+Providers that prefix their signature header value with the algorithm name, such as GitHub's and Meta's `+"`sha256=`"+`, are supported via the `+"`prefix`"+` field, which strips the configured prefix before the remainder is hex-decoded.`).
 		Fields(
 			service.NewStringField(hsiFieldPath).
 				Description("The endpoint path to listen for data delivery requests.").
@@ -157,6 +233,45 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				service.NewMetadataFilterField(hsiFieldResponseExtractMetadata).
 					Description("Specify criteria for which metadata values are added to the response as headers."),
 			),
+			service.NewObjectField(hsiFieldAuth,
+				service.NewObjectField(hsiFieldHMAC,
+					service.NewStringField(hsiFieldHMACSecret).
+						Description("The shared secret key used to compute and verify the HMAC signature.").
+						Secret().
+						LintRule(`root = if this == "" { [ "a non-empty secret is required" ] }`),
+					service.NewStringField(hsiFieldHMACHeader).
+						Description("The name of the request header containing the HMAC signature of the request body. By default, the header value must be the bare hex-encoded signature; use `prefix` if the caller adds a fixed prefix such as `sha256=` before the signature.").
+						ShortDescription("The name of the request header containing the hex-encoded HMAC signature of the request body.").
+						Examples("X-Tfc-Task-Signature", "X-Hub-Signature-256"),
+					service.NewStringField(hsiFieldHMACPrefix).
+						Description("An optional exact-match prefix that the `header` value must begin with; it is stripped before the remaining value is hex-decoded. Some providers, such as GitHub and Meta, prefix their signature header value with the algorithm name (for example `sha256=`). This prefix is matched literally and does not influence which algorithm (`algorithm`) is used to verify the signature.").
+						ShortDescription("An optional prefix stripped from the signature header value before hex decoding.").
+						Examples("sha256=").
+						Default(""),
+					service.NewStringAnnotatedEnumField(hsiFieldHMACAlgorithm, map[string]string{
+						"sha256": "Verify signatures computed with HMAC-SHA256.",
+						"sha512": "Verify signatures computed with HMAC-SHA512.",
+					}).
+						Description("The hash algorithm used to compute the HMAC signature.").
+						Default("sha512"),
+					service.NewIntField(hsiFieldHMACMaxBodySize).
+						Description("The maximum size of the request body in bytes that will be read and buffered for signature verification. Requests with larger bodies are rejected with 413 Request Entity Too Large.").
+						Default(defaultHMACMaxBodySize).
+						Advanced().
+						LintRule(`root = if this <= 0 { [ "max_body_size must be greater than zero" ] }`),
+				).
+					Description(`
+Verifies incoming requests by computing an HMAC of the raw request body using `+"`secret`"+` and comparing it against the hex-encoded signature found in the request header named by `+"`header`"+`.
+
+This is intended for webhook-style callers that sign their payloads, such as Terraform Cloud Run Tasks, which send a hex-encoded HMAC-SHA512 of the request body in a request header. Callers that prefix the signature with a fixed value, such as GitHub's and Meta's `+"`sha256=`"+`, are supported via `+"`prefix`"+`; the algorithm used for verification always comes from `+"`algorithm`"+` and is never inferred from the header.
+
+Only the raw request body is covered by the signature, and there is no replay protection (no timestamp or nonce is validated), so a captured signed payload can be resent. Headers, query parameters, path parameters and cookies are not signed but are still exposed as message metadata, so avoid basing authorization decisions on them.`).
+					Optional(),
+			).
+				Description(`
+Configures how incoming requests to this endpoint are authenticated. At most one authentication mechanism may be set. When a mechanism is set, it replaces the platform-managed (Redpanda Cloud JWT/RBAC) authentication for this endpoint. `+"`hmac`"+` is the currently supported mechanism.`).
+				Optional().
+				Advanced(),
 			netutil.ListenerConfigSpec().
 				Description("Customize messages returned via xref:guides:sync_responses.adoc[synchronous responses].").
 				ShortDescription("Customize messages returned via synchronous responses.").
@@ -191,6 +306,7 @@ type Input struct {
 
 	rpJWTValidator *gateway.RPJWTMiddleware
 	authzPolicy    *gateway.FileWatchingAuthzResourcePolicy
+	hmacMiddleware *gateway.HMACMiddleware
 
 	batches chan batchAndAck
 
@@ -215,30 +331,49 @@ func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Inpu
 		mgr:     mgr,
 		batches: make(chan batchAndAck),
 	}
-	if h.rpJWTValidator, err = gateway.NewRPJWTMiddleware(mgr); err != nil {
-		return nil, err
-	}
-	if authzConf, ok := gateway.ManagerAuthzConfig(mgr); ok {
-		errorCallback := func(err error) {
-			mgr.Logger().With("error", err).Error("Authorization policy error")
+	if h.conf.Auth.HMAC.Enabled {
+		if h.hmacMiddleware, err = gateway.NewHMACMiddleware(mgr, gateway.HMACConfig{
+			Secret:      h.conf.Auth.HMAC.Secret,
+			Header:      h.conf.Auth.HMAC.Header,
+			Algorithm:   h.conf.Auth.HMAC.Algorithm,
+			Prefix:      h.conf.Auth.HMAC.Prefix,
+			MaxBodySize: h.conf.Auth.HMAC.MaxBodySize,
+		}); err != nil {
+			return nil, err
 		}
-		if authzConf.PolicyEndpoint != "" {
-			h.authzPolicy, err = gateway.NewEndpointWatchingAuthzResourcePolicy(
-				authzConf.ResourceName,
-				authzConf.PolicyEndpoint,
-				[]authz.PermissionName{gatewayPermission},
-				errorCallback,
-			)
-		} else if authzConf.PolicyFile != "" {
-			h.authzPolicy, err = gateway.NewFileWatchingAuthzResourcePolicy(
-				authzConf.ResourceName,
-				authzConf.PolicyFile,
-				[]authz.PermissionName{gatewayPermission},
-				errorCallback,
-			)
+		if gateway.PlatformJWTConfigured() {
+			mgr.Logger().Warn("The configured auth.hmac mechanism replaces the platform-managed JWT/RBAC authentication for this endpoint.")
 		}
-		if err != nil {
-			return nil, fmt.Errorf("initialize authorization policy: %w", err)
+	} else {
+		// The JWT validator and authorization policy are only used by
+		// createHandler in the non-HMAC branch; skip constructing them
+		// entirely in HMAC mode, since the authz policy setup opens a live
+		// file watch or gRPC stream that would otherwise sit unused.
+		if h.rpJWTValidator, err = gateway.NewRPJWTMiddleware(mgr); err != nil {
+			return nil, err
+		}
+		if authzConf, ok := gateway.ManagerAuthzConfig(mgr); ok {
+			errorCallback := func(err error) {
+				mgr.Logger().With("error", err).Error("Authorization policy error")
+			}
+			if authzConf.PolicyEndpoint != "" {
+				h.authzPolicy, err = gateway.NewEndpointWatchingAuthzResourcePolicy(
+					authzConf.ResourceName,
+					authzConf.PolicyEndpoint,
+					[]authz.PermissionName{gatewayPermission},
+					errorCallback,
+				)
+			} else if authzConf.PolicyFile != "" {
+				h.authzPolicy, err = gateway.NewFileWatchingAuthzResourcePolicy(
+					authzConf.ResourceName,
+					authzConf.PolicyFile,
+					[]authz.PermissionName{gatewayPermission},
+					errorCallback,
+				)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("initialize authorization policy: %w", err)
+			}
 		}
 	}
 
@@ -260,10 +395,18 @@ func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Inpu
 func (ri *Input) createHandler() (h http.Handler) {
 	h = http.HandlerFunc(ri.deliverHandler)
 	h = gzipHandler(h)
-	if ri.authzPolicy != nil {
-		h = gateway.AuthzMiddleware(ri.authzPolicy, gatewayPermission, h)
+	// Exactly one auth mechanism applies to a given endpoint: any mechanism
+	// configured under `auth` replaces the JWT/RBAC authentication chain
+	// entirely. Additional mechanisms should be added as further cases here.
+	switch {
+	case ri.hmacMiddleware != nil:
+		h = ri.hmacMiddleware.Wrap(h)
+	default:
+		if ri.authzPolicy != nil {
+			h = gateway.AuthzMiddleware(ri.authzPolicy, gatewayPermission, h)
+		}
+		h = ri.rpJWTValidator.Wrap(h)
 	}
-	h = ri.rpJWTValidator.Wrap(h)
 	h = ri.conf.CORS.WrapHandler(h)
 	return
 }
