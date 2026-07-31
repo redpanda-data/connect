@@ -39,7 +39,7 @@ func init() {
 		Field(service.NewBoolField("unsafe_dynamic_query").Description("Whether to enable dynamic queries that support interpolation functions.").Advanced().Default(false)).
 		Field(service.NewBoolField("use_batch").
 			Description("Whether to execute all messages in a batch as a single `BatchExecuteStatement` call. Set this to `false` to execute one `ExecuteStatement` call per message instead, which is required for PartiQL `SELECT` queries against a global secondary index (GSI) — `BatchExecuteStatement` does not support querying a GSI. Only the first result row is used when a query returns multiple items.").
-			ShortDescription("Execute a whole batch in one BatchExecuteStatement call. Disable for PartiQL SELECT queries.").
+			ShortDescription("Execute a whole batch in one BatchExecuteStatement call. Disable for PartiQL SELECT queries against a GSI.").
 			Advanced().
 			Default(true)).
 		Field(service.NewBloblangField("args_mapping").
