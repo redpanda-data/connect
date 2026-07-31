@@ -100,20 +100,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		fmt.Fprintf(&buf, " AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
 	}
 
-	logMinerQuery := fmt.Sprintf(`
-		SELECT
-			SCN,
-			SQL_REDO,
-			OPERATION_CODE,
-			TABLE_NAME,
-			SEG_OWNER,
-			TIMESTAMP,
-			XID,
-			COMMIT_SCN,
-			CSF
-		FROM V$LOGMNR_CONTENTS
-		WHERE SCN > :1 AND SCN <= :2%s
-	`, buf.String())
+	logMinerQuery := "SELECT SCN, SQL_REDO, OPERATION_CODE, TABLE_NAME, SEG_OWNER, TIMESTAMP, XID, COMMIT_SCN, CSF FROM V$LOGMNR_CONTENTS WHERE SCN > :1 AND SCN <= :2" + buf.String()
 
 	lm := &LogMiner{
 		cfg:                  cfg,
@@ -913,6 +900,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	}
 
 	// Use the pre-built query from initialization
+	lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d): %s", startSCN, endSCN, lm.windowSize, lm.logMinerQuery)
 	queryStart := time.Now()
 	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
