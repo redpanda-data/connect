@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- mssqlserver_cdc: Convert reading of LSN to binary to avoid LSN corruption due to read collation decoding. ([@josephwoodward](https://github.com/josephwoodward), [#4644](https://github.com/redpanda-data/connect/pull/4644))
+- mssqlserver_cdc: Convert reading of LSN from checkpoint cache to binary to avoid LSN corruption due to read collation decoding. ([@josephwoodward](https://github.com/josephwoodward), [#4644](https://github.com/redpanda-data/connect/pull/4644))
 
 ### Changed
 
@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- docs: Add short descriptions to component config fields. ([@prakhargarg105](https://github.com/prakhargarg105), [#4646](https://github.com/redpanda-data/connect/pull/4646))
+- docs: Add short descriptions to component config fields. ([@prakhargarg105](https://github.com/prakhargarg105), [#4638](https://github.com/redpanda-data/connect/pull/4638))
 
 ## 4.102.0 - 2026-07-23
 
