@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.103.1 - 2026-07-31
+
+### Added
+
+- oracledb_cdc: Add additional debug log for LogMiner queries. ([@josephwoodward](https://github.com/josephwoodward), [#4653](https://github.com/redpanda-data/connect/pull/4653))
+
 ## 4.103.0 - 2026-07-30
 
 ### Fixed
