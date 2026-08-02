@@ -32,9 +32,7 @@ func threadProcessorSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Description(`Read a thread using the https://api.slack.com/methods/conversations.replies[^Slack API]`).
 		Fields(
-			service.NewStringField(pFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
-        root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
-      `),
+			service.NewStringField(pFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(tokenLintRule("xoxb-")),
 			service.NewInterpolatedStringField(pFieldChannelID).Description("The channel ID to read messages from."),
 			service.NewInterpolatedStringField(pFieldThreadTS).Description("The thread timestamp to read the full thread of."),
 		)
