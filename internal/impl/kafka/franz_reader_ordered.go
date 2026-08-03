@@ -87,6 +87,12 @@ type FranzReaderOrdered struct {
 	topicLagRefreshPeriod time.Duration
 	batchMaxSize          uint64
 
+	// lagMetricName is the name of the consumer lag gauge emitted by this
+	// reader. It is owned by the input rather than the reader so that inputs
+	// which can be served by either reader implementation emit a consistent
+	// metric name.
+	lagMetricName string
+
 	res     *service.Resources
 	log     *service.Logger
 	shutSig *shutdown.Signaller
@@ -100,11 +106,12 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 	readBackOff.MaxElapsedTime = 0
 
 	f := FranzReaderOrdered{
-		readBackOff: readBackOff,
-		res:         res,
-		log:         res.Logger(),
-		shutSig:     shutdown.NewSignaller(),
-		clientOpts:  optsFn,
+		readBackOff:   readBackOff,
+		res:           res,
+		log:           res.Logger(),
+		shutSig:       shutdown.NewSignaller(),
+		clientOpts:    optsFn,
+		lagMetricName: lagMetricNameRedpanda,
 	}
 
 	f.consumerGroup, _ = conf.FieldString(kroFieldConsumerGroup)
@@ -534,7 +541,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 	go func() {
 		var consumerLag *ConsumerLag
 		if f.consumerGroup != "" {
-			topicLagGauge := f.res.Metrics().NewGauge("redpanda_lag", "topic", "partition")
+			topicLagGauge := f.res.Metrics().NewGauge(f.lagMetricName, "topic", "partition")
 			consumerLag = NewConsumerLag(f.Client, f.consumerGroup, f.res.Logger(), topicLagGauge, f.topicLagRefreshPeriod)
 			consumerLag.Start()
 			defer consumerLag.Stop()
