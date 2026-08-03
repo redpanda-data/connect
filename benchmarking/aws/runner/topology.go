@@ -8,6 +8,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -127,12 +128,24 @@ type MetricInputs struct {
 // locate the S3 upload; Outs carries TF outputs (broker endpoints for source,
 // Glue/warehouse for sink); Names supplies per-engine resource names.
 type MetricSidecarArgs struct {
-	Engine    string
-	VCPU      int
+	Engine string
+	VCPU   int
+	// Key identifies the sweep point in artifact names: the bare vCPU count
+	// for arm-less scenarios, "<vcpu>-<armID>" when arms are in play. Falls
+	// back to VCPU when empty so narrow unit tests can omit it.
+	Key       string
 	Bucket    string
 	SessionID string
 	Outs      map[string]string
 	Names     BenchNames
+}
+
+// ArtifactKey is Key, or the bare vCPU count when Key was not set.
+func (a MetricSidecarArgs) ArtifactKey() string {
+	if a.Key != "" {
+		return a.Key
+	}
+	return strconv.Itoa(a.VCPU)
 }
 
 // MetricSidecar is the bash a bench script splices in to sample throughput.
@@ -164,9 +177,10 @@ type Topology interface {
 	ResetScript(s *Scenario, outs map[string]string, n BenchNames) (string, error)
 	// EngineSeries turns a per-engine metrics dump into a throughput series.
 	EngineSeries(in MetricInputs, engine string) ([]TopicPoint, error)
-	// MetricArtifact is the per-engine, per-vCPU metrics dump basename that the
-	// bench script uploads and EngineSeries later parses.
-	MetricArtifact(engine string, vcpu int) string
+	// MetricArtifact is the per-engine, per-point metrics dump basename that
+	// the bench script uploads and EngineSeries later parses. key is the
+	// sweepPoint key: a bare vCPU count without arms, "<vcpu>-<armID>" with.
+	MetricArtifact(engine, key string) string
 	// MetricSidecar returns the bash that samples throughput during a bench
 	// window. Setup launches a background poller (polling $PID every interval,
 	// framing samples under "###timestamp=<unix>" into $RP) and ends by setting

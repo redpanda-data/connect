@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -118,6 +119,7 @@ func (m *MatrixRunner) Run(
 				sidecar = m.Topology.MetricSidecar(MetricSidecarArgs{
 					Engine:    engine,
 					VCPU:      n,
+					Key:       strconv.Itoa(n),
 					Bucket:    m.Bucket,
 					SessionID: m.SessionID,
 					Outs:      m.Outs,
@@ -209,7 +211,7 @@ func (m *MatrixRunner) Run(
 			// Broker-side: each engine scrapes /public_metrics during its
 			// own window and uploads to a per-engine filename, so we fetch
 			// only the matching engine's file here.
-			brokerSeries := m.fetchBrokerSeriesForEngine(ctx, engine, n)
+			brokerSeries := m.fetchBrokerSeriesForEngine(ctx, engine, strconv.Itoa(n))
 
 			var summary Summary
 			if engine == "kafka_connect" || m.Direction == DirectionSink {
@@ -297,7 +299,7 @@ func (m *MatrixRunner) fetchProm(ctx context.Context, vcpu int) []PromPoint {
 	return pts
 }
 
-// fetchBrokerSeriesForEngine downloads the per-engine, per-vCPU broker
+// fetchBrokerSeriesForEngine downloads the per-engine, per-point broker
 // metrics dump and returns the topic series attributed to that engine.
 // Non-fatal: a missing or unparseable file logs and returns nil.
 //
@@ -305,7 +307,7 @@ func (m *MatrixRunner) fetchProm(ctx context.Context, vcpu int) []PromPoint {
 // KC → redpanda-N-kc.txt) covering only that engine's bench window, so
 // we don't need to merge across engines — the file FOR an engine already
 // contains only that engine's bytes (the other engine wasn't running).
-func (m *MatrixRunner) fetchBrokerSeriesForEngine(ctx context.Context, engine string, vcpu int) []TopicPoint {
+func (m *MatrixRunner) fetchBrokerSeriesForEngine(ctx context.Context, engine, key string) []TopicPoint {
 	if m.LogFetcher == nil {
 		return nil
 	}
@@ -313,8 +315,8 @@ func (m *MatrixRunner) fetchBrokerSeriesForEngine(ctx context.Context, engine st
 		fmt.Fprintf(stdout, "[bench] no Topology configured; metric fetch skipped\n")
 		return nil
 	}
-	key := fmt.Sprintf("runs/%s/%s", m.SessionID, m.Topology.MetricArtifact(engine, vcpu))
-	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, key)
+	s3Key := fmt.Sprintf("runs/%s/%s", m.SessionID, m.Topology.MetricArtifact(engine, key))
+	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, s3Key)
 	if err != nil {
 		fmt.Fprintf(stdout, "[bench] fetch broker metrics %s (non-fatal): %v\n", engine, err)
 		return nil

@@ -140,16 +140,16 @@ func (sinkTopology) EngineSeries(in MetricInputs, engine string) ([]TopicPoint, 
 	return ParseIcebergSeries(in.Body)
 }
 
-func (sinkTopology) MetricArtifact(engine string, vcpu int) string {
+func (sinkTopology) MetricArtifact(engine, key string) string {
 	suffix := engine
 	if engine == "kafka_connect" {
 		suffix = "kc"
 	}
-	return fmt.Sprintf("iceberg-%d-%s.txt", vcpu, suffix)
+	return fmt.Sprintf("iceberg-%s-%s.txt", key, suffix)
 }
 
 func (t sinkTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
-	artifact := t.MetricArtifact(args.Engine, args.VCPU)
+	artifact := t.MetricArtifact(args.Engine, args.ArtifactKey())
 	sp, _ := sinkSpecFor(args.Names.Connector) // ok ignored: Validate guarantees the sinkSpec exists
 	region := args.Outs["aws_region"]
 	db := sp.Namespace

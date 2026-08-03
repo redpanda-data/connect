@@ -91,10 +91,10 @@ func TestSinkTopology_Pipeline_MergesInputOptions(t *testing.T) {
 }
 
 func TestSinkTopology_MetricArtifact(t *testing.T) {
-	if got := (sinkTopology{}).MetricArtifact("connect", 4); got != "iceberg-4-connect.txt" {
+	if got := (sinkTopology{}).MetricArtifact("connect", "4"); got != "iceberg-4-connect.txt" {
 		t.Errorf("artifact = %q", got)
 	}
-	if got := (sinkTopology{}).MetricArtifact("kafka_connect", 2); got != "iceberg-2-kc.txt" {
+	if got := (sinkTopology{}).MetricArtifact("kafka_connect", "2"); got != "iceberg-2-kc.txt" {
 		t.Errorf("kc artifact = %q", got)
 	}
 }
