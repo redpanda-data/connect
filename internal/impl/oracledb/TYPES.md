@@ -29,12 +29,12 @@ their proper Go types using column metadata from the schema cache.
 | Oracle Type | Schema Type | Snapshot Go Type | Streaming Go Type | JSON Wire Format |
 |---|---|---|---|---|
 | `NUMBER(p≤18, 0)` | Int64 | `int64` | `int64` ¹ | `42` |
-| `NUMBER(p>18, 0)` | String | `json.Number` | `json.Number` ¹ | `99999999999999999999` |
-| `NUMBER(p, s>0)` | String | `json.Number` | `json.Number` ¹ | `123.456` |
-| `NUMBER(p, s<0)` | String (BigDecimal) ⁵ | `json.Number` | `json.Number` ¹ | `1200` |
-| `NUMBER` (bare) | String | `json.Number` | `json.Number` ¹ | `42` |
+| `NUMBER(p>18, 0)` | String (Decimal(p,0)) | `string` | `string` ¹ | `"99999999999999999999"` |
+| `NUMBER(p, s>0)` | String (Decimal(p,s)) | `string` | `string` ¹ | `"123.456"` |
+| `NUMBER(p, s<0)` | String (BigDecimal) ⁵ | `string` | `string` ¹ | `"1200"` |
+| `NUMBER` (bare) | String (BigDecimal) | `string` | `string` ¹ | `"42"` |
 | `INTEGER` / `INT` / `SMALLINT` | String (Decimal(38,0)) ² | `string` | `string` ¹ | `"42"` |
-| `FLOAT` | String (BigDecimal) ² | `json.Number` | `json.Number` ¹ | `1.5` |
+| `FLOAT` | String (BigDecimal) ² | `string` | `string` ¹ | `"1.5"` |
 | `BINARY_FLOAT` | Float32 | `float64` | `float64` ¹ | `1.5` |
 | `BINARY_DOUBLE` | Float64 | `float64` | `float64` ¹ | `3.14` |
 | `DATE` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00Z"` |

@@ -75,15 +75,15 @@ func oracleTypeToCommonType(dataType string) schema.CommonType {
 // catalogNumberInfo converts ALL_TAB_COLUMNS numeric metadata into the
 // (precision, scale, hasDecimalInfo) triple NumberToCommon expects.
 // DATA_PRECISION is NULL for NUMBER(*,s) columns — including INTEGER, INT and
-// SMALLINT, which are NUMBER(*,0) — while the driver reports precision 38 for
-// the same columns (verified against real Oracle by the restart leg of
-// TestIntegrationOracleDBCDCDataTypeConsistency). 38 is also Oracle's maximum
-// NUMBER precision, so substitute it to keep the two schema sources identical.
+// SMALLINT, which are NUMBER(*,0) — while the driver reports Oracle's maximum
+// NUMBER precision for the same columns (verified against real Oracle by the
+// restart leg of TestIntegrationOracleDBCDCDataTypeConsistency), so
+// substitute it to keep the two schema sources identical.
 // A NULL scale (bare NUMBER, FLOAT) stays hasDecimalInfo=false → BigDecimal,
 // matching the driver's undeclared-scale sentinel.
 func catalogNumberInfo(precision, scale sql.NullInt64) (p, s int64, hasDecimalInfo bool) {
 	if !precision.Valid && scale.Valid {
-		return 38, scale.Int64, true
+		return replication.MaxOracleNumberPrecision, scale.Int64, true
 	}
 	return precision.Int64, scale.Int64, precision.Valid && scale.Valid
 }
