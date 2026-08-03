@@ -1633,7 +1633,16 @@ Inside the loop, make these substitutions:
 			})
 ```
 
-- The early-abort guard's `if n == cpuPoints[0]` becomes `if len(out) == 1` (first recorded point of the sweep, regardless of arm), keeping the same fail-fast semantics.
+- The early-abort guard's `if n == cpuPoints[0]` becomes
+  `if pt.Key() == plan[0].Key()`. Do NOT use `len(out) == 1`: that fires only
+  once per sweep, whereas the original fired for **every engine** at the first
+  vCPU point. Since the existing scenarios sweep both engines, `len(out) == 1`
+  would stop checking Kafka Connect's first point, so a KC misconfiguration
+  producing zero throughput would burn the whole 2-3h sweep instead of aborting
+  immediately. Keying off the first plan point preserves the original semantics
+  exactly: it fires once per engine at the first point, arms or not.
+  `plan[0]` is safe to index — the loop body only runs when the plan is
+  non-empty.
 
 Add the resolver:
 
