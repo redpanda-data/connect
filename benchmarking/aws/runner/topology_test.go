@@ -409,6 +409,13 @@ func TestSinkResetScript_CreatesUnionForMultiStreamPlan(t *testing.T) {
 	if n := strings.Count(got, "/opt/bench/iceberg-tablegen"); n != 6 {
 		t.Errorf("expected 6 tablegen pre-creates, got %d:\n%s", n, got)
 	}
+	// Each pre-create is wrapped in a bounded retry that still fails loud.
+	if n := strings.Count(got, "for attempt in 1 2 3; do"); n != 6 {
+		t.Errorf("expected each tablegen wrapped in a retry loop, got %d:\n%s", n, got)
+	}
+	if !strings.Contains(got, "after 3 attempts") {
+		t.Errorf("retry must fail loud after 3 attempts:\n%s", got)
+	}
 	// The consumer group is shared by both streams, so it is reset once per
 	// engine, not once per table.
 	if n := strings.Count(got, "kafka-consumer-groups.sh"); n != 2 {
