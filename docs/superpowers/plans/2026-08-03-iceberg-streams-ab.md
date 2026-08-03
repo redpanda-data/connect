@@ -26,8 +26,11 @@
 - New per-arm resources are named from the arm ID, which must match `^[a-z0-9][a-z0-9-]*$` because it lands in filenames and S3 keys.
 - **`task fmt` and `task lint` do NOT cover `benchmarking/`** — both are scoped to
   `cmd/... internal/... public/...` (`Taskfile.yml:40,49`). Format with
-  `gofmt -l -w <changed files>` and confirm `go vet ./benchmarking/aws/runner/`
-  is clean before each commit.
+  `gofmt -l -w` on **only the files the task changed** and confirm
+  `go vet ./benchmarking/aws/runner/` is clean before each commit. Do NOT run
+  `gofmt -w` over the whole package: `benchmarking/aws/runner/doc.go` and
+  `ssm.go` carry pre-existing formatting drift unrelated to this plan, and
+  reformatting them would smuggle unrelated churn into a task's diff.
 - Commit after every task. Branch: `benchmarking`.
 
 ---
@@ -302,7 +305,7 @@ Expected: PASS, including all pre-existing `TestLoadScenario_*` cases (proves no
 - [ ] **Step 6: Commit**
 
 ```bash
-gofmt -l -w benchmarking/aws/runner/
+gofmt -l -w $(git diff --name-only -- 'benchmarking/aws/runner/*.go')
 go vet ./benchmarking/aws/runner/
 git add benchmarking/aws/runner/scenario.go benchmarking/aws/runner/scenario_test.go benchmarking/aws/runner/testdata/
 git commit -m "feat(bench): matrix.arms scenario field + validation (sink-only)"
@@ -585,7 +588,7 @@ Expected: PASS (6 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-gofmt -l -w benchmarking/aws/runner/
+gofmt -l -w $(git diff --name-only -- 'benchmarking/aws/runner/*.go')
 go vet ./benchmarking/aws/runner/
 git add benchmarking/aws/runner/sweepplan.go benchmarking/aws/runner/sweepplan_test.go
 git commit -m "feat(bench): sweep plan expansion for matrix.arms with no-arms parity"
@@ -779,7 +782,7 @@ Expected: PASS. `TestBenchNames_SinkConventions` (pre-existing) must still pass 
 - [ ] **Step 5: Commit**
 
 ```bash
-gofmt -l -w benchmarking/aws/runner/
+gofmt -l -w $(git diff --name-only -- 'benchmarking/aws/runner/*.go')
 go vet ./benchmarking/aws/runner/
 git add benchmarking/aws/runner/topology.go benchmarking/aws/runner/topology_test.go
 git commit -m "feat(bench): stream-aware iceberg table names on BenchNames"
@@ -916,7 +919,7 @@ Expected: PASS. Any existing test that constructs `MetricSidecarArgs` without `K
 - [ ] **Step 5: Commit**
 
 ```bash
-gofmt -l -w benchmarking/aws/runner/
+gofmt -l -w $(git diff --name-only -- 'benchmarking/aws/runner/*.go')
 go vet ./benchmarking/aws/runner/
 git add benchmarking/aws/runner/
 git commit -m "refactor(bench): key metric artifacts by sweep-point key, not raw vCPU"
@@ -1052,7 +1055,7 @@ Expected: PASS, including the pre-existing `icebergmetrics_test.go` cases (the e
 - [ ] **Step 5: Commit**
 
 ```bash
-gofmt -l -w benchmarking/aws/runner/
+gofmt -l -w $(git diff --name-only -- 'benchmarking/aws/runner/*.go')
 go vet ./benchmarking/aws/runner/
 git add benchmarking/aws/runner/topology_sink.go benchmarking/aws/runner/topology_test.go
 git commit -m "feat(bench): sink metric sidecar sums committed bytes across stream tables"
@@ -1186,7 +1189,7 @@ Expected: PASS across the package.
 - [ ] **Step 5: Commit**
 
 ```bash
-gofmt -l -w benchmarking/aws/runner/
+gofmt -l -w $(git diff --name-only -- 'benchmarking/aws/runner/*.go')
 go vet ./benchmarking/aws/runner/
 git add benchmarking/aws/runner/topology_sink.go benchmarking/aws/runner/topology_test.go
 git commit -m "feat(bench): sink reset pre-creates union of per-arm iceberg tables"
@@ -1362,7 +1365,7 @@ Expected: PASS, including the pre-existing `TestRenderBenchScript_EmbedsBucketAn
 - [ ] **Step 5: Commit**
 
 ```bash
-gofmt -l -w benchmarking/aws/runner/
+gofmt -l -w $(git diff --name-only -- 'benchmarking/aws/runner/*.go')
 go vet ./benchmarking/aws/runner/
 git add benchmarking/aws/runner/matrix.go benchmarking/aws/runner/matrix_test.go
 git commit -m "feat(bench): bench script supports GOMAXPROCS override and streams-mode launch"
@@ -1637,7 +1640,7 @@ Expected: PASS. Existing `MatrixRunner` tests need their first argument rewritte
 - [ ] **Step 5: Commit**
 
 ```bash
-gofmt -l -w benchmarking/aws/runner/
+gofmt -l -w $(git diff --name-only -- 'benchmarking/aws/runner/*.go')
 go vet ./benchmarking/aws/runner/
 git add benchmarking/aws/runner/matrix.go benchmarking/aws/runner/matrix_test.go benchmarking/aws/runner/main.go
 git commit -m "feat(bench): MatrixRunner sweeps plan points instead of raw cpu_points"
@@ -2085,7 +2088,7 @@ Expected: PASS. Note `renderPointConfigs` leaves temp files behind; that already
 - [ ] **Step 5: Commit**
 
 ```bash
-gofmt -l -w benchmarking/aws/runner/
+gofmt -l -w $(git diff --name-only -- 'benchmarking/aws/runner/*.go')
 go vet ./benchmarking/aws/runner/
 git add benchmarking/aws/runner/
 git commit -m "feat(bench): per-arm config rendering and staging incl. streams-mode root+stream configs"
@@ -2253,7 +2256,7 @@ Expected: PASS, including pre-existing `render_test.go` and `summary_test.go` ca
 - [ ] **Step 5: Commit**
 
 ```bash
-gofmt -l -w benchmarking/aws/runner/
+gofmt -l -w $(git diff --name-only -- 'benchmarking/aws/runner/*.go')
 go vet ./benchmarking/aws/runner/
 git add benchmarking/aws/runner/
 git commit -m "feat(bench): report arm and GOMAXPROCS in result JSON and markdown"
@@ -2428,11 +2431,14 @@ Expected: PASS. Cross-read the assertions against the YAML you just fed the bina
 Run:
 ```bash
 task test:unit -- benchmarking/aws/runner
-gofmt -l benchmarking/aws/runner/          # must print nothing
 go vet ./benchmarking/aws/runner/          # must be clean
+gofmt -l benchmarking/aws/runner/          # see note below
 ```
 
-Expected: all three clean.
+`go vet` and the suite must be clean. `gofmt -l` will list
+`benchmarking/aws/runner/doc.go` and `ssm.go` — that drift is **pre-existing and
+unrelated to this plan**. Leave those two files alone; the requirement is only
+that no file THIS plan touched appears in the list.
 
 Then run the linter over this package **advisorily** — `task lint` excludes
 `benchmarking/`, so this path has never been linted and pre-existing hits are
