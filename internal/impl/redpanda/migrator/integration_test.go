@@ -335,7 +335,7 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 	require.NoError(t, err)
 	txt, err := srDst.SchemaTextByVersion(t.Context(), subj, 1)
 	require.NoError(t, err)
-	assert.Equal(t, schema, txt)
+	assert.True(t, migrator.SchemaStringEquals(schema, txt, ss.Type))
 
 	t.Logf("And: %d schema-encoded messages are present in destination topic %s", numMessages, migratorTestTopic)
 	records := readTopicContent(dst, numMessages)

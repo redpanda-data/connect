@@ -863,21 +863,29 @@ func schemaEquals(a, b sr.Schema) bool {
 // newlines and leading/trailing spaces in the schemas.
 //
 // For JSON and Avro schemas, the function parses the schemas as JSON and
-// compares the resulting maps. For Protobuf schemas, the function removes
+// compares the resulting values. For Protobuf schemas, the function removes
 // newlines and leading/trailing spaces from the schemas and compares the
 // resulting strings.
 func schemaStringEquals(a, b string, st sr.SchemaType) bool {
 	switch st {
 	case sr.TypeAvro, sr.TypeJSON:
-		// Parse the schemas as JSON
-		var as, bs map[string]any
-		if err := json.Unmarshal([]byte(a), &as); err != nil {
+		// Parse the schemas as JSON. Values, not just objects, since Avro
+		// allows primitive types to be declared as either a bare string
+		// (e.g. "int") or an object (e.g. {"type": "int"}) - both forms are
+		// semantically identical and schema registries may canonicalize
+		// between them.
+		var av, bv any
+		if err := json.Unmarshal([]byte(a), &av); err != nil {
 			return false
 		}
-		if err := json.Unmarshal([]byte(b), &bs); err != nil {
+		if err := json.Unmarshal([]byte(b), &bv); err != nil {
 			return false
 		}
-		if !cmp.Equal(as, bs) {
+		if st == sr.TypeAvro {
+			av = normalizeAvroPrimitiveType(av)
+			bv = normalizeAvroPrimitiveType(bv)
+		}
+		if !cmp.Equal(av, bv) {
 			return false
 		}
 	case sr.TypeProtobuf:
@@ -892,6 +900,18 @@ func schemaStringEquals(a, b string, st sr.SchemaType) bool {
 	}
 
 	return true
+}
+
+// normalizeAvroPrimitiveType rewrites a bare Avro primitive type name (e.g.
+// "int") into its equivalent object form (e.g. map[string]any{"type": "int"})
+// so that both representations compare equal. Non-string values are returned
+// unchanged.
+func normalizeAvroPrimitiveType(v any) any {
+	s, ok := v.(string)
+	if !ok {
+		return v
+	}
+	return map[string]any{"type": s}
 }
 
 func (m *schemaRegistryMigrator) syncSubjectCompatibility(ctx context.Context, subject string) error {
