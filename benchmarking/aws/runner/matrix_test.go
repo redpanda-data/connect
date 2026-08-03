@@ -29,6 +29,81 @@ func makeLog(count int, mbPerSec float64) string {
 	return sb.String()
 }
 
+func TestMatrixRunner_RunSweepsEveryArm(t *testing.T) {
+	// Two arms at one vCPU point must produce two SweepPoints carrying their
+	// arm id and GOMAXPROCS, each launched from its own config paths.
+	const sessionID = "sess-x"
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-2-a0.log", sessionID): makeLog(30, 60),
+			fmt.Sprintf("runs/%s/sweep-2-b.log", sessionID):  makeLog(30, 90),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": {"bench point complete"}}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM: ssm, LogFetcher: fetcher, RunnerInstance: "i-runner",
+		Bucket: "b", SessionID: sessionID,
+		ConfigPaths: map[string]pointConfigPaths{
+			"2-a0": {Single: "/opt/bench/cfg/2-a0/config.yaml"},
+			"2-b":  {Root: "/opt/bench/cfg/2-b/root.yaml", Dir: "/opt/bench/cfg/2-b/streams"},
+		},
+	}
+	plan := []sweepPoint{
+		{VCPU: 2, ArmID: "a0", GOMAXPROCS: 2, Streams: 1},
+		{VCPU: 2, ArmID: "b", GOMAXPROCS: 4, Streams: 2},
+	}
+	points, err := mr.Run(context.Background(), plan, 2, 0, 30*time.Second, "", "")
+	require.NoError(t, err)
+	require.Len(t, points, 2)
+	require.Equal(t, "a0", points[0].ArmID)
+	require.Equal(t, 2, points[0].GOMAXPROCS)
+	require.Equal(t, "b", points[1].ArmID)
+	require.Equal(t, 4, points[1].GOMAXPROCS)
+	require.Equal(t, 2, points[0].VCPU, "every arm shares the vCPU pin")
+	require.Equal(t, 2, points[1].VCPU)
+
+	// Each arm's script must reference that arm's own config paths and its own
+	// GOMAXPROCS.
+	scripts := strings.Join(ssm.Scripts, "\n---\n")
+	require.Contains(t, scripts, "run /opt/bench/cfg/2-a0/config.yaml")
+	require.Contains(t, scripts, "streams -o /opt/bench/cfg/2-b/root.yaml /opt/bench/cfg/2-b/streams")
+	require.Contains(t, scripts, "GOMAXPROCS=2")
+	require.Contains(t, scripts, "GOMAXPROCS=4")
+}
+
+func TestMatrixRunner_ArmlessPlanUsesLegacyConfigPath(t *testing.T) {
+	// nil ConfigPaths → every point launches the single staged config at the
+	// historical path, exactly as the six existing scenarios do.
+	const sessionID = "sess-y"
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): makeLog(30, 50),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": {"bench point complete"}}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM: ssm, LogFetcher: fetcher, RunnerInstance: "i-runner",
+		Bucket: "b", SessionID: sessionID,
+		ConfigPath: "/opt/bench/config.yaml",
+	}
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 2, 0, 30*time.Second, "", "")
+	require.NoError(t, err)
+	require.Len(t, points, 1)
+	require.Empty(t, points[0].ArmID)
+	scripts := strings.Join(ssm.Scripts, "\n")
+	require.Contains(t, scripts, "run /opt/bench/config.yaml")
+	require.Contains(t, scripts, "s3://b/runs/sess-y/sweep-1.log",
+		"arm-less artifact keys stay bare-vCPU")
+}
+
 func TestMatrixRunner_HappyPath(t *testing.T) {
 	const sessionID = "bench-test"
 	const bucket = "results-bucket"
@@ -59,7 +134,7 @@ func TestMatrixRunner_HappyPath(t *testing.T) {
 		Bucket:         bucket,
 		SessionID:      sessionID,
 	}
-	points, err := mr.Run(context.Background(), []int{1, 2}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 2)
 
@@ -98,7 +173,7 @@ func TestMatrixRunner_EarlyAbortOnZeroSamples(t *testing.T) {
 		Bucket:         "b",
 		SessionID:      sessionID,
 	}
-	_, err := mr.Run(context.Background(), []int{1, 2}, 1, 1*time.Second, 5*time.Second, "", "")
+	_, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}}, 1, 1*time.Second, 5*time.Second, "", "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "0 samples")
 	// Log tail should have been dumped so the operator can see the error.
@@ -126,7 +201,7 @@ func TestMatrixRunner_WarmupTrimsAndReindexes(t *testing.T) {
 		Bucket:         "b",
 		SessionID:      sessionID,
 	}
-	points, err := mr.Run(context.Background(), []int{1}, 1, 2*time.Second, 3*time.Second, "", "")
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 2*time.Second, 3*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 1)
 	require.Len(t, points[0].Samples, 3)
@@ -164,7 +239,7 @@ go_memstats_heap_inuse_bytes 1.1e+08
 		Bucket:         bucket,
 		SessionID:      sessionID,
 	}
-	points, err := mr.Run(context.Background(), []int{1}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 1)
 	require.Len(t, points[0].Prom, 2)
@@ -191,7 +266,7 @@ func TestMatrixRunner_MissingPromIsNonFatal(t *testing.T) {
 	defer func() { stdout = prev }()
 
 	mr := &MatrixRunner{SSM: ssm, LogFetcher: fetcher, RunnerInstance: "i-runner", Bucket: "b", SessionID: sessionID}
-	points, err := mr.Run(context.Background(), []int{1}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err, "missing prom dump must not fail the sweep point")
 	require.Len(t, points, 1)
 	require.Empty(t, points[0].Prom, "Prom stays nil/empty when fetch failed")
@@ -421,7 +496,7 @@ func TestMatrixRun_EngineInnerLoop_BothEngines(t *testing.T) {
 		KCConnectorName:       "bench_pg",
 		KCConnectorConfigJSON: `{"connector.class":"x"}`,
 	}
-	points, err := mr.Run(context.Background(), []int{1, 2}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 4, "expected 4 sweep points (2 vcpu × 2 engines)")
 
@@ -498,7 +573,7 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="be
 		KCConnectorConfigJSON:    `{"connector.class":"x"}`,
 		RedpandaMetricsEndpoints: "10.42.0.10:9644,10.42.1.10:9644,10.42.0.11:9644",
 	}
-	points, err := mr.Run(context.Background(), []int{1}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 2)
 
@@ -559,7 +634,7 @@ total_files_size_bytes 1048576000
 		Engines:        []string{"connect"},
 		Direction:      DirectionSink,
 	}
-	points, err := mr.Run(context.Background(), []int{1}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	// No spurious early-abort even though log samples are empty: the sink's
 	// metric series is non-empty.
 	require.NoError(t, err)
@@ -602,7 +677,7 @@ func TestMatrixRun_EngineInnerLoop_ConnectOnly(t *testing.T) {
 		SessionID:      sessionID,
 		Engines:        []string{"connect"},
 	}
-	points, err := mr.Run(context.Background(), []int{1, 2, 4}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}, {VCPU: 4, GOMAXPROCS: 4, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 3, "expected 3 sweep points (connect-only)")
 	for _, p := range points {

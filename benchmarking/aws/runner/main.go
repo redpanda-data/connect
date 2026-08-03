@@ -302,7 +302,8 @@ func runBench(opts benchOpts) (errOut error) {
 	} else {
 		duration = minDuration
 	}
-	points, err := mr.Run(ctx, s.Matrix.CPUPoints, s.Matrix.GoMemLimitPerVCPU, warmup, duration, reset, workload)
+	plan := buildSweepPlan(s)
+	points, err := mr.Run(ctx, plan, s.Matrix.GoMemLimitPerVCPU, warmup, duration, reset, workload)
 	if err != nil {
 		return err
 	}

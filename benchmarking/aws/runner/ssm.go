@@ -98,9 +98,13 @@ func (a *awsSSM) Run(ctx context.Context, instanceID, script string, onLine func
 type FakeSSM struct {
 	Transcripts map[string][]string // instanceID → lines to emit on Run
 	Errs        map[string]error
+	// Scripts records every script submitted, in order, so tests can assert on
+	// what the runner actually asked the host to execute.
+	Scripts []string
 }
 
-func (f *FakeSSM) Run(_ context.Context, instanceID, _ string, onLine func(string)) error {
+func (f *FakeSSM) Run(_ context.Context, instanceID, script string, onLine func(string)) error {
+	f.Scripts = append(f.Scripts, script)
 	for _, line := range f.Transcripts[instanceID] {
 		if onLine != nil {
 			onLine(line)

@@ -27,9 +27,14 @@ type MatrixRunner struct {
 	RunnerInstance  string
 	LoadGenInstance string
 	ConfigPath      string // path on the runner host to benchmark_config.yaml
-	BinaryPath      string // path on the runner host to redpanda-connect
-	Bucket          string // S3 bucket where per-point Connect logs are uploaded
-	SessionID       string // run-scoped key prefix: runs/<SessionID>/sweep-<vcpu>.log
+	// ConfigPaths maps sweepPoint.Key() to that point's launch config paths on
+	// the runner host. Nil (the arm-less case) means every point launches
+	// ConfigPath, which keeps existing scenarios on the historical
+	// /opt/bench/config.yaml staging path.
+	ConfigPaths map[string]pointConfigPaths
+	BinaryPath  string // path on the runner host to redpanda-connect
+	Bucket      string // S3 bucket where per-point Connect logs are uploaded
+	SessionID   string // run-scoped key prefix: runs/<SessionID>/sweep-<vcpu>.log
 	// RedpandaMetricsEndpoint is the host:port pair (e.g. "10.42.10.10:9644") the
 	// per-point scraper curls every 10s. Empty disables the scraper, so callers
 	// without a Redpanda cluster (e.g. an early-stack bring-up) won't fail.
@@ -65,9 +70,23 @@ type MatrixRunner struct {
 	Direction Direction
 }
 
+// pointConfigPaths locates one sweep point's launch config(s) on the runner
+// host. Single is set for single-pipeline points; Root and Dir are set for
+// streams-mode points.
+type pointConfigPaths struct {
+	Single string
+	Root   string
+	Dir    string
+}
+
 // SweepPoint is the per-point measurement.
 type SweepPoint struct {
-	VCPU         int
+	VCPU int
+	// ArmID is "" for arm-less sweeps; the matrix.arms id otherwise.
+	ArmID string
+	// GOMAXPROCS is the runtime P count measured at this point. Equal to VCPU
+	// unless an arm oversubscribed it.
+	GOMAXPROCS   int
 	Engine       string
 	Samples      []Sample
 	Summary      Summary
@@ -81,7 +100,7 @@ type SweepPoint struct {
 // runs on the load-gen host concurrently with the bench step.
 func (m *MatrixRunner) Run(
 	ctx context.Context,
-	cpuPoints []int,
+	plan []sweepPoint,
 	memLimitPerVCPU int,
 	warmup, duration time.Duration,
 	resetScript string,
@@ -91,10 +110,17 @@ func (m *MatrixRunner) Run(
 	if len(engines) == 0 {
 		engines = []string{"connect"}
 	}
-	out := make([]SweepPoint, 0, len(cpuPoints)*len(engines))
-	for _, n := range cpuPoints {
+	out := make([]SweepPoint, 0, len(plan)*len(engines))
+	for _, pt := range plan {
+		n := pt.VCPU
+		key := pt.Key()
 		for _, engine := range engines {
-			fmt.Printf("=== sweep point: %d vCPU, engine=%s (warmup %s, window %s) ===\n", n, engine, warmup, duration)
+			if pt.ArmID == "" {
+				fmt.Printf("=== sweep point: %d vCPU, engine=%s (warmup %s, window %s) ===\n", n, engine, warmup, duration)
+			} else {
+				fmt.Printf("=== sweep point: %d vCPU, arm=%s (GOMAXPROCS %d, %d streams), engine=%s (warmup %s, window %s) ===\n",
+					n, pt.ArmID, pt.GOMAXPROCS, pt.Streams, engine, warmup, duration)
+			}
 
 			if resetScript != "" {
 				if err := m.SSM.Run(ctx, m.RunnerInstance, resetScript, streamingOnLine(stdout, "reset")); err != nil {
@@ -119,7 +145,7 @@ func (m *MatrixRunner) Run(
 				sidecar = m.Topology.MetricSidecar(MetricSidecarArgs{
 					Engine:    engine,
 					VCPU:      n,
-					Key:       strconv.Itoa(n),
+					Key:       key,
 					Bucket:    m.Bucket,
 					SessionID: m.SessionID,
 					Outs:      m.Outs,
@@ -130,12 +156,18 @@ func (m *MatrixRunner) Run(
 			var script string
 			switch engine {
 			case "connect":
+				cfg := m.configPathsFor(key)
 				script = renderBenchScript(benchScriptArgs{
 					VCPU:                     n,
+					GOMAXPROCS:               pt.GOMAXPROCS,
+					Streams:                  pt.Streams,
+					Key:                      key,
 					MemLimitGiB:              memLimitPerVCPU * n,
 					WarmupSec:                int(warmup.Seconds()),
 					DurationSec:              int(duration.Seconds()),
-					ConfigPath:               m.ConfigPath,
+					ConfigPath:               cfg.Single,
+					RootConfigPath:           cfg.Root,
+					StreamsDir:               cfg.Dir,
 					BinaryPath:               m.BinaryPath,
 					Bucket:                   m.Bucket,
 					SessionID:                m.SessionID,
@@ -199,19 +231,19 @@ func (m *MatrixRunner) Run(
 			var samples []Sample
 			var rawLog []byte
 			if engine == "connect" {
-				raw, err := m.fetchLog(ctx, n)
+				raw, err := m.fetchLog(ctx, key)
 				if err != nil {
 					return nil, fmt.Errorf("fetch log at %d vCPU (%s): %w", n, engine, err)
 				}
 				rawLog = raw
 				samples = parseAndTrim(raw, warmup)
 			}
-			promPts := m.fetchProm(ctx, n)
+			promPts := m.fetchProm(ctx, key)
 
 			// Broker-side: each engine scrapes /public_metrics during its
 			// own window and uploads to a per-engine filename, so we fetch
 			// only the matching engine's file here.
-			brokerSeries := m.fetchBrokerSeriesForEngine(ctx, engine, strconv.Itoa(n))
+			brokerSeries := m.fetchBrokerSeriesForEngine(ctx, engine, key)
 
 			var summary Summary
 			if engine == "kafka_connect" || m.Direction == DirectionSink {
@@ -225,6 +257,8 @@ func (m *MatrixRunner) Run(
 			anomalies := DetectAnomaliesWithProm(samples, summary.MedianMBPerSec, promPts)
 			out = append(out, SweepPoint{
 				VCPU:         n,
+				ArmID:        pt.ArmID,
+				GOMAXPROCS:   pt.GOMAXPROCS,
 				Engine:       engine,
 				Samples:      samples,
 				Summary:      summary,
@@ -239,7 +273,7 @@ func (m *MatrixRunner) Run(
 			// throughput data — later points would fail the same way. The
 			// signal differs by direction: source-Connect uses rolling-stats
 			// log samples; a sink (no such log) uses its metric series.
-			if n == cpuPoints[0] {
+			if len(out) == 1 {
 				var empty bool
 				var what string
 				switch {
@@ -263,13 +297,22 @@ func (m *MatrixRunner) Run(
 	return out, nil
 }
 
+// configPathsFor returns the launch config paths for a point key, falling back
+// to the single staged ConfigPath when the scenario declares no arms.
+func (m *MatrixRunner) configPathsFor(key string) pointConfigPaths {
+	if cfg, ok := m.ConfigPaths[key]; ok {
+		return cfg
+	}
+	return pointConfigPaths{Single: m.ConfigPath}
+}
+
 // fetchLog downloads the per-point Connect log uploaded by the bench script.
-func (m *MatrixRunner) fetchLog(ctx context.Context, vcpu int) ([]byte, error) {
+func (m *MatrixRunner) fetchLog(ctx context.Context, key string) ([]byte, error) {
 	if m.LogFetcher == nil {
 		return nil, fmt.Errorf("LogFetcher not configured")
 	}
-	key := fmt.Sprintf("runs/%s/sweep-%d.log", m.SessionID, vcpu)
-	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, key)
+	s3Key := fmt.Sprintf("runs/%s/sweep-%s.log", m.SessionID, key)
+	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, s3Key)
 	if err != nil {
 		return nil, err
 	}
@@ -280,12 +323,12 @@ func (m *MatrixRunner) fetchLog(ctx context.Context, vcpu int) ([]byte, error) {
 // fetchProm downloads the per-point Prometheus dump uploaded by the bench
 // script. Failure is non-fatal — the sweep point is still useful without
 // goroutine/heap context.
-func (m *MatrixRunner) fetchProm(ctx context.Context, vcpu int) []PromPoint {
+func (m *MatrixRunner) fetchProm(ctx context.Context, key string) []PromPoint {
 	if m.LogFetcher == nil {
 		return nil
 	}
-	key := fmt.Sprintf("runs/%s/prom-%d.txt", m.SessionID, vcpu)
-	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, key)
+	s3Key := fmt.Sprintf("runs/%s/prom-%s.txt", m.SessionID, key)
+	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, s3Key)
 	if err != nil {
 		fmt.Fprintf(stdout, "[bench] fetch prom (non-fatal): %v\n", err)
 		return nil
