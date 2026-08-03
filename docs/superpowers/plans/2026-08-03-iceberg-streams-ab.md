@@ -1138,6 +1138,13 @@ func TestSinkResetScript_CreatesUnionForMultiStreamPlan(t *testing.T) {
 	if n := strings.Count(got, "/opt/bench/iceberg-tablegen"); n != 6 {
 		t.Errorf("expected 6 tablegen pre-creates, got %d:\n%s", n, got)
 	}
+	// Each pre-create is wrapped in a bounded retry that still fails loud.
+	if n := strings.Count(got, "for attempt in 1 2 3; do"); n != 6 {
+		t.Errorf("expected each tablegen wrapped in a retry loop, got %d:\n%s", n, got)
+	}
+	if !strings.Contains(got, "after 3 attempts") {
+		t.Errorf("retry must fail loud after 3 attempts:\n%s", got)
+	}
 	// The consumer group is shared by both streams, so it is reset once per
 	// engine, not once per table.
 	if n := strings.Count(got, "kafka-consumer-groups.sh"); n != 2 {
@@ -1169,8 +1176,25 @@ In `benchmarking/aws/runner/topology_sink.go`, replace the `for _, eng := range 
 				region, db, table)
 			// Pre-create with an explicit location: the Glue REST catalog
 			// requires one on create and the KC Tabular sink does not supply it.
-			w(`/opt/bench/iceberg-tablegen --catalog-uri=%s --warehouse=%s --region=%s --namespace=%s --table=%s --location=%s`,
+			//
+			// Retried, because this script runs under `set -euo pipefail` and
+			// iceberg-tablegen exits non-zero on transient Glue/IAM errors (it
+			// already treats "already exists" as success). The table union turns
+			// one unguarded call per engine into N, and a single throttled call
+			// would otherwise abort the whole sweep at reset time. Three
+			// attempts, then fail LOUD: a missing table must never be silently
+			// tolerated, because the stream that needed it would commit nothing
+			// and deflate its arm's throughput instead of erroring.
+			//
+			// `if cmd; then` (not `cmd && break`) because the `if` condition is
+			// explicitly exempt from `-e`, making the retry's semantics
+			// unambiguous.
+			w(`for attempt in 1 2 3; do`)
+			w(`  if /opt/bench/iceberg-tablegen --catalog-uri=%s --warehouse=%s --region=%s --namespace=%s --table=%s --location=%s; then break; fi`,
 				catalogURI, warehouse, region, db, table, fmt.Sprintf("%s/%s/%s", whBase, db, table))
+			w(`  if [ "$attempt" = 3 ]; then echo "iceberg-tablegen failed for %s after 3 attempts" >&2; exit 1; fi`, table)
+			w(`  sleep 5`)
+			w(`done`)
 		}
 		// Reset the per-engine consumer group to re-read the whole topic. Both
 		// streams of a multi-stream arm share this group — that is what splits
