@@ -1587,7 +1587,19 @@ func (m *MatrixRunner) Run(
 
 Inside the loop, make these substitutions:
 
-- Sidecar args: `VCPU: n, Key: key,`.
+- Sidecar args: `VCPU: n, Key: key,` **and `Names: m.Names.WithStreams(pt.Streams)`.**
+  The `Names` scoping is load-bearing and easy to miss: `sinkTopology.MetricSidecar`
+  derives the tables it polls from `args.Names.IcebergTables(args.Engine)`, so
+  passing the base `m.Names` (`Streams == 0`) would poll only the unsuffixed
+  table. For a 2-stream arm the streams write `_s0`/`_s1` while the unsuffixed
+  table — which the reset union does create — is never written, so the arm would
+  report ~0 MB/s with no error anywhere, and the A/B would read as "2 pipelines
+  are far worse" rather than as a broken measurement. Add a test that runs a
+  2-stream sink plan and asserts the submitted script references both per-stream
+  table names.
+  (`fetchBrokerSeriesForEngine`'s `MetricInputs{Names: m.Names}` needs no
+  scoping — the sink's `EngineSeries` is `ParseIcebergSeries(in.Body)`, which
+  ignores `Names`.)
 - The `connect` branch of the script switch:
 
 ```go
