@@ -407,7 +407,7 @@ func TestCommitOverwriteCleansUpOrphansOnFailure(t *testing.T) {
 	// A non-retryable failure guarantees the mutation's commit does not land, so
 	// the files the overwrite wrote are genuine orphans.
 	fc := &flakyCatalog{memCatalog: cat, failuresLeft: 1 << 30, failErr: errors.New("storage unavailable")}
-	comm, err := NewCommitter(fc.snapshot(), CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+	comm, err := NewCommitter(fc.snapshot(), fc, CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, fc.snapshot(), "id")
@@ -441,7 +441,7 @@ func TestCommitOverwriteIdempotentOnUnknownState(t *testing.T) {
 		seedTbl, mem := newCOWTable(t, sc)
 		_ = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
 		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{outcome}}
-		comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		t.Cleanup(comm.Close)
 		w := cowWriter(t, cat.snapshot(), "id")
@@ -546,7 +546,7 @@ func TestCOWv1TableStaysV1(t *testing.T) {
 	tbl = appendCOWRows(t, ctx, tbl, map[int64]string{1: "one", 2: "two", 3: "three"})
 	require.EqualValues(t, 1, cat.snapshot().Metadata().Version(), "seeding must not upgrade the table")
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3, SkipFormatUpgrade: true}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3, SkipFormatUpgrade: true}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, tbl, "id")
@@ -581,7 +581,7 @@ func TestCOWUpsertDeleteRoundTrip(t *testing.T) {
 	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
 
 	// Build a writer whose committer shares the catalog.
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, seedTbl, "id")
@@ -616,7 +616,7 @@ func TestCOWOnlyDeletesFastPath(t *testing.T) {
 	seedTbl, cat := newCOWTable(t, sc)
 	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two"})
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, seedTbl, "id")
@@ -640,7 +640,7 @@ func TestCOWOnlyInsertsUsesAppend(t *testing.T) {
 	)
 	seedTbl, cat := newCOWTable(t, sc)
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, seedTbl, "id")
@@ -767,7 +767,7 @@ func TestCOWPartitionedUpsertDeleteRoundTrip(t *testing.T) {
 		{"id": 4, "region": "apac", "payload": "four"},
 	})
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, seedTbl, "id")
@@ -819,7 +819,7 @@ func TestCOWPartitionKeyChangeRoundTrip(t *testing.T) {
 		{"id": 1, "region": "us", "payload": "one"},
 	})
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, seedTbl, "id")
@@ -863,7 +863,7 @@ func TestCOWBucketPartitionRoundTrip(t *testing.T) {
 		{"id": 3, "region": "apac", "payload": "three"},
 	})
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, seedTbl, "id")
@@ -916,7 +916,7 @@ func TestCOWCaseInsensitiveUpsert(t *testing.T) {
 	_, err = tx.Commit(ctx)
 	require.NoError(t, err)
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriterCI(t, cat.snapshot(), "Id")
@@ -1076,7 +1076,7 @@ func TestCOWInsertPlusUpsertSameKeyDuplicates(t *testing.T) {
 	)
 	seedTbl, cat := newCOWTable(t, sc)
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, seedTbl, "id")
@@ -1193,7 +1193,7 @@ func TestCommitOverwriteNoLeakOnConflictThenSuccess(t *testing.T) {
 
 	// attempt 1 = clean conflict (nothing lands), attempt 2 = success.
 	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitConflict}}
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3},
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
 		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
@@ -1242,7 +1242,7 @@ func TestCommitOverwritePreservesFilesOnTerminalUnknown(t *testing.T) {
 		outcomes[i] = commitUnknownNoLand
 	}
 	cat := &scriptedCatalog{memCatalog: mem, outcomes: outcomes}
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: maxRetries},
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: maxRetries},
 		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
@@ -1286,7 +1286,7 @@ func TestCommitOverwriteResumesAfterReloadFailures(t *testing.T) {
 		}
 		return cat.snapshot(), nil
 	}
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 5}, reload, service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 5}, reload, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, cat.snapshot(), "id")
@@ -1333,7 +1333,7 @@ func TestCommitOverwriteGracefulWithoutListableFS(t *testing.T) {
 	fc := &flakyCatalog{memCatalog: mem, failuresLeft: 1 << 30, failErr: errors.New("storage unavailable")}
 	nlSnap := table.New(fc.ident, fc.meta, fc.metadataLocation,
 		func(context.Context) (iceio.IO, error) { return nonListableFS{}, nil }, fc)
-	comm, err := NewCommitter(nlSnap, CommitConfig{MaxRetries: 2},
+	comm, err := NewCommitter(nlSnap, fc, CommitConfig{MaxRetries: 2},
 		func(context.Context) (*table.Table, error) { return nlSnap, nil }, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
@@ -1362,7 +1362,7 @@ func TestCleanupOverwriteReferenceGuard(t *testing.T) {
 	seedTbl, cat := newCOWTable(t, sc)
 	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two"})
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 
@@ -1398,7 +1398,7 @@ func TestCommitOverwriteReturnsNewReaderError(t *testing.T) {
 	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two"})
 	seedCount := countParquetFiles(t, seedTbl.Location())
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 

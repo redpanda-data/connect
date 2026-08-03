@@ -135,7 +135,7 @@ func TestCommitterSkipsDuplicateCheck(t *testing.T) {
 	tbl = seedTable(t, ctx, tbl, 1)
 
 	logger := service.MockResources().Logger()
-	c, err := NewCommitter(tbl, CommitConfig{
+	c, err := NewCommitter(tbl, cat, CommitConfig{
 		ManifestMergeEnabled: false,
 		MaxRetries:           1,
 	}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
@@ -264,7 +264,7 @@ func newScriptedCommitter(tb testing.TB, outcomes ...commitOutcome) (*committer,
 	_, mem := newTestTable(tb)
 	cat := &scriptedCatalog{memCatalog: mem, outcomes: outcomes}
 	logger := service.MockResources().Logger()
-	c, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3},
+	c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
 		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
 	require.NoError(tb, err)
 	tb.Cleanup(c.Close)
@@ -353,7 +353,7 @@ func TestStaleSchemaErrorOnAllEntryPoints(t *testing.T) {
 
 	t.Run("doCommit (append path)", func(t *testing.T) {
 		tbl, cat := newTestTable(t)
-		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+		c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 		require.NoError(t, err)
 		defer c.Close()
 		cur := c.currentSchemaID()
@@ -363,7 +363,7 @@ func TestStaleSchemaErrorOnAllEntryPoints(t *testing.T) {
 
 	t.Run("commitRowDelta (merge-on-read path)", func(t *testing.T) {
 		tbl, cat := newTestTable(t)
-		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+		c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 		require.NoError(t, err)
 		defer c.Close()
 		cur := c.currentSchemaID()
@@ -376,7 +376,7 @@ func TestStaleSchemaErrorOnAllEntryPoints(t *testing.T) {
 
 	t.Run("commitOverwrite (copy-on-write path)", func(t *testing.T) {
 		tbl, cat := newTestTable(t)
-		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+		c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 		require.NoError(t, err)
 		defer c.Close()
 		cur := c.currentSchemaID()
@@ -398,7 +398,7 @@ func TestCommitStampsMaxSnapshotAge(t *testing.T) {
 	ctx := t.Context()
 	tbl, cat := newTestTable(t)
 	const age = 48 * time.Hour
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age}, reloadFn(cat), service.MockResources().Logger())
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -420,7 +420,7 @@ func TestNewCommitterClampsMaxRetries(t *testing.T) {
 	for _, n := range []int{0, -3} {
 		t.Run(fmt.Sprintf("max_retries_%d", n), func(t *testing.T) {
 			tbl, cat := newTestTable(t)
-			c, err := NewCommitter(tbl, CommitConfig{MaxRetries: n}, reloadFn(cat), service.MockResources().Logger())
+			c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: n}, reloadFn(cat), service.MockResources().Logger())
 			require.NoError(t, err)
 			defer c.Close()
 			assert.Equal(t, 1, c.cfg.MaxRetries, "MaxRetries must be clamped to at least 1")

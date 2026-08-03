@@ -63,7 +63,7 @@ func cowMutateDirect(t testing.TB, ctx context.Context, sc *iceberg.Schema, seed
 		}
 	}
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w = cowWriter(t, cat.snapshot(), "id")

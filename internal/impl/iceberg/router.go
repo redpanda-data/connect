@@ -774,7 +774,7 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 	// irreversible v1->v2 upgrade the merge-on-read path needs.
 	commitCfg := r.commitCfg
 	commitCfg.SkipFormatUpgrade = r.rowOpCfg.MergeStrategy == mergeStrategyCOW
-	comm, err := NewCommitter(committerTbl, commitCfg, reloadTable, r.logger)
+	comm, err := NewCommitter(committerTbl, client.TableIO(), commitCfg, reloadTable, r.logger)
 	if err != nil {
 		return nil, fmt.Errorf("creating committer: %w", err)
 	}

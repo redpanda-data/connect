@@ -104,6 +104,14 @@ type committer struct {
 	cfg         CommitConfig
 	reloadTable func(ctx context.Context) (*table.Table, error)
 	batcher     *asyncroutine.Batcher[CommitInput, struct{}]
+	// stripper wraps the table's catalog at the commit boundary so that
+	// property keys a catalog rejects as prohibited (learned from the
+	// rejection error in commitLocked) are filtered from later attempts. It
+	// is installed unconditionally and is a pass-through until a key is
+	// learned. Every table the committer retains (initial, reloaded, and
+	// post-commit — the latter inherits the binding from its transaction) is
+	// bound to it; see NewCommitter for the rebinding choke points.
+	stripper *propertyStrippingCatalog
 	// commitMu serializes all commits and guards c.table. The batcher's
 	// doCommit and the direct commitRowDelta path both take it.
 	commitMu        sync.Mutex
@@ -112,8 +120,15 @@ type committer struct {
 	logger          *service.Logger
 }
 
-// NewCommitter creates a new committer for a specific table.
-func NewCommitter(tbl *table.Table, cfg CommitConfig, reloadTable func(ctx context.Context) (*table.Table, error), logger *service.Logger) (*committer, error) {
+// NewCommitter creates a new committer for a specific table. cat must be the
+// catalog tbl was loaded from (the table.CatalogIO its commits go to); the
+// committer rebinds tbl — and every table reloadTable returns — onto a
+// wrapper of cat so prohibited property keys can be stripped at the commit
+// boundary (see propertyStrippingCatalog).
+func NewCommitter(tbl *table.Table, cat table.CatalogIO, cfg CommitConfig, reloadTable func(ctx context.Context) (*table.Table, error), logger *service.Logger) (*committer, error) {
+	if cat == nil {
+		return nil, errors.New("creating committer: catalog must not be nil")
+	}
 	// Defensively clamp MaxRetries to at least 1: commitLocked's retry loop is
 	// `for range cfg.MaxRetries`, so a zero or negative value would never run a
 	// single attempt and return a "committing transaction after 0 attempts"
@@ -122,11 +137,24 @@ func NewCommitter(tbl *table.Table, cfg CommitConfig, reloadTable func(ctx conte
 	if cfg.MaxRetries < 1 {
 		cfg.MaxRetries = 1
 	}
+	stripper := newPropertyStrippingCatalog(cat)
 	c := &committer{
-		table:       tbl,
-		cfg:         cfg,
-		reloadTable: reloadTable,
-		logger:      logger,
+		table:    rebindTable(tbl, stripper),
+		cfg:      cfg,
+		stripper: stripper,
+		logger:   logger,
+	}
+	if reloadTable != nil {
+		// Single choke point for reloaded tables: every table handle the
+		// committer adopts after a reload is rebound onto the stripper, so
+		// retried commits keep flowing through the prohibited-key filter.
+		c.reloadTable = func(ctx context.Context) (*table.Table, error) {
+			fresh, err := reloadTable(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return rebindTable(fresh, stripper), nil
+		}
 	}
 
 	batcher, err := asyncroutine.NewBatcher(100, c.doCommit)
@@ -493,6 +521,30 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			return attempt > 1, err
 		}
 		tbl, err := txn.Commit(ctx)
+		// Some engine-backed catalogs (Databricks Unity Catalog) reject a
+		// commit whose set-properties updates touch reserved keys, naming the
+		// offending keys in the error (e.g. "Table properties contain
+		// prohibited keys: schema.name-mapping.default"). Learn those keys,
+		// arm the stripper, and retry: the rejection is a clean 400 (nothing
+		// landed), so re-staging from the same base is safe, and the next
+		// attempt commits with the keys filtered out. Keys under
+		// reservedTablePropertyPrefix are never stripped — they carry
+		// connector semantics (e.g. the timestamp-encoding pin) — so a
+		// catalog prohibiting them fails the commit loudly instead.
+		if err != nil {
+			if retry, fatalErr := c.noteProhibitedKeys(attempt, err); fatalErr != nil {
+				// Reload so the next call uses fresh metadata, mirroring the
+				// non-retryable branch below.
+				if reloaded, reloadErr := c.reloadTable(ctx); reloadErr == nil {
+					c.table = reloaded
+				}
+				c.incrCommitFailure()
+				return attempt > 1, fatalErr
+			} else if retry {
+				commitErr = err
+				continue
+			}
+		}
 		// ErrCommitFailed is a clean conflict (our commit did not land), so a
 		// reload-and-retry re-adds our files exactly once. ErrCommitStateUnknown
 		// means the commit may have landed; retrying is only safe when stage
@@ -532,6 +584,48 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	}
 	c.incrCommitFailure()
 	return attempt > 1, fmt.Errorf("committing transaction after %d attempts: %w", attempt, commitErr)
+}
+
+// noteProhibitedKeys inspects a failed commit's error for a catalog
+// prohibited-table-property rejection and updates the stripper accordingly.
+// It returns retry=true when at least one new (non-reserved) key was learned —
+// the caller should count the attempt and re-stage, letting the stripper
+// filter the keys on the next commit. It returns a non-nil fatalErr when the
+// catalog named a key under reservedTablePropertyPrefix: those keys carry
+// connector semantics (the commit-id idempotency token, the
+// timestamp-encoding pin) that stripping would silently break, so the commit
+// must fail loudly instead. Both zero values mean the error is not a
+// prohibited-keys rejection — or it names only keys that are already being
+// stripped, in which case retrying would loop futilely — and the caller's
+// standard error handling applies.
+func (c *committer) noteProhibitedKeys(attempt int, err error) (retry bool, fatalErr error) {
+	keys := parseProhibitedPropertyKeys(err)
+	if len(keys) == 0 {
+		return false, nil
+	}
+	var learned, reserved []string
+	for _, k := range keys {
+		if strings.HasPrefix(k, reservedTablePropertyPrefix) {
+			reserved = append(reserved, k)
+		} else if c.stripper.addProhibitedKey(k) {
+			learned = append(learned, k)
+		}
+	}
+	if len(reserved) > 0 {
+		return false, fmt.Errorf(
+			"catalog prohibits table properties %v, which this connector depends on (%s* keys pin semantics such as the table's timestamp encoding) and refuses to strip: %w",
+			reserved, reservedTablePropertyPrefix, err)
+	}
+	if len(learned) == 0 {
+		return false, nil
+	}
+	// One-time warning per key: addProhibitedKey only reports a key the first
+	// time it is learned.
+	for _, k := range learned {
+		c.logger.Warnf("Catalog prohibits table property %q; stripping it from commits — safe because our data files carry Iceberg field IDs, so the property only duplicates optional metadata (e.g. the name-mapping fallback for ID-less files) that readers of this table never need", k)
+	}
+	c.logger.Warnf("Commit attempt %d/%d rejected for prohibited table properties %v; retrying with them stripped", attempt, c.cfg.MaxRetries, learned)
+	return true, nil
 }
 
 // dropAlreadyCommitted returns the subset of files whose paths are not already

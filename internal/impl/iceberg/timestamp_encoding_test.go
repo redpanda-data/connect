@@ -346,7 +346,7 @@ func TestCOWLegacyTimestampGuard(t *testing.T) {
 
 	newCOWEncWriter := func(t *testing.T, cat *memCatalog, enc icebergx.TimestampEncoding) *writer {
 		t.Helper()
-		comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3, SkipFormatUpgrade: true}, reloadFn(cat), service.MockResources().Logger())
+		comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3, SkipFormatUpgrade: true}, reloadFn(cat), service.MockResources().Logger())
 		require.NoError(t, err)
 		t.Cleanup(comm.Close)
 		w := cowWriter(t, cat.snapshot(), "id")
@@ -439,7 +439,7 @@ func TestCOWLegacyTimestampGuard(t *testing.T) {
 		_, cat := newEncTable(t, encTestSchema(), nil)
 		seedEncTimestampFile(t, ctx, cat, icebergx.TimestampEncodingLegacy)
 
-		comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+		comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 		require.NoError(t, err)
 		defer comm.Close()
 		w := &writer{

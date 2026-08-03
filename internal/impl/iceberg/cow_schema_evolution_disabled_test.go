@@ -59,7 +59,7 @@ func TestCOWUpsertUnknownColumnSchemaEvolutionDisabled(t *testing.T) {
 
 	// A real committer over the in-memory catalog — so if the write erroneously
 	// reached the overwrite commit, it would land a new snapshot we could detect.
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3, SkipFormatUpgrade: true}, reloadFn(cat), logger)
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3, SkipFormatUpgrade: true}, reloadFn(cat), logger)
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, cat.snapshot(), "id")

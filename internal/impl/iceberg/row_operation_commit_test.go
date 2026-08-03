@@ -86,7 +86,7 @@ func TestCommitDeleteOnlyProducesDeleteSnapshot(t *testing.T) {
 	deleteFiles, err := w.writeEqualityDeletes(ctx, service.MessageBatch{structuredMsg(t, map[string]any{"id": 2})})
 	require.NoError(t, err)
 
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -110,7 +110,7 @@ func TestCommitUpsertProducesOverwriteSnapshot(t *testing.T) {
 	// the shape an upsert produces.
 	dataFile := synthDataFile(t, tbl.Spec(), fmt.Sprintf("%s/data/new-%s.parquet", tbl.Location(), uuid.New()))
 
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -132,7 +132,7 @@ func TestCommitInsertOnlyStaysAppend(t *testing.T) {
 
 	dataFile := synthDataFile(t, tbl.Spec(), fmt.Sprintf("%s/data/ins-%s.parquet", tbl.Location(), uuid.New()))
 
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -211,7 +211,7 @@ func TestCommitRowDeltaConcurrentNotCoalesced(t *testing.T) {
 	ctx := t.Context()
 	tbl, cat := newTestTable(t)
 	logger := service.MockResources().Logger()
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 5}, reloadFn(cat), logger)
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 5}, reloadFn(cat), logger)
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -325,7 +325,7 @@ func TestCommitUpgradesFormatVersionV1ToV2(t *testing.T) {
 	tbl, cat := newTestTableV1(t)
 	require.EqualValues(t, 1, tbl.Metadata().Version(), "precondition: table starts at v1")
 
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -352,7 +352,7 @@ func TestCommitRetriesOnConflict(t *testing.T) {
 		_, plain := newTestTable(t)
 		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 2, failErr: rest.ErrCommitFailed}
 		ftbl := fc.snapshot()
-		c, err := NewCommitter(ftbl, CommitConfig{MaxRetries: 5}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+		c, err := NewCommitter(ftbl, fc, CommitConfig{MaxRetries: 5}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		defer c.Close()
 
@@ -366,7 +366,7 @@ func TestCommitRetriesOnConflict(t *testing.T) {
 		_, plain := newTestTable(t)
 		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1 << 30, failErr: rest.ErrCommitFailed}
 		ftbl := fc.snapshot()
-		c, err := NewCommitter(ftbl, CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+		c, err := NewCommitter(ftbl, fc, CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		defer c.Close()
 
@@ -390,7 +390,7 @@ func TestWriteCleansUpFilesOnCommitFailure(t *testing.T) {
 	// Control: a healthy committer leaves the written parquet file in place.
 	t.Run("control writes a file", func(t *testing.T) {
 		tbl, cat := newTestTable(t)
-		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
+		c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
 		require.NoError(t, err)
 		defer c.Close()
 		require.NoError(t, os.MkdirAll(filepath.Join(tbl.Location(), "data"), 0o755))
@@ -403,7 +403,7 @@ func TestWriteCleansUpFilesOnCommitFailure(t *testing.T) {
 		_, plain := newTestTable(t)
 		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1 << 30, failErr: errors.New("storage unavailable")}
 		ftbl := fc.snapshot()
-		c, err := NewCommitter(ftbl, CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+		c, err := NewCommitter(ftbl, fc, CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		defer c.Close()
 
@@ -445,7 +445,7 @@ func TestCommitRowDeltaIdempotentOnUnknownState(t *testing.T) {
 		ctx := t.Context()
 		_, mem := newTestTable(t)
 		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitLandThenUnknown}}
-		c, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		defer c.Close()
 
@@ -463,7 +463,7 @@ func TestCommitRowDeltaIdempotentOnUnknownState(t *testing.T) {
 		ctx := t.Context()
 		_, mem := newTestTable(t)
 		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitUnknownNoLand}}
-		c, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		defer c.Close()
 
@@ -481,7 +481,7 @@ func TestCommitRowDeltaIdempotentOnUnknownState(t *testing.T) {
 		ctx := t.Context()
 		_, mem := newTestTable(t)
 		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitConflict}}
-		c, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		defer c.Close()
 
@@ -501,7 +501,7 @@ func TestCommitRowDeltaIdempotentOnUnknownState(t *testing.T) {
 		ctx := t.Context()
 		_, mem := newTestTable(t)
 		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitLandThenFail}}
-		c, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		defer c.Close()
 
@@ -520,7 +520,7 @@ func TestCommitRowDeltaIdempotentOnUnknownState(t *testing.T) {
 func TestCommitRowDeltaWritesCommitIDToSummary(t *testing.T) {
 	ctx := t.Context()
 	tbl, cat := newTestTable(t)
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -547,7 +547,7 @@ func BenchmarkCommitterAppend(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		tbl, cat := newTestTable(b)
-		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
+		c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
 		require.NoError(b, err)
 		df := synthDataFile(b, tbl.Spec(), fmt.Sprintf("%s/data/bench-%d.parquet", tbl.Location(), i))
 		b.StartTimer()
@@ -577,7 +577,7 @@ func BenchmarkCommitterRowDelta(b *testing.B) {
 		deleteFiles, err := w.writeEqualityDeletes(ctx, service.MessageBatch{structuredMsg(b, map[string]any{"id": i})})
 		require.NoError(b, err)
 		dataFile := synthDataFile(b, tbl.Spec(), fmt.Sprintf("%s/data/bench-%d.parquet", tbl.Location(), i))
-		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
+		c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
 		require.NoError(b, err)
 		b.StartTimer()
 

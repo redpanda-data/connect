@@ -141,7 +141,7 @@ func TestCOWConcurrentCommittersConverge(t *testing.T) {
 	// MaxRetries lets the loser of the race reload and re-stage.
 	mkWriter := func(t *testing.T, occ *occCatalog) *writer {
 		t.Helper()
-		comm, err := NewCommitter(occ.snapshot(), CommitConfig{MaxRetries: 10},
+		comm, err := NewCommitter(occ.snapshot(), occ, CommitConfig{MaxRetries: 10},
 			func(context.Context) (*table.Table, error) { return occ.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		t.Cleanup(comm.Close)

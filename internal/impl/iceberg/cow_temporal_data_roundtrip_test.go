@@ -149,7 +149,7 @@ func TestCOWNumericEpochTimestampDataColumnUpsert(t *testing.T) {
 		{"id": int64(2), "ts": sentinel},
 	})
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriterWithResolver(t, cat.snapshot(), false, "id")
@@ -201,7 +201,7 @@ func TestCOWNumericEpochTimestampRequireSchemaMetadata(t *testing.T) {
 		sentinel := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 		_ = seedCOWRows(t, ctx, seedTbl, cat, "id", []map[string]any{{"id": int64(1), "ts": sentinel}})
 
-		comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+		comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 		require.NoError(t, err)
 		defer comm.Close()
 		w := cowWriterWithResolver(t, cat.snapshot(), true, "id")
@@ -220,7 +220,7 @@ func TestCOWNumericEpochTimestampRequireSchemaMetadata(t *testing.T) {
 		sentinel := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 		_ = seedCOWRows(t, ctx, seedTbl, cat, "id", []map[string]any{{"id": int64(1), "ts": sentinel}})
 
-		comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+		comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 		require.NoError(t, err)
 		defer comm.Close()
 		w := cowWriterWithResolver(t, cat.snapshot(), true, "id")

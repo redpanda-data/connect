@@ -172,7 +172,7 @@ func TestCOWMergeKeyRoundTrip(t *testing.T) {
 			seedByPay := invertByPayload(t, seedMap)
 
 			// Drive a real copy-on-write upsert(k2)+delete(k3) batch.
-			comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+			comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 			require.NoError(t, err)
 			defer comm.Close()
 			w := cowWriter(t, cat.snapshot(), "k")
@@ -216,7 +216,7 @@ func driveCOWKeyed(t testing.TB, ctx context.Context, sc *iceberg.Schema, seed [
 	tbl, cat := newCOWTable(t, sc)
 	_ = seedMergeKeyRows(t, ctx, tbl, cat, seed)
 
-	comm, err := NewCommitter(cat.snapshot(), CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
 	w := cowWriter(t, cat.snapshot(), "k")
