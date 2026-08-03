@@ -273,7 +273,7 @@ func (m *MatrixRunner) Run(
 			// throughput data — later points would fail the same way. The
 			// signal differs by direction: source-Connect uses rolling-stats
 			// log samples; a sink (no such log) uses its metric series.
-			if len(out) == 1 {
+			if pt.Key() == plan[0].Key() {
 				var empty bool
 				var what string
 				switch {

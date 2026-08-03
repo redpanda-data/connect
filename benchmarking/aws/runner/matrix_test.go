@@ -180,6 +180,74 @@ func TestMatrixRunner_EarlyAbortOnZeroSamples(t *testing.T) {
 	require.Contains(t, buf.String(), "license invalid")
 }
 
+func TestMatrixRunner_EarlyAbortFiresPerEngineAtFirstPoint(t *testing.T) {
+	// Regression test for the early-abort guard's key. It must fire once per
+	// engine at the FIRST plan point (pt.Key() == plan[0].Key()) — not once
+	// per sweep (len(out) == 1, a bug introduced and then caught in this
+	// task's first pass). A dual-engine sweep where only the SECOND engine's
+	// first point produces zero throughput must still abort the whole sweep,
+	// not silently continue to later points and burn the rest of a real
+	// multi-hour bench on a broken engine.
+	//
+	// This is exercised under Direction: DirectionSink because that is the
+	// only direction whose early-abort switch inspects every engine — its
+	// first case (m.Direction == DirectionSink) matches unconditionally on
+	// engine. The source-direction switch only has a case for
+	// engine == "connect": under source direction, kafka_connect's own
+	// zero-throughput signal is never inspected by this guard at all,
+	// regardless of the guard's key. That is a pre-existing limitation of the
+	// direction/engine switch's case list (frozen, out of scope for this
+	// task — see the fix report for detail), not something this guard-key
+	// fix can address, so a literal source-direction dual-engine version of
+	// this test cannot be constructed to demonstrate an abort.
+	const sessionID = "sess-guard"
+	const connector = "iceberg"
+
+	const icebergConnect = `###timestamp=1000
+total_files_size_bytes 0
+###timestamp=1010
+total_files_size_bytes 524288000
+`
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID):           "INFO starting redpanda-connect\nINFO output connected\n",
+			fmt.Sprintf("runs/%s/iceberg-1-connect.txt", sessionID): icebergConnect,
+			// Deliberately no iceberg-1-kc.txt: kafka_connect's first point
+			// captures zero metric samples, simulating a broken KC connector.
+			// No sweep-2.log / iceberg-2-*.txt either — if the guard fails to
+			// abort, the run should blow up on THIS point (point 2 doesn't
+			// exist for KC), not silently produce clean-looking output.
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:            ssm,
+		LogFetcher:     fetcher,
+		RunnerInstance: "i-runner",
+		Bucket:         "b",
+		SessionID:      sessionID,
+		Topology:       sinkTopology{},
+		Names:          newBenchNames(sessionID, connector),
+		Engines:        []string{"connect", "kafka_connect"},
+		Direction:      DirectionSink,
+	}
+	plan := []sweepPoint{
+		{VCPU: 1, GOMAXPROCS: 1, Streams: 1},
+		{VCPU: 2, GOMAXPROCS: 2, Streams: 1},
+	}
+	points, err := mr.Run(context.Background(), plan, 1, 60*time.Second, 120*time.Second, "", "")
+	require.Error(t, err, "kafka_connect's empty first point must abort the sweep, not just connect's")
+	require.Contains(t, err.Error(), "first sweep point at 1 vCPU captured 0 metric samples")
+	require.Len(t, points, 2, "connect@1 and kafka_connect@1 were recorded before the abort fired")
+	require.Equal(t, "connect", points[0].Engine)
+	require.Equal(t, "kafka_connect", points[1].Engine)
+	require.Empty(t, points[1].BrokerSeries, "kafka_connect's first point produced no metric samples")
+}
+
 func TestMatrixRunner_WarmupTrimsAndReindexes(t *testing.T) {
 	const sessionID = "bench-test"
 	// 5 samples total, warmup=2s → keep 3, T=0,1,2.
