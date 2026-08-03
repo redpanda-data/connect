@@ -464,6 +464,7 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 			log:           log,
 			knownSubjects: make(map[schemaSubjectVersion]struct{}),
 			knownSchemas:  make(map[int]schemaInfo),
+			inFlight:      make(map[schemaSubjectVersion]chan struct{}),
 		},
 		groups: groupsMigrator{
 			metrics:         newGroupsMetrics(mgr.Metrics()),
