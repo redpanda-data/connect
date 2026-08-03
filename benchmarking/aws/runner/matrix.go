@@ -149,7 +149,15 @@ func (m *MatrixRunner) Run(
 					Bucket:    m.Bucket,
 					SessionID: m.SessionID,
 					Outs:      m.Outs,
-					Names:     m.Names,
+					// WithStreams scopes Names to this point's stream count so
+					// sinkTopology.MetricSidecar's IcebergTables(engine) polls
+					// every per-stream table (..._s0, ..._s1, ...) a multi-
+					// stream arm actually writes to, not just the unsuffixed
+					// base table (which the reset union creates but nothing
+					// writes when Streams > 1). Without this, a 2-stream arm's
+					// sidecar polls a table that never grows and the arm
+					// reports ~0 MB/s with no error anywhere.
+					Names: m.Names.WithStreams(pt.Streams),
 				})
 			}
 

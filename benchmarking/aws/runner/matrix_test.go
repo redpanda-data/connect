@@ -717,6 +717,65 @@ total_files_size_bytes 1048576000
 	require.InDelta(t, 50.0, p.Summary.MedianMBPerSec, 0.1)
 }
 
+func TestMatrixRunner_SidecarPollsEveryStreamTableForMultiStreamArm(t *testing.T) {
+	// Regression test: MetricSidecar's Names must be scoped to the point's
+	// own Streams count. Before the fix, MatrixRunner.Run passed m.Names
+	// straight through (Streams == 0), so sinkTopology.MetricSidecar's
+	// IcebergTables(engine) always returned only the unsuffixed base table —
+	// even for a 2-stream arm whose two pipelines commit to ..._s0 and
+	// ..._s1. The sidecar would poll a table nothing writes to (the base
+	// table the reset union still creates), silently reporting ~0 MB/s with
+	// no error raised anywhere: exactly the silent-corruption class this
+	// plan exists to catch. Assert against the actual script text submitted
+	// to FakeSSM — the sidecar's Setup is spliced into it — so this pins the
+	// real end-to-end path from the plan point to the polled tables, not
+	// just the Names.WithStreams call in isolation.
+	const sessionID = "sess-multi"
+	const connector = "iceberg"
+
+	const iceberg = `###timestamp=1000
+total_files_size_bytes 0
+###timestamp=1010
+total_files_size_bytes 524288000
+###timestamp=1020
+total_files_size_bytes 1048576000
+`
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/iceberg-2-connect.txt", sessionID): iceberg,
+			fmt.Sprintf("runs/%s/sweep-2.log", sessionID):           "INFO starting redpanda-connect\nINFO output connected\n",
+		},
+		Errs: map[string]error{
+			fmt.Sprintf("runs/%s/prom-2.txt", sessionID): fmt.Errorf("not found"),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:            ssm,
+		LogFetcher:     fetcher,
+		RunnerInstance: "i-runner",
+		Bucket:         "b",
+		SessionID:      sessionID,
+		Topology:       sinkTopology{},
+		Names:          newBenchNames(sessionID, connector),
+		Engines:        []string{"connect"},
+		Direction:      DirectionSink,
+	}
+	plan := []sweepPoint{{VCPU: 2, GOMAXPROCS: 4, Streams: 2}}
+	_, err := mr.Run(context.Background(), plan, 1, 60*time.Second, 120*time.Second, "", "")
+	require.NoError(t, err)
+	require.Len(t, ssm.Scripts, 1)
+	script := ssm.Scripts[0]
+	require.Contains(t, script, "bench_sess_multi_iceberg_connect_s0",
+		"sidecar must poll stream 0's table")
+	require.Contains(t, script, "bench_sess_multi_iceberg_connect_s1",
+		"sidecar must poll stream 1's table")
+}
+
 func TestMatrixRun_EngineInnerLoop_ConnectOnly(t *testing.T) {
 	const sessionID = "sess"
 	logFor := func(vcpu int) string { return makeLog(180, float64(50+vcpu)) }
