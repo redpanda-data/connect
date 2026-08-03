@@ -307,10 +307,10 @@ func (s *Scenario) Validate() error {
 			}
 			seen[a.ID] = true
 			if a.GOMAXPROCS < 0 {
-				return fmt.Errorf("matrix.arms[%d].gomaxprocs must be positive when set (got %d)", i, a.GOMAXPROCS)
+				return fmt.Errorf("matrix.arms[%d].gomaxprocs must be non-negative (got %d); 0 means use the default", i, a.GOMAXPROCS)
 			}
 			if a.Streams < 0 {
-				return fmt.Errorf("matrix.arms[%d].streams must be positive when set (got %d)", i, a.Streams)
+				return fmt.Errorf("matrix.arms[%d].streams must be non-negative (got %d); 0 means use the default", i, a.Streams)
 			}
 		}
 	}

@@ -388,6 +388,55 @@ func TestScenarioValidate_RejectsDuplicateArmIDs(t *testing.T) {
 	require.Contains(t, err.Error(), "duplicate")
 }
 
+func TestScenarioValidate_RejectsNegativeGOMAXPROCS(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 1000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 200},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "a0", GOMAXPROCS: -1, Streams: 1}},
+		},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "matrix.arms[0].gomaxprocs")
+}
+
+func TestScenarioValidate_RejectsNegativeStreams(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 1000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 200},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "a0", GOMAXPROCS: 2, Streams: -1}},
+		},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "matrix.arms[0].streams")
+}
+
+func TestScenarioValidate_AcceptsZeroGOMAXPROCSAndStreams(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 110000000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 133},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "a0"}},
+		},
+	}
+	require.NoError(t, s.Validate())
+}
+
 func TestLoadScenario_KafkaConnectOptional(t *testing.T) {
 	const yamlBody = `
 name: test
