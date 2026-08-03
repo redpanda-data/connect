@@ -215,6 +215,54 @@ func TestRenderBenchScript_EmbedsBucketAndSession(t *testing.T) {
 	require.Contains(t, got, "###scrape_error")
 }
 
+func TestRenderBenchScript_DefaultsGOMAXPROCSToVCPU(t *testing.T) {
+	// Zero-value GOMAXPROCS/Key/Streams must reproduce the pre-arms script.
+	got := renderBenchScript(benchScriptArgs{
+		VCPU: 4, MemLimitGiB: 8, WarmupSec: 0, DurationSec: 900,
+		ConfigPath: "/opt/bench/config.yaml", BinaryPath: "/opt/bench/redpanda-connect",
+		Bucket: "b", SessionID: "s",
+	})
+	require.Contains(t, got, "GOMAXPROCS=4")
+	require.Contains(t, got, "taskset -c 2-5")
+	require.Contains(t, got, "/opt/bench/redpanda-connect run /opt/bench/config.yaml")
+	require.Contains(t, got, "/tmp/bench-4.log")
+	require.Contains(t, got, "s3://b/runs/s/sweep-4.log")
+	require.NotContains(t, got, "streams -o")
+}
+
+func TestRenderBenchScript_OversubscribesGOMAXPROCSWithoutWideningTaskset(t *testing.T) {
+	got := renderBenchScript(benchScriptArgs{
+		VCPU: 2, GOMAXPROCS: 4, Streams: 1, Key: "2-a1-1pipe-gmp4",
+		MemLimitGiB: 4, DurationSec: 900,
+		ConfigPath: "/opt/bench/cfg/2-a1-1pipe-gmp4/config.yaml",
+		BinaryPath: "/opt/bench/redpanda-connect",
+		Bucket:     "b", SessionID: "s",
+	})
+	require.Contains(t, got, "GOMAXPROCS=4")
+	require.Contains(t, got, "taskset -c 2-3", "the core pin must still follow VCPU, not GOMAXPROCS")
+	require.Contains(t, got, "GOMEMLIMIT=4GiB", "memory stays vCPU-derived so arms are memory-fair")
+	require.Contains(t, got, "/tmp/bench-2-a1-1pipe-gmp4.log")
+	require.Contains(t, got, "s3://b/runs/s/sweep-2-a1-1pipe-gmp4.log")
+	require.Contains(t, got, "s3://b/runs/s/prom-2-a1-1pipe-gmp4.txt")
+}
+
+func TestRenderBenchScript_StreamsModeLaunch(t *testing.T) {
+	got := renderBenchScript(benchScriptArgs{
+		VCPU: 2, GOMAXPROCS: 4, Streams: 2, Key: "2-b-2pipe-gmp4",
+		MemLimitGiB: 4, DurationSec: 900,
+		RootConfigPath: "/opt/bench/cfg/2-b-2pipe-gmp4/root.yaml",
+		StreamsDir:     "/opt/bench/cfg/2-b-2pipe-gmp4/streams",
+		BinaryPath:     "/opt/bench/redpanda-connect",
+		Bucket:         "b", SessionID: "s",
+	})
+	require.Contains(t, got,
+		"/opt/bench/redpanda-connect streams -o /opt/bench/cfg/2-b-2pipe-gmp4/root.yaml /opt/bench/cfg/2-b-2pipe-gmp4/streams")
+	require.NotContains(t, got, "redpanda-connect run ")
+	require.Contains(t, got, "GOMAXPROCS=4")
+	require.Contains(t, got, "taskset -c 2-3")
+	require.Contains(t, got, "/tmp/bench-2-b-2pipe-gmp4.log")
+}
+
 func TestRenderBenchScript_RedpandaScraperWhenEndpointSet(t *testing.T) {
 	// Back-compat path: only the legacy singular field is set. The
 	// scraper still wraps it in the IFS-split shell construct (single-

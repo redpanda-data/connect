@@ -369,6 +369,46 @@ type benchScriptArgs struct {
 	// to S3. Both come from Topology.MetricSidecar.
 	ScrapeSetup  string
 	ScrapeUpload string
+	// GOMAXPROCS is the Go runtime's P count. 0 means "same as VCPU", which is
+	// the pre-arms default. An arm may deliberately set it above VCPU: the
+	// taskset core pin below always follows VCPU, so oversubscribing only
+	// changes how many goroutines the runtime will schedule onto those cores.
+	GOMAXPROCS int
+	// Streams > 1 launches `redpanda-connect streams -o <RootConfigPath>
+	// <StreamsDir>` instead of `run <ConfigPath>`.
+	Streams        int
+	RootConfigPath string
+	StreamsDir     string
+	// Key names this point's artifacts. Empty means the bare vCPU count.
+	Key string
+}
+
+// artifactKey names this point's log and metric files: the bare vCPU count for
+// arm-less scenarios (unchanged from before matrix.arms), "<vcpu>-<armID>" with
+// arms.
+func (a benchScriptArgs) artifactKey() string {
+	if a.Key != "" {
+		return a.Key
+	}
+	return strconv.Itoa(a.VCPU)
+}
+
+// gomaxprocs is the runtime P count for this point, defaulting to the pinned
+// core count.
+func (a benchScriptArgs) gomaxprocs() int {
+	if a.GOMAXPROCS > 0 {
+		return a.GOMAXPROCS
+	}
+	return a.VCPU
+}
+
+// launchCmd is the engine invocation: streams mode when the point runs more
+// than one pipeline in the process, single-config run mode otherwise.
+func (a benchScriptArgs) launchCmd() string {
+	if a.Streams > 1 {
+		return fmt.Sprintf("%s streams -o %s %s", a.BinaryPath, a.RootConfigPath, a.StreamsDir)
+	}
+	return fmt.Sprintf("%s run %s", a.BinaryPath, a.ConfigPath)
 }
 
 // renderBenchScript produces the shell script executed on the runner EC2 for
@@ -382,21 +422,26 @@ type benchScriptArgs struct {
 func renderBenchScript(a benchScriptArgs) string {
 	// Cores 0,1 reserved → measured set starts at core 2.
 	cpusetHi := 1 + a.VCPU // inclusive
+	key := a.artifactKey()
 	totalSec := a.WarmupSec + a.DurationSec
 	lines := []string{
 		`set -euo pipefail`,
-		fmt.Sprintf(`echo "starting bench: %d vCPU, %d GiB, warmup %ds, window %ds"`,
-			a.VCPU, a.MemLimitGiB, a.WarmupSec, a.DurationSec),
-		fmt.Sprintf(`LOG=/tmp/bench-%d.log`, a.VCPU),
-		fmt.Sprintf(`PROM=/tmp/prom-%d.txt`, a.VCPU),
+		fmt.Sprintf(`echo "starting bench: %d vCPU, GOMAXPROCS %d, %d streams, %d GiB, warmup %ds, window %ds"`,
+			a.VCPU, a.gomaxprocs(), max(a.Streams, 1), a.MemLimitGiB, a.WarmupSec, a.DurationSec),
+		fmt.Sprintf(`LOG=/tmp/bench-%s.log`, key),
+		fmt.Sprintf(`PROM=/tmp/prom-%s.txt`, key),
 		`: > "$LOG"`,
 		`: > "$PROM"`,
 		// chrt removed for scheduler parity with KC (it deadlocked the JVM
 		// under single-core taskset; see traps reference in the
 		// bench-framework Claude skill). taskset alone gives us CPU
 		// isolation; SCHED_OTHER is what KC uses.
-		fmt.Sprintf(`taskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s run %s >"$LOG" 2>&1 &`,
-			cpusetHi, a.VCPU, a.MemLimitGiB, a.BinaryPath, a.ConfigPath),
+		//
+		// The core pin follows VCPU while GOMAXPROCS is independent: an arm can
+		// oversubscribe the runtime on a fixed core allocation. GOMEMLIMIT is
+		// vCPU-derived by the caller, so it is constant across an A/B's arms.
+		fmt.Sprintf(`taskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s >"$LOG" 2>&1 &`,
+			cpusetHi, a.gomaxprocs(), a.MemLimitGiB, a.launchCmd()),
 		`PID=$!`,
 		// Heartbeat: every 60s, echo the latest rolling-stats line so the
 		// operator can see throughput live. Bounded output (~17 lines per
@@ -446,10 +491,10 @@ func renderBenchScript(a benchScriptArgs) string {
 	}
 	lines = append(lines,
 		`echo "bench point complete"`,
-		fmt.Sprintf(`aws s3 cp "$LOG" "s3://%s/runs/%s/sweep-%d.log" >/dev/null`,
-			a.Bucket, a.SessionID, a.VCPU),
-		fmt.Sprintf(`aws s3 cp "$PROM" "s3://%s/runs/%s/prom-%d.txt" >/dev/null`,
-			a.Bucket, a.SessionID, a.VCPU),
+		fmt.Sprintf(`aws s3 cp "$LOG" "s3://%s/runs/%s/sweep-%s.log" >/dev/null`,
+			a.Bucket, a.SessionID, key),
+		fmt.Sprintf(`aws s3 cp "$PROM" "s3://%s/runs/%s/prom-%s.txt" >/dev/null`,
+			a.Bucket, a.SessionID, key),
 	)
 	if a.ScrapeUpload != "" {
 		lines = append(lines, a.ScrapeUpload)
