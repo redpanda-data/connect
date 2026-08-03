@@ -128,6 +128,18 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 	fmt.Printf("[1/7] loaded scenario %s\n", s.Name)
 
+	// matrix.arms compares Connect launch topologies (one iceberg pipeline vs.
+	// N streams-mode pipelines), not engines — Kafka Connect has no notion of
+	// streams, so arms require the sweep to be Connect-only. Checked here,
+	// before any infra apply / build / render / seed, so an invalid
+	// combination fails immediately instead of after minutes of wall-clock
+	// and real AWS spend.
+	if len(s.Matrix.Arms) > 0 {
+		if len(opts.engines) != 1 || opts.engines[0] != "connect" {
+			return fmt.Errorf("matrix.arms requires --engines=connect (got %v): arms compare Connect launch topologies, not engines", opts.engines)
+		}
+	}
+
 	topo, err := topologyFor(s.Direction)
 	if err != nil {
 		return err
@@ -282,15 +294,6 @@ func runBench(opts benchOpts) (errOut error) {
 		}
 		kcConnectorName = res.ConnectorName
 		kcConfigJSON = res.ConfigJSON
-	}
-
-	// matrix.arms compares Connect launch topologies (one iceberg pipeline vs.
-	// N streams-mode pipelines), not engines — Kafka Connect has no notion of
-	// streams, so arms require the sweep to be Connect-only.
-	if len(s.Matrix.Arms) > 0 {
-		if len(opts.engines) != 1 || opts.engines[0] != "connect" {
-			return fmt.Errorf("matrix.arms requires --engines=connect (got %v): arms compare Connect launch topologies, not engines", opts.engines)
-		}
 	}
 
 	mr := &MatrixRunner{
@@ -880,12 +883,15 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 	for _, item := range items {
 		f, err := os.Open(item.path)
 		if err != nil {
-			return err
+			// item.path is an ephemeral /tmp/bench-*.yaml name; item.key (e.g.
+			// stage/cfg/2-b-2pipe-gmp4/streams/stream-1.yaml) is what identifies
+			// which arm/stream failed.
+			return fmt.Errorf("open %s for s3 key %s: %w", item.path, item.key, err)
 		}
 		_, err = uploader.Upload(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &item.key, Body: f})
 		f.Close()
 		if err != nil {
-			return fmt.Errorf("upload %s: %w", item.path, err)
+			return fmt.Errorf("upload %s to %s: %w", item.path, item.key, err)
 		}
 	}
 

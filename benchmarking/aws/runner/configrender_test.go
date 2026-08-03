@@ -82,6 +82,9 @@ func TestRenderPointConfigs_StreamsModeSplitsRootAndStreams(t *testing.T) {
 	for _, k := range []string{"input", "output", "buffer"} {
 		require.NotContains(t, root, k, "root config must not carry stream field %q", k)
 	}
+	// The root config goes through writeTempYAML too — its own placeholder
+	// (${REDPANDA_BROKER_ENDPOINTS}) must resolve, not just the stream configs'.
+	require.Equal(t, []any{"b1:9092"}, root["redpanda"].(map[string]any)["seed_brokers"])
 
 	// Each stream config carries only its own pipeline.
 	for i, path := range got.Streams {
