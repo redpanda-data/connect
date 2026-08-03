@@ -2040,14 +2040,18 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 	}
 
 	for _, item := range items {
+		// Both errors name the S3 key, not just the local temp path: the temp
+		// paths are ephemeral /tmp/bench-stream1-<rand>.yaml names, while the key
+		// carries the point key and stream index, so it is the only thing that
+		// tells an operator WHICH arm and stream failed.
 		f, err := os.Open(item.path)
 		if err != nil {
-			return err
+			return fmt.Errorf("open %s for s3 key %s: %w", item.path, item.key, err)
 		}
 		_, err = uploader.Upload(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &item.key, Body: f})
 		f.Close()
 		if err != nil {
-			return fmt.Errorf("upload %s: %w", item.path, err)
+			return fmt.Errorf("upload %s to %s: %w", item.path, item.key, err)
 		}
 	}
 
@@ -2108,7 +2112,13 @@ Set on the `MatrixRunner`: `ConfigPath: "/opt/bench/config.yaml"` stays, and add
 		}(),
 ```
 
-Add the arms/engines guard just before the `MatrixRunner` is constructed:
+Add the arms/engines guard at the **top** of `runBench`, immediately after the
+scenario is loaded — NOT just before `MatrixRunner` is constructed. It needs only
+`s.Matrix.Arms` and `opts.engines`, both available immediately, and placing it
+late means an invalid combination is caught only after `buildConnect`, config
+rendering, `stageArtefacts` and the seeder have already run. Seeding this
+scenario's 132 GB dataset is minutes of wall-clock and real S3 spend; fail before
+paying for it:
 
 ```go
 	if len(s.Matrix.Arms) > 0 {
