@@ -40,7 +40,7 @@ func TestInfluxIntegration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	ctr, err := testcontainers.Run(t.Context(), "influxdb:1.8.3-alpine",
+	ctr, err := testcontainers.Run(t.Context(), "influxdb:1.12.4-alpine",
 		testcontainers.WithExposedPorts("8086/tcp"),
 		testcontainers.WithEnv(map[string]string{
 			"INFLUXDB_DB":             "db0",
