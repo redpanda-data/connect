@@ -22,8 +22,11 @@ a serverless SQL warehouse via the SQL Statement Execution API.
   terraform runs that CLI call for you.
 - **Storage root check**: if `databricks metastores summary` shows no default
   storage root (common on auto-provisioned metastores), catalog creation needs
-  an explicit one — set `TF_VAR_storage_root=s3://bucket/prefix` (or the
-  `storage_root` variable) before applying.
+  an explicit one — either set `TF_VAR_storage_root=s3://bucket/prefix` (or
+  the `storage_root` variable) before applying, or set `create_storage=true`
+  to have terraform provision a bucket + external location itself (see the
+  trial quick-start below; works for company accounts too). An explicit
+  `storage_root` always wins over `create_storage`.
 
 ## Auth
 
@@ -43,6 +46,78 @@ end up in state or logs.
 OAuth2 (M2M service principal) also works for terraform, but the tests use the
 PAT bearer token for the Iceberg REST client deliberately: community reports
 intermittent 500s using OAuth2 tokens against the UC IRC endpoint.
+
+## Trial account quick-start (no company workspace needed)
+
+A Databricks 14-day express trial can run this whole suite — with one twist:
+trial workspaces use [default storage](https://docs.databricks.com/aws/en/storage/default-storage),
+which does **not** support credential vending for external clients ("such as
+when external systems connect to the Unity REST API or Iceberg REST catalog",
+per that doc). A catalog on default storage therefore **cannot** work for
+these tests, no matter the grants. Serverless trial workspaces *do* support
+catalogs on customer-owned S3, which is exactly what `create_storage=true`
+provisions (bucket + IAM role + UC storage credential + external location,
+all disposable). You need an AWS account for the bucket; the ~$400 trial
+credit covers the Databricks side.
+
+Known trial constraints:
+
+- **Free Edition cannot work at all** — no external data access. Use the
+  trial from [databricks.com/try-databricks](https://www.databricks.com/try-databricks).
+- Sign up with a **business email** (no card needed, ~$400 of credits over
+  14 days). Personal-email trials are capped at a single SQL warehouse, which
+  bites the moment anything else holds one — business email avoids that.
+- Trial workspace assets are deleted **60 days after the trial expires** —
+  nothing here is worth keeping anyway, but don't park anything you love in
+  it.
+
+Steps:
+
+1. Sign up, open the workspace, and grab a PAT (User Settings → Developer →
+   Access tokens).
+2. Enable external data access on the metastore (as the trial's only user you
+   are the account admin; if the call is refused, make yourself metastore
+   admin first in the account console under Catalog → your metastore):
+
+   ```sh
+   databricks metastores summary                      # note the metastore id
+   databricks metastores update <metastore-id> --json '{"external_access_enabled": true}'
+   ```
+
+3. Export Databricks and AWS credentials, plus the storage variables — use
+   `TF_VAR_*` env vars (not one-off `-var` flags) so `terraform destroy` later
+   sees the same values:
+
+   ```sh
+   export DATABRICKS_HOST="https://dbc-abc123.cloud.databricks.com"
+   export DATABRICKS_TOKEN="dapi..."
+   export TF_VAR_workspace_host="$DATABRICKS_HOST"
+   export AWS_PROFILE=...                             # or AWS_ACCESS_KEY_ID etc.
+   export TF_VAR_create_storage=true
+   export TF_VAR_aws_region=us-east-1                 # bucket region
+   ```
+
+4. Apply and test as usual:
+
+   ```sh
+   task terraform:apply
+   task test
+   ```
+
+   (`task terraform:apply -- -var create_storage=true -var aws_region=us-east-1`
+   also works — args after `--` pass through — but then destroy needs the
+   same flags, hence the env-var recommendation.)
+
+The company-account path is unchanged: `create_storage` defaults to `false`
+and nothing AWS-side is touched.
+
+**If the first apply fails at the external location**: Unity Catalog storage
+credentials have a chicken-and-egg with the IAM role (the role's trust policy
+needs the credential's external ID), handled with the databricks provider's
+documented pattern plus a 30s wait for IAM propagation. IAM is eventually
+consistent, so a slow region can still occasionally fail the external
+location's validation on the first try — just re-run `task terraform:apply`;
+it picks up where it left off.
 
 ## Running
 

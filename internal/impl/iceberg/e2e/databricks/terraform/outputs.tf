@@ -17,3 +17,8 @@ output "workspace_host" {
 output "iceberg_rest_url" {
   value = "https://${local.workspace_host}/api/2.1/unity-catalog/iceberg-rest"
 }
+
+output "storage_bucket" {
+  description = "S3 bucket provisioned for catalog storage (null unless create_storage = true)"
+  value       = one(aws_s3_bucket.e2e[*].bucket)
+}
