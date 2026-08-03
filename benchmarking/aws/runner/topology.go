@@ -19,10 +19,32 @@ import (
 type BenchNames struct {
 	SessionID string
 	Connector string
+	// Streams is the arm's stream count. 0 and 1 both mean single-stream, in
+	// which case Iceberg table names are unsuffixed exactly as they were
+	// before matrix.arms existed. > 1 suffixes each stream's table with
+	// _s<StreamIndex> so concurrent streams commit to independent tables.
+	Streams int
+	// StreamIndex selects which stream's names to render. Only meaningful
+	// when Streams > 1.
+	StreamIndex int
 }
 
 func newBenchNames(sessionID, connector string) BenchNames {
 	return BenchNames{SessionID: sessionID, Connector: connector}
+}
+
+// WithStreams returns a copy scoped to an arm's stream count, resetting the
+// stream index to 0.
+func (n BenchNames) WithStreams(count int) BenchNames {
+	n.Streams = count
+	n.StreamIndex = 0
+	return n
+}
+
+// WithStream returns a copy scoped to one stream of a multi-stream arm.
+func (n BenchNames) WithStream(idx int) BenchNames {
+	n.StreamIndex = idx
+	return n
 }
 
 // ConnectTopic is the single topic Connect writes to in a source bench.
@@ -41,11 +63,50 @@ func (n BenchNames) SourceTopic() string {
 	return fmt.Sprintf("bench_%s_%s_src", n.SessionID, n.Connector)
 }
 
-// IcebergTable is the per-engine Glue table name. Glue/SQL identifiers can't
-// contain '-', so the session id's dashes are converted to underscores.
-func (n BenchNames) IcebergTable(engine string) string {
+// icebergTableBase is the unsuffixed per-engine Glue table name. Glue/SQL
+// identifiers can't contain '-', so the session id's dashes become underscores.
+func (n BenchNames) icebergTableBase(engine string) string {
 	safe := strings.ReplaceAll(n.SessionID, "-", "_")
 	return fmt.Sprintf("bench_%s_%s_%s", safe, n.Connector, engine)
+}
+
+// IcebergTable is the Glue table this stream writes. Unsuffixed for
+// single-stream arms; _s<StreamIndex> when the arm runs multiple streams.
+func (n BenchNames) IcebergTable(engine string) string {
+	base := n.icebergTableBase(engine)
+	if n.Streams <= 1 {
+		return base
+	}
+	return fmt.Sprintf("%s_s%d", base, n.StreamIndex)
+}
+
+// IcebergTables is every table this arm writes, in stream order. Throughput for
+// a multi-stream arm is the summed committed-bytes growth across all of them.
+func (n BenchNames) IcebergTables(engine string) []string {
+	if n.Streams <= 1 {
+		return []string{n.icebergTableBase(engine)}
+	}
+	out := make([]string, 0, n.Streams)
+	for i := 0; i < n.Streams; i++ {
+		out = append(out, n.WithStream(i).IcebergTable(engine))
+	}
+	return out
+}
+
+// IcebergResetTables is the union of tables any arm in the plan might write:
+// the base name (used by single-stream arms and by Kafka Connect) plus every
+// per-stream name up to maxStreams. The between-points reset drops and
+// pre-creates all of them, so a single precomputed reset script serves every
+// arm and each arm still starts from zero committed bytes.
+func (n BenchNames) IcebergResetTables(engine string, maxStreams int) []string {
+	out := []string{n.icebergTableBase(engine)}
+	if maxStreams <= 1 {
+		return out
+	}
+	for i := 0; i < maxStreams; i++ {
+		out = append(out, n.WithStreams(maxStreams).WithStream(i).IcebergTable(engine))
+	}
+	return out
 }
 
 // ConsumerGroup is the per-engine consumer group reading SourceTopic.

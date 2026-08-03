@@ -33,6 +33,74 @@ func TestBenchNames_SinkConventions(t *testing.T) {
 	}
 }
 
+func TestBenchNames_SingleStreamTableNamesUnchanged(t *testing.T) {
+	// Streams 0 (zero value) and 1 must both yield the historical unsuffixed
+	// name — this is what keeps the six existing scenarios untouched.
+	for _, n := range []BenchNames{
+		newBenchNames("sess-x", "iceberg"),
+		newBenchNames("sess-x", "iceberg").WithStreams(1),
+	} {
+		if got := n.IcebergTable("connect"); got != "bench_sess_x_iceberg_connect" {
+			t.Errorf("IcebergTable(connect) = %q, want unsuffixed bench_sess_x_iceberg_connect", got)
+		}
+		if got := n.IcebergTables("connect"); len(got) != 1 || got[0] != "bench_sess_x_iceberg_connect" {
+			t.Errorf("IcebergTables(connect) = %v, want one unsuffixed name", got)
+		}
+	}
+}
+
+func TestBenchNames_MultiStreamTableNamesSuffixed(t *testing.T) {
+	n := newBenchNames("sess-x", "iceberg").WithStreams(2)
+	if got := n.WithStream(0).IcebergTable("connect"); got != "bench_sess_x_iceberg_connect_s0" {
+		t.Errorf("stream 0 table = %q", got)
+	}
+	if got := n.WithStream(1).IcebergTable("connect"); got != "bench_sess_x_iceberg_connect_s1" {
+		t.Errorf("stream 1 table = %q", got)
+	}
+	want := []string{"bench_sess_x_iceberg_connect_s0", "bench_sess_x_iceberg_connect_s1"}
+	got := n.IcebergTables("connect")
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("IcebergTables = %v, want %v", got, want)
+	}
+}
+
+func TestBenchNames_SharedIdentifiersAreStreamIndependent(t *testing.T) {
+	// Both streams join the same consumer group and read the same topic — that
+	// is what splits the partitions 8/8 instead of doubling the work.
+	n := newBenchNames("sess-x", "iceberg").WithStreams(2)
+	if a, b := n.WithStream(0).ConsumerGroup("connect"), n.WithStream(1).ConsumerGroup("connect"); a != b {
+		t.Errorf("consumer group must be shared across streams: %q vs %q", a, b)
+	}
+	if a, b := n.WithStream(0).SourceTopic(), n.WithStream(1).SourceTopic(); a != b {
+		t.Errorf("source topic must be shared across streams: %q vs %q", a, b)
+	}
+}
+
+func TestBenchNames_IcebergResetTablesIsUnionAcrossArms(t *testing.T) {
+	n := newBenchNames("sess-x", "iceberg")
+	// maxStreams 1: just the base table, exactly as before arms existed.
+	got := n.IcebergResetTables("connect", 1)
+	if len(got) != 1 || got[0] != "bench_sess_x_iceberg_connect" {
+		t.Errorf("maxStreams=1 reset tables = %v, want [base]", got)
+	}
+	// maxStreams 2: base (for single-stream arms and for KC) plus both
+	// per-stream tables, so one reset script serves every arm.
+	got = n.IcebergResetTables("connect", 2)
+	want := []string{
+		"bench_sess_x_iceberg_connect",
+		"bench_sess_x_iceberg_connect_s0",
+		"bench_sess_x_iceberg_connect_s1",
+	}
+	if len(got) != 3 {
+		t.Fatalf("maxStreams=2 reset tables = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("reset table[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestTopologyFor(t *testing.T) {
 	if _, err := topologyFor(DirectionSource); err != nil {
 		t.Errorf("source topology must resolve, got %v", err)
