@@ -301,3 +301,52 @@ func TestSourceTopology_EngineSeries_ParsesBrokerDump(t *testing.T) {
 		t.Errorf("expected positive MB/s, got %v", pts[0].MBPerSec)
 	}
 }
+
+func TestSinkMetricSidecar_SingleTableShapeUnchanged(t *testing.T) {
+	sc := sinkTopology{}.MetricSidecar(MetricSidecarArgs{
+		Engine: "connect", VCPU: 2, Key: "2",
+		Bucket: "b", SessionID: "sess-x",
+		Outs:  map[string]string{"aws_region": "us-east-2"},
+		Names: newBenchNames("sess-x", "iceberg"),
+	})
+	if !strings.Contains(sc.Setup, "RP=/tmp/iceberg-2-connect.txt") {
+		t.Errorf("artifact path missing:\n%s", sc.Setup)
+	}
+	if !strings.Contains(sc.Setup, "bench_sess_x_iceberg_connect") {
+		t.Errorf("base table missing:\n%s", sc.Setup)
+	}
+	if !strings.Contains(sc.Setup, "total_files_size_bytes") || !strings.Contains(sc.Setup, "total_records") {
+		t.Errorf("sidecar must still emit both metric lines:\n%s", sc.Setup)
+	}
+	if !strings.Contains(sc.Upload, "s3://b/runs/sess-x/iceberg-2-connect.txt") {
+		t.Errorf("upload target wrong:\n%s", sc.Upload)
+	}
+}
+
+func TestSinkMetricSidecar_SumsAcrossStreamTables(t *testing.T) {
+	sc := sinkTopology{}.MetricSidecar(MetricSidecarArgs{
+		Engine: "connect", VCPU: 2, Key: "2-b-2pipe-gmp4",
+		Bucket: "b", SessionID: "sess-x",
+		Outs:  map[string]string{"aws_region": "us-east-2"},
+		Names: newBenchNames("sess-x", "iceberg").WithStreams(2),
+	})
+	for _, want := range []string{
+		"RP=/tmp/iceberg-2-b-2pipe-gmp4-connect.txt",
+		"bench_sess_x_iceberg_connect_s0",
+		"bench_sess_x_iceberg_connect_s1",
+	} {
+		if !strings.Contains(sc.Setup, want) {
+			t.Errorf("sidecar missing %q:\n%s", want, sc.Setup)
+		}
+	}
+	// The poller must accumulate, not overwrite, or a 2-stream arm reports
+	// only one stream's bytes and the whole A/B is wrong.
+	if !strings.Contains(sc.Setup, "SIZE=$((SIZE + ") || !strings.Contains(sc.Setup, "RECS=$((RECS + ") {
+		t.Errorf("sidecar must accumulate across tables:\n%s", sc.Setup)
+	}
+	// Still exactly two emitted metric lines per frame, so ParseIcebergSeries
+	// needs no change.
+	if got := strings.Count(sc.Setup, `echo "total_files_size_bytes`); got != 1 {
+		t.Errorf("expected exactly one size emission per frame, got %d:\n%s", got, sc.Setup)
+	}
+}

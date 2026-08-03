@@ -153,30 +153,36 @@ func (t sinkTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
 	sp, _ := sinkSpecFor(args.Names.Connector) // ok ignored: Validate guarantees the sinkSpec exists
 	region := args.Outs["aws_region"]
 	db := sp.Namespace
-	table := args.Names.IcebergTable(args.Engine)
+	// A multi-stream arm writes one table per stream; the arm's throughput is
+	// the summed committed-bytes growth across all of them. Single-stream arms
+	// yield a one-element list, so the shell shape is identical either way.
+	tables := args.Names.IcebergTables(args.Engine)
 	setup := fmt.Sprintf(`RP=/tmp/%s
 : > "$RP"
 (
   while kill -0 "$PID" 2>/dev/null; do
     {
       echo "###timestamp=$(date +%%s)"
-      META=$(aws glue get-table --region %q --database-name %q --name %q \
-              --query 'Table.Parameters.metadata_location' --output text 2>/dev/null || echo "")
-      if [ -n "$META" ] && [ "$META" != "None" ]; then
-        SNAP=$(aws s3 cp "$META" - 2>/dev/null || echo '{}')
-        SIZE=$(echo "$SNAP" | jq -r '[.snapshots[]?."summary"."total-files-size" // "0" | tonumber] | last // 0' 2>/dev/null || echo 0)
-        RECS=$(echo "$SNAP" | jq -r '[.snapshots[]?."summary"."total-records" // "0" | tonumber] | last // 0' 2>/dev/null || echo 0)
-      else
-        SIZE=0
-        RECS=0
-      fi
+      SIZE=0
+      RECS=0
+      for T in %s; do
+        META=$(aws glue get-table --region %q --database-name %q --name "$T" \
+                --query 'Table.Parameters.metadata_location' --output text 2>/dev/null || echo "")
+        if [ -n "$META" ] && [ "$META" != "None" ]; then
+          SNAP=$(aws s3 cp "$META" - 2>/dev/null || echo '{}')
+          S=$(echo "$SNAP" | jq -r '[.snapshots[]?."summary"."total-files-size" // "0" | tonumber] | last // 0' 2>/dev/null || echo 0)
+          R=$(echo "$SNAP" | jq -r '[.snapshots[]?."summary"."total-records" // "0" | tonumber] | last // 0' 2>/dev/null || echo 0)
+          SIZE=$((SIZE + ${S:-0}))
+          RECS=$((RECS + ${R:-0}))
+        fi
+      done
       echo "total_files_size_bytes ${SIZE:-0}"
       echo "total_records ${RECS:-0}"
     } >> "$RP"
     sleep 10
   done
 ) &
-RP_SCRAPER=$!`, artifact, region, db, table)
+RP_SCRAPER=$!`, artifact, strings.Join(tables, " "), region, db)
 	upload := fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/%s" >/dev/null`,
 		args.Bucket, args.SessionID, artifact)
 	return MetricSidecar{Setup: setup, Upload: upload}
