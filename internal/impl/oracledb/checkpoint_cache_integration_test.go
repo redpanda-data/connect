@@ -129,12 +129,7 @@ END;`)
 	assert.Equalf(t, 1, cacheKeyCount, "expected cache key '%s' to exist in checkpoint cache", defaultCacheKeyNew)
 
 	// assert scn stored in cache as progressed
-	var (
-		finalSCNBytes []byte
-		query         = fmt.Sprintf(`SELECT cache_val FROM %s WHERE cache_key = :1`, cacheTableName)
-	)
-	require.NoError(t, cdbDB.QueryRowContext(t.Context(), query, defaultCacheKeyNew).Scan(&finalSCNBytes))
-	finalSCN := binary.LittleEndian.Uint64(finalSCNBytes)
+	finalSCN := readCheckpointSCN(t, cdbDB, cacheTableName, defaultCacheKeyNew)
 	initialSCN := binary.LittleEndian.Uint64(expectedSCN)
 	assert.Greaterf(t, finalSCN, initialSCN, "expected final SCN (%d) to have advanced beyond initial SCN (%d)", finalSCN, initialSCN)
 }
