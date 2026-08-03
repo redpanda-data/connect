@@ -8,6 +8,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -19,6 +20,9 @@ const (
 	reservedCores       = 2
 	defaultGoMemPerVCPU = 2 // GiB
 )
+
+// armIDRe constrains arm ids to what is safe in a filename and an S3 key.
+var armIDRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // instanceTypeVCPU maps known EC2 instance types to their vCPU counts.
 // Extend this table when new types are referenced by scenarios.
@@ -97,6 +101,27 @@ type MatrixSpec struct {
 	CPUPoints         []int                  `yaml:"cpu_points"`
 	GoMemLimitPerVCPU int                    `yaml:"go_mem_limit_per_vcpu,omitempty"`
 	Overrides         map[int]map[string]any `yaml:"overrides,omitempty"`
+	// Arms turns a single cpu_points entry into an A/B: each arm is measured
+	// at that same vCPU pin but with its own launch topology (GOMAXPROCS,
+	// stream count) and pipeline overrides. Sink-only, Connect-only. Empty
+	// for every pre-existing scenario, which keeps the classic
+	// one-point-per-cpu_points behaviour.
+	Arms []Arm `yaml:"arms,omitempty"`
+}
+
+// Arm is one leg of an A/B at a fixed vCPU point. GOMAXPROCS may exceed the
+// pinned core count deliberately: Connect counts licensed cores off the machine
+// CPU rather than GOMAXPROCS, so oversubscribing is free, and an I/O-blocked
+// output (e.g. iceberg commits) can leave pinned cores idle without it.
+// Streams > 1 launches `redpanda-connect streams` with one config per stream
+// instead of `redpanda-connect run`.
+type Arm struct {
+	ID         string `yaml:"id"`
+	GOMAXPROCS int    `yaml:"gomaxprocs,omitempty"`
+	Streams    int    `yaml:"streams,omitempty"`
+	// Pipeline is deep-merged over the scenario-level pipeline block for this
+	// arm, so an arm declares only what differs. Applied to every stream.
+	Pipeline map[string]any `yaml:"pipeline,omitempty"`
 }
 
 type ResetStep struct {
@@ -262,6 +287,31 @@ func (s *Scenario) Validate() error {
 	for i := 1; i < len(s.Matrix.CPUPoints); i++ {
 		if s.Matrix.CPUPoints[i] <= s.Matrix.CPUPoints[i-1] {
 			return fmt.Errorf("matrix.cpu_points must be strictly ascending: %v", s.Matrix.CPUPoints)
+		}
+	}
+
+	if len(s.Matrix.Arms) > 0 {
+		if s.Direction != DirectionSink {
+			return fmt.Errorf("matrix.arms is only supported for direction: sink (got %q)", s.Direction)
+		}
+		if len(s.Matrix.CPUPoints) != 1 {
+			return fmt.Errorf("matrix.arms requires exactly one matrix.cpu_points entry (got %v): arms × vCPU would multiply the run", s.Matrix.CPUPoints)
+		}
+		seen := map[string]bool{}
+		for i, a := range s.Matrix.Arms {
+			if !armIDRe.MatchString(a.ID) {
+				return fmt.Errorf("matrix.arms[%d].id %q must match %s (it is used in filenames and S3 keys)", i, a.ID, armIDRe.String())
+			}
+			if seen[a.ID] {
+				return fmt.Errorf("matrix.arms[%d].id %q is a duplicate; arm ids must be unique", i, a.ID)
+			}
+			seen[a.ID] = true
+			if a.GOMAXPROCS < 0 {
+				return fmt.Errorf("matrix.arms[%d].gomaxprocs must be positive when set (got %d)", i, a.GOMAXPROCS)
+			}
+			if a.Streams < 0 {
+				return fmt.Errorf("matrix.arms[%d].streams must be positive when set (got %d)", i, a.Streams)
+			}
 		}
 	}
 

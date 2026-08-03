@@ -322,6 +322,72 @@ kafka_connect:
 	}
 }
 
+func TestLoadScenario_ParsesArms(t *testing.T) {
+	s, err := LoadScenario("testdata/valid-iceberg-arms.yaml")
+	require.NoError(t, err)
+	require.Len(t, s.Matrix.Arms, 3)
+	require.Equal(t, "a0-1pipe-gmp2", s.Matrix.Arms[0].ID)
+	require.Equal(t, 2, s.Matrix.Arms[0].GOMAXPROCS)
+	require.Equal(t, 1, s.Matrix.Arms[0].Streams)
+	require.Equal(t, "b-2pipe-gmp4", s.Matrix.Arms[2].ID)
+	require.Equal(t, 4, s.Matrix.Arms[2].GOMAXPROCS)
+	require.Equal(t, 2, s.Matrix.Arms[2].Streams)
+	// Per-arm pipeline override is parsed as a nested map, not flattened.
+	out, ok := s.Matrix.Arms[2].Pipeline["output"].(map[string]any)
+	require.True(t, ok, "arm pipeline override must parse as map[string]any")
+	ice, ok := out["iceberg"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, 8, ice["max_in_flight"])
+}
+
+func TestLoadScenario_RejectsArmsOnSource(t *testing.T) {
+	_, err := LoadScenario("testdata/invalid-arms-source.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "matrix.arms")
+	require.Contains(t, err.Error(), "sink")
+}
+
+func TestLoadScenario_RejectsArmsWithMultipleCPUPoints(t *testing.T) {
+	_, err := LoadScenario("testdata/invalid-arms-multi-cpu.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "matrix.arms")
+	require.Contains(t, err.Error(), "cpu_points")
+}
+
+func TestScenarioValidate_RejectsBadArmID(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 1000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 200},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "Bad_ID", GOMAXPROCS: 4, Streams: 1}},
+		},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "matrix.arms[0].id")
+}
+
+func TestScenarioValidate_RejectsDuplicateArmIDs(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 1000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 200},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "dup", Streams: 1}, {ID: "dup", Streams: 2}},
+		},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate")
+}
+
 func TestLoadScenario_KafkaConnectOptional(t *testing.T) {
 	const yamlBody = `
 name: test
