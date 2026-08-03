@@ -1121,8 +1121,20 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	}
 	lm.log.Debugf("Collected %d redo log file(s) for LogMiner: %v", len(logFiles), types)
 
-	if lm.sessionMgr.logFilesChanged(logFiles) {
-		// Log files have changed (first start or log switch) — full reload required.
+	// On databases where redo log switches are infrequent, a LogMiner session can stay
+	// open for hours, accumulating server-side PGA (notably around online catalog
+	// dictionary lookups) until Oracle kills it outright with ORA-04036. SessionMaxAge
+	// forces a restart on a timer instead of relying solely on a log switch to happen,
+	// mirroring Debezium's log.mining.session.max.ms.
+	sessionExpired := lm.cfg.SessionMaxAge > 0 && lm.sessionMgr.IsActive() && lm.sessionMgr.Age() >= lm.cfg.SessionMaxAge
+	if sessionExpired {
+		lm.log.Infof("LogMiner session has been open for %s, exceeding session_max_age of %s — forcing restart to release accumulated session memory",
+			lm.sessionMgr.Age(), lm.cfg.SessionMaxAge)
+	}
+
+	if lm.sessionMgr.logFilesChanged(logFiles) || sessionExpired {
+		// Log files have changed (first start or log switch), or the session has exceeded
+		// its maximum age — full reload required.
 		if lm.sessionMgr.IsActive() {
 			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
 				lm.log.Errorf("Failed to end existing LogMiner session: %v", err)
