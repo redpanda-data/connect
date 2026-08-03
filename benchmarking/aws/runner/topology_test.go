@@ -350,3 +350,68 @@ func TestSinkMetricSidecar_SumsAcrossStreamTables(t *testing.T) {
 		t.Errorf("expected exactly one size emission per frame, got %d:\n%s", got, sc.Setup)
 	}
 }
+
+func TestSinkResetScript_SingleStreamUnchanged(t *testing.T) {
+	s := &Scenario{Connector: "iceberg", Direction: DirectionSink}
+	outs := map[string]string{
+		"aws_region": "us-east-2", "redpanda_broker_endpoints": "b:9092",
+		"glue_rest_uri": "https://glue", "warehouse_account_id": "1234",
+		"warehouse_s3_uri": "s3://wh",
+	}
+	got, err := sinkTopology{}.ResetScript(s, outs, newBenchNames("sess-x", "iceberg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"bench_sess_x_iceberg_connect",
+		"bench_sess_x_iceberg_kafka_connect",
+		"kafka-consumer-groups.sh",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("reset missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "_s0") {
+		t.Errorf("single-stream reset must not mention per-stream tables:\n%s", got)
+	}
+	// One delete + one pre-create per engine.
+	if n := strings.Count(got, "aws glue delete-table"); n != 2 {
+		t.Errorf("expected 2 delete-table calls (one per engine), got %d", n)
+	}
+}
+
+func TestSinkResetScript_CreatesUnionForMultiStreamPlan(t *testing.T) {
+	s := &Scenario{Connector: "iceberg", Direction: DirectionSink}
+	outs := map[string]string{
+		"aws_region": "us-east-2", "redpanda_broker_endpoints": "b:9092",
+		"glue_rest_uri": "https://glue", "warehouse_account_id": "1234",
+		"warehouse_s3_uri": "s3://wh",
+	}
+	// Streams here is the plan max, so the reset serves every arm.
+	got, err := sinkTopology{}.ResetScript(s, outs, newBenchNames("sess-x", "iceberg").WithStreams(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"bench_sess_x_iceberg_connect",    // base: used by the single-stream arms
+		"bench_sess_x_iceberg_connect_s0", // arm B stream 0
+		"bench_sess_x_iceberg_connect_s1", // arm B stream 1
+		"bench_sess_x_iceberg_kafka_connect",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("reset missing %q:\n%s", want, got)
+		}
+	}
+	// 3 connect tables + 3 kafka_connect tables, each dropped and pre-created.
+	if n := strings.Count(got, "aws glue delete-table"); n != 6 {
+		t.Errorf("expected 6 delete-table calls, got %d:\n%s", n, got)
+	}
+	if n := strings.Count(got, "/opt/bench/iceberg-tablegen"); n != 6 {
+		t.Errorf("expected 6 tablegen pre-creates, got %d:\n%s", n, got)
+	}
+	// The consumer group is shared by both streams, so it is reset once per
+	// engine, not once per table.
+	if n := strings.Count(got, "kafka-consumer-groups.sh"); n != 2 {
+		t.Errorf("expected 2 consumer-group resets (one per engine), got %d:\n%s", n, got)
+	}
+}

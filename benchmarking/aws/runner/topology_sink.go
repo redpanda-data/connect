@@ -120,15 +120,23 @@ func (sinkTopology) ResetScript(s *Scenario, outs map[string]string, n BenchName
 	w := func(format string, a ...any) { fmt.Fprintf(&sb, format+"\n", a...) }
 	w("set -euo pipefail")
 	for _, eng := range []string{"connect", "kafka_connect"} {
-		table := n.IcebergTable(eng)
-		// Drop the per-engine table so total-files-size restarts at 0.
-		w(`aws glue delete-table --region %q --database-name %q --name %q 2>/dev/null || true`,
-			region, db, table)
-		// Pre-create the table with an explicit location: the Glue REST catalog
-		// requires one on create and the KC Tabular sink does not supply it.
-		w(`/opt/bench/iceberg-tablegen --catalog-uri=%s --warehouse=%s --region=%s --namespace=%s --table=%s --location=%s`,
-			catalogURI, warehouse, region, db, table, fmt.Sprintf("%s/%s/%s", whBase, db, table))
-		// Reset the per-engine consumer group to re-read the whole topic.
+		// Reset the union of every arm's tables: the base name plus each
+		// per-stream name up to the plan's max stream count. n.Streams carries
+		// that max (see planMaxStreams), which lets this one precomputed
+		// script serve every arm — each arm's own tables start at zero
+		// committed bytes and the extras sit empty.
+		for _, table := range n.IcebergResetTables(eng, n.Streams) {
+			// Drop the table so total-files-size restarts at 0.
+			w(`aws glue delete-table --region %q --database-name %q --name %q 2>/dev/null || true`,
+				region, db, table)
+			// Pre-create with an explicit location: the Glue REST catalog
+			// requires one on create and the KC Tabular sink does not supply it.
+			w(`/opt/bench/iceberg-tablegen --catalog-uri=%s --warehouse=%s --region=%s --namespace=%s --table=%s --location=%s`,
+				catalogURI, warehouse, region, db, table, fmt.Sprintf("%s/%s/%s", whBase, db, table))
+		}
+		// Reset the per-engine consumer group to re-read the whole topic. Both
+		// streams of a multi-stream arm share this group — that is what splits
+		// the partitions between them instead of doubling the work.
 		w(`/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server %q --group %q --reset-offsets --to-earliest --all-topics --execute 2>/dev/null || true`,
 			brokers, n.ConsumerGroup(eng))
 	}
