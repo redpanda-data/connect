@@ -154,9 +154,12 @@ regression guard and is unit-tested directly.
   untouched.
 - `ResetScript` drops and pre-creates every per-stream table (per engine) and
   still resets the shared consumer group to earliest.
-- `PipelineForStream(s, n, idx, count)` renders stream `idx`'s input/output with
-  that stream's table name; the single-stream path delegates to it with
-  `count == 1`.
+- **No `Topology` interface change is needed for per-stream rendering.**
+  `sinkTopology.Pipeline` already asks `n.IcebergTable("connect")` for its table,
+  so handing it a `BenchNames` scoped to stream `idx` is sufficient: the config
+  renderer calls `topo.Pipeline(&armScenario, names.WithStreams(count).WithStream(idx))`
+  once per stream. `Pipeline`, `KCConfig`, and the interface itself stay
+  untouched.
 
 ### 5. `runner/main.go`
 
