@@ -218,9 +218,26 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 	fmt.Println("[3/7] built redpanda-connect")
 
-	cfgPath, err := renderPipelineConfig(s, sharedOuts, topo, names)
-	if err != nil {
-		return fmt.Errorf("render pipeline config: %w", err)
+	plan := buildSweepPlan(s)
+	// legacy scenarios (no matrix.arms) share one config across every point,
+	// staged at the historical stage/config.yaml -> /opt/bench/config.yaml
+	// path, so the six existing scenarios are byte-for-byte unchanged.
+	legacy := len(s.Matrix.Arms) == 0
+	var sets []renderedPointConfigs
+	if legacy {
+		set, err := renderPointConfigs(s, sharedOuts, topo, names, plan[0])
+		if err != nil {
+			return fmt.Errorf("render pipeline config: %w", err)
+		}
+		sets = []renderedPointConfigs{set}
+	} else {
+		for _, p := range plan {
+			set, err := renderPointConfigs(s, sharedOuts, topo, names, p)
+			if err != nil {
+				return fmt.Errorf("render pipeline config for %s: %w", p.Key(), err)
+			}
+			sets = append(sets, set)
+		}
 	}
 	// Upload the iceberg-tablegen binary (sink scenarios only) BEFORE
 	// stageArtefacts, whose SSM script downloads it onto the runner — otherwise
@@ -228,7 +245,7 @@ func runBench(opts benchOpts) (errOut error) {
 	if err := stageTableGenForSink(ctx, opts, s, sharedOuts); err != nil {
 		return fmt.Errorf("stage iceberg-tablegen: %w", err)
 	}
-	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, cfgPath); err != nil {
+	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy); err != nil {
 		return fmt.Errorf("stage artefacts: %w", err)
 	}
 	fmt.Println("[4/7] staged binary + config on runner")
@@ -267,12 +284,27 @@ func runBench(opts benchOpts) (errOut error) {
 		kcConfigJSON = res.ConfigJSON
 	}
 
+	// matrix.arms compares Connect launch topologies (one iceberg pipeline vs.
+	// N streams-mode pipelines), not engines — Kafka Connect has no notion of
+	// streams, so arms require the sweep to be Connect-only.
+	if len(s.Matrix.Arms) > 0 {
+		if len(opts.engines) != 1 || opts.engines[0] != "connect" {
+			return fmt.Errorf("matrix.arms requires --engines=connect (got %v): arms compare Connect launch topologies, not engines", opts.engines)
+		}
+	}
+
 	mr := &MatrixRunner{
-		SSM:                      ssmExec,
-		LogFetcher:               logFetcher,
-		RunnerInstance:           sharedOuts["runner_instance_id"],
-		LoadGenInstance:          sharedOuts["load_gen_instance_id"],
-		ConfigPath:               "/opt/bench/config.yaml",
+		SSM:             ssmExec,
+		LogFetcher:      logFetcher,
+		RunnerInstance:  sharedOuts["runner_instance_id"],
+		LoadGenInstance: sharedOuts["load_gen_instance_id"],
+		ConfigPath:      "/opt/bench/config.yaml",
+		ConfigPaths: func() map[string]pointConfigPaths {
+			if legacy {
+				return nil // every point uses ConfigPath
+			}
+			return runnerConfigPaths(sets)
+		}(),
 		BinaryPath:               "/opt/bench/redpanda-connect",
 		Bucket:                   sharedOuts["results_bucket"],
 		SessionID:                sessionID,
@@ -286,7 +318,10 @@ func runBench(opts benchOpts) (errOut error) {
 		Outs:                     sharedOuts,
 		Direction:                s.Direction,
 	}
-	reset, err := topo.ResetScript(s, sharedOuts, names)
+	// Reset must cover the union of every arm's tables (planMaxStreams), not
+	// just this scenario's own Streams, so one precomputed reset script serves
+	// every point in the plan regardless of its stream count.
+	reset, err := topo.ResetScript(s, sharedOuts, names.WithStreams(planMaxStreams(plan)))
 	if err != nil {
 		return err
 	}
@@ -302,7 +337,6 @@ func runBench(opts benchOpts) (errOut error) {
 	} else {
 		duration = minDuration
 	}
-	plan := buildSweepPlan(s)
 	points, err := mr.Run(ctx, plan, s.Matrix.GoMemLimitPerVCPU, warmup, duration, reset, workload)
 	if err != nil {
 		return err
@@ -544,49 +578,140 @@ func buildConnect(repoRoot string) (string, error) {
 	return out, nil
 }
 
-func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, names BenchNames) (string, error) {
-	input, output, err := topo.Pipeline(s, names)
+// renderedPointConfigs is one sweep point's rendered config set, as local temp
+// file paths. Single is set for single-pipeline points; Root plus Streams for
+// streams-mode points.
+type renderedPointConfigs struct {
+	Key     string
+	Single  string
+	Root    string
+	Streams []string
+}
+
+// writeTempYAML marshals cfg, resolves ${TF_OUTPUT} placeholders, and writes it
+// to a temp file, returning the path.
+func writeTempYAML(cfg map[string]any, outs map[string]string, pattern string) (string, error) {
+	raw, err := yaml.Marshal(cfg)
 	if err != nil {
-		return "", fmt.Errorf("render pipeline: %w", err)
+		return "", err
 	}
+	tmp, err := os.CreateTemp("", pattern)
+	if err != nil {
+		return "", err
+	}
+	defer tmp.Close()
+	if _, err := tmp.WriteString(substitutePlaceholders(string(raw), outs)); err != nil {
+		return "", err
+	}
+	return tmp.Name(), nil
+}
+
+// rootSections are the observability and service-wide fields. In streams mode
+// they live in the -o root config; in run mode they sit alongside the pipeline
+// in the single config.
+func rootSections(s *Scenario) map[string]any {
 	cfg := map[string]any{
 		"http": map[string]any{"debug_endpoints": true},
 		"redpanda": map[string]any{
 			"seed_brokers": []string{"${REDPANDA_BROKER_ENDPOINTS}"},
 		},
-		"input":  input,
-		"output": output,
 		"logger": map[string]any{"level": "INFO"},
 		"metrics": map[string]any{
 			"prometheus": map[string]any{"add_process_metrics": true, "add_go_metrics": true},
 		},
 	}
 	// Connectors that require a persistent checkpoint (e.g. mysql_cdc) declare
-	// cache_resources in the scenario's pipeline block. Thread them through
-	// to the Connect config root when present.
+	// cache_resources in the scenario's pipeline block. Resources are
+	// service-wide, so they belong here in both modes.
 	if cr, ok := s.Pipeline["cache_resources"]; ok {
 		cfg["cache_resources"] = cr
 	}
-	// A scenario may declare a top-level buffer (e.g. memory) in its pipeline
-	// block to decouple a fast input from a commit-latency-bound output like
-	// the iceberg sink. Thread it through to the Connect config root.
+	return cfg
+}
+
+// renderPipelineConfig renders the single-config shape: rootSections plus
+// input/output/buffer, exactly as the pre-arms renderer produced. Used both
+// for arm-less scenarios and for single-stream arms.
+func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, names BenchNames) (string, error) {
+	input, output, err := topo.Pipeline(s, names)
+	if err != nil {
+		return "", fmt.Errorf("render pipeline: %w", err)
+	}
+	cfg := rootSections(s)
+	cfg["input"] = input
+	cfg["output"] = output
+	// A scenario may declare a top-level buffer (e.g. memory) to decouple a
+	// fast input from a commit-latency-bound output like the iceberg sink.
 	if buf, ok := s.Pipeline["buffer"]; ok {
 		cfg["buffer"] = buf
 	}
-	raw, err := yaml.Marshal(cfg)
+	return writeTempYAML(cfg, outs, "bench-config-*.yaml")
+}
+
+// renderPointConfigs renders the launch config(s) for one sweep point. A point
+// with Streams <= 1 gets a single config identical in shape to the pre-arms
+// renderer. A multi-stream point gets a root config (observability only) plus
+// one stream config per pipeline, each writing its own Iceberg table but
+// sharing the source topic and consumer group.
+func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, names BenchNames, p sweepPoint) (renderedPointConfigs, error) {
+	out := renderedPointConfigs{Key: p.Key()}
+
+	// Arms carry a merged pipeline; arm-less points use the scenario's own.
+	armScenario := *s
+	if p.Pipeline != nil {
+		armScenario.Pipeline = p.Pipeline
+	}
+
+	if p.Streams <= 1 {
+		path, err := renderPipelineConfig(&armScenario, outs, topo, names.WithStreams(1))
+		if err != nil {
+			return renderedPointConfigs{}, err
+		}
+		out.Single = path
+		return out, nil
+	}
+
+	rootPath, err := writeTempYAML(rootSections(&armScenario), outs, "bench-root-*.yaml")
 	if err != nil {
-		return "", err
+		return renderedPointConfigs{}, fmt.Errorf("render root config for %s: %w", out.Key, err)
 	}
-	rendered := substitutePlaceholders(string(raw), outs)
-	tmp, err := os.CreateTemp("", "bench-config-*.yaml")
-	if err != nil {
-		return "", err
+	out.Root = rootPath
+
+	for i := 0; i < p.Streams; i++ {
+		streamNames := names.WithStreams(p.Streams).WithStream(i)
+		input, output, err := topo.Pipeline(&armScenario, streamNames)
+		if err != nil {
+			return renderedPointConfigs{}, fmt.Errorf("render stream %d of %s: %w", i, out.Key, err)
+		}
+		cfg := map[string]any{"input": input, "output": output}
+		if buf, ok := armScenario.Pipeline["buffer"]; ok {
+			cfg["buffer"] = buf
+		}
+		path, err := writeTempYAML(cfg, outs, fmt.Sprintf("bench-stream%d-*.yaml", i))
+		if err != nil {
+			return renderedPointConfigs{}, fmt.Errorf("write stream %d of %s: %w", i, out.Key, err)
+		}
+		out.Streams = append(out.Streams, path)
 	}
-	defer tmp.Close()
-	if _, err := tmp.WriteString(rendered); err != nil {
-		return "", err
+	return out, nil
+}
+
+// runnerConfigPaths maps each point key to where its configs land on the runner
+// host after staging.
+func runnerConfigPaths(sets []renderedPointConfigs) map[string]pointConfigPaths {
+	out := make(map[string]pointConfigPaths, len(sets))
+	for _, set := range sets {
+		base := "/opt/bench/cfg/" + set.Key
+		var p pointConfigPaths
+		if set.Single != "" {
+			p.Single = base + "/config.yaml"
+		} else {
+			p.Root = base + "/root.yaml"
+			p.Dir = base + "/streams"
+		}
+		out[set.Key] = p
 	}
-	return tmp.Name(), nil
+	return out
 }
 
 // buildKCRenderInputs gathers the values needed to render a Kafka Connect
@@ -705,32 +830,65 @@ func substitutePlaceholders(in string, outs map[string]string) string {
 	return in
 }
 
-func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string, binPath, cfgPath string) error {
+// stageArtefacts uploads the binary, license, and per-point config(s) to S3 and
+// downloads them onto the runner host over SSM. legacy is
+// len(s.Matrix.Arms) == 0: arm-less runs keep the historical single
+// stage/config.yaml -> /opt/bench/config.yaml path so the six existing
+// scenarios are untouched. Arm runs stage each point under its own
+// stage/cfg/<key>/ prefix, mirroring runnerConfigPaths.
+func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string, binPath string, sets []renderedPointConfigs, legacy bool) error {
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
 	if err != nil {
 		return err
 	}
 	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
 	bucket := outs["results_bucket"]
-	for _, item := range []struct{ key, path string }{
+
+	type upload struct{ key, path string }
+	items := []upload{
 		{"stage/redpanda-connect", binPath},
-		{"stage/config.yaml", cfgPath},
 		{"stage/license.jwt", opts.licenseFile},
-	} {
+	}
+	var dl []string // per-point download lines appended to the runner script
+
+	// Arm-less runs keep the historical single stage/config.yaml ->
+	// /opt/bench/config.yaml path so nothing about the six existing scenarios
+	// changes. Arm runs get a per-point directory.
+	if legacy {
+		items = append(items, upload{"stage/config.yaml", sets[0].Single})
+		dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/stage/config.yaml /opt/bench/config.yaml`, bucket))
+	} else {
+		for _, set := range sets {
+			base := "stage/cfg/" + set.Key
+			host := "/opt/bench/cfg/" + set.Key
+			dl = append(dl, fmt.Sprintf(`mkdir -p %s/streams`, host))
+			if set.Single != "" {
+				items = append(items, upload{base + "/config.yaml", set.Single})
+				dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/%s/config.yaml %s/config.yaml`, bucket, base, host))
+				continue
+			}
+			items = append(items, upload{base + "/root.yaml", set.Root})
+			dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/%s/root.yaml %s/root.yaml`, bucket, base, host))
+			for i, sp := range set.Streams {
+				name := fmt.Sprintf("stream-%d.yaml", i)
+				items = append(items, upload{fmt.Sprintf("%s/streams/%s", base, name), sp})
+				dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/%s/streams/%s %s/streams/%s`, bucket, base, name, host, name))
+			}
+		}
+	}
+
+	for _, item := range items {
 		f, err := os.Open(item.path)
 		if err != nil {
 			return err
 		}
-		_, err = uploader.Upload(ctx, &s3.PutObjectInput{
-			Bucket: &bucket,
-			Key:    &item.key,
-			Body:   f,
-		})
+		_, err = uploader.Upload(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &item.key, Body: f})
 		f.Close()
 		if err != nil {
 			return fmt.Errorf("upload %s: %w", item.path, err)
 		}
 	}
+
 	ssmExec, err := NewSSMExecutor(ctx, opts.region)
 	if err != nil {
 		return err
@@ -738,12 +896,12 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 	script := fmt.Sprintf(`
 set -euo pipefail
 aws s3 cp s3://%s/stage/redpanda-connect /opt/bench/redpanda-connect
-aws s3 cp s3://%s/stage/config.yaml /opt/bench/config.yaml
 aws s3 cp s3://%s/stage/license.jwt /opt/bench/license.jwt
+%s
 chmod +x /opt/bench/redpanda-connect
 chmod 0600 /opt/bench/license.jwt
 aws s3 cp s3://%s/stage/iceberg-tablegen /opt/bench/iceberg-tablegen 2>/dev/null && chmod +x /opt/bench/iceberg-tablegen || true
-`, bucket, bucket, bucket, bucket)
+`, bucket, bucket, strings.Join(dl, "\n"), bucket)
 	return ssmExec.Run(ctx, outs["runner_instance_id"], script, streamingOnLine(os.Stdout, "stage"))
 }
 
