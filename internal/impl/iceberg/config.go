@@ -327,6 +327,7 @@ array:list
 
 			service.NewStringEnumField(ioFieldMergeStrategy, string(mergeStrategyMOR), string(mergeStrategyCOW)).
 				Description("How `upsert` and `delete` are materialised on disk.\n\n* `merge-on-read` (the default) writes Iceberg v2 equality-delete files. Deletes are applied at read time, so writes stay cheap and streaming-friendly, but only catalog-native / Flink-world engines can read the result — engine-backed catalogs such as Snowflake and the Databricks Unity Catalog cannot read equality deletes.\n* `copy-on-write` rewrites whole data files so the table only ever contains plain data files (no delete files), which every engine can read — including Snowflake and Databricks Unity Catalog. It works on version-1 or version-2 tables and never forces the irreversible v1->v2 upgrade. The trade-off is heavy write amplification: each mutating batch rewrites every data file that contains a touched key, so it is a batch / moderate-throughput mode. Sort the table by the identifier key and use large batches so each rewrite touches as few files as possible.\n\nSee the <<merge-strategies,Merge strategies>> section above for the full decision guide, copy-on-write support matrix (column and merge-key types, partitioning, table format), and maintenance guidance.").
+				ShortDescription("How upsert and delete are materialised: merge-on-read (equality deletes) or copy-on-write (plain data files every engine can read).").
 				Default(string(mergeStrategyMOR)).
 				Advanced(),
 
