@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -20,11 +21,12 @@ import (
 // SessionManager manages LogMiner sessions, such as loading
 // logs into LogMiner then starting/ending mining sessions.
 type SessionManager struct {
-	cfg         *Config
-	opts        []string
-	active      bool
-	loadedFiles []*LogFile
-	log         *service.Logger
+	cfg           *Config
+	opts          []string
+	active        bool
+	loadedFiles   []*LogFile
+	sessionOpened time.Time
+	log           *service.Logger
 }
 
 // NewSessionManager creates a new SessionManager with the specified configuration.
@@ -80,6 +82,7 @@ func (sm *SessionManager) AddLogFile(ctx context.Context, conn *sql.Conn, files 
 	}
 
 	sm.loadedFiles = files
+	sm.sessionOpened = time.Now()
 	return nil
 }
 
@@ -111,10 +114,27 @@ func (sm *SessionManager) EndSession(ctx context.Context, conn *sql.Conn) error 
 
 	sm.active = false
 	sm.loadedFiles = nil
+	sm.sessionOpened = time.Time{}
 	return nil
 }
 
 // IsActive returns true if a LogMiner session is currently active.
 func (sm *SessionManager) IsActive() bool {
 	return sm.active
+}
+
+// Age returns how long the current LogMiner session has been open since its
+// underlying log files were last (re)loaded via AddLogFile. Returns 0 if no
+// session is active.
+func (sm *SessionManager) Age() time.Duration {
+	if sm.sessionOpened.IsZero() {
+		return 0
+	}
+	return time.Since(sm.sessionOpened)
+}
+
+// IsExpired reports whether the current session has been open for at least
+// maxAge. Always false when no session is active or maxAge is 0 (disabled).
+func (sm *SessionManager) IsExpired(maxAge time.Duration) bool {
+	return maxAge > 0 && sm.active && sm.Age() >= maxAge
 }
