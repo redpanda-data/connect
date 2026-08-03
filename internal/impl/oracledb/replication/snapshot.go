@@ -465,7 +465,7 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 
 		// Oracle database type names
 		switch col.DatabaseTypeName() {
-		case "RAW", "LONG RAW", "BLOB", "LongRaw":
+		case "RAW", "LONG RAW", "BLOB", "VarRaw", "LongRaw", "LongVarRaw", "OCIBlobLocator":
 			val = new(sql.Null[[]byte])
 			mapper = snapshotValueMapper[[]byte]
 		case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE",
@@ -511,14 +511,16 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 		case "BINARY_FLOAT", "IBFloat", "BFloat", "BINARY_DOUBLE", "IBDouble", "BDouble":
 			val = new(sql.Null[float64])
 			mapper = snapshotValueMapper[float64]
-		case "CLOB", "NCLOB", "LONG", "LongVarChar":
+		case "CLOB", "NCLOB", "LONG", "LongVarChar", "OCIClobLocator":
 			// Character large objects - handle as string
 			val = new(sql.NullString)
 			mapper = stringMapping(func(s string) (any, error) {
 				return s, nil
 			})
-		case "JSON":
-			// Oracle 21c+ native JSON type
+		case "JSON", "TNSType(119)":
+			// Oracle 21c+ native JSON type. go-ora v2.9.0's TNSType stringer
+			// has no entry for it (119), so DatabaseTypeName() renders the
+			// raw "TNSType(119)" form.
 			val = new(sql.NullString)
 			mapper = stringMapping(func(s string) (v any, err error) {
 				err = json.Unmarshal([]byte(s), &v)
@@ -564,7 +566,8 @@ func buildColumnMeta(types []*sql.ColumnType) []ColumnMeta {
 func isLOBType(dbType string) bool {
 	switch dbType {
 	case "CLOB", "NCLOB", "BLOB", "LONG", "LONG RAW",
-		"LongVarChar", "LongRaw": // go-ora driver-level names for CLOB/NCLOB/LONG and BLOB/LONG RAW
+		"LongVarChar", "LongRaw", // go-ora driver-level names for CLOB/NCLOB/LONG and BLOB/LONG RAW (inline LOB mode)
+		"OCIClobLocator", "OCIBlobLocator": // go-ora driver-level LOB locator names (non-inline mode)
 		return true
 	}
 	return false

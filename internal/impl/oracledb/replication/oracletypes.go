@@ -24,8 +24,11 @@ import "github.com/redpanda-data/benthos/v4/public/schema"
 //     (38, 255) for bare NUMBER): BigDecimal.
 //   - scale == 0 && 0 < precision <= 18: Int64 (scale-0 NUMBER fits losslessly
 //     in int64).
-//   - scale < 0: rounded to Decimal(precision, 0) — Avro/Parquet/Iceberg can't
-//     represent negative scale.
+//   - scale < 0 (NUMBER(p,-s), only ever reported by the catalog): BigDecimal.
+//     The driver can't represent a negative scale — its uint8 scale wraps
+//     (e.g. -2 → 254) and trips the scale-greater-than-precision sentinel
+//     below — so the catalog side must land on BigDecimal too or the two
+//     schema sources disagree on the same column.
 //   - otherwise: Decimal(precision, scale), falling back to BigDecimal when the
 //     precision exceeds the bounded Decimal cap.
 func NumberToCommon(name string, precision, scale int64, hasDecimalInfo bool) schema.Common {
@@ -33,7 +36,7 @@ func NumberToCommon(name string, precision, scale int64, hasDecimalInfo bool) sc
 		return schema.NewBigDecimal(name, true)
 	}
 	if scale < 0 {
-		scale = 0
+		return schema.NewBigDecimal(name, true)
 	}
 	// Treat scale-greater-than-precision as undeclared (driver sentinel).
 	if scale > precision {

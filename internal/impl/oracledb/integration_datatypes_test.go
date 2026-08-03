@@ -76,6 +76,7 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 		num_38_2    NUMBER(38,2),
 		num_10_2    NUMBER(10,2),
 		num_5_0     NUMBER(5,0),
+		num_star_2  NUMBER(*,2),
 		num_int     INTEGER,
 		flt         FLOAT,
 		bin_float   BINARY_FLOAT,
@@ -94,7 +95,7 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 	// LogMiner SQL_REDO reports. Used once before launch (snapshot) and once
 	// after launch (streaming).
 	insertSQL := `INSERT INTO testdb.all_types
-		(num_plain, num_38, num_38_0, num_38_2, num_10_2, num_5_0, num_int, flt, bin_float, bin_double, vc, ch, nvc, dt, ts, ts_tz, rw)
+		(num_plain, num_38, num_38_0, num_38_2, num_10_2, num_5_0, num_star_2, num_int, flt, bin_float, bin_double, vc, ch, nvc, dt, ts, ts_tz, rw)
 		VALUES (
 			12345.678,
 			123456789012345678901234567890,
@@ -102,6 +103,7 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 			12.34,
 			56.78,
 			42,
+			78.91,
 			99,
 			3.5,
 			1.5,
@@ -124,6 +126,7 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 		num_38_2   = 5,
 		num_10_2   = -7,
 		num_5_0    = -42,
+		num_star_2 = 3,
 		num_int    = 0,
 		flt        = 9,
 		vc         = 'updated'`
@@ -207,7 +210,42 @@ oracledb_cdc:
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
 
-	phaseNames := []string{"snapshot", "stream-insert", "stream-update"}
+	// Restart leg: rebuild an identical stream, which resumes from the
+	// persisted SCN checkpoint and therefore SKIPS the snapshot. With no
+	// snapshot to seed the schema cache from driver column metadata, every
+	// message now carries the schema derived from ALL_TAB_COLUMNS — exactly
+	// what happens on a real connector restart. A divergence between the two
+	// schema sources (e.g. catalog "TIMESTAMP(6)" vs driver "TimeStampDTY")
+	// only surfaces on this leg: within a single process lifetime streaming
+	// reuses the snapshot-seeded schema and the catalog mapping never appears
+	// in any published message.
+	mu.Lock()
+	captured = nil
+	mu.Unlock()
+
+	{
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(collect))
+
+		stream, err = streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			if rErr := stream.Run(t.Context()); rErr != nil && !errors.Is(rErr, context.Canceled) {
+				t.Error(rErr)
+			}
+		}()
+	}
+
+	db.MustExec(insertSQL)
+	phases["stream-post-restart"] = waitForMessage()
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
+
+	phaseNames := []string{"snapshot", "stream-insert", "stream-update", "stream-post-restart"}
 
 	// Use the snapshot schema as the reference for column types; assert all
 	// phases that carry a schema agree with it.

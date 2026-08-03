@@ -10,6 +10,7 @@ package oracledb
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"testing"
@@ -91,8 +92,45 @@ func TestOracleTypeToCommonType(t *testing.T) {
 		{"TIMESTAMP WITH LOCAL TIME ZONE", schema.Timestamp},
 		{"timestamp with local time zone", schema.Timestamp},
 
+		// ALL_TAB_COLUMNS.DATA_TYPE embeds the fractional-seconds precision in
+		// the type name for the TIMESTAMP family. These are the names the
+		// catalog actually reports — the bare names above only come from the
+		// driver. Regression test for the snapshot-vs-streaming schema split
+		// where TIMESTAMP(6) fell through to String.
+		{"TIMESTAMP(0)", schema.Timestamp},
+		{"TIMESTAMP(6)", schema.Timestamp},
+		{"TIMESTAMP(9)", schema.Timestamp},
+		{"TIMESTAMP(6) WITH TIME ZONE", schema.Timestamp},
+		{"TIMESTAMP(9) WITH TIME ZONE", schema.Timestamp},
+		{"TIMESTAMP(6) WITH LOCAL TIME ZONE", schema.Timestamp},
+
+		// go-ora driver names (sql.ColumnType.DatabaseTypeName()) for the same
+		// temporal types, as seeded from snapshot column metadata.
+		{"TimeStampDTY", schema.Timestamp},
+		{"TimeStampTZ", schema.Timestamp},
+		{"TimeStampTZ_DTY", schema.Timestamp},
+		{"TimeStampLTZ_DTY", schema.Timestamp},
+		{"TimeStampeLTZ", schema.Timestamp},
+
+		// go-ora driver names for binary types.
+		{"VarRaw", schema.ByteArray},
+		{"LongRaw", schema.ByteArray},
+		{"LongVarRaw", schema.ByteArray},
+		{"OCIBlobLocator", schema.ByteArray},
+
 		{"JSON", schema.Any},
 		{"json", schema.Any},
+		// go-ora v2.9.0 has no stringer entry for the native JSON type (119).
+		{"TNSType(119)", schema.Any},
+		// ...but other unknown TNS type ids must still default to String.
+		{"TNSType(121)", schema.String},
+
+		// Interval catalog names also carry parenthesised qualifiers; they are
+		// unmapped and must land on String from both sources.
+		{"INTERVAL DAY(2) TO SECOND(6)", schema.String},
+		{"INTERVAL YEAR(2) TO MONTH", schema.String},
+		{"IntervalDS_DTY", schema.String},
+		{"IntervalYM_DTY", schema.String},
 
 		{"VARCHAR2", schema.String},
 		{"varchar2", schema.String},
@@ -130,6 +168,12 @@ func TestOracleNumberToCommonType(t *testing.T) {
 		{"fractional scale 2", 10, 2, true, schema.Decimal},
 		{"bare NUMBER no info", 0, 0, false, schema.BigDecimal},
 		{"NUMBER(0) edge case maps to BigDecimal", 0, 0, true, schema.BigDecimal},
+		// Negative scale (NUMBER(p,-s)) is only ever reported by the catalog;
+		// the driver's uint8 scale wraps and lands on BigDecimal via the
+		// scale-greater-than-precision sentinel, so the catalog must match.
+		{"negative scale maps to BigDecimal", 5, -2, true, schema.BigDecimal},
+		{"driver-wrapped negative scale maps to BigDecimal", 5, 254, true, schema.BigDecimal},
+		{"driver sentinel scale 255 maps to BigDecimal", 38, 255, true, schema.BigDecimal},
 	}
 
 	for _, tt := range tests {
@@ -163,6 +207,234 @@ func TestIsNumberType(t *testing.T) {
 	} {
 		t.Run(tt.typeName, func(t *testing.T) {
 			assert.Equal(t, tt.want, isNumberType(tt.typeName))
+		})
+	}
+}
+
+// TestOracleSchemaSourceParity pins the two schema sources to each other. The
+// schema cache is populated from ALL_TAB_COLUMNS on Connect()/drift refresh and
+// from go-ora driver column metadata on snapshot seeding — and the two report
+// the same Oracle column differently (catalog "TIMESTAMP(6)" vs driver
+// "TimeStampDTY"; catalog NULL precision for INTEGER vs driver (38, 255); …).
+// If both inputs for any column type don't map to an identical schema.Common,
+// the schema attached to a message flips depending on which path produced it,
+// and Schema Registry rejects every message from the losing path with a
+// permanent BACKWARD MISSING_UNION_BRANCH error.
+//
+// Each row records the column type's real-world representation from both
+// sources:
+//   - catalog: DATA_TYPE / DATA_PRECISION / DATA_SCALE as ALL_TAB_COLUMNS
+//     reports them, NULLs included — the row is fed through catalogNumberInfo
+//     exactly as fetchTableSchema does.
+//   - driver: sql.ColumnType DatabaseTypeName() / DecimalSize() as go-ora
+//     v2.9.0 reports them. NUMBER-family wire metadata: bare NUMBER and FLOAT
+//     surface as precision 38 / scale 0xFF (see go-ora ParameterInfo.load);
+//     NUMBER(*,s) — including INTEGER/INT/SMALLINT, which are NUMBER(*,0) —
+//     surfaces as precision 38 with the declared scale (verified against real
+//     Oracle by TestIntegrationOracleDBCDCDataTypeConsistency's restart leg);
+//     a declared negative scale wraps through uint8 (e.g. -2 → 254);
+//     DecimalSize() returns ok=true for any NUMBER.
+func TestOracleSchemaSourceParity(t *testing.T) {
+	type catalogSource struct {
+		typeName         string
+		precision, scale sql.NullInt64
+	}
+	type driverSource struct {
+		typeName         string
+		precision, scale int64
+		hasInfo          bool
+	}
+	n := func(v int64) sql.NullInt64 { return sql.NullInt64{Int64: v, Valid: true} }
+	tests := []struct {
+		name    string
+		catalog catalogSource
+		drivers []driverSource // some types have multiple driver spellings
+		want    schema.CommonType
+	}{
+		{
+			name:    "DATE",
+			catalog: catalogSource{typeName: "DATE"},
+			drivers: []driverSource{{typeName: "DATE"}},
+			want:    schema.Timestamp,
+		},
+		{
+			name:    "TIMESTAMP",
+			catalog: catalogSource{typeName: "TIMESTAMP(6)"},
+			drivers: []driverSource{{typeName: "TimeStampDTY"}, {typeName: "TIMESTAMP"}},
+			want:    schema.Timestamp,
+		},
+		{
+			name:    "TIMESTAMP(9)",
+			catalog: catalogSource{typeName: "TIMESTAMP(9)"},
+			drivers: []driverSource{{typeName: "TimeStampDTY"}},
+			want:    schema.Timestamp,
+		},
+		{
+			name:    "TIMESTAMP WITH TIME ZONE",
+			catalog: catalogSource{typeName: "TIMESTAMP(6) WITH TIME ZONE"},
+			drivers: []driverSource{{typeName: "TimeStampTZ_DTY"}, {typeName: "TimeStampTZ"}},
+			want:    schema.Timestamp,
+		},
+		{
+			name:    "TIMESTAMP WITH LOCAL TIME ZONE",
+			catalog: catalogSource{typeName: "TIMESTAMP(6) WITH LOCAL TIME ZONE"},
+			drivers: []driverSource{{typeName: "TimeStampLTZ_DTY"}, {typeName: "TimeStampeLTZ"}},
+			want:    schema.Timestamp,
+		},
+		{
+			name:    "NUMBER(10,2)",
+			catalog: catalogSource{typeName: "NUMBER", precision: n(10), scale: n(2)},
+			drivers: []driverSource{{typeName: "NUMBER", precision: 10, scale: 2, hasInfo: true}},
+			want:    schema.Decimal,
+		},
+		{
+			name:    "NUMBER(5)",
+			catalog: catalogSource{typeName: "NUMBER", precision: n(5), scale: n(0)},
+			drivers: []driverSource{{typeName: "NUMBER", precision: 5, scale: 0, hasInfo: true}},
+			want:    schema.Int64,
+		},
+		{
+			// Bare NUMBER: catalog reports NULL precision and scale; the driver
+			// substitutes (38, 0xFF).
+			name:    "NUMBER",
+			catalog: catalogSource{typeName: "NUMBER"},
+			drivers: []driverSource{{typeName: "NUMBER", precision: 38, scale: 255, hasInfo: true}},
+			want:    schema.BigDecimal,
+		},
+		{
+			// INTEGER is NUMBER(*,0): catalog reports NULL precision with scale
+			// 0; the driver reports (38, 0). Both must land on Decimal(38,0).
+			name:    "INTEGER",
+			catalog: catalogSource{typeName: "NUMBER", scale: n(0)},
+			drivers: []driverSource{{typeName: "NUMBER", precision: 38, scale: 0, hasInfo: true}},
+			want:    schema.Decimal,
+		},
+		{
+			// NUMBER(*,2): catalog reports NULL precision with the declared
+			// scale; the driver reports (38, 2).
+			name:    "NUMBER(*,2)",
+			catalog: catalogSource{typeName: "NUMBER", scale: n(2)},
+			drivers: []driverSource{{typeName: "NUMBER", precision: 38, scale: 2, hasInfo: true}},
+			want:    schema.Decimal,
+		},
+		{
+			// FLOAT: catalog reports DATA_TYPE FLOAT with binary precision and
+			// NULL scale; the driver reports NUMBER with the undeclared-scale
+			// sentinel.
+			name:    "FLOAT",
+			catalog: catalogSource{typeName: "FLOAT", precision: n(126)},
+			drivers: []driverSource{{typeName: "NUMBER", precision: 38, scale: 255, hasInfo: true}},
+			want:    schema.BigDecimal,
+		},
+		{
+			// Negative scale: catalog reports it faithfully; the driver's uint8
+			// scale wraps (-2 → 254) and trips the scale > precision sentinel.
+			name:    "NUMBER(5,-2)",
+			catalog: catalogSource{typeName: "NUMBER", precision: n(5), scale: n(-2)},
+			drivers: []driverSource{{typeName: "NUMBER", precision: 5, scale: 254, hasInfo: true}},
+			want:    schema.BigDecimal,
+		},
+		{
+			name:    "BINARY_FLOAT",
+			catalog: catalogSource{typeName: "BINARY_FLOAT"},
+			drivers: []driverSource{{typeName: "IBFloat"}, {typeName: "BFloat"}},
+			want:    schema.Float32,
+		},
+		{
+			name:    "BINARY_DOUBLE",
+			catalog: catalogSource{typeName: "BINARY_DOUBLE"},
+			drivers: []driverSource{{typeName: "IBDouble"}, {typeName: "BDouble"}},
+			want:    schema.Float64,
+		},
+		{
+			name:    "RAW",
+			catalog: catalogSource{typeName: "RAW"},
+			drivers: []driverSource{{typeName: "RAW"}, {typeName: "VarRaw"}},
+			want:    schema.ByteArray,
+		},
+		{
+			name:    "LONG RAW",
+			catalog: catalogSource{typeName: "LONG RAW"},
+			drivers: []driverSource{{typeName: "LongRaw"}, {typeName: "LongVarRaw"}},
+			want:    schema.ByteArray,
+		},
+		{
+			// BLOB surfaces as a locator or, with inline LOB fetching, LongRaw.
+			name:    "BLOB",
+			catalog: catalogSource{typeName: "BLOB"},
+			drivers: []driverSource{{typeName: "OCIBlobLocator"}, {typeName: "LongRaw"}},
+			want:    schema.ByteArray,
+		},
+		{
+			name:    "VARCHAR2",
+			catalog: catalogSource{typeName: "VARCHAR2"},
+			drivers: []driverSource{{typeName: "NCHAR"}, {typeName: "VARCHAR"}},
+			want:    schema.String,
+		},
+		{
+			name:    "CHAR",
+			catalog: catalogSource{typeName: "CHAR"},
+			drivers: []driverSource{{typeName: "CHAR"}},
+			want:    schema.String,
+		},
+		{
+			// CLOB/NCLOB surface as a locator or, with inline LOB fetching,
+			// LongVarChar.
+			name:    "CLOB",
+			catalog: catalogSource{typeName: "CLOB"},
+			drivers: []driverSource{{typeName: "OCIClobLocator"}, {typeName: "LongVarChar"}},
+			want:    schema.String,
+		},
+		{
+			name:    "LONG",
+			catalog: catalogSource{typeName: "LONG"},
+			drivers: []driverSource{{typeName: "LONG"}, {typeName: "LongVarChar"}},
+			want:    schema.String,
+		},
+		{
+			name:    "JSON",
+			catalog: catalogSource{typeName: "JSON"},
+			drivers: []driverSource{{typeName: "TNSType(119)"}},
+			want:    schema.Any,
+		},
+		{
+			name:    "XMLTYPE",
+			catalog: catalogSource{typeName: "XMLTYPE"},
+			drivers: []driverSource{{typeName: "OCIXMLType"}, {typeName: "XMLType"}},
+			want:    schema.String,
+		},
+		{
+			name:    "INTERVAL DAY TO SECOND",
+			catalog: catalogSource{typeName: "INTERVAL DAY(2) TO SECOND(6)"},
+			drivers: []driverSource{{typeName: "IntervalDS_DTY"}},
+			want:    schema.String,
+		},
+		{
+			name:    "INTERVAL YEAR TO MONTH",
+			catalog: catalogSource{typeName: "INTERVAL YEAR(2) TO MONTH"},
+			drivers: []driverSource{{typeName: "IntervalYM_DTY"}},
+			want:    schema.String,
+		},
+		{
+			name:    "ROWID",
+			catalog: catalogSource{typeName: "ROWID"},
+			drivers: []driverSource{{typeName: "ROWID"}},
+			want:    schema.String,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, s, hasInfo := catalogNumberInfo(tt.catalog.precision, tt.catalog.scale)
+			fromCatalog := columnToCommon("COL", tt.catalog.typeName, p, s, hasInfo)
+			assert.Equal(t, tt.want, fromCatalog.Type, "catalog mapping for %s", tt.catalog.typeName)
+
+			for _, d := range tt.drivers {
+				fromDriver := columnToCommon("COL", d.typeName, d.precision, d.scale, d.hasInfo)
+				assert.Equalf(t, fromCatalog, fromDriver,
+					"schema derived from driver metadata (%q) must equal schema derived from catalog metadata (%q)",
+					d.typeName, tt.catalog.typeName)
+			}
 		})
 	}
 }
