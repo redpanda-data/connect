@@ -128,7 +128,7 @@ infra:
     instance_type: c8g.4xlarge
 
 dataset:
-  initial_rows: 100000000
+  initial_rows: 110000000
   row_size_bytes: 1200
   seeder: json-orders
   expected_peak_mb_s: 133
@@ -2298,11 +2298,13 @@ infra:
     instance_type: c8g.4xlarge
 
 dataset:
-  # 100M x 1200 B = ~120 GB. The window is 15 min at 0 s warmup, so the topic
-  # must hold 900 s x peak MB/s. 80M rows (96 GB) would drain above 107 MB/s —
-  # exactly the outcome under test — and a drained topic silently deflates the
-  # arm's mean instead of failing. 120 GB covers up to 133 MB/s.
-  initial_rows: 100000000
+  # 110M x 1200 B = ~132 GB = 125,885 MiB. The window is 15 min at 0 s warmup,
+  # so the topic must hold 900 s x peak. A drained topic silently deflates the
+  # arm's mean instead of failing, so size for the upside: 132 GB sustains
+  # ~140 MiB/s for the full window, and Scenario.Validate's bounded-dataset
+  # check (total MiB / expected_peak_mb_s >= 15 min) estimates 946 s. 80 GB or
+  # 96 GB would drain around 107 MiB/s — exactly the outcome under test.
+  initial_rows: 110000000
   row_size_bytes: 1200
   seeder: json-orders
   expected_peak_mb_s: 133

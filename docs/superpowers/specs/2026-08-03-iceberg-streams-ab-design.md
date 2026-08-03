@@ -180,17 +180,24 @@ regression guard and is unit-tested directly.
 ### 7. New scenario
 
 `benchmarking/aws/scenarios/iceberg/orders-sink-streams-ab.yaml` — Recipe A base,
-`cpu_points: [2]`, the three arms above, `initial_rows: 100000000`.
+`cpu_points: [2]`, the three arms above, `initial_rows: 110000000`.
 
 ## Dataset sizing
 
-**100,000,000 rows × 1200 B ≈ 120 GB.**
+**110,000,000 rows × 1200 B ≈ 132 GB (125,885 MiB).**
 
 The window is 15 min at 0 s warmup, so the topic must hold at least
-`900 s × peak MB/s`. At 80M rows (96 GB) the topic drains at anything above
-107 MB/s — which is precisely the outcome under test, and a drained topic
-silently deflates arm B's mean rather than failing loudly. 100M rows covers up to
-133 MB/s and still trims 37% off the 160M-row sweep dataset.
+`900 s × peak`. At 80M rows (96 GB) the topic drains at anything above
+107 MiB/s — precisely the outcome under test, and a drained topic silently
+deflates arm B's mean rather than failing loudly. 132 GB sustains ~140 MiB/s for
+the full window, and still trims 31% off the 160M-row sweep dataset.
+
+Corrected during implementation: an earlier draft of this spec said 100M rows
+(120 GB) "covers up to 133 MB/s". It does not. `Scenario.Validate`'s
+bounded-dataset check computes `total_MiB / expected_peak_mb_s` and requires
+≥ 15 min (`scenario.go:340-346`), i.e. the rate is MiB/s. 120 GB at 133 MiB/s
+estimates 860 s and fails that check; 104.6M rows is the exact break-even, and
+110M rows gives margin at 946 s.
 
 If a smaller dataset is preferred, the equivalent safe combination is 80M rows
 with a 10-minute window.
@@ -227,7 +234,7 @@ Acceptance checks on the run itself:
 
 ## Cost
 
-~1.5 h wall clock, ~$6-8: one infra spin-up, one seed of 120 GB, three 15-minute
+~1.5 h wall clock, ~$6-8: one infra spin-up, one seed of 132 GB, three 15-minute
 windows with a reset between arms, one teardown.
 
 ## Out of scope
