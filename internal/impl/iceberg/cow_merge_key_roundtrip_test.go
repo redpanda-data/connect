@@ -34,7 +34,7 @@ import (
 // (see TestCOWDecimalMergeKeyGated) because iceberg-go's overwrite filter panics
 // on a decimal literal.
 //
-// The load-bearing guard is against the CON-490 silent-no-match bug: if the
+// The load-bearing guard is against the silent-no-match bug: if the
 // filter literal's encoding disagreed with the stored value, the overwrite
 // would match nothing, leaving a duplicate of the upserted key and failing to
 // delete — which these assertions (exact final row set, keyed identity)
@@ -368,7 +368,7 @@ func TestCOWBooleanMergeKeyGated(t *testing.T) {
 //
 // Consequence (documented, not a bug): two instants differing only below the
 // microsecond collapse to the same key. That is inherent to a microsecond column
-// and is consistent between filter and storage, so it never causes the CON-490
+// and is consistent between filter and storage, so it never causes the
 // silent-no-match — it only means sub-microsecond precision is not part of the
 // key identity.
 func TestCOWSubMicrosecondTimestampKeyTruncation(t *testing.T) {

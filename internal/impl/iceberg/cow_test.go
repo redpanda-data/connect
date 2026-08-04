@@ -316,7 +316,7 @@ func TestBuildCOWFilterUnsupportedKeyType(t *testing.T) {
 	assert.Contains(t, err.Error(), "does not support merge key column")
 }
 
-// TestBuildCOWFilterBareNumberTemporalKeyRejected pins the CON-490 guard on the
+// TestBuildCOWFilterBareNumberTemporalKeyRejected pins the silent-no-match guard on the
 // merge-key path: a temporal key given as a bare number is ambiguous (the data
 // path cannot reproduce how a number would be interpreted), so it must be
 // rejected loudly rather than silently building a literal that matches nothing.

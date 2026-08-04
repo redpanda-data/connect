@@ -522,7 +522,7 @@ func deleteKeyJSONValue(t iceberg.Type, v any) (any, error) {
 	// (its unit — seconds/millis/micros — cannot be recovered without schema
 	// metadata), so accepting one blindly would silently mismatch what the
 	// insert path wrote. Merge-key callers keep this strict on purpose (an
-	// unambiguous key must round-trip exactly, the CON-490 guarantee); the
+	// unambiguous key must round-trip exactly, the silent-no-match guarantee); the
 	// copy-on-write data-column path (cowMassage) resolves a numeric temporal to
 	// a time.Time via the shredder's unit-aware conversion BEFORE calling this,
 	// so a numeric only reaches here for a merge key or a genuinely

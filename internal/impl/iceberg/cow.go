@@ -357,7 +357,7 @@ func (w *writer) lookupKeyValue(msg *service.Message, field iceberg.NestedField,
 //
 // The overriding invariant is that the literal's encoding MUST match how
 // buildCOWRecordFactory stores the same value, or the overwrite filter selects
-// no rows and the upsert/delete silently becomes a no-op (the CON-490 hazard).
+// no rows and the upsert/delete silently becomes a no-op (a silent no-op instead of a mutation).
 // The rewrite stores every value by running it through deleteKeyJSONValue and
 // then array.RecordFromJSON, so this function derives each literal from that
 // same canonicalisation:
@@ -368,7 +368,7 @@ func (w *writer) lookupKeyValue(msg *service.Message, field iceberg.NestedField,
 //     StringLiteral.To — so filter and storage share an encoding by construction
 //     (date days, microsecond time-of-day, uuid bytes).
 //   - timestamp/timestamptz: deleteKeyJSONValue requires a time.Time and rejects
-//     a bare number (a numeric timestamp is ambiguous — the exact CON-490 silent
+//     a bare number (a numeric timestamp is ambiguous — the exact silent
 //     no-match), so it is reused for that validation. The literal is then built
 //     directly from the time.Time as UnixMicro, because StringLiteral.To's
 //     timestamp parser does not accept the RFC3339 form the data path stores;

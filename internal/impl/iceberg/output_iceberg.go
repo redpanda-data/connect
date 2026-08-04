@@ -85,7 +85,7 @@ func newOpMetrics(m *service.Metrics) *opMetrics {
 	}
 }
 
-// NOTE(CON-490, item 3.2): there is no importable seam here to assert emitted
+// NOTE: there is no importable seam here to assert emitted
 // counter *values* in a unit test. service.MockResources() backs its Metrics
 // with metrics.Noop() (which discards writes), and the only readable in-memory
 // implementation (metrics.NewLocal) lives in benthos-internal

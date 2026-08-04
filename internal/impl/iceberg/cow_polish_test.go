@@ -78,7 +78,7 @@ func TestCOWAmplificationWarning(t *testing.T) {
 // TestSplitByOperationCOWCountsFeedMetrics pins item 3.2 at the reachable seam:
 // the per-operation counts that drive iceberg_row_operations_total{operation=...}
 // are computed by splitByOperation. Because the emitted counter *values* are not
-// readable from a unit test (see the CON-490 note in output_iceberg.go), this
+// readable from a unit test (see the metrics note in output_iceberg.go), this
 // guards the numbers that would be handed to incrInserted/incrUpserted/
 // incrDeleted instead — including the last-writer-wins per-key collapse, so a
 // counter can never over-count a repeatedly-mutated key.
