@@ -20,7 +20,7 @@ import (
 	policymaterializerv1 "buf.build/gen/go/redpandadata/common/protocolbuffers/go/redpanda/policymaterializer/v1"
 	"connectrpc.com/connect"
 	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
+	"golang.org/x/net/http2/h2c" //nolint:staticcheck
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -65,8 +65,8 @@ func startPolicyMaterializerServer(t *testing.T, svc policymaterializerv1connect
 	lis, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
-	srv := &http.Server{Handler: h2c.NewHandler(mux, &http2.Server{})}
-	go srv.Serve(lis) //nolint:errcheck // test server
+	srv := &http.Server{Handler: h2c.NewHandler(mux, &http2.Server{})} //nolint:staticcheck
+	go srv.Serve(lis)                                                  //nolint:errcheck // test server
 	t.Cleanup(func() { srv.Close() })
 
 	return "http://" + lis.Addr().String()
