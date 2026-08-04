@@ -472,20 +472,20 @@ func digStrsFromSlices(slice []any) []string {
 	return strs
 }
 
-func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, error) {
+func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) (*gabs.Container, []s3ObjectTarget, error) {
 	gObj, err := gabs.ParseJSON([]byte(*sqsMsg))
 	if err != nil {
-		return nil, fmt.Errorf("parsing SQS message: %v", err)
+		return nil, nil, fmt.Errorf("parsing SQS message: %v", err)
 	}
 
 	if s.conf.SQS.EnvelopePath != "" {
 		d := gObj.Path(s.conf.SQS.EnvelopePath).Data()
 		if str, ok := d.(string); ok {
 			if gObj, err = gabs.ParseJSON([]byte(str)); err != nil {
-				return nil, fmt.Errorf("parsing enveloped message: %v", err)
+				return nil, nil, fmt.Errorf("parsing enveloped message: %v", err)
 			}
 		} else {
-			return nil, fmt.Errorf("expected string at envelope path, found %T", d)
+			return nil, nil, fmt.Errorf("expected string at envelope path, found %T", d)
 		}
 	}
 
@@ -510,14 +510,14 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 	objects := make([]s3ObjectTarget, 0, len(keys))
 	for i, key := range keys {
 		if key, err = url.QueryUnescape(key); err != nil {
-			return nil, fmt.Errorf("parsing key from SQS message: %v", err)
+			return nil, nil, fmt.Errorf("parsing key from SQS message: %v", err)
 		}
 		bucket := s.conf.Bucket
 		if len(buckets) > i {
 			bucket = buckets[i]
 		}
 		if bucket == "" {
-			return nil, errors.New("required bucket was not found in SQS message")
+			return nil, nil, errors.New("required bucket was not found in SQS message")
 		}
 		objects = append(objects, s3ObjectTarget{
 			key:    key,
@@ -525,7 +525,8 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 		})
 	}
 
-	return objects, nil
+	// return gabs.Container to save reparsing
+	return gObj, objects, nil
 }
 
 func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget, error) {
@@ -570,14 +571,14 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 			continue
 		}
 
-		objects, err := s.parseObjectPaths(sqsMsg.Body)
+		gObj, objects, err := s.parseObjectPaths(sqsMsg.Body)
 		if err != nil {
 			addDudFn(sqsMsg)
 			s.log.Errorf("SQS extract key error: %v", err)
 			continue
 		}
 		if len(objects) == 0 {
-			if isS3TestEvent(sqsMsg.Body) {
+			if isS3TestEvent(gObj) {
 				s.log.Debugf("Received S3 test event, deleting: %s", *sqsMsg.Body)
 				if err := s.ackSQSMessage(ctx, sqsMsg); err != nil {
 					s.log.Errorf("Failed to delete SQS test event message: %v", err)
@@ -669,9 +670,8 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg sqstypes.Messag
 	return err
 }
 
-func isS3TestEvent(sqsMsg *string) bool {
-	gObj, err := gabs.ParseJSON([]byte(*sqsMsg))
-	if err != nil {
+func isS3TestEvent(gObj *gabs.Container) bool {
+	if gObj == nil {
 		return false
 	}
 	event, ok := gObj.Path("Event").Data().(string)
