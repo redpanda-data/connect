@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -139,9 +140,23 @@ input:
 		builder := service.NewStreamBuilder()
 		require.NoError(t, builder.SetYAML(yaml))
 
+		// The consumer func runs on the stream's own goroutine, not the test
+		// goroutine, so failures here must not call t.Fatalf/require (which
+		// call FailNow, only valid from the test goroutine). Instead, record
+		// any unexpected message under a mutex and assert on it below, once
+		// the stream has stopped.
+		var (
+			unexpectedMu   sync.Mutex
+			unexpectedMsgs [][]byte
+		)
 		require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
-			b, _ := m.AsBytes()
-			t.Fatalf("did not expect any message to be emitted for an s3:TestEvent, got: %s", b)
+			b, err := m.AsBytes()
+			if err != nil {
+				b = fmt.Appendf(nil, "<failed to read message bytes: %v>", err)
+			}
+			unexpectedMu.Lock()
+			unexpectedMsgs = append(unexpectedMsgs, b)
+			unexpectedMu.Unlock()
 			return nil
 		}))
 
@@ -179,6 +194,10 @@ input:
 		case <-time.After(10 * time.Second):
 			t.Fatal("stream did not exit after StopWithin returned")
 		}
+
+		unexpectedMu.Lock()
+		assert.Empty(t, unexpectedMsgs, "did not expect any message to be emitted for an s3:TestEvent")
+		unexpectedMu.Unlock()
 	})
 
 	t.Run("via_sqs_lines", func(t *testing.T) {
