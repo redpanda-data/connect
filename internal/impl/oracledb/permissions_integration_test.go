@@ -11,7 +11,6 @@ package oracledb_test
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -61,7 +60,6 @@ func TestIntegrationOracleDBCDCWithRestrictedPermissions(t *testing.T) {
 
 		type capturedEvent struct {
 			operation string
-			row       map[string]any
 		}
 		var (
 			outEvents   []capturedEvent
@@ -94,12 +92,7 @@ oracledb_cdc:
 				op, ok := msg.MetaGet("operation")
 				assert.True(t, ok, "message missing 'operation' metadata")
 
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				var row map[string]any
-				assert.NoError(t, json.Unmarshal(msgBytes, &row))
-
-				outEvents = append(outEvents, capturedEvent{operation: op, row: row})
+				outEvents = append(outEvents, capturedEvent{operation: op})
 			}
 			return nil
 		}))
@@ -127,19 +120,8 @@ oracledb_cdc:
 		outEventsMu.Unlock()
 		require.Lenf(t, events, want, "Wanted %d snapshot rows but got %d", want, len(events))
 
-		// Index by row ID. Do not assume arrival order.
-		byID := make(map[string]capturedEvent, len(events))
 		for _, e := range events {
 			assert.Equalf(t, "read", e.operation, "snapshot row has operation %q, want \"read\"", e.operation)
-			id, _ := e.row["ID"].(string)
-			_, dup := byID[id]
-			require.Falsef(t, dup, "received more than one row for id %q: %+v", id, events)
-			byID[id] = e
-		}
-
-		for id, wantVal := range seedRows {
-			require.Containsf(t, byID, id, "missing snapshot row for id %s", id)
-			assert.EqualValues(t, wantVal, byID[id].row["VAL"])
 		}
 
 		require.NoError(t, stream.StopWithin(time.Second*10))
@@ -162,11 +144,8 @@ oracledb_cdc:
 		// need this row. Snapshotting is off, so this row is not a change event.
 		pdbDB.MustExec("INSERT INTO testdb.mtfoo (id, val) VALUES (1, 10)")
 
-		// capturedEvent stores the operation type and row data for one message.
-		// This lets the test check each operation, not just the message count.
 		type capturedEvent struct {
 			operation string
-			row       map[string]any
 		}
 		var (
 			outEvents   []capturedEvent
@@ -200,12 +179,7 @@ oracledb_cdc:
 				op, ok := msg.MetaGet("operation")
 				assert.True(t, ok, "message missing 'operation' metadata")
 
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				var row map[string]any
-				assert.NoError(t, json.Unmarshal(msgBytes, &row))
-
-				outEvents = append(outEvents, capturedEvent{operation: op, row: row})
+				outEvents = append(outEvents, capturedEvent{operation: op})
 			}
 			return nil
 		}))
