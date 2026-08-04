@@ -699,3 +699,45 @@ order-preserving sibling scenario orders-sink.yaml for the Recipe A config.
 
 
 Raw samples + Prometheus snapshots: [`results/iceberg/orders-sink-recipe-b/2026-07-09T15-57-38Z.json`](results/iceberg/orders-sink-recipe-b/2026-07-09T15-57-38Z.json)
+
+
+## AWS — orders-sink-streams-ab — 2026-08-04
+
+**Scenario:** A/B at a fixed 2-vCPU pin: does splitting one iceberg pipeline into two
+streams-mode pipelines buy throughput when GOMAXPROCS oversubscribes the core
+allocation? Connect counts licensed cores off the machine CPU rather than
+GOMAXPROCS, so raising it is free; the iceberg output is commit-latency-bound
+(Glue REST + S3), so blocked goroutines can otherwise leave the pinned cores
+idle.
+
+Three arms, all pinned to the same two cores, all Connect-only, all with the
+same vCPU-derived GOMEMLIMIT:
+  a0-1pipe-gmp2  in-session baseline (GOMAXPROCS == cores, as every prior sweep)
+  a1-1pipe-gmp4  isolates the GOMAXPROCS oversubscription effect
+  b-2pipe-gmp4   adds the pipeline split on top
+
+Arm B halves each stream's buffer and max_in_flight so total buffered memory
+(500 MiB) and total in-flight budget (16) match arms A — a pure topology
+comparison, not a resource-budget one. Both streams consume the same topic
+under the same consumer group (16 partitions split 8/8) and each writes its
+own Iceberg table; the arm's throughput is the summed committed-bytes growth.
+
+Base config is Recipe A from docs/benchmark-results/iceberg-recipe-comparison.md,
+which won at 2 vCPU (69.1 vs 64.1 MB/s).
+
+**Git SHA:** [`98b3ac004`](https://github.com/redpanda-data/connect/commit/98b3ac00498050e263db26b920437c33d0b35b83)
+
+**Infra:** Runner `c8g.4xlarge`; source `` (0 GB) in `us-east-2`.
+
+**Dataset:** 110,000,000 rows × 1200 B = ~122 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 2    | 2          | a0-1pipe-gmp2  | connect       |           70 |       68.268 |        61,566 |           70 |          61 |           75 |        62,793 |                    |
+| 2    | 4          | a1-1pipe-gmp4  | connect       |           74 |       65.866 |        59,400 |           74 |          18 |           78 |        66,325 |                    |
+| 2    | 4          | b-2pipe-gmp4   | connect       |           68 |       68.029 |        61,350 |           68 |          65 |           74 |        61,118 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/iceberg/orders-sink-streams-ab/2026-08-04T02-24-51Z.json`](results/iceberg/orders-sink-streams-ab/2026-08-04T02-24-51Z.json)
