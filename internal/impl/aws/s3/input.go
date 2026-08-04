@@ -577,6 +577,13 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 			continue
 		}
 		if len(objects) == 0 {
+			if isS3TestEvent(sqsMsg.Body) {
+				s.log.Debugf("Received S3 test event, deleting: %s", *sqsMsg.Body)
+				if err := s.ackSQSMessage(ctx, sqsMsg); err != nil {
+					s.log.Errorf("Failed to delete SQS test event message: %v", err)
+				}
+				continue
+			}
 			addDudFn(sqsMsg)
 			s.log.Debug("Extracted zero target keys from SQS message")
 			continue
@@ -660,6 +667,15 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg sqstypes.Messag
 		ReceiptHandle: msg.ReceiptHandle,
 	})
 	return err
+}
+
+func isS3TestEvent(sqsMsg *string) bool {
+	gObj, err := gabs.ParseJSON([]byte(*sqsMsg))
+	if err != nil {
+		return false
+	}
+	event, ok := gObj.Path("Event").Data().(string)
+	return ok && event == "s3:TestEvent"
 }
 
 //------------------------------------------------------------------------------
