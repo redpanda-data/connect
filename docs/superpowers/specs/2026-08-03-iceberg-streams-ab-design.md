@@ -175,7 +175,11 @@ regression guard and is unit-tested directly.
 
 - `PointResult` gains `Arm string`.
 - Group rows by `(vcpu, arm)` instead of `vcpu`; add an Arm column.
-- Suppress the `Δ vs Connect` column when arms are present (no KC row exists).
+- Keep the `Δ vs Connect` column. (An earlier draft said to suppress it when arms
+  are present. That is unnecessary: arms runs are structurally single-engine —
+  `runBench` requires `--engines=connect` when arms are set — so no
+  `kafka_connect` row exists, the delta renders blank, and the template stays
+  shared with every other scenario.)
 
 ### 7. New scenario
 
