@@ -10,12 +10,13 @@ tasks:
     cmds:
       - |
         if [ -z "{{.scenario}}" ]; then
-          echo "usage: task aws:bench -- scenario=<path>"
+          echo "usage: task aws:bench -- scenario=<path> [engines=connect]"
           exit 2
         fi
         cd ../.. && {{.RUNNER}} bench \
           --scenario=benchmarking/aws/scenarios/{{.scenario}}.yaml \
-          --repo-root=.
+          --repo-root=. \
+          {{if .engines}}--engines={{.engines}}{{end}}
 
   aws:validate:
     desc: "Validate a scenario YAML + terraform plan (no AWS spend)"
