@@ -2527,12 +2527,16 @@ git commit -m "feat(bench): iceberg 1-pipeline vs 2-streams A/B scenario at 2 vC
 Not part of the implementation — this is the handoff. Costs ~1.5 h and ~$6-8.
 
 ```bash
-aws-vault exec bench -- \
-  env REDPANDA_LICENSE_FILEPATH=$PWD/rpcn.license \
-  go run ./benchmarking/aws/runner bench \
-  --scenario=benchmarking/aws/scenarios/iceberg/orders-sink-streams-ab.yaml \
-  --repo-root=. --engines=connect
+cd benchmarking/aws && \
+  unset AWS_PROFILE && \
+  aws-vault exec AWSAdministratorAccess-605419575229 -- \
+    env REDPANDA_LICENSE_FILEPATH=/Users/prakhar.garg/Documents/connect_prakhar/rpcn.license \
+    task aws:bench scenario=iceberg/orders-sink-streams-ab engines=connect
 ```
+
+Note `task aws:bench` only resolves from `benchmarking/aws/` — the root Taskfile
+does not include that namespace. The aws-vault profile is
+`AWSAdministratorAccess-605419575229`; there is no profile literally named `bench`.
 
 `--engines=connect` is mandatory (Task 9 enforces it). Interrupt only with SIGINT.
 
