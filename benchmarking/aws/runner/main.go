@@ -318,6 +318,7 @@ func runBench(opts benchOpts) (errOut error) {
 		KCConnectorConfigJSON:    kcConfigJSON,
 		Topology:                 topo,
 		Names:                    names,
+		Topics:                   s.Dataset.Topics,
 		Outs:                     sharedOuts,
 		Direction:                s.Direction,
 	}

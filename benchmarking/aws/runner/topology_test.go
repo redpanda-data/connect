@@ -6,6 +6,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -98,6 +99,91 @@ func TestBenchNames_IcebergResetTablesIsUnionAcrossArms(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("reset table[%d] = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestBenchNames_SingleTopicNamesUnchanged(t *testing.T) {
+	// Topics 0 (zero value) and 1 must both yield the historical unsuffixed
+	// names — the parity guard for every existing scenario.
+	for _, n := range []BenchNames{
+		newBenchNames("sess-x", "iceberg"),
+		newBenchNames("sess-x", "iceberg").WithTopics(1),
+	} {
+		if got := n.SourceTopic(); got != "bench_sess-x_iceberg_src" {
+			t.Errorf("SourceTopic = %q, want unsuffixed", got)
+		}
+		if got := n.IcebergTable("connect"); got != "bench_sess_x_iceberg_connect" {
+			t.Errorf("IcebergTable(connect) = %q, want unsuffixed", got)
+		}
+		if got := n.ConsumerGroup("connect"); got != "bench_sess-x_iceberg_connect" {
+			t.Errorf("ConsumerGroup = %q, want unsuffixed", got)
+		}
+		if got := n.IcebergTablesForTopics("connect"); len(got) != 1 || got[0] != "bench_sess_x_iceberg_connect" {
+			t.Errorf("IcebergTablesForTopics = %v, want one unsuffixed name", got)
+		}
+	}
+}
+
+func TestBenchNames_MultiTopicNamesSuffixed(t *testing.T) {
+	n := newBenchNames("sess-x", "iceberg").WithTopics(7)
+	if got := n.WithTopic(0).SourceTopic(); got != "bench_sess-x_iceberg_src_t0" {
+		t.Errorf("topic 0 source topic = %q", got)
+	}
+	if got := n.WithTopic(6).SourceTopic(); got != "bench_sess-x_iceberg_src_t6" {
+		t.Errorf("topic 6 source topic = %q", got)
+	}
+	if got := n.WithTopic(0).IcebergTable("connect"); got != "bench_sess_x_iceberg_connect_t0" {
+		t.Errorf("topic 0 table = %q", got)
+	}
+	if got := n.WithTopic(6).IcebergTable("connect"); got != "bench_sess_x_iceberg_connect_t6" {
+		t.Errorf("topic 6 table = %q", got)
+	}
+	if got := n.WithTopic(0).ConsumerGroup("connect"); got != "bench_sess-x_iceberg_connect_t0" {
+		t.Errorf("topic 0 consumer group = %q", got)
+	}
+	if a, b := n.WithTopic(0).ConsumerGroup("connect"), n.WithTopic(1).ConsumerGroup("connect"); a == b {
+		t.Errorf("distinct topics must get distinct consumer groups, got %q for both", a)
+	}
+}
+
+func TestBenchNames_IcebergTablesForTopics_AllSeven(t *testing.T) {
+	// The failure mode this exists to catch: a 7-topic sidecar/reset script
+	// that references one table, or six, instead of all seven.
+	n := newBenchNames("sess-x", "iceberg").WithTopics(7)
+	got := n.IcebergTablesForTopics("connect")
+	if len(got) != 7 {
+		t.Fatalf("IcebergTablesForTopics returned %d tables, want 7: %v", len(got), got)
+	}
+	for i := 0; i < 7; i++ {
+		want := fmt.Sprintf("bench_sess_x_iceberg_connect_t%d", i)
+		if got[i] != want {
+			t.Errorf("table[%d] = %q, want %q", i, got[i], want)
+		}
+	}
+}
+
+func TestBenchNames_TopicsAndStreamsMutuallyExclusive_TopicSuffixWins(t *testing.T) {
+	// Validation elsewhere rejects Topics>1 and Streams>1 together, but
+	// IcebergTable must still behave sanely (and never emit both suffixes)
+	// if it somehow happens.
+	n := newBenchNames("sess-x", "iceberg").WithStreams(2).WithStream(1).WithTopics(3).WithTopic(2)
+	got := n.IcebergTable("connect")
+	if got != "bench_sess_x_iceberg_connect_t2" {
+		t.Errorf("IcebergTable with both set = %q, want _t2 suffix only", got)
+	}
+	if strings.Contains(got, "_s1") {
+		t.Errorf("must not also emit the stream suffix: %q", got)
+	}
+}
+
+func TestBenchNames_WithTopicsResetsTopicIndex(t *testing.T) {
+	n := newBenchNames("sess-x", "iceberg").WithTopics(7).WithTopic(5)
+	if n.TopicIndex != 5 {
+		t.Fatalf("setup: TopicIndex = %d, want 5", n.TopicIndex)
+	}
+	n = n.WithTopics(3)
+	if n.TopicIndex != 0 {
+		t.Errorf("WithTopics must reset TopicIndex to 0, got %d", n.TopicIndex)
 	}
 }
 

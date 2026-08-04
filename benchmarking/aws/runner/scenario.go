@@ -35,6 +35,17 @@ const (
 	// union and ~2002 tablegen invocations per reset, all against real AWS
 	// spend. 8 is generous headroom over the plan's own 2-stream arm B.
 	maxArmStreams = 8
+	// maxDatasetTopics bounds DatasetSpec.Topics. Each topic adds one seeder
+	// invocation, one Iceberg table, and (in streams mode) one consumer
+	// group — 16 mirrors the generous headroom maxArmStreams already gives
+	// per-stream resources, well above the 7-topic case this exists for.
+	maxDatasetTopics = 16
+	// maxArmSweepPoints bounds len(matrix.cpu_points) * len(matrix.arms). Arms
+	// used to require exactly one cpu_points entry; lifting that restriction
+	// (topology × core count is the whole point of the 7-table consolidation
+	// test) still needs a ceiling so a careless scenario can't silently
+	// commit to a day-long run.
+	maxArmSweepPoints = 8
 )
 
 // armIDRe constrains arm ids to what is safe in a filename and an S3 key.
@@ -105,6 +116,28 @@ type DatasetSpec struct {
 	Tables            []string `yaml:"tables"`
 	Seeder            string   `yaml:"seeder"`
 	ExpectedPeakMBSec int      `yaml:"expected_peak_mb_s,omitempty"`
+	// Topics splits InitialRows evenly across N pre-seeded source topics
+	// instead of one. 0 (absent) and 1 both mean single-topic, which keeps
+	// every existing scenario byte-identical: same topic name, same table
+	// name, same consumer group, same seed script. Sink-only (see Validate).
+	// See BenchNames.WithTopics/WithTopic for the corresponding naming.
+	Topics int `yaml:"topics,omitempty"`
+	// PartitionsPerTopic is the per-topic partition count the seeder
+	// pre-creates when Topics > 1. Ignored when Topics <= 1 — the seeder's
+	// own --partitions default (16) applies instead, unchanged. See
+	// partitionsPerTopic for the Topics > 1 default (4).
+	PartitionsPerTopic int `yaml:"partitions_per_topic,omitempty"`
+}
+
+// partitionsPerTopic is the effective per-topic partition count to seed with
+// when Topics > 1, defaulting to 4 (7 topics x 4 = 28 partitions, ample for
+// <=4 cores and far faster to seed than reusing the single-topic default of
+// 16 per topic).
+func (d DatasetSpec) partitionsPerTopic() int {
+	if d.PartitionsPerTopic > 0 {
+		return d.PartitionsPerTopic
+	}
+	return 4
 }
 
 type WorkloadSpec struct {
@@ -310,8 +343,9 @@ func (s *Scenario) Validate() error {
 		if s.Direction != DirectionSink {
 			return fmt.Errorf("matrix.arms is only supported for direction: sink (got %q)", s.Direction)
 		}
-		if len(s.Matrix.CPUPoints) != 1 {
-			return fmt.Errorf("matrix.arms requires exactly one matrix.cpu_points entry (got %v): arms × vCPU would multiply the run", s.Matrix.CPUPoints)
+		if product := len(s.Matrix.CPUPoints) * len(s.Matrix.Arms); product > maxArmSweepPoints {
+			return fmt.Errorf("matrix.arms × matrix.cpu_points must expand to <= %d sweep points (got %d cpu_points × %d arms = %d): a careless scenario could otherwise commit to a day-long run",
+				maxArmSweepPoints, len(s.Matrix.CPUPoints), len(s.Matrix.Arms), product)
 		}
 		seen := map[string]bool{}
 		for i, a := range s.Matrix.Arms {
@@ -334,6 +368,19 @@ func (s *Scenario) Validate() error {
 			if a.Streams > maxArmStreams {
 				return fmt.Errorf("matrix.arms[%d].streams must be <= %d (got %d); each stream adds a rendered config, an Iceberg table, and a retried tablegen pre-create per engine at every between-points reset", i, maxArmStreams, a.Streams)
 			}
+		}
+	}
+
+	if s.Dataset.Topics > 1 {
+		if s.Direction != DirectionSink {
+			return fmt.Errorf("dataset.topics > 1 is only supported for direction: sink (got %q)", s.Direction)
+		}
+		if s.Dataset.Topics > maxDatasetTopics {
+			return fmt.Errorf("dataset.topics must be <= %d (got %d)", maxDatasetTopics, s.Dataset.Topics)
+		}
+		if s.Dataset.InitialRows%int64(s.Dataset.Topics) != 0 {
+			return fmt.Errorf("dataset.initial_rows (%d) must be evenly divisible by dataset.topics (%d) so the per-topic split is exact",
+				s.Dataset.InitialRows, s.Dataset.Topics)
 		}
 	}
 

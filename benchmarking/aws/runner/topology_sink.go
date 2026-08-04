@@ -91,17 +91,28 @@ func (sinkTopology) Pipeline(s *Scenario, n BenchNames) (input, output map[strin
 
 func (sinkTopology) SeedScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
 	key := "stage/" + s.Dataset.Seeder
-	return fmt.Sprintf(`
-set -euo pipefail
-aws s3 cp s3://%s/%s /opt/bench/%s
-chmod +x /opt/bench/%s
-REDPANDA_BROKERS=%q /opt/bench/%s seed \
-  --topic=%s --rows=%d --row-size=%d
-`,
-		outs["results_bucket"], key, s.Dataset.Seeder, s.Dataset.Seeder,
-		outs["redpanda_broker_endpoints"], s.Dataset.Seeder,
-		n.SourceTopic(), s.Dataset.InitialRows, s.Dataset.RowSizeBytes,
-	), nil
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "\nset -euo pipefail\naws s3 cp s3://%s/%s /opt/bench/%s\nchmod +x /opt/bench/%s\n",
+		outs["results_bucket"], key, s.Dataset.Seeder, s.Dataset.Seeder)
+
+	brokers := outs["redpanda_broker_endpoints"]
+	if s.Dataset.Topics <= 1 {
+		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s seed \\\n  --topic=%s --rows=%d --row-size=%d\n",
+			brokers, s.Dataset.Seeder, n.SourceTopic(), s.Dataset.InitialRows, s.Dataset.RowSizeBytes)
+		return sb.String(), nil
+	}
+
+	// Multi-topic: one seeder invocation per topic. InitialRows splits evenly
+	// (Validate guarantees InitialRows % Topics == 0) and each topic is
+	// pre-created with PartitionsPerTopic partitions (default 4).
+	rowsPerTopic := s.Dataset.InitialRows / int64(s.Dataset.Topics)
+	partitions := s.Dataset.partitionsPerTopic()
+	scoped := n.WithTopics(s.Dataset.Topics)
+	for i := 0; i < s.Dataset.Topics; i++ {
+		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s seed \\\n  --topic=%s --rows=%d --row-size=%d --partitions=%d\n",
+			brokers, s.Dataset.Seeder, scoped.WithTopic(i).SourceTopic(), rowsPerTopic, s.Dataset.RowSizeBytes, partitions)
+	}
+	return sb.String(), nil
 }
 
 func (sinkTopology) WorkloadScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
@@ -120,12 +131,22 @@ func (sinkTopology) ResetScript(s *Scenario, outs map[string]string, n BenchName
 	w := func(format string, a ...any) { fmt.Fprintf(&sb, format+"\n", a...) }
 	w("set -euo pipefail")
 	for _, eng := range []string{"connect", "kafka_connect"} {
-		// Reset the union of every arm's tables: the base name plus each
-		// per-stream name up to the plan's max stream count. n.Streams carries
-		// that max (see planMaxStreams), which lets this one precomputed
-		// script serve every arm — each arm's own tables start at zero
-		// committed bytes and the extras sit empty.
-		for _, table := range n.IcebergResetTables(eng, n.Streams) {
+		// Multi-topic scenarios write N topic-derived tables instead of the
+		// stream union; Topics > 1 and Streams > 1 are mutually exclusive
+		// (validation enforces this), so exactly one of these branches ever
+		// applies for a given scenario.
+		var tables []string
+		if s.Dataset.Topics > 1 {
+			tables = n.WithTopics(s.Dataset.Topics).IcebergTablesForTopics(eng)
+		} else {
+			// Reset the union of every arm's tables: the base name plus each
+			// per-stream name up to the plan's max stream count. n.Streams
+			// carries that max (see planMaxStreams), which lets this one
+			// precomputed script serve every arm — each arm's own tables
+			// start at zero committed bytes and the extras sit empty.
+			tables = n.IcebergResetTables(eng, n.Streams)
+		}
+		for _, table := range tables {
 			// Drop the table so total-files-size restarts at 0.
 			w(`aws glue delete-table --region %q --database-name %q --name %q 2>/dev/null || true`,
 				region, db, table)
@@ -151,11 +172,22 @@ func (sinkTopology) ResetScript(s *Scenario, outs map[string]string, n BenchName
 			w(`  sleep 5`)
 			w(`done`)
 		}
-		// Reset the per-engine consumer group to re-read the whole topic. Both
-		// streams of a multi-stream arm share this group — that is what splits
-		// the partitions between them instead of doubling the work.
-		w(`/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server %q --group %q --reset-offsets --to-earliest --all-topics --execute 2>/dev/null || true`,
-			brokers, n.ConsumerGroup(eng))
+		if s.Dataset.Topics > 1 {
+			// Each topic is a distinct Kafka topic (not partitions of one
+			// topic, unlike the multi-stream case), so each gets its own
+			// consumer group reset.
+			scoped := n.WithTopics(s.Dataset.Topics)
+			for i := 0; i < s.Dataset.Topics; i++ {
+				w(`/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server %q --group %q --reset-offsets --to-earliest --all-topics --execute 2>/dev/null || true`,
+					brokers, scoped.WithTopic(i).ConsumerGroup(eng))
+			}
+		} else {
+			// Reset the per-engine consumer group to re-read the whole topic. Both
+			// streams of a multi-stream arm share this group — that is what splits
+			// the partitions between them instead of doubling the work.
+			w(`/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server %q --group %q --reset-offsets --to-earliest --all-topics --execute 2>/dev/null || true`,
+				brokers, n.ConsumerGroup(eng))
+		}
 	}
 	w(`curl -fsS -X DELETE "http://localhost:8083/connectors/bench_%s" || true`, s.Connector)
 	return sb.String(), nil
@@ -178,10 +210,16 @@ func (t sinkTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
 	sp, _ := sinkSpecFor(args.Names.Connector) // ok ignored: Validate guarantees the sinkSpec exists
 	region := args.Outs["aws_region"]
 	db := sp.Namespace
-	// A multi-stream arm writes one table per stream; the arm's throughput is
-	// the summed committed-bytes growth across all of them. Single-stream arms
-	// yield a one-element list, so the shell shape is identical either way.
+	// A multi-stream arm writes one table per stream; a multi-topic scenario
+	// writes one table per topic. Either way the throughput is the summed
+	// committed-bytes growth across all of them, and single-stream/
+	// single-topic points yield a one-element list, so the shell shape is
+	// identical either way. Topics > 1 and Streams > 1 are mutually
+	// exclusive, so at most one of these ever differs from the base table.
 	tables := args.Names.IcebergTables(args.Engine)
+	if args.Names.Topics > 1 {
+		tables = args.Names.IcebergTablesForTopics(args.Engine)
+	}
 	setup := fmt.Sprintf(`RP=/tmp/%s
 : > "$RP"
 (

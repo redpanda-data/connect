@@ -98,6 +98,41 @@ func TestBuildSweepPlan_ArmDefaultsGOMAXPROCSToVCPUAndStreamsToOne(t *testing.T)
 	require.Equal(t, 1, plan[0].Streams)
 }
 
+func TestBuildSweepPlan_ArmsExpandAcrossMultipleCPUPoints(t *testing.T) {
+	// The single-cpu_points restriction on arms is lifted (Scenario.Validate),
+	// so buildSweepPlan must expand the full cpu_points x arms product, in
+	// cpu_points-major order (outer loop over CPUPoints, inner over Arms) —
+	// this pins that shape rather than assuming it.
+	s := &Scenario{
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2, 4},
+			Arms: []Arm{
+				{ID: "streams7", Streams: 7},
+				{ID: "fanin", Streams: 1},
+			},
+		},
+	}
+	plan := buildSweepPlan(s)
+	require.Len(t, plan, 4, "2 cpu_points x 2 arms = 4 points")
+	wantKeys := []string{"2-streams7", "2-fanin", "4-streams7", "4-fanin"}
+	gotKeys := make([]string, len(plan))
+	for i, p := range plan {
+		gotKeys[i] = p.Key()
+	}
+	require.Equal(t, wantKeys, gotKeys)
+	for _, p := range plan {
+		if p.ArmID == "streams7" {
+			require.Equal(t, 7, p.Streams)
+		} else {
+			require.Equal(t, 1, p.Streams)
+		}
+	}
+	require.Equal(t, 2, plan[0].VCPU)
+	require.Equal(t, 2, plan[1].VCPU)
+	require.Equal(t, 4, plan[2].VCPU)
+	require.Equal(t, 4, plan[3].VCPU)
+}
+
 func TestPlanMaxStreams(t *testing.T) {
 	require.Equal(t, 1, planMaxStreams([]sweepPoint{{Streams: 1}, {Streams: 1}}))
 	require.Equal(t, 2, planMaxStreams([]sweepPoint{{Streams: 1}, {Streams: 2}}))

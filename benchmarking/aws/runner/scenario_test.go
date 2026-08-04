@@ -347,11 +347,25 @@ func TestLoadScenario_RejectsArmsOnSource(t *testing.T) {
 	require.Contains(t, err.Error(), "sink")
 }
 
-func TestLoadScenario_RejectsArmsWithMultipleCPUPoints(t *testing.T) {
+func TestLoadScenario_RejectsArmsSweepProductTooLarge(t *testing.T) {
+	// matrix.arms used to require exactly one cpu_points entry; that
+	// restriction is lifted (topology x core count is the point of the
+	// 7-table consolidation test), replaced by a product ceiling. This
+	// fixture is 3 cpu_points x 3 arms = 9, over the 8-point guard.
 	_, err := LoadScenario("testdata/invalid-arms-multi-cpu.yaml")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "matrix.arms")
 	require.Contains(t, err.Error(), "cpu_points")
+	require.Contains(t, err.Error(), "9")
+}
+
+func TestLoadScenario_AcceptsArmsWithMultipleCPUPointsUnderGuard(t *testing.T) {
+	// The single-cpu_points restriction is gone: 2 cpu_points x 3 arms = 6,
+	// within the 8-point guard, must now validate.
+	s, err := LoadScenario("testdata/valid-arms-multi-cpu.yaml")
+	require.NoError(t, err)
+	require.Equal(t, []int{1, 2}, s.Matrix.CPUPoints)
+	require.Len(t, s.Matrix.Arms, 3)
 }
 
 func TestScenarioValidate_RejectsBadArmID(t *testing.T) {
@@ -508,6 +522,116 @@ func TestScenarioValidate_AcceptsZeroGOMAXPROCSAndStreams(t *testing.T) {
 		},
 	}
 	require.NoError(t, s.Validate())
+}
+
+func TestScenarioValidate_AcceptsArmSweepProductAtMax(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 110000000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 133},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{1, 2, 4, 8},
+			Arms:      []Arm{{ID: "a0"}, {ID: "a1"}},
+		},
+	}
+	require.NoError(t, s.Validate(), "4 cpu_points x 2 arms = 8, exactly at the guard")
+}
+
+func TestScenarioValidate_RejectsArmSweepProductOverMax(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 110000000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 133},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{1, 2, 4, 8},
+			Arms:      []Arm{{ID: "a0"}, {ID: "a1"}, {ID: "a2"}},
+		},
+	}
+	err := s.Validate()
+	require.Error(t, err, "4 cpu_points x 3 arms = 12, over the 8-point guard")
+	require.Contains(t, err.Error(), "matrix.arms")
+	require.Contains(t, err.Error(), "cpu_points")
+}
+
+func TestScenarioValidate_RejectsTopicsOnSource(t *testing.T) {
+	s := &Scenario{
+		Name: "postgres-x", Connector: "postgres_cdc", Stack: "postgres",
+		Direction: DirectionSource,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c7i.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 1000, RowSizeBytes: 256, Tables: []string{"orders"}, Seeder: "cdc-rows", Topics: 7},
+		Pipeline:  map[string]any{"input": map[string]any{"postgres_cdc": map[string]any{}}},
+		Workload:  &WorkloadSpec{Warmup: 2 * time.Minute, Duration: 15 * time.Minute},
+		Matrix:    MatrixSpec{CPUPoints: []int{2}},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "dataset.topics")
+	require.Contains(t, err.Error(), "sink")
+}
+
+func TestScenarioValidate_RejectsTopicsAboveMax(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 170000000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 145, Topics: 17},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix:    MatrixSpec{CPUPoints: []int{2}},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "dataset.topics")
+	require.Contains(t, err.Error(), "16")
+}
+
+func TestScenarioValidate_RejectsTopicsNotDividingInitialRows(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 119000001, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 145, Topics: 7},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix:    MatrixSpec{CPUPoints: []int{2}},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "dataset.initial_rows")
+	require.Contains(t, err.Error(), "dataset.topics")
+}
+
+func TestScenarioValidate_AcceptsValidTopics(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 119000000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 145, Topics: 7},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix:    MatrixSpec{CPUPoints: []int{2, 4}},
+	}
+	require.NoError(t, s.Validate())
+}
+
+func TestScenarioValidate_AcceptsAbsentTopics(t *testing.T) {
+	// The zero value (field omitted from YAML) must validate exactly like
+	// Topics: 1 — the parity guard for every existing scenario.
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 110000000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 133},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix:    MatrixSpec{CPUPoints: []int{2}},
+	}
+	require.NoError(t, s.Validate())
+}
+
+func TestDatasetSpec_PartitionsPerTopicDefaultsTo4(t *testing.T) {
+	require.Equal(t, 4, DatasetSpec{Topics: 7}.partitionsPerTopic())
+	require.Equal(t, 8, DatasetSpec{Topics: 7, PartitionsPerTopic: 8}.partitionsPerTopic())
 }
 
 func TestLoadScenario_KafkaConnectOptional(t *testing.T) {

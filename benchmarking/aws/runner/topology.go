@@ -28,6 +28,20 @@ type BenchNames struct {
 	// StreamIndex selects which stream's names to render. Only meaningful
 	// when Streams > 1.
 	StreamIndex int
+	// Topics is a scenario's multi-topic sink bench topic count: N pre-seeded
+	// source topics instead of one, each with its own Iceberg table. 0 and 1
+	// both mean single-topic, in which case the source topic, table, and
+	// consumer group are all unsuffixed exactly as they were before Topics
+	// existed. > 1 suffixes each per-topic name with _t<TopicIndex>.
+	//
+	// Topics > 1 and Streams > 1 are mutually exclusive — validation enforces
+	// this (dataset.topics and matrix.arms[].streams are independent knobs,
+	// but a scenario should only exercise one at a time). If both are somehow
+	// set, IcebergTable prefers the _t<i> suffix and never emits both.
+	Topics int
+	// TopicIndex selects which topic's names to render. Only meaningful when
+	// Topics > 1.
+	TopicIndex int
 }
 
 func newBenchNames(sessionID, connector string) BenchNames {
@@ -59,6 +73,30 @@ func (n BenchNames) WithStream(idx int) BenchNames {
 	return n
 }
 
+// WithTopics returns a copy scoped to a scenario's topic count, resetting the
+// topic index to 0.
+//
+// Order matters: WithTopics always resets TopicIndex to 0, so
+// n.WithTopics(7).WithTopic(3) is correct but n.WithTopic(3).WithTopics(7)
+// silently loses the index — WithTopics runs second and stomps it back to 0
+// with no error. Always call WithTopics before WithTopic (the same footgun
+// WithStreams/WithStream document).
+func (n BenchNames) WithTopics(count int) BenchNames {
+	n.Topics = count
+	n.TopicIndex = 0
+	return n
+}
+
+// WithTopic returns a copy scoped to one topic of a multi-topic scenario.
+//
+// Call this AFTER WithTopics, not before: WithTopics resets TopicIndex to 0,
+// so reversing the order (n.WithTopic(3).WithTopics(7)) silently drops the
+// index you just set.
+func (n BenchNames) WithTopic(idx int) BenchNames {
+	n.TopicIndex = idx
+	return n
+}
+
 // ConnectTopic is the single topic Connect writes to in a source bench.
 func (n BenchNames) ConnectTopic() string {
 	return fmt.Sprintf("bench_%s_%s_connect", n.SessionID, n.Connector)
@@ -71,8 +109,14 @@ func (n BenchNames) KCTopicPrefix() string {
 }
 
 // SourceTopic is the pre-seeded Redpanda topic a sink bench consumes.
+// Unsuffixed when Topics <= 1 (unchanged); else suffixed with
+// _t<TopicIndex> so each of a multi-topic scenario's N topics is distinct.
 func (n BenchNames) SourceTopic() string {
-	return fmt.Sprintf("bench_%s_%s_src", n.SessionID, n.Connector)
+	base := fmt.Sprintf("bench_%s_%s_src", n.SessionID, n.Connector)
+	if n.Topics <= 1 {
+		return base
+	}
+	return fmt.Sprintf("%s_t%d", base, n.TopicIndex)
 }
 
 // icebergTableBase is the unsuffixed per-engine Glue table name. Glue/SQL
@@ -82,10 +126,17 @@ func (n BenchNames) icebergTableBase(engine string) string {
 	return fmt.Sprintf("bench_%s_%s_%s", safe, n.Connector, engine)
 }
 
-// IcebergTable is the Glue table this stream writes. Unsuffixed for
-// single-stream arms; _s<StreamIndex> when the arm runs multiple streams.
+// IcebergTable is the Glue table this stream/topic writes. Unsuffixed for
+// single-stream, single-topic arms; _s<StreamIndex> when the arm runs
+// multiple streams; _t<TopicIndex> when the scenario runs multiple topics.
+// Topics > 1 and Streams > 1 are mutually exclusive (validation enforces
+// this); if both are somehow set, the _t<i> suffix wins and _s<i> is never
+// also emitted.
 func (n BenchNames) IcebergTable(engine string) string {
 	base := n.icebergTableBase(engine)
+	if n.Topics > 1 {
+		return fmt.Sprintf("%s_t%d", base, n.TopicIndex)
+	}
 	if n.Streams <= 1 {
 		return base
 	}
@@ -101,6 +152,22 @@ func (n BenchNames) IcebergTables(engine string) []string {
 	out := make([]string, 0, n.Streams)
 	for i := 0; i < n.Streams; i++ {
 		out = append(out, n.WithStream(i).IcebergTable(engine))
+	}
+	return out
+}
+
+// IcebergTablesForTopics is every table a multi-topic scenario writes, in
+// topic order. Single-topic scenarios (Topics <= 1) yield a one-element list
+// with the unsuffixed base name, so callers get an identical shape either
+// way. Used by the sidecar (throughput is the summed growth across all N
+// topic tables) and by ResetScript (pre-create/drop the union).
+func (n BenchNames) IcebergTablesForTopics(engine string) []string {
+	if n.Topics <= 1 {
+		return []string{n.icebergTableBase(engine)}
+	}
+	out := make([]string, 0, n.Topics)
+	for i := 0; i < n.Topics; i++ {
+		out = append(out, n.WithTopic(i).IcebergTable(engine))
 	}
 	return out
 }
@@ -122,8 +189,20 @@ func (n BenchNames) IcebergResetTables(engine string, maxStreams int) []string {
 }
 
 // ConsumerGroup is the per-engine consumer group reading SourceTopic.
+// Unsuffixed when Topics <= 1 (unchanged). Suffixed with _t<TopicIndex> when
+// Topics > 1: in streams mode each stream reads a distinct topic under its
+// own group so it independently consumes that whole topic (unlike the
+// Streams-only case, where multiple streams intentionally SHARE one group to
+// split one topic's partitions). Fan-in instead needs the unsuffixed group
+// with one subscription per topic — it gets that by calling ConsumerGroup on
+// an unscoped (Topics <= 1) BenchNames, which is guaranteed to reproduce
+// today's exact name.
 func (n BenchNames) ConsumerGroup(engine string) string {
-	return fmt.Sprintf("bench_%s_%s_%s", n.SessionID, n.Connector, engine)
+	base := fmt.Sprintf("bench_%s_%s_%s", n.SessionID, n.Connector, engine)
+	if n.Topics > 1 {
+		return fmt.Sprintf("%s_t%d", base, n.TopicIndex)
+	}
+	return base
 }
 
 // MetricInputs carries everything EngineSeries needs to turn a per-engine

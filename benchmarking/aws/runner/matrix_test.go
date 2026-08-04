@@ -863,6 +863,61 @@ total_files_size_bytes 1048576000
 		"sidecar must poll stream 1's table")
 }
 
+func TestMatrixRunner_SidecarPollsEveryTopicTableForMultiTopicScenario(t *testing.T) {
+	// Regression test mirroring TestMatrixRunner_SidecarPollsEveryStreamTableForMultiStreamArm:
+	// MatrixRunner.Topics must be chained onto Names when building the
+	// sidecar's MetricSidecarArgs, exactly the way pt.Streams already is.
+	// Before this wiring, a 7-topic scenario's sidecar would poll only the
+	// unsuffixed base table (which nothing writes to when Topics > 1),
+	// silently reporting ~0 MB/s with no error anywhere — the same class of
+	// bug the streams precedent (2026-08-04) already caught once.
+	const sessionID = "sess-topics"
+	const connector = "iceberg"
+
+	const iceberg = `###timestamp=1000
+total_files_size_bytes 0
+###timestamp=1010
+total_files_size_bytes 524288000
+###timestamp=1020
+total_files_size_bytes 1048576000
+`
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/iceberg-2-connect.txt", sessionID): iceberg,
+			fmt.Sprintf("runs/%s/sweep-2.log", sessionID):           "INFO starting redpanda-connect\nINFO output connected\n",
+		},
+		Errs: map[string]error{
+			fmt.Sprintf("runs/%s/prom-2.txt", sessionID): fmt.Errorf("not found"),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:            ssm,
+		LogFetcher:     fetcher,
+		RunnerInstance: "i-runner",
+		Bucket:         "b",
+		SessionID:      sessionID,
+		Topology:       sinkTopology{},
+		Names:          newBenchNames(sessionID, connector),
+		Topics:         7,
+		Engines:        []string{"connect"},
+		Direction:      DirectionSink,
+	}
+	plan := []sweepPoint{{VCPU: 2, GOMAXPROCS: 2, Streams: 1}}
+	_, err := mr.Run(context.Background(), plan, 1, 60*time.Second, 120*time.Second, "", "")
+	require.NoError(t, err)
+	require.Len(t, ssm.Scripts, 1)
+	script := ssm.Scripts[0]
+	for i := 0; i < 7; i++ {
+		require.Contains(t, script, fmt.Sprintf("bench_sess_topics_iceberg_connect_t%d", i),
+			"sidecar must poll topic %d's table", i)
+	}
+}
+
 func TestMatrixRun_EngineInnerLoop_ConnectOnly(t *testing.T) {
 	const sessionID = "sess"
 	logFor := func(vcpu int) string { return makeLog(180, float64(50+vcpu)) }

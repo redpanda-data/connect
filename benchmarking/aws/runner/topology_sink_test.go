@@ -6,6 +6,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -90,6 +91,77 @@ func TestSinkTopology_Pipeline_MergesInputOptions(t *testing.T) {
 	}
 }
 
+func TestSinkTopology_SeedScript_SingleTopicUnchanged(t *testing.T) {
+	s := &Scenario{
+		Connector: "iceberg", Direction: DirectionSink,
+		Dataset: DatasetSpec{Seeder: "json-orders", InitialRows: 1000, RowSizeBytes: 1200},
+	}
+	outs := map[string]string{"results_bucket": "bucket", "redpanda_broker_endpoints": "10.0.0.1:9092"}
+	got, err := (sinkTopology{}).SeedScript(s, outs, newBenchNames("sess", "iceberg"))
+	if err != nil {
+		t.Fatalf("SeedScript: %v", err)
+	}
+	want := `
+set -euo pipefail
+aws s3 cp s3://bucket/stage/json-orders /opt/bench/json-orders
+chmod +x /opt/bench/json-orders
+REDPANDA_BROKERS="10.0.0.1:9092" /opt/bench/json-orders seed \
+  --topic=bench_sess_iceberg_src --rows=1000 --row-size=1200
+`
+	if got != want {
+		t.Errorf("single-topic SeedScript changed:\n got: %q\nwant: %q", got, want)
+	}
+	if strings.Count(got, "seed \\") != 1 {
+		t.Errorf("single-topic must emit exactly one seed invocation, got:\n%s", got)
+	}
+	if strings.Contains(got, "--partitions") {
+		t.Errorf("single-topic must not pass --partitions (seeder's own default applies); got:\n%s", got)
+	}
+}
+
+func TestSinkTopology_SeedScript_SevenTopicsSevenInvocations(t *testing.T) {
+	// 119,000,000 rows / 7 topics = 17,000,000 rows per topic.
+	s := &Scenario{
+		Connector: "iceberg", Direction: DirectionSink,
+		Dataset: DatasetSpec{Seeder: "json-orders", InitialRows: 119000000, RowSizeBytes: 1200, Topics: 7},
+	}
+	outs := map[string]string{"results_bucket": "bucket", "redpanda_broker_endpoints": "10.0.0.1:9092"}
+	got, err := (sinkTopology{}).SeedScript(s, outs, newBenchNames("sess", "iceberg"))
+	if err != nil {
+		t.Fatalf("SeedScript: %v", err)
+	}
+	if n := strings.Count(got, "seed \\"); n != 7 {
+		t.Fatalf("expected 7 seed invocations, got %d:\n%s", n, got)
+	}
+	if n := strings.Count(got, "--rows=17000000"); n != 7 {
+		t.Errorf("expected 7 invocations with --rows=17000000, got %d:\n%s", n, got)
+	}
+	if n := strings.Count(got, "--partitions=4"); n != 7 {
+		t.Errorf("expected 7 invocations with the default --partitions=4, got %d:\n%s", n, got)
+	}
+	for i := 0; i < 7; i++ {
+		want := fmt.Sprintf("--topic=bench_sess_iceberg_src_t%d", i)
+		if !strings.Contains(got, want) {
+			t.Errorf("missing topic %d invocation %q:\n%s", i, want, got)
+		}
+	}
+}
+
+func TestSinkTopology_SeedScript_CustomPartitionsPerTopic(t *testing.T) {
+	s := &Scenario{
+		Connector: "iceberg", Direction: DirectionSink,
+		Dataset: DatasetSpec{Seeder: "json-orders", InitialRows: 700, RowSizeBytes: 1200, Topics: 7, PartitionsPerTopic: 8},
+	}
+	outs := map[string]string{"results_bucket": "bucket", "redpanda_broker_endpoints": "10.0.0.1:9092"}
+	got, err := (sinkTopology{}).SeedScript(s, outs, newBenchNames("sess", "iceberg"))
+	if err != nil {
+		t.Fatalf("SeedScript: %v", err)
+	}
+	if n := strings.Count(got, "--partitions=8"); n != 7 {
+		t.Errorf("expected 7 invocations with --partitions=8, got %d:\n%s", n, got)
+	}
+}
+
 func TestSinkTopology_MetricArtifact(t *testing.T) {
 	if got := (sinkTopology{}).MetricArtifact("connect", "4"); got != "iceberg-4-connect.txt" {
 		t.Errorf("artifact = %q", got)
@@ -145,6 +217,39 @@ func TestSinkTopology_MetricSidecar_EmitsPerTableLine(t *testing.T) {
 	}
 }
 
+func TestSinkTopology_MetricSidecar_SumsAcrossAllSevenTopicTables(t *testing.T) {
+	// The failure mode this exists to catch: a 7-topic sidecar that polls
+	// one table, or six, instead of all seven — which would silently hide a
+	// starved topic (or under-report throughput) with no error anywhere.
+	sc := sinkTopology{}.MetricSidecar(MetricSidecarArgs{
+		Engine: "connect", VCPU: 2, Key: "2",
+		Bucket: "b", SessionID: "sess-x",
+		Outs:  map[string]string{"aws_region": "us-east-2"},
+		Names: newBenchNames("sess-x", "iceberg").WithTopics(7),
+	})
+	for i := 0; i < 7; i++ {
+		table := fmt.Sprintf("bench_sess_x_iceberg_connect_t%d", i)
+		if !strings.Contains(sc.Setup, table) {
+			t.Errorf("sidecar missing topic %d table %q:\n%s", i, table, sc.Setup)
+		}
+	}
+	// Exactly 7 per-table lines, not 1 and not 6.
+	if n := strings.Count(sc.Setup, `echo "table_files_size_bytes $T`); n != 1 {
+		// The per-table echo is inside the for-loop template (one echo
+		// statement, executed once per table at runtime); this asserts the
+		// template shape, and the "for T in <7 names>" list above asserts
+		// the actual count of tables iterated.
+		t.Errorf("expected the per-table echo template exactly once, got %d:\n%s", n, sc.Setup)
+	}
+	if got := strings.Count(sc.Setup, "bench_sess_x_iceberg_connect_t"); got != 7 {
+		t.Errorf("expected exactly 7 topic-table references, got %d:\n%s", got, sc.Setup)
+	}
+	// Still exactly one summed emission per frame.
+	if got := strings.Count(sc.Setup, `echo "total_files_size_bytes`); got != 1 {
+		t.Errorf("expected exactly one summed size emission per frame, got %d:\n%s", got, sc.Setup)
+	}
+}
+
 func TestSinkTopology_KCConfig_Iceberg(t *testing.T) {
 	res, ok, err := (sinkTopology{}).KCConfig(&Scenario{Connector: "iceberg", Direction: DirectionSink}, sinkOuts(), newBenchNames("sess", "iceberg"))
 	if err != nil || !ok {
@@ -174,6 +279,32 @@ func TestSinkTopology_ResetScript_DropsTableAndResetsOffset(t *testing.T) {
 	}
 	if !strings.Contains(sc, "s3://rpcn-bench-ice/wh/bench/bench_sess_iceberg_connect") {
 		t.Errorf("reset must pass the per-table S3 location; got:\n%s", sc)
+	}
+}
+
+func TestSinkTopology_ResetScript_CreatesUnionForSevenTopics(t *testing.T) {
+	s := &Scenario{Connector: "iceberg", Direction: DirectionSink, Dataset: DatasetSpec{Topics: 7}}
+	got, err := (sinkTopology{}).ResetScript(s, sinkOuts(), newBenchNames("sess", "iceberg"))
+	if err != nil {
+		t.Fatalf("ResetScript: %v", err)
+	}
+	for i := 0; i < 7; i++ {
+		table := fmt.Sprintf("--table=bench_sess_iceberg_connect_t%d", i)
+		if !strings.Contains(got, table) {
+			t.Errorf("missing topic %d table pre-create %q:\n%s", i, table, got)
+		}
+		group := fmt.Sprintf("--group %q", fmt.Sprintf("bench_sess_iceberg_connect_t%d", i))
+		if !strings.Contains(got, group) {
+			t.Errorf("missing topic %d consumer-group reset %q:\n%s", i, group, got)
+		}
+	}
+	// Only Connect is in play here (KC gets its own union too, but the count
+	// check below only wants Connect's 7 + KC's 7).
+	if n := strings.Count(got, "aws glue delete-table"); n != 14 {
+		t.Errorf("expected 14 delete-table calls (7 topics x 2 engines), got %d:\n%s", n, got)
+	}
+	if strings.Contains(got, "_s0") || strings.Contains(got, "_s1") {
+		t.Errorf("multi-topic reset must not mention stream-suffixed tables:\n%s", got)
 	}
 }
 

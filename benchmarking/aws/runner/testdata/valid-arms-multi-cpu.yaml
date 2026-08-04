@@ -1,5 +1,5 @@
 name: iceberg-orders-sink-streams-ab
-description: arms x cpu_points product exceeds the maxArmSweepPoints guard
+description: arms x cpu_points product within the maxArmSweepPoints guard (previously rejected outright)
 direction: sink
 connector: iceberg
 stack: iceberg
@@ -33,8 +33,8 @@ pipeline:
         max_snapshot_age: 24h
 
 matrix:
-  # 3 cpu_points x 3 arms = 9 sweep points, over the maxArmSweepPoints (8) guard.
-  cpu_points: [1, 2, 4]
+  # 2 cpu_points x 3 arms = 6 sweep points, within the maxArmSweepPoints (8) guard.
+  cpu_points: [1, 2]
   arms:
     - id: a0-1pipe-gmp2
       gomaxprocs: 2

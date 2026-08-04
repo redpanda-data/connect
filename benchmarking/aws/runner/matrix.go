@@ -62,6 +62,15 @@ type MatrixRunner struct {
 	Topology Topology
 	// Names is the per-session naming value passed into Topology.EngineSeries.
 	Names BenchNames
+	// Topics is the scenario's dataset.topics count (0/1 = single-topic).
+	// Chained onto Names alongside WithStreams(pt.Streams) when building the
+	// per-point MetricSidecar args, so a multi-topic scenario's sidecar polls
+	// every per-topic table (see IcebergTablesForTopics) instead of just the
+	// unsuffixed base table. Without this a 7-topic scenario's sidecar would
+	// poll a table nothing writes to and silently report ~0 MB/s — the same
+	// class of bug that WithStreams(pt.Streams) below already exists to
+	// prevent for the stream case.
+	Topics int
 	// Outs is the TF output map, passed into Topology.MetricSidecar.
 	Outs map[string]string
 	// Direction selects how throughput is measured: source benches parse
@@ -179,7 +188,7 @@ func (m *MatrixRunner) Run(
 					// writes when Streams > 1). Without this, a 2-stream arm's
 					// sidecar polls a table that never grows and the arm
 					// reports ~0 MB/s with no error anywhere.
-					Names: m.Names.WithStreams(pt.Streams),
+					Names: m.Names.WithStreams(pt.Streams).WithTopics(m.Topics),
 				})
 			}
 
