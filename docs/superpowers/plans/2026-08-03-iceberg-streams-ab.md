@@ -2197,7 +2197,10 @@ func TestAppendMarkdown_RendersArmRows(t *testing.T) {
 	}
 	require.Contains(t, out, "| vCPU |", "vCPU and GOMAXPROCS must be separate columns")
 	require.Contains(t, out, "arm")
-	require.Equal(t, 3, strings.Count(out, "connect"), "three connect rows, one per arm")
+	// Count "| connect" (the table's engine column), not bare "connect": the
+	// template's Git-SHA link contains github.com/redpanda-data/connect/commit/…,
+	// so a bare count is 4 and would pass even if a table row went missing.
+	require.Equal(t, 3, strings.Count(out, "| connect"), "three connect rows, one per arm")
 }
 
 func TestAppendMarkdown_ArmlessRowsKeepBlankArm(t *testing.T) {
