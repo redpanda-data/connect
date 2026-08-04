@@ -1,5 +1,5 @@
 -- Multi-schema CDC test setup
--- Tests: schema glob (tenant_*), pg_schema metadata, commit_ts_ms, before (update/delete)
+-- Tests: schema glob (tenant_*), database_schema metadata, commit_ts_ms, before (update/delete)
 
 -- ── Tenant schemas ────────────────────────────────────────────────────────────
 

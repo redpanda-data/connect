@@ -85,7 +85,7 @@ Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then th
 
 This input adds the following metadata fields to each message:
 - table: Name of the table that the message originated from
-- pg_schema: The PostgreSQL schema name that the table belongs to (e.g. "public", "tenant_foo"). Useful for per-schema routing when using schema patterns.
+- database_schema: The database schema for the table where the message originates from (e.g. "public", "tenant_foo"). Useful for per-schema routing when using schema patterns.
 - operation: Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled
 - lsn: the log sequence number in postgres
 - schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
@@ -586,7 +586,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				}
 				batchMsg := service.NewMessage(mb)
 				batchMsg.MetaSet("table", msg.Table)
-				batchMsg.MetaSet("pg_schema", msg.Schema)
+				batchMsg.MetaSet("database_schema", msg.Schema)
 				batchMsg.MetaSet("operation", string(msg.Operation))
 				if msg.LSN != nil {
 					batchMsg.MetaSet("lsn", *msg.LSN)

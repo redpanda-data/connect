@@ -1249,44 +1249,44 @@ postgres_cdc:
 		outBatches,
 		[]any{
 			map[string]any{
-				"operation": "read",
-				"table":     "FlightsCompositePK",
-				"pg_schema": "public",
+				"operation":       "read",
+				"table":           "FlightsCompositePK",
+				"database_schema": "public",
 			},
 			map[string]any{
-				"operation": "read",
-				"table":     "flights",
-				"pg_schema": "public",
+				"operation":       "read",
+				"table":           "flights",
+				"database_schema": "public",
 			},
 			map[string]any{
-				"operation":    "insert",
-				"table":        "FlightsCompositePK",
-				"lsn":          "XXX/XXX",
-				"commit_ts_ms": "SET",
-				"pg_schema":    "public",
+				"operation":       "insert",
+				"table":           "FlightsCompositePK",
+				"lsn":             "XXX/XXX",
+				"commit_ts_ms":    "SET",
+				"database_schema": "public",
 			},
 			map[string]any{
-				"operation":    "insert",
-				"table":        "flights",
-				"lsn":          "XXX/XXX",
-				"commit_ts_ms": "SET",
-				"pg_schema":    "public",
+				"operation":       "insert",
+				"table":           "flights",
+				"lsn":             "XXX/XXX",
+				"commit_ts_ms":    "SET",
+				"database_schema": "public",
 			},
 			map[string]any{
-				"operation":    "update",
-				"table":        "flights",
-				"lsn":          "XXX/XXX",
-				"commit_ts_ms": "SET",
-				"before":       "SET",
-				"pg_schema":    "public",
+				"operation":       "update",
+				"table":           "flights",
+				"lsn":             "XXX/XXX",
+				"commit_ts_ms":    "SET",
+				"before":          "SET",
+				"database_schema": "public",
 			},
 			map[string]any{
-				"operation":    "delete",
-				"table":        "flights",
-				"lsn":          "XXX/XXX",
-				"commit_ts_ms": "SET",
-				"before":       "SET",
-				"pg_schema":    "public",
+				"operation":       "delete",
+				"table":           "flights",
+				"lsn":             "XXX/XXX",
+				"commit_ts_ms":    "SET",
+				"before":          "SET",
+				"database_schema": "public",
 			},
 		},
 	)
@@ -1656,7 +1656,7 @@ func TestIntegrationMultiSchemaSnapshotAndCDC(t *testing.T) {
 	require.NoError(t, err)
 
 	type msgMeta struct {
-		pgSchema  string
+		dbSchema  string
 		table     string
 		operation string
 		lsn       string
@@ -1685,7 +1685,7 @@ postgres_cdc:
 		defer mu.Unlock()
 		for _, msg := range batch {
 			m := msgMeta{}
-			m.pgSchema, _ = msg.MetaGet("pg_schema")
+			m.dbSchema, _ = msg.MetaGet("database_schema")
 			m.table, _ = msg.MetaGet("table")
 			m.operation, _ = msg.MetaGet("operation")
 			m.lsn, _ = msg.MetaGet("lsn")
@@ -1738,7 +1738,7 @@ postgres_cdc:
 	for _, m := range snapshots {
 		assert.Equal(t, "events", m.table, "snapshot: table should be bare name without schema prefix")
 		assert.Empty(t, m.lsn, "snapshot rows have no LSN")
-		snapshotSchemas[m.pgSchema]++
+		snapshotSchemas[m.dbSchema]++
 	}
 	assert.Equal(t, 2, snapshotSchemas["tenant_a"], "expected 2 snapshot rows from tenant_a")
 	assert.Equal(t, 1, snapshotSchemas["tenant_b"], "expected 1 snapshot row from tenant_b")
@@ -1750,7 +1750,7 @@ postgres_cdc:
 		assert.Equal(t, "insert", m.operation)
 		assert.Equal(t, "events", m.table)
 		assert.NotEmpty(t, m.lsn, "CDC rows must have an LSN")
-		cdcSchemas[m.pgSchema]++
+		cdcSchemas[m.dbSchema]++
 	}
 	assert.Equal(t, 1, cdcSchemas["tenant_a"], "expected 1 CDC row from tenant_a")
 	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
@@ -1777,7 +1777,7 @@ func TestIntegrationMultiSchemaMissingTableDegradesGracefully(t *testing.T) {
 	require.NoError(t, err)
 
 	type msgMeta struct {
-		pgSchema string
+		dbSchema string
 		table    string
 	}
 
@@ -1804,7 +1804,7 @@ postgres_cdc:
 		defer mu.Unlock()
 		for _, msg := range batch {
 			m := msgMeta{}
-			m.pgSchema, _ = msg.MetaGet("pg_schema")
+			m.dbSchema, _ = msg.MetaGet("database_schema")
 			m.table, _ = msg.MetaGet("table")
 			collected = append(collected, m)
 		}
@@ -1827,7 +1827,7 @@ postgres_cdc:
 	mu.Lock()
 	defer mu.Unlock()
 	require.Len(t, collected, 1)
-	assert.Equal(t, "tenant_a", collected[0].pgSchema)
+	assert.Equal(t, "tenant_a", collected[0].dbSchema)
 	assert.Equal(t, "events", collected[0].table)
 }
 
