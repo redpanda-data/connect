@@ -57,6 +57,12 @@ type PointResult struct {
 	Anomalies []Anomaly   `json:"anomalies,omitempty"`
 	Prom      []PromPoint `json:"prom,omitempty"`
 
+	// Arm is the matrix.arms id this point measured; empty for arm-less sweeps.
+	Arm string `json:"arm,omitempty"`
+	// GOMAXPROCS is the runtime P count measured at this point. Equal to VCPU
+	// unless an arm oversubscribed it.
+	GOMAXPROCS int `json:"gomaxprocs,omitempty"`
+
 	// BrokerSeries is the broker-side throughput attributed to this engine
 	// at this vCPU point. For Connect, it's a cross-check against the
 	// rolling-stats-derived Summary. For KC (which has no rolling-stats
@@ -107,6 +113,8 @@ type markdownView struct {
 
 type markdownRow struct {
 	VCPU           int
+	GOMAXPROCS     int
+	Arm            string
 	Engine         string
 	MedianMB       string
 	MeanMB         string
@@ -133,29 +141,38 @@ func AppendMarkdown(target string, r *Result, description string) error {
 		return fmt.Errorf("scenario %q is not connector/scenario", r.Scenario)
 	}
 
-	// First pass: group points by vCPU and capture iteration order.
+	// First pass: group points by (vCPU, arm) and capture iteration order. The
+	// arm is part of the key so an A/B at one vCPU yields one row group per
+	// arm; for arm-less runs the arm is "" and grouping is by vCPU as before,
+	// which keeps the connect/KC pairing (and the delta column) intact.
+	type groupKey struct {
+		vcpu int
+		arm  string
+	}
 	type vGroup struct {
-		vcpu     int
+		key      groupKey
 		byEngine map[string]PointResult
 	}
-	groups := map[int]*vGroup{}
-	var order []int
+	groups := map[groupKey]*vGroup{}
+	var order []groupKey
 	for _, p := range r.Points {
-		g, ok := groups[p.VCPU]
+		k := groupKey{vcpu: p.VCPU, arm: p.Arm}
+		g, ok := groups[k]
 		if !ok {
-			g = &vGroup{vcpu: p.VCPU, byEngine: map[string]PointResult{}}
-			groups[p.VCPU] = g
-			order = append(order, p.VCPU)
+			g = &vGroup{key: k, byEngine: map[string]PointResult{}}
+			groups[k] = g
+			order = append(order, k)
 		}
 		g.byEngine[p.Engine] = p
 	}
 
-	// Second pass: emit one row per (vcpu, engine) — connect first, then kafka_connect.
-	// For KC rows, compute the delta column from the matching Connect row.
+	// Second pass: emit one row per (vcpu, arm, engine) — connect first, then
+	// kafka_connect. For KC rows, compute the delta column from the matching
+	// Connect row in the same group.
 	var rows []markdownRow
 	var anomalies []anomalyView
-	for _, vcpu := range order {
-		g := groups[vcpu]
+	for _, k := range order {
+		g := groups[k]
 		for _, engine := range []string{"connect", "kafka_connect"} {
 			p, ok := g.byEngine[engine]
 			if !ok {
@@ -180,6 +197,8 @@ func AppendMarkdown(target string, r *Result, description string) error {
 			}
 			rows = append(rows, markdownRow{
 				VCPU:           p.VCPU,
+				GOMAXPROCS:     p.GOMAXPROCS,
+				Arm:            p.Arm,
 				Engine:         p.Engine,
 				MedianMB:       fmt.Sprintf("%12.0f", p.Summary.MedianMBPerSec),
 				MeanMB:         fmt.Sprintf("%12.3f", p.Summary.MeanMBPerSec),

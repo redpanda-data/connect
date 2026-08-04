@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -189,4 +190,59 @@ func TestAppendMarkdown(t *testing.T) {
 	require.Contains(t, s, "153")
 	// msg/sec (p50) — formatted with thousands separator:
 	require.Contains(t, s, "127,344")
+}
+
+func TestAppendMarkdown_RendersArmRows(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "iceberg.md")
+	r := &Result{
+		Scenario:  "iceberg/orders-sink-streams-ab",
+		GitSHA:    "abcdef1234567890",
+		StartedAt: time.Now().UTC(),
+		Points: []PointResult{
+			{VCPU: 2, GOMAXPROCS: 2, Arm: "a0-1pipe-gmp2", Engine: "connect",
+				Summary: Summary{MedianMBPerSec: 69, MeanMBPerSec: 69.1}},
+			{VCPU: 2, GOMAXPROCS: 4, Arm: "a1-1pipe-gmp4", Engine: "connect",
+				Summary: Summary{MedianMBPerSec: 80, MeanMBPerSec: 80.2}},
+			{VCPU: 2, GOMAXPROCS: 4, Arm: "b-2pipe-gmp4", Engine: "connect",
+				Summary: Summary{MedianMBPerSec: 95, MeanMBPerSec: 95.3}},
+		},
+	}
+	require.NoError(t, AppendMarkdown(target, r, "arms A/B"))
+	raw, err := os.ReadFile(target)
+	require.NoError(t, err)
+	out := string(raw)
+
+	// One row per arm, all three present and distinguishable.
+	for _, arm := range []string{"a0-1pipe-gmp2", "a1-1pipe-gmp4", "b-2pipe-gmp4"} {
+		require.Contains(t, out, arm)
+	}
+	require.Contains(t, out, "| vCPU |", "vCPU and GOMAXPROCS must be separate columns")
+	require.Contains(t, out, "arm")
+	// Count "| connect" (row-leading pipe + engine column) rather than bare
+	// "connect": the header also links to
+	// https://github.com/redpanda-data/connect/commit/... which contains the
+	// substring "connect" and would otherwise inflate the count by one.
+	require.Equal(t, 3, strings.Count(out, "| connect"), "three connect rows, one per arm")
+}
+
+func TestAppendMarkdown_ArmlessRowsKeepBlankArm(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "postgres.md")
+	r := &Result{
+		Scenario:  "postgres/orders-cdc",
+		GitSHA:    "abcdef1234567890",
+		StartedAt: time.Now().UTC(),
+		Points: []PointResult{
+			{VCPU: 1, GOMAXPROCS: 1, Engine: "connect", Summary: Summary{MedianMBPerSec: 10}},
+			{VCPU: 1, GOMAXPROCS: 1, Engine: "kafka_connect", Summary: Summary{MedianMBPerSec: 8}},
+		},
+	}
+	require.NoError(t, AppendMarkdown(target, r, "cdc"))
+	raw, err := os.ReadFile(target)
+	require.NoError(t, err)
+	out := string(raw)
+	// The KC delta column still works: connect and KC group together when
+	// neither carries an arm.
+	require.Contains(t, out, "-2 MB/s (-20%)")
 }

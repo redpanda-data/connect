@@ -373,6 +373,8 @@ func runBench(opts benchOpts) (errOut error) {
 			Anomalies:    p.Anomalies,
 			Prom:         p.Prom,
 			BrokerSeries: p.BrokerSeries,
+			Arm:          p.ArmID,
+			GOMAXPROCS:   p.GOMAXPROCS,
 		})
 	}
 	var connectPts, kcPts []PointResult
