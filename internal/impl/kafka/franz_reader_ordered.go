@@ -45,6 +45,7 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(kroFieldConsumerGroup).
 			Description("An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.").
+			ShortDescription("An optional consumer group to consume as. Partitions and offsets are managed automatically across the group.").
 			Optional(),
 		service.NewDurationField(kroFieldCommitPeriod).
 			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
@@ -52,6 +53,7 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 			Advanced(),
 		service.NewStringField(kroFieldPartitionBuffer).
 			Description("A buffer size (in bytes) for each consumed partition, allowing records to be queued internally before flushing. Increasing this may improve throughput at the cost of higher memory utilisation. Note that each buffer can grow slightly beyond this value.").
+			ShortDescription("Buffer size in bytes for each consumed partition, queueing records before they are flushed.").
 			Default("1MB").
 			Advanced(),
 		service.NewDurationField(kroFieldTopicLagRefreshPeriod).
@@ -63,6 +65,7 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 				"This value must be less than or equal to the `partition_buffer_bytes`. " +
 				"If using Redpanda output, this value should not be greater than the `max_message_bytes` option value (1MB by default), " +
 				"and for high-throughput scenarios they should be equal.").
+			ShortDescription("Maximum size in bytes of each batch yielded by this input. Must not exceed partition_buffer_bytes.").
 			Default("32KB").
 			Advanced(),
 	}

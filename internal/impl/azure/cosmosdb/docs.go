@@ -197,7 +197,8 @@ func PartitionKeysField(isInputField bool) *service.ConfigField {
 	// TODO: Add examples for hierarchical / empty Partition Keys this when the following issues are addressed:
 	// - https://github.com/Azure/azure-sdk-for-go/issues/18578
 	// - https://github.com/Azure/azure-sdk-for-go/issues/21063
-	field := service.NewBloblangField(FieldPartitionKeysMap).Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to a single partition key value or an array of partition key values of type string, integer or boolean. Currently, hierarchical partition keys are not supported so only one value may be provided.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = null`)
+	field := service.NewBloblangField(FieldPartitionKeysMap).Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to a single partition key value or an array of partition key values of type string, integer or boolean. Currently, hierarchical partition keys are not supported so only one value may be provided.").
+		ShortDescription("Bloblang mapping evaluating to a partition key, or an array of keys, of type string, integer or boolean.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = null`)
 
 	// Add dynamic examples
 	if !isInputField {
@@ -230,10 +231,12 @@ func CRUDFields(hasReadOperation bool) []*service.ConfigField {
 				string(patchOperationSet):       "Set patch operation.",
 			}).Description("Operation.").Default(string(patchOperationAdd)),
 			service.NewStringField(fieldPatchPath).Description("Path.").Example("/foo/bar/baz"),
-			service.NewBloblangField(fieldPatchValue).Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to a value of any type that is supported by CosmosDB.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = json("blobfish").depth`).Example(`root = [1, 2, 3]`).Optional(),
+			service.NewBloblangField(fieldPatchValue).Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to a value of any type that is supported by CosmosDB.").
+				ShortDescription("Bloblang mapping evaluating to any value type supported by CosmosDB.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = json("blobfish").depth`).Example(`root = [1, 2, 3]`).Optional(),
 		}...).Description("Patch operations to be performed when `" + fieldOperation + ": " + string(OperationPatch) + "` .").Optional().Advanced(),
 		service.NewInterpolatedStringField(fieldPatchCondition).Description("Patch operation condition.").Optional().Advanced().Example(`from c where not is_defined(c.blobfish)`),
-		service.NewBoolField(fieldAutoID).Description("Automatically set the item `id` field to a random UUID v4. If the `id` field is already set, then it will not be overwritten. Setting this to `false` can improve performance, since the messages will not have to be parsed.").Default(true).Advanced(),
+		service.NewBoolField(fieldAutoID).Description("Automatically set the item `id` field to a random UUID v4. If the `id` field is already set, then it will not be overwritten. Setting this to `false` can improve performance, since the messages will not have to be parsed.").
+			ShortDescription("Set the item id field to a random UUID v4, unless it is already set.").Default(true).Advanced(),
 		service.NewInterpolatedStringField(fieldItemID).Description("ID of item to replace or delete. Only used by the Replace and Delete operations").Example(`${! json("id") }`).Optional(),
 	}
 }

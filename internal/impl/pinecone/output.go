@@ -64,6 +64,7 @@ func outputSpec() *service.ConfigSpec {
 			service.NewBloblangField(poFieldVectorMapping).
 				Optional().
 				Description("The mapping to extract out the vector from the document. The result must be a floating point array. Required if not a delete operation.").
+				ShortDescription("Mapping extracting the vector from the document, returning a float array. Required unless deleting.").
 				Example("root = this.embeddings_vector").
 				Example("root = [1.2, 0.5, 0.76]"),
 			service.NewBloblangField(poFieldMetadataMapping).

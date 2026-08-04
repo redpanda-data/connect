@@ -93,6 +93,7 @@ func outputConfig() *service.ConfigSpec {
 			service.NewStringField(coFieldURI).
 				Description(`The connection URI to connect to.
 See https://neo4j.com/docs/go-manual/current/connect-advanced/[Neo4j's documentation^] for more information. `).
+				ShortDescription("The connection URI to connect to.").
 				Examples(
 					"neo4j://demo.neo4jlabs.com",
 					"neo4j+s://aura.databases.neo4j.io",
@@ -114,6 +115,7 @@ MERGE (p)-[:WORKS_FOR]->(o)`,
 				Default(""),
 			service.NewBloblangField(coFieldArgsMapping).
 				Description(`The mapping from the message to the data that is passed in as parameters to the cypher expression. Must be an object. By default the entire payload is used.`).
+				ShortDescription("Mapping from the message to the parameters passed to the cypher expression. Must be an object.").
 				Examples(
 					`root.name = this.displayName`,
 					`root = {"orgId": this.org.id, "name": this.user.name}`,

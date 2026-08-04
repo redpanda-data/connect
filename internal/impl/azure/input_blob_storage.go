@@ -138,6 +138,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Default(false),
 			service.NewInputField(bsiFieldTargetsInput).
 				Description("EXPERIMENTAL: An optional source of download targets, configured as a xref:components:inputs/about.adoc[regular Redpanda Connect input]. Each message yielded by this input should be a single structured object containing a field `name`, which represents the blob to be downloaded.").
+				ShortDescription("EXPERIMENTAL: An optional input supplying download targets.").
 				Optional().
 				Version("4.27.0").
 				Example(map[string]any{

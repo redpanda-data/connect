@@ -3,6 +3,38 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.103.1 - 2026-07-31
+
+### Added
+
+- oracledb_cdc: Add additional debug log for LogMiner queries. ([@josephwoodward](https://github.com/josephwoodward), [#4653](https://github.com/redpanda-data/connect/pull/4653))
+
+## 4.103.0 - 2026-07-30
+
+### Fixed
+
+- mssqlserver_cdc: Convert reading of LSN from checkpoint cache to binary to avoid LSN corruption due to read collation decoding. ([@josephwoodward](https://github.com/josephwoodward), [#4644](https://github.com/redpanda-data/connect/pull/4644))
+
+### Changed
+
+- oracledb_cdc: Improved ability to debug logminer query performance with better debug logging for redo log file loading. ([@josephwoodward](https://github.com/josephwoodward), [#4629](https://github.com/redpanda-data/connect/pull/4629))
+- postgres_cdc: Clarified behavior of postgres_cdc when the tables configuration is empty. ([@josephwoodward](https://github.com/josephwoodward), [#4621](https://github.com/redpanda-data/connect/pull/4621))
+
+### Added
+
+- docs: Add short descriptions to component config fields. ([@prakhargarg105](https://github.com/prakhargarg105), [#4638](https://github.com/redpanda-data/connect/pull/4638))
+
+## 4.102.0 - 2026-07-23
+
+### Added
+
+- aws_dynamodb_partiql: Added `use_batch` field (default true) to enable single ExecuteStatement calls for PartiQL SELECT queries against Global Secondary Indexes, since BatchExecuteStatement does not support GSI queries. ([@squiidz](https://github.com/squiidz), [#4588](https://github.com/redpanda-data/connect/pull/4588))
+- migrator: Support ability to set headers via config. ([@josephwoodward](https://github.com/josephwoodward), [#4615](https://github.com/redpanda-data/connect/pull/4615))
+
+### Fixed
+
+- iceberg: Fixed table_location prefix handling to work correctly both with and without trailing slashes, resolving CreateTable failures on schema-evolved tables. ([@david-yu](https://github.com/david-yu), [#4604](https://github.com/redpanda-data/connect/pull/4604))
+
 ## 4.101.0 - 2026-07-17
 
 ### Added

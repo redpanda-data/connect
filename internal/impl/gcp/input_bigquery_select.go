@@ -112,6 +112,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
 		Field(service.NewStringField("where").
 			Description("An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Placeholders should always be question marks (`?`).").
+			ShortDescription("An optional where clause. Placeholders must be question marks, populated from args_mapping.").
 			Example("type = ? and created_at > ?").
 			Example("user_id = ?").
 			Optional(),
@@ -121,6 +122,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("priority").Description("The priority with which to schedule the query.").Default("")).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
+			ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").
 			Example(`root = [ "article", now().ts_format("2006-01-02") ]`).
 			Optional()).
 		Field(service.NewStringField("prefix").

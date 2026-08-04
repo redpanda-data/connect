@@ -140,17 +140,20 @@ Change streams provide a way to track mutations to your Spanner database tables.
 more information about Spanner change streams, refer to the Google Cloud documentation:
 https://cloud.google.com/spanner/docs/change-streams
 `).
-		Field(service.NewStringField(siFieldCredentialsJSON).Optional().Description("Base64 encoded GCP service account JSON credentials file for authentication. If not provided, Application Default Credentials (ADC) will be used.").Default("")).
+		Field(service.NewStringField(siFieldCredentialsJSON).Optional().Description("Base64 encoded GCP service account JSON credentials file for authentication. If not provided, Application Default Credentials (ADC) will be used.").
+			ShortDescription("Base64 encoded GCP service account JSON credentials. Application Default Credentials are used if unset.").Default("")).
 		Field(service.NewStringField(siFieldProjectID).Description("GCP project ID containing the Spanner instance")).
 		Field(service.NewStringField(siFieldInstanceID).Description("Spanner instance ID")).
 		Field(service.NewStringField(siFieldDatabaseID).Description("Spanner database ID")).
-		Field(service.NewStringField(siFieldStreamID).Description("The name of the change stream to track, the stream must exist in the database. To create a change stream, see https://cloud.google.com/spanner/docs/change-streams/manage.")).
+		Field(service.NewStringField(siFieldStreamID).Description("The name of the change stream to track, the stream must exist in the database. To create a change stream, see https://cloud.google.com/spanner/docs/change-streams/manage.").
+			ShortDescription("The name of the change stream to track. The stream must already exist in the database.")).
 		Field(service.NewStringField(siFieldStartTimestamp).Optional().Description("RFC3339 formatted inclusive timestamp to start reading from the change stream (default: current time)").Example("2022-01-01T00:00:00Z").Default("")).
 		Field(service.NewStringField(siFieldEndTimestamp).Optional().Description("RFC3339 formatted exclusive timestamp to stop reading at (default: no end time)").Example("2022-01-01T00:00:00Z").Default("")).
 		Field(service.NewStringField(siFieldHeartbeatInterval).Advanced().Description("Duration string for heartbeat interval").Default("10s")).
 		Field(service.NewStringField(siFieldMetadataTable).Advanced().Optional().Description("The table to store metadata in (default: cdc_metadata_<stream_id>)").Default("")).
 		Field(service.NewStringField(siFieldMinWatermarkCacheTTL).Advanced().Description("Duration string for frequency of querying Spanner for minimum watermark.").Default("5s")).
-		Field(service.NewStringListField(siFieldAllowedModTypes).Advanced().Optional().Description("List of modification types to process. If not specified, all modification types are processed. Allowed values: INSERT, UPDATE, DELETE").Example([]string{"INSERT", "UPDATE", "DELETE"})).
+		Field(service.NewStringListField(siFieldAllowedModTypes).Advanced().Optional().Description("List of modification types to process. If not specified, all modification types are processed. Allowed values: INSERT, UPDATE, DELETE").
+			ShortDescription("Modification types to process: INSERT, UPDATE, DELETE. All are processed if unset.").Example([]string{"INSERT", "UPDATE", "DELETE"})).
 		Field(service.NewBatchPolicyField(siFieldBatchPolicy)).
 		Field(service.NewAutoRetryNacksToggleField())
 }

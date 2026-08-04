@@ -76,7 +76,7 @@ func (sm *SessionManager) AddLogFile(ctx context.Context, conn *sql.Conn, files 
 			return fmt.Errorf("adding logminer log file '%s' with option '%s': %w", f.FileName, opt, err)
 		}
 
-		sm.log.Debugf("Loaded redo log file '%s' into LogMiner", f.FileName)
+		sm.log.Debugf("Loaded %s redo log file '%s' into LogMiner", f.Type, f.FileName)
 	}
 
 	sm.loadedFiles = files

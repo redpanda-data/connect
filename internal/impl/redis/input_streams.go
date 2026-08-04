@@ -69,6 +69,7 @@ func redisStreamsInputConfig() *service.ConfigSpec {
 				Default(true),
 			service.NewBoolField(siFieldStartFromOldest).
 				Description("If an offset is not found for a stream, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.").
+				ShortDescription("When no offset is found for a stream, consume from the oldest available offset rather than the latest.").
 				Advanced().
 				Default(true),
 			service.NewDurationField(siFieldCommitPeriod).

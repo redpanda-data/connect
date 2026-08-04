@@ -76,16 +76,19 @@ A schema can be derived from a source file using https://github.com/xitongsys/pa
 			"to_json":   "Expand a file into one or more JSON messages.",
 			"from_json": "Compress a batch of JSON documents into a file.",
 		}).
-			Description("Determines whether the processor converts messages into a parquet file or expands parquet files into messages. Converting into JSON allows subsequent processors and mappings to convert the data into any other format.")).
+			Description("Determines whether the processor converts messages into a parquet file or expands parquet files into messages. Converting into JSON allows subsequent processors and mappings to convert the data into any other format.").
+			ShortDescription("Whether the processor converts messages into a parquet file or expands parquet files into messages.")).
 		Field(service.NewStringEnumField("compression", "uncompressed", "snappy", "gzip", "lz4", "zstd" /*, "lzo", "brotli", "lz4_raw" */).
 			Description("The type of compression to use when writing parquet files, this field is ignored when consuming parquet files.").
 			Default("snappy")).
 		Field(service.NewStringField("schema_file").
 			Description("A file path containing a schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified when creating Parquet files via the `from_json` operator.").
+			ShortDescription("A file path containing the JSON schema document describing the parquet files.").
 			Optional().
 			Example(`schemas/foo.json`)).
 		Field(service.NewStringField("schema").
 			Description("A schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified when creating Parquet files via the `from_json` operator.").
+			ShortDescription("A JSON schema document describing the parquet files being generated or consumed.").
 			Optional().
 			Example(`{
   "Tag": "name=root, repetitiontype=REQUIRED",

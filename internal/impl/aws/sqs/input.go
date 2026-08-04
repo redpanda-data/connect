@@ -112,10 +112,12 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`
 				Description("The SQS URL to consume from."),
 			service.NewBoolField(sqsiFieldDeleteMessage).
 				Description("Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.").
+				ShortDescription("Delete the consumed message once it is acked.").
 				Default(true).
 				Advanced(),
 			service.NewBoolField(sqsiFieldResetVisibility).
 				Description("Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.").
+				ShortDescription("Set the visibility timeout of a consumed message to zero once it is nacked.").
 				Version("3.58.0").
 				Default(true).
 				Advanced(),
@@ -132,6 +134,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`
 				Advanced(),
 			service.NewDurationField(sqsiFieldMessageTimeout).
 				Description("The time to process messages before needing to refresh the receipt handle. Messages will be eligible for refresh when half of the timeout has elapsed. This sets MessageVisibility for each received message.").
+				ShortDescription("How long to process messages before the receipt handle must be refreshed.").
 				Default("30s").
 				Advanced(),
 		).

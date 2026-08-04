@@ -256,12 +256,14 @@ array:list
 
 			service.NewBoolField(ioFieldCaseSensitiveColumns).
 				Description("Controls how message field names are matched against table column names, and how column references in the partition spec are resolved. When `true` (the default), names must match exactly. When `false`, matching is case-insensitive — set this when your downstream catalog or query engine treats column names as case-insensitive (the iceberg specification's recommended convention) so that, for example, a message keyed `\"COLUMN\"` lands in an existing `column` rather than triggering schema evolution. Ambiguous case-only duplicates in the input are rejected.").
+				ShortDescription("Whether message field names must match table column names exactly.").
 				Default(true).
 				Advanced(),
 
 			// Row-level operation mapping (insert / upsert / delete).
 			service.NewInterpolatedStringField(ioFieldRowOperation).
 				Description("The row-level operation to apply for each message: `insert` (append), `upsert` (replace rows matching `identifier_fields`, then append), or `delete` (remove rows matching `identifier_fields`). Supports interpolation so the operation can be driven by the data — e.g. a change-data-capture stream's operation field. Defaults to `insert`, preserving the original append-only behaviour.\n\nSee the <<row-level-operations,Row-level operations>> section above for the full semantics, the format-version-2 upgrade, batching behaviour, and important caveats.").
+				ShortDescription("The row-level operation per message: insert, upsert or delete.").
 				Example("insert").
 				Example(`${! metadata("op") }`).
 				Example(`${! this.op == "d" ? "delete" : "upsert" }`).
@@ -270,6 +272,7 @@ array:list
 
 			service.NewStringListField(ioFieldIdentifierFields).
 				Description("The columns forming the row identity (the Iceberg identifier fields / equality-delete key) used by `upsert` and `delete`. Required when `row_operation` can evaluate to `upsert` or `delete`, and must reference existing table columns of a primitive, non-floating-point type.\n\nSee the <<row-level-operations,Row-level operations>> section above for the full constraints, including the temporal-type and partitioning rules and when the requirement is enforced.").
+				ShortDescription("Columns forming the row identity, used by upsert and delete. Required when either can be evaluated.").
 				Example([]string{"id"}).
 				Example([]string{"tenant_id", "user_id"}).
 				Default([]string{}).
@@ -321,6 +324,7 @@ array:list
 						Advanced(),
 					service.NewStringField(ioFieldGCSCredType).
 						Description("The type of credentials to use. Valid values: `service_account`, `authorized_user`, `impersonated_service_account`, `external_account`.").
+						ShortDescription("The type of credentials to use: service_account, authorized_user, impersonated_service_account or external_account.").
 						Optional().
 						Example("service_account"),
 					service.NewStringField(ioFieldGCSKeyPath).
@@ -328,6 +332,7 @@ array:list
 						Optional(),
 					service.NewStringField(ioFieldGCSJSONKey).
 						Description("GCP credentials JSON content. Use this or `credentials_file`, not both.").
+						ShortDescription("GCP credentials JSON content. Use this or credentials_file, not both.").
 						Optional().
 						Secret(),
 				).Description("Google Cloud Storage configuration.").
@@ -359,7 +364,8 @@ array:list
 						Secret(),
 				).Description("Azure Blob Storage (ADLS Gen2) configuration.").
 					Optional(),
-			).Description("Storage backend configuration for data files. Exactly one of `aws_s3`, `gcp_cloud_storage`, or `azure_blob_storage` must be specified."),
+			).Description("Storage backend configuration for data files. Exactly one of `aws_s3`, `gcp_cloud_storage`, or `azure_blob_storage` must be specified.").
+				ShortDescription("Storage backend for data files. Exactly one of aws_s3, gcp_cloud_storage or azure_blob_storage."),
 
 			// Schema evolution
 			service.NewObjectField(ioFieldSchemaEvolution,
@@ -368,6 +374,7 @@ array:list
 					Default(false),
 				service.NewInterpolatedStringField(ioFieldSchemaEvolutionPartitionSpec).
 					Description("A bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an iceberg partition spec in the same string format as the https://docs.redpanda.com/current/manage/iceberg/about-iceberg-topics/#use-custom-partitioning[^Redpanda Streaming Topic Property]").
+					ShortDescription("A Bloblang expression evaluated on table creation to determine the table's Iceberg partition spec.").
 					Example(`(col1)`).
 					Example(`(nested.col)`).
 					Example(`(year(my_ts_col))`).
@@ -378,19 +385,23 @@ array:list
 					Default("()"),
 				service.NewStringField(ioFieldSchemaEvolutionTableLoc).
 					Description("A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived as `{prefix}{namespace}/{table}`.").
+					ShortDescription("A location prefix for new tables, for catalogs such as AWS Glue that require one explicitly.").
 					Example("s3://my-iceberg-bucket/").
 					Optional(),
 				service.NewStringField(ioFieldSchemaEvolutionSchemaMetadata).
 					Description("The name of a message metadata field containing a schema definition. When set, the schema is used to determine column types during schema evolution and table creation instead of inferring types from values. The schema must be in the standard common schema format (the same format used by the `parquet_encode` processor's `schema_metadata` field). For batches of messages, the first message's schema is used. Record presence drives schema shape: fields declared in the schema metadata that are absent from the record are not added to the table, while the metadata controls column ordering, naming, and types for fields that are present. In case-insensitive mode, top-level column names use the metadata's casing — record keys are matched by case-folding and the metadata's name is what lands in the table.").
+					ShortDescription("A message metadata field containing a schema definition, used to determine column types instead of inferring them.").
 					Default("").
 					Optional().
 					Advanced(),
 				service.NewBloblangField(ioFieldSchemaEvolutionNewColumnTypeMapping).
 					Description("An optional Bloblang mapping to customize column types during schema evolution. This mapping is executed for each new column and can override the inferred or schema-metadata-derived type. The mapping receives an object with fields `name` (column name), `path` (dot-separated path), `value` (sample value), `inferred_type` (the type that would be used without this mapping), `message` (the full message body), `namespace`, and `table`. It must return a string with a valid Iceberg type name: `boolean`, `int`, `long`, `float`, `double`, `string`, `binary`, `date`, `time`, `timestamp`, `timestamptz`, `uuid`, `decimal(p,s)`, or `fixed[n]`.").
+					ShortDescription("An optional Bloblang mapping customising column types during schema evolution.").
 					Optional().
 					Advanced(),
 				service.NewBoolField(ioFieldSchemaEvolutionRequireSchemaMetadata).
 					Description("When `true`, writing a numeric value into a `timestamp`, `timestamptz`, `date`, or `time` column without `schema_metadata` registered for that column is a hard error. The default `false` permits a fallback path that interprets bare numeric timestamps as Unix seconds and bare numeric times as already-microseconds — convenient, but silently wrong if upstream produced milliseconds. Enable this when you cannot guarantee the upstream attaches schema metadata and want to fail loudly rather than corrupt dates by ~50,000 years. No effect on time-typed columns receiving `time.Time`/`time.Duration` Go values, which carry their own unit unambiguously, and no effect on non-time columns. Requires `schema_metadata` to be set.").
+					ShortDescription("Treat a numeric value written to a temporal column without registered schema_metadata as a hard error.").
 					Default(false).
 					Advanced(),
 			).Description("Schema evolution configuration.").
@@ -416,6 +427,7 @@ array:list
 			service.NewObjectField(ioFieldParquet,
 				service.NewStringEnumField(ioFieldParquetStringEncoding, "plain", "delta_length_byte_array").
 					Description("The encoding to use for string and binary columns. Use `plain` for compatibility with readers that do not support `DELTA_LENGTH_BYTE_ARRAY` encoding, such as AWS Redshift Spectrum.").
+					ShortDescription("Encoding for string and binary columns. Use plain for readers lacking DELTA_LENGTH_BYTE_ARRAY.").
 					Default("delta_length_byte_array"),
 			).Description("Parquet writer configuration.").
 				Advanced().
