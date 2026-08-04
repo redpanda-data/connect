@@ -19,6 +19,22 @@ const (
 	minDuration         = 15 * time.Minute
 	reservedCores       = 2
 	defaultGoMemPerVCPU = 2 // GiB
+	// maxArmGOMAXPROCS bounds Arm.GOMAXPROCS. The taskset core pin always
+	// follows vCPU, not GOMAXPROCS (see renderBenchScript), so oversubscribing
+	// past the largest vCPU count any supported instance type offers
+	// (instanceTypeVCPU's max, the 16xlarge row) buys nothing but scheduler
+	// contention on cores the arm was never pinned to. A typo like
+	// `gomaxprocs: 1000` would otherwise validate fine and silently
+	// oversubscribe by 15x with no error until the AWS run is already paying
+	// for it.
+	maxArmGOMAXPROCS = 64
+	// maxArmStreams bounds Arm.Streams. Each stream adds one rendered config,
+	// one Iceberg table, and one retried iceberg-tablegen pre-create PER
+	// ENGINE at every between-points reset (see IcebergResetTables) — a
+	// typo like `streams: 1000` would render ~1001 tables in the reset
+	// union and ~2002 tablegen invocations per reset, all against real AWS
+	// spend. 8 is generous headroom over the plan's own 2-stream arm B.
+	maxArmStreams = 8
 )
 
 // armIDRe constrains arm ids to what is safe in a filename and an S3 key.
@@ -309,8 +325,14 @@ func (s *Scenario) Validate() error {
 			if a.GOMAXPROCS < 0 {
 				return fmt.Errorf("matrix.arms[%d].gomaxprocs must be non-negative (got %d); 0 means use the default", i, a.GOMAXPROCS)
 			}
+			if a.GOMAXPROCS > maxArmGOMAXPROCS {
+				return fmt.Errorf("matrix.arms[%d].gomaxprocs must be <= %d (got %d); the taskset core pin always follows vCPU, not GOMAXPROCS, so oversubscribing past the largest supported instance type's vCPU count buys nothing but scheduler contention", i, maxArmGOMAXPROCS, a.GOMAXPROCS)
+			}
 			if a.Streams < 0 {
 				return fmt.Errorf("matrix.arms[%d].streams must be non-negative (got %d); 0 means use the default", i, a.Streams)
+			}
+			if a.Streams > maxArmStreams {
+				return fmt.Errorf("matrix.arms[%d].streams must be <= %d (got %d); each stream adds a rendered config, an Iceberg table, and a retried tablegen pre-create per engine at every between-points reset", i, maxArmStreams, a.Streams)
 			}
 		}
 	}

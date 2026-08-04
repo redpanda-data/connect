@@ -62,6 +62,14 @@ type PointResult struct {
 	// GOMAXPROCS is the runtime P count measured at this point. Equal to VCPU
 	// unless an arm oversubscribed it.
 	GOMAXPROCS int `json:"gomaxprocs,omitempty"`
+	// Streams is the number of pipelines launched for this point (1 for a
+	// single-config run, >1 for a streams-mode arm). Populated for every
+	// point, arm-less included (where it is always 1, matching the
+	// GOMAXPROCS field's existing precedent of always carrying the measured
+	// value rather than omitting it for arm-less rows) — see finding #5 of
+	// the final whole-branch review for why this was chosen over keeping
+	// arm-less rows byte-identical to pre-arms JSON.
+	Streams int `json:"streams,omitempty"`
 
 	// BrokerSeries is the broker-side throughput attributed to this engine
 	// at this vCPU point. For Connect, it's a cross-check against the

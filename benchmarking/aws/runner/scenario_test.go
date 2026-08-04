@@ -422,6 +422,79 @@ func TestScenarioValidate_RejectsNegativeStreams(t *testing.T) {
 	require.Contains(t, err.Error(), "matrix.arms[0].streams")
 }
 
+func TestScenarioValidate_RejectsGOMAXPROCSAboveMax(t *testing.T) {
+	// Finding #6: an unbounded gomaxprocs (e.g. a typo like 1000) validates
+	// fine today and would silently oversubscribe far past any real
+	// instance's vCPU count, with no error until the AWS run is already
+	// paying for it.
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 1000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 200},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "a0", GOMAXPROCS: 1000, Streams: 1}},
+		},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "matrix.arms[0].gomaxprocs")
+	require.Contains(t, err.Error(), "must be <= 64")
+}
+
+func TestScenarioValidate_AcceptsGOMAXPROCSAtMax(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 110000000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 133},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "a0", GOMAXPROCS: 64, Streams: 1}},
+		},
+	}
+	require.NoError(t, s.Validate(), "the boundary value itself must validate")
+}
+
+func TestScenarioValidate_RejectsStreamsAboveMax(t *testing.T) {
+	// Finding #6: streams: 1000 would render ~1001 tables in the reset
+	// union and ~2002 tablegen invocations per reset, all against real AWS
+	// spend.
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 1000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 200},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "a0", GOMAXPROCS: 2, Streams: 1000}},
+		},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "matrix.arms[0].streams")
+	require.Contains(t, err.Error(), "must be <= 8")
+}
+
+func TestScenarioValidate_AcceptsStreamsAtMax(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 110000000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 133},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "a0", GOMAXPROCS: 2, Streams: 8}},
+		},
+	}
+	require.NoError(t, s.Validate(), "the boundary value itself must validate")
+}
+
 func TestScenarioValidate_AcceptsZeroGOMAXPROCSAndStreams(t *testing.T) {
 	s := &Scenario{
 		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",

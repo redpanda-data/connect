@@ -192,6 +192,27 @@ func TestAppendMarkdown(t *testing.T) {
 	require.Contains(t, s, "127,344")
 }
 
+func TestWriteResultJSON_RoundTripsStreams(t *testing.T) {
+	// Finding #5: Streams must survive the JSON round-trip alongside Arm and
+	// GOMAXPROCS, so a result file is re-analysable without inferring the
+	// stream count from the arm-id naming convention.
+	dir := t.TempDir()
+	r := sampleResult()
+	r.Points[0].Arm = "b-2pipe-gmp4"
+	r.Points[0].GOMAXPROCS = 4
+	r.Points[0].Streams = 2
+	path, err := WriteResultJSON(dir, r)
+	require.NoError(t, err)
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), `"streams": 2`)
+
+	var got Result
+	require.NoError(t, json.Unmarshal(raw, &got))
+	require.Equal(t, 2, got.Points[0].Streams)
+}
+
 func TestAppendMarkdown_RendersArmRows(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "iceberg.md")
