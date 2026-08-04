@@ -36,6 +36,11 @@ func newBenchNames(sessionID, connector string) BenchNames {
 
 // WithStreams returns a copy scoped to an arm's stream count, resetting the
 // stream index to 0.
+//
+// Order matters: WithStreams always resets StreamIndex to 0, so
+// n.WithStreams(2).WithStream(1) is correct but n.WithStream(1).WithStreams(2)
+// silently loses the index — WithStreams runs second and stomps it back to 0
+// with no error. Always call WithStreams before WithStream.
 func (n BenchNames) WithStreams(count int) BenchNames {
 	n.Streams = count
 	n.StreamIndex = 0
@@ -43,6 +48,12 @@ func (n BenchNames) WithStreams(count int) BenchNames {
 }
 
 // WithStream returns a copy scoped to one stream of a multi-stream arm.
+//
+// Call this AFTER WithStreams, not before: WithStreams resets StreamIndex to
+// 0, so reversing the order (n.WithStream(1).WithStreams(2)) silently drops
+// the index you just set. Every current call site uses the correct order;
+// this is documented here so a future caller doesn't discover the footgun
+// the hard way.
 func (n BenchNames) WithStream(idx int) BenchNames {
 	n.StreamIndex = idx
 	return n
