@@ -86,7 +86,12 @@ type SweepPoint struct {
 	ArmID string
 	// GOMAXPROCS is the runtime P count measured at this point. Equal to VCPU
 	// unless an arm oversubscribed it.
-	GOMAXPROCS   int
+	GOMAXPROCS int
+	// Streams is the number of pipelines launched for this point: 1 for a
+	// single-config run, >1 for a streams-mode arm. Carried through so a
+	// result JSON is re-analysable without inferring it from the arm-id
+	// naming convention (e.g. "b-2pipe-gmp4").
+	Streams      int
 	Engine       string
 	Samples      []Sample
 	Summary      Summary
@@ -109,6 +114,23 @@ func (m *MatrixRunner) Run(
 	engines := m.Engines
 	if len(engines) == 0 {
 		engines = []string{"connect"}
+	}
+	// Validate up front, before any AWS spend in this sweep, that every plan
+	// point has a staged config path. m.ConfigPaths and plan are always built
+	// from the same list (runnerConfigPaths(sets) and buildSweepPlan(s) both
+	// derive from the same scenario), so a miss here should be impossible —
+	// but if it ever happened, configPathsFor's fallback to the single legacy
+	// ConfigPath would launch the engine against the WRONG config on a
+	// multi-stream point (Root=="" → `streams -o  <dir>`, a malformed launch
+	// command), which combined with the early-abort guard would still fail
+	// loud — but silently on the wrong point/config rather than obviously.
+	// Failing here instead names the exact missing key immediately.
+	if m.ConfigPaths != nil {
+		for _, pt := range plan {
+			if _, ok := m.ConfigPaths[pt.Key()]; !ok {
+				return nil, fmt.Errorf("no staged config paths for sweep point %q: ConfigPaths and the sweep plan must derive from the same point list (this should be impossible — investigate before running)", pt.Key())
+			}
+		}
 	}
 	out := make([]SweepPoint, 0, len(plan)*len(engines))
 	for _, pt := range plan {
@@ -267,6 +289,7 @@ func (m *MatrixRunner) Run(
 				VCPU:         n,
 				ArmID:        pt.ArmID,
 				GOMAXPROCS:   pt.GOMAXPROCS,
+				Streams:      pt.Streams,
 				Engine:       engine,
 				Samples:      samples,
 				Summary:      summary,
@@ -277,11 +300,21 @@ func (m *MatrixRunner) Run(
 			fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
 				len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
 
-			// Early-abort on the first sweep point if it produced no
-			// throughput data — later points would fail the same way. The
-			// signal differs by direction: source-Connect uses rolling-stats
-			// log samples; a sink (no such log) uses its metric series.
-			if pt.Key() == plan[0].Key() {
+			// Early-abort if this point produced no throughput data. For the
+			// very first plan point, "later points would fail the same way"
+			// holds because every arm-less point shares the same launch
+			// mechanism (run mode), so checking plan[0] once is sufficient.
+			// That reasoning does NOT extend to arms: a0/a1 launch via
+			// `run cfg.yaml` while b launches via `streams -o root.yaml
+			// streams/` — a different launch mechanism entirely — so one
+			// arm succeeding predicts nothing about another arm's launch.
+			// The engine runs backgrounded (`… &`) in the bench script, so
+			// `set -e` cannot see it die; a launch failure would otherwise
+			// silently produce `median 0.00 MB/s` with no error. So: check
+			// the first point unconditionally (pre-arms behaviour), AND
+			// check every point that carries an arm, regardless of position
+			// in the plan.
+			if pt.Key() == plan[0].Key() || pt.ArmID != "" {
 				var empty bool
 				var what string
 				switch {

@@ -65,6 +65,8 @@ func TestMatrixRunner_RunSweepsEveryArm(t *testing.T) {
 	require.Equal(t, 4, points[1].GOMAXPROCS)
 	require.Equal(t, 2, points[0].VCPU, "every arm shares the vCPU pin")
 	require.Equal(t, 2, points[1].VCPU)
+	require.Equal(t, 1, points[0].Streams, "arm a0 launches a single pipeline")
+	require.Equal(t, 2, points[1].Streams, "arm b launches two pipelines")
 
 	// Each arm's script must reference that arm's own config paths and its own
 	// GOMAXPROCS.
@@ -73,6 +75,36 @@ func TestMatrixRunner_RunSweepsEveryArm(t *testing.T) {
 	require.Contains(t, scripts, "streams -o /opt/bench/cfg/2-b/root.yaml /opt/bench/cfg/2-b/streams")
 	require.Contains(t, scripts, "GOMAXPROCS=2")
 	require.Contains(t, scripts, "GOMAXPROCS=4")
+}
+
+func TestMatrixRunner_RejectsPlanPointMissingFromConfigPaths(t *testing.T) {
+	// Finding #8: configPathsFor used to silently fall back to the legacy
+	// ConfigPath on a key miss. For a multi-stream point that fallback
+	// yields Root=="" -> a malformed `streams -o  <dir>` launch, which is a
+	// confusing failure mode to debug. Run must now reject this loudly,
+	// up front, before any AWS spend, naming the exact missing key.
+	const sessionID = "sess-missing-key"
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM: ssm, LogFetcher: &FakeLogFetcher{}, RunnerInstance: "i-runner",
+		Bucket: "b", SessionID: sessionID,
+		ConfigPaths: map[string]pointConfigPaths{
+			"2-a0": {Single: "/opt/bench/cfg/2-a0/config.yaml"},
+			// Deliberately missing "2-b".
+		},
+	}
+	plan := []sweepPoint{
+		{VCPU: 2, ArmID: "a0", GOMAXPROCS: 2, Streams: 1},
+		{VCPU: 2, ArmID: "b", GOMAXPROCS: 4, Streams: 2},
+	}
+	_, err := mr.Run(context.Background(), plan, 2, 0, 30*time.Second, "", "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `"2-b"`)
+	require.Empty(t, ssm.Scripts, "the sweep must reject before issuing any SSM command, not partway through")
 }
 
 func TestMatrixRunner_ArmlessPlanUsesLegacyConfigPath(t *testing.T) {
@@ -246,6 +278,61 @@ total_files_size_bytes 524288000
 	require.Equal(t, "connect", points[0].Engine)
 	require.Equal(t, "kafka_connect", points[1].Engine)
 	require.Empty(t, points[1].BrokerSeries, "kafka_connect's first point produced no metric samples")
+}
+
+func TestMatrixRunner_EarlyAbortFiresForLaterArmToo(t *testing.T) {
+	// Regression test for finding #1 of the final whole-branch review: the
+	// early-abort guard used to fire ONLY at plan[0] ("later points would
+	// fail the same way — true when points differ only in vCPU, false when
+	// they differ in launch mechanism"). Arm "a0" here launches via `run`
+	// and succeeds; arm "b" launches via `streams` and produces zero
+	// throughput. Before the fix (pt.Key() == plan[0].Key() only), arm b
+	// would sail through with a 0 MB/s point and no error — the exact
+	// "looks like an answer" failure mode this whole review exists to catch.
+	const sessionID = "sess-guard-arm"
+	const connector = "iceberg"
+
+	const icebergA0 = `###timestamp=1000
+total_files_size_bytes 0
+###timestamp=1010
+total_files_size_bytes 524288000
+`
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/iceberg-2-a0-connect.txt", sessionID): icebergA0,
+			fmt.Sprintf("runs/%s/sweep-2-a0.log", sessionID):           "INFO starting redpanda-connect\nINFO output connected\n",
+			fmt.Sprintf("runs/%s/sweep-2-b.log", sessionID):            "INFO starting redpanda-connect\nINFO output connected\n",
+			// Deliberately no iceberg-2-b-connect.txt: arm b's streams-mode
+			// launch produced zero metric samples (e.g. it failed to start).
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:            ssm,
+		LogFetcher:     fetcher,
+		RunnerInstance: "i-runner",
+		Bucket:         "b",
+		SessionID:      sessionID,
+		Topology:       sinkTopology{},
+		Names:          newBenchNames(sessionID, connector),
+		Engines:        []string{"connect"},
+		Direction:      DirectionSink,
+	}
+	plan := []sweepPoint{
+		{VCPU: 2, ArmID: "a0", GOMAXPROCS: 2, Streams: 1},
+		{VCPU: 2, ArmID: "b", GOMAXPROCS: 4, Streams: 2},
+	}
+	points, err := mr.Run(context.Background(), plan, 1, 60*time.Second, 120*time.Second, "", "")
+	require.Error(t, err, "arm b's empty metric series must abort the sweep, not just plan[0]'s arm")
+	require.Contains(t, err.Error(), "first sweep point at 2 vCPU captured 0 metric samples")
+	require.Len(t, points, 2, "both arms were recorded before the abort fired")
+	require.Equal(t, "a0", points[0].ArmID)
+	require.Equal(t, "b", points[1].ArmID)
+	require.Empty(t, points[1].BrokerSeries, "arm b produced no metric samples")
 }
 
 func TestMatrixRunner_WarmupTrimsAndReindexes(t *testing.T) {
