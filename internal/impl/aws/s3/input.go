@@ -152,6 +152,8 @@ If your notification events are being routed to SQS via an SNS topic then the ev
 
 When using SQS please make sure you have sensible values for `+"`sqs.max_messages`"+` and also the visibility timeout of the queue itself. When Redpanda Connect consumes an S3 object the SQS message that triggered it is not deleted until the S3 object has been sent onwards. This ensures at-least-once crash resiliency, but also means that if the S3 object takes longer to process than the visibility timeout of your queue then the same objects might be processed multiple times.
 
+Amazon S3 sends an `+"`s3:TestEvent`"+` notification whenever a bucket's event configuration is saved, to verify the queue is reachable. Redpanda Connect detects these (including via an SNS envelope) and deletes them automatically. Any other message with no extractable target key, for example due to a misconfigured `+"`sqs.key_path`"+`/`+"`sqs.bucket_path`"+`, is logged as a warning and left on the queue instead.
+
 == Download large files
 
 When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a `+"<<scanner, `scanner`>>"+` can be specified that determines how to break the input into smaller individual messages.
