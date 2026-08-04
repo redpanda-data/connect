@@ -586,7 +586,10 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 				continue
 			}
 			addDudFn(sqsMsg)
-			s.log.Debug("Extracted zero target keys from SQS message")
+			s.log.Warnf(
+				"Extracted zero target keys from SQS message using key_path %q (bucket_path %q) - this likely indicates a misconfigured key_path/bucket_path, or an unrecognised notification event type: %s",
+				s.conf.SQS.KeyPath, s.conf.SQS.BucketPath, *sqsMsg.Body,
+			)
 			continue
 		}
 
