@@ -375,6 +375,7 @@ func runBench(opts benchOpts) (errOut error) {
 			BrokerSeries: p.BrokerSeries,
 			Arm:          p.ArmID,
 			GOMAXPROCS:   p.GOMAXPROCS,
+			Streams:      p.Streams,
 		})
 	}
 	var connectPts, kcPts []PointResult
@@ -682,6 +683,18 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 	}
 	out.Root = rootPath
 
+	// topo.Pipeline (e.g. sinkTopology.Pipeline) mutates and returns a map
+	// that ALIASES armScenario.Pipeline["output"][<component>] in place — it
+	// does not copy it. Each stream's output map must therefore be marshalled
+	// to disk (writeTempYAML, below) BEFORE the next iteration calls
+	// topo.Pipeline again and re-mutates that same shared map for the next
+	// stream's table name. That ordering holds today because the loop is
+	// sequential. Do NOT parallelize this loop: two goroutines mutating the
+	// same aliased map concurrently would race, and the most likely visible
+	// symptom is two streams silently marshalling the SAME table name and
+	// committing to one Iceberg table instead of two — exactly the class of
+	// silent-corruption failure this whole review exists to catch, and not
+	// something a test would reliably catch either.
 	for i := 0; i < p.Streams; i++ {
 		streamNames := names.WithStreams(p.Streams).WithStream(i)
 		input, output, err := topo.Pipeline(&armScenario, streamNames)
@@ -701,12 +714,32 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 	return out, nil
 }
 
+// hostCfgDir is the per-point config directory on the runner host. This is
+// the single source of truth for that path: runnerConfigPaths (the launch
+// path MatrixRunner.Run substitutes into the bench script) and
+// buildStagePlan (the download path stageArtefacts' SSM script copies into)
+// both call this instead of rebuilding the "/opt/bench/cfg/<key>" literal
+// independently, so the two can never drift. A drift would mean the engine
+// launches against a path that doesn't exist on the host — which, combined
+// with the early-abort guard covering every arm point (see matrix.go), would
+// otherwise surface as a silent 0 MB/s rather than a loud failure.
+func hostCfgDir(key string) string {
+	return "/opt/bench/cfg/" + key
+}
+
+// stageCfgPrefix is the S3 key prefix (under the results bucket) that one
+// point's config(s) are uploaded to. Mirrors hostCfgDir on the S3 side; see
+// its comment for why this is factored out rather than rebuilt per call site.
+func stageCfgPrefix(key string) string {
+	return "stage/cfg/" + key
+}
+
 // runnerConfigPaths maps each point key to where its configs land on the runner
 // host after staging.
 func runnerConfigPaths(sets []renderedPointConfigs) map[string]pointConfigPaths {
 	out := make(map[string]pointConfigPaths, len(sets))
 	for _, set := range sets {
-		base := "/opt/bench/cfg/" + set.Key
+		base := hostCfgDir(set.Key)
 		var p pointConfigPaths
 		if set.Single != "" {
 			p.Single = base + "/config.yaml"
@@ -835,12 +868,59 @@ func substitutePlaceholders(in string, outs map[string]string) string {
 	return in
 }
 
-// stageArtefacts uploads the binary, license, and per-point config(s) to S3 and
-// downloads them onto the runner host over SSM. legacy is
-// len(s.Matrix.Arms) == 0: arm-less runs keep the historical single
+// upload is one S3 object stageArtefacts uploads: key is the S3 key under the
+// results bucket, path is the local file to read the body from.
+type upload struct{ key, path string }
+
+// buildStagePlan computes the S3 upload keys and the runner-host download
+// commands for one bench's config artefacts, without touching AWS. Split out
+// from stageArtefacts so the staged S3 key and the host download path can be
+// unit-tested for agreement with runnerConfigPaths' launch path (see
+// TestBuildStagePlan_AgreesWithRunnerConfigPaths) — previously these were two
+// independent constructions of the same "/opt/bench/cfg/<key>" /
+// "stage/cfg/<key>" strings, with nothing asserting they stayed in sync.
+//
+// legacy is len(s.Matrix.Arms) == 0: arm-less runs keep the historical single
 // stage/config.yaml -> /opt/bench/config.yaml path so the six existing
 // scenarios are untouched. Arm runs stage each point under its own
 // stage/cfg/<key>/ prefix, mirroring runnerConfigPaths.
+//
+// Each point's streams/ directory is cleared before download (rm -rf then
+// mkdir -p), not just created: /opt/bench/cfg/<key>/streams is
+// session-independent, so a --keep re-run of the same scenario with a
+// different stream count would otherwise leave a stale stream-N.yaml behind
+// that nothing overwrites — the engine launches one pipeline per file it
+// finds there, so a stale file silently launches an extra pipeline the
+// sidecar never polls.
+func buildStagePlan(sets []renderedPointConfigs, bucket string, legacy bool) (items []upload, dl []string) {
+	if legacy {
+		items = append(items, upload{"stage/config.yaml", sets[0].Single})
+		dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/stage/config.yaml /opt/bench/config.yaml`, bucket))
+		return items, dl
+	}
+	for _, set := range sets {
+		base := stageCfgPrefix(set.Key)
+		host := hostCfgDir(set.Key)
+		dl = append(dl, fmt.Sprintf(`rm -rf %s/streams && mkdir -p %s/streams`, host, host))
+		if set.Single != "" {
+			items = append(items, upload{base + "/config.yaml", set.Single})
+			dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/%s/config.yaml %s/config.yaml`, bucket, base, host))
+			continue
+		}
+		items = append(items, upload{base + "/root.yaml", set.Root})
+		dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/%s/root.yaml %s/root.yaml`, bucket, base, host))
+		for i, sp := range set.Streams {
+			name := fmt.Sprintf("stream-%d.yaml", i)
+			items = append(items, upload{fmt.Sprintf("%s/streams/%s", base, name), sp})
+			dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/%s/streams/%s %s/streams/%s`, bucket, base, name, host, name))
+		}
+	}
+	return items, dl
+}
+
+// stageArtefacts uploads the binary, license, and per-point config(s) to S3 and
+// downloads them onto the runner host over SSM. See buildStagePlan for the
+// legacy vs. arms path-building logic.
 func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string, binPath string, sets []renderedPointConfigs, legacy bool) error {
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
 	if err != nil {
@@ -849,38 +929,12 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
 	bucket := outs["results_bucket"]
 
-	type upload struct{ key, path string }
 	items := []upload{
 		{"stage/redpanda-connect", binPath},
 		{"stage/license.jwt", opts.licenseFile},
 	}
-	var dl []string // per-point download lines appended to the runner script
-
-	// Arm-less runs keep the historical single stage/config.yaml ->
-	// /opt/bench/config.yaml path so nothing about the six existing scenarios
-	// changes. Arm runs get a per-point directory.
-	if legacy {
-		items = append(items, upload{"stage/config.yaml", sets[0].Single})
-		dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/stage/config.yaml /opt/bench/config.yaml`, bucket))
-	} else {
-		for _, set := range sets {
-			base := "stage/cfg/" + set.Key
-			host := "/opt/bench/cfg/" + set.Key
-			dl = append(dl, fmt.Sprintf(`mkdir -p %s/streams`, host))
-			if set.Single != "" {
-				items = append(items, upload{base + "/config.yaml", set.Single})
-				dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/%s/config.yaml %s/config.yaml`, bucket, base, host))
-				continue
-			}
-			items = append(items, upload{base + "/root.yaml", set.Root})
-			dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/%s/root.yaml %s/root.yaml`, bucket, base, host))
-			for i, sp := range set.Streams {
-				name := fmt.Sprintf("stream-%d.yaml", i)
-				items = append(items, upload{fmt.Sprintf("%s/streams/%s", base, name), sp})
-				dl = append(dl, fmt.Sprintf(`aws s3 cp s3://%s/%s/streams/%s %s/streams/%s`, bucket, base, name, host, name))
-			}
-		}
-	}
+	planItems, dl := buildStagePlan(sets, bucket, legacy)
+	items = append(items, planItems...)
 
 	for _, item := range items {
 		f, err := os.Open(item.path)

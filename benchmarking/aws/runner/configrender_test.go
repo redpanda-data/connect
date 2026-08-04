@@ -6,7 +6,9 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -132,4 +134,76 @@ func TestRunnerConfigPaths_MapsKeysToRunnerHostPaths(t *testing.T) {
 	require.Equal(t, "/opt/bench/cfg/2-b/root.yaml", got["2-b"].Root)
 	require.Equal(t, "/opt/bench/cfg/2-b/streams", got["2-b"].Dir)
 	require.Empty(t, got["2-b"].Single)
+}
+
+// TestBuildStagePlan_AgreesWithRunnerConfigPaths is finding #3 of the final
+// whole-branch review: runnerConfigPaths (the launched path) and
+// stageArtefacts' download commands (via buildStagePlan) used to rebuild the
+// "/opt/bench/cfg/<key>" and "stage/cfg/<key>" literals independently, with
+// nothing asserting they agreed. A drift there means the engine launches
+// against a path that was never downloaded — which, combined with the
+// early-abort guard now covering every arm point, must fail loud rather than
+// report a plausible 0 MB/s. This pins the staged S3 key, the host download
+// destination, and runnerConfigPaths' launch path to the SAME value for both
+// a single-stream and a 2-stream point.
+func TestBuildStagePlan_AgreesWithRunnerConfigPaths(t *testing.T) {
+	sets := []renderedPointConfigs{
+		{Key: "2-a0", Single: "/local/tmp/a"},
+		{Key: "2-b", Root: "/local/tmp/root", Streams: []string{"/local/tmp/s0", "/local/tmp/s1"}},
+	}
+	const bucket = "results-bucket"
+	cfgPaths := runnerConfigPaths(sets)
+	items, dl := buildStagePlan(sets, bucket, false)
+	dlJoined := strings.Join(dl, "\n")
+
+	// Single-stream point: the download destination must be exactly the
+	// launched path runnerConfigPaths computed, and the staged S3 key must
+	// be what that download command actually copies from.
+	single := cfgPaths["2-a0"].Single
+	require.Equal(t, "/opt/bench/cfg/2-a0/config.yaml", single)
+	require.Contains(t, dlJoined, fmt.Sprintf("aws s3 cp s3://%s/stage/cfg/2-a0/config.yaml %s", bucket, single))
+	var sawSingleKey bool
+	for _, it := range items {
+		if it.key == "stage/cfg/2-a0/config.yaml" {
+			sawSingleKey = true
+		}
+	}
+	require.True(t, sawSingleKey, "staged S3 key must match the download source referenced above")
+
+	// 2-stream point: root + both stream configs must agree across staged
+	// key, download destination, and the launched Root/Dir.
+	root := cfgPaths["2-b"].Root
+	dir := cfgPaths["2-b"].Dir
+	require.Equal(t, "/opt/bench/cfg/2-b/root.yaml", root)
+	require.Equal(t, "/opt/bench/cfg/2-b/streams", dir)
+	require.Contains(t, dlJoined, fmt.Sprintf("aws s3 cp s3://%s/stage/cfg/2-b/root.yaml %s", bucket, root))
+	require.Contains(t, dlJoined, fmt.Sprintf("aws s3 cp s3://%s/stage/cfg/2-b/streams/stream-0.yaml %s/stream-0.yaml", bucket, dir))
+	require.Contains(t, dlJoined, fmt.Sprintf("aws s3 cp s3://%s/stage/cfg/2-b/streams/stream-1.yaml %s/stream-1.yaml", bucket, dir))
+}
+
+// TestBuildStagePlan_ClearsStreamsDirBeforeDownload is finding #4: the
+// streams/ directory must be wiped before download, not merely mkdir -p'd.
+// /opt/bench/cfg/<key>/streams is session-independent (unlike runs/<sess>/),
+// and downloads are per-file `aws s3 cp`, not `sync` — so a --keep re-run of
+// the same scenario with a smaller stream count would otherwise leave a
+// stale stream-N.yaml behind, launching an extra pipeline the sidecar never
+// polls: a silent undercount with a plausible-looking value.
+func TestBuildStagePlan_ClearsStreamsDirBeforeDownload(t *testing.T) {
+	sets := []renderedPointConfigs{
+		{Key: "2-b", Root: "/local/tmp/root", Streams: []string{"/local/tmp/s0", "/local/tmp/s1"}},
+	}
+	_, dl := buildStagePlan(sets, "b", false)
+	dlJoined := strings.Join(dl, "\n")
+	require.Contains(t, dlJoined, "rm -rf /opt/bench/cfg/2-b/streams && mkdir -p /opt/bench/cfg/2-b/streams",
+		"a stale stream config from a previous --keep run with a different stream count must not survive a per-file aws s3 cp download")
+}
+
+// TestBuildStagePlan_LegacyKeepsHistoricalPath is the parity guard: arm-less
+// scenarios must keep the exact stage/config.yaml -> /opt/bench/config.yaml
+// path, byte-for-byte, regardless of the buildStagePlan refactor.
+func TestBuildStagePlan_LegacyKeepsHistoricalPath(t *testing.T) {
+	sets := []renderedPointConfigs{{Key: "1", Single: "/local/tmp/a"}}
+	items, dl := buildStagePlan(sets, "b", true)
+	require.Equal(t, []upload{{"stage/config.yaml", "/local/tmp/a"}}, items)
+	require.Equal(t, []string{"aws s3 cp s3://b/stage/config.yaml /opt/bench/config.yaml"}, dl)
 }
