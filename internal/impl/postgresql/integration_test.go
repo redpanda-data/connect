@@ -1831,35 +1831,36 @@ postgres_cdc:
 	assert.Equal(t, "events", collected[0].table)
 }
 
-func TestIntegrationNoSchemasMatchedError(t *testing.T) {
+func TestIntegrationNoSchemasMatchedReturnsError(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
 	tmpl := fmt.Sprintf(`
-postgres_cdc:
-    dsn: %s
-    slot_name: no_schema_match_slot
-    schema: nonexistent_schema_zzz_*
-    tables:
-      - events
+dsn: %s
+slot_name: no_schema_match_slot
+schema: nonexistent_schema_zzz_*
+tables:
+  - events
 `, databaseURL)
 
-	sb := service.NewStreamBuilder()
-	require.NoError(t, sb.SetLoggerYAML(`level: ERROR`))
-	require.NoError(t, sb.AddInputYAML(tmpl))
-	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, _ service.MessageBatch) error {
-		return nil
-	}))
-
-	stream, err := sb.Build()
+	conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
 	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	mgr := service.MockResources()
+	license.InjectTestService(mgr)
+
+	input, err := newPgStreamInput(conf, mgr)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err = stream.Run(ctx)
+	// Bypass the benthos AsyncReader's infinite connect-retry loop by calling
+	// Connect directly: a schema-pattern-not-found error is permanent, but
+	// stream.Run has no path to surface it (it only returns once ctx is done),
+	// so going through StreamBuilder/Run here would just time out instead.
+	err = input.Connect(ctx)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no schemas found matching pattern")
 }
