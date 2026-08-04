@@ -1697,7 +1697,11 @@ postgres_cdc:
 	stream, err := sb.Build()
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
-	go func() { _ = stream.Run(t.Context()) }()
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
 	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
 
 	// Wait for all 3 snapshot rows.
@@ -1814,7 +1818,11 @@ postgres_cdc:
 	stream, err := sb.Build()
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
-	go func() { _ = stream.Run(t.Context()) }()
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
 	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
 
 	// tenant_a should keep streaming even though tenant_b is missing the table.
