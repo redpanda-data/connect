@@ -18,22 +18,6 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
-// resolveSchemas expands a schema name or glob pattern into the set of
-// quoted PostgreSQL identifiers that exist in the database.
-//
-// For unquoted patterns (e.g. "tenant_*") the pattern is matched
-// case-insensitively against information_schema.schemata using LIKE, because
-// PostgreSQL folds unquoted identifiers to lower-case at creation time.
-//
-// For quoted identifiers (e.g. `"MySchema"`) an exact case-sensitive lookup
-// is performed.
-//
-// System schemas (pg_* and information_schema) are always excluded so that
-// wildcard patterns like "*" do not attempt to replicate catalog tables.
-//
-// Returns an error if the query fails. Returns (nil, nil) if no schemas match.
-// The caller is responsible for treating an empty result as an error.
-
 // schemaPatternToLike converts a schema name or glob pattern into the LIKE
 // pattern used by resolveSchemas. Extracted for unit testing.
 //
@@ -58,6 +42,17 @@ func schemaPatternToLike(pattern string) (string, error) {
 // warn the user instead of silently dropping schemas they expected to be
 // included, e.g. `"tenant_*"` matching a schema the configured role can't
 // see yet.
+//
+// For unquoted patterns (e.g. "tenant_*") the pattern is matched
+// case-insensitively via LIKE, because PostgreSQL folds unquoted identifiers
+// to lower-case at creation time. For quoted identifiers (e.g. `"MySchema"`)
+// an exact case-sensitive lookup is performed. System schemas (pg_* and
+// information_schema) are always excluded so that wildcard patterns like "*"
+// do not attempt to replicate catalog tables.
+//
+// Returned schema names are quoted PostgreSQL identifiers. Returns an error
+// if either query fails; returns a nil visibleSchemas slice (with a nil err)
+// if no schemas match — callers should treat that as an error condition.
 func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (visibleSchemas, inaccessibleSchemas []string, err error) {
 	likePattern, err := schemaPatternToLike(pattern)
 	if err != nil {
