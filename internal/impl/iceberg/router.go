@@ -74,6 +74,14 @@ type tableEntry struct {
 	// error recovery) reuses it. Guarded by mu; valid when tsEncodingResolved.
 	tsEncoding         icebergx.TimestampEncoding
 	tsEncodingResolved bool
+
+	// prohibitedProps persists the catalog-prohibited property keys learned
+	// by this table's committers (mirroring the tsEncoding cache pattern):
+	// writeWithRetry closes the writer on every failure, so without it each
+	// recreated committer would re-learn the keys at the cost of one rejected
+	// commit per generation. Created lazily in createWriter under mu; the set
+	// carries its own lock, so committers share it race-safely.
+	prohibitedProps *prohibitedKeySet
 }
 
 // Router routes message batches to per-table writers.
@@ -774,6 +782,14 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 	// irreversible v1->v2 upgrade the merge-on-read path needs.
 	commitCfg := r.commitCfg
 	commitCfg.SkipFormatUpgrade = r.rowOpCfg.MergeStrategy == mergeStrategyCOW
+	// Seed the committer with the entry's persistent prohibited-key set (we
+	// hold entry.mu), so property keys a catalog rejection taught a previous
+	// committer stay stripped after writer recreation instead of costing one
+	// rejected commit per writer generation.
+	if entry.prohibitedProps == nil {
+		entry.prohibitedProps = newProhibitedKeySet()
+	}
+	commitCfg.ProhibitedKeys = entry.prohibitedProps
 	comm, err := NewCommitter(committerTbl, client.TableIO(), commitCfg, reloadTable, r.logger)
 	if err != nil {
 		return nil, fmt.Errorf("creating committer: %w", err)

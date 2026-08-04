@@ -163,7 +163,9 @@ func (w *writer) checkCOWTimestampEncoding() error {
 	}
 	return fmt.Errorf(
 		"table %s uses the legacy UTC-adjusted parquet encoding for its `timestamp` columns (table property %s=legacy), which copy-on-write cannot rewrite; "+
-			"compact/rewrite the table's data files with an engine that writes the spec encoding and set the table property %s=spec, or use merge_strategy: merge-on-read",
+			"compact/rewrite the table's data files with an engine that writes the spec encoding and set the table property %s=spec "+
+			"(stop or restart connector writers to the table around the migration — a running writer only re-reads the property when its writer is recreated), "+
+			"or use merge_strategy: merge-on-read",
 		strings.Join(w.table.Identifier(), "."), icebergx.TimestampEncodingProperty, icebergx.TimestampEncodingProperty,
 	)
 }

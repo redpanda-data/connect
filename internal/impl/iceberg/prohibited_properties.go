@@ -36,16 +36,22 @@ const reservedTablePropertyPrefix = "redpanda-connect."
 //	BadRequestException: Malformed request: INVALID_PARAMETER_VALUE:
 //	Table properties contain prohibited keys: schema.name-mapping.default
 //
-// The match is case-insensitive on the "prohibited keys" marker, tolerates any
-// prefix text, an optional colon, and captures the remainder of the message
-// for tokenising in parseProhibitedPropertyKeys.
-var prohibitedKeysRe = regexp.MustCompile(`(?i)prohibited\s+keys?\s*:?\s*(.+)`)
+// The match is case-insensitive on the "prohibited keys" marker and tolerates
+// any prefix text, but REQUIRES a colon introducing the key list — a bare
+// "prohibited keys" phrase, or prose like "prohibited keys detected in the
+// request", names no keys and must not match (the \b stops the ? from
+// backtracking "keys" into "key"+"s"). The captured remainder is tokenised in
+// parseProhibitedPropertyKeys.
+var prohibitedKeysRe = regexp.MustCompile(`(?i)prohibited\s+keys?\b\s*:\s*(.+)`)
 
 // parseProhibitedPropertyKeys extracts the property keys named by a catalog's
 // prohibited-table-property rejection. It returns nil when err does not look
-// like such a rejection. The parse is deliberately tolerant: surrounding text,
-// case differences on the marker, quotes/brackets around the list, trailing
-// prose after a key, and sentence-terminating punctuation are all accepted.
+// like such a rejection. The parse is tolerant of surrounding text, case
+// differences on the marker, quotes/brackets around the list, trailing prose
+// after a key, and sentence-terminating punctuation — but each token must
+// still look like a property key (see looksLikePropertyKey), and tokenising
+// stops at the first that doesn't, so sentence prose after the list ("Remove
+// them, then retry.") is never learned as keys.
 func parseProhibitedPropertyKeys(err error) []string {
 	if err == nil {
 		return nil
@@ -66,9 +72,13 @@ func parseProhibitedPropertyKeys(err error) []string {
 		// Keys never start or end with a dot; a trailing one is sentence
 		// punctuation ("... keys: a.b.").
 		tok = strings.Trim(tok, ".")
-		if tok != "" {
-			keys = append(keys, tok)
+		if !looksLikePropertyKey(tok) {
+			// The comma-separated list has run into sentence prose ("a.b.
+			// Remove them, then retry." yields "then"); stop rather than
+			// learn prose words as keys.
+			break
 		}
+		keys = append(keys, tok)
 	}
 	return keys
 }
@@ -76,6 +86,71 @@ func parseProhibitedPropertyKeys(err error) []string {
 func isPropertyKeyRune(r rune) bool {
 	return r == '.' || r == '-' || r == '_' ||
 		(r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+}
+
+// looksLikePropertyKey reports whether tok plausibly names a table property:
+// it must start with a letter and contain at least one dot. Every key this
+// stripper exists for (schema.name-mapping.default, write.delete.mode, ...)
+// is dotted; requiring the dot is what keeps prose words out of the strip set.
+func looksLikePropertyKey(tok string) bool {
+	if tok == "" {
+		return false
+	}
+	if c := tok[0]; (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
+		return false
+	}
+	return strings.Contains(tok, ".")
+}
+
+// hasReservedPrefix reports whether key falls under
+// reservedTablePropertyPrefix, comparing case-insensitively so a catalog that
+// case-folds key names in its rejection (e.g. "Redpanda-Connect.…") still
+// triggers the loud refuses-to-strip diagnostic instead of a futile retry.
+func hasReservedPrefix(key string) bool {
+	return len(key) >= len(reservedTablePropertyPrefix) &&
+		strings.EqualFold(key[:len(reservedTablePropertyPrefix)], reservedTablePropertyPrefix)
+}
+
+// prohibitedKeySet is a concurrency-safe set of catalog-prohibited property
+// keys, guarded by its own mutex so it can be SHARED: the router owns one per
+// tableEntry and seeds every committer created for that table with it (see
+// CommitConfig.ProhibitedKeys and Router.createWriter). Sharing matters
+// because writeWithRetry closes the writer on every failure — without it each
+// writer generation would start with an empty strip set and burn one rejected
+// commit re-learning the same keys (and a catalog naming one key per
+// rejection could livelock recreation forever).
+type prohibitedKeySet struct {
+	mu   sync.RWMutex
+	keys map[string]struct{}
+}
+
+func newProhibitedKeySet() *prohibitedKeySet {
+	return &prohibitedKeySet{keys: map[string]struct{}{}}
+}
+
+// add records key, reporting whether it was newly added.
+func (s *prohibitedKeySet) add(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.keys[key]; ok {
+		return false
+	}
+	s.keys[key] = struct{}{}
+	return true
+}
+
+// snapshot returns the current keys; nil when the set is empty.
+func (s *prohibitedKeySet) snapshot() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if len(s.keys) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(s.keys))
+	for k := range s.keys {
+		out = append(out, k)
+	}
+	return out
 }
 
 // propertyStrippingCatalog is a table.CatalogIO wrapper that filters
@@ -105,29 +180,78 @@ func isPropertyKeyRune(r rune) bool {
 type propertyStrippingCatalog struct {
 	inner table.CatalogIO
 
-	mu    sync.RWMutex
-	strip map[string]struct{}
+	// strip carries its own lock and may be shared across committers for the
+	// same table (see prohibitedKeySet), so learned keys survive writer
+	// recreation.
+	strip *prohibitedKeySet
+
+	// sentMu guards lastSent: the property keys the most recent CommitTable
+	// actually forwarded to the inner catalog. noteProhibitedKeys consults it
+	// so only keys we genuinely sent can be learned from a rejection —
+	// commits through a committer are serialized (commitMu), so the last call
+	// is always the one whose error is being inspected.
+	sentMu   sync.Mutex
+	lastSent map[string]struct{}
 }
 
-func newPropertyStrippingCatalog(inner table.CatalogIO) *propertyStrippingCatalog {
-	return &propertyStrippingCatalog{inner: inner, strip: map[string]struct{}{}}
+// newPropertyStrippingCatalog wraps inner with prohibited-key filtering. A
+// nil strip gets a fresh, private key set; passing a shared set persists
+// learned keys across committer generations for the same table.
+func newPropertyStrippingCatalog(inner table.CatalogIO, strip *prohibitedKeySet) *propertyStrippingCatalog {
+	if strip == nil {
+		strip = newProhibitedKeySet()
+	}
+	return &propertyStrippingCatalog{inner: inner, strip: strip}
 }
 
 // addProhibitedKey records key for stripping from future commits, reporting
-// whether it was newly added. Keys under reservedTablePropertyPrefix are
-// refused (returning false): those carry connector semantics that must not be
-// silently dropped — the caller is expected to fail loudly instead.
+// whether it was newly added. Keys under reservedTablePropertyPrefix
+// (compared case-insensitively) are refused (returning false): those carry
+// connector semantics that must not be silently dropped — the caller is
+// expected to fail loudly instead.
 func (p *propertyStrippingCatalog) addProhibitedKey(key string) bool {
-	if strings.HasPrefix(key, reservedTablePropertyPrefix) {
+	if hasReservedPrefix(key) {
 		return false
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if _, ok := p.strip[key]; ok {
-		return false
+	return p.strip.add(key)
+}
+
+// sentPropertyKey reports whether the most recent CommitTable through this
+// wrapper forwarded a set-properties update containing key.
+func (p *propertyStrippingCatalog) sentPropertyKey(key string) bool {
+	p.sentMu.Lock()
+	defer p.sentMu.Unlock()
+	_, ok := p.lastSent[key]
+	return ok
+}
+
+// recordSentPropertyKeys stores the union of property keys in updates'
+// set-properties updates as the most recent commit's sent set. Best-effort:
+// an update that cannot be introspected is skipped (the same JSON round-trip
+// in filterUpdates would have failed the commit first anyway).
+func (p *propertyStrippingCatalog) recordSentPropertyKeys(updates []table.Update) {
+	sent := map[string]struct{}{}
+	for _, u := range updates {
+		if u.Action() != table.UpdateSetProperties {
+			continue
+		}
+		raw, err := json.Marshal(u)
+		if err != nil {
+			continue
+		}
+		var payload struct {
+			Updates iceberg.Properties `json:"updates"`
+		}
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			continue
+		}
+		for k := range payload.Updates {
+			sent[k] = struct{}{}
+		}
 	}
-	p.strip[key] = struct{}{}
-	return true
+	p.sentMu.Lock()
+	p.lastSent = sent
+	p.sentMu.Unlock()
 }
 
 // LoadTable delegates to the wrapped catalog. The returned table keeps its
@@ -146,6 +270,9 @@ func (p *propertyStrippingCatalog) CommitTable(ctx context.Context, ident table.
 	if err != nil {
 		return nil, "", fmt.Errorf("stripping prohibited table properties from commit updates: %w", err)
 	}
+	// Remember which property keys this commit actually carries, so a
+	// rejection naming a key we never sent is not learned (noteProhibitedKeys).
+	p.recordSentPropertyKeys(filtered)
 	return p.inner.CommitTable(ctx, ident, reqs, filtered)
 }
 
@@ -158,14 +285,8 @@ func (p *propertyStrippingCatalog) CommitTable(ctx context.Context, ident table.
 // table.NewSetPropertiesUpdate constructor (same action, same no-op
 // PostCommit).
 func (p *propertyStrippingCatalog) filterUpdates(updates []table.Update) ([]table.Update, error) {
-	p.mu.RLock()
-	n := len(p.strip)
-	strip := make([]string, 0, n)
-	for k := range p.strip {
-		strip = append(strip, k)
-	}
-	p.mu.RUnlock()
-	if n == 0 {
+	strip := p.strip.snapshot()
+	if len(strip) == 0 {
 		return updates, nil
 	}
 

@@ -83,6 +83,13 @@ type CommitConfig struct {
 	// unnecessary, irreversible v1->v2 upgrade. Merge-on-read/append leave this
 	// false: their equality-delete path requires v2.
 	SkipFormatUpgrade bool
+	// ProhibitedKeys, when non-nil, is the shared set of catalog-prohibited
+	// property keys the committer's stripper reads and learns into. The
+	// router owns one per tableEntry so keys learned from one committer's
+	// rejection persist across writer recreation (writeWithRetry closes the
+	// writer on every failure) instead of costing a rejected commit per
+	// generation. Nil gets a fresh, private set.
+	ProhibitedKeys *prohibitedKeySet
 }
 
 // StaleSchemaError is returned when data was written with a schema
@@ -129,6 +136,13 @@ func NewCommitter(tbl *table.Table, cat table.CatalogIO, cfg CommitConfig, reloa
 	if cat == nil {
 		return nil, errors.New("creating committer: catalog must not be nil")
 	}
+	// commitLocked dereferences reloadTable on every failure branch, so a nil
+	// one would panic mid-commit rather than fail construction; reject it here
+	// with a clear error. The production caller (Router.createWriter) always
+	// supplies one.
+	if reloadTable == nil {
+		return nil, errors.New("creating committer: reloadTable must not be nil")
+	}
 	// Defensively clamp MaxRetries to at least 1: commitLocked's retry loop is
 	// `for range cfg.MaxRetries`, so a zero or negative value would never run a
 	// single attempt and return a "committing transaction after 0 attempts"
@@ -137,24 +151,22 @@ func NewCommitter(tbl *table.Table, cat table.CatalogIO, cfg CommitConfig, reloa
 	if cfg.MaxRetries < 1 {
 		cfg.MaxRetries = 1
 	}
-	stripper := newPropertyStrippingCatalog(cat)
+	stripper := newPropertyStrippingCatalog(cat, cfg.ProhibitedKeys)
 	c := &committer{
 		table:    rebindTable(tbl, stripper),
 		cfg:      cfg,
 		stripper: stripper,
 		logger:   logger,
 	}
-	if reloadTable != nil {
-		// Single choke point for reloaded tables: every table handle the
-		// committer adopts after a reload is rebound onto the stripper, so
-		// retried commits keep flowing through the prohibited-key filter.
-		c.reloadTable = func(ctx context.Context) (*table.Table, error) {
-			fresh, err := reloadTable(ctx)
-			if err != nil {
-				return nil, err
-			}
-			return rebindTable(fresh, stripper), nil
+	// Single choke point for reloaded tables: every table handle the
+	// committer adopts after a reload is rebound onto the stripper, so
+	// retried commits keep flowing through the prohibited-key filter.
+	c.reloadTable = func(ctx context.Context) (*table.Table, error) {
+		fresh, err := reloadTable(ctx)
+		if err != nil {
+			return nil, err
 		}
+		return rebindTable(fresh, stripper), nil
 	}
 
 	batcher, err := asyncroutine.NewBatcher(100, c.doCommit)
@@ -531,7 +543,13 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 		// reservedTablePropertyPrefix are never stripped — they carry
 		// connector semantics (e.g. the timestamp-encoding pin) — so a
 		// catalog prohibiting them fails the commit loudly instead.
-		if err != nil {
+		//
+		// An ErrCommitStateUnknown is never treated as a prohibited-keys
+		// rejection, even if its text mentions them: the commit may have
+		// landed server-side, and the prohibited-keys retry re-stages WITHOUT
+		// the reload + commit-id idempotency check below, so it could apply
+		// the mutation twice. Unknown-state takes precedence.
+		if err != nil && !errors.Is(err, rest.ErrCommitStateUnknown) {
 			if retry, fatalErr := c.noteProhibitedKeys(attempt, err); fatalErr != nil {
 				// Reload so the next call uses fresh metadata, mirroring the
 				// non-retryable branch below.
@@ -590,14 +608,18 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 // prohibited-table-property rejection and updates the stripper accordingly.
 // It returns retry=true when at least one new (non-reserved) key was learned —
 // the caller should count the attempt and re-stage, letting the stripper
-// filter the keys on the next commit. It returns a non-nil fatalErr when the
-// catalog named a key under reservedTablePropertyPrefix: those keys carry
-// connector semantics (the commit-id idempotency token, the
-// timestamp-encoding pin) that stripping would silently break, so the commit
-// must fail loudly instead. Both zero values mean the error is not a
-// prohibited-keys rejection — or it names only keys that are already being
-// stripped, in which case retrying would loop futilely — and the caller's
-// standard error handling applies.
+// filter the keys on the next commit. Only keys the failed commit actually
+// sent (in its set-properties updates, tracked by the stripper) can be
+// learned: a named key we never sent cannot be the cause of THIS rejection,
+// so learning it would let arbitrary error text poison the strip set — it is
+// logged at debug and skipped instead. It returns a non-nil fatalErr when the
+// catalog named a key under reservedTablePropertyPrefix (matched
+// case-insensitively): those keys carry connector semantics (the commit-id
+// idempotency token, the timestamp-encoding pin) that stripping would
+// silently break, so the commit must fail loudly instead. Both zero values
+// mean the error is not a prohibited-keys rejection — or it names only keys
+// that are already being stripped or were never sent, in which case retrying
+// would loop futilely — and the caller's standard error handling applies.
 func (c *committer) noteProhibitedKeys(attempt int, err error) (retry bool, fatalErr error) {
 	keys := parseProhibitedPropertyKeys(err)
 	if len(keys) == 0 {
@@ -605,9 +627,12 @@ func (c *committer) noteProhibitedKeys(attempt int, err error) (retry bool, fata
 	}
 	var learned, reserved []string
 	for _, k := range keys {
-		if strings.HasPrefix(k, reservedTablePropertyPrefix) {
+		switch {
+		case hasReservedPrefix(k):
 			reserved = append(reserved, k)
-		} else if c.stripper.addProhibitedKey(k) {
+		case !c.stripper.sentPropertyKey(k):
+			c.logger.Debugf("Catalog rejection named prohibited table property %q, which this commit never set; not learning it", k)
+		case c.stripper.addProhibitedKey(k):
 			learned = append(learned, k)
 		}
 	}

@@ -167,12 +167,26 @@ func probeParquetFooterEncoding(fsys iceio.IO, path string, schema *iceberg.Sche
 
 // stampTimestampEncoding commits the resolved encoding onto the table as the
 // redpanda-connect.timestamp-encoding property, making the bootstrap decision
-// permanent and visible. Two writers may race to stamp the same table: on a
-// commit failure the table is reloaded and, if the property appeared
-// meanwhile with our value, the race is benign and the reloaded table is
-// used. A property that appeared with a DIFFERENT value is a hard error —
-// both writers probed the same files, so a disagreement means something is
-// wrong and writing could mix annotations.
+// permanent and visible. Two writers may race to stamp the same table; the
+// invariant that keeps that safe is that two new-version writers probing the
+// same snapshot always resolve the SAME encoding, so whichever stamp lands,
+// every writer agrees with it. The failure-path check below (reload and
+// compare a concurrently-appeared value) is a best-effort guard for
+// CAS-style catalogs whose commits actually fail on concurrent writes: on
+// REST catalogs a SetProperties-only commit carries only an AssertTableUUID
+// requirement, so it rarely fails and the last writer simply wins — benign,
+// because agreeing writers write identical values. A DIFFERENT value can
+// therefore only be detected when the commit does fail; it means something
+// is genuinely wrong (e.g. mixed connector versions probing differently) and
+// writing could mix annotations, so it is a hard error.
+//
+// This commit goes through the table's own catalog binding, NOT through a
+// committer's propertyStrippingCatalog: the transaction stages only the
+// single redpanda-connect.* property, which the stripper refuses to strip
+// anyway (reservedTablePropertyPrefix), so prohibited-key stripping
+// intentionally does not apply here — a catalog that prohibits
+// redpanda-connect.* keys fails this path with the raw catalog error by
+// design.
 func stampTimestampEncoding(ctx context.Context, tbl *table.Table, enc icebergx.TimestampEncoding, reload func(context.Context) (*table.Table, error)) (*table.Table, error) {
 	txn := tbl.NewTransaction()
 	if err := txn.SetProperties(iceberg.Properties{icebergx.TimestampEncodingProperty: enc.String()}); err != nil {

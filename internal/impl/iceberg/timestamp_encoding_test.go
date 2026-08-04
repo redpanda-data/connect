@@ -289,6 +289,45 @@ func TestResolveTimestampEncodingBootstrap(t *testing.T) {
 	})
 }
 
+// TestProbeSkipsTimestamptzLeaf pins the probe's timestamptz-leaf skip. The
+// schema orders a `timestamptz` column FIRST, so the footer's first
+// timestamp-annotated leaf is the tstz one — which carries isAdjustedToUTC=true
+// in BOTH encodings and so says nothing about the table's encoding. The probe
+// must skip it and decide from the no-tz `timestamp` leaf: a spec-encoded file
+// must pin `spec`, not a legacy mispin read off the tstz leaf.
+func TestProbeSkipsTimestamptzLeaf(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "a_tstz", Type: iceberg.PrimitiveTypes.TimestampTz, Required: false},
+		iceberg.NestedField{ID: 2, Name: "b_ts", Type: iceberg.PrimitiveTypes.Timestamp, Required: false},
+	)
+	_, cat := newEncTable(t, sc, nil)
+	tbl := cat.snapshot()
+	require.NoError(t, os.MkdirAll(filepath.Join(tbl.Location(), "data"), 0o755))
+	w := &writer{table: tbl, caseSensitive: true, tsEncoding: icebergx.TimestampEncodingSpec, logger: service.MockResources().Logger()}
+	files, err := w.writeDataFiles(ctx, service.MessageBatch{structuredMsg(t, map[string]any{
+		"a_tstz": encSeedTime, "b_ts": encSeedTime,
+	})})
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+	tx := tbl.NewTransaction()
+	require.NoError(t, tx.AddDataFiles(ctx, files, nil, table.WithoutAutoNameMapping(), table.WithoutDuplicateCheck()))
+	_, err = tx.Commit(ctx)
+	require.NoError(t, err)
+
+	// Precondition: the file's leaves follow the schema order (tstz leaf
+	// first) and the tstz leaf is UTC-adjusted — a probe that read the first
+	// timestamp-annotated leaf naively would mispin legacy.
+	ann := footerTimestampAdjusted(t, files[0].FilePath())
+	require.Equal(t, map[int]bool{1: true, 2: false}, ann,
+		"precondition: tstz leaf UTC-adjusted, no-tz spec leaf not")
+
+	enc, err := probeTimestampEncoding(ctx, cat.snapshot())
+	require.NoError(t, err)
+	assert.Equal(t, icebergx.TimestampEncodingSpec, enc,
+		"the probe must skip the timestamptz leaf and pin spec from the no-tz timestamp leaf")
+}
+
 // --- stamping race ------------------------------------------------------------
 
 // TestStampTimestampEncodingRace covers two writers bootstrapping the same

@@ -151,6 +151,17 @@ func TestCommitterSkipsDuplicateCheck(t *testing.T) {
 	require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df2}, SchemaID: c.currentSchemaID()}))
 }
 
+// TestNewCommitterRejectsNilReloadTable pins the constructor guard:
+// commitLocked dereferences reloadTable on every failure branch, so a nil one
+// must be rejected at construction with a clear error instead of panicking
+// mid-commit.
+func TestNewCommitterRejectsNilReloadTable(t *testing.T) {
+	tbl, cat := newTestTable(t)
+	_, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, nil, service.MockResources().Logger())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reloadTable must not be nil")
+}
+
 // commitOutcome scripts how scriptedCatalog handles a single CommitTable call.
 type commitOutcome int
 

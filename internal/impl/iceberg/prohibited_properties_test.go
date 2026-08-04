@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/catalog/rest"
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -244,6 +245,150 @@ func TestProhibitedReservedKeyFailsLoudly(t *testing.T) {
 	assert.Equal(t, 1, cat.commits, "a reserved-key rejection must fail on the first attempt, not retry")
 }
 
+// TestProhibitedReservedKeyCaseInsensitive pins that the reserved-prefix guard
+// is case-insensitive: a catalog that case-folds key names in its rejection
+// ("Redpanda-Connect.…") must still trigger the loud refuses-to-strip
+// diagnostic — with the property surviving outside the strip set — rather than
+// burning a futile stripped retry and surfacing the raw catalog error.
+func TestProhibitedReservedKeyCaseInsensitive(t *testing.T) {
+	ctx := t.Context()
+	_, mem := newTestTable(t)
+	cat := &alwaysProhibitingCatalog{memCatalog: mem, keys: []string{"Redpanda-Connect.timestamp-encoding"}}
+
+	c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
+		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer c.Close()
+
+	df := synthDataFile(t, cat.snapshot().Spec(), fmt.Sprintf("%s/data/reserved-fold-%s.parquet", cat.location, uuid.New()))
+	err = c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: c.currentSchemaID()})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Redpanda-Connect.timestamp-encoding")
+	assert.Contains(t, err.Error(), "refuses to strip", "a case-variant reserved key must hit the loud diagnostic, not the raw error")
+	assert.Equal(t, 1, cat.commits, "a reserved-key rejection must fail on the first attempt, not retry")
+	assert.Empty(t, c.stripper.strip.snapshot(), "the reserved key must never enter the strip set")
+}
+
+// TestProhibitedKeyNeverSentIsNotLearned pins the strongest parser guard: a
+// rejection naming a property key the failed commit never actually sent (the
+// append path stages no set-properties updates at all) must not be learned —
+// otherwise arbitrary error text could poison the strip set.
+func TestProhibitedKeyNeverSentIsNotLearned(t *testing.T) {
+	ctx := t.Context()
+	_, mem := newTestTable(t)
+	cat := &alwaysProhibitingCatalog{memCatalog: mem, keys: []string{"some.innocent.key"}}
+
+	c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
+		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer c.Close()
+
+	df := synthDataFile(t, cat.snapshot().Spec(), fmt.Sprintf("%s/data/unsent-%s.parquet", cat.location, uuid.New()))
+	err = c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: c.currentSchemaID()})
+	require.Error(t, err, "with nothing to strip, the rejection is not retryable and must surface")
+	assert.Empty(t, c.stripper.strip.snapshot(), "a key the commit never sent must not be learned")
+	assert.Equal(t, 1, cat.commits, "no stripped retry may be attempted for a key we never sent")
+}
+
+// TestProhibitedKeysPersistAcrossCommitters pins the strip-set persistence the
+// router provides via tableEntry.prohibitedProps: writeWithRetry closes the
+// writer (and its committer) on every failure, so a NEW committer seeded with
+// the SAME shared prohibitedKeySet — exactly what Router.createWriter does —
+// must strip already-learned keys on its FIRST attempt instead of burning one
+// rejected commit per writer generation.
+func TestProhibitedKeysPersistAcrossCommitters(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, mem := newCOWTable(t, sc)
+	_ = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+	cat := &prohibitingCatalog{memCatalog: mem, prohibited: []string{"schema.name-mapping.default"}}
+
+	// One shared set for the table, as Router.createWriter seeds from
+	// tableEntry.prohibitedProps.
+	shared := newProhibitedKeySet()
+	newGenWriter := func() *writer {
+		comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3, ProhibitedKeys: shared},
+			func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+		require.NoError(t, err)
+		t.Cleanup(comm.Close)
+		w := cowWriter(t, cat.snapshot(), "id")
+		w.committer = comm
+		return w
+	}
+
+	// First committer generation pays one rejection to learn the key.
+	w1 := newGenWriter()
+	require.NoError(t, w1.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}))
+	require.Equal(t, 1, cat.rejections)
+	require.Equal(t, 2, cat.commits, "generation one: one rejection, one stripped success")
+
+	// Second generation (fresh committer, same shared set — the writer was
+	// recreated): the mutation must commit FIRST-TRY, no rejection burned.
+	w2 := newGenWriter()
+	require.NoError(t, w2.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 3, "payload": "THREE"})}))
+	assert.Equal(t, 1, cat.rejections, "a committer seeded with the shared set must not re-learn the key via a rejection")
+	assert.Equal(t, 3, cat.commits, "generation two must land its commit on the first attempt")
+	assert.Equal(t, map[int64]string{1: "one", 2: "TWO", 3: "THREE"}, scanRows(t, ctx, cat.snapshot()))
+}
+
+// unknownStateProhibitedTextCatalog applies the FIRST commit server-side but
+// reports an ErrCommitStateUnknown whose text also names a prohibited key that
+// the commit really sent. It models a 5xx from a catalog whose error body
+// happens to mention prohibited keys: the ambiguity handling (reload +
+// commit-id idempotency) must take precedence over prohibited-key learning.
+type unknownStateProhibitedTextCatalog struct {
+	*memCatalog
+	calls int
+}
+
+func (c *unknownStateProhibitedTextCatalog) CommitTable(ctx context.Context, ident table.Identifier, reqs []table.Requirement, updates []table.Update) (table.Metadata, string, error) {
+	c.calls++
+	if c.calls == 1 {
+		if _, _, err := c.memCatalog.CommitTable(ctx, ident, reqs, updates); err != nil {
+			return nil, "", err
+		}
+		return nil, "", fmt.Errorf("500 Internal Server Error: Table properties contain prohibited keys: schema.name-mapping.default: %w", rest.ErrCommitStateUnknown)
+	}
+	return c.memCatalog.CommitTable(ctx, ident, reqs, updates)
+}
+
+func (c *unknownStateProhibitedTextCatalog) snapshot() *table.Table {
+	return rebindTable(c.memCatalog.snapshot(), c)
+}
+
+// TestUnknownStateTakesPrecedenceOverProhibitedKeys pins the precedence fix: a
+// commit that LANDED but returned ErrCommitStateUnknown must go through the
+// reload + commit-id idempotency check — treating it as a prohibited-keys
+// rejection would re-stage and apply the mutation a second time. Exactly one
+// snapshot may carry the commit id, and no key may be learned.
+func TestUnknownStateTakesPrecedenceOverProhibitedKeys(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, mem := newCOWTable(t, sc)
+	_ = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two"})
+	cat := &unknownStateProhibitedTextCatalog{memCatalog: mem}
+
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
+		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+	require.NoError(t, err)
+	t.Cleanup(comm.Close)
+	w := cowWriter(t, cat.snapshot(), "id")
+	w.committer = comm
+
+	require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}))
+
+	assert.Equal(t, 1, cat.calls, "the landed commit must be detected via the commit-id, not re-sent")
+	assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()), "the mutation must be applied exactly once")
+	assert.Equal(t, map[int64]string{1: "one", 2: "TWO"}, scanRows(t, ctx, cat.snapshot()))
+	assert.Empty(t, comm.stripper.strip.snapshot(), "an unknown-state error must never teach the stripper")
+}
+
 // TestParseProhibitedPropertyKeys pins the rejection-parsing grammar: a
 // case-insensitive "prohibited key(s)" marker with arbitrary prefix text, an
 // optional colon, and a comma-separated key list that tolerates quotes,
@@ -290,6 +435,42 @@ func TestParseProhibitedPropertyKeys(t *testing.T) {
 			want: []string{"schema.name-mapping.default"},
 		},
 		{
+			// Regression: the old lazy-colon regex backtracked "keys" into
+			// "key" + list "s" and learned the key "s".
+			name: "bare phrase without a list learns nothing",
+			err:  errors.New("prohibited keys"),
+			want: nil,
+		},
+		{
+			// Regression: without the required colon this learned "detected".
+			name: "prose after the marker without a colon learns nothing",
+			err:  errors.New("prohibited keys detected in the request"),
+			want: nil,
+		},
+		{
+			// Regression: the prose after the sentence break used to yield a
+			// bogus second key "then".
+			name: "sentence prose after the key list is not learned",
+			err:  errors.New("prohibited keys: a.b. Remove them, then retry."),
+			want: []string{"a.b"},
+		},
+		{
+			name: "prose tail after multiple keys keeps only the real keys",
+			err:  errors.New("prohibited keys: a.b, c.d. Please remove them, then retry."),
+			want: []string{"a.b", "c.d"},
+		},
+		{
+			name: "quoted comma-separated keys",
+			err:  errors.New("prohibited keys: 'x.y', 'z.w'"),
+			want: []string{"x.y", "z.w"},
+		},
+		{
+			// Real property keys are dotted; a bare word is prose, not a key.
+			name: "dotless token is not a property key",
+			err:  errors.New("prohibited keys: forbidden"),
+			want: nil,
+		},
+		{
 			name: "unrelated error",
 			err:  errors.New("commit failed, refresh and try again"),
 			want: nil,
@@ -313,7 +494,7 @@ func TestParseProhibitedPropertyKeys(t *testing.T) {
 // their original value. It also pins the strip-set rules: dedupe on re-add and
 // refusal of reserved redpanda-connect.* keys.
 func TestStripperFiltersOnlySetPropertiesUpdates(t *testing.T) {
-	s := newPropertyStrippingCatalog(nil)
+	s := newPropertyStrippingCatalog(nil, nil)
 
 	// Pass-through while the strip set is empty: same slice, no copies.
 	unfilteredProps := table.NewSetPropertiesUpdate(iceberg.Properties{"schema.name-mapping.default": "m"})
