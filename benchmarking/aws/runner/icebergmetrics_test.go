@@ -69,6 +69,56 @@ func TestParseIcebergSeries_SkipsCounterReset(t *testing.T) {
 	}
 }
 
+func TestParseIcebergSeries_IgnoresPerTableLines(t *testing.T) {
+	// Finding #2 of the final whole-branch review: the sidecar now also
+	// emits a per-table "table_files_size_bytes <name> <bytes>" line inside
+	// each frame (live evidence for the plan's own acceptance check — a
+	// zero on one of arm B's two tables means the rebalance starved one
+	// stream). ParseIcebergSeries must ignore these lines and produce
+	// EXACTLY the same series as a dump without them: "table_files_size_bytes"
+	// is a distinct prefix from "total_files_size_bytes " (different first
+	// word — "table" vs "total") and from "total_records ", so neither
+	// switch case in ParseIcebergSeries can match it; it falls through to
+	// the switch's default and is silently dropped.
+	withoutPerTable := strings.Join([]string{
+		"###timestamp=1000",
+		"total_files_size_bytes 0",
+		"total_records 0",
+		"###timestamp=1010",
+		"total_files_size_bytes 104857600",
+		"total_records 1000000",
+	}, "\n")
+	withPerTable := strings.Join([]string{
+		"###timestamp=1000",
+		"table_files_size_bytes bench_sess_x_iceberg_connect_s0 0",
+		"table_files_size_bytes bench_sess_x_iceberg_connect_s1 0",
+		"total_files_size_bytes 0",
+		"total_records 0",
+		"###timestamp=1010",
+		"table_files_size_bytes bench_sess_x_iceberg_connect_s0 52428800",
+		"table_files_size_bytes bench_sess_x_iceberg_connect_s1 52428800",
+		"total_files_size_bytes 104857600",
+		"total_records 1000000",
+	}, "\n")
+
+	want, err := ParseIcebergSeries(strings.NewReader(withoutPerTable))
+	if err != nil {
+		t.Fatalf("ParseIcebergSeries(without): %v", err)
+	}
+	got, err := ParseIcebergSeries(strings.NewReader(withPerTable))
+	if err != nil {
+		t.Fatalf("ParseIcebergSeries(with): %v", err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("per-table lines changed point count: got %d, want %d (got=%#v want=%#v)", len(got), len(want), got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("point %d differs: got %#v, want %#v", i, got[i], want[i])
+		}
+	}
+}
+
 func TestParseIcebergSeries_Empty(t *testing.T) {
 	pts, err := ParseIcebergSeries(strings.NewReader(""))
 	if err != nil {

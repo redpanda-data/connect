@@ -118,6 +118,33 @@ func TestSinkTopology_MetricSidecar_GluePoll(t *testing.T) {
 	}
 }
 
+func TestSinkTopology_MetricSidecar_EmitsPerTableLine(t *testing.T) {
+	// Finding #2: the sidecar must emit a per-table
+	// "table_files_size_bytes <table> <bytes>" line inside the for-loop, so
+	// the plan's own acceptance check (did BOTH of arm B's tables grow) has
+	// live evidence before the Glue database and warehouse bucket are torn
+	// down. The summed total_files_size_bytes line survives in
+	// runs/<sess>/iceberg-*.txt but cannot distinguish a healthy 8/8 split
+	// from a degenerate 16/0 one.
+	sc := sinkTopology{}.MetricSidecar(MetricSidecarArgs{
+		Engine: "connect", VCPU: 2, Key: "2-b-2pipe-gmp4",
+		Bucket: "b", SessionID: "sess-x",
+		Outs:  map[string]string{"aws_region": "us-east-2"},
+		Names: newBenchNames("sess-x", "iceberg").WithStreams(2),
+	})
+	if !strings.Contains(sc.Setup, `echo "table_files_size_bytes $T ${S:-0}"`) {
+		t.Errorf("sidecar must emit a per-table line inside the for loop; got:\n%s", sc.Setup)
+	}
+	// The load-bearing invariant from Task 5 must still hold: exactly one
+	// summed total_files_size_bytes / total_records emission per frame.
+	if got := strings.Count(sc.Setup, `echo "total_files_size_bytes`); got != 1 {
+		t.Errorf("expected exactly one summed size emission per frame, got %d:\n%s", got, sc.Setup)
+	}
+	if got := strings.Count(sc.Setup, `echo "total_records`); got != 1 {
+		t.Errorf("expected exactly one summed records emission per frame, got %d:\n%s", got, sc.Setup)
+	}
+}
+
 func TestSinkTopology_KCConfig_Iceberg(t *testing.T) {
 	res, ok, err := (sinkTopology{}).KCConfig(&Scenario{Connector: "iceberg", Direction: DirectionSink}, sinkOuts(), newBenchNames("sess", "iceberg"))
 	if err != nil || !ok {

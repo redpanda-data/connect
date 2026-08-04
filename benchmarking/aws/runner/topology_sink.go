@@ -199,6 +199,18 @@ func (t sinkTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
           R=$(echo "$SNAP" | jq -r '[.snapshots[]?."summary"."total-records" // "0" | tonumber] | last // 0' 2>/dev/null || echo 0)
           SIZE=$((SIZE + ${S:-0}))
           RECS=$((RECS + ${R:-0}))
+          # Per-table line, live evidence for the plan's own acceptance check
+          # ("did BOTH of arm B's tables grow, or did the rebalance starve
+          # one stream of partitions"). The summed total_files_size_bytes
+          # line below cannot distinguish a healthy 8/8 split from a
+          # degenerate 16/0 one, and by the time anyone looks at
+          # runs/<sess>/iceberg-*.txt after teardown the Glue database and
+          # warehouse bucket are already gone — this line is the only
+          # record. table_files_size_bytes is a DISTINCT prefix from
+          # total_files_size_bytes/total_records (see ParseIcebergSeries),
+          # so it is inert to the parser: unmatched lines fall through its
+          # switch default and are silently dropped.
+          echo "table_files_size_bytes $T ${S:-0}"
         fi
       done
       echo "total_files_size_bytes ${SIZE:-0}"
