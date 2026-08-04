@@ -21,6 +21,11 @@ type sweepPoint struct {
 	ArmID      string
 	GOMAXPROCS int
 	Streams    int
+	// FanIn mirrors Arm.FanIn: renderPointConfigs renders this point as one
+	// pipeline subscribed to all of dataset.topics' topics instead of the
+	// per-Streams rendering below. false for every arm-less scenario and for
+	// arms that don't set fan_in.
+	FanIn bool
 	// Pipeline is the scenario pipeline with this arm's overrides merged in.
 	// nil for arm-less scenarios, whose callers use Scenario.Pipeline directly.
 	Pipeline map[string]any
@@ -62,6 +67,7 @@ func buildSweepPlan(s *Scenario) []sweepPoint {
 				ArmID:      a.ID,
 				GOMAXPROCS: gmp,
 				Streams:    streams,
+				FanIn:      a.FanIn,
 				Pipeline:   mergePipeline(s.Pipeline, a.Pipeline),
 			})
 		}

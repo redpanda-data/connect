@@ -133,6 +133,22 @@ func TestBuildSweepPlan_ArmsExpandAcrossMultipleCPUPoints(t *testing.T) {
 	require.Equal(t, 4, plan[3].VCPU)
 }
 
+func TestBuildSweepPlan_ArmsCarryFanIn(t *testing.T) {
+	s := &Scenario{
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms: []Arm{
+				{ID: "streams7", Streams: 7},
+				{ID: "fanin", FanIn: true},
+			},
+		},
+	}
+	plan := buildSweepPlan(s)
+	require.Len(t, plan, 2)
+	require.False(t, plan[0].FanIn, "streams7 arm must not carry fan_in")
+	require.True(t, plan[1].FanIn, "fanin arm's fan_in must reach the sweep point")
+}
+
 func TestPlanMaxStreams(t *testing.T) {
 	require.Equal(t, 1, planMaxStreams([]sweepPoint{{Streams: 1}, {Streams: 1}}))
 	require.Equal(t, 2, planMaxStreams([]sweepPoint{{Streams: 1}, {Streams: 2}}))

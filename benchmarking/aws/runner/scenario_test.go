@@ -629,6 +629,70 @@ func TestScenarioValidate_AcceptsAbsentTopics(t *testing.T) {
 	require.NoError(t, s.Validate())
 }
 
+func TestLoadScenario_ParsesFanInArm(t *testing.T) {
+	s, err := LoadScenario("testdata/valid-iceberg-7table.yaml")
+	require.NoError(t, err)
+	require.Equal(t, 7, s.Dataset.Topics)
+	require.Len(t, s.Matrix.Arms, 2)
+	require.Equal(t, "streams7", s.Matrix.Arms[0].ID)
+	require.Equal(t, 7, s.Matrix.Arms[0].Streams)
+	require.False(t, s.Matrix.Arms[0].FanIn, "streams7 arm must not set fan_in")
+	require.Equal(t, "fanin", s.Matrix.Arms[1].ID)
+	require.True(t, s.Matrix.Arms[1].FanIn)
+	require.Equal(t, 0, s.Matrix.Arms[1].Streams, "fanin arm must not also set streams")
+}
+
+func TestScenarioValidate_RejectsFanInWithSingleTopic(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 1000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 200},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "fanin", FanIn: true}},
+		},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "matrix.arms[0].fan_in")
+	require.Contains(t, err.Error(), "dataset.topics")
+}
+
+func TestScenarioValidate_RejectsFanInWithStreamsAboveOne(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 119000000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 145, Topics: 7},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "fanin", FanIn: true, Streams: 2}},
+		},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "matrix.arms[0].fan_in")
+	require.Contains(t, err.Error(), "streams")
+}
+
+func TestScenarioValidate_AcceptsFanInWithMultiTopic(t *testing.T) {
+	s := &Scenario{
+		Name: "iceberg-x", Connector: "iceberg", Stack: "iceberg",
+		Direction: DirectionSink,
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Dataset:   DatasetSpec{InitialRows: 119000000, RowSizeBytes: 1200, Seeder: "json-orders", ExpectedPeakMBSec: 145, Topics: 7},
+		Pipeline:  map[string]any{"output": map[string]any{"iceberg": map[string]any{}}},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "fanin", FanIn: true}},
+		},
+	}
+	require.NoError(t, s.Validate())
+}
+
 func TestDatasetSpec_PartitionsPerTopicDefaultsTo4(t *testing.T) {
 	require.Equal(t, 4, DatasetSpec{Topics: 7}.partitionsPerTopic())
 	require.Equal(t, 8, DatasetSpec{Topics: 7, PartitionsPerTopic: 8}.partitionsPerTopic())

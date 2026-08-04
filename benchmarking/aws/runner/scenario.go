@@ -168,6 +168,14 @@ type Arm struct {
 	ID         string `yaml:"id"`
 	GOMAXPROCS int    `yaml:"gomaxprocs,omitempty"`
 	Streams    int    `yaml:"streams,omitempty"`
+	// FanIn true renders this arm as ONE pipeline subscribed to all of
+	// dataset.topics' N topics, routing each record to its topic-derived
+	// Iceberg table via an interpolated `table` field (see fanInTableExpr in
+	// main.go) instead of streams mode's one-stream-per-topic default.
+	// Requires dataset.topics > 1 (fanning a single topic in is meaningless)
+	// and is mutually exclusive with Streams > 1 (fan-in IS a single
+	// pipeline) — Validate enforces both.
+	FanIn bool `yaml:"fan_in,omitempty"`
 	// Pipeline is deep-merged over the scenario-level pipeline block for this
 	// arm, so an arm declares only what differs. Applied to every stream.
 	Pipeline map[string]any `yaml:"pipeline,omitempty"`
@@ -367,6 +375,12 @@ func (s *Scenario) Validate() error {
 			}
 			if a.Streams > maxArmStreams {
 				return fmt.Errorf("matrix.arms[%d].streams must be <= %d (got %d); each stream adds a rendered config, an Iceberg table, and a retried tablegen pre-create per engine at every between-points reset", i, maxArmStreams, a.Streams)
+			}
+			if a.FanIn && s.Dataset.Topics <= 1 {
+				return fmt.Errorf("matrix.arms[%d].fan_in requires dataset.topics > 1 (got %d); fanning a single topic in is meaningless", i, s.Dataset.Topics)
+			}
+			if a.FanIn && a.Streams > 1 {
+				return fmt.Errorf("matrix.arms[%d].fan_in is mutually exclusive with streams > 1 (got streams: %d); fan-in is a single pipeline", i, a.Streams)
 			}
 		}
 	}

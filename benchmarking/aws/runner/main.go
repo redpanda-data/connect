@@ -655,11 +655,85 @@ func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, na
 	return writeTempYAML(cfg, outs, "bench-config-*.yaml")
 }
 
-// renderPointConfigs renders the launch config(s) for one sweep point. A point
-// with Streams <= 1 gets a single config identical in shape to the pre-arms
-// renderer. A multi-stream point gets a root config (observability only) plus
-// one stream config per pipeline, each writing its own Iceberg table but
-// sharing the source topic and consumer group.
+// fanInTableExpr routes a fan-in arm's iceberg output table by the record's
+// source topic, so fan-in writes the exact same N tables that streams mode
+// writes for a multi-topic scenario (see BenchNames.IcebergTablesForTopics
+// and TestFanInTableExpr_MatchesTopicDerivedTableNames, which asserts the
+// equivalence element-for-element). kafka_topic metadata is set by the
+// redpanda input for every consumed record (internal/impl/kafka/
+// franz_reader.go). Glue table identifiers cannot contain '-', hence the
+// dash->underscore replacement (mirrors BenchNames.icebergTableBase); the
+// second replace maps a topic's _src_t<i> suffix to the table's _connect_t<i>
+// suffix, matching IcebergTable's Topics > 1 naming rule.
+const fanInTableExpr = `${! @kafka_topic.replace_all("-","_").replace_all("_src_t","_connect_t") }`
+
+// renderFanInConfig renders the single config for a fan-in arm: one pipeline
+// whose redpanda input subscribes to all of dataset.topics' N source topics
+// under the unsuffixed consumer group (one group, N subscriptions), and whose
+// output's table is fanInTableExpr rather than the literal name
+// topo.Pipeline would otherwise set — that literal is for exactly ONE topic's
+// table and would misroute every other topic's records if left in place.
+// This mutates a fresh copy of topo.Pipeline's result rather than changing
+// sinkTopology.Pipeline's behaviour for other callers.
+func renderFanInConfig(s *Scenario, outs map[string]string, topo Topology, names BenchNames) (string, error) {
+	n := s.Dataset.Topics
+	if n <= 1 {
+		return "", fmt.Errorf("fan-in requires dataset.topics > 1 (got %d)", n)
+	}
+	scoped := names.WithTopics(n)
+
+	// topo.Pipeline needs SOME topic-scoped BenchNames to build the
+	// redpanda-input/iceberg-output skeleton; topic 0 is as good as any
+	// since its topics list and table are both overwritten below.
+	input, output, err := topo.Pipeline(s, scoped.WithTopic(0))
+	if err != nil {
+		return "", fmt.Errorf("render fan-in pipeline: %w", err)
+	}
+
+	redpandaIn, ok := input["redpanda"].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("fan-in: expected a redpanda input, got %T", input["redpanda"])
+	}
+	topics := make([]any, n)
+	for i := 0; i < n; i++ {
+		topics[i] = scoped.WithTopic(i).SourceTopic()
+	}
+	redpandaIn["topics"] = topics
+	// The unsuffixed group: names is not topic-scoped (Topics <= 1), so
+	// ConsumerGroup reproduces today's exact single-topic name — one group,
+	// N subscriptions, per the design's fan-in wiring.
+	redpandaIn["consumer_group"] = names.ConsumerGroup("connect")
+
+	// output has exactly one entry (the sink's output component, e.g.
+	// "iceberg") — topo.Pipeline's contract. Overwrite its table with the
+	// interpolated expression instead of the single literal table name
+	// topo.Pipeline set for topic 0.
+	for _, v := range output {
+		icfg, ok := v.(map[string]any)
+		if !ok {
+			return "", fmt.Errorf("fan-in: expected output component to be a map, got %T", v)
+		}
+		icfg["table"] = fanInTableExpr
+	}
+
+	cfg := rootSections(s)
+	cfg["input"] = input
+	cfg["output"] = output
+	if buf, ok := s.Pipeline["buffer"]; ok {
+		cfg["buffer"] = buf
+	}
+	return writeTempYAML(cfg, outs, "bench-config-*.yaml")
+}
+
+// renderPointConfigs renders the launch config(s) for one sweep point. A
+// fan-in point gets one config (renderFanInConfig). A point with Streams <= 1
+// gets a single config identical in shape to the pre-arms renderer. A
+// multi-stream point gets a root config (observability only) plus one stream
+// config per pipeline. For a single-topic scenario each stream shares the
+// source topic and consumer group, distinguished only by table (_s<i>); for
+// a multi-topic scenario (dataset.topics > 1) each stream instead reads its
+// OWN topic (_t<i>) under its own group and table, and Streams must equal
+// dataset.topics or every extra topic would sit unconsumed.
 func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, names BenchNames, p sweepPoint) (renderedPointConfigs, error) {
 	out := renderedPointConfigs{Key: p.Key()}
 
@@ -669,6 +743,15 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 		armScenario.Pipeline = p.Pipeline
 	}
 
+	if p.FanIn {
+		path, err := renderFanInConfig(&armScenario, outs, topo, names)
+		if err != nil {
+			return renderedPointConfigs{}, fmt.Errorf("render fan-in config for %s: %w", out.Key, err)
+		}
+		out.Single = path
+		return out, nil
+	}
+
 	if p.Streams <= 1 {
 		path, err := renderPipelineConfig(&armScenario, outs, topo, names.WithStreams(1))
 		if err != nil {
@@ -676,6 +759,12 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 		}
 		out.Single = path
 		return out, nil
+	}
+
+	if s.Dataset.Topics > 1 && p.Streams != s.Dataset.Topics {
+		return renderedPointConfigs{}, fmt.Errorf(
+			"point %s: streams (%d) must equal dataset.topics (%d) for a multi-topic scenario in streams mode; a mismatch would silently leave topics unconsumed, which looks like low throughput rather than a misconfiguration",
+			out.Key, p.Streams, s.Dataset.Topics)
 	}
 
 	rootPath, err := writeTempYAML(rootSections(&armScenario), outs, "bench-root-*.yaml")
@@ -697,7 +786,18 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 	// silent-corruption failure this whole review exists to catch, and not
 	// something a test would reliably catch either.
 	for i := 0; i < p.Streams; i++ {
+		// Single-topic (or arm-less) scenarios: streams share the topic and
+		// group, distinguished only by table (WithStreams/WithStream, _s<i>).
+		// Multi-topic scenarios: each stream is scoped to its OWN topic
+		// instead (WithTopics/WithTopic, _t<i>), so it reads only that topic
+		// under its own group and writes only that topic's table — the
+		// mapping the "Design decision that keeps the comparison honest"
+		// section requires so streams7 writes the identical tables fanin
+		// does.
 		streamNames := names.WithStreams(p.Streams).WithStream(i)
+		if s.Dataset.Topics > 1 {
+			streamNames = names.WithTopics(s.Dataset.Topics).WithTopic(i)
+		}
 		input, output, err := topo.Pipeline(&armScenario, streamNames)
 		if err != nil {
 			return renderedPointConfigs{}, fmt.Errorf("render stream %d of %s: %w", i, out.Key, err)
