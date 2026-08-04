@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.103.2 - TBD
+
+### Fixed
+
+- redpanda: Enabling `unordered_processing` no longer renames the consumer lag gauge from `redpanda_lag` to `kafka_lag`. The `redpanda` input now emits `redpanda_lag` in both modes, as documented. ([@prakhargarg105](https://github.com/prakhargarg105), [#4663](https://github.com/redpanda-data/connect/issues/4663))
+
 ## 4.103.1 - 2026-07-31
 
 ### Added

@@ -97,6 +97,12 @@ type FranzReaderUnordered struct {
 	batchPolicy           service.BatchPolicy
 	topicLagRefreshPeriod time.Duration
 
+	// lagMetricName is the name of the consumer lag gauge emitted by this
+	// reader. It is owned by the input rather than the reader so that inputs
+	// which can be served by either reader implementation emit a consistent
+	// metric name.
+	lagMetricName string
+
 	batchChan atomic.Value
 	res       *service.Resources
 	log       *service.Logger
@@ -117,9 +123,10 @@ func (f *FranzReaderUnordered) storeBatchChan(c chan batchWithAckFn) {
 // Deprecated: Use the toggled variant in future.
 func NewFranzReaderUnorderedFromConfig(conf *service.ParsedConfig, res *service.Resources, opts ...kgo.Opt) (*FranzReaderUnordered, error) {
 	f := FranzReaderUnordered{
-		res:     res,
-		log:     res.Logger(),
-		shutSig: shutdown.NewSignaller(),
+		res:           res,
+		log:           res.Logger(),
+		shutSig:       shutdown.NewSignaller(),
+		lagMetricName: lagMetricNameKafka,
 	}
 	f.clientOpts = func() ([]kgo.Opt, error) {
 		return slices.Clone(opts), nil
@@ -580,7 +587,7 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 	go func() {
 		var consumerLag *ConsumerLag
 		if f.consumerGroup != "" {
-			topicLagGauge := f.res.Metrics().NewGauge("kafka_lag", "topic", "partition")
+			topicLagGauge := f.res.Metrics().NewGauge(f.lagMetricName, "topic", "partition")
 			consumerLag = NewConsumerLag(cl, f.consumerGroup, f.res.Logger(), topicLagGauge, f.topicLagRefreshPeriod)
 			consumerLag.Start()
 			defer consumerLag.Stop()
