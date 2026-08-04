@@ -140,11 +140,6 @@ input:
 		builder := service.NewStreamBuilder()
 		require.NoError(t, builder.SetYAML(yaml))
 
-		// The consumer func runs on the stream's own goroutine, not the test
-		// goroutine, so failures here must not call t.Fatalf/require (which
-		// call FailNow, only valid from the test goroutine). Instead, record
-		// any unexpected message under a mutex and assert on it below, once
-		// the stream has stopped.
 		var (
 			unexpectedMu   sync.Mutex
 			unexpectedMsgs [][]byte
