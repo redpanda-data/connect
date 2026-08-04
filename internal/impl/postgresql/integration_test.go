@@ -1861,7 +1861,7 @@ tables:
 	input, err := newPgStreamInput(conf, mgr)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	// Bypass the benthos AsyncReader's infinite connect-retry loop by calling
