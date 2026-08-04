@@ -31,6 +31,7 @@ Last refreshed: 2026-08-04
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
 | dynamodb / cdc        |         8 |           82 |      —    |                   —  | 2026-06-15  |
+| iceberg / orders-7table-consolidation |         4 |          120 |      —    |                   —  | 2026-08-04  |
 | iceberg / orders-sink ⚠ |         4 |          135 |      70 | +65 MB/s (+48%)    | 2026-07-09  |
 | iceberg / orders-sink-recipe-b |         8 |          128 |      75 | +53 MB/s (+42%)    | 2026-07-09  |
 | iceberg / orders-sink-smoke |     —      |         —      |      —    |                   —  | 2026-07-08  |

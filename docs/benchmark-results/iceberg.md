@@ -741,3 +741,53 @@ which won at 2 vCPU (69.1 vs 64.1 MB/s).
 
 
 Raw samples + Prometheus snapshots: [`results/iceberg/orders-sink-streams-ab/2026-08-04T02-24-51Z.json`](results/iceberg/orders-sink-streams-ab/2026-08-04T02-24-51Z.json)
+
+
+## AWS — orders-7table-consolidation — 2026-08-04
+
+**Scenario:** Can 7 one-core pipelines become one process? A customer runs 7 topics -> 7
+Iceberg tables as 7 separate pipelines at 1 core each (7 cores total) and wants
+to cut cores. This measures the two consolidation topologies at 2 and 4 cores:
+
+  streams7  one process, 7 streams; stream i reads topic i, writes table i.
+            Independent commit paths, but 7 consumer clients and 7 buffers.
+  fanin     one process, one pipeline subscribed to all 7 topics, one iceberg
+            output routing by interpolated table name. One client, one buffer.
+
+Both arms write the SAME 7 topic-derived tables (fan-in gets there by
+interpolating the table from ${! @kafka_topic }), so the metric sidecar sums an
+identical table set for every arm and one reset serves both — without that the
+arms would not be measuring the same thing.
+
+Resources are held constant so this is a topology comparison, not a resource
+one: streams7 divides the 500 MiB buffer and the 16 in-flight budget by 7.
+
+fanin batches x7 deliberately. internal/impl/iceberg/router.go groups a batch
+per table and writes each group SEQUENTIALLY, so a fan-in batch yields 7 writes
+of 1/7 the size. Without scaling the batch up we would be measuring our own
+misconfiguration rather than the topology.
+
+Not measured here: the customer's actual 7x1-core baseline, which needs 7
+concurrent processes. The published 1-vCPU numbers (15.9 MB/s Recipe A / 38.3
+Recipe B) bracket it, and that 2.4x spread is exactly the range where the answer
+flips between "one 4-core process replaces all 7 cores" and "one process cannot
+reach their aggregate at any core count". Their real per-pipeline throughput is
+the decisive input and is cheaper to ask for than to measure.
+
+**Git SHA:** [`75a3f4a86`](https://github.com/redpanda-data/connect/commit/75a3f4a86b508d809b71a92045fd4b32d8b3dfaf)
+
+**Infra:** Runner `c8g.4xlarge`; source `` (0 GB) in `us-east-2`.
+
+**Dataset:** 119,000,000 rows × 1200 B = ~132 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 2    | 2          | streams7       | connect       |           63 |       62.846 |        56,675 |           63 |          58 |           69 |        56,554 |                    |
+| 2    | 2          | fanin          | connect       |           53 |       52.655 |        47,485 |           53 |          47 |           58 |        47,472 |                    |
+| 4    | 4          | streams7       | connect       |          120 |      121.981 |       110,005 |          120 |         113 |          133 |       108,463 |                    |
+| 4    | 4          | fanin          | connect       |           53 |       49.468 |        44,612 |           53 |          18 |           73 |        48,088 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/iceberg/orders-7table-consolidation/2026-08-04T05-42-24Z.json`](results/iceberg/orders-7table-consolidation/2026-08-04T05-42-24Z.json)
