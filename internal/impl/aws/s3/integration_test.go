@@ -25,6 +25,8 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -93,6 +95,90 @@ input:
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
 		)
+	})
+
+	t.Run("via_sqs_test_event_deleted", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+
+		id := fmt.Sprintf("testevent%d", time.Now().UnixNano())
+		require.NoError(t, awstest.CreateBucketQueue(ctx, lsPort, lsPort, id))
+
+		sqsClient := newLocalStackSQSClient(t, lsPort)
+		queueURL := fmt.Sprintf("http://localhost:%s/000000000000/queue-%s", lsPort, id)
+
+		testEventBody := fmt.Sprintf(
+			`{"Service":"Amazon S3","Event":"s3:TestEvent","Time":"%s","Bucket":"bucket-%s","RequestId":"N99ABJ6Q","HostId":"+3DhJHKGDGBwqSTufMSS1UgAMIoRovmGa9vkZwWIb1="}`,
+			time.Now().UTC().Format(time.RFC3339), id,
+		)
+		_, err := sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+			QueueUrl:    aws.String(queueURL),
+			MessageBody: aws.String(testEventBody),
+		})
+		require.NoError(t, err)
+
+		yaml := fmt.Sprintf(`
+input:
+  aws_s3:
+    bucket: bucket-%s
+    endpoint: http://localhost:%s
+    force_path_style_urls: true
+    region: eu-west-1
+    delete_objects: true
+    sqs:
+      url: %s
+      key_path: Records.*.s3.object.key
+      endpoint: http://localhost:%s
+      wait_time_seconds: 1
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+`, id, lsPort, queueURL, lsPort)
+
+		builder := service.NewStreamBuilder()
+		require.NoError(t, builder.SetYAML(yaml))
+
+		require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+			b, _ := m.AsBytes()
+			t.Fatalf("did not expect any message to be emitted for an s3:TestEvent, got: %s", b)
+			return nil
+		}))
+
+		stream, err := builder.Build()
+		require.NoError(t, err)
+
+		runErr := make(chan error, 1)
+		runCtx, runCancel := context.WithCancel(ctx)
+		defer runCancel()
+		go func() { runErr <- stream.Run(runCtx) }()
+
+		// The test event should be deleted from the queue rather than left
+		// to be received again indefinitely.
+		assert.Eventually(t, func() bool {
+			out, err := sqsClient.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+				QueueUrl: aws.String(queueURL),
+				AttributeNames: []sqstypes.QueueAttributeName{
+					sqstypes.QueueAttributeNameApproximateNumberOfMessages,
+					sqstypes.QueueAttributeNameApproximateNumberOfMessagesNotVisible,
+				},
+			})
+			if err != nil {
+				return false
+			}
+			return out.Attributes[string(sqstypes.QueueAttributeNameApproximateNumberOfMessages)] == "0" &&
+				out.Attributes[string(sqstypes.QueueAttributeNameApproximateNumberOfMessagesNotVisible)] == "0"
+		}, 15*time.Second, 500*time.Millisecond, "test event message should have been deleted from the queue")
+
+		require.NoError(t, stream.StopWithin(10*time.Second))
+		select {
+		case err := <-runErr:
+			if err != nil && !errors.Is(err, context.Canceled) {
+				require.NoError(t, err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("stream did not exit after StopWithin returned")
+		}
 	})
 
 	t.Run("via_sqs_lines", func(t *testing.T) {
@@ -391,4 +477,18 @@ func newLocalStackS3Client(t *testing.T, port string) *s3.Client {
 	return s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
+}
+
+// newLocalStackSQSClient builds an SQS client pointed at the LocalStack
+// instance on the supplied port, with dummy credentials.
+func newLocalStackSQSClient(t *testing.T, port string) *sqs.Client {
+	t.Helper()
+	endpoint := fmt.Sprintf("http://localhost:%s", port)
+	cfg, err := awsconfig.LoadDefaultConfig(t.Context(),
+		awsconfig.WithRegion("eu-west-1"),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+	)
+	require.NoError(t, err)
+	cfg.BaseEndpoint = &endpoint
+	return sqs.NewFromConfig(cfg)
 }
