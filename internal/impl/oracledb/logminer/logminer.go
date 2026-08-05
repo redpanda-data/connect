@@ -1128,7 +1128,7 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	// mirroring Debezium's log.mining.session.max.ms.
 	sessionExpired := lm.cfg.SessionMaxAge > 0 && lm.sessionMgr.IsActive() && lm.sessionMgr.Age() >= lm.cfg.SessionMaxAge
 	if sessionExpired {
-		lm.log.Infof("LogMiner session has been open for %s, exceeding session_max_age of %s — forcing restart to release accumulated session memory",
+		lm.log.Debugf("LogMiner session has been open for %s, exceeding session_max_age of %s — forcing restart to release accumulated session memory",
 			lm.sessionMgr.Age(), lm.cfg.SessionMaxAge)
 	}
 
