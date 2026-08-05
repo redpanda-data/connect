@@ -250,7 +250,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Example("10s").
 					Example("0s").
 					Default("30s").
-					LintRule(`root = if this.parse_duration().catch(0) < 0 { [ "` + s3iSQSFieldZeroKeyWarnInterval + ` must not be negative" ] }`).
+					LintRule(`root = if this.parse_duration().catch(0) < 0 { [ "`+s3iSQSFieldZeroKeyWarnInterval+` must not be negative" ] }`).
 					Advanced(),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").
@@ -603,7 +603,6 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 				continue
 			}
 			addDudFn(sqsMsg)
-			// misconfigured event will get redelivered, so support control looding of warn logs.
 			if now := time.Now(); now.Sub(s.lastZeroKeyWarnAt) >= s.conf.SQS.ZeroKeyWarnInterval {
 				s.lastZeroKeyWarnAt = now
 				s.log.Warnf(
