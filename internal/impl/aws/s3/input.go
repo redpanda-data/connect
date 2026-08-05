@@ -250,6 +250,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Example("10s").
 					Example("0s").
 					Default("30s").
+					LintRule(`root = if this.parse_duration().catch(0) < 0 { [ "` + s3iSQSFieldZeroKeyWarnInterval + ` must not be negative" ] }`).
 					Advanced(),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").
