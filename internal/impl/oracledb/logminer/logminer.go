@@ -492,6 +492,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 							OldValues:     acc.PKValues,
 							TransactionID: redoEvent.TransactionID,
 							Timestamp:     redoEvent.Timestamp,
+							UserName:      redoEvent.UserName.String,
 						}
 						txn.Events = append(txn.Events, synthetic)
 						lm.log.Debugf("LOB merge: synthesized UPDATE for %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
