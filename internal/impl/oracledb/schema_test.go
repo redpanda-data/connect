@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -180,6 +181,16 @@ func TestOracleNumberToCommonType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := replication.NumberToCommon("col", tt.precision, tt.scale, tt.hasInfo)
 			assert.Equal(t, tt.wantType, c.Type)
+			// Bounded decimals must carry the declared precision/scale in
+			// their logical params — the Avro decimal type is
+			// (precision, scale), not just "decimal", so a silent clamp or
+			// substitution here re-registers an incompatible schema.
+			if tt.wantType == schema.Decimal {
+				require.NotNil(t, c.Logical)
+				require.NotNil(t, c.Logical.Decimal)
+				assert.Equal(t, int32(tt.precision), c.Logical.Decimal.Precision)
+				assert.Equal(t, int32(tt.scale), c.Logical.Decimal.Scale)
+			}
 		})
 	}
 }
@@ -250,6 +261,12 @@ func TestOracleSchemaSourceParity(t *testing.T) {
 		catalog catalogSource
 		drivers []driverSource // some types have multiple driver spellings
 		want    schema.CommonType
+		// wantDecimal pins the exact [precision, scale] for Decimal rows.
+		// Agreement between the two sources alone is NOT enough: Avro decimal
+		// compatibility is on (precision, scale), so both sources agreeing on
+		// the WRONG parameters would still re-register an incompatible schema
+		// against existing subjects.
+		wantDecimal []int32
 	}{
 		{
 			name:    "DATE",
@@ -282,10 +299,11 @@ func TestOracleSchemaSourceParity(t *testing.T) {
 			want:    schema.Timestamp,
 		},
 		{
-			name:    "NUMBER(10,2)",
-			catalog: catalogSource{typeName: "NUMBER", precision: n(10), scale: n(2)},
-			drivers: []driverSource{{typeName: "NUMBER", precision: 10, scale: 2, hasInfo: true}},
-			want:    schema.Decimal,
+			name:        "NUMBER(10,2)",
+			catalog:     catalogSource{typeName: "NUMBER", precision: n(10), scale: n(2)},
+			drivers:     []driverSource{{typeName: "NUMBER", precision: 10, scale: 2, hasInfo: true}},
+			want:        schema.Decimal,
+			wantDecimal: []int32{10, 2},
 		},
 		{
 			name:    "NUMBER(5)",
@@ -304,18 +322,20 @@ func TestOracleSchemaSourceParity(t *testing.T) {
 		{
 			// INTEGER is NUMBER(*,0): catalog reports NULL precision with scale
 			// 0; the driver reports (38, 0). Both must land on Decimal(38,0).
-			name:    "INTEGER",
-			catalog: catalogSource{typeName: "NUMBER", scale: n(0)},
-			drivers: []driverSource{{typeName: "NUMBER", precision: 38, scale: 0, hasInfo: true}},
-			want:    schema.Decimal,
+			name:        "INTEGER",
+			catalog:     catalogSource{typeName: "NUMBER", scale: n(0)},
+			drivers:     []driverSource{{typeName: "NUMBER", precision: 38, scale: 0, hasInfo: true}},
+			want:        schema.Decimal,
+			wantDecimal: []int32{38, 0},
 		},
 		{
 			// NUMBER(*,2): catalog reports NULL precision with the declared
 			// scale; the driver reports (38, 2).
-			name:    "NUMBER(*,2)",
-			catalog: catalogSource{typeName: "NUMBER", scale: n(2)},
-			drivers: []driverSource{{typeName: "NUMBER", precision: 38, scale: 2, hasInfo: true}},
-			want:    schema.Decimal,
+			name:        "NUMBER(*,2)",
+			catalog:     catalogSource{typeName: "NUMBER", scale: n(2)},
+			drivers:     []driverSource{{typeName: "NUMBER", precision: 38, scale: 2, hasInfo: true}},
+			want:        schema.Decimal,
+			wantDecimal: []int32{38, 2},
 		},
 		{
 			// FLOAT: catalog reports DATA_TYPE FLOAT with binary precision and
@@ -428,6 +448,12 @@ func TestOracleSchemaSourceParity(t *testing.T) {
 			p, s, hasInfo := catalogNumberInfo(tt.catalog.precision, tt.catalog.scale)
 			fromCatalog := columnToCommon("COL", tt.catalog.typeName, p, s, hasInfo)
 			assert.Equal(t, tt.want, fromCatalog.Type, "catalog mapping for %s", tt.catalog.typeName)
+			if tt.wantDecimal != nil {
+				require.NotNil(t, fromCatalog.Logical)
+				require.NotNil(t, fromCatalog.Logical.Decimal)
+				assert.Equal(t, tt.wantDecimal[0], fromCatalog.Logical.Decimal.Precision, "decimal precision for %s", tt.name)
+				assert.Equal(t, tt.wantDecimal[1], fromCatalog.Logical.Decimal.Scale, "decimal scale for %s", tt.name)
+			}
 
 			for _, d := range tt.drivers {
 				fromDriver := columnToCommon("COL", d.typeName, d.precision, d.scale, d.hasInfo)
@@ -796,4 +822,83 @@ func TestCoerceStreamingValuesColumnTypeInfoFromCache(t *testing.T) {
 	assert.Equal(t, "12345.67890", data["AMOUNT"])
 	assert.Equal(t, "hello", data["NAME"])
 	assert.Equal(t, float64(1.5), data["SCORE"])
+}
+
+// TestSnapshotScannerSchemaParity pins the three case-sensitive enumerations
+// of driver type-name spellings to each other: the schema mapping
+// (columnToCommon), the snapshot scan-destination switch
+// (replication.SnapshotScanDest), and the lob_enabled filter
+// (replication.IsLOBTypeName). These encode the same fact — what kind of
+// column a driver spelling denotes — in three hand-maintained lists, and they
+// have drifted twice before (LongRaw missing from the schema mapping,
+// LongVarRaw missing from the LOB filter). This table is the single place a
+// new spelling must be added; any list it doesn't reach fails here.
+func TestSnapshotScannerSchemaParity(t *testing.T) {
+	type row struct {
+		spelling         string
+		precision, scale int64
+		hasDecimal       bool
+		wantSchema       schema.CommonType
+		wantScanDest     string // %T of the scan destination
+		wantLOB          bool
+	}
+	rows := []row{
+		// Binary family. RAW/VarRaw are plain columns; the rest are LOBs.
+		{spelling: "RAW", wantSchema: schema.ByteArray, wantScanDest: "*sql.Null[[]uint8]"},
+		{spelling: "VarRaw", wantSchema: schema.ByteArray, wantScanDest: "*sql.Null[[]uint8]"},
+		{spelling: "LongRaw", wantSchema: schema.ByteArray, wantScanDest: "*sql.Null[[]uint8]", wantLOB: true},
+		{spelling: "LongVarRaw", wantSchema: schema.ByteArray, wantScanDest: "*sql.Null[[]uint8]", wantLOB: true},
+		{spelling: "OCIBlobLocator", wantSchema: schema.ByteArray, wantScanDest: "*sql.Null[[]uint8]", wantLOB: true},
+
+		// Temporal family.
+		{spelling: "DATE", wantSchema: schema.Timestamp, wantScanDest: "*sql.NullTime"},
+		{spelling: "TIMESTAMP", wantSchema: schema.Timestamp, wantScanDest: "*sql.NullTime"},
+		{spelling: "TimeStampDTY", wantSchema: schema.Timestamp, wantScanDest: "*sql.NullTime"},
+		{spelling: "TimeStampTZ", wantSchema: schema.Timestamp, wantScanDest: "*sql.NullTime"},
+		{spelling: "TimeStampTZ_DTY", wantSchema: schema.Timestamp, wantScanDest: "*sql.NullTime"},
+		{spelling: "TimeStampLTZ_DTY", wantSchema: schema.Timestamp, wantScanDest: "*sql.NullTime"},
+		{spelling: "TimeStampeLTZ", wantSchema: schema.Timestamp, wantScanDest: "*sql.NullTime"},
+
+		// NUMBER family: the scan destination depends on the classified type.
+		{spelling: "NUMBER", precision: 5, scale: 0, hasDecimal: true, wantSchema: schema.Int64, wantScanDest: "*sql.Null[int64]"},
+		{spelling: "NUMBER", precision: 10, scale: 2, hasDecimal: true, wantSchema: schema.Decimal, wantScanDest: "*sql.NullString"},
+		{spelling: "NUMBER", precision: 38, scale: 255, hasDecimal: true, wantSchema: schema.BigDecimal, wantScanDest: "*sql.NullString"},
+
+		// Binary floats.
+		{spelling: "IBFloat", wantSchema: schema.Float32, wantScanDest: "*sql.Null[float64]"},
+		{spelling: "BFloat", wantSchema: schema.Float32, wantScanDest: "*sql.Null[float64]"},
+		{spelling: "IBDouble", wantSchema: schema.Float64, wantScanDest: "*sql.Null[float64]"},
+		{spelling: "BDouble", wantSchema: schema.Float64, wantScanDest: "*sql.Null[float64]"},
+
+		// Character LOB family.
+		{spelling: "CLOB", wantSchema: schema.String, wantScanDest: "*sql.NullString", wantLOB: true},
+		{spelling: "NCLOB", wantSchema: schema.String, wantScanDest: "*sql.NullString", wantLOB: true},
+		{spelling: "LONG", wantSchema: schema.String, wantScanDest: "*sql.NullString", wantLOB: true},
+		{spelling: "LongVarChar", wantSchema: schema.String, wantScanDest: "*sql.NullString", wantLOB: true},
+		{spelling: "OCIClobLocator", wantSchema: schema.String, wantScanDest: "*sql.NullString", wantLOB: true},
+
+		// JSON (TNS type 119 has no stringer entry in go-ora v2.9.0).
+		{spelling: "JSON", wantSchema: schema.Any, wantScanDest: "*sql.NullString"},
+		{spelling: "TNSType(119)", wantSchema: schema.Any, wantScanDest: "*sql.NullString"},
+
+		// Plain character types and unknowns take the default string path.
+		{spelling: "NCHAR", wantSchema: schema.String, wantScanDest: "*sql.Null[string]"},
+		{spelling: "VARCHAR", wantSchema: schema.String, wantScanDest: "*sql.Null[string]"},
+		{spelling: "CHAR", wantSchema: schema.String, wantScanDest: "*sql.Null[string]"},
+		{spelling: "ROWID", wantSchema: schema.String, wantScanDest: "*sql.Null[string]"},
+		{spelling: "TNSType(121)", wantSchema: schema.String, wantScanDest: "*sql.Null[string]"},
+	}
+
+	for _, r := range rows {
+		t.Run(fmt.Sprintf("%s(%d,%d)", r.spelling, r.precision, r.scale), func(t *testing.T) {
+			common := columnToCommon("COL", r.spelling, r.precision, r.scale, r.hasDecimal)
+			assert.Equal(t, r.wantSchema, common.Type, "schema class for %q", r.spelling)
+
+			dest, mapper := replication.SnapshotScanDest(r.spelling, "COL", r.precision, r.scale, r.hasDecimal)
+			assert.Equal(t, r.wantScanDest, fmt.Sprintf("%T", dest), "scan destination for %q", r.spelling)
+			assert.NotNil(t, mapper, "mapper for %q", r.spelling)
+
+			assert.Equal(t, r.wantLOB, replication.IsLOBTypeName(r.spelling), "lob_enabled filtering for %q", r.spelling)
+		})
+	}
 }

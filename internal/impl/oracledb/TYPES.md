@@ -29,19 +29,20 @@ their proper Go types using column metadata from the schema cache.
 | Oracle Type | Schema Type | Snapshot Go Type | Streaming Go Type | JSON Wire Format |
 |---|---|---|---|---|
 | `NUMBER(p≤18, 0)` | Int64 | `int64` | `int64` ¹ | `42` |
-| `NUMBER(p>18, 0)` | String (Decimal(p,0)) | `string` | `string` ¹ | `"99999999999999999999"` |
-| `NUMBER(p, s>0)` | String (Decimal(p,s)) | `string` | `string` ¹ | `"123.456"` |
-| `NUMBER(p, s<0)` | String (BigDecimal) ⁵ | `string` | `string` ¹ | `"1200"` |
-| `NUMBER` (bare) | String (BigDecimal) | `string` | `string` ¹ | `"42"` |
-| `INTEGER` / `INT` / `SMALLINT` | String (Decimal(38,0)) ² | `string` | `string` ¹ | `"42"` |
-| `FLOAT` | String (BigDecimal) ² | `string` | `string` ¹ | `"1.5"` |
+| `NUMBER(p>18, 0)` | Decimal(p,0) | `string` | `string` ¹ | `"99999999999999999999"` |
+| `NUMBER(p, 0<s≤p)` | Decimal(p,s) | `string` | `string` ¹ | `"123.456"` |
+| `NUMBER(p, s>p)` | BigDecimal ⁵ | `string` | `string` ¹ | `"0.00042"` |
+| `NUMBER(p, s<0)` | BigDecimal ⁵ | `string` | `string` ¹ | `"1200"` |
+| `NUMBER` (bare) | BigDecimal | `string` | `string` ¹ | `"42"` |
+| `INTEGER` / `INT` / `SMALLINT` | Decimal(38,0) ² | `string` | `string` ¹ | `"42"` |
+| `FLOAT` | BigDecimal ² | `string` | `string` ¹ | `"1.5"` |
 | `BINARY_FLOAT` | Float32 | `float64` | `float64` ¹ | `1.5` |
 | `BINARY_DOUBLE` | Float64 | `float64` | `float64` ¹ | `3.14` |
 | `DATE` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00Z"` |
 | `TIMESTAMP` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00.123456Z"` |
 | `TIMESTAMP WITH TIME ZONE` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00+05:30"` |
 | `TIMESTAMP WITH LOCAL TIME ZONE` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00Z"` |
-| `RAW` / `LONG RAW` / `BLOB` | ByteArray | `[]byte` | `[]byte` ³ | `"DEADBEEF"` (base64) |
+| `RAW` / `LONG RAW` / `BLOB` | ByteArray | `[]byte` | `[]byte` ³ | `"3q2+7w=="` (base64) |
 | `CHAR` / `VARCHAR2` | String | `string` | `string` | `"hello"` |
 | `NCHAR` / `NVARCHAR2` | String | `string` | `string` | `"hello"` |
 | `CLOB` / `NCLOB` / `LONG` | String | `string` | `string` | `"long text..."` |
@@ -79,10 +80,13 @@ Note that go-ora v2.9.0's `DatabaseTypeName()` renders the native JSON type (TNS
 type 119) as the literal string `TNSType(119)`, which `oracleTypeToCommonType`
 aliases back to the JSON mapping.
 
-⁵ **Negative scale.** `NUMBER(p,-s)` maps to BigDecimal from both sources. The
-catalog reports the negative scale faithfully, but the driver's `uint8` scale wraps
-(e.g. `-2` → `254`) and trips the undeclared-scale sentinel in `NumberToCommon`, so
-the catalog side maps to BigDecimal as well to keep the two sources in agreement.
+⁵ **Out-of-range scales.** Declared scales outside `0..p` map to BigDecimal from
+both sources. For negative scale (`NUMBER(p,-s)`) the catalog reports it
+faithfully, but the driver's `uint8` scale wraps (e.g. `-2` → `254`) and trips
+the scale-greater-than-precision branch in `NumberToCommon`, so the catalog side
+maps to BigDecimal as well to keep the two sources in agreement. A declared
+scale greater than precision (e.g. `NUMBER(2,5)`, legal in Oracle) reaches the
+same branch directly from both sources.
 
 ## Value Coercion
 
@@ -189,7 +193,8 @@ the same column type, and both must map identically (see
 |---|---|---|
 | `BINARY_FLOAT` | `IBFloat` or `BFloat` | `BINARY_FLOAT` |
 | `BINARY_DOUBLE` | `IBDouble` or `BDouble` | `BINARY_DOUBLE` |
-| `TIMESTAMP` | `TimeStampDTY` | `TIMESTAMP(n)` |
+| `RAW` | `RAW` or `VarRaw` | `RAW` |
+| `TIMESTAMP` | `TimeStampDTY` or `TIMESTAMP` | `TIMESTAMP(n)` |
 | `TIMESTAMP WITH TIME ZONE` | `TimeStampTZ_DTY` or `TimeStampTZ` | `TIMESTAMP(n) WITH TIME ZONE` |
 | `TIMESTAMP WITH LOCAL TIME ZONE` | `TimeStampLTZ_DTY` or `TimeStampeLTZ` | `TIMESTAMP(n) WITH LOCAL TIME ZONE` |
 | `BLOB` | `OCIBlobLocator` (or `LongRaw` inline) | `BLOB` |

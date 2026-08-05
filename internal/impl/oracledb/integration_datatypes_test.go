@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -81,6 +82,7 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 		num_10_2    NUMBER(10,2),
 		num_5_0     NUMBER(5,0),
 		num_star_2  NUMBER(*,2),
+		num_neg     NUMBER(5,-2),
 		num_int     INTEGER,
 		flt         FLOAT,
 		bin_float   BINARY_FLOAT,
@@ -99,7 +101,7 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 	// LogMiner SQL_REDO reports. Used once before launch (snapshot) and once
 	// after launch (streaming).
 	insertSQL := `INSERT INTO testdb.all_types
-		(num_plain, num_38, num_38_0, num_38_2, num_10_2, num_5_0, num_star_2, num_int, flt, bin_float, bin_double, vc, ch, nvc, dt, ts, ts_tz, rw)
+		(num_plain, num_38, num_38_0, num_38_2, num_10_2, num_5_0, num_star_2, num_neg, num_int, flt, bin_float, bin_double, vc, ch, nvc, dt, ts, ts_tz, rw)
 		VALUES (
 			12345.678,
 			123456789012345678901234567890,
@@ -108,6 +110,7 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 			56.78,
 			42,
 			78.91,
+			1234,
 			99,
 			3.5,
 			1.5,
@@ -131,6 +134,7 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 		num_10_2   = -7,
 		num_5_0    = -42,
 		num_star_2 = 3,
+		num_neg    = 8765,
 		num_int    = 0,
 		flt        = 9,
 		vc         = 'updated'`
@@ -161,18 +165,38 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 		return nil
 	}
 
-	waitForMessage := func() capturedMessage {
+	// waitForOperation drains captured messages until one with the wanted
+	// operation arrives, discarding others (checkpointing is at-least-once, so
+	// a restarted stream may redeliver earlier events first). Capturing an
+	// operation in forbidden fails immediately: each phase must prove it
+	// exercised the code path it claims to — e.g. the post-restart leg forbids
+	// "read", because a re-run snapshot would make it silently re-test the
+	// snapshot-seeded path instead of the catalog-derived one.
+	waitForOperation := func(want string, forbidden ...string) capturedMessage {
 		t.Helper()
-		assert.Eventually(t, func() bool {
+		var (
+			msg   capturedMessage
+			badOp string
+		)
+		require.Eventually(t, func() bool {
 			mu.Lock()
 			defer mu.Unlock()
-			return len(captured) >= 1
-		}, time.Minute*5, time.Second)
-		mu.Lock()
-		defer mu.Unlock()
-		require.GreaterOrEqual(t, len(captured), 1)
-		msg := captured[0]
-		captured = nil
+			for len(captured) > 0 {
+				m := captured[0]
+				captured = captured[1:]
+				if slices.Contains(forbidden, m.operation) {
+					badOp = m.operation
+					return true
+				}
+				if m.operation == want {
+					msg = m
+					captured = nil
+					return true
+				}
+			}
+			return false
+		}, time.Minute*5, time.Second, "waiting for a %q message", want)
+		require.Emptyf(t, badOp, "captured forbidden operation %q while waiting for %q", badOp, want)
 		return msg
 	}
 
@@ -204,15 +228,17 @@ oracledb_cdc:
 		}()
 	}
 
-	// Capture one message per phase: snapshot read, streaming INSERT, streaming UPDATE.
+	// Capture one message per phase: snapshot read, streaming INSERT, streaming
+	// UPDATE — each pinned to its operation so a duplicate delivery of an
+	// earlier event can't silently substitute for the phase under test.
 	phases := map[string]capturedMessage{}
-	phases["snapshot"] = waitForMessage()
+	phases["snapshot"] = waitForOperation("read")
 
 	db.MustExec(insertSQL)
-	phases["stream-insert"] = waitForMessage()
+	phases["stream-insert"] = waitForOperation("insert")
 
 	db.MustExec(updateSQL)
-	phases["stream-update"] = waitForMessage()
+	phases["stream-update"] = waitForOperation("update")
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
 
@@ -246,21 +272,16 @@ oracledb_cdc:
 		}()
 	}
 
+	// The post-restart phase must capture the fresh INSERT and must never see
+	// a snapshot read: if the checkpoint wasn't persisted or resumed, the
+	// second stream re-runs the snapshot and this leg silently degrades into a
+	// duplicate of the snapshot phase — passing every schema assertion below
+	// without exercising the catalog-derived schema path it exists to cover.
+	// Redelivered streaming events (at-least-once) are drained and discarded.
 	db.MustExec(insertSQL)
-	phases["stream-post-restart"] = waitForMessage()
+	phases["stream-post-restart"] = waitForOperation("insert", "read")
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
-
-	// Pin each phase's premise via the operation metadata. In particular the
-	// post-restart message must NOT be a snapshot read: if the checkpoint
-	// wasn't persisted or resumed, the second stream re-runs the snapshot and
-	// this leg silently degrades into a duplicate of the snapshot phase —
-	// passing every schema assertion below without exercising the
-	// catalog-derived schema path it exists to cover.
-	require.Equal(t, "read", phases["snapshot"].operation,
-		"snapshot phase captured a non-snapshot message")
-	require.NotEqual(t, "read", phases["stream-post-restart"].operation,
-		"post-restart phase captured a snapshot read: the restarted stream did not resume from the checkpoint, so the catalog-derived schema path is not being exercised")
 
 	phaseNames := []string{"snapshot", "stream-insert", "stream-update", "stream-post-restart"}
 
@@ -349,6 +370,24 @@ oracledb_cdc:
 					}
 					_, isStr := v.(string)
 					assert.Truef(t, isStr, "decimal column %q in phase %q is %T, want string", col, p, v)
+				}
+			}
+
+			// Timestamp columns must render as RFC 3339 in EVERY phase.
+			// Matching Go types (%T == string) alone would let the streaming
+			// coercion leave a raw redo rendering ("2024-01-15 10:30:00") in
+			// place, which downstream Avro timestamp encoding rejects.
+			if refSchema[col].Type == schema.Timestamp {
+				for _, p := range phaseNames {
+					v, ok := phases[p].body[col]
+					if !ok || v == nil {
+						continue
+					}
+					s, isStr := v.(string)
+					if assert.Truef(t, isStr, "timestamp column %q in phase %q is %T, want string", col, p, v) {
+						_, perr := time.Parse(time.RFC3339, s)
+						assert.NoErrorf(t, perr, "timestamp column %q in phase %q is not RFC 3339: %q", col, p, s)
+					}
 				}
 			}
 		})

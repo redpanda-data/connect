@@ -38,7 +38,10 @@ func NumberToCommon(name string, precision, scale int64, hasDecimalInfo bool) sc
 	if scale < 0 {
 		return schema.NewBigDecimal(name, true)
 	}
-	// Treat scale-greater-than-precision as undeclared (driver sentinel).
+	// Scale greater than precision covers both the driver's undeclared-scale
+	// sentinel (e.g. go-ora's (38, 255) for bare NUMBER) and Oracle's legal
+	// declared form NUMBER(p, s>p) (e.g. NUMBER(2,5)); neither fits a bounded
+	// Decimal, so both map to BigDecimal.
 	if scale > precision {
 		return schema.NewBigDecimal(name, true)
 	}

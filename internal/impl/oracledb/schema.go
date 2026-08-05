@@ -91,10 +91,13 @@ func catalogNumberInfo(precision, scale sql.NullInt64) (p, s int64, hasDecimalIn
 // columnToCommon maps one column's reported type metadata to its common schema
 // type. It is the single mapping point for BOTH schema sources — catalog
 // refreshes (fetchTableSchema, from ALL_TAB_COLUMNS) and snapshot seeding
-// (seedFromColumnMeta, from driver column metadata) — so the two can never
-// disagree on a column's type. Divergence here is what caused snapshot and
-// streaming messages to register conflicting Schema Registry schemas; see
-// TestOracleSchemaSourceParity.
+// (seedFromColumnMeta, from driver column metadata) — so the two cannot drift
+// through duplicated mapping logic. The sources still feed different type-name
+// spellings and numeric metadata, so every spelling must be enumerated in
+// oracleTypeToCommonType; that agreement is pinned by
+// TestOracleSchemaSourceParity and TestSnapshotScannerSchemaParity. Divergence
+// here is what caused snapshot and streaming messages to register conflicting
+// Schema Registry schemas.
 func columnToCommon(name, typeName string, precision, scale int64, hasDecimalInfo bool) schema.Common {
 	if isNumberType(typeName) {
 		return replication.NumberToCommon(name, precision, scale, hasDecimalInfo)
