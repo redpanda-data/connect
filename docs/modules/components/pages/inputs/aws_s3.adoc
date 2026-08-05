@@ -92,6 +92,7 @@ input:
       max_messages: 10
       wait_time_seconds: 0
       nack_visibility_timeout: 0
+      zero_key_warn_interval: 30s
 ```
 
 --
@@ -429,5 +430,22 @@ Custom SQS Nack Visibility timeout in seconds. Default is 0
 *Type*: `int`
 
 *Default*: `0`
+
+=== `sqs.zero_key_warn_interval`
+
+A message from which no target key can be extracted (e.g. due to a misconfigured `key_path`/`bucket_path`) is never deleted, so it's redelivered and re-evaluated repeatedly until the underlying issue is fixed. This field limits how often that condition is logged as a warning, to avoid flooding the logs; every occurrence is still logged at debug level. Set to `0s` to warn on every occurrence.
+
+
+*Type*: `string`
+
+*Default*: `"30s"`
+
+```yml
+# Examples
+
+zero_key_warn_interval: 10s
+
+zero_key_warn_interval: 0s
+```
 
 

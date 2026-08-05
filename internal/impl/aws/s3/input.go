@@ -42,15 +42,16 @@ import (
 
 const (
 	// S3 Input SQS Fields
-	s3iSQSFieldURL              = "url"
-	s3iSQSFieldEndpoint         = "endpoint"
-	s3iSQSFieldEnvelopePath     = "envelope_path"
-	s3iSQSFieldKeyPath          = "key_path"
-	s3iSQSFieldBucketPath       = "bucket_path"
-	s3iSQSFieldDelayPeriod      = "delay_period"
-	s3iSQSFieldMaxMessages      = "max_messages"
-	s3iSQSFieldWaitTimeSeconds  = "wait_time_seconds"
-	s3iSQSNackVisibilityTimeout = "nack_visibility_timeout"
+	s3iSQSFieldURL                 = "url"
+	s3iSQSFieldEndpoint            = "endpoint"
+	s3iSQSFieldEnvelopePath        = "envelope_path"
+	s3iSQSFieldKeyPath             = "key_path"
+	s3iSQSFieldBucketPath          = "bucket_path"
+	s3iSQSFieldDelayPeriod         = "delay_period"
+	s3iSQSFieldMaxMessages         = "max_messages"
+	s3iSQSFieldWaitTimeSeconds     = "wait_time_seconds"
+	s3iSQSNackVisibilityTimeout    = "nack_visibility_timeout"
+	s3iSQSFieldZeroKeyWarnInterval = "zero_key_warn_interval"
 
 	// S3 Input Fields
 	s3iFieldBucket             = "bucket"
@@ -61,15 +62,16 @@ const (
 )
 
 type s3iSQSConfig struct {
-	URL               string
-	Endpoint          string
-	EnvelopePath      string
-	KeyPath           string
-	BucketPath        string
-	DelayPeriod       string
-	MaxMessages       int64
-	WaitTimeSeconds   int64
-	VisibilityTimeout int32
+	URL                 string
+	Endpoint            string
+	EnvelopePath        string
+	KeyPath             string
+	BucketPath          string
+	DelayPeriod         string
+	MaxMessages         int64
+	WaitTimeSeconds     int64
+	VisibilityTimeout   int32
+	ZeroKeyWarnInterval time.Duration
 }
 
 func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err error) {
@@ -98,6 +100,9 @@ func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err
 		return
 	}
 	if conf.VisibilityTimeout, err = baws.Int32Field(pConf, s3iSQSNackVisibilityTimeout); err != nil {
+		return
+	}
+	if conf.ZeroKeyWarnInterval, err = pConf.FieldDuration(s3iSQSFieldZeroKeyWarnInterval); err != nil {
 		return
 	}
 	return
@@ -239,6 +244,13 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Description("Custom SQS Nack Visibility timeout in seconds. Default is 0").
 					Default(0).
 					Optional(),
+				service.NewDurationField(s3iSQSFieldZeroKeyWarnInterval).
+					Description("A message from which no target key can be extracted (e.g. due to a misconfigured `key_path`/`bucket_path`) is never deleted, so it's redelivered and re-evaluated repeatedly until the underlying issue is fixed. This field limits how often that condition is logged as a warning, to avoid flooding the logs; every occurrence is still logged at debug level. Set to `0s` to warn on every occurrence.").
+					ShortDescription("How often to repeat the warning for a message with no extractable target key.").
+					Example("10s").
+					Example("0s").
+					Default("30s").
+					Advanced(),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").
 				Optional(),
@@ -409,6 +421,8 @@ type sqsTargetReader struct {
 	nextRequest time.Time
 
 	pending []*s3ObjectTarget
+
+	lastZeroKeyWarnAt time.Time
 }
 
 func newSQSTargetReader(
@@ -588,10 +602,19 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 				continue
 			}
 			addDudFn(sqsMsg)
-			s.log.Warnf(
-				"Extracted zero target keys from SQS message using key_path %q (bucket_path %q) - this likely indicates a misconfigured key_path/bucket_path, or an unrecognised notification event type: %s",
-				s.conf.SQS.KeyPath, s.conf.SQS.BucketPath, *sqsMsg.Body,
-			)
+			// This message is never deleted, so it'll be redelivered
+			// indefinitely if the misconfiguration isn't fixed. Throttle the
+			// warning so that doesn't flood the logs; every occurrence still
+			// gets logged in full at debug level.
+			if now := time.Now(); now.Sub(s.lastZeroKeyWarnAt) >= s.conf.SQS.ZeroKeyWarnInterval {
+				s.lastZeroKeyWarnAt = now
+				s.log.Warnf(
+					"Extracted zero target keys from SQS message using key_path %q (bucket_path %q) - this likely indicates a misconfigured key_path/bucket_path, or an unrecognised notification event type (further occurrences suppressed for %s): %s",
+					s.conf.SQS.KeyPath, s.conf.SQS.BucketPath, s.conf.SQS.ZeroKeyWarnInterval, *sqsMsg.Body,
+				)
+			} else {
+				s.log.Debugf("Extracted zero target keys from SQS message: %s", *sqsMsg.Body)
+			}
 			continue
 		}
 
