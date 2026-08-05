@@ -18,3 +18,6 @@ __pycache__
 compile_out.txt
 test_output.txt
 benchmark_results.json
+
+# superpowers scratch workspace (sdd ledger/briefs/reports)
+.superpowers/
