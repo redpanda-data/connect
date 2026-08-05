@@ -602,15 +602,12 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 				continue
 			}
 			addDudFn(sqsMsg)
-			// This message is never deleted, so it'll be redelivered
-			// indefinitely if the misconfiguration isn't fixed. Throttle the
-			// warning so that doesn't flood the logs; every occurrence still
-			// gets logged in full at debug level.
+			// misconfigured event will get redelivered, so support control looding of warn logs.
 			if now := time.Now(); now.Sub(s.lastZeroKeyWarnAt) >= s.conf.SQS.ZeroKeyWarnInterval {
 				s.lastZeroKeyWarnAt = now
 				s.log.Warnf(
-					"Extracted zero target keys from SQS message using key_path %q (bucket_path %q) - this likely indicates a misconfigured key_path/bucket_path, or an unrecognised notification event type (further occurrences suppressed for %s): %s",
-					s.conf.SQS.KeyPath, s.conf.SQS.BucketPath, s.conf.SQS.ZeroKeyWarnInterval, *sqsMsg.Body,
+					"Extracted zero target keys from SQS message using key_path %q (bucket_path %q) - this likely indicates a misconfigured key_path/bucket_path, or an unrecognised notification event type: %s",
+					s.conf.SQS.KeyPath, s.conf.SQS.BucketPath, *sqsMsg.Body,
 				)
 			} else {
 				s.log.Debugf("Extracted zero target keys from SQS message: %s", *sqsMsg.Body)
