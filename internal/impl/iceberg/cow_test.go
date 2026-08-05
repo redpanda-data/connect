@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -1303,8 +1304,10 @@ func TestCommitOverwriteResumesAfterReloadFailures(t *testing.T) {
 
 // nonListableFS forwards reads and writes to the local filesystem but deliberately
 // omits WalkDir, so it satisfies iceio.IO / WriteFileIO but NOT iceio.ListableIO.
-// It lets a copy-on-write commit write real parquet while forcing the orphan-
-// cleanup path down its can't-list branch.
+// It lets a copy-on-write commit write real parquet on a filesystem that cannot
+// be listed, proving recording-based orphan cleanup needs no directory walking
+// (and, via newRecordingIO's fidelity rules, that the committer's wrapper does
+// not invent a ListableIO the underlying FS lacks).
 type nonListableFS struct{ inner iceio.LocalFS }
 
 func (f nonListableFS) Open(name string) (iceio.File, error)         { return f.inner.Open(name) }
@@ -1312,12 +1315,14 @@ func (f nonListableFS) Create(name string) (iceio.FileWriter, error) { return f.
 func (f nonListableFS) WriteFile(name string, p []byte) error        { return f.inner.WriteFile(name, p) }
 func (f nonListableFS) Remove(name string) error                     { return f.inner.Remove(name) }
 
-// TestCommitOverwriteGracefulWithoutListableFS (T-14) proves graceful degradation
-// when the filesystem cannot be listed: a failing copy-on-write commit must return
-// its error without panicking, and orphan cleanup is silently skipped (dataFilePaths
-// returns nil for a non-listable FS, so the before-snapshot guard short-circuits)
-// rather than attempting a WalkDir it cannot perform.
-func TestCommitOverwriteGracefulWithoutListableFS(t *testing.T) {
+// TestCommitOverwriteCleansUpWithoutListableFS (T-14, repurposed) proves orphan
+// cleanup no longer depends on the filesystem being listable. The original test
+// pinned a graceful degradation — cleanup used a WalkDir-based directory diff,
+// so a non-listable FS had to skip it, leaking the failed commit's files. With
+// authorship tracking the committer records the paths it writes at Create/
+// WriteFile time (writeRecorder), which works on any WriteFileIO, so a failing
+// copy-on-write commit on a non-listable FS now cleans its own files too.
+func TestCommitOverwriteCleansUpWithoutListableFS(t *testing.T) {
 	ctx := t.Context()
 	sc := iceberg.NewSchema(0,
 		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
@@ -1343,16 +1348,18 @@ func TestCommitOverwriteGracefulWithoutListableFS(t *testing.T) {
 	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})})
 	require.Error(t, err, "the failing commit must surface an error, not panic")
 
-	// Cleanup was skipped (FS not listable), so the overwrite's parquet remains.
-	assert.Greater(t, countParquetFiles(t, seedTbl.Location()), seedCount,
-		"a non-listable FS must skip cleanup (no WalkDir), leaving the written files in place")
+	// Recording-based cleanup needs no WalkDir: the failed commit's files are
+	// reclaimed even though the FS cannot be listed, leaving only the seed.
+	assert.Equal(t, seedCount, countParquetFiles(t, seedTbl.Location()),
+		"a non-listable FS must still clean the failed commit's recorded files")
 }
 
-// TestCleanupOverwriteReferenceGuard (T-15) proves cleanup never deletes a file the
-// current snapshot still references, even when that file "appeared since" the
-// before-snapshot. With an empty before set every file counts as appeared-since, so
-// only the referenced[p] guard can protect the live seed files; a genuinely
-// unreferenced orphan is still removed.
+// TestCleanupOverwriteReferenceGuard (T-15) proves cleanup never deletes a file
+// the current snapshot still references, even when that file is in the recorded
+// (authored-by-us) set handed to it. That is exactly the retried-success shape:
+// the winning attempt's files are recorded alongside the losing attempts', and
+// only the referenced[p] guard tells them apart — the winners must survive
+// while a genuinely unreferenced recorded orphan is removed.
 func TestCleanupOverwriteReferenceGuard(t *testing.T) {
 	ctx := t.Context()
 	sc := iceberg.NewSchema(0,
@@ -1373,15 +1380,128 @@ func TestCleanupOverwriteReferenceGuard(t *testing.T) {
 	orphan := filepath.Join(seedTbl.Location(), "data", "orphan-"+uuid.NewString()+".parquet")
 	require.NoError(t, os.WriteFile(orphan, []byte("not a real parquet"), 0o644))
 
-	// Empty before set: only the reference guard can save the live seed files.
-	comm.cleanupOrphanedOverwriteFiles(ctx, map[string]struct{}{})
+	// Hand cleanup a recorded set containing BOTH the live (referenced) files
+	// and the orphan: only the reference guard can save the live files.
+	written := map[string]struct{}{orphan: {}}
+	for p := range referenced {
+		written[p] = struct{}{}
+	}
+	comm.cleanupOrphanedOverwriteFiles(ctx, written)
 
 	for p := range referenced {
 		_, statErr := os.Stat(p)
 		assert.NoError(t, statErr, "a file referenced by the current snapshot must survive cleanup: %s", p)
 	}
 	_, statErr := os.Stat(orphan)
-	assert.True(t, os.IsNotExist(statErr), "an unreferenced orphan must be removed")
+	assert.True(t, os.IsNotExist(statErr), "an unreferenced recorded orphan must be removed")
+}
+
+// commitHookCatalog wraps a table.CatalogIO, invoking hook (with the 1-based
+// call number) at the start of every CommitTable before delegating. It lets a
+// test inject a side effect at the exact moment a commit is in flight — after
+// the copy-on-write stage has written its files but before the outcome is
+// known — which is when a concurrent writer's files can appear.
+type commitHookCatalog struct {
+	table.CatalogIO
+	hook  func(call int)
+	mu    sync.Mutex
+	calls int
+}
+
+func (h *commitHookCatalog) CommitTable(ctx context.Context, ident table.Identifier, reqs []table.Requirement, updates []table.Update) (table.Metadata, string, error) {
+	h.mu.Lock()
+	h.calls++
+	n := h.calls
+	h.mu.Unlock()
+	if h.hook != nil {
+		h.hook(n)
+	}
+	return h.CatalogIO.CommitTable(ctx, ident, reqs, updates)
+}
+
+// TestCommitOverwriteCleanupSparesForeignFiles pins the concurrent-writer
+// safety of authorship-tracked orphan cleanup on BOTH of its triggers. A
+// foreign parquet file — standing in for another committer's written-but-not-
+// yet-committed data file — appears in the table's data directory while our
+// commit is in flight (planted by the catalog hook, i.e. after our stage wrote
+// its files). It is referenced by no snapshot, so the old directory-diff
+// design deleted it, corrupting the other writer's pending commit; cleanup
+// must now leave it untouched because we did not author it, while still
+// reclaiming our own orphans.
+func TestCommitOverwriteCleanupSparesForeignFiles(t *testing.T) {
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	logger := service.MockResources().Logger()
+
+	// plantOnFirstCall writes the foreign file when the first commit attempt is
+	// in flight.
+	plantOnFirstCall := func(t *testing.T, foreign string) func(int) {
+		return func(call int) {
+			if call == 1 {
+				require.NoError(t, os.WriteFile(foreign, []byte("another writer's in-flight parquet"), 0o644))
+			}
+		}
+	}
+
+	t.Run("on terminal failure", func(t *testing.T) {
+		ctx := t.Context()
+		seedTbl, mem := newCOWTable(t, sc)
+		seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+		seedCount := countParquetFiles(t, seedTbl.Location())
+		foreign := filepath.Join(seedTbl.Location(), "data", "inflight-"+uuid.NewString()+".parquet")
+
+		fc := &flakyCatalog{memCatalog: mem, failuresLeft: 1 << 30, failErr: errors.New("storage unavailable")}
+		hooked := &commitHookCatalog{CatalogIO: fc, hook: plantOnFirstCall(t, foreign)}
+		comm, err := NewCommitter(fc.snapshot(), hooked, CommitConfig{MaxRetries: 2},
+			func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer comm.Close()
+		w := cowWriter(t, fc.snapshot(), "id")
+		w.committer = comm
+
+		err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})})
+		require.Error(t, err)
+
+		_, statErr := os.Stat(foreign)
+		assert.NoError(t, statErr, "a foreign in-flight file must survive failure-path cleanup")
+		assert.Equal(t, seedCount+1, countParquetFiles(t, seedTbl.Location()),
+			"our failed attempts' files must be cleaned while the foreign file is spared")
+	})
+
+	t.Run("on retried success", func(t *testing.T) {
+		ctx := t.Context()
+		seedTbl, mem := newCOWTable(t, sc)
+		seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+		seedCount := countParquetFiles(t, seedTbl.Location())
+		foreign := filepath.Join(seedTbl.Location(), "data", "inflight-"+uuid.NewString()+".parquet")
+
+		// Attempt 1 is a clean conflict, attempt 2 succeeds — the retried-success
+		// cleanup trigger.
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitConflict}}
+		hooked := &commitHookCatalog{CatalogIO: cat, hook: plantOnFirstCall(t, foreign)}
+		comm, err := NewCommitter(cat.snapshot(), hooked, CommitConfig{MaxRetries: 3},
+			func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer comm.Close()
+		w := cowWriter(t, cat.snapshot(), "id")
+		w.committer = comm
+
+		require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}))
+		require.Equal(t, 2, cat.calls, "the conflict must force a second attempt")
+
+		_, statErr := os.Stat(foreign)
+		assert.NoError(t, statErr, "a foreign in-flight file must survive retried-success cleanup")
+
+		// Final on-disk parquet: the protected seed, the spared foreign file, and
+		// the winning attempt's referenced files — attempt 1's orphans cleaned.
+		referenced := comm.referencedDataFilePaths(ctx)
+		require.NotEmpty(t, referenced)
+		assert.Equal(t, seedCount+1+len(referenced), countParquetFiles(t, seedTbl.Location()),
+			"attempt 1's orphans must be cleaned while the foreign file and winner survive")
+		assert.Equal(t, map[int64]string{1: "one", 2: "TWO", 3: "three"}, scanRows(t, ctx, cat.snapshot()))
+	})
 }
 
 // TestCommitOverwriteReturnsNewReaderError (T-17) proves a factory error from

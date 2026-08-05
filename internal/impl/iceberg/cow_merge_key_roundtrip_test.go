@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -334,6 +335,67 @@ func TestCOWInt32KeyRoundTrip(t *testing.T) {
 	assert.Equal(t, "1", byPay["one"])
 	assert.NotContains(t, byPay, "three")
 	assert.NotContains(t, byPay, "two")
+}
+
+// TestCOWInt32KeyOutOfRangeRejected pins the int32 merge-key range guard: a
+// value outside [MinInt32, MaxInt32] must be rejected loudly by the filter
+// path, naming identifier_fields, the column, and the offending value. Before
+// the guard, int32(n) silently wrapped — {"k": 4294967297} (2^32+1) became 1,
+// so a delete-only copy-on-write batch deleted the WRONG row. json.Number and
+// float64-within-2^53 both reach the same narrowing (the float64 2^53 guard in
+// cowValueToInt64 never fires for these), so both representations are pinned.
+func TestCOWInt32KeyOutOfRangeRejected(t *testing.T) {
+	sc := iceberg.NewSchema(0, iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Int32, Required: true})
+	tbl := newTypedKeyTableFromSchema(t, sc)
+	w := cowWriter(t, tbl, "k")
+
+	cases := []struct {
+		name    string
+		v       any
+		wantVal string
+	}{
+		{"json.Number above int32", json.Number("4294967297"), "4294967297"},   // 2^32+1: would wrap to 1
+		{"json.Number below int32", json.Number("-2147483649"), "-2147483649"}, // MinInt32-1: would wrap to MaxInt32
+		{"float64 above int32 within 2^53", float64(4294967297), "4294967297"},
+		{"float64 below int32 within 2^53", float64(math.MinInt32) - 1, "-2147483649"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := w.buildCOWFilter(sc, service.MessageBatch{structuredMsg(t, map[string]any{"k": c.v})})
+			require.Error(t, err, "an out-of-range int32 key must be rejected, not silently wrapped")
+			assert.Contains(t, err.Error(), "outside the int32 range", "the error must explain the range violation")
+			assert.Contains(t, err.Error(), ioFieldIdentifierFields, "the error must name the config field")
+			assert.Contains(t, err.Error(), `"k"`, "the error must name the offending column")
+			assert.Contains(t, err.Error(), c.wantVal, "the error must include the offending value")
+		})
+	}
+}
+
+// TestCOWInt32KeyBoundaryRoundTrip proves the exact int32 boundary values still
+// round-trip through a real copy-on-write upsert+delete — the range guard must
+// reject only values strictly outside [MinInt32, MaxInt32].
+func TestCOWInt32KeyBoundaryRoundTrip(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Int32, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String},
+	)
+	final := driveCOWKeyed(t, ctx, sc,
+		[]map[string]any{
+			{"k": int64(math.MaxInt32), "payload": "max"},
+			{"k": int64(math.MinInt32), "payload": "min"},
+			{"k": int64(0), "payload": "untouched"},
+		},
+		service.MessageBatch{
+			cowMsg(t, "upsert", map[string]any{"k": int64(math.MaxInt32), "payload": "MAX"}),
+			cowMsg(t, "delete", map[string]any{"k": int64(math.MinInt32)}),
+		})
+	byPay := invertByPayload(t, final)
+	require.Len(t, final, 2, "exactly the upserted and untouched rows must remain")
+	assert.Equal(t, fmt.Sprintf("%d", int64(math.MaxInt32)), byPay["MAX"], "MaxInt32 must key the upserted row")
+	assert.Equal(t, "0", byPay["untouched"])
+	assert.NotContains(t, byPay, "max", "the pre-upsert MaxInt32 row must be overwritten, not duplicated")
+	assert.NotContains(t, byPay, "min", "the MinInt32 row must be deleted")
 }
 
 // TestCOWBooleanMergeKeyGated pins the deliberate gate on boolean merge keys.

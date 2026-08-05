@@ -12,17 +12,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/catalog/rest"
-	iceio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
 
@@ -119,6 +116,15 @@ type committer struct {
 	// post-commit — the latter inherits the binding from its transaction) is
 	// bound to it; see NewCommitter for the rebinding choke points.
 	stripper *propertyStrippingCatalog
+	// writes records every data-file path written through this committer's
+	// table handles (their filesystem factory is wrapped by
+	// rebindTableRecording, at the same choke points as the stripper). It is
+	// what makes copy-on-write orphan cleanup safe under concurrent writers:
+	// cleanup only ever considers paths this committer itself authored, so
+	// another process's written-but-uncommitted files are untouchable by
+	// construction. Scoped per commitOverwrite call via reset-on-entry, which
+	// commitMu makes race-free.
+	writes *writeRecorder
 	// commitMu serializes all commits and guards c.table. The batcher's
 	// doCommit and the direct commitRowDelta path both take it.
 	commitMu        sync.Mutex
@@ -131,7 +137,9 @@ type committer struct {
 // catalog tbl was loaded from (the table.CatalogIO its commits go to); the
 // committer rebinds tbl — and every table reloadTable returns — onto a
 // wrapper of cat so prohibited property keys can be stripped at the commit
-// boundary (see propertyStrippingCatalog).
+// boundary (see propertyStrippingCatalog), and onto a recording filesystem so
+// copy-on-write orphan cleanup knows exactly which data files this committer
+// wrote (see writeRecorder).
 func NewCommitter(tbl *table.Table, cat table.CatalogIO, cfg CommitConfig, reloadTable func(ctx context.Context) (*table.Table, error), logger *service.Logger) (*committer, error) {
 	if cat == nil {
 		return nil, errors.New("creating committer: catalog must not be nil")
@@ -152,21 +160,25 @@ func NewCommitter(tbl *table.Table, cat table.CatalogIO, cfg CommitConfig, reloa
 		cfg.MaxRetries = 1
 	}
 	stripper := newPropertyStrippingCatalog(cat, cfg.ProhibitedKeys)
+	writes := newWriteRecorder()
 	c := &committer{
-		table:    rebindTable(tbl, stripper),
+		table:    rebindTableRecording(tbl, stripper, writes),
 		cfg:      cfg,
 		stripper: stripper,
+		writes:   writes,
 		logger:   logger,
 	}
 	// Single choke point for reloaded tables: every table handle the
-	// committer adopts after a reload is rebound onto the stripper, so
-	// retried commits keep flowing through the prohibited-key filter.
+	// committer adopts after a reload is rebound onto the stripper and the
+	// write recorder, so retried commits keep flowing through the
+	// prohibited-key filter and keep recording the data files they write.
+	// (Post-commit tables inherit both bindings from their transaction.)
 	c.reloadTable = func(ctx context.Context) (*table.Table, error) {
 		fresh, err := reloadTable(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return rebindTable(fresh, stripper), nil
+		return rebindTableRecording(fresh, stripper, writes), nil
 	}
 
 	batcher, err := asyncroutine.NewBatcher(100, c.doCommit)
@@ -293,13 +305,15 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 
 	// Copy-on-write writes its rewritten and new data files to storage before the
 	// catalog commit (inside txn.Overwrite/Delete), and — unlike the writer-
-	// authored append/row-delta paths — we never hold their paths. commitLocked
-	// re-runs the stage (and so re-writes fresh parquet) on EACH attempt, so even
-	// a commit that ultimately succeeds can leave earlier attempts' files behind.
-	// Snapshot the data files present beforehand so any attempt's leftovers can be
-	// diffed out once the commit resolves. nil means the filesystem can't be
-	// listed, so cleanup is skipped.
-	before := c.dataFilePaths(ctx)
+	// authored append/row-delta paths — we are never handed their paths.
+	// commitLocked re-runs the stage (and so re-writes fresh parquet) on EACH
+	// attempt, so even a commit that ultimately succeeds can leave earlier
+	// attempts' files behind. The committer's table handles write through a
+	// recording filesystem (rebindTableRecording), so every data file this call's
+	// stage attempts write is captured in c.writes; reset it now so the set is
+	// scoped to exactly this call (commitMu, held here, serializes every commit
+	// through this committer, so nothing else records concurrently).
+	c.writes.reset()
 
 	// A stable commit-id, generated once before the retry loop, makes this
 	// copy-on-write commit idempotent across a reload: commitLocked stamps it into
@@ -330,33 +344,35 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 		return txn.Overwrite(ctx, rdr, props, table.WithOverwriteFilter(input.Filter))
 	})
 
-	// Diff-based orphan cleanup runs after commitLocked resolves. commitLocked
-	// re-runs the stage on every retry, and each stage attempt writes a fresh set
-	// of parquet files, so a clean-conflict-then-success sequence lands the winning
-	// snapshot's files but leaves the earlier attempt's files orphaned — running
-	// cleanup only on error (as we used to) would leak them.
+	// Authorship-tracked orphan cleanup runs after commitLocked resolves.
+	// commitLocked re-runs the stage on every retry, and each stage attempt
+	// writes a fresh set of parquet files, so a clean-conflict-then-success
+	// sequence lands the winning snapshot's files but leaves the earlier
+	// attempt's files orphaned — running cleanup only on error (as we used to)
+	// would leak them.
 	//
-	// Two guards keep this safe:
+	// The candidate set is exactly the files THIS call recorded writing (see
+	// c.writes above), never a listing of the data directory: a concurrent
+	// committer's written-but-not-yet-committed files are absent from our
+	// recorded set, so they are untouchable by construction — no matter how the
+	// commits interleave. A recorded file is deleted only if it is also absent
+	// from c.table's current snapshot (referencedDataFilePaths), which protects
+	// the landed attempt's files on a retried success. Safety argument in one
+	// line: authored-by-us AND not-referenced ⇒ orphan of a losing attempt.
+	//
+	// Two further guards:
 	//   - Terminal ErrCommitStateUnknown is never cleaned: the commit may have
-	//     landed server-side, so its files could belong to a committed snapshot and
-	//     deleting them would corrupt the table. Those are left for Iceberg
-	//     orphan-file maintenance.
-	//   - On SUCCESS we only clean when the commit was retried. A first-attempt
-	//     success wrote exactly the files it committed (no orphans of ours), and —
-	//     critically — under concurrent committers on the same table our snapshot
-	//     view does not reference a racing committer's just-written files, so a
-	//     first-attempt winner running diff cleanup would delete another committer's
-	//     live/in-flight files. Only a retried commit can have left our own
-	//     orphans, and by the time it succeeds c.table has been reloaded onto the
-	//     latest committed state, so referencedDataFilePaths protects every live
-	//     file while removing only our earlier attempts' leftovers. On FAILURE we
-	//     still clean unconditionally (our commit did not land, so its files are
-	//     genuine orphans), preserving the original failure-path behaviour.
+	//     landed server-side, so its files could belong to a committed snapshot
+	//     (one a failed reload kept us from seeing), and deleting them would
+	//     corrupt the table. Those are left for Iceberg orphan-file maintenance.
+	//   - On SUCCESS we only clean when the commit was retried: a first-attempt
+	//     success wrote exactly the files it committed, so there is nothing to
+	//     reclaim and the reference scan is skipped.
 	//
-	// Cleanup is best-effort: skipped when the filesystem can't be listed
-	// (before == nil).
-	if before != nil && !errors.Is(err, rest.ErrCommitStateUnknown) && (err != nil || retried) {
-		c.cleanupOrphanedOverwriteFiles(ctx, before)
+	// Cleanup is best-effort: failures are logged, never returned.
+	if written := c.writes.snapshot(); len(written) > 0 &&
+		!errors.Is(err, rest.ErrCommitStateUnknown) && (err != nil || retried) {
+		c.cleanupOrphanedOverwriteFiles(ctx, written)
 	}
 	if err != nil {
 		return err
@@ -365,76 +381,35 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 	return nil
 }
 
-// dataFilePaths returns the set of .parquet paths currently under the table's
-// data directory, or nil if the filesystem doesn't support listing (in which
-// case copy-on-write orphan cleanup is skipped). Best-effort: any walk error
-// yields nil. The scan is O(files), but the copy-on-write commit it guards
-// already scans every file's metadata, so it does not change that path's order.
-func (c *committer) dataFilePaths(ctx context.Context) map[string]struct{} {
+// cleanupOrphanedOverwriteFiles removes the data files a copy-on-write commit
+// left orphaned: those in `written` — the paths THIS committer's stage attempts
+// recorded writing (see writeRecorder) — that are not referenced by c.table's
+// current snapshot. It runs after the commit resolves whether it succeeded or
+// failed: a retried commit re-writes files on each attempt, so even a
+// successful commit can leave an earlier attempt's files behind. Because the
+// candidate set is authored-by-us by construction (never a directory listing),
+// a concurrent committer's in-flight files can never be deleted here; the
+// reference check against the current snapshot is the remaining guard that
+// keeps the landed attempt's files safe on a retried success. Best-effort —
+// errors are logged, not returned. The caller must have established that the
+// commit did not terminate in an ambiguous (possibly-landed) state, since
+// deleting a possibly-committed file would corrupt the table.
+func (c *committer) cleanupOrphanedOverwriteFiles(ctx context.Context, written map[string]struct{}) {
 	fsys, err := c.table.FS(ctx)
 	if err != nil {
-		return nil
-	}
-	lister, ok := fsys.(iceio.ListableIO)
-	if !ok {
-		return nil
-	}
-	paths := make(map[string]struct{})
-	if walkErr := lister.WalkDir(c.table.Location()+"/data", func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() && strings.HasSuffix(p, ".parquet") {
-			paths[p] = struct{}{}
-		}
-		return nil
-	}); walkErr != nil {
-		return nil
-	}
-	return paths
-}
-
-// cleanupOrphanedOverwriteFiles removes .parquet files a copy-on-write commit
-// left orphaned under the data directory: those that appeared since the `before`
-// snapshot and are not referenced by the current snapshot. It runs after the
-// commit resolves whether it succeeded or failed — a retried commit re-writes
-// files on each attempt, so even a successful commit can leave an earlier
-// attempt's files behind. The reference check against the current snapshot is
-// what makes the success case safe: a file the committed snapshot still points
-// to is never deleted, so only genuinely unreferenced leftovers are removed.
-// Best-effort — errors are logged, not returned. The caller must have
-// established that the commit did not terminate in an ambiguous (possibly-
-// landed) state, since deleting a possibly-committed file would corrupt the table.
-func (c *committer) cleanupOrphanedOverwriteFiles(ctx context.Context, before map[string]struct{}) {
-	fsys, err := c.table.FS(ctx)
-	if err != nil {
-		return
-	}
-	lister, ok := fsys.(iceio.ListableIO)
-	if !ok {
 		return
 	}
 	referenced := c.referencedDataFilePaths(ctx)
-	_ = lister.WalkDir(c.table.Location()+"/data", func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || !strings.HasSuffix(p, ".parquet") {
-			return nil
-		}
-		if _, existed := before[p]; existed {
-			return nil
-		}
+	for p := range written {
 		if _, ref := referenced[p]; ref {
-			return nil
+			continue
 		}
 		if rmErr := fsys.Remove(p); rmErr != nil {
 			c.logger.Warnf("Failed to remove orphaned copy-on-write file %s: %v", p, rmErr)
 		} else {
 			c.logger.Debugf("Removed orphaned copy-on-write file %s", p)
 		}
-		return nil
-	})
+	}
 }
 
 // referencedDataFilePaths returns the paths referenced by the table's current

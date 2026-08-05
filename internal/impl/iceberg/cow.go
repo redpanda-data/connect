@@ -392,6 +392,15 @@ func cowKeyLiteral(t iceberg.Type, name string, v any) (iceberg.Literal, error) 
 		if err != nil {
 			return nil, fmt.Errorf("%s %q: %w", ioFieldIdentifierFields, name, err)
 		}
+		// Range-check before narrowing. cowValueToInt64 returns a full int64
+		// (every representation — json.Number, int/int64, float64 within 2^53,
+		// numeric string — funnels through it), so without this check a value
+		// like 4294967297 (2^32+1) would silently wrap to 1 and a delete-only
+		// copy-on-write batch would remove the WRONG row. Checking the int64
+		// result here covers all of cowValueToInt64's input paths at once.
+		if n < math.MinInt32 || n > math.MaxInt32 {
+			return nil, fmt.Errorf("%s %q: int (32-bit) column given value %d outside the int32 range [%d, %d]; values that size need a long (64-bit) column", ioFieldIdentifierFields, name, n, math.MinInt32, math.MaxInt32)
+		}
 		return iceberg.NewLiteral(int32(n)), nil
 	case iceberg.Int64Type:
 		n, err := cowValueToInt64(v)
