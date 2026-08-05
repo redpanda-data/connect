@@ -70,6 +70,13 @@ func NewFranzReaderToggledFromConfig(conf *service.ParsedConfig, res *service.Re
 
 			clientOpts:         optsFn,
 			franzRecordToMsgFn: FranzRecordToMessageV1,
+
+			// The toggled reader is only used by Redpanda branded inputs, and
+			// toggling unordered processing must not change the name of the
+			// consumer lag gauge, otherwise enabling it silently breaks lag
+			// dashboards and alerts. Hence we deliberately use the Redpanda
+			// name here rather than the default of the unordered reader.
+			lagMetricName: lagMetricNameRedpanda,
 		}
 
 		var err error
