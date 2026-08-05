@@ -64,6 +64,22 @@ func TestPublishBatch(t *testing.T) {
 		require.Len(t, scns, 1, "expected cacheSCN to be called exactly once for a batch whose last message is streaming")
 		require.Equal(t, replication.SCN(300), scns[0], "expected the streaming SCN from the last message, not the leftover snapshot SCN")
 	})
+
+	t.Run("streaming SCN survives an out-of-order snapshot ack", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisher(t)
+
+		snapshotMsg := publishAndReceive(t, ctx, publisher, service.MessageBatch{newSnapshotMessage("100")})
+		streamingMsg := publishAndReceive(t, ctx, publisher, service.MessageBatch{newStreamingMessage("200")})
+
+		require.NoError(t, streamingMsg.ackFn(ctx, nil))
+		require.Empty(t, cachedSCNs(), "cacheSCN must not be called while the snapshot batch is still the unresolved head")
+		require.NoError(t, snapshotMsg.ackFn(ctx, nil))
+
+		scns := cachedSCNs()
+		require.Len(t, scns, 1, "expected cacheSCN to be called exactly once when the snapshot batch resolves the streaming SCN")
+		require.Equal(t, replication.SCN(200), scns[0], "expected the streaming batch's SCN to survive the out-of-order snapshot ack")
+	})
 }
 
 func newTestBatchPublisher(t *testing.T) (*batchPublisher, func() []replication.SCN) {

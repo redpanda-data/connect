@@ -252,14 +252,15 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 		msg: batch,
 		ackFn: func(ctx context.Context, _ error) error {
 			scn := resolveFn()
-			if isSnapshotBatch {
-				// Persisting here would introduce premature-checkpointing.
+			if scn == nil || !scn.IsValid() {
 				return nil
 			}
-			if scn != nil && scn.IsValid() {
-				return b.cacheSCN(ctx, *scn)
+			if isSnapshotBatch && *scn <= checkpointSCN {
+				// Resolved value is this snapshot batch's own shared SCN (or older) —
+				// nothing new to persist, and persisting it would be premature.
+				return nil
 			}
-			return nil
+			return b.cacheSCN(ctx, *scn)
 		},
 	}
 	select {
