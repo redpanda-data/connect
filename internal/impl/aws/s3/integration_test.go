@@ -283,8 +283,10 @@ input:
 				// about, identifying the likely key_path misconfiguration,
 				// and - unlike an s3:TestEvent - left on the queue for
 				// redelivery rather than deleted.
+				const zeroKeyWarnMsg = "Extracted zero target keys from SQS message using key_path"
+
 				assert.Eventually(t, func() bool {
-					return strings.Contains(logBuf.String(), "level=WARN") && strings.Contains(logBuf.String(), "key_path")
+					return strings.Contains(logBuf.String(), zeroKeyWarnMsg)
 				}, 15*time.Second, 500*time.Millisecond, "expected a WARN log identifying a key_path misconfiguration, got logs: %s", &logBuf)
 
 				if tc.expectExactlyOne {
@@ -295,14 +297,14 @@ input:
 					// it several more cycles and confirm the WARN stays at
 					// a single occurrence.
 					time.Sleep(3 * time.Second)
-					assert.Equal(t, 1, strings.Count(logBuf.String(), "level=WARN"),
+					assert.Equal(t, 1, strings.Count(logBuf.String(), zeroKeyWarnMsg),
 						"expected the misconfiguration warning to be throttled to a single occurrence, got logs: %s", logBuf.String())
 				} else {
 					// zero_key_warn_interval: 0s disables the throttle, so
 					// the same ~500ms redelivery cycle should produce
 					// multiple WARNs instead of just one.
 					assert.Eventually(t, func() bool {
-						return strings.Count(logBuf.String(), "level=WARN") >= tc.minWarnCount
+						return strings.Count(logBuf.String(), zeroKeyWarnMsg) >= tc.minWarnCount
 					}, 15*time.Second, 500*time.Millisecond, "expected at least %d WARN logs with throttling disabled, got logs: %s", tc.minWarnCount, &logBuf)
 				}
 
