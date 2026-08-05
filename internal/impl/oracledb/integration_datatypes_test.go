@@ -42,6 +42,10 @@ type capturedMessage struct {
 	// path is sensitive to.
 	body   map[string]any
 	schema schema.Common
+	// operation is the message's "operation" metadata ("read" for snapshot
+	// rows, "insert"/"update"/"delete" for streamed rows) — used to assert a
+	// phase actually exercised the code path it claims to.
+	operation string
 }
 
 // decodeWithNumber mirrors how benthos parses message bytes downstream (via
@@ -147,9 +151,11 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 		for _, msg := range mb {
 			b, aErr := msg.AsBytes()
 			assert.NoError(t, aErr)
+			op, _ := msg.MetaGet("operation")
 			captured = append(captured, capturedMessage{
-				body:   decodeWithNumber(t, string(b)),
-				schema: oracledbtest.ExtractSchema(t, msg),
+				body:      decodeWithNumber(t, string(b)),
+				schema:    oracledbtest.ExtractSchema(t, msg),
+				operation: op,
 			})
 		}
 		return nil
@@ -244,6 +250,17 @@ oracledb_cdc:
 	phases["stream-post-restart"] = waitForMessage()
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
+
+	// Pin each phase's premise via the operation metadata. In particular the
+	// post-restart message must NOT be a snapshot read: if the checkpoint
+	// wasn't persisted or resumed, the second stream re-runs the snapshot and
+	// this leg silently degrades into a duplicate of the snapshot phase —
+	// passing every schema assertion below without exercising the
+	// catalog-derived schema path it exists to cover.
+	require.Equal(t, "read", phases["snapshot"].operation,
+		"snapshot phase captured a non-snapshot message")
+	require.NotEqual(t, "read", phases["stream-post-restart"].operation,
+		"post-restart phase captured a snapshot read: the restarted stream did not resume from the checkpoint, so the catalog-derived schema path is not being exercised")
 
 	phaseNames := []string{"snapshot", "stream-insert", "stream-update", "stream-post-restart"}
 

@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - redpanda: Enabling `unordered_processing` no longer renames the consumer lag gauge from `redpanda_lag` to `kafka_lag`. The `redpanda` input now emits `redpanda_lag` in both modes, as documented. ([@prakhargarg105](https://github.com/prakhargarg105), [#4663](https://github.com/redpanda-data/connect/issues/4663))
-- oracledb_cdc: Fix the per-message schema metadata flipping between the snapshot and streaming paths for TIMESTAMP, INTEGER and binary columns, which caused permanent Schema Registry BACKWARD-compatibility rejections (and a failed registration round-trip per row) after a pipeline restart. INTEGER/INT/SMALLINT columns now consistently map to Decimal(38,0); subjects registered with the old catalog-derived typing need a one-time migration described in the PR. ([@Jeffail](https://github.com/Jeffail), [#4661](https://github.com/redpanda-data/connect/pull/4661))
+- oracledb_cdc: Fix the per-message schema metadata flipping between the snapshot and streaming paths for TIMESTAMP, INTEGER and binary columns, which caused permanent Schema Registry BACKWARD-compatibility rejections (and a failed registration round-trip per row) after a pipeline restart. INTEGER/INT/SMALLINT columns now consistently map to Decimal(38,0), and negative-scale NUMBER(p,-s) columns map to BigDecimal (previously Decimal(p,0) on the catalog path); subjects registered with the old catalog-derived typing for any of these — or for string-typed timestamps — need a one-time migration described in the PR. ([@Jeffail](https://github.com/Jeffail), [#4661](https://github.com/redpanda-data/connect/pull/4661))
 
 ## 4.103.1 - 2026-07-31
 
