@@ -127,4 +127,7 @@ type MessageEvent struct {
 	CommitTimestamp time.Time
 	ColumnMeta      []ColumnMeta
 	TransactionID   string
+	// UserName is the Oracle database user that executed the change. Empty on
+	// snapshot (read) events and for internal/recursive transactions.
+	UserName string
 }

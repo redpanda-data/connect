@@ -1166,6 +1166,7 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, com
 		Timestamp:       dml.Timestamp,
 		TransactionID:   dml.TransactionID.String(),
 		CommitTimestamp: commitTimestamp,
+		UserName:        dml.UserName,
 	}
 
 	switch dml.Operation {

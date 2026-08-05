@@ -412,6 +412,29 @@ func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 	assert.Empty(t, lm.pendingLOBWrites, "no LOB_WRITEs should remain deferred after COMMIT")
 }
 
+func TestProcessRedoEventCapturesUserName(t *testing.T) {
+	pub := &publisherStub{}
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	lm := newLogMiner(pub, cache)
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           100,
+		Operation:     sqlredo.OpInsert,
+		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."USERS"("ID") values ('1')`, Valid: true},
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "USERS", Valid: true},
+		UserName:      sql.NullString{String: "ALICE", Valid: true},
+		TransactionID: "txB",
+	}))
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txB",
+	}))
+
+	require.Len(t, pub.messages, 1)
+	assert.Equal(t, "ALICE", pub.messages[0].UserName)
+}
+
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
 	return &LogMiner{
 		publisher:        pub,
