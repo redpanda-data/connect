@@ -49,9 +49,9 @@ func TestSessionManager(t *testing.T) {
 		assert.Equal(t, time.Duration(0), sm.Age(), "age must reset to zero once the session has ended")
 	})
 
-	t.Run("PrepareLogsAndStartSessionRestartsOnSessionMaxAge", func(t *testing.T) {
+	t.Run("PrepareLogsAndStartSessionRestartsOnMaxSessionAge", func(t *testing.T) {
 		cfg := NewDefaultConfig()
-		cfg.SessionMaxAge = 20 * time.Millisecond
+		cfg.MaxSessionAge = 20 * time.Millisecond
 
 		logger := service.NewLoggerFromSlog(slog.Default())
 		lm := &LogMiner{
@@ -69,7 +69,7 @@ func TestSessionManager(t *testing.T) {
 		require.Equal(t, 1, fc.count("ADD_LOGFILE"), "first call has no prior session, so it must add log files")
 		require.Equal(t, 0, fc.count("END_LOGMNR"), "first call has no prior session, so there is nothing to end")
 
-		// Artificially age the session well past SessionMaxAge without changing the
+		// Artificially age the session well past MaxSessionAge without changing the
 		// underlying log files - the only thing that can trigger a restart here is age.
 		lm.sessionMgr.sessionOpened = time.Now().Add(-time.Hour)
 
@@ -87,7 +87,7 @@ func TestSessionManager(t *testing.T) {
 
 	t.Run("MiningCycleEndsExpiredSessionWhenCaughtUp", func(t *testing.T) {
 		cfg := NewDefaultConfig()
-		cfg.SessionMaxAge = 20 * time.Millisecond
+		cfg.MaxSessionAge = 20 * time.Millisecond
 
 		logger := service.NewLoggerFromSlog(slog.Default())
 		lm := &LogMiner{
@@ -104,7 +104,7 @@ func TestSessionManager(t *testing.T) {
 		require.True(t, lm.sessionMgr.IsActive())
 
 		// Database is caught up with what we've already mined, and the session
-		// was opened well beyond SessionMaxAge - miningCycle must still end it
+		// was opened well beyond MaxSessionAge - miningCycle must still end it
 		// even though no productive mining work happens on this cycle.
 		lm.currentSCN = 200
 		fc.currentSCN = 200
@@ -114,24 +114,24 @@ func TestSessionManager(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, caughtUp, "miningCycle must report caught up when currentSCN >= dbCurrentSCN")
 		assert.Equal(t, 1, fc.count("END_LOGMNR"),
-			"an idle session that has exceeded session_max_age must be ended even while caught up")
+			"an idle session that has exceeded max_session_age must be ended even while caught up")
 		assert.False(t, lm.sessionMgr.IsActive())
 	})
 
 	t.Run("MiningCycleCaughtUpDoesNotEndSessionWhenNotExpired", func(t *testing.T) {
 		tests := []struct {
 			name          string
-			sessionMaxAge time.Duration
+			maxSessionAge time.Duration
 			sessionAge    time.Duration
 		}{
 			{
-				name:          "session_max_age disabled (default)",
-				sessionMaxAge: 0,
+				name:          "max_session_age disabled (default)",
+				maxSessionAge: 0,
 				sessionAge:    24 * time.Hour,
 			},
 			{
-				name:          "session_max_age configured but not yet exceeded",
-				sessionMaxAge: time.Hour,
+				name:          "max_session_age configured but not yet exceeded",
+				maxSessionAge: time.Hour,
 				sessionAge:    time.Millisecond,
 			},
 		}
@@ -139,7 +139,7 @@ func TestSessionManager(t *testing.T) {
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
 				cfg := NewDefaultConfig()
-				cfg.SessionMaxAge = test.sessionMaxAge
+				cfg.MaxSessionAge = test.maxSessionAge
 
 				logger := service.NewLoggerFromSlog(slog.Default())
 				lm := &LogMiner{
@@ -163,7 +163,7 @@ func TestSessionManager(t *testing.T) {
 				require.NoError(t, err)
 				assert.True(t, caughtUp)
 				assert.Equal(t, 0, fc.count("END_LOGMNR"),
-					"session must remain open while caught up if it has not exceeded session_max_age")
+					"session must remain open while caught up if it has not exceeded max_session_age")
 				assert.True(t, lm.sessionMgr.IsActive())
 			})
 		}
@@ -171,7 +171,7 @@ func TestSessionManager(t *testing.T) {
 
 	t.Run("MiningCycleEndsExpiredSessionWhenDeferring", func(t *testing.T) {
 		cfg := NewDefaultConfig()
-		cfg.SessionMaxAge = 20 * time.Millisecond
+		cfg.MaxSessionAge = 20 * time.Millisecond
 		require.Greater(t, cfg.MinSCNWindowSize, 0, "test relies on a positive MinSCNWindowSize to trigger deferral")
 
 		logger := service.NewLoggerFromSlog(slog.Default())
@@ -198,13 +198,13 @@ func TestSessionManager(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, caughtUp, "miningCycle must report caught up (deferred) when the SCN gap is below MinSCNWindowSize")
 		assert.Equal(t, 1, fc.count("END_LOGMNR"),
-			"an idle session that has exceeded session_max_age must be ended even while deferring")
+			"an idle session that has exceeded max_session_age must be ended even while deferring")
 		assert.False(t, lm.sessionMgr.IsActive())
 	})
 
-	t.Run("PrepareLogsAndStartSessionDefaultSessionMaxAgeDoesNotRestart", func(t *testing.T) {
+	t.Run("PrepareLogsAndStartSessionDefaultMaxSessionAgeDoesNotRestart", func(t *testing.T) {
 		cfg := NewDefaultConfig()
-		require.Equal(t, time.Duration(0), cfg.SessionMaxAge, "default SessionMaxAge must remain disabled")
+		require.Equal(t, time.Duration(0), cfg.MaxSessionAge, "default MaxSessionAge must remain disabled")
 
 		logger := service.NewLoggerFromSlog(slog.Default())
 		lm := &LogMiner{
@@ -220,8 +220,8 @@ func TestSessionManager(t *testing.T) {
 		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
 		require.Equal(t, 1, fc.count("ADD_LOGFILE"))
 
-		// Artificially age the session far beyond any sane session_max_age value,
-		// with the log file set left unchanged. With SessionMaxAge disabled this
+		// Artificially age the session far beyond any sane max_session_age value,
+		// with the log file set left unchanged. With MaxSessionAge disabled this
 		// must have no effect on whether a restart occurs.
 		lm.sessionMgr.sessionOpened = time.Now().Add(-24 * time.Hour)
 		staleOpened := lm.sessionMgr.sessionOpened
@@ -229,9 +229,9 @@ func TestSessionManager(t *testing.T) {
 		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 200, 300))
 
 		assert.Equal(t, 0, fc.count("END_LOGMNR"),
-			"session must not be ended when SessionMaxAge is disabled (0)")
+			"session must not be ended when MaxSessionAge is disabled (0)")
 		assert.Equal(t, 1, fc.count("ADD_LOGFILE"),
-			"log files must not be reloaded when neither the file set changed nor SessionMaxAge is exceeded")
+			"log files must not be reloaded when neither the file set changed nor MaxSessionAge is exceeded")
 		assert.Equal(t, staleOpened, lm.sessionMgr.sessionOpened,
 			"sessionOpened must be untouched since AddLogFile was not re-invoked")
 		assert.Equal(t, 2, fc.count("START_LOGMNR"),
@@ -258,7 +258,7 @@ func newFakeSQLConn(t *testing.T, files []*LogFile) (*sql.Conn, *fakeConn) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
-	conn, err := db.Conn(context.Background())
+	conn, err := db.Conn(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 

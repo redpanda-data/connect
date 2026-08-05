@@ -36,10 +36,10 @@ var (
 	// DefaultTransactionCacheKey is the default prefix used for the transaction buffer cache key.
 	// Only relevant when configuring a (potentially shared) cache_resource transaction buffer.
 	DefaultTransactionCacheKey = "oracledb_cdc"
-	// DefaultSessionMaxAge controls how long a single LogMiner session may remain active
+	// DefaultMaxSessionAge controls how long a single LogMiner session may remain active
 	// before being forcibly restarted, independent of redo log switches. 0 disables this,
 	// restarting only on log switches (the previous, and still default, behaviour).
-	DefaultSessionMaxAge = 0 * time.Second
+	DefaultMaxSessionAge = 0 * time.Second
 )
 
 // MiningStrategy defines how LogMiner accesses dictionary information
@@ -69,7 +69,7 @@ type Config struct {
 	LOBEnabled             bool
 	PDBName                string
 	TransactionCacheConfig TransactionCacheConfig
-	SessionMaxAge          time.Duration
+	MaxSessionAge          time.Duration
 }
 
 // NewDefaultConfig returns a Config with default values
@@ -83,6 +83,6 @@ func NewDefaultConfig() *Config {
 		MiningStrategy:        MiningStrategy(DefaultMiningStrategy),
 		MaxTransactionEvents:  DefaultMaxTransactionEvents,
 		LOBEnabled:            DefaultLOBEnabled,
-		SessionMaxAge:         DefaultSessionMaxAge,
+		MaxSessionAge:         DefaultMaxSessionAge,
 	}
 }

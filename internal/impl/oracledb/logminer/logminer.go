@@ -198,18 +198,15 @@ func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
 	return replication.SCN(currentPos), nil
 }
 
-// endExpiredIdleSession ends the active LogMiner session if it has exceeded
-// SessionMaxAge.
-func (lm *LogMiner) endExpiredIdleSession(ctx context.Context, conn *sql.Conn) error {
-	if !lm.sessionMgr.IsExpired(lm.cfg.SessionMaxAge) {
-		return nil
+func (lm *LogMiner) endExpiredIdleSession(ctx context.Context, conn *sql.Conn) {
+	if !lm.sessionMgr.IsExpired(lm.cfg.MaxSessionAge) {
+		return
 	}
-	lm.log.Debugf("LogMiner session has been open for %s, exceeding session_max_age of %s — ending idle session to release accumulated session memory",
-		lm.sessionMgr.Age(), lm.cfg.SessionMaxAge)
+	lm.log.Debugf("LogMiner session has been open for %s, exceeding max_session_age of %s — ending idle session to release accumulated session memory",
+		lm.sessionMgr.Age(), lm.cfg.MaxSessionAge)
 	if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
-		return fmt.Errorf("ending expired logminer session while idle: %w", err)
+		lm.log.Errorf("Failed to end idle LogMiner session: %v", err)
 	}
-	return nil
 }
 
 func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
@@ -220,16 +217,12 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	}
 
 	if lm.currentSCN >= dbCurrentSCN {
-		if err := lm.endExpiredIdleSession(ctx, conn); err != nil {
-			return false, err
-		}
+		lm.endExpiredIdleSession(ctx, conn)
 		return true, nil
 	}
 
 	if deferMiningCycle(lm.currentSCN, dbCurrentSCN, lm.cfg.MinSCNWindowSize) {
-		if err := lm.endExpiredIdleSession(ctx, conn); err != nil {
-			return false, err
-		}
+		lm.endExpiredIdleSession(ctx, conn)
 		return true, nil
 	}
 
@@ -1143,13 +1136,13 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 
 	// On databases where redo log switches are infrequent, a LogMiner session can stay
 	// open for hours, accumulating server-side PGA (notably around online catalog
-	// dictionary lookups) until Oracle kills it outright with ORA-04036. SessionMaxAge
+	// dictionary lookups) until Oracle kills it outright with ORA-04036. MaxSessionAge
 	// forces a restart on a timer instead of relying solely on a log switch to happen,
 	// mirroring Debezium's log.mining.session.max.ms.
-	sessionExpired := lm.sessionMgr.IsExpired(lm.cfg.SessionMaxAge)
+	sessionExpired := lm.sessionMgr.IsExpired(lm.cfg.MaxSessionAge)
 	if sessionExpired {
-		lm.log.Debugf("LogMiner session has been open for %s, exceeding session_max_age of %s — forcing restart to release accumulated session memory",
-			lm.sessionMgr.Age(), lm.cfg.SessionMaxAge)
+		lm.log.Debugf("LogMiner session has been open for %s, exceeding max_session_age of %s — forcing restart to release accumulated session memory",
+			lm.sessionMgr.Age(), lm.cfg.MaxSessionAge)
 	}
 
 	if lm.sessionMgr.logFilesChanged(logFiles) || sessionExpired {

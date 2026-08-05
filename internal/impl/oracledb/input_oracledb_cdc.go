@@ -62,7 +62,7 @@ const (
 	ociFieldLOBEnabled           = "lob_enabled"
 	ociFieldTransactionCache     = "transaction_cache"
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
-	ociFieldSessionMaxAge        = "session_max_age"
+	ociFieldMaxSessionAge        = "max_session_age"
 
 	//-- snapshot specific
 	ociFieldSnapshotFilters = "snapshot_filters"
@@ -183,11 +183,12 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 			Description("The key prefix used when storing transactions in `"+ociFieldTransactionCache+"`. An alternative prefix must be set if multiple `oracledb_cdc` inputs share the same cache resource, since Oracle transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance and would otherwise collide.").
 			Default(logminer.DefaultTransactionCacheKey).
 			Optional(),
-		service.NewDurationField(ociFieldSessionMaxAge).
+		service.NewDurationField(ociFieldMaxSessionAge).
 			Description("The maximum duration a single LogMiner session may stay open before being forcibly ended and restarted, even if the underlying redo log files haven't changed. By default, a LogMiner session is only restarted when a redo log switch is detected. On databases where switches are infrequent, a session can stay open for a long time, and LogMiner has been observed to accumulate server-side PGA memory (particularly around online catalog dictionary lookups) until Oracle terminates the session with ORA-04036. Setting this forces a periodic restart independent of log switches. Set to 0 (default) to disable and restart only on log switches.").
 			ShortDescription("Maximum duration before a LogMiner session is force-restarted, independent of redo log switches.").
-			Default(logminer.DefaultSessionMaxAge.String()).
+			Default(logminer.DefaultMaxSessionAge.String()).
 			Example("20m").
+			LintRule(`root = if this.parse_duration().catch(0) < 0 { [ "`+ociFieldMaxSessionAge+` must be 0 or greater" ] }`).
 			Optional(),
 	).Description("LogMiner configuration settings."),
 	).
@@ -842,11 +843,8 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		if cfg.LOBEnabled, err = lmConf.FieldBool(ociFieldLOBEnabled); err != nil {
 			return nil, err
 		}
-		if cfg.SessionMaxAge, err = lmConf.FieldDuration(ociFieldSessionMaxAge); err != nil {
+		if cfg.MaxSessionAge, err = lmConf.FieldDuration(ociFieldMaxSessionAge); err != nil {
 			return nil, err
-		}
-		if cfg.SessionMaxAge < 0 {
-			return nil, fmt.Errorf("logminer.%s must be 0 or greater, got %s", ociFieldSessionMaxAge, cfg.SessionMaxAge)
 		}
 		// support cache_resources for buffering logminer transactions
 		if lmConf.Contains(ociFieldTransactionCache) {
