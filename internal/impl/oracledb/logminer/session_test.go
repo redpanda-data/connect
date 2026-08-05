@@ -85,6 +85,123 @@ func TestSessionManager(t *testing.T) {
 			"AddLogFile must have refreshed sessionOpened, resetting the reported session age")
 	})
 
+	t.Run("MiningCycleEndsExpiredSessionWhenCaughtUp", func(t *testing.T) {
+		cfg := NewDefaultConfig()
+		cfg.SessionMaxAge = 20 * time.Millisecond
+
+		logger := service.NewLoggerFromSlog(slog.Default())
+		lm := &LogMiner{
+			cfg:          cfg,
+			sessionMgr:   NewSessionManager(cfg, logger),
+			logCollector: NewLogFileCollector(),
+			log:          logger,
+		}
+
+		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+		conn, fc := newFakeSQLConn(t, files)
+
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+		require.True(t, lm.sessionMgr.IsActive())
+
+		// Database is caught up with what we've already mined, and the session
+		// was opened well beyond SessionMaxAge - miningCycle must still end it
+		// even though no productive mining work happens on this cycle.
+		lm.currentSCN = 200
+		fc.currentSCN = 200
+		lm.sessionMgr.sessionOpened = time.Now().Add(-time.Hour)
+
+		caughtUp, err := lm.miningCycle(t.Context(), conn)
+		require.NoError(t, err)
+		assert.True(t, caughtUp, "miningCycle must report caught up when currentSCN >= dbCurrentSCN")
+		assert.Equal(t, 1, fc.count("END_LOGMNR"),
+			"an idle session that has exceeded session_max_age must be ended even while caught up")
+		assert.False(t, lm.sessionMgr.IsActive())
+	})
+
+	t.Run("MiningCycleCaughtUpDoesNotEndSessionWhenNotExpired", func(t *testing.T) {
+		tests := []struct {
+			name          string
+			sessionMaxAge time.Duration
+			sessionAge    time.Duration
+		}{
+			{
+				name:          "session_max_age disabled (default)",
+				sessionMaxAge: 0,
+				sessionAge:    24 * time.Hour,
+			},
+			{
+				name:          "session_max_age configured but not yet exceeded",
+				sessionMaxAge: time.Hour,
+				sessionAge:    time.Millisecond,
+			},
+		}
+
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				cfg := NewDefaultConfig()
+				cfg.SessionMaxAge = test.sessionMaxAge
+
+				logger := service.NewLoggerFromSlog(slog.Default())
+				lm := &LogMiner{
+					cfg:          cfg,
+					sessionMgr:   NewSessionManager(cfg, logger),
+					logCollector: NewLogFileCollector(),
+					log:          logger,
+				}
+
+				files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+				conn, fc := newFakeSQLConn(t, files)
+
+				require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+				require.True(t, lm.sessionMgr.IsActive())
+
+				lm.currentSCN = 200
+				fc.currentSCN = 200
+				lm.sessionMgr.sessionOpened = time.Now().Add(-test.sessionAge)
+
+				caughtUp, err := lm.miningCycle(t.Context(), conn)
+				require.NoError(t, err)
+				assert.True(t, caughtUp)
+				assert.Equal(t, 0, fc.count("END_LOGMNR"),
+					"session must remain open while caught up if it has not exceeded session_max_age")
+				assert.True(t, lm.sessionMgr.IsActive())
+			})
+		}
+	})
+
+	t.Run("MiningCycleEndsExpiredSessionWhenDeferring", func(t *testing.T) {
+		cfg := NewDefaultConfig()
+		cfg.SessionMaxAge = 20 * time.Millisecond
+		require.Greater(t, cfg.MinSCNWindowSize, 0, "test relies on a positive MinSCNWindowSize to trigger deferral")
+
+		logger := service.NewLoggerFromSlog(slog.Default())
+		lm := &LogMiner{
+			cfg:          cfg,
+			sessionMgr:   NewSessionManager(cfg, logger),
+			logCollector: NewLogFileCollector(),
+			log:          logger,
+		}
+
+		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+		conn, fc := newFakeSQLConn(t, files)
+
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+		require.True(t, lm.sessionMgr.IsActive())
+
+		// Database has advanced past currentSCN, but by less than MinSCNWindowSize,
+		// so miningCycle defers rather than mining - this must still end a stale session.
+		lm.currentSCN = 200
+		fc.currentSCN = 200 + uint64(cfg.MinSCNWindowSize) - 1
+		lm.sessionMgr.sessionOpened = time.Now().Add(-time.Hour)
+
+		caughtUp, err := lm.miningCycle(t.Context(), conn)
+		require.NoError(t, err)
+		assert.True(t, caughtUp, "miningCycle must report caught up (deferred) when the SCN gap is below MinSCNWindowSize")
+		assert.Equal(t, 1, fc.count("END_LOGMNR"),
+			"an idle session that has exceeded session_max_age must be ended even while deferring")
+		assert.False(t, lm.sessionMgr.IsActive())
+	})
+
 	t.Run("PrepareLogsAndStartSessionDefaultSessionMaxAgeDoesNotRestart", func(t *testing.T) {
 		cfg := NewDefaultConfig()
 		require.Equal(t, time.Duration(0), cfg.SessionMaxAge, "default SessionMaxAge must remain disabled")
@@ -157,9 +274,10 @@ func (d *fakeDriver) Open(string) (driver.Conn, error) {
 }
 
 type fakeConn struct {
-	mu       sync.Mutex
-	logFiles []*LogFile
-	execs    []string
+	mu         sync.Mutex
+	logFiles   []*LogFile
+	execs      []string
+	currentSCN uint64
 }
 
 func (c *fakeConn) count(substr string) int {
@@ -184,9 +302,12 @@ func (*fakeConn) Begin() (driver.Tx, error) {
 	return nil, errors.New("fakeConn: transactions not supported")
 }
 
-func (c *fakeConn) QueryContext(_ context.Context, _ string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *fakeConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if strings.Contains(query, "CURRENT_SCN") {
+		return &fakeSCNRow{scn: c.currentSCN}, nil
+	}
 	return &fakeRows{files: c.logFiles}, nil
 }
 
@@ -222,5 +343,25 @@ func (r *fakeRows) Next(dest []driver.Value) error {
 	dest[4] = f.Type
 	dest[5] = int64(f.Thread)
 	r.idx++
+	return nil
+}
+
+// fakeSCNRow implements driver.Rows over a single CURRENT_SCN value, satisfying
+// miningCycle's `SELECT CURRENT_SCN FROM V$DATABASE` query.
+type fakeSCNRow struct {
+	scn  uint64
+	done bool
+}
+
+func (*fakeSCNRow) Columns() []string { return []string{"CURRENT_SCN"} }
+
+func (*fakeSCNRow) Close() error { return nil }
+
+func (r *fakeSCNRow) Next(dest []driver.Value) error {
+	if r.done {
+		return io.EOF
+	}
+	dest[0] = int64(r.scn)
+	r.done = true
 	return nil
 }

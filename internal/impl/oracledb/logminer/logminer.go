@@ -198,6 +198,20 @@ func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
 	return replication.SCN(currentPos), nil
 }
 
+// endExpiredIdleSession ends the active LogMiner session if it has exceeded
+// SessionMaxAge.
+func (lm *LogMiner) endExpiredIdleSession(ctx context.Context, conn *sql.Conn) error {
+	if !lm.sessionMgr.IsExpired(lm.cfg.SessionMaxAge) {
+		return nil
+	}
+	lm.log.Debugf("LogMiner session has been open for %s, exceeding session_max_age of %s — ending idle session to release accumulated session memory",
+		lm.sessionMgr.Age(), lm.cfg.SessionMaxAge)
+	if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
+		return fmt.Errorf("ending expired logminer session while idle: %w", err)
+	}
+	return nil
+}
+
 func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
 	// Get database's current SCN to know our target
 	var dbCurrentSCN uint64
@@ -206,10 +220,16 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	}
 
 	if lm.currentSCN >= dbCurrentSCN {
+		if err := lm.endExpiredIdleSession(ctx, conn); err != nil {
+			return false, err
+		}
 		return true, nil
 	}
 
 	if deferMiningCycle(lm.currentSCN, dbCurrentSCN, lm.cfg.MinSCNWindowSize) {
+		if err := lm.endExpiredIdleSession(ctx, conn); err != nil {
+			return false, err
+		}
 		return true, nil
 	}
 
@@ -1126,7 +1146,7 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	// dictionary lookups) until Oracle kills it outright with ORA-04036. SessionMaxAge
 	// forces a restart on a timer instead of relying solely on a log switch to happen,
 	// mirroring Debezium's log.mining.session.max.ms.
-	sessionExpired := lm.cfg.SessionMaxAge > 0 && lm.sessionMgr.IsActive() && lm.sessionMgr.Age() >= lm.cfg.SessionMaxAge
+	sessionExpired := lm.sessionMgr.IsExpired(lm.cfg.SessionMaxAge)
 	if sessionExpired {
 		lm.log.Debugf("LogMiner session has been open for %s, exceeding session_max_age of %s — forcing restart to release accumulated session memory",
 			lm.sessionMgr.Age(), lm.cfg.SessionMaxAge)

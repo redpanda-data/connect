@@ -132,3 +132,9 @@ func (sm *SessionManager) Age() time.Duration {
 	}
 	return time.Since(sm.sessionOpened)
 }
+
+// IsExpired reports whether the current session has been open for at least
+// maxAge. Always false when no session is active or maxAge is 0 (disabled).
+func (sm *SessionManager) IsExpired(maxAge time.Duration) bool {
+	return maxAge > 0 && sm.active && sm.Age() >= maxAge
+}
