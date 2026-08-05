@@ -369,7 +369,9 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 	//     success wrote exactly the files it committed, so there is nothing to
 	//     reclaim and the reference scan is skipped.
 	//
-	// Cleanup is best-effort: failures are logged, never returned.
+	// Cleanup is best-effort: failures are logged, never returned. It also
+	// fails closed: if the reference scan cannot be completed, cleanup deletes
+	// nothing at all (see cleanupOrphanedOverwriteFiles).
 	if written := c.writes.snapshot(); len(written) > 0 &&
 		!errors.Is(err, rest.ErrCommitStateUnknown) && (err != nil || retried) {
 		c.cleanupOrphanedOverwriteFiles(ctx, written)
@@ -394,12 +396,26 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 // errors are logged, not returned. The caller must have established that the
 // commit did not terminate in an ambiguous (possibly-landed) state, since
 // deleting a possibly-committed file would corrupt the table.
+//
+// Cleanup fails closed: if the reference scan cannot be completed
+// (referencedDataFilePaths errors), it deletes NOTHING and leaves every
+// recorded file for Iceberg orphan-file maintenance. An incomplete scan
+// cannot tell a losing attempt's orphan from a file the landed snapshot
+// references — on a retried success both attempts' files are in `written`,
+// and treating a still-referenced file as an orphan would delete data the
+// committed snapshot depends on. Deleting nothing is always safe; deleting on
+// an incomplete scan is not.
 func (c *committer) cleanupOrphanedOverwriteFiles(ctx context.Context, written map[string]struct{}) {
 	fsys, err := c.table.FS(ctx)
 	if err != nil {
+		c.logger.Warnf("Skipping copy-on-write orphan cleanup: could not resolve the table filesystem; leaving %d recorded files for Iceberg orphan-file maintenance: %v", len(written), err)
 		return
 	}
-	referenced := c.referencedDataFilePaths(ctx)
+	referenced, err := c.referencedDataFilePaths(ctx)
+	if err != nil {
+		c.logger.Warnf("Skipping copy-on-write orphan cleanup: could not verify which files the current snapshot references; leaving %d recorded files for Iceberg orphan-file maintenance: %v", len(written), err)
+		return
+	}
 	for p := range written {
 		if _, ref := referenced[p]; ref {
 			continue
@@ -413,32 +429,34 @@ func (c *committer) cleanupOrphanedOverwriteFiles(ctx context.Context, written m
 }
 
 // referencedDataFilePaths returns the paths referenced by the table's current
-// snapshot, used to guard orphan cleanup. Best-effort: on any error it returns
-// what it has so far, and an empty set simply disables the reference guard
-// (leaving the appeared-since-`before` guard to do the work).
-func (c *committer) referencedDataFilePaths(ctx context.Context) map[string]struct{} {
+// snapshot, used to guard orphan cleanup. It fails closed: every failure to
+// read the snapshot's manifests is propagated rather than accumulated past —
+// a partial set would make cleanup mistake a still-referenced file for an
+// orphan and delete data the committed snapshot depends on. A nil current
+// snapshot is not an error: an empty table genuinely references nothing.
+func (c *committer) referencedDataFilePaths(ctx context.Context) (map[string]struct{}, error) {
 	refs := make(map[string]struct{})
 	snap := c.table.CurrentSnapshot()
 	if snap == nil {
-		return refs
+		return refs, nil
 	}
 	fsys, err := c.table.FS(ctx)
 	if err != nil {
-		return refs
+		return nil, fmt.Errorf("resolving table filesystem: %w", err)
 	}
 	manifests, err := snap.Manifests(fsys)
 	if err != nil {
-		return refs
+		return nil, fmt.Errorf("loading current snapshot manifests: %w", err)
 	}
 	for _, m := range manifests {
 		for entry, err := range m.Entries(fsys, true) {
 			if err != nil {
-				return refs
+				return nil, fmt.Errorf("reading manifest entries: %w", err)
 			}
 			refs[entry.DataFile().FilePath()] = struct{}{}
 		}
 	}
-	return refs
+	return refs, nil
 }
 
 // commitLocked stages a transaction via stage and commits it, retrying on

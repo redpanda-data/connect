@@ -14,10 +14,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1211,7 +1214,8 @@ func TestCommitOverwriteNoLeakOnConflictThenSuccess(t *testing.T) {
 	// protected) plus the files the winning snapshot references (disjoint from the
 	// seed, since the overwrite rewrote them into fresh files). If attempt 1's
 	// files had leaked, the count would be strictly larger.
-	referenced := comm.referencedDataFilePaths(ctx)
+	referenced, err := comm.referencedDataFilePaths(ctx)
+	require.NoError(t, err)
 	require.NotEmpty(t, referenced)
 	assert.Equal(t, seedCount+len(referenced), countParquetFiles(t, final.Location()),
 		"attempt 1's orphaned parquet must have been cleaned even though the overall commit succeeded")
@@ -1373,7 +1377,8 @@ func TestCleanupOverwriteReferenceGuard(t *testing.T) {
 	require.NoError(t, err)
 	defer comm.Close()
 
-	referenced := comm.referencedDataFilePaths(ctx)
+	referenced, err := comm.referencedDataFilePaths(ctx)
+	require.NoError(t, err)
 	require.NotEmpty(t, referenced, "the seeded snapshot must reference at least one data file")
 
 	// A genuine orphan under data/ that no snapshot references.
@@ -1394,6 +1399,100 @@ func TestCleanupOverwriteReferenceGuard(t *testing.T) {
 	}
 	_, statErr := os.Stat(orphan)
 	assert.True(t, os.IsNotExist(statErr), "an unreferenced recorded orphan must be removed")
+}
+
+// failingOpenFS forwards to the local filesystem but, while armed, fails every
+// Open of a path with the configured suffix. Arming it with suffix ".avro"
+// after a commit has landed simulates a transient storage outage that hits
+// exactly the post-commit reference scan (manifest lists and manifests are
+// avro) while leaving parquet reads and all writes untouched.
+type failingOpenFS struct {
+	inner  iceio.LocalFS
+	armed  *atomic.Bool
+	suffix string
+}
+
+func (f failingOpenFS) Open(name string) (iceio.File, error) {
+	if f.armed.Load() && strings.HasSuffix(name, f.suffix) {
+		return nil, fmt.Errorf("simulated storage outage opening %s", name)
+	}
+	return f.inner.Open(name)
+}
+func (f failingOpenFS) Create(name string) (iceio.FileWriter, error) { return f.inner.Create(name) }
+func (f failingOpenFS) WriteFile(name string, p []byte) error        { return f.inner.WriteFile(name, p) }
+func (f failingOpenFS) Remove(name string) error                     { return f.inner.Remove(name) }
+
+// TestCommitOverwriteCleanupFailsClosedOnIncompleteReferenceScan pins the
+// fail-closed semantics of orphan cleanup: when the post-commit reference scan
+// cannot be completed, cleanup must delete NOTHING. The scenario is a
+// retried-success copy-on-write commit (attempt 1 loses a clean conflict,
+// attempt 2 lands), so the recorded set holds BOTH attempts' files — including
+// the files the landed snapshot references. A transient manifest-read failure
+// is injected AFTER the commit lands (the failing FS is armed at the start of
+// attempt 2's CommitTable, by which point the stage has done all its reads):
+// with the old best-effort scan, `referenced` came back empty and cleanup
+// deleted the landed snapshot's data files, corrupting the table. Now the scan
+// error must skip cleanup entirely, leaving every recorded file on disk and
+// the committed snapshot fully readable.
+func TestCommitOverwriteCleanupFailsClosedOnIncompleteReferenceScan(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, mem := newCOWTable(t, sc)
+	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+	seedCount := countParquetFiles(t, seedTbl.Location())
+
+	// attempt 1 = clean conflict, attempt 2 = success; the hook arms the failing
+	// FS when attempt 2's CommitTable is in flight, so the outage begins only
+	// once the commit lands and the first reads it can hit are cleanup's.
+	armed := &atomic.Bool{}
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitConflict}}
+	hooked := &commitHookCatalog{CatalogIO: cat, hook: func(call int) {
+		if call == 2 {
+			armed.Store(true)
+		}
+	}}
+	// Every table handle the committer uses (initial and reloaded) carries the
+	// failing FS, mirroring how a real committer sees one filesystem throughout.
+	snapFail := func() *table.Table {
+		return table.New(mem.ident, mem.meta, mem.metadataLocation,
+			func(context.Context) (iceio.IO, error) {
+				return failingOpenFS{armed: armed, suffix: ".avro"}, nil
+			}, hooked)
+	}
+
+	var logBuf bytes.Buffer
+	logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&logBuf, nil)))
+	comm, err := NewCommitter(snapFail(), hooked, CommitConfig{MaxRetries: 3},
+		func(context.Context) (*table.Table, error) { return snapFail(), nil }, logger)
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, cat.snapshot(), "id")
+	w.committer = comm
+
+	require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}),
+		"the retried commit must succeed; only cleanup is hit by the outage")
+	require.Equal(t, 2, cat.calls, "the conflict must force a second attempt")
+	assert.True(t, armed.Load(), "the manifest-read outage must have been armed mid-commit")
+
+	// Fail closed: every recorded file — both attempts' — must still be on disk.
+	written := comm.writes.snapshot()
+	require.NotEmpty(t, written, "the retried commit must have recorded written files")
+	for p := range written {
+		_, statErr := os.Stat(p)
+		assert.NoError(t, statErr, "no recorded file may be removed when the reference scan is incomplete: %s", p)
+	}
+	assert.Greater(t, countParquetFiles(t, seedTbl.Location()), seedCount,
+		"the landed snapshot's files (and attempt 1's leftovers) must remain on disk")
+	assert.Contains(t, logBuf.String(), "could not verify which files the current snapshot references",
+		"skipping cleanup must be logged as a warning")
+
+	// With the outage over, the committed snapshot must still scan correctly —
+	// i.e. nothing it references was deleted.
+	armed.Store(false)
+	assert.Equal(t, map[int64]string{1: "one", 2: "TWO", 3: "three"}, scanRows(t, ctx, cat.snapshot()))
 }
 
 // commitHookCatalog wraps a table.CatalogIO, invoking hook (with the 1-based
@@ -1496,7 +1595,8 @@ func TestCommitOverwriteCleanupSparesForeignFiles(t *testing.T) {
 
 		// Final on-disk parquet: the protected seed, the spared foreign file, and
 		// the winning attempt's referenced files — attempt 1's orphans cleaned.
-		referenced := comm.referencedDataFilePaths(ctx)
+		referenced, err := comm.referencedDataFilePaths(ctx)
+		require.NoError(t, err)
 		require.NotEmpty(t, referenced)
 		assert.Equal(t, seedCount+1+len(referenced), countParquetFiles(t, seedTbl.Location()),
 			"attempt 1's orphans must be cleaned while the foreign file and winner survive")
