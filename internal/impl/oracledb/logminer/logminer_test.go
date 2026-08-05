@@ -435,6 +435,16 @@ func TestProcessRedoEventCapturesUserName(t *testing.T) {
 	assert.Equal(t, "ALICE", pub.messages[0].UserName)
 }
 
+func TestNewMinerQueryIncludesUserName(t *testing.T) {
+	pub := &publisherStub{}
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	tables := []replication.UserTable{{Schema: "TESTDB", Name: "USERS"}}
+
+	lm := NewMiner(nil, tables, pub, NewDefaultConfig(), cache, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+
+	assert.Contains(t, lm.logMinerQuery, "USERNAME")
+}
+
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
 	return &LogMiner{
 		publisher:        pub,
