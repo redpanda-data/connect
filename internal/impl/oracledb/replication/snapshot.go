@@ -560,6 +560,11 @@ func buildColumnMeta(types []*sql.ColumnType) []ColumnMeta {
 	return meta
 }
 
+// IsLOBTypeName reports whether the given go-ora driver type name denotes a
+// large-object column, whose value is nulled in snapshot rows when
+// lob_enabled is false. Exported so tests can pin its classification against
+// the schema mapping and scan-destination enumerations of the same spellings
+// (see TestSnapshotScannerSchemaParity).
 func IsLOBTypeName(dbType string) bool {
 	switch dbType {
 	case "CLOB", "NCLOB", "BLOB", "LONG", "LONG RAW",
