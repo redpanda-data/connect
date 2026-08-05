@@ -134,11 +134,13 @@ tasks:
         echo "RESULT cores=$CORES_LABEL fetch={{.FETCH_SIZE}} total=$FINAL elapsed=${ELAPSED}s avg=$AVG"
 
   bench:matrix:
-    desc: "Sweep fetch_size x cores (e.g. task bench:matrix OUT=results.txt)"
+    desc: "Sweep fetch_size x cores (e.g. task bench:matrix OUT=results.txt FETCH=\"10000 100000 500000\" CORES=\"2 4 8\")"
     vars:
       OUT: '{{.OUT | default ""}}'
       MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "10"}}'
       BATCH_COUNT: '{{.BATCH_COUNT | default "1000"}}'
+      FETCH: '{{.FETCH | default "1000 10000 100000"}}'
+      CORES: '{{.CORES | default "1 2 4 8"}}'
     cmds:
       - |
         OUT_FILE="{{.OUT}}"
@@ -148,8 +150,8 @@ tasks:
           printf "# max_in_flight={{.MAX_IN_FLIGHT}}  batch_count={{.BATCH_COUNT}}\n" > "$OUT_FILE"
           echo "$HEADER" >> "$OUT_FILE"
         fi
-        for fetch in 1000 10000 100000; do
-          for cores in 1 2 4 8; do
+        for fetch in {{.FETCH}}; do
+          for cores in {{.CORES}}; do
             OUTPUT=$(task bench:run FETCH_SIZE=$fetch CORES=$cores BATCH_COUNT={{.BATCH_COUNT}} MAX_IN_FLIGHT={{.MAX_IN_FLIGHT}} 2>&1) || true
             R=$(echo "$OUTPUT" | grep "^RESULT " || true)
             TOTAL=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOTAL=${TOTAL:-ERROR}

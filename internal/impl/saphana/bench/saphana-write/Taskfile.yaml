@@ -107,6 +107,8 @@ tasks:
         # mid-run that would trigger a false "done" signal.
         MAX_WAIT=600
         ELAPSED=0
+        SEEN_REAL_LAG=false
+        ZERO_STREAK=0
         while kill -0 "$RPCN_PID" 2>/dev/null && [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
           sleep 1
           ELAPSED=$((ELAPSED + 1))
@@ -128,7 +130,20 @@ tasks:
 
           printf "%-10s  %-12s  %s msg/s\n" "$(date +%H:%M:%S)" "$LAG" "$LOG_RATE" >&2
 
-          if [ "${LAG}" = "0" ] 2>/dev/null; then break; fi
+          # A freshly-created consumer group can report a spurious LAG=0 on the
+          # first tick or two before it has really started consuming. Require at
+          # least one genuine nonzero lag reading first, then 2 consecutive
+          # zero-lag ticks, before trusting "done" — otherwise ELAPSED/AVG_MSG_S
+          # get measured against a run that hasn't actually finished writing.
+          if [ "${LAG}" != "?" ] && [ "${LAG}" -gt 0 ] 2>/dev/null; then
+            SEEN_REAL_LAG=true
+          fi
+          if [ "${LAG}" = "0" ] 2>/dev/null && [ "$SEEN_REAL_LAG" = "true" ]; then
+            ZERO_STREAK=$((ZERO_STREAK + 1))
+          else
+            ZERO_STREAK=0
+          fi
+          if [ "$ZERO_STREAK" -ge 2 ]; then break; fi
         done
 
         # SIGTERM: when LAG=0, no WriteBatch in flight → benthos exits in <1s.
@@ -155,29 +170,34 @@ tasks:
         echo "RESULT batch={{.BATCH_COUNT}} max_in_flight={{.MAX_IN_FLIGHT}} cores=$CORES_LABEL total=$TOTAL elapsed=${ELAPSED}s avg=$AVG"
 
   bench:matrix:
-    desc: "Sweep batch_count x max_in_flight (e.g. task bench:matrix TOTAL=100000 OUT=results.txt)"
+    desc: "Sweep batch_count x max_in_flight x cores (e.g. task bench:matrix TOTAL=100000 OUT=results.txt CORES=\"unbounded 4 8\")"
     vars:
       TOTAL: '{{.TOTAL | default "100000"}}'
       OUT: '{{.OUT | default ""}}'
+      CORES: '{{.CORES | default "unbounded"}}'
     cmds:
       - |
         OUT_FILE="{{.OUT}}"
-        HDR=$(printf "%-8s  %-14s  %-12s  %-10s  %s\n" "BATCH" "MAX_IN_FLIGHT" "TOTAL" "ELAPSED" "AVG_MSG_S")
+        HDR=$(printf "%-8s  %-14s  %-8s  %-12s  %-10s  %s\n" "BATCH" "MAX_IN_FLIGHT" "CORES" "TOTAL" "ELAPSED" "AVG_MSG_S")
         echo "$HDR"
         if [ -n "$OUT_FILE" ]; then
           printf "# sql_insert hdb write  total={{.TOTAL}}\n" > "$OUT_FILE"
           echo "$HDR" >> "$OUT_FILE"
         fi
-        for batch in 1000 5000 10000 50000; do
-          for mif in 1 4 8 16; do
-            OUTPUT=$(task bench:run TOTAL={{.TOTAL}} BATCH_COUNT=$batch MAX_IN_FLIGHT=$mif 2>&1) || true
-            R=$(echo "$OUTPUT" | grep "^RESULT " || true)
-            TOT=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOT=${TOT:-ERROR}
-            EL=$(echo "$R" | grep -o 'elapsed=[^ ]*' | cut -d= -f2 || true); EL=${EL:-?}
-            AV=$(echo "$R" | grep -o 'avg=[^ ]*' | cut -d= -f2 || true); AV=${AV:-0}
-            ROW=$(printf "%-8s  %-14s  %-12s  %-10s  %s\n" "$batch" "$mif" "$TOT" "$EL" "$AV")
-            echo "$ROW"
-            if [ -n "$OUT_FILE" ]; then echo "$ROW" >> "$OUT_FILE"; fi
+        for cores in {{.CORES}}; do
+          core_arg="$cores"
+          if [ "$cores" = "unbounded" ]; then core_arg=""; fi
+          for batch in 1000 5000 10000 50000; do
+            for mif in 1 4 8 16; do
+              OUTPUT=$(task bench:run TOTAL={{.TOTAL}} BATCH_COUNT=$batch MAX_IN_FLIGHT=$mif CORES="$core_arg" 2>&1) || true
+              R=$(echo "$OUTPUT" | grep "^RESULT " || true)
+              TOT=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOT=${TOT:-ERROR}
+              EL=$(echo "$R" | grep -o 'elapsed=[^ ]*' | cut -d= -f2 || true); EL=${EL:-?}
+              AV=$(echo "$R" | grep -o 'avg=[^ ]*' | cut -d= -f2 || true); AV=${AV:-0}
+              ROW=$(printf "%-8s  %-14s  %-8s  %-12s  %-10s  %s\n" "$batch" "$mif" "$cores" "$TOT" "$EL" "$AV")
+              echo "$ROW"
+              if [ -n "$OUT_FILE" ]; then echo "$ROW" >> "$OUT_FILE"; fi
+            done
           done
         done
 

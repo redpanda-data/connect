@@ -188,7 +188,7 @@ tasks:
             echo "Avg throughput : ${AVG} msg/s"
             echo "RESULT cores=$CORES_LABEL fetch={{.FETCH_SIZE}} poll={{.POLL}} total=$KAFKA_COUNT elapsed=${ELAPSED}s avg=$AVG"
             break
-          elif [ "$STARTED" -eq 1 ] && [ "$LOAD_DONE" -eq 1 ] && [ "$LOAD_DONE_ZEROS" -ge 8 ]; then
+          elif [ "$STARTED" -eq 1 ] && [ "$LOAD_DONE" -eq 1 ] && [ "$LOAD_DONE_ZEROS" -ge 60 ]; then
             # Loader finished and connector has been idle for 8 intervals — truly done
             ELAPSED=$((NOW - START))
             AVG=$(awk "BEGIN { printf \"%.0f\", ${KAFKA_COUNT:-0} / ($ELAPSED > 0 ? $ELAPSED : 1) }")
@@ -219,12 +219,15 @@ tasks:
         done
 
   bench:matrix:
-    desc: "Sweep fetch_size x cores x poll (e.g. task bench:matrix COUNT=500000 OUT=results.txt)"
+    desc: "Sweep fetch_size x cores x poll (e.g. task bench:matrix COUNT=5000000 OUT=results.txt FETCH=\"10000 100000 500000\" CORES=\"2 4 8\" POLL=\"100ms 500ms\")"
     vars:
       COUNT: '{{.COUNT | default "500000"}}'
       OUT: '{{.OUT | default ""}}'
       MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "10"}}'
       BATCH_COUNT: '{{.BATCH_COUNT | default "1000"}}'
+      FETCH: '{{.FETCH | default "1000 10000 100000"}}'
+      CORES: '{{.CORES | default "1 2 4 8"}}'
+      POLL: '{{.POLL | default "100ms 500ms 1s"}}'
     cmds:
       - |
         OUT_FILE="{{.OUT}}"
@@ -234,9 +237,9 @@ tasks:
           printf "# count={{.COUNT}}  max_in_flight={{.MAX_IN_FLIGHT}}  batch_count={{.BATCH_COUNT}}\n" > "$OUT_FILE"
           echo "$HEADER" >> "$OUT_FILE"
         fi
-        for fetch in 1000 10000 100000; do
-          for cores in 1 2 4 8; do
-            for poll in 100ms 500ms 1s; do
+        for fetch in {{.FETCH}}; do
+          for cores in {{.CORES}}; do
+            for poll in {{.POLL}}; do
               OUTPUT=$(task bench:run COUNT={{.COUNT}} FETCH_SIZE=$fetch CORES=$cores POLL=$poll BATCH_COUNT={{.BATCH_COUNT}} MAX_IN_FLIGHT={{.MAX_IN_FLIGHT}} 2>&1) || true
               R=$(echo "$OUTPUT" | grep "^RESULT " || true)
               TOTAL=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOTAL=${TOTAL:-ERROR}

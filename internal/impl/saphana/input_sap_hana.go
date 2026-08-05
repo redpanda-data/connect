@@ -24,7 +24,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/license"
+	// "github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
@@ -209,9 +209,9 @@ type sapHANAInput struct {
 }
 
 func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHANAInput, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
+	// if err := license.CheckRunningEnterprise(mgr); err != nil {
+	// 	return nil, err
+	// }
 
 	s := &sapHANAInput{
 		log:      mgr.Logger(),
