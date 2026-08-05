@@ -626,6 +626,11 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 			txID, ok := msg.MetaGet("transaction_id")
 			require.Truef(t, ok, "message %d missing 'transaction_id' metadata", i)
 			assert.Regexpf(t, `^\d+\.\d+\.\d+$`, txID, "message %d: transaction_id %q not in USN.SLOT.SEQ format", i, txID)
+
+			// assert user_name metadata
+			userName, ok := msg.MetaGet("user_name")
+			require.Truef(t, ok, "message %d missing 'user_name' metadata", i)
+			assert.NotEmptyf(t, userName, "message %d: user_name should not be empty", i)
 		}
 
 		for _, expectedKey := range []string{"TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"} {

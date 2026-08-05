@@ -173,6 +173,9 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	if m.TransactionID != "" {
 		msg.MetaSet("transaction_id", m.TransactionID)
 	}
+	if m.UserName != "" {
+		msg.MetaSet("user_name", m.UserName)
+	}
 	if m.SCN.IsValid() {
 		msg.MetaSet("scn", m.SCN.String())
 	}
