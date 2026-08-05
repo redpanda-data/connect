@@ -266,7 +266,7 @@ oracledb_cdc:
 
 	// Use the snapshot schema as the reference for column types; assert all
 	// phases that carry a schema agree with it.
-	refSchema := childTypeMap(phases["snapshot"].schema)
+	refSchema := childSchemaMap(phases["snapshot"].schema)
 	require.NotEmpty(t, refSchema, "snapshot message carried no schema")
 
 	// Gather the union of columns observed across every phase.
@@ -293,7 +293,7 @@ oracledb_cdc:
 	}
 	for _, col := range sortedCols {
 		var b strings.Builder
-		fmt.Fprintf(&b, "%-14s | %-12s", col, refSchema[col].String())
+		fmt.Fprintf(&b, "%-14s | %-14s", col, describeColumnSchema(refSchema[col]))
 		for _, p := range phaseNames {
 			v, ok := phases[p].body[col]
 			if !ok {
@@ -307,14 +307,20 @@ oracledb_cdc:
 
 	for _, col := range sortedCols {
 		t.Run(col, func(t *testing.T) {
-			// Schema for the column must agree across all phases that carry one.
+			// The FULL column schema — type, optionality, and logical decimal
+			// precision/scale — must agree across all phases that carry one.
+			// Comparing only the CommonType would let a Decimal(38,2) vs
+			// Decimal(22,2) flip between the snapshot-seeded and
+			// catalog-derived paths pass unnoticed, even though Avro decimal
+			// precision/scale are part of the type and such a flip is exactly
+			// the Schema Registry incompatibility this test exists to catch.
 			for _, p := range phaseNames {
-				ps := childTypeMap(phases[p].schema)
+				ps := childSchemaMap(phases[p].schema)
 				if len(ps) == 0 {
 					continue
 				}
 				assert.Equalf(t, refSchema[col], ps[col],
-					"schema type for %q in phase %q differs from snapshot", col, p)
+					"schema for %q in phase %q differs from snapshot", col, p)
 			}
 
 			// Establish the reference Go type from the snapshot value, then
@@ -335,7 +341,7 @@ oracledb_cdc:
 			// bare JSON number (json.Number) — in EVERY phase. This is the bug
 			// under test: a leaked json.Number breaks downstream Avro encoding
 			// into string-typed fields.
-			if ct := refSchema[col]; ct == schema.Decimal || ct == schema.BigDecimal {
+			if ct := refSchema[col].Type; ct == schema.Decimal || ct == schema.BigDecimal {
 				for _, p := range phaseNames {
 					v, ok := phases[p].body[col]
 					if !ok || v == nil {
@@ -349,11 +355,23 @@ oracledb_cdc:
 	}
 }
 
-// childTypeMap indexes a record schema's children by name → CommonType.
-func childTypeMap(c schema.Common) map[string]schema.CommonType {
-	out := map[string]schema.CommonType{}
+// childSchemaMap indexes a record schema's children by name, keeping the FULL
+// schema.Common per column (type, optionality, logical decimal
+// precision/scale) so cross-phase comparisons catch flips in any of them —
+// not just in the CommonType.
+func childSchemaMap(c schema.Common) map[string]schema.Common {
+	out := map[string]schema.Common{}
 	for i := range c.Children {
-		out[c.Children[i].Name] = c.Children[i].Type
+		out[c.Children[i].Name] = c.Children[i]
 	}
 	return out
+}
+
+// describeColumnSchema renders a column schema for the diagnostic table,
+// including decimal precision/scale when present (e.g. "DECIMAL(38,2)").
+func describeColumnSchema(c schema.Common) string {
+	if c.Logical != nil && c.Logical.Decimal != nil {
+		return fmt.Sprintf("%s(%d,%d)", c.Type.String(), c.Logical.Decimal.Precision, c.Logical.Decimal.Scale)
+	}
+	return c.Type.String()
 }
