@@ -275,6 +275,83 @@ pg_stream:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
+// TestIntegrationPostgresMarshalFailureStopsStream verifies that a row whose
+// value cannot be marshalled to JSON (float8 NaN: the decoder passes it
+// through as a float64, which encoding/json rejects) stops the stream instead
+// of being silently skipped. Before the fix the row and the remainder of its
+// WAL batch were dropped while the stream kept running and checkpointed past
+// them. See CON-504.
+func TestIntegrationPostgresMarshalFailureStopsStream(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS nan_floats (id serial PRIMARY KEY, value DOUBLE PRECISION);")
+	require.NoError(t, err)
+
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_marshal_failure
+    stream_snapshot: false
+    schema: public
+    tables:
+       - nan_floats
+`, databaseURL)
+
+	var (
+		receivedMu sync.Mutex
+		received   []string
+	)
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, builder.AddInputYAML(template))
+	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+		receivedMu.Lock()
+		received = append(received, string(b))
+		receivedMu.Unlock()
+		return nil
+	}))
+	stream, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() { _ = stream.Run(t.Context()) }()
+
+	// Give the input time to create the replication slot: streaming-only mode
+	// only sees rows inserted after the slot exists.
+	time.Sleep(5 * time.Second)
+
+	// Sentinel row proves the stream is live before the poison row arrives.
+	_, err = db.Exec("INSERT INTO nan_floats (value) VALUES (1.5);")
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+		return len(received) == 1
+	}, 30*time.Second, 100*time.Millisecond, "sentinel row was never streamed - stream not live")
+
+	// Poison row (unmarshalable), then a normal row behind it.
+	_, err = db.Exec("INSERT INTO nan_floats (value) VALUES ('NaN'::double precision);")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO nan_floats (value) VALUES (2.5);")
+	require.NoError(t, err)
+
+	// The core guarantee: nothing may be delivered past the poison row. In the
+	// buggy version the NaN row was silently dropped and 2.5 arrived here.
+	time.Sleep(10 * time.Second)
+	receivedMu.Lock()
+	got := append([]string(nil), received...)
+	receivedMu.Unlock()
+	require.Len(t, got, 1, "no row may be delivered past an unmarshalable row; got: %v", got)
+	require.Contains(t, got[0], "1.5")
+
+	require.NoError(t, stream.StopWithin(30*time.Second))
+}
+
 // TestIntegrationPostgresSnapshotAckBarrier verifies that a crash during the
 // snapshot->stream handoff (after snapshot rows are emitted but before they are
 // acknowledged) does not lose data: because the replication slot is only
