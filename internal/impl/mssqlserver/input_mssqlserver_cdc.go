@@ -366,6 +366,24 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 				i.stopSig.TriggerHasStopped()
 				return
 			}
+
+			// Flush the partial snapshot batch still held by the batcher, then
+			// block until every snapshot batch is acknowledged downstream.
+			// Persisting the LSN any earlier would let a crash in this window
+			// skip un-acked snapshot rows on restart. Blocks until acks drain
+			// or soft-stop (no timeout, by design; see postgres_cdc's
+			// equivalent barrier).
+			if err = i.publisher.flushCurrent(softCtx); err != nil {
+				i.log.Errorf("Failed to flush remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				i.stopSig.TriggerHasStopped()
+				return
+			}
+			if err = i.publisher.waitSnapshotAcks(softCtx); err != nil {
+				i.log.Infof("Interrupted while waiting for snapshot acknowledgements. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				i.stopSig.TriggerHasStopped()
+				return
+			}
+
 			if err = i.cacheLSN(softCtx, maxLSN); err != nil {
 				if i.stopSig.IsHardStopSignalled() {
 					i.log.Errorf("Shutting down snapshotting process: %s", err)
