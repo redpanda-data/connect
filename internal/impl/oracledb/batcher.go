@@ -322,6 +322,23 @@ func (b *batchPublisher) msgs() <-chan asyncMessage {
 	return b.msgChan
 }
 
+// flushCurrent flushes any partial batch still held by the batcher and
+// publishes it, leaving the publisher loop running. Used at the
+// snapshot->streaming handoff so every snapshot row is published (and can be
+// awaited via waitSnapshotAcks) before the post-snapshot SCN is persisted.
+func (b *batchPublisher) flushCurrent(ctx context.Context) error {
+	if b.batcher == nil {
+		return nil
+	}
+	b.batcherMu.Lock()
+	remaining, err := b.batcher.Flush(ctx)
+	b.batcherMu.Unlock()
+	if err != nil || len(remaining) == 0 {
+		return err
+	}
+	return b.publishBatch(ctx, remaining)
+}
+
 // FlushRemaining stops the loop goroutine and then flushes any partial batch
 // still held in the batcher, blocking until it is consumed by ReadBatch.
 func (b *batchPublisher) FlushRemaining(ctx context.Context) error {
@@ -330,14 +347,7 @@ func (b *batchPublisher) FlushRemaining(ctx context.Context) error {
 	}
 	b.shutSig.TriggerSoftStop()
 	<-b.shutSig.HasStoppedChan()
-
-	b.batcherMu.Lock()
-	remaining, err := b.batcher.Flush(ctx)
-	b.batcherMu.Unlock()
-	if err != nil || len(remaining) == 0 {
-		return err
-	}
-	return b.publishBatch(ctx, remaining)
+	return b.flushCurrent(ctx)
 }
 
 // Close signals the publisher's loop goroutine to stop and waits for it to exit.

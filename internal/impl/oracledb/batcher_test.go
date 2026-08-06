@@ -148,6 +148,51 @@ func TestSnapshotAckGate(t *testing.T) {
 	})
 }
 
+func TestFlushCurrent(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cp := checkpoint.NewCapped[replication.SCN](100)
+
+	batcher, err := (service.BatchPolicy{Count: 100}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+
+	publisher := newBatchPublisher(batcher, cp, logger)
+	t.Cleanup(publisher.Close)
+	publisher.cacheSCN = func(context.Context, replication.SCN) error { return nil }
+
+	publishEvent := func(v int) {
+		t.Helper()
+		require.NoError(t, publisher.Publish(ctx, &replication.MessageEvent{
+			Schema:    "S",
+			Table:     "T",
+			Operation: replication.MessageOperationRead,
+			Data:      map[string]any{"a": v},
+			SCN:       replication.SCN(100),
+		}))
+	}
+	receive := func(failMsg string) {
+		t.Helper()
+		got := make(chan asyncMessage, 1)
+		go func() { got <- <-publisher.msgs() }()
+		require.NoError(t, publisher.flushCurrent(ctx))
+		select {
+		case m := <-got:
+			require.Len(t, m.msg, 1)
+		case <-time.After(5 * time.Second):
+			t.Fatal(failMsg)
+		}
+	}
+
+	// Count=100 keeps a single event buffered in the batcher until flushed.
+	publishEvent(1)
+	receive("flushCurrent did not publish the buffered partial batch")
+
+	// The loop must still be alive after flushCurrent (unlike FlushRemaining):
+	// a second publish+flush must work identically.
+	publishEvent(2)
+	receive("publisher loop no longer functional after flushCurrent")
+}
+
 func newTestBatchPublisher(t *testing.T) (*batchPublisher, func() []replication.SCN) {
 	t.Helper()
 
