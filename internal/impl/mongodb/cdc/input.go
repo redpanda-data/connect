@@ -666,6 +666,24 @@ func (m *mongoCDC) readParallelSnapshot(
 	return g.Wait()
 }
 
+// snapshotAckFn builds the ack function for a snapshot batch. Mirroring the
+// streaming ackFn, a nack returns the error without resolving the checkpoint
+// slot: the shared capped tracker stays pinned, so the resume token can never
+// be persisted past un-delivered snapshot rows (redelivery is owned by
+// auto_replay_nacks).
+func snapshotAckFn(resolve func() *bson.Raw) service.AckFunc {
+	return func(_ context.Context, err error) error {
+		if err != nil {
+			return err
+		}
+		resumeToken := resolve()
+		if resumeToken != nil && *resumeToken != nil {
+			return fmt.Errorf("unexpected resume token for snapshot batch: %s", resumeToken.String())
+		}
+		return nil
+	}
+}
+
 func (m *mongoCDC) readSnapshotRange(
 	ctx context.Context,
 	coll *mongo.Collection,
@@ -707,13 +725,7 @@ func (m *mongoCDC) readSnapshotRange(
 			if err != nil {
 				return fmt.Errorf("unable to create batch: %w", err)
 			}
-			b := mongoBatch{mb, func(context.Context, error) error {
-				resumeToken := resolve()
-				if resumeToken != nil && *resumeToken != nil {
-					return fmt.Errorf("unexpected resume token for snapshot batch: %s", resumeToken.String())
-				}
-				return nil
-			}}
+			b := mongoBatch{mb, snapshotAckFn(resolve)}
 			select {
 			case m.readChan <- b:
 			case <-ctx.Done():
