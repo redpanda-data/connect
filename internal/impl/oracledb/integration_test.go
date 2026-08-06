@@ -13,7 +13,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -656,10 +658,11 @@ oracledb_cdc:
     count: 500`
 
 		var logBuf oracledbtest.SyncBuffer
+
 		t.Log("Launching component...")
 		{
 			streamBuilder := service.NewStreamBuilder()
-			streamBuilder.SetLogger(slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			streamBuilder.SetLogger(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logBuf), &slog.HandlerOptions{Level: slog.LevelDebug})))
 			require.NoError(t, streamBuilder.AddInputYAML(cfg))
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				for _, msg := range mb {
@@ -708,12 +711,8 @@ oracledb_cdc:
 
 		t.Run("Session is forcibly ended after max_session_age", func(t *testing.T) {
 			require.Eventually(t, func() bool {
-				if strings.Contains(logBuf.String(), "exceeding max_session_age of 5s") {
-					t.Log("Found max_session_age debug log entry")
-					return true
-				}
-				return false
-			}, 30*time.Second, 200*time.Millisecond,
+				return strings.Contains(logBuf.String(), "exceeding max_session_age of 5s")
+			}, 30*time.Second, 4*time.Second,
 				"expected a LogMiner session-expiry debug log entry within max_session_age (5s)")
 		})
 
