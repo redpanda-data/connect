@@ -37,8 +37,12 @@ func main() {
 		rowSize := fs.Int("row-size", 1200, "approximate row size in bytes")
 		rate := fs.Int("rate", 5000, "writes per second total across tables")
 		dur := fs.Duration("duration", 15*time.Minute, "total duration")
+		// 16 continuous workers sustained ~41 MB/s in the seed path on
+		// db.r5.2xlarge; 32 gives headroom when the rate is split across
+		// several tables (each table gets workers/len(tables) of them).
+		workers := fs.Int("workers", 32, "concurrent insert workers, split evenly across tables")
 		_ = fs.Parse(os.Args[2:])
-		if err := workload(context.Background(), strings.Split(*tables, ","), *rowSize, *rate, *dur); err != nil {
+		if err := workload(context.Background(), strings.Split(*tables, ","), *rowSize, *rate, *dur, *workers); err != nil {
 			fmt.Fprintln(os.Stderr, "workload:", err)
 			os.Exit(1)
 		}

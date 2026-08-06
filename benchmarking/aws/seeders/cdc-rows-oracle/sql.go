@@ -10,11 +10,13 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "github.com/sijms/go-ora/v2"
@@ -245,63 +247,147 @@ func bulkInsert(ctx context.Context, db *sql.DB, table string, rows int64, rowSi
 	return nil
 }
 
-func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.Duration) error {
-	const workers = 16
+// workload drives a sustained insert rate across `tables` for `dur`.
+//
+// PACING MODEL (do not reintroduce a ticker here). The original version gated
+// each worker on a 100ms time.Ticker and did one BLOCKING array-bind insert per
+// tick. Because time.Ticker drops missed ticks, a worker whose insert takes
+// longer than the tick interval simply loses the intervening ticks: at
+// rate=150000 the per-tick batch is 150000/16/10 = 937 rows, observed insert
+// latency was ~1.5s, so each worker managed ~0.67 inserts/sec instead of 10 and
+// the generator topped out near 16*0.67*937 ~= 10K rows/sec (~12 MB/s) no matter
+// what `rate` asked for. That silently capped every Oracle bench run and was
+// misread as an oracledb_cdc/LogMiner ceiling, because Connect merely kept pace
+// with the load at every vCPU point.
+//
+// The fix mirrors bulkInsert, which sustained ~41 MB/s on the same DB with the
+// same connection count: workers loop CONTINUOUSLY, and rate is enforced by
+// comparing rows actually inserted against rows owed for the elapsed time. A
+// slow insert is absorbed by the next iteration instead of discarding quota.
+//
+// Rate semantics: `rate` is rows/sec TOTAL across tables (matching the -rate
+// flag doc), divided evenly, with dedicated workers per table so one slow table
+// cannot starve the others.
+func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.Duration, workers int) error {
+	const batchSize = 1000
+
+	if workers < len(tables) {
+		workers = len(tables)
+	}
 	db, err := openDB(workers)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	perWorkerPer100ms := rate / workers / 10
-	if perWorkerPer100ms < 1 {
-		perWorkerPer100ms = 1
-	}
+	workersPerTable := workers / len(tables)
+	perWorkerRate := float64(rate) / float64(len(tables)) / float64(workersPerTable)
+
+	// Achieved-rate instrumentation. Every Oracle run before this was flying
+	// blind on the write side: the scenario asked for 150K rows/sec, the
+	// generator delivered ~10K, and nothing logged the difference. These
+	// counters make the delivered load visible in the sweep log so a
+	// read-side number can never again be quoted without its load.
+	counters := make([]atomic.Int64, len(tables))
+
+	reportCtx, stopReport := context.WithCancel(ctx)
+	defer stopReport()
+	go reportLoadRate(reportCtx, tables, counters, rowSize, rate)
+
 	deadline := time.Now().Add(dur)
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers)
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		workerIdx := w
-		go func() {
-			defer wg.Done()
-			payload := randomPayload(rowSize)
-			batch := make([]string, perWorkerPer100ms)
-			for i := range batch {
-				batch[i] = payload
-			}
-			ticker := time.NewTicker(100 * time.Millisecond)
-			defer ticker.Stop()
-			tIdx := workerIdx
-			for {
-				select {
-				case <-ctx.Done():
-					errCh <- ctx.Err()
-					return
-				case <-ticker.C:
+	for tIdx, table := range tables {
+		stmt := fmt.Sprintf("INSERT INTO %s (payload) VALUES (:1)", table)
+		for w := 0; w < workersPerTable; w++ {
+			wg.Add(1)
+			go func(tIdx int, stmt string) {
+				defer wg.Done()
+				payload := randomPayload(rowSize)
+				full := make([]string, batchSize)
+				for i := range full {
+					full[i] = payload
+				}
+				start := time.Now()
+				var done int64
+				for {
+					if ctx.Err() != nil {
+						errCh <- ctx.Err()
+						return
+					}
 					if time.Now().After(deadline) {
 						errCh <- nil
 						return
 					}
-					table := tables[tIdx%len(tables)]
-					tIdx++
-					stmt := fmt.Sprintf("INSERT INTO %s (payload) VALUES (:1)", table)
-					if _, err := db.ExecContext(ctx, stmt, batch); err != nil {
+					// Rows this worker owes for the elapsed window. Running
+					// behind (the normal case under load) means no sleep at
+					// all — insert back-to-back until caught up.
+					owed := int64(perWorkerRate * time.Since(start).Seconds())
+					if done >= owed {
+						time.Sleep(10 * time.Millisecond)
+						continue
+					}
+					n := owed - done
+					if n > batchSize {
+						n = batchSize
+					}
+					if _, err := db.ExecContext(ctx, stmt, full[:n]); err != nil {
+						if ctx.Err() != nil {
+							errCh <- nil
+							return
+						}
 						errCh <- err
 						return
 					}
+					done += n
+					counters[tIdx].Add(n)
 				}
-			}
-		}()
+			}(tIdx, stmt)
+		}
 	}
 	wg.Wait()
 	close(errCh)
 	for err := range errCh {
-		if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			return err
 		}
 	}
 	return nil
+}
+
+// reportLoadRate logs delivered write throughput every 10s, in total and per
+// table, alongside the target. The `[load]` prefix matches what the bench
+// runner greps for in the load-gen output.
+func reportLoadRate(ctx context.Context, tables []string, counters []atomic.Int64, rowSize, target int) {
+	const interval = 10 * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	prev := make([]int64, len(tables))
+	last := time.Now()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			elapsed := time.Since(last).Seconds()
+			last = time.Now()
+			var totalRows int64
+			parts := make([]string, len(tables))
+			for i := range tables {
+				cur := counters[i].Load()
+				delta := cur - prev[i]
+				prev[i] = cur
+				totalRows += delta
+				rps := float64(delta) / elapsed
+				parts[i] = fmt.Sprintf("%s=%.0f rows/s (%.1f MB/s)",
+					tables[i], rps, rps*float64(rowSize)/(1024*1024))
+			}
+			rps := float64(totalRows) / elapsed
+			fmt.Printf("[load] delivered %.0f rows/s (%.1f MB/s) of %d rows/s target | %s\n",
+				rps, rps*float64(rowSize)/(1024*1024), target, strings.Join(parts, " "))
+		}
+	}
 }
 
 func randomPayload(size int) string {
