@@ -28,7 +28,7 @@ tasks:
     desc: Start Kafka Connect (requires bench/ngdbc.jar and Kafka already running via task up)
     cmds:
       - |
-        if [ ! -f "../../ngdbc.jar" ]; then
+        if [ ! -f "${SAPHANA_BENCH_DIR:-../..}/ngdbc.jar" ]; then
           echo "ERROR: SAP HANA JDBC driver not found at bench/ngdbc.jar"
           echo "       Copy ngdbc.jar from the HANA server or SAP Support Portal, then retry."
           exit 1
@@ -344,7 +344,7 @@ tasks:
       - |
         if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
         if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
-        if [ ! -f "../../ngdbc.jar" ]; then echo "ERROR: place SAP HANA JDBC driver at bench/ngdbc.jar"; exit 1; fi
+        if [ ! -f "${SAPHANA_BENCH_DIR:-../..}/ngdbc.jar" ]; then echo "ERROR: place SAP HANA JDBC driver at bench/ngdbc.jar"; exit 1; fi
 
         # Parse DSN: hdb://user:pass@host:port
         _S="${HANA_DSN#hdb://}"; KC_USER="${_S%%:*}"; _R="${_S#*:}"; KC_PASS="${_R%@*}"; KC_HP="${_S##*@}"
@@ -388,10 +388,11 @@ tasks:
               \"connection.user\":\"${KC_USER}\",
               \"connection.password\":\"${KC_PASS}\",
               \"topics\":\"${TOPIC}\",
+              \"mode\":\"incrementing\",
+              \"batch.max.rows\":\"${BATCH_MAX_ROWS}\",
               \"${TOPIC}.table.name\":\"${KC_TABLE}\",
               \"${TOPIC}.incrementing.column.name\":\"ID\",
               \"${TOPIC}.poll.interval.ms\":\"${POLL}\",
-              \"${TOPIC}.batch.max.rows\":\"${BATCH_MAX_ROWS}\",
               \"tasks.max\":\"1\",
               \"key.converter\":\"org.apache.kafka.connect.json.JsonConverter\",
               \"value.converter\":\"org.apache.kafka.connect.json.JsonConverter\",
@@ -404,9 +405,9 @@ tasks:
         ATTEMPTS=0
         until [ $ATTEMPTS -ge 30 ]; do
           STATE=$(curl -sf "${KC_REST}/connectors/${CONN}/status" 2>/dev/null \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['connector']['state'])" 2>/dev/null || echo "UNKNOWN")
-          [ "$STATE" = "RUNNING" ] && break
-          [ "$STATE" = "FAILED" ] && echo "ERROR: connector failed to start" && exit 1
+            | python3 -c "import sys,json; d=json.load(sys.stdin); ts=[t['state'] for t in d.get('tasks',[])]; print('FAILED' if 'FAILED' in ts or d['connector']['state']=='FAILED' else d['connector']['state'])" 2>/dev/null || echo "UNKNOWN")
+          if [ "$STATE" = "RUNNING" ]; then break; fi
+          if [ "$STATE" = "FAILED" ]; then echo "ERROR: connector failed to start"; exit 1; fi
           sleep 1; ATTEMPTS=$((ATTEMPTS+1))
         done
         sleep 2
@@ -431,10 +432,10 @@ tasks:
           if ! kill -0 $LOAD_PID 2>/dev/null; then LOAD_DONE=1; fi
 
           CONN_STATE=$(curl -sf "${KC_REST}/connectors/${CONN}/status" 2>/dev/null \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['connector']['state'])" 2>/dev/null || echo "UNKNOWN")
+            | python3 -c "import sys,json; d=json.load(sys.stdin); ts=[t['state'] for t in d.get('tasks',[])]; print('FAILED' if 'FAILED' in ts or d['connector']['state']=='FAILED' else d['connector']['state'])" 2>/dev/null || echo "UNKNOWN")
           if [ "$CONN_STATE" = "FAILED" ]; then
             TRACE=$(curl -sf "${KC_REST}/connectors/${CONN}/status" 2>/dev/null \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['connector'].get('trace','')[:300])" 2>/dev/null || echo "")
+              | python3 -c "import sys,json; d=json.load(sys.stdin); tt=[t.get('trace','') for t in d.get('tasks',[]) if t.get('trace')]; print((tt[0] if tt else d['connector'].get('trace',''))[:300])" 2>/dev/null || echo "")
             curl -sf -X DELETE "${KC_REST}/connectors/${CONN}" >/dev/null 2>&1 || true
             kill -9 $LOAD_PID 2>/dev/null || true
             echo "ERROR: connector FAILED — $TRACE"; exit 1
@@ -442,10 +443,12 @@ tasks:
 
           if [ "$STARTED" -eq 0 ]; then
             ZEROS=$((ZEROS+1))
-            [ "$ZEROS" -ge 24 ] && echo "ERROR: no messages after 48s" && kill -9 $LOAD_PID 2>/dev/null && exit 1
+            if [ "$ZEROS" -ge 24 ]; then
+              echo "ERROR: no messages after 48s"; kill -9 $LOAD_PID 2>/dev/null; exit 1
+            fi
           elif [ "$DELTA_C" -eq 0 ]; then
             ZEROS=$((ZEROS+1))
-            [ "$LOAD_DONE" -eq 1 ] && LOAD_DONE_ZEROS=$((LOAD_DONE_ZEROS+1))
+            if [ "$LOAD_DONE" -eq 1 ]; then LOAD_DONE_ZEROS=$((LOAD_DONE_ZEROS+1)); fi
           else
             ZEROS=0; LOAD_DONE_ZEROS=0
           fi

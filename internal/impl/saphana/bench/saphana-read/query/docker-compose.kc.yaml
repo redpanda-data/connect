@@ -1,7 +1,7 @@
 services:
   kafka-connect:
     build:
-      context: ../..
+      context: ${SAPHANA_BENCH_DIR:-../..}
       dockerfile: Dockerfile.connect.sap
     container_name: rpcns-hana-query-connect
     # host networking so JDBC connections to HANA appear from the host IP
@@ -25,7 +25,7 @@ services:
       CONNECT_REST_ADVERTISED_HOST_NAME: localhost
     volumes:
       - type: bind
-        source: ../../ngdbc.jar
+        source: ${SAPHANA_BENCH_DIR:-../..}/ngdbc.jar
         target: /usr/share/kafka-connect-sap/lib/ngdbc.jar
         read_only: true
     healthcheck:
