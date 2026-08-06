@@ -34,6 +34,11 @@ type batchPublisher struct {
 	cacheSCN   func(ctx context.Context, scn replication.SCN) error
 	schemas    *schemaCache
 
+	// snapshotAckWG counts published snapshot batches that have not yet been
+	// acknowledged downstream. The snapshot->streaming handoff blocks on it so
+	// the post-snapshot SCN is never persisted while snapshot rows are in flight.
+	snapshotAckWG sync.WaitGroup
+
 	log     *service.Logger
 	shutSig *shutdown.Signaller
 }
@@ -251,6 +256,9 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 	msg := asyncMessage{
 		msg: batch,
 		ackFn: func(ctx context.Context, _ error) error {
+			if isSnapshotBatch {
+				defer b.snapshotAckWG.Done()
+			}
 			scn := resolveFn()
 			if scn == nil || !scn.IsValid() {
 				return nil
@@ -263,8 +271,34 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 			return b.cacheSCN(ctx, *scn)
 		},
 	}
+	if isSnapshotBatch {
+		b.snapshotAckWG.Add(1)
+	}
 	select {
 	case b.msgChan <- msg:
+		return nil
+	case <-ctx.Done():
+		if isSnapshotBatch {
+			b.snapshotAckWG.Done()
+		}
+		return ctx.Err()
+	}
+}
+
+// waitSnapshotAcks blocks until every published snapshot batch has been
+// acknowledged (or nacked) downstream, or until ctx is cancelled. Nacked
+// batches release the gate too: redelivery is owned by auto_replay_nacks,
+// and the ctx escape prevents a permanently-failing downstream from
+// wedging shutdown.
+func (b *batchPublisher) waitSnapshotAcks(ctx context.Context) error {
+	drained := make(chan struct{})
+	go func() {
+		// May outlive this call if ctx fires first; bounded by process lifetime.
+		b.snapshotAckWG.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

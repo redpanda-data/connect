@@ -10,9 +10,11 @@ package oracledb
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/stretchr/testify/require"
@@ -79,6 +81,70 @@ func TestPublishBatch(t *testing.T) {
 		scns := cachedSCNs()
 		require.Len(t, scns, 1, "expected cacheSCN to be called exactly once when the snapshot batch resolves the streaming SCN")
 		require.Equal(t, replication.SCN(200), scns[0], "expected the streaming batch's SCN to survive the out-of-order snapshot ack")
+	})
+}
+
+func TestSnapshotAckGate(t *testing.T) {
+	t.Run("blocks until the snapshot batch is acked", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, _ := newTestBatchPublisher(t)
+
+		msg := publishAndReceive(t, ctx, publisher, service.MessageBatch{newSnapshotMessage("100")})
+
+		done := make(chan error, 1)
+		go func() { done <- publisher.waitSnapshotAcks(ctx) }()
+
+		select {
+		case err := <-done:
+			t.Fatalf("waitSnapshotAcks returned before the snapshot batch was acked: %v", err)
+		case <-time.After(100 * time.Millisecond):
+		}
+
+		require.NoError(t, msg.ackFn(ctx, nil))
+		select {
+		case err := <-done:
+			require.NoError(t, err)
+		case <-time.After(5 * time.Second):
+			t.Fatal("waitSnapshotAcks did not return after the snapshot batch was acked")
+		}
+	})
+
+	t.Run("a nack also releases the gate", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, _ := newTestBatchPublisher(t)
+
+		msg := publishAndReceive(t, ctx, publisher, service.MessageBatch{newSnapshotMessage("100")})
+		require.NoError(t, msg.ackFn(ctx, errors.New("downstream failure")))
+
+		require.NoError(t, publisher.waitSnapshotAcks(ctx))
+	})
+
+	t.Run("streaming batches do not hold the gate", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, _ := newTestBatchPublisher(t)
+
+		// Published but never acked: must not block the gate.
+		publishAndReceive(t, ctx, publisher, service.MessageBatch{newStreamingMessage("200")})
+
+		require.NoError(t, publisher.waitSnapshotAcks(ctx))
+	})
+
+	t.Run("context cancellation escapes the gate", func(t *testing.T) {
+		publisher, _ := newTestBatchPublisher(t)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		publishAndReceive(t, ctx, publisher, service.MessageBatch{newSnapshotMessage("100")})
+
+		done := make(chan error, 1)
+		go func() { done <- publisher.waitSnapshotAcks(ctx) }()
+		cancel()
+
+		select {
+		case err := <-done:
+			require.ErrorIs(t, err, context.Canceled)
+		case <-time.After(5 * time.Second):
+			t.Fatal("waitSnapshotAcks did not return after context cancellation")
+		}
 	})
 }
 
