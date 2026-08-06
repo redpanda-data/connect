@@ -1,5 +1,20 @@
 # Oracle CDC Benchmark Results (AWS framework)
 
+> **⚠ Every result dated before 2026-08-05 in this file is invalid — do not quote it.**
+> The load generator gated blocking inserts on a 100 ms `time.Ticker`. Go discards missed
+> ticks, so a worker whose insert took ~1.5 s achieved ~0.67 inserts/sec instead of 10,
+> capping delivered load near **12 MB/s regardless of the requested rate**. The
+> "~13 MB/s flat across 1-8 vCPU" and "single-session LogMiner ceiling" conclusions below
+> therefore measured *the load generator*, not Oracle: Connect was keeping pace with a load
+> that was identical at every core point. Fixed 2026-08-05 in
+> `benchmarking/aws/seeders/cdc-rows-oracle/sql.go` (continuous pacing + per-table
+> delivered-rate logging).
+>
+> **For current findings see [`oracle-logminer-split-test.md`](oracle-logminer-split-test.md).**
+> Headline: the ceiling is **per reader**, not per database — ~7-12 MB/s sustained per reader,
+> ~19 MB/s draining a backlog, plateauing near ~31 MB/s per database; and cores are not the
+> constraint (Connect never exceeded 1.0 of 4).
+
 Suite: `benchmarking/aws/` — Connect `oracledb_cdc` vs Kafka Connect (Debezium
 Oracle) on RDS Oracle, both mining the **same** redo logs via LogMiner so it's a
 fair head-to-head. Scenario: `benchmarking/aws/scenarios/oracle/orders-cdc.yaml`.
@@ -114,3 +129,254 @@ source databases), which is an architectural choice, not a config knob.
   Debezium ~17 steady (bursts to 33). +46% vs prior code.
 - **2026-06-18** (`63ea466c5`, pre-merge): Connect **13 MB/s** flat; Debezium
   ~16–27. Same single-session-LogMiner conclusion at a lower absolute number.
+
+
+## AWS — orders-5table-split — 2026-08-05
+
+**Scenario:** DISCRIMINATOR TEST — is the oracledb_cdc throughput limit the traversal of
+Oracle's single ordered redo stream, or the per-session fetch/parse of the
+rows that match a session's table filter?
+
+This question was never answerable from the earlier oracle/orders-cdc runs.
+Those runs' workload generator was ticker-gated and silently capped near
+~10K rows/sec (~12 MB/s) regardless of the requested rate, so "Connect flat
+at 13 (later 19) MB/s across 1-8 vCPU" is equally consistent with "Connect
+simply kept pace with a load that was identical at every point". The seeder's
+workload path is now a continuous paced loop (mirroring bulkInsert, which
+sustained ~41 MB/s on this instance class) and logs delivered rows/sec and
+MB/s per table every 10s, so the read-side number can be read against the
+load that actually arrived.
+
+Load: 5 tables, ~7 MB/s of row data each, ~35 MB/s total. Note that redo
+volume is materially HIGHER than 35 MB/s: every table carries ADD
+SUPPLEMENTAL LOG DATA (ALL) COLUMNS, so redo also holds full before-images
+plus undo and index maintenance. That is deliberate — it matches what a
+customer running Debezium-style CDC actually generates.
+
+Arms (identical except for the input's include list):
+  a-1table  — one input mining ONE of the 5 loaded tables.
+  b-5tables — one input mining ALL 5.
+
+Reading the result:
+  a ~= 7 and b ~= 35  -> no session ceiling near 19 at all; the old number was
+                         load-bound. One input serves all 5 tables; no split.
+  a ~= 7 and b ~= 19-25 -> a session CAN traverse a ~35 MB/s stream while
+                         emitting only its own table, so the limit is
+                         per-session fetch/parse of matched rows. Splitting
+                         into N inputs raises aggregate throughput.
+  a << 7              -> the session cannot even keep pace with the stream
+                         while emitting one table's worth. Traversal-bound:
+                         splitting buys nothing and ~19 MB/s is the real
+                         aggregate ceiling for LogMiner.
+
+Cores are deliberately generous (4 vCPU, GOMAXPROCS 8, both arms) so that a
+shortfall cannot be mistaken for CPU starvation. This is a shape test, not a
+CPU sweep — cpu_points stays at a single value on purpose.
+
+**Git SHA:** [`f1ccf5289`](https://github.com/redpanda-data/connect/commit/f1ccf52899ab019a9fc93ae638e1741357e4825b)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 8          | a-1table       | connect       |            6 |        7.719 |         6,014 |            0 |           3 |           13 |         5,000 |                    |
+| 4    | 8          | b-5tables      | connect       |           19 |       21.329 |        16,866 |            2 |          13 |           32 |        15,000 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/oracle/orders-5table-split/2026-08-05T20-48-45Z.json`](results/oracle/orders-5table-split/2026-08-05T20-48-45Z.json)
+
+
+## AWS — orders-5table-readers — 2026-08-06
+
+**Scenario:** FOLLOW-UP TO oracle/orders-5table-split — does adding READERS raise aggregate
+throughput, and what does it cost the database?
+
+orders-5table-split established that the oracledb_cdc ceiling is per-reader,
+not per-database: one input mining 1 of 5 loaded tables captured 98% of its
+table (and went idle 2.7% of samples) while one input mining all 5 captured
+only 55% and never idled. It could not answer the next question, because only
+ONE reader was ever active: every reader runs its own independent LogMiner
+mining pass over the whole redo stream, so N readers may cost the DATABASE up
+to N times the mining work even though each reader only parses its own rows.
+
+This scenario sweeps reader COUNT at fixed load: the same 5 tables written at
+~7 MB/s each (~35 MB/s total) in every arm, with the 5 tables distributed over
+1, then 2, then 5 concurrent `oracledb_cdc` inputs inside a `broker` input
+(benthos `broker` reads its inputs in parallel, so this is genuinely N
+concurrent LogMiner sessions in one process). Each reader gets its OWN
+checkpoint_cache_key — they share one memory cache resource, and the default
+key would make them clobber each other's SCN.
+
+Reading the result — aggregate captured throughput:
+  r1 ~19-21, r2 ~35, r5 ~35  -> readers scale, 5 x 7 MB/s is achievable.
+  r1 ~19-21, r2 ~30, r5 ~30  -> partial scaling; a plateau to characterise.
+  r1 ~ r2 ~ r5 ~ 19-21       -> the ceiling is shared after all, and the
+                                split-test result does NOT generalise to
+                                concurrent readers.
+
+AND THE MEASUREMENT THIS SCENARIO EXISTS FOR — Oracle's own CPU. The harness
+does not scrape source-database metrics, so collect it post-run from
+CloudWatch per arm window (the RDS identifier `rpcn-bench-ora-ora` is stable
+and metrics outlive teardown):
+  CPU flat across r1/r2/r5   -> Oracle pushes the table filter down and skips
+                                non-matching redo cheaply; many readers are
+                                affordable.
+  CPU scaling ~linearly      -> each reader really does re-mine the whole
+                                stream; readers per database are tightly
+                                capped and the ~24-tables-per-DB plan needs
+                                few, larger readers.
+
+Load is held IDENTICAL across arms so aggregate capture % is comparable, and
+cores stay at 4 vCPU / GOMAXPROCS 8 (as in orders-5table-split) so a change
+cannot be a CPU artifact — measured per-reader cost there was only ~0.26
+cores, so 5 readers should need ~1.3.
+
+**Git SHA:** [`f1ccf5289`](https://github.com/redpanda-data/connect/commit/f1ccf52899ab019a9fc93ae638e1741357e4825b)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 8          | r1-one-reader  | connect       |           19 |       18.969 |        14,949 |            2 |          13 |           32 |        15,000 |                    |
+| 4    | 8          | r2-two-readers | connect       |           25 |       25.912 |        20,469 |            2 |          17 |           38 |        20,000 |                    |
+| 4    | 8          | r5-five-readers | connect       |           29 |       30.669 |        24,090 |            2 |          21 |           44 |        23,085 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/oracle/orders-5table-readers/2026-08-06T15-02-03Z.json`](results/oracle/orders-5table-readers/2026-08-06T15-02-03Z.json)
+
+
+## AWS — orders-5table-baseline — 2026-08-06
+
+**Scenario:** DECOMPOSITION RUN — splits Oracle-side CPU into write cost, stream-mining
+cost, and matched-row-return cost.
+
+orders-5table-readers measured Oracle CPU at 45.9% / 50.5% / 72.2% for 1 / 2 /
+5 concurrent readers, refuting the pessimistic "N readers = N x mining work"
+bound (5x readers cost only ~1.57x CPU) but leaving the numbers
+uninterpretable in absolute terms: the 35 MB/s write workload consumes Oracle
+CPU too, and there was no baseline to subtract. Aggregate throughput also
+plateaued at 30.7 MB/s (79% of offered) with Oracle at 72%, and it was unclear
+how much of that ceiling is duplicated mining versus row return.
+
+Three arms, identical 35 MB/s write load, all on ONE RDS instance so the CPU
+figures are directly differencable (cross-run CPU comparison is not reliable):
+
+  w0-writes-only   no Oracle reader at all (a trivial `generate` input keeps
+                   the pipeline valid). Oracle CPU here is PURE WRITE COST.
+  m1-empty-reader  one oracledb_cdc reader whose include matches
+                   BENCH.ORDERS_IDLE — a table that exists, carries
+                   supplemental logging, and is NEVER written. The session
+                   opens, mines the full redo stream, and returns ZERO rows.
+  r1-one-reader    one reader over all five written tables. Reproduces
+                   orders-5table-readers' r1 (18.97 MB/s mean, 45.9% Oracle
+                   CPU) as an in-run reference point.
+
+The decomposition:
+  W          = w0 CPU                  -> write path
+  M - W      = m1 CPU - w0 CPU         -> ONE session mining the whole stream,
+                                          returning nothing
+  R1 - M     = r1 CPU - m1 CPU         -> reconstructing and returning five
+                                          tables' matched rows
+
+Why it matters: if (M - W) is large, each additional reader pays a big fixed
+mining toll and reader count is tightly capped — few, large readers. If
+(M - W) is small and (R1 - M) dominates, mining is cheap, duplication is
+nearly free, and the 5-reader plateau must be explained by something else
+(row-return contention, or Oracle CPU saturation near 72%).
+
+ARM ORDER IS DELIBERATE: w0 runs LAST. It is the novel shape (a source
+scenario whose input never touches the source), so if it trips a harness
+assumption about zero-throughput points, the two informative arms have
+already completed.
+
+**Git SHA:** [`f1ccf5289`](https://github.com/redpanda-data/connect/commit/f1ccf52899ab019a9fc93ae638e1741357e4825b)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 8          | m1-empty-reader | connect       |            0 |        0.000 |             0 |            0 |           0 |            0 |             0 |                    |
+| 4    | 8          | r1-one-reader  | connect       |           19 |       20.148 |        15,908 |            2 |          13 |           32 |        15,000 |                    |
+| 4    | 8          | w0-writes-only | connect       |            0 |        0.000 |             0 |            0 |           0 |            0 |             0 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/oracle/orders-5table-baseline/2026-08-06T16-27-35Z.json`](results/oracle/orders-5table-baseline/2026-08-06T16-27-35Z.json)
+
+
+## AWS — orders-return-cost — 2026-08-06
+
+**Scenario:** FINAL DECOMPOSITION — the clean cost of RETURNING matched rows, measured
+between two readers that both keep up with the stream.
+
+orders-5table-baseline produced W=34.4%, M=46.4% (a reader mining everything,
+returning no DML) and R1=42.2% (a reader over all 5 tables). R1 - M came out
+NEGATIVE (-4.3 points), which is not a negative cost: r1 captured only ~54% of
+the load, so in a fixed window it advanced through roughly half as much redo as
+m1 did and therefore performed LESS mining. The two arms did not mine the same
+amount of stream, so the subtraction was invalid.
+
+This run fixes that by keeping every reader arm UNDER the ~19 MB/s
+single-reader ceiling, so all of them keep pace with the stream and mining
+coverage is identical by construction:
+
+  w0-writes-only   no Oracle reader. Oracle CPU = write path (control).
+  m0-zero-tables   one reader on BENCH.ORDERS_IDLE (never written). Mines the
+                   whole stream, returns no DML. NOTE it still receives
+                   transaction-control rows (START/COMMIT/ROLLBACK are matched
+                   unfiltered, because transaction boundaries are needed
+                   regardless of table), so this is "scan + txn bookkeeping",
+                   not "scan alone".
+  a2-two-tables    one reader on ORDERS_T1 + ORDERS_T2 = 14.0 MB/s returned,
+                   comfortably under the ~19 MB/s ceiling so it keeps up.
+
+The measurement:
+  A2 - M0  = cost to Oracle of reconstructing and shipping 14 MB/s of matched
+             rows, with mining held constant. THIS is the number that was
+             previously unobtainable.
+  M0 - W   = the per-reader scan + txn-bookkeeping toll (re-measured in-run;
+             was 12.0 points).
+
+VALIDITY GATE: a2 must capture ~100% of its two tables (~12,232 rows/s). If it
+captures materially less it fell behind, mining coverage diverged again, and
+A2 - M0 is invalid exactly as R1 - M was. Check this before trusting the
+subtraction.
+
+SENSITIVITY: the effect being measured is small (previous indirect estimate was
+1-2 points) against per-minute CPU noise of roughly +/-8 points. Hence 30-minute
+windows rather than 15, doubling CloudWatch samples per arm to ~30, and only
+three arms so total wall clock stays near 2h — well inside the 4h
+orphan-cleanup TTL. Even so, treat a result under ~2 points as "smaller than we
+can resolve", not as zero.
+
+Write load is held at 5 tables x 7 MB/s = 35 MB/s, identical to
+orders-5table-split / -readers / -baseline, so W and the scan toll stay
+comparable with those runs.
+
+**Git SHA:** [`f1ccf5289`](https://github.com/redpanda-data/connect/commit/f1ccf52899ab019a9fc93ae638e1741357e4825b)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 8          | m0-zero-tables | connect       |            0 |        0.000 |             0 |            0 |           0 |            0 |             0 |                    |
+| 4    | 8          | a2-two-tables  | connect       |           13 |       13.303 |        10,340 |            1 |           6 |           19 |        10,000 |                    |
+| 4    | 8          | w0-writes-only | connect       |            0 |        0.000 |             0 |            0 |           0 |            0 |             0 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/oracle/orders-return-cost/2026-08-06T19-27-01Z.json`](results/oracle/orders-return-cost/2026-08-06T19-27-01Z.json)
