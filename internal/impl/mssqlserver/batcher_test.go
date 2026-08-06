@@ -132,6 +132,37 @@ func TestFlushCurrent(t *testing.T) {
 	receive("publisher loop no longer functional after flushCurrent")
 }
 
+func TestCheckpointSelection(t *testing.T) {
+	t.Run("persists checkpoint_lsn, never the row's own lsn", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedLSNs := newTestBatchPublisher(t)
+
+		msg := service.NewMessage([]byte("{}"))
+		msg.MetaSet("operation", replication.MessageOperationInsert.String())
+		msg.MetaSet("lsn", "00000042")
+		msg.MetaSet("checkpoint_lsn", "00000041")
+
+		am := publishAndReceive(t, ctx, publisher, service.MessageBatch{msg})
+		require.NoError(t, am.ackFn(ctx, nil))
+
+		lsns := cachedLSNs()
+		require.Len(t, lsns, 1)
+		require.Equal(t, "00000041", string(lsns[0]),
+			"the checkpoint must be the last fully-published transaction boundary, not the row's own LSN")
+	})
+
+	t.Run("no checkpoint_lsn (first transaction) persists nothing", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedLSNs := newTestBatchPublisher(t)
+
+		am := publishAndReceive(t, ctx, publisher, service.MessageBatch{newStreamingMessage("00000042")})
+		require.NoError(t, am.ackFn(ctx, nil))
+
+		require.Empty(t, cachedLSNs(),
+			"a batch ending mid-transaction (no prior complete transaction) must not persist any LSN")
+	})
+}
+
 // TestTrackOrderUnderConcurrentFlush stresses the two concurrent flushers (the
 // count-triggered flush in Publish and the timed-flush loop) and asserts the
 // persisted checkpoint never regresses when batches are acked in delivery
@@ -179,13 +210,15 @@ func TestTrackOrderUnderConcurrentFlush(t *testing.T) {
 
 	const events = 500
 	for i := range events {
+		// %08d keeps lexicographic order == numeric order, like real LSNs.
+		lsn := replication.LSN(fmt.Sprintf("%08d", i))
 		require.NoError(t, publisher.Publish(ctx, replication.MessageEvent{
-			Schema:    "dbo",
-			Table:     "t",
-			Operation: replication.MessageOperationInsert.String(),
-			// %08d keeps lexicographic order == numeric order, like real LSNs.
-			LSN:  replication.LSN(fmt.Sprintf("%08d", i)),
-			Data: map[string]any{"i": i},
+			Schema:        "dbo",
+			Table:         "t",
+			Operation:     replication.MessageOperationInsert.String(),
+			LSN:           lsn,
+			CheckpointLSN: lsn,
+			Data:          map[string]any{"i": i},
 		}))
 	}
 	require.NoError(t, publisher.flushCurrent(ctx))

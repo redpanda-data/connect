@@ -83,8 +83,14 @@ func (op OpType) String() string {
 
 // MessageEvent represents a single change from Table's change table in the database.
 type MessageEvent struct {
-	LSN       LSN    `json:"start_lsn"`
-	Operation string `json:"operation"`
+	LSN LSN `json:"start_lsn"`
+	// CheckpointLSN is the start LSN of the most recent transaction whose rows
+	// have all been published — the only value safe to persist as a resume
+	// position (resume is exclusive and all rows of a transaction share a
+	// start LSN). Empty for snapshot rows and until the first transaction
+	// boundary is observed.
+	CheckpointLSN LSN    `json:"-"`
+	Operation     string `json:"operation"`
 	Schema    string `json:"schema"`
 	Table     string `json:"table"`
 	Data      any    `json:"data"`

@@ -191,6 +191,9 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	if len(m.LSN) != 0 {
 		msg.MetaSet("lsn", string(m.LSN))
 	}
+	if len(m.CheckpointLSN) != 0 {
+		msg.MetaSet("checkpoint_lsn", string(m.CheckpointLSN))
+	}
 	if s := b.getOrComputeTableSchema(m.Table, m.ColumnNames, m.ColumnTypes); s != nil {
 		msg.MetaSetImmut("schema", service.ImmutableAny{V: s})
 	}
@@ -235,8 +238,12 @@ type trackedBatch struct {
 func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.MessageBatch) (*trackedBatch, error) {
 	lastMsg := batch[len(batch)-1]
 	var checkpointLSN []byte
-	// snapshot records don't have a lsn as we don't track those
-	if lsn, ok := lastMsg.MetaGet("lsn"); ok {
+	// Checkpoint only checkpoint_lsn: the last transaction whose rows are all
+	// published. The row's own lsn must never be persisted — all rows of a
+	// transaction share a start LSN and resume is exclusive (> lsn), so
+	// persisting it mid-transaction would skip the transaction's remaining
+	// rows on restart. Snapshot rows carry neither meta; we don't track those.
+	if lsn, ok := lastMsg.MetaGet("checkpoint_lsn"); ok {
 		checkpointLSN = replication.LSN(lsn)
 	}
 

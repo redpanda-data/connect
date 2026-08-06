@@ -332,6 +332,27 @@ func mapScannedValue(val any, colType *sql.ColumnType) any {
 	return val
 }
 
+// txnBoundary tracks transaction boundaries in the globally LSN-ordered row
+// stream. All rows of one transaction share a __$start_lsn, so an LSN change
+// between consecutive rows proves the previous transaction is fully read (and,
+// because rows are published synchronously in read order, fully published).
+type txnBoundary struct {
+	prev         LSN
+	lastComplete LSN
+}
+
+// Observe records the current row's LSN and returns the start LSN of the most
+// recent transaction whose rows have all been observed — empty until the first
+// boundary is crossed.
+func (t *txnBoundary) Observe(lsn LSN) LSN {
+	if len(t.prev) != 0 && !bytes.Equal(lsn, t.prev) {
+		t.lastComplete = t.prev
+	}
+	// Copy: the iterator may reuse the underlying array on the next scan.
+	t.prev = append(t.prev[:0:0], lsn...)
+	return t.lastComplete
+}
+
 // ChangePublisher is responsible for handling and processing of a replication.MessageEvent.
 type ChangePublisher interface {
 	Publish(ctx context.Context, msg MessageEvent) error
@@ -365,6 +386,9 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 		startLSN LSN // load last checkpoint; nil means start from beginning in tables
 		endLSN   LSN // often set to fn_cdc_get_max_lsn(); nil means no upper bound
 		lastLSN  LSN
+		// boundary computes each row's CheckpointLSN: the last transaction
+		// whose rows are all published, the only safe resume position.
+		boundary txnBoundary
 	)
 
 	if len(startPos) != 0 {
@@ -415,13 +439,14 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 			cur := item.iter.current
 
 			msg := MessageEvent{
-				Table:       item.iter.table.Name,
-				Schema:      item.iter.table.Schema,
-				Data:        cur.columns,
-				LSN:         cur.startLSN,
-				Operation:   cur.operation.String(),
-				ColumnNames: item.iter.userColNames,
-				ColumnTypes: item.iter.userColTypes,
+				Table:         item.iter.table.Name,
+				Schema:        item.iter.table.Schema,
+				Data:          cur.columns,
+				LSN:           cur.startLSN,
+				CheckpointLSN: boundary.Observe(cur.startLSN),
+				Operation:     cur.operation.String(),
+				ColumnNames:   item.iter.userColNames,
+				ColumnTypes:   item.iter.userColTypes,
 			}
 
 			if err := r.publisher.Publish(ctx, msg); err != nil {
