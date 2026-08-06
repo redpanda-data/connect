@@ -1872,3 +1872,70 @@ tables:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no schemas found matching pattern")
 }
+
+// TestIntegrationForAllTablesIgnoresNonMatchingSchemaPattern guards the
+// documented behaviour of FOR ALL TABLES mode: when `tables` is left empty,
+// `schema` has no effect and must not block startup even if it matches no
+// schema in the database.
+func TestIntegrationForAllTablesIgnoresNonMatchingSchemaPattern(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: for_all_tables_ignores_schema_slot
+    schema: nonexistent_schema_zzz_*
+`, databaseURL)
+
+	// FOR ALL TABLES mode disables the initial snapshot, so replication only
+	// sees rows written after the slot/publication exist. Insert continuously
+	// (rather than once upfront) so a row lands after startup completes.
+	writer := asyncroutine.NewPeriodic(100*time.Millisecond, func() {
+		_, err := db.Exec("INSERT INTO flights (name, created_at) VALUES ('alice', now());")
+		require.NoError(t, err)
+	})
+	writer.Start()
+	t.Cleanup(writer.Stop)
+
+	var (
+		mu        sync.Mutex
+		collected []string
+	)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			table, _ := msg.MetaGet("table")
+			collected = append(collected, table)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	// Non-matching schema pattern must not block FOR ALL TABLES replication:
+	// the "flights" insert above should still arrive.
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected) >= 1
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for FOR ALL TABLES replication; a non-matching schema pattern should be ignored when tables is empty")
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Contains(t, collected, "flights")
+}
