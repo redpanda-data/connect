@@ -11,6 +11,7 @@ package oracledb_test
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net/url"
@@ -144,6 +145,17 @@ oracledb_cdc:
 		// need this row. Snapshotting is off, so this row is not a change event.
 		pdbDB.MustExec("INSERT INTO testdb.mtfoo (id, val) VALUES (1, 10)")
 
+		// adminDB reads the checkpoint table below. This checks that the
+		// EXECUTE grant on the upsert procedure is enough for the connector
+		// to write a checkpoint, not just read one.
+		adminDB, err := sql.Open("oracle", cdbConnStr)
+		require.NoError(t, err)
+		t.Cleanup(func() { assert.NoError(t, adminDB.Close()) })
+		require.NoError(t, adminDB.PingContext(t.Context()))
+
+		var initialSCN uint64
+		require.NoError(t, adminDB.QueryRowContext(t.Context(), "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&initialSCN))
+
 		type capturedEvent struct {
 			operation string
 		}
@@ -228,6 +240,19 @@ oracledb_cdc:
 		require.Contains(t, byOp, "delete")
 
 		require.NoError(t, stream.StopWithin(time.Second*10))
+
+		// The write path (cacheSCN, called from the batch ack func) runs
+		// after the consumer records the three events above, so it is not
+		// otherwise exercised. Check the checkpoint here instead: the
+		// EXECUTE grant must be enough to advance it past initialSCN.
+		checkpointTable := "C##RPCN.CDC_CHECKPOINT_" + strings.ToUpper(pdbName)
+		var finalSCNBytes []byte
+		require.NoError(t, adminDB.QueryRowContext(t.Context(),
+			fmt.Sprintf("SELECT cache_val FROM %s WHERE cache_key = :1", checkpointTable),
+			"oracledb_cdc").Scan(&finalSCNBytes))
+		finalSCN := binary.LittleEndian.Uint64(finalSCNBytes)
+		assert.Greaterf(t, finalSCN, initialSCN,
+			"expected checkpoint SCN (%d) to have advanced beyond initial SCN (%d)", finalSCN, initialSCN)
 	})
 }
 
