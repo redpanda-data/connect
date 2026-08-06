@@ -1136,9 +1136,7 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 
 	// On databases where redo log switches are infrequent, a LogMiner session can stay
 	// open for hours, accumulating server-side PGA (notably around online catalog
-	// dictionary lookups) until Oracle kills it outright with ORA-04036. MaxSessionAge
-	// forces a restart on a timer instead of relying solely on a log switch to happen,
-	// mirroring Debezium's log.mining.session.max.ms.
+	// dictionary lookups) until Oracle kills it outright with ORA-04036.
 	sessionExpired := lm.sessionMgr.IsExpired(lm.cfg.MaxSessionAge)
 	if sessionExpired {
 		lm.log.Debugf("LogMiner session has been open for %s, exceeding max_session_age of %s — forcing restart to release accumulated session memory",

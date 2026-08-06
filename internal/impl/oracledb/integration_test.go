@@ -661,7 +661,6 @@ oracledb_cdc:
 			streamBuilder := service.NewStreamBuilder()
 			streamBuilder.SetLogger(slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 			require.NoError(t, streamBuilder.AddInputYAML(cfg))
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				for _, msg := range mb {
 					msgChan <- msg
