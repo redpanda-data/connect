@@ -40,6 +40,11 @@ const (
 	bsoFieldTags              = "tags"
 	bsoFieldBlobType          = "blob_type"
 	bsoFieldPublicAccessLevel = "public_access_level"
+
+	// bsoMaxTagsPermitted is the maximum number of blob index tags a single
+	// blob may carry, a limit imposed by Azure. See
+	// https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs
+	bsoMaxTagsPermitted = 10
 )
 
 type bsoTagPair struct {
@@ -76,8 +81,8 @@ func bsoConfigFromParsed(pConf *service.ParsedConfig) (conf bsoConfig, err error
 	if tagMap, err = pConf.FieldInterpolatedStringMap(bsoFieldTags); err != nil {
 		return
 	}
-	if len(tagMap) > 10 {
-		err = fmt.Errorf("at most 10 blob index tags are permitted, got %d", len(tagMap))
+	if len(tagMap) > bsoMaxTagsPermitted {
+		err = fmt.Errorf("at most %d blob index tags are permitted, got %d", bsoMaxTagsPermitted, len(tagMap))
 		return
 	}
 	conf.Tags = make([]bsoTagPair, 0, len(tagMap))
@@ -129,7 +134,7 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewInterpolatedStringMapField(bsoFieldTags).
-				Description("Key/value pairs to store with the blob as https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs[blob index tags^]. A maximum of 10 tags are permitted, tag keys must be between 1 and 128 characters, and tag values must be between 0 and 256 characters. Keys and values are case-sensitive and only support string values. Not supported on storage accounts with hierarchical namespace (Data Lake Gen2).").
+				Description(fmt.Sprintf("Key/value pairs to store with the blob as https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs[blob index tags^]. A maximum of %d tags are permitted, tag keys must be between 1 and 128 characters, and tag values must be between 0 and 256 characters. Keys and values are case-sensitive and only support string values. Not supported on storage accounts with hierarchical namespace (Data Lake Gen2).", bsoMaxTagsPermitted)).
 				Default(map[string]any{}).
 				Example(map[string]any{
 					"Environment": "production",
