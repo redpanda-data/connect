@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/checkpoint"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/ack"
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams"
@@ -103,12 +105,25 @@ func (s *spannerPartitionBatchIter) Err() error {
 	return s.err
 }
 
+// spannerCheckpointCap bounds the number of in-flight (unacked) batches
+// tracked per partition; Track blocks once reached, applying backpressure.
+const spannerCheckpointCap = 1024
+
 type spannerPartitionBatcher struct {
 	batcher *service.Batcher
 	last    *changestreams.DataChangeRecord
 	period  *time.Timer
 	acks    []*ack.Once
 	rm      func()
+
+	// cp orders in-flight batches so the partition watermark only ever
+	// advances to a commit timestamp once every batch at or below it has been
+	// acked (see spannerCDCReader.emit).
+	cp *checkpoint.Capped[time.Time]
+	// lastWatermark is the most recent non-zero watermark emitted for this
+	// partition; mid-record (zero watermark) batches carry it forward. Only
+	// accessed from the partition's serialized callback.
+	lastWatermark time.Time
 }
 
 func (s *spannerPartitionBatcher) MaybeFlushWith(dcr *changestreams.DataChangeRecord) *spannerPartitionBatchIter {
@@ -202,6 +217,7 @@ func (f *spannerPartitionBatcherFactory) forPartition(partitionToken string) (*s
 
 		spb = &spannerPartitionBatcher{
 			batcher: b,
+			cp:      checkpoint.NewCapped[time.Time](spannerCheckpointCap),
 			rm: func() {
 				f.mu.Lock()
 				delete(f.partitions, partitionToken)

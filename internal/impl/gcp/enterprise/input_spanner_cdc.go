@@ -183,9 +183,14 @@ type spannerCDCReader struct {
 
 	batching   service.BatchPolicy
 	batcher    *spannerPartitionBatcherFactory
+	res        *service.Resources
 	resCh      chan asyncMessage
 	subscriber *changestreams.Subscriber
 	stopSig    *shutdown.Signaller
+
+	// updateWatermark persists a partition watermark; set to the subscriber's
+	// UpdatePartitionWatermark in Connect, overridable in tests.
+	updateWatermark func(ctx context.Context, partitionToken string, ts time.Time) error
 }
 
 var _ service.BatchInput = (*spannerCDCReader)(nil)
@@ -217,13 +222,23 @@ func newSpannerCDCReader(conf spannerCDCInputConfig, batching service.BatchPolic
 		metrics:  changestreams.NewMetrics(mgr.Metrics(), conf.StreamID),
 		batching: batching,
 		batcher:  newSpannerPartitionBatcherFactory(batching, mgr),
+		res:      mgr,
 		resCh:    make(chan asyncMessage),
 		stopSig:  shutdown.NewSignaller(),
 	}
 }
 
+// resetPartitionBatchers discards all cached partition batchers. Called on
+// (re)connect: stale batchers hold rows and ack state from the previous
+// subscriber session, and the re-read from the persisted watermarks
+// re-delivers those rows anyway.
+func (r *spannerCDCReader) resetPartitionBatchers() {
+	r.batcher = newSpannerPartitionBatcherFactory(r.batching, r.res)
+}
+
 func (r *spannerCDCReader) emit(
 	ctx context.Context,
+	batcher *spannerPartitionBatcher,
 	partitionToken string,
 	msg service.MessageBatch,
 	commitTimestamp time.Time,
@@ -231,10 +246,31 @@ func (r *spannerCDCReader) emit(
 	if len(msg) == 0 {
 		return nil, nil
 	}
+	// A zero commitTimestamp means "mid-record, do not advance": substitute
+	// the last known-safe watermark so an out-of-order resolve can never
+	// regress or stall behind it. Per-partition callbacks are serialized, so
+	// this needs no locking.
+	if commitTimestamp.IsZero() {
+		commitTimestamp = batcher.lastWatermark
+	} else {
+		batcher.lastWatermark = commitTimestamp
+	}
+	resolveFn, err := batcher.cp.Track(ctx, commitTimestamp, int64(len(msg)))
+	if err != nil {
+		return nil, fmt.Errorf("tracking watermark checkpoint: %w", err)
+	}
 	ackOnce := ack.NewOnce(func(ctx context.Context) error {
+		// Only the resolved (contiguous-prefix) watermark is safe to persist:
+		// a batch acked out of order must not advance the watermark past
+		// still-unacked earlier batches, or a crash in that window would skip
+		// their records on restart.
+		resolved := resolveFn()
+		if resolved == nil || resolved.IsZero() {
+			return nil
+		}
 		// If we processed the message and failed to update the watermark, we
 		// would try to update it on the next message, no need to return an error here.
-		if err := r.subscriber.UpdatePartitionWatermark(ctx, partitionToken, commitTimestamp); err != nil {
+		if err := r.updateWatermark(ctx, partitionToken, *resolved); err != nil {
 			r.log.Errorf("%s: failed to update watermark: %v", partitionToken, err)
 		}
 		return nil
@@ -268,7 +304,7 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 		if err != nil {
 			return err
 		}
-		ack, err := r.emit(ctx, partitionToken, msg, ts)
+		ack, err := r.emit(ctx, batcher, partitionToken, msg, ts)
 		if err != nil {
 			return err
 		}
@@ -289,7 +325,7 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 		if err != nil {
 			return err
 		}
-		ack, err := r.emit(ctx, partitionToken, msg, ts)
+		ack, err := r.emit(ctx, batcher, partitionToken, msg, ts)
 		if err != nil {
 			return err
 		}
@@ -300,7 +336,7 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 
 	iter := batcher.MaybeFlushWith(dcr)
 	for mb, ts := range iter.Iter(ctx) {
-		ack, err := r.emit(ctx, partitionToken, mb, ts)
+		ack, err := r.emit(ctx, batcher, partitionToken, mb, ts)
 		if err != nil {
 			return err
 		}
@@ -327,11 +363,18 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 		cb = p.onDataChangeRecord
 	}
 
+	// Discard any partition batchers from a previous subscriber session:
+	// their buffered rows were never acked and will be re-read from the
+	// persisted watermarks; reusing them would duplicate rows into mixed
+	// batches and misalign the ack tracker.
+	r.resetPartitionBatchers()
+
 	var err error
 	r.subscriber, err = changestreams.NewSubscriber(ctx, r.conf.Config, cb, r.log, r.metrics)
 	if err != nil {
 		return fmt.Errorf("create Spanner change stream reader: %w", err)
 	}
+	r.updateWatermark = r.subscriber.UpdatePartitionWatermark
 
 	if err := r.subscriber.Setup(ctx); err != nil {
 		return fmt.Errorf("setup Spanner change stream reader: %w", err)
