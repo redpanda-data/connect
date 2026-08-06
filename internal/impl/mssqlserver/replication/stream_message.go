@@ -91,9 +91,9 @@ type MessageEvent struct {
 	// boundary is observed.
 	CheckpointLSN LSN    `json:"-"`
 	Operation     string `json:"operation"`
-	Schema    string `json:"schema"`
-	Table     string `json:"table"`
-	Data      any    `json:"data"`
+	Schema        string `json:"schema"`
+	Table         string `json:"table"`
+	Data          any    `json:"data"`
 
 	// ColumnNames and ColumnTypes carry user-defined column metadata (excluding
 	// MSSQL system columns with __$ prefix). They are used to build schema
