@@ -847,7 +847,7 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 			return nil, err
 		}
 		if cfg.MaxSessionAge < 0 {
-			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %d", ociFieldMaxSessionAge, cfg.MaxSessionAge)
+			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %s", ociFieldMaxSessionAge, cfg.MaxSessionAge)
 		}
 		// support cache_resources for buffering logminer transactions
 		if lmConf.Contains(ociFieldTransactionCache) {
