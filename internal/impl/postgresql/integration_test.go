@@ -1939,3 +1939,237 @@ postgres_cdc:
 	defer mu.Unlock()
 	assert.Contains(t, collected, "flights")
 }
+
+func TestIntegrationSchemaAndTableMatchingTest(t *testing.T) {
+	integration.CheckSkip(t)
+
+	t.Run("exact schema match with missing table fails", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		_, err = db.Exec("CREATE TABLE IF NOT EXISTS orders (id SERIAL PRIMARY KEY, name TEXT);")
+		require.NoError(t, err)
+
+		tmpl := fmt.Sprintf(`
+dsn: %s
+slot_name: exact_schema_missing_table_slot
+schema: public
+tables:
+  - orders
+  - ordres
+`, databaseURL)
+
+		conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
+		require.NoError(t, err)
+
+		mgr := service.MockResources()
+		license.InjectTestService(mgr)
+
+		input, err := newPgStreamInput(conf, mgr)
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+
+		// Bypass the benthos AsyncReader's infinite connect-retry loop, same as
+		// TestIntegrationNoSchemasMatchedReturnsError.
+		err = input.Connect(ctx)
+		require.Error(t, err, "typo'd table %q should fail startup loudly instead of silently streaming only %q", "ordres", "orders")
+		assert.Contains(t, err.Error(), "ordres")
+	})
+
+	t.Run("glob schema matching multiple schemas with one or more missing tables fails", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		_, err = db.Exec(`
+			CREATE SCHEMA tenant_a;
+			CREATE SCHEMA tenant_b;
+
+			CREATE TABLE tenant_a.orders (id SERIAL PRIMARY KEY, name TEXT);
+			CREATE TABLE tenant_b.orders (id SERIAL PRIMARY KEY, name TEXT);
+		`)
+		require.NoError(t, err)
+
+		tmpl := fmt.Sprintf(`
+dsn: %s
+slot_name: glob_schema_total_miss_slot
+schema: tenant_*
+tables:
+  - orders
+  - ordres
+`, databaseURL)
+
+		conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
+		require.NoError(t, err)
+
+		mgr := service.MockResources()
+		license.InjectTestService(mgr)
+
+		input, err := newPgStreamInput(conf, mgr)
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+
+		err = input.Connect(ctx)
+		require.Error(t, err, "ordres exists in neither tenant_a nor tenant_b, so it should fail startup instead of silently streaming only tenant_a/b.orders")
+		assert.Contains(t, err.Error(), "ordres")
+	})
+
+	t.Run("glob schema matching multiple schemas with matching tables passes", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		_, err = db.Exec(`
+			CREATE SCHEMA tenant_a;
+			CREATE SCHEMA tenant_b;
+
+			CREATE TABLE tenant_a.orders (id SERIAL PRIMARY KEY, name TEXT);
+			CREATE TABLE tenant_b.ordres (id SERIAL PRIMARY KEY, name TEXT);
+
+			INSERT INTO tenant_a.orders (name) VALUES ('alice');
+			INSERT INTO tenant_b.ordres (name) VALUES ('bob');
+		`)
+		require.NoError(t, err)
+
+		type msgMeta struct {
+			dbSchema string
+			table    string
+		}
+
+		var (
+			mu        sync.Mutex
+			collected []msgMeta
+		)
+
+		tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: glob_schema_partial_match_slot
+    stream_snapshot: true
+    schema: tenant_*
+    tables:
+      - orders
+      - ordres
+`, databaseURL)
+
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+		require.NoError(t, sb.AddInputYAML(tmpl))
+		require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range batch {
+				m := msgMeta{}
+				m.dbSchema, _ = msg.MetaGet("database_schema")
+				m.table, _ = msg.MetaGet("table")
+				collected = append(collected, m)
+			}
+			return nil
+		}))
+
+		stream, err := sb.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+		assert.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return len(collected) >= 2
+		}, 30*time.Second, 100*time.Millisecond, "timed out waiting for both tenant_a.orders and tenant_b.ordres snapshot rows")
+
+		mu.Lock()
+		defer mu.Unlock()
+		require.Len(t, collected, 2)
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_a", table: "orders"})
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_b", table: "ordres"})
+	})
+
+	t.Run("glob schema matching multiple schemas with all tables present in all schemas passes", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		_, err = db.Exec(`
+			CREATE SCHEMA tenant_a;
+			CREATE SCHEMA tenant_b;
+
+			CREATE TABLE tenant_a.orders (id SERIAL PRIMARY KEY, name TEXT);
+			CREATE TABLE tenant_a.ordres (id SERIAL PRIMARY KEY, name TEXT);
+			CREATE TABLE tenant_b.orders (id SERIAL PRIMARY KEY, name TEXT);
+			CREATE TABLE tenant_b.ordres (id SERIAL PRIMARY KEY, name TEXT);
+
+			INSERT INTO tenant_a.orders (name) VALUES ('alice');
+			INSERT INTO tenant_a.ordres (name) VALUES ('bob');
+			INSERT INTO tenant_b.orders (name) VALUES ('carol');
+			INSERT INTO tenant_b.ordres (name) VALUES ('dave');
+		`)
+		require.NoError(t, err)
+
+		type msgMeta struct {
+			dbSchema string
+			table    string
+		}
+
+		var (
+			mu        sync.Mutex
+			collected []msgMeta
+		)
+
+		tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: glob_schema_full_match_slot
+    stream_snapshot: true
+    schema: tenant_*
+    tables:
+      - orders
+      - ordres
+`, databaseURL)
+
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+		require.NoError(t, sb.AddInputYAML(tmpl))
+		require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range batch {
+				m := msgMeta{}
+				m.dbSchema, _ = msg.MetaGet("database_schema")
+				m.table, _ = msg.MetaGet("table")
+				collected = append(collected, m)
+			}
+			return nil
+		}))
+
+		stream, err := sb.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+		assert.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return len(collected) >= 4
+		}, 30*time.Second, 100*time.Millisecond, "timed out waiting for all four tenant_{a,b}.{orders,ordres} snapshot rows")
+
+		mu.Lock()
+		defer mu.Unlock()
+		require.Len(t, collected, 4)
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_a", table: "orders"})
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_a", table: "ordres"})
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_b", table: "orders"})
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_b", table: "ordres"})
+	})
+}

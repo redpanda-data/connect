@@ -120,6 +120,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 
 	tables := make([]TableFQN, 0, len(schemas)*len(normalizedTables))
+	foundTables := make(map[string]bool, len(normalizedTables))
 	for _, schema := range schemas {
 		existingTables, err := resolveExistingTables(ctx, dbConn, schema)
 		if err != nil {
@@ -131,10 +132,21 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				continue
 			}
 			tables = append(tables, TableFQN{Schema: schema, Table: table})
+			foundTables[table] = true
 		}
 	}
-	if len(tables) == 0 && len(normalizedTables) > 0 {
-		return nil, fmt.Errorf("none of the configured tables %v were found in any schema matching pattern %q", config.DBTables, config.DBSchemaPattern)
+	// A table must exist in at least one matched schema. Missing from some
+	// (but not all) matched schemas is tolerated above as a multi-tenant gap;
+	// missing from every matched schema is indistinguishable from a typo and
+	// must fail loudly rather than silently drop the table.
+	var missingTables []string
+	for i, table := range normalizedTables {
+		if !foundTables[table] {
+			missingTables = append(missingTables, config.DBTables[i])
+		}
+	}
+	if len(missingTables) > 0 {
+		return nil, fmt.Errorf("table(s) %v not found in any schema matching pattern %q", missingTables, config.DBSchemaPattern)
 	}
 	batchSize := 1000
 	if config.BatchSize > 0 {
