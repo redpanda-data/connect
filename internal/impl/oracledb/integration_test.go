@@ -560,6 +560,127 @@ oracledb_cdc:
 	}
 }
 
+// TestIntegrationOracleDBCDCSnapshotAckBarrier verifies that a crash during
+// the snapshot->streaming handoff (after snapshot rows are emitted but before
+// they are acknowledged) does not lose data: because the post-snapshot SCN is
+// only persisted once every snapshot batch is acked, the snapshot must re-run
+// on restart. See CON-504.
+func TestIntegrationOracleDBCDCSnapshotAckBarrier(t *testing.T) {
+	integration.CheckSkip(t)
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.ackbarrier", "CREATE TABLE testdb.ackbarrier (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+
+	const rowCount = 5
+	for range rowCount {
+		db.MustExec("INSERT INTO testdb.ackbarrier (id) VALUES (DEFAULT)")
+	}
+	db.MustExec("COMMIT")
+
+	// batching.count == rowCount forces all snapshot rows into a single output
+	// batch, so the run-1 consumer receives them all at once and can then block
+	// without acking - reproducing the "emitted but not yet acked" handoff state.
+	cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  snapshot_mode: snapshot_and_stream
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["TESTDB.ACKBARRIER"]
+  batching:
+    count: %d
+    period: 1h`, connStr, rowCount)
+
+	// Run 1: receive the snapshot rows but never acknowledge them, then
+	// simulate a crash by cancelling the run before the SCN can be persisted.
+	t.Log("Launching run 1 (blocked consumer, simulated crash)...")
+	received := make(chan struct{}, 1)
+	run1Builder := service.NewStreamBuilder()
+	require.NoError(t, run1Builder.AddInputYAML(cfg))
+	require.NoError(t, run1Builder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, run1Builder.AddBatchConsumerFunc(func(ctx context.Context, _ service.MessageBatch) error {
+		select {
+		case received <- struct{}{}:
+		default:
+		}
+		// Block without acking until the simulated crash cancels our context.
+		<-ctx.Done()
+		return ctx.Err()
+	}))
+	run1, err := run1Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run1.Resources())
+
+	run1Ctx, crash := context.WithCancel(t.Context())
+	run1Done := make(chan struct{})
+	go func() {
+		defer close(run1Done)
+		_ = run1.Run(run1Ctx)
+	}()
+
+	select {
+	case <-received:
+	case <-time.After(5 * time.Minute):
+		t.Fatal("snapshot rows were never delivered to the run-1 output")
+	}
+	// Give the input time to reach the ack barrier (and, in the buggy version,
+	// to persist the post-snapshot SCN) before we crash.
+	time.Sleep(5 * time.Second)
+	crash()
+	select {
+	case <-run1Done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("run 1 did not stop after the simulated crash")
+	}
+
+	// The barrier must have prevented the post-snapshot SCN from being
+	// persisted, since the snapshot rows were never acknowledged. This is the
+	// core guarantee: without it a cached SCN would exist here and the
+	// snapshot would be skipped on restart, silently losing the un-acked rows.
+	var checkpoints int
+	require.NoError(t, db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM RPCN.CDC_CHECKPOINT_CACHE").Scan(&checkpoints))
+	require.Zero(t, checkpoints, "post-snapshot SCN must not be persisted before snapshot rows are acknowledged")
+
+	// Run 2: restart against the same checkpoint cache. Since run 1 never
+	// acked the snapshot, no SCN was cached, so the snapshot re-runs and every
+	// row is delivered again.
+	t.Log("Launching run 2 (verifying the snapshot re-runs)...")
+	var (
+		readsMu sync.Mutex
+		reads   int
+	)
+	run2Builder := service.NewStreamBuilder()
+	require.NoError(t, run2Builder.AddInputYAML(cfg))
+	require.NoError(t, run2Builder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, run2Builder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		readsMu.Lock()
+		defer readsMu.Unlock()
+		for _, msg := range mb {
+			if op, _ := msg.MetaGet("operation"); op == "read" {
+				reads++
+			}
+		}
+		return nil
+	}))
+	run2, err := run2Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run2.Resources())
+	go func() {
+		if err := run2.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		readsMu.Lock()
+		defer readsMu.Unlock()
+		assert.Equal(c, rowCount, reads, "snapshot should have re-run and re-delivered every row after the crash")
+	}, 5*time.Minute, 500*time.Millisecond)
+	require.NoError(t, run2.StopWithin(time.Second*30))
+}
+
 func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	integration.CheckSkip(t)
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
