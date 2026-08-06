@@ -122,13 +122,15 @@ When a pattern is used, all schemas whose names match the pattern are replicated
 
 Double-quoted identifiers are treated as exact names and do not support wildcards.
 
-Schema pattern matching runs once at pipeline startup. Schemas created after the pipeline starts will not be picked up until the pipeline is restarted.`).
+Schema pattern matching runs once at pipeline startup. Schemas created after the pipeline starts will not be picked up until the pipeline is restarted.
+
+If ` + "`" + fieldTables + "`" + ` is non-empty and this pattern matches no schema in the database, startup fails with an error. This field has no effect when ` + "`" + fieldTables + "`" + ` is left empty - see ` + "`" + fieldTables + "`" + ` below.`).
 			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`, "tenant_*", "*"),
 		).
 		Field(service.NewStringListField(fieldTables).
 			Description(`A list of table names to include in the logical replication. Each table should be specified as a separate item.
 
-When ` + "`schema`" + ` is a glob pattern, this list is resolved against each matched schema independently: a table missing from a given schema is skipped (with a warning logged) rather than failing replication for every matched schema.
+When ` + "`schema`" + ` is a glob pattern, this list is resolved against each matched schema independently: a table missing from some (but not all) of the matched schemas is skipped for those schemas only (with a warning logged), tolerating multi-tenant setups where a table hasn't been provisioned in every schema yet. A table that's missing from every matched schema, however, is treated as a configuration error (most likely a typo) and startup fails, naming the missing table.
 
 If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
