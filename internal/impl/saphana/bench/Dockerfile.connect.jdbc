@@ -1,0 +1,8 @@
+FROM confluentinc/cp-kafka-connect:7.7.8
+
+# Generic Confluent JDBC Source connector, used with the SAP HANA JDBC
+# driver (ngdbc.jar, mounted at runtime) for a like-for-like comparison
+# against the SAP-specific kafka-connect-sap connector.
+USER root
+RUN confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.7.6
+USER appuser

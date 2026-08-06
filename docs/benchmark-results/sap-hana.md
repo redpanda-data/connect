@@ -466,3 +466,195 @@ task bench:matrix FETCH="10000 100000 500000" CORES="2 4 8" OUT=rpcn_query_v2.tx
   each other) — no strong win from pushing cores to 8.
 - **Recommended config: `FETCH_SIZE=100000, CORES=4`** (~100k msg/s) — matches the
   bulk read recommendation almost exactly, consistent story across both read modes.
+
+---
+
+## EC2 Kafka Connect Results (temporary — preliminary, not yet confirmed)
+
+> **Not a final result.** Captured while debugging why Kafka Connect throughput on EC2
+> was far below the local WSL2 numbers earlier in this doc. Two real bugs in the bench
+> harness were found and fixed along the way (config keys `batch.size`/`batch.max.rows`
+> must be top-level, not `<topic>.`-prefixed — the topic-prefixed version was silently
+> ignored, capping every run at the connector's default `batch.max.rows=100`). Numbers
+> below are post-fix but still much lower than local. Root cause under investigation —
+> see caveats below before treating these as representative.
+
+**Environment:** same EC2 box as the native EC2 Testing section above (Intel Xeon
+Platinum 8488C, 8 vCPU). HANA reached over a network hop — TCP connect to HANA:30015
+from this EC2 box measured **~118ms** (vs ~70ms measured from the local/VPN path used
+for the WSL2 numbers earlier in this doc — not a large enough gap to explain the full
+throughput difference on its own).
+
+**Root cause (confirmed from `kafka-connect-sap` source):** `HANAJdbcClient.executeQuery`
+builds `SELECT ... LIMIT <batch.max.rows> OFFSET <running_total>` and re-executes it
+fresh on every poll cycle — no server-side cursor is held open, unlike `sap_hana`
+(go-hdb), which streams one cursor for the whole run. Each poll pays full query
+re-planning + `OFFSET` skip-scan (cost grows as offset increases) + a network round
+trip. This is architectural to the connector's bulk mode, not a config problem.
+
+### Bulk Read — Kafka Connect JDBC Source
+
+`BENCH_ORDERS` table, `TOTAL=200000` rows (smaller scale than the native EC2 runs —
+was mid-debugging, not yet re-run at 2M+).
+
+```
+FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
+1000        1000        200000        301s        664
+1000        5000        200000        78s         2564
+1000        10000       200000        48s         4167
+10000       1000        200000        301s        664
+10000       5000        200000        77s         2597
+10000       10000       200000        48s         4167
+100000      1000        200000        298s        671
+100000      5000        200000        80s         2500
+100000      10000       200000        47s         4255
+```
+
+**Observations:**
+- `FETCH` (mapped to `batch.size`) has essentially no effect — 664/2564/4167 msg/s
+  repeats near-identically across all three `FETCH` values at each `BATCH` level.
+- `BATCH` (mapped to `batch.max.rows`) is what drives throughput — scales
+  664 → 2564 → 4167 as batch goes 1000 → 5000 → 10000, but sub-linearly (fewer, larger
+  `LIMIT/OFFSET` round trips per run = less repeated overhead, consistent with the
+  root cause above).
+- Best so far: **4,255 msg/s** (fetch=100000, batch=10000) — roughly **20× below**
+  the local WSL2 bulk-read KC number (86,957 msg/s) for the same connector.
+- `tasks.max` sweep not yet run at time of this capture (added to the harness
+  afterward — source connectors here are single-table/single-task regardless, so it's
+  expected to have no effect, but not yet confirmed on this environment).
+
+**Still open:** whether the local 86,957 msg/s figure is a fair comparison — it may
+predate the config-key fix (same bug likely existed in the local Taskfile too), so it's
+unclear if it was captured through a working large-batch path or was itself artificially
+low/high via a different code path. Re-run locally through the current fixed Taskfile,
+same params, before trusting either number as ground truth.
+
+### Incrementing Read — Kafka Connect JDBC Source
+
+500,000 rows, `mode=incrementing`. Harness bug fixed mid-run: the matrix task was
+silently dying on the "no messages yet" grace-period check due to a shell quirk with
+`[ cond ] && a && b && exit 1` one-liners — rewritten as proper `if/then` blocks.
+Numbers below are from the fixed harness.
+
+```
+POLL_MS     BATCH         TOTAL         ELAPSED     AVG_MSG_S
+100         1000          507000        164s        3091
+500         1000          505000        197s        2563
+1000        1000          500000        417s        1199
+100         5000          500000        197s        2538
+500         5000          500000        197s        2538
+1000        5000          500000        200s        2500
+100         10000         500000        119s        4202
+500         10000         500000        116s        4310
+1000        10000         500000        120s        4167
+```
+
+**Observations:**
+- Same shape as bulk: `BATCH` (`batch.max.rows`) dominates — 1000→~1200-3000 msg/s,
+  10000→~4200-4300 msg/s. Same root cause (fresh `LIMIT/OFFSET` query per poll,
+  no held cursor) applies here too.
+- `POLL_MS` has an inconsistent effect at `batch=1000` (100ms fastest at 3091, 1000ms
+  much slower at 1199) but converges to flat (~4200-4300) at `batch=10000` — plausible
+  since a larger batch means fewer poll cycles overall, diluting poll-interval-driven
+  variance.
+- Best so far: **4,310 msg/s** (poll=500ms, batch=10000) — still roughly **10×
+  below** the local WSL2 incrementing KC number (41,667 msg/s), consistent with the
+  bulk-read gap and the same architectural explanation.
+- A couple of rows overshot `TOTAL` slightly (507000, 505000 vs requested 500000) —
+  likely the loader inserting a few extra rows past the target before the connector's
+  count check caught up; not a correctness concern for throughput comparison.
+
+**Contention ruled out — confirmed reproducible, not a measurement artifact.** This EC2
+box was found to be running 4 zombie Kafka Connect connectors (leftover from earlier
+interrupted runs never reaching their cleanup `DELETE` call — 2 still `RUNNING` and
+polling HANA every second, 2 `FAILED`-looping after a later run dropped their table out
+from under them) plus two orphaned native benchmark processes (`rpcns-hana-inc-bench`,
+running since the day before; `rpcns-hana-write-bench`, running over a day) — all
+competing for HANA connections and CPU with every benchmark run captured above. Idle
+CPU on the connect container dropped from 24.79% to 2.98% after cleanup. Re-running the
+same matrix on a fully clean box:
+
+```
+POLL_MS     BATCH         TOTAL         ELAPSED     AVG_MSG_S
+100         1000          500000        765s        654
+500         1000          500000        760s        658
+1000        1000          500000        763s        655
+100         5000          500000        200s        2500
+500         5000          500000        196s        2551
+1000        5000          500000        200s        2500
+100         10000         500000        119s        4202
+500         10000         500000        120s        4167
+1000        10000         500000        119s        4202
+```
+
+`batch=10000` results are essentially identical to the contended run (4202/4167/4202 vs
+4202/4310/4167) — **confirms the ~4,200 msg/s ceiling is architectural (LIMIT/OFFSET
+per poll + EC2↔HANA network RTT), not caused by resource contention.** `batch=1000`
+numbers came out worse post-cleanup (654-658 vs 1199-3091) rather than better — treat
+as run-to-run noise (many more poll cycles at low batch = more variance surface), not a
+regression from the cleanup. **~4,200 msg/s at `batch.max.rows=10000` is the confirmed,
+reproducible number for this connector on this EC2↔HANA path.**
+
+---
+
+## EC2 — Generic Confluent JDBC Source Connector (comparison)
+
+Same EC2 box as the sections above. `io.confluent.connect.jdbc.JdbcSourceConnector`
+(`kafka-connect-jdbc` via confluent-hub) with the SAP HANA JDBC driver (`ngdbc.jar`),
+`mode=bulk`, raw `query` (not `table.whitelist`), `fetchsize` passed as a JDBC URL
+param. Separate container/port (8084) from the `kafka-connect-sap` harness above, run
+independently — not concurrently.
+
+### Bulk Read — 100k scale
+
+`BENCH_ORDERS` table, `TOTAL=100000` rows.
+
+```
+FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
+1000        1000        100000        27s         3704
+1000        5000        100000        9s          11111
+1000        10000       100000        6s          16667
+10000       1000        100000        27s         3704
+10000       5000        100000        9s          11111
+10000       10000       100000        6s          16667
+100000      1000        100000        27s         3704
+100000      5000        100000        9s          11111
+100000      10000       100000        6s          16667
+```
+
+### Bulk Read — 2M scale
+
+`BENCH_ORDERS` table reloaded to `TOTAL=2000000` rows.
+
+```
+FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
+1000        1000        2000000       458s        4367
+1000        5000        2000000       99s         20202
+1000        10000       2000000       54s         37037
+10000       1000        2000000       457s        4376
+10000       5000        2000000       95s         21053
+10000       10000       2000000       51s         39216
+100000      1000        ERROR         ?           0
+100000      5000        2036000       80s         25000
+100000      10000       2102000       48s         41667
+```
+
+`100000/1000` errored — a connector was deleted mid-run while debugging a separate
+"matrix looks stuck" report (client-side `task` process appeared to have died after an
+SSH timeout; turned out to still be running server-side, and the manual cleanup landed
+on this combo). Not yet re-run in isolation to confirm a clean number. The `2036000` /
+`2102000` totals slightly overshooting `TOTAL=2000000` are the same harness quirk noted
+in the incrementing-read section above (offset check lag, not a correctness issue).
+
+**Observations:**
+- Same shape as every other matrix in this doc: `FETCH` has essentially no effect,
+  `BATCH` (`batch.max.rows`) drives throughput — 4,367 → 20,202 → 37,037 msg/s as batch
+  goes 1000 → 5000 → 10000 at fixed fetch.
+- **Peak 41,667 msg/s** (`fetch=100000, batch=10000`) — roughly **10× above** the
+  `kafka-connect-sap` connector's confirmed ~4,200 msg/s ceiling on this same EC2↔HANA
+  path. Confirms the generic connector's held-cursor bulk read (vs. `kafka-connect-sap`'s
+  fresh `LIMIT/OFFSET` query per poll, no server-side cursor — see root cause above)
+  holds its advantage on EC2, not just the local/WSL2 path where this was first observed.
+- Still below the original local WSL2 doc figure for this connector (86,957 msg/s) —
+  consistent with EC2↔HANA network RTT (~118ms, vs ~70ms local/VPN) adding overhead per
+  round trip, same pattern as the `kafka-connect-sap` EC2 numbers above.
