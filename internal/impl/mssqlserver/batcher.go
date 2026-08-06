@@ -42,6 +42,11 @@ type batchPublisher struct {
 	log        *service.Logger
 	cacheLSN   func(ctx context.Context, lsn replication.LSN) error
 	shutSig    *shutdown.Signaller
+
+	// snapshotAckWG counts published snapshot batches that have not yet been
+	// acknowledged downstream. The snapshot->streaming handoff blocks on it so
+	// the post-snapshot LSN is never persisted while snapshot rows are in flight.
+	snapshotAckWG sync.WaitGroup
 }
 
 // newBatchPublisher creates an instance of batchPublisher.
@@ -208,6 +213,13 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 		checkpointLSN = replication.LSN(lsn)
 	}
 
+	// Snapshot batches are tracked so the snapshot->streaming handoff can block
+	// until they are acknowledged downstream (see waitSnapshotAcks).
+	isSnapshotBatch := false
+	if op, ok := lastMsg.MetaGet("operation"); ok && op == replication.MessageOperationRead.String() {
+		isSnapshotBatch = true
+	}
+
 	resolveFn, err := b.checkpoint.Track(ctx, checkpointLSN, int64(len(batch)))
 	if err != nil {
 		return fmt.Errorf("tracking LSN checkpoint for batch: %w", err)
@@ -215,6 +227,9 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 	msg := asyncMessage{
 		msg: batch,
 		ackFn: func(ctx context.Context, _ error) error {
+			if isSnapshotBatch {
+				defer b.snapshotAckWG.Done()
+			}
 			lsn := resolveFn()
 			if lsn != nil && len(*lsn) != 0 {
 				return b.cacheLSN(ctx, *lsn)
@@ -222,12 +237,55 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 			return nil
 		},
 	}
+	if isSnapshotBatch {
+		b.snapshotAckWG.Add(1)
+	}
 	select {
 	case b.msgChan <- msg:
 		return nil
 	case <-ctx.Done():
+		if isSnapshotBatch {
+			b.snapshotAckWG.Done()
+		}
 		return ctx.Err()
 	}
+}
+
+// waitSnapshotAcks blocks until every published snapshot batch has been
+// acknowledged (or nacked) downstream, or until ctx is cancelled. Nacked
+// batches release the gate too: redelivery is owned by auto_replay_nacks,
+// and the ctx escape prevents a permanently-failing downstream from
+// wedging shutdown.
+func (b *batchPublisher) waitSnapshotAcks(ctx context.Context) error {
+	drained := make(chan struct{})
+	go func() {
+		// May outlive this call if ctx fires first; bounded by process lifetime.
+		b.snapshotAckWG.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// flushCurrent flushes any partial batch still held by the batcher and
+// publishes it, leaving the publisher loop running. Used at the
+// snapshot->streaming handoff so every snapshot row is published (and can be
+// awaited via waitSnapshotAcks) before the post-snapshot LSN is persisted.
+func (b *batchPublisher) flushCurrent(ctx context.Context) error {
+	if b.batcher == nil {
+		return nil
+	}
+	b.batcherMu.Lock()
+	remaining, err := b.batcher.Flush(ctx)
+	b.batcherMu.Unlock()
+	if err != nil || len(remaining) == 0 {
+		return err
+	}
+	return b.publishBatch(ctx, remaining)
 }
 
 func (b *batchPublisher) msgs() <-chan asyncMessage {
