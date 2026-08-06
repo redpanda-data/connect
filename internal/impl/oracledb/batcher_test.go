@@ -193,6 +193,79 @@ func TestFlushCurrent(t *testing.T) {
 	receive("publisher loop no longer functional after flushCurrent")
 }
 
+// TestTrackOrderUnderConcurrentFlush stresses the two concurrent flushers (the
+// count-triggered flush in Publish and the timed-flush loop) and asserts the
+// persisted checkpoint never regresses when batches are acked in delivery
+// order. Before Track was moved under the batcher mutex, the two flushers
+// could interleave between flush and Track, registering batches with the
+// ordered tracker in the wrong order and persisting a regressing SCN. Run with
+// -race to also catch the underlying data race structurally.
+func TestTrackOrderUnderConcurrentFlush(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cp := checkpoint.NewCapped[replication.SCN](1000)
+
+	// Count 2 + a tiny period keeps both flush paths active concurrently.
+	batcher, err := (service.BatchPolicy{Count: 2, Period: "1ms"}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+
+	publisher := newBatchPublisher(batcher, cp, logger)
+	t.Cleanup(publisher.Close)
+
+	var (
+		mu        sync.Mutex
+		persisted []replication.SCN
+	)
+	publisher.cacheSCN = func(_ context.Context, scn replication.SCN) error {
+		mu.Lock()
+		defer mu.Unlock()
+		persisted = append(persisted, scn)
+		return nil
+	}
+
+	// Consumer: ack every batch immediately, in delivery order.
+	consumerDone := make(chan struct{})
+	consumerCtx, stopConsumer := context.WithCancel(ctx)
+	go func() {
+		defer close(consumerDone)
+		for {
+			select {
+			case m := <-publisher.msgs():
+				_ = m.ackFn(ctx, nil)
+			case <-consumerCtx.Done():
+				return
+			}
+		}
+	}()
+
+	const events = 500
+	for i := range events {
+		require.NoError(t, publisher.Publish(ctx, &replication.MessageEvent{
+			Schema:        "S",
+			Table:         "T",
+			Operation:     replication.MessageOperationInsert,
+			CheckpointSCN: replication.SCN(i + 1),
+			Data:          map[string]any{"i": i},
+		}))
+	}
+	require.NoError(t, publisher.flushCurrent(ctx))
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(persisted) > 0 && persisted[len(persisted)-1] == replication.SCN(events)
+	}, 10*time.Second, 10*time.Millisecond, "final SCN was never persisted")
+	stopConsumer()
+	<-consumerDone
+
+	mu.Lock()
+	defer mu.Unlock()
+	for i := 1; i < len(persisted); i++ {
+		require.GreaterOrEqual(t, persisted[i], persisted[i-1],
+			"persisted checkpoint regressed at index %d: %v", i, persisted)
+	}
+}
+
 func newTestBatchPublisher(t *testing.T) (*batchPublisher, func() []replication.SCN) {
 	t.Helper()
 
