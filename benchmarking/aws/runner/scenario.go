@@ -348,8 +348,25 @@ func (s *Scenario) Validate() error {
 	}
 
 	if len(s.Matrix.Arms) > 0 {
+		// Source scenarios may use arms, but only in the shape that renders
+		// through the topology-agnostic renderPipelineConfig: one pipeline per
+		// arm, arms differing by their pipeline override (e.g. an oracledb_cdc
+		// arm mining one table vs. all five, on the same RDS instance and the
+		// same load — the whole point of an arm rather than two separate runs).
+		//
+		// fan_in and streams > 1 stay sink-only because their renderers are
+		// sink-shaped: renderFanInConfig requires a redpanda input plus a
+		// table-bearing output, and multi-stream rendering derives per-topic
+		// names and Iceberg tables. Neither has any meaning for a CDC source.
 		if s.Direction != DirectionSink {
-			return fmt.Errorf("matrix.arms is only supported for direction: sink (got %q)", s.Direction)
+			for i, a := range s.Matrix.Arms {
+				if a.FanIn {
+					return fmt.Errorf("matrix.arms[%d].fan_in is only supported for direction: sink (got %q); fan-in renders a redpanda input into a table-bearing output", i, s.Direction)
+				}
+				if a.Streams > 1 {
+					return fmt.Errorf("matrix.arms[%d].streams must be <= 1 for direction: %q (got %d); multi-stream rendering derives per-topic names and sink tables", i, s.Direction, a.Streams)
+				}
+			}
 		}
 		if product := len(s.Matrix.CPUPoints) * len(s.Matrix.Arms); product > maxArmSweepPoints {
 			return fmt.Errorf("matrix.arms × matrix.cpu_points must expand to <= %d sweep points (got %d cpu_points × %d arms = %d): a careless scenario could otherwise commit to a day-long run",
