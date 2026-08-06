@@ -1262,6 +1262,109 @@ func TestCommitOverwritePreservesFilesOnTerminalUnknown(t *testing.T) {
 		"the overwrite's parquet files must be preserved (NOT cleaned) on a possibly-landed unknown state")
 }
 
+// TestCommitOverwriteUnknownStateGuardIsStickyAcrossRetries pins the STICKY
+// half of the unknown-state cleanup guard: cleanup must be skipped if ANY
+// attempt's outcome remains ambiguous, not just the last. Attempt 1 lands the
+// overwrite server-side but reports ErrCommitStateUnknown; the reload that
+// could resolve the ambiguity fails persistently (the correlated outage — the
+// same catalog that returned the ambiguous response cannot serve fresh
+// metadata either), so committedSnapshotHasID never observes the landed
+// commit; every later attempt re-stages against the stale table and cleanly
+// conflicts until retries exhaust. The LAST attempt's error is a plain
+// ErrCommitFailed — before the sticky fix commitLocked wrapped only that,
+// cleanup saw no unknown state, and its reference scan (run against the stale
+// pre-commit c.table, so it COMPLETES and slips past the fail-closed guard)
+// deleted the landed snapshot's data files: table corruption. The ambiguity
+// must instead stay sticky: the returned error is unknown-class, cleanup is
+// skipped entirely, every recorded file survives, and the committed table
+// still scans correctly with the mutation applied exactly once.
+func TestCommitOverwriteUnknownStateGuardIsStickyAcrossRetries(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, mem := newCOWTable(t, sc)
+	_ = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+
+	// Attempt 1 applies the overwrite but reports unknown; attempts 2 and 3
+	// cleanly conflict (nothing lands), so the loop exhausts with a terminal
+	// error that is NOT unknown-class on its own.
+	const maxRetries = 3
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitLandThenUnknown, commitConflict, commitConflict}}
+	reload := func(context.Context) (*table.Table, error) {
+		return nil, errors.New("catalog reload unavailable")
+	}
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: maxRetries}, reload, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, cat.snapshot(), "id")
+	w.committer = comm
+
+	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, rest.ErrCommitStateUnknown,
+		"an ambiguous attempt that was never resolved must keep the terminal error unknown-class, even though the last attempt failed cleanly")
+	assert.Equal(t, maxRetries, cat.calls, "the commit must exhaust every retry")
+
+	// Cleanup must have been skipped entirely: every recorded file — attempt
+	// 1's landed files included — must still be on disk.
+	written := comm.writes.snapshot()
+	require.NotEmpty(t, written, "the overwrite attempts must have recorded written files")
+	for p := range written {
+		_, statErr := os.Stat(p)
+		assert.NoError(t, statErr, "no recorded file may be removed while an attempt's outcome is ambiguous: %s", p)
+	}
+
+	// The landed snapshot is intact: the mutation applied exactly once and the
+	// table scans correctly (a deleted data file would fail the scan).
+	final := cat.snapshot()
+	assert.Equal(t, 1, countSnapshotsWithCommitID(final), "the overwrite must have landed exactly once")
+	assert.Equal(t, map[int64]string{1: "one", 2: "TWO", 3: "three"}, scanRows(t, ctx, final))
+}
+
+// TestCommitOverwriteCleanupRunsOnceAmbiguityResolved is the counterweight to
+// the sticky guard: a resolved ambiguity must not suppress the hygiene path.
+// Attempt 1 returns ErrCommitStateUnknown WITHOUT landing; the very next
+// reload SUCCEEDS and the commit-id token is absent, proving the ambiguous
+// attempt did not land — ambiguity resolved. The remaining attempts exhaust
+// with clean conflicts, so the terminal error is plain ErrCommitFailed (not
+// unknown-class) and cleanup must run, reclaiming every attempt's orphaned
+// parquet and leaving only the seed files.
+func TestCommitOverwriteCleanupRunsOnceAmbiguityResolved(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, mem := newCOWTable(t, sc)
+	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+	seedCount := countParquetFiles(t, seedTbl.Location())
+	require.Positive(t, seedCount, "seeding must have written data files")
+
+	const maxRetries = 3
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitUnknownNoLand, commitConflict, commitConflict}}
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: maxRetries},
+		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, cat.snapshot(), "id")
+	w.committer = comm
+
+	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, rest.ErrCommitFailed, "the terminal error must surface the exhausted conflicts")
+	assert.NotErrorIs(t, err, rest.ErrCommitStateUnknown,
+		"a successful reload resolved the ambiguity (token absent, so the attempt did not land); the terminal error must not be unknown-class")
+	assert.Equal(t, maxRetries, cat.calls, "the commit must exhaust every retry")
+
+	// The hygiene path must run: nothing landed, so every attempt's files are
+	// genuine orphans and cleanup reclaims them all, back to the seed count.
+	assert.Zero(t, countSnapshotsWithCommitID(cat.snapshot()), "nothing may have landed")
+	assert.Equal(t, seedCount, countParquetFiles(t, seedTbl.Location()),
+		"cleanup must reclaim the failed attempts' files once the ambiguity was resolved")
+}
+
 // TestCommitOverwriteResumesAfterReloadFailures (T-12, CORR-3) proves the commit-id
 // idempotency check resumes correctly even when the reload after a lost-ack
 // conflict fails several times before recovering. Attempt 1 lands the overwrite

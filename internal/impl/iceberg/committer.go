@@ -361,10 +361,20 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 	// line: authored-by-us AND not-referenced ⇒ orphan of a losing attempt.
 	//
 	// Two further guards:
-	//   - Terminal ErrCommitStateUnknown is never cleaned: the commit may have
-	//     landed server-side, so its files could belong to a committed snapshot
-	//     (one a failed reload kept us from seeing), and deleting them would
-	//     corrupt the table. Those are left for Iceberg orphan-file maintenance.
+	//   - An unresolved ErrCommitStateUnknown is never cleaned, and the guard
+	//     is STICKY across the whole retry history, not just the last attempt:
+	//     commitLocked's returned error carries the unknown state whenever ANY
+	//     attempt's outcome remains ambiguous (no subsequent successful reload
+	//     resolved it) — even when a later attempt's clean failure terminated
+	//     the loop. Such an attempt may have landed server-side against
+	//     metadata a failed reload kept us from seeing; the reference scan
+	//     below would then run against a stale c.table, complete successfully
+	//     (slipping past the fail-closed guard), not see the landed snapshot's
+	//     files as referenced, and delete them — corrupting the table. Those
+	//     files are left for Iceberg orphan-file maintenance instead. Once a
+	//     successful reload resolves the ambiguity (the commit-id token was
+	//     absent, so the ambiguous attempt provably did not land), the error is
+	//     no longer unknown-class and cleanup runs as normal.
 	//   - On SUCCESS we only clean when the commit was retried: a first-attempt
 	//     success wrote exactly the files it committed, so there is nothing to
 	//     reclaim and the reference scan is skipped.
@@ -485,6 +495,20 @@ func (c *committer) referencedDataFilePaths(ctx context.Context) (map[string]str
 // no such leftovers, and cleaning then would be unsafe under concurrent
 // committers (see commitOverwrite).
 //
+// Unknown-state stickiness: an attempt that ends in ErrCommitStateUnknown may
+// have landed server-side, and only a subsequent SUCCESSFUL reload can resolve
+// that ambiguity (either the reloaded metadata carries our commit-id — the
+// attempt landed and we return success — or the token's absence proves it did
+// not land). The ambiguity is therefore tracked across the WHOLE retry
+// history, not just the last attempt: whenever commitLocked returns an error
+// while some attempt's outcome is still unresolved — regardless of which
+// attempt's error terminated the loop (exhausted retries, a non-retryable
+// error, a stage failure, ...) — the returned error satisfies
+// errors.Is(err, rest.ErrCommitStateUnknown). Callers that gate destructive
+// follow-up work on the absence of unknown state (commitOverwrite's orphan
+// cleanup) rely on this: the guard must hold if ANY attempt might have landed
+// unobserved, not merely the final one.
+//
 // Callers must hold c.commitMu.
 func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUnknownState bool, stage func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error) (bool, error) {
 	props := iceberg.Properties{
@@ -509,6 +533,18 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	}
 
 	var commitErr error
+	// unresolvedUnknown is non-nil while some attempt's outcome is ambiguous
+	// (ErrCommitStateUnknown: the commit may have landed server-side) and no
+	// subsequent successful reload has resolved it. Only a successful reload
+	// clears it: after one, either committedSnapshotHasID finds our token (the
+	// ambiguous attempt landed — we return success), or the token's absence
+	// proves it did not land (the append path's dropAlreadyCommitted plays the
+	// same role against the reloaded metadata). A FAILED reload never clears
+	// it, and every error return joins it into the returned error
+	// (joinUnresolvedUnknown) so callers' errors.Is(err,
+	// rest.ErrCommitStateUnknown) checks stay true even when a later attempt's
+	// differently-classed error terminates the loop.
+	var unresolvedUnknown error
 	attempt := 0
 	reloaded := false
 	for range c.cfg.MaxRetries {
@@ -519,13 +555,19 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 				c.logger.Warnf("Upgrading iceberg table to format version %d to support row-level deletes; this change is irreversible", CurrentIcebergVersion)
 			})
 			if err := txn.UpgradeFormatVersion(CurrentIcebergVersion); err != nil {
-				return attempt > 1, fmt.Errorf("upgrading version: %w", err)
+				return attempt > 1, fmt.Errorf("upgrading version: %w", joinUnresolvedUnknown(err, unresolvedUnknown))
 			}
 		}
 		if err := stage(txn, props, reloaded); err != nil {
-			return attempt > 1, err
+			return attempt > 1, joinUnresolvedUnknown(err, unresolvedUnknown)
 		}
 		tbl, err := txn.Commit(ctx)
+		if errors.Is(err, rest.ErrCommitStateUnknown) {
+			// This attempt may have landed server-side. Sticky until a
+			// successful reload observes whether it did (see unresolvedUnknown
+			// above).
+			unresolvedUnknown = err
+		}
 		// Some engine-backed catalogs (Databricks Unity Catalog) reject a
 		// commit whose set-properties updates touch reserved keys, naming the
 		// offending keys in the error (e.g. "Table properties contain
@@ -550,7 +592,7 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 					c.table = reloaded
 				}
 				c.incrCommitFailure()
-				return attempt > 1, fatalErr
+				return attempt > 1, joinUnresolvedUnknown(fatalErr, unresolvedUnknown)
 			} else if retry {
 				commitErr = err
 				continue
@@ -568,6 +610,12 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			if reloadedTbl, reloadErr := c.reloadTable(ctx); reloadErr == nil {
 				c.table = reloadedTbl
 				reloaded = true
+				// A successful reload resolves any pending ambiguity: either
+				// the commit-id check just below finds the token (the ambiguous
+				// attempt landed — we return success), or the token's absence
+				// proves it did not land. A failed reload (the else branch)
+				// resolves nothing and must leave the ambiguity standing.
+				unresolvedUnknown = nil
 				// Idempotency: a failed or ambiguous response may still have
 				// landed the commit server-side. If the reloaded table already
 				// carries our commit-id, the prior attempt succeeded — return
@@ -584,17 +632,34 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			continue
 		} else if err != nil {
 			// Non-retryable error: reload so the next call uses fresh metadata.
+			// (This reload does not clear unresolvedUnknown: no commit-id check
+			// follows it, so it never observes whether an ambiguous attempt
+			// landed.)
 			if reloaded, reloadErr := c.reloadTable(ctx); reloadErr == nil {
 				c.table = reloaded
 			}
 			c.incrCommitFailure()
-			return attempt > 1, fmt.Errorf("committing transaction: %w", err)
+			return attempt > 1, fmt.Errorf("committing transaction: %w", joinUnresolvedUnknown(err, unresolvedUnknown))
 		}
 		c.table = tbl
 		return attempt > 1, nil
 	}
 	c.incrCommitFailure()
-	return attempt > 1, fmt.Errorf("committing transaction after %d attempts: %w", attempt, commitErr)
+	return attempt > 1, fmt.Errorf("committing transaction after %d attempts: %w", attempt, joinUnresolvedUnknown(commitErr, unresolvedUnknown))
+}
+
+// joinUnresolvedUnknown attaches an unresolved ambiguous commit outcome — an
+// earlier attempt's ErrCommitStateUnknown that no successful reload resolved
+// (see commitLocked's unknown-state stickiness) — to err, so that errors.Is on
+// the result reports the unknown state no matter which attempt's error
+// terminated the retry loop. When there is no unresolved ambiguity, or err
+// already carries the unknown-state sentinel, err is returned unchanged,
+// preserving the existing error message exactly.
+func joinUnresolvedUnknown(err, unresolved error) error {
+	if unresolved == nil || errors.Is(err, rest.ErrCommitStateUnknown) {
+		return err
+	}
+	return errors.Join(err, unresolved)
 }
 
 // noteProhibitedKeys inspects a failed commit's error for a catalog
