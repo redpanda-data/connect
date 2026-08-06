@@ -913,7 +913,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	}
 
 	// Use the pre-built query from initialization
-	lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d): %s", startSCN, endSCN, lm.windowSize, lm.logMinerQuery)
+	lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
 	queryStart := time.Now()
 	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
