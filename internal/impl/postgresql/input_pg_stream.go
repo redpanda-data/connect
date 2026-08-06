@@ -530,7 +530,11 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			)
 			for _, msg := range batch {
 				if mb, err = json.Marshal(msg.Data); err != nil {
-					p.logger.Errorf("failure to marshal message: %s", err)
+					// Skipping the row would silently lose it while later rows
+					// advance the checkpoint past it. Restart instead: the LSN
+					// was never acked, so the stream resumes before this row.
+					p.logger.Errorf("failure to marshal message, restarting stream to avoid data loss: %s", err)
+					p.stopSig.TriggerSoftStop()
 					break
 				}
 				batchMsg := service.NewMessage(mb)
