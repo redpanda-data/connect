@@ -10,6 +10,7 @@ package oracledb_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1049,6 +1050,92 @@ oracledb_cdc:
 		"OUTOFLINELOB": "`+outofline+`"
 		}`, batch.Clone()[0], "Failed to assert streaming LOB columns")
 		}
+	})
+
+	// Non-inline LOB fetching: with `lob fetch=stream` (or `post`) in the
+	// connection string, go-ora reports LOB columns under their locator type
+	// names (OCIClobLocator/OCIBlobLocator) instead of rewriting them to
+	// LongVarChar/LongRaw as inline mode does — a different set of driver
+	// spellings feeding the snapshot scanner, the schema mapping, and the
+	// lob_enabled filter. These legs assert snapshot behaviour only: the
+	// LogMiner streaming path reads redo records and is independent of the
+	// client's LOB fetch mode, which the inline legs above already cover.
+	streamFetchConnStr := connStr + "?lob%20fetch=stream"
+	blobPayload := []byte(strings.Repeat("C", 4000))
+	lobStreamRows := 5
+
+	runLobStreamLeg := func(t *testing.T, table string, lobEnabled bool, wantRow string) *service.Stream {
+		t.Helper()
+		sql := `CREATE TABLE ` + table + ` (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),cloblob NCLOB,bloblob BLOB)`
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), table, sql))
+		for range lobStreamRows {
+			db.MustExec("INSERT INTO "+table+" (varcharcol, cloblob, bloblob) VALUES (:1, :2, :3)", "snapshot", outofline, blobPayload)
+		}
+
+		var batch oracledbtest.Batch
+		cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  snapshot_mode: snapshot_and_stream
+  logminer:
+    lob_enabled: %t
+    min_scn_window_size: 0
+  include: ["%s"]`, streamFetchConnStr, lobEnabled, strings.ToUpper(table))
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			batch.Lock()
+			defer batch.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				assert.NoError(t, err)
+				batch.Msgs = append(batch.Msgs, string(msgBytes))
+			}
+			return nil
+		}))
+
+		leg, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(leg.Resources())
+		go func() {
+			if err := leg.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		var got int
+		assert.Eventually(t, func() bool {
+			got = batch.Count()
+			return got >= lobStreamRows
+		}, time.Minute*5, time.Second*1)
+		require.Truef(t, (got == lobStreamRows), "Wanted %d snapshot messages but got %d", lobStreamRows, got)
+		require.JSONEq(t, wantRow, batch.Clone()[0], "Failed to assert snapshot LOB columns under lob fetch=stream")
+		return leg
+	}
+
+	_, _ = db.Exec(`TRUNCATE TABLE RPCN.CDC_CHECKPOINT_CACHE`)
+
+	t.Run("lob_enabled=false lob-fetch=stream", func(t *testing.T) {
+		leg := runLobStreamLeg(t, "testdb.lobstreamdisabled", false, `{
+		"ID": "1",
+		"VARCHARCOL": "snapshot",
+		"CLOBLOB": null,
+		"BLOBLOB": null
+		}`)
+		require.NoError(t, leg.StopWithin(time.Second*10))
+	})
+
+	_, _ = db.Exec(`TRUNCATE TABLE RPCN.CDC_CHECKPOINT_CACHE`)
+
+	t.Run("lob_enabled=true lob-fetch=stream", func(t *testing.T) {
+		leg := runLobStreamLeg(t, "testdb.lobstreamenabled", true, `{
+		"ID": "1",
+		"VARCHARCOL": "snapshot",
+		"CLOBLOB": "`+outofline+`",
+		"BLOBLOB": "`+base64.StdEncoding.EncodeToString(blobPayload)+`"
+		}`)
+		require.NoError(t, leg.StopWithin(time.Second*10))
 	})
 
 	if stream != nil {
