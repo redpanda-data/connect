@@ -85,7 +85,11 @@ func (p *batchPublisher) loop() {
 			return
 		}
 
+		// UntilNext reads the batcher's internal state, which concurrent
+		// Publish calls mutate under batcherMu — take the same lock.
+		p.batcherMu.Lock()
 		tNext, exists := p.batcher.UntilNext()
+		p.batcherMu.Unlock()
 		if !exists {
 			if flushBatchTicker != nil {
 				flushBatchTicker.Stop()
@@ -109,9 +113,14 @@ func (p *batchPublisher) loop() {
 		adjustTimedFlush()
 		select {
 		case <-flushBatch:
-			var sendBatch service.MessageBatch
+			var (
+				tracked  *trackedBatch
+				trackErr error
+			)
 
-			// Wrap this in a closure to make locking/unlocking easier.
+			// Wrap this in a closure to make locking/unlocking easier. Track
+			// happens under the same lock as the flush so the checkpoint
+			// sequence matches flush order.
 			func() {
 				p.batcherMu.Lock()
 				defer p.batcherMu.Unlock()
@@ -124,13 +133,18 @@ func (p *batchPublisher) loop() {
 					return
 				}
 
+				var sendBatch service.MessageBatch
 				if sendBatch, _ = p.batcher.Flush(closeAtLeisureCtx); len(sendBatch) == 0 {
 					return
 				}
+				tracked, trackErr = p.trackBatchLocked(closeAtLeisureCtx, sendBatch)
 			}()
+			if trackErr != nil {
+				return
+			}
 
-			if len(sendBatch) > 0 {
-				if err := p.publishBatch(closeAtLeisureCtx, sendBatch); err != nil {
+			if tracked != nil {
+				if err := p.sendTracked(closeAtLeisureCtx, tracked); err != nil {
 					return
 				}
 			}
@@ -181,10 +195,17 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 		msg.MetaSetImmut("schema", service.ImmutableAny{V: s})
 	}
 
-	var flushedBatch []*service.Message
+	// Flush and Track must be atomic: Track order defines the checkpoint
+	// sequence, so another flusher (the timed-flush loop) must not interleave
+	// between our flush and our Track. Only the channel send happens outside
+	// the lock.
+	var tracked *trackedBatch
 	b.batcherMu.Lock()
 	if b.batcher.Add(msg) {
-		flushedBatch, err = b.batcher.Flush(ctx)
+		var flushedBatch []*service.Message
+		if flushedBatch, err = b.batcher.Flush(ctx); err == nil && len(flushedBatch) > 0 {
+			tracked, err = b.trackBatchLocked(ctx, flushedBatch)
+		}
 	}
 	b.batcherMu.Unlock()
 	if err != nil {
@@ -192,8 +213,8 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	}
 
 	// If a batch was flushed, publish it outside the lock
-	if len(flushedBatch) > 0 {
-		if err := b.publishBatch(ctx, flushedBatch); err != nil {
+	if tracked != nil {
+		if err := b.sendTracked(ctx, tracked); err != nil {
 			return fmt.Errorf("publishing flushed batch: %w", err)
 		}
 	}
@@ -201,11 +222,17 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	return nil
 }
 
-func (b *batchPublisher) publishBatch(ctx context.Context, batch service.MessageBatch) error {
-	if len(batch) == 0 {
-		return nil
-	}
+// trackedBatch pairs a ready-to-send asyncMessage with the bookkeeping needed
+// to roll back its snapshot-gate slot if the send fails.
+type trackedBatch struct {
+	msg        asyncMessage
+	isSnapshot bool
+}
 
+// trackBatchLocked registers the batch with the ordered checkpoint tracker and
+// builds its ack function. It MUST be called with batcherMu held: Track order
+// defines the checkpoint sequence, so it has to match flush order exactly.
+func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.MessageBatch) (*trackedBatch, error) {
 	lastMsg := batch[len(batch)-1]
 	var checkpointLSN []byte
 	// snapshot records don't have a lsn as we don't track those
@@ -222,33 +249,59 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 
 	resolveFn, err := b.checkpoint.Track(ctx, checkpointLSN, int64(len(batch)))
 	if err != nil {
-		return fmt.Errorf("tracking LSN checkpoint for batch: %w", err)
-	}
-	msg := asyncMessage{
-		msg: batch,
-		ackFn: func(ctx context.Context, _ error) error {
-			if isSnapshotBatch {
-				defer b.snapshotAckWG.Done()
-			}
-			lsn := resolveFn()
-			if lsn != nil && len(*lsn) != 0 {
-				return b.cacheLSN(ctx, *lsn)
-			}
-			return nil
-		},
+		return nil, fmt.Errorf("tracking LSN checkpoint for batch: %w", err)
 	}
 	if isSnapshotBatch {
 		b.snapshotAckWG.Add(1)
 	}
+	return &trackedBatch{
+		isSnapshot: isSnapshotBatch,
+		msg: asyncMessage{
+			msg: batch,
+			ackFn: func(ctx context.Context, _ error) error {
+				if isSnapshotBatch {
+					defer b.snapshotAckWG.Done()
+				}
+				lsn := resolveFn()
+				if lsn != nil && len(*lsn) != 0 {
+					return b.cacheLSN(ctx, *lsn)
+				}
+				return nil
+			},
+		},
+	}, nil
+}
+
+// sendTracked hands a tracked batch to ReadBatch. Must be called WITHOUT
+// batcherMu held (the send blocks until consumed). A failed send releases the
+// batch's snapshot-gate slot.
+func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch) error {
 	select {
-	case b.msgChan <- msg:
+	case b.msgChan <- tracked.msg:
 		return nil
 	case <-ctx.Done():
-		if isSnapshotBatch {
+		if tracked.isSnapshot {
 			b.snapshotAckWG.Done()
 		}
 		return ctx.Err()
 	}
+}
+
+// publishBatch tracks and sends a batch that was flushed elsewhere. Callers
+// that flush the batcher themselves must instead track under the same lock as
+// their flush (see Publish/loop/flushCurrent) to keep Track order == flush
+// order.
+func (b *batchPublisher) publishBatch(ctx context.Context, batch service.MessageBatch) error {
+	if len(batch) == 0 {
+		return nil
+	}
+	b.batcherMu.Lock()
+	tracked, err := b.trackBatchLocked(ctx, batch)
+	b.batcherMu.Unlock()
+	if err != nil {
+		return err
+	}
+	return b.sendTracked(ctx, tracked)
 }
 
 // waitSnapshotAcks blocks until every published snapshot batch has been
@@ -279,13 +332,17 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 	if b.batcher == nil {
 		return nil
 	}
+	var tracked *trackedBatch
 	b.batcherMu.Lock()
 	remaining, err := b.batcher.Flush(ctx)
+	if err == nil && len(remaining) > 0 {
+		tracked, err = b.trackBatchLocked(ctx, remaining)
+	}
 	b.batcherMu.Unlock()
-	if err != nil || len(remaining) == 0 {
+	if err != nil || tracked == nil {
 		return err
 	}
-	return b.publishBatch(ctx, remaining)
+	return b.sendTracked(ctx, tracked)
 }
 
 func (b *batchPublisher) msgs() <-chan asyncMessage {
