@@ -291,15 +291,19 @@ test('acceptance case 2: the heavy-mapping tax can push a target past the ceilin
 })
 
 test('acceptance case 3: oracle refuses to grow cores and names readers as the fix', () => {
+  // 20k/s at 1200 B = 24 MB/s, +30% = 31.2 — past every measured reader point.
   const r = core.sizeFor({
     connector: 'oracledb_cdc', eventsPerSec: 20_000, eventBytes: 1200,
-    tax: 'passthrough', headroomPct: 30,
+    readers: 1, tax: 'passthrough', headroomPct: 30,
   })
   assert.equal(r.status, 'ceiling')
-  assert.equal(r.ceilingRate, 13)
+  assert.equal(r.measuredCeilingRate, 19, 'the 1-reader measurement')
   assert.match(r.ceiling.reason, /LogMiner/)
   assert.match(r.ceiling.fix, /readers/)
   assert.equal(r.cores, undefined, 'a refusal must not carry a core count')
+  // 31.2 exceeds even 5 readers (29), so there is no reader count to suggest.
+  assert.equal(r.readerHint, null)
+  assert.deepEqual(r.topMeasured, { readers: 5, rate: 29, effective: 29 })
 })
 
 test('acceptance case 4: mongo names sharding as the fix', () => {
@@ -372,15 +376,76 @@ test('a ceiling refusal separates the measured maximum from the tax-derated figu
 })
 
 test('at 1.0x the ceiling figure is the measured maximum itself', () => {
+  // mongodb has a flat vCPU curve and no reader scaling, so it exercises the plain path.
   const r = core.sizeFor({
-    connector: 'oracledb_cdc', eventsPerSec: 20_000, eventBytes: 1200,
+    connector: 'mongodb_cdc', eventsPerSec: 40_000, eventBytes: 1200,
     tax: 'passthrough', headroomPct: 30,
   })
   assert.equal(r.status, 'ceiling')
   assert.equal(r.taxMultiplier, 1)
   assert.equal(r.taxMeasured, true)
   assert.equal(r.measuredCeilingRate, r.ceilingRate)
-  assert.equal(r.measuredCeilingRate, 13)
+  assert.equal(r.measuredCeilingRate, 33)
+})
+
+test('oracle sizes off reader count, and reports cores as the run value not a scaling knob', () => {
+  const base = { connector: 'oracledb_cdc', eventBytes: 1200, tax: 'passthrough', headroomPct: 0 }
+  // 12 MB/s target: clears at 1 reader (19).
+  const one = core.sizeFor({ ...base, eventsPerSec: 10_000, readers: 1 })
+  assert.equal(one.status, 'ok')
+  assert.equal(one.measuredRate, 19)
+  assert.equal(one.cores, 4, 'the reader runs held vCPU at 4')
+  assert.equal(one.readers, 1)
+
+  // 22 MB/s: past 1 reader (19), inside 2 readers (25).
+  assert.equal(core.sizeFor({ ...base, eventsPerSec: 18_500, readers: 1 }).status, 'ceiling')
+  const two = core.sizeFor({ ...base, eventsPerSec: 18_500, readers: 2 })
+  assert.equal(two.status, 'ok')
+  assert.equal(two.measuredRate, 25)
+
+  // Same volume at 1 reader must point at the reader count that would clear it.
+  assert.equal(core.sizeFor({ ...base, eventsPerSec: 18_500, readers: 1 }).readerHint, 2)
+})
+
+test('an unmeasured reader count is refused, never interpolated', () => {
+  for (const readers of [3, 4, 6, 0]) {
+    const r = core.sizeFor({ connector: 'oracledb_cdc', eventsPerSec: 5_000, eventBytes: 1200, readers })
+    assert.equal(r.status, 'unmeasured-readers', `readers=${readers} must not produce a number`)
+    assert.equal(r.cores, undefined)
+    assert.deepEqual(r.measuredReaderCounts, [1, 2, 5])
+  }
+  assert.equal(core.readerRate(core.CONNECTORS.oracledb_cdc, 3), null)
+})
+
+test('the oracle reader curve is pinned, sublinear, and short of the offered load', () => {
+  const rs = core.CONNECTORS.oracledb_cdc.readerScaling
+  assert.deepEqual(rs.points, [
+    { readers: 1, rate: 19 },
+    { readers: 2, rate: 25 },
+    { readers: 5, rate: 29 },
+  ])
+  assert.equal(rs.vcpu, 4)
+  assert.equal(rs.tables, 5)
+  assert.equal(rs.unit, 'MB')
+  assert.equal(rs.run.sha, 'f1ccf5289')
+  assert.equal(rs.corroboration.sha, '3e8bf51d4')
+  // The two facts a rep must not lose: 5x readers is far from 5x throughput, and even the
+  // best point never caught the write rate.
+  assert.ok(rs.points[2].rate / rs.points[0].rate < 2, 'reader scaling must read as sublinear')
+  assert.ok(rs.points[2].rate < rs.offeredMBs, 'top reader point must still trail offered load')
+  assert.ok(rs.notes.some((n) => /single hot table cannot be split/.test(n)))
+  assert.ok(rs.notes.some((n) => /per-database ceiling/.test(n)))
+})
+
+test('only oracle is reader-scaled; the others ignore a readers argument', () => {
+  assert.deepEqual(core.measuredReaderCounts(core.CONNECTORS.oracledb_cdc), [1, 2, 5])
+  for (const key of ['postgres_cdc', 'mysql_cdc', 'mongodb_cdc', 'dynamodb_cdc', 'iceberg_sink']) {
+    assert.deepEqual(core.measuredReaderCounts(core.CONNECTORS[key]), [])
+    const withReaders = core.sizeFor({ connector: key, eventsPerSec: 10_000, eventBytes: 1200, readers: 3 })
+    const without = core.sizeFor({ connector: key, eventsPerSec: 10_000, eventBytes: 1200 })
+    assert.equal(withReaders.status, without.status, `${key} must ignore readers`)
+    assert.equal(withReaders.cores, without.cores)
+  }
 })
 
 test('the measured maximum quoted on a refusal is the top of the curve, ties going to the largest vCPU', () => {

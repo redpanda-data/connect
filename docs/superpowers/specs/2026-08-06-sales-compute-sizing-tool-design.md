@@ -91,8 +91,14 @@ explicitly where the rep can see and defend it.
 Where the measured curve is flat, the tool must not return a larger vCPU count for a
 target above the ceiling. It reports the ceiling and the actual fix:
 
-- **oracledb_cdc** — ~13 MB/s regardless of vCPU. The ceiling is per LogMiner reader.
-  Fix is more readers: measured 19, 25, 30 MB/s at 4 vCPU as readers increase.
+- **oracledb_cdc** — ~13 MB/s regardless of vCPU on the single-table run. The ceiling is
+  per LogMiner reader, and **readers are now a sizing input rather than prose advice**:
+  measured 19 / 25 / 29 MB/s at 1 / 2 / 5 readers, on a 5-table 36.7 MB/s workload at a
+  fixed 4 vCPU (`oracle/orders-5table-readers`, corroborated by `-fastio` on a larger
+  source instance). Because readers partition tables, a single hot table cannot be split at
+  all, and only the three measured reader counts are answerable — 3 and 4 return a refusal
+  rather than an interpolation. Scaling is sublinear and never reached the offered load, so
+  ~30 MB/s is the practical Oracle ceiling until something above it is measured.
 - **mongodb_cdc** — ~33 MB/s from 2 vCPU up. The ceiling is the single change-stream
   cursor. Fix is sharding.
 

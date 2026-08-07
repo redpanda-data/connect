@@ -20,6 +20,40 @@ Published URL: https://claude.ai/code/artifact/febb2295-eb57-4115-b2ab-94c1717f7
 file path and pass that URL as `url` — a fresh conversation that skips the `url` mints a
 new link, which strands anyone who bookmarked the old one.
 
+## Oracle scales with readers, not cores
+
+Oracle is the one connector where the sizing dimension is not vCPU. A LogMiner reader is an
+`oracledb_cdc` input with its own disjoint table list, so **readers partition tables**. The
+page therefore shows a reader-count control for Oracle only, sizes off the measured reader
+curve, and always displays that curve with its caveats.
+
+Measured on `scenarios/oracle/orders-5table-readers` — the same 5-table, 36.7 MB/s workload
+redistributed across N readers at a fixed 4 vCPU:
+
+| Readers | Measured | vs 1 reader |
+|---|---|---|
+| 1 | 19 MB/s | 1.00x |
+| 2 | 25 MB/s | 1.32x |
+| 5 | 29 MB/s | 1.53x |
+
+Three things the page states and you should not let a quote drop:
+
+1. **A single hot table cannot be split.** Readers partition tables, so if the writes sit in
+   one table, no reader count and no core count beats the 13 MB/s from the single-table
+   `orders-cdc` run. That is why the vCPU table (13, one table) and the reader table (19 at
+   one reader, five tables) disagree — they are different workloads, and the page says so.
+2. **Scaling is sublinear and never caught the offered load.** 5x the readers bought 1.53x,
+   topping out at 29-30 MB/s against a 36.7 MB/s write rate. A per-database ceiling near
+   31 MB/s is the likely explanation, so treat ~30 MB/s as the practical Oracle ceiling.
+3. **Only 1, 2 and 5 readers were run.** The select offers exactly those. Asking for 3 or 4
+   returns a refusal rather than an interpolated number, because nothing measured them.
+
+Two runs on different source instances (`db.r5.2xlarge` and `db.r5.4xlarge`) agreed within
+1 MB/s, which is what rules out source I/O as the constraint. Both are cited on the page.
+
+Adding reader scaling to another connector means giving it a `readerScaling` block of the
+same shape; `sizeFor` picks up the reader path from its presence alone.
+
 ## The hard boundary
 
 Only six connectors have a number: `postgres_cdc`, `mysql_cdc`, `mongodb_cdc`,
@@ -36,7 +70,7 @@ row by analogy or interpolation.
 node --test benchmarking/aws/sizing/sizing.test.mjs
 ```
 
-32 tests cover the calculation core: unit conversion in both directions, rate/throughput
+36 tests cover the calculation core: unit conversion in both directions, rate/throughput
 round-tripping without drift across all four input units, the "smallest clearing point" rule, headroom semantics, ceiling
 refusals, the no-answer guard on blank/negative/non-finite input, event-size caveats, and
 per-connector provenance. Run them after any change to the data or the calculation.

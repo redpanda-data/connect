@@ -57,6 +57,37 @@ export const SCALE_OUT_UNMEASURED = {
     'may become the constraint before Connect does. Ask the perf team before quoting.',
 }
 
+// Oracle is the one connector whose throughput moves with something other than vCPU. A
+// LogMiner reader is an `oracledb_cdc` input with its own disjoint table list, so readers
+// partition TABLES — which is why more of them help, and why a single hot table cannot be
+// split no matter how many you configure.
+//
+// Measured on scenarios/oracle/orders-5table-readers: the same 5-table, 36.7 MB/s workload
+// redistributed across 1, 2 and 5 readers at a fixed 4 vCPU. Two independent runs on
+// different source instances (db.r5.2xlarge and db.r5.4xlarge) agreed to within 1 MB/s,
+// which is what rules out source I/O as the constraint. The conservative figure is used
+// where they differ.
+export const ORACLE_READER_SCALING = {
+  vcpu: 4,
+  tables: 5,
+  offeredMBs: 36.7,
+  unit: 'MB',
+  // readers → measured median. Do NOT interpolate or extrapolate: 3 and 4 readers were
+  // never run, and nothing past 5 was either.
+  points: [
+    { readers: 1, rate: 19 },
+    { readers: 2, rate: 25 },
+    { readers: 5, rate: 29 },
+  ],
+  run: { path: 'oracle/orders-5table-readers/2026-08-06T15-02-03Z.json', date: '2026-08-06', sha: 'f1ccf5289' },
+  corroboration: { path: 'oracle/orders-5table-readers-fastio/2026-08-06T22-17-54Z.json', date: '2026-08-06', sha: '3e8bf51d4' },
+  notes: [
+    'Readers partition tables — each is an oracledb_cdc input with its own table list. A single hot table cannot be split, so if the write load sits in one table, no reader count and no core count will beat the 13 MB/s measured on the single-table run.',
+    'Scaling is sublinear and does not reach the offered load: 5x the readers bought 1.55x the throughput, and 29-30 MB/s was the most ever seen against a 36.7 MB/s write rate. A per-database ceiling somewhere near 31 MB/s is the most likely explanation, so treat ~30 MB/s as the practical Oracle ceiling until something above it is measured.',
+    'Both runs held vCPU at 4. Cores were never the constraint on this connector, so the core count below is what the measurement used, not a figure that scales.',
+  ],
+}
+
 // Connect median throughput at 1/2/4/8 vCPU, all measured on a c8g.4xlarge runner.
 // Each curve is in the unit its own run stored — see curveUnit and the UNITS note above.
 export const CONNECTORS = {
@@ -119,10 +150,11 @@ export const CONNECTORS = {
     curveUnit: 'MB',
     ceiling: {
       reason: 'one LogMiner reader — the ceiling is per reader, and vCPU count is irrelevant to it',
-      fix: 'Add readers. Measured 19, then 25, then 30 MB/s at a fixed 4 vCPU as readers were added.',
+      fix: 'Split the tables across more readers. See the reader curve below.',
     },
     sourceKind: 'cdc',
     confidence: 'high',
+    readerScaling: ORACLE_READER_SCALING,
   },
   iceberg_sink: {
     label: 'Iceberg sink (iceberg output)',
@@ -225,12 +257,35 @@ export function hasSizeableInput(bytesPerSec) {
   return Number.isFinite(bytesPerSec) && bytesPerSec > 0
 }
 
+// For a connector with a reader curve, throughput is set by reader count rather than vCPU.
+// Only measured reader counts are answerable; anything else returns null so the caller
+// refuses rather than interpolating a number nobody ran.
+export function readerRate(c, readers) {
+  const rs = c.readerScaling
+  if (!rs) return null
+  const hit = rs.points.find((p) => p.readers === readers)
+  return hit ? hit.rate : null
+}
+
+export function measuredReaderCounts(c) {
+  return c.readerScaling ? c.readerScaling.points.map((p) => p.readers) : []
+}
+
+// The smallest measured reader count whose rate clears `required`, or null if none does.
+// Used to turn a refusal into "N readers would have cleared this" where the data supports it.
+export function readersNeededFor(c, required, taxMultiplier = 1) {
+  if (!c.readerScaling) return null
+  const hit = c.readerScaling.points.find((p) => p.rate / taxMultiplier >= required)
+  return hit ? hit.readers : null
+}
+
 // Sizing always works from a rate and an average event size. The page lets a rep type a
 // throughput instead, but converts it to a rate via the size before calling this, so the
 // event-size check is never skipped.
 export function sizeFor({
   connector,
   eventsPerSec, eventBytes,
+  readers = 1,
   tax = 'passthrough', headroomPct = 30,
 }) {
   const c = CONNECTORS[connector]
@@ -250,6 +305,41 @@ export function sizeFor({
   const target = inCurveUnit(bytesPerSec, unit)
   const required = target * (1 + headroomPct / 100)
   const warnings = warningsFor(c, eventBytes)
+
+  // --- reader-scaled connectors (Oracle): reader count is the dimension, not vCPU ---
+  if (c.readerScaling) {
+    const rs = c.readerScaling
+    const base = { connector, unit, bytesPerSec, target, required, headroomPct,
+                   taxMultiplier: multiplier, taxMeasured: TAX[tax].measured,
+                   taxShort: TAX[tax].short, readers, readerScaling: rs,
+                   run: rs.run, confidence: c.confidence, warnings }
+
+    const measured = readerRate(c, readers)
+    if (measured === null) {
+      // Never interpolate a reader count nobody ran.
+      return { ...base, status: 'unmeasured-readers', measuredReaderCounts: measuredReaderCounts(c) }
+    }
+
+    const available = measured / multiplier
+    if (available >= required) {
+      return { ...base, status: 'ok', cores: rs.vcpu, measuredRate: measured, effectiveRate: available,
+               peakHeapMB: c.peakHeapMB }
+    }
+
+    // Refusal. If a larger MEASURED reader count would have cleared it, say which.
+    const hint = readersNeededFor(c, required, multiplier)
+    const top = rs.points[rs.points.length - 1]
+    return {
+      ...base,
+      status: 'ceiling',
+      measuredCeilingRate: measured,
+      ceilingRate: available,
+      readerHint: hint && hint !== readers ? hint : null,
+      topMeasured: { readers: top.readers, rate: top.rate, effective: top.rate / multiplier },
+      ceiling: c.ceiling,
+      scaleOutNote: null,
+    }
+  }
 
   const effective = VCPU_POINTS.map((vcpu) => ({ vcpu, rate: c.curve[vcpu] / multiplier }))
   const fit = effective.find((p) => p.rate >= required)
@@ -303,6 +393,7 @@ window.__sizingCore = {
   EVENT_BYTES_DEVIATION_FACTOR, INPUT_UNITS, TAX, SCALE_OUT_UNMEASURED, CONNECTORS,
   bytesPerSecFromEvents, bytesPerSecFromThroughput, inCurveUnit,
   throughputFromEvents, eventsPerSecFromThroughput,
+  ORACLE_READER_SCALING, readerRate, measuredReaderCounts, readersNeededFor,
   warningsFor, hasSizeableInput, sizeFor,
 }
 </script>
@@ -838,6 +929,12 @@ window.__sizingCore = {
         <span class="helper">Same volume, stated the other way</span>
       </div>
 
+      <div class="field" id="readersField" hidden>
+        <label for="readers">LogMiner readers</label>
+        <select id="readers"></select>
+        <span class="helper">Readers split tables between them</span>
+      </div>
+
       <div class="field">
         <label for="tax">Processing</label>
         <select id="tax"></select>
@@ -862,17 +959,27 @@ window.__sizingCore = {
     <p class="panel-label">Measured curve</p>
     <div id="curveHost"></div>
   </section>
+
+  <section class="panel" id="readerSection" hidden>
+    <p class="panel-label">How Oracle scales</p>
+    <div id="readerHost"></div>
+  </section>
 </div>
 
 <script type="module">
   const { CONNECTORS, TAX, VCPU_POINTS, INPUT_UNITS, sizeFor,
-          throughputFromEvents, eventsPerSecFromThroughput } = window.__sizingCore
+          throughputFromEvents, eventsPerSecFromThroughput,
+          measuredReaderCounts } = window.__sizingCore
 
   const connectorSelect = document.getElementById('connector')
   const eventsInput = document.getElementById('eventsPerSec')
   const bytesInput = document.getElementById('eventBytes')
   const throughputInput = document.getElementById('throughput')
   const throughputUnitSelect = document.getElementById('throughputUnit')
+  const readersSelect = document.getElementById('readers')
+  const readersField = document.getElementById('readersField')
+  const readerSection = document.getElementById('readerSection')
+  const readerHost = document.getElementById('readerHost')
   const taxSelect = document.getElementById('tax')
   const headroomInput = document.getElementById('headroom')
   const headroomVal = document.getElementById('headroomVal')
@@ -908,6 +1015,22 @@ window.__sizingCore = {
     throughputUnitSelect.appendChild(opt)
   }
   throughputUnitSelect.value = 'MB/s'
+
+  // Options are the measured reader counts and nothing else — 3 and 4 readers were never
+  // run, so offering them would invite a number no benchmark supports.
+  function syncReaderOptions(connectorKey) {
+    const counts = measuredReaderCounts(CONNECTORS[connectorKey] || {})
+    readersField.hidden = counts.length === 0
+    readerSection.hidden = counts.length === 0
+    if (!counts.length) return
+    const keep = readersSelect.value
+    if (readersSelect.dataset.for !== connectorKey) {
+      readersSelect.innerHTML = counts.map((n) =>
+        `<option value="${n}">${n} reader${n === 1 ? '' : 's'}</option>`).join('')
+      readersSelect.dataset.for = connectorKey
+      readersSelect.value = counts.includes(Number(keep)) ? keep : String(counts[0])
+    }
+  }
 
   // --- formatting helpers ---
   const r1 = (n) => (Math.round(n * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 })
@@ -954,7 +1077,8 @@ window.__sizingCore = {
         <span class="core-count">${r.cores}</span>
         <span class="core-unit">licensable cores</span>
       </div>
-      <p class="support-line">Needs ${r1(r.required)} ${r.unit}/s (target ${r1(r.target)} ${r.unit}/s + ${r.headroomPct}% headroom). Measured ${r1(r.measuredRate)} ${r.unit}/s at ${r.cores} vCPU.</p>
+      <p class="support-line">Needs ${r1(r.required)} ${r.unit}/s (target ${r1(r.target)} ${r.unit}/s + ${r.headroomPct}% headroom). Measured ${r1(r.measuredRate)} ${r.unit}/s at ${r.cores} vCPU${r.readerScaling ? ` with ${r.readers} reader${r.readers === 1 ? '' : 's'}` : ''}.</p>
+      ${r.readerScaling ? `<p class="support-line">Throughput here comes from reader count, not cores — ${r.cores} vCPU is what the reader runs used, and adding cores did not move this connector.</p>` : ''}
       <p class="support-line">Peak heap: ${int(r.peakHeapMB)} MB</p>
       ${memNote}
       ${provenanceHtml(r.run)}
@@ -976,17 +1100,45 @@ window.__sizingCore = {
         </div>`
     // Never call a tax-derated figure "measured". At 1.0x the two numbers are the same
     // reading; above 1.0x the derated figure is arithmetic and is labelled as such.
-    const ceilingLine = r.taxMultiplier === 1
-      ? `<p class="support-line">The most that was ever measured is ${r1(r.measuredCeilingRate)} ${r.unit}/s at ${r.measuredCeilingVcpu} vCPU — the last row of the table below. No point on the curve reaches the requirement.</p>`
-      : `<p class="support-line">The most that was ever measured is ${r1(r.measuredCeilingRate)} ${r.unit}/s at ${r.measuredCeilingVcpu} vCPU with no mapping — the last row of the table below. Derated by the estimated ${r.taxMultiplier}x cost of ${r.taxShort}, that works out to about ${r1(r.ceilingRate)} ${r.unit}/s. That ${r1(r.ceilingRate)} is calculated, not measured — no benchmark produced it.</p>`
+    const derated = (measured, effective) => r.taxMultiplier === 1
+      ? ''
+      : ` Derated by the estimated ${r.taxMultiplier}x cost of ${r.taxShort} that is about ${r1(effective)} ${r.unit}/s, which is calculated, not measured — no benchmark produced it.`
+
+    let ceilingLine
+    if (r.readerScaling) {
+      // Reader-scaled: quote the reader count in play, then whether more readers would help.
+      const rs = r.readerScaling
+      const more = r.readerHint
+        ? `${r.readerHint} readers would clear it — that point was measured at ${r1(rs.points.find((p) => p.readers === r.readerHint).rate)} ${r.unit}/s. Split the tables that way.`
+        : `Nothing measured clears it. The most ever seen is ${r1(r.topMeasured.rate)} ${r.unit}/s at ${r.topMeasured.readers} readers, against a ${rs.offeredMBs} ${r.unit}/s write rate the run never caught up with — so roughly ${r1(r.topMeasured.rate)} ${r.unit}/s is the practical Oracle ceiling until something above it is measured.`
+      ceilingLine = `
+        <p class="support-line">With ${r.readers} reader${r.readers === 1 ? '' : 's'} the measured throughput is ${r1(r.measuredCeilingRate)} ${r.unit}/s.${derated(r.measuredCeilingRate, r.ceilingRate)}</p>
+        <p class="support-line">${more}</p>`
+    } else {
+      ceilingLine = `<p class="support-line">The most that was ever measured is ${r1(r.measuredCeilingRate)} ${r.unit}/s at ${r.measuredCeilingVcpu} vCPU${r.taxMultiplier === 1 ? '' : ' with no mapping'} — the last row of the table below. No point on the curve reaches the requirement.${derated(r.measuredCeilingRate, r.ceilingRate)}</p>`
+    }
+
+    const headline = r.readerScaling
+      ? 'No core count — more cores will not get you there.'
+      : 'No core count — this exceeds what was measured.'
+
     resultHost.innerHTML = `
-      <p class="headline-refuse">No core count — this exceeds what was measured.</p>
+      <p class="headline-refuse">${headline}</p>
       <p class="support-line">Needs ${r1(r.required)} ${r.unit}/s (target ${r1(r.target)} ${r.unit}/s + ${r.headroomPct}% headroom).</p>
       ${ceilingLine}
       ${limitHtml}
       ${provenanceHtml(r.run)}
       ${badgeHtml(r)}
       ${caveatsHtml(r.warnings)}
+    `
+  }
+
+  function renderUnmeasuredReaders(r) {
+    resultCard.className = 'panel result-card state-ceiling'
+    resultHost.innerHTML = `
+      <p class="headline-refuse">No number — that reader count was never run.</p>
+      <p class="support-line">Measured reader counts: ${r.measuredReaderCounts.join(', ')}. Interpolating between them would invent a figure, so the tool declines.</p>
+      ${provenanceHtml(r.run)}
     `
   }
 
@@ -1027,13 +1179,51 @@ window.__sizingCore = {
     curveHost.innerHTML = `
       <div class="curve-wrap">
         <table class="curve-table">
-          <caption>${c.label} — measured ${c.curveUnit}/s by vCPU (c8g.4xlarge)</caption>
+          <caption>${c.label} — measured ${c.curveUnit}/s by vCPU (c8g.4xlarge)${c.readerScaling ? `, one busy table on one reader. Flat: cores never moved it. The reader curve below is a different, ${c.readerScaling.tables}-table run — that is why its figures are higher.` : ''}</caption>
           <thead>
             <tr><th scope="col">vCPU</th><th scope="col">Measured ${c.curveUnit}/s</th><th scope="col">Relative</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
+    `
+  }
+
+  // Always-on explanation for a reader-scaled connector: the measured reader curve, its
+  // provenance and corroborating run, and the caveats that make the shape make sense.
+  function renderReaderPanel(connectorKey, activeReaders) {
+    const c = CONNECTORS[connectorKey]
+    if (!c || !c.readerScaling) { readerSection.hidden = true; return }
+    readerSection.hidden = false
+    const rs = c.readerScaling
+    const max = Math.max(...rs.points.map((p) => p.rate))
+    const rows = rs.points.map((p) => {
+      const isActive = p.readers === activeReaders
+      const pct = Math.max(4, Math.round((p.rate / max) * 100))
+      const gain = (p.rate / rs.points[0].rate).toFixed(2)
+      return `
+        <tr class="${isActive ? 'selected-row' : ''}">
+          <td>${p.readers}${isActive ? '<span class="row-tag">selected</span>' : ''}</td>
+          <td>${r1(p.rate)} ${rs.unit}/s</td>
+          <td>${gain}x</td>
+          <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+        </tr>`
+    }).join('')
+    readerHost.innerHTML = `
+      <div class="curve-wrap">
+        <table class="curve-table">
+          <caption>${rs.tables} tables split across N LogMiner readers, at a fixed ${rs.vcpu} vCPU — offered load ${rs.offeredMBs} ${rs.unit}/s</caption>
+          <thead>
+            <tr><th scope="col">Readers</th><th scope="col">Measured ${rs.unit}/s</th><th scope="col">vs 1 reader</th><th scope="col">Relative</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <ul class="caveats">
+        ${rs.notes.map((n) => `<li class="caveat"><span class="eyebrow">Read this before quoting</span>${n}</li>`).join('')}
+      </ul>
+      <p class="provenance">Measured ${rs.run.date} · run ${rs.run.path} · ${rs.run.sha}</p>
+      <p class="provenance">Corroborated on a larger source instance · run ${rs.corroboration.path} · ${rs.corroboration.sha}</p>
     `
   }
 
@@ -1048,13 +1238,19 @@ window.__sizingCore = {
       return
     }
 
+    syncReaderOptions(connector)
+    const readers = readersField.hidden ? 1 : Number(readersSelect.value)
+
     const result = sizeFor({
       connector,
       eventsPerSec: Number(eventsInput.value),
       eventBytes: Number(bytesInput.value),
+      readers,
       tax: taxSelect.value,
       headroomPct,
     })
+
+    renderReaderPanel(connector, readers)
 
     if (result.status === 'ok') {
       renderOk(result)
@@ -1062,6 +1258,9 @@ window.__sizingCore = {
     } else if (result.status === 'ceiling') {
       renderCeiling(result)
       renderCurve(connector, null, true)
+    } else if (result.status === 'unmeasured-readers') {
+      renderUnmeasuredReaders(result)
+      renderCurve(connector, null)
     } else if (result.status === 'no-input') {
       renderNoInput()
       renderCurve(connector, null)
@@ -1116,6 +1315,7 @@ window.__sizingCore = {
     throughputInput.addEventListener(ev, linked(showEventsFromThroughput))
     throughputUnitSelect.addEventListener(ev, linked(showThroughputFromEvents))
     connectorSelect.addEventListener(ev, render)
+    readersSelect.addEventListener(ev, render)
     taxSelect.addEventListener(ev, render)
     headroomInput.addEventListener(ev, render)
   }
