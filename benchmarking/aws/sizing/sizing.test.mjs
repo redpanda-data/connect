@@ -54,37 +54,67 @@ test('acceptance case 1: postgres 40k/s at 1200 B passthrough clears at 2 cores'
   assert.ok(Math.abs(r.required - 62.4) < 0.05, `required was ${r.required}`)
 })
 
-test('the same rate stated as throughput gives the same core count as events x size', () => {
-  const base = { connector: 'postgres_cdc', tax: 'passthrough', headroomPct: 30 }
-  const viaEvents = core.sizeFor({ ...base, eventsPerSec: 40_000, eventBytes: 1200 })
-  const viaThroughput = core.sizeFor({ ...base, mode: 'throughput', throughput: 48, throughputUnit: 'MB/s' })
-  assert.equal(viaThroughput.status, 'ok')
-  assert.equal(viaThroughput.cores, viaEvents.cores)
-  assert.equal(viaThroughput.target, viaEvents.target)
+test('rate and throughput round-trip through the event size without drift', () => {
+  // The two fields are views of one volume, anchored by the event size. Editing either must
+  // land on the same bytes/sec, or the page would disagree with itself as a rep typed.
+  const t = core.throughputFromEvents(40_000, 1200, 'MB/s')
+  assert.equal(t, 48)
+  assert.equal(core.eventsPerSecFromThroughput(t, 'MB/s', 1200), 40_000)
+
+  for (const unit of ['MB/s', 'MiB/s', 'GB/day', 'TB/day']) {
+    const back = core.eventsPerSecFromThroughput(core.throughputFromEvents(40_000, 1200, unit), unit, 1200)
+    assert.ok(Math.abs(back - 40_000) < 0.001, `${unit} round-trip gave ${back}`)
+  }
+
+  // A blank or zero size cannot yield a rate — the anchor is missing.
+  assert.ok(Number.isNaN(core.eventsPerSecFromThroughput(48, 'MB/s', 0)))
+  assert.ok(Number.isNaN(core.throughputFromEvents(40_000, 1200, 'bogus/s')))
 })
 
-test('throughput mode says the event-size check could not run', () => {
-  const r = core.sizeFor({
-    connector: 'dynamodb_cdc', mode: 'throughput', throughput: 20, throughputUnit: 'MB/s',
-    tax: 'passthrough', headroomPct: 30,
+test('a throughput-derived rate sizes identically to the rate typed directly', () => {
+  const base = { connector: 'postgres_cdc', tax: 'passthrough', headroomPct: 30 }
+  const direct = core.sizeFor({ ...base, eventsPerSec: 40_000, eventBytes: 1200 })
+  const derived = core.sizeFor({
+    ...base,
+    eventsPerSec: core.eventsPerSecFromThroughput(48, 'MB/s', 1200),
+    eventBytes: 1200,
   })
-  assert.equal(r.status, 'ok')
-  assert.equal(r.mode, 'throughput')
-  assert.equal(r.warnings.length, 1)
-  assert.match(r.warnings[0], /event size is unknown/)
-  assert.match(r.warnings[0], /4096 B events/)
+  assert.equal(derived.status, 'ok')
+  assert.equal(derived.cores, direct.cores)
+  assert.equal(derived.target, direct.target)
+})
+
+test('the event-size check always runs, whichever field the rep typed into', () => {
+  // Sizing is always rate x size, so no input path can skip the size check. dynamodb was
+  // benched at 4096 B, so a 600 B event must warn regardless of how the volume was entered.
+  const typed = core.sizeFor({ connector: 'dynamodb_cdc', eventsPerSec: 20_000, eventBytes: 600 })
+  const viaThroughput = core.sizeFor({
+    connector: 'dynamodb_cdc',
+    eventsPerSec: core.eventsPerSecFromThroughput(12, 'MB/s', 600),
+    eventBytes: 600,
+  })
+  for (const r of [typed, viaThroughput]) {
+    assert.equal(r.status, 'ok')
+    assert.equal(r.warnings.length, 1)
+    assert.match(r.warnings[0], /4096 B events/)
+  }
 })
 
 test('a MiB/s-stated volume is not silently treated as MB/s', () => {
-  // Against a decimal-MB curve, 100 MiB/s is 104.86 MB/s. Sizing it as 100 would
-  // understate the requirement by 4.86% — the bug this whole unit tag exists to stop.
-  const asMiB = core.sizeFor({ connector: 'postgres_cdc', mode: 'throughput', throughput: 100, throughputUnit: 'MiB/s', headroomPct: 0 })
-  const asMB = core.sizeFor({ connector: 'postgres_cdc', mode: 'throughput', throughput: 100, throughputUnit: 'MB/s', headroomPct: 0 })
-  assert.ok(Math.abs(asMiB.target - 104.8576) < 0.01, `MiB target was ${asMiB.target}`)
-  assert.equal(asMB.target, 100)
-  // 100 MB/s clears against the 102 point; 104.86 MB/s clears nothing.
-  assert.equal(asMB.status, 'ok')
-  assert.equal(asMiB.status, 'ceiling')
+  // 100 MiB/s is 104.86 MB/s. Against a decimal-MB curve that is the difference between
+  // clearing the 102 point and not — the error this whole unit split exists to prevent.
+  const asMiB = core.eventsPerSecFromThroughput(100, 'MiB/s', 1200)
+  const asMB = core.eventsPerSecFromThroughput(100, 'MB/s', 1200)
+  assert.ok(asMiB > asMB, 'a MiB figure must yield a higher rate than the same MB figure')
+  assert.ok(Math.abs(asMiB / asMB - 1.048576) < 1e-9)
+
+  const base = { connector: 'postgres_cdc', eventBytes: 1200, headroomPct: 0 }
+  const mib = core.sizeFor({ ...base, eventsPerSec: asMiB })
+  const mb = core.sizeFor({ ...base, eventsPerSec: asMB })
+  assert.ok(Math.abs(mib.target - 104.8576) < 0.01, `MiB target was ${mib.target}`)
+  assert.ok(Math.abs(mb.target - 100) < 0.01)
+  assert.equal(mb.status, 'ok')
+  assert.equal(mib.status, 'ceiling')
 })
 
 test('picks the smallest clearing point, not the biggest', () => {
@@ -390,9 +420,7 @@ test('a positive rate times a blank size is still no-input, not zero cores', () 
   const r = core.sizeFor({ connector: 'postgres_cdc', eventsPerSec: 40_000, eventBytes: 0 })
   assert.equal(r.status, 'no-input')
   assert.equal(r.cores, undefined)
-  const t = core.sizeFor({ connector: 'postgres_cdc', mode: 'throughput', throughput: 0 })
-  assert.equal(t.status, 'no-input')
-  assert.equal(t.mode, 'throughput')
+  assert.equal(core.sizeFor({ connector: 'postgres_cdc', eventsPerSec: 0, eventBytes: 1200 }).status, 'no-input')
 })
 
 test('an event size far from the connector\'s own bench size warns even inside the global band', () => {

@@ -48,9 +48,12 @@ Connect reports about itself. Result files written before that fix keep their or
 unit, so each connector on the page carries a `curveUnit` tag and the target is converted
 into that connector's unit — which keeps every curve value byte-identical to its run file.
 
-The page accepts volume as events/sec x size **or** as a throughput figure (MB/s, MiB/s,
-GB/day, TB/day). Everything funnels through bytes/sec before being expressed in a
-connector's curve unit, so there is exactly one place a unit conversion happens.
+The page treats events/sec and throughput (MB/s, MiB/s, GB/day, TB/day) as two views of
+one volume, linked through the average event size: editing either rewrites the other, and
+the size is the anchor that is never rewritten. Sizing therefore always works from a rate
+and a size, so the event-size check can never be skipped. Everything funnels through
+bytes/sec before being expressed in a connector's curve unit, so there is exactly one place
+a unit conversion happens.
 
 ## The calculation
 

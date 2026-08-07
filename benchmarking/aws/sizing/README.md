@@ -1,10 +1,13 @@
 # Compute sizing page
 
 Self-serve tool: pick a connector, state the volume, set a processing-tax setting and a
-headroom percentage; get back a licensable core count. Volume can be stated either way a
-customer usually gives it — events/sec plus an average event size, or a throughput figure
-directly (MB/s, MiB/s, GB/day, TB/day). Throughput mode skips the event-size check, so it
-always carries a caveat saying so. It exists so a rep
+headroom percentage; get back a licensable core count.
+
+Volume can be typed either way a customer states it. **Events/sec and throughput are two
+views of one quantity and stay linked** — edit either and the other follows, with the
+average event size as the anchor between them (the size is never rewritten). Throughput
+takes MB/s, MiB/s, GB/day or TB/day; switching the unit restates the same rate. Because the
+size is always known, the event-size sanity check always runs. It exists so a rep
 or SE can answer "how many cores do I need" live, on a call, without paging the perf
 team or reading `benchmarking/aws/results/` (45+ timestamped JSON files, most of them
 smokes).
@@ -33,8 +36,8 @@ row by analogy or interpolation.
 node --test benchmarking/aws/sizing/sizing.test.mjs
 ```
 
-31 tests cover the calculation core: unit conversion in both directions, both input modes
-agreeing on the same rate, the "smallest clearing point" rule, headroom semantics, ceiling
+32 tests cover the calculation core: unit conversion in both directions, rate/throughput
+round-tripping without drift across all four input units, the "smallest clearing point" rule, headroom semantics, ceiling
 refusals, the no-answer guard on blank/negative/non-finite input, event-size caveats, and
 per-connector provenance. Run them after any change to the data or the calculation.
 

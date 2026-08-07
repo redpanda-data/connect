@@ -157,6 +157,19 @@ export function bytesPerSecFromThroughput(value, unit) {
   return u ? u.bytesPerSec(value) : NaN
 }
 
+// A rate and a throughput are two views of the same quantity, with the average event size
+// as the anchor between them. These two conversions keep the page's fields in sync, so a
+// rep can type into whichever one the customer gave them.
+export function throughputFromEvents(eventsPerSec, eventBytes, unit) {
+  const divisor = INPUT_UNITS[unit] ? bytesPerSecFromThroughput(1, unit) : NaN
+  return bytesPerSecFromEvents(eventsPerSec, eventBytes) / divisor
+}
+
+export function eventsPerSecFromThroughput(value, unit, eventBytes) {
+  if (!(eventBytes > 0)) return NaN
+  return bytesPerSecFromThroughput(value, unit) / eventBytes
+}
+
 // Express bytes/sec in the unit a connector's stored curve uses, so a target and a
 // curve are always in the same unit before they are compared. This is the single
 // place unit conversion happens.
@@ -175,44 +188,31 @@ function ratioWord(eventBytes, benched) {
     : `${round1(eventBytes / benched)}x larger than`
 }
 
-// eventBytes is null when the rep entered a throughput figure instead of a rate and a
-// size. That is a real loss of a safety check, so it produces its own caveat rather
-// than silently skipping the size check.
 export function warningsFor(c, eventBytes) {
   const out = []
   const unit = c.curveUnit
+  const nearBench =
+    eventBytes >= c.benchedEventBytes / EVENT_BYTES_DEVIATION_FACTOR &&
+    eventBytes <= c.benchedEventBytes * EVENT_BYTES_DEVIATION_FACTOR
+  const inBand = eventBytes >= EVENT_BYTES_MIN && eventBytes <= EVENT_BYTES_MAX
 
-  if (eventBytes == null) {
+  // The per-connector check is the more specific of the two, so it wins when both fire —
+  // one caveat, not two near-identical ones.
+  if (!nearBench) {
+    const drop = eventBytes < c.benchedEventBytes
+      ? `Smaller events shift the cost to per-message overhead, so achievable ${unit}/s drops below this curve.`
+      : 'Larger events change batching and per-message behaviour, so this curve may not hold.'
     out.push(
-      `Sized from a throughput figure, so the event size is unknown and could not be ` +
-      `checked. This curve was measured with ${c.benchedEventBytes} B events; if the real ` +
-      `events are more than ${EVENT_BYTES_DEVIATION_FACTOR}x away from that, the core count ` +
-      `is extrapolated. Enter a rate and an average size for a checked answer.`
+      `Extrapolated. This connector's curve was measured with ${c.benchedEventBytes} B events, and ` +
+      `${eventBytes} B is ${ratioWord(eventBytes, c.benchedEventBytes)} that. ${drop} ` +
+      `Treat the core count as indicative and confirm in a POC.`
     )
-  } else {
-    const nearBench =
-      eventBytes >= c.benchedEventBytes / EVENT_BYTES_DEVIATION_FACTOR &&
-      eventBytes <= c.benchedEventBytes * EVENT_BYTES_DEVIATION_FACTOR
-    const inBand = eventBytes >= EVENT_BYTES_MIN && eventBytes <= EVENT_BYTES_MAX
-
-    // The per-connector check is the more specific of the two, so it wins when both fire —
-    // one caveat, not two near-identical ones.
-    if (!nearBench) {
-      const drop = eventBytes < c.benchedEventBytes
-        ? `Smaller events shift the cost to per-message overhead, so achievable ${unit}/s drops below this curve.`
-        : 'Larger events change batching and per-message behaviour, so this curve may not hold.'
-      out.push(
-        `Extrapolated. This connector's curve was measured with ${c.benchedEventBytes} B events, and ` +
-        `${eventBytes} B is ${ratioWord(eventBytes, c.benchedEventBytes)} that. ${drop} ` +
-        `Treat the core count as indicative and confirm in a POC.`
-      )
-    } else if (!inBand) {
-      out.push(
-        `Extrapolated. This curve was measured at ${c.benchedEventBytes} B events; outside ` +
-        `${EVENT_BYTES_MIN}–${EVENT_BYTES_MAX} B no measurement backs it. Smaller events shift the ` +
-        `cost to per-message overhead, so achievable ${unit}/s drops.`
-      )
-    }
+  } else if (!inBand) {
+    out.push(
+      `Extrapolated. This curve was measured at ${c.benchedEventBytes} B events; outside ` +
+      `${EVENT_BYTES_MIN}–${EVENT_BYTES_MAX} B no measurement backs it. Smaller events shift the ` +
+      `cost to per-message overhead, so achievable ${unit}/s drops.`
+    )
   }
 
   if (c.confidence !== 'high' && c.confidenceNote) out.push(c.confidenceNote)
@@ -225,34 +225,31 @@ export function hasSizeableInput(bytesPerSec) {
   return Number.isFinite(bytesPerSec) && bytesPerSec > 0
 }
 
-// mode: 'events' (rate x average size) or 'throughput' (a rate stated directly).
+// Sizing always works from a rate and an average event size. The page lets a rep type a
+// throughput instead, but converts it to a rate via the size before calling this, so the
+// event-size check is never skipped.
 export function sizeFor({
   connector,
-  mode = 'events',
   eventsPerSec, eventBytes,
-  throughput, throughputUnit = 'MB/s',
   tax = 'passthrough', headroomPct = 30,
 }) {
   const c = CONNECTORS[connector]
   if (!c) return { status: 'unbenchmarked', connector }
 
-  const usingEvents = mode !== 'throughput'
-  const bytesPerSec = usingEvents
-    ? bytesPerSecFromEvents(eventsPerSec, eventBytes)
-    : bytesPerSecFromThroughput(throughput, throughputUnit)
+  const bytesPerSec = bytesPerSecFromEvents(eventsPerSec, eventBytes)
 
-  // In events mode BOTH fields must be positive — a positive rate times a blank size is
-  // still zero bytes, and must not size as though it were valid.
-  const fieldsOk = usingEvents
-    ? Number.isFinite(eventsPerSec) && Number.isFinite(eventBytes) && eventsPerSec > 0 && eventBytes > 0
-    : Number.isFinite(throughput) && throughput > 0
-  if (!fieldsOk || !hasSizeableInput(bytesPerSec)) return { status: 'no-input', connector, mode }
+  // BOTH fields must be positive — a positive rate times a blank size is still zero bytes,
+  // and must not size as though it were valid.
+  const fieldsOk =
+    Number.isFinite(eventsPerSec) && Number.isFinite(eventBytes) &&
+    eventsPerSec > 0 && eventBytes > 0
+  if (!fieldsOk || !hasSizeableInput(bytesPerSec)) return { status: 'no-input', connector }
 
   const unit = c.curveUnit
   const multiplier = TAX[tax].multiplier
   const target = inCurveUnit(bytesPerSec, unit)
   const required = target * (1 + headroomPct / 100)
-  const warnings = warningsFor(c, usingEvents ? eventBytes : null)
+  const warnings = warningsFor(c, eventBytes)
 
   const effective = VCPU_POINTS.map((vcpu) => ({ vcpu, rate: c.curve[vcpu] / multiplier }))
   const fit = effective.find((p) => p.rate >= required)
@@ -263,7 +260,7 @@ export function sizeFor({
     const best = effective.reduce((a, b) => (b.rate >= a.rate ? b : a))
     return {
       status: 'ceiling',
-      connector, mode, unit, bytesPerSec, target, required, headroomPct,
+      connector, unit, bytesPerSec, target, required, headroomPct,
       // measuredCeilingRate is a real benchmark reading. ceilingRate is that reading
       // divided by the processing multiplier — derived, and only equal to it at 1.0x.
       measuredCeilingRate: c.curve[best.vcpu],
@@ -282,7 +279,7 @@ export function sizeFor({
 
   return {
     status: 'ok',
-    connector, mode, unit, bytesPerSec,
+    connector, unit, bytesPerSec,
     cores: fit.vcpu,
     target, required, headroomPct,
     measuredRate: c.curve[fit.vcpu],
@@ -305,6 +302,7 @@ window.__sizingCore = {
   MIB, MB, UNIT_DIVISOR, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX,
   EVENT_BYTES_DEVIATION_FACTOR, INPUT_UNITS, TAX, SCALE_OUT_UNMEASURED, CONNECTORS,
   bytesPerSecFromEvents, bytesPerSecFromThroughput, inCurveUnit,
+  throughputFromEvents, eventsPerSecFromThroughput,
   warningsFor, hasSizeableInput, sizeFor,
 }
 </script>
@@ -820,31 +818,24 @@ window.__sizingCore = {
       </div>
 
       <div class="field">
-        <label for="mode">Volume stated as</label>
-        <select id="mode">
-          <option value="events">Events / sec + average size</option>
-          <option value="throughput">Throughput directly</option>
-        </select>
-      </div>
-
-      <div class="field" id="eventsField">
-        <label for="eventsPerSec">Events / sec</label>
-        <input id="eventsPerSec" type="number" min="1" step="1000" value="40000">
-      </div>
-
-      <div class="field" id="bytesField">
         <label for="eventBytes">Average event size (bytes)</label>
         <input id="eventBytes" type="number" min="1" value="1200">
         <span class="helper">Benchmarks used 1200 B (4096 B for DynamoDB)</span>
       </div>
 
-      <div class="field" id="throughputField" hidden>
+      <div class="field">
+        <label for="eventsPerSec">Events / sec</label>
+        <input id="eventsPerSec" type="number" min="1" step="1000" value="40000">
+        <span class="helper">Linked to throughput — edit either one</span>
+      </div>
+
+      <div class="field">
         <label for="throughput">Throughput</label>
         <div class="range-row">
-          <input id="throughput" type="number" min="0" step="10" value="50">
+          <input id="throughput" type="number" min="0" step="10" value="48">
           <select id="throughputUnit" aria-label="Throughput unit"></select>
         </div>
-        <span class="helper">Skips the event-size check — the answer carries a caveat</span>
+        <span class="helper">Same volume, stated the other way</span>
       </div>
 
       <div class="field">
@@ -874,17 +865,14 @@ window.__sizingCore = {
 </div>
 
 <script type="module">
-  const { CONNECTORS, TAX, VCPU_POINTS, INPUT_UNITS, sizeFor } = window.__sizingCore
+  const { CONNECTORS, TAX, VCPU_POINTS, INPUT_UNITS, sizeFor,
+          throughputFromEvents, eventsPerSecFromThroughput } = window.__sizingCore
 
   const connectorSelect = document.getElementById('connector')
-  const modeSelect = document.getElementById('mode')
   const eventsInput = document.getElementById('eventsPerSec')
   const bytesInput = document.getElementById('eventBytes')
   const throughputInput = document.getElementById('throughput')
   const throughputUnitSelect = document.getElementById('throughputUnit')
-  const eventsField = document.getElementById('eventsField')
-  const bytesField = document.getElementById('bytesField')
-  const throughputField = document.getElementById('throughputField')
   const taxSelect = document.getElementById('tax')
   const headroomInput = document.getElementById('headroom')
   const headroomVal = document.getElementById('headroomVal')
@@ -1009,12 +997,9 @@ window.__sizingCore = {
     `
   }
 
-  function renderNoInput(r) {
+  function renderNoInput() {
     resultCard.className = 'panel result-card state-empty'
-    const msg = r.mode === 'throughput'
-      ? 'Enter a throughput greater than zero to size this connector.'
-      : 'Enter an event rate and an average event size to size this connector. Both need to be greater than zero.'
-    resultHost.innerHTML = `<p class="headline-unbenched">${msg}</p>`
+    resultHost.innerHTML = `<p class="headline-unbenched">Enter a volume and an average event size to size this connector. Both need to be greater than zero.</p>`
   }
 
   function renderCurve(connectorKey, selectedCores, markCeiling = false) {
@@ -1063,18 +1048,10 @@ window.__sizingCore = {
       return
     }
 
-    const mode = modeSelect.value
-    const usingEvents = mode !== 'throughput'
-    eventsField.hidden = !usingEvents
-    bytesField.hidden = !usingEvents
-    throughputField.hidden = usingEvents
-
     const result = sizeFor({
-      connector, mode,
+      connector,
       eventsPerSec: Number(eventsInput.value),
       eventBytes: Number(bytesInput.value),
-      throughput: Number(throughputInput.value),
-      throughputUnit: throughputUnitSelect.value,
       tax: taxSelect.value,
       headroomPct,
     })
@@ -1086,7 +1063,7 @@ window.__sizingCore = {
       renderCeiling(result)
       renderCurve(connector, null, true)
     } else if (result.status === 'no-input') {
-      renderNoInput(result)
+      renderNoInput()
       renderCurve(connector, null)
     } else {
       renderUnbenchmarked()
@@ -1094,12 +1071,55 @@ window.__sizingCore = {
     }
   }
 
-  const controls = [connectorSelect, modeSelect, eventsInput, bytesInput,
-                    throughputInput, throughputUnitSelect, taxSelect, headroomInput]
-  for (const el of controls) {
-    el.addEventListener('input', render)
-    el.addEventListener('change', render)
+  // Events/sec and throughput are two views of one volume, anchored by the event size.
+  // Editing either one rewrites the other, so a rep can type in whichever the customer
+  // gave them. `syncing` stops the programmatic write from re-entering this handler.
+  let syncing = false
+
+  // Scale the displayed precision to the magnitude: 200 rather than 199.999 for MB/s (the
+  // rate is a whole number of events, so exact round-trips are not always possible), while
+  // still leaving TB/day figures like 0.041472 legible.
+  function tidy(n) {
+    const dp = n >= 100 ? 1 : n >= 1 ? 3 : 6
+    const f = 10 ** dp
+    return Math.round(n * f) / f
   }
 
+  function showThroughputFromEvents() {
+    const t = throughputFromEvents(Number(eventsInput.value), Number(bytesInput.value), throughputUnitSelect.value)
+    throughputInput.value = Number.isFinite(t) && t > 0 ? tidy(t) : ''
+  }
+
+  function showEventsFromThroughput() {
+    // A cleared throughput box clears the rate too, rather than writing a misleading 0.
+    const entered = Number(throughputInput.value)
+    if (throughputInput.value === '' || !(entered > 0)) { eventsInput.value = ''; return }
+    const e = eventsPerSecFromThroughput(entered, throughputUnitSelect.value, Number(bytesInput.value))
+    eventsInput.value = Number.isFinite(e) && e > 0 ? Math.round(e) : ''
+  }
+
+  function linked(fn) {
+    return () => {
+      if (syncing) return
+      syncing = true
+      fn()
+      syncing = false
+      render()
+    }
+  }
+
+  // Editing the rate, or the size, restates the throughput. Editing the throughput, or
+  // switching its unit, restates the rate — the size is the anchor and is never rewritten.
+  for (const ev of ['input', 'change']) {
+    eventsInput.addEventListener(ev, linked(showThroughputFromEvents))
+    bytesInput.addEventListener(ev, linked(showThroughputFromEvents))
+    throughputInput.addEventListener(ev, linked(showEventsFromThroughput))
+    throughputUnitSelect.addEventListener(ev, linked(showThroughputFromEvents))
+    connectorSelect.addEventListener(ev, render)
+    taxSelect.addEventListener(ev, render)
+    headroomInput.addEventListener(ev, render)
+  }
+
+  showThroughputFromEvents()
   render()
 </script>
