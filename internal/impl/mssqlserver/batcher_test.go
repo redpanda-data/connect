@@ -29,7 +29,7 @@ func TestSnapshotAckGate(t *testing.T) {
 		ctx := t.Context()
 		publisher, _ := newTestBatchPublisher(t)
 
-		msg := publishAndReceive(t, ctx, publisher, service.MessageBatch{newSnapshotMessage()})
+		msg := publishAndReceive(t, ctx, publisher, snapshotEvent())
 
 		done := make(chan error, 1)
 		go func() { done <- publisher.waitSnapshotAcks(ctx) }()
@@ -49,14 +49,20 @@ func TestSnapshotAckGate(t *testing.T) {
 		}
 	})
 
-	t.Run("a nack also releases the gate", func(t *testing.T) {
+	t.Run("a nack releases the gate but fails it", func(t *testing.T) {
 		ctx := t.Context()
-		publisher, _ := newTestBatchPublisher(t)
+		publisher, cachedLSNs := newTestBatchPublisher(t)
 
-		msg := publishAndReceive(t, ctx, publisher, service.MessageBatch{newSnapshotMessage()})
-		require.NoError(t, msg.ackFn(ctx, errors.New("downstream failure")))
+		msg := publishAndReceive(t, ctx, publisher, snapshotEvent())
+		nackErr := errors.New("downstream failure")
+		require.ErrorIs(t, msg.ackFn(ctx, nackErr), nackErr)
 
-		require.NoError(t, publisher.waitSnapshotAcks(ctx))
+		// auto_replay_nacks is user-toggleable, so a nack can be terminal:
+		// the gate must report it so the post-snapshot LSN is not persisted
+		// and the snapshot re-runs on restart.
+		err := publisher.waitSnapshotAcks(ctx)
+		require.ErrorIs(t, err, nackErr)
+		require.Empty(t, cachedLSNs())
 	})
 
 	t.Run("streaming batches do not hold the gate", func(t *testing.T) {
@@ -64,7 +70,7 @@ func TestSnapshotAckGate(t *testing.T) {
 		publisher, _ := newTestBatchPublisher(t)
 
 		// Published but never acked: must not block the gate.
-		publishAndReceive(t, ctx, publisher, service.MessageBatch{newStreamingMessage("00000030")})
+		publishAndReceive(t, ctx, publisher, streamingEvent("00000030", ""))
 
 		require.NoError(t, publisher.waitSnapshotAcks(ctx))
 	})
@@ -73,7 +79,7 @@ func TestSnapshotAckGate(t *testing.T) {
 		publisher, _ := newTestBatchPublisher(t)
 
 		ctx, cancel := context.WithCancel(t.Context())
-		publishAndReceive(t, ctx, publisher, service.MessageBatch{newSnapshotMessage()})
+		publishAndReceive(t, ctx, publisher, snapshotEvent())
 
 		done := make(chan error, 1)
 		go func() { done <- publisher.waitSnapshotAcks(ctx) }()
@@ -90,24 +96,12 @@ func TestSnapshotAckGate(t *testing.T) {
 
 func TestFlushCurrent(t *testing.T) {
 	ctx := t.Context()
-	logger := service.NewLoggerFromSlog(slog.Default())
-	cp := checkpoint.NewCapped[replication.LSN](100)
-
-	batcher, err := (service.BatchPolicy{Count: 100}).NewBatcher(service.MockResources())
-	require.NoError(t, err)
-
-	publisher := newBatchPublisher(batcher, cp, logger)
-	t.Cleanup(func() { publisher.shutSig.TriggerSoftStop() })
-	publisher.cacheLSN = func(context.Context, replication.LSN) error { return nil }
+	// Count=100 keeps published events buffered in the batcher until flushed.
+	publisher, _ := newTestBatchPublisherWithCount(t, 100)
 
 	publishEvent := func() {
 		t.Helper()
-		require.NoError(t, publisher.Publish(ctx, replication.MessageEvent{
-			Schema:    "dbo",
-			Table:     "t",
-			Operation: replication.MessageOperationRead.String(),
-			Data:      map[string]any{"a": 1},
-		}))
+		require.NoError(t, publisher.Publish(ctx, snapshotEvent()))
 	}
 	receive := func(failMsg string) {
 		t.Helper()
@@ -122,7 +116,6 @@ func TestFlushCurrent(t *testing.T) {
 		}
 	}
 
-	// Count=100 keeps a single event buffered in the batcher until flushed.
 	publishEvent()
 	receive("flushCurrent did not publish the buffered partial batch")
 
@@ -133,16 +126,11 @@ func TestFlushCurrent(t *testing.T) {
 }
 
 func TestCheckpointSelection(t *testing.T) {
-	t.Run("persists checkpoint_lsn, never the row's own lsn", func(t *testing.T) {
+	t.Run("persists the transaction boundary, never the row's own lsn", func(t *testing.T) {
 		ctx := t.Context()
 		publisher, cachedLSNs := newTestBatchPublisher(t)
 
-		msg := service.NewMessage([]byte("{}"))
-		msg.MetaSet("operation", replication.MessageOperationInsert.String())
-		msg.MetaSet("lsn", "00000042")
-		msg.MetaSet("checkpoint_lsn", "00000041")
-
-		am := publishAndReceive(t, ctx, publisher, service.MessageBatch{msg})
+		am := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", "00000041"))
 		require.NoError(t, am.ackFn(ctx, nil))
 
 		lsns := cachedLSNs()
@@ -151,15 +139,32 @@ func TestCheckpointSelection(t *testing.T) {
 			"the checkpoint must be the last fully-published transaction boundary, not the row's own LSN")
 	})
 
-	t.Run("no checkpoint_lsn (first transaction) persists nothing", func(t *testing.T) {
+	t.Run("no boundary yet (first transaction) persists nothing", func(t *testing.T) {
 		ctx := t.Context()
 		publisher, cachedLSNs := newTestBatchPublisher(t)
 
-		am := publishAndReceive(t, ctx, publisher, service.MessageBatch{newStreamingMessage("00000042")})
+		am := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", ""))
 		require.NoError(t, am.ackFn(ctx, nil))
 
 		require.Empty(t, cachedLSNs(),
 			"a batch ending mid-transaction (no prior complete transaction) must not persist any LSN")
+	})
+
+	t.Run("a nacked batch pins the checkpoint", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedLSNs := newTestBatchPublisher(t)
+
+		b1 := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", "00000041"))
+		b2 := publishAndReceive(t, ctx, publisher, streamingEvent("00000043", "00000042"))
+
+		// Nack b1: with auto_replay_nacks disabled this is terminal, so b2's
+		// ack must not persist anything past the undelivered b1.
+		nackErr := errors.New("downstream failure")
+		require.ErrorIs(t, b1.ackFn(ctx, nackErr), nackErr)
+		require.NoError(t, b2.ackFn(ctx, nil))
+
+		require.Empty(t, cachedLSNs(),
+			"a checkpoint must never be persisted past a nacked batch")
 	})
 }
 
@@ -211,15 +216,8 @@ func TestTrackOrderUnderConcurrentFlush(t *testing.T) {
 	const events = 500
 	for i := range events {
 		// %08d keeps lexicographic order == numeric order, like real LSNs.
-		lsn := replication.LSN(fmt.Sprintf("%08d", i))
-		require.NoError(t, publisher.Publish(ctx, replication.MessageEvent{
-			Schema:        "dbo",
-			Table:         "t",
-			Operation:     replication.MessageOperationInsert.String(),
-			LSN:           lsn,
-			CheckpointLSN: lsn,
-			Data:          map[string]any{"i": i},
-		}))
+		lsn := fmt.Sprintf("%08d", i)
+		require.NoError(t, publisher.Publish(ctx, streamingEvent(lsn, lsn)))
 	}
 	require.NoError(t, publisher.flushCurrent(ctx))
 
@@ -239,13 +237,24 @@ func TestTrackOrderUnderConcurrentFlush(t *testing.T) {
 	}
 }
 
+// newTestBatchPublisher builds a publisher whose batcher flushes on every
+// published event (count=1), so tests drive the production
+// Publish->trackBatchLocked->sendTracked path directly.
 func newTestBatchPublisher(t *testing.T) (*batchPublisher, func() []replication.LSN) {
+	t.Helper()
+	return newTestBatchPublisherWithCount(t, 1)
+}
+
+func newTestBatchPublisherWithCount(t *testing.T, count int) (*batchPublisher, func() []replication.LSN) {
 	t.Helper()
 
 	logger := service.NewLoggerFromSlog(slog.Default())
 	cp := checkpoint.NewCapped[replication.LSN](100)
 
-	publisher := newBatchPublisher(nil, cp, logger)
+	batcher, err := (service.BatchPolicy{Count: count}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+
+	publisher := newBatchPublisher(batcher, cp, logger)
 	t.Cleanup(func() { publisher.shutSig.TriggerSoftStop() })
 
 	var (
@@ -268,23 +277,33 @@ func newTestBatchPublisher(t *testing.T) (*batchPublisher, func() []replication.
 	return publisher, cachedLSNsFn
 }
 
-func newSnapshotMessage() *service.Message {
-	msg := service.NewMessage([]byte("{}"))
-	msg.MetaSet("operation", replication.MessageOperationRead.String())
-	return msg
+func snapshotEvent() replication.MessageEvent {
+	return replication.MessageEvent{
+		Schema:    "dbo",
+		Table:     "t",
+		Operation: replication.MessageOperationRead.String(),
+		Data:      map[string]any{"a": 1},
+	}
 }
 
-func newStreamingMessage(lsn string) *service.Message {
-	msg := service.NewMessage([]byte("{}"))
-	msg.MetaSet("operation", replication.MessageOperationInsert.String())
-	msg.MetaSet("lsn", lsn)
-	return msg
+func streamingEvent(lsn, checkpointLSN string) replication.MessageEvent {
+	return replication.MessageEvent{
+		Schema:        "dbo",
+		Table:         "t",
+		Operation:     replication.MessageOperationInsert.String(),
+		LSN:           replication.LSN(lsn),
+		CheckpointLSN: replication.LSN(checkpointLSN),
+		Data:          map[string]any{"a": 1},
+	}
 }
 
-func publishAndReceive(t *testing.T, ctx context.Context, publisher *batchPublisher, batch service.MessageBatch) asyncMessage {
+// publishAndReceive publishes a single event through the production Publish
+// path (count=1 batcher: every event flushes, tracks, and sends immediately)
+// and returns the delivered asyncMessage.
+func publishAndReceive(t *testing.T, ctx context.Context, publisher *batchPublisher, event replication.MessageEvent) asyncMessage {
 	t.Helper()
 	go func() {
-		_ = publisher.publishBatch(ctx, batch)
+		_ = publisher.Publish(ctx, event)
 	}()
 	return <-publisher.msgs()
 }

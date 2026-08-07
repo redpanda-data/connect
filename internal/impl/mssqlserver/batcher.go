@@ -47,6 +47,26 @@ type batchPublisher struct {
 	// acknowledged downstream. The snapshot->streaming handoff blocks on it so
 	// the post-snapshot LSN is never persisted while snapshot rows are in flight.
 	snapshotAckWG sync.WaitGroup
+	// snapshotNackErr records the first snapshot batch nack. auto_replay_nacks
+	// is user-toggleable, so a nack can be terminal: the gate must fail rather
+	// than let the post-snapshot LSN persist over undelivered rows.
+	snapshotNackMu  sync.Mutex
+	snapshotNackErr error
+
+	// pendingCheckpointLSN mirrors the CheckpointLSN of the most recently
+	// added message: the start LSN of the last transaction whose rows are all
+	// published, the only value safe to persist as a resume position. Guarded
+	// by batcherMu, so at flush time it always belongs to the flushed batch's
+	// last message.
+	pendingCheckpointLSN replication.LSN
+}
+
+func (b *batchPublisher) recordSnapshotNack(err error) {
+	b.snapshotNackMu.Lock()
+	defer b.snapshotNackMu.Unlock()
+	if b.snapshotNackErr == nil {
+		b.snapshotNackErr = err
+	}
 }
 
 // newBatchPublisher creates an instance of batchPublisher.
@@ -191,9 +211,6 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	if len(m.LSN) != 0 {
 		msg.MetaSet("lsn", string(m.LSN))
 	}
-	if len(m.CheckpointLSN) != 0 {
-		msg.MetaSet("checkpoint_lsn", string(m.CheckpointLSN))
-	}
 	if s := b.getOrComputeTableSchema(m.Table, m.ColumnNames, m.ColumnTypes); s != nil {
 		msg.MetaSetImmut("schema", service.ImmutableAny{V: s})
 	}
@@ -204,6 +221,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	// the lock.
 	var tracked *trackedBatch
 	b.batcherMu.Lock()
+	b.pendingCheckpointLSN = m.CheckpointLSN
 	if b.batcher.Add(msg) {
 		var flushedBatch []*service.Message
 		if flushedBatch, err = b.batcher.Flush(ctx); err == nil && len(flushedBatch) > 0 {
@@ -237,15 +255,12 @@ type trackedBatch struct {
 // defines the checkpoint sequence, so it has to match flush order exactly.
 func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.MessageBatch) (*trackedBatch, error) {
 	lastMsg := batch[len(batch)-1]
-	var checkpointLSN []byte
-	// Checkpoint only checkpoint_lsn: the last transaction whose rows are all
-	// published. The row's own lsn must never be persisted — all rows of a
-	// transaction share a start LSN and resume is exclusive (> lsn), so
-	// persisting it mid-transaction would skip the transaction's remaining
-	// rows on restart. Snapshot rows carry neither meta; we don't track those.
-	if lsn, ok := lastMsg.MetaGet("checkpoint_lsn"); ok {
-		checkpointLSN = replication.LSN(lsn)
-	}
+	// Checkpoint only the pending checkpoint LSN: the last transaction whose
+	// rows are all published. The row's own lsn must never be persisted — all
+	// rows of a transaction share a start LSN and resume is exclusive (> lsn),
+	// so persisting it mid-transaction would skip the transaction's remaining
+	// rows on restart. Snapshot rows never carry one; we don't track those.
+	checkpointLSN := []byte(b.pendingCheckpointLSN)
 
 	// Snapshot batches are tracked so the snapshot->streaming handoff can block
 	// until they are acknowledged downstream (see waitSnapshotAcks).
@@ -265,9 +280,20 @@ func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.Mes
 		isSnapshot: isSnapshotBatch,
 		msg: asyncMessage{
 			msg: batch,
-			ackFn: func(ctx context.Context, _ error) error {
+			ackFn: func(ctx context.Context, err error) error {
 				if isSnapshotBatch {
 					defer b.snapshotAckWG.Done()
+				}
+				if err != nil {
+					// auto_replay_nacks is user-toggleable, so a nack can be
+					// terminal. Never resolve: the checkpoint stays pinned
+					// before this batch so nothing can be persisted past its
+					// undelivered rows. Snapshot nacks additionally fail the
+					// handoff gate so the post-snapshot LSN is not persisted.
+					if isSnapshotBatch {
+						b.recordSnapshotNack(err)
+					}
+					return err
 				}
 				lsn := resolveFn()
 				if lsn != nil && len(*lsn) != 0 {
@@ -294,28 +320,11 @@ func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch)
 	}
 }
 
-// publishBatch tracks and sends a batch that was flushed elsewhere. Callers
-// that flush the batcher themselves must instead track under the same lock as
-// their flush (see Publish/loop/flushCurrent) to keep Track order == flush
-// order.
-func (b *batchPublisher) publishBatch(ctx context.Context, batch service.MessageBatch) error {
-	if len(batch) == 0 {
-		return nil
-	}
-	b.batcherMu.Lock()
-	tracked, err := b.trackBatchLocked(ctx, batch)
-	b.batcherMu.Unlock()
-	if err != nil {
-		return err
-	}
-	return b.sendTracked(ctx, tracked)
-}
-
 // waitSnapshotAcks blocks until every published snapshot batch has been
-// acknowledged (or nacked) downstream, or until ctx is cancelled. Nacked
-// batches release the gate too: redelivery is owned by auto_replay_nacks,
-// and the ctx escape prevents a permanently-failing downstream from
-// wedging shutdown.
+// acknowledged or nacked downstream, or until ctx is cancelled (the escape
+// prevents a stalled downstream from wedging shutdown). Any nack fails the
+// gate: with auto_replay_nacks disabled a nack is terminal, so the
+// post-snapshot LSN must not be persisted and the snapshot must re-run.
 func (b *batchPublisher) waitSnapshotAcks(ctx context.Context) error {
 	drained := make(chan struct{})
 	go func() {
@@ -325,6 +334,11 @@ func (b *batchPublisher) waitSnapshotAcks(ctx context.Context) error {
 	}()
 	select {
 	case <-drained:
+		b.snapshotNackMu.Lock()
+		defer b.snapshotNackMu.Unlock()
+		if b.snapshotNackErr != nil {
+			return fmt.Errorf("snapshot batch was rejected downstream: %w", b.snapshotNackErr)
+		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
