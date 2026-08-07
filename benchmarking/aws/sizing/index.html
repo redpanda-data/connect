@@ -1,0 +1,149 @@
+<title>Redpanda Connect — Compute Sizing</title>
+<script type="module">
+// <sizing-core>
+// Sizing core. Every figure below comes from one blessed benchmark run; see
+// docs/superpowers/specs/2026-08-06-sales-compute-sizing-tool-design.md for why
+// each run was chosen and which runs were deliberately excluded.
+//
+// UNITS: the runner's `mb_per_sec` field is actually MiB/s — brokermetrics.go:145
+// divides by (1 << 20). Curves and targets are both MiB/s. Never use 1e6.
+
+export const MIB = 1024 * 1024
+export const VCPU_POINTS = [1, 2, 4, 8]
+
+export const EVENT_BYTES_MIN = 512
+export const EVENT_BYTES_MAX = 5120
+
+export const TAX = {
+  passthrough: { label: 'Passthrough — no mapping', multiplier: 1.0, measured: true },
+  light: { label: 'Light mapping — renames, filters, JSON in/out', multiplier: 1.2, measured: false },
+  heavy: { label: 'Heavy mapping + schema registry — Avro/Protobuf codec', multiplier: 2.0, measured: false },
+}
+
+// Connect median MiB/s at 1/2/4/8 vCPU, all measured on a c8g.4xlarge runner.
+export const CONNECTORS = {
+  postgres_cdc: {
+    label: 'PostgreSQL CDC (postgres_cdc)',
+    curve: { 1: 51, 2: 83, 4: 102, 8: 102 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 118,
+    run: { path: 'postgres/orders-cdc/2026-06-01T20-55-50Z', date: '2026-06-01', sha: '25057d693' },
+    ceiling: null,
+    confidence: 'high',
+  },
+  mysql_cdc: {
+    label: 'MySQL CDC (mysql_cdc)',
+    curve: { 1: 70, 2: 102, 4: 108, 8: 111 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 378,
+    run: { path: 'mysql/orders-cdc/2026-06-02T14-13-52Z', date: '2026-06-02', sha: '25057d693' },
+    ceiling: null,
+    confidence: 'high',
+  },
+  mongodb_cdc: {
+    label: 'MongoDB CDC (mongodb_cdc)',
+    curve: { 1: 26, 2: 33, 4: 33, 8: 33 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 157,
+    run: { path: 'mongodb/orders-cdc/2026-07-17T17-11-10Z', date: '2026-07-17', sha: '156a11081' },
+    ceiling: {
+      mibps: 33,
+      reason: 'a single change-stream cursor, which one replica set gives you regardless of vCPU',
+      fix: 'Shard the collection — each shard adds a cursor. More cores will not move this number.',
+    },
+    confidence: 'high',
+  },
+  dynamodb_cdc: {
+    label: 'DynamoDB CDC (aws_dynamodb_cdc)',
+    curve: { 1: 40, 2: 72, 4: 81, 8: 82 },
+    benchedEventBytes: 4096,
+    peakHeapMB: 936,
+    run: { path: 'dynamodb/cdc/2026-06-15T17-44-43Z', date: '2026-06-15', sha: 'd9d2b3c98' },
+    ceiling: {
+      mibps: 82,
+      reason: 'the source, not Connect — the run hit the test account\'s write-capacity limit past 4 vCPU',
+      fix: 'Spread the load across more tables or streams. The 8 vCPU figure is a floor, not a Connect limit.',
+    },
+    confidence: 'high',
+  },
+  oracledb_cdc: {
+    label: 'Oracle CDC (oracle_cdc)',
+    curve: { 1: 13, 2: 13, 4: 13, 8: 13 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 190,
+    run: { path: 'oracle/orders-cdc/2026-06-22T16-31-22Z', date: '2026-06-22', sha: '63ea466c5' },
+    ceiling: {
+      mibps: 13,
+      reason: 'one LogMiner reader — the ceiling is per reader, and vCPU count is irrelevant to it',
+      fix: 'Add readers. Measured 19, then 25, then 30 MiB/s at a fixed 4 vCPU as readers were added.',
+    },
+    confidence: 'high',
+  },
+  iceberg_sink: {
+    label: 'Iceberg sink (iceberg output)',
+    curve: { 1: 34, 2: 65, 4: 97, 8: 128 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 2681,
+    run: { path: 'iceberg/orders-sink-recipe-b/2026-07-09T15-57-38Z', date: '2026-07-09', sha: '62f50196b' },
+    ceiling: null,
+    confidence: 'medium',
+    confidenceNote: 'Medium confidence: a sibling Iceberg scenario produced 241, 78, 49 and 128 MiB/s at 8 vCPU across four runs. This blessed run is the well-behaved one; treat the 8 vCPU point as indicative.',
+  },
+}
+
+export function targetMiBps(eventsPerSec, eventBytes) {
+  return (eventsPerSec * eventBytes) / MIB
+}
+
+export function warningsFor(c, eventBytes) {
+  const out = []
+  if (eventBytes < EVENT_BYTES_MIN || eventBytes > EVENT_BYTES_MAX) {
+    out.push(
+      `Extrapolated. This curve was measured at ${c.benchedEventBytes} B events; outside ` +
+      `${EVENT_BYTES_MIN}–${EVENT_BYTES_MAX} B no measurement backs it. Smaller events shift the ` +
+      `cost to per-message overhead, so achievable MiB/s drops.`
+    )
+  }
+  if (c.confidence !== 'high' && c.confidenceNote) out.push(c.confidenceNote)
+  return out
+}
+
+export function sizeFor({ connector, eventsPerSec, eventBytes, tax = 'passthrough', headroomPct = 30 }) {
+  const c = CONNECTORS[connector]
+  if (!c) return { status: 'unbenchmarked', connector }
+
+  const multiplier = TAX[tax].multiplier
+  const target = targetMiBps(eventsPerSec, eventBytes)
+  const required = target * (1 + headroomPct / 100)
+  const warnings = warningsFor(c, eventBytes)
+
+  const effective = VCPU_POINTS.map((vcpu) => ({ vcpu, mibps: c.curve[vcpu] / multiplier }))
+  const fit = effective.find((p) => p.mibps >= required)
+
+  if (!fit) {
+    return {
+      status: 'ceiling',
+      connector, target, required,
+      ceilingMiBps: effective[effective.length - 1].mibps,
+      ceiling: c.ceiling,
+      run: c.run,
+      warnings,
+    }
+  }
+
+  return {
+    status: 'ok',
+    connector,
+    cores: fit.vcpu,
+    target, required, headroomPct,
+    measuredMiBps: c.curve[fit.vcpu],
+    effectiveMiBps: fit.mibps,
+    peakHeapMB: c.peakHeapMB,
+    run: c.run,
+    confidence: c.confidence,
+    taxMeasured: TAX[tax].measured,
+    warnings,
+  }
+}
+// </sizing-core>
+</script>
