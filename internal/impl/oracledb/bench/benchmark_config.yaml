@@ -6,11 +6,15 @@ input:
     # connection_string: oracle://testdb:testdb123@localhost:1521/TESTPDB
     connection_string: oracle://c%23%23testdb:testdb123@localhost:1521/FREE
     pdb_name: TESTPDB
-    snapshot_mode: snapshot_only
+    snapshot_mode: none
     snapshot_max_batch_size: 160000
     logminer:
       backoff_interval: 2s
       mining_interval: 0s
+      max_session_age: 10m
+      max_scn_window_size: 200000
+      scn_window_size: 20000
+      min_scn_window_size: 0
       # transaction_cache: testcache
       # transaction_cache_key: mykey
     include:
@@ -20,10 +24,20 @@ input:
     batching:
       period: 1s
 
+pipeline:
+  processors:
+    - log:
+        level: INFO
+        message: "Message processed"
+        fields_mapping: |
+          # Print a specific metadata key
+          root.commit_ts_ms = meta("commit_ts_ms")
+          root.source_ts_ms = meta("source_ts_ms")
+
 output:
   processors:
     - benchmark:
-        interval: 1s
+        interval: 2s
         count_bytes: true
   file:
     path: "./benchmark_results.json"
