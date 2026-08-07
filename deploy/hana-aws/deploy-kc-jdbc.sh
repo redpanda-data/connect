@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Add the generic Confluent JDBC Source connector benchmark harness (bulk read
-# only, for comparison against the kafka-connect-sap connector) to an EC2 box
-# that already has the native `rpcns-hana-*` bench dirs from deploy.sh.
+# Add the generic Confluent JDBC Source connector benchmark harness (bulk,
+# incrementing, and query reads — for comparison against the kafka-connect-sap
+# connector) to an EC2 box that already has the native `rpcns-hana-*` bench
+# dirs from deploy.sh.
 #
 # Does NOT copy ngdbc.jar from this machine — it's pulled straight from Maven
 # Central (com.sap.cloud.db.jdbc:ngdbc, public) by a curl run on the EC2 box
@@ -10,20 +11,25 @@
 # Usage:
 #   SSH_KEY=~/Downloads/atul_ed25519 SSH_HOST=ec2-user@44.220.172.22 ./deploy-kc-jdbc.sh
 #
-# Requires locally: rsync. Requires remotely: the ~/rpcns-hana-bulk dir already
-# created by deploy.sh, docker + compose plugin, the `task` CLI, and internet
-# access on the box (kc:jdbc:build downloads the kafka-connect-jdbc plugin via
+# Requires locally: rsync. Requires remotely: the ~/rpcns-hana-bulk,
+# ~/rpcns-hana-incrementing, ~/rpcns-hana-query dirs already created by
+# deploy.sh, docker + compose plugin, the `task` CLI, and internet access on
+# the box (kc:jdbc:build downloads the kafka-connect-jdbc plugin via
 # confluent-hub).
 set -euo pipefail
 
 SSH_KEY="${SSH_KEY:?set SSH_KEY to your private key path}"
 SSH_HOST="${SSH_HOST:?set SSH_HOST to user@host}"
 REMOTE_BULK_DIR="${REMOTE_BULK_DIR:-~/rpcns-hana-bulk}"
+REMOTE_INC_DIR="${REMOTE_INC_DIR:-~/rpcns-hana-incrementing}"
+REMOTE_QUERY_DIR="${REMOTE_QUERY_DIR:-~/rpcns-hana-query}"
 NGDBC_VERSION="${NGDBC_VERSION:-}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SAPHANA_BENCH_DIR="$REPO_ROOT/internal/impl/saphana/bench"
 BULK_DIR="$SAPHANA_BENCH_DIR/saphana-read/bulk"
+INC_DIR="$SAPHANA_BENCH_DIR/saphana-read/incrementing"
+QUERY_DIR="$SAPHANA_BENCH_DIR/saphana-read/query"
 
 ssh_cmd() { ssh -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new "$SSH_HOST" "$@"; }
 rsync_cmd() { rsync -avz --partial --progress -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new" "$@"; }
@@ -53,6 +59,14 @@ echo "== uploading bulk read bench JDBC Kafka Connect harness =="
 ssh_cmd "mkdir -p $REMOTE_BULK_DIR"
 rsync_cmd "$BULK_DIR/Taskfile.yaml" "$BULK_DIR/docker-compose.kc-jdbc.yaml" "$SSH_HOST:$REMOTE_BULK_DIR/"
 
+echo "== uploading incrementing read bench JDBC Kafka Connect harness =="
+ssh_cmd "mkdir -p $REMOTE_INC_DIR"
+rsync_cmd "$INC_DIR/Taskfile.yaml" "$INC_DIR/docker-compose.kc-jdbc.yaml" "$SSH_HOST:$REMOTE_INC_DIR/"
+
+echo "== uploading query read bench JDBC Kafka Connect harness =="
+ssh_cmd "mkdir -p $REMOTE_QUERY_DIR"
+rsync_cmd "$QUERY_DIR/Taskfile.yaml" "$QUERY_DIR/docker-compose.kc-jdbc.yaml" "$SSH_HOST:$REMOTE_QUERY_DIR/"
+
 cat <<EOF
 
 Deployed. Next, on the box (every kc: task needs SAPHANA_BENCH_DIR pointing at the
@@ -74,5 +88,23 @@ staged jar/Dockerfile dir — export it once per shell):
   task bench:kc:jdbc:matrix TOTAL=1000000 OUT=jdbc_bulk.txt
   task down
 
-  task logs                            # tail the running benchmark (from within the dir)
+  # -- incrementing read bench (generic Confluent JDBC Source connector) --
+  cd $REMOTE_INC_DIR
+  task up
+  task kc:jdbc:build
+  task kc:jdbc:up
+  task bench:kc:jdbc:run COUNT=500000 POLL=1000 BATCH_MAX_ROWS=10000
+  task bench:kc:jdbc:matrix COUNT=500000 OUT=jdbc_inc.txt
+  task down
+
+  # -- query read bench (generic Confluent JDBC Source connector) --
+  cd $REMOTE_QUERY_DIR
+  task up
+  task kc:jdbc:build
+  task kc:jdbc:up
+  task bench:kc:jdbc:run FETCH_SIZE=10000 BATCH_MAX_ROWS=10000 TOTAL=2000000
+  task bench:kc:jdbc:matrix TOTAL=2000000 OUT=jdbc_query.txt
+  task down
+
+  task logs                            # tail the running benchmark (from within each dir)
 EOF

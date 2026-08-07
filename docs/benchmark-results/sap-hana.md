@@ -595,6 +595,32 @@ as run-to-run noise (many more poll cycles at low batch = more variance surface)
 regression from the cleanup. **~4,200 msg/s at `batch.max.rows=10000` is the confirmed,
 reproducible number for this connector on this EC2↔HANA path.**
 
+### Query Read — Kafka Connect JDBC Source
+
+`BENCH_ORDERS` table, raw `query` mode, `TOTAL=200000` rows.
+
+```
+FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
+1000        1000        200000        301s        664
+1000        5000        200000        80s         2500
+1000        10000       200000        48s         4167
+10000       1000        200000        298s        671
+10000       5000        200000        81s         2469
+10000       10000       200000        48s         4167
+100000      1000        200000        301s        664
+100000      5000        200000        77s         2597
+100000      10000       200000        47s         4255
+```
+
+**Observations:**
+- Identical shape and near-identical numbers to this connector's bulk-read results
+  (664/2500/4167 vs bulk's 664/2564/4167 at the same fetch/batch combos) — confirms
+  query mode hits the same LIMIT/OFFSET-per-poll bottleneck as bulk (root cause above),
+  since `kafka-connect-sap` has no distinct held-cursor path for raw queries either.
+- Best so far: **4,255 msg/s** (fetch=100000, batch=10000) — roughly **10× below** the
+  generic Confluent JDBC connector's query-mode peak (40,000 msg/s) on the same
+  EC2↔HANA path.
+
 ---
 
 ## EC2 — Generic Confluent JDBC Source Connector (comparison)
@@ -658,3 +684,54 @@ in the incrementing-read section above (offset check lag, not a correctness issu
 - Still below the original local WSL2 doc figure for this connector (86,957 msg/s) —
   consistent with EC2↔HANA network RTT (~118ms, vs ~70ms local/VPN) adding overhead per
   round trip, same pattern as the `kafka-connect-sap` EC2 numbers above.
+
+### Incrementing Read — 2M scale
+
+`BENCH_ORDERS` table, `mode=incrementing`, `TOTAL=2000000` rows.
+
+```
+POLL_MS     BATCH         TOTAL         ELAPSED     AVG_MSG_S
+100         1000          2000000       459s        4357
+500         1000          2000000       459s        4357
+1000        1000          ERROR         ?           0
+100         5000          2000000       168s        11905
+500         5000          1995000       125s        15960
+1000        5000          2000000       104s        19231
+100         10000         2000000       57s         35088
+500         10000         2000000       57s         35088
+1000        10000         1995000       83s         24036
+```
+
+**Observations:**
+- Same shape as bulk: `BATCH` dominates — 4,357 msg/s at `batch=1000` → ~15-19k at
+  `batch=5000` → ~24-35k at `batch=10000`. `POLL_MS` has negligible/inconsistent effect,
+  same as elsewhere in this doc.
+- `poll=1000, batch=1000` errored (not yet re-run in isolation).
+- Peak **35,088 msg/s** (`poll=100` and `poll=500`, both `batch=10000`) — well above
+  the `kafka-connect-sap` incrementing ceiling (~4,200 msg/s) on this same EC2↔HANA
+  path, consistent with the ~10× advantage this connector shows on bulk reads.
+
+### Query Read — 2M scale
+
+`BENCH_ORDERS` table, raw `query` mode, `TOTAL=2000000` rows.
+
+```
+FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
+1000        1000        2000000       453s        4415
+1000        5000        2000000       96s         20833
+1000        10000       2000000       51s         39216
+10000       1000        2000000       453s        4415
+10000       5000        2000000       99s         20202
+10000       10000       2000000       50s         40000
+100000      1000        2000000       459s        4357
+100000      5000        2000000       96s         20833
+100000      10000       2000000       51s         39216
+```
+
+**Observations:**
+- Same shape as bulk and incrementing: `FETCH` has essentially no effect, `BATCH`
+  drives throughput — ~4,400 msg/s at `batch=1000` → ~20-21k at `batch=5000` → ~39-40k
+  at `batch=10000`.
+- Peak **40,000 msg/s** (`fetch=10000, batch=10000`) — in line with this connector's
+  bulk (41,667 msg/s) and incrementing (35,088 msg/s) peaks, confirming the held-cursor
+  advantage holds across all three read modes.
