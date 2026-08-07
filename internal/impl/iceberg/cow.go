@@ -63,7 +63,7 @@ func (w *writer) writeCOW(ctx context.Context, batch service.MessageBatch) error
 			return fmt.Errorf("writing data files: %w", err)
 		}
 		if err := w.committer.Commit(ctx, CommitInput{Files: files, SchemaID: w.table.Schema().ID}); err != nil {
-			w.cleanupFiles(ctx, files)
+			w.cleanupFilesAfterCommitErr(ctx, err, files)
 			return fmt.Errorf("committing: %w", err)
 		}
 		w.metrics.incrInserted(counts.inserted)

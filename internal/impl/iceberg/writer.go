@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"path"
@@ -25,6 +26,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/catalog/rest"
 	icebergio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
@@ -191,7 +193,7 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 			return fmt.Errorf("writing data files: %w", err)
 		}
 		if err := w.committer.Commit(ctx, CommitInput{Files: files, SchemaID: w.table.Schema().ID}); err != nil {
-			w.cleanupFiles(ctx, files)
+			w.cleanupFilesAfterCommitErr(ctx, err, files)
 			return fmt.Errorf("committing: %w", err)
 		}
 		// Metrics reflect successfully committed rows, so they are incremented
@@ -230,7 +232,7 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 		return nil
 	}
 	if err := w.committer.Commit(ctx, CommitInput{Files: files, DeleteFiles: deleteFiles, SchemaID: w.table.Schema().ID}); err != nil {
-		w.cleanupFiles(ctx, files, deleteFiles)
+		w.cleanupFilesAfterCommitErr(ctx, err, files, deleteFiles)
 		return fmt.Errorf("committing: %w", err)
 	}
 	// Increment only after the commit succeeds, using the post-collapse counts.
@@ -238,6 +240,25 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 	w.metrics.incrUpserted(counts.upserted)
 	w.metrics.incrDeleted(counts.deleted)
 	return nil
+}
+
+// cleanupFilesAfterCommitErr removes written-but-uncommitted files after a
+// failed commit — unless any attempt's outcome remains ambiguous
+// (rest.ErrCommitStateUnknown, which commitLocked joins into every error
+// return when set): an ambiguous commit may still land server-side, and
+// deleting files a landed snapshot references corrupts the table. Ambiguous
+// leftovers are deferred to Iceberg orphan-file maintenance instead,
+// mirroring commitOverwrite's cleanup gate.
+func (w *writer) cleanupFilesAfterCommitErr(ctx context.Context, commitErr error, groups ...[]iceberg.DataFile) {
+	if errors.Is(commitErr, rest.ErrCommitStateUnknown) {
+		n := 0
+		for _, group := range groups {
+			n += len(group)
+		}
+		w.logger.Warnf("Skipping cleanup of %d written files: the commit outcome is ambiguous and a landed snapshot may reference them; leaving them for Iceberg orphan-file maintenance", n)
+		return
+	}
+	w.cleanupFiles(ctx, groups...)
 }
 
 // cleanupFiles best-effort removes written-but-uncommitted parquet files after a

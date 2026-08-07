@@ -10,7 +10,6 @@ package iceberg
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -401,7 +400,7 @@ func TestWriteCleansUpFilesOnCommitFailure(t *testing.T) {
 
 	t.Run("failed commit cleans up", func(t *testing.T) {
 		_, plain := newTestTable(t)
-		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1 << 30, failErr: errors.New("storage unavailable")}
+		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1 << 30, failErr: fmt.Errorf("%w: request malformed", rest.ErrBadRequest)}
 		ftbl := fc.snapshot()
 		c, err := NewCommitter(ftbl, fc, CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
 		require.NoError(t, err)
@@ -419,6 +418,39 @@ func TestWriteCleansUpFilesOnCommitFailure(t *testing.T) {
 // file plus one equality-delete file for the given id) against tbl. It mirrors
 // the shape TestCommitUpsertProducesOverwriteSnapshot uses, so the RowDelta
 // commit derives an overwrite snapshot.
+
+// TestWriteSkipsCleanupOnAmbiguousCommit pins the writer-side cleanup gate: when
+// every commit attempt's outcome remains ambiguous (ErrCommitStateUnknown, which
+// commitLocked joins into its error returns), the writer must NOT delete the
+// data and equality-delete files it wrote — the commit may still land
+// server-side and reference them. They are left for Iceberg orphan-file
+// maintenance instead, mirroring commitOverwrite's cleanup gate.
+func TestWriteSkipsCleanupOnAmbiguousCommit(t *testing.T) {
+	ctx := t.Context()
+	logger := service.MockResources().Logger()
+
+	_, mem := newTestTable(t)
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{
+		commitUnknownNoLand, commitUnknownNoLand, commitUnknownNoLand,
+	}}
+	tbl := cat.snapshot()
+	require.NoError(t, os.MkdirAll(filepath.Join(tbl.Location(), "data"), 0o755))
+
+	comm, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+	require.NoError(t, err)
+	defer comm.Close()
+
+	w := newDeleteWriter(t, tbl)
+	w.committer = comm
+	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+
+	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})})
+	require.Error(t, err)
+	require.ErrorIs(t, err, rest.ErrCommitStateUnknown, "exhausted ambiguous attempts must surface as unknown-state")
+	assert.Positive(t, countParquetFiles(t, tbl.Location()),
+		"ambiguous commit outcome: written files must be left for orphan-file maintenance, not deleted")
+}
+
 func morUpsertInput(t testing.TB, ctx context.Context, tbl *table.Table, id int) CommitInput {
 	t.Helper()
 	w := newDeleteWriter(t, tbl)
