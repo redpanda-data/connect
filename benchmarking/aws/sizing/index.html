@@ -146,4 +146,741 @@ export function sizeFor({ connector, eventsPerSec, eventBytes, tax = 'passthroug
   }
 }
 // </sizing-core>
+
+// Bridge for the UI script below: the fence above must stay a side-effect-free
+// ES module (see sizing.test.mjs), so this line lives outside the sentinels.
+window.__sizingCore = { MIB, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX, TAX, CONNECTORS, targetMiBps, warningsFor, sizeFor }
+</script>
+
+<style>
+  :root {
+    --bg: #f5f7f6;
+    --surface: #ffffff;
+    --surface-2: #eef2f0;
+    --border: #d7ddda;
+    --border-strong: #b9c2be;
+    --text: #12181a;
+    --text-muted: #57635f;
+    --accent: #0d6d78;
+    --accent-soft: #dcedee;
+    --accent-strong: #094e56;
+    --danger: #9c2f24;
+    --danger-soft: #f5e1dd;
+    --warning: #8a5a12;
+    --warning-soft: #f2e6cd;
+    --neutral-badge: #4a5652;
+    --focus-ring: #0d6d78;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", "Roboto Mono", Menlo, monospace;
+    --shadow: 0 1px 2px rgba(20, 30, 28, 0.06), 0 1px 12px rgba(20, 30, 28, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1413;
+      --surface: #161f1d;
+      --surface-2: #1c2725;
+      --border: #2a3634;
+      --border-strong: #3c4b48;
+      --text: #e7ece9;
+      --text-muted: #9aa8a2;
+      --accent: #55c2cd;
+      --accent-soft: #17383c;
+      --accent-strong: #8fdbe3;
+      --danger: #e2776c;
+      --danger-soft: #3a1f1c;
+      --warning: #d9a94c;
+      --warning-soft: #362a15;
+      --neutral-badge: #9aa8a2;
+      --focus-ring: #55c2cd;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 14px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0e1413;
+    --surface: #161f1d;
+    --surface-2: #1c2725;
+    --border: #2a3634;
+    --border-strong: #3c4b48;
+    --text: #e7ece9;
+    --text-muted: #9aa8a2;
+    --accent: #55c2cd;
+    --accent-soft: #17383c;
+    --accent-strong: #8fdbe3;
+    --danger: #e2776c;
+    --danger-soft: #3a1f1c;
+    --warning: #d9a94c;
+    --warning-soft: #362a15;
+    --neutral-badge: #9aa8a2;
+    --focus-ring: #55c2cd;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 14px rgba(0, 0, 0, 0.3);
+  }
+
+  :root[data-theme="light"] {
+    --bg: #f5f7f6;
+    --surface: #ffffff;
+    --surface-2: #eef2f0;
+    --border: #d7ddda;
+    --border-strong: #b9c2be;
+    --text: #12181a;
+    --text-muted: #57635f;
+    --accent: #0d6d78;
+    --accent-soft: #dcedee;
+    --accent-strong: #094e56;
+    --danger: #9c2f24;
+    --danger-soft: #f5e1dd;
+    --warning: #8a5a12;
+    --warning-soft: #f2e6cd;
+    --neutral-badge: #4a5652;
+    --focus-ring: #0d6d78;
+    --shadow: 0 1px 2px rgba(20, 30, 28, 0.06), 0 1px 12px rgba(20, 30, 28, 0.05);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    overflow-x: hidden;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .result-card { transition: border-color 120ms ease; }
+  }
+
+  a { color: var(--accent); }
+
+  .page {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .masthead h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+
+  .masthead p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    max-width: 38rem;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 1.25rem 1.375rem;
+  }
+
+  .panel-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin: 0 0 0.85rem;
+  }
+
+  .input-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 1rem 1.25rem;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .field.field-wide {
+    grid-column: 1 / -1;
+  }
+
+  .field label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .field select,
+  .field input[type="number"] {
+    font: inherit;
+    font-family: var(--mono);
+    font-size: 0.92rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    width: 100%;
+  }
+
+  .field select {
+    font-family: var(--sans);
+  }
+
+  .field select:focus-visible,
+  .field input:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+  }
+
+  .field .helper {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  .range-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .range-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+
+  .range-row .range-val {
+    font-family: var(--mono);
+    font-size: 0.92rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 3ch;
+    text-align: right;
+    color: var(--accent-strong);
+    font-weight: 600;
+  }
+
+  .result-card {
+    border-left: 4px solid var(--border-strong);
+  }
+
+  .result-card.state-ok { border-left-color: var(--accent); }
+  .result-card.state-ceiling { border-left-color: var(--danger); }
+  .result-card.state-unbenchmarked { border-left-color: var(--border-strong); }
+
+  .headline-ok {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .core-count {
+    font-family: var(--mono);
+    font-size: clamp(2.6rem, 9vw, 3.6rem);
+    font-weight: 700;
+    color: var(--accent-strong);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .core-unit {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+
+  .headline-refuse {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--danger);
+    text-wrap: balance;
+    margin: 0 0 0.15rem;
+  }
+
+  .headline-unbenched {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 0;
+  }
+
+  .support-line {
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    color: var(--text);
+    margin: 0.75rem 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .support-line + .support-line { margin-top: 0.45rem; }
+
+  .body-text {
+    font-size: 0.92rem;
+    color: var(--text);
+    margin: 0.75rem 0 0;
+  }
+
+  .body-text + .body-text { margin-top: 0.45rem; }
+
+  .memory-note {
+    font-size: 0.86rem;
+    color: var(--warning);
+    margin: 0.6rem 0 0;
+    font-weight: 600;
+  }
+
+  .provenance {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin: 0.9rem 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .gomax-note {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin: 0.6rem 0 0;
+    padding-top: 0.6rem;
+    border-top: 1px dashed var(--border);
+  }
+
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.9rem 0 0;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    line-height: 1.4;
+  }
+
+  .badge-measured {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    border: 1px solid var(--accent);
+  }
+
+  .badge-estimate {
+    background: transparent;
+    color: var(--warning);
+    border: 1px dashed var(--warning);
+  }
+
+  .estimate-note {
+    font-size: 0.86rem;
+    color: var(--warning);
+    margin: 0.5rem 0 0;
+  }
+
+  .caveats {
+    list-style: none;
+    margin: 0.9rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .caveat {
+    border-left: 3px solid var(--warning);
+    background: var(--warning-soft);
+    padding: 0.45rem 0.7rem;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.84rem;
+    color: var(--text);
+  }
+
+  .caveat .eyebrow {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--warning);
+    margin-bottom: 0.15rem;
+  }
+
+  .ceiling-box {
+    margin-top: 0.85rem;
+    padding: 0.75rem 0.85rem;
+    background: var(--danger-soft);
+    border-radius: 6px;
+    border: 1px solid var(--danger);
+  }
+
+  .ceiling-box p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text);
+  }
+
+  .ceiling-box p + p { margin-top: 0.4rem; }
+
+  .curve-wrap {
+    overflow-x: auto;
+  }
+
+  table.curve-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 0.86rem;
+    min-width: 26rem;
+  }
+
+  table.curve-table caption {
+    text-align: left;
+    font-family: var(--sans);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin-bottom: 0.7rem;
+  }
+
+  table.curve-table th,
+  table.curve-table td {
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+
+  table.curve-table th {
+    font-family: var(--sans);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  table.curve-table tr.selected-row {
+    background: var(--accent-soft);
+  }
+
+  table.curve-table tr.selected-row td {
+    color: var(--accent-strong);
+    font-weight: 700;
+  }
+
+  table.curve-table tr.ceiling-row {
+    background: var(--danger-soft);
+  }
+
+  table.curve-table tr.ceiling-row td {
+    color: var(--danger);
+    font-weight: 700;
+  }
+
+  .row-tag {
+    display: inline-block;
+    margin-left: 0.5rem;
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .bar-cell {
+    width: 40%;
+  }
+
+  .bar-track {
+    background: var(--surface-2);
+    border-radius: 3px;
+    height: 0.55rem;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    background: var(--border-strong);
+    border-radius: 3px;
+  }
+
+  tr.selected-row .bar-fill { background: var(--accent); }
+  tr.ceiling-row .bar-fill { background: var(--danger); }
+
+  .empty-curve-note {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 30rem) {
+    .panel { padding: 1rem; }
+    .core-count { font-size: clamp(2.2rem, 14vw, 2.8rem); }
+  }
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <h1>Redpanda Connect — Compute Sizing</h1>
+    <p>
+      Self-serve core sizing from blessed benchmark runs. Answers only for connectors with
+      measured data — everything else is a refusal, on purpose.
+    </p>
+  </header>
+
+  <section class="panel" aria-label="Sizing inputs">
+    <p class="panel-label">Inputs</p>
+    <div class="input-grid">
+      <div class="field">
+        <label for="connector">Connector</label>
+        <select id="connector"></select>
+      </div>
+
+      <div class="field">
+        <label for="eventsPerSec">Events / sec</label>
+        <input id="eventsPerSec" type="number" min="1" step="1000" value="40000">
+      </div>
+
+      <div class="field">
+        <label for="eventBytes">Average event size (bytes)</label>
+        <input id="eventBytes" type="number" min="1" value="1200">
+        <span class="helper">Benchmarks used 1200 B (4096 B for DynamoDB)</span>
+      </div>
+
+      <div class="field">
+        <label for="tax">Processing</label>
+        <select id="tax"></select>
+      </div>
+
+      <div class="field field-wide">
+        <label for="headroom">Headroom</label>
+        <div class="range-row">
+          <input id="headroom" type="range" min="0" max="100" step="5" value="30">
+          <span class="range-val" id="headroomVal">30%</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel result-card" id="resultCard" aria-live="polite">
+    <p class="panel-label">Result</p>
+    <div id="result"></div>
+  </section>
+
+  <section class="panel" id="curveSection">
+    <p class="panel-label">Measured curve</p>
+    <div id="curveHost"></div>
+  </section>
+</div>
+
+<script type="module">
+  const { CONNECTORS, TAX, VCPU_POINTS, sizeFor } = window.__sizingCore
+
+  const connectorSelect = document.getElementById('connector')
+  const eventsInput = document.getElementById('eventsPerSec')
+  const bytesInput = document.getElementById('eventBytes')
+  const taxSelect = document.getElementById('tax')
+  const headroomInput = document.getElementById('headroom')
+  const headroomVal = document.getElementById('headroomVal')
+  const resultCard = document.getElementById('resultCard')
+  const resultHost = document.getElementById('result')
+  const curveHost = document.getElementById('curveHost')
+
+  // --- populate selects from the core's data, once ---
+  for (const [key, c] of Object.entries(CONNECTORS)) {
+    const opt = document.createElement('option')
+    opt.value = key
+    opt.textContent = c.label
+    connectorSelect.appendChild(opt)
+  }
+  const otherOpt = document.createElement('option')
+  otherOpt.value = '__other'
+  otherOpt.textContent = 'Something else…'
+  connectorSelect.appendChild(otherOpt)
+  connectorSelect.value = 'postgres_cdc'
+
+  for (const [key, t] of Object.entries(TAX)) {
+    const opt = document.createElement('option')
+    opt.value = key
+    opt.textContent = t.label + (t.measured === false ? ' (estimate)' : '')
+    taxSelect.appendChild(opt)
+  }
+  taxSelect.value = 'passthrough'
+
+  // --- formatting helpers ---
+  const r1 = (n) => (Math.round(n * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 })
+  const int = (n) => Math.round(n).toLocaleString('en-US')
+
+  function badgeHtml(result) {
+    if (result.taxMeasured === false) {
+      return `
+        <div class="badge-row">
+          <span class="badge badge-estimate">Estimate</span>
+        </div>
+        <p class="estimate-note">Includes an unmeasured processing multiplier — confirm in a POC.</p>
+      `
+    }
+    return `
+      <div class="badge-row">
+        <span class="badge badge-measured">Measured</span>
+      </div>
+    `
+  }
+
+  function caveatsHtml(warnings) {
+    if (!warnings || warnings.length === 0) return ''
+    return `
+      <ul class="caveats">
+        ${warnings.map((w) => `<li class="caveat"><span class="eyebrow">Caveat</span>${w}</li>`).join('')}
+      </ul>
+    `
+  }
+
+  function provenanceHtml(run) {
+    return `<p class="provenance">Measured ${run.date} · run ${run.path} · ${run.sha}</p>`
+  }
+
+  const GOMAXPROCS_NOTE = "Cores are counted off the instance's CPU, not GOMAXPROCS. Raising GOMAXPROCS for I/O-bound work does not change this number."
+
+  function renderOk(r) {
+    resultCard.className = 'panel result-card state-ok'
+    const memNote = r.peakHeapMB > 1024
+      ? `<p class="memory-note">Peak heap on this run exceeded 1024 MB — memory, not cores, may end up driving the instance choice here.</p>`
+      : ''
+    resultHost.innerHTML = `
+      <div class="headline-ok">
+        <span class="core-count">${r.cores}</span>
+        <span class="core-unit">licensable cores</span>
+      </div>
+      <p class="support-line">Needs ${r1(r.required)} MiB/s (target ${r1(r.target)} MiB/s + ${r.headroomPct}% headroom). Measured ${r1(r.measuredMiBps)} MiB/s at ${r.cores} vCPU.</p>
+      <p class="support-line">Peak heap: ${int(r.peakHeapMB)} MB</p>
+      ${memNote}
+      ${provenanceHtml(r.run)}
+      ${badgeHtml(r)}
+      <p class="gomax-note">${GOMAXPROCS_NOTE}</p>
+      ${caveatsHtml(r.warnings)}
+    `
+  }
+
+  function renderCeiling(r) {
+    resultCard.className = 'panel result-card state-ceiling'
+    const limitHtml = r.ceiling
+      ? `<div class="ceiling-box">
+          <p>The limit is ${r.ceiling.reason}</p>
+          <p>${r.ceiling.fix}</p>
+        </div>`
+      : `<div class="ceiling-box">
+          <p>Only one Connect instance was benchmarked. Scaling out across instances was not measured — ask the perf team before quoting.</p>
+        </div>`
+    resultHost.innerHTML = `
+      <p class="headline-refuse">No core count — this exceeds what was measured.</p>
+      <p class="support-line">Needs ${r1(r.required)} MiB/s; the measured ceiling is ${r1(r.ceilingMiBps)} MiB/s.</p>
+      ${limitHtml}
+      ${provenanceHtml(r.run)}
+      ${caveatsHtml(r.warnings)}
+    `
+  }
+
+  function renderUnbenchmarked() {
+    resultCard.className = 'panel result-card state-unbenchmarked'
+    resultHost.innerHTML = `
+      <p class="headline-unbenched">Not benchmarked. This tool only answers for the six connectors with a blessed benchmark run. Ask the perf team rather than extrapolating.</p>
+    `
+  }
+
+  function renderCurve(connectorKey, selectedCores) {
+    const c = CONNECTORS[connectorKey]
+    if (!c) {
+      curveHost.innerHTML = `<p class="empty-curve-note">No measured curve — this connector was not benchmarked.</p>`
+      return
+    }
+    const max = Math.max(...VCPU_POINTS.map((v) => c.curve[v]))
+    const rows = VCPU_POINTS.map((v) => {
+      const mibps = c.curve[v]
+      const isSelected = v === selectedCores
+      const isCeilingRow = !selectedCores && v === VCPU_POINTS[VCPU_POINTS.length - 1]
+      const rowClass = isSelected ? 'selected-row' : (isCeilingRow ? 'ceiling-row' : '')
+      const tag = isSelected ? '<span class="row-tag">selected</span>' : (isCeilingRow ? '<span class="row-tag">ceiling</span>' : '')
+      const pct = Math.max(4, Math.round((mibps / max) * 100))
+      return `
+        <tr class="${rowClass}">
+          <td>${v}${tag}</td>
+          <td>${r1(mibps)} MiB/s</td>
+          <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+        </tr>
+      `
+    }).join('')
+    curveHost.innerHTML = `
+      <div class="curve-wrap">
+        <table class="curve-table">
+          <caption>${c.label} — measured MiB/s by vCPU (c8g.4xlarge)</caption>
+          <thead>
+            <tr><th scope="col">vCPU</th><th scope="col">Measured MiB/s</th><th scope="col">Relative</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `
+  }
+
+  function render() {
+    const headroomPct = Number(headroomInput.value)
+    headroomVal.textContent = headroomPct + '%'
+
+    const connector = connectorSelect.value
+    if (connector === '__other' || !CONNECTORS[connector]) {
+      renderUnbenchmarked()
+      curveHost.innerHTML = ''
+      return
+    }
+
+    const eventsPerSec = Number(eventsInput.value)
+    const eventBytes = Number(bytesInput.value)
+    const tax = taxSelect.value
+
+    const result = sizeFor({ connector, eventsPerSec, eventBytes, tax, headroomPct })
+
+    if (result.status === 'ok') {
+      renderOk(result)
+      renderCurve(connector, result.cores)
+    } else if (result.status === 'ceiling') {
+      renderCeiling(result)
+      renderCurve(connector, null)
+    } else {
+      renderUnbenchmarked()
+      curveHost.innerHTML = ''
+    }
+  }
+
+  for (const el of [connectorSelect, eventsInput, bytesInput, taxSelect, headroomInput]) {
+    el.addEventListener('input', render)
+    el.addEventListener('change', render)
+  }
+
+  render()
 </script>
