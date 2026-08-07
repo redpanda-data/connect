@@ -19,6 +19,7 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/catalog"
 	"github.com/apache/iceberg-go/catalog/rest"
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
@@ -361,20 +362,22 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 	// line: authored-by-us AND not-referenced ⇒ orphan of a losing attempt.
 	//
 	// Two further guards:
-	//   - An unresolved ErrCommitStateUnknown is never cleaned, and the guard
-	//     is STICKY across the whole retry history, not just the last attempt:
-	//     commitLocked's returned error carries the unknown state whenever ANY
-	//     attempt's outcome remains ambiguous (no subsequent successful reload
-	//     resolved it) — even when a later attempt's clean failure terminated
-	//     the loop. Such an attempt may have landed server-side against
-	//     metadata a failed reload kept us from seeing; the reference scan
-	//     below would then run against a stale c.table, complete successfully
-	//     (slipping past the fail-closed guard), not see the landed snapshot's
-	//     files as referenced, and delete them — corrupting the table. Those
-	//     files are left for Iceberg orphan-file maintenance instead. Once a
-	//     successful reload resolves the ambiguity (the commit-id token was
-	//     absent, so the ambiguous attempt provably did not land), the error is
-	//     no longer unknown-class and cleanup runs as normal.
+	//   - Cleanup on failure runs ONLY when every attempt's outcome was a
+	//     definitive server-side rejection (isDefinitiveCommitRejection): the
+	//     destructive step requires PROOF that no attempt could still land. Any
+	//     other failure — the catalog's explicit ErrCommitStateUnknown (5xx),
+	//     but equally a raw transport error (timeout, connection reset, EOF) on
+	//     the commit request — may have applied server-side, possibly AFTER we
+	//     stopped looking: even a successful reload that does not show our
+	//     commit-id token only proves the attempt had not landed YET, never
+	//     that it won't (the server may be mid-apply). commitLocked therefore
+	//     keeps the ambiguity marker sticky for the whole call — the returned
+	//     error is unknown-class whenever ANY attempt's outcome was ambiguous,
+	//     even when a later attempt's definitive failure terminated the loop —
+	//     and cleanup is skipped, leaving the files for Iceberg orphan-file
+	//     maintenance. Deleting them and having the ambiguous attempt land
+	//     afterwards would leave a committed snapshot referencing deleted
+	//     files: table corruption.
 	//   - On SUCCESS we only clean when the commit was retried: a first-attempt
 	//     success wrote exactly the files it committed, so there is nothing to
 	//     reclaim and the reference scan is skipped.
@@ -495,19 +498,27 @@ func (c *committer) referencedDataFilePaths(ctx context.Context) (map[string]str
 // no such leftovers, and cleaning then would be unsafe under concurrent
 // committers (see commitOverwrite).
 //
-// Unknown-state stickiness: an attempt that ends in ErrCommitStateUnknown may
-// have landed server-side, and only a subsequent SUCCESSFUL reload can resolve
-// that ambiguity (either the reloaded metadata carries our commit-id — the
-// attempt landed and we return success — or the token's absence proves it did
-// not land). The ambiguity is therefore tracked across the WHOLE retry
-// history, not just the last attempt: whenever commitLocked returns an error
-// while some attempt's outcome is still unresolved — regardless of which
+// Ambiguity stickiness: an attempt whose txn.Commit error is not a definitive
+// server-side rejection (isDefinitiveCommitRejection) may have landed
+// server-side — that covers the catalog's explicit ErrCommitStateUnknown
+// (5xx) and equally raw transport failures (client timeout, connection reset,
+// EOF) where no verdict ever arrived. Within a call, the only observation
+// that resolves such an ambiguity is finding our commit-id token in reloaded
+// metadata — the attempt landed and we return success. The token's ABSENCE
+// resolves nothing: it proves the attempt had not landed YET, not that it
+// won't (the server may still be mid-apply). The ambiguity is therefore
+// sticky across the WHOLE retry history: whenever commitLocked returns an
+// error while some attempt's outcome is ambiguous — regardless of which
 // attempt's error terminated the loop (exhausted retries, a non-retryable
 // error, a stage failure, ...) — the returned error satisfies
-// errors.Is(err, rest.ErrCommitStateUnknown). Callers that gate destructive
-// follow-up work on the absence of unknown state (commitOverwrite's orphan
-// cleanup) rely on this: the guard must hold if ANY attempt might have landed
-// unobserved, not merely the final one.
+// errors.Is(err, rest.ErrCommitStateUnknown) (raw ambiguous errors are joined
+// with that sentinel so callers need no new check). Callers that gate
+// destructive follow-up work on the absence of unknown state
+// (commitOverwrite's orphan cleanup) rely on this: cleanup requires proof of
+// non-application, and absence of proof of application is not that.
+// (A commit that ultimately SUCCEEDS returns nil even after earlier ambiguous
+// attempts: our commits carry requirements pinned to the base snapshot, so
+// once a later attempt lands, an earlier straggler can no longer apply.)
 //
 // Callers must hold c.commitMu.
 func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUnknownState bool, stage func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error) (bool, error) {
@@ -533,17 +544,19 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	}
 
 	var commitErr error
-	// unresolvedUnknown is non-nil while some attempt's outcome is ambiguous
-	// (ErrCommitStateUnknown: the commit may have landed server-side) and no
-	// subsequent successful reload has resolved it. Only a successful reload
-	// clears it: after one, either committedSnapshotHasID finds our token (the
-	// ambiguous attempt landed — we return success), or the token's absence
-	// proves it did not land (the append path's dropAlreadyCommitted plays the
-	// same role against the reloaded metadata). A FAILED reload never clears
-	// it, and every error return joins it into the returned error
-	// (joinUnresolvedUnknown) so callers' errors.Is(err,
-	// rest.ErrCommitStateUnknown) checks stay true even when a later attempt's
-	// differently-classed error terminates the loop.
+	// unresolvedUnknown is non-nil once some attempt's outcome is ambiguous:
+	// its txn.Commit error was not a definitive server-side rejection
+	// (isDefinitiveCommitRejection), so the commit may have landed — or may
+	// STILL land — server-side. Nothing on an error path ever clears it: a
+	// reloaded snapshot without our commit-id token only proves the ambiguous
+	// attempt has not landed YET, never that it won't (the server may be
+	// mid-apply), so token absence is deliberately not treated as resolution.
+	// The only resolutions are token FOUND (the attempt landed; we return
+	// success) and a later attempt SUCCEEDING (its snapshot-pinned
+	// requirements then fence out any straggler). Every error return joins the
+	// marker into the returned error (joinUnresolvedUnknown) so callers'
+	// errors.Is(err, rest.ErrCommitStateUnknown) checks stay true even when a
+	// later attempt's differently-classed error terminates the loop.
 	var unresolvedUnknown error
 	attempt := 0
 	reloaded := false
@@ -562,11 +575,20 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			return attempt > 1, joinUnresolvedUnknown(err, unresolvedUnknown)
 		}
 		tbl, err := txn.Commit(ctx)
-		if errors.Is(err, rest.ErrCommitStateUnknown) {
-			// This attempt may have landed server-side. Sticky until a
-			// successful reload observes whether it did (see unresolvedUnknown
-			// above).
-			unresolvedUnknown = err
+		if err != nil && !isDefinitiveCommitRejection(err) {
+			// Anything short of a definitive server-side rejection may have
+			// landed (or may still land) server-side: the catalog's explicit
+			// ErrCommitStateUnknown (5xx), but equally a raw transport failure
+			// (client timeout, connection reset, EOF) on the commit request.
+			// Sticky for the rest of the call (see unresolvedUnknown above).
+			// Raw errors are wrapped together with rest.ErrCommitStateUnknown
+			// so the marker is caller-visible through the one existing
+			// sentinel.
+			if errors.Is(err, rest.ErrCommitStateUnknown) {
+				unresolvedUnknown = err
+			} else {
+				unresolvedUnknown = fmt.Errorf("%w: %w", rest.ErrCommitStateUnknown, err)
+			}
 		}
 		// Some engine-backed catalogs (Databricks Unity Catalog) reject a
 		// commit whose set-properties updates touch reserved keys, naming the
@@ -610,12 +632,13 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			if reloadedTbl, reloadErr := c.reloadTable(ctx); reloadErr == nil {
 				c.table = reloadedTbl
 				reloaded = true
-				// A successful reload resolves any pending ambiguity: either
-				// the commit-id check just below finds the token (the ambiguous
-				// attempt landed — we return success), or the token's absence
-				// proves it did not land. A failed reload (the else branch)
-				// resolves nothing and must leave the ambiguity standing.
-				unresolvedUnknown = nil
+				// A successful reload can resolve a pending ambiguity in one
+				// direction only: the commit-id check just below finding our
+				// token (the ambiguous attempt landed — we return success).
+				// The token's ABSENCE resolves nothing — it proves the attempt
+				// has not landed YET, not that it won't (the server may still
+				// be mid-apply and land it after this reload) — so
+				// unresolvedUnknown is deliberately NOT cleared here.
 				// Idempotency: a failed or ambiguous response may still have
 				// landed the commit server-side. If the reloaded table already
 				// carries our commit-id, the prior attempt succeeded — return
@@ -632,9 +655,9 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			continue
 		} else if err != nil {
 			// Non-retryable error: reload so the next call uses fresh metadata.
-			// (This reload does not clear unresolvedUnknown: no commit-id check
-			// follows it, so it never observes whether an ambiguous attempt
-			// landed.)
+			// (Like every reload, this one cannot clear unresolvedUnknown —
+			// only finding the commit-id token, which returns success, proves
+			// anything about an ambiguous attempt.)
 			if reloaded, reloadErr := c.reloadTable(ctx); reloadErr == nil {
 				c.table = reloaded
 			}
@@ -649,17 +672,72 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 }
 
 // joinUnresolvedUnknown attaches an unresolved ambiguous commit outcome — an
-// earlier attempt's ErrCommitStateUnknown that no successful reload resolved
-// (see commitLocked's unknown-state stickiness) — to err, so that errors.Is on
-// the result reports the unknown state no matter which attempt's error
-// terminated the retry loop. When there is no unresolved ambiguity, or err
-// already carries the unknown-state sentinel, err is returned unchanged,
-// preserving the existing error message exactly.
+// earlier attempt whose failure was not a definitive rejection and whose
+// possible landing was never observed (see commitLocked's ambiguity
+// stickiness) — to err, so that errors.Is on the result reports the unknown
+// state no matter which attempt's error terminated the retry loop. When there
+// is no unresolved ambiguity, or err already carries the unknown-state
+// sentinel, err is returned unchanged, preserving the existing error message
+// exactly.
 func joinUnresolvedUnknown(err, unresolved error) error {
 	if unresolved == nil || errors.Is(err, rest.ErrCommitStateUnknown) {
 		return err
 	}
 	return errors.Join(err, unresolved)
+}
+
+// isDefinitiveCommitRejection reports whether a txn.Commit error is a
+// definitive server-side verdict that the commit did NOT apply. Only such
+// errors may skip commitLocked's ambiguity marker: the destructive follow-up
+// work gated on that marker (commitOverwrite's orphan cleanup) requires proof
+// of non-application, and absence of proof of application is not that.
+//
+// The allowlist mirrors iceberg-go's rest catalog error mapping (catalog/rest
+// handleNon200 plus updateTable's per-status overrides):
+//   - table.ErrCommitFailed — the clean-conflict verdict. It covers
+//     rest.ErrCommitFailed (a 409, which wraps it) and the client-side
+//     conflict-validation sentinels, all of which mean the commit was
+//     rejected without applying.
+//   - rest.ErrBadRequest (400), catalog.ErrNoSuchTable (404, updateTable's
+//     override), rest.ErrUnauthorized (401), rest.ErrForbidden (403) and
+//     rest.ErrAuthorizationExpired (419) — 4xx verdicts: the server evaluated
+//     the request and refused it. 400 notably includes engine catalogs'
+//     prohibited-property rejections, whose learn-strip-retry flow depends on
+//     the rejection being definitive.
+//   - A prohibited-keys rejection recognised by text
+//     (parseProhibitedPropertyKeys) — that text is only ever authored by a
+//     catalog that evaluated and refused the request (in the wild it arrives
+//     as the 400 above; test doubles and non-REST wrappers may surface the
+//     bare message). The explicit ambiguous-class check below keeps a 5xx
+//     body that happens to mention prohibited keys out of this clause.
+//
+// Everything else is NOT definitive: the rest catalog's explicit ambiguity
+// classes (ErrCommitStateUnknown for 500/502/503/504, ErrServerError /
+// ErrServiceUnavailable for other 5xx), raw transport failures (url.Error,
+// net.Error timeouts, context deadlines, io.EOF, connection resets), and any
+// unrecognised error. Notably, bare rest.ErrRESTError is excluded even though
+// a 422 maps to it: it is also the wrapper for undecodable error responses of
+// any status, so it cannot prove non-application.
+func isDefinitiveCommitRejection(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Ambiguous classes first: these may have applied server-side, whatever
+	// else the error chain or message carries.
+	if errors.Is(err, rest.ErrCommitStateUnknown) ||
+		errors.Is(err, rest.ErrServerError) ||
+		errors.Is(err, rest.ErrServiceUnavailable) {
+		return false
+	}
+	if errors.Is(err, table.ErrCommitFailed) ||
+		errors.Is(err, rest.ErrBadRequest) ||
+		errors.Is(err, rest.ErrUnauthorized) ||
+		errors.Is(err, rest.ErrForbidden) ||
+		errors.Is(err, rest.ErrAuthorizationExpired) ||
+		errors.Is(err, catalog.ErrNoSuchTable) {
+		return true
+	}
+	return len(parseProhibitedPropertyKeys(err)) > 0
 }
 
 // noteProhibitedKeys inspects a failed commit's error for a catalog

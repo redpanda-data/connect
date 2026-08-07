@@ -18,12 +18,14 @@
 // client-side namespace creation against UC's Iceberg REST catalog is
 // unverified; the tests never call CreateNamespace.
 //
-// UNVERIFIED-WITHOUT-LIVE-ACCESS: these tests were written before live
-// Databricks credentials were available. The exact UC Iceberg REST behaviours
-// they probe (CREATE TABLE acceptance, rejection wording for
-// identifier-field-ids, set-properties commits for the timestamp-encoding
-// pin, equality-delete commit handling) are asserted per official docs and
-// field reports and must be confirmed on the first live run.
+// These tests have run green against a live Databricks Unity Catalog
+// (serverless workspace, customer-owned S3 via create_storage): CREATE TABLE
+// acceptance, the identifier-field-ids rejection (verbatim ErrorCode 2014),
+// the set-properties commit for the timestamp-encoding pin, equality-delete
+// commit handling (rejected with ErrorCode 2013), and the commit-latency
+// bench are all live-confirmed. Still unexercised: OAuth M2M auth for the
+// Iceberg REST client (PAT was used throughout) and the explicit
+// storage_root / metastore-root-inherit table-storage variants.
 package databrickse2e
 
 import (

@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -286,7 +287,12 @@ func TestBuildCOWFilterSingleKey(t *testing.T) {
 	}
 	filter, err := w.buildCOWFilter(tbl.Schema(), keyed)
 	require.NoError(t, err)
-	assert.Equal(t, iceberg.OpIn, filter.Op(), "two distinct keys on one column is an IN predicate")
+	// The IN predicate is conjoined with a NotNull guard on the key column,
+	// which keeps the negated survivor scan null-safe (see buildCOWFilter's doc
+	// comment; pinned end-to-end by cow_null_key_test.go).
+	require.Equal(t, iceberg.OpAnd, filter.Op(), "a single-column key builds a null-safe AND(NotNull, IN)")
+	assert.Contains(t, filter.String(), "NotNull", "the key column must carry the NotNull guard")
+	assert.Contains(t, filter.String(), "In(", "two distinct keys on one column collapse to an IN predicate")
 }
 
 func TestBuildCOWFilterCompositeKey(t *testing.T) {
@@ -408,9 +414,12 @@ func TestCommitOverwriteCleansUpOrphansOnFailure(t *testing.T) {
 	seedCount := countParquetFiles(t, seedTbl.Location())
 	require.Positive(t, seedCount, "seeding must have written data files")
 
-	// A non-retryable failure guarantees the mutation's commit does not land, so
-	// the files the overwrite wrote are genuine orphans.
-	fc := &flakyCatalog{memCatalog: cat, failuresLeft: 1 << 30, failErr: errors.New("storage unavailable")}
+	// A definitive, non-retryable rejection (400-class) proves the mutation's
+	// commit did not land, so the files the overwrite wrote are genuine orphans.
+	// (A bare transport-style error would instead be ambiguous — the commit may
+	// still land server-side — and cleanup would rightly be skipped; see
+	// TestCommitOverwriteTransportErrorIsAmbiguous.)
+	fc := &flakyCatalog{memCatalog: cat, failuresLeft: 1 << 30, failErr: fmt.Errorf("commit rejected: %w", rest.ErrBadRequest)}
 	comm, err := NewCommitter(fc.snapshot(), fc, CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
 	require.NoError(t, err)
 	defer comm.Close()
@@ -1323,15 +1332,262 @@ func TestCommitOverwriteUnknownStateGuardIsStickyAcrossRetries(t *testing.T) {
 	assert.Equal(t, map[int64]string{1: "one", 2: "TWO", 3: "three"}, scanRows(t, ctx, final))
 }
 
-// TestCommitOverwriteCleanupRunsOnceAmbiguityResolved is the counterweight to
-// the sticky guard: a resolved ambiguity must not suppress the hygiene path.
-// Attempt 1 returns ErrCommitStateUnknown WITHOUT landing; the very next
-// reload SUCCEEDS and the commit-id token is absent, proving the ambiguous
-// attempt did not land — ambiguity resolved. The remaining attempts exhaust
-// with clean conflicts, so the terminal error is plain ErrCommitFailed (not
-// unknown-class) and cleanup must run, reclaiming every attempt's orphaned
-// parquet and leaving only the seed files.
-func TestCommitOverwriteCleanupRunsOnceAmbiguityResolved(t *testing.T) {
+// TestCommitOverwriteCleanupRunsOnDefinitiveFailures is the counterweight to
+// the ambiguity guard: cleanup requires proof that no attempt could still
+// land, and a retry history made up ONLY of definitive server-side rejections
+// (clean 409 conflicts) plus at most a final success is exactly that proof.
+// The hygiene path must therefore still run for these shapes — the allowlist
+// fix must not turn every failed commit into an orphan leak. (Since token
+// absence no longer counts as resolving an ambiguous attempt, these
+// no-ambiguity-anywhere histories are the ONLY failure shapes where cleanup
+// runs; an unknown or transport-failed attempt anywhere in the history keeps
+// it skipped — see TestCommitOverwriteAmbiguityNotClearedByTokenAbsence.)
+func TestCommitOverwriteCleanupRunsOnDefinitiveFailures(t *testing.T) {
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+
+	// Every attempt loses a clean 409 (nothing lands anywhere): all attempts'
+	// files are provable orphans and cleanup reclaims them all.
+	t.Run("exhausted conflicts", func(t *testing.T) {
+		ctx := t.Context()
+		seedTbl, mem := newCOWTable(t, sc)
+		seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+		seedCount := countParquetFiles(t, seedTbl.Location())
+		require.Positive(t, seedCount, "seeding must have written data files")
+
+		const maxRetries = 3
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitConflict, commitConflict, commitConflict}}
+		comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: maxRetries},
+			func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+		require.NoError(t, err)
+		defer comm.Close()
+		w := cowWriter(t, cat.snapshot(), "id")
+		w.committer = comm
+
+		err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, rest.ErrCommitFailed, "the terminal error must surface the exhausted conflicts")
+		assert.NotErrorIs(t, err, rest.ErrCommitStateUnknown,
+			"clean 409s are definitive rejections; no ambiguity marker may be attached")
+		assert.Equal(t, maxRetries, cat.calls, "the commit must exhaust every retry")
+
+		assert.Zero(t, countSnapshotsWithCommitID(cat.snapshot()), "nothing may have landed")
+		assert.Equal(t, seedCount, countParquetFiles(t, seedTbl.Location()),
+			"cleanup must reclaim every attempt's files: definitive rejections prove none of them can land")
+	})
+
+	// Attempt 1 loses a clean 409, attempt 2 lands: the loser's files are
+	// provable orphans and the retried-success trigger reclaims them, while the
+	// winner's referenced files survive.
+	t.Run("conflict then success", func(t *testing.T) {
+		ctx := t.Context()
+		seedTbl, mem := newCOWTable(t, sc)
+		seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+		seedCount := countParquetFiles(t, seedTbl.Location())
+		require.Positive(t, seedCount, "seeding must have written data files")
+
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitConflict}}
+		comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
+			func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+		require.NoError(t, err)
+		defer comm.Close()
+		w := cowWriter(t, cat.snapshot(), "id")
+		w.committer = comm
+
+		require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}))
+		require.Equal(t, 2, cat.calls, "the conflict must force a second attempt")
+
+		referenced, err := comm.referencedDataFilePaths(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, referenced)
+		assert.Equal(t, seedCount+len(referenced), countParquetFiles(t, seedTbl.Location()),
+			"attempt 1's orphans must be reclaimed on the retried success; the winner's files survive")
+		assert.Equal(t, map[int64]string{1: "one", 2: "TWO", 3: "three"}, scanRows(t, ctx, cat.snapshot()))
+	})
+}
+
+// lateLandingOutcome scripts one CommitTable call of a lateLandingCatalog.
+type lateLandingOutcome struct {
+	err     error // non-nil: return this error WITHOUT applying the update
+	capture bool  // stash the call's updates so landPending can apply them later
+}
+
+// lateLandingCatalog models the ambiguous commit whose server-side apply
+// finishes only after the client has given up: a scripted CommitTable call
+// returns its error without applying, but captures the update so the test can
+// land it "server-side" later via landPending. Calls beyond the script
+// succeed normally through the embedded memCatalog.
+type lateLandingCatalog struct {
+	*memCatalog
+	outcomes []lateLandingOutcome
+	calls    int
+	pending  [][]table.Update
+}
+
+func (c *lateLandingCatalog) CommitTable(ctx context.Context, ident table.Identifier, reqs []table.Requirement, updates []table.Update) (table.Metadata, string, error) {
+	var o lateLandingOutcome
+	if c.calls < len(c.outcomes) {
+		o = c.outcomes[c.calls]
+	}
+	c.calls++
+	if o.err == nil {
+		return c.memCatalog.CommitTable(ctx, ident, reqs, updates)
+	}
+	if o.capture {
+		c.pending = append(c.pending, updates)
+	}
+	return nil, "", o.err
+}
+
+// landPending applies every captured update, oldest first — the server
+// finishing the ambiguous requests after the client stopped waiting.
+func (c *lateLandingCatalog) landPending(t testing.TB, ctx context.Context) {
+	t.Helper()
+	for _, updates := range c.pending {
+		_, _, err := c.memCatalog.CommitTable(ctx, c.ident, nil, updates)
+		require.NoError(t, err, "the late landing must apply cleanly")
+	}
+	c.pending = nil
+}
+
+func (c *lateLandingCatalog) snapshot() *table.Table {
+	return table.New(c.ident, c.meta, c.metadataLocation,
+		func(context.Context) (iceio.IO, error) { return iceio.LocalFS{}, nil }, c)
+}
+
+// TestCommitOverwriteTransportErrorIsAmbiguous pins hole (a) of the cleanup
+// ambiguity guard: iceberg-go's rest catalog maps only HTTP 500/502/503/504
+// to ErrCommitStateUnknown, so a client-side transport failure on the commit
+// POST — timeout, connection reset, EOF — surfaces as a raw error. That is
+// the textbook ambiguous outcome (the server may finish applying after the
+// client stops waiting), so commitOverwrite must treat it exactly like an
+// unknown state: surface an unknown-class error and skip the destructive
+// orphan cleanup, while retry policy stays unchanged (the raw error is still
+// not retried). The commit then lands late, AFTER the write returned; had
+// cleanup run, the landed snapshot would reference deleted files.
+func TestCommitOverwriteTransportErrorIsAmbiguous(t *testing.T) {
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"url error wrapping a context deadline", &url.Error{
+			Op:  "Post",
+			URL: "https://catalog.example/v1/namespaces/ns/tables/t",
+			Err: context.DeadlineExceeded,
+		}},
+		{"bare connection reset", errors.New("read tcp 10.1.2.3:52341->10.9.8.7:443: read: connection reset by peer")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			seedTbl, mem := newCOWTable(t, sc)
+			seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+			seedCount := countParquetFiles(t, seedTbl.Location())
+			require.Positive(t, seedCount, "seeding must have written data files")
+
+			cat := &lateLandingCatalog{memCatalog: mem, outcomes: []lateLandingOutcome{{err: tc.err, capture: true}}}
+			comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
+				func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+			require.NoError(t, err)
+			defer comm.Close()
+			w := cowWriter(t, cat.snapshot(), "id")
+			w.committer = comm
+
+			err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})})
+			require.Error(t, err)
+			assert.ErrorIs(t, err, rest.ErrCommitStateUnknown,
+				"a raw transport failure on the commit request must surface as unknown-class: no verdict ever arrived")
+			assert.Equal(t, 1, cat.calls, "retry policy is unchanged: a raw transport error is not retried")
+
+			// Cleanup must have been skipped: every recorded file is still on
+			// disk, because the ambiguous attempt may still land.
+			written := comm.writes.snapshot()
+			require.NotEmpty(t, written, "the overwrite attempt must have recorded written files")
+			for p := range written {
+				_, statErr := os.Stat(p)
+				assert.NoError(t, statErr, "no recorded file may be removed after an ambiguous transport failure: %s", p)
+			}
+			assert.Greater(t, countParquetFiles(t, seedTbl.Location()), seedCount,
+				"the ambiguous attempt's parquet files must be preserved")
+
+			// The server finishes applying afterwards. The landed snapshot must
+			// be complete: exactly one application, all referenced files intact.
+			cat.landPending(t, ctx)
+			assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()), "the ambiguous attempt landed exactly once")
+			assert.Equal(t, map[int64]string{1: "one", 2: "TWO", 3: "three"}, scanRows(t, ctx, cat.snapshot()),
+				"the late-landed snapshot must scan cleanly: none of its files were deleted")
+		})
+	}
+}
+
+// TestCommitOverwriteAmbiguityNotClearedByTokenAbsence pins hole (b) of the
+// cleanup ambiguity guard: a successful reload that does NOT show the
+// commit-id token proves only that the ambiguous attempt has not landed YET —
+// the server may still be mid-apply — so it must not clear the guard.
+// Attempt 1 returns a 5xx unknown without applying (the server holds the
+// request); the reload succeeds and finds no token; attempt 2 loses a
+// definitive 409 and retries exhaust. The guard must stay sticky — the
+// terminal error is unknown-class and cleanup is skipped — because attempt 1
+// then lands late. Before the fix, the token-absent reload cleared the guard,
+// the definitive 409 unlocked cleanup, and the late-landing snapshot's files
+// were deleted: table corruption.
+func TestCommitOverwriteAmbiguityNotClearedByTokenAbsence(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, mem := newCOWTable(t, sc)
+	_ = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+
+	const maxRetries = 2
+	cat := &lateLandingCatalog{memCatalog: mem, outcomes: []lateLandingOutcome{
+		{err: rest.ErrCommitStateUnknown, capture: true}, // ambiguous, lands late
+		{err: rest.ErrCommitFailed},                      // definitive clean 409
+	}}
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: maxRetries},
+		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, cat.snapshot(), "id")
+	w.committer = comm
+
+	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, rest.ErrCommitFailed, "the terminal error must surface the exhausted conflict")
+	assert.ErrorIs(t, err, rest.ErrCommitStateUnknown,
+		"a token-absent reload must not clear the ambiguity: the terminal error must stay unknown-class")
+	assert.Equal(t, maxRetries, cat.calls, "the commit must exhaust every retry")
+
+	// Cleanup must have been skipped entirely — attempt 1's files included.
+	written := comm.writes.snapshot()
+	require.NotEmpty(t, written, "the overwrite attempts must have recorded written files")
+	for p := range written {
+		_, statErr := os.Stat(p)
+		assert.NoError(t, statErr, "no recorded file may be removed while an attempt may still land: %s", p)
+	}
+
+	// Attempt 1 lands late. Its snapshot must be complete and scan cleanly.
+	cat.landPending(t, ctx)
+	assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()), "the ambiguous attempt landed exactly once")
+	assert.Equal(t, map[int64]string{1: "one", 2: "TWO", 3: "three"}, scanRows(t, ctx, cat.snapshot()),
+		"the late-landed snapshot must scan cleanly: none of its files were deleted")
+}
+
+// TestCommitOverwriteProhibitedKeysRejectionIsDefinitive pins that a
+// catalog's prohibited-property rejection stays on the definitive allowlist:
+// it is a validation verdict (a 400 in the wild), so the terminal-failure
+// hygiene path must still reclaim the failed overwrite's files — the
+// ambiguity guard must not turn engine-catalog rejections into orphan leaks.
+// The key named here was never sent, so nothing is learned and the rejection
+// is terminal on the first attempt. (The learn-strip-retry-succeed flow is
+// pinned by TestCOWOverwriteStripsProhibitedKeys.)
+func TestCommitOverwriteProhibitedKeysRejectionIsDefinitive(t *testing.T) {
 	ctx := t.Context()
 	sc := iceberg.NewSchema(0,
 		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
@@ -1342,9 +1598,8 @@ func TestCommitOverwriteCleanupRunsOnceAmbiguityResolved(t *testing.T) {
 	seedCount := countParquetFiles(t, seedTbl.Location())
 	require.Positive(t, seedCount, "seeding must have written data files")
 
-	const maxRetries = 3
-	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitUnknownNoLand, commitConflict, commitConflict}}
-	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: maxRetries},
+	cat := &alwaysProhibitingCatalog{memCatalog: mem, keys: []string{"some.innocent.key"}}
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
 		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer comm.Close()
@@ -1353,16 +1608,11 @@ func TestCommitOverwriteCleanupRunsOnceAmbiguityResolved(t *testing.T) {
 
 	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, rest.ErrCommitFailed, "the terminal error must surface the exhausted conflicts")
 	assert.NotErrorIs(t, err, rest.ErrCommitStateUnknown,
-		"a successful reload resolved the ambiguity (token absent, so the attempt did not land); the terminal error must not be unknown-class")
-	assert.Equal(t, maxRetries, cat.calls, "the commit must exhaust every retry")
-
-	// The hygiene path must run: nothing landed, so every attempt's files are
-	// genuine orphans and cleanup reclaims them all, back to the seed count.
-	assert.Zero(t, countSnapshotsWithCommitID(cat.snapshot()), "nothing may have landed")
+		"a prohibited-keys rejection is a definitive catalog verdict, not an ambiguity")
+	assert.Equal(t, 1, cat.commits, "an unlearnable prohibited-keys rejection must be terminal on the first attempt")
 	assert.Equal(t, seedCount, countParquetFiles(t, seedTbl.Location()),
-		"cleanup must reclaim the failed attempts' files once the ambiguity was resolved")
+		"the definitive rejection must still unlock cleanup: the failed overwrite's files are reclaimed")
 }
 
 // TestCommitOverwriteResumesAfterReloadFailures (T-12, CORR-3) proves the commit-id
@@ -1440,9 +1690,10 @@ func TestCommitOverwriteCleansUpWithoutListableFS(t *testing.T) {
 	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
 	seedCount := countParquetFiles(t, seedTbl.Location())
 
-	// A catalog that always fails the commit with a non-retryable error, and a
-	// table handle whose FS is writable but non-listable.
-	fc := &flakyCatalog{memCatalog: mem, failuresLeft: 1 << 30, failErr: errors.New("storage unavailable")}
+	// A catalog that always fails the commit with a definitive, non-retryable
+	// rejection (so cleanup may run), and a table handle whose FS is writable
+	// but non-listable.
+	fc := &flakyCatalog{memCatalog: mem, failuresLeft: 1 << 30, failErr: fmt.Errorf("commit rejected: %w", rest.ErrBadRequest)}
 	nlSnap := table.New(fc.ident, fc.meta, fc.metadataLocation,
 		func(context.Context) (iceio.IO, error) { return nonListableFS{}, nil }, fc)
 	comm, err := NewCommitter(nlSnap, fc, CommitConfig{MaxRetries: 2},
@@ -1654,7 +1905,8 @@ func TestCommitOverwriteCleanupSparesForeignFiles(t *testing.T) {
 		seedCount := countParquetFiles(t, seedTbl.Location())
 		foreign := filepath.Join(seedTbl.Location(), "data", "inflight-"+uuid.NewString()+".parquet")
 
-		fc := &flakyCatalog{memCatalog: mem, failuresLeft: 1 << 30, failErr: errors.New("storage unavailable")}
+		// Definitive rejection so failure-path cleanup runs at all.
+		fc := &flakyCatalog{memCatalog: mem, failuresLeft: 1 << 30, failErr: fmt.Errorf("commit rejected: %w", rest.ErrBadRequest)}
 		hooked := &commitHookCatalog{CatalogIO: fc, hook: plantOnFirstCall(t, foreign)}
 		comm, err := NewCommitter(fc.snapshot(), hooked, CommitConfig{MaxRetries: 2},
 			func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)

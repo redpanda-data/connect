@@ -155,14 +155,19 @@ billing.
    Fallback: the one-line CLI call above, run once by an admin — after that
    `manage_external_access` can stay `false` forever.
 
-## Unverified until the first live run
+## Live-run status
 
-Written before live credentials existed; verify these on first contact:
+The harness has run green end-to-end against a live Unity Catalog (serverless
+workspace, customer-owned S3 via `create_storage = true`): the terraform chain
+(catalog, schema, warehouse with 1-minute auto-stop, `EXTERNAL_USE_SCHEMA`
+self-grant, storage credential and external location), all four tests, and the
+commit-latency bench. Results are recorded in
+`docs/benchmark-results/iceberg.md`.
 
-- the `databricks_grants` privilege string `EXTERNAL_USE_SCHEMA` (and whether
-  UC tolerates the redundant self-grant to the owner) — `terraform/main.tf`;
-- the `null_resource` local-exec `databricks metastores update` invocation —
-  `terraform/main.tf`;
-- the UC Iceberg REST behaviours the tests probe (CREATE TABLE acceptance,
-  identifier-field-ids rejection wording, set-properties commits for the
-  timestamp-encoding pin, equality-delete commit handling) — `e2e_test.go`.
+Still unexercised — verify on first use:
+
+- the `manage_external_access` `null_resource` (`databricks metastores
+  update`) — the toggle was flipped manually via the CLI before terraform ran;
+- OAuth M2M auth for the Iceberg REST client (PAT was used throughout);
+- the explicit `storage_root` variable and metastore-root-inherit variants
+  (only `create_storage = true` has been run).

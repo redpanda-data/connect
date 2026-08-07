@@ -122,9 +122,8 @@ resource "databricks_sql_endpoint" "e2e" {
 # the catalog owner can grant it — terraform's principal creates the catalog
 # and is therefore its owner, so granting itself here should work.
 #
-# UNVERIFIED-WITHOUT-LIVE-ACCESS: the exact provider privilege string for
-# EXTERNAL USE SCHEMA ("EXTERNAL_USE_SCHEMA") and whether UC allows a
-# redundant self-grant to the owner must be confirmed on the first live run.
+# Live-verified: the "EXTERNAL_USE_SCHEMA" privilege string and the
+# self-grant to the catalog owner both applied cleanly on a real workspace.
 resource "databricks_grants" "catalog" {
   catalog = databricks_catalog.e2e.name
 
@@ -155,9 +154,9 @@ resource "databricks_grants" "catalog" {
 # resource (which does expose external_access_enabled) would be far more
 # invasive than a disposable e2e environment warrants.
 #
-# UNVERIFIED-WITHOUT-LIVE-ACCESS: the CLI invocation below is written per the
-# official docs and needs confirming on the first live run. Note it is not
-# reverted on destroy.
+# UNVERIFIED: this null_resource path has not been exercised — live runs so
+# far flipped the toggle manually via the CLI beforehand. Written per the
+# official docs; note it is not reverted on destroy.
 resource "null_resource" "enable_external_access" {
   count = var.manage_external_access ? 1 : 0
 

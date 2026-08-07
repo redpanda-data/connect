@@ -251,9 +251,24 @@ func cowSupportedColumnType(t iceberg.Type) bool {
 
 // buildCOWFilter builds the boolean expression selecting every row whose merge
 // key appears in the keyed (upsert/delete) messages. For a single identifier
-// column it is `col IN (v1, v2, ...)`; for a composite key it is an OR of
-// per-tuple ANDs — `(a=a1 AND b=b1) OR (a=a2 AND b=b2) ...` — which is the
-// correct semantics (an AND of per-column INs would match the cross product).
+// column it is `col IS NOT NULL AND col IN (v1, v2, ...)`; for a composite key
+// it is an OR of per-tuple ANDs — `(a NOT NULL AND a=a1 AND b NOT NULL AND
+// b=b1) OR ...` — which is the correct semantics (an AND of per-column INs
+// would match the cross product).
+//
+// The NotNull conjunct on every key column is load-bearing for null SAFETY,
+// not just semantics: iceberg-go's copy-on-write keeps survivor rows by
+// scanning each rewritten file with NOT(filter) through arrow's compute.Filter
+// with DefaultFilterOptions, whose zero-value null selection is DropNulls — so
+// a null-propagating predicate (EqualTo evaluates to NULL on a NULL key,
+// making NOT(filter) NULL) silently DROPS every NULL-key bystander row from
+// the rewritten file. COW table schemas deliberately leave identifier columns
+// nullable, so such rows legitimately exist; with the NotNull conjunct the
+// whole clause evaluates to false on a NULL key under Kleene logic
+// (and_kleene(false, NULL) = false), so NOT(filter) is true and the row is
+// kept — and on the deletion side NULL-key rows are never selected, which is
+// semantically correct because NULL never equals a merge key. Pinned by
+// cow_null_key_test.go.
 //
 // Merge-key columns may be int/long/string, the temporal types
 // (date/time/timestamp/timestamptz), or uuid. Every key literal is built so its
@@ -283,13 +298,18 @@ func (w *writer) buildCOWFilter(tableSchema *iceberg.Schema, keyed service.Messa
 			lits = append(lits, lit)
 		}
 		// SetPredicate collapses duplicate literals and reduces to EqualTo/
-		// AlwaysFalse for the degenerate cases.
-		return iceberg.SetPredicate(iceberg.OpIn, iceberg.Reference(f.Name), lits), nil
+		// AlwaysFalse for the degenerate cases; the NotNull conjunct keeps the
+		// negated filter null-safe (see the doc comment) even when the set
+		// collapses to a null-propagating EqualTo.
+		return iceberg.NewAnd(
+			cowNotNull(f.Name),
+			iceberg.SetPredicate(iceberg.OpIn, iceberg.Reference(f.Name), lits),
+		), nil
 	}
 
 	clauses := make([]iceberg.BooleanExpression, 0, len(keyed))
 	for i, msg := range keyed {
-		ands := make([]iceberg.BooleanExpression, 0, len(idFields))
+		ands := make([]iceberg.BooleanExpression, 0, 2*len(idFields))
 		for _, f := range idFields {
 			v, err := w.lookupKeyValue(msg, f, i)
 			if err != nil {
@@ -299,21 +319,31 @@ func (w *writer) buildCOWFilter(tableSchema *iceberg.Schema, keyed service.Messa
 			if err != nil {
 				return nil, err
 			}
-			ands = append(ands, iceberg.LiteralPredicate(iceberg.OpEQ, iceberg.Reference(f.Name), lit))
+			// The per-column NotNull keeps the clause null-safe under the
+			// negated survivor scan (see the doc comment).
+			ands = append(ands,
+				cowNotNull(f.Name),
+				iceberg.LiteralPredicate(iceberg.OpEQ, iceberg.Reference(f.Name), lit))
 		}
-		var clause iceberg.BooleanExpression
-		if len(ands) == 1 {
-			clause = ands[0]
-		} else {
-			clause = iceberg.NewAnd(ands[0], ands[1], ands[2:]...)
-		}
-		clauses = append(clauses, clause)
+		// Composite keys have >= 2 columns, so ands always has >= 4 entries.
+		clauses = append(clauses, iceberg.NewAnd(ands[0], ands[1], ands[2:]...))
 	}
 
 	if len(clauses) == 1 {
 		return clauses[0], nil
 	}
 	return iceberg.NewOr(clauses[0], clauses[1], clauses[2:]...), nil
+}
+
+// cowNotNull builds the `col IS NOT NULL` predicate conjoined into every
+// copy-on-write key clause. iceberg-go has no named NotNull constructor;
+// UnaryPredicate is its documented builder for the unary operations, its
+// substrait conversion maps OpNotNull to `is_not_null` (which arrow executes
+// natively in the rewrite's survivor scan), and binding against a required
+// column folds it to AlwaysTrue, so the conjunct is free when the key cannot
+// be null anyway.
+func cowNotNull(name string) iceberg.BooleanExpression {
+	return iceberg.UnaryPredicate(iceberg.OpNotNull, iceberg.Reference(name))
 }
 
 // cowKeyFields resolves the configured identifier_fields against the table
