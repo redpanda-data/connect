@@ -249,13 +249,28 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 // deleting files a landed snapshot references corrupts the table. Ambiguous
 // leftovers are deferred to Iceberg orphan-file maintenance instead,
 // mirroring commitOverwrite's cleanup gate.
+//
+// It is also the single choke point for the `commit.cleanup_on_failure: false`
+// escape hatch on every writer-side commit path (append, merge-on-read, and
+// copy-on-write's insert-only sub-path), so a disabled cleanup is reported once
+// per commit rather than once per file; copy-on-write's own orphan sweep is
+// gated in commitOverwrite. A nil committer (only possible in tests that drive
+// a writer without one) is treated as cleanup enabled, preserving the default
+// behaviour.
 func (w *writer) cleanupFilesAfterCommitErr(ctx context.Context, commitErr error, groups ...[]iceberg.DataFile) {
-	if errors.Is(commitErr, rest.ErrCommitStateUnknown) {
+	countFiles := func() int {
 		n := 0
 		for _, group := range groups {
 			n += len(group)
 		}
-		w.logger.Warnf("Skipping cleanup of %d written files: the commit outcome is ambiguous and a landed snapshot may reference them; leaving them for Iceberg orphan-file maintenance", n)
+		return n
+	}
+	if w.committer != nil && w.committer.cfg.DisableCleanupOnFailure {
+		w.logger.Debugf("Skipping cleanup of %d written files: %s is disabled; leaving them for Iceberg orphan-file maintenance", countFiles(), ioFieldCleanupOnFailure)
+		return
+	}
+	if errors.Is(commitErr, rest.ErrCommitStateUnknown) {
+		w.logger.Warnf("Skipping cleanup of %d written files: the commit outcome is ambiguous and a landed snapshot may reference them; leaving them for Iceberg orphan-file maintenance", countFiles())
 		return
 	}
 	w.cleanupFiles(ctx, groups...)

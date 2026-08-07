@@ -81,6 +81,17 @@ type CommitConfig struct {
 	// unnecessary, irreversible v1->v2 upgrade. Merge-on-read/append leave this
 	// false: their equality-delete path requires v2.
 	SkipFormatUpgrade bool
+	// DisableCleanupOnFailure turns off every post-failed-commit file cleanup
+	// this output performs (writer.cleanupFilesAfterCommitErr and
+	// commitOverwrite's authorship-tracked orphan sweep). It is the negation of
+	// the positively-named `commit.cleanup_on_failure` config field so that the
+	// Go zero value keeps cleanup ENABLED — the safe, default behaviour — for
+	// every caller that constructs a CommitConfig literal.
+	//
+	// It exists purely as an incident escape hatch: disabling cleanup can only
+	// ever leak storage (orphaned files that Iceberg orphan-file maintenance
+	// reclaims), never corrupt a table, so it is always safe to flip.
+	DisableCleanupOnFailure bool
 	// ProhibitedKeys, when non-nil, is the shared set of catalog-prohibited
 	// property keys the committer's stripper reads and learns into. The
 	// router owns one per tableEntry so keys learned from one committer's
@@ -381,13 +392,21 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 	//   - On SUCCESS we only clean when the commit was retried: a first-attempt
 	//     success wrote exactly the files it committed, so there is nothing to
 	//     reclaim and the reference scan is skipped.
+	//   - `commit.cleanup_on_failure: false` (DisableCleanupOnFailure) switches
+	//     the whole sweep off as an incident escape hatch. Skipping it only ever
+	//     leaks storage — the recorded files are left for Iceberg orphan-file
+	//     maintenance — so it can never corrupt the table.
 	//
 	// Cleanup is best-effort: failures are logged, never returned. It also
 	// fails closed: if the reference scan cannot be completed, cleanup deletes
 	// nothing at all (see cleanupOrphanedOverwriteFiles).
 	if written := c.writes.snapshot(); len(written) > 0 &&
 		!errors.Is(err, rest.ErrCommitStateUnknown) && (err != nil || retried) {
-		c.cleanupOrphanedOverwriteFiles(ctx, written)
+		if c.cfg.DisableCleanupOnFailure {
+			c.logger.Debugf("Skipping copy-on-write orphan cleanup of %d recorded files: %s is disabled; leaving them for Iceberg orphan-file maintenance", len(written), ioFieldCleanupOnFailure)
+		} else {
+			c.cleanupOrphanedOverwriteFiles(ctx, written)
+		}
 	}
 	if err != nil {
 		return err

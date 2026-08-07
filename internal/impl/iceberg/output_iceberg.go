@@ -185,6 +185,14 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		mgr.Logger().Infof("%s", msg)
 	}
 
+	// Cleanup of a failed commit's files is on by default; turning it off is an
+	// incident escape hatch that trades orphaned storage for never deleting
+	// anything. Say so once at startup so the resulting object growth is not a
+	// mystery later — the per-commit skips are logged at debug only.
+	if commitCfg.DisableCleanupOnFailure {
+		mgr.Logger().Infof("%s.%s is disabled: failed commits will leave their written files orphaned in storage on every write path. Run Iceberg table maintenance (snapshot expiry plus orphan-file removal) to reclaim them.", ioFieldCommit, ioFieldCleanupOnFailure)
+	}
+
 	// Parse parquet config
 	var writerOpts []parquet.WriterOption
 	if conf.Contains(ioFieldParquet) {
@@ -649,6 +657,14 @@ func parseCommitConfig(conf *service.ParsedConfig) (CommitConfig, error) {
 	if err != nil {
 		return cfg, err
 	}
+	// The config field is positively named (`cleanup_on_failure`, defaulting to
+	// true) while the Go field is the negation, so that a zero-value
+	// CommitConfig keeps cleanup enabled — see CommitConfig.
+	cleanupOnFailure, err := conf.FieldBool(ioFieldCommit, ioFieldCleanupOnFailure)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.DisableCleanupOnFailure = !cleanupOnFailure
 	return cfg, nil
 }
 

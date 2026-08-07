@@ -414,6 +414,31 @@ func TestWriteCleansUpFilesOnCommitFailure(t *testing.T) {
 	})
 }
 
+// TestWriteSkipsCleanupWhenDisabled pins the `commit.cleanup_on_failure: false`
+// escape hatch on the writer's commit path: even a DEFINITIVE rejection — the
+// one case TestWriteCleansUpFilesOnCommitFailure proves does delete the written
+// files — must leave them in place once cleanup is disabled. The only cost is
+// orphaned storage, which Iceberg orphan-file maintenance reclaims.
+func TestWriteSkipsCleanupWhenDisabled(t *testing.T) {
+	ctx := t.Context()
+	logger := service.MockResources().Logger()
+
+	_, plain := newTestTable(t)
+	fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1 << 30, failErr: fmt.Errorf("%w: request malformed", rest.ErrBadRequest)}
+	ftbl := fc.snapshot()
+	c, err := NewCommitter(ftbl, fc, CommitConfig{MaxRetries: 2, DisableCleanupOnFailure: true}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+	require.NoError(t, err)
+	defer c.Close()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(ftbl.Location(), "data"), 0o755))
+	w := &writer{table: ftbl, committer: c, caseSensitive: true, logger: logger}
+	err = w.Write(ctx, service.MessageBatch{structuredMsg(t, map[string]any{"id": 1})})
+	require.Error(t, err)
+	require.NotErrorIs(t, err, rest.ErrCommitStateUnknown, "the rejection must be definitive, so cleanup is skipped by the kill switch and not by the ambiguity gate")
+	assert.Positive(t, countParquetFiles(t, ftbl.Location()),
+		"cleanup_on_failure: false must leave the uncommitted parquet file for Iceberg orphan-file maintenance")
+}
+
 // morUpsertInput builds an upsert-shaped merge-on-read CommitInput (one data
 // file plus one equality-delete file for the given id) against tbl. It mirrors
 // the shape TestCommitUpsertProducesOverwriteSnapshot uses, so the RowDelta

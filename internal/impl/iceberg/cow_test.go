@@ -433,6 +433,41 @@ func TestCommitOverwriteCleansUpOrphansOnFailure(t *testing.T) {
 		"the failed copy-on-write commit's parquet files must be cleaned up, leaving only the seed files")
 }
 
+// TestCommitOverwriteSkipsCleanupWhenDisabled is the counterpart to
+// TestCommitOverwriteCleansUpOrphansOnFailure: with
+// `commit.cleanup_on_failure: false` the same definitively-failed copy-on-write
+// commit must leave every file it recorded writing in place. Disabling cleanup
+// can only ever leak storage (reclaimed by Iceberg orphan-file maintenance),
+// which is what makes the escape hatch safe to expose.
+func TestCommitOverwriteSkipsCleanupWhenDisabled(t *testing.T) {
+	ctx := t.Context()
+	logger := service.MockResources().Logger()
+
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String},
+	)
+	seedTbl, cat := newCOWTable(t, sc)
+	seedTbl = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
+	seedCount := countParquetFiles(t, seedTbl.Location())
+	require.Positive(t, seedCount, "seeding must have written data files")
+
+	// Same definitive (400-class) rejection as the cleanup test, so the files
+	// the overwrite wrote are provable orphans and cleanup would otherwise run.
+	fc := &flakyCatalog{memCatalog: cat, failuresLeft: 1 << 30, failErr: fmt.Errorf("commit rejected: %w", rest.ErrBadRequest)}
+	comm, err := NewCommitter(fc.snapshot(), fc, CommitConfig{MaxRetries: 2, DisableCleanupOnFailure: true}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+	require.NoError(t, err)
+	defer comm.Close()
+	w := cowWriter(t, fc.snapshot(), "id")
+	w.committer = comm
+
+	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})})
+	require.Error(t, err)
+
+	assert.Greater(t, countParquetFiles(t, seedTbl.Location()), seedCount,
+		"cleanup_on_failure: false must leave the failed copy-on-write commit's files for Iceberg orphan-file maintenance")
+}
+
 // TestCommitOverwriteIdempotentOnUnknownState pins the copy-on-write half of the
 // commit-id idempotency guarantee. A copy-on-write overwrite is safe to retry
 // after an ambiguous (ErrCommitStateUnknown) catalog response because the

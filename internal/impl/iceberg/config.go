@@ -90,6 +90,7 @@ const (
 	ioFieldManifestMergeEnabled = "manifest_merge_enabled"
 	ioFieldMaxSnapshotAge       = "max_snapshot_age"
 	ioFieldMaxCommitRetries     = "max_retries"
+	ioFieldCleanupOnFailure     = "cleanup_on_failure"
 
 	// Performance fields
 	ioFieldBatching    = "batching"
@@ -157,7 +158,7 @@ const rowOperationDocs = "\n" +
 	"\n" +
 	"*Memory.* Under `copy-on-write` the whole new-row batch is materialised in memory as a single Arrow record while the batch commits, so a keyed batch's memory scales with its total row bytes. Size keyed batches to stay within the process memory budget rather than making them arbitrarily large.\n" +
 	"\n" +
-	"*Maintenance.* Because every mutating batch rewrites files and adds a snapshot, a high-churn `copy-on-write` workload accumulates data files and snapshots quickly. Run regular table maintenance: compaction (rewrite / bin-pack data files), snapshot expiry, and orphan-file removal. Orphan-file removal matters specifically because a `copy-on-write` commit that fails *ambiguously* (the catalog may or may not have recorded it) can leave newly-written data files unreferenced; the connector cleans these up best-effort, but periodic orphan-file removal is the definitive backstop.\n" +
+	"*Maintenance.* Because every mutating batch rewrites files and adds a snapshot, a high-churn `copy-on-write` workload accumulates data files and snapshots quickly. Run regular table maintenance: compaction (rewrite / bin-pack data files), snapshot expiry, and orphan-file removal. Orphan-file removal matters specifically because a `copy-on-write` commit that fails *ambiguously* (the catalog may or may not have recorded it) can leave newly-written data files unreferenced; the connector cleans these up best-effort, but periodic orphan-file removal is the definitive backstop. Setting `commit.cleanup_on_failure` to `false` turns that connector-side cleanup off altogether — on every write path — which makes periodic orphan-file removal mandatory rather than merely advisable.\n" +
 	"\n" +
 	"*Copy-on-write limitations.*\n" +
 	"\n" +
@@ -476,6 +477,11 @@ array:list
 					// `max_retries` times, so 0 or a negative value would never
 					// attempt the commit at all. Require >= 1.
 					LintRule(`root = if this < 1 { [ "max_retries must be at least 1" ] }`),
+				service.NewBoolField(ioFieldCleanupOnFailure).
+					Description("Whether to remove the files a failed commit had already written. A commit's data files (and, under `merge-on-read`, its equality-delete files) are written to storage before the catalog commit, so a failed commit leaves them referenced by no snapshot; the default `true` removes them best-effort to limit orphaned objects. This applies to every write path: append, `merge-on-read`, and `copy-on-write`.\n\nCleanup is already skipped automatically whenever a commit's outcome is ambiguous — such a commit may still land server-side, and deleting files a landed snapshot references would corrupt the table — so those leftovers are always deferred to table maintenance regardless of this setting.\n\nSetting this to `false` disables cleanup entirely, as a safety valve: writes then never delete anything, and every failed commit leaves its files orphaned in storage for Iceberg orphan-file maintenance (snapshot expiry plus `remove_orphan_files`) to reclaim. See the <<merge-strategies,Merge strategies>> section above for that maintenance guidance.").
+					ShortDescription("Remove the files a failed commit had already written. Disabling it leaves them orphaned for table maintenance to reclaim.").
+					Default(true).
+					Advanced(),
 			).Description("Commit behavior configuration.").
 				Advanced().
 				Optional(),

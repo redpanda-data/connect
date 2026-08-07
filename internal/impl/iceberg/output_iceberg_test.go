@@ -68,17 +68,79 @@ func amplificationInformed(out string) bool {
 	return strings.Contains(out, "write amplification bounded")
 }
 
-// TestRuntimeNoticeWiring pins the two startup log notices wired in
+func cleanupDisabledInformed(out string) bool {
+	return strings.Contains(out, "cleanup_on_failure is disabled")
+}
+
+// TestParseCommitConfigCleanupOnFailure pins the `commit.cleanup_on_failure`
+// plumbing, including the deliberate polarity flip: the YAML field is positively
+// named and defaults to true, while CommitConfig carries the negation so a
+// zero-value CommitConfig keeps cleanup enabled.
+func TestParseCommitConfigCleanupOnFailure(t *testing.T) {
+	cases := []struct {
+		name        string
+		commitYAML  string
+		wantDisable bool
+	}{
+		{
+			// No `commit` object at all: parseCommitConfig returns its own
+			// defaults without consulting the field.
+			name:        "commit object absent keeps cleanup enabled",
+			commitYAML:  "",
+			wantDisable: false,
+		},
+		{
+			// `commit` present but the field omitted: the field default (true)
+			// applies.
+			name:        "field absent defaults to cleanup enabled",
+			commitYAML:  "commit:\n  max_retries: 2\n",
+			wantDisable: false,
+		},
+		{
+			name:        "explicit true keeps cleanup enabled",
+			commitYAML:  "commit:\n  cleanup_on_failure: true\n",
+			wantDisable: false,
+		},
+		{
+			name:        "explicit false disables cleanup",
+			commitYAML:  "commit:\n  cleanup_on_failure: false\n",
+			wantDisable: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: bucket
+`+tc.commitYAML, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseCommitConfig(conf)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantDisable, cfg.DisableCleanupOnFailure)
+		})
+	}
+}
+
+// TestRuntimeNoticeWiring pins the startup log notices wired in
 // newIcebergOutputFromConfig (currently 0% covered): the max_in_flight ordering
-// WARNING and the copy-on-write write-amplification INFO. The pure helpers
-// (mutating / cowAmplificationWarning) are unit-tested separately in
-// cow_polish_test.go; this exercises the WIRING that decides whether each fires.
+// WARNING, the copy-on-write write-amplification INFO, and the
+// cleanup_on_failure escape-hatch INFO. The pure helpers (mutating /
+// cowAmplificationWarning) are unit-tested separately in cow_polish_test.go;
+// this exercises the WIRING that decides whether each fires.
 func TestRuntimeNoticeWiring(t *testing.T) {
 	cases := []struct {
-		name         string
-		extra        string
-		wantOrdering bool
-		wantAmp      bool
+		name           string
+		extra          string
+		wantOrdering   bool
+		wantAmp        bool
+		wantCleanupOff bool
 	}{
 		{
 			// copy-on-write + mutating + concurrent: both the ordering warning
@@ -122,6 +184,19 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 			wantOrdering: false,
 			wantAmp:      false,
 		},
+		{
+			// The cleanup escape hatch left at its default: silent, so the
+			// notice cannot become background noise for ordinary configs.
+			name:           "cleanup_on_failure default silent",
+			extra:          "commit:\n  cleanup_on_failure: true\n",
+			wantCleanupOff: false,
+		},
+		{
+			// Explicitly disabled: the notice fires, and only that one.
+			name:           "cleanup_on_failure false informs",
+			extra:          "commit:\n  cleanup_on_failure: false\n",
+			wantCleanupOff: true,
+		},
 	}
 
 	for _, tc := range cases {
@@ -131,6 +206,8 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 				"ordering warning firing mismatch; captured log:\n%s", out)
 			assert.Equal(t, tc.wantAmp, amplificationInformed(out),
 				"amplification info firing mismatch; captured log:\n%s", out)
+			assert.Equal(t, tc.wantCleanupOff, cleanupDisabledInformed(out),
+				"cleanup_on_failure info firing mismatch; captured log:\n%s", out)
 		})
 	}
 }
