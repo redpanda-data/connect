@@ -9,7 +9,10 @@ smokes).
 Design spec (why every decision below was made, including why median over p5 and why
 no charts): `docs/superpowers/specs/2026-08-06-sales-compute-sizing-tool-design.md`.
 
-Published URL: recorded on first publish.
+Published URL: https://claude.ai/code/artifact/febb2295-eb57-4115-b2ab-94c1717f761e
+(private until shared from the page's share menu). To update it, republish this same
+file path and pass that URL as `url` — a fresh conversation that skips the `url` mints a
+new link, which strands anyone who bookmarked the old one.
 
 ## The hard boundary
 
