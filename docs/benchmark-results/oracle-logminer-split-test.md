@@ -121,10 +121,50 @@ parallelising the serial fetch-and-parse cycle. But 1→2 bought +7 MB/s while 2
 +5 more, and five readers never reached the offered 35.
 
 **Unexplained:** at five readers *neither* side is exhausted — Oracle at 72.2% with 28 points of
-headroom, Connect at 0.99 of 4 cores — yet throughput stops improving. Candidates we cannot
-distinguish: contention on redo latches or buffers, diminishing overlap between readers, or a
-serialised component inside Oracle's mining. **If more than ~31 MB/s from one database is
-needed, this is the unknown that matters.**
+headroom, Connect at 0.99 of 4 cores — yet throughput stops improving. **If more than ~31 MB/s
+from one database is needed, this is the unknown that matters.**
+
+### Storage was investigated and REFUTED (2026-08-06)
+
+CloudWatch I/O from the reader sweep looked like a smoking gun: total throughput 340 → 320 →
+**452 MiB/s** (90% of RDS's ~500 MiB/s gp3 default), DiskQueueDepth 26.4 → 26.5 → **34.2**, and
+most persuasively **WriteIOPS FELL as readers were added** (8,405 → 7,212 → 7,158) while total
+I/O stayed pinned — readers appearing to take I/O from writers. It also surfaced a real gap:
+`storage_throughput` was set nowhere in the Terraform, so every Oracle run had silently used the
+default.
+
+`oracle/orders-5table-readers-fastio` re-ran the identical arms with both ceilings lifted —
+`db.r5.4xlarge` (~1,187 vs ~594 MiB/s EBS bandwidth, and 16 vs 8 vCPU), iops 24,000 → 32,000,
+`storage_throughput` 500 → 1,000 MiB/s. Confirmed applied in the plan output.
+
+| Arm | 2xlarge / ~500 MiB/s | 4xlarge / 1,000 MiB/s |
+|---|---|---|
+| 1 reader | 18.97 MB/s | 18.63 |
+| 2 readers | 25.91 | 24.01 |
+| 5 readers | **30.67** | **31.06** |
+
+**+1.3% at five readers — noise.** And the decisive detail: with double the capacity available the
+workload consumed *the same* I/O (~355 MiB/s read at five readers vs ~303 before). It never wanted
+more, so the volume was at most marginally binding. Delivered load was verified at a steady
+35.0 MB/s mean in all three arms, so the shortfall is real and not a load artifact.
+
+**So the plateau is not CPU (either side), not storage throughput, not IOPS, not instance EBS
+bandwidth, and not the load generator.** What remains is the shape of the residue: a lone reader
+on one table does 7.7 MB/s, while five readers together do 6.2 each — **~81% per-reader
+efficiency**. Something *shared* costs each reader a fifth of its rate. Two candidate families:
+
+- **Oracle-side sharing** — contention between LogMiner sessions on the same redo, or a
+  serialised structure inside mining.
+- **Connect-side sharing** — all readers feed ONE output and share ONE `memory` cache resource
+  for checkpoints (distinct keys, single lock-protected instance). Easy to overlook, and it fits
+  the signature just as well.
+
+**Cheapest discriminator (~35 min):** one productive reader on one table alongside four readers on
+*idle* tables. The idle readers contend for Oracle while barely touching Connect's output or
+cache. If the productive reader falls from 7.7 toward 6.2 the contention is Oracle-side; if it
+holds, it is Connect-side. Isolating the output specifically needs a runner change (an arm with
+`output: drop` — the `benchmark` processor counts before the output, so throughput stays
+measurable).
 
 ## 6. Database CPU: writes dominate, tables are cheap
 

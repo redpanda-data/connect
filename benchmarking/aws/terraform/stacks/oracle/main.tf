@@ -36,8 +36,9 @@ module "rds" {
     data.terraform_remote_state.shared.outputs.runner_sg_id,
     data.terraform_remote_state.shared.outputs.load_gen_sg_id,
   ]
-  instance_class = var.instance_class
-  storage_gb     = var.storage_gb
-  iops           = var.iops
-  parameters     = var.parameters
+  instance_class     = var.instance_class
+  storage_gb         = var.storage_gb
+  iops               = var.iops
+  storage_throughput = var.storage_throughput
+  parameters         = var.parameters
 }

@@ -151,3 +151,47 @@ func TestOracleReaders_ArmsHoldCoresAndLoadConstant(t *testing.T) {
 	assert.InDelta(t, 7.0, perTableMBps, 0.1,
 		fmt.Sprintf("per-table load must stay ~7 MB/s for comparability (got %.2f)", perTableMBps))
 }
+
+const oracleReadersFastIOScenario = "../scenarios/oracle/orders-5table-readers-fastio.yaml"
+
+// TestOracleReadersFastIO_MatchesBaselineExceptInfra pins the fast-I/O variant to
+// being a pure infrastructure change. Its whole purpose is to test whether the
+// 5-reader plateau was a storage-throughput wall, which only holds if the arms,
+// load and pipeline are identical to orders-5table-readers — otherwise a
+// throughput difference could come from anywhere.
+func TestOracleReadersFastIO_MatchesBaselineExceptInfra(t *testing.T) {
+	base, err := LoadScenario(oracleReadersScenario)
+	require.NoError(t, err)
+	fast, err := LoadScenario(oracleReadersFastIOScenario)
+	require.NoError(t, err)
+	require.NoError(t, fast.Validate())
+
+	assert.Equal(t, base.Workload, fast.Workload, "workload must be identical for comparability")
+	assert.Equal(t, base.Dataset, fast.Dataset, "dataset must be identical for comparability")
+	assert.Equal(t, base.Pipeline, fast.Pipeline, "base pipeline must be identical")
+	assert.Equal(t, base.Matrix, fast.Matrix, "arms must be identical — reader count is the swept variable")
+	assert.Equal(t, base.Reset, fast.Reset, "reset must be identical")
+
+	// And the infra must actually differ, or the run measures nothing new.
+	assert.NotEqual(t, base.Infra.Source, fast.Infra.Source,
+		"fast-io scenario must change infra.source, that is its entire purpose")
+}
+
+// TestOracleReadersFastIO_StorageSettingsAreValidForAWS catches an invalid gp3
+// combination locally instead of at `terraform apply`, ~10 minutes into a paid
+// run. AWS requires storage throughput in [500, 4000] MiB/s and iops >= 4x
+// throughput; the instance class caps both independently.
+func TestOracleReadersFastIO_StorageSettingsAreValidForAWS(t *testing.T) {
+	s, err := LoadScenario(oracleReadersFastIOScenario)
+	require.NoError(t, err)
+
+	iops := asInt(s.Infra.Source["iops"])
+	thr := asInt(s.Infra.Source["storage_throughput"])
+	require.Positive(t, iops, "iops must be set")
+	require.Positive(t, thr, "storage_throughput must be set — leaving it unset is what capped earlier runs")
+
+	assert.GreaterOrEqual(t, thr, 500, "gp3 storage throughput floor is 500 MiB/s")
+	assert.LessOrEqual(t, thr, 4000, "gp3 storage throughput ceiling is 4000 MiB/s")
+	assert.GreaterOrEqual(t, iops, 4*thr,
+		"AWS requires iops >= 4x storage throughput (got iops=%d, throughput=%d)", iops, thr)
+}

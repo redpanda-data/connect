@@ -42,6 +42,7 @@ Last refreshed: 2026-08-06
 | mysql / orders-cdc ⚠  |         8 |          111 |      39 | +72 MB/s (+65%)    | 2026-06-02  |
 | oracle / orders-5table-baseline |         4 |           19 |      —    |                   —  | 2026-08-06  |
 | oracle / orders-5table-readers |         4 |           29 |      —    |                   —  | 2026-08-06  |
+| oracle / orders-5table-readers-fastio |         4 |           30 |      —    |                   —  | 2026-08-06  |
 | oracle / orders-5table-split |         4 |           19 |      —    |                   —  | 2026-08-05  |
 | oracle / orders-cdc   |         1 |           13 |      —    |                   —  | 2026-06-22  |
 | oracle / orders-return-cost |         4 |           13 |      —    |                   —  | 2026-08-06  |

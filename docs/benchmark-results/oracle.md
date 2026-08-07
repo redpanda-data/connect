@@ -380,3 +380,55 @@ comparable with those runs.
 
 
 Raw samples + Prometheus snapshots: [`results/oracle/orders-return-cost/2026-08-06T19-27-01Z.json`](results/oracle/orders-return-cost/2026-08-06T19-27-01Z.json)
+
+
+## AWS — orders-5table-readers-fastio — 2026-08-06
+
+**Scenario:** WHY DOES THE 5-READER PLATEAU HAPPEN? Repeat of orders-5table-readers with the
+storage throughput ceiling removed.
+
+orders-5table-readers found 1/2/5 concurrent readers delivering 19.0 / 25.9 /
+30.7 MB/s against a 35 MB/s offered load — sub-linear, plateauing at 79%
+capture. Neither side was exhausted: database CPU 72% of 8 vCPU, Connect 0.99
+of 4 cores. CloudWatch I/O metrics from that run explain it:
+
+  total IOPS       11,149 -> 10,726 -> 13,313   (55% of 24,000 provisioned)
+  total throughput    340 ->    320 ->    452 MiB/s
+  DiskQueueDepth     26.4 ->   26.5 ->   34.2
+
+~452 MiB/s is 90% of RDS's ~500 MiB/s gp3 DEFAULT throughput (never raised,
+because `storage_throughput` was set nowhere in the Terraform) and 76% of a
+db.r5.2xlarge's ~594 MiB/s EBS bandwidth. The clincher: WriteIOPS FELL as
+readers were added (8,405 -> 7,212 -> 7,158) while total I/O stayed pinned —
+the readers were taking I/O away from the writers. Classic saturation.
+
+This scenario raises both ceilings and re-runs the identical 1/2/5 reader arms.
+Reading the result:
+  5 readers well above 30.7 MB/s -> the plateau was the test rig's storage, and
+      the ~31 MB/s "per-database ceiling" in
+      docs/benchmark-results/oracle-logminer-split-test.md is a property of
+      db.r5.2xlarge on default gp3 throughput, NOT of LogMiner. Guidance must
+      then be restated against provisioned I/O.
+  5 readers near 30.7 again -> storage was NOT the cause despite the saturation
+      signature, and the plateau is something else (redo latch contention, or a
+      serialised component inside LogMiner).
+
+Everything except `infra.source` is identical to orders-5table-readers, so the
+two runs are directly comparable.
+
+**Git SHA:** [`3e8bf51d4`](https://github.com/redpanda-data/connect/commit/3e8bf51d4154084e2fb8498addaf86dfc9827faa)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.4xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 8          | r1-one-reader  | connect       |           19 |       18.625 |        14,692 |            2 |          13 |           25 |        15,000 |                    |
+| 4    | 8          | r2-two-readers | connect       |           25 |       24.007 |        19,002 |            2 |          17 |           32 |        20,000 |                    |
+| 4    | 8          | r5-five-readers | connect       |           30 |       31.059 |        24,392 |            2 |          24 |           43 |        23,304 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/oracle/orders-5table-readers-fastio/2026-08-06T22-17-54Z.json`](results/oracle/orders-5table-readers-fastio/2026-08-06T22-17-54Z.json)

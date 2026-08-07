@@ -56,6 +56,18 @@ resource "aws_db_instance" "this" {
   allocated_storage = var.storage_gb
   storage_type      = "gp3"
   iops              = var.iops
+  # gp3 storage throughput MUST be set explicitly. Provisioning `iops` alone
+  # leaves throughput at the RDS default (~500 MiB/s for volumes >= 400 GiB),
+  # which is a SEPARATE ceiling and the one that actually bound the Oracle
+  # reader sweeps: 5 concurrent LogMiner readers plus the write workload moved
+  # ~452 MiB/s (90% of the default) while using only 55% of 24,000 provisioned
+  # IOPS and 72% of database CPU. Throughput, not IOPS or CPU, was the wall.
+  #
+  # AWS constraints: 500-4,000 MiB/s, and IOPS must be at least 4x throughput.
+  # Note the instance class caps this independently — a db.r5.2xlarge tops out
+  # near 594 MiB/s of EBS bandwidth regardless of what the volume offers, so
+  # raising this past that buys nothing without a larger class.
+  storage_throughput = var.storage_throughput
 
   # On RDS Oracle the db_name IS the Oracle SID (1-8 alphanumeric chars). go-ora
   # and Debezium both connect using it as the service name, which RDS registers

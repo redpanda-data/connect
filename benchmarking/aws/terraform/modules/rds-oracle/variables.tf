@@ -20,6 +20,14 @@ variable "iops" {
   type    = number
   default = 12000
 }
+variable "storage_throughput" {
+  # MiB/s. Default 500 preserves the behaviour of every sweep run before this
+  # variable existed (RDS's own gp3 default for volumes >= 400 GiB), so results
+  # stay comparable unless a scenario deliberately raises it. Valid range
+  # 500-4,000, and iops must be >= 4x this value.
+  type    = number
+  default = 500
+}
 variable "engine_version" {
   # Oracle 19c Standard Edition 2 (non-CDB). Verify a currently-offered RU with:
   #   aws rds describe-db-engine-versions --engine oracle-se2 --query \
