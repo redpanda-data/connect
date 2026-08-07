@@ -75,3 +75,75 @@ test('the six blessed connectors are present and kinesis is not', () => {
     'dynamodb_cdc', 'iceberg_sink', 'mongodb_cdc', 'mysql_cdc', 'oracledb_cdc', 'postgres_cdc',
   ])
 })
+
+test('acceptance case 2: the heavy-mapping tax can push a target past the ceiling', () => {
+  // postgres passthrough curve 51/83/102/102; at 2.0x it becomes 25.5/41.5/51/51.
+  // A 59.51 MiB/s requirement clears at 2 vCPU passthrough but nothing clears at 2.0x.
+  const r = core.sizeFor({
+    connector: 'postgres_cdc', eventsPerSec: 40_000, eventBytes: 1200,
+    tax: 'heavy', headroomPct: 30,
+  })
+  assert.equal(r.status, 'ceiling')
+  assert.equal(r.ceilingMiBps, 51)
+})
+
+test('acceptance case 3: oracle refuses to grow cores and names readers as the fix', () => {
+  const r = core.sizeFor({
+    connector: 'oracledb_cdc', eventsPerSec: 20_000, eventBytes: 1200,
+    tax: 'passthrough', headroomPct: 30,
+  })
+  assert.equal(r.status, 'ceiling')
+  assert.equal(r.ceilingMiBps, 13)
+  assert.match(r.ceiling.reason, /LogMiner/)
+  assert.match(r.ceiling.fix, /readers/)
+  assert.equal(r.cores, undefined, 'a refusal must not carry a core count')
+})
+
+test('acceptance case 4: mongo names sharding as the fix', () => {
+  const eventsPerSec = Math.round((40 * core.MIB) / 1200) // ≈ 40 MiB/s of target
+  const r = core.sizeFor({ connector: 'mongodb_cdc', eventsPerSec, eventBytes: 1200, tax: 'passthrough', headroomPct: 30 })
+  assert.equal(r.status, 'ceiling')
+  assert.match(r.ceiling.reason, /cursor/)
+  assert.match(r.ceiling.fix, /[Ss]hard/)
+})
+
+test('acceptance case 5: tiny events raise an extrapolation warning but still size', () => {
+  const r = core.sizeFor({ connector: 'postgres_cdc', eventsPerSec: 40_000, eventBytes: 200, tax: 'passthrough', headroomPct: 30 })
+  assert.equal(r.status, 'ok')
+  assert.equal(r.cores, 1)
+  assert.equal(r.warnings.length, 1)
+  assert.match(r.warnings[0], /Extrapolated/)
+})
+
+test('acceptance case 6: an unlisted connector yields no number at all', () => {
+  const r = core.sizeFor({ connector: 'snowflake', eventsPerSec: 40_000, eventBytes: 1200 })
+  assert.equal(r.status, 'unbenchmarked')
+  assert.equal(r.cores, undefined)
+  assert.equal(r.required, undefined)
+})
+
+test('an in-range event size raises no warning', () => {
+  const r = core.sizeFor({ connector: 'mysql_cdc', eventsPerSec: 10_000, eventBytes: 1200, tax: 'passthrough', headroomPct: 30 })
+  assert.deepEqual(r.warnings, [])
+})
+
+test('the iceberg curve always carries its reproducibility caveat', () => {
+  const r = core.sizeFor({ connector: 'iceberg_sink', eventsPerSec: 20_000, eventBytes: 1200, tax: 'passthrough', headroomPct: 30 })
+  assert.equal(r.status, 'ok')
+  assert.equal(r.confidence, 'medium')
+  assert.ok(r.warnings.some((w) => /Medium confidence/.test(w)))
+})
+
+test('estimated tax settings are flagged as unmeasured in the result', () => {
+  const passthrough = core.sizeFor({ connector: 'mysql_cdc', eventsPerSec: 10_000, eventBytes: 1200, tax: 'passthrough' })
+  const light = core.sizeFor({ connector: 'mysql_cdc', eventsPerSec: 10_000, eventBytes: 1200, tax: 'light' })
+  assert.equal(passthrough.taxMeasured, true)
+  assert.equal(light.taxMeasured, false)
+})
+
+test('dynamodb attributes its plateau to the source, not to Connect', () => {
+  const eventsPerSec = Math.round((200 * core.MIB) / 4096)
+  const r = core.sizeFor({ connector: 'dynamodb_cdc', eventsPerSec, eventBytes: 4096, tax: 'passthrough', headroomPct: 30 })
+  assert.equal(r.status, 'ceiling')
+  assert.match(r.ceiling.reason, /source/)
+})
