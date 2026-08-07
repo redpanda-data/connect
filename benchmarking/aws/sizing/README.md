@@ -27,9 +27,18 @@ row by analogy or interpolation.
 node --test benchmarking/aws/sizing/sizing.test.mjs
 ```
 
-15 tests cover the calculation core: unit conversion, the "smallest clearing point"
-rule, headroom semantics, ceiling refusals, and per-connector provenance. Run them
-after any change to the data or the calculation.
+25 tests cover the calculation core: unit conversion, the "smallest clearing point" rule,
+headroom semantics, ceiling refusals, the no-answer guard on blank/negative/non-finite
+input, event-size caveats, and per-connector provenance. Run them after any change to the
+data or the calculation.
+
+One of them is a **literal data snapshot** pinning all 24 curve points, the six SHAs, run
+paths, dates, peak-heap figures and `benchedEventBytes`, the event-size constants, and the
+`measured` flag on all three tax settings. It exists because these numbers go straight into
+customer quotes and the earlier `typeof`-only checks let a transposed digit through. The
+benchmark JSONs under `benchmarking/aws/results/` are gitignored, so the test cannot
+re-derive the values from them — if you change the data on purpose, update the snapshot in
+the same commit.
 
 This is deliberately **not** wired into CI. The page is a standalone sales artifact,
 not a build target — there's no pipeline that would run it, and adding one is not
@@ -86,18 +95,24 @@ Consequences:
 
 4. **Add the `CONNECTORS` entry** in `index.html` (inside the sentinels), matching the
    shape of the existing six: `label`, `curve` (all four vCPU points), `benchedEventBytes`
-   (the average event size the run used), `peakHeapMB`, `run: { path, date, sha }` (the
-   run's relative path under `results/`, its date, and the git SHA the run was taken
-   at — `git_sha` is in the result JSON), `ceiling` (`null` if the curve keeps scaling,
-   or `{ mibps, reason, fix }` if it plateaus — see `oracledb_cdc`/`mongodb_cdc` for the
-   shape), and `confidence` (`'high'` unless the run has a reproducibility caveat, in
-   which case also set `confidenceNote`, as `iceberg_sink` does).
+   (the average event size the run used — the page warns when a user's event size is more
+   than `EVENT_BYTES_DEVIATION_FACTOR` away from it in either direction, so it must be the
+   real figure), `peakHeapMB`, `run: { path, date, sha }` (the run's relative path under
+   `results/` **including the `.json` extension**, so it can be pasted straight into an
+   editor, plus its date and the git SHA the run was taken at — `git_sha` is in the result
+   JSON), `ceiling` (`null` if the curve keeps scaling, or `{ mibps, reason, fix }` if it
+   plateaus — see `oracledb_cdc`/`mongodb_cdc` for the shape), `sourceKind` (`'cdc'` or
+   `'sink'`, which selects the honest scale-out caveat in `SCALE_OUT_UNMEASURED` when
+   `ceiling` is `null`), and `confidence` (`'high'` unless the run has a reproducibility
+   caveat, in which case also set `confidenceNote`, as `iceberg_sink` does).
 
-5. **Add a test** in `sizing.test.mjs` asserting the new curve — at minimum, that
-   `sizeFor` picks the right core count for a known target, mirroring the existing
-   per-connector acceptance tests. Run `node --test benchmarking/aws/sizing/sizing.test.mjs`
-   and confirm all tests pass, including the "six blessed connectors" list test, which
-   you'll need to update to seven.
+5. **Update the data snapshot test and add a behaviour test** in `sizing.test.mjs`. The
+   snapshot ("data snapshot: curves, provenance, …") must gain a literal block for the new
+   connector, or it will fail. Then add at minimum an assertion that `sizeFor` picks the
+   right core count for a known target, mirroring the existing per-connector acceptance
+   tests. Run `node --test benchmarking/aws/sizing/sizing.test.mjs` and confirm all tests
+   pass, including the "six blessed connectors" list test, which you'll need to update to
+   seven.
 
 6. **Republish the Artifact** (same file, same URL — see the note in the Artifact
    tool's own docs about updating in place rather than minting a new URL) and update
@@ -121,13 +136,45 @@ baseline):
 2. a representative `mapping` processor — renames/filters, JSON in/out
 3. Avro with schema registry — encode or decode through the registry
 
-Once those runs land, replace `TAX.light.multiplier` and `TAX.heavy.multiplier` with
-the measured ratios (light/heavy median MiB/s divided by passthrough median MiB/s),
-flip `measured: true`, and drop the "Estimate" badge and note from the UI — both are
-keyed off `TAX[tax].measured` in `index.html`, so no other code changes are needed.
+Once those runs land, replace `TAX.light.multiplier` and `TAX.heavy.multiplier` with the
+measured ratios and flip `measured: true`. The "Estimate" badge and note then disappear on
+their own — both are keyed off `TAX[tax].measured` in `index.html`, so no other code
+changes are needed.
+
+**Get the ratio the right way round.** The multiplier *divides* the curve
+(`effective = curve / multiplier` in `sizeFor`), so it expresses how many times *more*
+compute the mapping needs, and it must be **greater than or equal to 1** for anything
+slower than passthrough:
+
+```
+multiplier = passthrough median MiB/s  ÷  mapped-arm median MiB/s
+```
+
+Concretely: passthrough measures 100 MiB/s, the Avro arm measures 50 MiB/s → heavy becomes
+100 ÷ 50 = **2.0**. The inverse (50 ÷ 100 = 0.5) would make the page claim heavy mapping
+runs *twice as fast* as passthrough. If you ever compute a multiplier below 1.0 for a
+mapped arm, you have the division backwards. Sanity check after editing: for identical
+inputs, heavy mapping must never return a smaller core count than passthrough.
 
 Until that run exists, say so plainly to anyone asking: light and heavy mapping costs
 on this page are estimates, not measurements.
+
+## States the result card can render
+
+| Status | Renders | Core count |
+|---|---|---|
+| `ok` | headline core count, measured MiB/s at that point, peak heap, provenance, Measured/Estimate badge | yes |
+| `ceiling` | refusal, the requirement, the **measured maximum** and (above 1.0x tax) the derated figure labelled as calculated, the limit box, provenance, badge | no |
+| `unbenchmarked` | "not benchmarked — ask the perf team" | no |
+| `no-input` | neutral "enter an event rate and an average event size" prompt, no badge, no provenance | no |
+
+`no-input` exists because `Number('')` is `0`: an emptied events field used to size at
+1 vCPU and render a **Measured** badge over a number the user never asked for. The guard is
+`hasSizeableInput` inside the fence (so it is testable), not in the UI.
+
+On the `ceiling` path, note the two distinct fields: `measuredCeilingMiBps` is a real curve
+reading and `ceilingMiBps` is that reading divided by the processing multiplier. Only the
+first may ever be called "measured" in copy; at 1.0x they are equal.
 
 ## Known gap (not this task's to fix)
 
@@ -135,5 +182,8 @@ on this page are estimates, not measurements.
 target exceeds the single-instance curve, because scaling across multiple Connect
 instances was never benchmarked. A customer asking for ~500 MiB/s of Postgres CDC is
 realistic and the tool will decline it rather than multiply the single-instance curve
-by an instance count (that would be an invented number). Worth deciding deliberately
-whether to bench a two-instance arm before this comes up live on a call.
+by an instance count (that would be an invented number). For the CDC sources it is not
+even a given that a second instance would help — each needs its own replication slot or
+log reader and may duplicate the stream rather than divide it, which is why
+`SCALE_OUT_UNMEASURED.cdc` says so rather than implying a ready remedy. Worth deciding
+deliberately whether to bench a two-instance arm before this comes up live on a call.

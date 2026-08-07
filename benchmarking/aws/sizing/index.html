@@ -15,9 +15,25 @@ export const EVENT_BYTES_MIN = 512
 export const EVENT_BYTES_MAX = 5120
 
 export const TAX = {
-  passthrough: { label: 'Passthrough — no mapping', multiplier: 1.0, measured: true },
-  light: { label: 'Light mapping — renames, filters, JSON in/out', multiplier: 1.2, measured: false },
-  heavy: { label: 'Heavy mapping + schema registry — Avro/Protobuf codec', multiplier: 2.0, measured: false },
+  passthrough: { label: 'Passthrough — no mapping', short: 'passthrough', multiplier: 1.0, measured: true },
+  light: { label: 'Light mapping — renames, filters, JSON in/out', short: 'light mapping', multiplier: 1.2, measured: false },
+  heavy: { label: 'Heavy mapping + schema registry — Avro/Protobuf codec', short: 'heavy mapping + schema registry', multiplier: 2.0, measured: false },
+}
+
+// Copy for the "curve keeps climbing but we only ever ran one instance" case. Split by
+// source kind because the honest caveat differs: a CDC source's second instance needs
+// its own slot/reader, so scale-out is not a given even in principle.
+export const SCALE_OUT_UNMEASURED = {
+  cdc:
+    'Only one Connect instance was benchmarked, and scaling out across instances was not measured. ' +
+    'For a CDC source a second instance is not a straightforward doubling either: it needs its own ' +
+    'replication slot or log reader, and can duplicate the stream rather than divide it. Nothing here ' +
+    'proves scale-out is impossible — it simply has not been measured, and the source itself may be the ' +
+    'constraint. Ask the perf team before quoting.',
+  sink:
+    'Only one Connect instance was benchmarked, and scaling out across instances was not measured. ' +
+    'Nothing here proves it will not work — it simply has not been measured, and the destination system ' +
+    'may become the constraint before Connect does. Ask the perf team before quoting.',
 }
 
 // Connect median MiB/s at 1/2/4/8 vCPU, all measured on a c8g.4xlarge runner.
@@ -27,8 +43,9 @@ export const CONNECTORS = {
     curve: { 1: 51, 2: 83, 4: 102, 8: 102 },
     benchedEventBytes: 1200,
     peakHeapMB: 118,
-    run: { path: 'postgres/orders-cdc/2026-06-01T20-55-50Z', date: '2026-06-01', sha: '25057d693' },
+    run: { path: 'postgres/orders-cdc/2026-06-01T20-55-50Z.json', date: '2026-06-01', sha: '25057d693' },
     ceiling: null,
+    sourceKind: 'cdc',
     confidence: 'high',
   },
   mysql_cdc: {
@@ -36,8 +53,9 @@ export const CONNECTORS = {
     curve: { 1: 70, 2: 102, 4: 108, 8: 111 },
     benchedEventBytes: 1200,
     peakHeapMB: 378,
-    run: { path: 'mysql/orders-cdc/2026-06-02T14-13-52Z', date: '2026-06-02', sha: '25057d693' },
+    run: { path: 'mysql/orders-cdc/2026-06-02T14-13-52Z.json', date: '2026-06-02', sha: '25057d693' },
     ceiling: null,
+    sourceKind: 'cdc',
     confidence: 'high',
   },
   mongodb_cdc: {
@@ -45,12 +63,13 @@ export const CONNECTORS = {
     curve: { 1: 26, 2: 33, 4: 33, 8: 33 },
     benchedEventBytes: 1200,
     peakHeapMB: 157,
-    run: { path: 'mongodb/orders-cdc/2026-07-17T17-11-10Z', date: '2026-07-17', sha: '156a11081' },
+    run: { path: 'mongodb/orders-cdc/2026-07-17T17-11-10Z.json', date: '2026-07-17', sha: '156a11081' },
     ceiling: {
       mibps: 33,
       reason: 'a single change-stream cursor, which one replica set gives you regardless of vCPU',
       fix: 'Shard the collection — each shard adds a cursor. More cores will not move this number.',
     },
+    sourceKind: 'cdc',
     confidence: 'high',
   },
   dynamodb_cdc: {
@@ -58,12 +77,13 @@ export const CONNECTORS = {
     curve: { 1: 40, 2: 72, 4: 81, 8: 82 },
     benchedEventBytes: 4096,
     peakHeapMB: 936,
-    run: { path: 'dynamodb/cdc/2026-06-15T17-44-43Z', date: '2026-06-15', sha: 'd9d2b3c98' },
+    run: { path: 'dynamodb/cdc/2026-06-15T17-44-43Z.json', date: '2026-06-15', sha: 'd9d2b3c98' },
     ceiling: {
       mibps: 82,
       reason: 'the source, not Connect — the run hit the test account\'s write-capacity limit past 4 vCPU',
       fix: 'Spread the load across more tables or streams. The 8 vCPU figure is a floor, not a Connect limit.',
     },
+    sourceKind: 'cdc',
     confidence: 'high',
   },
   oracledb_cdc: {
@@ -71,12 +91,13 @@ export const CONNECTORS = {
     curve: { 1: 13, 2: 13, 4: 13, 8: 13 },
     benchedEventBytes: 1200,
     peakHeapMB: 190,
-    run: { path: 'oracle/orders-cdc/2026-06-22T16-31-22Z', date: '2026-06-22', sha: '63ea466c5' },
+    run: { path: 'oracle/orders-cdc/2026-06-22T16-31-22Z.json', date: '2026-06-22', sha: '63ea466c5' },
     ceiling: {
       mibps: 13,
       reason: 'one LogMiner reader — the ceiling is per reader, and vCPU count is irrelevant to it',
       fix: 'Add readers. Measured 19, then 25, then 30 MiB/s at a fixed 4 vCPU as readers were added.',
     },
+    sourceKind: 'cdc',
     confidence: 'high',
   },
   iceberg_sink: {
@@ -84,8 +105,9 @@ export const CONNECTORS = {
     curve: { 1: 34, 2: 65, 4: 97, 8: 128 },
     benchedEventBytes: 1200,
     peakHeapMB: 2681,
-    run: { path: 'iceberg/orders-sink-recipe-b/2026-07-09T15-57-38Z', date: '2026-07-09', sha: '62f50196b' },
+    run: { path: 'iceberg/orders-sink-recipe-b/2026-07-09T15-57-38Z.json', date: '2026-07-09', sha: '62f50196b' },
     ceiling: null,
+    sourceKind: 'sink',
     confidence: 'medium',
     confidenceNote: 'Medium confidence: a sibling Iceberg scenario produced 241, 78, 49 and 128 MiB/s at 8 vCPU across four runs. This blessed run is the well-behaved one; treat the 8 vCPU point as indicative.',
   },
@@ -95,9 +117,36 @@ export function targetMiBps(eventsPerSec, eventBytes) {
   return (eventsPerSec * eventBytes) / MIB
 }
 
+// How far the requested event size may drift from the size a connector's own curve was
+// measured at before the curve stops meaning anything. 2x either way.
+export const EVENT_BYTES_DEVIATION_FACTOR = 2
+
+function ratioWord(eventBytes, benched) {
+  const round1 = (n) => Math.round(n * 10) / 10
+  return eventBytes < benched
+    ? `${round1(benched / eventBytes)}x smaller than`
+    : `${round1(eventBytes / benched)}x larger than`
+}
+
 export function warningsFor(c, eventBytes) {
   const out = []
-  if (eventBytes < EVENT_BYTES_MIN || eventBytes > EVENT_BYTES_MAX) {
+  const nearBench =
+    eventBytes >= c.benchedEventBytes / EVENT_BYTES_DEVIATION_FACTOR &&
+    eventBytes <= c.benchedEventBytes * EVENT_BYTES_DEVIATION_FACTOR
+  const inBand = eventBytes >= EVENT_BYTES_MIN && eventBytes <= EVENT_BYTES_MAX
+
+  // The per-connector check is the more specific of the two, so it wins when both fire —
+  // one caveat, not two near-identical ones.
+  if (!nearBench) {
+    const drop = eventBytes < c.benchedEventBytes
+      ? 'Smaller events shift the cost to per-message overhead, so achievable MiB/s drops below this curve.'
+      : 'Larger events change batching and per-message behaviour, so this curve may not hold.'
+    out.push(
+      `Extrapolated. This connector's curve was measured with ${c.benchedEventBytes} B events, and ` +
+      `${eventBytes} B is ${ratioWord(eventBytes, c.benchedEventBytes)} that. ${drop} ` +
+      `Treat the core count as indicative and confirm in a POC.`
+    )
+  } else if (!inBand) {
     out.push(
       `Extrapolated. This curve was measured at ${c.benchedEventBytes} B events; outside ` +
       `${EVENT_BYTES_MIN}–${EVENT_BYTES_MAX} B no measurement backs it. Smaller events shift the ` +
@@ -108,9 +157,19 @@ export function warningsFor(c, eventBytes) {
   return out
 }
 
+// A blank or nonsensical events/bytes field must not produce a confident "1 core" — the
+// guard lives here, not in the UI, so it is testable.
+export function hasSizeableInput(eventsPerSec, eventBytes) {
+  return (
+    Number.isFinite(eventsPerSec) && Number.isFinite(eventBytes) &&
+    eventsPerSec > 0 && eventBytes > 0
+  )
+}
+
 export function sizeFor({ connector, eventsPerSec, eventBytes, tax = 'passthrough', headroomPct = 30 }) {
   const c = CONNECTORS[connector]
   if (!c) return { status: 'unbenchmarked', connector }
+  if (!hasSizeableInput(eventsPerSec, eventBytes)) return { status: 'no-input', connector }
 
   const multiplier = TAX[tax].multiplier
   const target = targetMiBps(eventsPerSec, eventBytes)
@@ -121,12 +180,24 @@ export function sizeFor({ connector, eventsPerSec, eventBytes, tax = 'passthroug
   const fit = effective.find((p) => p.mibps >= required)
 
   if (!fit) {
+    // Best point on the curve, preferring the highest vCPU on a tie so the figure quoted
+    // matches the last row of the table on the page.
+    const best = effective.reduce((a, b) => (b.mibps >= a.mibps ? b : a))
     return {
       status: 'ceiling',
-      connector, target, required,
-      ceilingMiBps: effective[effective.length - 1].mibps,
+      connector, target, required, headroomPct,
+      // measuredCeilingMiBps is a real benchmark reading. ceilingMiBps is that reading
+      // divided by the processing multiplier — derived, and only equal to it at 1.0x.
+      measuredCeilingMiBps: c.curve[best.vcpu],
+      measuredCeilingVcpu: best.vcpu,
+      ceilingMiBps: best.mibps,
+      taxMultiplier: multiplier,
+      taxMeasured: TAX[tax].measured,
+      taxShort: TAX[tax].short,
       ceiling: c.ceiling,
+      scaleOutNote: c.ceiling ? null : SCALE_OUT_UNMEASURED[c.sourceKind],
       run: c.run,
+      confidence: c.confidence,
       warnings,
     }
   }
@@ -149,7 +220,7 @@ export function sizeFor({ connector, eventsPerSec, eventBytes, tax = 'passthroug
 
 // Bridge for the UI script below: the fence above must stay a side-effect-free
 // ES module (see sizing.test.mjs), so this line lives outside the sentinels.
-window.__sizingCore = { MIB, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX, TAX, CONNECTORS, targetMiBps, warningsFor, sizeFor }
+window.__sizingCore = { MIB, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX, EVENT_BYTES_DEVIATION_FACTOR, TAX, SCALE_OUT_UNMEASURED, CONNECTORS, targetMiBps, warningsFor, hasSizeableInput, sizeFor }
 </script>
 
 <style>
@@ -383,6 +454,7 @@ window.__sizingCore = { MIB, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX, TAX,
   .result-card.state-ok { border-left-color: var(--accent); }
   .result-card.state-ceiling { border-left-color: var(--danger); }
   .result-card.state-unbenchmarked { border-left-color: var(--border-strong); }
+  .result-card.state-empty { border-left-color: var(--border-strong); }
 
   .headline-ok {
     display: flex;
@@ -795,13 +867,20 @@ window.__sizingCore = { MIB, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX, TAX,
           <p>${r.ceiling.fix}</p>
         </div>`
       : `<div class="ceiling-box">
-          <p>Only one Connect instance was benchmarked. Scaling out across instances was not measured — ask the perf team before quoting.</p>
+          <p>${r.scaleOutNote}</p>
         </div>`
+    // Never call a tax-derated figure "measured". At 1.0x the two numbers are the same
+    // reading; above 1.0x the derated figure is arithmetic and is labelled as such.
+    const ceilingLine = r.taxMultiplier === 1
+      ? `<p class="support-line">The most that was ever measured is ${r1(r.measuredCeilingMiBps)} MiB/s at ${r.measuredCeilingVcpu} vCPU — the last row of the table below. No point on the curve reaches the requirement.</p>`
+      : `<p class="support-line">The most that was ever measured is ${r1(r.measuredCeilingMiBps)} MiB/s at ${r.measuredCeilingVcpu} vCPU with no mapping — the last row of the table below. Derated by the estimated ${r.taxMultiplier}x cost of ${r.taxShort}, that works out to about ${r1(r.ceilingMiBps)} MiB/s. That ${r1(r.ceilingMiBps)} is calculated, not measured — no benchmark produced it.</p>`
     resultHost.innerHTML = `
       <p class="headline-refuse">No core count — this exceeds what was measured.</p>
-      <p class="support-line">Needs ${r1(r.required)} MiB/s; the measured ceiling is ${r1(r.ceilingMiBps)} MiB/s.</p>
+      <p class="support-line">Needs ${r1(r.required)} MiB/s (target ${r1(r.target)} MiB/s + ${r.headroomPct}% headroom).</p>
+      ${ceilingLine}
       ${limitHtml}
       ${provenanceHtml(r.run)}
+      ${badgeHtml(r)}
       ${caveatsHtml(r.warnings)}
     `
   }
@@ -813,7 +892,14 @@ window.__sizingCore = { MIB, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX, TAX,
     `
   }
 
-  function renderCurve(connectorKey, selectedCores) {
+  function renderNoInput() {
+    resultCard.className = 'panel result-card state-empty'
+    resultHost.innerHTML = `
+      <p class="headline-unbenched">Enter an event rate and an average event size to size this connector. Both need to be greater than zero.</p>
+    `
+  }
+
+  function renderCurve(connectorKey, selectedCores, markCeiling = false) {
     const c = CONNECTORS[connectorKey]
     if (!c) {
       curveHost.innerHTML = `<p class="empty-curve-note">No measured curve — this connector was not benchmarked.</p>`
@@ -823,7 +909,7 @@ window.__sizingCore = { MIB, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX, TAX,
     const rows = VCPU_POINTS.map((v) => {
       const mibps = c.curve[v]
       const isSelected = v === selectedCores
-      const isCeilingRow = !selectedCores && v === VCPU_POINTS[VCPU_POINTS.length - 1]
+      const isCeilingRow = markCeiling && !selectedCores && v === VCPU_POINTS[VCPU_POINTS.length - 1]
       const rowClass = isSelected ? 'selected-row' : (isCeilingRow ? 'ceiling-row' : '')
       const tag = isSelected ? '<span class="row-tag">selected</span>' : (isCeilingRow ? '<span class="row-tag">ceiling</span>' : '')
       const pct = Math.max(4, Math.round((mibps / max) * 100))
@@ -870,6 +956,9 @@ window.__sizingCore = { MIB, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX, TAX,
       renderCurve(connector, result.cores)
     } else if (result.status === 'ceiling') {
       renderCeiling(result)
+      renderCurve(connector, null, true)
+    } else if (result.status === 'no-input') {
+      renderNoInput()
       renderCurve(connector, null)
     } else {
       renderUnbenchmarked()
