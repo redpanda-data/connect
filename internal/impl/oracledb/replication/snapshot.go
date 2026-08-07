@@ -283,7 +283,7 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 			if v, mapErr = mappers[idx](value); mapErr != nil {
 				return 0, mapErr
 			}
-			if !s.lobEnabled && isLOBType(types[idx].DatabaseTypeName()) {
+			if !s.lobEnabled && IsLOBTypeName(types[idx].DatabaseTypeName()) {
 				v = nil
 			}
 			row[columns[idx]] = v
@@ -447,6 +447,22 @@ func (s *Snapshot) Close() error {
 }
 
 func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {
+	for _, col := range cols {
+		precision, scale, ok := col.DecimalSize()
+		val, mapper := SnapshotScanDest(col.DatabaseTypeName(), col.Name(), precision, scale, ok)
+		values = append(values, val)
+		mappers = append(mappers, mapper)
+	}
+	return
+}
+
+// SnapshotScanDest returns the scan destination and value mapper for a column
+// with the given go-ora driver type name (sql.ColumnType.DatabaseTypeName())
+// and decimal metadata. It is exported so tests can pin its classification of
+// every driver type-name spelling against the schema mapping's — the two are
+// separate case-sensitive enumerations of the same fact and have drifted
+// before (see TestSnapshotScannerSchemaParity).
+func SnapshotScanDest(dbTypeName, colName string, precision, scale int64, hasDecimalSize bool) (val any, mapper func(any) (any, error)) {
 	stringMapping := func(mapper func(s string) (any, error)) func(any) (any, error) {
 		return func(v any) (any, error) {
 			s, ok := v.(*sql.NullString)
@@ -459,80 +475,63 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 			return mapper(s.String)
 		}
 	}
-	for _, col := range cols {
-		var val any
-		var mapper func(any) (any, error)
 
-		// Oracle database type names
-		switch col.DatabaseTypeName() {
-		case "RAW", "LONG RAW", "BLOB", "LongRaw":
-			val = new(sql.Null[[]byte])
-			mapper = snapshotValueMapper[[]byte]
-		case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE",
-			"TimeStampTZ", "TimeStampDTY", "TimeStampTZ_DTY", "TimeStampLTZ_DTY", "TimeStampeLTZ", "TIMESTAMPTZ":
-			val = new(sql.NullTime)
-			mapper = func(v any) (any, error) {
-				s, ok := v.(*sql.NullTime)
-				if !ok {
-					return nil, fmt.Errorf("expected %T got %T", time.Time{}, v)
-				}
-				if !s.Valid {
-					return nil, nil
-				}
-				return s.Time, nil
+	// Oracle database type names
+	switch dbTypeName {
+	case "RAW", "LONG RAW", "BLOB", "VarRaw", "LongRaw", "LongVarRaw", "OCIBlobLocator":
+		return new(sql.Null[[]byte]), snapshotValueMapper[[]byte]
+	case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE",
+		"TimeStampTZ", "TimeStampDTY", "TimeStampTZ_DTY", "TimeStampLTZ_DTY", "TimeStampeLTZ", "TIMESTAMPTZ":
+		return new(sql.NullTime), func(v any) (any, error) {
+			s, ok := v.(*sql.NullTime)
+			if !ok {
+				return nil, fmt.Errorf("expected %T got %T", time.Time{}, v)
 			}
-		case "NUMBER", "INTEGER", "INT", "SMALLINT", "FLOAT":
-			// Classify the column with the same NumberToCommon the streaming
-			// schema cache uses, so snapshot and streaming agree on whether a
-			// NUMBER is an Int64, a bounded Decimal, or a BigDecimal — and so
-			// the emitted value type matches the schema in both modes.
-			precision, scale, ok := col.DecimalSize()
-			colName := col.Name()
-			common := NumberToCommon(colName, precision, scale, ok)
-			switch common.Type {
-			case schema.Int64:
-				// Scan integer-width columns natively; go-ora handles the
-				// NUMBER → int64 conversion robustly without a string round-trip.
-				val = new(sql.Null[int64])
-				mapper = snapshotValueMapper[int64]
-			default:
-				// Decimal / BigDecimal: scan as text and canonicalise to a
-				// string via the shared coercion (never a bare number), so
-				// downstream Avro string-field encoding accepts the value.
-				val = new(sql.NullString)
-				mapper = stringMapping(func(text string) (any, error) {
-					out, err := sqlutil.CoerceToCommon(common, text)
-					if err != nil {
-						return nil, fmt.Errorf("column %s: %w", colName, err)
-					}
-					return out, nil
-				})
+			if !s.Valid {
+				return nil, nil
 			}
-		case "BINARY_FLOAT", "IBFloat", "BFloat", "BINARY_DOUBLE", "IBDouble", "BDouble":
-			val = new(sql.Null[float64])
-			mapper = snapshotValueMapper[float64]
-		case "CLOB", "NCLOB", "LONG", "LongVarChar":
-			// Character large objects - handle as string
-			val = new(sql.NullString)
-			mapper = stringMapping(func(s string) (any, error) {
-				return s, nil
-			})
-		case "JSON":
-			// Oracle 21c+ native JSON type
-			val = new(sql.NullString)
-			mapper = stringMapping(func(s string) (v any, err error) {
-				err = json.Unmarshal([]byte(s), &v)
-				return
-			})
-		default:
-			// Default to string for VARCHAR2, CHAR, NVARCHAR2, NCHAR, etc.
-			val = new(sql.Null[string])
-			mapper = snapshotValueMapper[string]
+			return s.Time, nil
 		}
-		values = append(values, val)
-		mappers = append(mappers, mapper)
+	case "NUMBER", "INTEGER", "INT", "SMALLINT", "FLOAT":
+		// Classify the column with the same NumberToCommon the streaming
+		// schema cache uses, so snapshot and streaming agree on whether a
+		// NUMBER is an Int64, a bounded Decimal, or a BigDecimal — and so
+		// the emitted value type matches the schema in both modes.
+		common := NumberToCommon(colName, precision, scale, hasDecimalSize)
+		if common.Type == schema.Int64 {
+			// Scan integer-width columns natively; go-ora handles the
+			// NUMBER → int64 conversion robustly without a string round-trip.
+			return new(sql.Null[int64]), snapshotValueMapper[int64]
+		}
+		// Decimal / BigDecimal: scan as text and canonicalise to a
+		// string via the shared coercion (never a bare number), so
+		// downstream Avro string-field encoding accepts the value.
+		return new(sql.NullString), stringMapping(func(text string) (any, error) {
+			out, err := sqlutil.CoerceToCommon(common, text)
+			if err != nil {
+				return nil, fmt.Errorf("column %s: %w", colName, err)
+			}
+			return out, nil
+		})
+	case "BINARY_FLOAT", "IBFloat", "BFloat", "BINARY_DOUBLE", "IBDouble", "BDouble":
+		return new(sql.Null[float64]), snapshotValueMapper[float64]
+	case "CLOB", "NCLOB", "LONG", "LongVarChar", "OCIClobLocator":
+		// Character large objects - handle as string
+		return new(sql.NullString), stringMapping(func(s string) (any, error) {
+			return s, nil
+		})
+	case "JSON", "TNSType(119)":
+		// Oracle 21c+ native JSON type. go-ora v2.9.0's TNSType stringer
+		// has no entry for it (119), so DatabaseTypeName() renders the
+		// raw "TNSType(119)" form.
+		return new(sql.NullString), stringMapping(func(s string) (v any, err error) {
+			err = json.Unmarshal([]byte(s), &v)
+			return
+		})
+	default:
+		// Default to string for VARCHAR2, CHAR, NVARCHAR2, NCHAR, etc.
+		return new(sql.Null[string]), snapshotValueMapper[string]
 	}
-	return
 }
 
 func buildOrderByClause(pk []string) string {
@@ -561,10 +560,16 @@ func buildColumnMeta(types []*sql.ColumnType) []ColumnMeta {
 	return meta
 }
 
-func isLOBType(dbType string) bool {
+// IsLOBTypeName reports whether the given go-ora driver type name denotes a
+// large-object column, whose value is nulled in snapshot rows when
+// lob_enabled is false. Exported so tests can pin its classification against
+// the schema mapping and scan-destination enumerations of the same spellings
+// (see TestSnapshotScannerSchemaParity).
+func IsLOBTypeName(dbType string) bool {
 	switch dbType {
 	case "CLOB", "NCLOB", "BLOB", "LONG", "LONG RAW",
-		"LongVarChar", "LongRaw": // go-ora driver-level names for CLOB/NCLOB/LONG and BLOB/LONG RAW
+		"LongVarChar", "LongRaw", "LongVarRaw", // go-ora driver-level names for CLOB/NCLOB/LONG and BLOB/LONG RAW (inline LOB mode)
+		"OCIClobLocator", "OCIBlobLocator": // go-ora driver-level LOB locator names (non-inline mode)
 		return true
 	}
 	return false
