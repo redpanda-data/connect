@@ -8,7 +8,7 @@
 Sales needs a licensable core count for a Redpanda Connect deployment, live, without
 asking the perf team. The benchmark data to answer this exists in
 `benchmarking/aws/results/` but is unusable by a non-engineer: 45+ timestamped JSON
-files, a majority of them smokes or broken runs reading 0 MiB/s, with no indication of
+files, a majority of them smokes or broken runs reading 0, with no indication of
 which run is authoritative.
 
 ## Form factor
@@ -34,13 +34,20 @@ The unit depended on how a point was summarised (`runner/matrix.go:288`):
 | Connect arm of a source scenario — Connect's own `rolling stats:` log, SI decimal via `humanize.Bytes` | **MB/s** (10⁶) |
 | Sink scenario, or any `kafka_connect` arm — broker/Iceberg byte counters divided by `(1 << 20)` | **MiB/s** (2²⁰) |
 
-Two consequences followed. First, five of the six blessed runs are decimal MB/s, so a page
-converting with `2^20` under-sized on about 1.8% of plausible inputs — including cases
-where it produced a core count instead of a refusal. Second, and beyond this tool, every
-Connect-vs-Kafka-Connect ratio in `results/` is inflated 4.86%, because Connect's
-source-side figure was decimal while the KC arm it was compared against was binary.
-Conclusions survive (postgres at 4 vCPU: 6.0x → 5.7x; mysql: 2.04x → 1.94x) but the
-printed figures are biased in Connect's favour.
+Five of the six blessed runs are decimal MB/s, so a page converting with `2^20` under-sized
+on about 1.8% of plausible inputs — including cases where it produced a core count instead
+of a refusal.
+
+It also means the two arms of a byte-based Connect-vs-Kafka-Connect comparison were 4.86%
+apart in Connect's favour. **Do not treat that as the correction needed to publish those
+ratios.** A much larger confound is documented in `runner/brokermetrics.go`
+(`extractTopicProduceRecords`): Connect's headline comes from its own rolling-stats log
+(uncompressed logical sizes) while KC's derives from broker produce bytes (compressed on the
+wire), and the seeders reuse identical row payloads that compress enormously — Connect's
+headline runs 11–17x above its own broker byte series on postgres, mysql, oracle and
+sqlserver, versus ~1.1x on mongodb, whose seeder emits distinct payloads. Record counts are
+the fair basis; restating byte ratios to three significant figures would be false
+precision.
 
 The harness now divides by a single `bytesPerMB = 1_000_000` everywhere
 (`runner/stats.go`), chosen because it matches both the `mb_per_sec` field name and what
@@ -59,8 +66,8 @@ a unit conversion happens.
 
 1. Rep enters events/sec and average event size (default 1200 B, editable, labelled as
    the size the benchmarks used).
-2. Target throughput = events/sec x event size, in MiB/s.
-3. Look up the connector's measured Connect median MiB/s at 1, 2, 4, 8 vCPU.
+2. Target throughput = events/sec x event size, expressed in that connector's `curveUnit`.
+3. Look up the connector's measured Connect median at 1, 2, 4, 8 vCPU.
 4. Divide every point on that curve by the processing-tax multiplier.
 5. Inflate the target, not the curve, by the headroom factor: `required = target x (1 + headroom)`,
    default 30%.
@@ -70,7 +77,7 @@ a unit conversion happens.
 
 The obvious choice is p5 — a rep should not quote a number the pipeline misses half the
 time. It does not survive contact with the data. The postgres run holds a warm-window p5
-of 25–32 MiB/s against a median of 83–102, with dips to ~2 MiB/s scattered through the
+of 25–32 MB/s against a median of 83–102, with dips to ~2 MB/s scattered through the
 entire run, not just startup. MySQL, on the same harness and instance, is tight: p5 95
 against median 102. That asymmetry is evidence the postgres dips come from the load
 generator's pacing rather than from Connect, so sizing on p5 would penalise postgres for
@@ -84,21 +91,22 @@ explicitly where the rep can see and defend it.
 Where the measured curve is flat, the tool must not return a larger vCPU count for a
 target above the ceiling. It reports the ceiling and the actual fix:
 
-- **oracledb_cdc** — ~13 MiB/s regardless of vCPU. The ceiling is per LogMiner reader.
-  Fix is more readers: measured 19, 25, 30 MiB/s at 4 vCPU as readers increase.
-- **mongodb_cdc** — ~33 MiB/s from 2 vCPU up. The ceiling is the single change-stream
+- **oracledb_cdc** — ~13 MB/s regardless of vCPU. The ceiling is per LogMiner reader.
+  Fix is more readers: measured 19, 25, 30 MB/s at 4 vCPU as readers increase.
+- **mongodb_cdc** — ~33 MB/s from 2 vCPU up. The ceiling is the single change-stream
   cursor. Fix is sharding.
 
 ### Guard: event size out of range
 
-Every curve is MiB/s measured at 1.2 KB events (4 KB for dynamodb). Below roughly 0.5 KB
-per-message overhead dominates and the achievable MiB/s drops; above roughly 5 KB the
-curves are untested. Outside 0.5–5 KB the page warns that the number is extrapolated.
+Every curve was measured at 1.2 KB events (4 KB for dynamodb). Below roughly 0.5 KB
+per-message overhead dominates and the achievable rate drops; above roughly 5 KB the curves
+are untested. The page warns when the event size is more than 2x from that connector's own
+benched size, and otherwise when it falls outside 0.5–5 KB.
 
 ## Data baked in
 
-Six connectors, one blessed run each. Connect median MiB/s at 1 / 2 / 4 / 8 vCPU, all on
-a `c8g.4xlarge` runner:
+Six connectors, one blessed run each. Connect median at 1 / 2 / 4 / 8 vCPU, all on a
+`c8g.4xlarge` runner. The five CDC rows are decimal MB/s; the iceberg row is MiB/s (see Units):
 
 | Connector | 1 | 2 | 4 | 8 | Shape | Blessed run | git sha |
 |---|---|---|---|---|---|---|---|
@@ -173,12 +181,13 @@ which affects instance choice independently of cores.
 
 Verified by hand in the browser:
 
-1. postgres_cdc, 40k events/sec at 1200 B (= 45.8 MiB/s), passthrough, 30% headroom
-   → target 59.5 MiB/s → clears at 2 vCPU (83) → **2 cores**.
+1. postgres_cdc, 40k events/sec at 1200 B (= 48 MB/s), passthrough, 30% headroom
+   → required 62.4 MB/s → clears at 2 vCPU (83) → **2 cores**.
 2. Same but heavy mapping + SR (2.0x) → effective curve 25.5/41.5/51/51 → target
-   59.5 MiB/s exceeds every point → refuses with "exceeds measured ceiling at 8 vCPU".
-3. oracledb_cdc, any target above ~13 MiB/s → per-reader ceiling message, no larger core
+   62.4 MB/s exceeds every point → refuses, quoting the measured 102 MB/s maximum and
+   labelling the derated 51 as calculated rather than measured.
+3. oracledb_cdc, any target above ~13 MB/s → per-reader ceiling message, no larger core
    count offered, points at more readers.
-4. mongodb_cdc, target 40 MiB/s → single-cursor ceiling message naming sharding.
+4. mongodb_cdc, target 40 MB/s → single-cursor ceiling message naming sharding.
 5. Any connector at 200 B events → extrapolation warning shown.
 6. snowflake (or any unlisted connector) → "not benchmarked" state, no number rendered.
