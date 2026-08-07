@@ -345,6 +345,35 @@ func (b *batchPublisher) waitSnapshotAcks(ctx context.Context) error {
 	}
 }
 
+// CheckpointWindow registers an empty marker slot carrying lsn with the
+// ordered tracker, after flushing any partial batch belonging to the window.
+// The marker resolves immediately, so lsn is persisted as soon as every batch
+// published before it has been acked — giving the stream an exact resume
+// position at each drained polling window instead of lagging one transaction
+// behind (which would re-deliver the final transaction of a burst on every
+// restart).
+func (b *batchPublisher) CheckpointWindow(ctx context.Context, lsn replication.LSN) error {
+	// Flush buffered rows first: they belong to the window, so the marker
+	// must be tracked after them.
+	if err := b.flushCurrent(ctx); err != nil {
+		return fmt.Errorf("flushing window remainder: %w", err)
+	}
+
+	b.batcherMu.Lock()
+	resolveFn, err := b.checkpoint.Track(ctx, lsn, 1)
+	b.batcherMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("tracking window checkpoint: %w", err)
+	}
+	// Resolve the marker immediately: if everything before it is already
+	// acked this persists lsn now; otherwise the last outstanding ack's
+	// resolve will surface it.
+	if resolved := resolveFn(); resolved != nil && len(*resolved) != 0 {
+		return b.cacheLSN(ctx, *resolved)
+	}
+	return nil
+}
+
 // flushCurrent flushes any partial batch still held by the batcher and
 // publishes it, leaving the publisher loop running. Used at the
 // snapshot->streaming handoff so every snapshot row is published (and can be

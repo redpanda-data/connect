@@ -168,6 +168,50 @@ func TestCheckpointSelection(t *testing.T) {
 	})
 }
 
+func TestCheckpointWindow(t *testing.T) {
+	t.Run("persists immediately when all prior batches are acked", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedLSNs := newTestBatchPublisher(t)
+
+		am := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", ""))
+		require.NoError(t, am.ackFn(ctx, nil))
+		require.Empty(t, cachedLSNs(), "mid-transaction batch must not persist anything on its own")
+
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.LSN("00000042")))
+
+		lsns := cachedLSNs()
+		require.Len(t, lsns, 1)
+		require.Equal(t, "00000042", string(lsns[0]),
+			"a drained window must checkpoint its exact end position")
+	})
+
+	t.Run("waits for outstanding acks before surfacing", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedLSNs := newTestBatchPublisher(t)
+
+		am := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", ""))
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.LSN("00000042")))
+		require.Empty(t, cachedLSNs(), "the window end must not persist while its batches are unacked")
+
+		require.NoError(t, am.ackFn(ctx, nil))
+		lsns := cachedLSNs()
+		require.Len(t, lsns, 1)
+		require.Equal(t, "00000042", string(lsns[0]))
+	})
+
+	t.Run("a nacked batch pins the window checkpoint", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedLSNs := newTestBatchPublisher(t)
+
+		am := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", ""))
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.LSN("00000042")))
+
+		nackErr := errors.New("downstream failure")
+		require.ErrorIs(t, am.ackFn(ctx, nackErr), nackErr)
+		require.Empty(t, cachedLSNs(), "the window end must never persist past a nacked batch")
+	})
+}
+
 // TestTrackOrderUnderConcurrentFlush stresses the two concurrent flushers (the
 // count-triggered flush in Publish and the timed-flush loop) and asserts the
 // persisted checkpoint never regresses when batches are acked in delivery

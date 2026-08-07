@@ -356,6 +356,13 @@ func (t *txnBoundary) Observe(lsn LSN) LSN {
 // ChangePublisher is responsible for handling and processing of a replication.MessageEvent.
 type ChangePublisher interface {
 	Publish(ctx context.Context, msg MessageEvent) error
+	// CheckpointWindow records that every transaction up to and including lsn
+	// has been fully published (a polling window drained). Once all batches
+	// published before this call are acknowledged, lsn may be persisted as the
+	// resume position — without it the final transaction of a burst would only
+	// be checkpointed when a later transaction appears, re-delivering it on
+	// every restart of an idle stream.
+	CheckpointWindow(ctx context.Context, lsn LSN) error
 }
 
 // ChangeTableStream tracks and streams all change events from the configured change
@@ -475,6 +482,12 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 
 		if len(lastLSN) != 0 {
 			if !bytes.Equal(startLSN, lastLSN) {
+				// The window is drained: every transaction <= lastLSN is fully
+				// published, so the exact end position may be checkpointed once
+				// the window's batches are acked.
+				if err := r.publisher.CheckpointWindow(ctx, lastLSN); err != nil {
+					return fmt.Errorf("checkpointing window end: %w", err)
+				}
 				startLSN = lastLSN
 			} else {
 				r.log.Debug("No more changes across all change tables, backing off...")
