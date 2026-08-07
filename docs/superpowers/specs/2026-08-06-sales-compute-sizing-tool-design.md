@@ -24,11 +24,33 @@ each carrying the provenance of the run it came from.
 
 ## Units
 
-Every throughput number in `results/` is **MiB/s**, not MB/s, despite the JSON field
-being named `mb_per_sec`: `brokermetrics.go:145` computes
-`deltaBytes / interval / (1 << 20)`. The page must convert the rep's events/sec x bytes
-using `2^20` to match, or the quote drifts about 5% against the curve it is compared to.
-The UI labels the unit MiB/s so the mismatch is not reintroduced by a reader.
+**Superseded — corrected 2026-08-06.** This section originally claimed every throughput
+number in `results/` is MiB/s. That was wrong, and generalised from one call site.
+
+The unit depended on how a point was summarised (`runner/matrix.go:288`):
+
+| Summarised from | Unit |
+|---|---|
+| Connect arm of a source scenario — Connect's own `rolling stats:` log, SI decimal via `humanize.Bytes` | **MB/s** (10⁶) |
+| Sink scenario, or any `kafka_connect` arm — broker/Iceberg byte counters divided by `(1 << 20)` | **MiB/s** (2²⁰) |
+
+Two consequences followed. First, five of the six blessed runs are decimal MB/s, so a page
+converting with `2^20` under-sized on about 1.8% of plausible inputs — including cases
+where it produced a core count instead of a refusal. Second, and beyond this tool, every
+Connect-vs-Kafka-Connect ratio in `results/` is inflated 4.86%, because Connect's
+source-side figure was decimal while the KC arm it was compared against was binary.
+Conclusions survive (postgres at 4 vCPU: 6.0x → 5.7x; mysql: 2.04x → 1.94x) but the
+printed figures are biased in Connect's favour.
+
+The harness now divides by a single `bytesPerMB = 1_000_000` everywhere
+(`runner/stats.go`), chosen because it matches both the `mb_per_sec` field name and what
+Connect reports about itself. Result files written before that fix keep their original
+unit, so each connector on the page carries a `curveUnit` tag and the target is converted
+into that connector's unit — which keeps every curve value byte-identical to its run file.
+
+The page accepts volume as events/sec x size **or** as a throughput figure (MB/s, MiB/s,
+GB/day, TB/day). Everything funnels through bytes/sec before being expressed in a
+connector's curve unit, so there is exactly one place a unit conversion happens.
 
 ## The calculation
 

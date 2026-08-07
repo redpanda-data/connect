@@ -20,10 +20,24 @@ async function loadCore() {
 
 const core = await loadCore()
 
-test('targetMiBps converts with 2^20, not 1e6', () => {
-  // 40k events/sec at 1200 B is 48,000,000 B/s. In MiB/s that is 45.78, not 48.
-  const t = core.targetMiBps(40_000, 1200)
-  assert.ok(Math.abs(t - 45.776) < 0.01, `expected ~45.776 MiB/s, got ${t}`)
+test('everything funnels through bytes/sec, whichever way volume was stated', () => {
+  // 40k events/sec at 1200 B, 48 MB/s, 45.776 MiB/s and 4.147 TB/day are the same rate.
+  const viaEvents = core.bytesPerSecFromEvents(40_000, 1200)
+  assert.equal(viaEvents, 48_000_000)
+  assert.equal(core.bytesPerSecFromThroughput(48, 'MB/s'), 48_000_000)
+  assert.ok(Math.abs(core.bytesPerSecFromThroughput(45.776, 'MiB/s') - 48_000_000) < 1000)
+  assert.ok(Math.abs(core.bytesPerSecFromThroughput(4.1472, 'TB/day') - 48_000_000) < 1000)
+  assert.ok(Math.abs(core.bytesPerSecFromThroughput(4147.2, 'GB/day') - 48_000_000) < 1000)
+  assert.ok(Number.isNaN(core.bytesPerSecFromThroughput(48, 'bogus/s')))
+})
+
+test('a target is expressed in the unit of the curve it will be compared against', () => {
+  // The five CDC runs stored decimal MB/s; the iceberg run stored MiB/s. 48e6 B/s is
+  // 48 MB/s but only 45.776 MiB/s, and comparing across those is a 4.86% error.
+  assert.equal(core.inCurveUnit(48_000_000, 'MB'), 48)
+  assert.ok(Math.abs(core.inCurveUnit(48_000_000, 'MiB') - 45.776) < 0.01)
+  assert.equal(core.CONNECTORS.postgres_cdc.curveUnit, 'MB')
+  assert.equal(core.CONNECTORS.iceberg_sink.curveUnit, 'MiB')
 })
 
 test('acceptance case 1: postgres 40k/s at 1200 B passthrough clears at 2 cores', () => {
@@ -33,12 +47,48 @@ test('acceptance case 1: postgres 40k/s at 1200 B passthrough clears at 2 cores'
   })
   assert.equal(r.status, 'ok')
   assert.equal(r.cores, 2)
-  assert.equal(r.measuredMiBps, 83)
-  assert.ok(Math.abs(r.required - 59.51) < 0.05, `required was ${r.required}`)
+  assert.equal(r.measuredRate, 83)
+  assert.equal(r.unit, 'MB')
+  // 48 MB/s target + 30% = 62.4, cleared by the 83 MB/s point at 2 vCPU.
+  assert.equal(r.target, 48)
+  assert.ok(Math.abs(r.required - 62.4) < 0.05, `required was ${r.required}`)
+})
+
+test('the same rate stated as throughput gives the same core count as events x size', () => {
+  const base = { connector: 'postgres_cdc', tax: 'passthrough', headroomPct: 30 }
+  const viaEvents = core.sizeFor({ ...base, eventsPerSec: 40_000, eventBytes: 1200 })
+  const viaThroughput = core.sizeFor({ ...base, mode: 'throughput', throughput: 48, throughputUnit: 'MB/s' })
+  assert.equal(viaThroughput.status, 'ok')
+  assert.equal(viaThroughput.cores, viaEvents.cores)
+  assert.equal(viaThroughput.target, viaEvents.target)
+})
+
+test('throughput mode says the event-size check could not run', () => {
+  const r = core.sizeFor({
+    connector: 'dynamodb_cdc', mode: 'throughput', throughput: 20, throughputUnit: 'MB/s',
+    tax: 'passthrough', headroomPct: 30,
+  })
+  assert.equal(r.status, 'ok')
+  assert.equal(r.mode, 'throughput')
+  assert.equal(r.warnings.length, 1)
+  assert.match(r.warnings[0], /event size is unknown/)
+  assert.match(r.warnings[0], /4096 B events/)
+})
+
+test('a MiB/s-stated volume is not silently treated as MB/s', () => {
+  // Against a decimal-MB curve, 100 MiB/s is 104.86 MB/s. Sizing it as 100 would
+  // understate the requirement by 4.86% — the bug this whole unit tag exists to stop.
+  const asMiB = core.sizeFor({ connector: 'postgres_cdc', mode: 'throughput', throughput: 100, throughputUnit: 'MiB/s', headroomPct: 0 })
+  const asMB = core.sizeFor({ connector: 'postgres_cdc', mode: 'throughput', throughput: 100, throughputUnit: 'MB/s', headroomPct: 0 })
+  assert.ok(Math.abs(asMiB.target - 104.8576) < 0.01, `MiB target was ${asMiB.target}`)
+  assert.equal(asMB.target, 100)
+  // 100 MB/s clears against the 102 point; 104.86 MB/s clears nothing.
+  assert.equal(asMB.status, 'ok')
+  assert.equal(asMiB.status, 'ceiling')
 })
 
 test('picks the smallest clearing point, not the biggest', () => {
-  // mysql curve is 70/102/108/111; a 60 MiB/s requirement must not return 8.
+  // mysql curve is 70/102/108/111 MB/s; a 62.4 MB/s requirement must not return 8.
   const r = core.sizeFor({
     connector: 'mysql_cdc', eventsPerSec: 40_000, eventBytes: 1200,
     tax: 'passthrough', headroomPct: 30,
@@ -50,11 +100,11 @@ test('picks the smallest clearing point, not the biggest', () => {
 test('headroom inflates the requirement, not the curve', () => {
   const low = core.sizeFor({ connector: 'postgres_cdc', eventsPerSec: 60_000, eventBytes: 1200, tax: 'passthrough', headroomPct: 0 })
   const high = core.sizeFor({ connector: 'postgres_cdc', eventsPerSec: 60_000, eventBytes: 1200, tax: 'passthrough', headroomPct: 50 })
-  // 60k/s at 1200 B = 68.66 MiB/s. At 0% headroom the 83 point clears it (2 vCPU).
-  // At 50% the requirement becomes 103 MiB/s, above the curve's 102 maximum, so
+  // 60k/s at 1200 B = 72 MB/s. At 0% headroom the 83 point clears it (2 vCPU).
+  // At 50% the requirement becomes 108 MB/s, above the curve's 102 maximum, so
   // nothing clears — proving headroom moves the requirement rather than the curve.
   assert.equal(low.cores, 2)
-  assert.equal(low.measuredMiBps, 83)
+  assert.equal(low.measuredRate, 83)
   assert.equal(high.status, 'ceiling')
 })
 
@@ -73,7 +123,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       runPath: c.run.path,
       runDate: c.run.date,
       runSha: c.run.sha,
-      ceilingMiBps: c.ceiling ? c.ceiling.mibps : null,
+      curveUnit: c.curveUnit,
+      hasCeiling: Boolean(c.ceiling),
       sourceKind: c.sourceKind,
       confidence: c.confidence,
     }
@@ -87,7 +138,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       runPath: 'postgres/orders-cdc/2026-06-01T20-55-50Z.json',
       runDate: '2026-06-01',
       runSha: '25057d693',
-      ceilingMiBps: null,
+      curveUnit: 'MB',
+      hasCeiling: false,
       sourceKind: 'cdc',
       confidence: 'high',
     },
@@ -98,7 +150,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       runPath: 'mysql/orders-cdc/2026-06-02T14-13-52Z.json',
       runDate: '2026-06-02',
       runSha: '25057d693',
-      ceilingMiBps: null,
+      curveUnit: 'MB',
+      hasCeiling: false,
       sourceKind: 'cdc',
       confidence: 'high',
     },
@@ -109,7 +162,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       runPath: 'mongodb/orders-cdc/2026-07-17T17-11-10Z.json',
       runDate: '2026-07-17',
       runSha: '156a11081',
-      ceilingMiBps: 33,
+      curveUnit: 'MB',
+      hasCeiling: true,
       sourceKind: 'cdc',
       confidence: 'high',
     },
@@ -120,7 +174,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       runPath: 'dynamodb/cdc/2026-06-15T17-44-43Z.json',
       runDate: '2026-06-15',
       runSha: 'd9d2b3c98',
-      ceilingMiBps: 82,
+      curveUnit: 'MB',
+      hasCeiling: true,
       sourceKind: 'cdc',
       confidence: 'high',
     },
@@ -131,7 +186,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       runPath: 'oracle/orders-cdc/2026-06-22T16-31-22Z.json',
       runDate: '2026-06-22',
       runSha: '63ea466c5',
-      ceilingMiBps: 13,
+      curveUnit: 'MB',
+      hasCeiling: true,
       sourceKind: 'cdc',
       confidence: 'high',
     },
@@ -142,7 +198,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       runPath: 'iceberg/orders-sink-recipe-b/2026-07-09T15-57-38Z.json',
       runDate: '2026-07-09',
       runSha: '62f50196b',
-      ceilingMiBps: null,
+      curveUnit: 'MiB',
+      hasCeiling: false,
       sourceKind: 'sink',
       confidence: 'medium',
     },
@@ -200,7 +257,7 @@ test('acceptance case 2: the heavy-mapping tax can push a target past the ceilin
     tax: 'heavy', headroomPct: 30,
   })
   assert.equal(r.status, 'ceiling')
-  assert.equal(r.ceilingMiBps, 51)
+  assert.equal(r.ceilingRate, 51)
 })
 
 test('acceptance case 3: oracle refuses to grow cores and names readers as the fix', () => {
@@ -209,7 +266,7 @@ test('acceptance case 3: oracle refuses to grow cores and names readers as the f
     tax: 'passthrough', headroomPct: 30,
   })
   assert.equal(r.status, 'ceiling')
-  assert.equal(r.ceilingMiBps, 13)
+  assert.equal(r.ceilingRate, 13)
   assert.match(r.ceiling.reason, /LogMiner/)
   assert.match(r.ceiling.fix, /readers/)
   assert.equal(r.cores, undefined, 'a refusal must not carry a core count')
@@ -273,11 +330,11 @@ test('a ceiling refusal separates the measured maximum from the tax-derated figu
   })
   assert.equal(r.status, 'ceiling')
   assert.equal(r.cores, undefined, 'a refusal must not carry a core count')
-  assert.equal(r.measuredCeilingMiBps, 102, 'must be a real curve reading')
+  assert.equal(r.measuredCeilingRate, 102, 'must be a real curve reading')
   assert.equal(r.measuredCeilingVcpu, 8, 'must name the vCPU point the table highlights')
   assert.equal(r.taxMultiplier, 1.2)
-  assert.ok(Math.abs(r.ceilingMiBps - 85) < 0.001, `derated ceiling was ${r.ceilingMiBps}`)
-  assert.notEqual(r.measuredCeilingMiBps, r.ceilingMiBps)
+  assert.ok(Math.abs(r.ceilingRate - 85) < 0.001, `derated ceiling was ${r.ceilingRate}`)
+  assert.notEqual(r.measuredCeilingRate, r.ceilingRate)
   // Without this the ceiling path renders no Estimate badge for an estimated number.
   assert.equal(r.taxMeasured, false)
   assert.equal(r.taxShort, 'light mapping')
@@ -292,8 +349,8 @@ test('at 1.0x the ceiling figure is the measured maximum itself', () => {
   assert.equal(r.status, 'ceiling')
   assert.equal(r.taxMultiplier, 1)
   assert.equal(r.taxMeasured, true)
-  assert.equal(r.measuredCeilingMiBps, r.ceilingMiBps)
-  assert.equal(r.measuredCeilingMiBps, 13)
+  assert.equal(r.measuredCeilingRate, r.ceilingRate)
+  assert.equal(r.measuredCeilingRate, 13)
 })
 
 test('the measured maximum quoted on a refusal is the top of the curve, ties going to the largest vCPU', () => {
@@ -301,7 +358,7 @@ test('the measured maximum quoted on a refusal is the top of the curve, ties goi
   const r = core.sizeFor({ connector: 'postgres_cdc', eventsPerSec: 200_000, eventBytes: 1200, tax: 'passthrough', headroomPct: 30 })
   assert.equal(r.status, 'ceiling')
   assert.equal(r.measuredCeilingVcpu, 8)
-  assert.equal(r.measuredCeilingMiBps, 102)
+  assert.equal(r.measuredCeilingRate, 102)
 })
 
 test('blank, zero, negative and non-finite input yields no answer at all', () => {
@@ -313,7 +370,7 @@ test('blank, zero, negative and non-finite input yields no answer at all', () =>
       assert.equal(r.status, 'no-input', `${field}=${bad} produced status ${r.status}`)
       assert.equal(r.cores, undefined, `${field}=${bad} produced a core count`)
       assert.equal(r.required, undefined)
-      assert.equal(r.measuredMiBps, undefined)
+      assert.equal(r.measuredRate, undefined)
       assert.equal(r.taxMeasured, undefined, 'a no-answer state must render no badge')
       assert.equal(r.run, undefined, 'a no-answer state must render no provenance')
     }
@@ -321,12 +378,21 @@ test('blank, zero, negative and non-finite input yields no answer at all', () =>
 })
 
 test('hasSizeableInput is the single guard, and it accepts real input', () => {
-  assert.equal(core.hasSizeableInput(40_000, 1200), true)
-  assert.equal(core.hasSizeableInput(0, 1200), false)
-  assert.equal(core.hasSizeableInput(40_000, 0), false)
-  assert.equal(core.hasSizeableInput(-1, 1200), false)
-  assert.equal(core.hasSizeableInput(NaN, 1200), false)
-  assert.equal(core.hasSizeableInput(40_000, Infinity), false)
+  assert.equal(core.hasSizeableInput(48_000_000), true)
+  assert.equal(core.hasSizeableInput(0), false)
+  assert.equal(core.hasSizeableInput(-1), false)
+  assert.equal(core.hasSizeableInput(NaN), false)
+  assert.equal(core.hasSizeableInput(Infinity), false)
+})
+
+test('a positive rate times a blank size is still no-input, not zero cores', () => {
+  // Number('') === 0, so this is the durable-empty-field case in events mode.
+  const r = core.sizeFor({ connector: 'postgres_cdc', eventsPerSec: 40_000, eventBytes: 0 })
+  assert.equal(r.status, 'no-input')
+  assert.equal(r.cores, undefined)
+  const t = core.sizeFor({ connector: 'postgres_cdc', mode: 'throughput', throughput: 0 })
+  assert.equal(t.status, 'no-input')
+  assert.equal(t.mode, 'throughput')
 })
 
 test('an event size far from the connector\'s own bench size warns even inside the global band', () => {
@@ -365,4 +431,29 @@ test('the unmeasured-scale-out caveat is honest in both directions and CDC-aware
   // A connector with a known hard ceiling explains that instead of scale-out.
   const ora = core.sizeFor({ connector: 'oracledb_cdc', eventsPerSec: 20_000, eventBytes: 1200, tax: 'passthrough', headroomPct: 30 })
   assert.equal(ora.scaleOutNote, null)
+})
+
+// The page is one file with two module scripts: the fenced core, then the UI. They are
+// joined by a `window.__sizingCore = { ... }` bridge line. Every other test here imports
+// the fence DIRECTLY, so a stale name in that bridge throws at page load, blanks the whole
+// UI, and leaves this suite green — which is exactly what happened once. This test closes
+// that gap by checking both sides of the bridge against the real file.
+test('the UI bridge names match the core exports and cover what the UI destructures', async () => {
+  const html = await readFile(join(here, 'index.html'), 'utf8')
+
+  const bridge = html.match(/window\.__sizingCore = \{([\s\S]*?)\n\}/)
+  assert.ok(bridge, 'window.__sizingCore bridge object not found')
+  const bridged = bridge[1].split(',').map((s) => s.trim()).filter(Boolean)
+
+  // Side 1: every bridged name must actually be exported by the core.
+  for (const name of bridged) {
+    assert.ok(name in core, `bridge exposes "${name}", which the sizing core does not export`)
+  }
+
+  // Side 2: every name the UI script destructures must be on the bridge.
+  const destructure = html.match(/const \{([^}]*)\} = window\.__sizingCore/)
+  assert.ok(destructure, 'UI script does not destructure window.__sizingCore')
+  for (const name of destructure[1].split(',').map((s) => s.trim()).filter(Boolean)) {
+    assert.ok(bridged.includes(name), `UI destructures "${name}", which the bridge does not provide`)
+  }
 })

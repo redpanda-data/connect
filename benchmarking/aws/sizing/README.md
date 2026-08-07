@@ -1,7 +1,10 @@
 # Compute sizing page
 
-Self-serve tool: enter events/sec, average event size, a connector, a processing-tax
-setting and a headroom percentage; get back a licensable core count. It exists so a rep
+Self-serve tool: pick a connector, state the volume, set a processing-tax setting and a
+headroom percentage; get back a licensable core count. Volume can be stated either way a
+customer usually gives it — events/sec plus an average event size, or a throughput figure
+directly (MB/s, MiB/s, GB/day, TB/day). Throughput mode skips the event-size check, so it
+always carries a caveat saying so. It exists so a rep
 or SE can answer "how many cores do I need" live, on a call, without paging the perf
 team or reading `benchmarking/aws/results/` (45+ timestamped JSON files, most of them
 smokes).
@@ -30,10 +33,19 @@ row by analogy or interpolation.
 node --test benchmarking/aws/sizing/sizing.test.mjs
 ```
 
-25 tests cover the calculation core: unit conversion, the "smallest clearing point" rule,
-headroom semantics, ceiling refusals, the no-answer guard on blank/negative/non-finite
-input, event-size caveats, and per-connector provenance. Run them after any change to the
-data or the calculation.
+31 tests cover the calculation core: unit conversion in both directions, both input modes
+agreeing on the same rate, the "smallest clearing point" rule, headroom semantics, ceiling
+refusals, the no-answer guard on blank/negative/non-finite input, event-size caveats, and
+per-connector provenance. Run them after any change to the data or the calculation.
+
+Two are worth knowing about specifically:
+
+- A test asserting that a **MiB/s-stated volume is not treated as MB/s**. Against a
+  decimal-MB curve, 100 MiB/s is 104.86 MB/s — enough to flip a refusal into a core count.
+- A **bridge-integrity test**. The page is two module scripts joined by a
+  `window.__sizingCore = { ... }` line. Every other test imports the fenced core directly,
+  so a stale name in that bridge throws at load, blanks the entire UI, and leaves the suite
+  green. That happened once; this test checks both sides of the bridge against the file.
 
 One of them is a **literal data snapshot** pinning all 24 curve points, the six SHAs, run
 paths, dates, peak-heap figures and `benchedEventBytes`, the event-size constants, and the
@@ -72,7 +84,7 @@ Consequences:
 ## Adding a connector once a new bench lands
 
 1. **Pick one blessed run. Do not glob `benchmarking/aws/results/`.** Most files
-   there are smokes or broken runs reading 0 MiB/s; averaging across whatever's in a
+   there are smokes or broken runs reading 0; averaging across whatever's in a
    directory will silently poison the number. Find the run yourself, confirm it looks
    healthy (non-zero, no crossed-out anomalies), and pick exactly one JSON file the
    same way the six existing rows were picked — see the spec's "Exclusions" section
@@ -82,10 +94,28 @@ Consequences:
 2. **Read the curve.** Each result file is `{ scenario, git_sha, points: [...] }`,
    where `points` has one entry per `(vcpu, engine)` pair. For each of the 1/2/4/8
    vCPU points where `engine == "connect"`, take `point.summary.median_mb_s`.
-   **The field is named `mb_per_sec`/`median_mb_s` but the value is MiB/s**, not
-   MB/s — `benchmarking/aws/runner/brokermetrics.go:145` computes
-   `deltaBytes / interval / (1 << 20)`. Don't re-derive it from `msg_per_sec x
-   bytes` with `1e6`; use the field as-is and label it MiB/s.
+   Use the field as-is — never re-derive it from `msg_per_sec x bytes`.
+
+   **Then set `curveUnit`, and get it right — a wrong tag is a silent 4.86% error.**
+   Which unit `median_mb_s` holds depends on how the point was summarised
+   (`runner/matrix.go:288`):
+
+   | How the point was summarised | Unit | `curveUnit` |
+   |---|---|---|
+   | Connect arm of a **source** scenario — from Connect's own `rolling stats:` log, which is SI decimal (`humanize.Bytes`) | MB/s | `'MB'` |
+   | **Sink** scenario, or **any `kafka_connect`** arm — from broker/Iceberg byte counters | see below | see below |
+
+   The broker-side samplers used to divide by `(1 << 20)`, storing MiB/s in a field
+   named MB. That is now fixed — `runner/stats.go` defines a single `bytesPerMB =
+   1_000_000` and every sampler uses it — so **any run produced after that fix is
+   `'MB'`**. Runs from before it keep MiB/s on their sink and `kafka_connect` points,
+   which is why `iceberg_sink` is still tagged `'MiB'` here. If you are unsure which
+   side of the fix a run falls on, check whether its `git_sha` predates the commit that
+   introduced `bytesPerMB`.
+
+   The page converts a rep's input into each connector's own `curveUnit` before
+   comparing, so tagging correctly is all that is required — do not restate a curve in
+   a different unit, because that would break its byte-for-byte match with the run file.
 
 3. **Read the peak heap.** `peakHeapMB` is the *worst case across the whole run*, not
    just at the point you'll size against: for every `connect`-engine point in the
@@ -103,7 +133,7 @@ Consequences:
    real figure), `peakHeapMB`, `run: { path, date, sha }` (the run's relative path under
    `results/` **including the `.json` extension**, so it can be pasted straight into an
    editor, plus its date and the git SHA the run was taken at — `git_sha` is in the result
-   JSON), `ceiling` (`null` if the curve keeps scaling, or `{ mibps, reason, fix }` if it
+   JSON), `ceiling` (`null` if the curve keeps scaling, or `{ reason, fix }` if it
    plateaus — see `oracledb_cdc`/`mongodb_cdc` for the shape), `sourceKind` (`'cdc'` or
    `'sink'`, which selects the honest scale-out caveat in `SCALE_OUT_UNMEASURED` when
    `ceiling` is `null`), and `confidence` (`'high'` unless the run has a reproducibility
@@ -150,10 +180,10 @@ compute the mapping needs, and it must be **greater than or equal to 1** for any
 slower than passthrough:
 
 ```
-multiplier = passthrough median MiB/s  ÷  mapped-arm median MiB/s
+multiplier = passthrough median  ÷  mapped-arm median      (both in the same unit)
 ```
 
-Concretely: passthrough measures 100 MiB/s, the Avro arm measures 50 MiB/s → heavy becomes
+Concretely: passthrough measures 100 MB/s, the Avro arm measures 50 MB/s → heavy becomes
 100 ÷ 50 = **2.0**. The inverse (50 ÷ 100 = 0.5) would make the page claim heavy mapping
 runs *twice as fast* as passthrough. If you ever compute a multiplier below 1.0 for a
 mapped arm, you have the division backwards. Sanity check after editing: for identical
@@ -166,7 +196,7 @@ on this page are estimates, not measurements.
 
 | Status | Renders | Core count |
 |---|---|---|
-| `ok` | headline core count, measured MiB/s at that point, peak heap, provenance, Measured/Estimate badge | yes |
+| `ok` | headline core count, measured rate at that point in the connector's own unit, peak heap, provenance, Measured/Estimate badge | yes |
 | `ceiling` | refusal, the requirement, the **measured maximum** and (above 1.0x tax) the derated figure labelled as calculated, the limit box, provenance, badge | no |
 | `unbenchmarked` | "not benchmarked — ask the perf team" | no |
 | `no-input` | neutral "enter an event rate and an average event size" prompt, no badge, no provenance | no |
@@ -175,15 +205,15 @@ on this page are estimates, not measurements.
 1 vCPU and render a **Measured** badge over a number the user never asked for. The guard is
 `hasSizeableInput` inside the fence (so it is testable), not in the UI.
 
-On the `ceiling` path, note the two distinct fields: `measuredCeilingMiBps` is a real curve
-reading and `ceilingMiBps` is that reading divided by the processing multiplier. Only the
+On the `ceiling` path, note the two distinct fields: `measuredCeilingRate` is a real curve
+reading and `ceilingRate` is that reading divided by the processing multiplier. Only the
 first may ever be called "measured" in copy; at 1.0x they are equal.
 
 ## Known gap (not this task's to fix)
 
 `sizeFor`'s `ceiling` path returns no number for postgres, mysql, and iceberg once a
 target exceeds the single-instance curve, because scaling across multiple Connect
-instances was never benchmarked. A customer asking for ~500 MiB/s of Postgres CDC is
+instances was never benchmarked. A customer asking for ~500 MB/s of Postgres CDC is
 realistic and the tool will decline it rather than multiply the single-instance curve
 by an instance count (that would be an invented number). For the CDC sources it is not
 even a given that a second instance would help — each needs its own replication slot or
