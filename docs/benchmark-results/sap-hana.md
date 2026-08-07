@@ -2,11 +2,11 @@
 
 Throughput comparison of three ways to move data between Kafka and SAP HANA:
 
-| Connector | What it is | Modes tested |
-|---|---|---|
-| **`sap_hana`** | Redpanda Connect native input/output (go-hdb driver) | Bulk, Incrementing, Query, Write |
-| **`kafka-connect-sap`** | SAP's own Kafka Connect connector ([SAP/kafka-connect-sap](https://github.com/SAP/kafka-connect-sap)) | Bulk, Incrementing, Query (EC2 only), Write (local only) |
-| **Generic Confluent JDBC** | `io.confluent.connect.jdbc.JdbcSourceConnector` + SAP HANA JDBC driver (`ngdbc.jar`) | Bulk, Incrementing, Query |
+| Connector                  | What it is                                                                                            | Modes tested                                             |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| **`sap_hana`**             | Redpanda Connect native input/output (go-hdb driver)                                                  | Bulk, Incrementing, Query, Write                         |
+| **`kafka-connect-sap`**    | SAP's own Kafka Connect connector ([SAP/kafka-connect-sap](https://github.com/SAP/kafka-connect-sap)) | Bulk, Incrementing, Query (EC2 only), Write (local only) |
+| **Generic Confluent JDBC** | `io.confluent.connect.jdbc.JdbcSourceConnector` + SAP HANA JDBC driver (`ngdbc.jar`)                  | Bulk, Incrementing, Query                                |
 
 See [`internal/impl/saphana/bench/`](../../internal/impl/saphana/bench/) for configs and run instructions.
 
@@ -41,19 +41,19 @@ This explains the ~10× gap between `kafka-connect-sap` and the other two connec
 
 ### Local (WSL2), 2M rows unless noted
 
-| Mode | `sap_hana` native | `kafka-connect-sap` | Generic Confluent JDBC |
-|---|---|---|---|
-| Bulk Read | 48,780 | *not tested* | **86,957** |
-| Incrementing Read (500k, concurrent load) | 41,667 | *not tested* | 41,667 |
-| Query Read | **95,238** | *not tested* | 90,909 |
+| Mode                                      | `sap_hana` native | `kafka-connect-sap` | Generic Confluent JDBC |
+| ----------------------------------------- | ----------------- | ------------------- | ---------------------- |
+| Bulk Read                                 | 48,780            | *not tested*        | **86,957**             |
+| Incrementing Read (500k, concurrent load) | 41,667            | *not tested*        | 41,667                 |
+| Query Read                                | **95,238**        | *not tested*        | 90,909                 |
 
 ### EC2
 
-| Mode | `sap_hana` native | `kafka-connect-sap` | Generic Confluent JDBC |
-|---|---|---|---|
-| Bulk Read (5M) | **83,333** | 4,255 (200k) | 41,667 (2M) |
-| Incrementing Read (5M) | **48,544** | 4,310 (500k) | 35,088 (2M) |
-| Query Read (5M) | **100,000** | 4,255 (200k) | 40,000 (2M) |
+| Mode                   | `sap_hana` native | `kafka-connect-sap` | Generic Confluent JDBC |
+| ---------------------- | ----------------- | ------------------- | ---------------------- |
+| Bulk Read (5M)         | **83,333**        | 4,255 (200k)        | 41,667 (2M)            |
+| Incrementing Read (5M) | **48,544**        | 4,310 (500k)        | 35,088 (2M)            |
+| Query Read (5M)        | **100,000**       | 4,255 (200k)        | 40,000 (2M)            |
 
 `sap_hana` and generic Confluent JDBC numbers above are at larger scale (5M/2M) than `kafka-connect-sap` (200k) — scale differences don't change the qualitative story (held-cursor connectors win by ~10× on EC2) but keep the scale gap in mind when quoting exact ratios.
 
@@ -68,7 +68,7 @@ Pipeline: `sap_hana` input (bulk mode) → `kafka_franz` output. `max_in_flight=
 Varying `fetch_size`, `batching.count`, and `GOMAXPROCS`.
 
 | fetch_size | batch  | cores=1 | cores=2 | cores=4    | cores=8    |
-|------------|--------|---------|---------|------------|------------|
+| ---------- | ------ | ------- | ------- | ---------- | ---------- |
 | 1,000      | 1,000  | 20,202  | 20,833  | 21,739     | 21,978     |
 | 1,000      | 5,000  | 19,231  | 21,739  | 20,408     | 19,417     |
 | 1,000      | 10,000 | 18,868  | 19,231  | 19,048     | 19,802     |
@@ -94,17 +94,17 @@ Concurrent load + capture: 500,000 rows inserted via 10 parallel workers while t
 Pipeline: `sap_hana` input (incrementing mode, `incrementing_column=ID`) → `kafka_franz` output. `max_in_flight=10`, `batching.count=1000`.
 Varying `fetch_size`, `GOMAXPROCS`, `poll_interval`.
 
-| fetch_size | poll   | cores=1 | cores=2 | cores=4    | cores=8    |
-|------------|--------|---------|---------|------------|------------|
-| 1,000      | 100ms  | 20,000  | 20,000  | 21,739     | 22,727     |
-| 1,000      | 500ms  | 20,000  | 20,000  | 17,857     | 19,231     |
-| 1,000      | 1s     | 20,000  | 20,000  | 20,000     | 19,231     |
-| 10,000     | 100ms  | 31,250  | 31,250  | 38,462     | 38,462     |
-| 10,000     | 500ms  | 31,250  | 38,462  | 38,462     | **41,667** |
-| 10,000     | 1s     | 26,316  | 31,250  | 31,250     | 38,462     |
-| 100,000    | 100ms  | 31,250  | 38,462  | 38,462     | 22,727     |
-| 100,000    | 500ms  | 26,316  | 38,462  | 31,250     | 38,462     |
-| 100,000    | 1s     | 15,625  | 20,000  | 38,462     | 38,462     |
+| fetch_size | poll  | cores=1 | cores=2 | cores=4 | cores=8    |
+| ---------- | ----- | ------- | ------- | ------- | ---------- |
+| 1,000      | 100ms | 20,000  | 20,000  | 21,739  | 22,727     |
+| 1,000      | 500ms | 20,000  | 20,000  | 17,857  | 19,231     |
+| 1,000      | 1s    | 20,000  | 20,000  | 20,000  | 19,231     |
+| 10,000     | 100ms | 31,250  | 31,250  | 38,462  | 38,462     |
+| 10,000     | 500ms | 31,250  | 38,462  | 38,462  | **41,667** |
+| 10,000     | 1s    | 26,316  | 31,250  | 31,250  | 38,462     |
+| 100,000    | 100ms | 31,250  | 38,462  | 38,462  | 22,727     |
+| 100,000    | 500ms | 26,316  | 38,462  | 31,250  | 38,462     |
+| 100,000    | 1s    | 15,625  | 20,000  | 38,462  | 38,462     |
 
 **Best per fetch_size:** 1,000 → 22,727 (poll=100ms, cores=8) · 10,000 → **41,667** (poll=500ms, cores=8) · 100,000 → 38,462 (poll=100/500ms, cores=2/4/8)
 
@@ -121,7 +121,7 @@ Full scan via user-supplied SQL: 2,000,000 rows × ~300 B. Pipeline: `sap_hana` 
 Query: `SELECT * FROM "SCHEMA"."BENCH_ORDERS_QUERY"`. Varying `fetch_size`, `GOMAXPROCS`.
 
 | fetch_size | cores=1 | cores=2 | cores=4    | cores=8 |
-|------------|---------|---------|------------|---------|
+| ---------- | ------- | ------- | ---------- | ------- |
 | 1,000      | 22,727  | 22,222  | 21,505     | 23,529  |
 | 10,000     | 68,966  | 76,923  | 76,923     | 71,429  |
 | 100,000    | 62,500  | 68,966  | **95,238** | 90,909  |
@@ -141,7 +141,7 @@ Pipeline: `kafka_franz` input → `sap_hana` output. Each batch sent via a cache
 `batching.count=1000`. Varying `max_in_flight` (concurrent batch INSERT calls), `GOMAXPROCS`.
 
 | max_in_flight | cores=1 | cores=2 | cores=4 | cores=8    |
-|---------------|---------|---------|---------|------------|
+| ------------- | ------- | ------- | ------- | ---------- |
 | 5             | 31,250  | 34,483  | 36,364  | 36,364     |
 | 10            | 28,986  | 51,282  | 40,816  | **57,143** |
 | 20            | 28,169  | 33,333  | 35,714  | 37,736     |
@@ -166,7 +166,7 @@ Pipeline: `kafka_franz` input → `sap_hana` output. Each batch sent via a cache
 Varying `jdbc.fetch.size`, `batch.max.rows`.
 
 | fetch_size | batch=1,000 | batch=5,000 | batch=10,000 |
-|------------|-------------|-------------|--------------|
+| ---------- | ----------- | ----------- | ------------ |
 | 1,000      | 15,748      | 54,054      | 76,923       |
 | 10,000     | 15,385      | 55,556      | **86,957**   |
 | 100,000    | 15,873      | 60,606      | 83,333       |
@@ -180,17 +180,17 @@ Varying `jdbc.fetch.size`, `batch.max.rows`.
 
 Same concurrent load (500k rows / 10 workers). `mode=incrementing`, `incrementing.column.name=ID`, `tasks.max=1`. Varying `poll.interval.ms`, `batch.max.rows`.
 
-| batch  | poll   | msg/s      |
-|--------|--------|------------|
-| 1,000  | 100ms  | 13,158     |
-| 1,000  | 500ms  | 12,821     |
-| 1,000  | 1s     | 13,158     |
-| 5,000  | 100ms  | 35,714     |
-| 5,000  | 500ms  | **41,667** |
-| 5,000  | 1s     | 38,462     |
-| 10,000 | 100ms  | 38,462     |
-| 10,000 | 500ms  | 31,250     |
-| 10,000 | 1s     | 38,462     |
+| batch  | poll  | msg/s      |
+| ------ | ----- | ---------- |
+| 1,000  | 100ms | 13,158     |
+| 1,000  | 500ms | 12,821     |
+| 1,000  | 1s    | 13,158     |
+| 5,000  | 100ms | 35,714     |
+| 5,000  | 500ms | **41,667** |
+| 5,000  | 1s    | 38,462     |
+| 10,000 | 100ms | 38,462     |
+| 10,000 | 500ms | 31,250     |
+| 10,000 | 1s    | 38,462     |
 
 **Observations:**
 - `batch.max.rows` dominant — default (100) gives ~1,700 msg/s; 5,000–10,000 reaches ~42k, a 24× improvement.
@@ -201,11 +201,11 @@ Same concurrent load (500k rows / 10 workers). `mode=incrementing`, `incrementin
 
 Custom query with `CAST(PRICE AS DOUBLE)`, `mode=bulk`, `tasks.max=1`, `poll.interval.ms=86400000` (one-shot). Varying `jdbc.fetch.size`, `batch.max.rows`.
 
-| fetch_size | batch=1,000 | batch=5,000 | batch=10,000   |
-|------------|-------------|-------------|----------------|
-| 1,000      | 16,129      | 62,500      | **90,909**     |
-| 10,000     | 15,873      | 57,143      | 76,923         |
-| 100,000    | 15,748      | 55,556      | 76,923         |
+| fetch_size | batch=1,000 | batch=5,000 | batch=10,000 |
+| ---------- | ----------- | ----------- | ------------ |
+| 1,000      | 16,129      | 62,500      | **90,909**   |
+| 10,000     | 15,873      | 57,143      | 76,923       |
+| 100,000    | 15,748      | 55,556      | 76,923       |
 
 **Observations:**
 - `batch.max.rows` dominates: batch=1000 caps ~16k; batch=10000 reaches ~91k regardless of fetch size.
@@ -221,11 +221,11 @@ Custom query with `CAST(PRICE AS DOUBLE)`, `mode=bulk`, `tasks.max=1`, `poll.int
 Kafka → `com.sap.kafka.connect.sink.hana.HANASinkConnector` (kafka-connect-sap 0.9.4): 2,000,000 rows × 3 columns (BIGINT, NVARCHAR(50), DOUBLE).
 Schema-embedded JSON via `JsonConverter`. `consumer.override.max.poll.records` set to match `batch.size`. Varying `batch.size` (rows per JDBC `executeBatch`), `tasks.max`.
 
-| batch_size | tasks=1    | tasks=2    | tasks=4    |
-|------------|------------|------------|------------|
-| 1,000      | 6,645      | 6,579      | 6,601      |
-| 5,000      | 20,408     | 20,408     | 20,408     |
-| 10,000     | 28,986     | 28,986     | 28,986     |
+| batch_size | tasks=1 | tasks=2 | tasks=4 |
+| ---------- | ------- | ------- | ------- |
+| 1,000      | 6,645   | 6,579   | 6,601   |
+| 5,000      | 20,408  | 20,408  | 20,408  |
+| 10,000     | 28,986  | 28,986  | 28,986  |
 
 **Observations:**
 - `batch_size` dominates; `tasks.max` has no effect — HANA JDBC insert throughput is single-threaded bounded.
@@ -247,7 +247,7 @@ task bench:matrix FETCH="1000 10000 100000 200000 500000" BATCH=5000 CORES="1 2 
 ```
 
 | fetch_size | cores=1 | cores=2 | cores=4    | cores=8    |
-|------------|---------|---------|------------|------------|
+| ---------- | ------- | ------- | ---------- | ---------- |
 | 1,000      | 7,886   | 8,389   | 8,375      | 8,361      |
 | 10,000     | 44,248  | 54,348  | 56,180     | 56,180     |
 | 100,000    | 41,322  | 73,529  | **83,333** | 61,728     |
@@ -271,17 +271,17 @@ task bench:matrix FETCH="1000 10000 100000 200000 500000" BATCH=5000 CORES="1 2 
 task bench:matrix COUNT=500000 OUT=rpcn_inc.txt
 ```
 
-| fetch_size | poll  | cores=1 | cores=2 | cores=4 | cores=8 |
-|------------|-------|---------|---------|---------|---------|
-| 1,000      | 100ms | 7,576   | 7,576   | 7,692   | 7,576   |
-| 1,000      | 500ms | 7,692   | 7,246   | 7,692   | 7,692   |
-| 1,000      | 1s    | 5,380   | 7,353   | 7,246   | 7,353   |
-| 10,000     | 100ms | 12,073  | 11,667  | 11,667  | 27,778  |
-| 10,000     | 500ms | 23,810  | 11,786  | 29,412  | 12,073  |
-| 10,000     | 1s    | 10,312  | 23,810  | 23,810  | 27,778  |
-| 100,000    | 100ms | 11,951  | **33,333** | 12,692 | 27,778  |
-| 100,000    | 500ms | 23,810  | 10,426  | 12,073  | 11,786  |
-| 100,000    | 1s    | 23,810  | 27,778  | 27,778  | 27,778  |
+| fetch_size | poll  | cores=1 | cores=2    | cores=4 | cores=8 |
+| ---------- | ----- | ------- | ---------- | ------- | ------- |
+| 1,000      | 100ms | 7,576   | 7,576      | 7,692   | 7,576   |
+| 1,000      | 500ms | 7,692   | 7,246      | 7,692   | 7,692   |
+| 1,000      | 1s    | 5,380   | 7,353      | 7,246   | 7,353   |
+| 10,000     | 100ms | 12,073  | 11,667     | 11,667  | 27,778  |
+| 10,000     | 500ms | 23,810  | 11,786     | 29,412  | 12,073  |
+| 10,000     | 1s    | 10,312  | 23,810     | 23,810  | 27,778  |
+| 100,000    | 100ms | 11,951  | **33,333** | 12,692  | 27,778  |
+| 100,000    | 500ms | 23,810  | 10,426     | 12,073  | 11,786  |
+| 100,000    | 1s    | 23,810  | 27,778     | 27,778  | 27,778  |
 
 **Best per fetch_size:** 1,000 → 7,692 (poll=500ms, cores=4/8) · 10,000 → 29,412 (poll=500ms, cores=4) · 100,000 → **33,333** (poll=100ms, cores=2)
 
@@ -297,7 +297,7 @@ task bench:matrix COUNT=5000000 FETCH="10000 100000 500000" CORES="2 4 8" POLL="
 ```
 
 | fetch_size | poll  | cores=2 | cores=4    | cores=8    |
-|------------|-------|---------|------------|------------|
+| ---------- | ----- | ------- | ---------- | ---------- |
 | 10,000     | 100ms | 38,721  | 39,563     | 44,643     |
 | 10,000     | 500ms | 37,803  | **47,619** | 34,618     |
 | 100,000    | 100ms | 37,803  | 37,689     | 39,643     |
@@ -316,10 +316,10 @@ task bench:matrix COUNT=5000000 FETCH="10000 100000 500000" CORES="2 4 8" POLL="
 task bench:matrix OUT=rpcn_query.txt
 ```
 
-| fetch_size | cores=1 | cores=2 | cores=4    | cores=8 |
-|------------|---------|---------|------------|---------|
-| 1,000      | 8,197   | 8,197   | 8,333      | 8,197   |
-| 10,000     | 45,455  | 50,000  | 45,455     | 50,000  |
+| fetch_size | cores=1 | cores=2    | cores=4    | cores=8 |
+| ---------- | ------- | ---------- | ---------- | ------- |
+| 1,000      | 8,197   | 8,197      | 8,333      | 8,197   |
+| 10,000     | 45,455  | 50,000     | 45,455     | 50,000  |
 | 100,000    | 55,556  | **71,429** | **71,429** | 62,500  |
 
 Same shape as bulk/incrementing — `fetch_size=1000` bottlenecks at ~8k, jumps to ~45-50k at fetch=10000, best at fetch=100000/cores=2-4 (~71k). 500k rows wasn't enough to separate fetch=100000 from a hypothetical fetch=500000, so this was re-run at 5M scale:
@@ -330,7 +330,7 @@ task bench:matrix FETCH="10000 100000 500000" CORES="2 4 8" OUT=rpcn_query_v2.tx
 ```
 
 | fetch_size | cores=2 | cores=4     | cores=8    |
-|------------|---------|-------------|------------|
+| ---------- | ------- | ----------- | ---------- |
 | 10,000     | 56,180  | 56,180      | 56,818     |
 | 100,000    | 94,340  | **100,000** | 96,154     |
 | 500,000    | 87,719  | 96,154      | **98,039** |
@@ -354,18 +354,17 @@ task bench:matrix FETCH="10000 100000 500000" CORES="2 4 8" OUT=rpcn_query_v2.tx
 
 `BENCH_ORDERS` table, `TOTAL=200000` rows.
 
-```
-FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
-1000        1000        200000        301s        664
-1000        5000        200000        78s         2564
-1000        10000       200000        48s         4167
-10000       1000        200000        301s        664
-10000       5000        200000        77s         2597
-10000       10000       200000        48s         4167
-100000      1000        200000        298s        671
-100000      5000        200000        80s         2500
-100000      10000       200000        47s         4255
-```
+| FETCH   | BATCH  | ELAPSED | AVG_MSG_S |
+| ------- | ------ | ------- | --------- |
+| 1,000   | 1,000  | 301s    | 664       |
+| 1,000   | 5,000  | 78s     | 2,564     |
+| 1,000   | 10,000 | 48s     | 4,167     |
+| 10,000  | 1,000  | 301s    | 664       |
+| 10,000  | 5,000  | 77s     | 2,597     |
+| 10,000  | 10,000 | 48s     | 4,167     |
+| 100,000 | 1,000  | 298s    | 671       |
+| 100,000 | 5,000  | 80s     | 2,500     |
+| 100,000 | 10,000 | 47s     | 4,255     |
 
 **Observations:**
 - `FETCH` (`batch.size`) has essentially no effect — 664/2564/4167 msg/s repeats near-identically across all three `FETCH` values at each `BATCH` level.
@@ -376,18 +375,17 @@ FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
 
 500,000 rows, `mode=incrementing`.
 
-```
-POLL_MS     BATCH         TOTAL         ELAPSED     AVG_MSG_S
-100         1000          507000        164s        3091
-500         1000          505000        197s        2563
-1000        1000          500000        417s        1199
-100         5000          500000        197s        2538
-500         5000          500000        197s        2538
-1000        5000          500000        200s        2500
-100         10000         500000        119s        4202
-500         10000         500000        116s        4310
-1000        10000         500000        120s        4167
-```
+| POLL_MS | BATCH  | ELAPSED | AVG_MSG_S |
+| ------- | ------ | ------- | --------- |
+| 100     | 1,000  | 164s    | 3,091     |
+| 500     | 1,000  | 197s    | 2,563     |
+| 1,000   | 1,000  | 417s    | 1,199     |
+| 100     | 5,000  | 197s    | 2,538     |
+| 500     | 5,000  | 197s    | 2,538     |
+| 1,000   | 5,000  | 200s    | 2,500     |
+| 100     | 10,000 | 119s    | 4,202     |
+| 500     | 10,000 | 116s    | 4,310     |
+| 1,000   | 10,000 | 120s    | 4,167     |
 
 **Observations:**
 - Same shape as bulk: `BATCH` dominates — 1000→~1200-3000 msg/s, 10000→~4200-4300 msg/s.
@@ -397,18 +395,17 @@ POLL_MS     BATCH         TOTAL         ELAPSED     AVG_MSG_S
 
 **Contention check:** this EC2 box was found running 4 zombie Kafka Connect connectors plus two orphaned native benchmark processes, all competing for HANA connections/CPU during the runs above (idle CPU on the connect container: 24.79% → 2.98% after cleanup). Re-ran the same matrix on a clean box:
 
-```
-POLL_MS     BATCH         TOTAL         ELAPSED     AVG_MSG_S
-100         1000          500000        765s        654
-500         1000          500000        760s        658
-1000        1000          500000        763s        655
-100         5000          500000        200s        2500
-500         5000          500000        196s        2551
-1000        5000          500000        200s        2500
-100         10000         500000        119s        4202
-500         10000         500000        120s        4167
-1000        10000         500000        119s        4202
-```
+| POLL_MS | BATCH  | ELAPSED | AVG_MSG_S |
+| ------- | ------ | ------- | --------- |
+| 100     | 1,000  | 765s    | 654       |
+| 500     | 1,000  | 760s    | 658       |
+| 1,000   | 1,000  | 763s    | 655       |
+| 100     | 5,000  | 200s    | 2,500     |
+| 500     | 5,000  | 196s    | 2,551     |
+| 1,000   | 5,000  | 200s    | 2,500     |
+| 100     | 10,000 | 119s    | 4,202     |
+| 500     | 10,000 | 120s    | 4,167     |
+| 1,000   | 10,000 | 119s    | 4,202     |
 
 `batch=10000` results are essentially identical to the contended run (4202/4167/4202 vs 4202/4310/4167) — **confirms the ~4,200 msg/s ceiling is architectural** (LIMIT/OFFSET per poll + EC2↔HANA network RTT), not resource contention. `batch=1000` came out worse post-cleanup (654-658 vs 1199-3091) — treat as run-to-run noise, not a regression. **~4,200 msg/s at `batch.max.rows=10000` is the confirmed, reproducible number for this connector on this EC2↔HANA path.**
 
@@ -416,18 +413,17 @@ POLL_MS     BATCH         TOTAL         ELAPSED     AVG_MSG_S
 
 `BENCH_ORDERS` table, raw `query` mode, `TOTAL=200000` rows.
 
-```
-FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
-1000        1000        200000        301s        664
-1000        5000        200000        80s         2500
-1000        10000       200000        48s         4167
-10000       1000        200000        298s        671
-10000       5000        200000        81s         2469
-10000       10000       200000        48s         4167
-100000      1000        200000        301s        664
-100000      5000        200000        77s         2597
-100000      10000       200000        47s         4255
-```
+| FETCH   | BATCH  | ELAPSED | AVG_MSG_S |
+| ------- | ------ | ------- | --------- |
+| 1,000   | 1,000  | 301s    | 664       |
+| 1,000   | 5,000  | 80s     | 2,500     |
+| 1,000   | 10,000 | 48s     | 4,167     |
+| 10,000  | 1,000  | 298s    | 671       |
+| 10,000  | 5,000  | 81s     | 2,469     |
+| 10,000  | 10,000 | 48s     | 4,167     |
+| 100,000 | 1,000  | 301s    | 664       |
+| 100,000 | 5,000  | 77s     | 2,597     |
+| 100,000 | 10,000 | 47s     | 4,255     |
 
 **Observations:**
 - Same shape and near-identical numbers to this connector's bulk-read results — query mode hits the same LIMIT/OFFSET-per-poll bottleneck; `kafka-connect-sap` has no distinct held-cursor path for raw queries either.
@@ -443,34 +439,31 @@ FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
 
 `BENCH_ORDERS` table, `TOTAL=100000` rows:
 
-```
-FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
-1000        1000        100000        27s         3704
-1000        5000        100000        9s          11111
-1000        10000       100000        6s          16667
-10000       1000        100000        27s         3704
-10000       5000        100000        9s          11111
-10000       10000       100000        6s          16667
-100000      1000        100000        27s         3704
-100000      5000        100000        9s          11111
-100000      10000       100000        6s          16667
-```
+| FETCH   | BATCH  | ELAPSED | AVG_MSG_S |
+| ------- | ------ | ------- | --------- |
+| 1,000   | 1,000  | 27s     | 3,704     |
+| 1,000   | 5,000  | 9s      | 11,111    |
+| 1,000   | 10,000 | 6s      | 16,667    |
+| 10,000  | 1,000  | 27s     | 3,704     |
+| 10,000  | 5,000  | 9s      | 11,111    |
+| 10,000  | 10,000 | 6s      | 16,667    |
+| 100,000 | 1,000  | 27s     | 3,704     |
+| 100,000 | 5,000  | 9s      | 11,111    |
+| 100,000 | 10,000 | 6s      | 16,667    |
 
 Reloaded to `TOTAL=2000000` rows:
 
-```
-FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
-1000        1000        2000000       458s        4367
-1000        5000        2000000       99s         20202
-1000        10000       2000000       54s         37037
-10000       1000        2000000       457s        4376
-10000       5000        2000000       95s         21053
-10000       10000       2000000       51s         39216
-100000      1000        2000000       402          4973
-100000      5000        2000000       80s         25000
-100000      10000       2000000       48s         41667
-```
-
+| FETCH   | BATCH  | ELAPSED | AVG_MSG_S |
+| ------- | ------ | ------- | --------- |
+| 1,000   | 1,000  | 458s    | 4,367     |
+| 1,000   | 5,000  | 99s     | 20,202    |
+| 1,000   | 10,000 | 54s     | 37,037    |
+| 10,000  | 1,000  | 457s    | 4,376     |
+| 10,000  | 5,000  | 95s     | 21,053    |
+| 10,000  | 10,000 | 51s     | 39,216    |
+| 100,000 | 1,000  | 402     | 4,973     |
+| 100,000 | 5,000  | 80s     | 25,000    |
+| 100,000 | 10,000 | 48s     | 41,667    |
 
 **Observations:**
 - Same shape as every matrix in this doc: `FETCH` has essentially no effect, `BATCH` drives throughput — 4,367 → 20,202 → 37,037 as batch goes 1000 → 5000 → 10000.
@@ -481,18 +474,17 @@ FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
 
 `BENCH_ORDERS` table, `mode=incrementing`, `TOTAL=2000000` rows:
 
-```
-POLL_MS     BATCH         TOTAL         ELAPSED     AVG_MSG_S
-100         1000          2000000       459s        4357
-500         1000          2000000       459s        4357
-1000        1000          ERROR         ?           0
-100         5000          2000000       168s        11905
-500         5000          1995000       125s        15960
-1000        5000          2000000       104s        19231
-100         10000         2000000       57s         35088
-500         10000         2000000       57s         35088
-1000        10000         1995000       83s         24036
-```
+| POLL_MS | BATCH  | ELAPSED | AVG_MSG_S |
+| ------- | ------ | ------- | --------- |
+| 100     | 1,000  | 459s    | 4,357     |
+| 500     | 1,000  | 459s    | 4,357     |
+| 1,000   | 1,000  | ?       | 0         |
+| 100     | 5,000  | 168s    | 11,905    |
+| 500     | 5,000  | 125s    | 15,960    |
+| 1,000   | 5,000  | 104s    | 19,231    |
+| 100     | 10,000 | 57s     | 35,088    |
+| 500     | 10,000 | 57s     | 35,088    |
+| 1,000   | 10,000 | 83s     | 24,036    |
 
 **Observations:**
 - Same shape as bulk: `BATCH` dominates — 4,357 at batch=1000 → ~15-19k at batch=5000 → ~24-35k at batch=10000. `POLL_MS` negligible/inconsistent.
@@ -503,18 +495,17 @@ POLL_MS     BATCH         TOTAL         ELAPSED     AVG_MSG_S
 
 `BENCH_ORDERS` table, raw `query` mode, `TOTAL=2000000` rows:
 
-```
-FETCH       BATCH       TOTAL         ELAPSED     AVG_MSG_S
-1000        1000        2000000       453s        4415
-1000        5000        2000000       96s         20833
-1000        10000       2000000       51s         39216
-10000       1000        2000000       453s        4415
-10000       5000        2000000       99s         20202
-10000       10000       2000000       50s         40000
-100000      1000        2000000       459s        4357
-100000      5000        2000000       96s         20833
-100000      10000       2000000       51s         39216
-```
+| FETCH   | BATCH  | ELAPSED | AVG_MSG_S |
+| ------- | ------ | ------- | --------- |
+| 1,000   | 1,000  | 453s    | 4,415     |
+| 1,000   | 5,000  | 96s     | 20,833    |
+| 1,000   | 10,000 | 51s     | 39,216    |
+| 10,000  | 1,000  | 453s    | 4,415     |
+| 10,000  | 5,000  | 99s     | 20,202    |
+| 10,000  | 10,000 | 50s     | 40,000    |
+| 100,000 | 1,000  | 459s    | 4,357     |
+| 100,000 | 5,000  | 96s     | 20,833    |
+| 100,000 | 10,000 | 51s     | 39,216    |
 
 **Observations:**
 - Same shape as bulk and incrementing: `FETCH` negligible, `BATCH` drives throughput — ~4,400 at batch=1000 → ~20-21k at batch=5000 → ~39-40k at batch=10000.
