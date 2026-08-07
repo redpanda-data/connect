@@ -219,9 +219,19 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 	}
 
 	lastMsg := batch[len(batch)-1]
+
+	// ensure we don't checkpoint snapshot batches
+	isSnapshotBatch := false
+	if op, ok := lastMsg.MetaGet("operation"); ok && op == replication.MessageOperationRead.String() {
+		isSnapshotBatch = true
+	}
+
 	var checkpointSCN replication.SCN
-	// Prefer checkpoint_scn (which accounts for open transactions) otherwise fall back to scn.
-	// Snapshot records don't have an scn so we don't track those.
+	// Prefer checkpoint_scn. It accounts for open transactions.
+	// Use scn if checkpoint_scn is absent.
+	// Snapshot rows never carry checkpoint_scn.
+	// All rows in one snapshot run share the same scn, captured once in Snapshot.Prepare().
+	// So the fallback always selects that shared scn for snapshot batches.
 	scnKey := "checkpoint_scn"
 	if _, ok := lastMsg.MetaGet(scnKey); !ok {
 		scnKey = "scn"
@@ -242,10 +252,15 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 		msg: batch,
 		ackFn: func(ctx context.Context, _ error) error {
 			scn := resolveFn()
-			if scn != nil && scn.IsValid() {
-				return b.cacheSCN(ctx, *scn)
+			if scn == nil || !scn.IsValid() {
+				return nil
 			}
-			return nil
+			if isSnapshotBatch && *scn <= checkpointSCN {
+				// Resolved value is this snapshot batch's own shared SCN (or older) —
+				// nothing new to persist, and persisting it would be premature.
+				return nil
+			}
+			return b.cacheSCN(ctx, *scn)
 		},
 	}
 	select {
