@@ -3,6 +3,23 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.104.0 - 2026-08-06
+
+### Fixed
+
+- kafka: Fixed incorrect validation of max_in_flight_requests with idempotent_write enabled, which was causing silent failures instead of configuration errors. ([@prakhargarg105](https://github.com/prakhargarg105), [#4645](https://github.com/redpanda-data/connect/pull/4645))
+- oracledb_cdc: Improved Oracle CDC snapshot handling by skipping unnecessary checkpointing during snapshot reads. ([@josephwoodward](https://github.com/josephwoodward), [#4670](https://github.com/redpanda-data/connect/pull/4670))
+- redpanda: Fixed redpanda_lag metric name to remain consistent when unordered_processing is enabled, preventing silent metric name changes that broke existing dashboards and alerts. ([@prakhargarg105](https://github.com/prakhargarg105), [#4664](https://github.com/redpanda-data/connect/pull/4664))
+- oracledb_cdc: Derive identical message schemas from catalog and driver meta. ([@Jeffail](https://github.com/Jeffail), [#4661](https://github.com/redpanda-data/connect/pull/4661))
+
+### Changed
+
+- s3: Added handling for S3 TestEvent messages to prevent message redelivery and improved logging for misconfigured bucket events. ([@josephwoodward](https://github.com/josephwoodward), [#4667](https://github.com/redpanda-data/connect/pull/4667))
+
+### Added
+
+- oracledb_cdc: Support the ability to configure a log miner session age [@josephwoodward](https://github.com/josephwoodward), [#4673](https://github.com/redpanda-data/connect/pull/4673))
+
 ## 4.103.2 - TBD
 
 ### Fixed
