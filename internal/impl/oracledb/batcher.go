@@ -38,6 +38,11 @@ type batchPublisher struct {
 	// acknowledged downstream. The snapshot->streaming handoff blocks on it so
 	// the post-snapshot SCN is never persisted while snapshot rows are in flight.
 	snapshotAckWG sync.WaitGroup
+	// snapshotNackErr records the first snapshot batch nack. auto_replay_nacks
+	// is user-toggleable, so a nack can be terminal: the gate must fail rather
+	// than let the post-snapshot SCN persist over undelivered rows.
+	snapshotNackMu  sync.Mutex
+	snapshotNackErr error
 
 	log     *service.Logger
 	shutSig *shutdown.Signaller
@@ -94,7 +99,7 @@ func (p *batchPublisher) loop() {
 		flushBatch = flushBatchTicker.C
 	}
 
-	// hardStopCtx survives a soft stop so that an in-flight publishBatch send can
+	// hardStopCtx survives a soft stop so that an in-flight sendTracked send can
 	// complete before the loop exits. Only a hard stop (triggered by Close)
 	// cancels it, which is the forced-shutdown last resort.
 	hardStopCtx, done := p.shutSig.HardStopCtx(context.Background())
@@ -246,23 +251,6 @@ type trackedBatch struct {
 	isSnapshot bool
 }
 
-// publishBatch tracks and sends a batch that was flushed elsewhere. Callers
-// that flush the batcher themselves must instead track under the same lock as
-// their flush (see Publish/loop/flushCurrent) to keep Track order == flush
-// order.
-func (b *batchPublisher) publishBatch(ctx context.Context, batch service.MessageBatch) error {
-	if len(batch) == 0 {
-		return nil
-	}
-	b.batcherMu.Lock()
-	tracked, err := b.trackBatchLocked(ctx, batch)
-	b.batcherMu.Unlock()
-	if err != nil {
-		return err
-	}
-	return b.sendTracked(ctx, tracked)
-}
-
 // trackBatchLocked registers the batch with the ordered checkpoint tracker and
 // builds its ack function. It MUST be called with batcherMu held: Track order
 // defines the checkpoint sequence, so it has to match flush order exactly.
@@ -304,9 +292,20 @@ func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.Mes
 		isSnapshot: isSnapshotBatch,
 		msg: asyncMessage{
 			msg: batch,
-			ackFn: func(ctx context.Context, _ error) error {
+			ackFn: func(ctx context.Context, err error) error {
 				if isSnapshotBatch {
 					defer b.snapshotAckWG.Done()
+				}
+				if err != nil {
+					// auto_replay_nacks is user-toggleable, so a nack can be
+					// terminal. Never resolve: the checkpoint stays pinned
+					// before this batch so nothing can be persisted past its
+					// undelivered rows. Snapshot nacks additionally fail the
+					// handoff gate so the post-snapshot SCN is not persisted.
+					if isSnapshotBatch {
+						b.recordSnapshotNack(err)
+					}
+					return err
 				}
 				scn := resolveFn()
 				if scn == nil || !scn.IsValid() {
@@ -321,6 +320,26 @@ func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.Mes
 			},
 		},
 	}, nil
+}
+
+func (b *batchPublisher) recordSnapshotNack(err error) {
+	b.snapshotNackMu.Lock()
+	defer b.snapshotNackMu.Unlock()
+	if b.snapshotNackErr == nil {
+		b.snapshotNackErr = err
+	}
+}
+
+// resetSnapshotGate clears any nack recorded by a previous snapshot attempt so
+// the gate reflects only the current run: the publisher outlives reconnects,
+// and a stale error would fail every retry even after a clean re-run. The
+// WaitGroup is deliberately left untouched — batches from a previous attempt
+// that are still in flight can yet be acked or nacked, and both must keep
+// counting.
+func (b *batchPublisher) resetSnapshotGate() {
+	b.snapshotNackMu.Lock()
+	defer b.snapshotNackMu.Unlock()
+	b.snapshotNackErr = nil
 }
 
 // sendTracked hands a tracked batch to ReadBatch. Must be called WITHOUT
@@ -339,10 +358,10 @@ func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch)
 }
 
 // waitSnapshotAcks blocks until every published snapshot batch has been
-// acknowledged (or nacked) downstream, or until ctx is cancelled. Nacked
-// batches release the gate too: redelivery is owned by auto_replay_nacks,
-// and the ctx escape prevents a permanently-failing downstream from
-// wedging shutdown.
+// acknowledged or nacked downstream, or until ctx is cancelled (the escape
+// prevents a stalled downstream from wedging shutdown). Any nack fails the
+// gate: with auto_replay_nacks disabled a nack is terminal, so the
+// post-snapshot SCN must not be persisted and the snapshot must re-run.
 func (b *batchPublisher) waitSnapshotAcks(ctx context.Context) error {
 	drained := make(chan struct{})
 	go func() {
@@ -352,6 +371,11 @@ func (b *batchPublisher) waitSnapshotAcks(ctx context.Context) error {
 	}()
 	select {
 	case <-drained:
+		b.snapshotNackMu.Lock()
+		defer b.snapshotNackMu.Unlock()
+		if b.snapshotNackErr != nil {
+			return fmt.Errorf("snapshot batch was rejected downstream: %w", b.snapshotNackErr)
+		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -408,7 +432,7 @@ func (b *batchPublisher) FlushRemaining(ctx context.Context) error {
 }
 
 // Close signals the publisher's loop goroutine to stop and waits for it to exit.
-// TriggerHardStop cancels the HardStopCtx used by publishBatch, unblocking any
+// TriggerHardStop cancels the HardStopCtx used by the flush loop, unblocking any
 // send that is waiting on msgChan when no consumer is left.
 func (b *batchPublisher) Close() {
 	b.shutSig.TriggerSoftStop()

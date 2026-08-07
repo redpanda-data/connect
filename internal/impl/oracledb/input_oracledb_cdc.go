@@ -607,6 +607,9 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {
+			// The publisher outlives reconnects: clear any nack recorded by a
+			// previous snapshot attempt so the gate judges only this run.
+			o.publisher.resetSnapshotGate()
 			if startSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					o.log.Infof("Snapshotting stopped: %s", err)
