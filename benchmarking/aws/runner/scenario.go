@@ -438,7 +438,7 @@ func (s *Scenario) Validate() error {
 			return fmt.Errorf("bounded-dataset scenario must set dataset.expected_peak_mb_s")
 		}
 		totalBytes := s.Dataset.InitialRows * int64(s.Dataset.RowSizeBytes)
-		mbTotal := totalBytes / (1024 * 1024)
+		mbTotal := totalBytes / bytesPerMB
 		estSeconds := mbTotal / int64(s.Dataset.ExpectedPeakMBSec)
 		if estSeconds < int64(minDuration.Seconds()) {
 			return fmt.Errorf("bounded-dataset run would complete in %ds at %d MB/s — below minimum %s; increase dataset",

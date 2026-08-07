@@ -15,7 +15,7 @@ func TestParseIcebergSeries_DeltaThroughput(t *testing.T) {
 		"###timestamp=1000",
 		"total_files_size_bytes 0",
 		"###timestamp=1010",
-		"total_files_size_bytes 104857600", // +100 MiB over 10s = 10 MiB/s
+		"total_files_size_bytes 100000000", // +100 MB over 10s = 10 MB/s (decimal)
 	}, "\n")
 	pts, err := ParseIcebergSeries(strings.NewReader(dump))
 	if err != nil {

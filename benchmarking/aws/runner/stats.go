@@ -13,6 +13,21 @@ import (
 	"strconv"
 )
 
+// bytesPerMB is the ONE divisor every throughput figure in this harness uses.
+//
+// It is SI base-10, deliberately, because the benchmark processor's own log line
+// is base-10: humanize.Bytes prints "204 MB/sec" for 2.038e+08 bytes/sec. Every
+// `mb_per_sec` and `*_mb_s` field therefore means decimal MB/s, matching both the
+// field names and what Connect reports about itself.
+//
+// This was not always true. The broker- and Iceberg-side samplers divided by
+// (1 << 20) and stored MiB/s in fields named MB — so a source scenario's Connect
+// arm (summarised from the log) and its kafka_connect arm (summarised from broker
+// metrics) were 4.86% apart in Connect's favour, and result files written before
+// this was fixed still carry MiB/s on their sink and kafka_connect points. Do not
+// reintroduce a second divisor: use this constant everywhere.
+const bytesPerMB = 1_000_000
+
 // Sample is one second's snapshot of rolling stats from the benchmark processor.
 type Sample struct {
 	T         int     `json:"t"`

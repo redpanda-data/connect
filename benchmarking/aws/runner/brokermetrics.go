@@ -142,7 +142,7 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 			}
 			out[topic] = append(out[topic], TopicPoint{
 				T:           int(f.UnixTime - baseT),
-				MBPerSec:    deltaBytes / float64(interval) / (1 << 20),
+				MBPerSec:    deltaBytes / float64(interval) / bytesPerMB,
 				IntervalSec: interval,
 			})
 		}

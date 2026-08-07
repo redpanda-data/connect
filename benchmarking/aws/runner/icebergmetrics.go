@@ -21,7 +21,7 @@ import (
 //	###timestamp=<unix-seconds>
 //	total_files_size_bytes <cumulative-bytes>
 //
-// Throughput for frame i is (bytes[i]-bytes[i-1]) / (t[i]-t[i-1]) / MiB. Counter
+// Throughput for frame i is (bytes[i]-bytes[i-1]) / (t[i]-t[i-1]) / bytesPerMB. Counter
 // resets (current < previous, e.g. the table was dropped between sweep points)
 // are skipped, mirroring ParseTopicSeries.
 func ParseIcebergSeries(r io.Reader) ([]TopicPoint, error) {
@@ -92,7 +92,7 @@ func ParseIcebergSeries(r io.Reader) ([]TopicPoint, error) {
 		}
 		out = append(out, TopicPoint{
 			T:           int(cur.t - baseT),
-			MBPerSec:    delta / float64(interval) / (1 << 20),
+			MBPerSec:    delta / float64(interval) / bytesPerMB,
 			MsgPerSec:   msgPerSec,
 			IntervalSec: int(interval),
 		})

@@ -238,7 +238,7 @@ func TestMatrixRunner_EarlyAbortFiresPerEngineAtFirstPoint(t *testing.T) {
 	const icebergConnect = `###timestamp=1000
 total_files_size_bytes 0
 ###timestamp=1010
-total_files_size_bytes 524288000
+total_files_size_bytes 500000000
 `
 	fetcher := &FakeLogFetcher{
 		Contents: map[string]string{
@@ -295,7 +295,7 @@ func TestMatrixRunner_EarlyAbortFiresForLaterArmToo(t *testing.T) {
 	const icebergA0 = `###timestamp=1000
 total_files_size_bytes 0
 ###timestamp=1010
-total_files_size_bytes 524288000
+total_files_size_bytes 500000000
 `
 	fetcher := &FakeLogFetcher{
 		Contents: map[string]string{
@@ -687,14 +687,14 @@ func TestMatrixRun_PopulatesBrokerSeriesForBothEngines(t *testing.T) {
 	const rpConnect = `###timestamp=1000
 redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 0
 ###timestamp=1010
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 524288000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 500000000
 ###timestamp=1020
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 1048576000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 1000000000
 `
 	const rpKC = `###timestamp=2000
 redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_kc.public.orders"} 0
 ###timestamp=2010
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_kc.public.orders"} 314572800
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_kc.public.orders"} 300000000
 ###timestamp=2020
 redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_kc.public.orders"} 629145600
 `
@@ -735,13 +735,13 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="be
 	connectPt := points[0]
 	require.Equal(t, "connect", connectPt.Engine)
 	require.NotEmpty(t, connectPt.BrokerSeries, "connect BrokerSeries must be populated from redpanda-1-connect.txt")
-	// Connect produced 500 MiB in 10s → 50 MiB/s.
+	// Connect produced 500 MB in 10s → 50 MB/s.
 	require.InDelta(t, 50.0, connectPt.BrokerSeries[0].MBPerSec, 0.1)
 
 	kcPt := points[1]
 	require.Equal(t, "kafka_connect", kcPt.Engine)
 	require.NotEmpty(t, kcPt.BrokerSeries, "kc BrokerSeries must be populated")
-	// KC produced 300 MiB in 10s → 30 MiB/s.
+	// KC produced 300 MiB in 10s → 30 MB/s.
 	require.InDelta(t, 30.0, kcPt.BrokerSeries[0].MBPerSec, 0.1)
 	// KC's Summary should now have non-zero median (derived from broker bytes).
 	require.Greater(t, kcPt.Summary.MedianMBPerSec, 0.0, "KC Summary should be derived from broker bytes")
@@ -758,9 +758,9 @@ func TestMatrixRun_SinkDerivesSummaryFromBrokerSeries(t *testing.T) {
 	const iceberg = `###timestamp=1000
 total_files_size_bytes 0
 ###timestamp=1010
-total_files_size_bytes 524288000
+total_files_size_bytes 500000000
 ###timestamp=1020
-total_files_size_bytes 1048576000
+total_files_size_bytes 1000000000
 `
 	fetcher := &FakeLogFetcher{
 		Contents: map[string]string{
@@ -799,7 +799,7 @@ total_files_size_bytes 1048576000
 	require.Equal(t, "connect", p.Engine)
 	require.Empty(t, p.Samples, "sink Connect pipeline produces no rolling-stats samples")
 	require.NotEmpty(t, p.BrokerSeries, "sink BrokerSeries must come from the Iceberg metric series")
-	// 500 MiB committed in 10s → 50 MiB/s.
+	// 500 MB committed in 10s → 50 MB/s (decimal).
 	require.Greater(t, p.Summary.MedianMBPerSec, 0.0, "Summary derived from brokerSeries, not empty log samples")
 	require.InDelta(t, 50.0, p.Summary.MedianMBPerSec, 0.1)
 }
@@ -823,9 +823,9 @@ func TestMatrixRunner_SidecarPollsEveryStreamTableForMultiStreamArm(t *testing.T
 	const iceberg = `###timestamp=1000
 total_files_size_bytes 0
 ###timestamp=1010
-total_files_size_bytes 524288000
+total_files_size_bytes 500000000
 ###timestamp=1020
-total_files_size_bytes 1048576000
+total_files_size_bytes 1000000000
 `
 	fetcher := &FakeLogFetcher{
 		Contents: map[string]string{
@@ -877,9 +877,9 @@ func TestMatrixRunner_SidecarPollsEveryTopicTableForMultiTopicScenario(t *testin
 	const iceberg = `###timestamp=1000
 total_files_size_bytes 0
 ###timestamp=1010
-total_files_size_bytes 524288000
+total_files_size_bytes 500000000
 ###timestamp=1020
-total_files_size_bytes 1048576000
+total_files_size_bytes 1000000000
 `
 	fetcher := &FakeLogFetcher{
 		Contents: map[string]string{

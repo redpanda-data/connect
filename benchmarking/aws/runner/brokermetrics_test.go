@@ -97,9 +97,9 @@ func TestBrokerMetrics_TopicSeries_DeltasOverFrames(t *testing.T) {
 	const body = `###timestamp=1000
 redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 0
 ###timestamp=1010
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 10485760
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 10000000
 ###timestamp=1020
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 20971520
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 20000000
 `
 	series, err := ParseTopicSeries(strings.NewReader(body))
 	if err != nil {
@@ -110,7 +110,7 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1
 		t.Fatal("topic t1 missing from series map")
 	}
 	// 3 frames → 2 deltas. Each delta covers a 10s interval at
-	// 10 MiB / 10s = 1 MiB/s.
+	// 10 MB / 10s = 1 MB/s (decimal — see bytesPerMB).
 	if len(t1) != 2 {
 		t.Fatalf("expected 2 series points (one per inter-frame delta); got %d", len(t1))
 	}
