@@ -499,6 +499,62 @@ type snapshotState struct {
 	scanner       *SnapshotScanner
 	recordsRead   atomic.Int64
 	segmentsTotal int
+
+	// ackTracker gates snapshot progress persistence on downstream acks.
+	ackTracker *snapshotAckTracker
+	// ackWG counts emitted snapshot batches that have not yet been acked or
+	// nacked; the snapshot is only marked complete once it drains cleanly.
+	ackWG sync.WaitGroup
+	// nackErr records the first snapshot batch nack. auto_replay_nacks is
+	// user-toggleable, so a nack can be terminal: the completion gate must
+	// fail rather than mark the snapshot complete over undelivered items.
+	// Cleared per connection attempt (the state outlives reconnects).
+	nackMu  sync.Mutex
+	nackErr error
+}
+
+func (s *snapshotState) recordNack(err error) {
+	s.nackMu.Lock()
+	defer s.nackMu.Unlock()
+	if s.nackErr == nil {
+		s.nackErr = err
+	}
+}
+
+func (s *snapshotState) nackError() error {
+	s.nackMu.Lock()
+	defer s.nackMu.Unlock()
+	return s.nackErr
+}
+
+// resetAckGate clears any nack recorded by a previous snapshot attempt so the
+// completion gate judges only the current run. The WaitGroup is deliberately
+// left untouched — batches from a previous attempt that are still in flight
+// can yet be acked or nacked, and both must keep counting.
+func (s *snapshotState) resetAckGate() {
+	s.nackMu.Lock()
+	defer s.nackMu.Unlock()
+	s.nackErr = nil
+}
+
+// waitAcks blocks until every emitted snapshot batch has been acked or
+// nacked, or ctx is cancelled; a recorded nack fails the gate.
+func (s *snapshotState) waitAcks(ctx context.Context) error {
+	drained := make(chan struct{})
+	go func() {
+		// May outlive this call if ctx fires first; bounded by process lifetime.
+		s.ackWG.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+		if err := s.nackError(); err != nil {
+			return fmt.Errorf("snapshot batch was rejected downstream: %w", err)
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // snapshotSequenceBuffer tracks sequence numbers seen during snapshot for deduplication.
@@ -1332,21 +1388,24 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	d.snapshot.state.Store(snapshotStateInProgress)
 	d.metrics.snapshotState.Set(int64(snapshotStateInProgress))
 
-	// Initialize snapshot scanner
+	// Initialize snapshot scanner. Progress persistence is ack-gated: the
+	// tracker below persists a segment's position only once every batch at or
+	// below it has been acknowledged downstream, and the completion gate is
+	// reset per connection attempt.
+	d.snapshot.ackTracker = newSnapshotAckTracker(d.checkpointer, 10 /* persist every 10 acked batches */, d.log)
+	d.snapshot.resetAckGate()
 	d.snapshot.scanner = NewSnapshotScanner(SnapshotScannerConfig{
-		Client:             d.dynamoClient,
-		Table:              tableName,
-		Segments:           d.conf.snapshot.segments,
-		BatchSize:          d.conf.snapshot.batchSize,
-		Throttle:           d.conf.snapshot.throttle,
-		Checkpointer:       d.checkpointer,
-		CheckpointInterval: 10, // Checkpoint every 10 batches (10x cost reduction)
-		Logger:             d.log,
+		Client:    d.dynamoClient,
+		Table:     tableName,
+		Segments:  d.conf.snapshot.segments,
+		BatchSize: d.conf.snapshot.batchSize,
+		Throttle:  d.conf.snapshot.throttle,
+		Logger:    d.log,
 	})
 
 	// Set batch callback to send snapshot records to msgChan
-	d.snapshot.scanner.SetBatchCallback(func(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int) error {
-		return d.handleSnapshotBatch(ctx, items, segment, tableName)
+	d.snapshot.scanner.SetBatchCallback(func(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, lastKey map[string]dynamodbtypes.AttributeValue) error {
+		return d.handleSnapshotBatch(ctx, items, segment, tableName, lastKey)
 	})
 
 	// Set progress callback to update metrics
@@ -1354,9 +1413,14 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 		d.metrics.snapshotSegmentsActive.Set(int64(d.snapshot.scanner.ActiveSegments()))
 	})
 
-	// Set checkpoint failure callback to track failures
-	d.snapshot.scanner.SetCheckpointFailedCallback(func(_ int, _ error) {
-		d.metrics.checkpointFailures.Incr(1)
+	// Seal each segment behind its in-flight batches so Complete=true only
+	// persists after they are all acknowledged.
+	d.snapshot.scanner.SetSegmentSealedCallback(func(ctx context.Context, segment int) error {
+		if err := d.snapshot.ackTracker.SealSegment(ctx, segment); err != nil {
+			d.metrics.checkpointFailures.Incr(1)
+			return err
+		}
+		return nil
 	})
 
 	// Set segment completion callback to track scan duration
@@ -1392,6 +1456,21 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 				d.metrics.snapshotState.Set(int64(snapshotStateFailed))
 				return
 			}
+		}
+
+		// The scan has read everything, but the snapshot is only complete once
+		// every emitted batch is acknowledged downstream: marking it complete
+		// any earlier would let a crash (or a terminal nack) skip un-acked
+		// items on restart. Blocks until acks drain or soft-stop.
+		if err := d.snapshot.waitAcks(scanCtx); err != nil {
+			wrappedErr := fmt.Errorf("snapshot completion gate for table %s: %w", tableName, err)
+			d.log.Errorf("%v (the snapshot will resume from acknowledged progress on restart)", wrappedErr)
+			d.snapshot.errOnce.Do(func() {
+				d.snapshot.err = wrappedErr
+			})
+			d.snapshot.state.Store(snapshotStateFailed)
+			d.metrics.snapshotState.Set(int64(snapshotStateFailed))
+			return
 		}
 
 		// Snapshot complete
@@ -2705,8 +2784,10 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 	}
 }
 
-// handleSnapshotBatch processes a batch of items from the snapshot scan
-func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, tableName string) error {
+// handleSnapshotBatch processes a batch of items from the snapshot scan.
+// lastKey is the scan position after this batch; it is registered with the
+// segment's ordered ack tracker and persisted only once acknowledged.
+func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, tableName string, lastKey map[string]dynamodbtypes.AttributeValue) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -2762,12 +2843,19 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 		d.log.Warn("Snapshot deduplication buffer overflowed - duplicates may occur during CDC overlap")
 	}
 
-	// Track pending ack
-	d.pendingAcks.Add(1)
+	// Register with the segment's ordered ack tracker: the scan position is
+	// only persisted once this batch (and everything before it) is acked.
+	snapshot := d.snapshot
+	resolve := snapshot.ackTracker.TrackBatch(segment, lastKey, len(batch))
+	tracker := snapshot.ackTracker
 
-	// Create simple ack function for snapshot records
-	ackFunc := func(_ context.Context, err error) error {
+	// Track pending acks: the global gauge and the snapshot completion gate.
+	d.pendingAcks.Add(1)
+	snapshot.ackWG.Add(1)
+
+	ackFunc := func(ackCtx context.Context, err error) error {
 		defer d.pendingAcks.Done()
+		defer snapshot.ackWG.Done()
 
 		if d.closed.Load() {
 			d.log.Debug("Received snapshot ack after close, dropping")
@@ -2775,10 +2863,20 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 		}
 
 		if err != nil {
-			d.log.Warnf("Snapshot batch nacked from segment %d: %v", segment, err)
+			// auto_replay_nacks is user-toggleable, so a nack can be terminal.
+			// Never resolve: the segment's persisted position stays pinned
+			// before this batch, and the completion gate fails so the snapshot
+			// is not marked complete over undelivered items.
+			snapshot.recordNack(err)
+			d.log.Errorf("Snapshot batch rejected downstream (segment %d): the segment's checkpoint is pinned before this batch and the snapshot will not be marked complete, unless the batch is redelivered (auto_replay_nacks) or the pipeline restarts: %v", segment, err)
 			return err
 		}
 
+		if ackErr := tracker.Ack(ackCtx, segment, len(batch), resolve); ackErr != nil {
+			d.metrics.checkpointFailures.Incr(1)
+			d.log.Errorf("Failed to checkpoint snapshot segment %d after ack: %v", segment, ackErr)
+			return ackErr
+		}
 		return nil
 	}
 
@@ -2786,6 +2884,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	select {
 	case <-ctx.Done():
 		d.pendingAcks.Done() // Undo the Add(1) above
+		snapshot.ackWG.Done()
 		return ctx.Err()
 	case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 		d.log.Debugf("Sent snapshot batch of %d records from segment %d", len(batch), segment)
