@@ -65,10 +65,17 @@ pipeline:
       # different costume). Note the field's own docs claim it starts from the
       # current LSN; the code starts from the capture instance's start_lsn.
       stream_snapshot: false
-      # Default is 5s. At the high-vCPU points the reader briefly catches up,
-      # and a 5s sleep on every catch-up shows up as a sawtooth that craters the
-      # p5. 1s keeps the idle poll cheap without distorting the tail.
-      stream_backoff_interval: 1s
+      # MEASURED, not guessed. At 1s (2026-08-10, 1 vCPU) Connect was idle for
+      # 64% of wall clock — 36 of 100 broker samples nonzero — and captured only
+      # ~43% of offered load, because it drains up to the endLSN captured at loop
+      # start and then sleeps a full second while the lagging capture job
+      # publishes more. Its p95 was 1.8x Debezium's peak, so the deficit was duty
+      # cycle, not capacity.
+      #
+      # 500ms deliberately MATCHES Debezium's poll.interval.ms default, which the
+      # KC side runs at stock. Going lower would poll more aggressively than the
+      # comparator and hand Connect an unearned advantage.
+      stream_backoff_interval: 500ms
       checkpoint_cache: bench_checkpoint   # memory cache — the default SQL-Server-backed
                                            # cache would need a pre-existing rpcn schema
                                            # plus CREATE TABLE/PROCEDURE rights
