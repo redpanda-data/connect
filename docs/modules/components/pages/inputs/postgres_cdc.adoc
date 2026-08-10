@@ -43,7 +43,8 @@ input:
     include_transaction_markers: false
     stream_snapshot: false
     snapshot_batch_size: 1000
-    schema: public # No default (required)
+    schema: public
+    schema_pattern: ""
     tables: [] # No default (required)
     checkpoint_limit: 1024
     temporary_slot: false
@@ -73,7 +74,8 @@ input:
     include_transaction_markers: false
     stream_snapshot: false
     snapshot_batch_size: 1000
-    schema: public # No default (required)
+    schema: public
+    schema_pattern: ""
     tables: [] # No default (required)
     checkpoint_limit: 1024
     temporary_slot: false
@@ -170,7 +172,24 @@ snapshot_batch_size: 10000
 
 === `schema`
 
-The PostgreSQL schema to replicate data from. Accepts an exact schema name or a glob pattern using `*` as a wildcard to match multiple schemas.
+The PostgreSQL schema from which to replicate data.
+
+
+*Type*: `string`
+
+*Default*: `"public"`
+
+```yml
+# Examples
+
+schema: public
+
+schema: '"MyCaseSensitiveSchemaNeedingQuotes"'
+```
+
+=== `schema_pattern`
+
+The PostgreSQL schema pattern to replicate data from. Accepts an exact schema name or a glob pattern using `*` as a wildcard to match multiple schemas.
 
 When a pattern is used, all schemas whose names match the pattern are replicated using a single replication slot and publication. This is useful for multi-tenant databases where each tenant has its own schema (e.g. `tenant_*` matches `tenant_foo`, `tenant_bar`, etc.).
 
@@ -180,27 +199,28 @@ Schema pattern matching runs once at pipeline startup. Schemas created after the
 
 If `tables` is non-empty and this pattern matches no schema in the database, startup fails with an error. This field has no effect when `tables` is left empty - see `tables` below.
 
+This field is mutually exclusive with `schema`; when set, it takes over schema resolution entirely and `schema` must be left at its default.
+
 
 *Type*: `string`
 
+*Default*: `""`
 
 ```yml
 # Examples
 
-schema: public
+schema_pattern: tenant_*
 
-schema: '"MyCaseSensitiveSchemaNeedingQuotes"'
+schema_pattern: '*'
 
-schema: tenant_*
-
-schema: '*'
+schema_pattern: '"MyCaseSensitiveSchemaNeedingQuotes"'
 ```
 
 === `tables`
 
 A list of table names to include in the logical replication. Each table should be specified as a separate item.
 
-When `schema` is a glob pattern, this list is resolved against each matched schema independently: a table missing from some (but not all) of the matched schemas is skipped for those schemas only (with a warning logged), tolerating multi-tenant setups where a table hasn't been provisioned in every schema yet. A table that's missing from every matched schema, however, is treated as a configuration error (most likely a typo) and startup fails, naming the missing table.
+When `schema_pattern` is set, this list is resolved against each matched schema independently: a table missing from some (but not all) of the matched schemas is skipped for those schemas only (with a warning logged), tolerating multi-tenant setups where a table hasn't been provisioned in every schema yet. A table that's missing from every matched schema, however, is treated as a configuration error (most likely a typo) and startup fails, naming the missing table.
 
 If left empty, the underlying PostgreSQL publication is created `FOR ALL TABLES`, which replicates every table in every schema of the database, ignoring `schema`. This also disables `stream_snapshot`, since the initial snapshot is only planned for tables listed here.
 

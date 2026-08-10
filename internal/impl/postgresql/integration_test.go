@@ -1672,7 +1672,7 @@ postgres_cdc:
     dsn: %s
     slot_name: multi_schema_test_slot
     stream_snapshot: true
-    schema: tenant_*
+    schema_pattern: tenant_*
     tables:
       - events
 `, databaseURL)
@@ -1795,7 +1795,7 @@ postgres_cdc:
     dsn: %s
     slot_name: missing_table_degrade_slot
     stream_snapshot: true
-    schema: tenant_*
+    schema_pattern: tenant_*
     tables:
       - events
 `, databaseURL)
@@ -1847,7 +1847,7 @@ func TestIntegrationNoSchemasMatchedReturnsError(t *testing.T) {
 	tmpl := fmt.Sprintf(`
 dsn: %s
 slot_name: no_schema_match_slot
-schema: nonexistent_schema_zzz_*
+schema_pattern: nonexistent_schema_zzz_*
 tables:
   - events
 `, databaseURL)
@@ -1886,7 +1886,7 @@ func TestIntegrationForAllTablesIgnoresNonMatchingSchemaPattern(t *testing.T) {
 postgres_cdc:
     dsn: %s
     slot_name: for_all_tables_ignores_schema_slot
-    schema: nonexistent_schema_zzz_*
+    schema_pattern: nonexistent_schema_zzz_*
 `, databaseURL)
 
 	// FOR ALL TABLES mode disables the initial snapshot, so replication only
@@ -1994,7 +1994,7 @@ tables:
 		tmpl := fmt.Sprintf(`
 dsn: %s
 slot_name: glob_schema_total_miss_slot
-schema: tenant_*
+schema_pattern: tenant_*
 tables:
   - orders
   - ordres
@@ -2048,7 +2048,7 @@ postgres_cdc:
     dsn: %s
     slot_name: glob_schema_partial_match_slot
     stream_snapshot: true
-    schema: tenant_*
+    schema_pattern: tenant_*
     tables:
       - orders
       - ordres
@@ -2127,7 +2127,7 @@ postgres_cdc:
     dsn: %s
     slot_name: glob_schema_full_match_slot
     stream_snapshot: true
-    schema: tenant_*
+    schema_pattern: tenant_*
     tables:
       - orders
       - ordres

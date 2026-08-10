@@ -98,55 +98,72 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return nil, err
 	}
 
-	schemas, inaccessibleSchemas, err := resolveSchemas(ctx, dbConn, config.DBSchemaPattern)
-	if err != nil {
-		return nil, fmt.Errorf("resolving schema pattern %q: %w", config.DBSchemaPattern, err)
-	}
-	if len(inaccessibleSchemas) > 0 && len(config.DBTables) > 0 {
-		config.Logger.Warnf("schema pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", config.DBSchemaPattern, inaccessibleSchemas)
-	}
-	if len(schemas) == 0 && len(config.DBTables) > 0 {
-		return nil, fmt.Errorf("no schemas found matching pattern %q", config.DBSchemaPattern)
-	}
-	config.Logger.Infof("Schema pattern %q resolved to %d schema(s): %v", config.DBSchemaPattern, len(schemas), schemas)
-
-	normalizedTables := make([]string, 0, len(config.DBTables))
-	for _, table := range config.DBTables {
-		normalized, err := sanitize.NormalizePostgresIdentifier(table)
+	var tables []TableFQN
+	if config.DBSchemaPattern != "" {
+		schemas, inaccessibleSchemas, err := resolveSchemas(ctx, dbConn, config.DBSchemaPattern)
 		if err != nil {
-			return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+			return nil, fmt.Errorf("resolving schema pattern %q: %w", config.DBSchemaPattern, err)
 		}
-		normalizedTables = append(normalizedTables, normalized)
-	}
+		if len(inaccessibleSchemas) > 0 && len(config.DBTables) > 0 {
+			config.Logger.Warnf("schema pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", config.DBSchemaPattern, inaccessibleSchemas)
+		}
+		if len(schemas) == 0 && len(config.DBTables) > 0 {
+			return nil, fmt.Errorf("no schemas found matching pattern %q", config.DBSchemaPattern)
+		}
+		config.Logger.Infof("Schema pattern %q resolved to %d schema(s): %v", config.DBSchemaPattern, len(schemas), schemas)
 
-	tables := make([]TableFQN, 0, len(schemas)*len(normalizedTables))
-	foundTables := make(map[string]bool, len(normalizedTables))
-	for _, schema := range schemas {
-		existingTables, err := resolveExistingTables(ctx, dbConn, schema)
-		if err != nil {
-			return nil, fmt.Errorf("resolving tables in schema %q: %w", schema, err)
-		}
-		for _, table := range normalizedTables {
-			if _, ok := existingTables[table]; !ok {
-				config.Logger.Warnf("table %s.%s not found, skipping (schema %s matched pattern %q but does not contain this table)", schema, table, schema, config.DBSchemaPattern)
-				continue
+		normalizedTables := make([]string, 0, len(config.DBTables))
+		for _, table := range config.DBTables {
+			normalized, err := sanitize.NormalizePostgresIdentifier(table)
+			if err != nil {
+				return nil, fmt.Errorf("invalid table name %q: %w", table, err)
 			}
-			tables = append(tables, TableFQN{Schema: schema, Table: table})
-			foundTables[table] = true
+			normalizedTables = append(normalizedTables, normalized)
 		}
-	}
-	// A table must exist in at least one matched schema. Missing from some
-	// (but not all) matched schemas is tolerated above as a multi-tenant gap;
-	// missing from every matched schema is indistinguishable from a typo and
-	// must fail loudly rather than silently drop the table.
-	var missingTables []string
-	for i, table := range normalizedTables {
-		if !foundTables[table] {
-			missingTables = append(missingTables, config.DBTables[i])
+
+		tables = make([]TableFQN, 0, len(schemas)*len(normalizedTables))
+		foundTables := make(map[string]bool, len(normalizedTables))
+		for _, schema := range schemas {
+			existingTables, err := resolveExistingTables(ctx, dbConn, schema)
+			if err != nil {
+				return nil, fmt.Errorf("resolving tables in schema %q: %w", schema, err)
+			}
+			for _, table := range normalizedTables {
+				if _, ok := existingTables[table]; !ok {
+					config.Logger.Warnf("table %s.%s not found, skipping (schema %s matched pattern %q but does not contain this table)", schema, table, schema, config.DBSchemaPattern)
+					continue
+				}
+				tables = append(tables, TableFQN{Schema: schema, Table: table})
+				foundTables[table] = true
+			}
 		}
-	}
-	if len(missingTables) > 0 {
-		return nil, fmt.Errorf("table(s) %v not found in any schema matching pattern %q", missingTables, config.DBSchemaPattern)
+		// A table must exist in at least one matched schema. Missing from some
+		// (but not all) matched schemas is tolerated above as a multi-tenant gap;
+		// missing from every matched schema is indistinguishable from a typo and
+		// must fail loudly rather than silently drop the table.
+		var missingTables []string
+		for i, table := range normalizedTables {
+			if !foundTables[table] {
+				missingTables = append(missingTables, config.DBTables[i])
+			}
+		}
+		if len(missingTables) > 0 {
+			return nil, fmt.Errorf("table(s) %v not found in any schema matching pattern %q", missingTables, config.DBSchemaPattern)
+		}
+	} else {
+		schema, err := sanitize.NormalizePostgresIdentifier(config.DBSchema)
+		if err != nil {
+			return nil, fmt.Errorf("invalid schema name %q: %w", config.DBSchema, err)
+		}
+
+		tables = []TableFQN{}
+		for _, table := range config.DBTables {
+			normalized, err := sanitize.NormalizePostgresIdentifier(table)
+			if err != nil {
+				return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+			}
+			tables = append(tables, TableFQN{Schema: schema, Table: normalized})
+		}
 	}
 	batchSize := 1000
 	if config.BatchSize > 0 {

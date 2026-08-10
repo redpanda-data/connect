@@ -24,8 +24,11 @@ type Config struct {
 	DBConfig  *pgconn.Config
 	DBRawDSN  string
 	TLSConfig *tls.Config
-	// DBSchemaPattern is the schema to replicate from. Accepts an exact schema
-	// name or a glob pattern using '*' as a wildcard (e.g. "tenant_*", "*").
+	DBSchema  string
+	// DBSchemaPattern is the glob pattern used to replicate from multiple
+	// schemas at once, using '*' as a wildcard (e.g. "tenant_*", "*"). When
+	// non-empty, it takes precedence over DBSchema and schemas are resolved
+	// dynamically at stream creation time.
 	DBSchemaPattern string
 	DBTables        []string
 	// Refreshes short lived IAM auth token that is treated as a password

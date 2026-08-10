@@ -38,6 +38,7 @@ const (
 	fieldSnapshotMemSafetyFactor   = "snapshot_memory_safety_factor"
 	fieldSnapshotBatchSize         = "snapshot_batch_size"
 	fieldSchema                    = "schema"
+	fieldSchemaPattern             = "schema_pattern"
 	fieldTables                    = "tables"
 	fieldCheckpointLimit           = "checkpoint_limit"
 	fieldTemporarySlot             = "temporary_slot"
@@ -116,7 +117,13 @@ This input adds the following metadata fields to each message:
 			Example(10000).
 			Default(1000)).
 		Field(service.NewStringField(fieldSchema).
-			Description(`The PostgreSQL schema to replicate data from. Accepts an exact schema name or a glob pattern using `+"`*`"+` as a wildcard to match multiple schemas.
+			Description("The PostgreSQL schema from which to replicate data.").
+			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`).
+			Optional().
+			Default("public"),
+		).
+		Field(service.NewStringField(fieldSchemaPattern).
+			Description(`The PostgreSQL schema pattern to replicate data from. Accepts an exact schema name or a glob pattern using `+"`*`"+` as a wildcard to match multiple schemas.
 
 When a pattern is used, all schemas whose names match the pattern are replicated using a single replication slot and publication. This is useful for multi-tenant databases where each tenant has its own schema (e.g. `+"`tenant_*`"+` matches `+"`tenant_foo`"+`, `+"`tenant_bar`"+`, etc.).
 
@@ -124,13 +131,17 @@ Double-quoted identifiers are treated as exact names and do not support wildcard
 
 Schema pattern matching runs once at pipeline startup. Schemas created after the pipeline starts will not be picked up until the pipeline is restarted.
 
-If ` + "`" + fieldTables + "`" + ` is non-empty and this pattern matches no schema in the database, startup fails with an error. This field has no effect when ` + "`" + fieldTables + "`" + ` is left empty - see ` + "`" + fieldTables + "`" + ` below.`).
-			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`, "tenant_*", "*"),
+If `+"`"+fieldTables+"`"+` is non-empty and this pattern matches no schema in the database, startup fails with an error. This field has no effect when `+"`"+fieldTables+"`"+` is left empty - see `+"`"+fieldTables+"`"+` below.
+
+This field is mutually exclusive with `+"`"+fieldSchema+"`"+`; when set, it takes over schema resolution entirely and `+"`"+fieldSchema+"`"+` must be left at its default.`).
+			Examples("tenant_*", "*", `"MyCaseSensitiveSchemaNeedingQuotes"`).
+			Optional().
+			Default(""),
 		).
 		Field(service.NewStringListField(fieldTables).
 			Description(`A list of table names to include in the logical replication. Each table should be specified as a separate item.
 
-When ` + "`schema`" + ` is a glob pattern, this list is resolved against each matched schema independently: a table missing from some (but not all) of the matched schemas is skipped for those schemas only (with a warning logged), tolerating multi-tenant setups where a table hasn't been provisioned in every schema yet. A table that's missing from every matched schema, however, is treated as a configuration error (most likely a typo) and startup fails, naming the missing table.
+When ` + "`schema_pattern`" + ` is set, this list is resolved against each matched schema independently: a table missing from some (but not all) of the matched schemas is skipped for those schemas only (with a warning logged), tolerating multi-tenant setups where a table hasn't been provisioned in every schema yet. A table that's missing from every matched schema, however, is treated as a configuration error (most likely a typo) and startup fails, naming the missing table.
 
 If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
@@ -231,6 +242,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		dbSlotName                string
 		temporarySlot             bool
 		schema                    string
+		schemaPattern             string
 		tables                    []string
 		streamSnapshot            bool
 		includeTxnMarkers         bool
@@ -275,14 +287,23 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	if schema, err = conf.FieldString(fieldSchema); err != nil {
 		return nil, err
 	}
-	if err = validateSchemaPattern(schema); err != nil {
-		return nil, fmt.Errorf("invalid schema: %w", err)
+
+	if schemaPattern, err = conf.FieldString(fieldSchemaPattern); err != nil {
+		return nil, err
 	}
-	// Normalize unquoted patterns to lower-case: PostgreSQL folds unquoted
-	// identifiers at creation time, so TENANT_* and tenant_* resolve identically.
-	// Normalizing early avoids silent case-folding surprises in resolveSchemas.
-	if !strings.HasPrefix(schema, `"`) {
-		schema = strings.ToLower(schema)
+	if schemaPattern != "" {
+		if schema != "public" {
+			return nil, errors.New("schema and schema_pattern are mutually exclusive")
+		}
+		if err = validateSchemaPattern(schemaPattern); err != nil {
+			return nil, fmt.Errorf("invalid schema_pattern: %w", err)
+		}
+		// Normalize unquoted patterns to lower-case: PostgreSQL folds unquoted
+		// identifiers at creation time, so TENANT_* and tenant_* resolve identically.
+		// Normalizing early avoids silent case-folding surprises in resolveSchemas.
+		if !strings.HasPrefix(schemaPattern, `"`) {
+			schemaPattern = strings.ToLower(schemaPattern)
+		}
 	}
 
 	if tables, err = conf.FieldStringList(fieldTables); err != nil {
@@ -363,7 +384,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			DBConfig:         pgConnConfig,
 			TLSConfig:        pgConnConfig.TLSConfig,
 			DBRawDSN:         dsn,
-			DBSchemaPattern:  schema,
+			DBSchema:         schema,
+			DBSchemaPattern:  schemaPattern,
 			DBTables:         tables,
 			RefreshAuthToken: iamAuthTokenBuilder,
 
