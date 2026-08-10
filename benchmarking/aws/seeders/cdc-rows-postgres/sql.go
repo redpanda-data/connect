@@ -67,10 +67,10 @@ func ensureTable(ctx context.Context, pool *pgxpool.Pool, table string, rowSize 
 	return nil
 }
 
-func bulkInsert(ctx context.Context, pool *pgxpool.Pool, table string, rows int64, rowSize int) error {
+func bulkInsert(ctx context.Context, pgPool *pgxpool.Pool, table string, rows int64, rowSize int) error {
 	const workers = 16
 	rowsPerWorker := rows / workers
-	payload := randomPayload(rowSize)
+	pool := randomPayloadPool(rowSize, payloadPoolSize)
 	start := time.Now()
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers)
@@ -78,10 +78,11 @@ func bulkInsert(ctx context.Context, pool *pgxpool.Pool, table string, rows int6
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			batch := strings.Repeat("(NOW(),$1),", 1000)
-			batch = strings.TrimSuffix(batch, ",")
-			stmt := fmt.Sprintf("INSERT INTO %s (created_at, payload) VALUES %s", table, batch)
-			conn, err := pool.Acquire(ctx)
+			const batchSize = 1000
+			stmt := fmt.Sprintf("INSERT INTO %s (created_at, payload) VALUES %s", table, valuesList(batchSize))
+			args := make([]any, batchSize)
+			cursor := 0
+			conn, err := pgPool.Acquire(ctx)
 			if err != nil {
 				errCh <- err
 				return
@@ -89,7 +90,8 @@ func bulkInsert(ctx context.Context, pool *pgxpool.Pool, table string, rows int6
 			defer conn.Release()
 			done := int64(0)
 			for done < rowsPerWorker {
-				if _, err := conn.Exec(ctx, stmt, payload); err != nil {
+				fillArgs(args, pool, &cursor)
+				if _, err := conn.Exec(ctx, stmt, args...); err != nil {
 					errCh <- err
 					return
 				}
@@ -122,11 +124,11 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 		return err
 	}
 	cfg.MaxConns = int32(workers)
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	pgPool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return err
 	}
-	defer pool.Close()
+	defer pgPool.Close()
 
 	perWorkerPer100ms := rate / workers / 10
 	if perWorkerPer100ms < 1 {
@@ -140,9 +142,12 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 		workerIdx := w
 		go func() {
 			defer wg.Done()
-			payload := randomPayload(rowSize)
-			batch := strings.Repeat("(NOW(),$1),", perWorkerPer100ms)
-			batch = strings.TrimSuffix(batch, ",")
+			// Distinct payloads (built once) so change events aren't trivially
+			// compressible — see payloadPoolSize.
+			pool := randomPayloadPool(rowSize, payloadPoolSize)
+			cursor := 0
+			batch := valuesList(perWorkerPer100ms)
+			args := make([]any, perWorkerPer100ms)
 			ticker := time.NewTicker(100 * time.Millisecond)
 			defer ticker.Stop()
 			tIdx := workerIdx
@@ -159,7 +164,8 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 					table := tables[tIdx%len(tables)]
 					tIdx++
 					stmt := fmt.Sprintf("INSERT INTO %s (created_at, payload) VALUES %s", table, batch)
-					if _, err := pool.Exec(ctx, stmt, payload); err != nil {
+					fillArgs(args, pool, &cursor)
+					if _, err := pgPool.Exec(ctx, stmt, args...); err != nil {
 						errCh <- err
 						return
 					}
@@ -175,6 +181,53 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 		}
 	}
 	return nil
+}
+
+// payloadPoolSize is the number of distinct random payloads cycled per worker.
+//
+// Ported from cdc-rows-mongodb, the only seeder that originally had this right.
+// Reusing ONE identical payload for every row makes each producer batch
+// trivially compressible, and that alone accounted for the 11-17x gap between
+// Connect's self-reported throughput and the broker's byte counters across the
+// postgres, mysql, oracle and sqlserver benches. Mongo's calibration note is the
+// authority on the size: 4096 comfortably exceeds one compression batch, where
+// 1024 still left ~1.5x compressible.
+const payloadPoolSize = 4096
+
+// valuesList builds a multi-row VALUES clause with ONE PLACEHOLDER PER ROW:
+// (NOW(),$1),(NOW(),$2),...,(NOW(),$n)
+//
+// It used to repeat "$1" n times, which only worked because every row carried an
+// identical payload. Distinct payloads need distinct placeholders. Postgres
+// allows 65535 parameters per statement, so n=1000 is far inside the limit.
+func valuesList(n int) string {
+	var sb strings.Builder
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		fmt.Fprintf(&sb, "(NOW(),$%d)", i+1)
+	}
+	return sb.String()
+}
+
+// fillArgs refills args from the pool, advancing the cursor. Refilling every
+// batch matters: filling once would make each batch byte-identical to the last,
+// which compresses just as well as a single repeated payload did.
+func fillArgs(args []any, pool []string, cursor *int) {
+	for i := range args {
+		args[i] = pool[*cursor%len(pool)]
+		*cursor++
+	}
+}
+
+// randomPayloadPool builds n distinct random payloads of ~size bytes.
+func randomPayloadPool(size, n int) []string {
+	pool := make([]string, n)
+	for i := range pool {
+		pool[i] = randomPayload(size)
+	}
+	return pool
 }
 
 func randomPayload(size int) string {

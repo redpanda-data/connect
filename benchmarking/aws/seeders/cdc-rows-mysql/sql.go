@@ -86,7 +86,7 @@ func bulkInsert(ctx context.Context, db *sql.DB, table string, rows int64, rowSi
 		// ran, so the table exists but stays empty.
 		return nil
 	}
-	payload := randomPayload(rowSize)
+	pool := randomPayloadPool(rowSize, payloadPoolSize)
 	start := time.Now()
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers)
@@ -99,11 +99,17 @@ func bulkInsert(ctx context.Context, db *sql.DB, table string, rows int64, rowSi
 			batch = strings.TrimSuffix(batch, ",")
 			stmt := fmt.Sprintf("INSERT INTO %s (created_at, payload) VALUES %s", table, batch)
 			args := make([]any, batchSize)
-			for i := range args {
-				args[i] = payload
-			}
+			cursor := 0
 			done := int64(0)
 			for done < rowsPerWorker {
+				// Refill from the pool every batch, advancing the cursor.
+				// Filling args ONCE would make every batch byte-identical to the
+				// last, which compresses just as well as a single repeated
+				// payload did — see payloadPoolSize.
+				for i := range args {
+					args[i] = pool[cursor%len(pool)]
+					cursor++
+				}
 				if _, err := db.ExecContext(ctx, stmt, args...); err != nil {
 					errCh <- err
 					return
@@ -147,13 +153,14 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 		workerIdx := w
 		go func() {
 			defer wg.Done()
-			payload := randomPayload(rowSize)
+			// Distinct payloads (built once) so change events aren't trivially
+			// compressible — see payloadPoolSize. args is refilled per tick from
+			// an advancing cursor, not once up front.
+			pool := randomPayloadPool(rowSize, payloadPoolSize)
+			cursor := 0
 			batch := strings.Repeat("(NOW(6),?),", perWorkerPer100ms)
 			batch = strings.TrimSuffix(batch, ",")
 			args := make([]any, perWorkerPer100ms)
-			for i := range args {
-				args[i] = payload
-			}
 			ticker := time.NewTicker(100 * time.Millisecond)
 			defer ticker.Stop()
 			tIdx := workerIdx
@@ -169,6 +176,10 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 					}
 					table := tables[tIdx%len(tables)]
 					tIdx++
+					for i := range args {
+						args[i] = pool[cursor%len(pool)]
+						cursor++
+					}
 					stmt := fmt.Sprintf("INSERT INTO %s (created_at, payload) VALUES %s", table, batch)
 					if _, err := db.ExecContext(ctx, stmt, args...); err != nil {
 						errCh <- err
@@ -186,6 +197,26 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 		}
 	}
 	return nil
+}
+
+// payloadPoolSize is the number of distinct random payloads cycled per worker.
+//
+// Ported from cdc-rows-mongodb, the only seeder that originally had this right.
+// Reusing ONE identical payload for every row makes each producer batch
+// trivially compressible, and that alone accounted for the 11-17x gap between
+// Connect's self-reported throughput and the broker's byte counters across the
+// postgres, mysql, oracle and sqlserver benches. Mongo's calibration note is the
+// authority on the size: 4096 comfortably exceeds one compression batch, where
+// 1024 still left ~1.5x compressible.
+const payloadPoolSize = 4096
+
+// randomPayloadPool builds n distinct random payloads of ~size bytes.
+func randomPayloadPool(size, n int) []string {
+	pool := make([]string, n)
+	for i := range pool {
+		pool[i] = randomPayload(size)
+	}
+	return pool
 }
 
 func randomPayload(size int) string {
