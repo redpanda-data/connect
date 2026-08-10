@@ -305,6 +305,7 @@ func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.Mes
 					if isSnapshotBatch {
 						b.recordSnapshotNack(err)
 					}
+					b.log.Errorf("Batch rejected downstream (snapshot=%v, checkpoint LSN '%s'): the checkpoint is now pinned before this batch and the input will stall once checkpoint_limit is reached, unless the batch is redelivered (auto_replay_nacks) or the pipeline restarts: %v", isSnapshotBatch, replication.LSN(checkpointLSN), err)
 					return err
 				}
 				lsn := resolveFn()
