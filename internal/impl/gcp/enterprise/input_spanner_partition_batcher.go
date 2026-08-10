@@ -105,10 +105,6 @@ func (s *spannerPartitionBatchIter) Err() error {
 	return s.err
 }
 
-// spannerCheckpointCap bounds the number of in-flight (unacked) batches
-// tracked per partition; Track blocks once reached, applying backpressure.
-const spannerCheckpointCap = 1024
-
 type spannerPartitionBatcher struct {
 	batcher *service.Batcher
 	last    *changestreams.DataChangeRecord
@@ -188,6 +184,9 @@ func (s *spannerPartitionBatcher) Close(ctx context.Context) error {
 type spannerPartitionBatcherFactory struct {
 	batching service.BatchPolicy
 	res      *service.Resources
+	// checkpointLimit caps in-flight (unacknowledged) messages tracked per
+	// partition; Track blocks once reached, applying backpressure.
+	checkpointLimit int
 
 	mu         sync.RWMutex
 	partitions map[string]*spannerPartitionBatcher
@@ -196,11 +195,34 @@ type spannerPartitionBatcherFactory struct {
 func newSpannerPartitionBatcherFactory(
 	batching service.BatchPolicy,
 	res *service.Resources,
+	checkpointLimit int,
 ) *spannerPartitionBatcherFactory {
+	if checkpointLimit <= 0 {
+		checkpointLimit = 1024
+	}
 	return &spannerPartitionBatcherFactory{
-		batching:   batching,
-		res:        res,
-		partitions: make(map[string]*spannerPartitionBatcher),
+		batching:        batching,
+		res:             res,
+		checkpointLimit: checkpointLimit,
+		partitions:      make(map[string]*spannerPartitionBatcher),
+	}
+}
+
+// Reset discards every cached partition batcher, closing each one (stopping
+// its period timer and closing its service.Batcher). Used on reconnect so no
+// stale rows or ack state leak into the new session; the factory pointer is
+// never swapped because straggler goroutines from the previous session may
+// still hold it.
+func (f *spannerPartitionBatcherFactory) Reset(ctx context.Context) {
+	f.mu.Lock()
+	old := f.partitions
+	f.partitions = make(map[string]*spannerPartitionBatcher)
+	f.mu.Unlock()
+
+	for token, spb := range old {
+		if err := spb.Close(ctx); err != nil {
+			f.res.Logger().Debugf("%s: closing discarded partition batcher: %v", token, err)
+		}
 	}
 }
 
@@ -215,15 +237,21 @@ func (f *spannerPartitionBatcherFactory) forPartition(partitionToken string) (*s
 			return nil, false, err
 		}
 
-		spb = &spannerPartitionBatcher{
+		newSpb := &spannerPartitionBatcher{
 			batcher: b,
-			cp:      checkpoint.NewCapped[time.Time](spannerCheckpointCap),
-			rm: func() {
-				f.mu.Lock()
-				delete(f.partitions, partitionToken)
-				f.mu.Unlock()
-			},
+			cp:      checkpoint.NewCapped[time.Time](int64(f.checkpointLimit)),
 		}
+		// rm removes only this exact instance: after a Reset, a new session's
+		// batcher may occupy the same token and must not be evicted by the
+		// discarded one's Close.
+		newSpb.rm = func() {
+			f.mu.Lock()
+			if f.partitions[partitionToken] == newSpb {
+				delete(f.partitions, partitionToken)
+			}
+			f.mu.Unlock()
+		}
+		spb = newSpb
 		if d, ok := spb.batcher.UntilNext(); ok {
 			spb.period = time.NewTimer(d)
 		}
