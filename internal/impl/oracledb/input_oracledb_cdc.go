@@ -632,7 +632,11 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 				return
 			}
 			if err = o.publisher.waitSnapshotAcks(softCtx); err != nil {
-				o.log.Infof("Interrupted while waiting for snapshot acknowledgements. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					o.log.Infof("Interrupted while waiting for snapshot acknowledgements. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				} else {
+					o.log.Errorf("Snapshot batch was rejected downstream. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				}
 				o.stopSig.TriggerHasStopped()
 				return
 			}
