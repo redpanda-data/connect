@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -54,11 +55,36 @@ type batchPublisher struct {
 	snapshotNackErr error
 
 	// pendingCheckpointLSN mirrors the CheckpointLSN of the most recently
-	// added message: the start LSN of the last transaction whose rows are all
-	// published, the only value safe to persist as a resume position. Guarded
-	// by batcherMu, so at flush time it always belongs to the flushed batch's
-	// last message.
+	// added message (or a stronger drained-window LSN, see CheckpointWindow):
+	// the start LSN of the last transaction whose rows are all published, the
+	// only value safe to persist as a resume position. Guarded by batcherMu,
+	// so at flush time it always belongs to the flushed batch's last message.
 	pendingCheckpointLSN replication.LSN
+	// buffered counts messages currently held by the batcher (guarded by
+	// batcherMu). CheckpointWindow uses it to decide between deferring the
+	// window checkpoint to the buffered batch and registering a marker.
+	buffered int
+
+	// onTerminalNack, when set, is invoked once a batch is rejected
+	// downstream: a nack pins the ordered tracker, so the input must restart
+	// (with a fresh publisher) to resume from the last durable LSN.
+	onTerminalNack func(error)
+	// sealed marks a publisher that has been replaced by a reconnect. Late
+	// acks from its session must not persist checkpoints (they could regress
+	// the new session's positions) nor trigger restarts.
+	sealed atomic.Bool
+}
+
+// seal marks the publisher as replaced; see the sealed field.
+func (b *batchPublisher) seal() {
+	b.sealed.Store(true)
+}
+
+// Close stops the publisher's flush loop and waits for it to exit; the
+// batcher is closed by the loop's defer.
+func (b *batchPublisher) Close() {
+	b.shutSig.TriggerSoftStop()
+	<-b.shutSig.HasStoppedChan()
 }
 
 func (b *batchPublisher) recordSnapshotNack(err error) {
@@ -169,6 +195,7 @@ func (p *batchPublisher) loop() {
 				if sendBatch, _ = p.batcher.Flush(closeAtLeisureCtx); len(sendBatch) == 0 {
 					return
 				}
+				p.buffered = 0
 				tracked, trackErr = p.trackBatchLocked(closeAtLeisureCtx, sendBatch)
 			}()
 			if trackErr != nil {
@@ -237,8 +264,11 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	if b.batcher.Add(msg) {
 		var flushedBatch []*service.Message
 		if flushedBatch, err = b.batcher.Flush(ctx); err == nil && len(flushedBatch) > 0 {
+			b.buffered = 0
 			tracked, err = b.trackBatchLocked(ctx, flushedBatch)
 		}
+	} else {
+		b.buffered++
 	}
 	b.batcherMu.Unlock()
 	if err != nil {
@@ -301,12 +331,27 @@ func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.Mes
 					// terminal. Never resolve: the checkpoint stays pinned
 					// before this batch so nothing can be persisted past its
 					// undelivered rows. Snapshot nacks additionally fail the
-					// handoff gate so the post-snapshot LSN is not persisted.
+					// handoff gate so the post-snapshot LSN is not persisted,
+					// and the input restarts with a fresh tracker to resume
+					// from the last durable LSN (the pinned slot would
+					// otherwise wedge checkpointing for the process lifetime).
 					if isSnapshotBatch {
 						b.recordSnapshotNack(err)
 					}
-					b.log.Errorf("Batch rejected downstream (snapshot=%v, checkpoint LSN '%s'): the checkpoint is now pinned before this batch and the input will stall once checkpoint_limit is reached, unless the batch is redelivered (auto_replay_nacks) or the pipeline restarts: %v", isSnapshotBatch, replication.LSN(checkpointLSN), err)
+					if b.sealed.Load() {
+						return err
+					}
+					b.log.Errorf("Batch rejected downstream (snapshot=%v, checkpoint LSN '%s'): restarting to redeliver from the last durable checkpoint: %v", isSnapshotBatch, replication.LSN(checkpointLSN), err)
+					if b.onTerminalNack != nil {
+						b.onTerminalNack(err)
+					}
 					return err
+				}
+				if b.sealed.Load() {
+					// A late ack from a replaced session: resolving its own
+					// tracker is harmless, but persisting could regress the
+					// new session's checkpoints.
+					return nil
 				}
 				lsn := resolveFn()
 				if lsn != nil && len(*lsn) != 0 {
@@ -358,21 +403,23 @@ func (b *batchPublisher) waitSnapshotAcks(ctx context.Context) error {
 	}
 }
 
-// CheckpointWindow registers an empty marker slot carrying lsn with the
-// ordered tracker, after flushing any partial batch belonging to the window.
-// The marker resolves immediately, so lsn is persisted as soon as every batch
-// published before it has been acked — giving the stream an exact resume
-// position at each drained polling window instead of lagging one transaction
-// behind (which would re-deliver the final transaction of a burst on every
-// restart).
+// CheckpointWindow records that every transaction up to and including lsn is
+// fully published (a polling window drained), giving the stream an exact
+// resume position instead of lagging one transaction behind (which would
+// re-deliver the final transaction of a burst on every restart).
+//
+// The user's batching policy stays in charge of batch sizes: if rows from the
+// window are still buffered, the window-end LSN simply becomes their batch's
+// checkpoint payload (safe, and stronger than the last row's transaction
+// boundary). Only when the batcher is empty is an immediately-resolved marker
+// slot registered, so lsn persists once every published batch is acked.
 func (b *batchPublisher) CheckpointWindow(ctx context.Context, lsn replication.LSN) error {
-	// Flush buffered rows first: they belong to the window, so the marker
-	// must be tracked after them.
-	if err := b.flushCurrent(ctx); err != nil {
-		return fmt.Errorf("flushing window remainder: %w", err)
-	}
-
 	b.batcherMu.Lock()
+	if b.buffered > 0 {
+		b.pendingCheckpointLSN = lsn
+		b.batcherMu.Unlock()
+		return nil
+	}
 	resolveFn, err := b.checkpoint.Track(ctx, lsn, 1)
 	b.batcherMu.Unlock()
 	if err != nil {
@@ -399,6 +446,7 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 	b.batcherMu.Lock()
 	remaining, err := b.batcher.Flush(ctx)
 	if err == nil && len(remaining) > 0 {
+		b.buffered = 0
 		tracked, err = b.trackBatchLocked(ctx, remaining)
 	}
 	b.batcherMu.Unlock()

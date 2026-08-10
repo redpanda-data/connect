@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -229,6 +230,79 @@ func TestCheckpointWindow(t *testing.T) {
 		nackErr := errors.New("downstream failure")
 		require.ErrorIs(t, am.ackFn(ctx, nackErr), nackErr)
 		require.Empty(t, cachedLSNs(), "the window end must never persist past a nacked batch")
+	})
+}
+
+func TestCheckpointWindowDefersToBufferedBatch(t *testing.T) {
+	ctx := t.Context()
+	// Count=100 keeps published events buffered: the window checkpoint must
+	// ride on the eventual batch instead of forcing a flush (which would
+	// override the user's batching policy).
+	publisher, cachedLSNs := newTestBatchPublisherWithCount(t, 100)
+
+	require.NoError(t, publisher.Publish(ctx, streamingEvent("00000042", "")))
+	require.NoError(t, publisher.CheckpointWindow(ctx, replication.LSN("00000042")))
+	require.Empty(t, cachedLSNs(), "a deferred window checkpoint must not persist before its batch is acked")
+
+	// No batch may have been force-flushed by CheckpointWindow.
+	select {
+	case m := <-publisher.msgs():
+		t.Fatalf("CheckpointWindow force-flushed a batch of %d messages, overriding the batching policy", len(m.msg))
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// When the batch eventually flushes and acks, it carries the window LSN.
+	got := make(chan asyncMessage, 1)
+	go func() { got <- <-publisher.msgs() }()
+	require.NoError(t, publisher.flushCurrent(ctx))
+	var am asyncMessage
+	select {
+	case am = <-got:
+	case <-time.After(5 * time.Second):
+		t.Fatal("buffered batch was never flushed")
+	}
+	require.NoError(t, am.ackFn(ctx, nil))
+
+	lsns := cachedLSNs()
+	require.Len(t, lsns, 1)
+	require.Equal(t, "00000042", string(lsns[0]), "the drained-window LSN must ride on the buffered batch's checkpoint")
+}
+
+func TestTerminalNack(t *testing.T) {
+	t.Run("invokes onTerminalNack so the input can restart", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedLSNs := newTestBatchPublisher(t)
+
+		var got atomic.Value
+		publisher.onTerminalNack = func(err error) { got.Store(err) }
+
+		am := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", "00000041"))
+		nackErr := errors.New("downstream failure")
+		require.ErrorIs(t, am.ackFn(ctx, nackErr), nackErr)
+
+		stored, _ := got.Load().(error)
+		require.ErrorIs(t, stored, nackErr)
+		require.Empty(t, cachedLSNs())
+	})
+
+	t.Run("a sealed publisher neither persists nor restarts", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedLSNs := newTestBatchPublisher(t)
+
+		restarted := false
+		publisher.onTerminalNack = func(error) { restarted = true }
+
+		am1 := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", "00000041"))
+		am2 := publishAndReceive(t, ctx, publisher, streamingEvent("00000043", "00000042"))
+		publisher.seal()
+
+		// Late ack from a replaced session: must not persist.
+		require.NoError(t, am1.ackFn(ctx, nil))
+		require.Empty(t, cachedLSNs(), "a sealed publisher must not persist checkpoints")
+
+		// Late nack: must not trigger a restart of the new session.
+		require.Error(t, am2.ackFn(ctx, errors.New("late failure")))
+		require.False(t, restarted, "a sealed publisher must not trigger restarts")
 	})
 }
 
