@@ -275,6 +275,97 @@ pg_stream:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
+// TestIntegrationPostgresSnapshotNackFailsBarrier verifies that a downstream
+// rejection (nack) of a snapshot batch with auto_replay_nacks disabled fails
+// the promotion barrier instead of being treated like an ack: the replication
+// slot must not be promoted over undelivered rows. The input restarts itself,
+// re-runs the snapshot, and once a clean run is fully acked the slot is
+// promoted and every row has been delivered. See CON-504.
+func TestIntegrationPostgresSnapshotNackFailsBarrier(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	const rowCount = 5
+	for i := range rowCount {
+		f := GetFakeFlightRecord()
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+
+	// batching.count == rowCount keeps the whole snapshot in one batch, so a
+	// single nack rejects the entire snapshot delivery.
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_snapshot_nack_barrier
+    stream_snapshot: true
+    snapshot_batch_size: 1000
+    auto_replay_nacks: false
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+    batching:
+      count: %d
+      period: 1h
+`, databaseURL, rowCount)
+
+	// The consumer nacks the FIRST snapshot batch it sees (terminal, since
+	// auto_replay_nacks is off), then acks everything afterwards. The input
+	// must restart without promoting the slot and re-run the snapshot; the
+	// second, clean run promotes and completes.
+	var (
+		mu       sync.Mutex
+		nacked   bool
+		reads    int
+		promoted = func() bool {
+			var n int
+			if err := db.QueryRow(`SELECT count(*) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_nack_barrier'`).Scan(&n); err != nil {
+				return false
+			}
+			return n == 1
+		}
+	)
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, builder.AddInputYAML(template))
+	require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if !nacked {
+			nacked = true
+			// The permanent slot must not exist while the snapshot is being
+			// rejected - it is only created by promotion after a fully-acked
+			// snapshot.
+			require.False(t, promoted(), "replication slot must not be promoted before the nacked snapshot is cleanly re-delivered")
+			return errors.New("simulated downstream rejection")
+		}
+		for _, msg := range mb {
+			if op, _ := msg.MetaGet("operation"); op == "read" {
+				reads++
+			}
+		}
+		return nil
+	}))
+	stream, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() { _ = stream.Run(t.Context()) }()
+
+	// The nack must not lose anything: the snapshot re-runs and a clean pass
+	// delivers every row, after which the slot is promoted.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		r := reads
+		n := nacked
+		mu.Unlock()
+		assert.True(c, n, "the first snapshot batch was never delivered")
+		assert.Equal(c, rowCount, r, "the snapshot should have re-run and re-delivered every row after the nack")
+		assert.True(c, promoted(), "the replication slot should be promoted once a clean snapshot run is fully acked")
+	}, 5*time.Minute, 500*time.Millisecond)
+	require.NoError(t, stream.StopWithin(30*time.Second))
+}
+
 // TestIntegrationPostgresSnapshotAckBarrier verifies that a crash during the
 // snapshot->stream handoff (after snapshot rows are emitted but before they are
 // acknowledged) does not lose data: because the replication slot is only

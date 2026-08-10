@@ -418,9 +418,41 @@ type pgStreamInput struct {
 	// acknowledged. The snapshot->stream handoff blocks until it drains so the
 	// replication slot is not promoted before snapshot rows are durable.
 	snapshotAckWG sync.WaitGroup
+	// snapshotNackErr records the first snapshot batch nack. auto_replay_nacks
+	// is user-toggleable, so a nack can be terminal: the barrier must fail
+	// rather than promote the replication slot over undelivered rows. Cleared
+	// per connection attempt (the input outlives reconnects).
+	snapshotNackMu  sync.Mutex
+	snapshotNackErr error
 
 	// IAM authentication fields
 	iamAuthEnabled bool
+}
+
+func (p *pgStreamInput) recordSnapshotNack(err error) {
+	p.snapshotNackMu.Lock()
+	defer p.snapshotNackMu.Unlock()
+	if p.snapshotNackErr == nil {
+		p.snapshotNackErr = err
+	}
+}
+
+func (p *pgStreamInput) snapshotNackError() error {
+	p.snapshotNackMu.Lock()
+	defer p.snapshotNackMu.Unlock()
+	return p.snapshotNackErr
+}
+
+// resetSnapshotGate clears any nack recorded by a previous connection attempt
+// so the promotion barrier judges only the current run: the input outlives
+// reconnects, and a stale error would fail every retry even after a clean
+// re-run. The WaitGroup is deliberately left untouched — batches from a
+// previous attempt that are still in flight can yet be acked or nacked, and
+// both must keep counting.
+func (p *pgStreamInput) resetSnapshotGate() {
+	p.snapshotNackMu.Lock()
+	defer p.snapshotNackMu.Unlock()
+	p.snapshotNackErr = nil
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -430,6 +462,10 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 			return fmt.Errorf("unable to generate IAM auth token: %w", err)
 		}
 	}
+
+	// The input outlives reconnects: clear any nack recorded by a previous
+	// snapshot attempt so the promotion barrier judges only this run.
+	p.resetSnapshotGate()
 
 	pgStream, err := pglogicalstream.NewPgStream(ctx, p.streamConfig)
 	if err != nil {
@@ -518,6 +554,16 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				}()
 				select {
 				case <-drained:
+					if nackErr := p.snapshotNackError(); nackErr != nil {
+						// A snapshot batch was rejected downstream and
+						// auto_replay_nacks may be disabled: promoting the slot
+						// would skip the rejected rows forever. Restart instead;
+						// the temporary slot is discarded and the snapshot
+						// re-runs.
+						p.logger.Errorf("Snapshot batch was rejected downstream, restarting without promoting the replication slot (the snapshot will re-run): %v", nackErr)
+						p.stopSig.TriggerSoftStop()
+						break
+					}
 					pgStream.MarkSnapshotAcknowledged()
 				case <-p.stopSig.SoftStopChan():
 				}
@@ -605,9 +651,21 @@ func (p *pgStreamInput) flushBatch(
 	// in the read loop).
 	isSnapshot := lsn == nil
 
-	ackFn := func(ctx context.Context, _ error) error {
+	ackFn := func(ctx context.Context, err error) error {
 		if isSnapshot {
 			defer p.snapshotAckWG.Done()
+		}
+		if err != nil {
+			// auto_replay_nacks is user-toggleable, so a nack can be terminal.
+			// Never resolve: the checkpoint stays pinned before this batch so
+			// no LSN can be acknowledged past its undelivered rows. Snapshot
+			// nacks additionally fail the promotion barrier so the replication
+			// slot is not promoted and the snapshot re-runs on restart.
+			if isSnapshot {
+				p.recordSnapshotNack(err)
+			}
+			p.logger.Errorf("Batch rejected downstream (snapshot=%v): the checkpoint is now pinned before this batch and the input will stall once checkpoint_limit is reached, unless the batch is redelivered (auto_replay_nacks) or the pipeline restarts: %v", isSnapshot, err)
+			return err
 		}
 		maxOffset := resolveFn()
 		if maxOffset == nil {
@@ -617,7 +675,7 @@ func (p *pgStreamInput) flushBatch(
 		if maxLSN == nil {
 			return nil
 		}
-		if err = pgStream.AckLSN(ctx, *maxLSN); err != nil {
+		if err := pgStream.AckLSN(ctx, *maxLSN); err != nil {
 			return fmt.Errorf("unable to ack LSN to postgres: %w", err)
 		}
 		return nil
