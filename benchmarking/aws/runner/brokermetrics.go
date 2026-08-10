@@ -93,6 +93,65 @@ func extractTopicProduceBytes(body string) (map[string]float64, error) {
 	return out, scanner.Err()
 }
 
+// extractTopicProduceRecords scans a /public_metrics snapshot body for
+// redpanda_kafka_records_produced_total{topic=...} counter samples and returns
+// the latest value per topic.
+//
+// This is the COMPRESSION-INDEPENDENT throughput metric, and it is the only
+// basis on which Connect and Kafka Connect can be fairly compared.
+//
+// Byte-based comparison is confounded twice over. First, the two engines'
+// headline numbers are read at different points: Connect's comes from its own
+// rolling-stats log (uncompressed logical message sizes) while KC's is derived
+// from broker produce-request bytes (compressed, on the wire). Second, the two
+// producers don't share compression settings. The gap is large: across the
+// suite Connect's headline runs 11-17x above its own broker byte series on
+// postgres, mysql, oracle and sqlserver — and only ~1.1x on mongodb, whose
+// seeder is the one that emits DISTINCT row payloads (randomPayloadPool)
+// instead of reusing a single identical payload for every row. Identical rows
+// compress enormously; that ratio, not a throughput difference, is what the
+// byte comparison was measuring.
+//
+// Record counts are immune to all of it: one row in, one record out.
+//
+// Same label shape and exclusions as extractTopicProduceBytes, and likewise
+// summed across the per-broker bodies concatenated into a single frame.
+// records_fetched_total is deliberately NOT read — that is consume-side.
+func extractTopicProduceRecords(body string) (map[string]float64, error) {
+	out := map[string]float64{}
+	scanner := bufio.NewScanner(strings.NewReader(body))
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if !strings.HasPrefix(line, "redpanda_kafka_records_produced_total{") {
+			continue
+		}
+		labels, valueStr, ok := splitLabeledMetric(line)
+		if !ok {
+			continue
+		}
+		topic := labels["redpanda_topic"]
+		if topic == "" ||
+			strings.HasPrefix(topic, "_kc_") ||
+			topic == "__consumer_offsets" ||
+			topic == "controller" {
+			continue
+		}
+		if ns := labels["redpanda_namespace"]; ns != "" && ns != "kafka" {
+			continue
+		}
+		v, err := strconv.ParseFloat(valueStr, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parse %q: %w", line, err)
+		}
+		out[topic] += v
+	}
+	return out, scanner.Err()
+}
+
 // TopicPoint is one inter-frame throughput sample for a single topic.
 type TopicPoint struct {
 	T           int     `json:"t"` // seconds since first frame
@@ -120,6 +179,7 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 	}
 	baseT := frames[0].UnixTime
 	prevBytes := map[string]float64{}
+	prevRecords := map[string]float64{}
 	out := map[string][]TopicPoint{}
 	for i, f := range frames {
 		if f.Errored {
@@ -129,9 +189,25 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 		if err != nil {
 			return nil, fmt.Errorf("frame %d at t=%d: %w", i, f.UnixTime, err)
 		}
+		// Records are tracked alongside bytes so every TopicPoint carries a
+		// compression-independent figure. Before this, MsgPerSec was declared
+		// and serialized but never assigned, so every KC point in every result
+		// on disk reported median_msg_s = 0 — silently removing the only metric
+		// that made the head-to-head comparable.
+		recordsByTopic, err := extractTopicProduceRecords(f.Body)
+		if err != nil {
+			return nil, fmt.Errorf("frame %d at t=%d: %w", i, f.UnixTime, err)
+		}
 		for topic, cur := range bytesByTopic {
 			prev, hadPrev := prevBytes[topic]
 			prevBytes[topic] = cur
+
+			curRecs, hasRecs := recordsByTopic[topic]
+			prevRecs, hadPrevRecs := prevRecords[topic]
+			if hasRecs {
+				prevRecords[topic] = curRecs
+			}
+
 			if !hadPrev || i == 0 {
 				continue
 			}
@@ -140,9 +216,20 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 			if interval <= 0 || deltaBytes < 0 {
 				continue // counter reset or out-of-order frame; skip
 			}
+			// A records counter reset (or a topic whose records metric is
+			// missing from this frame) leaves MsgPerSec at zero rather than
+			// discarding the byte sample, so one flaky metric can't erase the
+			// other.
+			var msgPerSec float64
+			if hasRecs && hadPrevRecs {
+				if d := curRecs - prevRecs; d >= 0 {
+					msgPerSec = d / float64(interval)
+				}
+			}
 			out[topic] = append(out[topic], TopicPoint{
 				T:           int(f.UnixTime - baseT),
 				MBPerSec:    deltaBytes / float64(interval) / bytesPerMB,
+				MsgPerSec:   msgPerSec,
 				IntervalSec: interval,
 			})
 		}
@@ -187,9 +274,15 @@ func AttributeByEngine(series map[string][]TopicPoint, sessionID, connector stri
 
 func mergeTopicSeries(series map[string][]TopicPoint, topics []string) []TopicPoint {
 	byT := map[int]float64{}
+	// Records must be merged alongside bytes. This is the KC path specifically
+	// (Debezium writes a topic per table, so its series always come through
+	// here), and dropping MsgPerSec here would zero out the compression-
+	// independent metric for exactly the engine it is needed to compare.
+	msgByT := map[int]float64{}
 	for _, t := range topics {
 		for _, p := range series[t] {
 			byT[p.T] += p.MBPerSec
+			msgByT[p.T] += p.MsgPerSec
 		}
 	}
 	ts := make([]int, 0, len(byT))
@@ -199,7 +292,7 @@ func mergeTopicSeries(series map[string][]TopicPoint, topics []string) []TopicPo
 	sort.Ints(ts)
 	out := make([]TopicPoint, len(ts))
 	for i, t := range ts {
-		out[i] = TopicPoint{T: t, MBPerSec: byT[t]}
+		out[i] = TopicPoint{T: t, MBPerSec: byT[t], MsgPerSec: msgByT[t]}
 	}
 	return out
 }

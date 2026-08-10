@@ -142,10 +142,27 @@ func TestMatrixRunner_HappyPath(t *testing.T) {
 
 	// 60s warmup + 120s window = first 60 samples discarded, 120 kept.
 	logFor := func(vcpu int) string { return makeLog(180, float64(50+vcpu)) }
+
+	// Broker frames for each point. The Summary is now derived from THESE, not
+	// from the log above — the two carry deliberately different numbers so the
+	// assertions below can tell which instrument was used. 2 MB over a 10s
+	// interval = 0.2 MB/s; 20000 records over 10s = 2000 records/s.
+	brokerFor := func(vcpu int) string {
+		topic := fmt.Sprintf("bench_%s_pg_cdc_connect", sessionID)
+		return fmt.Sprintf(`###timestamp=1000
+redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",redpanda_topic="%s"} 1000000
+redpanda_kafka_records_produced_total{redpanda_namespace="kafka",redpanda_topic="%s"} 1000
+###timestamp=1010
+redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",redpanda_topic="%s"} %d
+redpanda_kafka_records_produced_total{redpanda_namespace="kafka",redpanda_topic="%s"} 21000
+`, topic, topic, topic, 1000000+2000000*vcpu, topic)
+	}
 	fetcher := &FakeLogFetcher{
 		Contents: map[string]string{
-			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): logFor(1),
-			fmt.Sprintf("runs/%s/sweep-2.log", sessionID): logFor(2),
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID):            logFor(1),
+			fmt.Sprintf("runs/%s/sweep-2.log", sessionID):            logFor(2),
+			fmt.Sprintf("runs/%s/redpanda-1-connect.txt", sessionID): brokerFor(1),
+			fmt.Sprintf("runs/%s/redpanda-2-connect.txt", sessionID): brokerFor(2),
 		},
 	}
 	ssm := &FakeSSM{
@@ -165,18 +182,31 @@ func TestMatrixRunner_HappyPath(t *testing.T) {
 		RunnerInstance: "i-runner",
 		Bucket:         bucket,
 		SessionID:      sessionID,
+		Topology:       sourceTopology{},
+		Names:          newBenchNames(sessionID, "pg_cdc"),
 	}
 	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 2)
 
 	for i, p := range points {
+		// Connect's rolling-stats log is still parsed and preserved in full, so
+		// the log-derived view remains recomputable from any result file.
 		require.Len(t, p.Samples, 120, "point %d should keep window-many samples", i)
 		require.Equal(t, 0, p.Samples[0].T, "first kept sample re-indexed to T=0")
 		require.Equal(t, 119, p.Samples[119].T)
-		expectedMB := float64(50 + p.VCPU)
-		require.InDelta(t, expectedMB, p.Summary.MedianMBPerSec, 1e-9)
-		require.InDelta(t, expectedMB, p.Summary.PeakMBPerSec, 1e-9)
+		require.InDelta(t, float64(50+p.VCPU), p.Samples[0].MBPerSec, 1e-9,
+			"samples keep the LOG's numbers")
+
+		// ...but the Summary comes from the BROKER series, so both engines are
+		// measured by one instrument and `Δ vs Connect` compares like with like.
+		// Asserting the log value here is what this test used to do, and it is
+		// exactly the asymmetry that made the head-to-head incomparable.
+		expectedBrokerMB := float64(2*p.VCPU) / 10
+		require.InDelta(t, expectedBrokerMB, p.Summary.MedianMBPerSec, 1e-9,
+			"Summary must be broker-derived, not log-derived")
+		require.InDelta(t, 2000, p.Summary.MedianMsgPerSec, 1e-9,
+			"records/sec is the compression-independent comparison basis")
 	}
 }
 

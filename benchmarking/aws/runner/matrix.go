@@ -284,16 +284,34 @@ func (m *MatrixRunner) Run(
 			// only the matching engine's file here.
 			brokerSeries := m.fetchBrokerSeriesForEngine(ctx, engine, key)
 
-			var summary Summary
-			if engine == "kafka_connect" || m.Direction == DirectionSink {
-				// No rolling-stats log to parse (KC has none; a sink's
-				// Connect pipeline has no benchmark processor). Derive the
-				// Summary from the metric series attributed to this engine.
-				summary = SummariseTopicPoints(brokerSeries)
-			} else {
-				summary = Summarise(samples)
-			}
-			anomalies := DetectAnomaliesWithProm(samples, summary.MedianMBPerSec, promPts)
+			// EVERY engine's Summary is now derived from the SAME instrument:
+			// the broker-side series attributed to that engine.
+			//
+			// It used to depend on the engine — Connect from its own
+			// rolling-stats log, KC from broker counters — which made the
+			// `Δ vs Connect` column a comparison between two different
+			// measurements. Connect's log reports uncompressed logical bytes;
+			// the broker reports what actually arrived. Those differed by
+			// 11-17x on postgres, mysql, oracle and sqlserver, because the
+			// seeders reused one identical row payload and the resulting
+			// batches compressed ~14x. Records/sec (now populated for both
+			// engines, see brokermetrics.go) is immune to that, and with the
+			// seeders emitting distinct payloads the byte figures are
+			// meaningful again too.
+			//
+			// Connect's log is NOT discarded: Samples below still carries every
+			// rolling-stats line, so the log-derived view can be recomputed
+			// from any result file.
+			summary := SummariseTopicPoints(brokerSeries)
+
+			// Anomaly detection deliberately keeps using the LOG-derived median.
+			// It judges the Connect log's internal consistency — how far
+			// individual log samples stray from their own centre — so handing it
+			// a broker-derived median would compare two instruments and flag
+			// nearly every sample. KC has no log, so this is zero there, exactly
+			// as before.
+			logMedian := Summarise(samples).MedianMBPerSec
+			anomalies := DetectAnomaliesWithProm(samples, logMedian, promPts)
 			out = append(out, SweepPoint{
 				VCPU:         n,
 				ArmID:        pt.ArmID,
