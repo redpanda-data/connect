@@ -78,8 +78,10 @@ pipeline:
         period: 1s
 
 matrix:
-  # SMOKE: pinned to [1]. Restore to [1, 2, 4, 8] for the real sweep.
-  cpu_points: [1]
+  # The committed scenario is always the full sweep. Pin this to [1] only in a
+  # local edit for a smoke, and never commit that pin — it silently turns every
+  # later "sweep" into a single point.
+  cpu_points: [1, 2, 4, 8]
 
 reset:
   # Three-step dance, not a one-line TRUNCATE: SQL Server refuses to truncate a
