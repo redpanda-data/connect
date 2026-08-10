@@ -13,11 +13,23 @@
 --
 -- - sql: "TRUNCATE TABLE {{TABLE}}"
 --
--- Pattern for SQL Server (similar to mysql -- no slots, but you may need to disable+re-enable CDC):
+-- Pattern for SQL Server. The disable/re-enable is MANDATORY, not optional:
+-- TRUNCATE is rejected outright on a CDC-enabled table, and the re-enable is what
+-- mints a capture instance starting at the current LSN (the only reason
+-- stream_snapshot:false is safe). There is no sqlcmd on the runner, so this runs
+-- through the seeder rather than `sql:` steps -- see seeders/cdc-rows-mssql:
 --
--- - sql: "EXEC sys.sp_cdc_disable_table @source_schema='dbo', @source_name='{{TABLE}}', @capture_instance='all'"
--- - sql: "TRUNCATE TABLE {{TABLE}}"
--- - sql: "EXEC sys.sp_cdc_enable_table @source_schema='dbo', @source_name='{{TABLE}}', @role_name=null"
+-- - bash: |
+--     /opt/bench/cdc-rows-mssql reset --dsn "${MSSQL_DSN}" --tables {{TABLE}}
+--
+-- which does, per table:
+--     EXEC sys.sp_cdc_disable_table @source_schema='dbo', @source_name='{{TABLE}}', @capture_instance='all'
+--     TRUNCATE TABLE {{TABLE}}
+--     EXEC sys.sp_cdc_enable_table  @source_schema='dbo', @source_name='{{TABLE}}', @role_name=NULL, @supports_net_changes=0
+--
+-- then ensures the capture job is RUNNING (start-only, never stop -- see
+-- references/rds-quirks.md#sql-server-enabling-cdc-on-rds) and blocks until a
+-- sentinel row proves fn_cdc_get_max_lsn() is advancing.
 --
 -- Key invariants:
 -- 1. The table MUST be truncated (avoid Trap 8 -- see references/traps.md#truncate-between-points)

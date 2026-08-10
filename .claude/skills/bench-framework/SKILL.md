@@ -62,7 +62,7 @@ Answer these before writing anything:
 |--------------------|--------------|
 | Postgres-shaped CDC (logical replication, slots) | `scenarios/postgres/orders-cdc.yaml` + `kcConnectorSpecs["postgres_cdc"]` |
 | MySQL-shaped CDC (binlog, no slots) | `scenarios/mysql/orders-cdc.yaml` + `kcConnectorSpecs["mysql_cdc"]` |
-| SQL Server CDC (table tail, schema-changes) | Closest: mysql shape; see `reset.sql.tmpl` for the `sp_cdc_disable_table`/`sp_cdc_enable_table` reset pattern. RDS SQL Server module doesn't exist yet — create it mirroring `modules/rds-mysql/` (see `references/rds-quirks.md#sql-server-enabling-cdc-on-rds`). Debezium SQL Server plugin not installed — add to cloud-init (see `references/kc-connector-mapping.md#adding-a-new-kc-plugin-cloud-init-step`). |
+| SQL Server CDC (table tail) | **Already built — mirror it rather than the mysql shape.** `modules/rds-mssql/` + `stacks/sqlserver/` + `scenarios/sqlserver/orders-cdc.yaml` + `seeders/cdc-rows-mssql/`, and the Debezium SQL Server plugin is in cloud-init. Read `references/rds-quirks.md#sql-server-enabling-cdc-on-rds` first: the capture job is a ceiling upstream of both engines, TRUNCATE is illegal on a CDC-enabled table, and the reset must never stop the capture job. |
 | Mongo CDC (change stream) | Closest: postgres shape; Debezium MongoDB needs `mongo.connection.string` not user/pass split |
 | Sink (any) | Plan 4 — TBD when sink scenarios land |
 

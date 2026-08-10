@@ -42,17 +42,38 @@ RDS SQL Server exposes `MSSQLSERVER` as the engine name. The Terraform module us
 **Required T-SQL to enable CDC on the database and table (run once, not in reset):**
 
 ```sql
--- 1. Enable CDC on the database
-EXEC sys.sp_cdc_enable_db;
+-- 0. RDS creates a SQL Server instance with NO application database: `db_name` is
+--    rejected for every sqlserver engine. Create it first, against a MASTER DSN.
+CREATE DATABASE benchdb;
 
--- 2. Enable CDC on the target table
+-- 1. Enable CDC on the database. MUST be the RDS wrapper, NOT the native
+--    sys.sp_cdc_enable_db — that requires sysadmin, which RDS does not grant to
+--    the master user. Runs from any database context because it is qualified.
+EXEC msdb.dbo.rds_cdc_enable_db 'benchdb';
+
+-- 2. Enable CDC on the target table (db_owner is enough here).
 EXEC sys.sp_cdc_enable_table
-  @source_schema = 'dbo',
-  @source_name   = 'orders',
-  @role_name     = null;
+  @source_schema        = 'dbo',
+  @source_name          = 'orders',
+  @role_name            = NULL,
+  @supports_net_changes = 0;
+
+-- 3. ONLY NOW can the capture job be tuned. rds_cdc_enable_db does NOT create the
+--    job's msdb row — that happens when the first table is enabled. Tuning before
+--    step 2 fails with "The Change Data Capture job table containing job
+--    information for database 'benchdb' cannot be found in the msdb system
+--    database."
+EXEC sys.sp_cdc_add_job    @job_type = N'capture', @maxtrans = 5000, @maxscans = 100, @continuous = 1, @pollinginterval = 1;
+EXEC sys.sp_cdc_change_job @job_type = N'capture', @maxtrans = 5000, @maxscans = 100, @continuous = 1, @pollinginterval = 1;
 ```
 
-These commands are idempotent if run again but should go in the **first-run seed script**, not the reset block. The reset block only needs disable+truncate+re-enable (see `reset.sql.tmpl`).
+These go in the **first-run seed script**, not the reset block.
+
+**THE CAPTURE JOB IS A CEILING UPSTREAM OF BOTH ENGINES — tune it or you are not benching the connector.** Neither `microsoft_sql_server_cdc` nor Debezium reads the transaction log; both tail the `cdc.<schema>_<table>_CT` change tables, which SQL Server's own capture job fills. That job does `@maxscans` passes of at most `@maxtrans` transactions, then sleeps `@pollinginterval` seconds. At the stock 10 / 500 / 5 that is a hard ceiling of ~1000 transactions/sec no matter how much CPU either engine has.
+
+**TRUNCATE is ILLEGAL on a CDC-enabled table** ("Cannot truncate table ... because it is published for replication or enabled for Change Data Capture"). The reset must be disable-CDC → TRUNCATE → re-enable-CDC. The re-enable is load-bearing beyond cleanup: a fresh capture instance starts at the current LSN, which is the only reason `stream_snapshot: false` is safe. Without it the connector starts from the capture instance's original `start_lsn` and replays every change ever captured.
+
+**Do NOT stop/start the capture job in the reset.** SQL Server Agent handles start/stop asynchronously. If the job is already running, `sp_cdc_stop_job` succeeds and the immediately following `sp_cdc_start_job` is refused with "the job already has a pending request" — leaving the job STOPPED for the whole sweep point. Both engines then report 0 MB/s with no error anywhere. Only ever start it, and prove it is scanning by writing a sentinel row and requiring `sys.fn_cdc_get_max_lsn()` to advance (see `ensureCaptureJobRunning` in `seeders/cdc-rows-mssql/sql.go`). `cdc.change_tables.start_lsn` being non-NULL is NOT sufficient — it shows the job scanned once, not that it is running now.
 
 **RDS SQL Server parameters** (set in the module's parameter group):
 
@@ -70,14 +91,22 @@ engine_version = "15.00.4415.2.v1"      # SQL Server 2019 — check latest via a
 family         = "sqlserver-se-15.0"     # parameter group family
 ```
 
-Unlike Postgres and MySQL, RDS SQL Server uses **Windows Authentication** and requires `license_model = "license-included"`.
+RDS SQL Server requires `license_model = "license-included"` (there is no BYOL path for se/ee via this API) and is **x86-only** — no Graviton instance classes, same as RDS Oracle.
+
+Authentication is ordinary **SQL Server authentication** with the master username/password, exactly like Postgres and MySQL. (An earlier version of this document claimed Windows Authentication; that is only relevant if you deliberately integrate the instance with AD, which the bench does not.)
+
+CDC needs **Standard or Enterprise** edition — it is unavailable on `sqlserver-ex` / `sqlserver-web`, where `rds_cdc_enable_db` errors out.
 
 **Security group port:** `1433` (not 5432 or 3306).
 
 **DSN format** for go-mssqldb driver:
 ```
-sqlserver://bench:<password>@<host>:1433?database=benchdb
+sqlserver://bench:<password>@<host>:1433?database=benchdb&encrypt=true&TrustServerCertificate=true
 ```
+
+`TrustServerCertificate=true` is required: the RDS-internal CA is not in the runner image. Keep `encrypt=true` for fairness — the mssql-jdbc driver Debezium uses defaults to encryption, so disabling it on the Connect side hands Connect a free CPU saving at every pinned-vCPU point.
+
+A **second DSN pointing at `master`** is also needed, because the application database does not exist yet on a fresh instance (see step 0 above). The bench wires it in via the engineSpec's `ExtraEnvVars` as `MSSQL_MASTER_DSN`.
 
 Mirror `modules/rds-mysql/` but change port/family/engine and add `license_model = "license-included"`.
 

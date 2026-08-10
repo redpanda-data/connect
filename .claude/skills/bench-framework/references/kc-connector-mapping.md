@@ -20,8 +20,8 @@ The runner's cloud-init installs these:
 |----------------------------|-----------|-----|
 | `postgres_cdc` | Debezium PostgreSQL | Both speak logical replication / pgoutput |
 | `mysql_cdc` | Debezium MySQL | Both speak binlog |
-| `sqlserver_cdc` | Debezium SQL Server (NOT INSTALLED — add to cloud-init) | Both speak CDC table tail |
-| `mongo_cdc` | Debezium MongoDB (NOT INSTALLED) | Both speak change-stream / oplog |
+| `microsoft_sql_server_cdc` | Debezium SQL Server (installed) | Both tail the same `cdc.<schema>_<table>_CT` change tables — the closest pairing in the suite |
+| `mongodb_cdc` | Debezium MongoDB (installed) | Both speak change-stream / oplog |
 | Postgres polling-source | Aiven JDBC Source | Both poll a query |
 | S3 sink | Confluent S3 Sink (Plan 4 placeholder) | Both write objects to S3 |
 | Iceberg sink | Tabular Iceberg sink (Plan 4 placeholder) | Both write Iceberg tables |
@@ -38,12 +38,11 @@ If the connector you're benching needs a plugin not in the list above:
    - Current Debezium version in the framework: **2.7.x** (match this to avoid version skew with existing postgres/mysql connectors).
    - Example for SQL Server 2.7.3: `https://repo1.maven.org/maven2/io/debezium/debezium-connector-sqlserver/2.7.3.Final/debezium-connector-sqlserver-2.7.3.Final-plugin.tar.gz`
 
-2. In `benchmarking/aws/terraform/shared/runner-user-data.tftpl`, add a step in the cloud-init `runcmd` to download + extract into `/opt/kafka/plugins/<name>/`. Follow the existing postgres/mysql plugin install pattern exactly. Example for SQL Server:
+2. In `benchmarking/aws/terraform/shared/runner-user-data.tftpl`, add a step in the cloud-init `runcmd` to download + extract into `/opt/kafka-connect/plugins/`. Follow the existing postgres/mysql plugin install pattern exactly. Example for SQL Server:
    ```yaml
-   - mkdir -p /opt/kafka/plugins/debezium-connector-sqlserver
-   - curl -fsSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-sqlserver/2.7.3.Final/debezium-connector-sqlserver-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka/plugins/debezium-connector-sqlserver --strip-components=1
+   - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-sqlserver/2.7.3.Final/debezium-connector-sqlserver-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
    ```
-   The `--strip-components=1` flattens the archive's top-level directory so the JARs land directly in the plugin dir.
+   NOTE the path is `/opt/kafka-connect/plugins/` (the worker's `plugin.path`), NOT `/opt/kafka/plugins/` — `/opt/kafka` is the Kafka tarball. And do NOT pass `--strip-components=1`: Debezium archives unpack to their own `debezium-connector-<engine>/` directory, which is what Connect expects one level below `plugin.path`. Flattening puts the JARs directly in `plugin.path` and the plugin scan will not find the connector. Match the existing postgres/mysql/mongodb lines verbatim.
 
 3. Restart the kafka-connect systemd unit so KC's plugin scan picks it up. The unit name is `kafka-connect` (verify: `systemctl status kafka-connect` on the runner). The cloud-init step is:
    ```yaml
