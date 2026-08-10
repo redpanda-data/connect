@@ -114,6 +114,54 @@ func TestEngineSpecFor_MySQL(t *testing.T) {
 	}
 }
 
+func TestEngineSpecFor_MSSQL(t *testing.T) {
+	es, ok := engineSpecFor("microsoft_sql_server_cdc")
+	if !ok {
+		t.Fatalf("microsoft_sql_server_cdc should be registered")
+	}
+	if es.DSNOutputKey != "mssql_dsn" {
+		t.Errorf("DSNOutputKey = %q, want mssql_dsn", es.DSNOutputKey)
+	}
+	if es.DSNEnvVar != "MSSQL_DSN" {
+		t.Errorf("DSNEnvVar = %q, want MSSQL_DSN", es.DSNEnvVar)
+	}
+	if es.NoDSN {
+		t.Errorf("microsoft_sql_server_cdc must not set NoDSN (it uses MSSQL_DSN); got %+v", es)
+	}
+	if es.ResetHostOutputKey != "mssql_host" || es.ResetPortOutputKey != "mssql_port" ||
+		es.ResetUserOutputKey != "mssql_user" || es.ResetPassOutputKey != "mssql_password" ||
+		es.ResetDBOutputKey != "mssql_db" {
+		t.Errorf("mssql reset output keys incomplete: %+v", es)
+	}
+	// RDS rejects db_name for every sqlserver engine, so the seeder has to
+	// CREATE DATABASE against master before MSSQL_DSN is connectable at all.
+	// Losing this ExtraEnvVars entry makes the seed phase fail on a fresh stack
+	// with a bare login error, which is a long way from the actual cause.
+	if got := es.ExtraEnvVars["MSSQL_MASTER_DSN"]; got != "mssql_master_dsn" {
+		t.Errorf("ExtraEnvVars[MSSQL_MASTER_DSN] = %q, want mssql_master_dsn", got)
+	}
+}
+
+// TestEnvVarPrefix_MSSQLCarriesMasterDSN pins the rendered env prefix: both the
+// bench DSN and the master DSN must reach the seeder, since the seeder needs
+// master to create the database and enable database-level CDC.
+func TestEnvVarPrefix_MSSQLCarriesMasterDSN(t *testing.T) {
+	es, ok := engineSpecFor("microsoft_sql_server_cdc")
+	if !ok {
+		t.Fatal("microsoft_sql_server_cdc should be registered")
+	}
+	got := envVarPrefix(es, map[string]string{
+		"mssql_dsn":        "sqlserver://bench:pw@host:1433?database=benchdb",
+		"mssql_master_dsn": "sqlserver://bench:pw@host:1433?database=master",
+	})
+	if !strings.Contains(got, `MSSQL_DSN="sqlserver://bench:pw@host:1433?database=benchdb"`) {
+		t.Errorf("env prefix missing MSSQL_DSN; got %q", got)
+	}
+	if !strings.Contains(got, `MSSQL_MASTER_DSN="sqlserver://bench:pw@host:1433?database=master"`) {
+		t.Errorf("env prefix missing MSSQL_MASTER_DSN; got %q", got)
+	}
+}
+
 func TestEngineSpecFor_MongoDB(t *testing.T) {
 	es, ok := engineSpecFor("mongodb_cdc")
 	if !ok {

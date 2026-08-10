@@ -135,6 +135,56 @@ var kcConnectorSpecs = map[string]kcConnectorSpec{
 }`,
 		RequiredPlugins: []string{"debezium-connector-oracle*"},
 	},
+	"microsoft_sql_server_cdc": {
+		Class:     "io.debezium.connector.sqlserver.SqlServerConnector",
+		Direction: kcSource,
+		// The fairest pairing in the suite: Debezium SQL Server reads the same
+		// cdc.<schema>_<table>_CT change tables that Connect's
+		// microsoft_sql_server_cdc reads, populated by the same SQL Server
+		// capture job. Neither engine touches the transaction log.
+		//
+		// database.names (plural, a list) is the 2.x property — NOT
+		// database.dbname as in the postgres/oracle connectors. Topics land at
+		// <prefix>.<database>.<schema>.<table>, so SQL Server topic names carry
+		// one more segment than the other engines; combineReset enumerates
+		// topics by prefix, so that needs no special handling.
+		//
+		// driver.encrypt/driver.trustServerCertificate are documented
+		// pass-throughs to the mssql-jdbc driver. mssql-jdbc 10+ defaults to
+		// encrypt=true and the RDS-internal CA isn't in the runner's trust
+		// store, so trustServerCertificate=true is required or the handshake
+		// fails. This matches the Connect side's DSN (encrypt=true +
+		// TrustServerCertificate=true) so both engines pay the same TLS cost at
+		// every pinned-vCPU point.
+		//
+		// snapshot.mode=no_data, as for mysql/oracle: the per-vCPU connector
+		// names give each sweep point a connector with no prior offset, so
+		// "never" would fail the task before warmup. no_data captures the schema
+		// (the table is truncated between points, so there are no rows) then
+		// streams from the current position.
+		PropsTemplate: `{
+  "connector.class": "io.debezium.connector.sqlserver.SqlServerConnector",
+  "tasks.max": "1",
+  "database.hostname": "{{.Host}}",
+  "database.port": "{{.Port}}",
+  "database.user": "{{.User}}",
+  "database.password": "{{.Password}}",
+  "database.names": "{{.Database}}",
+  "database.encrypt": "true",
+  "driver.encrypt": "true",
+  "driver.trustServerCertificate": "true",
+  "topic.prefix": "{{.TopicPrefix}}",
+  "table.include.list": "{{.SchemaTables}}",
+  "schema.history.internal.kafka.bootstrap.servers": "{{.BootstrapServers}}",
+  "schema.history.internal.kafka.topic": "_kc_schema_history_{{.TopicPrefix}}",
+  "snapshot.mode": "no_data",
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "false",
+  "value.converter.schemas.enable": "false"
+}`,
+		RequiredPlugins: []string{"debezium-connector-sqlserver*"},
+	},
 	"mongodb_cdc": {
 		Class:     "io.debezium.connector.mongodb.MongoDbConnector",
 		Direction: kcSource,

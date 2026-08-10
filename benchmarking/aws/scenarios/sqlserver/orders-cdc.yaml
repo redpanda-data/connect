@@ -1,0 +1,100 @@
+name: sqlserver-orders-cdc
+description: |
+  Stream changes from a high-write SQL Server orders table so the
+  microsoft_sql_server_cdc input — not the producer, and not SQL Server's own
+  capture job — is the bottleneck across the CPU sweep.
+
+  Fairness: neither engine reads the transaction log. Connect's
+  microsoft_sql_server_cdc and the Kafka Connect comparator (Debezium SQL
+  Server) both tail the same cdc.<schema>_<table>_CT change tables, populated by
+  SQL Server's capture job. That makes this the most apples-to-apples CDC
+  head-to-head in the suite — and it also means the capture job sits upstream of
+  BOTH engines. The seeder raises its per-cycle limits well past what the load
+  generator can produce (see tuneCaptureJob in seeders/cdc-rows-mssql/sql.go);
+  leave the stock 10/500/5 in place and you measure the capture job's ~1000
+  transactions/sec ceiling and mislabel it a connector ceiling.
+
+connector: microsoft_sql_server_cdc
+stack: sqlserver
+
+infra:
+  source:
+    # RDS SQL Server has NO Graviton support — x86 (db.r5) only, same as RDS
+    # Oracle. Standard Edition is license-included and materially pricier per
+    # hour than the postgres/mysql equivalents; price the class before a long
+    # sweep. CDC needs se or ee — it is unavailable on sqlserver-ex/sqlserver-web.
+    instance_class: db.r5.2xlarge
+    storage_gb: 800       # match the mysql/oracle 4xlarge sizing to hold the IOPS budget
+    iops: 24000
+    # No parameter-group knobs: unlike rds.logical_replication (postgres) and
+    # binlog_format (mysql), SQL Server CDC is enabled entirely in T-SQL by the
+    # seeder. See references/rds-quirks.md#sql-server-enabling-cdc-on-rds.
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0          # reset truncates before every point, so a seed is pointless;
+                           # the seeder still runs once to CREATE DATABASE, enable CDC
+                           # at the database and table level, and tune the capture job.
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-mssql
+
+workload:
+  write_rate_per_sec: 150000
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  cache_resources:
+    - label: bench_checkpoint
+      memory: {}
+  input:
+    microsoft_sql_server_cdc:
+      connection_string: ${MSSQL_DSN}
+      # `include` takes REGEXES, not literal names (confx.ParseRegexpPatterns).
+      # dbo.orders matches literally here; a table name containing regex
+      # metacharacters would need escaping.
+      include: ["dbo.orders"]
+      # false = start from the capture instance's start_lsn rather than
+      # snapshotting. Safe ONLY because the reset below disables and re-enables
+      # CDC on the table, which mints a fresh capture instance whose start_lsn
+      # is "now" — so the change table is empty at the start of each point.
+      # Without that re-enable this replays the whole accumulated change table
+      # and never reaches the live workload (the Oracle FindStartPos trap in a
+      # different costume). Note the field's own docs claim it starts from the
+      # current LSN; the code starts from the capture instance's start_lsn.
+      stream_snapshot: false
+      # Default is 5s. At the high-vCPU points the reader briefly catches up,
+      # and a 5s sleep on every catch-up shows up as a sawtooth that craters the
+      # p5. 1s keeps the idle poll cheap without distorting the tail.
+      stream_backoff_interval: 1s
+      checkpoint_cache: bench_checkpoint   # memory cache — the default SQL-Server-backed
+                                           # cache would need a pre-existing rpcn schema
+                                           # plus CREATE TABLE/PROCEDURE rights
+      checkpoint_cache_key: mssql_bench
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  # SMOKE: pinned to [1]. Restore to [1, 2, 4, 8] for the real sweep.
+  cpu_points: [1]
+
+reset:
+  # Three-step dance, not a one-line TRUNCATE: SQL Server refuses to truncate a
+  # table that is enabled for CDC. The seeder's `reset` subcommand does
+  # disable-CDC -> TRUNCATE -> enable-CDC, re-applies the capture-job tuning,
+  # then blocks until cdc.change_tables.start_lsn is populated for each table
+  # (it is NULL until the capture job's first scan, and Connect reads exactly
+  # that column to pick its start position).
+  #
+  # There is no sqlcmd on the runner image, so this runs through the seeder
+  # rather than a `sql:` step. Reset runs on the RUNNER host (matrix.go) while
+  # the seeder is only staged on the LOAD-GEN host, so self-stage it from the
+  # same S3 key the seed phase uploaded. The binary is GOARCH=arm64 and the
+  # runner is Graviton (c8g), so it runs as-is.
+  - bash: |
+      aws s3 cp s3://${RESULTS_BUCKET}/stage/cdc-rows-mssql /opt/bench/cdc-rows-mssql
+      chmod +x /opt/bench/cdc-rows-mssql
+      /opt/bench/cdc-rows-mssql reset --dsn "${MSSQL_DSN}" --tables orders

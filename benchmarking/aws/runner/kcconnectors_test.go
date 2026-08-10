@@ -73,6 +73,94 @@ func TestKCConnectorSpecFor_MySQLCDC(t *testing.T) {
 	}
 }
 
+func TestKCConnectorSpecFor_MSSQL(t *testing.T) {
+	es, ok := kcConnectorSpecFor("microsoft_sql_server_cdc")
+	if !ok {
+		t.Fatal("microsoft_sql_server_cdc should be registered")
+	}
+	if es.Class != "io.debezium.connector.sqlserver.SqlServerConnector" {
+		t.Errorf("Class = %q, want Debezium SQL Server class", es.Class)
+	}
+	if es.Direction != kcSource {
+		t.Errorf("Direction should be kcSource")
+	}
+	// database.names (a list) is the 2.x property; database.dbname is the
+	// postgres/oracle spelling and Debezium SQL Server rejects the config
+	// without database.names.
+	if !strings.Contains(es.PropsTemplate, "database.names") {
+		t.Errorf("SQL Server Debezium config must set database.names; got:\n%s", es.PropsTemplate)
+	}
+	if strings.Contains(es.PropsTemplate, "database.dbname") {
+		t.Errorf("SQL Server Debezium uses database.names, not database.dbname; got:\n%s", es.PropsTemplate)
+	}
+	// mssql-jdbc 10+ defaults to encrypt=true and the RDS CA is not in the
+	// runner's trust store, so without trustServerCertificate the connector
+	// fails at handshake.
+	if !strings.Contains(es.PropsTemplate, "driver.trustServerCertificate") {
+		t.Errorf("SQL Server Debezium needs driver.trustServerCertificate for RDS; got:\n%s", es.PropsTemplate)
+	}
+	if !strings.Contains(es.PropsTemplate, "{{.SchemaTables}}") {
+		t.Errorf("template should interpolate {{.SchemaTables}}; got:\n%s", es.PropsTemplate)
+	}
+	if len(es.RequiredPlugins) == 0 || !strings.Contains(es.RequiredPlugins[0], "sqlserver") {
+		t.Errorf("RequiredPlugins should list the debezium-connector-sqlserver glob; got %v", es.RequiredPlugins)
+	}
+}
+
+// TestBuildKCRenderInputs_MSSQL exercises the microsoft_sql_server_cdc branch of
+// buildKCRenderInputs. Two things are load-bearing: table.include.list is
+// schema-qualified (dbo.orders) and NOT database-qualified, and snapshot.mode is
+// no_data so a fresh per-vCPU connector can bootstrap without an offset.
+func TestBuildKCRenderInputs_MSSQL(t *testing.T) {
+	es, ok := engineSpecFor("microsoft_sql_server_cdc")
+	if !ok {
+		t.Fatal("microsoft_sql_server_cdc should be registered")
+	}
+	s := &Scenario{
+		Connector: "microsoft_sql_server_cdc",
+		Dataset:   DatasetSpec{Tables: []string{"orders"}},
+		Pipeline: map[string]any{
+			"input": map[string]any{
+				// The connector selects via `include` regexes, not `tables`, so
+				// the table list must fall back to dataset.Tables.
+				"microsoft_sql_server_cdc": map[string]any{
+					"include": []any{"dbo.orders"},
+				},
+			},
+		},
+	}
+	outs := map[string]string{
+		"mssql_host":     "10.0.0.7",
+		"mssql_port":     "1433",
+		"mssql_user":     "bench",
+		"mssql_password": "pw",
+		"mssql_db":       "benchdb",
+	}
+	in, err := buildKCRenderInputs(s, es, outs, "sess123")
+	if err != nil {
+		t.Fatalf("buildKCRenderInputs: %v", err)
+	}
+	if in.SchemaTables != "dbo.orders" {
+		t.Errorf("SchemaTables = %q, want dbo.orders (schema-qualified, not database-qualified)", in.SchemaTables)
+	}
+	cfg, err := renderKCConfig(s, in)
+	if err != nil {
+		t.Fatalf("renderKCConfig: %v", err)
+	}
+	if cfg["database.names"] != "benchdb" {
+		t.Errorf("database.names = %v, want benchdb", cfg["database.names"])
+	}
+	if cfg["table.include.list"] != "dbo.orders" {
+		t.Errorf("table.include.list = %v, want dbo.orders", cfg["table.include.list"])
+	}
+	if cfg["snapshot.mode"] != "no_data" {
+		t.Errorf("snapshot.mode = %v, want no_data (per-vCPU connectors have no prior offset)", cfg["snapshot.mode"])
+	}
+	if cfg["database.port"] != "1433" {
+		t.Errorf("database.port = %v, want 1433", cfg["database.port"])
+	}
+}
+
 func TestKCConnectorSpecFor_MongoDB(t *testing.T) {
 	es, ok := kcConnectorSpecFor("mongodb_cdc")
 	if !ok {

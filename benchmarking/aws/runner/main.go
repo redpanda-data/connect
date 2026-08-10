@@ -949,6 +949,16 @@ func buildKCRenderInputs(s *Scenario, es engineSpec, outs map[string]string, ses
 			parts = append(parts, schema+"."+strings.ToUpper(t))
 		}
 		in.SchemaTables = strings.Join(parts, ",")
+	case "microsoft_sql_server_cdc":
+		// Debezium SQL Server table.include.list is <schema>.<table> — NOT
+		// database-qualified, even though the topic names are (the database comes
+		// from database.names instead). dbo matches the schema the
+		// cdc-rows-mssql seeder creates the table in.
+		parts := make([]string, 0, len(in.Tables))
+		for _, t := range in.Tables {
+			parts = append(parts, "dbo."+t)
+		}
+		in.SchemaTables = strings.Join(parts, ",")
 	case "mongodb_cdc":
 		// Debezium MongoDB collection.include.list is <db>.<collection>. The db is
 		// the connecting database (in.Database, from the mongodb_db output).

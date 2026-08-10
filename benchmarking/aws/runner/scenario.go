@@ -246,6 +246,33 @@ var engineSpecs = map[string]engineSpec{
 		ResetPassOutputKey: "oracle_password",
 		ResetDBOutputKey:   "oracle_db",
 	},
+	// microsoft_sql_server_cdc connects via a go-mssqldb DSN URL
+	// (connection_string). The discrete Reset*OutputKey fields drive the KC
+	// (Debezium SQL Server) render in main.go, which needs host/port/user/
+	// password/dbname split out.
+	//
+	// MSSQL_MASTER_DSN is the SQL-Server-only wrinkle: RDS rejects `db_name` for
+	// every sqlserver engine, so the instance comes up with only its system
+	// databases and MSSQL_DSN isn't connectable until something CREATEs the
+	// application database. The seeder does that against the master DSN first,
+	// which is also where database-level CDC gets enabled (via
+	// msdb.dbo.rds_cdc_enable_db — the native sys.sp_cdc_enable_db needs
+	// sysadmin, which RDS does not grant).
+	//
+	// There is no sqlcmd on the runner, so the scenario's reset is a bash: step
+	// shelling out to the cdc-rows-mssql seeder's `reset` subcommand.
+	"microsoft_sql_server_cdc": {
+		DSNOutputKey:       "mssql_dsn",
+		DSNEnvVar:          "MSSQL_DSN",
+		ResetHostOutputKey: "mssql_host",
+		ResetPortOutputKey: "mssql_port",
+		ResetUserOutputKey: "mssql_user",
+		ResetPassOutputKey: "mssql_password",
+		ResetDBOutputKey:   "mssql_db",
+		ExtraEnvVars: map[string]string{
+			"MSSQL_MASTER_DSN": "mssql_master_dsn",
+		},
+	},
 	// mongodb_cdc streams MongoDB change streams from a self-hosted single-node
 	// replica set (terraform modules/mongodb-ec2). mongod runs without auth, so
 	// the mongodb_user / mongodb_password terraform outputs are empty strings and

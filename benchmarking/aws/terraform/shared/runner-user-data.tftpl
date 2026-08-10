@@ -82,6 +82,14 @@ runcmd:
   # archive unpacks to debezium-connector-mongodb/. See kcConnectorSpecs["mongodb_cdc"].
   - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-mongodb/2.7.3.Final/debezium-connector-mongodb-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
 
+  # Debezium SQL Server connector. Tails the same cdc.<schema>_<table>_CT change
+  # tables that the Connect microsoft_sql_server_cdc input reads — the closest
+  # head-to-head in the suite, since neither engine touches the transaction log.
+  # The mssql JDBC driver IS bundled in this archive (unlike Oracle's ojdbc), so
+  # no extra jar is needed. Unpacks to debezium-connector-sqlserver/.
+  # See kcConnectorSpecs["microsoft_sql_server_cdc"].
+  - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-sqlserver/2.7.3.Final/debezium-connector-sqlserver-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
+
   # Aiven JDBC sink + JDBC drivers (postgres + mariadb). Repo was renamed in 2024;
   # archive unpacks to jdbc-connector-for-apache-kafka-6.10.0/, not the old aiven-* name.
   - curl -sSL -o /tmp/aiven-jdbc.zip https://github.com/Aiven-Open/jdbc-connector-for-apache-kafka/releases/download/v6.10.0/jdbc-connector-for-apache-kafka-6.10.0.zip
