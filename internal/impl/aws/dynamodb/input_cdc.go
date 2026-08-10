@@ -245,6 +245,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Description("Maximum number of shards to track simultaneously. Prevents memory issues with extremely large tables.").
 				Default(10000).
 				Advanced(),
+			service.NewAutoRetryNacksToggleField(),
 			service.NewDurationField(dciFieldThrottleBackoff).
 				Description("Time to wait when applying backpressure due to too many in-flight messages.").
 				Default(defaultDynamoDBThrottleBackoff).
@@ -360,7 +361,14 @@ func init() {
 	err := service.RegisterBatchInput(
 		"aws_dynamodb_cdc", dynamoDBCDCInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			return newDynamoDBCDCInputFromConfig(conf, mgr)
+			in, err := newDynamoDBCDCInputFromConfig(conf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			// With the toggle on (default) transient downstream failures are
+			// replayed in-process; with it off a nack pins the shard's
+			// checkpoint frontier and redelivery happens on restart.
+			return service.AutoRetryNacksBatchedToggled(conf, in)
 		})
 	if err != nil {
 		panic(err)
