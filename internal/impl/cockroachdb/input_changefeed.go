@@ -59,8 +59,8 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 				ShortDescription("Cache resource storing the last delivered cursor, so restarts resume instead of re-reading the table.").
 				Optional(),
 			service.NewStringListField("options").
-				Description("A list of options to be included in the changefeed (WITH X, Y...).\n\nNOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Redpanda Connect in this case.").
-				ShortDescription("Options to include in the changefeed. CURSOR and UPDATED are ignored when cursor_cache is set.").
+				Description("A list of options to be included in the changefeed (WITH X, Y...).\n\nNOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Redpanda Connect in this case. A RESOLVED option is also added (unless one is supplied here): the stored cursor only ever advances to resolved timestamps whose rows have all been acknowledged downstream, so a restart redelivers at most the changes since the last resolved timestamp (bounded by the `changefeed.min_checkpoint_frequency` cluster setting) and never skips data.").
+				ShortDescription("Options to include in the changefeed. CURSOR and UPDATED are ignored when cursor_cache is set, and RESOLVED is added.").
 				Example([]string{`virtual_columns="omitted"`}).
 				Advanced().
 				Optional(),
@@ -124,6 +124,7 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 	if c.cursorCache == "" {
 		options = tmpOptions
 	} else {
+		hasResolved := false
 		for _, o := range tmpOptions {
 			if strings.HasPrefix(strings.ToLower(o), "updated") {
 				continue
@@ -131,9 +132,20 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 			if strings.HasPrefix(strings.ToLower(o), "cursor") {
 				continue
 			}
+			if strings.HasPrefix(strings.ToLower(o), "resolved") {
+				hasResolved = true
+			}
 			options = append(options, o)
 		}
 		options = append(options, "UPDATED")
+		if !hasResolved {
+			// Only RESOLVED timestamps are safe cursors: every row of a
+			// transaction (and the entire initial backfill) shares one
+			// `updated` timestamp, and CURSOR resume is exclusive, so a
+			// row-level cursor would skip that timestamp's remaining rows on
+			// restart. A user-supplied resolved='interval' option is kept.
+			options = append(options, "RESOLVED")
+		}
 		if err := res.AccessCache(context.Background(), c.cursorCache, func(c service.Cache) {
 			cursorBytes, cErr := c.Get(context.Background(), cursorCacheKey)
 			if cErr != nil {
@@ -244,6 +256,16 @@ func (c *crdbChangefeedInput) closeConnection() {
 	}
 }
 
+// persistCursor writes a resolved cursor timestamp to the cursor cache.
+func (c *crdbChangefeedInput) persistCursor(ctx context.Context, cursorTimestamp string) (cErr error) {
+	if err := c.res.AccessCache(ctx, c.cursorCache, func(cache service.Cache) {
+		cErr = cache.Set(ctx, cursorCacheKey, []byte(cursorTimestamp), nil)
+	}); err != nil {
+		return err
+	}
+	return
+}
+
 func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	c.dbMut.Lock()
 	defer c.dbMut.Unlock()
@@ -252,64 +274,102 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		return nil, nil, service.ErrNotConnected
 	}
 
-	// rows.Next() blocks until the next changefeed event. The mutex is held to
-	// prevent closeConnection() from calling rows.Close() concurrently. On
-	// shutdown, SoftStopCtx cancels the query context which unblocks this call.
-	if !c.rows.Next() {
-		err := c.rows.Err()
-		c.closeQueryLocked()
+	for {
+		// rows.Next() blocks until the next changefeed event. The mutex is held to
+		// prevent closeConnection() from calling rows.Close() concurrently. On
+		// shutdown, SoftStopCtx cancels the query context which unblocks this call.
+		if !c.rows.Next() {
+			err := c.rows.Err()
+			c.closeQueryLocked()
 
-		if c.shutSig.IsSoftStopSignalled() {
-			return nil, nil, service.ErrNotConnected
+			if c.shutSig.IsSoftStopSignalled() {
+				return nil, nil, service.ErrNotConnected
+			}
+			if err == nil {
+				err = service.ErrNotConnected
+			} else {
+				err = fmt.Errorf("row read: %w", err)
+			}
+			return nil, nil, err
 		}
-		if err == nil {
-			err = service.ErrNotConnected
-		} else {
-			err = fmt.Errorf("row read: %w", err)
+
+		values, err := c.rows.Values()
+		if err != nil {
+			return nil, nil, fmt.Errorf("row values: %w", err)
 		}
-		return nil, nil, err
-	}
 
-	values, err := c.rows.Values()
-	if err != nil {
-		return nil, nil, fmt.Errorf("row values: %w", err)
-	}
+		rowBytes := values[2].([]byte)
+		gObj, gErr := gabs.ParseJSON(rowBytes)
 
-	var cursorReleaseFn func() *string
-
-	rowBytes := values[2].([]byte)
-	if gObj, err := gabs.ParseJSON(rowBytes); err == nil {
-		if cursorTimestamp, _ := gObj.S("updated").Data().(string); cursorTimestamp != "" {
-			cursorReleaseFn, _ = c.cursorCheckpointer.Track(ctx, cursorTimestamp, 1)
+		// Resolved records carry NULL table/key columns and are bookkeeping,
+		// never emitted downstream. A resolved timestamp is CockroachDB's
+		// guarantee that nothing at or below it will be emitted again — the
+		// only safe cursor (and CockroachDB does not emit one until the
+		// initial scan completes, so a persisted cursor always covers the
+		// backfill). Register it behind the in-flight rows (immediately
+		// resolved marker): the timestamp persists once every row before it
+		// is acked, either right here or inside the last outstanding ack.
+		if gErr == nil {
+			if resolvedTs, _ := gObj.S("resolved").Data().(string); resolvedTs != "" {
+				if c.cursorCache == "" {
+					continue
+				}
+				releaseFn, err := c.cursorCheckpointer.Track(ctx, resolvedTs, 1)
+				if err != nil {
+					return nil, nil, fmt.Errorf("tracking resolved cursor: %w", err)
+				}
+				if cursorTimestamp := releaseFn(); cursorTimestamp != nil && *cursorTimestamp != "" {
+					if err := c.persistCursor(ctx, *cursorTimestamp); err != nil {
+						c.logger.Errorf("Failed to persist resolved cursor: %v", err)
+					}
+				}
+				continue
+			}
 		}
-	}
 
-	// Construct the new JSON
-	var jsonBytes []byte
-	if jsonBytes, err = json.Marshal(map[string]string{
-		"table":       values[0].(string),
-		"primary_key": string(values[1].([]byte)), // Stringified JSON (Array)
-		"row":         string(rowBytes),           // Stringified JSON (Object)
-	}); err != nil {
-		return nil, nil, err
-	}
+		var cursorReleaseFn func() *string
+		if c.cursorCache != "" {
+			// Data rows are tracked with an empty payload: they hold the
+			// ordered tracker's frontier (so no resolved timestamp can persist
+			// past an un-acked row) but never advance the cursor themselves.
+			// Row-level `updated` timestamps are unsafe cursors: every row of
+			// a transaction — and the entire initial backfill — shares one,
+			// and CURSOR resume is exclusive.
+			if cursorReleaseFn, err = c.cursorCheckpointer.Track(ctx, "", 1); err != nil {
+				return nil, nil, fmt.Errorf("tracking row checkpoint: %w", err)
+			}
+		}
 
-	msg := service.NewMessage(jsonBytes)
-	return msg, func(ctx context.Context, _ error) (cErr error) {
-		if cursorReleaseFn == nil {
-			return nil
-		}
-		cursorTimestamp := cursorReleaseFn()
-		if cursorTimestamp == nil {
-			return nil
-		}
-		if err := c.res.AccessCache(ctx, c.cursorCache, func(c service.Cache) {
-			cErr = c.Set(ctx, cursorCacheKey, []byte(*cursorTimestamp), nil)
+		// Construct the new JSON
+		var jsonBytes []byte
+		if jsonBytes, err = json.Marshal(map[string]string{
+			"table":       values[0].(string),
+			"primary_key": string(values[1].([]byte)), // Stringified JSON (Array)
+			"row":         string(rowBytes),           // Stringified JSON (Object)
 		}); err != nil {
-			return err
+			return nil, nil, err
 		}
-		return
-	}, nil
+
+		msg := service.NewMessage(jsonBytes)
+		return msg, func(ctx context.Context, err error) error {
+			if cursorReleaseFn == nil {
+				return nil
+			}
+			if err != nil {
+				// auto_replay_nacks is user-toggleable, so a nack can be
+				// terminal. Never resolve: the cursor stays pinned before this
+				// row so no resolved timestamp can be persisted past its
+				// undelivered data.
+				c.logger.Errorf("Row rejected downstream: the cursor is now pinned before this row and the input will stall once the checkpoint limit is reached, unless the row is redelivered (auto_replay_nacks) or the pipeline restarts: %v", err)
+				return err
+			}
+			cursorTimestamp := cursorReleaseFn()
+			if cursorTimestamp == nil || *cursorTimestamp == "" {
+				return nil
+			}
+			return c.persistCursor(ctx, *cursorTimestamp)
+		}, nil
+	}
 }
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
