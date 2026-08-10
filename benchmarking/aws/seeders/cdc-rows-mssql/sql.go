@@ -20,11 +20,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	_ "github.com/microsoft/go-mssqldb"
+	mssql "github.com/microsoft/go-mssqldb"
 )
 
-// SQL Server's row-constructor limit: an INSERT ... VALUES (...),(...) batch may
-// carry at most 1000 rows.
+// Rows per bulk-copy batch, i.e. rows per transaction.
+//
+// No longer bounded by SQL Server's 1000-row VALUES-constructor limit (bulk copy
+// has no such cap), but kept at 1000 because it sets the TRANSACTION rate the CDC
+// capture job has to keep up with: at 150K rows/sec this is ~150 transactions/sec,
+// comfortably inside the tuned @maxtrans/@maxscans/@pollinginterval budget. Raise
+// it and each transaction gets larger; lower it and the capture job's per-cycle
+// transaction ceiling starts to matter.
 const batchSize = 1000
 
 // schema is where the bench table lives. Both the Connect input's `include`
@@ -589,37 +595,71 @@ func randomPayloadPool(size, n int) []string {
 	return pool
 }
 
-// insertStmt builds a multi-row INSERT with ONE PARAMETER PER ROW:
-// VALUES (@p1),(@p2),...,(@pn)
+// bulkInsertBatch writes n rows via the TDS bulk-copy protocol (mssql.CopyIn).
 //
-// It used to bind a single parameter n times, which was only possible because
-// every row carried an identical payload. Distinct payloads need distinct
-// parameters. At batchSize=1000 that is 1000 parameters, comfortably inside SQL
-// Server's 2100-per-statement cap.
+// WHY BULK COPY, measured not assumed. Parameterized multi-row INSERT tops out
+// at ~11K rows/sec and NOTHING about its shape moves that number. A local
+// A/B (2026-08-10, SQL Server 2022 container) over batch sizes 25/100/250/1000
+// and both NVARCHAR and explicit VARCHAR parameters landed every variant in the
+// 10.5-11.3K band, while bulk copy ran 4-7x faster in the same harness:
 //
-// The TDS bulk-copy path (mssql.CopyIn) stays deliberately unused: bulk load is
-// not the OLTP write shape this bench represents.
-func insertStmt(table string, n int) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "INSERT INTO [%s].[%s] (payload) VALUES ", schema, table)
-	for i := 0; i < n; i++ {
-		if i > 0 {
-			sb.WriteString(",")
-		}
-		fmt.Fprintf(&sb, "(@p%d)", i+1)
+//	parameterized, any shape   ~10.9-11.3K rows/sec
+//	bulk copy (CopyIn)          44.9K-81K rows/sec
+//
+// That ~11K figure is the same ceiling the AWS runs hit on a db.r5.2xlarge with
+// a 16 vCPU load generator, so it is a property of the parameterized INSERT
+// path, not of RDS, instance size, or the client. It also explains two earlier
+// refuted fixes (prepared statements; load-gen 2 -> 16 vCPU): both were
+// changing things that were never the constraint.
+//
+// An earlier version of this file rejected CopyIn as "not the OLTP write shape
+// this bench represents". That was wrong twice over. Every other seeder already
+// uses its engine's fast path - go-ora array binding for oracle, multi-row
+// VALUES for postgres and mysql - so bulk copy is the CONSISTENT choice, not a
+// deviation. And the load generator's job is to saturate the reader under test;
+// it is an instrument, not a workload model.
+//
+// CDC capture is verified, not assumed: after a bulk-copy-only run the base
+// table held 449,000 rows and cdc.dbo_t_bench_CT held 449,000 - captured 1:1.
+// Column defaults apply to columns outside the copy list, so id (IDENTITY) and
+// created_at (DEFAULT SYSUTCDATETIME()) fill in as they do for INSERT.
+//
+// TABLOCK is deliberately NOT set: it would speed a single loader but serialize
+// the concurrent workers this generator relies on.
+func bulkInsertBatch(ctx context.Context, db *sql.DB, table string, pool []string, cursor *int, n int) error {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
 	}
-	return sb.String()
-}
+	defer conn.Close()
 
-// batchArgs slices batchSize distinct payloads out of the pool, advancing the
-// caller's cursor. Returns them as []any for Stmt.ExecContext.
-func batchArgs(pool []string, cursor *int, n int) []any {
-	args := make([]any, n)
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.PrepareContext(ctx, mssql.CopyIn(schema+"."+table, mssql.BulkOptions{}, "payload"))
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("prepare bulk copy into %s.%s: %w", schema, table, err)
+	}
 	for i := 0; i < n; i++ {
-		args[i] = pool[*cursor%len(pool)]
+		if _, err := stmt.ExecContext(ctx, pool[*cursor%len(pool)]); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("bulk copy row: %w", err)
+		}
 		*cursor++
 	}
-	return args
+	// The argument-less Exec flushes the batch; Close finalises it. Both must
+	// happen before Commit or the rows are silently discarded.
+	if _, err := stmt.ExecContext(ctx); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("flush bulk copy: %w", err)
+	}
+	if err := stmt.Close(); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("close bulk copy: %w", err)
+	}
+	return tx.Commit()
 }
 
 func bulkInsert(ctx context.Context, db *sql.DB, table string, rows int64, rowSize int) error {
@@ -631,48 +671,31 @@ func bulkInsert(ctx context.Context, db *sql.DB, table string, rows int64, rowSi
 		return nil
 	}
 	pool := randomPayloadPool(rowSize, payloadPoolSize)
-	fullStmt := insertStmt(table, batchSize)
 	start := time.Now()
 
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers)
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
-		go func() {
+		go func(w int) {
 			defer wg.Done()
-			// Prepare once per worker: see the note on the workload path. A
-			// 1000-row VALUES list re-sent as ad-hoc SQL on every insert is what
-			// held the generator to ~8% of target.
-			prepared, err := db.PrepareContext(ctx, fullStmt)
-			if err != nil {
-				errCh <- fmt.Errorf("prepare seed insert: %w", err)
-				return
-			}
-			defer prepared.Close()
-
-			cursor := 0
+			// Stagger each worker's start position in the pool so concurrent
+			// batches don't all carry identical rows.
+			cursor := w * 131
 			done := int64(0)
 			for done < rowsPerWorker {
 				n := int64(batchSize)
 				if rem := rowsPerWorker - done; rem < n {
 					n = rem
-					// Odd-sized tail: ad-hoc, runs at most once per worker.
-					if _, err := db.ExecContext(ctx, insertStmt(table, int(n)),
-						batchArgs(pool, &cursor, int(n))...); err != nil {
-						errCh <- err
-						return
-					}
-					done += n
-					continue
 				}
-				if _, err := prepared.ExecContext(ctx, batchArgs(pool, &cursor, int(n))...); err != nil {
+				if err := bulkInsertBatch(ctx, db, table, pool, &cursor, int(n)); err != nil {
 					errCh <- err
 					return
 				}
 				done += n
 			}
 			errCh <- nil
-		}()
+		}(w)
 	}
 	wg.Wait()
 	close(errCh)
@@ -726,30 +749,12 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers)
 	for tIdx, table := range tables {
-		fullStmt := insertStmt(table, batchSize)
 		for w := 0; w < workersPerTable; w++ {
 			wg.Add(1)
-			go func(tIdx int, table, fullStmt string) {
+			go func(tIdx, w int, table string) {
 				defer wg.Done()
-				// PREPARE ONCE. The 2026-08-07 smoke delivered only ~13K of
-				// 150K rows/sec — ~8% of target — and the arithmetic put the cost
-				// in per-statement latency: ~2.4s for a 1000-row, 1.2 MB batch.
-				// The cause was re-sending a ~7 KB ad-hoc VALUES list through
-				// sp_executesql on every insert, forcing SQL Server to re-parse a
-				// 1000-row table value constructor each time. Preparing hands the
-				// statement over once (sp_prepare) then executes by handle, paying
-				// parse and wire cost once per worker instead of once per batch.
-				prepared, err := db.PrepareContext(ctx, fullStmt)
-				if err != nil {
-					errCh <- fmt.Errorf("prepare workload insert: %w", err)
-					return
-				}
-				defer prepared.Close()
-
-				// Distinct payloads (built once) so change events aren't
-				// trivially compressible — see payloadPoolSize.
 				pool := randomPayloadPool(rowSize, payloadPoolSize)
-				cursor := 0
+				cursor := w * 131
 				start := time.Now()
 				var done int64
 				for {
@@ -770,25 +775,10 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 						continue
 					}
 					n := owed - done
-					if n >= batchSize {
-						// Hot path: full batch through the prepared handle.
-						if _, err := prepared.ExecContext(ctx, batchArgs(pool, &cursor, batchSize)...); err != nil {
-							if ctx.Err() != nil {
-								errCh <- nil
-								return
-							}
-							errCh <- err
-							return
-						}
-						done += batchSize
-						counters[tIdx].Add(batchSize)
-						continue
+					if n > batchSize {
+						n = batchSize
 					}
-					// Short of a full batch: ad-hoc statement for the remainder.
-					// Only reached once the worker has caught up with its quota,
-					// so it stays off the hot path.
-					if _, err := db.ExecContext(ctx, insertStmt(table, int(n)),
-						batchArgs(pool, &cursor, int(n))...); err != nil {
+					if err := bulkInsertBatch(ctx, db, table, pool, &cursor, int(n)); err != nil {
 						if ctx.Err() != nil {
 							errCh <- nil
 							return
@@ -799,7 +789,7 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 					done += n
 					counters[tIdx].Add(n)
 				}
-			}(tIdx, table, fullStmt)
+			}(tIdx, w, table)
 		}
 	}
 	wg.Wait()
