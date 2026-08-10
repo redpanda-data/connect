@@ -10,6 +10,7 @@ package dynamodb
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"testing"
@@ -27,13 +28,19 @@ type recordedProgress struct {
 }
 
 type fakeProgressStore struct {
-	mu      sync.Mutex
-	updates []recordedProgress
+	mu       sync.Mutex
+	updates  []recordedProgress
+	failNext error
 }
 
 func (f *fakeProgressStore) UpdateSnapshotProgress(_ context.Context, segment int, lastKey map[string]dynamodbtypes.AttributeValue, recordsRead int64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.failNext != nil {
+		err := f.failNext
+		f.failNext = nil
+		return err
+	}
 	f.updates = append(f.updates, recordedProgress{segment: segment, lastKey: lastKey, recordsRead: recordsRead})
 	return nil
 }
@@ -43,6 +50,8 @@ func (f *fakeProgressStore) recorded() []recordedProgress {
 	defer f.mu.Unlock()
 	return append([]recordedProgress(nil), f.updates...)
 }
+
+var errStoreDown = errors.New("store down")
 
 func scanKey(v string) map[string]dynamodbtypes.AttributeValue {
 	return map[string]dynamodbtypes.AttributeValue{
@@ -132,6 +141,28 @@ func TestSnapshotAckTracker(t *testing.T) {
 		got := store.recorded()
 		require.Len(t, got, 1)
 		require.Nil(t, got[0].lastKey)
+	})
+
+	t.Run("a failed store write is retried by the next ack", func(t *testing.T) {
+		tracker, store := newTestSnapshotAckTracker(1)
+
+		r1 := tracker.TrackBatch(4, scanKey("k1"), 5)
+		r2 := tracker.TrackBatch(4, scanKey("k2"), 5)
+
+		store.mu.Lock()
+		store.failNext = errStoreDown
+		store.mu.Unlock()
+
+		// The first ack's write fails; bookkeeping must not treat the failed
+		// position as durable.
+		require.Error(t, tracker.Ack(context.Background(), 4, 5, r1))
+		require.Empty(t, store.recorded())
+
+		// The next ack retries and persists.
+		require.NoError(t, tracker.Ack(context.Background(), 4, 5, r2))
+		got := store.recorded()
+		require.Len(t, got, 1)
+		require.Equal(t, "k2", keyVal(got[0].lastKey))
 	})
 
 	t.Run("a never-acked batch pins the segment forever", func(t *testing.T) {

@@ -18,6 +18,11 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// defaultSnapshotCheckpointBatchInterval is how many acknowledged batches a
+// segment accumulates between checkpoint-store writes (bounding write volume
+// the same way the pre-ack-gating scanner checkpointed every 10 batches).
+const defaultSnapshotCheckpointBatchInterval = 10
+
 // snapshotProgressStore is the persistence surface used by the snapshot ack
 // tracker; satisfied by *Checkpointer.
 type snapshotProgressStore interface {
@@ -60,7 +65,7 @@ type snapshotAckTracker struct {
 
 func newSnapshotAckTracker(store snapshotProgressStore, interval int, log *service.Logger) *snapshotAckTracker {
 	if interval <= 0 {
-		interval = 10
+		interval = defaultSnapshotCheckpointBatchInterval
 	}
 	return &snapshotAckTracker{
 		store:    store,
@@ -116,10 +121,6 @@ func (t *snapshotAckTracker) Ack(ctx context.Context, segment, n int, resolve fu
 			cp := st.frontier
 			toPersist = &cp
 			records = st.ackedRecords
-			st.persistedBatches = st.ackedBatches
-			if cp.complete {
-				st.persistedComplete = true
-			}
 		}
 	}
 	t.mu.Unlock()
@@ -127,10 +128,26 @@ func (t *snapshotAckTracker) Ack(ctx context.Context, segment, n int, resolve fu
 	if toPersist == nil {
 		return nil
 	}
+	var persistErr error
 	if toPersist.complete {
-		return t.store.UpdateSnapshotProgress(ctx, segment, nil, records)
+		persistErr = t.store.UpdateSnapshotProgress(ctx, segment, nil, records)
+	} else {
+		persistErr = t.store.UpdateSnapshotProgress(ctx, segment, toPersist.lastKey, records)
 	}
-	return t.store.UpdateSnapshotProgress(ctx, segment, toPersist.lastKey, records)
+	if persistErr != nil {
+		// Bookkeeping is deliberately untouched: the next ack (or seal) for
+		// this segment retries the write instead of silently treating the
+		// failed position as durable.
+		return persistErr
+	}
+
+	t.mu.Lock()
+	st.persistedBatches = st.ackedBatches
+	if toPersist.complete {
+		st.persistedComplete = true
+	}
+	t.mu.Unlock()
+	return nil
 }
 
 // SealSegment registers the segment-complete marker. Segments can end on an

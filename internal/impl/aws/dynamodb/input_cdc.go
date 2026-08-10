@@ -1392,7 +1392,7 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	// tracker below persists a segment's position only once every batch at or
 	// below it has been acknowledged downstream, and the completion gate is
 	// reset per connection attempt.
-	d.snapshot.ackTracker = newSnapshotAckTracker(d.checkpointer, 10 /* persist every 10 acked batches */, d.log)
+	d.snapshot.ackTracker = newSnapshotAckTracker(d.checkpointer, defaultSnapshotCheckpointBatchInterval, d.log)
 	d.snapshot.resetAckGate()
 	d.snapshot.scanner = NewSnapshotScanner(SnapshotScannerConfig{
 		Client:    d.dynamoClient,
@@ -1463,6 +1463,13 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 		// any earlier would let a crash (or a terminal nack) skip un-acked
 		// items on restart. Blocks until acks drain or soft-stop.
 		if err := d.snapshot.waitAcks(scanCtx); err != nil {
+			if errors.Is(err, context.Canceled) {
+				// Graceful shutdown mid-snapshot: nothing is wrong, the
+				// un-acked items simply resume from acknowledged progress on
+				// the next run.
+				d.log.Debug("Snapshot completion gate interrupted by shutdown")
+				return
+			}
 			wrappedErr := fmt.Errorf("snapshot completion gate for table %s: %w", tableName, err)
 			d.log.Errorf("%v (the snapshot will resume from acknowledged progress on restart)", wrappedErr)
 			d.snapshot.errOnce.Do(func() {
@@ -1678,16 +1685,7 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 			cutoff = decision.Cutoff
 			d.log.Infof("Failover resume for shard %s from trim horizon, skipping records at/before %s", shardID, cutoff.Format(time.RFC3339))
 		default:
-			// start_from: latest is honored only on the first discovery of a
-			// fresh pipeline. Checkpoint-less shards found on later refresh
-			// cycles (or after a restart with existing state) are stream
-			// rotation children: starting them at LATEST would silently skip
-			// their backlog.
-			if d.conf.startFrom == "latest" && d.honorStartFrom.Load() {
-				iteratorType = types.ShardIteratorTypeLatest
-			} else {
-				iteratorType = types.ShardIteratorTypeTrimHorizon
-			}
+			iteratorType = initialIteratorType(d.conf.startFrom, d.honorStartFrom.Load())
 			d.log.Infof("Starting shard %s from %s", shardID, iteratorType)
 		}
 
@@ -1988,16 +1986,7 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 			cutoff = decision.Cutoff
 			d.log.Infof("Failover resume for shard %s (table %s) from trim horizon, skipping records at/before %s", shardID, tableName, cutoff.Format(time.RFC3339))
 		default:
-			// start_from: latest is honored only on the first discovery of a
-			// fresh pipeline. Checkpoint-less shards found on later refresh
-			// cycles (or after a restart with existing state) are stream
-			// rotation children: starting them at LATEST would silently skip
-			// their backlog.
-			if d.conf.startFrom == "latest" && ts.honorStartFrom.Load() {
-				iteratorType = types.ShardIteratorTypeLatest
-			} else {
-				iteratorType = types.ShardIteratorTypeTrimHorizon
-			}
+			iteratorType = initialIteratorType(d.conf.startFrom, ts.honorStartFrom.Load())
 			d.log.Infof("Starting shard %s (table %s) from %s", shardID, tableName, iteratorType)
 		}
 
@@ -2082,20 +2071,35 @@ func lastRecordSequenceNumber(records []types.Record) string {
 	return ""
 }
 
+// initialIteratorType decides where a shard with no checkpoint state starts.
+// start_from is honored only while honorStartFrom is true — the first shard
+// discovery of a pipeline with no prior checkpoint state. Shards discovered
+// on later refresh cycles (or after a restart with existing state) are stream
+// rotation children: starting them at LATEST would silently skip their
+// backlog.
+func initialIteratorType(startFrom string, honorStartFrom bool) types.ShardIteratorType {
+	if startFrom == "latest" && honorStartFrom {
+		return types.ShardIteratorTypeLatest
+	}
+	return types.ShardIteratorTypeTrimHorizon
+}
+
 // resolveResumeIterator decides which iterator type and sequence number to use
 // when re-acquiring an iterator after the previous one expired. It prefers the
 // last sequence number actually read from the shard (resuming exactly where a
 // healthy iterator would be, so no records are skipped or re-read beyond the
 // pipeline's normal at-least-once guarantee), then the persisted checkpoint,
-// and finally the configured start position when nothing has been read yet.
-func resolveResumeIterator(lastSeq, checkpoint, startFrom string) (types.ShardIteratorType, *string) {
+// and otherwise the trim horizon. LATEST is never used here: the shard was
+// already positioned when its previous iterator was acquired, so re-acquiring
+// LATEST would silently skip everything published since — including the whole
+// backlog of a TRIM_HORIZON-positioned rotation child that expired before its
+// first read.
+func resolveResumeIterator(lastSeq, checkpoint string) (types.ShardIteratorType, *string) {
 	switch {
 	case lastSeq != "":
 		return types.ShardIteratorTypeAfterSequenceNumber, &lastSeq
 	case checkpoint != "":
 		return types.ShardIteratorTypeAfterSequenceNumber, &checkpoint
-	case startFrom == "latest":
-		return types.ShardIteratorTypeLatest, nil
 	default:
 		return types.ShardIteratorTypeTrimHorizon, nil
 	}
@@ -2117,7 +2121,7 @@ func (d *dynamoDBCDCInput) refreshExpiredIterator(ctx context.Context, cp *Check
 		}
 	}
 
-	iteratorType, sequenceNumber := resolveResumeIterator(lastSeq, checkpoint, d.conf.startFrom)
+	iteratorType, sequenceNumber := resolveResumeIterator(lastSeq, checkpoint)
 
 	iter, err := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
 		StreamArn:         &streamArn,
