@@ -727,7 +727,14 @@ func (e *salesforceCDCInputExecutor) emitSnapshot(
 		return fmt.Errorf("track snapshot checkpoint: %w", err)
 	}
 
-	ackFn := func(ackCtx context.Context, _ error) error {
+	ackFn := func(ackCtx context.Context, err error) error {
+		if err != nil {
+			// auto_replay_nacks is user-toggleable, so a nack can be terminal.
+			// Never resolve: the snapshot cursor stays pinned before this
+			// batch so nothing can be persisted past its undelivered records.
+			e.logger.Errorf("Snapshot batch rejected downstream: the snapshot cursor is now pinned before this batch and the input will stall once the checkpoint limit is reached, unless the batch is redelivered (auto_replay_nacks) or the pipeline restarts: %v", err)
+			return err
+		}
 		resolved := resolveFn()
 		if resolved == nil {
 			return nil
@@ -740,11 +747,11 @@ func (e *salesforceCDCInputExecutor) emitSnapshot(
 		e.stateMu.Lock()
 		e.state.SnapshotComplete = acked.SnapshotComplete
 		e.state.RestCursor = acked.RestCursor
-		err := e.saveStateLocked(ackCtx)
+		persistErr := e.saveStateLocked(ackCtx)
 		e.stateMu.Unlock()
 
-		if err != nil {
-			return fmt.Errorf("persist snapshot checkpoint: %w", err)
+		if persistErr != nil {
+			return fmt.Errorf("persist snapshot checkpoint: %w", persistErr)
 		}
 		return nil
 	}
@@ -900,7 +907,14 @@ func (e *salesforceCDCInputExecutor) flushTopic(
 		return fmt.Errorf("track checkpoint for %s: %w", topic, err)
 	}
 
-	ackFn := func(ackCtx context.Context, _ error) error {
+	ackFn := func(ackCtx context.Context, err error) error {
+		if err != nil {
+			// auto_replay_nacks is user-toggleable, so a nack can be terminal.
+			// Never resolve: the replay checkpoint stays pinned before this
+			// batch so nothing can be persisted past its undelivered events.
+			e.logger.Errorf("Batch rejected downstream (topic %s): the replay checkpoint is now pinned before this batch and the input will stall once the checkpoint limit is reached, unless the batch is redelivered (auto_replay_nacks) or the pipeline restarts: %v", topic, err)
+			return err
+		}
 		resolved := resolveFn()
 		if resolved == nil {
 			return nil
@@ -912,11 +926,11 @@ func (e *salesforceCDCInputExecutor) flushTopic(
 
 		e.stateMu.Lock()
 		e.state.Topics[topic] = acked
-		err := e.saveStateLocked(ackCtx)
+		persistErr := e.saveStateLocked(ackCtx)
 		e.stateMu.Unlock()
 
-		if err != nil {
-			return fmt.Errorf("persist checkpoint: %w", err)
+		if persistErr != nil {
+			return fmt.Errorf("persist checkpoint: %w", persistErr)
 		}
 		return nil
 	}

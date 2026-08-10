@@ -121,21 +121,39 @@ func (s *Subscription) connectLocked(ctx context.Context) error {
 	// so waiting for the first Recv would block indefinitely on idle topics.
 	s.markReadyLocked()
 
-	go s.receiveLoop(ctx)
+	go s.receiveLoop(ctx, streamCtx)
 
 	return nil
 }
 
 // receiveLoop reads from the gRPC stream and pushes decoded events into the
 // buffer. On stream errors it attempts reconnection with backoff instead of
-// exiting.
-func (s *Subscription) receiveLoop(ctx context.Context) {
+// exiting. streamCtx is this stream's cancellation context: it unblocks a
+// backpressured buffer send when the subscription closes or reconnects.
+func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 	// Capture done at goroutine start. reconnectWithBackoff → connectLocked
 	// replaces s.done with a fresh channel for the new goroutine; closing the
 	// old reference here prevents a double-close panic when both goroutines
 	// eventually return.
 	done := s.done
 	defer close(done)
+
+	// failStream logs err and hands control to the reconnect path. Because
+	// s.lastReplayID has not been advanced past the current batch, the
+	// reconnected stream redelivers it: duplicates, never loss.
+	failStream := func(err error) {
+		s.client.log.Errorf("Pub/Sub stream error (topic=%s), reconnecting: %v", s.config.TopicName, err)
+		s.lastError.Store(err)
+		s.lastErrorTime.Store(time.Now().UnixNano())
+
+		if reconnErr := s.reconnectWithBackoff(ctx); reconnErr != nil {
+			s.mu.Lock()
+			s.streamErr = reconnErr
+			s.state = StreamStateDisconnected
+			s.mu.Unlock()
+			s.client.log.Errorf("Reconnection failed permanently (topic=%s): %v", s.config.TopicName, reconnErr)
+		}
+	}
 
 	for {
 		resp, err := s.stream.Recv()
@@ -148,17 +166,7 @@ func (s *Subscription) receiveLoop(ctx context.Context) {
 			}
 			s.mu.Unlock()
 
-			s.client.log.Errorf("Pub/Sub stream error (topic=%s): %v", s.config.TopicName, err)
-			s.lastError.Store(err)
-			s.lastErrorTime.Store(time.Now().UnixNano())
-
-			if reconnErr := s.reconnectWithBackoff(ctx); reconnErr != nil {
-				s.mu.Lock()
-				s.streamErr = reconnErr
-				s.state = StreamStateDisconnected
-				s.mu.Unlock()
-				s.client.log.Errorf("Reconnection failed permanently (topic=%s): %v", s.config.TopicName, reconnErr)
-			}
+			failStream(err)
 			return
 		}
 
@@ -177,18 +185,24 @@ func (s *Subscription) receiveLoop(ctx context.Context) {
 				continue
 			}
 
+			// A schema fetch or decode failure must not skip the event: the
+			// batch's replay ID would advance past it and the event would be
+			// silently lost. Reconnect instead — lastReplayID still points
+			// before this batch, so it is redelivered. Transient failures
+			// (schema fetch) heal on retry; a genuinely undecodable event
+			// stalls the topic loudly rather than vanishing.
 			schema, err := s.client.schemaCache.GetSchema(ctx, event.SchemaId)
 			if err != nil {
-				s.client.log.Errorf("get schema for event (schemaID=%s): %v", event.SchemaId, err)
 				s.eventsDecodeErrors.Add(1)
-				continue
+				failStream(fmt.Errorf("get schema for event (schemaID=%s): %w", event.SchemaId, err))
+				return
 			}
 
 			decoded, err := DecodeAvroPayload(schema, event.Payload)
 			if err != nil {
-				s.client.log.Errorf("decode Avro payload (schemaID=%s): %v", event.SchemaId, err)
 				s.eventsDecodeErrors.Add(1)
-				continue
+				failStream(fmt.Errorf("decode Avro payload (schemaID=%s): %w", event.SchemaId, err))
+				return
 			}
 
 			pubsubEvent := &PubSubEvent{
@@ -209,14 +223,20 @@ func (s *Subscription) receiveLoop(ctx context.Context) {
 				}
 			}
 
+			// A full buffer applies backpressure instead of dropping: while
+			// this send blocks, no flow-control FetchRequest is issued, so
+			// Salesforce stops sending and the replay cursor cannot advance
+			// past an undelivered event. The stream context unblocks the send
+			// on close or reconnect.
 			select {
 			case s.eventBuffer <- pubsubEvent:
 				s.eventsReceived.Add(1)
 				s.lastEventTime.Store(time.Now().UnixNano())
 				s.client.log.Debugf("Pub/Sub event received (topic=%s, schemaID=%s, replayID=%x)", pubsubEvent.TopicName, pubsubEvent.SchemaID, pubsubEvent.ReplayID)
-			default:
-				s.eventsDropped.Add(1)
-				s.client.log.Warnf("Pub/Sub event buffer full (topic=%s), dropping event", s.config.TopicName)
+			case <-streamCtx.Done():
+				return
+			case <-ctx.Done():
+				return
 			}
 		}
 
