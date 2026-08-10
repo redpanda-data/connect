@@ -12,7 +12,20 @@ variable "runner_instance_type" {
 variable "load_gen_instance_type" {
   description = "EC2 instance type for the load generator."
   type        = string
-  default     = "c8g.large"
+  # MEASURED, do not "fix" this again without new evidence: the load generator's
+  # instance size is NOT what limits delivered write throughput.
+  #
+  # On the 2026-08-07 SQL Server runs, c8g.large (2 vCPU) committed 9,198,178
+  # rows over a point and c8g.4xlarge (16 vCPU) committed 8,498,328 — slightly
+  # FEWER, at an identical ~10-11K rows/s against a 150K target. An 8x vCPU
+  # increase changed nothing, which rules out client CPU, TLS cost and client
+  # network. The arithmetic puts the constraint server-side: ~3s per 1000-row
+  # insert regardless of client size, with a recurring sawtooth down to ~3K
+  # rows/s that looks like a checkpoint or log-growth stall.
+  #
+  # Kept at c8g.large so every bench isn't paying 8x for a box that measurably
+  # buys nothing. Raise it only if a specific scenario proves it client-bound.
+  default = "c8g.large"
 }
 
 variable "bench_session_id" {
