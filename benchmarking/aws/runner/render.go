@@ -195,12 +195,22 @@ func AppendMarkdown(target string, r *Result, description string) error {
 				sort.Float64s(rates)
 				brokerMedian = rates[len(rates)/2]
 			}
+			// The head-to-head delta is a RECORDS comparison, not a byte one.
+			//
+			// Bytes are not comparable between the engines even now that both are
+			// measured at the broker: the two producers use different compression
+			// settings, and Debezium's JSON envelope is fatter per record than
+			// Connect's output. A real measured example — Connect 9,400 vs
+			// Debezium 10,319 records/sec (within 10%) but 11.47 vs 18.48 MB/s —
+			// rendered as "+61%" on bytes, which reads as Debezium being much
+			// faster when it is simply more verbose. Records/sec is immune to both
+			// effects: one row in, one record out.
 			deltaStr := ""
 			if engine == "kafka_connect" {
-				if connectPt, hasConnect := g.byEngine["connect"]; hasConnect && connectPt.Summary.MedianMBPerSec > 0 {
-					diff := p.Summary.MedianMBPerSec - connectPt.Summary.MedianMBPerSec
-					pct := 100.0 * diff / connectPt.Summary.MedianMBPerSec
-					deltaStr = fmt.Sprintf("%+.0f MB/s (%+.0f%%)", diff, pct)
+				if connectPt, hasConnect := g.byEngine["connect"]; hasConnect && connectPt.Summary.MedianMsgPerSec > 0 {
+					diff := p.Summary.MedianMsgPerSec - connectPt.Summary.MedianMsgPerSec
+					pct := 100.0 * diff / connectPt.Summary.MedianMsgPerSec
+					deltaStr = fmt.Sprintf("%+s msg/s (%+.0f%%)", formatThousands(int64(diff)), pct)
 				}
 			}
 			rows = append(rows, markdownRow{

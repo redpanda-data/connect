@@ -66,12 +66,12 @@ func sampleDualEngineResult() *Result {
 			VCPU:   1,
 			Engine: "connect",
 			Summary: Summary{MedianMBPerSec: 100, P5MBPerSec: 90, P95MBPerSec: 110, PeakMBPerSec: 115,
-				MedianMsgPerSec: 80000},
+				MedianMsgPerSec: 100000},
 		},
 		{
 			VCPU:    1,
 			Engine:  "kafka_connect",
-			Summary: Summary{MedianMBPerSec: 72, P5MBPerSec: 65, P95MBPerSec: 78, PeakMBPerSec: 80},
+			Summary: Summary{MedianMBPerSec: 72, P5MBPerSec: 65, P95MBPerSec: 78, PeakMBPerSec: 80, MedianMsgPerSec: 110000},
 			BrokerSeries: []TopicPoint{
 				{T: 10, MBPerSec: 70}, {T: 20, MBPerSec: 72}, {T: 30, MBPerSec: 74},
 			},
@@ -96,8 +96,15 @@ func TestAppendMarkdown_DualEngineWithDelta(t *testing.T) {
 	require.Contains(t, s, "kafka_connect")
 	// Delta column header:
 	require.Contains(t, s, "Δ vs Connect")
-	// KC's delta: (72 - 100) / 100 = -28%
-	require.Contains(t, s, "-28%", "expected KC -28%% delta vs Connect; full markdown:\n"+s)
+
+	// The delta is a RECORDS comparison, not a byte one. The fixture is built so
+	// the two bases disagree in sign: KC is 100000 -> 110000 records/sec (+10%)
+	// while being 100 -> 72 MB/s (-28%). Bytes would call KC 28% slower when it
+	// is moving 10% MORE records with a fatter envelope, which is exactly the
+	// misreading this column used to invite.
+	require.Contains(t, s, "+10%", "delta must be records-based; full markdown:\n"+s)
+	require.NotContains(t, s, "-28%", "delta must NOT be byte-based")
+	require.Contains(t, s, "msg/s", "delta unit should name records, not MB")
 	// Connect row's delta column is blank — no "+0%" / "-0%" anywhere.
 	require.NotContains(t, s, "+0%", "connect row should not have a delta value")
 }
@@ -255,8 +262,8 @@ func TestAppendMarkdown_ArmlessRowsKeepBlankArm(t *testing.T) {
 		GitSHA:    "abcdef1234567890",
 		StartedAt: time.Now().UTC(),
 		Points: []PointResult{
-			{VCPU: 1, GOMAXPROCS: 1, Engine: "connect", Summary: Summary{MedianMBPerSec: 10}},
-			{VCPU: 1, GOMAXPROCS: 1, Engine: "kafka_connect", Summary: Summary{MedianMBPerSec: 8}},
+			{VCPU: 1, GOMAXPROCS: 1, Engine: "connect", Summary: Summary{MedianMBPerSec: 10, MedianMsgPerSec: 10000}},
+			{VCPU: 1, GOMAXPROCS: 1, Engine: "kafka_connect", Summary: Summary{MedianMBPerSec: 8, MedianMsgPerSec: 8000}},
 		},
 	}
 	require.NoError(t, AppendMarkdown(target, r, "cdc"))
@@ -264,6 +271,6 @@ func TestAppendMarkdown_ArmlessRowsKeepBlankArm(t *testing.T) {
 	require.NoError(t, err)
 	out := string(raw)
 	// The KC delta column still works: connect and KC group together when
-	// neither carries an arm.
-	require.Contains(t, out, "-2 MB/s (-20%)")
+	// neither carries an arm. Records-based (see the delta note in render.go).
+	require.Contains(t, out, "-2,000 msg/s (-20%)")
 }

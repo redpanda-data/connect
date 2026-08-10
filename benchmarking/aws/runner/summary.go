@@ -137,10 +137,17 @@ func derivedRow(connector, scenario, jsonPath string) (summaryRow, error) {
 	}
 	if matchingKC.Engine != "" {
 		row.KCMedianMB = matchingKC.Summary.MedianMBPerSec
-		if bestConnect.Summary.MedianMBPerSec > 0 {
-			diff := bestConnect.Summary.MedianMBPerSec - matchingKC.Summary.MedianMBPerSec
-			pct := 100.0 * diff / bestConnect.Summary.MedianMBPerSec
-			row.GapStr = fmt.Sprintf("%+.0f MB/s (%+.0f%%)", diff, pct)
+		// Gap is a RECORDS comparison — see the delta note in render.go. Bytes
+		// are not comparable across the engines (different producer compression,
+		// and Debezium's envelope is fatter per record), so a byte gap reads as a
+		// speed difference when it is a verbosity difference. Older result files
+		// carry MedianMsgPerSec = 0 on their KC points, because that field was
+		// never populated before the records fix; those rows get no gap rather
+		// than a misleading one.
+		if bestConnect.Summary.MedianMsgPerSec > 0 && matchingKC.Summary.MedianMsgPerSec > 0 {
+			diff := bestConnect.Summary.MedianMsgPerSec - matchingKC.Summary.MedianMsgPerSec
+			pct := 100.0 * diff / bestConnect.Summary.MedianMsgPerSec
+			row.GapStr = fmt.Sprintf("%+s msg/s (%+.0f%%)", formatThousands(int64(diff)), pct)
 		}
 	}
 

@@ -269,8 +269,8 @@ func TestRefreshSummary_DualEngineRow(t *testing.T) {
 		StartedAt:  time.Date(2026, 5, 19, 14, 2, 11, 0, time.UTC),
 		FinishedAt: time.Date(2026, 5, 19, 15, 33, 48, 0, time.UTC),
 		Points: []PointResult{
-			{VCPU: 1, Engine: "connect", Summary: Summary{MedianMBPerSec: 100, PeakMBPerSec: 110}},
-			{VCPU: 1, Engine: "kafka_connect", Summary: Summary{MedianMBPerSec: 72, PeakMBPerSec: 80}},
+			{VCPU: 1, Engine: "connect", Summary: Summary{MedianMBPerSec: 100, PeakMBPerSec: 110, MedianMsgPerSec: 100000}},
+			{VCPU: 1, Engine: "kafka_connect", Summary: Summary{MedianMBPerSec: 72, PeakMBPerSec: 80, MedianMsgPerSec: 110000}},
 		},
 	}, "", "  ")
 	resultPath := filepath.Join(resultsRoot, "postgres_cdc", "orders-cdc", "2026-05-19T14-02-11Z.json")
@@ -284,9 +284,12 @@ func TestRefreshSummary_DualEngineRow(t *testing.T) {
 	body, _ := os.ReadFile(summaryPath)
 	s := string(body)
 	require.Contains(t, s, "postgres_cdc / orders-cdc")
-	// Connect median 100, KC median 72, gap +28 MB/s (+28%)
+	// Connect median 100 MB/s @ 100,000 msg/s; KC 72 MB/s @ 110,000 msg/s.
+	// The MB/s columns still report bytes, but the GAP is records-based, so it
+	// reads -10,000 msg/s (-10%) rather than the +28 MB/s (+28%) a byte
+	// comparison would give. The two disagree in sign, which is the point.
 	require.Contains(t, s, "100")
 	require.Contains(t, s, "72")
-	require.Contains(t, s, "+28 MB/s")
-	require.Contains(t, s, "+28%")
+	require.Contains(t, s, "-10,000 msg/s (-10%)")
+	require.NotContains(t, s, "+28 MB/s", "gap must not be byte-based")
 }
