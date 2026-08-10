@@ -414,6 +414,13 @@ type tableStream struct {
 	shardReaders   map[string]*dynamoDBShardReader
 	snapshot       *snapshotState
 	shardRefreshCh chan struct{} // Signal coordinator to refresh shards immediately
+
+	// honorStartFrom is true only until the first successful shard discovery
+	// of a pipeline with no pre-existing checkpoint state. start_from applies
+	// exclusively to that case: shards that appear later (stream rotation
+	// children) or after a restart with state must start at TRIM_HORIZON, or
+	// their backlog would be silently skipped under start_from: latest.
+	honorStartFrom atomic.Bool
 }
 
 // dynamoDBCDCInput is the main input struct for DynamoDB CDC.
@@ -446,6 +453,14 @@ type dynamoDBCDCInput struct {
 	pendingAcks       sync.WaitGroup
 	backgroundWorkers sync.WaitGroup // Tracks background goroutines for proper cleanup
 	closed            atomic.Bool
+
+	// honorStartFrom (single-table path; see tableStream.honorStartFrom for
+	// multi-table) is true only until the first successful shard discovery of
+	// a pipeline with no pre-existing checkpoint state. start_from applies
+	// exclusively to that case: shards that appear later (stream rotation
+	// children) or after a restart with state must start at TRIM_HORIZON, or
+	// their backlog would be silently skipped under start_from: latest.
+	honorStartFrom atomic.Bool
 }
 
 type dynamoDBCDCMetrics struct {
@@ -1038,6 +1053,15 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 	// Initialize record batcher
 	d.recordBatcher = NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
 
+	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
+	// state already exists, shards without checkpoints are rotation children
+	// created while we were down and must be read from TRIM_HORIZON.
+	hasState, err := d.checkpointer.HasAnyState(ctx)
+	if err != nil {
+		return fmt.Errorf("probing checkpoint state: %w", err)
+	}
+	d.honorStartFrom.Store(!hasState)
+
 	d.log.Infof("Connected to DynamoDB stream: %s", *d.streamArn)
 
 	// Handle snapshot mode
@@ -1151,6 +1175,15 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 	// Initialize record batcher for this table
 	recordBatcher := NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
 
+	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
+	// state already exists for this table, shards without checkpoints are
+	// rotation children created while we were down and must be read from
+	// TRIM_HORIZON.
+	hasState, err := checkpointer.HasAnyState(ctx)
+	if err != nil {
+		return false, fmt.Errorf("probing checkpoint state for table %s: %w", tableName, err)
+	}
+
 	// Re-check under write lock before inserting (another goroutine may have
 	// initialized this table concurrently during periodic discovery).
 	d.mu.Lock()
@@ -1172,6 +1205,7 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 		shardReaders:   make(map[string]*dynamoDBShardReader),
 		shardRefreshCh: make(chan struct{}, 1),
 	}
+	ts.honorStartFrom.Store(!hasState)
 
 	d.tableStreams[tableName] = ts
 	d.log.Infof("Initialized table stream for %s (stream ARN: %s)", tableName, streamArn)
@@ -1565,12 +1599,17 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 			cutoff = decision.Cutoff
 			d.log.Infof("Failover resume for shard %s from trim horizon, skipping records at/before %s", shardID, cutoff.Format(time.RFC3339))
 		default:
-			if d.conf.startFrom == "latest" {
+			// start_from: latest is honored only on the first discovery of a
+			// fresh pipeline. Checkpoint-less shards found on later refresh
+			// cycles (or after a restart with existing state) are stream
+			// rotation children: starting them at LATEST would silently skip
+			// their backlog.
+			if d.conf.startFrom == "latest" && d.honorStartFrom.Load() {
 				iteratorType = types.ShardIteratorTypeLatest
 			} else {
 				iteratorType = types.ShardIteratorTypeTrimHorizon
 			}
-			d.log.Infof("Starting shard %s from %s", shardID, d.conf.startFrom)
+			d.log.Infof("Starting shard %s from %s", shardID, iteratorType)
 		}
 
 		// Get shard iterator (I/O operation - do not hold lock)
@@ -1611,6 +1650,10 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 		d.log.Infof("Tracking %d shards", totalShards)
 		d.metrics.shardsTracked.Set(int64(totalShards))
 	}
+
+	// The first successful discovery has positioned the fresh pipeline's
+	// initial shards; anything discovered from here on is a rotation child.
+	d.honorStartFrom.Store(false)
 
 	return nil
 }
@@ -1866,12 +1909,17 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 			cutoff = decision.Cutoff
 			d.log.Infof("Failover resume for shard %s (table %s) from trim horizon, skipping records at/before %s", shardID, tableName, cutoff.Format(time.RFC3339))
 		default:
-			if d.conf.startFrom == "latest" {
+			// start_from: latest is honored only on the first discovery of a
+			// fresh pipeline. Checkpoint-less shards found on later refresh
+			// cycles (or after a restart with existing state) are stream
+			// rotation children: starting them at LATEST would silently skip
+			// their backlog.
+			if d.conf.startFrom == "latest" && ts.honorStartFrom.Load() {
 				iteratorType = types.ShardIteratorTypeLatest
 			} else {
 				iteratorType = types.ShardIteratorTypeTrimHorizon
 			}
-			d.log.Infof("Starting shard %s (table %s) from %s", shardID, tableName, d.conf.startFrom)
+			d.log.Infof("Starting shard %s (table %s) from %s", shardID, tableName, iteratorType)
 		}
 
 		// Get shard iterator
@@ -1911,6 +1959,10 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		d.log.Infof("Table %s: tracking %d shards", tableName, shardCount)
 		d.updateTotalShardsMetric()
 	}
+
+	// The first successful discovery has positioned the fresh pipeline's
+	// initial shards; anything discovered from here on is a rotation child.
+	ts.honorStartFrom.Store(false)
 
 	return nil
 }

@@ -332,6 +332,32 @@ func (c *Checkpointer) CheckpointLimit() int {
 	return c.checkpointLimit
 }
 
+// HasAnyState reports whether any checkpoint state (shard checkpoints or
+// snapshot progress) exists under this pipeline's namespace and stream/table
+// key. Used to scope start_from to genuinely fresh pipelines: shards that
+// appear once state exists are stream-rotation children whose backlog must
+// not be skipped.
+func (c *Checkpointer) HasAnyState(ctx context.Context) (bool, error) {
+	result, err := c.svc.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(c.tableName),
+		KeyConditionExpression: aws.String("#hk = :hv"),
+		ExpressionAttributeNames: map[string]string{
+			"#hk": c.hashAttrName(),
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":hv": &types.AttributeValueMemberS{Value: c.hashKeyValue()},
+		},
+		Limit: aws.Int32(1),
+	})
+	if err != nil {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
+			return false, nil
+		}
+		return false, fmt.Errorf("probing checkpoint state for table=%s key=%s: %w", c.tableName, c.hashKeyValue(), err)
+	}
+	return len(result.Items) > 0, nil
+}
+
 type resumeMode int
 
 const (
