@@ -69,6 +69,18 @@ func (b *batchPublisher) recordSnapshotNack(err error) {
 	}
 }
 
+// resetSnapshotGate clears any nack recorded by a previous snapshot attempt so
+// the gate reflects only the current run: the publisher outlives reconnects,
+// and a stale error would fail every retry even after a clean re-run. The
+// WaitGroup is deliberately left untouched — batches from a previous attempt
+// that are still in flight can yet be acked or nacked, and both must keep
+// counting.
+func (b *batchPublisher) resetSnapshotGate() {
+	b.snapshotNackMu.Lock()
+	defer b.snapshotNackMu.Unlock()
+	b.snapshotNackErr = nil
+}
+
 // newBatchPublisher creates an instance of batchPublisher.
 func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[replication.LSN], logger *service.Logger) *batchPublisher {
 	b := &batchPublisher{

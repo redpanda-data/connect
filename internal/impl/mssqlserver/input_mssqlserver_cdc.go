@@ -357,6 +357,9 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 
 		// snapshot if no LSN exists then store checkpoint once complete
 		if snapshotter != nil {
+			// The publisher outlives reconnects: clear any nack recorded by a
+			// previous snapshot attempt so the gate judges only this run.
+			i.publisher.resetSnapshotGate()
 			if maxLSN, err = i.processSnapshot(softCtx, snapshotter); err != nil {
 				if i.stopSig.IsHardStopSignalled() {
 					i.log.Errorf("Shutting down snapshotting process: %s", err)

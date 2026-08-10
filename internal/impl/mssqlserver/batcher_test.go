@@ -75,6 +75,26 @@ func TestSnapshotAckGate(t *testing.T) {
 		require.NoError(t, publisher.waitSnapshotAcks(ctx))
 	})
 
+	t.Run("a nack fails only the snapshot attempt it belongs to", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedLSNs := newTestBatchPublisher(t)
+
+		// Run 1: a snapshot batch is nacked; the gate fails.
+		msg := publishAndReceive(t, ctx, publisher, snapshotEvent())
+		nackErr := errors.New("downstream failure")
+		require.ErrorIs(t, msg.ackFn(ctx, nackErr), nackErr)
+		require.ErrorIs(t, publisher.waitSnapshotAcks(ctx), nackErr)
+
+		// Run 2 (reconnect reuses the publisher): the gate is reset, the
+		// re-run snapshot acks cleanly, and the gate must pass — a stale
+		// run-1 error here would livelock the input re-snapshotting forever.
+		publisher.resetSnapshotGate()
+		msg2 := publishAndReceive(t, ctx, publisher, snapshotEvent())
+		require.NoError(t, msg2.ackFn(ctx, nil))
+		require.NoError(t, publisher.waitSnapshotAcks(ctx))
+		require.Empty(t, cachedLSNs())
+	})
+
 	t.Run("context cancellation escapes the gate", func(t *testing.T) {
 		publisher, _ := newTestBatchPublisher(t)
 
