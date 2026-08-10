@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -43,6 +44,15 @@ type batchPublisher struct {
 	// than let the post-snapshot SCN persist over undelivered rows.
 	snapshotNackMu  sync.Mutex
 	snapshotNackErr error
+
+	// onTerminalNack, when set, is invoked once a batch is rejected
+	// downstream: a nack pins the ordered tracker, so the input must restart
+	// (with a fresh publisher) to resume from the last durable SCN.
+	onTerminalNack func(error)
+	// sealed marks a publisher that has been replaced by a reconnect. Late
+	// acks from its session must not persist checkpoints (they could regress
+	// the new session's positions) nor trigger restarts.
+	sealed atomic.Bool
 
 	log     *service.Logger
 	shutSig *shutdown.Signaller
@@ -301,12 +311,27 @@ func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.Mes
 					// terminal. Never resolve: the checkpoint stays pinned
 					// before this batch so nothing can be persisted past its
 					// undelivered rows. Snapshot nacks additionally fail the
-					// handoff gate so the post-snapshot SCN is not persisted.
+					// handoff gate so the post-snapshot SCN is not persisted,
+					// and the input restarts with a fresh tracker to resume
+					// from the last durable SCN (the pinned slot would
+					// otherwise wedge checkpointing for the process lifetime).
 					if isSnapshotBatch {
 						b.recordSnapshotNack(err)
 					}
-					b.log.Errorf("Batch rejected downstream (snapshot=%v, checkpoint SCN %d): the checkpoint is now pinned before this batch and the input will stall once checkpoint_limit is reached, unless the batch is redelivered (auto_replay_nacks) or the pipeline restarts: %v", isSnapshotBatch, checkpointSCN, err)
+					if b.sealed.Load() {
+						return err
+					}
+					b.log.Errorf("Batch rejected downstream (snapshot=%v, checkpoint SCN %d): restarting to redeliver from the last durable checkpoint: %v", isSnapshotBatch, checkpointSCN, err)
+					if b.onTerminalNack != nil {
+						b.onTerminalNack(err)
+					}
 					return err
+				}
+				if b.sealed.Load() {
+					// A late ack from a replaced session: resolving its own
+					// tracker is harmless, but persisting could regress the
+					// new session's checkpoints.
+					return nil
 				}
 				scn := resolveFn()
 				if scn == nil || !scn.IsValid() {
@@ -321,6 +346,11 @@ func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.Mes
 			},
 		},
 	}, nil
+}
+
+// seal marks the publisher as replaced; see the sealed field.
+func (b *batchPublisher) seal() {
+	b.sealed.Store(true)
 }
 
 func (b *batchPublisher) recordSnapshotNack(err error) {

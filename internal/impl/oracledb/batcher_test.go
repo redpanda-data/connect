@@ -13,6 +13,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -228,6 +229,44 @@ func TestFlushCurrent(t *testing.T) {
 	// a second publish+flush must work identically.
 	publishEvent(2)
 	receive("publisher loop no longer functional after flushCurrent")
+}
+
+func TestTerminalNack(t *testing.T) {
+	t.Run("invokes onTerminalNack so the input can restart", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisher(t)
+
+		var got atomic.Value
+		publisher.onTerminalNack = func(err error) { got.Store(err) }
+
+		am := publishAndReceive(t, ctx, publisher, streamingEvent(200))
+		nackErr := errors.New("downstream failure")
+		require.ErrorIs(t, am.ackFn(ctx, nackErr), nackErr)
+
+		stored, _ := got.Load().(error)
+		require.ErrorIs(t, stored, nackErr)
+		require.Empty(t, cachedSCNs())
+	})
+
+	t.Run("a sealed publisher neither persists nor restarts", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisher(t)
+
+		restarted := false
+		publisher.onTerminalNack = func(error) { restarted = true }
+
+		am1 := publishAndReceive(t, ctx, publisher, streamingEvent(200))
+		am2 := publishAndReceive(t, ctx, publisher, streamingEvent(300))
+		publisher.seal()
+
+		// Late ack from a replaced session: must not persist.
+		require.NoError(t, am1.ackFn(ctx, nil))
+		require.Empty(t, cachedSCNs(), "a sealed publisher must not persist checkpoints")
+
+		// Late nack: must not trigger a restart of the new session.
+		require.Error(t, am2.ackFn(ctx, errors.New("late failure")))
+		require.False(t, restarted, "a sealed publisher must not trigger restarts")
+	})
 }
 
 // TestTrackOrderUnderConcurrentFlush stresses the two concurrent flushers (the

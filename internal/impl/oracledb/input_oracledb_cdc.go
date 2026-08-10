@@ -261,6 +261,13 @@ type oracleDBCDCInput struct {
 	publisher *batchPublisher
 	metrics   *service.Metrics
 
+	// batching and checkpointLimit rebuild the publisher (batcher + ordered
+	// checkpoint tracker) on every Connect: a terminal nack pins a tracker
+	// slot by design, and only a fresh tracker lets the restart resume from
+	// the last durable SCN instead of staying wedged behind the stale slot.
+	batching        service.BatchPolicy
+	checkpointLimit int
+
 	stopSig          *shutdown.Signaller
 	snapshotOnlyDone atomic.Bool
 	log              *service.Logger
@@ -403,13 +410,15 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 				Exclude: tableExcludes,
 			},
 		},
-		lmCfg:     lmCfg,
-		res:       resources,
-		log:       logger,
-		metrics:   resources.Metrics(),
-		stopSig:   shutdown.NewSignaller(),
-		publisher: newBatchPublisher(batcher, cp, logger),
-		cpCache:   cpCache,
+		lmCfg:           lmCfg,
+		res:             resources,
+		log:             logger,
+		metrics:         resources.Metrics(),
+		stopSig:         shutdown.NewSignaller(),
+		publisher:       newBatchPublisher(batcher, cp, logger),
+		batching:        policy,
+		checkpointLimit: checkpointLimit,
+		cpCache:         cpCache,
 	}
 
 	defer func() {
@@ -531,7 +540,28 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			o.log.Warnf("Failed to pre-fetch schema for %s.%s: %v", t.Schema, t.Name, err)
 		}
 	}
+
+	// Rebuild the publisher (batcher + ordered checkpoint tracker) for this
+	// connection attempt. A terminal nack pins a tracker slot by design;
+	// reusing the old tracker would leave every future checkpoint stuck
+	// behind the stale slot, wedging the input for the process lifetime
+	// instead of letting this restart resume from the last durable SCN. The
+	// old publisher is sealed so late acks from the previous session cannot
+	// persist stale positions.
+	o.publisher.seal()
+	o.publisher.Close()
+	newBatcher, err := o.batching.NewBatcher(o.res)
+	if err != nil {
+		return fmt.Errorf("creating batcher: %w", err)
+	}
+	o.publisher = newBatchPublisher(newBatcher, checkpoint.NewCapped[replication.SCN](int64(o.checkpointLimit)), o.log)
+	o.publisher.cacheSCN = o.cacheSCN
 	o.publisher.schemas = schemas
+	o.publisher.onTerminalNack = func(error) {
+		// o.stopSig is only replaced while the input is stopped, and sealed
+		// publishers never invoke this, so the signaller here is current.
+		o.stopSig.TriggerSoftStop()
+	}
 
 	if cachedSCN, err = o.getCachedSCN(ctx); err != nil {
 		if errors.Is(err, service.ErrKeyNotFound) {
