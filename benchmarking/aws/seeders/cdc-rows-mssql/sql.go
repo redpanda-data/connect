@@ -620,6 +620,44 @@ func enableCDCOnTable(ctx context.Context, db *sql.DB, table string) error {
 	return nil
 }
 
+// waitForScannerIdle blocks until the CDC log scanner has drained its backlog
+// (latest scan session shows empty scans / zero transactions), up to budget.
+//
+// Call this BEFORE sp_cdc_disable_table. The disable drops cdc.<instance>_CT,
+// and a scanner grinding through a large backlog writes to that table almost
+// continuously — on 2026-08-11 (AWS, ~17.4M-row backlog) five deadlock retries
+// over 30s all lost the race, where the same retries succeed easily against
+// the small backlogs of local testing. Waiting for idle first removes the
+// contention instead of racing it; the deadlock retry stays as the backstop
+// for the residual window.
+//
+// Returning after budget without idleness is deliberately NOT an error: the
+// disable still gets its retry attempts, and a scanner that busy will fail
+// them loudly anyway.
+func waitForScannerIdle(ctx context.Context, db *sql.DB, budget time.Duration) {
+	deadline := time.Now().Add(budget)
+	for time.Now().Before(deadline) {
+		var end sql.NullTime
+		var trans, empties sql.NullInt64
+		err := db.QueryRowContext(ctx, `SELECT TOP 1 end_time, tran_count, empty_scan_count
+			FROM sys.dm_cdc_log_scan_sessions ORDER BY start_time DESC`).Scan(&end, &trans, &empties)
+		if err != nil {
+			// DMV unreadable: nothing to wait on, let the disable retries cope.
+			fmt.Printf("waitForScannerIdle: dm_cdc_log_scan_sessions unreadable (%v); proceeding\n", err)
+			return
+		}
+		// Idle = the latest session is doing empty scans (nothing left to
+		// publish) rather than moving transactions.
+		if empties.Valid && empties.Int64 > 0 && (!trans.Valid || trans.Int64 == 0) {
+			return
+		}
+		fmt.Printf("waiting for CDC scanner to drain backlog before disable (tran_count=%d, empty_scans=%d)\n",
+			trans.Int64, empties.Int64)
+		time.Sleep(10 * time.Second)
+	}
+	fmt.Printf("scanner still busy after %s; attempting disable anyway (deadlock retry is the backstop)\n", budget)
+}
+
 func disableCDCOnTable(ctx context.Context, db *sql.DB, table string) error {
 	var tracked bool
 	err := db.QueryRowContext(ctx, `
@@ -637,6 +675,8 @@ func disableCDCOnTable(ctx context.Context, db *sql.DB, table string) error {
 	if !tracked {
 		return nil
 	}
+	// Don't race a scanner that is grinding backlog — see waitForScannerIdle.
+	waitForScannerIdle(ctx, db, 12*time.Minute)
 	q := fmt.Sprintf(
 		"EXEC sys.sp_cdc_disable_table @source_schema = N'%s', @source_name = N'%s', @capture_instance = N'all'",
 		schema, table)
