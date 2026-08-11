@@ -16,6 +16,7 @@ package mongodb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -58,6 +59,9 @@ func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig, logger *service
 	cc, err := ClientConfigFromParsed(parsedConf, logger)
 	if err != nil {
 		return nil, err
+	}
+	if cc.AssumesRole() {
+		return nil, errors.New("aws.role and aws.roles cannot be used with the mongodb cache: role-derived session credentials expire and this component has no reconnect lifecycle to refresh them; use the ambient credential chain or static keys instead")
 	}
 	connectCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

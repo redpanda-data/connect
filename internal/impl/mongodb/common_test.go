@@ -126,3 +126,88 @@ aws:
 	require.NoError(t, err)
 	require.NoError(t, input.Close(t.Context()))
 }
+
+// stubAWSOptFn swaps in a no-op AWSOptFn for the duration of the test, since
+// the mongodb package does not import the aws subpackage and would otherwise
+// hit the "does not import components/aws" stub error before the checks under
+// test get a chance to run.
+func stubAWSOptFn(t *testing.T) {
+	t.Helper()
+	prev := AWSOptFn
+	t.Cleanup(func() { AWSOptFn = prev })
+	AWSOptFn = func(*service.ParsedConfig, *service.Logger) (CredentialBuilder, error) {
+		return func(context.Context) (*options.Credential, error) {
+			return &options.Credential{AuthMechanism: "MONGODB-AWS"}, nil
+		}, nil
+	}
+}
+
+const processorConfBoilerplate = `
+url: "mongodb://localhost:27017"
+database: "foo"
+collection: "bar"
+operation: find-one
+filter_map: |
+  root.a = this.a
+`
+
+func TestAWSAuthProcessorRejectsRoleAssumption(t *testing.T) {
+	stubAWSOptFn(t)
+	conf, err := ProcessorSpec().ParseYAML(processorConfBoilerplate+`
+aws:
+  enabled: true
+  role: arn:aws:iam::123456789012:role/foo
+`, service.NewEnvironment())
+	require.NoError(t, err)
+
+	_, err = ProcessorFromParsed(conf, service.MockResources())
+	require.ErrorContains(t, err, "cannot be used with the mongodb processor")
+}
+
+func TestAWSAuthCacheRejectsRoleAssumption(t *testing.T) {
+	stubAWSOptFn(t)
+	conf, err := mongodbCacheConfig().ParseYAML(`
+url: "mongodb://localhost:27017"
+database: "foo"
+collection: "bar"
+key_field: "k"
+value_field: "v"
+aws:
+  enabled: true
+  role: arn:aws:iam::123456789012:role/foo
+`, service.NewEnvironment())
+	require.NoError(t, err)
+
+	_, err = newMongodbCacheFromConfig(conf, service.MockResources().Logger())
+	require.ErrorContains(t, err, "cannot be used with the mongodb cache")
+}
+
+func TestAWSAuthCacheAcceptsAmbientCredentials(t *testing.T) {
+	stubAWSOptFn(t)
+	conf, err := mongodbCacheConfig().ParseYAML(`
+url: "mongodb://localhost:27017"
+database: "foo"
+collection: "bar"
+key_field: "k"
+value_field: "v"
+aws:
+  enabled: true
+`, service.NewEnvironment())
+	require.NoError(t, err)
+
+	cache, err := newMongodbCacheFromConfig(conf, service.MockResources().Logger())
+	require.NoError(t, err)
+	require.NoError(t, cache.Close(t.Context()))
+}
+
+func TestAWSAuthInputAcceptsRoleAssumption(t *testing.T) {
+	stubAWSOptFn(t)
+	parsed := parseInputConf(t, inputConfBoilerplate+`
+aws:
+  enabled: true
+  role: arn:aws:iam::123456789012:role/foo
+`)
+	input, err := newMongoInput(parsed, service.MockResources().Logger())
+	require.NoError(t, err)
+	require.NoError(t, input.Close(t.Context()))
+}

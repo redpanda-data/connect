@@ -56,6 +56,22 @@ const (
 	FieldAWSIAMAuth = "aws"
 	// FieldAWSIAMAuthEnabled is the name of the field enabling AWS IAM authentication.
 	FieldAWSIAMAuthEnabled = "enabled"
+	// FieldAWSIAMAuthRegion is the name of the AWS region field.
+	FieldAWSIAMAuthRegion = "region"
+	// FieldAWSIAMAuthSessionDuration is the name of the STS session duration field.
+	FieldAWSIAMAuthSessionDuration = "session_duration"
+	// FieldAWSIAMAuthID is the name of the static access key ID field.
+	FieldAWSIAMAuthID = "id"
+	// FieldAWSIAMAuthSecret is the name of the static secret key field.
+	FieldAWSIAMAuthSecret = "secret"
+	// FieldAWSIAMAuthToken is the name of the static session token field.
+	FieldAWSIAMAuthToken = "token"
+	// FieldAWSIAMAuthRole is the name of the role ARN field, also used for entries of the roles list.
+	FieldAWSIAMAuthRole = "role"
+	// FieldAWSIAMAuthRoleExternalID is the name of the role external ID field, also used for entries of the roles list.
+	FieldAWSIAMAuthRoleExternalID = "role_external_id"
+	// FieldAWSIAMAuthRoles is the name of the role-chaining list field.
+	FieldAWSIAMAuthRoles = "roles"
 )
 
 // CredentialBuilder resolves a MONGODB-AWS credential at connection time. It
@@ -83,37 +99,37 @@ func AWSIAMAuthField() *service.ConfigField {
 			Description("Enable AWS IAM authentication using the driver-native `MONGODB-AWS` mechanism. The MongoDB Atlas database user must be created with the AWS IAM authentication type, and connections require TLS. When no static credentials or roles are configured, the ambient AWS credential chain (environment variables, EC2 instance profile, EKS pod role) is used and expiring credentials are refreshed automatically.").
 			ShortDescription("Enable AWS IAM authentication using the MONGODB-AWS mechanism.").
 			Default(false),
-		service.NewStringField("region").
+		service.NewStringField(FieldAWSIAMAuthRegion).
 			Description("The AWS region used when assuming roles (for STS calls). Only used when `role` or `roles` are configured; the ambient and static-key paths ignore it. If no region is specified then the environment default is used.").
 			ShortDescription("The AWS region used for STS calls when assuming roles. Defaults to the environment region.").
 			Optional(),
-		service.NewDurationField("session_duration").
+		service.NewDurationField(FieldAWSIAMAuthSessionDuration).
 			Description("The duration of the STS session requested when assuming roles. AWS requires at least 15 minutes and caps sessions created through role chaining at one hour. Only used when `role` or `roles` are configured.").
 			ShortDescription("STS session duration when assuming roles. AWS requires at least 15m and caps role chaining at 1h.").
 			Default("1h").
 			Advanced(),
-		service.NewStringField("id").
+		service.NewStringField(FieldAWSIAMAuthID).
 			Description("The ID of credentials to use.").
 			Optional().Advanced(),
-		service.NewStringField("secret").
+		service.NewStringField(FieldAWSIAMAuthSecret).
 			Description("The secret for the credentials being used.").
 			Optional().Advanced().Secret(),
-		service.NewStringField("token").
+		service.NewStringField(FieldAWSIAMAuthToken).
 			Description("The token for the credentials being used, required when using short term credentials.").
 			Optional().Advanced(),
-		service.NewStringField("role").
+		service.NewStringField(FieldAWSIAMAuthRole).
 			Description("Optional AWS IAM role ARN to assume for authentication. Cannot be combined with `roles`; use the `roles` array instead when chaining multiple roles.").
 			ShortDescription("Optional AWS IAM role ARN to assume for authentication. Cannot be combined with roles.").
 			Optional(),
-		service.NewStringField("role_external_id").
+		service.NewStringField(FieldAWSIAMAuthRoleExternalID).
 			Description("Optional external ID for the role assumption. Only used with the `role` field, which cannot be combined with `roles`.").
 			ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
 			Optional(),
-		service.NewObjectListField("roles",
-			service.NewStringField("role").
+		service.NewObjectListField(FieldAWSIAMAuthRoles,
+			service.NewStringField(FieldAWSIAMAuthRole).
 				Default("").
 				Description("AWS IAM role ARN to assume."),
-			service.NewStringField("role_external_id").
+			service.NewStringField(FieldAWSIAMAuthRoleExternalID).
 				Description("Optional external ID for the role assumption.").
 				Default("").
 				Optional(),
@@ -122,7 +138,7 @@ func AWSIAMAuthField() *service.ConfigField {
 			ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
 			Optional(),
 	).
-		Description("AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against MongoDB Atlas. When enabled, IAM credentials are used instead of a static username and password. Role-derived session credentials are resolved when the component connects and are re-resolved whenever it reconnects. The `mongodb` processor and cache establish their client once at creation, so restarting the pipeline is required to refresh their credentials. For long-running pipelines, prefer the ambient credential chain (leave keys and roles unset), which the driver refreshes automatically.").
+		Description("AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against MongoDB Atlas. When enabled, IAM credentials are used instead of a static username and password. Role-derived session credentials are resolved when the component connects and are re-resolved whenever it reconnects. The `mongodb` processor and cache establish their client once at creation and cannot refresh expiring session credentials, so `role` and `roles` are rejected for those components; use the ambient credential chain or static keys with them. For long-running pipelines, prefer the ambient credential chain (leave keys and roles unset), which the driver refreshes automatically.").
 		ShortDescription("AWS IAM authentication configuration (MONGODB-AWS).").
 		Advanced().
 		Optional().
@@ -138,6 +154,14 @@ type ClientConfig struct {
 	username    string
 	password    string
 	credBuilder CredentialBuilder // nil unless aws.enabled
+	assumesRole bool
+}
+
+// AssumesRole reports whether the aws block is configured with role
+// assumption, which yields expiring session credentials that can only be
+// refreshed by rebuilding the client.
+func (c *ClientConfig) AssumesRole() bool {
+	return c.assumesRole
 }
 
 // ClientConfigFromParsed parses and validates the connection fields shared by
@@ -182,6 +206,9 @@ func ClientConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		if probe.Auth != nil && (probe.Auth.Username != "" || probe.Auth.PasswordSet) {
 			return nil, errors.New("credentials embedded in the url cannot be combined with aws.enabled; the MONGODB-AWS mechanism authenticates with IAM credentials instead")
 		}
+		role, _ := awsConf.FieldString(FieldAWSIAMAuthRole)
+		roles, _ := awsConf.FieldObjectList(FieldAWSIAMAuthRoles)
+		c.assumesRole = role != "" || len(roles) > 0
 		if c.credBuilder, err = AWSOptFn(awsConf, logger); err != nil {
 			return nil, err
 		}

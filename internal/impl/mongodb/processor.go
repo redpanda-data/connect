@@ -101,6 +101,9 @@ func ProcessorFromParsed(conf *service.ParsedConfig, res *service.Resources) (mp
 	if cc, err = ClientConfigFromParsed(conf, res.Logger()); err != nil {
 		return
 	}
+	if cc.AssumesRole() {
+		return nil, errors.New("aws.role and aws.roles cannot be used with the mongodb processor: role-derived session credentials expire and this component has no reconnect lifecycle to refresh them; use the ambient credential chain or static keys instead")
+	}
 	connectCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	if mp.client, mp.database, err = cc.Connect(connectCtx); err != nil {

@@ -51,9 +51,9 @@ func awsIAMCredentials(awsConf *service.ParsedConfig, log *service.Logger) (mong
 		return nil, nil
 	}
 
-	id, _ := awsConf.FieldString("id")
-	secret, _ := awsConf.FieldString("secret")
-	token, _ := awsConf.FieldString("token")
+	id, _ := awsConf.FieldString(mongodb.FieldAWSIAMAuthID)
+	secret, _ := awsConf.FieldString(mongodb.FieldAWSIAMAuthSecret)
+	token, _ := awsConf.FieldString(mongodb.FieldAWSIAMAuthToken)
 
 	if (id == "") != (secret == "") {
 		return nil, errors.New("aws.id and aws.secret must both be set when either is provided")
@@ -62,7 +62,7 @@ func awsIAMCredentials(awsConf *service.ParsedConfig, log *service.Logger) (mong
 		return nil, errors.New("aws.token requires aws.id and aws.secret to also be set")
 	}
 
-	region, _ := awsConf.FieldString("region")
+	region, _ := awsConf.FieldString(mongodb.FieldAWSIAMAuthRegion)
 
 	roleConfigs, err := parseRoleConfigs(awsConf)
 	if err != nil {
@@ -80,7 +80,7 @@ func awsIAMCredentials(awsConf *service.ParsedConfig, log *service.Logger) (mong
 		}, nil
 	}
 
-	sessionDuration, err := awsConf.FieldDuration("session_duration")
+	sessionDuration, err := awsConf.FieldDuration(mongodb.FieldAWSIAMAuthSessionDuration)
 	if err != nil {
 		return nil, err
 	}
@@ -133,29 +133,29 @@ func credentialFromKeys(id, secret, token string) *options.Credential {
 
 func parseRoleConfigs(awsConf *service.ParsedConfig) ([]roleConfig, error) {
 	var rolesConfs []*service.ParsedConfig
-	if awsConf.Contains("roles") {
+	if awsConf.Contains(mongodb.FieldAWSIAMAuthRoles) {
 		var err error
-		if rolesConfs, err = awsConf.FieldObjectList("roles"); err != nil {
+		if rolesConfs, err = awsConf.FieldObjectList(mongodb.FieldAWSIAMAuthRoles); err != nil {
 			return nil, err
 		}
 	}
 
 	var roles []roleConfig
-	singleRole, _ := awsConf.FieldString("role")
+	singleRole, _ := awsConf.FieldString(mongodb.FieldAWSIAMAuthRole)
 	if singleRole != "" {
 		if len(rolesConfs) > 0 {
 			return nil, errors.New("aws.role and aws.roles cannot both be set; use roles for chaining")
 		}
-		externalID, _ := awsConf.FieldString("role_external_id")
+		externalID, _ := awsConf.FieldString(mongodb.FieldAWSIAMAuthRoleExternalID)
 		roles = append(roles, roleConfig{arn: singleRole, externalID: externalID})
 	}
 
 	for i, conf := range rolesConfs {
-		arn, _ := conf.FieldString("role")
+		arn, _ := conf.FieldString(mongodb.FieldAWSIAMAuthRole)
 		if arn == "" {
 			return nil, fmt.Errorf("roles[%d].role is required for IAM authentication", i)
 		}
-		externalID, _ := conf.FieldString("role_external_id")
+		externalID, _ := conf.FieldString(mongodb.FieldAWSIAMAuthRoleExternalID)
 		roles = append(roles, roleConfig{arn: arn, externalID: externalID})
 	}
 	return roles, nil
