@@ -17,16 +17,14 @@ import (
 )
 
 func TestSnapshotAckFn(t *testing.T) {
-	t.Run("nack returns the error without resolving", func(t *testing.T) {
+	t.Run("a nack resolves too: auto_replay_nacks off is an opt-in drop", func(t *testing.T) {
 		resolved := false
 		ackFn := snapshotAckFn(func() *bson.Raw {
 			resolved = true
 			return nil
 		})
-		nackErr := errors.New("downstream failure")
-		err := ackFn(t.Context(), nackErr)
-		require.ErrorIs(t, err, nackErr)
-		require.False(t, resolved, "a nacked snapshot batch must not resolve its checkpoint slot")
+		require.NoError(t, ackFn(t.Context(), errors.New("downstream failure")))
+		require.True(t, resolved, "a nacked batch is deleted per the auto_replay_nacks contract; the stream must continue past it")
 	})
 
 	t.Run("ack resolves and accepts a nil resume token", func(t *testing.T) {

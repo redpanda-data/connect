@@ -666,16 +666,14 @@ func (m *mongoCDC) readParallelSnapshot(
 	return g.Wait()
 }
 
-// snapshotAckFn builds the ack function for a snapshot batch. Mirroring the
-// streaming ackFn, a nack returns the error without resolving the checkpoint
-// slot: the shared capped tracker stays pinned, so the resume token can never
-// be persisted past un-delivered snapshot rows (redelivery is owned by
-// auto_replay_nacks).
+// snapshotAckFn builds the ack function for a snapshot batch. Nacks resolve
+// the checkpoint slot just like acks: auto_replay_nacks defaults to replaying
+// rejections in-process, and disabling it is a documented opt-in to DROP
+// messages that fail ("If set to false these messages will instead be
+// deleted"), so the stream must continue past them rather than pin the
+// tracker and back-pressure forever.
 func snapshotAckFn(resolve func() *bson.Raw) service.AckFunc {
-	return func(_ context.Context, err error) error {
-		if err != nil {
-			return err
-		}
+	return func(_ context.Context, _ error) error {
 		resumeToken := resolve()
 		if resumeToken != nil && *resumeToken != nil {
 			return fmt.Errorf("unexpected resume token for snapshot batch: %s", resumeToken.String())
