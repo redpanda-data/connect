@@ -14,6 +14,9 @@ import (
 	"sync"
 
 	"github.com/Jeffail/checkpoint"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -40,6 +43,10 @@ type RecordBatcher struct {
 	maxTrackedShards   int
 	maxTrackedMessages int
 	log                *service.Logger
+	// tracer wraps the live checkpoint-commit path (CONTRIBUTING.md §5.4.4).
+	// Defaults to a no-op tracer; the input installs the real tracer after
+	// construction.
+	tracer trace.Tracer
 
 	mu sync.Mutex
 
@@ -101,6 +108,7 @@ func NewRecordBatcher(maxTrackedShards, checkpointLimit int, log *service.Logger
 		maxTrackedShards:   maxTrackedShards,
 		maxTrackedMessages: maxTrackedMessages,
 		log:                log,
+		tracer:             noop.NewTracerProvider().Tracer("aws_dynamodb_cdc"),
 		batches:            make(map[*service.Message]*trackedBatch),
 		shards:             make(map[string]*shardAckTracker),
 	}
@@ -228,7 +236,7 @@ func (b *RecordBatcher) AckMessages(
 	// the last persisted position. A pinned frontier (nacked batch ahead of
 	// us in stream order) accumulates pending acks without persisting.
 	if st.pending >= cp.CheckpointLimit() && st.frontier != "" && st.frontier != st.persisted {
-		if err := cp.Set(ctx, tb.shardID, st.frontier, st.frontierTime); err != nil {
+		if err := b.commitCheckpoint(ctx, cp, tb.shardID, st.frontier, st.frontierTime); err != nil {
 			return err
 		}
 		st.persisted = st.frontier
@@ -236,6 +244,21 @@ func (b *RecordBatcher) AckMessages(
 		b.log.Debugf("Checkpointed shard %s at sequence %s", tb.shardID, st.frontier)
 	}
 
+	return nil
+}
+
+// commitCheckpoint persists a shard's checkpoint within an
+// aws_dynamodb_cdc.checkpoint_commit tracing span (CONTRIBUTING.md §5.4.4).
+// This is the live commit path exercised during normal streaming; the flush
+// on close is traced separately in flushCheckpoint.
+func (b *RecordBatcher) commitCheckpoint(ctx context.Context, cp checkpointer, shardID, sequenceNumber, approxCreationTime string) error {
+	ctx, span := b.tracer.Start(ctx, traceCheckpointCommit)
+	defer span.End()
+	if err := cp.Set(ctx, shardID, sequenceNumber, approxCreationTime); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
 	return nil
 }
 
