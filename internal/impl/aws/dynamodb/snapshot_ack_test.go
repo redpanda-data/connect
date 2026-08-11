@@ -168,11 +168,11 @@ func TestSnapshotAckTracker(t *testing.T) {
 	t.Run("a never-acked batch pins the segment forever", func(t *testing.T) {
 		tracker, store := newTestSnapshotAckTracker(1)
 
-		tracker.TrackBatch(3, scanKey("k1"), 5) // nacked: resolve never called
+		tracker.TrackBatch(3, scanKey("k1"), 5) // still in flight: resolve never called
 		r2 := tracker.TrackBatch(3, scanKey("k2"), 5)
 		require.NoError(t, tracker.Ack(ctx, 3, 5, r2))
 		require.NoError(t, tracker.SealSegment(ctx, 3))
 
-		require.Empty(t, store.recorded(), "neither progress nor completion may pass a nacked batch")
+		require.Empty(t, store.recorded(), "neither progress nor completion may pass an in-flight batch")
 	})
 }
