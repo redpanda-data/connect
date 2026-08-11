@@ -10,7 +10,9 @@ package iceberg
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/catalog"
 	"github.com/apache/iceberg-go/catalog/rest"
 	iceio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
@@ -537,5 +540,38 @@ func BenchmarkAddDataFilesDupCheck(b *testing.B) {
 				}
 			})
 		}
+	}
+}
+
+// TestIsDefinitiveCommitRejection pins the classification that every
+// destructive follow-up decision (orphan cleanup, prohibited-key learning,
+// retry shape) hangs off: only errors proving the commit did NOT apply may
+// return true; everything that may have landed — or where no verdict ever
+// arrived — must be ambiguous, even when a definitive-looking sentinel is
+// also present in the chain (the ambiguous-first veto).
+func TestIsDefinitiveCommitRejection(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"unknown-state sentinel", rest.ErrCommitStateUnknown, false},
+		{"server error", fmt.Errorf("%w: boom", rest.ErrServerError), false},
+		{"service unavailable", rest.ErrServiceUnavailable, false},
+		{"raw transport failure", &url.Error{Op: "Post", URL: "https://cat.example", Err: context.DeadlineExceeded}, false},
+		{"bare rest error (undecodable body)", fmt.Errorf("%w: garbled", rest.ErrRESTError), false},
+		{"clean 409", rest.ErrCommitFailed, true},
+		{"client-side conflict validation", table.ErrConflictingDataFiles, true},
+		{"client-side divergence (nothing sent)", fmt.Errorf("%w: branch main moved", table.ErrCommitDiverged), true},
+		{"bad request", rest.ErrBadRequest, true},
+		{"no such table", catalog.ErrNoSuchTable, true},
+		{"prohibited keys by text", errors.New("Table properties contain prohibited keys: a.b"), true},
+		{"ambiguous-first veto over conflict", fmt.Errorf("%w: %w", rest.ErrCommitStateUnknown, table.ErrCommitFailed), false},
+		{"ambiguous-first veto over prohibited text", fmt.Errorf("%w: prohibited keys: a.b", rest.ErrServerError), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isDefinitiveCommitRejection(tc.err))
+		})
 	}
 }

@@ -244,8 +244,10 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 
 // cleanupFilesAfterCommitErr removes written-but-uncommitted files after a
 // failed commit — unless any attempt's outcome remains ambiguous
-// (rest.ErrCommitStateUnknown, which commitLocked joins into every error
-// return when set): an ambiguous commit may still land server-side, and
+// (rest.ErrCommitStateUnknown, which commitLocked guarantees on every error
+// return while any attempt's outcome is ambiguous — errors are normalised
+// onto the sentinel at classification and re-joined at return): an ambiguous
+// commit may still land server-side, and
 // deleting files a landed snapshot references corrupts the table. Ambiguous
 // leftovers are deferred to Iceberg orphan-file maintenance instead,
 // mirroring commitOverwrite's cleanup gate.

@@ -361,6 +361,23 @@ func TestCommitRetriesOnConflict(t *testing.T) {
 		assert.Equal(t, 3, fc.calls(), "commit must be retried past the conflicts")
 	})
 
+	// iceberg-go's client-side conflict-validation sentinels (armed by the
+	// commit.retry.num-retries table property) wrap ONLY table.ErrCommitFailed,
+	// not rest.ErrCommitFailed, yet they are the same clean-conflict verdict:
+	// nothing landed, reload-and-retry is safe. The retry guard must match them.
+	t.Run("client-side conflict sentinel is retried", func(t *testing.T) {
+		_, plain := newTestTable(t)
+		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1, failErr: table.ErrConflictingDataFiles}
+		ftbl := fc.snapshot()
+		c, err := NewCommitter(ftbl, fc, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		df := synthDataFile(t, ftbl.Spec(), fmt.Sprintf("%s/data/retry-%s.parquet", ftbl.Location(), uuid.New()))
+		require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: c.currentSchemaID()}))
+		assert.Equal(t, 2, fc.calls(), "a client-side conflict-validation rejection is a clean conflict and must be retried")
+	})
+
 	t.Run("fails after exhausting retries", func(t *testing.T) {
 		_, plain := newTestTable(t)
 		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1 << 30, failErr: rest.ErrCommitFailed}

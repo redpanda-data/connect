@@ -530,8 +530,11 @@ func (c *committer) referencedDataFilePaths(ctx context.Context) (map[string]str
 // error while some attempt's outcome is ambiguous — regardless of which
 // attempt's error terminated the loop (exhausted retries, a non-retryable
 // error, a stage failure, ...) — the returned error satisfies
-// errors.Is(err, rest.ErrCommitStateUnknown) (raw ambiguous errors are joined
-// with that sentinel so callers need no new check). Callers that gate
+// errors.Is(err, rest.ErrCommitStateUnknown) (each ambiguous error is
+// normalised onto that sentinel where it is classified, and
+// joinUnresolvedUnknown re-attaches earlier ambiguity to a later,
+// differently-classed terminating error — so callers need no new check).
+// Callers that gate
 // destructive follow-up work on the absence of unknown state
 // (commitOverwrite's orphan cleanup) rely on this: cleanup requires proof of
 // non-application, and absence of proof of application is not that.
@@ -594,17 +597,20 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			return attempt > 1, joinUnresolvedUnknown(err, unresolvedUnknown)
 		}
 		tbl, err := txn.Commit(ctx)
-		if err != nil && !isDefinitiveCommitRejection(err) {
+		// ambiguous is THE classification for this attempt's outcome; the
+		// guards below reuse it rather than re-deriving it from the error
+		// chain, so they cannot drift from the normalisation that follows.
+		ambiguous := err != nil && !isDefinitiveCommitRejection(err)
+		if ambiguous {
 			// Anything short of a definitive server-side rejection may have
 			// landed (or may still land) server-side: the catalog's explicit
 			// ErrCommitStateUnknown (5xx), but equally a raw transport failure
 			// (client timeout, connection reset, EOF) on the commit request.
 			// Normalise err itself onto the one existing sentinel so EVERY
 			// downstream errors.Is(err, rest.ErrCommitStateUnknown) check —
-			// the prohibited-keys guard, the retry-on-unknown branch and its
-			// landed-commit check, and callers' cleanup gates — sees the whole
-			// ambiguous class, not just errors the catalog happened to wrap in
-			// the sentinel already. Also sticky for the rest of the call (see
+			// including callers' cleanup gates — sees the whole ambiguous
+			// class, not just errors the catalog happened to wrap in the
+			// sentinel already. Also sticky for the rest of the call (see
 			// unresolvedUnknown above).
 			if !errors.Is(err, rest.ErrCommitStateUnknown) {
 				err = fmt.Errorf("%w: %w", rest.ErrCommitStateUnknown, err)
@@ -626,11 +632,8 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 		// rejection, even if its text mentions them: the commit may have
 		// landed server-side, and the prohibited-keys retry re-stages WITHOUT
 		// the reload + commit-id idempotency check below, so it could apply
-		// the mutation twice. Unknown-state takes precedence. (The
-		// normalisation above folds every ambiguous error — non-sentinel 5xx,
-		// transport failures — onto ErrCommitStateUnknown, so this single
-		// sentinel check covers the whole class.)
-		if err != nil && !errors.Is(err, rest.ErrCommitStateUnknown) {
+		// the mutation twice. Unknown-state takes precedence.
+		if err != nil && !ambiguous {
 			if retry, fatalErr := c.noteProhibitedKeys(attempt, err); fatalErr != nil {
 				// Reload so the next call uses fresh metadata, mirroring the
 				// non-retryable branch below.
@@ -644,13 +647,19 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 				continue
 			}
 		}
-		// ErrCommitFailed is a clean conflict (our commit did not land), so a
-		// reload-and-retry re-adds our files exactly once. ErrCommitStateUnknown
-		// means the commit may have landed; retrying is only safe when stage
-		// dedupes against the reloaded snapshot (retryOnUnknownState), in which
-		// case a landed attempt becomes a no-op and an unlanded one re-adds once.
-		if errors.Is(err, rest.ErrCommitFailed) ||
-			(retryOnUnknownState && errors.Is(err, rest.ErrCommitStateUnknown)) {
+		// A clean conflict (our commit did not land) is retried: a
+		// reload-and-retry re-adds our files exactly once. Matched via
+		// table.ErrCommitFailed, which rest.ErrCommitFailed (the 409) wraps —
+		// iceberg-go's client-side conflict-validation sentinels
+		// (ErrConflictingDataFiles etc., armed by commit.retry.num-retries)
+		// wrap ONLY the table sentinel, so matching the rest one would let
+		// those clean conflicts escape the retry loop after one attempt. An
+		// ambiguous outcome means the commit may have landed; retrying is only
+		// safe when stage dedupes against the reloaded snapshot
+		// (retryOnUnknownState), in which case a landed attempt becomes a
+		// no-op and an unlanded one re-adds once.
+		if errors.Is(err, table.ErrCommitFailed) ||
+			(retryOnUnknownState && ambiguous) {
 			commitErr = err
 			c.logger.Warnf("Commit attempt %d/%d failed: %v", attempt, c.cfg.MaxRetries, err)
 			if reloadedTbl, reloadErr := c.reloadTable(ctx); reloadErr == nil {
@@ -722,6 +731,11 @@ func joinUnresolvedUnknown(err, unresolved error) error {
 //     rest.ErrCommitFailed (a 409, which wraps it) and the client-side
 //     conflict-validation sentinels, all of which mean the commit was
 //     rejected without applying.
+//   - table.ErrCommitDiverged — iceberg-go's client-side refresh-and-replay
+//     (commit.retry.num-retries > 0) concluding the base snapshot left the
+//     branch BEFORE any CommitTable call: nothing was sent, so
+//     non-application is proven. It deliberately does not wrap
+//     ErrCommitFailed, hence its own entry.
 //   - rest.ErrBadRequest (400), catalog.ErrNoSuchTable (404, updateTable's
 //     override), rest.ErrUnauthorized (401), rest.ErrForbidden (403) and
 //     rest.ErrAuthorizationExpired (419) — 4xx verdicts: the server evaluated
@@ -754,6 +768,7 @@ func isDefinitiveCommitRejection(err error) bool {
 		return false
 	}
 	if errors.Is(err, table.ErrCommitFailed) ||
+		errors.Is(err, table.ErrCommitDiverged) ||
 		errors.Is(err, rest.ErrBadRequest) ||
 		errors.Is(err, rest.ErrUnauthorized) ||
 		errors.Is(err, rest.ErrForbidden) ||
