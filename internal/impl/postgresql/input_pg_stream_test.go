@@ -57,6 +57,11 @@ func TestSchemaPatternValidation(t *testing.T) {
 		{"tenant_*", ""},
 		{"*", ""},
 		{`"MySchema"`, ""},
+		// Regression test: validateSchemaPattern must accept the same unicode
+		// letters/digits that sanitize.NormalizePostgresIdentifier accepts for
+		// unquoted identifiers (e.g. "münchen"), not just ASCII.
+		{"münchen", ""},
+		{"tenant_ü*", ""},
 		// Regression test: len("") == 2 used to pass the old `len(s) < 2` guard.
 		// Fixed to `len(s) < 3`.
 		{`""`, "invalid quoted schema identifier"},
@@ -112,6 +117,24 @@ func TestSchemaPatternWithDefaultSchemaSucceeds(t *testing.T) {
 	yaml := `
 dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
 schema_pattern: 'tenant_*'
+slot_name: test_slot
+tables:
+  - events
+`
+	_, err := parsePgStreamInput(t, yaml)
+	require.NoError(t, err)
+}
+
+// TestSchemaAcceptsUnicodeIdentifier verifies that the schema field (single
+// exact-name path) still accepts unquoted unicode identifiers like
+// "münchen", matching sanitize.NormalizePostgresIdentifier which is the sole
+// validator on this path (see NewPgStream). schema no longer runs through
+// validateSchemaPattern, so this guards against that ASCII-only validator
+// regressing this path again in the future.
+func TestSchemaAcceptsUnicodeIdentifier(t *testing.T) {
+	yaml := `
+dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
+schema: münchen
 slot_name: test_slot
 tables:
   - events

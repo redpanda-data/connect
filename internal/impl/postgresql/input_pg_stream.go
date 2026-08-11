@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
@@ -444,13 +446,13 @@ func validateSchemaPattern(s string) error {
 		return nil
 	}
 	for i, ch := range s {
-		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '*' {
+		if unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '_' || ch == '*' {
 			continue
 		}
 		return fmt.Errorf("invalid character %q at position %d in schema pattern %q", ch, i, s)
 	}
-	first := rune(s[0])
-	if first != '_' && first != '*' && (first < 'a' || first > 'z') && (first < 'A' || first > 'Z') {
+	first, _ := utf8.DecodeRuneInString(s)
+	if first != '_' && first != '*' && !unicode.IsLetter(first) {
 		return fmt.Errorf("schema pattern %q must start with a letter, underscore, or '*'", s)
 	}
 	return nil
