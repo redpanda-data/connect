@@ -156,13 +156,6 @@ type sqlServerCDCInput struct {
 	publisher *batchPublisher
 	metrics   *service.Metrics
 
-	// batching and checkpointLimit rebuild the publisher (batcher + ordered
-	// checkpoint tracker) on every Connect: a terminal nack pins a tracker
-	// slot by design, and only a fresh tracker lets the restart resume from
-	// the last durable LSN instead of staying wedged behind the stale slot.
-	batching        service.BatchPolicy
-	checkpointLimit int
-
 	connMu  sync.Mutex
 	stopSig *shutdown.Signaller
 	log     *service.Logger
@@ -273,14 +266,12 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 				Exclude: tableExcludes,
 			},
 		},
-		res:             resources,
-		log:             logger,
-		metrics:         resources.Metrics(),
-		stopSig:         shutdown.NewSignaller(),
-		publisher:       newBatchPublisher(batcher, cp, logger),
-		batching:        policy,
-		checkpointLimit: checkpointLimit,
-		cpCache:         cpCache,
+		res:       resources,
+		log:       logger,
+		metrics:   resources.Metrics(),
+		stopSig:   shutdown.NewSignaller(),
+		publisher: newBatchPublisher(batcher, cp, logger),
+		cpCache:   cpCache,
 	}
 
 	i.publisher.cacheLSN = i.cacheLSN
@@ -338,27 +329,6 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		return fmt.Errorf("unable to get cached LSN: %s", err)
 	}
 
-	// Rebuild the publisher (batcher + ordered checkpoint tracker) for this
-	// connection attempt. A terminal nack pins a tracker slot by design;
-	// reusing the old tracker would leave every future checkpoint stuck
-	// behind the stale slot, wedging the input for the process lifetime
-	// instead of letting this restart resume from the last durable LSN. The
-	// old publisher is sealed so late acks from the previous session cannot
-	// persist stale positions.
-	i.publisher.seal()
-	i.publisher.Close()
-	newBatcher, err := i.batching.NewBatcher(i.res)
-	if err != nil {
-		return fmt.Errorf("creating batcher: %w", err)
-	}
-	i.publisher = newBatchPublisher(newBatcher, checkpoint.NewCapped[replication.LSN](int64(i.checkpointLimit)), i.log)
-	i.publisher.cacheLSN = i.cacheLSN
-	i.publisher.onTerminalNack = func(error) {
-		// i.stopSig is only replaced while the input is stopped, and sealed
-		// publishers never invoke this, so the signaller here is current.
-		i.stopSig.TriggerSoftStop()
-	}
-
 	// setup snapshotting and streaming
 	var (
 		snapshotter *replication.Snapshot
@@ -387,9 +357,6 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 
 		// snapshot if no LSN exists then store checkpoint once complete
 		if snapshotter != nil {
-			// The publisher outlives reconnects: clear any nack recorded by a
-			// previous snapshot attempt so the gate judges only this run.
-			i.publisher.resetSnapshotGate()
 			if maxLSN, err = i.processSnapshot(softCtx, snapshotter); err != nil {
 				if i.stopSig.IsHardStopSignalled() {
 					i.log.Errorf("Shutting down snapshotting process: %s", err)
@@ -412,11 +379,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 				return
 			}
 			if err = i.publisher.waitSnapshotAcks(softCtx); err != nil {
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					i.log.Infof("Interrupted while waiting for snapshot acknowledgements. Snapshot will re-run on restart (may cause duplicate data): %s", err)
-				} else {
-					i.log.Errorf("Snapshot batch was rejected downstream. Snapshot will re-run on restart (may cause duplicate data): %s", err)
-				}
+				i.log.Infof("Interrupted while waiting for snapshot acknowledgements. Snapshot will re-run on restart (may cause duplicate data): %s", err)
 				i.stopSig.TriggerHasStopped()
 				return
 			}

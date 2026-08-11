@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -50,20 +49,15 @@ func TestSnapshotAckGate(t *testing.T) {
 		}
 	})
 
-	t.Run("a nack releases the gate but fails it", func(t *testing.T) {
+	t.Run("a nack also releases the gate", func(t *testing.T) {
 		ctx := t.Context()
-		publisher, cachedLSNs := newTestBatchPublisher(t)
+		publisher, _ := newTestBatchPublisher(t)
 
 		msg := publishAndReceive(t, ctx, publisher, snapshotEvent())
-		nackErr := errors.New("downstream failure")
-		require.ErrorIs(t, msg.ackFn(ctx, nackErr), nackErr)
-
-		// auto_replay_nacks is user-toggleable, so a nack can be terminal:
-		// the gate must report it so the post-snapshot LSN is not persisted
-		// and the snapshot re-runs on restart.
-		err := publisher.waitSnapshotAcks(ctx)
-		require.ErrorIs(t, err, nackErr)
-		require.Empty(t, cachedLSNs())
+		// Nacks count as settled: replay is owned by auto_replay_nacks, and
+		// disabling it is a documented opt-in to drop rejections.
+		require.NoError(t, msg.ackFn(ctx, errors.New("downstream failure")))
+		require.NoError(t, publisher.waitSnapshotAcks(ctx))
 	})
 
 	t.Run("streaming batches do not hold the gate", func(t *testing.T) {
@@ -74,26 +68,6 @@ func TestSnapshotAckGate(t *testing.T) {
 		publishAndReceive(t, ctx, publisher, streamingEvent("00000030", ""))
 
 		require.NoError(t, publisher.waitSnapshotAcks(ctx))
-	})
-
-	t.Run("a nack fails only the snapshot attempt it belongs to", func(t *testing.T) {
-		ctx := t.Context()
-		publisher, cachedLSNs := newTestBatchPublisher(t)
-
-		// Run 1: a snapshot batch is nacked; the gate fails.
-		msg := publishAndReceive(t, ctx, publisher, snapshotEvent())
-		nackErr := errors.New("downstream failure")
-		require.ErrorIs(t, msg.ackFn(ctx, nackErr), nackErr)
-		require.ErrorIs(t, publisher.waitSnapshotAcks(ctx), nackErr)
-
-		// Run 2 (reconnect reuses the publisher): the gate is reset, the
-		// re-run snapshot acks cleanly, and the gate must pass — a stale
-		// run-1 error here would livelock the input re-snapshotting forever.
-		publisher.resetSnapshotGate()
-		msg2 := publishAndReceive(t, ctx, publisher, snapshotEvent())
-		require.NoError(t, msg2.ackFn(ctx, nil))
-		require.NoError(t, publisher.waitSnapshotAcks(ctx))
-		require.Empty(t, cachedLSNs())
 	})
 
 	t.Run("context cancellation escapes the gate", func(t *testing.T) {
@@ -171,21 +145,22 @@ func TestCheckpointSelection(t *testing.T) {
 			"a batch ending mid-transaction (no prior complete transaction) must not persist any LSN")
 	})
 
-	t.Run("a nacked batch pins the checkpoint", func(t *testing.T) {
+	t.Run("a nack resolves too: auto_replay_nacks off is an opt-in drop", func(t *testing.T) {
 		ctx := t.Context()
 		publisher, cachedLSNs := newTestBatchPublisher(t)
 
 		b1 := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", "00000041"))
 		b2 := publishAndReceive(t, ctx, publisher, streamingEvent("00000043", "00000042"))
 
-		// Nack b1: with auto_replay_nacks disabled this is terminal, so b2's
-		// ack must not persist anything past the undelivered b1.
-		nackErr := errors.New("downstream failure")
-		require.ErrorIs(t, b1.ackFn(ctx, nackErr), nackErr)
+		// A nacked batch is deleted per the auto_replay_nacks contract: its
+		// slot resolves so the stream continues past it instead of pinning
+		// the tracker and back-pressuring forever.
+		require.NoError(t, b1.ackFn(ctx, errors.New("downstream failure")))
 		require.NoError(t, b2.ackFn(ctx, nil))
 
-		require.Empty(t, cachedLSNs(),
-			"a checkpoint must never be persisted past a nacked batch")
+		lsns := cachedLSNs()
+		require.NotEmpty(t, lsns, "the checkpoint must continue advancing past a dropped batch")
+		require.Equal(t, "00000042", string(lsns[len(lsns)-1]))
 	})
 }
 
@@ -220,16 +195,19 @@ func TestCheckpointWindow(t *testing.T) {
 		require.Equal(t, "00000042", string(lsns[0]))
 	})
 
-	t.Run("a nacked batch pins the window checkpoint", func(t *testing.T) {
+	t.Run("a nacked batch settles the window checkpoint too", func(t *testing.T) {
 		ctx := t.Context()
 		publisher, cachedLSNs := newTestBatchPublisher(t)
 
 		am := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", ""))
 		require.NoError(t, publisher.CheckpointWindow(ctx, replication.LSN("00000042")))
 
-		nackErr := errors.New("downstream failure")
-		require.ErrorIs(t, am.ackFn(ctx, nackErr), nackErr)
-		require.Empty(t, cachedLSNs(), "the window end must never persist past a nacked batch")
+		// A nacked batch is deleted per the auto_replay_nacks contract, so
+		// the window checkpoint behind it still persists.
+		require.NoError(t, am.ackFn(ctx, errors.New("downstream failure")))
+		lsns := cachedLSNs()
+		require.NotEmpty(t, lsns)
+		require.Equal(t, "00000042", string(lsns[len(lsns)-1]))
 	})
 }
 
@@ -266,44 +244,6 @@ func TestCheckpointWindowDefersToBufferedBatch(t *testing.T) {
 	lsns := cachedLSNs()
 	require.Len(t, lsns, 1)
 	require.Equal(t, "00000042", string(lsns[0]), "the drained-window LSN must ride on the buffered batch's checkpoint")
-}
-
-func TestTerminalNack(t *testing.T) {
-	t.Run("invokes onTerminalNack so the input can restart", func(t *testing.T) {
-		ctx := t.Context()
-		publisher, cachedLSNs := newTestBatchPublisher(t)
-
-		var got atomic.Value
-		publisher.onTerminalNack = func(err error) { got.Store(err) }
-
-		am := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", "00000041"))
-		nackErr := errors.New("downstream failure")
-		require.ErrorIs(t, am.ackFn(ctx, nackErr), nackErr)
-
-		stored, _ := got.Load().(error)
-		require.ErrorIs(t, stored, nackErr)
-		require.Empty(t, cachedLSNs())
-	})
-
-	t.Run("a sealed publisher neither persists nor restarts", func(t *testing.T) {
-		ctx := t.Context()
-		publisher, cachedLSNs := newTestBatchPublisher(t)
-
-		restarted := false
-		publisher.onTerminalNack = func(error) { restarted = true }
-
-		am1 := publishAndReceive(t, ctx, publisher, streamingEvent("00000042", "00000041"))
-		am2 := publishAndReceive(t, ctx, publisher, streamingEvent("00000043", "00000042"))
-		publisher.seal()
-
-		// Late ack from a replaced session: must not persist.
-		require.NoError(t, am1.ackFn(ctx, nil))
-		require.Empty(t, cachedLSNs(), "a sealed publisher must not persist checkpoints")
-
-		// Late nack: must not trigger a restart of the new session.
-		require.Error(t, am2.ackFn(ctx, errors.New("late failure")))
-		require.False(t, restarted, "a sealed publisher must not trigger restarts")
-	})
 }
 
 // TestTrackOrderUnderConcurrentFlush stresses the two concurrent flushers (the

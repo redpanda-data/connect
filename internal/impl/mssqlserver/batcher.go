@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -48,12 +47,6 @@ type batchPublisher struct {
 	// acknowledged downstream. The snapshot->streaming handoff blocks on it so
 	// the post-snapshot LSN is never persisted while snapshot rows are in flight.
 	snapshotAckWG sync.WaitGroup
-	// snapshotNackErr records the first snapshot batch nack. auto_replay_nacks
-	// is user-toggleable, so a nack can be terminal: the gate must fail rather
-	// than let the post-snapshot LSN persist over undelivered rows.
-	snapshotNackMu  sync.Mutex
-	snapshotNackErr error
-
 	// pendingCheckpointLSN mirrors the CheckpointLSN of the most recently
 	// added message (or a stronger drained-window LSN, see CheckpointWindow):
 	// the start LSN of the last transaction whose rows are all published, the
@@ -64,47 +57,6 @@ type batchPublisher struct {
 	// batcherMu). CheckpointWindow uses it to decide between deferring the
 	// window checkpoint to the buffered batch and registering a marker.
 	buffered int
-
-	// onTerminalNack, when set, is invoked once a batch is rejected
-	// downstream: a nack pins the ordered tracker, so the input must restart
-	// (with a fresh publisher) to resume from the last durable LSN.
-	onTerminalNack func(error)
-	// sealed marks a publisher that has been replaced by a reconnect. Late
-	// acks from its session must not persist checkpoints (they could regress
-	// the new session's positions) nor trigger restarts.
-	sealed atomic.Bool
-}
-
-// seal marks the publisher as replaced; see the sealed field.
-func (b *batchPublisher) seal() {
-	b.sealed.Store(true)
-}
-
-// Close stops the publisher's flush loop and waits for it to exit; the
-// batcher is closed by the loop's defer.
-func (b *batchPublisher) Close() {
-	b.shutSig.TriggerSoftStop()
-	<-b.shutSig.HasStoppedChan()
-}
-
-func (b *batchPublisher) recordSnapshotNack(err error) {
-	b.snapshotNackMu.Lock()
-	defer b.snapshotNackMu.Unlock()
-	if b.snapshotNackErr == nil {
-		b.snapshotNackErr = err
-	}
-}
-
-// resetSnapshotGate clears any nack recorded by a previous snapshot attempt so
-// the gate reflects only the current run: the publisher outlives reconnects,
-// and a stale error would fail every retry even after a clean re-run. The
-// WaitGroup is deliberately left untouched — batches from a previous attempt
-// that are still in flight can yet be acked or nacked, and both must keep
-// counting.
-func (b *batchPublisher) resetSnapshotGate() {
-	b.snapshotNackMu.Lock()
-	defer b.snapshotNackMu.Unlock()
-	b.snapshotNackErr = nil
 }
 
 // newBatchPublisher creates an instance of batchPublisher.
@@ -322,36 +274,13 @@ func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.Mes
 		isSnapshot: isSnapshotBatch,
 		msg: asyncMessage{
 			msg: batch,
-			ackFn: func(ctx context.Context, err error) error {
+			// The ack error is deliberately ignored: nacks are replayed by
+			// auto_replay_nacks (the default), and disabling that is a
+			// documented opt-in to DROP rejected messages, so the checkpoint
+			// must advance past them rather than pin the tracker.
+			ackFn: func(ctx context.Context, _ error) error {
 				if isSnapshotBatch {
 					defer b.snapshotAckWG.Done()
-				}
-				if err != nil {
-					// auto_replay_nacks is user-toggleable, so a nack can be
-					// terminal. Never resolve: the checkpoint stays pinned
-					// before this batch so nothing can be persisted past its
-					// undelivered rows. Snapshot nacks additionally fail the
-					// handoff gate so the post-snapshot LSN is not persisted,
-					// and the input restarts with a fresh tracker to resume
-					// from the last durable LSN (the pinned slot would
-					// otherwise wedge checkpointing for the process lifetime).
-					if isSnapshotBatch {
-						b.recordSnapshotNack(err)
-					}
-					if b.sealed.Load() {
-						return err
-					}
-					b.log.Errorf("Batch rejected downstream (snapshot=%v, checkpoint LSN '%s'): restarting to redeliver from the last durable checkpoint: %v", isSnapshotBatch, replication.LSN(checkpointLSN), err)
-					if b.onTerminalNack != nil {
-						b.onTerminalNack(err)
-					}
-					return err
-				}
-				if b.sealed.Load() {
-					// A late ack from a replaced session: resolving its own
-					// tracker is harmless, but persisting could regress the
-					// new session's checkpoints.
-					return nil
 				}
 				lsn := resolveFn()
 				if lsn != nil && len(*lsn) != 0 {
@@ -379,10 +308,10 @@ func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch)
 }
 
 // waitSnapshotAcks blocks until every published snapshot batch has been
-// acknowledged or nacked downstream, or until ctx is cancelled (the escape
-// prevents a stalled downstream from wedging shutdown). Any nack fails the
-// gate: with auto_replay_nacks disabled a nack is terminal, so the
-// post-snapshot LSN must not be persisted and the snapshot must re-run.
+// acknowledged (or nacked) downstream, or until ctx is cancelled. Nacked
+// batches release the gate too: redelivery is owned by auto_replay_nacks,
+// and disabling that is a documented opt-in to drop rejections. The ctx
+// escape prevents a permanently-failing downstream from wedging shutdown.
 func (b *batchPublisher) waitSnapshotAcks(ctx context.Context) error {
 	drained := make(chan struct{})
 	go func() {
@@ -392,11 +321,6 @@ func (b *batchPublisher) waitSnapshotAcks(ctx context.Context) error {
 	}()
 	select {
 	case <-drained:
-		b.snapshotNackMu.Lock()
-		defer b.snapshotNackMu.Unlock()
-		if b.snapshotNackErr != nil {
-			return fmt.Errorf("snapshot batch was rejected downstream: %w", b.snapshotNackErr)
-		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
