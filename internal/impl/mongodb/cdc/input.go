@@ -32,6 +32,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/impl/mongodb"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -102,6 +103,7 @@ Schema metadata is discovered using a two-tier strategy:
 				Description("The password to connect to the database.").
 				Default("").
 				Secret(),
+			mongodb.AWSIAMAuthField(),
 			service.NewStringListField(fieldCollections).
 				Description("The collections to stream changes from."),
 			service.NewStringField(fieldCheckpointKey).
@@ -190,20 +192,7 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 		logger:            res.Logger(),
 		collectionSchemas: make(map[string]*cachedSchema),
 	}
-	var url, username, password, dbName, appName string
-	if url, err = conf.FieldString(fieldClientURL); err != nil {
-		return
-	}
-	if username, err = conf.FieldString(fieldClientUsername); err != nil {
-		return
-	}
-	if password, err = conf.FieldString(fieldClientPassword); err != nil {
-		return
-	}
-	if appName, err = conf.FieldString(fieldClientAppName); err != nil {
-		return
-	}
-	if dbName, err = conf.FieldString(fieldClientDatabase); err != nil {
+	if cdc.cc, err = mongodb.ClientConfigFromParsed(conf, res.Logger()); err != nil {
 		return
 	}
 	if cdc.collections, err = conf.FieldStringList(fieldCollections); err != nil {
@@ -295,29 +284,6 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 		return
 	}
 
-	opts := options.Client().
-		SetConnectTimeout(10 * time.Second).
-		SetTimeout(30 * time.Second).
-		SetServerSelectionTimeout(30 * time.Second).
-		ApplyURI(url).
-		SetAppName(appName).
-		SetBSONOptions(&options.BSONOptions{
-			DefaultDocumentM: true,
-		})
-
-	if username != "" && password != "" {
-		creds := options.Credential{
-			Username: username,
-			Password: password,
-		}
-		opts.SetAuth(creds)
-	}
-
-	cdc.client, err = mongo.Connect(opts)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to mongo: %w", err)
-	}
-	cdc.db = cdc.client.Database(dbName)
 	return service.AutoRetryNacksBatchedToggled(conf, cdc)
 }
 
@@ -335,6 +301,9 @@ const (
 )
 
 type mongoCDC struct {
+	cc *mongodb.ClientConfig
+	// client and db are established lazily on Connect so that any credentials
+	// are resolved fresh on every (re)connection attempt.
 	client      *mongo.Client
 	db          *mongo.Database
 	collections []string
@@ -389,6 +358,21 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	m.collectionSchemasMu.Lock()
 	m.collectionSchemas = make(map[string]*cachedSchema)
 	m.collectionSchemasMu.Unlock()
+	if m.client != nil {
+		if err := m.client.Ping(ctx, nil); err != nil {
+			_ = m.client.Disconnect(ctx)
+			m.client = nil
+		}
+	}
+	if m.client == nil {
+		client, db, err := m.cc.Connect(ctx, func(o *options.ClientOptions) {
+			o.SetBSONOptions(&options.BSONOptions{DefaultDocumentM: true})
+		})
+		if err != nil {
+			return fmt.Errorf("unable to connect to mongo: %w", err)
+		}
+		m.client, m.db = client, db
+	}
 	if err := m.client.Ping(ctx, nil); err != nil {
 		return fmt.Errorf("unable to ping mongodb: %w", err)
 	}
@@ -1037,6 +1021,15 @@ func (m *mongoCDC) ReadBatch(ctx context.Context) (service.MessageBatch, service
 }
 
 func (m *mongoCDC) Close(ctx context.Context) error {
+	// The disconnect must outlive the shutdown deadline, otherwise an expired
+	// ctx makes the driver skip its endSessions handshake.
+	disconnectCtx := context.WithoutCancel(ctx)
+	defer func() {
+		if m.client != nil {
+			_ = m.client.Disconnect(disconnectCtx)
+			m.client, m.db = nil, nil
+		}
+	}()
 	if m.shutsig == nil {
 		return nil
 	}

@@ -79,6 +79,9 @@ func init() {
 type outputWriter struct {
 	log *service.Logger
 
+	cc *ClientConfig
+	// client and database are established lazily on Connect so that any
+	// credentials are resolved fresh on every (re)connection attempt.
 	client           *mongo.Client
 	database         *mongo.Database
 	collection       *service.InterpolatedString
@@ -93,7 +96,7 @@ func newOutputWriter(conf *service.ParsedConfig, res *service.Resources) (db *ou
 	db = &outputWriter{
 		log: res.Logger(),
 	}
-	if db.client, db.database, err = getClient(conf); err != nil {
+	if db.cc, err = ClientConfigFromParsed(conf, res.Logger()); err != nil {
 		return
 	}
 	if db.collection, err = conf.FieldInterpolatedString(moFieldCollection); err != nil {
@@ -115,8 +118,14 @@ func newOutputWriter(conf *service.ParsedConfig, res *service.Resources) (db *ou
 // without actually sending data. The connection, if successful, is then
 // closed.
 func (m *outputWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
-	err := m.client.Ping(ctx, nil)
+	client, _, err := m.cc.Connect(ctx)
 	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer func() {
+		_ = client.Disconnect(ctx)
+	}()
+	if err := client.Ping(ctx, nil); err != nil {
 		return service.ConnectionTestFailed(fmt.Errorf("ping failed: %w", err)).AsList()
 	}
 	return service.ConnectionTestSucceeded().AsList()
@@ -127,19 +136,32 @@ func (m *outputWriter) Connect(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if err := m.client.Ping(ctx, nil); err != nil {
+	if m.client != nil {
+		if err := m.client.Ping(ctx, nil); err == nil {
+			return nil
+		}
 		_ = m.client.Disconnect(ctx)
+		m.client = nil
+	}
+
+	client, database, err := m.cc.Connect(ctx)
+	if err != nil {
+		return err
+	}
+	if err := client.Ping(ctx, nil); err != nil {
+		_ = client.Disconnect(ctx)
 		return fmt.Errorf("ping failed: %v", err)
 	}
+	m.client, m.database = client, database
 	return nil
 }
 
 func (m *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	m.mu.Lock()
-	collection := m.collection
+	client, database, collection := m.client, m.database, m.collection
 	m.mu.Unlock()
 
-	if collection == nil {
+	if client == nil || collection == nil {
 		return service.ErrNotConnected
 	}
 
@@ -208,7 +230,7 @@ func (m *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 	// Dispatch any documents which WalkWithBatchedErrors managed to process successfully
 	if len(writeModelsMap) > 0 {
 		for collectionStr, writeModels := range writeModelsMap {
-			if err := m.builkWrite(ctx, collectionStr, writeModels); err != nil {
+			if err := m.builkWrite(ctx, database, collectionStr, writeModels); err != nil {
 				return err
 			}
 		}
@@ -221,7 +243,7 @@ func (m *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 	return nil
 }
 
-func (m *outputWriter) builkWrite(ctx context.Context, collectionStr string, writeModels []mongo.WriteModel) error {
+func (m *outputWriter) builkWrite(ctx context.Context, database *mongo.Database, collectionStr string, writeModels []mongo.WriteModel) error {
 	if m.writeConcernSpec.wTimeout != 0 {
 		var cancel func()
 		ctx, cancel = context.WithTimeout(ctx, m.writeConcernSpec.wTimeout)
@@ -229,7 +251,7 @@ func (m *outputWriter) builkWrite(ctx context.Context, collectionStr string, wri
 	}
 
 	// We should have at least one write model in the slice
-	collection := m.database.Collection(collectionStr, m.writeConcernSpec.options)
+	collection := database.Collection(collectionStr, m.writeConcernSpec.options)
 	_, err := collection.BulkWrite(ctx, writeModels)
 	return err
 }
@@ -243,6 +265,7 @@ func (m *outputWriter) Close(ctx context.Context) error {
 		err = m.client.Disconnect(ctx)
 		m.client = nil
 	}
+	m.database = nil
 	m.collection = nil
 	return err
 }

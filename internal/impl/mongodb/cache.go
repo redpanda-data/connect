@@ -46,13 +46,22 @@ func mongodbCacheConfig() *service.ConfigSpec {
 func init() {
 	service.MustRegisterCache(
 		"mongodb", mongodbCacheConfig(),
-		func(conf *service.ParsedConfig, _ *service.Resources) (service.Cache, error) {
-			return newMongodbCacheFromConfig(conf)
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+			return newMongodbCacheFromConfig(conf, mgr.Logger())
 		})
 }
 
-func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig) (*mongodbCache, error) {
-	client, database, err := getClient(parsedConf)
+func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig, logger *service.Logger) (*mongodbCache, error) {
+	// The cache has no connection lifecycle of its own, so the client (and with
+	// it any AWS credentials) is established once here. See the docs on the
+	// `aws` field for the refresh implications.
+	cc, err := ClientConfigFromParsed(parsedConf, logger)
+	if err != nil {
+		return nil, err
+	}
+	connectCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	client, database, err := cc.Connect(connectCtx)
 	if err != nil {
 		return nil, err
 	}

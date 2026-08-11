@@ -68,6 +68,16 @@ mongodb:
   username: ""
   password: ""
   app_name: benthos
+  aws:
+    enabled: false
+    region: "" # No default (optional)
+    session_duration: 1h
+    id: "" # No default (optional)
+    secret: "" # No default (optional)
+    token: "" # No default (optional)
+    role: "" # No default (optional)
+    role_external_id: "" # No default (optional)
+    roles: [] # No default (optional)
   collection: "" # No default (required)
   operation: insert-one
   write_concern:
@@ -139,6 +149,112 @@ The client application name.
 *Type*: `string`
 
 *Default*: `"benthos"`
+
+=== `aws`
+
+AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against MongoDB Atlas. When enabled, IAM credentials are used instead of a static username and password. Role-derived session credentials are resolved when the component connects and are re-resolved whenever it reconnects. The `mongodb` processor and cache establish their client once at creation, so restarting the pipeline is required to refresh their credentials. For long-running pipelines, prefer the ambient credential chain (leave keys and roles unset), which the driver refreshes automatically.
+
+
+*Type*: `object`
+
+Requires version 4.105.0 or newer
+
+=== `aws.enabled`
+
+Enable AWS IAM authentication using the driver-native `MONGODB-AWS` mechanism. The MongoDB Atlas database user must be created with the AWS IAM authentication type, and connections require TLS. When no static credentials or roles are configured, the ambient AWS credential chain (environment variables, EC2 instance profile, EKS pod role) is used and expiring credentials are refreshed automatically.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `aws.region`
+
+The AWS region used when assuming roles (for STS calls). Only used when `role` or `roles` are configured; the ambient and static-key paths ignore it. If no region is specified then the environment default is used.
+
+
+*Type*: `string`
+
+
+=== `aws.session_duration`
+
+The duration of the STS session requested when assuming roles. AWS requires at least 15 minutes and caps sessions created through role chaining at one hour. Only used when `role` or `roles` are configured.
+
+
+*Type*: `string`
+
+*Default*: `"1h"`
+
+=== `aws.id`
+
+The ID of credentials to use.
+
+
+*Type*: `string`
+
+
+=== `aws.secret`
+
+The secret for the credentials being used.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `aws.token`
+
+The token for the credentials being used, required when using short term credentials.
+
+
+*Type*: `string`
+
+
+=== `aws.role`
+
+Optional AWS IAM role ARN to assume for authentication. Cannot be combined with `roles`; use the `roles` array instead when chaining multiple roles.
+
+
+*Type*: `string`
+
+
+=== `aws.role_external_id`
+
+Optional external ID for the role assumption. Only used with the `role` field, which cannot be combined with `roles`.
+
+
+*Type*: `string`
+
+
+=== `aws.roles`
+
+Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID. Cannot be combined with `role`.
+
+
+*Type*: `array`
+
+
+=== `aws.roles[].role`
+
+AWS IAM role ARN to assume.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `aws.roles[].role_external_id`
+
+Optional external ID for the role assumption.
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `collection`
 

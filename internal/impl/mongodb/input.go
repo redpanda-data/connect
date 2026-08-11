@@ -96,7 +96,7 @@ func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.
 		sort             map[string]int
 	)
 
-	mClient, database, err := getClient(conf)
+	cc, err := ClientConfigFromParsed(conf, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -140,8 +140,7 @@ func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.
 	return service.AutoRetryNacksBatchedToggled(conf, &mongoInput{
 		query:        query,
 		collection:   collection,
-		client:       mClient,
-		database:     database,
+		cc:           cc,
 		operation:    operation,
 		marshalCanon: marshalMode == string(JSONMarshalModeCanonical),
 		batchSize:    int32(batchSize),
@@ -153,8 +152,11 @@ func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.
 }
 
 type mongoInput struct {
-	query        any
-	collection   string
+	query      any
+	collection string
+	cc         *ClientConfig
+	// client and database are established lazily on Connect so that any
+	// credentials are resolved fresh on every (re)connection attempt.
 	client       *mongo.Client
 	database     *mongo.Database
 	cursor       *mongo.Cursor
@@ -171,8 +173,14 @@ type mongoInput struct {
 // without actually consuming data. The connection, if successful, is then
 // closed.
 func (m *mongoInput) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
-	err := m.client.Ping(ctx, nil)
+	client, _, err := m.cc.Connect(ctx)
 	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer func() {
+		_ = client.Disconnect(ctx)
+	}()
+	if err := client.Ping(ctx, nil); err != nil {
 		return service.ConnectionTestFailed(fmt.Errorf("ping failed: %w", err)).AsList()
 	}
 	return service.ConnectionTestSucceeded().AsList()
@@ -183,8 +191,17 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	err := m.client.Ping(ctx, nil)
-	if err != nil {
+	if m.client == nil {
+		client, database, err := m.cc.Connect(ctx)
+		if err != nil {
+			return err
+		}
+		m.client, m.database = client, database
+	}
+
+	if err := m.client.Ping(ctx, nil); err != nil {
+		_ = m.client.Disconnect(ctx)
+		m.client = nil
 		return fmt.Errorf("ping failed: %v", err)
 	}
 
@@ -208,6 +225,7 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 	}
 	if opErr != nil {
 		_ = m.client.Disconnect(ctx)
+		m.client = nil
 		return opErr
 	}
 	return nil
@@ -248,11 +266,15 @@ func (m *mongoInput) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 }
 
 func (m *mongoInput) Close(ctx context.Context) error {
-	if m.cursor != nil && m.client != nil {
+	if m.cursor != nil {
 		m.logger.Debugf("Got %d documents from '%s' collection", m.count, m.collection)
-		return m.client.Disconnect(ctx)
 	}
-	return nil
+	if m.client == nil {
+		return nil
+	}
+	client := m.client
+	m.client = nil
+	return client.Disconnect(ctx)
 }
 
 func (m *mongoInput) getFindOptions() (*options.FindOptionsBuilder, error) {

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -93,7 +94,16 @@ func ProcessorFromParsed(conf *service.ParsedConfig, res *service.Resources) (mp
 	mp = &Processor{
 		log: res.Logger(),
 	}
-	if mp.client, mp.database, err = getClient(conf); err != nil {
+	// The processor has no connection lifecycle of its own, so the client (and
+	// with it any AWS credentials) is established once here. See the docs on the
+	// `aws` field for the refresh implications.
+	var cc *ClientConfig
+	if cc, err = ClientConfigFromParsed(conf, res.Logger()); err != nil {
+		return
+	}
+	connectCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if mp.client, mp.database, err = cc.Connect(connectCtx); err != nil {
 		return
 	}
 	if mp.collection, err = conf.FieldInterpolatedString(mpFieldCollection); err != nil {
@@ -114,8 +124,8 @@ func ProcessorFromParsed(conf *service.ParsedConfig, res *service.Resources) (mp
 	}
 	mp.marshalMode = JSONMarshalMode(marshalModeStr)
 
-	if err = mp.client.Ping(context.Background(), nil); err != nil {
-		_ = mp.client.Disconnect(context.Background())
+	if err = mp.client.Ping(connectCtx, nil); err != nil {
+		_ = mp.client.Disconnect(connectCtx)
 		return nil, fmt.Errorf("ping failed: %v", err)
 	}
 	return
