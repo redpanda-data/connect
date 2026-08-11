@@ -26,7 +26,7 @@ Last updated: 2026-03-16
 <!-- Copyright 2025 Redpanda Data, Inc. -->
 ## AWS Bench Results
 
-Last refreshed: 2026-08-10
+Last refreshed: 2026-08-11
 
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
@@ -47,7 +47,7 @@ Last refreshed: 2026-08-10
 | oracle / orders-cdc   |         1 |           13 |      —    |                   —  | 2026-06-22  |
 | oracle / orders-return-cost |         4 |           13 |      —    |                   —  | 2026-08-06  |
 | postgres / orders-cdc ⚠ |         4 |          102 |      17 |                   —  | 2026-06-01  |
-| sqlserver / orders-cdc |     —      |         —      |      —    |                   —  | 2026-08-10  |
+| sqlserver / orders-cdc |     —      |         —      |      —    |                   —  | 2026-08-11  |
 
 Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
 

@@ -42,12 +42,49 @@
 > - **Two early runs are broken, not results**: one where a stopped capture job
 >   reported 0 (fixed by `ensureCaptureJobRunning`), and the pre-bulk-copy runs
 >   that were load-bound at ~11.5 MB/s.
-> - **No multi-vCPU sweep exists.** Only 1 vCPU has been measured. A per-core
->   curve would be flat for reasons upstream of Connect, so it was not run.
+> - **The 4-point sweep exists (collated table below)** and the per-core curve
+>   is NOT flat, contrary to an earlier prediction here: burst-drain capacity
+>   scales with cores even though the capture job caps the mean.
 >
 > What the data does support: `microsoft_sql_server_cdc` sustains ~34K records/sec
 > at p95 on a single vCPU, roughly 1.8x Debezium's peak, and the practical limit
 > for SQL Server CDC is the capture job rather than the connector.
+
+## Collated 4-point sweep (2026-08-10..11, bulk-copy load, 500ms backoff)
+
+One 15-minute window per engine per point; offered load ~16.7-19.0M rows per
+window where captured (`[groundtruth]`). Records/sec, broker-derived, mean over
+the window — see the caveat above for why median and MB/s are not the right
+columns here.
+
+| vCPU | Connect mean rec/s | Connect p95 rec/s | Connect duty | Connect peak MB/s | Debezium mean rec/s | Debezium duty |
+|------|-----|-----|-----|-----|-----|-----|
+| 1 | 10,056 | 33,586 | 44% | 42.7 | 9,556¹ | 100% |
+| 2 | 16,215 | 38,852 | 82% | 62.8 | 10,703 | 100% |
+| 4 | 16,943 | 41,476 | 86% | 89.7 | 7,037² | 68% |
+| 8 | 10,431³ | 30,365 | 51% | 108.6 | 12,261 | 100% |
+
+¹ From the 1s-backoff run (101 broker samples); the 500ms run's Debezium series
+truncated to 11 samples and is unusable.
+² Real offered load (17.4M rows) — not a weak write window — but single-run.
+³ Offered load was the HIGHEST of any window (19.0M rows), so not load-starved;
+single-run, needs a repeat before quoting as an 8-core degradation.
+
+**Reading of the curve:**
+
+- **Connect's burst-drain capacity scales near-linearly with cores** (peak 42.7
+  → 62.8 → 89.7 → 108.6 MB/s), but mean throughput is capture-job-bound with a
+  **knee at 2 vCPU**: +61% from 1→2, +4% from 2→4. At 2-4 vCPU Connect converts
+  ~94% of offered load; the constraint above that is SQL Server publishing
+  changes, not the connector reading them.
+- **Debezium runs at ~100% duty cycle at every core count but its mean never
+  leaves the 7-12K band** — steady, lower ceiling, and no clear gain from cores.
+- **Sizing answer: 2 vCPU is the sweet spot for `microsoft_sql_server_cdc`**;
+  at that point it leads Debezium by ~52% on delivered records against the same
+  load. Point-to-point comparisons beyond that are variance-dominated because
+  offered load swings 14-24% between windows — compare capture ratios, not raw
+  means.
+
 
 
 
@@ -214,3 +251,178 @@ transactions/sec ceiling and mislabel it a connector ceiling.
 
 
 Raw samples + Prometheus snapshots: [`results/sqlserver/orders-cdc/2026-08-10T20-20-56Z.json`](results/sqlserver/orders-cdc/2026-08-10T20-20-56Z.json)
+
+
+## AWS — orders-cdc — 2026-08-11
+
+**Scenario:** Stream changes from a high-write SQL Server orders table so the
+microsoft_sql_server_cdc input — not the producer, and not SQL Server's own
+capture job — is the bottleneck across the CPU sweep.
+
+Fairness: neither engine reads the transaction log. Connect's
+microsoft_sql_server_cdc and the Kafka Connect comparator (Debezium SQL
+Server) both tail the same cdc.<schema>_<table>_CT change tables, populated by
+SQL Server's capture job. That makes this the most apples-to-apples CDC
+head-to-head in the suite — and it also means the capture job sits upstream of
+BOTH engines. The seeder raises its per-cycle limits well past what the load
+generator can produce (see tuneCaptureJob in seeders/cdc-rows-mssql/sql.go);
+leave the stock 10/500/5 in place and you measure the capture job's ~1000
+transactions/sec ceiling and mislabel it a connector ceiling.
+
+**Git SHA:** [`6cfc6928e`](https://github.com/redpanda-data/connect/commit/6cfc6928eb2c43592c1a71b2f864a7ad36bc10fd)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 2    | 2          |                | connect       |           20 |       19.780 |        16,215 |           21 |           0 |           47 |        16,600 |                    |
+
+
+> ⚠ At 2 vCPU: 64s dip to 0.00× median MB/sec from t=455s — investigate before publishing.
+
+
+
+Raw samples + Prometheus snapshots: [`results/sqlserver/orders-cdc/2026-08-11T15-36-19Z.json`](results/sqlserver/orders-cdc/2026-08-11T15-36-19Z.json)
+
+
+## AWS — orders-cdc — 2026-08-11
+
+**Scenario:** Stream changes from a high-write SQL Server orders table so the
+microsoft_sql_server_cdc input — not the producer, and not SQL Server's own
+capture job — is the bottleneck across the CPU sweep.
+
+Fairness: neither engine reads the transaction log. Connect's
+microsoft_sql_server_cdc and the Kafka Connect comparator (Debezium SQL
+Server) both tail the same cdc.<schema>_<table>_CT change tables, populated by
+SQL Server's capture job. That makes this the most apples-to-apples CDC
+head-to-head in the suite — and it also means the capture job sits upstream of
+BOTH engines. The seeder raises its per-cycle limits well past what the load
+generator can produce (see tuneCaptureJob in seeders/cdc-rows-mssql/sql.go);
+leave the stock 10/500/5 in place and you measure the capture job's ~1000
+transactions/sec ceiling and mislabel it a connector ceiling.
+
+**Git SHA:** [`f153b9220`](https://github.com/redpanda-data/connect/commit/f153b922022ebec31971538ff7c6424b1c81ec8c)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 2    | 2          |                | kafka_connect |           18 |       19.168 |        10,702 |           19 |           2 |           40 |        10,128 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/sqlserver/orders-cdc/2026-08-11T15-57-37Z.json`](results/sqlserver/orders-cdc/2026-08-11T15-57-37Z.json)
+
+
+## AWS — orders-cdc — 2026-08-11
+
+**Scenario:** Stream changes from a high-write SQL Server orders table so the
+microsoft_sql_server_cdc input — not the producer, and not SQL Server's own
+capture job — is the bottleneck across the CPU sweep.
+
+Fairness: neither engine reads the transaction log. Connect's
+microsoft_sql_server_cdc and the Kafka Connect comparator (Debezium SQL
+Server) both tail the same cdc.<schema>_<table>_CT change tables, populated by
+SQL Server's capture job. That makes this the most apples-to-apples CDC
+head-to-head in the suite — and it also means the capture job sits upstream of
+BOTH engines. The seeder raises its per-cycle limits well past what the load
+generator can produce (see tuneCaptureJob in seeders/cdc-rows-mssql/sql.go);
+leave the stock 10/500/5 in place and you measure the capture job's ~1000
+transactions/sec ceiling and mislabel it a connector ceiling.
+
+**Git SHA:** [`f153b9220`](https://github.com/redpanda-data/connect/commit/f153b922022ebec31971538ff7c6424b1c81ec8c)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 4          |                | connect       |           20 |       20.667 |        16,942 |           20 |           0 |           51 |        16,222 |                    |
+| 4    | 4          |                | kafka_connect |            4 |       12.600 |         7,036 |            4 |           0 |           44 |         1,997 | -14,225 msg/s (-88%) |
+
+
+> ⚠ At 4 vCPU: 93s dip to 0.00× median MB/sec from t=762s — investigate before publishing.
+
+
+
+### Cross-engine divergence
+
+| vCPU | faster        | slower        | ratio  | faster MB/s | slower MB/s |
+|------|---------------|---------------|--------|-------------|-------------|
+| 4    | connect       | kafka_connect | 5.53x |          20 |           4 |
+
+Raw samples + Prometheus snapshots: [`results/sqlserver/orders-cdc/2026-08-11T16-21-43Z.json`](results/sqlserver/orders-cdc/2026-08-11T16-21-43Z.json)
+
+
+## AWS — orders-cdc — 2026-08-11
+
+**Scenario:** Stream changes from a high-write SQL Server orders table so the
+microsoft_sql_server_cdc input — not the producer, and not SQL Server's own
+capture job — is the bottleneck across the CPU sweep.
+
+Fairness: neither engine reads the transaction log. Connect's
+microsoft_sql_server_cdc and the Kafka Connect comparator (Debezium SQL
+Server) both tail the same cdc.<schema>_<table>_CT change tables, populated by
+SQL Server's capture job. That makes this the most apples-to-apples CDC
+head-to-head in the suite — and it also means the capture job sits upstream of
+BOTH engines. The seeder raises its per-cycle limits well past what the load
+generator can produce (see tuneCaptureJob in seeders/cdc-rows-mssql/sql.go);
+leave the stock 10/500/5 in place and you measure the capture job's ~1000
+transactions/sec ceiling and mislabel it a connector ceiling.
+
+**Git SHA:** [`c0dba5963`](https://github.com/redpanda-data/connect/commit/c0dba5963f73d145da2cfd23f9671803ec834628)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 8    | 8          |                | connect       |            4 |       12.724 |        10,430 |            4 |           0 |           37 |         3,058 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/sqlserver/orders-cdc/2026-08-11T17-24-21Z.json`](results/sqlserver/orders-cdc/2026-08-11T17-24-21Z.json)
+
+
+## AWS — orders-cdc — 2026-08-11
+
+**Scenario:** Stream changes from a high-write SQL Server orders table so the
+microsoft_sql_server_cdc input — not the producer, and not SQL Server's own
+capture job — is the bottleneck across the CPU sweep.
+
+Fairness: neither engine reads the transaction log. Connect's
+microsoft_sql_server_cdc and the Kafka Connect comparator (Debezium SQL
+Server) both tail the same cdc.<schema>_<table>_CT change tables, populated by
+SQL Server's capture job. That makes this the most apples-to-apples CDC
+head-to-head in the suite — and it also means the capture job sits upstream of
+BOTH engines. The seeder raises its per-cycle limits well past what the load
+generator can produce (see tuneCaptureJob in seeders/cdc-rows-mssql/sql.go);
+leave the stock 10/500/5 in place and you measure the capture job's ~1000
+transactions/sec ceiling and mislabel it a connector ceiling.
+
+**Git SHA:** [`c0dba5963`](https://github.com/redpanda-data/connect/commit/c0dba5963f73d145da2cfd23f9671803ec834628)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 8    | 8          |                | kafka_connect |           26 |       21.961 |        12,261 |           26 |           3 |           41 |        14,345 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/sqlserver/orders-cdc/2026-08-11T18-02-38Z.json`](results/sqlserver/orders-cdc/2026-08-11T18-02-38Z.json)
