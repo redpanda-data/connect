@@ -408,6 +408,39 @@ func ensureTable(ctx context.Context, db *sql.DB, table string) error {
 	return enableCDCOnTable(ctx, db, table)
 }
 
+// execWithDeadlockRetry runs a statement, retrying while SQL Server picks it as a
+// deadlock victim (error 1205).
+//
+// The CDC enable/disable procedures are the reason this exists.
+// sp_cdc_disable_table drops cdc.<instance>_CT, and the capture job may be
+// writing to that very table at the same time — especially when it is working
+// through a backlog, which after a bulk-copy workload it always is. SQL Server
+// resolves the conflict by killing one side and telling it to rerun; observed on
+// 2026-08-10 as a seed failure deep inside
+// sp_cdc_disable_table -> sp_cdc_drop_change_table_objects -> drop table.
+//
+// Retrying is the documented remedy, not a workaround: error 1205's own text is
+// "Rerun the transaction."
+func execWithDeadlockRetry(ctx context.Context, db *sql.DB, label, stmt string) error {
+	const attempts = 5
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		_, lastErr = db.ExecContext(ctx, stmt)
+		if lastErr == nil {
+			return nil
+		}
+		var me mssql.Error
+		if !errors.As(lastErr, &me) || me.Number != 1205 {
+			return fmt.Errorf("%s: %w", label, lastErr)
+		}
+		wait := time.Duration(i+1) * 2 * time.Second
+		fmt.Printf("%s: deadlock victim (1205), attempt %d/%d, retrying in %s\n",
+			label, i+1, attempts, wait)
+		time.Sleep(wait)
+	}
+	return fmt.Errorf("%s: still deadlocking after %d attempts: %w", label, attempts, lastErr)
+}
+
 func enableCDCOnTable(ctx context.Context, db *sql.DB, table string) error {
 	var tracked bool
 	if err := db.QueryRowContext(ctx, `
@@ -427,8 +460,9 @@ func enableCDCOnTable(ctx context.Context, db *sql.DB, table string) error {
 	q := fmt.Sprintf(
 		"EXEC sys.sp_cdc_enable_table @source_schema = N'%s', @source_name = N'%s', @role_name = NULL, @supports_net_changes = 0",
 		schema, table)
-	if _, err := db.ExecContext(ctx, q); err != nil {
-		return fmt.Errorf("sp_cdc_enable_table %s.%s: %w", schema, table, err)
+	if err := execWithDeadlockRetry(ctx, db,
+		fmt.Sprintf("sp_cdc_enable_table %s.%s", schema, table), q); err != nil {
+		return err
 	}
 	fmt.Printf("cdc enabled on table %s.%s\n", schema, table)
 	return nil
@@ -454,10 +488,8 @@ func disableCDCOnTable(ctx context.Context, db *sql.DB, table string) error {
 	q := fmt.Sprintf(
 		"EXEC sys.sp_cdc_disable_table @source_schema = N'%s', @source_name = N'%s', @capture_instance = N'all'",
 		schema, table)
-	if _, err := db.ExecContext(ctx, q); err != nil {
-		return fmt.Errorf("sp_cdc_disable_table %s.%s: %w", schema, table, err)
-	}
-	return nil
+	return execWithDeadlockRetry(ctx, db,
+		fmt.Sprintf("sp_cdc_disable_table %s.%s", schema, table), q)
 }
 
 // waitForCaptureInstance blocks until the capture job has published a start_lsn
