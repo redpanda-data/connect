@@ -335,13 +335,14 @@ func TestProhibitedKeysPersistAcrossCommitters(t *testing.T) {
 }
 
 // unknownStateProhibitedTextCatalog applies the FIRST commit server-side but
-// reports an ErrCommitStateUnknown whose text also names a prohibited key that
-// the commit really sent. It models a 5xx from a catalog whose error body
+// reports an ambiguous error (firstErr) whose text also names a prohibited key
+// that the commit really sent. It models a 5xx from a catalog whose error body
 // happens to mention prohibited keys: the ambiguity handling (reload +
 // commit-id idempotency) must take precedence over prohibited-key learning.
 type unknownStateProhibitedTextCatalog struct {
 	*memCatalog
-	calls int
+	firstErr error
+	calls    int
 }
 
 func (c *unknownStateProhibitedTextCatalog) CommitTable(ctx context.Context, ident table.Identifier, reqs []table.Requirement, updates []table.Update) (table.Metadata, string, error) {
@@ -350,7 +351,7 @@ func (c *unknownStateProhibitedTextCatalog) CommitTable(ctx context.Context, ide
 		if _, _, err := c.memCatalog.CommitTable(ctx, ident, reqs, updates); err != nil {
 			return nil, "", err
 		}
-		return nil, "", fmt.Errorf("500 Internal Server Error: Table properties contain prohibited keys: schema.name-mapping.default: %w", rest.ErrCommitStateUnknown)
+		return nil, "", c.firstErr
 	}
 	return c.memCatalog.CommitTable(ctx, ident, reqs, updates)
 }
@@ -360,33 +361,53 @@ func (c *unknownStateProhibitedTextCatalog) snapshot() *table.Table {
 }
 
 // TestUnknownStateTakesPrecedenceOverProhibitedKeys pins the precedence fix: a
-// commit that LANDED but returned ErrCommitStateUnknown must go through the
+// commit that LANDED but returned an ambiguous error must go through the
 // reload + commit-id idempotency check — treating it as a prohibited-keys
 // rejection would re-stage and apply the mutation a second time. Exactly one
-// snapshot may carry the commit id, and no key may be learned.
+// snapshot may carry the commit id, and no key may be learned. The precedence
+// must hold for the whole ambiguous class, not just the literal
+// ErrCommitStateUnknown sentinel: iceberg-go surfaces some 5xx as
+// rest.ErrServerError, and commitLocked normalises those onto the sentinel
+// before the prohibited-keys guard runs.
 func TestUnknownStateTakesPrecedenceOverProhibitedKeys(t *testing.T) {
-	ctx := t.Context()
 	sc := iceberg.NewSchema(0,
 		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
 		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
 	)
-	seedTbl, mem := newCOWTable(t, sc)
-	_ = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two"})
-	cat := &unknownStateProhibitedTextCatalog{memCatalog: mem}
+	for _, tc := range []struct {
+		name     string
+		firstErr error
+	}{
+		{
+			name:     "explicit unknown-state sentinel",
+			firstErr: fmt.Errorf("500 Internal Server Error: Table properties contain prohibited keys: schema.name-mapping.default: %w", rest.ErrCommitStateUnknown),
+		},
+		{
+			name:     "non-sentinel ambiguous server error",
+			firstErr: fmt.Errorf("%w: Table properties contain prohibited keys: schema.name-mapping.default", rest.ErrServerError),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			seedTbl, mem := newCOWTable(t, sc)
+			_ = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two"})
+			cat := &unknownStateProhibitedTextCatalog{memCatalog: mem, firstErr: tc.firstErr}
 
-	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
-		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
-	require.NoError(t, err)
-	t.Cleanup(comm.Close)
-	w := cowWriter(t, cat.snapshot(), "id")
-	w.committer = comm
+			comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
+				func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+			require.NoError(t, err)
+			t.Cleanup(comm.Close)
+			w := cowWriter(t, cat.snapshot(), "id")
+			w.committer = comm
 
-	require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}))
+			require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}))
 
-	assert.Equal(t, 1, cat.calls, "the landed commit must be detected via the commit-id, not re-sent")
-	assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()), "the mutation must be applied exactly once")
-	assert.Equal(t, map[int64]string{1: "one", 2: "TWO"}, scanRows(t, ctx, cat.snapshot()))
-	assert.Empty(t, comm.stripper.strip.snapshot(), "an unknown-state error must never teach the stripper")
+			assert.Equal(t, 1, cat.calls, "the landed commit must be detected via the commit-id, not re-sent")
+			assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()), "the mutation must be applied exactly once")
+			assert.Equal(t, map[int64]string{1: "one", 2: "TWO"}, scanRows(t, ctx, cat.snapshot()))
+			assert.Empty(t, comm.stripper.strip.snapshot(), "an ambiguous error must never teach the stripper")
+		})
+	}
 }
 
 // TestParseProhibitedPropertyKeys pins the rejection-parsing grammar: a

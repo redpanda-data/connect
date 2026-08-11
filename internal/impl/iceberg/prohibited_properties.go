@@ -185,13 +185,13 @@ type propertyStrippingCatalog struct {
 	// recreation.
 	strip *prohibitedKeySet
 
-	// sentMu guards lastSent: the property keys the most recent CommitTable
+	// lastSentMu guards lastSent: the property keys the most recent CommitTable
 	// actually forwarded to the inner catalog. noteProhibitedKeys consults it
 	// so only keys we genuinely sent can be learned from a rejection —
 	// commits through a committer are serialized (commitMu), so the last call
 	// is always the one whose error is being inspected.
-	sentMu   sync.Mutex
-	lastSent map[string]struct{}
+	lastSentMu sync.Mutex
+	lastSent   map[string]struct{}
 }
 
 // newPropertyStrippingCatalog wraps inner with prohibited-key filtering. A
@@ -219,8 +219,8 @@ func (p *propertyStrippingCatalog) addProhibitedKey(key string) bool {
 // sentPropertyKey reports whether the most recent CommitTable through this
 // wrapper forwarded a set-properties update containing key.
 func (p *propertyStrippingCatalog) sentPropertyKey(key string) bool {
-	p.sentMu.Lock()
-	defer p.sentMu.Unlock()
+	p.lastSentMu.Lock()
+	defer p.lastSentMu.Unlock()
 	_, ok := p.lastSent[key]
 	return ok
 }
@@ -249,9 +249,9 @@ func (p *propertyStrippingCatalog) recordSentPropertyKeys(updates []table.Update
 			sent[k] = struct{}{}
 		}
 	}
-	p.sentMu.Lock()
+	p.lastSentMu.Lock()
 	p.lastSent = sent
-	p.sentMu.Unlock()
+	p.lastSentMu.Unlock()
 }
 
 // LoadTable delegates to the wrapped catalog. The returned table keeps its

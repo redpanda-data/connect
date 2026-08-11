@@ -599,15 +599,17 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			// landed (or may still land) server-side: the catalog's explicit
 			// ErrCommitStateUnknown (5xx), but equally a raw transport failure
 			// (client timeout, connection reset, EOF) on the commit request.
-			// Sticky for the rest of the call (see unresolvedUnknown above).
-			// Raw errors are wrapped together with rest.ErrCommitStateUnknown
-			// so the marker is caller-visible through the one existing
-			// sentinel.
-			if errors.Is(err, rest.ErrCommitStateUnknown) {
-				unresolvedUnknown = err
-			} else {
-				unresolvedUnknown = fmt.Errorf("%w: %w", rest.ErrCommitStateUnknown, err)
+			// Normalise err itself onto the one existing sentinel so EVERY
+			// downstream errors.Is(err, rest.ErrCommitStateUnknown) check —
+			// the prohibited-keys guard, the retry-on-unknown branch and its
+			// landed-commit check, and callers' cleanup gates — sees the whole
+			// ambiguous class, not just errors the catalog happened to wrap in
+			// the sentinel already. Also sticky for the rest of the call (see
+			// unresolvedUnknown above).
+			if !errors.Is(err, rest.ErrCommitStateUnknown) {
+				err = fmt.Errorf("%w: %w", rest.ErrCommitStateUnknown, err)
 			}
+			unresolvedUnknown = err
 		}
 		// Some engine-backed catalogs (Databricks Unity Catalog) reject a
 		// commit whose set-properties updates touch reserved keys, naming the
@@ -620,11 +622,14 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 		// connector semantics (e.g. the timestamp-encoding pin) — so a
 		// catalog prohibiting them fails the commit loudly instead.
 		//
-		// An ErrCommitStateUnknown is never treated as a prohibited-keys
+		// An ambiguous-class error is never treated as a prohibited-keys
 		// rejection, even if its text mentions them: the commit may have
 		// landed server-side, and the prohibited-keys retry re-stages WITHOUT
 		// the reload + commit-id idempotency check below, so it could apply
-		// the mutation twice. Unknown-state takes precedence.
+		// the mutation twice. Unknown-state takes precedence. (The
+		// normalisation above folds every ambiguous error — non-sentinel 5xx,
+		// transport failures — onto ErrCommitStateUnknown, so this single
+		// sentinel check covers the whole class.)
 		if err != nil && !errors.Is(err, rest.ErrCommitStateUnknown) {
 			if retry, fatalErr := c.noteProhibitedKeys(attempt, err); fatalErr != nil {
 				// Reload so the next call uses fresh metadata, mirroring the

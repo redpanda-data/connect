@@ -1498,10 +1498,12 @@ func (c *lateLandingCatalog) snapshot() *table.Table {
 // POST — timeout, connection reset, EOF — surfaces as a raw error. That is
 // the textbook ambiguous outcome (the server may finish applying after the
 // client stops waiting), so commitOverwrite must treat it exactly like an
-// unknown state: surface an unknown-class error and skip the destructive
-// orphan cleanup, while retry policy stays unchanged (the raw error is still
-// not retried). The commit then lands late, AFTER the write returned; had
-// cleanup run, the landed snapshot would reference deleted files.
+// unknown state: retry with the reload + commit-id idempotency check (raw
+// errors are normalised onto the sentinel, so they take the same
+// retry-on-unknown path), surface an unknown-class error once retries
+// exhaust, and skip the destructive orphan cleanup. The first attempt's
+// commit then lands late, AFTER the write returned; had cleanup run, the
+// landed snapshot would reference deleted files.
 func TestCommitOverwriteTransportErrorIsAmbiguous(t *testing.T) {
 	sc := iceberg.NewSchema(0,
 		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
@@ -1525,8 +1527,15 @@ func TestCommitOverwriteTransportErrorIsAmbiguous(t *testing.T) {
 			seedCount := countParquetFiles(t, seedTbl.Location())
 			require.Positive(t, seedCount, "seeding must have written data files")
 
-			cat := &lateLandingCatalog{memCatalog: mem, outcomes: []lateLandingOutcome{{err: tc.err, capture: true}}}
-			comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
+			// Every attempt fails with the same transport error; only the
+			// first is captured to land late. The retries between them run
+			// the reload + token check, which resolves nothing (the capture
+			// has not landed yet), so the loop exhausts ambiguous.
+			const maxRetries = 3
+			cat := &lateLandingCatalog{memCatalog: mem, outcomes: []lateLandingOutcome{
+				{err: tc.err, capture: true}, {err: tc.err}, {err: tc.err},
+			}}
+			comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: maxRetries},
 				func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
 			require.NoError(t, err)
 			defer comm.Close()
@@ -1537,7 +1546,8 @@ func TestCommitOverwriteTransportErrorIsAmbiguous(t *testing.T) {
 			require.Error(t, err)
 			assert.ErrorIs(t, err, rest.ErrCommitStateUnknown,
 				"a raw transport failure on the commit request must surface as unknown-class: no verdict ever arrived")
-			assert.Equal(t, 1, cat.calls, "retry policy is unchanged: a raw transport error is not retried")
+			assert.Equal(t, maxRetries, cat.calls,
+				"a transport failure is ambiguous, so it must be retried through the reload + commit-id check like any unknown state")
 
 			// Cleanup must have been skipped: every recorded file is still on
 			// disk, because the ambiguous attempt may still land.

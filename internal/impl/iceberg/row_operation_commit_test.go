@@ -439,11 +439,6 @@ func TestWriteSkipsCleanupWhenDisabled(t *testing.T) {
 		"cleanup_on_failure: false must leave the uncommitted parquet file for Iceberg orphan-file maintenance")
 }
 
-// morUpsertInput builds an upsert-shaped merge-on-read CommitInput (one data
-// file plus one equality-delete file for the given id) against tbl. It mirrors
-// the shape TestCommitUpsertProducesOverwriteSnapshot uses, so the RowDelta
-// commit derives an overwrite snapshot.
-
 // TestWriteSkipsCleanupOnAmbiguousCommit pins the writer-side cleanup gate: when
 // every commit attempt's outcome remains ambiguous (ErrCommitStateUnknown, which
 // commitLocked joins into its error returns), the writer must NOT delete the
@@ -476,6 +471,10 @@ func TestWriteSkipsCleanupOnAmbiguousCommit(t *testing.T) {
 		"ambiguous commit outcome: written files must be left for orphan-file maintenance, not deleted")
 }
 
+// morUpsertInput builds an upsert-shaped merge-on-read CommitInput (one data
+// file plus one equality-delete file for the given id) against tbl. It mirrors
+// the shape TestCommitUpsertProducesOverwriteSnapshot uses, so the RowDelta
+// commit derives an overwrite snapshot.
 func morUpsertInput(t testing.TB, ctx context.Context, tbl *table.Table, id int) CommitInput {
 	t.Helper()
 	w := newDeleteWriter(t, tbl)
@@ -529,6 +528,30 @@ func TestCommitRowDeltaIdempotentOnUnknownState(t *testing.T) {
 		assert.Equal(t, 2, cat.calls, "a commit that did not land must be retried")
 		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
 			"the mutation must be committed exactly once on the successful retry")
+	})
+
+	// (C) landed-but-reported-ambiguous-NON-sentinel: iceberg-go maps only
+	// HTTP 500/502/503/504 to ErrCommitStateUnknown; other 5xx surface as
+	// rest.ErrServerError (and client-side timeouts as raw transport errors).
+	// These are just as ambiguous — the commit may have landed — so
+	// commitLocked must normalise them onto the sentinel and run the same
+	// reload + commit-id check, finding the token and returning success
+	// WITHOUT a duplicate apply. Before the normalisation fix these errors
+	// took the terminal branch: the landed commit was reported as failed and
+	// redelivery re-applied the mutation.
+	t.Run("landed then server error applies once", func(t *testing.T) {
+		ctx := t.Context()
+		_, mem := newTestTable(t)
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitLandThenServerError}}
+		c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, cat.snapshot(), 2)))
+
+		assert.Equal(t, 1, cat.calls, "a landed commit must not be re-committed after a non-sentinel ambiguous 5xx")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+			"exactly one snapshot must carry the commit-id (mutation applied once)")
 	})
 
 	// Clean conflict (ErrCommitFailed, nothing landed): the commit-id is absent on

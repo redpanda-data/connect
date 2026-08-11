@@ -166,11 +166,12 @@ func TestNewCommitterRejectsNilReloadTable(t *testing.T) {
 type commitOutcome int
 
 const (
-	commitSucceed         commitOutcome = iota // apply the update and report success
-	commitLandThenFail                         // apply the update but report ErrCommitFailed (lost/ambiguous ack)
-	commitConflict                             // do NOT apply the update and report ErrCommitFailed (clean 409)
-	commitLandThenUnknown                      // apply the update but report ErrCommitStateUnknown (landed, ambiguous 5xx)
-	commitUnknownNoLand                        // do NOT apply the update and report ErrCommitStateUnknown (5xx before applying)
+	commitSucceed             commitOutcome = iota // apply the update and report success
+	commitLandThenFail                             // apply the update but report ErrCommitFailed (lost/ambiguous ack)
+	commitConflict                                 // do NOT apply the update and report ErrCommitFailed (clean 409)
+	commitLandThenUnknown                          // apply the update but report ErrCommitStateUnknown (landed, ambiguous 5xx)
+	commitUnknownNoLand                            // do NOT apply the update and report ErrCommitStateUnknown (5xx before applying)
+	commitLandThenServerError                      // apply the update but report a NON-sentinel ambiguous 5xx (rest.ErrServerError)
 )
 
 // scriptedCatalog drives per-call CommitTable outcomes so tests can model the
@@ -203,6 +204,10 @@ func (c *scriptedCatalog) CommitTable(ctx context.Context, ident table.Identifie
 		applies, retErr = false, rest.ErrCommitFailed
 	case commitUnknownNoLand:
 		applies, retErr = false, rest.ErrCommitStateUnknown
+	case commitLandThenServerError:
+		// iceberg-go maps only 500/502/503/504 to ErrCommitStateUnknown; other
+		// 5xx surface as ErrServerError. Equally ambiguous, different sentinel.
+		applies, retErr = true, fmt.Errorf("%w: internal error", rest.ErrServerError)
 	}
 
 	if applies {
