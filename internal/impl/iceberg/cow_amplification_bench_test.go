@@ -12,7 +12,10 @@ package iceberg
 // amplification of copy-on-write (COW) row-level mutations in iceberg-go, to
 // decide whether COW is viable for streaming CDC in the connect iceberg output.
 //
-// Run with:
+// The harnesses are opt-in by construction (integration.CheckSkip): they seed
+// hundreds of real parquet files and allocate hundreds of MB, so they must
+// never run as part of the plain `go test ./...` unit suite. Run explicitly
+// with:
 //
 //	go test -run TestCOWWriteAmplification -v ./internal/impl/iceberg/
 //
@@ -40,6 +43,8 @@ import (
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 // cowArrowSchema is the Arrow schema matching the (id int64, payload string)
@@ -261,9 +266,7 @@ func runAmpScenario(tb testing.TB, ctx context.Context, mode string, m, r, k, pa
 // TestCOWWriteAmplification is the headline harness. It sweeps M/K/scatter for
 // both COW and MOR delete modes and prints a table of measured amplification.
 func TestCOWWriteAmplification(t *testing.T) {
-	if testing.Short() {
-		t.Skip("amplification harness is slow; skipped under -short")
-	}
+	integration.CheckSkip(t) // slow characterisation harness: runs only when targeted via -run
 	ctx := t.Context()
 
 	const (
@@ -363,9 +366,7 @@ func TestCOWWriteAmplification(t *testing.T) {
 // rewrite. We deliberately do NOT seed literal 512 MB files (far too slow for a
 // unit test); the per-MB cost measured here is the extrapolation constant.
 func TestCOWWriteAmplificationScale(t *testing.T) {
-	if testing.Short() {
-		t.Skip("amplification harness is slow; skipped under -short")
-	}
+	integration.CheckSkip(t) // slow characterisation harness: runs only when targeted via -run
 	ctx := t.Context()
 
 	const (
@@ -436,9 +437,7 @@ func TestCOWWriteAmplificationScale(t *testing.T) {
 // the factory + one reader, and the heap retained while that reader is live
 // (the closure's JSON plus the live Arrow record), and derives bytes/row.
 func TestCOWRecordFactoryMemory(t *testing.T) {
-	if testing.Short() {
-		t.Skip("memory harness allocates hundreds of MB; skipped under -short")
-	}
+	integration.CheckSkip(t) // memory harness allocates hundreds of MB: runs only when targeted via -run
 
 	tbl, _ := newAmpTable(t, table.WriteModeCopyOnWrite) // schema: id int64, payload string
 	w := cowWriter(t, tbl, "id")
