@@ -42,15 +42,16 @@ import (
 
 const (
 	// S3 Input SQS Fields
-	s3iSQSFieldURL              = "url"
-	s3iSQSFieldEndpoint         = "endpoint"
-	s3iSQSFieldEnvelopePath     = "envelope_path"
-	s3iSQSFieldKeyPath          = "key_path"
-	s3iSQSFieldBucketPath       = "bucket_path"
-	s3iSQSFieldDelayPeriod      = "delay_period"
-	s3iSQSFieldMaxMessages      = "max_messages"
-	s3iSQSFieldWaitTimeSeconds  = "wait_time_seconds"
-	s3iSQSNackVisibilityTimeout = "nack_visibility_timeout"
+	s3iSQSFieldURL                 = "url"
+	s3iSQSFieldEndpoint            = "endpoint"
+	s3iSQSFieldEnvelopePath        = "envelope_path"
+	s3iSQSFieldKeyPath             = "key_path"
+	s3iSQSFieldBucketPath          = "bucket_path"
+	s3iSQSFieldDelayPeriod         = "delay_period"
+	s3iSQSFieldMaxMessages         = "max_messages"
+	s3iSQSFieldWaitTimeSeconds     = "wait_time_seconds"
+	s3iSQSNackVisibilityTimeout    = "nack_visibility_timeout"
+	s3iSQSFieldZeroKeyWarnInterval = "zero_key_warn_interval"
 
 	// S3 Input Fields
 	s3iFieldBucket             = "bucket"
@@ -61,15 +62,16 @@ const (
 )
 
 type s3iSQSConfig struct {
-	URL               string
-	Endpoint          string
-	EnvelopePath      string
-	KeyPath           string
-	BucketPath        string
-	DelayPeriod       string
-	MaxMessages       int64
-	WaitTimeSeconds   int64
-	VisibilityTimeout int32
+	URL                 string
+	Endpoint            string
+	EnvelopePath        string
+	KeyPath             string
+	BucketPath          string
+	DelayPeriod         string
+	MaxMessages         int64
+	WaitTimeSeconds     int64
+	VisibilityTimeout   int32
+	ZeroKeyWarnInterval time.Duration
 }
 
 func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err error) {
@@ -98,6 +100,9 @@ func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err
 		return
 	}
 	if conf.VisibilityTimeout, err = baws.Int32Field(pConf, s3iSQSNackVisibilityTimeout); err != nil {
+		return
+	}
+	if conf.ZeroKeyWarnInterval, err = pConf.FieldDuration(s3iSQSFieldZeroKeyWarnInterval); err != nil {
 		return
 	}
 	return
@@ -151,6 +156,8 @@ Redpanda Connect is able to follow this pattern when you configure an `+"`sqs.ur
 If your notification events are being routed to SQS via an SNS topic then the events will be enveloped by SNS, in which case you also need to specify the field `+"`sqs.envelope_path`"+`, which in the case of SNS to SQS will usually be `+"`Message`"+`.
 
 When using SQS please make sure you have sensible values for `+"`sqs.max_messages`"+` and also the visibility timeout of the queue itself. When Redpanda Connect consumes an S3 object the SQS message that triggered it is not deleted until the S3 object has been sent onwards. This ensures at-least-once crash resiliency, but also means that if the S3 object takes longer to process than the visibility timeout of your queue then the same objects might be processed multiple times.
+
+Amazon S3 sends an `+"`s3:TestEvent`"+` notification whenever a bucket's event configuration is saved, to verify the queue is reachable. Redpanda Connect detects these (including via an SNS envelope) and deletes them automatically. Any other message with no extractable target key, for example due to a misconfigured `+"`sqs.key_path`"+`/`+"`sqs.bucket_path`"+`, is logged as a warning and left on the queue instead.
 
 == Download large files
 
@@ -237,6 +244,14 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Description("Custom SQS Nack Visibility timeout in seconds. Default is 0").
 					Default(0).
 					Optional(),
+				service.NewDurationField(s3iSQSFieldZeroKeyWarnInterval).
+					Description("A message from which no target key can be extracted (e.g. due to a misconfigured `key_path`/`bucket_path`) is never deleted, so it's redelivered and re-evaluated repeatedly until the underlying issue is fixed. This field limits how often that condition is logged as a warning, to avoid flooding the logs; every occurrence is still logged at debug level. Set to `0s` to warn on every occurrence.").
+					ShortDescription("How often to repeat the warning for a message with no extractable target key.").
+					Example("10s").
+					Example("0s").
+					Default("30s").
+					LintRule(`root = if this.parse_duration().catch(0) < 0 { [ "`+s3iSQSFieldZeroKeyWarnInterval+` must not be negative" ] }`).
+					Advanced(),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").
 				Optional(),
@@ -407,6 +422,8 @@ type sqsTargetReader struct {
 	nextRequest time.Time
 
 	pending []*s3ObjectTarget
+
+	lastZeroKeyWarnAt time.Time
 }
 
 func newSQSTargetReader(
@@ -472,20 +489,20 @@ func digStrsFromSlices(slice []any) []string {
 	return strs
 }
 
-func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, error) {
+func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) (*gabs.Container, []s3ObjectTarget, error) {
 	gObj, err := gabs.ParseJSON([]byte(*sqsMsg))
 	if err != nil {
-		return nil, fmt.Errorf("parsing SQS message: %v", err)
+		return nil, nil, fmt.Errorf("parsing SQS message: %v", err)
 	}
 
 	if s.conf.SQS.EnvelopePath != "" {
 		d := gObj.Path(s.conf.SQS.EnvelopePath).Data()
 		if str, ok := d.(string); ok {
 			if gObj, err = gabs.ParseJSON([]byte(str)); err != nil {
-				return nil, fmt.Errorf("parsing enveloped message: %v", err)
+				return nil, nil, fmt.Errorf("parsing enveloped message: %v", err)
 			}
 		} else {
-			return nil, fmt.Errorf("expected string at envelope path, found %T", d)
+			return nil, nil, fmt.Errorf("expected string at envelope path, found %T", d)
 		}
 	}
 
@@ -510,14 +527,14 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 	objects := make([]s3ObjectTarget, 0, len(keys))
 	for i, key := range keys {
 		if key, err = url.QueryUnescape(key); err != nil {
-			return nil, fmt.Errorf("parsing key from SQS message: %v", err)
+			return nil, nil, fmt.Errorf("parsing key from SQS message: %v", err)
 		}
 		bucket := s.conf.Bucket
 		if len(buckets) > i {
 			bucket = buckets[i]
 		}
 		if bucket == "" {
-			return nil, errors.New("required bucket was not found in SQS message")
+			return nil, nil, errors.New("required bucket was not found in SQS message")
 		}
 		objects = append(objects, s3ObjectTarget{
 			key:    key,
@@ -525,7 +542,8 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 		})
 	}
 
-	return objects, nil
+	// return gabs.Container to save reparsing
+	return gObj, objects, nil
 }
 
 func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget, error) {
@@ -570,15 +588,30 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 			continue
 		}
 
-		objects, err := s.parseObjectPaths(sqsMsg.Body)
+		gObj, objects, err := s.parseObjectPaths(sqsMsg.Body)
 		if err != nil {
 			addDudFn(sqsMsg)
 			s.log.Errorf("SQS extract key error: %v", err)
 			continue
 		}
 		if len(objects) == 0 {
+			if isS3TestEvent(gObj) {
+				s.log.Debugf("Received S3 test event, deleting: %s", *sqsMsg.Body)
+				if err := s.ackSQSMessage(ctx, sqsMsg); err != nil {
+					s.log.Errorf("Failed to delete SQS test event message: %v", err)
+				}
+				continue
+			}
 			addDudFn(sqsMsg)
-			s.log.Debug("Extracted zero target keys from SQS message")
+			if now := time.Now(); now.Sub(s.lastZeroKeyWarnAt) >= s.conf.SQS.ZeroKeyWarnInterval {
+				s.lastZeroKeyWarnAt = now
+				s.log.Warnf(
+					"Extracted zero target keys from SQS message using key_path %q (bucket_path %q) - this likely indicates a misconfigured key_path/bucket_path, or an unrecognised notification event type: %s",
+					s.conf.SQS.KeyPath, s.conf.SQS.BucketPath, *sqsMsg.Body,
+				)
+			} else {
+				s.log.Debugf("Extracted zero target keys from SQS message: %s", *sqsMsg.Body)
+			}
 			continue
 		}
 
@@ -660,6 +693,14 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg sqstypes.Messag
 		ReceiptHandle: msg.ReceiptHandle,
 	})
 	return err
+}
+
+func isS3TestEvent(gObj *gabs.Container) bool {
+	if gObj == nil {
+		return false
+	}
+	event, ok := gObj.Path("Event").Data().(string)
+	return ok && event == "s3:TestEvent"
 }
 
 //------------------------------------------------------------------------------

@@ -215,3 +215,79 @@ tables:
 	_, err := parsePgStreamInput(t, yaml)
 	require.NoError(t, err)
 }
+
+func TestNewPgStreamInputSignalTableName(t *testing.T) {
+	env := service.NewEnvironment()
+	spec := newPostgresCDCConfig()
+
+	tests := []struct {
+		name        string
+		conf        string
+		errContains string
+	}{
+		{
+			name: "no signal table configured",
+			conf: `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+tables:
+  - events
+`,
+		},
+		{
+			name: "signal table distinct from tables",
+			conf: `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+tables:
+  - events
+signal_table_name: rpcn_signal_table
+`,
+		},
+		{
+			name: "signal table also listed in tables",
+			conf: `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+tables:
+  - events
+  - rpcn_signal_table
+signal_table_name: rpcn_signal_table
+`,
+			errContains: `signal_table_name "rpcn_signal_table" must not also appear in tables`,
+		},
+		{
+			name: "signal table matches tables entry under different case-folding",
+			conf: `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+tables:
+  - events
+  - RPCN_SIGNAL_TABLE
+signal_table_name: rpcn_signal_table
+`,
+			errContains: `signal_table_name "rpcn_signal_table" must not also appear in tables`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pConf, err := spec.ParseYAML(test.conf, env)
+			require.NoError(t, err)
+
+			mgr := service.MockResources()
+			license.InjectTestService(mgr)
+
+			_, err = newPgStreamInput(pConf, mgr)
+			if test.errContains != "" {
+				require.ErrorContains(t, err, test.errContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

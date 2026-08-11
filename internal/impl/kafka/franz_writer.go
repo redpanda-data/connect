@@ -94,9 +94,11 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 			Example("50mib"),
 		service.NewIntField(kfwFieldMaxInFlightRequestsPerBrkr).
 			Description("The maximum number of produce requests in flight per broker connection. " +
-				"When `idempotent_write` is enabled, this is capped at 5 by the Kafka protocol (and at 1 for Kafka < v1.0.0). " +
-				"When `idempotent_write` is disabled, higher values improve throughput by pipelining requests but may cause out-of-order delivery.").
-			ShortDescription("Maximum produce requests in flight per broker connection. Capped at 5 when idempotent_write is enabled.").
+				"While `idempotent_write` is enabled (the default) this must be `1`, as the client relies on a single in-flight request per broker to guarantee ordering. " +
+				"To use higher values you must set `idempotent_write` to `false`, which allows requests to be pipelined for throughput but may cause duplicate and out-of-order delivery on retries. " +
+				"Note that this is distinct from the output's `max_in_flight` field, which counts message batches being written in parallel rather than produce requests on the wire. " +
+				"A value of `1` is not a throughput ceiling: records from concurrent writes are coalesced into fewer, larger produce requests.").
+			ShortDescription("Maximum produce requests in flight per broker connection. Must be 1 while idempotent_write is enabled.").
 			Advanced().
 			Default(1),
 		service.NewIntField(kfwFieldRecordRetries).
@@ -331,6 +333,19 @@ func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) 
 		return nil, fmt.Errorf("idempotent_write requires acks to be \"all\", got %q", acksStr)
 	}
 
+	// The franz-go client rejects any value other than 1 here while idempotency
+	// is enabled, because it relies on a single in-flight request per broker to
+	// keep producer sequence numbers gapless. Without this check that rejection
+	// surfaces from within Connect() as a retryable connection error, so the
+	// pipeline starts, retries forever and silently produces nothing.
+	maxInFlightRequests, err := conf.FieldInt(kfwFieldMaxInFlightRequestsPerBrkr)
+	if err != nil {
+		return nil, err
+	}
+	if idempotentWrite && maxInFlightRequests != 1 {
+		return nil, fmt.Errorf("idempotent_write requires max_in_flight_requests to be 1, got %d (set idempotent_write to false to use higher values, at the cost of possible duplicate and out-of-order delivery on retries)", maxInFlightRequests)
+	}
+
 	if !idempotentWrite {
 		opts = append(opts, kgo.DisableIdempotentWrite())
 	}
@@ -407,7 +422,8 @@ func FranzWriterConfigLints() string {
   this.partitioner == "manual" && this.partition.or("") == "" => "a partition must be specified when the partitioner is set to manual"
   this.partitioner != "manual" && this.partition.or("") != "" => "a partition cannot be specified unless the partitioner is set to manual"
   this.timestamp.or("") != "" && this.timestamp_ms.or("") != "" => "both timestamp and timestamp_ms cannot be specified simultaneously"
-  this.idempotent_write == true && this.acks.or("all") != "all" => "idempotent_write requires acks to be set to all"
+  this.idempotent_write.or(true) == true && this.acks.or("all") != "all" => "idempotent_write requires acks to be set to all"
+  this.idempotent_write.or(true) == true && this.max_in_flight_requests.or(1) != 1 => "idempotent_write requires max_in_flight_requests to be 1, set idempotent_write to false to use higher values"
 }`
 }
 

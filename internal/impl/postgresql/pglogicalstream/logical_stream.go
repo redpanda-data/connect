@@ -99,7 +99,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 
 	var tables []TableFQN
+	var schema string
 	if config.DBSchemaPattern != "" {
+		if config.SignalTableName != "" {
+			return nil, errors.New("signal_table_name is not supported when schema_pattern is set")
+		}
 		schemas, inaccessibleSchemas, err := resolveSchemas(ctx, dbConn, config.DBSchemaPattern)
 		if err != nil {
 			return nil, fmt.Errorf("resolving schema pattern %q: %w", config.DBSchemaPattern, err)
@@ -181,7 +185,8 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			return nil, fmt.Errorf("table(s) %v not found in any schema matching pattern %q", missingTables, config.DBSchemaPattern)
 		}
 	} else {
-		schema, err := sanitize.NormalizePostgresIdentifier(config.DBSchema)
+		var err error
+		schema, err = sanitize.NormalizePostgresIdentifier(config.DBSchema)
 		if err != nil {
 			return nil, fmt.Errorf("invalid schema name %q: %w", config.DBSchema, err)
 		}
@@ -260,9 +265,23 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	stream.decodingPluginArguments = pluginArguments
 
+	tablesForPublication := tables
+	if config.SignalTableName != "" {
+		signalTable, err := validateSignalTable(ctx, stream, schema, config)
+		if err != nil {
+			return nil, fmt.Errorf("validating signal table: %w", err)
+		}
+
+		// An empty tables list means the publication covers FOR ALL TABLES, already including the signal table.
+		// Appending it here would collapse that into a single-table publication and silently stop replicating everything else.
+		if len(tables) > 0 {
+			tablesForPublication = append(slices.Clone(tables), signalTable)
+		}
+	}
+
 	pubName := "pglog_stream_" + config.ReplicationSlotName
-	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tables)
-	if err = CreatePublication(ctx, stream.pgConn, pubName, tables); err != nil {
+	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
+	if err = CreatePublication(ctx, stream.pgConn, pubName, tablesForPublication); err != nil {
 		return nil, err
 	}
 	cleanups = append(cleanups, func() {
@@ -978,4 +997,53 @@ func (s *Stream) Stop(ctx context.Context) error {
 	case <-s.shutSig.HasStoppedChan():
 	}
 	return err
+}
+
+var requiredSignalTableColumns = []string{"id", "type", "data"}
+
+// validateSignalTable verifies the signal table exists and has the
+// documented id/type/data columns.
+func validateSignalTable(ctx context.Context, stream *Stream, schema string, config *Config) (TableFQN, error) {
+	normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(config.SignalTableName)
+	if err != nil {
+		return TableFQN{}, fmt.Errorf("invalid signal table name %q: %w", config.SignalTableName, err)
+	}
+	signalTable := TableFQN{Schema: schema, Table: normalizedSignalTable}
+
+	wireSchema, err := sanitize.UnquotePostgresIdentifier(signalTable.Schema)
+	if err != nil {
+		return TableFQN{}, fmt.Errorf("verifying schema: %w", err)
+	}
+	wireSignalTable, err := sanitize.UnquotePostgresIdentifier(signalTable.Table)
+	if err != nil {
+		return TableFQN{}, fmt.Errorf("verifying signal table name: %w", err)
+	}
+	sql := "SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2"
+	query, err := sanitize.SQLQuery(sql, wireSchema, wireSignalTable)
+	if err != nil {
+		return TableFQN{}, err
+	}
+	res, err := stream.pgConn.Exec(ctx, query).ReadAll()
+	if err != nil {
+		return TableFQN{}, fmt.Errorf("checking signal table %s columns: %w", signalTable, err)
+	}
+	if len(res) == 0 || len(res[0].Rows) == 0 {
+		return signalTable, fmt.Errorf("signal table %s does not exist", signalTable)
+	}
+
+	columns := make(map[string]bool, len(res[0].Rows))
+	for _, row := range res[0].Rows {
+		columns[string(row[0])] = true
+	}
+	var missing []string
+	for _, required := range requiredSignalTableColumns {
+		if !columns[required] {
+			missing = append(missing, required)
+		}
+	}
+	if len(missing) > 0 {
+		return signalTable, fmt.Errorf("signal table %s is missing required column(s): %s", signalTable, strings.Join(missing, ", "))
+	}
+
+	return signalTable, nil
 }
