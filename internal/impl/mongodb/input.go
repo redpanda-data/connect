@@ -191,6 +191,11 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 		return nil
 	}
 
+	if m.client != nil && m.cc.AssumesRole() {
+		_ = m.client.Disconnect(ctx)
+		m.client = nil
+	}
+
 	if m.client == nil {
 		client, database, err := m.cc.Connect(ctx)
 		if err != nil {

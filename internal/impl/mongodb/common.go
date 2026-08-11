@@ -74,6 +74,13 @@ const (
 	FieldAWSIAMAuthRoles = "roles"
 )
 
+// clientConstructTimeout bounds client construction for components without a
+// connect lifecycle (processor, cache). Role assumption is rejected for these
+// components, so no STS calls happen under this context — it only bounds the
+// driver handshake work, which is further limited by the client's own
+// connect/server-selection timeouts.
+const clientConstructTimeout = time.Minute
+
 // CredentialBuilder resolves a MONGODB-AWS credential at connection time. It
 // returns nil when there is no credential to apply.
 type CredentialBuilder func(ctx context.Context) (*options.Credential, error)

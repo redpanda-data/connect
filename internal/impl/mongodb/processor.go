@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -104,7 +103,7 @@ func ProcessorFromParsed(conf *service.ParsedConfig, res *service.Resources) (mp
 	if cc.AssumesRole() {
 		return nil, errors.New("aws.role and aws.roles cannot be used with the mongodb processor: role-derived session credentials expire and this component has no reconnect lifecycle to refresh them; use the ambient credential chain or static keys instead")
 	}
-	connectCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	connectCtx, cancel := context.WithTimeout(context.Background(), clientConstructTimeout)
 	defer cancel()
 	if mp.client, mp.database, err = cc.Connect(connectCtx); err != nil {
 		return

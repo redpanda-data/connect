@@ -359,7 +359,10 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	m.collectionSchemas = make(map[string]*cachedSchema)
 	m.collectionSchemasMu.Unlock()
 	if m.client != nil {
-		if err := m.client.Ping(ctx, nil); err != nil {
+		if m.cc.AssumesRole() {
+			_ = m.client.Disconnect(ctx)
+			m.client = nil
+		} else if err := m.client.Ping(ctx, nil); err != nil {
 			_ = m.client.Disconnect(ctx)
 			m.client = nil
 		}

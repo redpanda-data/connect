@@ -137,8 +137,18 @@ func (m *outputWriter) Connect(ctx context.Context) error {
 	defer m.mu.Unlock()
 
 	if m.client != nil {
-		if err := m.client.Ping(ctx, nil); err == nil {
-			return nil
+		// MongoDB never re-authenticates an established pool connection, so a
+		// successful ping here only proves the old socket is still alive - it
+		// does not prove the credential baked into the client's options is
+		// still valid for a brand new socket. For role-derived (STS) session
+		// credentials that snapshot can already be expired, so those clients
+		// are always dropped and rebuilt below to re-run the credential
+		// builder. Static keys and the ambient chain don't expire this way,
+		// so the ping-reuse fast path stays for them.
+		if !m.cc.AssumesRole() {
+			if err := m.client.Ping(ctx, nil); err == nil {
+				return nil
+			}
 		}
 		_ = m.client.Disconnect(ctx)
 		m.client = nil
