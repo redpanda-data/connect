@@ -727,14 +727,11 @@ func (e *salesforceCDCInputExecutor) emitSnapshot(
 		return fmt.Errorf("track snapshot checkpoint: %w", err)
 	}
 
-	ackFn := func(ackCtx context.Context, err error) error {
-		if err != nil {
-			// auto_replay_nacks is user-toggleable, so a nack can be terminal.
-			// Never resolve: the snapshot cursor stays pinned before this
-			// batch so nothing can be persisted past its undelivered records.
-			e.logger.Errorf("Snapshot batch rejected downstream: the snapshot cursor is now pinned before this batch and the input will stall once the checkpoint limit is reached, unless the batch is redelivered (auto_replay_nacks) or the pipeline restarts: %v", err)
-			return err
-		}
+	// The ack error is deliberately ignored: nacks are replayed by
+	// auto_replay_nacks (the default), and disabling that is a documented
+	// opt-in to DROP rejected messages, so the checkpoint must advance past
+	// them rather than pin the tracker.
+	ackFn := func(ackCtx context.Context, _ error) error {
 		resolved := resolveFn()
 		if resolved == nil {
 			return nil
@@ -907,14 +904,11 @@ func (e *salesforceCDCInputExecutor) flushTopic(
 		return fmt.Errorf("track checkpoint for %s: %w", topic, err)
 	}
 
-	ackFn := func(ackCtx context.Context, err error) error {
-		if err != nil {
-			// auto_replay_nacks is user-toggleable, so a nack can be terminal.
-			// Never resolve: the replay checkpoint stays pinned before this
-			// batch so nothing can be persisted past its undelivered events.
-			e.logger.Errorf("Batch rejected downstream (topic %s): the replay checkpoint is now pinned before this batch and the input will stall once the checkpoint limit is reached, unless the batch is redelivered (auto_replay_nacks) or the pipeline restarts: %v", topic, err)
-			return err
-		}
+	// The ack error is deliberately ignored: nacks are replayed by
+	// auto_replay_nacks (the default), and disabling that is a documented
+	// opt-in to DROP rejected messages, so the checkpoint must advance past
+	// them rather than pin the tracker.
+	ackFn := func(ackCtx context.Context, _ error) error {
 		resolved := resolveFn()
 		if resolved == nil {
 			return nil
