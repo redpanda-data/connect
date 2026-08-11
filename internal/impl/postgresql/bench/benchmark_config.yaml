@@ -4,16 +4,25 @@ http:
 input:
   postgres_cdc:
     dsn: ${PG_DSN:postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable}
-    stream_snapshot: true
+    stream_snapshot: false
     schema: public
     tables:
       - users
-      - products
+      # - products
       - cart
     slot_name: bench_slot
     batching:
       count: 1000
       period: 1s
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 10
+        checkpoint_cache: snap_cache
+
+cache_resources:
+  - label: snap_cache
+    file:
+      directory: "./cache/"
 
 # pipeline:
 #   processors:
@@ -26,10 +35,10 @@ output:
     - benchmark:
         interval: 1s
         count_bytes: true
-  # file:
-  #   path: "./benchmark_results.json"
-  #   codec: lines
-  drop: {}
+  file:
+    path: "./benchmark_results.json"
+    codec: lines
+  # drop: {}
 
 logger:
   level: INFO

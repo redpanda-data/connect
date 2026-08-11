@@ -22,6 +22,12 @@ type heartbeat struct {
 	task          *asyncroutine.Periodic
 	logger        *service.Logger
 	prefix, value string
+	// transactional controls whether the heartbeat's logical message is
+	// emitted transactionally. It must be true when an incremental snapshot
+	// is running, since the coordinator's OnCommit only observes a txid for
+	// transactional messages, and heartbeats are otherwise the only write
+	// traffic guaranteed to occur on tables with no other activity.
+	transactional bool
 }
 
 func newHeartbeat(config *Config, prefix, value string) (*heartbeat, error) {
@@ -29,7 +35,15 @@ func newHeartbeat(config *Config, prefix, value string) (*heartbeat, error) {
 	if err != nil {
 		return nil, err
 	}
-	h := &heartbeat{db: dbConn, task: nil, logger: config.Logger, prefix: prefix, value: value}
+	h := &heartbeat{
+		db:     dbConn,
+		task:   nil,
+		logger: config.Logger,
+		prefix: prefix,
+		value:  value,
+		transactional: config.IncrementalSnapshot != nil &&
+			config.IncrementalSnapshot.Enabled,
+	}
 	h.task = asyncroutine.NewPeriodicWithContext(config.HeartbeatInterval, h.run)
 	return h, nil
 }
@@ -39,7 +53,14 @@ func (h *heartbeat) Start() {
 }
 
 func (h *heartbeat) run(ctx context.Context) {
-	_, err := h.db.ExecContext(ctx, "SELECT pg_logical_emit_message(false, $1, $2)", h.prefix, h.value)
+	// Preserved verbatim (transactional literal inline, not a placeholder)
+	// when incremental snapshotting is disabled, so this is a strict no-op
+	// for existing users.
+	query := "SELECT pg_logical_emit_message(false, $1, $2)"
+	if h.transactional {
+		query = "SELECT pg_logical_emit_message(true, $1, $2)"
+	}
+	_, err := h.db.ExecContext(ctx, query, h.prefix, h.value)
 	if err != nil {
 		h.logger.Warnf("unable to write heartbeat message: %v", err)
 	}
