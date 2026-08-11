@@ -41,6 +41,11 @@ const (
 	// replication slot until every snapshot message has been acknowledged
 	// downstream; it is never forwarded downstream.
 	SnapshotCompleteOpType OpType = "snapshot_complete"
+	// IncrementalSnapshotCheckpointOpType is an internal sentinel carrying
+	// only an incremental snapshot checkpoint (IncrementalSnapshotState) when
+	// state advanced without emitting rows. Must never be forwarded
+	// downstream as a real change event.
+	IncrementalSnapshotCheckpointOpType OpType = "incremental_snapshot_checkpoint"
 )
 
 // StreamMessage represents a single change from the database
@@ -56,4 +61,9 @@ type StreamMessage struct {
 	ColumnSchema any       `json:"-"`
 	CommitTime   time.Time `json:"-"`
 	BeforeData   any       `json:"-"`
+	// IncrementalSnapshotState carries the JSON-serialized resumable state
+	// (snapshot.State) after a transaction advances the incremental
+	// snapshot. Excluded from JSON serialization: it's input-layer plumbing,
+	// never payload.
+	IncrementalSnapshotState []byte `json:"-"`
 }
