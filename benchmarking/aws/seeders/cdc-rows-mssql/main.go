@@ -80,6 +80,32 @@ func main() {
 			fmt.Fprintln(os.Stderr, "exec:", err)
 			os.Exit(1)
 		}
+	case "query":
+		// SELECT counterpart of exec: runs a query and prints rows as TSV.
+		// exec can only execute — it discards result sets — which made the
+		// frozen-capture-job incidents undiagnosable from the bench host:
+		// there was no way to read sys.dm_cdc_errors or
+		// sys.dm_cdc_log_scan_sessions back. This closes that gap.
+		fs := flag.NewFlagSet("query", flag.ExitOnError)
+		dsn := fs.String("dsn", "", "SQL Server DSN (sqlserver://user:pass@host:port?database=db)")
+		query := fs.String("sql", "", "single SELECT to run; rows print as TSV with a header")
+		_ = fs.Parse(os.Args[2:])
+		if err := querySQL(context.Background(), *dsn, *query); err != nil {
+			fmt.Fprintln(os.Stderr, "query:", err)
+			os.Exit(1)
+		}
+	case "diag-cdc":
+		// One-shot CDC health snapshot: capture-job config + state, log-scan
+		// session progress, recent CDC errors, and max_lsn. This is the bundle
+		// to run whenever the liveness gate reports a frozen max_lsn, so "slow
+		// vs wedged" is answered by data instead of another hypothesis.
+		fs := flag.NewFlagSet("diag-cdc", flag.ExitOnError)
+		dsn := fs.String("dsn", "", "SQL Server DSN for the bench database")
+		_ = fs.Parse(os.Args[2:])
+		if err := diagCDC(context.Background(), *dsn); err != nil {
+			fmt.Fprintln(os.Stderr, "diag-cdc:", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintln(os.Stderr, "unknown subcommand:", cmd)
 		os.Exit(2)

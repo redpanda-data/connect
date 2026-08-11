@@ -75,6 +75,136 @@ func execSQL(ctx context.Context, dsn, query string) error {
 	return nil
 }
 
+// querySQL runs a SELECT and prints the result set as TSV with a header row.
+// NULLs print as "NULL"; []byte columns (LSNs) print as hex.
+func querySQL(ctx context.Context, dsn, query string) error {
+	if dsn == "" || query == "" {
+		return fmt.Errorf("query requires both --dsn and --sql")
+	}
+	db, err := openDB(dsn, 1)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("%s: %w", query, err)
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	fmt.Println(strings.Join(cols, "\t"))
+	vals := make([]any, len(cols))
+	ptrs := make([]any, len(cols))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	for rows.Next() {
+		if err := rows.Scan(ptrs...); err != nil {
+			return err
+		}
+		out := make([]string, len(cols))
+		for i, v := range vals {
+			switch x := v.(type) {
+			case nil:
+				out[i] = "NULL"
+			case []byte:
+				out[i] = fmt.Sprintf("%x", x)
+			case time.Time:
+				out[i] = x.UTC().Format(time.RFC3339)
+			default:
+				out[i] = fmt.Sprintf("%v", x)
+			}
+		}
+		fmt.Println(strings.Join(out, "\t"))
+	}
+	return rows.Err()
+}
+
+var diagSections = []struct{ label, q string }{
+	{"max_lsn", "SELECT sys.fn_cdc_get_max_lsn() AS max_lsn"},
+	{"capture job config (msdb)", "SELECT job_type, maxtrans, maxscans, continuous, pollinginterval FROM msdb.dbo.cdc_jobs"},
+	{"log scan sessions (latest 5)", `SELECT TOP 5 session_id, start_time, end_time, duration,
+			scan_phase, error_count, tran_count, latency,
+			empty_scan_count, failed_sessions_count
+		FROM sys.dm_cdc_log_scan_sessions ORDER BY start_time DESC`},
+	{"cdc errors (latest 5)", `SELECT TOP 5 entry_time, error_number, error_severity, error_message
+		FROM sys.dm_cdc_errors ORDER BY entry_time DESC`},
+	{"change_tables", "SELECT capture_instance, create_date, start_lsn FROM cdc.change_tables"},
+	{"log space", "SELECT total_log_size_in_bytes/1048576 AS log_mb, used_log_space_in_bytes/1048576 AS used_mb, used_log_space_in_percent FROM sys.dm_db_log_space_usage"},
+}
+
+// diagCDC prints a one-shot CDC health snapshot. Run it whenever the liveness
+// gate reports a frozen max_lsn: together these distinguish a capture job that
+// is SLOW (scan sessions present and advancing, no errors) from one that is
+// WEDGED (no sessions, or errors in sys.dm_cdc_errors).
+func diagCDC(ctx context.Context, dsn string) error {
+	if dsn == "" {
+		return errors.New("diag-cdc requires --dsn")
+	}
+	db, err := openDB(dsn, 1)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	for _, s := range diagSections {
+		fmt.Printf("\n### %s\n", s.label)
+		if err := querySection(ctx, db, s.q); err != nil {
+			// Sections are independent; a permissions failure on one DMV must
+			// not hide the rest.
+			fmt.Printf("(error: %v)\n", err)
+		}
+	}
+	return nil
+}
+
+func querySection(ctx context.Context, db *sql.DB, query string) error {
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	fmt.Println(strings.Join(cols, "\t"))
+	vals := make([]any, len(cols))
+	ptrs := make([]any, len(cols))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	n := 0
+	for rows.Next() {
+		if err := rows.Scan(ptrs...); err != nil {
+			return err
+		}
+		out := make([]string, len(cols))
+		for i, v := range vals {
+			switch x := v.(type) {
+			case nil:
+				out[i] = "NULL"
+			case []byte:
+				out[i] = fmt.Sprintf("%x", x)
+			case time.Time:
+				out[i] = x.UTC().Format(time.RFC3339)
+			default:
+				out[i] = fmt.Sprintf("%v", x)
+			}
+		}
+		fmt.Println(strings.Join(out, "\t"))
+		n++
+	}
+	if n == 0 {
+		fmt.Println("(no rows)")
+	}
+	return rows.Err()
+}
+
 // dbNameFromDSN pulls the `database` query parameter out of a go-mssqldb DSN.
 func dbNameFromDSN(dsn string) (string, error) {
 	u, err := url.Parse(dsn)
@@ -429,8 +559,19 @@ func execWithDeadlockRetry(ctx context.Context, db *sql.DB, label, stmt string) 
 		if lastErr == nil {
 			return nil
 		}
+		// The deadlock does NOT surface as error number 1205 here. The CDC
+		// procedures wrap it twice — sp_cdc_disable_table fails with 22837,
+		// whose message embeds 22933, whose message embeds the actual 1205 —
+		// and go-mssqldb reports the OUTER number. Verified live 2026-08-11: a
+		// reset under load produced Number=22837 with "deadlocked on lock
+		// resources ... chosen as the deadlock victim" three levels deep in the
+		// text. So match the number when it does come through directly, and the
+		// message text for the wrapped case.
 		var me mssql.Error
-		if !errors.As(lastErr, &me) || me.Number != 1205 {
+		isDeadlock := (errors.As(lastErr, &me) && me.Number == 1205) ||
+			strings.Contains(lastErr.Error(), "deadlock victim") ||
+			strings.Contains(lastErr.Error(), "error returned was 1205")
+		if !isDeadlock {
 			return fmt.Errorf("%s: %w", label, lastErr)
 		}
 		wait := time.Duration(i+1) * 2 * time.Second
@@ -556,22 +697,82 @@ func waitForCaptureInstance(ctx context.Context, db *sql.DB, table string) error
 // Starting an already-running job is harmless, which is why this only ever
 // starts and never stops.
 func ensureCaptureJobRunning(ctx context.Context, db *sql.DB, table string) error {
+	// PROGRESS-AWARE, not a fixed attempt count. The old 5x60s budget failed a
+	// healthy database on 2026-08-10: after an ~18M-row point the capture job
+	// spends minutes grinding through transaction-log backlog before the new
+	// capture instance's max_lsn can move, and during that grind a fixed budget
+	// reads as "stopped". Local diagnosis (diag-cdc, 2026-08-11) settled slow vs
+	// wedged: sys.dm_cdc_log_scan_sessions showed sessions completing with
+	// tran_count in the hundreds and zero rows in sys.dm_cdc_errors while
+	// max_lsn appeared frozen.
+	//
+	// So: keep waiting as long as the scanner is demonstrably making progress
+	// (recent scan-session end_time), up to a generous overall cap. Fail fast
+	// only when there is no scan activity at all — that is the genuinely-stopped
+	// case the gate exists for. On failure, dump the full diagnostic bundle so
+	// the AWS log self-diagnoses instead of needing a live instance.
 	const (
-		attempts      = 5
+		totalBudget   = 15 * time.Minute
 		perAttemptTTL = 60 * time.Second
 	)
+	deadline := time.Now().Add(totalBudget)
 	var lastErr error
-	for i := 0; i < attempts; i++ {
+	for attempt := 1; ; attempt++ {
 		// Tolerated: "already running" and "pending request" are both fine.
 		if _, err := db.ExecContext(ctx, "EXEC sys.sp_cdc_start_job @job_type = N'capture'"); err != nil {
-			fmt.Printf("sp_cdc_start_job (capture), attempt %d: %v (tolerated)\n", i+1, err)
+			fmt.Printf("sp_cdc_start_job (capture), attempt %d: %v (tolerated)\n", attempt, err)
 		}
 		if lastErr = waitForCaptureJobLive(ctx, db, table, perAttemptTTL); lastErr == nil {
 			return nil
 		}
-		fmt.Printf("capture job not live yet after attempt %d: %v\n", i+1, lastErr)
+		if time.Now().After(deadline) {
+			fmt.Println("capture job liveness budget exhausted; diagnostic snapshot follows:")
+			_ = diagCDCWithDB(ctx, db)
+			return fmt.Errorf("after %s: %w", totalBudget, lastErr)
+		}
+		if active, detail := captureScanActive(ctx, db); active {
+			fmt.Printf("capture job is scanning through backlog (%s); waiting on (attempt %d)\n", detail, attempt)
+			continue
+		} else if detail != "" {
+			fmt.Printf("no recent scan activity (%s); retrying start (attempt %d)\n", detail, attempt)
+		}
 	}
-	return lastErr
+}
+
+// captureScanActive reports whether the CDC log scanner shows recent progress.
+// "Recent" is a scan session whose end_time is within the last two minutes (in
+// continuous mode the job updates the open session's end_time as it scans, so a
+// live scanner always has a fresh one). Errors reading the DMV are reported in
+// detail but treated as "unknown", not "active" — a permissions gap must not
+// convert the gate into an infinite wait.
+func captureScanActive(ctx context.Context, db *sql.DB) (bool, string) {
+	var end sql.NullTime
+	var trans, empties sql.NullInt64
+	err := db.QueryRowContext(ctx, `SELECT TOP 1 end_time, tran_count, empty_scan_count
+		FROM sys.dm_cdc_log_scan_sessions ORDER BY start_time DESC`).Scan(&end, &trans, &empties)
+	if err != nil {
+		return false, fmt.Sprintf("dm_cdc_log_scan_sessions unreadable: %v", err)
+	}
+	if !end.Valid {
+		// Session open with no end_time yet: the scanner is mid-scan.
+		return true, "scan session in progress"
+	}
+	age := time.Since(end.Time)
+	detail := fmt.Sprintf("last scan ended %s ago, tran_count=%d, empty_scans=%d",
+		age.Round(time.Second), trans.Int64, empties.Int64)
+	return age < 2*time.Minute, detail
+}
+
+// diagCDCWithDB is diagCDC against an already-open handle, for use inside the
+// liveness failure path.
+func diagCDCWithDB(ctx context.Context, db *sql.DB) error {
+	for _, s := range diagSections {
+		fmt.Printf("\n### %s\n", s.label)
+		if err := querySection(ctx, db, s.q); err != nil {
+			fmt.Printf("(error: %v)\n", err)
+		}
+	}
+	return nil
 }
 
 func waitForCaptureJobLive(ctx context.Context, db *sql.DB, table string, timeout time.Duration) error {
