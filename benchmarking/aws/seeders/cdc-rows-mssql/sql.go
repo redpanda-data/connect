@@ -258,6 +258,17 @@ func seed(ctx context.Context, tables []string, rows int64, rowSize int, job cap
 	// Change Data Capture job table containing job information for database
 	// 'benchdb' cannot be found in the msdb system database."
 	for _, table := range tables {
+		// Ground truth BEFORE the drop, same as the reset path. When sweeps run
+		// as separate per-engine invocations, the next run's seed (not a reset)
+		// is what destroys the previous point's table — without this line the
+		// last point of every invocation loses its offered-load count and its
+		// capture ratio can't be computed. Cost of learning this: run A's
+		// 2 vCPU connect point (2026-08-11).
+		var prevRows int64
+		if err := db.QueryRowContext(ctx,
+			fmt.Sprintf("SELECT COUNT_BIG(*) FROM [%s].[%s]", schema, table)).Scan(&prevRows); err == nil {
+			fmt.Printf("[groundtruth] %s.%s committed %d rows during the previous point\n", schema, table, prevRows)
+		}
 		if err := ensureTable(ctx, db, table); err != nil {
 			return err
 		}
