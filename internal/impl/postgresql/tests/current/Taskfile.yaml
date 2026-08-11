@@ -72,17 +72,22 @@ tasks:
   # ── Schema validation smoke test ──────────────────────────────────────────────
 
   test:invalid-schema:
-    desc: Confirm that an empty quoted schema identifier is rejected at startup
+    desc: Confirm that a malformed schema_pattern is rejected at startup, before any DB connection is attempted
     env:
       PG_DSN: '{{.PG_DSN}}'
     cmds:
       - |
         set +e
         go run ../../../../../cmd/redpanda-connect/main.go run \
-          --set 'input.postgres_cdc.schema=""' \
+          --set 'input.postgres_cdc.schema_pattern=1abc' \
           ./test_config.yaml 2>&1 | head -5
         echo "exit $?"
-    # Expects: "invalid schema" error printed, process exits non-zero.
+    # Expects: "invalid schema_pattern" error printed, process exits non-zero.
+    # schema_pattern is validated eagerly in newPgStreamInput
+    # (validateSchemaPattern), unlike schema which is only checked later,
+    # against the live DB connection, inside NewPgStream.
+    # Note: an empty schema_pattern is NOT an error - it means "unset", and
+    # the connector falls back to the schema field (default "public").
 
   # ── Quick sanity ──────────────────────────────────────────────────────────────
 

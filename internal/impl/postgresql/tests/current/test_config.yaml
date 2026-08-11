@@ -4,7 +4,7 @@ input:
     slot_name: multi_schema_test_slot
     stream_snapshot: true
     # Glob pattern: replicates both tenant_a and tenant_b via one slot.
-    schema: tenant_*
+    schema_pattern: tenant_*
     tables:
       - events
 
