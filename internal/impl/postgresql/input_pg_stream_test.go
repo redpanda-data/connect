@@ -125,6 +125,79 @@ tables:
 	require.NoError(t, err)
 }
 
+// TestExcludeSchemasValidation verifies that each exclude_schemas entry is
+// validated with the same rules as schema_pattern - validateSchemaPattern is
+// reused rather than re-derived, so this exercises the same error cases
+// TestSchemaPatternValidation covers, just reached through a different field.
+func TestExcludeSchemasValidation(t *testing.T) {
+	tests := []struct {
+		pattern     string
+		errContains string
+	}{
+		{"tenant_test", ""},
+		{"tenant_test_*", ""},
+		{`"MySchema"`, ""},
+		{"1abc", "must start with a letter"},
+		{`"unclosed`, "invalid quoted schema identifier"},
+		{"schema-name", "invalid character"},
+		{`"quoted*"`, "wildcard"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.pattern, func(t *testing.T) {
+			// Single-quoted so the pattern (which may itself contain double
+			// quotes, e.g. `"MySchema"`) reaches validateSchemaPattern verbatim.
+			yaml := fmt.Sprintf(`
+dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
+schema_pattern: 'tenant_*'
+exclude_schemas: ['%s']
+slot_name: test_slot
+tables:
+  - events
+`, tt.pattern)
+
+			_, err := parsePgStreamInput(t, yaml)
+			if tt.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestExcludeSchemasRequiresSchemaPattern verifies that exclude_schemas is
+// rejected at config-parse time when schema_pattern is left unset. Both
+// single-exact-schema mode and FOR ALL TABLES mode (empty tables) have no
+// well-defined candidate set to exclude from, so this is a hard error rather
+// than a silent no-op.
+func TestExcludeSchemasRequiresSchemaPattern(t *testing.T) {
+	yaml := `
+dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
+exclude_schemas: [tenant_test]
+slot_name: test_slot
+tables:
+  - events
+`
+	_, err := parsePgStreamInput(t, yaml)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exclude_schemas requires schema_pattern to be set")
+}
+
+// TestExcludeSchemasEmptyWithoutSchemaPatternSucceeds verifies that leaving
+// exclude_schemas at its default empty list does not trip the
+// requires-schema_pattern check, since there's nothing to exclude.
+func TestExcludeSchemasEmptyWithoutSchemaPatternSucceeds(t *testing.T) {
+	yaml := `
+dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
+slot_name: test_slot
+tables:
+  - events
+`
+	_, err := parsePgStreamInput(t, yaml)
+	require.NoError(t, err)
+}
+
 // TestSchemaAcceptsUnicodeIdentifier verifies that the schema field (single
 // exact-name path) still accepts unquoted unicode identifiers like
 // "münchen", matching sanitize.NormalizePostgresIdentifier which is the sole

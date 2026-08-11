@@ -11,6 +11,7 @@ package pglogicalstream
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -197,4 +198,54 @@ func escapeLike(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// schemaMatchesExcludePattern reports whether quotedSchemaName - a schema
+// identifier in the same quoted form resolveSchemas returns - matches
+// excludePattern, an exclude_schemas entry written in the same shape as a
+// schema_pattern value (an exact name, a '*' glob, or a double-quoted exact
+// identifier).
+//
+// Matching happens entirely in memory against a schema list we've already
+// resolved, unlike resolveSchemas which queries the database: exclude_schemas
+// only ever narrows a candidate set that's already been fetched, so there's
+// no reason to pay for another round-trip per exclude pattern. Semantics
+// mirror schemaPatternToLike without going through SQL: a quoted pattern is
+// an exact, case-sensitive match on the unquoted name; an unquoted pattern is
+// matched case-insensitively with '*' as a wildcard.
+//
+// Returns an error only when a quoted operand fails to unquote. This should
+// only happen for a malformed excludePattern in practice, since
+// quotedSchemaName is always freshly quoted by resolveSchemas.
+func schemaMatchesExcludePattern(quotedSchemaName, excludePattern string) (bool, error) {
+	schemaName, err := sanitize.UnquotePostgresIdentifier(quotedSchemaName)
+	if err != nil {
+		return false, fmt.Errorf("unquoting schema identifier %q: %w", quotedSchemaName, err)
+	}
+
+	if strings.HasPrefix(excludePattern, `"`) {
+		unquoted, err := sanitize.UnquotePostgresIdentifier(excludePattern)
+		if err != nil {
+			return false, fmt.Errorf("invalid quoted schema identifier %q: %w", excludePattern, err)
+		}
+		return schemaName == unquoted, nil
+	}
+
+	re, err := globToRegexp(strings.ToLower(excludePattern))
+	if err != nil {
+		return false, fmt.Errorf("invalid exclude pattern %q: %w", excludePattern, err)
+	}
+	return re.MatchString(strings.ToLower(schemaName)), nil
+}
+
+// globToRegexp compiles an unquoted glob pattern (using '*' as a wildcard)
+// into an anchored regexp - the in-memory equivalent of globToLike for
+// callers matching against values already held in Go rather than via a SQL
+// LIKE clause.
+func globToRegexp(pattern string) (*regexp.Regexp, error) {
+	parts := strings.Split(pattern, "*")
+	for i, part := range parts {
+		parts[i] = regexp.QuoteMeta(part)
+	}
+	return regexp.Compile("^" + strings.Join(parts, ".*") + "$")
 }

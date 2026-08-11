@@ -1760,6 +1760,158 @@ postgres_cdc:
 	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
 }
 
+// TestIntegrationMultiSchemaExcludeSchemas verifies that exclude_schemas
+// carves an exception out of a broad schema_pattern: a schema that matches
+// schema_pattern but also matches an exclude_schemas entry contributes no
+// rows at all, neither during the initial snapshot nor from subsequent CDC
+// changes.
+func TestIntegrationMultiSchemaExcludeSchemas(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	// Three tenant schemas match tenant_*; tenant_c is carved out via exclude_schemas.
+	for _, schema := range []string{"tenant_a", "tenant_b", "tenant_c"} {
+		_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA %s", schema))
+		require.NoError(t, err)
+		_, err = db.Exec(fmt.Sprintf(
+			"CREATE TABLE %s.events (id SERIAL PRIMARY KEY, name TEXT)", schema))
+		require.NoError(t, err)
+	}
+
+	// Pre-load snapshot data, including a row in the excluded schema that must
+	// never surface.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('alice'), ('bob')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('carol')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_c.events (name) VALUES ('mallory')")
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		dbSchema  string
+		table     string
+		operation string
+		lsn       string
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+	collectedLen := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected)
+	}
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: exclude_schemas_test_slot
+    stream_snapshot: true
+    schema_pattern: tenant_*
+    exclude_schemas:
+      - tenant_c
+    tables:
+      - events
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			m := msgMeta{}
+			m.dbSchema, _ = msg.MetaGet("database_schema")
+			m.table, _ = msg.MetaGet("table")
+			m.operation, _ = msg.MetaGet("operation")
+			m.lsn, _ = msg.MetaGet("lsn")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	// Wait for the 3 snapshot rows from the two non-excluded schemas; tenant_c's
+	// row must never contribute to this count.
+	assert.Eventually(t, func() bool {
+		return collectedLen() >= 3
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot rows")
+
+	// Insert CDC rows into all three schemas, including the excluded one.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('dave')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('eve')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_c.events (name) VALUES ('trudy')")
+	require.NoError(t, err)
+
+	// Wait for the 2 CDC rows from the non-excluded schemas (total 5).
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, 5, collectedLen())
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for CDC rows")
+
+	// tenant_c's CDC insert above raced the same replication stream as the
+	// tenant_a/tenant_b inserts already confirmed above, so if it were going
+	// to leak through it would have by now; assert the count never climbs
+	// past 5 to catch a delayed leak instead of just checking once.
+	assert.Never(t, func() bool {
+		return collectedLen() > 5
+	}, 3*time.Second, 200*time.Millisecond, "received unexpected message(s) from excluded schema tenant_c")
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	require.Len(t, collected, 5)
+	for _, m := range collected {
+		assert.NotEqual(t, "tenant_c", m.dbSchema, "tenant_c is excluded and must never appear, got message: %+v", m)
+	}
+
+	var snapshots, cdcMsgs []msgMeta
+	for _, m := range collected {
+		if m.operation == "read" {
+			snapshots = append(snapshots, m)
+		} else {
+			cdcMsgs = append(cdcMsgs, m)
+		}
+	}
+
+	// Snapshot assertions.
+	require.Len(t, snapshots, 3)
+	snapshotSchemas := make(map[string]int)
+	for _, m := range snapshots {
+		assert.Equal(t, "events", m.table, "snapshot: table should be bare name without schema prefix")
+		assert.Empty(t, m.lsn, "snapshot rows have no LSN")
+		snapshotSchemas[m.dbSchema]++
+	}
+	assert.Equal(t, 2, snapshotSchemas["tenant_a"], "expected 2 snapshot rows from tenant_a")
+	assert.Equal(t, 1, snapshotSchemas["tenant_b"], "expected 1 snapshot row from tenant_b")
+
+	// CDC assertions.
+	require.Len(t, cdcMsgs, 2)
+	cdcSchemas := make(map[string]int)
+	for _, m := range cdcMsgs {
+		assert.Equal(t, "insert", m.operation)
+		assert.Equal(t, "events", m.table)
+		assert.NotEmpty(t, m.lsn, "CDC rows must have an LSN")
+		cdcSchemas[m.dbSchema]++
+	}
+	assert.Equal(t, 1, cdcSchemas["tenant_a"], "expected 1 CDC row from tenant_a")
+	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
+}
+
 func TestIntegrationMultiSchemaMissingTableDegradesGracefully(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")

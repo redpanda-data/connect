@@ -70,6 +70,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - postgres_cdc: Added a new `schema_pattern` field accepting a glob pattern (e.g. `tenant_*`), replicating all matching schemas through a single replication slot. Useful for multi-tenant databases where each tenant has its own schema. The existing `schema` field is unaffected and continues to take a single exact schema name (defaulting to `public`); `schema` and `schema_pattern` are mutually exclusive. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4589](https://github.com/redpanda-data/connect/pull/4589))
+- postgres_cdc: Added a new `exclude_schemas` field to carve exceptions out of a broad `schema_pattern` (e.g. `schema_pattern: tenant_*` while skipping `tenant_test`). Accepts the same exact-name/glob/quoted syntax as `schema_pattern`, matches entries against the already-resolved schema list in memory with no extra database round-trips, and requires `schema_pattern` to be set. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4589](https://github.com/redpanda-data/connect/pull/4589))
 - aws_dynamodb_cdc: DynamoDB CDC now supports an optional checkpoint_namespace field, allowing multiple independent pipelines to share a single checkpoint table without overwriting each other's checkpoints. ([@squiidz](https://github.com/squiidz), [#4602](https://github.com/redpanda-data/connect/pull/4602))
 
 ### Fixed

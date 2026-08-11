@@ -47,10 +47,11 @@ tasks:
   # ── Test data ─────────────────────────────────────────────────────────────────
 
   data:insert:
-    desc: Insert CDC rows into both tenant schemas (triggers insert events)
+    desc: Insert CDC rows into all three tenant schemas (tenant_c must not appear in the output — it's excluded)
     cmds:
       - psql "{{.PG_DSN}}" -c "INSERT INTO tenant_a.events (name) VALUES ('dave'), ('eve');"
       - psql "{{.PG_DSN}}" -c "INSERT INTO tenant_b.events (name) VALUES ('frank');"
+      - psql "{{.PG_DSN}}" -c "INSERT INTO tenant_c.events (name) VALUES ('trudy');"
 
   data:update:
     desc: Update a row in tenant_a (triggers update event with 'before' field)
@@ -88,6 +89,22 @@ tasks:
     # against the live DB connection, inside NewPgStream.
     # Note: an empty schema_pattern is NOT an error - it means "unset", and
     # the connector falls back to the schema field (default "public").
+
+  test:exclude-schemas-requires-pattern:
+    desc: Confirm exclude_schemas is rejected at startup when schema_pattern is left unset
+    env:
+      PG_DSN: '{{.PG_DSN}}'
+    cmds:
+      - |
+        set +e
+        go run ../../../../../cmd/redpanda-connect/main.go run \
+          ./test_config_exclude_no_pattern.yaml 2>&1 | head -5
+        echo "exit $?"
+    # Expects: "exclude_schemas requires schema_pattern to be set" error
+    # printed, process exits non-zero. Uses a dedicated fixture file rather
+    # than --set on test_config.yaml, since --set rejects an empty RHS
+    # ("foo=" -> "expected foo=bar syntax"), so schema_pattern can't be
+    # cleared that way.
 
   # ── Quick sanity ──────────────────────────────────────────────────────────────
 

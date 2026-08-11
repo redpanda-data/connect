@@ -104,6 +104,36 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		if err != nil {
 			return nil, fmt.Errorf("resolving schema pattern %q: %w", config.DBSchemaPattern, err)
 		}
+
+		if len(config.DBExcludeSchemas) > 0 {
+			// Filtering happens entirely against the schemas slice we already
+			// fetched above - no extra DB round-trips per exclude pattern.
+			var excluded []string
+			remaining := make([]string, 0, len(schemas))
+			for _, schema := range schemas {
+				var isExcluded bool
+				for _, pattern := range config.DBExcludeSchemas {
+					matched, err := schemaMatchesExcludePattern(schema, pattern)
+					if err != nil {
+						return nil, fmt.Errorf("evaluating exclude_schemas pattern %q against schema %q: %w", pattern, schema, err)
+					}
+					if matched {
+						isExcluded = true
+						break
+					}
+				}
+				if isExcluded {
+					excluded = append(excluded, schema)
+					continue
+				}
+				remaining = append(remaining, schema)
+			}
+			if len(excluded) > 0 {
+				config.Logger.Infof("exclude_schemas %v excluded %d schema(s) %v from schema pattern %q; %d schema(s) remain: %v", config.DBExcludeSchemas, len(excluded), excluded, config.DBSchemaPattern, len(remaining), remaining)
+			}
+			schemas = remaining
+		}
+
 		if len(inaccessibleSchemas) > 0 && len(config.DBTables) > 0 {
 			config.Logger.Warnf("schema pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", config.DBSchemaPattern, inaccessibleSchemas)
 		}

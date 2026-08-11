@@ -41,6 +41,7 @@ const (
 	fieldSnapshotBatchSize         = "snapshot_batch_size"
 	fieldSchema                    = "schema"
 	fieldSchemaPattern             = "schema_pattern"
+	fieldExcludeSchemas            = "exclude_schemas"
 	fieldTables                    = "tables"
 	fieldCheckpointLimit           = "checkpoint_limit"
 	fieldTemporarySlot             = "temporary_slot"
@@ -139,6 +140,16 @@ This field is mutually exclusive with `+"`"+fieldSchema+"`"+`; when set, it take
 			Examples("tenant_*", "*", `"MyCaseSensitiveSchemaNeedingQuotes"`).
 			Optional().
 			Default(""),
+		).
+		Field(service.NewStringListField(fieldExcludeSchemas).
+			Description(`A list of schema names or glob patterns to exclude from the schemas matched by ` + "`" + fieldSchemaPattern + "`" + `. Only valid when ` + "`" + fieldSchemaPattern + "`" + ` is set.
+
+Each entry uses the same syntax as ` + "`" + fieldSchemaPattern + "`" + `: an exact schema name, a glob pattern using ` + "`*`" + ` as a wildcard, or a double-quoted exact identifier for an exact, case-sensitive match.
+
+A schema that matches ` + "`" + fieldSchemaPattern + "`" + ` and also matches any entry in this list is excluded from replication. An entry that does not match any schema resolved by ` + "`" + fieldSchemaPattern + "`" + ` is silently ignored, so a typo here simply excludes nothing rather than failing startup.`).
+			Examples([]string{"tenant_internal", "tenant_test_*"}).
+			Optional().
+			Default([]string{}),
 		).
 		Field(service.NewStringListField(fieldTables).
 			Description(`A list of table names to include in the logical replication. Each table should be specified as a separate item.
@@ -245,6 +256,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		temporarySlot             bool
 		schema                    string
 		schemaPattern             string
+		excludeSchemas            []string
 		tables                    []string
 		streamSnapshot            bool
 		includeTxnMarkers         bool
@@ -305,6 +317,26 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		// Normalizing early avoids silent case-folding surprises in resolveSchemas.
 		if !strings.HasPrefix(schemaPattern, `"`) {
 			schemaPattern = strings.ToLower(schemaPattern)
+		}
+	}
+
+	if excludeSchemas, err = conf.FieldStringList(fieldExcludeSchemas); err != nil {
+		return nil, err
+	}
+	if len(excludeSchemas) > 0 {
+		if schemaPattern == "" {
+			return nil, errors.New("exclude_schemas requires schema_pattern to be set")
+		}
+		for i, pattern := range excludeSchemas {
+			if err = validateSchemaPattern(pattern); err != nil {
+				return nil, fmt.Errorf("invalid exclude_schemas entry %q: %w", pattern, err)
+			}
+			// Normalize unquoted patterns to lower-case, mirroring schema_pattern
+			// above: PostgreSQL folds unquoted identifiers at creation time, so
+			// TENANT_TEST and tenant_test resolve to the same schema.
+			if !strings.HasPrefix(pattern, `"`) {
+				excludeSchemas[i] = strings.ToLower(pattern)
+			}
 		}
 	}
 
@@ -388,6 +420,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			DBRawDSN:         dsn,
 			DBSchema:         schema,
 			DBSchemaPattern:  schemaPattern,
+			DBExcludeSchemas: excludeSchemas,
 			DBTables:         tables,
 			RefreshAuthToken: iamAuthTokenBuilder,
 

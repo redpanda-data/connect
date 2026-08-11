@@ -45,6 +45,7 @@ input:
     snapshot_batch_size: 1000
     schema: public
     schema_pattern: ""
+    exclude_schemas: []
     tables: [] # No default (required)
     checkpoint_limit: 1024
     temporary_slot: false
@@ -76,6 +77,7 @@ input:
     snapshot_batch_size: 1000
     schema: public
     schema_pattern: ""
+    exclude_schemas: []
     tables: [] # No default (required)
     checkpoint_limit: 1024
     temporary_slot: false
@@ -214,6 +216,27 @@ schema_pattern: tenant_*
 schema_pattern: '*'
 
 schema_pattern: '"MyCaseSensitiveSchemaNeedingQuotes"'
+```
+
+=== `exclude_schemas`
+
+A list of schema names or glob patterns to exclude from the schemas matched by `schema_pattern`. Only valid when `schema_pattern` is set.
+
+Each entry uses the same syntax as `schema_pattern`: an exact schema name, a glob pattern using `*` as a wildcard, or a double-quoted exact identifier for an exact, case-sensitive match.
+
+A schema that matches `schema_pattern` and also matches any entry in this list is excluded from replication. An entry that does not match any schema resolved by `schema_pattern` is silently ignored, so a typo here simply excludes nothing rather than failing startup.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+exclude_schemas:
+  - tenant_internal
+  - tenant_test_*
 ```
 
 === `tables`

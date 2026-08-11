@@ -88,3 +88,43 @@ func TestEscapeLike(t *testing.T) {
 		})
 	}
 }
+
+func TestSchemaMatchesExcludePattern(t *testing.T) {
+	tests := []struct {
+		name        string
+		schema      string
+		pattern     string
+		expected    bool
+		errContains string
+	}{
+		// Unquoted patterns - case-insensitive, '*' as wildcard.
+		{name: "unquoted exact match", schema: `"tenant_a"`, pattern: "tenant_a", expected: true},
+		{name: "unquoted exact no match", schema: `"tenant_a"`, pattern: "tenant_b", expected: false},
+		{name: "unquoted glob match", schema: `"tenant_test_x"`, pattern: "tenant_test_*", expected: true},
+		{name: "unquoted glob no match", schema: `"tenant_prod_x"`, pattern: "tenant_test_*", expected: false},
+		{name: "bare wildcard matches everything", schema: `"anything"`, pattern: "*", expected: true},
+		// Case-folding: unquoted patterns and unquoted-origin schema names both
+		// fold to lower-case, mirroring PostgreSQL's identifier folding.
+		{name: "case-insensitive exact match", schema: `"tenant_a"`, pattern: "TENANT_A", expected: true},
+		{name: "case-insensitive glob match", schema: `"Tenant_Test_X"`, pattern: "tenant_test_*", expected: true},
+		// Quoted patterns - exact, case-sensitive, no wildcard expansion.
+		{name: "quoted exact case-sensitive match", schema: `"MySchema"`, pattern: `"MySchema"`, expected: true},
+		{name: "quoted exact case mismatch does not match", schema: `"MySchema"`, pattern: `"myschema"`, expected: false},
+		{name: "quoted pattern does not expand wildcard", schema: `"tenant_a"`, pattern: `"tenant_*"`, expected: false},
+		// Errors - only from a malformed pattern, never from the candidate
+		// schema name, since that's always freshly quoted by resolveSchemas.
+		{name: "unterminated quoted pattern errors", schema: `"tenant_a"`, pattern: `"unterminated`, errContains: "invalid quoted schema identifier"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := schemaMatchesExcludePattern(tt.schema, tt.pattern)
+			if tt.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}

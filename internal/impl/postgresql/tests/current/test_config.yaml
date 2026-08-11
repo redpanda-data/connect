@@ -5,6 +5,10 @@ input:
     stream_snapshot: true
     # Glob pattern: replicates both tenant_a and tenant_b via one slot.
     schema_pattern: tenant_*
+    # tenant_c matches the glob above but is carved out here — its rows must
+    # never appear in the output below, neither during snapshot nor CDC.
+    exclude_schemas:
+      - tenant_c
     tables:
       - events
 
