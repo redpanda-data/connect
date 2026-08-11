@@ -21,8 +21,19 @@
 >    while the job catches up. It publishes in bursts, so readers alternate
 >    between draining at ~42 MB/s and sitting idle. `@maxtrans`/`@maxscans`/
 >    `@pollinginterval` are already tuned far above what the load needs - they
->    grant permission to do more work per cycle, they do not make the
->    single-threaded log scan faster.
+>    grant permission to do more work per cycle. NOTE (2026-08-11, RDS
+>    CloudWatch pulled post-sweep — metrics outlive the instance): the DB was
+>    STORAGE-THROUGHPUT saturated during every window. WriteThroughput pinned
+>    at ~195-197 MB/s (~10x write amplification over the ~20 MB/s of logical
+>    rows: base table + txn log + change table + checkpoints), CPU <= 50%,
+>    DiskQueueDepth spiking to 249. The capture job's log scanner shares that
+>    volume, so "the single-threaded scan is the intrinsic limit" is NOT
+>    established — the scanner was plausibly IO-starved. The rds-mssql module
+>    provisions gp3 IOPS (24000) but never sets storage_throughput; that is
+>    the prime suspect and the cheap A/B. Until it runs, every ABSOLUTE
+>    rows/sec figure below is conditional on ~195 MB/s of storage throughput.
+>    The RELATIVE Connect-vs-Debezium comparison and the 2 vCPU knee are
+>    unaffected — both engines faced the same saturated volume.
 >
 > Consequences for reading the tables below:
 >
