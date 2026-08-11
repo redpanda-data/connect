@@ -163,7 +163,7 @@ aws:
   session_duration: `+duration+`
 `)
 			_, err := awsIAMCredentials(awsConf, service.MockResources().Logger())
-			require.ErrorContains(t, err, "aws.session_duration must be at least 15 minutes")
+			require.ErrorContains(t, err, "aws.session_duration must be at least 15m")
 		})
 	}
 }

@@ -32,7 +32,13 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/mongodb"
 )
 
-const mongoDBAWSMechanism = "MONGODB-AWS"
+const (
+	mongoDBAWSMechanism = "MONGODB-AWS"
+
+	// minSTSSessionDuration is the minimum session duration accepted by STS
+	// AssumeRole.
+	minSTSSessionDuration = 15 * time.Minute
+)
 
 func init() {
 	mongodb.AWSOptFn = awsIAMCredentials
@@ -86,8 +92,8 @@ func awsIAMCredentials(awsConf *service.ParsedConfig, log *service.Logger) (mong
 	}
 	// STS rejects anything below its 15 minute minimum, and role chaining is
 	// additionally capped at an hour, which only AWS can enforce.
-	if sessionDuration < 15*time.Minute {
-		return nil, errors.New("aws.session_duration must be at least 15 minutes")
+	if sessionDuration < minSTSSessionDuration {
+		return nil, fmt.Errorf("aws.session_duration must be at least %v", minSTSSessionDuration)
 	}
 
 	return func(ctx context.Context) (*options.Credential, error) {
