@@ -25,3 +25,8 @@ variable "parameters" {
   type    = map(string)
   default = {}
 }
+variable "storage_throughput" {
+  # gp3 throughput MiB/s; null = RDS default. See modules/rds-mssql.
+  type    = number
+  default = null
+}

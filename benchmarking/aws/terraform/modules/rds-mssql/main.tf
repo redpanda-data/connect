@@ -68,9 +68,10 @@ resource "aws_db_instance" "this" {
   # same constraint as RDS Oracle. See references/rds-quirks.md.
   license_model = "license-included"
 
-  allocated_storage = var.storage_gb
-  storage_type      = "gp3"
-  iops              = var.iops
+  allocated_storage  = var.storage_gb
+  storage_type       = "gp3"
+  iops               = var.iops
+  storage_throughput = var.storage_throughput
 
   # NOTE: no `db_name`. RDS refuses it for every SQL Server engine — the
   # instance comes up with only the system databases and the application

@@ -54,3 +54,11 @@ variable "parameters" {
   type    = map(string)
   default = {}
 }
+variable "storage_throughput" {
+  # gp3 throughput in MiB/s. null = RDS default, which the 2026-08-10..11 sweep
+  # proved insufficient: WriteThroughput pinned at ~195-197 MB/s with
+  # DiskQueueDepth to 249 while CPU sat under 50%, so the whole bench was
+  # storage-bound. 24000 IOPS permits up to 1000 MiB/s (0.25 MiB/s per IOPS).
+  type    = number
+  default = null
+}

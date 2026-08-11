@@ -39,6 +39,7 @@ module "rds" {
   instance_class         = var.instance_class
   storage_gb             = var.storage_gb
   iops                   = var.iops
+  storage_throughput     = var.storage_throughput
   engine                 = var.engine
   engine_version         = var.engine_version
   parameter_group_family = var.parameter_group_family
