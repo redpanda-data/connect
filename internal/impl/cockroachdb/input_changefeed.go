@@ -55,7 +55,7 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 				Description("CSV of tables to be included in the changefeed").
 				Example([]string{"table1", "table2"}),
 			service.NewStringField("cursor_cache").
-				Description("A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest cursor that has been successfully delivered, this allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.\n\nNOTE: with a cursor cache configured and `auto_replay_nacks` disabled, a row that is rejected downstream permanently pins the cursor before that row (no later cursor can be persisted, and the input eventually stops delivering once its in-flight limit fills). This is deliberate — advancing past a rejected row would silently lose it — so keep `auto_replay_nacks` enabled unless rejections are handled by restarting the pipeline.").
+				Description("A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest cursor that has been successfully delivered, this allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.").
 				ShortDescription("Cache resource storing the last delivered cursor, so restarts resume instead of re-reading the table.").
 				Optional(),
 			service.NewStringListField("options").
@@ -351,17 +351,13 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		}
 
 		msg := service.NewMessage(jsonBytes)
-		return msg, func(ctx context.Context, err error) error {
+		// The ack error is deliberately ignored: nacks are replayed by
+		// auto_replay_nacks (the default), and disabling that is a documented
+		// opt-in to DROP rejected messages, so the cursor must advance past
+		// them rather than pin the tracker.
+		return msg, func(ctx context.Context, _ error) error {
 			if cursorReleaseFn == nil {
 				return nil
-			}
-			if err != nil {
-				// auto_replay_nacks is user-toggleable, so a nack can be
-				// terminal. Never resolve: the cursor stays pinned before this
-				// row so no resolved timestamp can be persisted past its
-				// undelivered data.
-				c.logger.Errorf("Row rejected downstream: the cursor is now pinned before this row and the input will stall once the checkpoint limit is reached, unless the row is redelivered (auto_replay_nacks) or the pipeline restarts: %v", err)
-				return err
 			}
 			cursorTimestamp := cursorReleaseFn()
 			if cursorTimestamp == nil || *cursorTimestamp == "" {
