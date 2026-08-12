@@ -202,7 +202,7 @@ Schema pattern matching runs once at pipeline startup. Schemas created after the
 
 If `tables` is non-empty and this pattern matches no schema in the database, startup fails with an error. This field has no effect when `tables` is left empty - see `tables` below.
 
-This pattern is matched against schema names as stored in the database rather than parsed as an identifier, so unquoted patterns may contain characters that are not valid in an unquoted PostgreSQL identifier (e.g. `tenant-*` or `a0eebc99-*` to match a UUID-suffixed schema that had to be created with a quoted identifier).
+This pattern can contain characters that wouldn't be allowed in an unquoted schema name, because it's only ever compared against the real name of each schema in the database - it doesn't have to be a valid name itself. For example, a schema literally named `a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11` (which must have been created using double quotes, since hyphens aren't allowed in an unquoted `CREATE SCHEMA` statement) can still be matched using the unquoted pattern `a0eebc99-*`.
 
 This field is mutually exclusive with `schema`; when set, it takes over schema resolution entirely and `schema` must be left at its default.
 
