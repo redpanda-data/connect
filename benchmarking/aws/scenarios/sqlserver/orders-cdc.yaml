@@ -26,6 +26,14 @@ infra:
     instance_class: db.r5.2xlarge
     storage_gb: 800       # match the mysql/oracle 4xlarge sizing to hold the IOPS budget
     iops: 24000
+    # MEASURED (A/B 2026-08-12): at the RDS default the volume caps at
+    # ~195 MB/s and the whole bench is storage-bound (queue depth to 249) —
+    # offered load, capture-job publication and delivered records all rose
+    # 40-55% when this was provisioned. 1000 MiB/s is the gp3 max at this
+    # IOPS ratio; the binding cap then becomes the instance's EBS baseline
+    # (~313 MB/s observed). Write amplification is ~10x the logical row rate,
+    # so size storage bandwidth ≈ 10x the change throughput under test.
+    storage_throughput: 1000
     # No parameter-group knobs: unlike rds.logical_replication (postgres) and
     # binlog_format (mysql), SQL Server CDC is enabled entirely in T-SQL by the
     # seeder. See references/rds-quirks.md#sql-server-enabling-cdc-on-rds.
