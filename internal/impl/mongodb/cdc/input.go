@@ -338,6 +338,13 @@ type cachedSchema struct {
 	keys   []string // sorted top-level field names for key-set fingerprinting
 }
 
+// mongoClientBSONOptions configures BSON marshalling options applied to every
+// client this input builds - both the initial connection and the post-snapshot
+// credential refresh - so the two call sites cannot drift.
+func mongoClientBSONOptions(o *options.ClientOptions) {
+	o.SetBSONOptions(&options.BSONOptions{DefaultDocumentM: true})
+}
+
 func (m *mongoCDC) Connect(ctx context.Context) error {
 	if m.shutsig != nil {
 		m.shutsig.TriggerSoftStop()
@@ -371,9 +378,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		}
 	}
 	if m.client == nil {
-		client, db, err := m.cc.Connect(ctx, func(o *options.ClientOptions) {
-			o.SetBSONOptions(&options.BSONOptions{DefaultDocumentM: true})
-		})
+		client, db, err := m.cc.Connect(ctx, mongoClientBSONOptions)
 		if err != nil {
 			return fmt.Errorf("unable to connect to mongo: %w", err)
 		}
@@ -497,6 +502,24 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				default:
 				}
 				return
+			}
+			if m.cc.AssumesRole() {
+				// The snapshot can run for a large fraction (or all) of the STS
+				// session duration, since snapshot progress is not checkpointed.
+				// Rebuild the client here so the change-stream phase starts with
+				// freshly resolved credentials rather than a session that may
+				// have already expired or be about to.
+				m.logger.Infof("Snapshot complete, refreshing IAM credentials before streaming")
+				_ = m.client.Disconnect(ctx)
+				client, db, err := m.cc.Connect(ctx, mongoClientBSONOptions)
+				if err != nil {
+					select {
+					case m.errorChan <- fmt.Errorf("error refreshing MongoDB credentials after snapshot: %w", err):
+					default:
+					}
+					return
+				}
+				m.client, m.db = client, db
 			}
 		}
 		if err := m.readFromStream(ctx, cp, opts); err != nil {
