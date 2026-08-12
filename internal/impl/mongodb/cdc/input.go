@@ -348,8 +348,11 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		}
 		m.shutsig = nil
 		select {
-		case <-m.errorChan:
-			// drain error channel
+		case err := <-m.errorChan:
+			// ReadBatch's select may have taken the goroutine-stopped case
+			// instead of this error, so log it here: otherwise the reason the
+			// previous connection died is lost.
+			m.logger.Warnf("Reconnecting after stream failure: %v", err)
 		default:
 		}
 	}

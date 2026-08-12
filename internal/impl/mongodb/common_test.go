@@ -16,13 +16,65 @@ package mongodb
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
+
+func TestIsConnPoolError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "handshake auth failure",
+			err:  errors.New(`connection(cluster0-shard-00-01.mongodb.net:27017[-12]) error occurred during connection handshake: auth error: sasl conversation error: unable to authenticate using mechanism "MONGODB-AWS": (AuthenticationFailed) Authentication failed.`),
+			want: true,
+		},
+		{
+			name: "pool cleared",
+			err:  errors.New("connection pool for cluster0-shard-00-01.mongodb.net:27017 was cleared because another operation failed with: connection() error occurred during connection handshake: auth error"),
+			want: true,
+		},
+		{
+			name: "server selection",
+			err:  errors.New("server selection error: context deadline exceeded, current topology: { ... }"),
+			want: true,
+		},
+		{
+			name: "network error label",
+			err:  mongo.CommandError{Labels: []string{"NetworkError"}, Message: "socket was unexpectedly closed"},
+			want: true,
+		},
+		{
+			name: "nil",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "duplicate key",
+			err:  mongo.CommandError{Code: 11000, Message: "E11000 duplicate key error collection: foo.bar"},
+			want: false,
+		},
+		{
+			name: "validation failure",
+			err:  errors.New("document validation failure"),
+			want: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, isConnPoolError(test.err))
+		})
+	}
+}
 
 func parseInputConf(t *testing.T, conf string) *service.ParsedConfig {
 	t.Helper()

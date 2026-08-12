@@ -241,6 +241,14 @@ func (m *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 	if len(writeModelsMap) > 0 {
 		for collectionStr, writeModels := range writeModelsMap {
 			if err := m.builkWrite(ctx, database, collectionStr, writeModels); err != nil {
+				// Only errors raised by the driver itself can indicate a broken
+				// pool. Reporting ErrNotConnected makes the framework re-run
+				// Connect, which rebuilds the client and re-resolves any IAM
+				// credentials, and retry this batch against it.
+				if isConnPoolError(err) {
+					m.log.Errorf("MongoDB connection failure, triggering reconnect: %v", err)
+					return service.ErrNotConnected
+				}
 				return err
 			}
 		}

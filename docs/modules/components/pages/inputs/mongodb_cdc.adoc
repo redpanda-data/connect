@@ -199,7 +199,7 @@ The AWS region used when assuming roles (for STS calls). Only used when `role` o
 
 === `aws.session_duration`
 
-The duration of the STS session requested when assuming roles. AWS requires at least 15 minutes and caps sessions created through role chaining at one hour. Only used when `role` or `roles` are configured.
+The duration of the STS session requested when assuming roles. AWS requires at least 15 minutes and caps sessions created through role chaining at one hour. Only used when `role` or `roles` are configured. When using `mongodb_cdc` with role assumption, the initial snapshot must complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. For large snapshots prefer the ambient credential chain.
 
 
 *Type*: `string`

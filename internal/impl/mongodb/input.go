@@ -267,6 +267,20 @@ func (m *mongoInput) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 			}, nil
 		}
 	}
+	// The loop can only fall through here with an empty batch: it continues only
+	// while RemainingBatchLength() > 0, and in that case the driver serves the
+	// next document from the buffered batch without I/O, so Next cannot fail.
+	if err := m.cursor.Err(); err != nil {
+		// The cursor died mid-read (e.g. an expired credential broke the
+		// connection pool). Tear down so the next Connect rebuilds the client
+		// — re-resolving IAM credentials when roles are used — and re-runs
+		// the query from the start (at-least-once delivery).
+		_ = m.cursor.Close(ctx)
+		m.cursor = nil
+		_ = m.client.Disconnect(ctx)
+		m.client = nil
+		return nil, nil, fmt.Errorf("mongodb cursor failure: %w", err)
+	}
 	return nil, nil, service.ErrEndOfInput
 }
 

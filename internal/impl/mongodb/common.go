@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -111,7 +112,7 @@ func AWSIAMAuthField() *service.ConfigField {
 			ShortDescription("The AWS region used for STS calls when assuming roles. Defaults to the environment region.").
 			Optional(),
 		service.NewDurationField(FieldAWSIAMAuthSessionDuration).
-			Description("The duration of the STS session requested when assuming roles. AWS requires at least 15 minutes and caps sessions created through role chaining at one hour. Only used when `role` or `roles` are configured.").
+			Description("The duration of the STS session requested when assuming roles. AWS requires at least 15 minutes and caps sessions created through role chaining at one hour. Only used when `role` or `roles` are configured. When using `mongodb_cdc` with role assumption, the initial snapshot must complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. For large snapshots prefer the ambient credential chain.").
 			ShortDescription("STS session duration when assuming roles. AWS requires at least 15m and caps role chaining at 1h.").
 			Default("1h").
 			Advanced(),
@@ -258,6 +259,27 @@ func (c *ClientConfig) Connect(ctx context.Context, optFns ...func(*options.Clie
 		return nil, nil, err
 	}
 	return client, client.Database(c.database), nil
+}
+
+// isConnPoolError reports whether err indicates the client's connection pool
+// is unusable — a handshake (including MONGODB-AWS auth) failure, a cleared
+// pool, or the server being unselectable — as opposed to an ordinary
+// operation error. Components with a connect lifecycle should treat these by
+// rebuilding the client, which also re-resolves IAM credentials.
+//
+// The pool-cleared error type has no Unwrap, so text matching is the only
+// available detection for some shapes.
+func isConnPoolError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if mongo.IsNetworkError(err) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "error occurred during connection handshake") ||
+		(strings.Contains(msg, "connection pool for ") && strings.Contains(msg, " was cleared")) ||
+		strings.Contains(msg, "server selection error")
 }
 
 func clientFields() []*service.ConfigField {
