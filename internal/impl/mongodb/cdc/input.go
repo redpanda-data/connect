@@ -420,15 +420,16 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		return fmt.Errorf("unable to decode replication info: %w", err)
 	}
 	ts, hasTS := bsonGetPath(helloReply, "lastWrite", "majorityOpTime", "ts").(bson.Timestamp)
-	// When starting fresh, capture the current change stream position as a
-	// resume token before anything else runs. The token is what makes the
-	// post-snapshot checkpoint possible: only tokens can be persisted to the
-	// checkpoint cache, the oplog timestamp cannot. Sharded clusters (mongos)
-	// report no oplog timestamp at all, so there the token is also the only
-	// usable start position. When a checkpoint already exists the stream
-	// resumes from it and no snapshot runs, so neither position is needed.
+	// Capture the current change stream position as a resume token when a
+	// snapshot is about to run, because only a token can be persisted to the
+	// checkpoint cache once that snapshot completes - the oplog timestamp
+	// cannot. Sharded clusters (mongos) report no oplog timestamp at all, so
+	// there the token is fetched regardless as the only usable start position.
+	// Otherwise the oplog timestamp positions the stream as before, and nothing
+	// needs a token: without a snapshot there is nothing to checkpoint early,
+	// and when a checkpoint already exists the stream resumes from it.
 	var initialResumeToken bson.Raw = nil
-	if m.resumeToken == nil {
+	if m.resumeToken == nil && (m.snapshotParallelism > 0 || !hasTS) {
 		token, err := m.getCurrentResumeToken(ctx)
 		switch {
 		case err == nil:
@@ -603,6 +604,12 @@ func (m *mongoCDC) storeSnapshotCheckpoint(
 			return false
 		case <-time.After(snapshotAckPollInterval):
 		}
+	}
+	// Pending() reaching zero is only evidence of delivery while this
+	// connection is alive: a shutdown resolves the slots of batches it drops on
+	// the floor, so a cancelled context makes the count untrustworthy.
+	if ctx.Err() != nil {
+		return false
 	}
 	// Keep the periodic flusher and the terminal save consistent with what was
 	// written: both dedupe on the token they last saw.
@@ -792,6 +799,11 @@ func (m *mongoCDC) readSnapshotRange(
 			if err != nil {
 				return fmt.Errorf("unable to create batch: %w", err)
 			}
+			// The error argument is ignored on purpose: with
+			// `auto_replay_nacks: false` a nacked snapshot batch resolves its
+			// slot by design (the documented opt-in to dropping failed
+			// batches), which also lets the post-snapshot checkpoint proceed.
+			// The drop scope is that batch, per the framework contract.
 			b := mongoBatch{mb, func(context.Context, error) error {
 				resumeToken := resolve()
 				if resumeToken != nil && *resumeToken != nil {
@@ -802,7 +814,11 @@ func (m *mongoCDC) readSnapshotRange(
 			select {
 			case m.readChan <- b:
 			case <-ctx.Done():
-				_ = b.ackFn(ctx, nil)
+				// Fail the snapshot rather than resolving the slot of a batch
+				// nobody received: a resolved slot would let the post-snapshot
+				// checkpoint be written for a snapshot that was never fully
+				// delivered, and a restart would then skip it.
+				return ctx.Err()
 			case <-m.shutsig.SoftStopChan():
 				_ = b.ackFn(ctx, nil)
 				return context.Canceled
@@ -841,7 +857,15 @@ func (m *mongoCDC) getCurrentResumeToken(ctx context.Context) (bson.Raw, error) 
 		// to read a position, the streaming phase opens its own.
 		_ = stream.Close(ctx)
 	}()
-	_ = stream.TryNext(ctx)
+	if stream.TryNext(ctx) {
+		// A batchSize of 0 means the server sends no events in the first batch,
+		// so this should be unreachable. If it ever happens the cached token is
+		// that event's `_id` and resuming after it would skip the event, so
+		// report no token instead: the caller then falls back to the oplog
+		// timestamp, or fails when no timestamp exists.
+		m.logger.Debugf("change stream returned an event while capturing the start position, ignoring the token to avoid skipping it")
+		return nil, errors.New("unable to determine start position prior to snapshot phase: stream returned an event")
+	}
 	if rt := stream.ResumeToken(); rt != nil {
 		// The driver hands back a token aliasing the cursor's batch buffer, so
 		// copy it before the stream is closed.

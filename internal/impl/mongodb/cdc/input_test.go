@@ -108,6 +108,26 @@ func TestStoreSnapshotCheckpointStopsOnShutdown(t *testing.T) {
 	m.resumeTokenMu.Unlock()
 }
 
+func TestStoreSnapshotCheckpointSkippedOnCancelledContext(t *testing.T) {
+	// Nothing is pending, but the context is already cancelled: the shutdown
+	// paths resolve the slots of snapshot batches they drop without delivering
+	// them, so a drained checkpointer proves nothing once the connection is
+	// going away. Storing here would let a restart skip an incomplete snapshot.
+	cp := checkpoint.NewCapped[bson.Raw](10)
+	require.Zero(t, cp.Pending())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	m := &mongoCDC{}
+	require.False(t, m.storeSnapshotCheckpoint(ctx, cp, bson.Raw{5, 0, 0, 0, 0}, func(context.Context, bson.Raw) error {
+		t.Error("checkpoint stored after the context was cancelled")
+		return nil
+	}))
+	m.resumeTokenMu.Lock()
+	require.Nil(t, m.resumeToken)
+	m.resumeTokenMu.Unlock()
+}
+
 func TestStoreSnapshotCheckpointSkippedWithoutToken(t *testing.T) {
 	cp := checkpoint.NewCapped[bson.Raw](10)
 	m := &mongoCDC{}
