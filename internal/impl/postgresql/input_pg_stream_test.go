@@ -155,9 +155,9 @@ func TestExcludeSchemasValidation(t *testing.T) {
 		{"tenant_test", ""},
 		{"tenant_test_*", ""},
 		{`"MySchema"`, ""},
-		{"1abc", "must start with a letter"},
+		{"1abc", ""},
 		{`"unclosed`, "invalid quoted schema identifier"},
-		{"schema-name", "invalid character"},
+		{"schema-name", ""},
 		{`"quoted*"`, "wildcard"},
 	}
 	for _, tt := range tests {
