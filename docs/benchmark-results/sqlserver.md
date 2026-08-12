@@ -61,6 +61,39 @@
 > at p95 on a single vCPU, roughly 1.8x Debezium's peak, and the practical limit
 > for SQL Server CDC is the capture job rather than the connector.
 
+## Storage-throughput A/B (2026-08-12): storage was the ceiling, measured
+
+One arm, 2 vCPU Connect-only, identical to the sweep's 2 vCPU point except
+gp3 `storage_throughput` provisioned at 1000 MiB/s (the sweep ran at the RDS
+default). Fresh infra, same instance class.
+
+| 2 vCPU Connect | sweep (default gp3) | A/B (1000 MiB/s) | Δ |
+|---|---|---|---|
+| offered load (rows/s) | ~16,400 | 25,440 | +55% |
+| delivered mean rec/s | 16,215 | 22,898 | +41% |
+| duty cycle | 82% | 92% | +10 pts |
+| CloudWatch WriteThroughput | pinned ~195 MB/s | peak ~313 MB/s | +60% |
+| CloudWatch DiskQueueDepth | to 249 | ~3 | — |
+
+Reading:
+
+- **Provisioning gp3 throughput moved everything** — the write path (+55%
+  offered) and the capture job's publication rate (+41% delivered). The
+  earlier claim that the capture job's single-threaded log scan was an
+  intrinsic ceiling is REFUTED: it was IO-starved, not CPU-limited, in every
+  sweep window.
+- **The new ceiling is the instance's EBS bandwidth**: 313 MB/s is the
+  db.r5.2xlarge EBS baseline almost exactly, with the disk queue now shallow.
+  Neither arm reached the capture job's intrinsic limit.
+- **Sizing rule of thumb this yields:** with ~10x write amplification (base
+  table + txn log + change table + checkpoints), SQL Server CDC's logical
+  change throughput on RDS is roughly storage-bandwidth / 10. Buy the
+  instance's EBS bandwidth and gp3 throughput accordingly; Connect needs only
+  2 vCPU to track whatever that provides.
+- The sweep table below is the DEFAULT-gp3 curve. Its relative claims stand
+  (both engines shared each volume); its absolute numbers are that
+  configuration's, not SQL Server's.
+
 ## Collated 4-point sweep (2026-08-10..11, bulk-copy load, 500ms backoff)
 
 One 15-minute window per engine per point; offered load ~16.7-19.0M rows per
@@ -437,3 +470,35 @@ transactions/sec ceiling and mislabel it a connector ceiling.
 
 
 Raw samples + Prometheus snapshots: [`results/sqlserver/orders-cdc/2026-08-11T18-02-38Z.json`](results/sqlserver/orders-cdc/2026-08-11T18-02-38Z.json)
+
+
+## AWS — orders-cdc — 2026-08-12
+
+**Scenario:** Stream changes from a high-write SQL Server orders table so the
+microsoft_sql_server_cdc input — not the producer, and not SQL Server's own
+capture job — is the bottleneck across the CPU sweep.
+
+Fairness: neither engine reads the transaction log. Connect's
+microsoft_sql_server_cdc and the Kafka Connect comparator (Debezium SQL
+Server) both tail the same cdc.<schema>_<table>_CT change tables, populated by
+SQL Server's capture job. That makes this the most apples-to-apples CDC
+head-to-head in the suite — and it also means the capture job sits upstream of
+BOTH engines. The seeder raises its per-cycle limits well past what the load
+generator can produce (see tuneCaptureJob in seeders/cdc-rows-mssql/sql.go);
+leave the stock 10/500/5 in place and you measure the capture job's ~1000
+transactions/sec ceiling and mislabel it a connector ceiling.
+
+**Git SHA:** [`9a647085f`](https://github.com/redpanda-data/connect/commit/9a647085f68c45fb2e7c1a169a9b1e5e57f205c8)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 2    | 2          |                | connect       |           33 |       27.932 |        22,898 |           33 |           0 |           45 |        27,000 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/sqlserver/orders-cdc/2026-08-12T00-42-11Z.json`](results/sqlserver/orders-cdc/2026-08-12T00-42-11Z.json)
