@@ -20,9 +20,14 @@ soak: true
 infra:
   source:
     instance_class: db.r6g.xlarge
-    storage_gb: 200
-    iops: 6000
-    storage_throughput: 500     # gp3 MiB/s; ample headroom at this sustained rate
+    # RDS gp3 for postgres: below 400 GB you get fixed baseline (3000 IOPS /
+    # 125 MiB/s) and may not set iops/storage_throughput at all; at >=400 GB
+    # the baseline is 12000 / 500 and those are the legal minimums. 400 GB at
+    # the free baseline is the cheapest shape that lets these fields exist
+    # (live-confirmed 2026-08-12: 200 GB + 6000 iops -> InvalidParameterCombination).
+    storage_gb: 400
+    iops: 12000
+    storage_throughput: 500
     iam_auth_enabled: true      # ~15-min IAM tokens = the rotation lever (see description)
     parameters:
       rds.logical_replication: "1"
