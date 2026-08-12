@@ -805,3 +805,66 @@ reset: []
 		t.Errorf("KafkaConnect should be nil when omitted; got %v", s.KafkaConnect)
 	}
 }
+
+const ordersSoakScenario = "../scenarios/postgres/orders-soak.yaml"
+
+// TestLoadScenario_OrdersSoak is the validity gate for the CON-179 R6 soak
+// profile: the scenario shipped in scenarios/postgres/orders-soak.yaml must
+// load and validate as a soak scenario, not merely parse.
+func TestLoadScenario_OrdersSoak(t *testing.T) {
+	s, err := LoadScenario(ordersSoakScenario)
+	require.NoError(t, err)
+	require.True(t, s.Soak)
+	require.Equal(t, []int{2}, s.Matrix.CPUPoints)
+	require.Empty(t, s.Matrix.Arms)
+	require.Equal(t, "c8g.xlarge", s.Infra.Runner.InstanceType)
+	require.Equal(t, 4, vcpuForInstanceType(s.Infra.Runner.InstanceType))
+	require.NotNil(t, s.Workload)
+	require.Equal(t, 90*time.Minute, s.Workload.Duration)
+	require.Equal(t, 5*time.Minute, s.Workload.Warmup)
+	require.Equal(t, 10000, s.Workload.WriteRatePerSec)
+	require.NoError(t, s.Validate())
+}
+
+func TestScenarioValidate_RejectsSoakWithMultipleCPUPoints(t *testing.T) {
+	s := &Scenario{
+		Name: "soak-x", Connector: "postgres_cdc", Stack: "postgres", Soak: true,
+		Infra:    InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.xlarge"}},
+		Dataset:  DatasetSpec{Tables: []string{"orders"}},
+		Pipeline: map[string]any{"input": map[string]any{"postgres_cdc": map[string]any{}}},
+		Workload: &WorkloadSpec{Warmup: minWarmup, Duration: minDuration},
+		Matrix:   MatrixSpec{CPUPoints: []int{1, 2}},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "soak scenarios must set exactly one matrix.cpu_points entry")
+}
+
+func TestScenarioValidate_RejectsSoakWithArms(t *testing.T) {
+	s := &Scenario{
+		Name: "soak-x", Connector: "postgres_cdc", Stack: "postgres", Soak: true,
+		Infra:    InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.xlarge"}},
+		Dataset:  DatasetSpec{Tables: []string{"orders"}},
+		Pipeline: map[string]any{"input": map[string]any{"postgres_cdc": map[string]any{}}},
+		Workload: &WorkloadSpec{Warmup: minWarmup, Duration: minDuration},
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms:      []Arm{{ID: "a0", GOMAXPROCS: 2, Streams: 1}},
+		},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "soak scenarios must not set matrix.arms")
+}
+
+func TestScenarioValidate_AcceptsSoakSingleCPUPointNoArms(t *testing.T) {
+	s := &Scenario{
+		Name: "soak-x", Connector: "postgres_cdc", Stack: "postgres", Soak: true,
+		Infra:    InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.xlarge"}},
+		Dataset:  DatasetSpec{Tables: []string{"orders"}},
+		Pipeline: map[string]any{"input": map[string]any{"postgres_cdc": map[string]any{}}},
+		Workload: &WorkloadSpec{Warmup: minWarmup, Duration: 90 * time.Minute},
+		Matrix:   MatrixSpec{CPUPoints: []int{2}},
+	}
+	require.NoError(t, s.Validate())
+}

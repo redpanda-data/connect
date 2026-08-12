@@ -83,6 +83,7 @@ func TestExtractPromPoint_FromRealFixture(t *testing.T) {
 	require.GreaterOrEqual(t, pp.BytesTotal, 0.0)
 	require.GreaterOrEqual(t, pp.CPUSeconds, 0.0)
 	require.GreaterOrEqual(t, pp.GCPauseTotalNS, uint64(0))
+	require.Greater(t, pp.RSSBytes, uint64(0), "process_resident_memory_bytes must be extracted — RSS is what the OOM killer sees, heap_in_use is not")
 }
 
 func TestExtractPromPoint_SyntheticAllMetrics(t *testing.T) {
@@ -93,6 +94,7 @@ go_memstats_heap_inuse_bytes 1.04857e+08
 go_memstats_gc_pause_total_ns 4.2e+07
 process_cpu_seconds_total 87.4
 benchmark_bytes_total 4.12e+09
+process_resident_memory_bytes 1.45e+08
 `
 	pp, ok := extractPromPoint(promSnapshot{UnixTime: 100, Body: body})
 	require.True(t, ok)
@@ -101,6 +103,7 @@ benchmark_bytes_total 4.12e+09
 	require.InDelta(t, 4.12e+09, pp.BytesTotal, 1.0)
 	require.InDelta(t, 87.4, pp.CPUSeconds, 0.01)
 	require.Equal(t, uint64(42000000), pp.GCPauseTotalNS)
+	require.Equal(t, uint64(145000000), pp.RSSBytes)
 }
 
 func TestExtractPromPoint_ErrorSnapshotSkipped(t *testing.T) {
@@ -118,6 +121,7 @@ go_memstats_heap_inuse_bytes 1.0485e+07
 	require.InDelta(t, 10.485, pp.HeapInUseMB, 0.001) // 1.0485e+07 B / 1e6 = 10.485 MB
 	require.Equal(t, 0.0, pp.CPUSeconds)              // missing — zero is OK
 	require.Equal(t, uint64(0), pp.GCPauseTotalNS)
+	require.Equal(t, uint64(0), pp.RSSBytes) // missing — zero is OK
 }
 
 func TestParsePromStream_EndToEnd(t *testing.T) {

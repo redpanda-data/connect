@@ -99,6 +99,14 @@ type Scenario struct {
 	// fields here are shallow-merged into the resulting KC connector config
 	// JSON. Use this to tune e.g. snapshot.mode without editing the registry.
 	KafkaConnect map[string]any `yaml:"kafka_connect,omitempty"`
+	// Soak marks this scenario as a long, single-CPU-point, sustained-moderate-
+	// load run whose purpose is catching leaks/stalls/rotation bugs over wall
+	// clock — unlike the short max-load sweeps matrix.cpu_points/arms are for.
+	// Validate restricts a soak scenario to exactly one cpu_points entry and no
+	// arms (see Validate); runBench additionally requires --engines=connect
+	// (checked there, not here, since engines is a CLI flag rather than a
+	// scenario field).
+	Soak bool `yaml:"soak,omitempty"`
 }
 
 type InfraSpec struct {
@@ -371,6 +379,22 @@ func (s *Scenario) Validate() error {
 	for i := 1; i < len(s.Matrix.CPUPoints); i++ {
 		if s.Matrix.CPUPoints[i] <= s.Matrix.CPUPoints[i-1] {
 			return fmt.Errorf("matrix.cpu_points must be strictly ascending: %v", s.Matrix.CPUPoints)
+		}
+	}
+
+	// A soak scenario measures ONE configuration held steady over a long wall
+	// clock, so it can catch leaks/stalls/rotation bugs a short sweep never
+	// runs long enough to hit. Sweeping cpu_points or A/B-ing arms is a
+	// different question (find the ceiling / compare topologies) that the
+	// bench profile already answers — checked here, before the general arms
+	// validation below, so a soak+arms scenario gets this specific message
+	// rather than getting tangled in arm-detail errors.
+	if s.Soak {
+		if len(s.Matrix.CPUPoints) != 1 {
+			return fmt.Errorf("soak scenarios must set exactly one matrix.cpu_points entry (got %v): soak measures one configuration over time, not a sweep across configurations", s.Matrix.CPUPoints)
+		}
+		if len(s.Matrix.Arms) > 0 {
+			return fmt.Errorf("soak scenarios must not set matrix.arms: soak measures one configuration over time, not an A/B comparison")
 		}
 	}
 

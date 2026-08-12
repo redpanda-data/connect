@@ -139,6 +139,45 @@ func runBench(opts benchOpts) (errOut error) {
 			return fmt.Errorf("matrix.arms requires --engines=connect (got %v): arms compare Connect launch topologies, not engines", opts.engines)
 		}
 	}
+	// soak is a sustained-load leak/stall/rotation check on Connect alone, not
+	// an engine comparison — checked here (not Scenario.Validate) because
+	// engines is a CLI flag, not a scenario field. Failing before any infra
+	// apply, same reasoning as the matrix.arms check above.
+	if s.Soak {
+		if len(opts.engines) != 1 || opts.engines[0] != "connect" {
+			return fmt.Errorf("scenario %s is a soak profile and requires --engines=connect (got %v): soak measures Connect alone over a sustained window, not an engine comparison", s.Name, opts.engines)
+		}
+	}
+
+	warmup, duration := sweepWarmupDuration(s)
+	// execTimeout bounds every script this session's SSM executor runs — the
+	// staging/seed commands as well as the sweep itself — at the AWS-
+	// RunShellScript document level (see NewSSMExecutor). Sized off the
+	// sweep's own warmup+duration plus slack rather than a scenario-specific
+	// value, since the same executor instance serves every command in the
+	// run and a generous cap is harmless for the short ones.
+	execTimeout := warmup + duration + execTimeoutSlack
+
+	// A soak point runs far longer than a sweep point, so the fixed cadences
+	// a short run tolerates would otherwise silently corrupt the run: the
+	// per-minute heartbeat would overflow SSM's ~24KB stdout cap over many
+	// hours, the 10s Prometheus scrape would accumulate gigabytes on disk and
+	// in S3, and a mid-run crash would lose the entire window's data. See
+	// matrix.go's benchScriptArgs for how these three feed the rendered
+	// script.
+	var heartbeatSec, promScrapeSec, checkpointSec int
+	var expectedRecordsPerSec float64
+	if s.Soak {
+		totalSec := int((warmup + duration).Seconds())
+		heartbeatSec = max(soakDefaultHeartbeatSec, totalSec/soakMaxHeartbeats)
+		promScrapeSec = soakPromScrapeSec
+		checkpointSec = soakCheckpointSec
+		if s.Workload != nil {
+			expectedRecordsPerSec = float64(s.Workload.WriteRatePerSec)
+		}
+		fmt.Printf("soak profile: window %s, heartbeat every %ds, prom scrape every %ds, checkpoint upload every %ds\n",
+			warmup+duration, heartbeatSec, promScrapeSec, checkpointSec)
+	}
 
 	topo, err := topologyFor(s.Direction)
 	if err != nil {
@@ -257,17 +296,17 @@ func runBench(opts benchOpts) (errOut error) {
 	if err := stageTableGenForSink(ctx, opts, s, sharedOuts); err != nil {
 		return fmt.Errorf("stage iceberg-tablegen: %w", err)
 	}
-	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy); err != nil {
+	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy, execTimeout); err != nil {
 		return fmt.Errorf("stage artefacts: %w", err)
 	}
 	fmt.Println("[4/7] staged binary + config on runner")
 
-	if err := runSeeder(ctx, opts, s, sharedOuts, topo, names); err != nil {
+	if err := runSeeder(ctx, opts, s, sharedOuts, topo, names, execTimeout); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
 	fmt.Println("[5/7] seed complete")
 
-	ssmExec, err := NewSSMExecutor(ctx, opts.region)
+	ssmExec, err := NewSSMExecutor(ctx, opts.region, execTimeout)
 	if err != nil {
 		return err
 	}
@@ -321,6 +360,10 @@ func runBench(opts benchOpts) (errOut error) {
 		Topics:                   s.Dataset.Topics,
 		Outs:                     sharedOuts,
 		Direction:                s.Direction,
+		HeartbeatSec:             heartbeatSec,
+		PromScrapeSec:            promScrapeSec,
+		CheckpointSec:            checkpointSec,
+		ExpectedRecordsPerSec:    expectedRecordsPerSec,
 	}
 	// Reset must cover the union of every arm's tables (planMaxStreams), not
 	// just this scenario's own Streams, so one precomputed reset script serves
@@ -332,14 +375,6 @@ func runBench(opts benchOpts) (errOut error) {
 	workload, err := topo.WorkloadScript(s, sharedOuts, names)
 	if err != nil {
 		return err
-	}
-	warmup := time.Duration(0)
-	duration := time.Duration(0)
-	if s.Workload != nil {
-		warmup = s.Workload.Warmup
-		duration = s.Workload.Duration
-	} else {
-		duration = minDuration
 	}
 	points, err := mr.Run(ctx, plan, s.Matrix.GoMemLimitPerVCPU, warmup, duration, reset, workload)
 	if err != nil {
@@ -377,6 +412,7 @@ func runBench(opts benchOpts) (errOut error) {
 			Arm:          p.ArmID,
 			GOMAXPROCS:   p.GOMAXPROCS,
 			Streams:      p.Streams,
+			Backlog:      p.Backlog,
 		})
 	}
 	var connectPts, kcPts []PointResult
@@ -423,11 +459,50 @@ func gitSHA(repoRoot string) string {
 }
 
 func totalDuration(s *Scenario, points int) time.Duration {
-	if s.Workload == nil {
-		return time.Duration(points) * minDuration
-	}
-	return time.Duration(points) * (s.Workload.Warmup + s.Workload.Duration)
+	warmup, duration := sweepWarmupDuration(s)
+	return time.Duration(points) * (warmup + duration)
 }
+
+// sweepWarmupDuration returns the scenario's per-point warmup and duration,
+// applying the workload-less bounded-dataset default (0 warmup, minDuration —
+// see Scenario.Validate) so every caller sizing a wall-clock estimate
+// (execTimeout, totalDuration) uses the same fallback.
+func sweepWarmupDuration(s *Scenario) (warmup, duration time.Duration) {
+	if s.Workload == nil {
+		return 0, minDuration
+	}
+	return s.Workload.Warmup, s.Workload.Duration
+}
+
+const (
+	// execTimeoutSlack is added atop the sweep's warmup+duration when sizing
+	// the session's shared SSM execution timeout (see NewSSMExecutor), so
+	// scheduling jitter — terraform output propagation, workload startup,
+	// the staging/seed commands that run before the sweep on the SAME
+	// executor — never trips the SSM agent's executionTimeout right at the
+	// wall-clock the sweep itself is expected to take.
+	execTimeoutSlack = 30 * time.Minute
+
+	// soakDefaultHeartbeatSec is the sweep's own heartbeat cadence (60s),
+	// used as a floor: a soak run's heartbeat only widens past this, it
+	// never narrows below the short-sweep behavior.
+	soakDefaultHeartbeatSec = 60
+	// soakMaxHeartbeats bounds how many heartbeat lines a soak run emits
+	// through SSM stdout (~24KB cap). totalSec/soakMaxHeartbeats gives a
+	// cadence that keeps a 24h run to ~60 heartbeat lines regardless of
+	// window length.
+	soakMaxHeartbeats = 60
+	// soakPromScrapeSec is the Connect /metrics scrape cadence for a soak
+	// run. Widened from the sweep's 10s default so a 24h run's snapshot
+	// file stays in the tens-of-MB range instead of the ~4GB a 10s cadence
+	// would accumulate.
+	soakPromScrapeSec = 60
+	// soakCheckpointSec is how often a soak run uploads its in-progress log
+	// and Prometheus snapshot to their FINAL S3 keys, overwriting each time.
+	// This is what makes a 24h run's data survive a mid-run crash instead of
+	// losing the entire window.
+	soakCheckpointSec = 600
+)
 
 func newSessionID() string {
 	return fmt.Sprintf("bench-%s", time.Now().UTC().Format("20060102-150405"))
@@ -1032,7 +1107,7 @@ func buildStagePlan(sets []renderedPointConfigs, bucket string, legacy bool) (it
 // stageArtefacts uploads the binary, license, and per-point config(s) to S3 and
 // downloads them onto the runner host over SSM. See buildStagePlan for the
 // legacy vs. arms path-building logic.
-func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string, binPath string, sets []renderedPointConfigs, legacy bool) error {
+func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string, binPath string, sets []renderedPointConfigs, legacy bool, execTimeout time.Duration) error {
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
 	if err != nil {
 		return err
@@ -1062,7 +1137,7 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 		}
 	}
 
-	ssmExec, err := NewSSMExecutor(ctx, opts.region)
+	ssmExec, err := NewSSMExecutor(ctx, opts.region, execTimeout)
 	if err != nil {
 		return err
 	}
@@ -1112,7 +1187,7 @@ func stageTableGenForSink(ctx context.Context, opts benchOpts, s *Scenario, outs
 	return err
 }
 
-func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string, topo Topology, names BenchNames) error {
+func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string, topo Topology, names BenchNames, execTimeout time.Duration) error {
 	if s.Dataset.Seeder == "" {
 		return nil
 	}
@@ -1144,7 +1219,7 @@ func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string
 	}); err != nil {
 		return err
 	}
-	ssmExec, err := NewSSMExecutor(ctx, opts.region)
+	ssmExec, err := NewSSMExecutor(ctx, opts.region, execTimeout)
 	if err != nil {
 		return err
 	}

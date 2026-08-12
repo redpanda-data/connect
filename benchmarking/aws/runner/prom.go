@@ -21,6 +21,13 @@ type PromPoint struct {
 	BytesTotal     float64 `json:"bytes_total"` // benchmark_bytes_total
 	CPUSeconds     float64 `json:"cpu_seconds"`
 	GCPauseTotalNS uint64  `json:"gc_pause_total_ns"` // monotonic; per-interval delta = scrape[i] - scrape[i-1]
+	// RSSBytes is process_resident_memory_bytes: what the OOM killer sees,
+	// unlike HeapInUseMB. Go's heap-in-use metric misses the leak classes
+	// that actually OOMKill a pod — fragmentation, cgo allocations, goroutine
+	// stacks — none of which show up as "in-use heap" but all of which count
+	// against RSS. A soak run watches this to catch a slow leak that a short
+	// sweep point never runs long enough to show.
+	RSSBytes uint64 `json:"rss_bytes,omitempty"`
 }
 
 // promSnapshot is one /metrics dump bracketed by ###timestamp= markers.
@@ -70,6 +77,9 @@ func extractPromPoint(s promSnapshot) (PromPoint, bool) {
 		case "benchmark_bytes_total":
 			n, _ := strconv.ParseFloat(valueStr, 64)
 			pp.BytesTotal = n
+		case "process_resident_memory_bytes":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.RSSBytes = uint64(n)
 		}
 	}
 	return pp, true

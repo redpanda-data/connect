@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +18,20 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 )
+
+// defaultExecTimeout is the AWS-RunShellScript document's own
+// executionTimeout default (distinct from SendCommand's delivery
+// TimeoutSeconds below). Used when NewSSMExecutor is given a zero
+// execTimeout, which reproduces the implicit behavior every caller relied on
+// before this field existed: any script running past 3600s was silently
+// killed by the SSM agent — the reason nothing longer than the ~17min sweep
+// points ever surfaced the bug.
+const defaultExecTimeout = time.Hour
+
+// sendCommandDeliveryTimeout bounds how long SendCommand waits for the
+// instance to START the command, not how long the command may run. It is
+// unrelated to execTimeout and does not need to scale with run length.
+const sendCommandDeliveryTimeout = 90 * time.Minute
 
 // SSMExecutor executes shell commands on EC2 instances via Systems Manager.
 type SSMExecutor interface {
@@ -27,23 +42,39 @@ type SSMExecutor interface {
 
 type awsSSM struct {
 	client *ssm.Client
+	// execTimeout is the AWS-RunShellScript document's executionTimeout
+	// parameter: how long the SSM agent lets the script itself run before
+	// killing it. Distinct from sendCommandDeliveryTimeout (time-to-start).
+	execTimeout time.Duration
 }
 
-// NewSSMExecutor builds an executor backed by the AWS SDK in the given region.
-func NewSSMExecutor(ctx context.Context, region string) (SSMExecutor, error) {
+// NewSSMExecutor builds an executor backed by the AWS SDK in the given
+// region. execTimeout bounds how long a submitted script may run before the
+// SSM agent kills it (the AWS-RunShellScript document's executionTimeout,
+// which otherwise defaults to 3600s); 0 keeps that historical default. All
+// scripts submitted through one executor share this cap, so a caller with a
+// long-running soak point should size it generously — a large cap is
+// harmless for the short staging/seed commands that share the same executor.
+func NewSSMExecutor(ctx context.Context, region string, execTimeout time.Duration) (SSMExecutor, error) {
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 	if err != nil {
 		return nil, err
 	}
-	return &awsSSM{client: ssm.NewFromConfig(cfg)}, nil
+	if execTimeout <= 0 {
+		execTimeout = defaultExecTimeout
+	}
+	return &awsSSM{client: ssm.NewFromConfig(cfg), execTimeout: execTimeout}, nil
 }
 
 func (a *awsSSM) Run(ctx context.Context, instanceID, script string, onLine func(string)) error {
 	send, err := a.client.SendCommand(ctx, &ssm.SendCommandInput{
 		InstanceIds:  []string{instanceID},
 		DocumentName: aws.String("AWS-RunShellScript"),
-		Parameters:   map[string][]string{"commands": {script}},
-		TimeoutSeconds: aws.Int32(int32((90 * time.Minute).Seconds())),
+		Parameters: map[string][]string{
+			"commands":         {script},
+			"executionTimeout": {strconv.Itoa(int(a.execTimeout.Seconds()))},
+		},
+		TimeoutSeconds: aws.Int32(int32(sendCommandDeliveryTimeout.Seconds())),
 	})
 	if err != nil {
 		return fmt.Errorf("send command: %w", err)

@@ -76,6 +76,11 @@ type PointResult struct {
 	// rolling-stats-derived Summary. For KC (which has no rolling-stats
 	// line to parse), Summary is derived from this series — see Task 6.
 	BrokerSeries []TopicPoint `json:"broker_series,omitempty"`
+
+	// Backlog is the end-to-end backlog proxy (see ComputeBacklog), present
+	// only when the scenario set an expected write rate (soak scenarios).
+	// Empty for every non-soak point.
+	Backlog []BacklogPoint `json:"backlog,omitempty"`
 }
 
 // WriteResultJSON writes the result to <dir>/<connector>/<scenario>/<timestamp>.json.

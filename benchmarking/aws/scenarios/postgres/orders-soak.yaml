@@ -1,0 +1,60 @@
+name: postgres-orders-soak
+description: |
+  Soak: hold Connect at a fixed, sustained-moderate load (10K writes/sec ≈
+  12 MB/s — roughly 10-15% of the ~100 MB/s ceiling orders-cdc's sweep
+  measures) for 90 minutes at a single vCPU point. This is not a ceiling
+  search; it exists to catch leaks, stalls, and log/metric-rotation bugs
+  that a short max-load sweep point never runs long enough to hit.
+
+connector: postgres_cdc
+stack: postgres
+soak: true
+
+infra:
+  source:
+    instance_class: db.r6g.xlarge
+    storage_gb: 200
+    iops: 6000
+    storage_throughput: 500     # gp3 MiB/s; ample headroom at this sustained rate
+    parameters:
+      rds.logical_replication: "1"
+      max_wal_senders: "20"
+  runner:
+    instance_type: c8g.xlarge   # 4 vCPU: reservedCores(2) + cpu_points[2] == 4
+
+dataset:
+  initial_rows: 0          # TRUNCATE keeps table size bounded; no seed needed
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-postgres
+
+workload:
+  write_rate_per_sec: 10000
+  duration: 90m
+  warmup: 5m
+
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      tls:
+        skip_cert_verify: true   # RDS-internal CA isn't in the runner image; postgres_cdc uses NewTLSField (no `enabled` toggle)
+      stream_snapshot: false
+      schema: public
+      tables: [orders]
+      slot_name: bench_slot
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [2]
+
+reset:
+  # Password-DSN auth for now; IAM auth for the RDS source is a separate
+  # follow-up (see orders-cdc.yaml's reset for the same pattern). Both slots
+  # are dropped even though soak runs --engines=connect only, so a --keep
+  # re-run against a KC-touched instance still starts clean.
+  - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
+  - sql: "SELECT pg_drop_replication_slot('kc_bench_slot') FROM pg_replication_slots WHERE slot_name='kc_bench_slot'"
+  - sql: "TRUNCATE TABLE orders"

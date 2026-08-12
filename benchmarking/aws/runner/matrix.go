@@ -77,6 +77,28 @@ type MatrixRunner struct {
 	// Connect's rolling-stats log (samples); sink benches use the metric
 	// series in brokerSeries (e.g. Iceberg committed bytes).
 	Direction Direction
+	// HeartbeatSec overrides the bench script's per-minute heartbeat cadence.
+	// 0 means 60 (the sweep default). A soak run widens this so the SSM
+	// stdout content cap (~24KB) isn't exceeded over many hours — see
+	// benchScriptArgs.heartbeatSec.
+	HeartbeatSec int
+	// PromScrapeSec overrides the bench script's /metrics scrape cadence.
+	// 0 means 10 (the sweep default). A soak run widens this so the
+	// Prometheus snapshot doesn't grow unboundedly over many hours — see
+	// benchScriptArgs.promScrapeSec.
+	PromScrapeSec int
+	// CheckpointSec, when > 0, makes the bench script periodically re-upload
+	// the in-progress log and Prometheus snapshot to their FINAL S3 keys
+	// (overwriting each time) while the engine is still running, so a
+	// mid-run crash doesn't lose the whole window's data. 0 disables this
+	// (the sweep default — sweep points are short enough that only the
+	// end-of-run upload matters).
+	CheckpointSec int
+	// ExpectedRecordsPerSec, when > 0, is the workload's target write rate.
+	// Run uses it to compute a backlog series (ComputeBacklog) from each
+	// point's broker-side series, tracking whether the engine is keeping
+	// pace with the source over the run. 0 disables backlog computation.
+	ExpectedRecordsPerSec float64
 }
 
 // pointConfigPaths locates one sweep point's launch config(s) on the runner
@@ -107,6 +129,12 @@ type SweepPoint struct {
 	Anomalies    []Anomaly
 	Prom         []PromPoint
 	BrokerSeries []TopicPoint
+	// Backlog is the end-to-end backlog proxy computed from BrokerSeries
+	// against MatrixRunner.ExpectedRecordsPerSec (see ComputeBacklog). Nil
+	// when ExpectedRecordsPerSec is 0 (the sweep default — a sweep is
+	// finding the ceiling, not tracking whether a fixed source rate is
+	// being kept up with).
+	Backlog []BacklogPoint
 }
 
 // Run executes the full sweep. resetScript runs on the runner host between
@@ -214,6 +242,9 @@ func (m *MatrixRunner) Run(
 					RedpandaMetricsEndpoints: m.RedpandaMetricsEndpoints,
 					ScrapeSetup:              sidecar.Setup,
 					ScrapeUpload:             sidecar.Upload,
+					HeartbeatSec:             m.HeartbeatSec,
+					PromScrapeSec:            m.PromScrapeSec,
+					CheckpointSec:            m.CheckpointSec,
 				})
 			case "kafka_connect":
 				// Per-vCPU connector name. KC stores Debezium offsets in
@@ -312,6 +343,7 @@ func (m *MatrixRunner) Run(
 			// as before.
 			logMedian := Summarise(samples).MedianMBPerSec
 			anomalies := DetectAnomaliesWithProm(samples, logMedian, promPts)
+			backlog := ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
 			out = append(out, SweepPoint{
 				VCPU:         n,
 				ArmID:        pt.ArmID,
@@ -323,6 +355,7 @@ func (m *MatrixRunner) Run(
 				Anomalies:    anomalies,
 				Prom:         promPts,
 				BrokerSeries: brokerSeries,
+				Backlog:      backlog,
 			})
 			fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
 				len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
@@ -492,6 +525,19 @@ type benchScriptArgs struct {
 	StreamsDir     string
 	// Key names this point's artifacts. Empty means the bare vCPU count.
 	Key string
+	// HeartbeatSec overrides the heartbeat loop's sleep interval. <= 0 means
+	// 60 (the pre-soak default) — see heartbeatSec.
+	HeartbeatSec int
+	// PromScrapeSec overrides the Prometheus scraper loop's sleep interval.
+	// <= 0 means 10 (the pre-soak default) — see promScrapeSec.
+	PromScrapeSec int
+	// CheckpointSec, when > 0, adds a background subshell that periodically
+	// re-uploads $LOG and $PROM to their final S3 keys (overwriting each
+	// time) while the engine is still running, so a mid-run crash doesn't
+	// lose the whole window's data. <= 0 disables it — no subshell is
+	// rendered at all, keeping the script byte-identical to before this
+	// field existed.
+	CheckpointSec int
 }
 
 // artifactKey names this point's log and metric files: the bare vCPU count for
@@ -511,6 +557,33 @@ func (a benchScriptArgs) gomaxprocs() int {
 		return a.GOMAXPROCS
 	}
 	return a.VCPU
+}
+
+// defaultHeartbeatSec and defaultPromScrapeSec are the pre-soak sweep
+// cadences: bounded output over a ~17min point (SSM's ~24KB stdout cap;
+// ~5MB of Prometheus snapshots). A soak run overrides both — see
+// heartbeatSec/promScrapeSec.
+const (
+	defaultHeartbeatSec  = 60
+	defaultPromScrapeSec = 10
+)
+
+// heartbeatSec is the heartbeat loop's sleep interval, defaulting to the
+// pre-soak sweep cadence.
+func (a benchScriptArgs) heartbeatSec() int {
+	if a.HeartbeatSec > 0 {
+		return a.HeartbeatSec
+	}
+	return defaultHeartbeatSec
+}
+
+// promScrapeSec is the Prometheus scraper loop's sleep interval, defaulting
+// to the pre-soak sweep cadence.
+func (a benchScriptArgs) promScrapeSec() int {
+	if a.PromScrapeSec > 0 {
+		return a.PromScrapeSec
+	}
+	return defaultPromScrapeSec
 }
 
 // launchCmd is the engine invocation: streams mode when the point runs more
@@ -535,6 +608,8 @@ func renderBenchScript(a benchScriptArgs) string {
 	cpusetHi := 1 + a.VCPU // inclusive
 	key := a.artifactKey()
 	totalSec := a.WarmupSec + a.DurationSec
+	logKey := fmt.Sprintf("s3://%s/runs/%s/sweep-%s.log", a.Bucket, a.SessionID, key)
+	promKey := fmt.Sprintf("s3://%s/runs/%s/prom-%s.txt", a.Bucket, a.SessionID, key)
 	lines := []string{
 		`set -euo pipefail`,
 		fmt.Sprintf(`echo "starting bench: %d vCPU, GOMAXPROCS %d, %d streams, %d GiB, warmup %ds, window %ds"`,
@@ -554,12 +629,14 @@ func renderBenchScript(a benchScriptArgs) string {
 		fmt.Sprintf(`taskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s >"$LOG" 2>&1 &`,
 			cpusetHi, a.gomaxprocs(), a.MemLimitGiB, a.launchCmd()),
 		`PID=$!`,
-		// Heartbeat: every 60s, echo the latest rolling-stats line so the
-		// operator can see throughput live. Bounded output (~17 lines per
-		// sweep point) keeps SSM stdout under its content cap.
-		`(
+		// Heartbeat: every heartbeatSec(), echo the latest rolling-stats line
+		// so the operator can see throughput live. At the sweep default
+		// (60s) this bounds output to ~17 lines per point, well under SSM's
+		// stdout content cap; a soak run widens the interval (see
+		// MatrixRunner.HeartbeatSec) so the same cap holds over many hours.
+		fmt.Sprintf(`(
   while kill -0 "$PID" 2>/dev/null; do
-    sleep 60
+    sleep %d
     LATEST="$(grep -F 'rolling stats' "$LOG" 2>/dev/null | tail -n 1 || true)"
     if [ -n "$LATEST" ]; then
       echo "[heartbeat] $LATEST"
@@ -567,21 +644,42 @@ func renderBenchScript(a benchScriptArgs) string {
       echo "[heartbeat] connect running, no samples yet"
     fi
   done
-) &`,
+) &`, a.heartbeatSec()),
 		`HEARTBEAT=$!`,
-		// Prom scraper — every 10s while Connect is alive, append a framed
-		// /metrics snapshot to /tmp/prom-N.txt. ~17min × 6 scrapes/min ≈
-		// 100 frames × ~50KB ≈ 5MB per point. Uploaded post-mortem.
-		`(
+		// Prom scraper — every promScrapeSec() while Connect is alive, append
+		// a framed /metrics snapshot to /tmp/prom-N.txt. At the sweep default
+		// (10s) a ~17min point accumulates ~5MB; a soak run widens the
+		// interval (see MatrixRunner.PromScrapeSec) so a 24h run doesn't
+		// accumulate gigabytes. Uploaded post-mortem (and, when CheckpointSec
+		// is set, periodically mid-run too).
+		fmt.Sprintf(`(
   while kill -0 "$PID" 2>/dev/null; do
     {
-      echo "###timestamp=$(date +%s)"
+      echo "###timestamp=$(date +%%s)"
       curl -s --max-time 5 http://localhost:4195/metrics || echo "###scrape_error"
     } >> "$PROM"
-    sleep 10
+    sleep %d
   done
-) &`,
+) &`, a.promScrapeSec()),
 		`PROM_SCRAPER=$!`,
+	}
+	// Checkpoint: for a long soak run, the end-of-script upload alone means a
+	// crash anywhere before the final `aws s3 cp` loses the ENTIRE window's
+	// data. When CheckpointSec > 0, periodically re-upload $LOG and $PROM to
+	// their FINAL keys (the same ones the end-of-script upload uses),
+	// overwriting each time, so the run's data survives a mid-run crash.
+	// `|| true` on the uploads: a transient S3 error must not kill the run.
+	// Disabled (CheckpointSec <= 0) renders no subshell at all, keeping the
+	// script byte-identical to before this field existed.
+	if a.CheckpointSec > 0 {
+		lines = append(lines, fmt.Sprintf(`(
+  while kill -0 "$PID" 2>/dev/null; do
+    sleep %d
+    aws s3 cp "$LOG" "%s" >/dev/null 2>&1 || true
+    aws s3 cp "$PROM" "%s" >/dev/null 2>&1 || true
+  done
+) &`, a.CheckpointSec, logKey, promKey))
+		lines = append(lines, `CHECKPOINT=$!`)
 	}
 	// The broker-scrape sidecar is computed by Topology.MetricSidecar and
 	// passed in via ScrapeSetup. It defines $RP and ends with RP_SCRAPER=$!,
@@ -597,15 +695,16 @@ func renderBenchScript(a benchScriptArgs) string {
 		`kill "$HEARTBEAT" 2>/dev/null || true`,
 		`kill "$PROM_SCRAPER" 2>/dev/null || true`,
 	)
+	if a.CheckpointSec > 0 {
+		lines = append(lines, `kill "$CHECKPOINT" 2>/dev/null || true`)
+	}
 	if a.ScrapeSetup != "" {
 		lines = append(lines, `kill "$RP_SCRAPER" 2>/dev/null || true`)
 	}
 	lines = append(lines,
 		`echo "bench point complete"`,
-		fmt.Sprintf(`aws s3 cp "$LOG" "s3://%s/runs/%s/sweep-%s.log" >/dev/null`,
-			a.Bucket, a.SessionID, key),
-		fmt.Sprintf(`aws s3 cp "$PROM" "s3://%s/runs/%s/prom-%s.txt" >/dev/null`,
-			a.Bucket, a.SessionID, key),
+		fmt.Sprintf(`aws s3 cp "$LOG" "%s" >/dev/null`, logKey),
+		fmt.Sprintf(`aws s3 cp "$PROM" "%s" >/dev/null`, promKey),
 	)
 	if a.ScrapeUpload != "" {
 		lines = append(lines, a.ScrapeUpload)

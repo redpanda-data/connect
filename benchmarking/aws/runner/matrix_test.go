@@ -651,6 +651,68 @@ func TestRenderBenchScript_RedpandaScraperOmittedWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestRenderBenchScript_ZeroCadenceArgsReproduceSweepDefault(t *testing.T) {
+	// HeartbeatSec/PromScrapeSec/CheckpointSec are all new fields added for
+	// soak; a zero value on every one of them must render byte-identical to
+	// the script before those fields existed.
+	base := benchScriptArgs{
+		VCPU: 4, MemLimitGiB: 4, WarmupSec: 60, DurationSec: 300,
+		ConfigPath: "/opt/bench/config.yaml", BinaryPath: "/opt/bench/redpanda-connect",
+		Bucket: "my-bucket", SessionID: "sess-1",
+	}
+	withZeroFields := base
+	withZeroFields.HeartbeatSec = 0
+	withZeroFields.PromScrapeSec = 0
+	withZeroFields.CheckpointSec = 0
+	require.Equal(t, renderBenchScript(base), renderBenchScript(withZeroFields))
+	require.Contains(t, renderBenchScript(base), "sleep 60")
+	require.Contains(t, renderBenchScript(base), "sleep 10")
+	require.NotContains(t, renderBenchScript(base), "CHECKPOINT")
+}
+
+func TestRenderBenchScript_SoakCadences(t *testing.T) {
+	// A soak point widens the heartbeat and Prom scrape intervals and adds a
+	// mid-run checkpoint upload — the shape main.go renders when Scenario.Soak
+	// is set (see the soak-derived MatrixRunner fields in runBench).
+	out := renderBenchScript(benchScriptArgs{
+		VCPU: 2, MemLimitGiB: 2, WarmupSec: 300, DurationSec: 5400,
+		Key:        "2",
+		ConfigPath: "/opt/bench/config.yaml", BinaryPath: "/opt/bench/redpanda-connect",
+		Bucket: "soak-bucket", SessionID: "sess-soak",
+		HeartbeatSec: 95, PromScrapeSec: 60, CheckpointSec: 600,
+	})
+	require.Contains(t, out, "sleep 95", "heartbeat cadence widened for the long window")
+	require.Contains(t, out, "sleep 60", "prom scrape cadence widened for the long window")
+	require.Contains(t, out, "sleep 600", "checkpoint cadence rendered")
+	require.Contains(t, out, "CHECKPOINT=$!")
+	require.Contains(t, out, `kill "$CHECKPOINT" 2>/dev/null || true`)
+	// The checkpoint subshell must re-upload to the exact same S3 keys the
+	// end-of-script upload uses, so a mid-run crash's last checkpoint and a
+	// clean run's final upload are indistinguishable to a downstream fetch.
+	require.Contains(t, out, `aws s3 cp "$LOG" "s3://soak-bucket/runs/sess-soak/sweep-2.log" >/dev/null 2>&1 || true`)
+	require.Contains(t, out, `aws s3 cp "$PROM" "s3://soak-bucket/runs/sess-soak/prom-2.txt" >/dev/null 2>&1 || true`)
+	require.Contains(t, out, `aws s3 cp "$LOG" "s3://soak-bucket/runs/sess-soak/sweep-2.log" >/dev/null`)
+	require.Contains(t, out, `aws s3 cp "$PROM" "s3://soak-bucket/runs/sess-soak/prom-2.txt" >/dev/null`)
+
+	// Kill order: HEARTBEAT and PROM_SCRAPER first, then CHECKPOINT, all
+	// before the final upload — a killed checkpoint subshell mid-upload
+	// would otherwise race the final upload.
+	heartbeatKillIdx := strings.Index(out, `kill "$HEARTBEAT"`)
+	checkpointKillIdx := strings.Index(out, `kill "$CHECKPOINT"`)
+	uploadIdx := strings.Index(out, `echo "bench point complete"`)
+	require.True(t, heartbeatKillIdx > 0 && checkpointKillIdx > heartbeatKillIdx && uploadIdx > checkpointKillIdx,
+		"expected HEARTBEAT kill, then CHECKPOINT kill, then final upload; got:\n%s", out)
+}
+
+func TestRenderBenchScript_CheckpointOmittedWhenZero(t *testing.T) {
+	out := renderBenchScript(benchScriptArgs{
+		VCPU: 1, MemLimitGiB: 1, WarmupSec: 60, DurationSec: 900,
+		ConfigPath: "/opt/bench/config.yaml", BinaryPath: "/opt/bench/redpanda-connect",
+		Bucket: "b", SessionID: "s", CheckpointSec: 0,
+	})
+	require.NotContains(t, out, "CHECKPOINT")
+}
+
 func TestMatrixRun_EngineInnerLoop_BothEngines(t *testing.T) {
 	const sessionID = "sess"
 	// Seed connect logs for both vCPUs. KC engine doesn't fetch.
