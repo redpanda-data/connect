@@ -220,6 +220,7 @@ func (t sinkTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
 	if args.Names.Topics > 1 {
 		tables = args.Names.IcebergTablesForTopics(args.Engine)
 	}
+	checkpointSetup, checkpointUploadPrefix := renderSidecarCheckpoint(args.CheckpointSec, args.Bucket, args.SessionID, artifact)
 	setup := fmt.Sprintf(`RP=/tmp/%s
 : > "$RP"
 (
@@ -254,12 +255,12 @@ func (t sinkTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
       echo "total_files_size_bytes ${SIZE:-0}"
       echo "total_records ${RECS:-0}"
     } >> "$RP"
-    sleep 10
+    sleep %d
   done
 ) &
-RP_SCRAPER=$!`, artifact, strings.Join(tables, " "), region, db)
-	upload := fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/%s" >/dev/null`,
-		args.Bucket, args.SessionID, artifact)
+RP_SCRAPER=$!%s`, artifact, strings.Join(tables, " "), region, db, args.scrapeIntervalSec(), checkpointSetup)
+	upload := fmt.Sprintf(`%saws s3 cp "$RP" "s3://%s/runs/%s/%s" >/dev/null`,
+		checkpointUploadPrefix, args.Bucket, args.SessionID, artifact)
 	return MetricSidecar{Setup: setup, Upload: upload}
 }
 

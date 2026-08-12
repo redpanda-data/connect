@@ -41,6 +41,12 @@ tasks:
           --scenario=benchmarking/aws/scenarios/{{.scenario}}.yaml \
           --repo-root=.
 
+  aws:persistent:
+    desc: "Apply the persistent stack (soak dashboards; later alarms). Outside the per-run lifecycle — apply once and on change, never torn down by aws:down."
+    cmds:
+      - terraform -chdir=terraform/persistent init -input=false -backend-config=../backend.hcl -backend-config=key=persistent
+      - terraform -chdir=terraform/persistent apply -input=false -auto-approve
+
   aws:cost-check:
     desc: "Show AWS Cost Explorer spend for the bench project (today/7d/MTD)"
     cmds:

@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -384,6 +385,22 @@ func runBench(opts benchOpts) (errOut error) {
 		CheckpointSec:            checkpointSec,
 		ExpectedRecordsPerSec:    expectedRecordsPerSec,
 	}
+	// A soak run publishes per-minute CloudWatch metrics as it goes, so an
+	// operator (or an alarm) can watch a run that may still have 23 hours
+	// left, instead of only finding out something went wrong when the
+	// result JSON lands at the end. Deliberately orchestrator-side (see
+	// MatrixRunner.Emitter): the runner EC2 instance role is never given
+	// cloudwatch:PutMetricData, so a future PR-mode binary running under
+	// that role cannot spoof the metrics that judge it.
+	if s.Soak {
+		emitter, err := NewCloudWatchEmitter(ctx, opts.region, CloudWatchNamespace, s.Connector, s.Name)
+		if err != nil {
+			return fmt.Errorf("build CloudWatch emitter: %w", err)
+		}
+		mr.Emitter = emitter
+		fmt.Printf("soak profile: publishing metrics to CloudWatch namespace %q, dimensions Connector=%q Scenario=%q\n",
+			CloudWatchNamespace, s.Connector, s.Name)
+	}
 	// Reset must cover the union of every arm's tables (planMaxStreams), not
 	// just this scenario's own Streams, so one precomputed reset script serves
 	// every point in the plan regardless of its stream count.
@@ -459,7 +476,95 @@ func runBench(opts benchOpts) (errOut error) {
 		// because the project-level summary couldn't be rewritten.
 		fmt.Fprintf(os.Stderr, "warning: refresh SUMMARY.md: %v\n", err)
 	}
+	// A soak run's result also lands in S3: the full JSON at a session-scoped
+	// key (so it's fetchable without a checkout of this repo), plus a small
+	// index line under soak-index/<scenario>/ that a future rolling-baseline
+	// comparator can list without downloading every run's full JSON. Non-fatal
+	// — a bench run that produced a valid local result must not fail because
+	// of an S3 hiccup on the upload.
+	if s.Soak {
+		if err := uploadSoakResult(ctx, opts.region, sharedOuts["results_bucket"], sessionID, s, result, jsonPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: upload soak result to S3: %v\n", err)
+		}
+	}
 	fmt.Printf("\n✓ done — JSON: %s\n           md: %s\n           summary: %s\n", jsonPath, mdPath, summaryPath)
+	return nil
+}
+
+// soakIndexEntry is the small per-run record a rolling-baseline comparator
+// (a later increment) can list under soak-index/<scenario>/ without having
+// to download every run's full result JSON first.
+type soakIndexEntry struct {
+	Scenario      string    `json:"scenario"`
+	Connector     string    `json:"connector"`
+	SessionID     string    `json:"session_id"`
+	StartedAt     time.Time `json:"started_at"`
+	MedianMBps    float64   `json:"median_mbps"`
+	P5MBps        float64   `json:"p5"`
+	P95MBps       float64   `json:"p95"`
+	RSSMaxBytes   uint64    `json:"rss_max_bytes"`
+	BacklogMaxSec float64   `json:"backlog_max_sec"`
+}
+
+// uploadSoakResult uploads a soak run's full result JSON to
+// s3://<bucket>/runs/<sessionID>/result.json and appends a soakIndexEntry to
+// s3://<bucket>/soak-index/<scenario>/<sessionID>.json. A soak scenario is
+// validated (see Scenario.Validate) to have exactly one cpu_points entry, so
+// result.Points has exactly one element in the success path — but this
+// degrades to zero values rather than panicking if that ever changes.
+func uploadSoakResult(ctx context.Context, region, bucket, sessionID string, s *Scenario, result *Result, jsonPath string) error {
+	if bucket == "" {
+		return fmt.Errorf("no results bucket in terraform outputs")
+	}
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
+	if err != nil {
+		return err
+	}
+	client := s3.NewFromConfig(cfg)
+
+	raw, err := os.ReadFile(jsonPath)
+	if err != nil {
+		return fmt.Errorf("read local result JSON %s: %w", jsonPath, err)
+	}
+	resultKey := fmt.Sprintf("runs/%s/result.json", sessionID)
+	if _, err := client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: &bucket, Key: &resultKey, Body: bytes.NewReader(raw),
+	}); err != nil {
+		return fmt.Errorf("upload result.json to %s: %w", resultKey, err)
+	}
+
+	entry := soakIndexEntry{
+		Scenario:  s.Name,
+		Connector: s.Connector,
+		SessionID: sessionID,
+		StartedAt: result.StartedAt,
+	}
+	if len(result.Points) > 0 {
+		p := result.Points[0]
+		entry.MedianMBps = p.Summary.MedianMBPerSec
+		entry.P5MBps = p.Summary.P5MBPerSec
+		entry.P95MBps = p.Summary.P95MBPerSec
+		for _, pp := range p.Prom {
+			if pp.RSSBytes > entry.RSSMaxBytes {
+				entry.RSSMaxBytes = pp.RSSBytes
+			}
+		}
+		for _, b := range p.Backlog {
+			if b.BacklogSec > entry.BacklogMaxSec {
+				entry.BacklogMaxSec = b.BacklogSec
+			}
+		}
+	}
+	indexRaw, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("marshal soak index entry: %w", err)
+	}
+	indexKey := fmt.Sprintf("soak-index/%s/%s.json", s.Name, sessionID)
+	if _, err := client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: &bucket, Key: &indexKey, Body: bytes.NewReader(indexRaw),
+	}); err != nil {
+		return fmt.Errorf("upload soak index entry to %s: %w", indexKey, err)
+	}
 	return nil
 }
 

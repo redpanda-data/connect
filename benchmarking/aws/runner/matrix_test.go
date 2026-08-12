@@ -9,12 +9,32 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+// makeBrokerFrames produces a synthetic redpanda-<key>-connect.txt dump: a
+// series of /public_metrics frames for one topic, starting at startUnix and
+// stepping by intervalSec, with deltaBytes/deltaRecords accruing every
+// frame. Constant per-interval deltas keep every derived TopicPoint's
+// MBPerSec/MsgPerSec identical, which is what lets soak-emit tests assert
+// exact per-minute means regardless of how many points land in a minute.
+func makeBrokerFrames(topic string, startUnix, frames, intervalSec int, deltaBytes, deltaRecords int64) string {
+	var sb strings.Builder
+	var cumBytes, cumRecords int64
+	for i := 0; i < frames; i++ {
+		fmt.Fprintf(&sb, "###timestamp=%d\n", startUnix+i*intervalSec)
+		fmt.Fprintf(&sb, `redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",redpanda_topic="%s"} %d`+"\n", topic, cumBytes)
+		fmt.Fprintf(&sb, `redpanda_kafka_records_produced_total{redpanda_namespace="kafka",redpanda_topic="%s"} %d`+"\n", topic, cumRecords)
+		cumBytes += deltaBytes
+		cumRecords += deltaRecords
+	}
+	return sb.String()
+}
 
 // makeLog produces a synthetic Connect log with `count` rolling-stats lines at
 // the given throughput, plus a couple of startup info lines for realism.
@@ -1044,4 +1064,254 @@ func TestMatrixRun_EngineInnerLoop_ConnectOnly(t *testing.T) {
 	for _, p := range points {
 		require.Equal(t, "connect", p.Engine)
 	}
+}
+
+// TestMatrixRunner_SoakEndToEnd_EmitsContractMetricsFromFakeInfra walks a
+// full soak point through FakeSSM + FakeLogFetcher + FakeEmitter — the same
+// wiring a real `runner bench` soak invocation uses, minus AWS — and asserts
+// the emitted CloudWatch data matches the metric contract exactly: the
+// fixed set of names, the mean/last aggregation semantics per metric, and
+// the warmup-offset alignment between the log-derived and broker/prom-
+// derived series (see offsetSampleT / aggregateSoakMinutes).
+//
+// CheckpointSec is left at 0, so only the deterministic FINAL post-point
+// emit runs here — the mid-run loop's own timer-driven behavior is exercised
+// separately (and without any real-time waiting) by
+// TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints.
+func TestMatrixRunner_SoakEndToEnd_EmitsContractMetricsFromFakeInfra(t *testing.T) {
+	const sessionID = "soak-sess"
+	const bucket = "soak-bucket"
+	const connector = "pg_cdc"
+	topic := fmt.Sprintf("bench_%s_%s_connect", sessionID, connector)
+
+	// 60s warmup + 120s window: makeLog(180, 42) gives parseAndTrim exactly
+	// 120 kept samples (T 0..119), all at a constant 42 MB/s.
+	logContent := makeLog(180, 42)
+	// 15 frames at a 10s cadence starting at unix 1000 -> 14 TopicPoints at
+	// T=10,20,...,140. Constant deltas -> constant 0.2 MB/s / 2000 msg/s.
+	brokerContent := makeBrokerFrames(topic, 1000, 15, 10, 2_000_000, 20_000)
+	promContent := `###timestamp=2000
+go_goroutines 5
+go_memstats_heap_inuse_bytes 1.0e+07
+process_resident_memory_bytes 100
+###timestamp=2050
+go_goroutines 6
+go_memstats_heap_inuse_bytes 2.0e+07
+process_resident_memory_bytes 200
+###timestamp=2065
+go_goroutines 7
+go_memstats_heap_inuse_bytes 3.0e+07
+process_resident_memory_bytes 300
+###timestamp=2090
+go_goroutines 8
+go_memstats_heap_inuse_bytes 4.0e+07
+process_resident_memory_bytes 400
+###timestamp=2125
+go_goroutines 9
+go_memstats_heap_inuse_bytes 5.0e+07
+process_resident_memory_bytes 500
+`
+
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID):            logContent,
+			fmt.Sprintf("runs/%s/prom-1.txt", sessionID):             promContent,
+			fmt.Sprintf("runs/%s/redpanda-1-connect.txt", sessionID): brokerContent,
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": {"bench point complete"}}}
+	emitter := &FakeEmitter{}
+
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:            ssm,
+		LogFetcher:     fetcher,
+		RunnerInstance: "i-runner",
+		Bucket:         bucket,
+		SessionID:      sessionID,
+		Topology:       sourceTopology{},
+		Names:          newBenchNames(sessionID, connector),
+		Emitter:        emitter,
+		// 5000 > the fixture's constant 2000 msg/s delivered, so backlog
+		// accrues instead of staying pinned at 0.
+		ExpectedRecordsPerSec: 5000,
+	}
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
+	require.NoError(t, err)
+	require.Len(t, points, 1)
+
+	require.Equal(t, 1, emitter.CallCount(), "CheckpointSec==0 disables the mid-run loop; only the final post-point emit runs")
+	data := emitter.All()
+
+	byMinute := map[time.Time]map[string]float64{}
+	var runActiveCount int
+	for _, d := range data {
+		if d.Name == metricRunActive {
+			runActiveCount++
+			require.Equal(t, unitCount, d.Unit)
+			require.Equal(t, float64(1), d.Value)
+			continue
+		}
+		if byMinute[d.At] == nil {
+			byMinute[d.At] = map[string]float64{}
+		}
+		_, dup := byMinute[d.At][d.Name]
+		require.False(t, dup, "the same (minute, metric) pair must never be emitted twice: %s @ %s", d.Name, d.At)
+		byMinute[d.At][d.Name] = d.Value
+	}
+	require.Equal(t, 1, runActiveCount, "exactly one RunActive datum per emit cycle")
+	require.Len(t, byMinute, 2, "minutes 0 and 1 are complete; minute 2 is the current incomplete minute and must never appear")
+
+	var minutes []time.Time
+	for m := range byMinute {
+		minutes = append(minutes, m)
+	}
+	sort.Slice(minutes, func(i, j int) bool { return minutes[i].Before(minutes[j]) })
+	require.Equal(t, minutes[0].Add(time.Minute), minutes[1])
+	minute0, minute1 := byMinute[minutes[0]], byMinute[minutes[1]]
+
+	// Minute 0 falls entirely inside warmup: the broker/prom series (never
+	// warmup-trimmed — see aggregateSoakMinutes' doc comment) DO cover it,
+	// but Connect's own rolling-stats log (warmup-trimmed by parseAndTrim,
+	// then shifted back by offsetSampleT) has no data there at all.
+	require.InDelta(t, 0.2, minute0[metricThroughputMBps], 1e-9)
+	require.InDelta(t, 2000, minute0[metricRecordsPerSec], 1e-9)
+	require.NotContains(t, minute0, metricLogThroughputMBps)
+	require.Equal(t, float64(200), minute0[metricRSSBytes])
+	require.Equal(t, float64(20_000_000), minute0[metricHeapInUseBytes])
+	require.Equal(t, float64(6), minute0[metricGoroutines])
+	require.InDelta(t, 30, minute0[metricBacklogSeconds], 1e-9)
+
+	// Minute 1 is past warmup: every contract metric, including the
+	// log-derived one, is present — and this is the alignment the warmup-
+	// offset handling exists for: LogThroughputMBps lands in the SAME
+	// minute the broker series reports for the same wall-clock window, not
+	// one minute early.
+	require.InDelta(t, 0.2, minute1[metricThroughputMBps], 1e-9)
+	require.InDelta(t, 2000, minute1[metricRecordsPerSec], 1e-9)
+	require.InDelta(t, 42, minute1[metricLogThroughputMBps], 1e-9)
+	require.Equal(t, float64(400), minute1[metricRSSBytes])
+	require.Equal(t, float64(40_000_000), minute1[metricHeapInUseBytes])
+	require.Equal(t, float64(8), minute1[metricGoroutines])
+	require.InDelta(t, 66, minute1[metricBacklogSeconds], 1e-9)
+}
+
+// TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints
+// exercises the mid-run loop's own per-cycle unit, emitSoakCycle, directly —
+// avoiding any dependency on real wall-clock timer behavior (FakeSSM.Run
+// returns synchronously, so driving this through the actual ticker inside
+// runSoakEmitLoop would be racy to assert on in a test). It simulates three
+// checkpoint fetches: the bench script's checkpoint upload overwrites the
+// SAME S3 keys with ever-growing content, and the high-water mark is what
+// keeps a re-fetch of unchanged content from re-emitting already-sent
+// minutes.
+func TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints(t *testing.T) {
+	const sessionID = "soak-sess-2"
+	const connector = "pg_cdc"
+	const key = "1"
+	topic := fmt.Sprintf("bench_%s_%s_connect", sessionID, connector)
+
+	fetcher := &FakeLogFetcher{Contents: map[string]string{}}
+	setCheckpoint := func(logLines, frames int) {
+		fetcher.Contents[fmt.Sprintf("runs/%s/sweep-%s.log", sessionID, key)] = makeLog(logLines, 42)
+		fetcher.Contents[fmt.Sprintf("runs/%s/redpanda-%s-connect.txt", sessionID, key)] = makeBrokerFrames(topic, 1000, frames, 10, 2_000_000, 20_000)
+	}
+
+	// First checkpoint: same shape as the end-to-end test above — minutes 0
+	// and 1 are complete, minute 2 is still open.
+	setCheckpoint(180, 15)
+
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	emitter := &FakeEmitter{}
+	mr := &MatrixRunner{
+		LogFetcher: fetcher, Bucket: "b", SessionID: sessionID,
+		Topology: sourceTopology{}, Names: newBenchNames(sessionID, connector),
+		Emitter: emitter,
+	}
+	hw := newSoakHighWater()
+	pointStart := time.Now()
+	warmup := 60 * time.Second
+
+	mr.emitSoakCycle(context.Background(), "connect", key, pointStart, warmup, hw)
+	require.Equal(t, 1, hw.get())
+	require.NotEmpty(t, emitter.All())
+
+	// Second cycle against the IDENTICAL checkpoint content (as if the
+	// bench script hasn't re-uploaded since the last cycle) must add
+	// NOTHING new — the high-water mark is what prevents a duplicate
+	// minute 0/1 emission.
+	mr.emitSoakCycle(context.Background(), "connect", key, pointStart, warmup, hw)
+	require.Equal(t, 1, hw.get(), "the high-water mark must not move when there is nothing new to emit")
+	secondCallData := emitter.LastCall()
+	for _, d := range secondCallData {
+		require.Equal(t, metricRunActive, d.Name,
+			"only the per-cycle RunActive heartbeat may repeat; every per-minute metric must be new")
+	}
+
+	// Third checkpoint: the run has progressed — minute 2 now has enough
+	// data to be complete, and minute 3 is the new open minute.
+	setCheckpoint(240, 21)
+	mr.emitSoakCycle(context.Background(), "connect", key, pointStart, warmup, hw)
+	require.Equal(t, 2, hw.get(), "the high-water mark must advance to the newly-completed minute 2")
+	thirdCallData := emitter.LastCall()
+	var sawMinute2Throughput bool
+	for _, d := range thirdCallData {
+		if d.Name == metricThroughputMBps {
+			sawMinute2Throughput = true
+		}
+	}
+	require.True(t, sawMinute2Throughput, "the newly-completed minute must actually be emitted, not just silently advance the mark")
+}
+
+// TestMatrixRunner_StartSoakEmitLoop_TicksAndStopsCleanly exercises the
+// actual goroutine wiring startSoakEmitLoop returns — the one piece of this
+// feature the other soak tests deliberately avoid driving through a real
+// ticker (see the comment on TestMatrixRunner_SoakEndToEnd_...). soakEmitGrace
+// is zeroed so the first tick doesn't require a real 30s wait.
+func TestMatrixRunner_StartSoakEmitLoop_TicksAndStopsCleanly(t *testing.T) {
+	prevGrace := soakEmitGrace
+	soakEmitGrace = 0
+	defer func() { soakEmitGrace = prevGrace }()
+
+	const sessionID = "soak-loop"
+	const connector = "pg_cdc"
+	const key = "1"
+	topic := fmt.Sprintf("bench_%s_%s_connect", sessionID, connector)
+
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-%s.log", sessionID, key):            makeLog(180, 42),
+			fmt.Sprintf("runs/%s/redpanda-%s-connect.txt", sessionID, key): makeBrokerFrames(topic, 1000, 15, 10, 2_000_000, 20_000),
+		},
+	}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	emitter := &FakeEmitter{}
+	mr := &MatrixRunner{
+		LogFetcher: fetcher, Bucket: "b", SessionID: sessionID,
+		Topology: sourceTopology{}, Names: newBenchNames(sessionID, connector),
+		Emitter: emitter, CheckpointSec: 1, // 1s interval + 0 grace -> ticks almost immediately
+	}
+	hw := newSoakHighWater()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stop := mr.startSoakEmitLoop(ctx, "connect", key, time.Now(), 60*time.Second, hw)
+
+	require.Eventually(t, func() bool {
+		return emitter.CallCount() > 0
+	}, 5*time.Second, 20*time.Millisecond, "the loop must tick and emit at least once")
+
+	stop()
+	callsAtStop := emitter.CallCount()
+	time.Sleep(50 * time.Millisecond)
+	require.Equal(t, callsAtStop, emitter.CallCount(),
+		"stop() must block until the goroutine has actually exited — no more emits after it returns")
 }

@@ -228,6 +228,55 @@ type MetricSidecarArgs struct {
 	SessionID string
 	Outs      map[string]string
 	Names     BenchNames
+	// ScrapeIntervalSec overrides the sidecar poller's sleep interval.
+	// <= 0 means 10 (the pre-soak sweep default) — see scrapeIntervalSec.
+	ScrapeIntervalSec int
+	// CheckpointSec, when > 0, adds a background subshell to the sidecar
+	// that periodically re-uploads its scrape artifact ($RP) to its FINAL
+	// S3 key (the same one Upload uses), overwriting each time, so a
+	// mid-run crash doesn't lose the whole window's broker/Iceberg metrics.
+	// <= 0 disables it — no subshell is rendered at all, keeping the
+	// sidecar byte-identical to before this field existed.
+	CheckpointSec int
+}
+
+// defaultScrapeIntervalSec is the sidecar poller's pre-soak sweep cadence:
+// bounded output over a ~17min point. A soak run widens this — see
+// scrapeIntervalSec.
+const defaultScrapeIntervalSec = 10
+
+// scrapeIntervalSec is the sidecar poller's sleep interval, defaulting to
+// the pre-soak sweep cadence.
+func (a MetricSidecarArgs) scrapeIntervalSec() int {
+	if a.ScrapeIntervalSec > 0 {
+		return a.ScrapeIntervalSec
+	}
+	return defaultScrapeIntervalSec
+}
+
+// renderSidecarCheckpoint renders the sidecar's mid-run checkpoint subshell
+// (started right after RP_SCRAPER in Setup, under its own RP_CHECKPOINT
+// PID) and the corresponding kill line prefixed onto Upload, or ("", "")
+// when disabled. finalKey is the same S3 destination Upload already
+// copies $RP to at end-of-run, so a mid-run crash still leaves the run's
+// data at its final, expected location — matching the pattern
+// renderBenchScript's own $LOG/$PROM checkpoint uses. `|| true` on the
+// upload: a transient S3 error must not kill the run.
+func renderSidecarCheckpoint(checkpointSec int, bucket, sessionID, artifact string) (setupSuffix, uploadPrefix string) {
+	if checkpointSec <= 0 {
+		return "", ""
+	}
+	finalKey := fmt.Sprintf("s3://%s/runs/%s/%s", bucket, sessionID, artifact)
+	setupSuffix = fmt.Sprintf(`
+(
+  while kill -0 "$PID" 2>/dev/null; do
+    sleep %d
+    aws s3 cp "$RP" "%s" >/dev/null 2>&1 || true
+  done
+) &
+RP_CHECKPOINT=$!`, checkpointSec, finalKey)
+	uploadPrefix = "kill \"$RP_CHECKPOINT\" 2>/dev/null || true\n"
+	return setupSuffix, uploadPrefix
 }
 
 // ArtifactKey is Key, or the bare vCPU count when Key was not set.

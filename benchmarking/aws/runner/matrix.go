@@ -13,12 +13,21 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 // stdout is the package-level writer used by streaming helpers.  main.go may
 // override this for tests or structured logging; os.Stdout is the default.
 var stdout io.Writer = os.Stdout
+
+// soakEmitGrace is the pause after a checkpoint interval elapses before the
+// mid-run CloudWatch emit loop takes its first fetch, giving the bench
+// script's own checkpoint upload (which fires on the same CheckpointSec
+// cadence — see renderBenchScript) time to actually land in S3 before the
+// orchestrator goes looking for it. A package var, not a const, so tests can
+// zero it out instead of tolerating a real 30s wait.
+var soakEmitGrace = 30 * time.Second
 
 // MatrixRunner orchestrates the CPU sweep against the runner EC2.
 type MatrixRunner struct {
@@ -99,6 +108,13 @@ type MatrixRunner struct {
 	// point's broker-side series, tracking whether the engine is keeping
 	// pace with the source over the run. 0 disables backlog computation.
 	ExpectedRecordsPerSec float64
+	// Emitter, when non-nil, makes Run publish per-minute CloudWatch metrics
+	// for a soak point: a mid-run goroutine re-fetches the checkpointed log
+	// and Prometheus/broker artifacts every CheckpointSec (see
+	// startSoakEmitLoop) and, after the point completes, a final aggregate
+	// emit covers whatever tail minutes the loop never got to. nil is the
+	// sweep default — a short sweep point has no need for a live dashboard.
+	Emitter MetricsEmitter
 }
 
 // pointConfigPaths locates one sweep point's launch config(s) on the runner
@@ -217,6 +233,13 @@ func (m *MatrixRunner) Run(
 					// sidecar polls a table that never grows and the arm
 					// reports ~0 MB/s with no error anywhere.
 					Names: m.Names.WithStreams(pt.Streams).WithTopics(m.Topics),
+					// The sidecar's own scrape/checkpoint cadence reuses the SAME
+					// fields the Connect-side scraper and log checkpoint already
+					// use (see benchScriptArgs above) — a soak run wants both
+					// pollers on the same cadence, and giving the sidecar its own
+					// separate knobs would just be two places to keep in sync.
+					ScrapeIntervalSec: m.PromScrapeSec,
+					CheckpointSec:     m.CheckpointSec,
 				})
 			}
 
@@ -278,18 +301,33 @@ func (m *MatrixRunner) Run(
 				return nil, fmt.Errorf("unknown engine %q at vcpu %d", engine, n)
 			}
 
+			// pointStart is this point's wall-clock launch — the base every
+			// CloudWatch minute bucket for this point is offset from (see
+			// aggregateSoakMinutes). hwm is this point's high-water mark: the
+			// last minute already emitted, shared between the mid-run loop
+			// below and the final emit after the point completes so neither
+			// re-emits a minute the other already sent.
+			pointStart := time.Now()
+			hwm := newSoakHighWater()
+			stopEmit := m.startSoakEmitLoop(ctx, engine, key, pointStart, warmup, hwm)
+
 			// The bench script writes the engine's stdout/stderr to a per-engine
 			// log file on the runner host and uploads it to S3 after termination.
 			// SSM stdout only carries the script's own status echos and a
 			// per-minute heartbeat (well under the ~24KB SSM content cap), so
 			// streaming every line is safe.
 			if err := m.SSM.Run(ctx, m.RunnerInstance, script, streamingOnLine(stdout, fmt.Sprintf("bench-%s", engine))); err != nil {
+				stopEmit()
 				cancelWorkload()
 				if werr := <-workloadDone; werr != nil && werr != context.Canceled {
 					fmt.Fprintf(stdout, "[bench] workload exited with error: %v\n", werr)
 				}
 				return nil, fmt.Errorf("bench at %d vCPU (%s): %w", n, engine, err)
 			}
+			// Stop the mid-run loop now, before fetching this point's final
+			// artifacts below — the loop and the final emit both read/write
+			// hwm, and neither is safe to run concurrently with the other.
+			stopEmit()
 			cancelWorkload()
 			if werr := <-workloadDone; werr != nil && werr != context.Canceled {
 				fmt.Fprintf(stdout, "[bench] workload exited with error: %v\n", werr)
@@ -344,6 +382,15 @@ func (m *MatrixRunner) Run(
 			logMedian := Summarise(samples).MedianMBPerSec
 			anomalies := DetectAnomaliesWithProm(samples, logMedian, promPts)
 			backlog := ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
+
+			// Final emit: whatever tail minutes the mid-run loop above never
+			// got to (it may never have ticked at all, e.g. a point shorter
+			// than CheckpointSec+soakEmitGrace) land here, from the same
+			// hwm — so a point never emits a minute twice regardless of how
+			// many mid-run cycles ran before this.
+			if m.Emitter != nil {
+				m.emitAggregated(ctx, samples, promPts, brokerSeries, backlog, pointStart, warmup, hwm)
+			}
 			out = append(out, SweepPoint{
 				VCPU:         n,
 				ArmID:        pt.ArmID,
@@ -488,6 +535,142 @@ func parseAndTrim(raw []byte, warmup time.Duration) []Sample {
 		kept[i] = s
 	}
 	return kept
+}
+
+// offsetSampleT returns a copy of samples with T shifted by offsetSec. It
+// exists to undo parseAndTrim's own reindexing: a Sample's T=0 there means
+// "end of warmup", i.e. wall-clock base+warmup, while every other soak
+// series (PromPoint, TopicPoint, BacklogPoint) has T=0 mean wall-clock base
+// (the point's own launch). aggregateSoakMinutes assumes all four series
+// share one base, so this must run before samples are handed to it —
+// skipping it would skew every rate/gauge pairing by exactly the warmup
+// duration.
+func offsetSampleT(samples []Sample, offsetSec int) []Sample {
+	if offsetSec == 0 || len(samples) == 0 {
+		return samples
+	}
+	out := make([]Sample, len(samples))
+	for i, s := range samples {
+		s.T += offsetSec
+		out[i] = s
+	}
+	return out
+}
+
+// soakHighWater tracks the last CloudWatch minute already emitted for one
+// sweep point. It is shared between the mid-run emit loop
+// (runSoakEmitLoop) and the point's own final emit (see Run) so neither
+// re-emits a minute the other already sent — the two never run
+// concurrently by construction (startSoakEmitLoop's stop func blocks until
+// the loop has exited before Run touches hwm again), but the type still
+// encapsulates its own mutex rather than relying on that invariant holding
+// forever.
+type soakHighWater struct {
+	mu sync.Mutex
+	v  int
+}
+
+// newSoakHighWater starts at -1: "nothing emitted yet", so minute 0 becomes
+// eligible as soon as the data shows it complete.
+func newSoakHighWater() *soakHighWater {
+	return &soakHighWater{v: -1}
+}
+
+func (h *soakHighWater) get() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.v
+}
+
+func (h *soakHighWater) set(v int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.v = v
+}
+
+// startSoakEmitLoop launches the mid-run CloudWatch emit goroutine when the
+// runner has both an Emitter and a checkpoint cadence configured (the soak
+// profile — see main.go's runBench) and returns a stop func that cancels it
+// and blocks until it has exited. Callers must call stop exactly once, on
+// every exit path, before touching hw again.
+//
+// Disabled (no Emitter, or CheckpointSec <= 0) returns a no-op stop func so
+// callers never need to branch on whether the loop is actually running.
+func (m *MatrixRunner) startSoakEmitLoop(ctx context.Context, engine, key string, pointStart time.Time, warmup time.Duration, hw *soakHighWater) (stop func()) {
+	if m.Emitter == nil || m.CheckpointSec <= 0 {
+		return func() {}
+	}
+	loopCtx, cancel := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		m.runSoakEmitLoop(loopCtx, engine, key, pointStart, warmup, hw)
+	}()
+	return func() {
+		cancel()
+		wg.Wait()
+	}
+}
+
+// runSoakEmitLoop re-fetches the point's checkpointed artifacts every
+// CheckpointSec (plus soakEmitGrace, so the bench script's own checkpoint
+// upload has time to land first) and pushes newly-complete minutes to
+// CloudWatch, so a dashboard watching a multi-hour run doesn't have to wait
+// for the point to finish. Returns as soon as ctx is cancelled — see
+// startSoakEmitLoop.
+func (m *MatrixRunner) runSoakEmitLoop(ctx context.Context, engine, key string, pointStart time.Time, warmup time.Duration, hw *soakHighWater) {
+	interval := time.Duration(m.CheckpointSec) * time.Second
+	timer := time.NewTimer(interval + soakEmitGrace)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			m.emitSoakCycle(ctx, engine, key, pointStart, warmup, hw)
+			timer.Reset(interval)
+		}
+	}
+}
+
+// emitSoakCycle fetches one checkpoint's worth of log/prom/broker data and
+// hands it to emitAggregated. Fetch or parse failure is logged and
+// swallowed, never fatal — a checkpoint that hasn't landed yet (or a
+// transient S3 hiccup) must not fail a run that may have hours left to run;
+// the next cycle simply tries again against the checkpoint's ever-growing
+// content.
+func (m *MatrixRunner) emitSoakCycle(ctx context.Context, engine, key string, pointStart time.Time, warmup time.Duration, hw *soakHighWater) {
+	var samples []Sample
+	if engine == "connect" {
+		raw, err := m.fetchLog(ctx, key)
+		if err != nil {
+			fmt.Fprintf(stdout, "[soak] fetch log checkpoint (non-fatal): %v\n", err)
+		} else {
+			samples = parseAndTrim(raw, warmup)
+		}
+	}
+	promPts := m.fetchProm(ctx, key)
+	brokerSeries := m.fetchBrokerSeriesForEngine(ctx, engine, key)
+	backlog := ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
+	m.emitAggregated(ctx, samples, promPts, brokerSeries, backlog, pointStart, warmup, hw)
+}
+
+// emitAggregated normalizes samples' warmup offset (see offsetSampleT),
+// aggregates every newly-complete minute since hw (see
+// aggregateSoakMinutes), appends a RunActive heartbeat datum stamped at
+// call time, and emits the batch. Emit failure is logged and swallowed —
+// never fatal, and hw is left unmoved so the same range is retried on the
+// next cycle instead of being silently dropped.
+func (m *MatrixRunner) emitAggregated(ctx context.Context, samples []Sample, prom []PromPoint, broker []TopicPoint, backlog []BacklogPoint, pointStart time.Time, warmup time.Duration, hw *soakHighWater) {
+	normalized := offsetSampleT(samples, int(warmup.Seconds()))
+	data, newHW := aggregateSoakMinutes(normalized, prom, broker, backlog, pointStart, hw.get())
+	data = append(data, MetricDatum{Name: metricRunActive, Value: 1, Unit: unitCount, At: time.Now()})
+	if err := m.Emitter.Emit(ctx, data); err != nil {
+		fmt.Fprintf(stdout, "[soak] emit metrics (non-fatal): %v\n", err)
+		return
+	}
+	hw.set(newHW)
 }
 
 type benchScriptArgs struct {

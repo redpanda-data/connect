@@ -110,6 +110,7 @@ func (t sourceTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
 		// when no broker endpoints were configured.
 		return MetricSidecar{}
 	}
+	checkpointSetup, checkpointUploadPrefix := renderSidecarCheckpoint(args.CheckpointSec, args.Bucket, args.SessionID, artifact)
 	setup := fmt.Sprintf(`RP=/tmp/%s
 : > "$RP"
 ENDPOINTS=%q
@@ -122,11 +123,11 @@ ENDPOINTS=%q
         curl -s --max-time 5 "http://$EP/public_metrics" || echo "###scrape_error_$EP"
       done
     } >> "$RP"
-    sleep 10
+    sleep %d
   done
 ) &
-RP_SCRAPER=$!`, artifact, endpoints)
-	upload := fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/%s" >/dev/null`,
-		args.Bucket, args.SessionID, artifact)
+RP_SCRAPER=$!%s`, artifact, endpoints, args.scrapeIntervalSec(), checkpointSetup)
+	upload := fmt.Sprintf(`%saws s3 cp "$RP" "s3://%s/runs/%s/%s" >/dev/null`,
+		checkpointUploadPrefix, args.Bucket, args.SessionID, artifact)
 	return MetricSidecar{Setup: setup, Upload: upload}
 }
