@@ -2203,7 +2203,7 @@ postgres_cdc:
 	// (rather than once upfront) so a row lands after startup completes.
 	writer := asyncroutine.NewPeriodic(100*time.Millisecond, func() {
 		_, err := db.Exec("INSERT INTO flights (name, created_at) VALUES ('alice', now());")
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	})
 	writer.Start()
 	t.Cleanup(writer.Stop)
