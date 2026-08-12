@@ -18,8 +18,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
@@ -539,13 +537,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 // validateSchemaPattern validates a schema name or glob pattern.
 //
 // Unquoted patterns are matched via ILIKE against stored schema names (see
-// resolveSchemas) rather than parsed as an identifier we construct
-// ourselves, so the accepted character set here is deliberately as wide as
-// what's legal inside a quoted schema name, plus '*' as a wildcard - it is
-// not narrowed to unquoted-identifier syntax. This matters because a schema
-// that had to be created with a quoted identifier (e.g. a UUID-suffixed
-// tenant schema, since hyphens are invalid in unquoted identifiers) must
-// still be matchable via an unquoted glob such as "tenant-*" or "a0eebc99-*".
+// resolveSchemas), not parsed as an identifier, so any character or leading
+// character is accepted - including hyphens and leading digits - except a
+// literal '"'. This lets a glob like "a0eebc99-*" match a UUID-suffixed
+// schema that itself had to be created quoted.
 // Double-quoted identifiers (e.g. "MySchema") are accepted as exact names;
 // wildcards are not allowed inside quotes.
 func validateSchemaPattern(s string) error {
@@ -563,10 +558,6 @@ func validateSchemaPattern(s string) error {
 	}
 	if strings.ContainsRune(s, '"') {
 		return fmt.Errorf("unquoted schema pattern %q must not contain '\"'", s)
-	}
-	first, _ := utf8.DecodeRuneInString(s)
-	if first != '_' && first != '*' && !unicode.IsLetter(first) {
-		return fmt.Errorf("schema pattern %q must start with a letter, underscore, or '*'", s)
 	}
 	return nil
 }

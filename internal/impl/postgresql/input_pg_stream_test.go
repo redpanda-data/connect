@@ -65,7 +65,12 @@ func TestSchemaPatternValidation(t *testing.T) {
 		// Regression test: len("") == 2 used to pass the old `len(s) < 2` guard.
 		// Fixed to `len(s) < 3`.
 		{`""`, "invalid quoted schema identifier"},
-		{"1abc", "must start with a letter"},
+		// Regression test: a leading digit is not an identifier-syntax
+		// violation here - the pattern is compared via ILIKE, never spliced
+		// into an identifier position - so "1abc" must be as valid as any
+		// other unquoted pattern. See the "9c0b4ef8-*" case below for the
+		// motivating real-world scenario (a UUID-suffixed tenant schema).
+		{"1abc", ""},
 		{`"unclosed`, "invalid quoted schema identifier"},
 		// Regression test: an unquoted pattern is matched against stored
 		// schema names, not parsed as an identifier, so hyphens (invalid in
@@ -73,6 +78,13 @@ func TestSchemaPatternValidation(t *testing.T) {
 		// match a UUID-suffixed tenant schema that had to be created quoted.
 		{"schema-name", ""},
 		{"a0eebc99-*", ""},
+		// Regression test: most UUIDs begin with a hex digit, so a tenant
+		// schema named e.g. "9c0b4ef8-bb6d-6bb9-bd38-0a11a0eebc99" (created
+		// quoted, per the a0eebc99-* case above) must be matchable by an
+		// unquoted glob starting with a digit - the pattern is compared via
+		// ILIKE, never spliced into an identifier position, so there's no
+		// syntactic reason to require a letter/underscore/'*' lead-in.
+		{"9c0b4ef8-*", ""},
 		{`"quoted*"`, "wildcard"},
 		{`a"b`, `must not contain '"'`},
 	}
