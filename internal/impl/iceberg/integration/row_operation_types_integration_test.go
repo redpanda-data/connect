@@ -104,7 +104,7 @@ func TestRowOperationKeyTypesIntegration(t *testing.T) {
 		{"timestamp-time", "k_ts_time", iceberg.TimestampType{}, ts1, ts2},
 		// Note: a bare numeric timestamp key is deliberately rejected at write
 		// time (its unit is ambiguous and cannot be matched against the insert
-		// path) — covered by the deleteKeyJSONValue unit test, not here.
+		// path) — covered by the jsonLeafValue unit test, not here.
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

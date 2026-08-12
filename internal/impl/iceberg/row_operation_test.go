@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/apache/iceberg-go"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -225,75 +226,127 @@ func TestSplitByOperationUpsertRequiresIdentifierFields(t *testing.T) {
 	assert.Contains(t, err.Error(), ioFieldIdentifierFields)
 }
 
-func TestDeleteKeyJSONValue(t *testing.T) {
+func TestJSONLeafValue(t *testing.T) {
+	// The shared leaf canonicaliser (formerly deleteKeyJSONValue) is pinned
+	// against its insert-path parity contract; the calls below use nil schema
+	// metadata and non-strict mode, the schema-agnostic default.
+	leaf := func(typ iceberg.Type, v any) (any, error) {
+		return jsonLeafValue(typ, v, nil, false)
+	}
+
 	// int64 beyond float64 precision must survive as an exact string.
-	v, err := deleteKeyJSONValue(iceberg.PrimitiveTypes.Int64, int64(9007199254740993))
+	v, err := leaf(iceberg.PrimitiveTypes.Int64, int64(9007199254740993))
 	require.NoError(t, err)
 	assert.Equal(t, "9007199254740993", v)
 
 	// decimal is emitted as a string to avoid float rounding.
-	v, err = deleteKeyJSONValue(iceberg.DecimalTypeOf(10, 2), 123.45)
+	v, err = leaf(iceberg.DecimalTypeOf(10, 2), 123.45)
 	require.NoError(t, err)
 	assert.Equal(t, "123.45", v)
 
 	// time.Time into a timestamp column becomes RFC3339.
 	tm := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
-	v, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Timestamp, tm)
+	v, err = leaf(iceberg.PrimitiveTypes.Timestamp, tm)
 	require.NoError(t, err)
 	assert.Equal(t, "2026-06-24T12:00:00Z", v)
 
-	// strings and other primitives pass through unchanged.
-	v, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.String, "abc")
+	// strings pass through unchanged.
+	v, err = leaf(iceberg.PrimitiveTypes.String, "abc")
 	require.NoError(t, err)
 	assert.Equal(t, "abc", v)
 
 	// a non-integer value into an integer column is a hard error.
-	_, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Int64, 1.5)
+	_, err = leaf(iceberg.PrimitiveTypes.Int64, 1.5)
 	require.Error(t, err)
 
+	// a numeric STRING into an integer column is a hard error: the insert path
+	// rejects it, so the mutation paths must not quietly accept it. This pin
+	// intentionally replaces the old passthrough leniency.
+	_, err = leaf(iceberg.PrimitiveTypes.Int64, "42")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported value type string")
+
 	// an integer-valued float64 within float64's exact-integer range is fine.
-	v, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Int64, float64(1_000_000_000_000_000))
+	v, err = leaf(iceberg.PrimitiveTypes.Int64, float64(1_000_000_000_000_000))
 	require.NoError(t, err)
 	assert.Equal(t, "1000000000000000", v)
 
 	// a float64 at/beyond 2^53 cannot be represented exactly as an integer, so
-	// int64(n) would silently corrupt or overflow the delete key — reject it.
-	_, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Int64, float64(uint64(1)<<53))
+	// int64(n) would silently corrupt or overflow the encoded value — reject it.
+	_, err = leaf(iceberg.PrimitiveTypes.Int64, float64(uint64(1)<<53))
 	require.Error(t, err)
-	_, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Int64, 9.3e18) // > 2^63, would overflow int64
+	_, err = leaf(iceberg.PrimitiveTypes.Int64, 9.3e18) // > 2^63, would overflow int64
 	require.Error(t, err)
 
-	// a bare numeric value into a temporal column is a hard error: its unit is
-	// ambiguous and would silently mismatch the data written by the insert path.
-	_, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Timestamp, int64(1700000000000))
-	require.Error(t, err)
+	// a bare numeric value into a temporal column is interpreted exactly as the
+	// insert path interprets it (here: no metadata, so bloblang's unix-seconds
+	// default) instead of being rejected. This pin intentionally replaces the
+	// old blanket rejection: both sides of a key comparison now share one
+	// interpretation, so the encoding still cannot silently mismatch storage.
+	v, err = leaf(iceberg.PrimitiveTypes.Timestamp, int64(1700000000))
+	require.NoError(t, err)
+	assert.Equal(t, "2023-11-14T22:13:20Z", v)
 
 	// timestamptz formats identically to timestamp, normalised to UTC.
-	v, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.TimestampTz, tm)
+	v, err = leaf(iceberg.PrimitiveTypes.TimestampTz, tm)
 	require.NoError(t, err)
 	assert.Equal(t, "2026-06-24T12:00:00Z", v)
 
 	// a date column keeps only the calendar date (UTC), dropping any time-of-day.
-	v, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Date, time.Date(2026, 6, 24, 18, 30, 0, 0, time.UTC))
+	v, err = leaf(iceberg.PrimitiveTypes.Date, time.Date(2026, 6, 24, 18, 30, 0, 0, time.UTC))
 	require.NoError(t, err)
 	assert.Equal(t, "2026-06-24", v)
 
 	// a time column keeps the wall clock in the value's OWN location (matching
 	// the shredder's convertTime, which stores 14:30 EST as 14:30, not 19:30
 	// UTC), truncated — never rounded — to the column's microsecond resolution.
-	v, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Time, time.Date(1970, 1, 1, 15, 4, 5, 123456789, time.UTC))
+	v, err = leaf(iceberg.PrimitiveTypes.Time, time.Date(1970, 1, 1, 15, 4, 5, 123456789, time.UTC))
 	require.NoError(t, err)
 	assert.Equal(t, "15:04:05.123456", v)
 	est := time.FixedZone("EST", -5*3600)
-	v, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Time, time.Date(2024, 6, 1, 14, 30, 0, 0, est))
+	v, err = leaf(iceberg.PrimitiveTypes.Time, time.Date(2024, 6, 1, 14, 30, 0, 0, est))
 	require.NoError(t, err)
 	assert.Equal(t, "14:30:00", v, "wall clock must be taken in the value's own location, not UTC-shifted")
 
-	// bare numbers into date/time columns are rejected for the same ambiguity reason.
-	_, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Date, int64(20000))
+	// bare numbers into date/time columns are likewise interpreted with the
+	// insert path's units (days since epoch, microseconds since midnight)
+	// instead of being rejected — the old rejection pins are intentionally
+	// replaced by the shared interpretation.
+	v, err = leaf(iceberg.PrimitiveTypes.Date, int64(20000))
+	require.NoError(t, err)
+	assert.Equal(t, "2024-10-04", v)
+	v, err = leaf(iceberg.PrimitiveTypes.Time, int64(54_000_000_000))
+	require.NoError(t, err)
+	assert.Equal(t, "15:00:00", v)
+
+	// time.Duration into a TIME column is accepted like the insert path (the
+	// avro time-millis/micros decode shape): microseconds since midnight.
+	v, err = leaf(iceberg.PrimitiveTypes.Time, 4*time.Hour+5*time.Minute+6*time.Second+7*time.Millisecond)
+	require.NoError(t, err)
+	assert.Equal(t, "04:05:06.007", v)
+	// A duration with no wall-clock representation is rejected loudly.
+	_, err = leaf(iceberg.PrimitiveTypes.Time, 25*time.Hour)
 	require.Error(t, err)
-	_, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Time, int64(54_000_000_000))
+
+	// []byte into a string column is the raw text, not json.Marshal's base64.
+	v, err = leaf(iceberg.PrimitiveTypes.String, []byte("raw"))
+	require.NoError(t, err)
+	assert.Equal(t, "raw", v)
+
+	// a boolean column accepts only bool: the insert path rejects strings, and
+	// Arrow's boolean builder would otherwise happily parse "true".
+	v, err = leaf(iceberg.PrimitiveTypes.Bool, true)
+	require.NoError(t, err)
+	assert.Equal(t, true, v)
+	_, err = leaf(iceberg.PrimitiveTypes.Bool, "true")
 	require.Error(t, err)
+
+	// a 16-byte uuid value canonicalises to the same text form the insert path
+	// stores as bytes; canonical text passes through.
+	id := uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479")
+	v, err = leaf(iceberg.PrimitiveTypes.UUID, id[:])
+	require.NoError(t, err)
+	assert.Equal(t, id.String(), v)
 }
 
 func TestDeleteRecordFieldsAcceptsPrimitivesRejectsNested(t *testing.T) {

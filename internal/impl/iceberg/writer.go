@@ -14,13 +14,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"path"
 	"reflect"
 	"slices"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
@@ -502,101 +499,6 @@ func (w *writer) dedupKey(msg *service.Message) (string, error) {
 	return string(b), nil
 }
 
-// deleteKeyJSONValue converts a Go identifier value into a JSON-encodable form
-// that array.RecordFromJSON parses losslessly for the column's iceberg type.
-// Integers and decimals are emitted as strings to avoid the float64 precision
-// loss that JSON number parsing would otherwise incur, and temporal time.Time
-// values are formatted to the canonical string forms the Arrow JSON reader
-// accepts. Other primitives (string, bool, float, binary, uuid) pass through
-// json.Marshal unchanged.
-func deleteKeyJSONValue(t iceberg.Type, v any) (any, error) {
-	switch t.(type) {
-	case iceberg.Int32Type, iceberg.Int64Type:
-		switch n := v.(type) {
-		case json.Number:
-			return n.String(), nil
-		case int:
-			return strconv.FormatInt(int64(n), 10), nil
-		case int32:
-			return strconv.FormatInt(int64(n), 10), nil
-		case int64:
-			return strconv.FormatInt(n, 10), nil
-		case float64:
-			if n != math.Trunc(n) {
-				return nil, fmt.Errorf("integer column given non-integer value %v", n)
-			}
-			// A float64 only represents integers exactly up to 2^53; beyond that
-			// int64(n) loses precision or overflows, silently producing a wrong
-			// delete key. Reject rather than corrupt — pass large integers as an
-			// int64/json.Number/string instead.
-			if math.Abs(n) >= 1<<53 {
-				return nil, fmt.Errorf("integer column given value %v outside the range representable exactly as a float64 (provide it as an integer or string)", n)
-			}
-			return strconv.FormatInt(int64(n), 10), nil
-		case string:
-			return n, nil
-		default:
-			return nil, fmt.Errorf("unsupported value type %T for integer column", v)
-		}
-	case iceberg.DecimalType:
-		// Format to the column's exact scale so the encoded key matches the
-		// stored decimal; the shortest float representation would not.
-		scale := t.(iceberg.DecimalType).Scale()
-		switch n := v.(type) {
-		case json.Number:
-			return n.String(), nil
-		case string:
-			return n, nil
-		case float64:
-			return strconv.FormatFloat(n, 'f', scale, 64), nil
-		case int:
-			return strconv.Itoa(n), nil
-		case int64:
-			return strconv.FormatInt(n, 10), nil
-		default:
-			return nil, fmt.Errorf("unsupported value type %T for decimal column", v)
-		}
-	// Temporal values must arrive as time.Time here. A bare number is ambiguous
-	// (its unit — seconds/millis/micros — cannot be recovered without schema
-	// metadata), so accepting one blindly would silently mismatch what the
-	// insert path wrote. Merge-key callers keep this strict on purpose (an
-	// unambiguous key must round-trip exactly, the silent-no-match guarantee); the
-	// copy-on-write data-column path (cowMassage) resolves a numeric temporal to
-	// a time.Time via the shredder's unit-aware conversion BEFORE calling this,
-	// so a numeric only reaches here for a merge key or a genuinely
-	// unconvertible value. The message is deliberately neutral about
-	// key-vs-column: callers add that context (identifier_fields for keys, the
-	// column name for data).
-	case iceberg.DateType:
-		if tm, ok := v.(time.Time); ok {
-			return tm.UTC().Format("2006-01-02"), nil
-		}
-		return nil, fmt.Errorf("date column requires a time value, got %T", v)
-	case iceberg.TimeType:
-		if tm, ok := v.(time.Time); ok {
-			// Wall clock in the value's OWN location, truncated to
-			// microseconds. Both halves must match what the insert path
-			// stores: the shredder's convertTime extracts H/M/S/ns in the
-			// value's location (14:30 EST stores 14:30, not 19:30 UTC) at
-			// microsecond resolution — formatting tm.UTC() here would shift
-			// the encoded key/value by the zone offset and silently match
-			// nothing. Go's ".999999" verb truncates (never rounds) and
-			// Arrow's time64[us] parsers reject more than 6 fractional
-			// digits, so µs truncation is also what makes the value
-			// parseable downstream.
-			return tm.Format("15:04:05.999999"), nil
-		}
-		return nil, fmt.Errorf("time column requires a time value, got %T", v)
-	case iceberg.TimestampType, iceberg.TimestampTzType:
-		if tm, ok := v.(time.Time); ok {
-			return tm.UTC().Format(time.RFC3339Nano), nil
-		}
-		return nil, fmt.Errorf("timestamp column requires a time value, got %T (a bare numeric timestamp is ambiguous without schema metadata)", v)
-	default:
-		return v, nil
-	}
-}
-
 // deleteRecordFields returns the schema fields that must appear in an
 // equality-delete record — the identifier fields (the equality key) plus, for
 // partitioned tables, the partition source columns needed to route each delete
@@ -628,6 +530,14 @@ func (w *writer) deleteRecordFields(tableSchema *iceberg.Schema, spec *iceberg.P
 			// float key would intermittently fail to match — Iceberg disallows
 			// floats as identifier fields for the same reason.
 			return nil, nil, fmt.Errorf("%s column %q has floating-point type %s, which is not a valid equality-delete key", ioFieldIdentifierFields, field.Name, field.Type)
+		case iceberg.TimestampNsType, iceberg.TimestampTzNsType:
+			// The delete-key encoder (jsonLeafValue) is microsecond-resolution
+			// end to end, so a nanosecond-timestamp key cannot be encoded
+			// consistently with what the insert path stores — an equality
+			// delete would silently match nothing and upserts would duplicate
+			// forever. Mirror the copy-on-write gate (checkCOWSchemaSupported)
+			// and fail loudly up front instead.
+			return nil, nil, fmt.Errorf("%s column %q has type %s, which is not supported as an equality-delete key; use a microsecond-resolution timestamp or timestamptz column for the merge key", ioFieldIdentifierFields, field.Name, field.Type)
 		}
 		eqFieldIDs = append(eqFieldIDs, field.ID)
 		if _, dup := seen[field.ID]; !dup {
@@ -670,6 +580,13 @@ func (w *writer) writeEqualityDeletes(ctx context.Context, msgs service.MessageB
 		return nil, err
 	}
 
+	// Resolve the batch's schema metadata exactly as the insert path and the
+	// copy-on-write rewrite do, so a numeric value in a temporal (or coerced
+	// numeric-temporal) key column is interpreted with the identical
+	// unit-aware conversion the insert path applied when it stored the row —
+	// the delete key must reproduce the stored encoding or it matches nothing.
+	fieldCommons := w.resolveFieldCommons(tableSchema, msgs)
+
 	// Project each message to its identifier columns, keyed by the canonical
 	// schema field name so the JSON keys line up with the Arrow schema.
 	rows := make([]map[string]any, 0, len(msgs))
@@ -688,7 +605,7 @@ func (w *writer) writeEqualityDeletes(ctx context.Context, msgs service.MessageB
 			if !ok || v == nil {
 				return nil, fmt.Errorf("%s %q is missing or null in message %d", ioFieldIdentifierFields, field.Name, i)
 			}
-			jv, err := deleteKeyJSONValue(field.Type, v)
+			jv, err := jsonLeafValue(field.Type, v, fieldCommons[field.ID], w.requireSchemaMetadata)
 			if err != nil {
 				return nil, fmt.Errorf("%s %q in message %d: %w", ioFieldIdentifierFields, field.Name, i, err)
 			}

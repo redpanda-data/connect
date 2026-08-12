@@ -350,7 +350,7 @@ func scaleTimestampNumeric(n int64, unit schema.TimeUnit, nanos bool) int64 {
 	}
 }
 
-// coerceTemporalToNumeric handles the rolling-upgrade case where the iceberg
+// CoerceTemporalToNumeric handles the rolling-upgrade case where the iceberg
 // table holds a numeric column (BIGINT / INT) that pre-dates the metadata
 // fix for issue #4399, but the upgraded upstream now emits a temporal Go
 // value (`time.Time` for Timestamp / Date, `time.Duration` for TimeOfDay)
@@ -370,7 +370,11 @@ func scaleTimestampNumeric(n int64, unit schema.TimeUnit, nanos bool) int64 {
 // common produces UnixMilli, Micros produces UnixMicro, etc. — preserving
 // the wire-equivalent representation the operator's pre-fix pipeline had
 // been storing in the same column.
-func coerceTemporalToNumeric(value any, common *schema.Common) (int64, bool) {
+//
+// Exported so the iceberg output's mutation paths (copy-on-write rewrite,
+// equality-delete keys, filter literals) can accept the same rolling-upgrade
+// population with the identical unit semantics the insert path applies.
+func CoerceTemporalToNumeric(value any, common *schema.Common) (int64, bool) {
 	if common == nil {
 		return 0, false
 	}

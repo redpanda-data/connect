@@ -52,7 +52,7 @@ func assertCOWSnapshot(t *testing.T, ctx context.Context, infra *testInfrastruct
 //
 // This is the highest-value gap closed by these tests. The copy-on-write filter
 // literal (cowKeyLiteral) and the rewrite's re-encoding of the surviving key
-// (cowMassage -> deleteKeyJSONValue -> Arrow) are the riskiest code: a wrong
+// (cowMassage -> jsonLeafValue -> Arrow) are the riskiest code: a wrong
 // encoding makes the overwrite filter select no rows, so the delete/upsert
 // silently becomes a no-op (a silent no-op instead of a mutation) or the rewritten key is
 // corrupted. All existing unit round-trips read back through iceberg-go's own

@@ -317,7 +317,7 @@ func TestCOWMapColumnRoundTrip(t *testing.T) {
 
 // TestCOWNestedIntegerBeyond2Pow53RoundTrip is the load-bearing fidelity test: an
 // int64 nested inside a struct beyond 2^53 must now round-trip EXACTLY. cowMassage
-// applies deleteKeyJSONValue at every leaf, so the nested int is emitted as a JSON
+// applies jsonLeafValue at every leaf, so the nested int is emitted as a JSON
 // string and parsed back by the Arrow Int64 builder without the float64 truncation
 // that the old flat projection suffered. This is the reverse of the previous
 // TestCOWNestedIntegerBeyond2Pow53IsLossy, which documented the corruption that

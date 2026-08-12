@@ -120,7 +120,7 @@ func TestCommitSubmitCtxCancelledIsAmbiguous(t *testing.T) {
 	})
 }
 
-// TestCOWTimeColumnOwnLocationRoundTrip pins deleteKeyJSONValue's TimeType
+// TestCOWTimeColumnOwnLocationRoundTrip pins jsonLeafValue's TimeType
 // canonicalisation: the wall clock is formatted in the value's OWN location and
 // truncated to microseconds ("15:04:05.999999"), matching the shredder insert
 // path's convertTime storage semantics (14:30 EST stores 14:30, not the 19:30
@@ -133,13 +133,13 @@ func TestCOWTimeColumnOwnLocationRoundTrip(t *testing.T) {
 
 	t.Run("unit canonicalisation", func(t *testing.T) {
 		// Own-location wall clock: 14:30 EST encodes as 14:30, not 19:30 UTC.
-		got, err := deleteKeyJSONValue(iceberg.PrimitiveTypes.Time, time.Date(2026, 3, 4, 14, 30, 0, 0, est))
+		got, err := jsonLeafValue(iceberg.PrimitiveTypes.Time, time.Date(2026, 3, 4, 14, 30, 0, 0, est), nil, false)
 		require.NoError(t, err)
 		assert.Equal(t, "14:30:00", got,
 			"a TIME value must encode the wall clock in its own location, matching the insert path's storage")
 
 		// Nanosecond precision truncates to at most 6 fractional digits.
-		got, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Time, time.Date(2000, 1, 1, 23, 59, 59, 123456789, time.UTC))
+		got, err = jsonLeafValue(iceberg.PrimitiveTypes.Time, time.Date(2000, 1, 1, 23, 59, 59, 123456789, time.UTC), nil, false)
 		require.NoError(t, err)
 		assert.Equal(t, "23:59:59.123456", got,
 			"sub-microsecond precision must be truncated to 6 digits so Arrow's time64[us] parser accepts the value")
@@ -577,4 +577,27 @@ func TestProbeTimestampEncodingHonoursContext(t *testing.T) {
 	_, err = probeTimestampEncoding(cancelled, cat.snapshot())
 	require.Error(t, err, "an already-cancelled context must abort the probe")
 	assert.ErrorIs(t, err, context.Canceled, "the probe error must wrap the context error")
+}
+
+// TestCOWFixedColumnMirrorsInsertPath pins cowMassage's FixedType leaf: Arrow's
+// FixedSizeBinary JSON reader base64-decodes every JSON string (same convention
+// as binary), and the insert path accepts ONLY []byte for a fixed column — so
+// the rewrite path must base64-encode []byte and reject anything else loudly.
+// Without the arm, a plain string fell through the old encoder's default
+// verbatim branch and Arrow base64-decoded it: silently stored wrong bytes when
+// the text happened to be valid base64, or failed the whole batch when it
+// wasn't — while the identical input errors cleanly on insert.
+func TestCOWFixedColumnMirrorsInsertPath(t *testing.T) {
+	w := &writer{}
+	fixed4 := iceberg.FixedTypeOf(4)
+
+	got, err := w.cowMassage(fixed4, 2, []byte{1, 2, 3, 4}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "AQIDBA==", got,
+		"[]byte must be base64-encoded so Arrow's FixedSizeBinary JSON reader decodes back the exact bytes")
+
+	_, err = w.cowMassage(fixed4, 2, "AQID", nil)
+	require.Error(t, err, "a string into a fixed column must be rejected, mirroring the insert path")
+	assert.Contains(t, err.Error(), "cannot convert string to fixed",
+		"the rejection must match the insert path's error shape")
 }

@@ -62,6 +62,11 @@ func seedMergeKeyRows(t testing.TB, ctx context.Context, tbl *table.Table, cat *
 // scanKeyPayload scans the table into a map keyed by the canonical JSON form of
 // the "k" column, valued by the "payload" string. JSON is a type-agnostic,
 // deterministic form for identifying which key each surviving row carries.
+//
+// Duplicate keys FAIL the calling test: a merge-key mutation leaving both row
+// versions behind is exactly the silent no-match failure these tests exist to
+// catch, and a plain map would hide the stale row by overwriting it — the
+// duplicate must never be swallowed into a passing assertion.
 func scanKeyPayload(t testing.TB, ctx context.Context, tbl *table.Table) map[string]string {
 	t.Helper()
 	at, err := tbl.Scan().ToArrowTable(ctx)
@@ -82,6 +87,9 @@ func scanKeyPayload(t testing.TB, ctx context.Context, tbl *table.Table) map[str
 			if pArr.IsValid(r) {
 				pay = pArr.Value(r)
 			}
+			prev, dup := out[string(b)]
+			require.False(t, dup,
+				"scan returned merge key %s twice (payloads %q and %q): the mutation left both row versions behind", string(b), prev, pay)
 			out[string(b)] = pay
 		}
 	}
@@ -232,9 +240,13 @@ func driveCOWKeyed(t testing.TB, ctx context.Context, sc *iceberg.Schema, seed [
 // TestCOWInt64KeyRepresentationsRoundTrip (T-2) drives real copy-on-write
 // upsert+delete on an int64-keyed table where the mutating message supplies the
 // key in each JSON-decoded representation an upstream might produce —
-// json.Number beyond 2^53, float64, and string. Each must match the intended
-// seeded row (no duplicate, no missed delete), proving cowValueToInt64's
-// canonicalisation agrees with the stored integer encoding.
+// json.Number beyond 2^53 and float64. Each must match the intended seeded row
+// (no duplicate, no missed delete), proving the shared jsonLeafValue
+// canonicalisation agrees with the stored integer encoding. A numeric STRING is
+// deliberately NOT among the representations: the insert path rejects strings
+// into integer columns, so the mutation paths now reject them identically (see
+// TestIntegerStringRejectedOnMutationPaths) — the old string leniency here was
+// an insert-vs-mutate asymmetry, not a feature.
 func TestCOWInt64KeyRepresentationsRoundTrip(t *testing.T) {
 	ctx := t.Context()
 	sc := iceberg.NewSchema(0,
@@ -247,10 +259,9 @@ func TestCOWInt64KeyRepresentationsRoundTrip(t *testing.T) {
 		upKey, delKey any
 		upWant        int64 // canonical key expected to carry "UP"
 	}{
-		// 2^53+1 and 2^53+3, exact only as json.Number/string, never float64.
+		// 2^53+1 and 2^53+3, exact only as json.Number, never float64.
 		{"json.Number beyond 2^53", json.Number("9007199254740993"), json.Number("9007199254740995"), 9007199254740993},
 		{"float64 within 2^53", float64(42), float64(43), 42},
-		{"string", "100", "101", 100},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -286,11 +297,6 @@ func mustInt64(t testing.TB, v any) int64 {
 		return i
 	case float64:
 		return int64(n)
-	case string:
-		var i int64
-		_, err := fmt.Sscan(n, &i)
-		require.NoError(t, err)
-		return i
 	default:
 		t.Fatalf("unsupported key representation %T", v)
 		return 0
@@ -299,7 +305,7 @@ func mustInt64(t testing.TB, v any) int64 {
 
 // TestCOWFloatKeyValueRejected pins that a non-integer or out-of-exact-range
 // float64 int-key value is rejected loudly by the filter path rather than
-// silently corrupting the merge key (cowValueToInt64).
+// silently corrupting the merge key (jsonLeafValue's integer guards).
 func TestCOWFloatKeyValueRejected(t *testing.T) {
 	sc := iceberg.NewSchema(0, iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Int64, Required: true})
 	tbl := newTypedKeyTableFromSchema(t, sc)
@@ -342,8 +348,8 @@ func TestCOWInt32KeyRoundTrip(t *testing.T) {
 // path, naming identifier_fields, the column, and the offending value. Before
 // the guard, int32(n) silently wrapped — {"k": 4294967297} (2^32+1) became 1,
 // so a delete-only copy-on-write batch deleted the WRONG row. json.Number and
-// float64-within-2^53 both reach the same narrowing (the float64 2^53 guard in
-// cowValueToInt64 never fires for these), so both representations are pinned.
+// float64-within-2^53 both reach the same narrowing (jsonLeafValue's float64
+// 2^53 guard never fires for these), so both representations are pinned.
 func TestCOWInt32KeyOutOfRangeRejected(t *testing.T) {
 	sc := iceberg.NewSchema(0, iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Int32, Required: true})
 	tbl := newTypedKeyTableFromSchema(t, sc)

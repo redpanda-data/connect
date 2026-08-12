@@ -37,6 +37,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	benthosschema "github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -327,26 +328,50 @@ func TestBuildCOWFilterUnsupportedKeyType(t *testing.T) {
 	assert.Contains(t, err.Error(), "does not support merge key column")
 }
 
-// TestBuildCOWFilterBareNumberTemporalKeyRejected pins the silent-no-match guard on the
-// merge-key path: a temporal key given as a bare number is ambiguous (the data
-// path cannot reproduce how a number would be interpreted), so it must be
-// rejected loudly rather than silently building a literal that matches nothing.
-func TestBuildCOWFilterBareNumberTemporalKeyRejected(t *testing.T) {
-	for _, typ := range []iceberg.Type{
-		iceberg.PrimitiveTypes.Timestamp,
-		iceberg.PrimitiveTypes.TimestampTz,
-		iceberg.PrimitiveTypes.Date,
-		iceberg.PrimitiveTypes.Time,
-	} {
-		t.Run(typ.String(), func(t *testing.T) {
-			sc := iceberg.NewSchema(0, iceberg.NestedField{ID: 1, Name: "k", Type: typ})
-			tbl := newTypedKeyTableFromSchema(t, sc)
-			w := cowWriter(t, tbl, "k")
-			_, err := w.buildCOWFilter(sc, service.MessageBatch{structuredMsg(t, map[string]any{"k": 1})})
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "requires a time value")
-		})
-	}
+// TestCOWKeyLiteralBareNumberTemporalKey pins the numeric-temporal merge-key
+// contract after unification with the data path: a temporal key given as a
+// bare number is interpreted with the SAME unit-aware conversion the insert
+// path and the copy-on-write data columns apply (shredder.NumericTemporalToTime
+// — metadata unit when declared, otherwise the historical defaults), so both
+// sides of the key comparison share one interpretation and cannot silently
+// mismatch. This intentionally replaces the old blanket rejection; strict mode
+// (require_schema_metadata) still refuses the genuinely ambiguous no-metadata
+// case, mirroring the insert path.
+func TestCOWKeyLiteralBareNumberTemporalKey(t *testing.T) {
+	t.Run("interpreted like the insert path without metadata", func(t *testing.T) {
+		// No metadata: timestamps use bloblang's unix-seconds default — the
+		// exact interpretation the insert path stores for the same input.
+		lit, err := cowKeyLiteral(iceberg.PrimitiveTypes.Timestamp, "k", int64(1_700_000_000), nil, false)
+		require.NoError(t, err)
+		assert.Equal(t, iceberg.NewLiteral(iceberg.Timestamp(1_700_000_000*int64(1_000_000))), lit)
+
+		// Dates are days since the epoch, times are microseconds since
+		// midnight — again the insert path's units.
+		lit, err = cowKeyLiteral(iceberg.PrimitiveTypes.Date, "k", int64(20000), nil, false)
+		require.NoError(t, err)
+		assert.Equal(t, iceberg.NewLiteral(iceberg.Date(20000)), lit)
+		lit, err = cowKeyLiteral(iceberg.PrimitiveTypes.Time, "k", int64(54_000_000_000), nil, false)
+		require.NoError(t, err)
+		assert.Equal(t, iceberg.NewLiteral(iceberg.Time(54_000_000_000)), lit)
+	})
+
+	t.Run("metadata declares the unit", func(t *testing.T) {
+		// timestamp-millis metadata: the literal must scale millis -> micros
+		// exactly as the data path stores the same key column value.
+		common := &benthosschema.Common{
+			Type:    benthosschema.Timestamp,
+			Logical: &benthosschema.LogicalParams{Timestamp: &benthosschema.TimestampParams{Unit: benthosschema.TimeUnitMillis, AdjustToUTC: true}},
+		}
+		lit, err := cowKeyLiteral(iceberg.PrimitiveTypes.TimestampTz, "k", int64(1_730_000_000_000), common, false)
+		require.NoError(t, err)
+		assert.Equal(t, iceberg.NewLiteral(iceberg.Timestamp(1_730_000_000_000*int64(1_000))), lit)
+	})
+
+	t.Run("strict mode still rejects the ambiguous no-metadata case", func(t *testing.T) {
+		_, err := cowKeyLiteral(iceberg.PrimitiveTypes.Timestamp, "k", int64(1_700_000_000), nil, true)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "require_schema_metadata=true")
+	})
 }
 
 // --- record factory ------------------------------------------------------------
