@@ -73,6 +73,11 @@ type benchOpts struct {
 	repoRoot     string
 	licenseFile  string
 	engines      []string
+	// enginesExplicit records whether --engines was set on the command line
+	// (vs. inherited from the flag default). A soak scenario silently narrows
+	// the DEFAULT engine pair to connect-only, but refuses an EXPLICIT
+	// non-connect choice — the operator asked for something soak can't mean.
+	enginesExplicit bool
 }
 
 func benchCmd(args []string) error {
@@ -94,19 +99,27 @@ func benchCmd(args []string) error {
 		return fmt.Errorf("--scenario is required")
 	}
 
+	enginesExplicit := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "engines" {
+			enginesExplicit = true
+		}
+	})
+
 	engineList := strings.Split(*engines, ",")
 	for i, e := range engineList {
 		engineList[i] = strings.TrimSpace(e)
 	}
 
 	opts := benchOpts{
-		scenarioPath: *scenario,
-		keep:         *keep,
-		keepOnFail:   *keepOnFail,
-		region:       *region,
-		repoRoot:     *repoRoot,
-		licenseFile:  *licenseFile,
-		engines:      engineList,
+		scenarioPath:    *scenario,
+		keep:            *keep,
+		keepOnFail:      *keepOnFail,
+		region:          *region,
+		repoRoot:        *repoRoot,
+		licenseFile:     *licenseFile,
+		engines:         engineList,
+		enginesExplicit: enginesExplicit,
 	}
 	return runBench(opts)
 }
@@ -144,7 +157,13 @@ func runBench(opts benchOpts) (errOut error) {
 	// engines is a CLI flag, not a scenario field. Failing before any infra
 	// apply, same reasoning as the matrix.arms check above.
 	if s.Soak {
-		if len(opts.engines) != 1 || opts.engines[0] != "connect" {
+		if !opts.enginesExplicit {
+			// The flag DEFAULT is the head-to-head pair; a soak scenario
+			// narrows it rather than making every operator remember
+			// engines=connect on the command line.
+			opts.engines = []string{"connect"}
+			fmt.Println("soak profile: narrowing default --engines to connect (soak measures Connect alone)")
+		} else if len(opts.engines) != 1 || opts.engines[0] != "connect" {
 			return fmt.Errorf("scenario %s is a soak profile and requires --engines=connect (got %v): soak measures Connect alone over a sustained window, not an engine comparison", s.Name, opts.engines)
 		}
 	}
