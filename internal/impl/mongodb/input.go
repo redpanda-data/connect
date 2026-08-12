@@ -270,14 +270,20 @@ func (m *mongoInput) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 	// The loop can only fall through here with an empty batch: it continues only
 	// while RemainingBatchLength() > 0, and in that case the driver serves the
 	// next document from the buffered batch without I/O, so Next cannot fail.
-	if err := m.cursor.Err(); err != nil {
+	if err := m.cursor.Err(); err != nil &&
+		!errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 		// The cursor died mid-read (e.g. an expired credential broke the
 		// connection pool). Tear down so the next Connect rebuilds the client
 		// — re-resolving IAM credentials when roles are used — and re-runs
-		// the query from the start (at-least-once delivery).
-		_ = m.cursor.Close(ctx)
+		// the query from the start (at-least-once delivery). A detached
+		// context lets the driver finish its endSessions handshake even when
+		// the read context is already gone. A cancelled read context is an
+		// ordinary shutdown, not a cursor failure, so it falls through to
+		// ErrEndOfInput.
+		tearCtx := context.WithoutCancel(ctx)
+		_ = m.cursor.Close(tearCtx)
 		m.cursor = nil
-		_ = m.client.Disconnect(ctx)
+		_ = m.client.Disconnect(tearCtx)
 		m.client = nil
 		return nil, nil, fmt.Errorf("mongodb cursor failure: %w", err)
 	}

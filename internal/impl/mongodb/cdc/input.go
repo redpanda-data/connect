@@ -419,18 +419,29 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	if err := r.Decode(&helloReply); err != nil {
 		return fmt.Errorf("unable to decode replication info: %w", err)
 	}
-	ts, ok := bsonGetPath(helloReply, "lastWrite", "majorityOpTime", "ts").(bson.Timestamp)
+	ts, hasTS := bsonGetPath(helloReply, "lastWrite", "majorityOpTime", "ts").(bson.Timestamp)
+	// When starting fresh, capture the current change stream position as a
+	// resume token before anything else runs. The token is what makes the
+	// post-snapshot checkpoint possible: only tokens can be persisted to the
+	// checkpoint cache, the oplog timestamp cannot. Sharded clusters (mongos)
+	// report no oplog timestamp at all, so there the token is also the only
+	// usable start position. When a checkpoint already exists the stream
+	// resumes from it and no snapshot runs, so neither position is needed.
 	var initialResumeToken bson.Raw = nil
-	if !ok && bsonGetPath(helloReply, "msg") == "isdbgrid" {
+	if m.resumeToken == nil {
 		token, err := m.getCurrentResumeToken(ctx)
-		if err != nil {
-			return fmt.Errorf("unable to compute stream start position: %w", err)
+		switch {
+		case err == nil:
+			initialResumeToken = token
+		case !hasTS:
+			return fmt.Errorf("unable to compute stream start position: %w (%s)", err, helloReply.String())
+		default:
+			// Replica sets before 4.0.7 may not report a post-batch resume
+			// token. The oplog timestamp still positions this run, but there is
+			// nothing storable, so the post-snapshot checkpoint is skipped and
+			// a failure re-runs the snapshot as before.
+			m.logger.Debugf("unable to capture a pre-snapshot resume token, a completed snapshot will not be checkpointed: %v", err)
 		}
-		initialResumeToken = token
-		ok = true
-	}
-	if !ok {
-		return fmt.Errorf("unable to get oplog last commit timestamp, got %s", helloReply.String())
 	}
 	// Tier 1: pre-fetch $jsonSchema validators for all watched collections
 	// during Connect() so the stream goroutine is not delayed.
@@ -503,13 +514,19 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				}
 				return
 			}
-			if m.cc.AssumesRole() {
+			// CONTRIBUTING §5.4.1: checkpoint as soon as the snapshot completes
+			// rather than waiting for the first streamed message, so that a
+			// restart resumes the stream instead of re-running the snapshot.
+			if !m.storeSnapshotCheckpoint(ctx, cp, initialResumeToken, m.checkpoint.Store) {
+				return
+			}
+			if m.snapshotParallelism > 0 && m.cc.AssumesRole() {
 				// The snapshot can run for a large fraction (or all) of the STS
-				// session duration, since snapshot progress is not checkpointed.
-				// Rebuild the client here so the change-stream phase starts with
-				// freshly resolved credentials rather than a session that may
-				// have already expired or be about to.
-				m.logger.Infof("Snapshot complete, refreshing IAM credentials before streaming")
+				// session duration, since progress within the snapshot is not
+				// checkpointed. Rebuild the client here so the change-stream
+				// phase starts with freshly resolved credentials rather than a
+				// session that may have already expired or be about to.
+				m.logger.Debugf("Snapshot complete, refreshing IAM credentials before streaming")
 				_ = m.client.Disconnect(ctx)
 				client, db, err := m.cc.Connect(ctx, mongoClientBSONOptions)
 				if err != nil {
@@ -543,6 +560,61 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		}()
 	}()
 	return nil
+}
+
+// snapshotAckPollInterval is how often the post-snapshot checkpoint waits for
+// the snapshot batches still in flight to be acknowledged.
+const snapshotAckPollInterval = 100 * time.Millisecond
+
+// pendingTracker reports how many tracked batches are yet to be resolved. It is
+// satisfied by *checkpoint.Capped.
+type pendingTracker interface {
+	Pending() int64
+}
+
+// storeSnapshotCheckpoint persists the pre-snapshot stream position once every
+// snapshot batch tracked by cp has been resolved downstream, and returns false
+// only when ctx was cancelled while waiting (the caller should then stop).
+//
+// The ack gate is a correctness requirement, not an optimisation: persisting the
+// pre-snapshot position while part of the snapshot is still in flight would let
+// a restart load the checkpoint, skip the snapshot entirely, and silently lose
+// the undelivered tail. Re-running the snapshot is the safe failure mode.
+// Waiting here is safe because every snapshot batch has already been handed to
+// the framework and their acks arrive independently of this goroutine; if they
+// never arrive the pipeline is already wedged, and shutdown still exits through
+// the ctx case.
+//
+// token is nil when no resume token could be captured for this run, in which
+// case nothing is stored and behaviour degrades to re-running the snapshot after
+// a failure - never to a checkpoint that cannot be resumed from.
+func (m *mongoCDC) storeSnapshotCheckpoint(
+	ctx context.Context,
+	cp pendingTracker,
+	token bson.Raw,
+	store func(context.Context, bson.Raw) error,
+) bool {
+	if token == nil {
+		return true
+	}
+	for cp.Pending() > 0 {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(snapshotAckPollInterval):
+		}
+	}
+	// Keep the periodic flusher and the terminal save consistent with what was
+	// written: both dedupe on the token they last saw.
+	m.resumeTokenMu.Lock()
+	m.resumeToken = token
+	m.resumeTokenMu.Unlock()
+	if err := store(ctx, token); err != nil {
+		// A failed write only means the snapshot may run again, so warn and
+		// carry on as every other checkpoint store in this file does.
+		m.logger.Warnf("unable to store post-snapshot checkpoint in cache: %v", err)
+	}
+	return true
 }
 
 func (m *mongoCDC) readSnapshot(
@@ -744,6 +816,12 @@ func (m *mongoCDC) readSnapshotRange(
 	return nil
 }
 
+// getCurrentResumeToken opens a short-lived change stream over the watched
+// collections and returns its initial post-batch resume token, i.e. the current
+// end of the stream. This works on any deployment that supports change streams:
+// sharded clusters, where it is the only available start position, and replica
+// sets, where servers report a post-batch resume token from 4.0.7 onwards. Older
+// servers return no token and this returns an error.
 func (m *mongoCDC) getCurrentResumeToken(ctx context.Context) (bson.Raw, error) {
 	filter := []bson.M{{"$match": bson.M{
 		"ns.coll": bson.M{"$in": slices.Clone(m.collections)},
@@ -758,9 +836,16 @@ func (m *mongoCDC) getCurrentResumeToken(ctx context.Context) (bson.Raw, error) 
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		// Don't leave the server-side cursor dangling: this stream is only used
+		// to read a position, the streaming phase opens its own.
+		_ = stream.Close(ctx)
+	}()
 	_ = stream.TryNext(ctx)
 	if rt := stream.ResumeToken(); rt != nil {
-		return rt, nil
+		// The driver hands back a token aliasing the cursor's batch buffer, so
+		// copy it before the stream is closed.
+		return bson.Raw(slices.Clone([]byte(rt))), nil
 	}
 	return nil, errors.New("unable to determine start position prior to snapshot phase")
 }
