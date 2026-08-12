@@ -1,0 +1,160 @@
+name: oracle-orders-5table-baseline
+description: |
+  DECOMPOSITION RUN — splits Oracle-side CPU into write cost, stream-mining
+  cost, and matched-row-return cost.
+
+  orders-5table-readers measured Oracle CPU at 45.9% / 50.5% / 72.2% for 1 / 2 /
+  5 concurrent readers, refuting the pessimistic "N readers = N x mining work"
+  bound (5x readers cost only ~1.57x CPU) but leaving the numbers
+  uninterpretable in absolute terms: the 35 MB/s write workload consumes Oracle
+  CPU too, and there was no baseline to subtract. Aggregate throughput also
+  plateaued at 30.7 MB/s (79% of offered) with Oracle at 72%, and it was unclear
+  how much of that ceiling is duplicated mining versus row return.
+
+  Three arms, identical 35 MB/s write load, all on ONE RDS instance so the CPU
+  figures are directly differencable (cross-run CPU comparison is not reliable):
+
+    w0-writes-only   no Oracle reader at all (a trivial `generate` input keeps
+                     the pipeline valid). Oracle CPU here is PURE WRITE COST.
+    m1-empty-reader  one oracledb_cdc reader whose include matches
+                     BENCH.ORDERS_IDLE — a table that exists, carries
+                     supplemental logging, and is NEVER written. The session
+                     opens, mines the full redo stream, and returns ZERO rows.
+    r1-one-reader    one reader over all five written tables. Reproduces
+                     orders-5table-readers' r1 (18.97 MB/s mean, 45.9% Oracle
+                     CPU) as an in-run reference point.
+
+  The decomposition:
+    W          = w0 CPU                  -> write path
+    M - W      = m1 CPU - w0 CPU         -> ONE session mining the whole stream,
+                                            returning nothing
+    R1 - M     = r1 CPU - m1 CPU         -> reconstructing and returning five
+                                            tables' matched rows
+
+  Why it matters: if (M - W) is large, each additional reader pays a big fixed
+  mining toll and reader count is tightly capped — few, large readers. If
+  (M - W) is small and (R1 - M) dominates, mining is cheap, duplication is
+  nearly free, and the 5-reader plateau must be explained by something else
+  (row-return contention, or Oracle CPU saturation near 72%).
+
+  ARM ORDER IS DELIBERATE: w0 runs LAST. It is the novel shape (a source
+  scenario whose input never touches the source), so if it trips a harness
+  assumption about zero-throughput points, the two informative arms have
+  already completed.
+
+connector: oracledb_cdc
+stack: oracle
+
+infra:
+  source:
+    # Identical to orders-5table-split and orders-5table-readers so r1 is
+    # comparable across all three runs.
+    instance_class: db.r5.2xlarge
+    storage_gb: 800
+    iops: 24000
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  tables: [orders_t1, orders_t2, orders_t3, orders_t4, orders_t5]
+  seeder: cdc-rows-oracle
+
+workload:
+  # Identical to the previous two runs: 5 x 6116 rows/sec, 7.0 MB/s per table,
+  # ~35 MB/s total. Held constant across arms — it is the control.
+  write_rate_per_sec: 30580
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  # DELIBERATELY NO `input` HERE. mergePipeline recurses into maps, so it can
+  # only ADD or REPLACE keys — never remove them. A base `input.oracledb_cdc`
+  # would survive into the w0 arm alongside its `generate`, producing a config
+  # with two sibling input types that Connect rejects — and it would only
+  # surface ~10 minutes into a paid run, after provisioning. Every arm
+  # therefore declares its own complete `input` block, so each rendered point
+  # has exactly one input key.
+  cache_resources:
+    - label: bench_checkpoint
+      memory: {}
+
+matrix:
+  cpu_points: [4]
+  arms:
+    # M — mines everything, returns nothing.
+    - id: m1-empty-reader
+      gomaxprocs: 8
+      streams: 1
+      pipeline:
+        input:
+          oracledb_cdc:
+            connection_string: ${ORACLE_DSN}
+            # ORDERS_IDLE is created (with ALL-column supplemental logging) by
+            # the reset step below and never receives a write. The session still
+            # runs a full LogMiner pass over every SCN window; the server-side
+            # (SEG_OWNER, TABLE_NAME) predicate simply matches nothing, so no
+            # rows cross the wire. Expected throughput: ~0 MB/s BY DESIGN.
+            include: ["BENCH.ORDERS_IDLE"]
+            stream_snapshot: true
+            checkpoint_cache: bench_checkpoint
+            checkpoint_cache_key: oracle_idle
+            batching:
+              count: 5000
+              period: 1s
+
+    # R1 — in-run reference: one reader over all five written tables. Same
+    # shape as orders-5table-readers' r1 arm (18.97 MB/s mean, 45.9% Oracle
+    # CPU), declared in full because the base carries no input.
+    - id: r1-one-reader
+      gomaxprocs: 8
+      streams: 1
+      pipeline:
+        input:
+          oracledb_cdc:
+            connection_string: ${ORACLE_DSN}
+            include:
+              - "BENCH.ORDERS_T1"
+              - "BENCH.ORDERS_T2"
+              - "BENCH.ORDERS_T3"
+              - "BENCH.ORDERS_T4"
+              - "BENCH.ORDERS_T5"
+            stream_snapshot: true
+            checkpoint_cache: bench_checkpoint
+            checkpoint_cache_key: oracle_bench
+            batching:
+              count: 5000
+              period: 1s
+
+    # W — no Oracle reader. `generate` at a 10s interval keeps the pipeline
+    # valid and its throughput negligible while touching Oracle not at all, so
+    # Oracle CPU over this window is the write path alone.
+    - id: w0-writes-only
+      gomaxprocs: 8
+      streams: 1
+      pipeline:
+        input:
+          generate:
+            interval: 10s
+            mapping: 'root = {"baseline": "writes-only"}'
+
+reset:
+  # Truncate the five written tables, and ensure the never-written ORDERS_IDLE
+  # table exists with supplemental logging for the m1 arm. Both go through the
+  # seeder's `exec` subcommand (one statement per call) because Oracle has no
+  # psql/mysql-style CLI on the runner. The CREATE/ALTER are wrapped in PL/SQL
+  # blocks that swallow exceptions, so re-running between every sweep point is
+  # a no-op after the first.
+  #
+  # Reset runs on the RUNNER host but the seeder is staged on the LOAD-GEN host,
+  # so self-stage it from the S3 key the seed phase uploaded to. The binary is
+  # arm64 and the runner is Graviton.
+  - bash: |
+      aws s3 cp s3://${RESULTS_BUCKET}/stage/cdc-rows-oracle /opt/bench/cdc-rows-oracle
+      chmod +x /opt/bench/cdc-rows-oracle
+      for t in ORDERS_T1 ORDERS_T2 ORDERS_T3 ORDERS_T4 ORDERS_T5; do
+        /opt/bench/cdc-rows-oracle exec --dsn "${ORACLE_DSN}" --sql "TRUNCATE TABLE BENCH.$t"
+      done
+      /opt/bench/cdc-rows-oracle exec --dsn "${ORACLE_DSN}" --sql "BEGIN EXECUTE IMMEDIATE 'CREATE TABLE BENCH.ORDERS_IDLE (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, payload VARCHAR2(4000))'; EXCEPTION WHEN OTHERS THEN NULL; END;"
+      /opt/bench/cdc-rows-oracle exec --dsn "${ORACLE_DSN}" --sql "BEGIN EXECUTE IMMEDIATE 'ALTER TABLE BENCH.ORDERS_IDLE ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS'; EXCEPTION WHEN OTHERS THEN NULL; END;"

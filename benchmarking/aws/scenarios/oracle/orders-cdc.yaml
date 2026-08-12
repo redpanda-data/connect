@@ -1,0 +1,81 @@
+name: oracle-orders-cdc
+description: |
+  Stream changes from a high-write Oracle orders table via LogMiner so the
+  oracledb_cdc input — not the producer — is the bottleneck across the CPU
+  sweep. Both Connect (oracledb_cdc) and the Kafka Connect comparator (Debezium
+  Oracle) mine the same RDS redo logs through LogMiner, so it's a fair
+  head-to-head. TRUNCATE between sweep points keeps the table bounded; the
+  per-table supplemental log group survives TRUNCATE so no re-enable is needed.
+
+connector: oracledb_cdc
+stack: oracle
+
+infra:
+  source:
+    # RDS Oracle has NO Graviton support — x86 (db.r5) only, like SQL Server.
+    instance_class: db.r5.2xlarge
+    storage_gb: 800       # match the mysql 4xlarge sizing to hold the IOPS budget
+    iops: 24000
+    # No parameter-group knobs: ARCHIVELOG follows backup retention (set in the
+    # module) and supplemental logging is enabled post-create by the seeder via
+    # rdsadmin. See references/rds-quirks.md#oracle.
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0          # TRUNCATE-before-every-point makes a seed pointless;
+                           # the seeder still runs once to CREATE the table,
+                           # enable supplemental logging, and grant LogMiner privs.
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-oracle
+
+workload:
+  write_rate_per_sec: 150000
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  cache_resources:
+    - label: bench_checkpoint
+      memory: {}
+  input:
+    oracledb_cdc:
+      connection_string: ${ORACLE_DSN}
+      # Owning schema is the RDS master user (BENCH), uppercased by Oracle.
+      include: ["BENCH.ORDERS"]
+      # stream_snapshot:true snapshots the (empty, post-TRUNCATE) table — instant,
+      # 0 rows — and captures CURRENT_SCN as the streaming start position, so we
+      # only mine redo produced AFTER startup (matches Debezium). stream_snapshot:
+      # false is a TRAP here: with an empty checkpoint cache it falls through to
+      # FindStartPos, which starts from the OLDEST available redo SCN; at 1 vCPU
+      # Connect then grinds through historical redo and never reaches the live
+      # workload within the window -> 0 MB/s captured with no error.
+      stream_snapshot: true
+      checkpoint_cache: bench_checkpoint   # memory cache — avoids the default
+                                           # SQL cache needing a pre-existing rpcn
+                                           # schema + CREATE TABLE/proc privileges
+      checkpoint_cache_key: oracle_bench
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  # Smoke passed at 1 vCPU (connect 13 MB/s, KC 26.5 MB/s) on 2026-06-18.
+  cpu_points: [1, 2, 4, 8]
+
+reset:
+  # No replication slot to drop (LogMiner is slotless) and supplemental logging
+  # survives TRUNCATE, so reset is just the truncate. Oracle has no psql/mysql-
+  # style CLI on the runner, so this runs through the seeder's `exec` subcommand
+  # (go-ora) rather than a sql: step. ${ORACLE_DSN} is substituted from the
+  # oracle_dsn terraform output.
+  #
+  # Reset runs on the RUNNER host (matrix.go), but the seeder is only staged at
+  # /opt/bench/ on the LOAD-GEN host during the seed phase. So self-stage the
+  # seeder from the same S3 key the seed phase uploaded it to (stage/<seeder>).
+  # The binary is GOARCH=arm64 and the runner is Graviton (c8g), so it runs as-is.
+  - bash: |
+      aws s3 cp s3://${RESULTS_BUCKET}/stage/cdc-rows-oracle /opt/bench/cdc-rows-oracle
+      chmod +x /opt/bench/cdc-rows-oracle
+      /opt/bench/cdc-rows-oracle exec --dsn "${ORACLE_DSN}" --sql "TRUNCATE TABLE BENCH.ORDERS"
