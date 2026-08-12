@@ -432,3 +432,79 @@ two runs are directly comparable.
 
 
 Raw samples + Prometheus snapshots: [`results/oracle/orders-5table-readers-fastio/2026-08-06T22-17-54Z.json`](results/oracle/orders-5table-readers-fastio/2026-08-06T22-17-54Z.json)
+
+
+## AWS — orders-snapshot — 2026-08-12
+
+**Scenario:** Snapshot a pre-seeded 30M-row (36 GB logical) Oracle orders table via
+oracledb_cdc stream_snapshot, A/B-ing go-ora's default 25-row prefetch
+against PREFETCH_ROWS=1000. Bounded-dataset mode: no workload, warmup 0,
+snapshot visible from t=0.
+
+**Git SHA:** [`b115f77c6`](https://github.com/redpanda-data/connect/commit/b115f77c67ed40a6336ce3f28da32fd951e8094a)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 30,000,000 rows × 1200 B = ~33 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 8          | s0-prefetch-default | connect       |            7 |        7.256 |         6,213 |            7 |           7 |            8 |         6,000 |                    |
+| 4    | 8          | s1-prefetch-1000 | connect       |            9 |       14.866 |        12,726 |            9 |           8 |           66 |         7,451 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/oracle/orders-snapshot/2026-08-12T17-33-13Z.json`](results/oracle/orders-snapshot/2026-08-12T17-33-13Z.json)
+
+### Snapshot analysis — first snapshot-path numbers for oracledb_cdc (2026-08-12)
+
+Everything above this run measures LogMiner streaming; this measured
+`stream_snapshot` over a pre-seeded 30M-row / 36 GB table (bounded-dataset
+mode: warmup 0, snapshot visible from t=0). Two arms, one variable: go-ora's
+default `PrefetchRows=25` vs `?PREFETCH_ROWS=1000` on the connection string.
+
+Per-minute delivered MB/s (self-report, 899 samples/arm):
+
+| arm | shape |
+|---|---|
+| s0-prefetch-default | flat **7.9-8.3** for all 15 min (7.0 GB of 36 GB delivered) |
+| s1-prefetch-1000 | **70.7 → 51** for ~2 min, then flat **~9.3** (14.3 GB delivered) |
+
+CloudWatch on the DB during the windows (5-min averages):
+
+- s0: physical reads 2-3 MB/s, DB CPU 11-15% — the database was nearly idle
+  while delivering 8 MB/s. **The default snapshot is network-round-trip-bound:**
+  25 rows/trip at ~7,000 rows/s ≈ 280 trips/s (~3.6 ms/trip). This confirms the
+  prefetch playbook's arithmetic on the snapshot SELECT path.
+- s1 cold phase: physical reads **109-126 MB/s and 2,200-2,500 read IOPS to
+  deliver 9.3 MB/s of rows (~12× read amplification)**, DB CPU ~20%. The fast
+  first ~2 minutes (≈7 GB at 66-70 MB/s) is almost exactly the range arm s0 had
+  just scanned — i.e. buffer-cache-warm blocks read at the new, higher
+  trip-size limit; the collapse is where the cache runs out.
+
+Mechanism (code-confirmed pagination, hypothesis on the I/O): the snapshot
+paginates by keyset — `WHERE pk > :last ORDER BY pk FETCH FIRST n ROWS ONLY`
+(`replication/snapshot.go::querySnapshotTable`). That is the right pagination
+shape, but fetching full rows in PK order over a table whose physical row
+order does not match PK order degenerates into scattered single-block reads
+via the index — this table was seeded by 16 concurrent workers, so ids
+interleave across blocks. A sequentially-loaded customer table would cluster
+better; a fragmented or heavily-updated one would not.
+
+**Takeaways:**
+
+1. `?PREFETCH_ROWS=1000` is free and removes the round-trip cap (8.6× while
+   pages are cache-warm). Recommend it for any snapshot.
+2. On cold data the snapshot becomes random-read-bound at the storage layer;
+   prefetch alone barely helps (9.3 vs 8 MB/s). A 36 GB table extrapolates to
+   ~75 min (default) / ~55 min (prefetch) on this rig.
+3. Connector-side candidate fix: snapshot in physical order (ROWID ranges /
+   parallel chunks, the DBMS_PARALLEL_EXECUTE pattern) instead of PK order —
+   turns scattered single-block reads into multiblock scans and parallelises
+   naturally.
+
+Caveats: single instance class (db.r5.2xlarge, 24K IOPS gp3); arm order means
+s1 inherited a partially warm cache (its fast phase measures the warm-cache
+regime, not steady-state); PK-vs-physical-order scatter is worst-case-ish here
+because of the 16-worker interleaved seed.

@@ -1,0 +1,99 @@
+# Oracle SNAPSHOT throughput — the first snapshot numbers for oracledb_cdc.
+# Everything in oracle.md / oracle-logminer-split-test.md measures the LogMiner
+# streaming path; this measures the OTHER path: stream_snapshot's direct SELECT
+# over a pre-seeded table. Bounded-dataset mode (no workload:) runs each point
+# with warmup 0 and a fixed 15m window, so the snapshot is visible from t=0 in
+# the per-second samples; completion shows as the drop to ~0 MB/s (nothing is
+# writing, so post-snapshot LogMiner tails silence).
+#
+# Two arms isolate the go-ora prefetch hypothesis from the prefetch playbook:
+# the driver defaults to PrefetchRows=25 (25 rows per network round-trip),
+# which should throttle a bulk SELECT far below the wire rate. PREFETCH_ROWS
+# is a recognised go-ora URL query param, so the A/B needs no code change.
+#
+# Analysis note: the run-summary median is NOT the snapshot rate when the
+# snapshot completes inside the window (trailing ~0 samples drag it down).
+# Compute rate from the samples series: bytes delivered / seconds until the
+# drop-to-idle transition.
+
+name: oracle-orders-snapshot
+description: |
+  Snapshot a pre-seeded 30M-row (36 GB logical) Oracle orders table via
+  oracledb_cdc stream_snapshot, A/B-ing go-ora's default 25-row prefetch
+  against PREFETCH_ROWS=1000. Bounded-dataset mode: no workload, warmup 0,
+  snapshot visible from t=0.
+
+connector: oracledb_cdc
+stack: oracle
+
+infra:
+  source:
+    # Same rig as the LogMiner split test so the two docs compose.
+    instance_class: db.r5.2xlarge
+    storage_gb: 800
+    iops: 24000
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  # 30M x 1200 B = 36,000 MB logical. At the validation estimate of 35 MB/s
+  # that is ~17 min of snapshot — spans the 15m window for the default-prefetch
+  # arm (rate measurable even without completion) while a much faster prefetch
+  # arm still completes several minutes into the window (visible from t=0).
+  initial_rows: 30000000
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-oracle
+  expected_peak_mb_s: 35
+
+# No workload: — bounded-dataset mode. The seeder's bulkInsert seeds once
+# before the sweep (~15 min at its measured ~34K rows/s).
+
+pipeline:
+  cache_resources:
+    - label: bench_checkpoint
+      memory: {}
+  # No input here: arms declare their own. mergePipeline can only add or
+  # replace keys, never remove them, so a base input would leak into arms.
+
+matrix:
+  cpu_points: [4]
+  arms:
+    # s0 — go-ora default prefetch (25 rows/round-trip). The deployed-config
+    # baseline every oracledb_cdc user gets today.
+    - id: s0-prefetch-default
+      gomaxprocs: 8
+      streams: 1
+      pipeline:
+        input:
+          oracledb_cdc:
+            connection_string: ${ORACLE_DSN}
+            include: ["BENCH.ORDERS"]
+            stream_snapshot: true
+            checkpoint_cache: bench_checkpoint
+            checkpoint_cache_key: oracle_snap_default
+            batching:
+              count: 5000
+              period: 1s
+
+    # s1 — PREFETCH_ROWS=1000: 40x fewer round-trips on the snapshot SELECT.
+    # The checkpoint cache is in-memory and dies with the process, so each
+    # arm re-snapshots the same 30M rows from scratch.
+    - id: s1-prefetch-1000
+      gomaxprocs: 8
+      streams: 1
+      pipeline:
+        input:
+          oracledb_cdc:
+            connection_string: ${ORACLE_DSN}?PREFETCH_ROWS=1000
+            include: ["BENCH.ORDERS"]
+            stream_snapshot: true
+            checkpoint_cache: bench_checkpoint
+            checkpoint_cache_key: oracle_snap_prefetch
+            batching:
+              count: 5000
+              period: 1s
+
+# No reset: nothing to clean between arms — the table must stay seeded (both
+# arms snapshot the same 30M rows), there is no replication slot, and the
+# in-memory checkpoint cache dies with each arm's process.

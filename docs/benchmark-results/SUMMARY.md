@@ -30,24 +30,7 @@ Last refreshed: 2026-08-12
 
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
-| dynamodb / cdc        |         8 |           82 |      —    |                   —  | 2026-06-15  |
-| iceberg / orders-7table-consolidation |         4 |          120 |      —    |                   —  | 2026-08-04  |
-| iceberg / orders-sink ⚠ |         4 |          135 |      70 | 31,167 msg/s (+26%) | 2026-07-09  |
-| iceberg / orders-sink-recipe-b |         8 |          128 |      75 | 18,957 msg/s (+16%) | 2026-07-09  |
-| iceberg / orders-sink-smoke |     —      |         —      |      —    |                   —  | 2026-07-08  |
-| iceberg / orders-sink-streams-ab |         2 |           74 |      —    |                   —  | 2026-08-04  |
-| kinesis / segment-output-ab |         2 |            5 |      —    |                   —  | 2026-08-05  |
-| kinesis / segment-tunes-ab |         2 |            5 |      —    |                   —  | 2026-08-05  |
-| mongodb / orders-cdc  |         2 |           33 |      17 |                   —  | 2026-07-17  |
-| mysql / orders-cdc ⚠  |         8 |          111 |      39 |                   —  | 2026-06-02  |
-| oracle / orders-5table-baseline |         4 |           19 |      —    |                   —  | 2026-08-06  |
-| oracle / orders-5table-readers |         4 |           29 |      —    |                   —  | 2026-08-06  |
-| oracle / orders-5table-readers-fastio |         4 |           30 |      —    |                   —  | 2026-08-06  |
-| oracle / orders-5table-split |         4 |           19 |      —    |                   —  | 2026-08-05  |
-| oracle / orders-cdc   |         1 |           13 |      —    |                   —  | 2026-06-22  |
-| oracle / orders-return-cost |         4 |           13 |      —    |                   —  | 2026-08-06  |
-| postgres / orders-cdc |         4 |           81 |      39 | 44,040 msg/s (+67%) | 2026-08-12  |
-| sqlserver / orders-cdc |         2 |           46 |      —    |                   —  | 2026-08-12  |
+| oracle / orders-snapshot |         4 |            9 |      —    |                   —  | 2026-08-12  |
 
 Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
 
