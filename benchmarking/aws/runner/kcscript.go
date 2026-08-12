@@ -67,12 +67,28 @@ func renderKCBenchScript(a kcBenchScriptArgs) string {
 		`set -euo pipefail`,
 		fmt.Sprintf(`echo "starting kc bench: %d vCPU, %d GiB heap, warmup %ds, window %ds"`,
 			a.VCPU, a.MemLimitGiB, a.WarmupSec, a.DurationSec),
+		// The Debezium plugin tarballs are downloaded by cloud-init, which can
+		// still be running when a KC-only sweep reaches its first point (~7 min
+		// after boot; the plugin set takes ~15 min to fetch from Maven Central).
+		// Without this gate the worker scans an empty plugin dir and the
+		// connector submit 500s with "Failed to find any class". Combined
+		// (connect-first) sweeps never hit this because the Connect points give
+		// cloud-init a ~25 min head start.
+		`echo "[kc] waiting for cloud-init (plugin downloads) to finish..."
+sudo cloud-init status --wait >/dev/null 2>&1 || true
+echo "[kc] cloud-init done"`,
 		fmt.Sprintf(`KC_LOG=/tmp/kc-%d.log`, a.VCPU),
 		`: > "$KC_LOG"`,
 		// Always upload kc-N.log to S3 even when the script aborts under set -e,
 		// so operators can debug a startup failure post-mortem (the JVM log is
 		// the only place that records connect-distributed.sh's actual error).
-		fmt.Sprintf(`trap 'rc=$?; aws s3 cp "$KC_LOG" "s3://%s/runs/%s/kc-%d.log" --only-show-errors 2>/dev/null || true; exit $rc' EXIT`,
+		// Also reap our background children (taskset JVM, broker scraper,
+		// heartbeat) on the failure paths: an orphaned JVM keeps the SSM
+		// command's process tree alive, so instead of failing in seconds the
+		// invocation sits InProgress until the 3600s executionTimeout SIGKILL —
+		// observed 2026-08-12, it turned a 2-minute submit failure into an
+		// hour-long hang. On the happy path these kills are no-ops.
+		fmt.Sprintf(`trap 'rc=$?; kill -TERM ${PID:-} ${RP_SCRAPER:-} ${HEARTBEAT:-} 2>/dev/null || true; aws s3 cp "$KC_LOG" "s3://%s/runs/%s/kc-%d.log" --only-show-errors 2>/dev/null || true; exit $rc' EXIT`,
 			a.Bucket, a.SessionID, a.VCPU),
 		// Stop the cloud-init-launched worker so we can spawn under taskset.
 		//
