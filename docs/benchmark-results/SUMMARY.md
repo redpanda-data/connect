@@ -30,7 +30,7 @@ Last refreshed: 2026-08-12
 
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
-| sqlserver / orders-cdc |         2 |           33 |      —    |                   —  | 2026-08-12  |
+| sqlserver / orders-cdc |         2 |           46 |      —    |                   —  | 2026-08-12  |
 
 Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
 

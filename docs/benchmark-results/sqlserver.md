@@ -502,3 +502,111 @@ transactions/sec ceiling and mislabel it a connector ceiling.
 
 
 Raw samples + Prometheus snapshots: [`results/sqlserver/orders-cdc/2026-08-12T00-42-11Z.json`](results/sqlserver/orders-cdc/2026-08-12T00-42-11Z.json)
+
+
+## AWS — orders-cdc — 2026-08-12
+
+**Scenario:** Stream changes from a high-write SQL Server orders table so the
+microsoft_sql_server_cdc input — not the producer, and not SQL Server's own
+capture job — is the bottleneck across the CPU sweep.
+
+Fairness: neither engine reads the transaction log. Connect's
+microsoft_sql_server_cdc and the Kafka Connect comparator (Debezium SQL
+Server) both tail the same cdc.<schema>_<table>_CT change tables, populated by
+SQL Server's capture job. That makes this the most apples-to-apples CDC
+head-to-head in the suite — and it also means the capture job sits upstream of
+BOTH engines. The seeder raises its per-cycle limits well past what the load
+generator can produce (see tuneCaptureJob in seeders/cdc-rows-mssql/sql.go);
+leave the stock 10/500/5 in place and you measure the capture job's ~1000
+transactions/sec ceiling and mislabel it a connector ceiling.
+
+**Git SHA:** [`8463f8e12`](https://github.com/redpanda-data/connect/commit/8463f8e121b30447a87355e8017237dbc46f3eb2)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 2    | 2          |                | kafka_connect |           41 |       27.211 |        15,188 |           41 |           0 |           52 |        22,780 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/sqlserver/orders-cdc/2026-08-12T01-50-23Z.json`](results/sqlserver/orders-cdc/2026-08-12T01-50-23Z.json)
+
+
+## AWS — orders-cdc — 2026-08-12
+
+**Scenario:** Stream changes from a high-write SQL Server orders table so the
+microsoft_sql_server_cdc input — not the producer, and not SQL Server's own
+capture job — is the bottleneck across the CPU sweep.
+
+Fairness: neither engine reads the transaction log. Connect's
+microsoft_sql_server_cdc and the Kafka Connect comparator (Debezium SQL
+Server) both tail the same cdc.<schema>_<table>_CT change tables, populated by
+SQL Server's capture job. That makes this the most apples-to-apples CDC
+head-to-head in the suite — and it also means the capture job sits upstream of
+BOTH engines. The seeder raises its per-cycle limits well past what the load
+generator can produce (see tuneCaptureJob in seeders/cdc-rows-mssql/sql.go);
+leave the stock 10/500/5 in place and you measure the capture job's ~1000
+transactions/sec ceiling and mislabel it a connector ceiling.
+
+**Git SHA:** [`8463f8e12`](https://github.com/redpanda-data/connect/commit/8463f8e121b30447a87355e8017237dbc46f3eb2)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5b.4xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 2    | 2          |                | connect       |           46 |       40.621 |        33,301 |           46 |           0 |           63 |        37,850 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/sqlserver/orders-cdc/2026-08-12T02-59-41Z.json`](results/sqlserver/orders-cdc/2026-08-12T02-59-41Z.json)
+
+## Follow-up runs (2026-08-12): Debezium measured at provisioned throughput, and the capture job is still not the ceiling
+
+Two single-point runs (2 vCPU, the knee) close the two gaps the storage A/B
+left open. Raw sections above (`01-50-23Z` = Debezium, `02-59-41Z` = Connect
+big-EBS); analysis here.
+
+### 1. Debezium at gp3 1000 MiB/s — the head-to-head at the provisioned config is now measured, not extrapolated
+
+| 2 vCPU | offered (rows/s) | delivered mean (rec/s) | capture ratio | p95 rec/s |
+|---|--:|--:|--:|--:|
+| Connect (A/B run, `00-42-11Z`) | 25,440 | 22,898 | ~90% | — |
+| Debezium (`01-50-23Z`) | 33,542 | 15,189 | ~45% | 29,243 |
+
+Connect **+51% on delivered mean** — the sweep's +52% figure survives the
+storage fix almost unchanged — and roughly **2× on capture ratio**, the
+offered-load-independent comparison. Debezium's window was not
+storage-starved: CloudWatch WriteThroughput avg 240 MB/s (max 374, burst above
+the r5.2xlarge 287.5 baseline), DiskQueueDepth avg 4.9, CPU ≤ 53%. Its
+deficit is duty cycle, same shape as before.
+
+### 2. db.r5b.4xlarge + gp3 2000 MiB/s — storage exonerated, capture job still not the wall
+
+Connect, 2 vCPU, source EBS baseline lifted 287.5 → 1250 MB/s (~4×):
+
+- Delivered **33,302 rec/s mean** (median 37,850, p95 51,791, **peak 63,000**)
+  of 39,137 rows/s offered — **~85% capture, +45%** over the same Connect
+  config on db.r5.2xlarge.
+- CloudWatch: WriteThroughput avg 282 / max 430 MB/s of ~1250 available
+  (**23% utilization**), DiskQueueDepth avg 3.0 (vs 249 when storage-bound),
+  DB CPU 24%. Storage and DB CPU are both loafing.
+- The binding constraint is now the **offered load**: the c8g.large load
+  generator plateaued at ~39K rows/s mean (55K peak) of its 150K target with
+  the DB no longer pushing back. The capture job's intrinsic ceiling is STILL
+  unmeasured — but it is now bounded below at **≥33K rec/s sustained / ≥63K
+  burst**, 2× the full sweep's best point. A bigger load-gen instance is the
+  next lever, not a bigger DB.
+- Write amplification at this tier measured ~6× (282 MB/s physical for
+  ~47 MB/s logical), gentler than the ~10× observed at the saturated tier —
+  the storage-bandwidth/10 sizing rule is conservative, which is the right
+  direction for a customer-facing rule.
+
+Ceiling chain after these runs: load-gen → capture job (unreached) → storage
+(only if unprovisioned). Neither engine's connector is the limit at 2 vCPU.
