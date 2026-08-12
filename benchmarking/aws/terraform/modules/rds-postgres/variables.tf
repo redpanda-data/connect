@@ -1,5 +1,5 @@
 variable "name_prefix" { type = string }
-variable "vpc_id"      { type = string }
+variable "vpc_id" { type = string }
 variable "subnet_ids" {
   type = list(string)
 }
@@ -32,8 +32,17 @@ variable "master_username" {
   default = "bench"
 }
 variable "parameters" {
-  type    = map(string)
+  type = map(string)
   # rds.logical_replication=1 is the RDS-specific knob that makes RDS set
   # wal_level=logical for us (wal_level itself isn't user-settable on RDS).
   default = { "rds.logical_replication" = "1", max_wal_senders = "20" }
+}
+variable "storage_throughput" {
+  # gp3 throughput in MiB/s. null = RDS default. The sqlserver 2026-08-10..11
+  # sweep proved the default insufficient under CDC write amplification
+  # (WriteThroughput pinned, DiskQueueDepth to 249, CPU <= 50%); the mysql
+  # 8-vCPU degradation was suspected storage throttling with the same shape.
+  # 24000 IOPS permits up to 1000 MiB/s (0.25 MiB/s per IOPS).
+  type    = number
+  default = null
 }

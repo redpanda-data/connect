@@ -16,6 +16,10 @@ infra:
                                        # See references/scenario-sizing.md ranked workarounds.
     storage_gb: 800                    # 4xlarge needs more storage to maintain IOPS budget
     iops: 24000                        # 2x the IOPS baseline
+    storage_throughput: 1000           # gp3 MiB/s. RDS default throughput was the suspected
+                                       # cause of the mysql 8-vCPU degradation, and the
+                                       # sqlserver A/B proved the ceiling moves with the
+                                       # volume — provision it so storage isn't a confound.
     parameters:
       rds.logical_replication: "1"
       max_wal_senders: "20"

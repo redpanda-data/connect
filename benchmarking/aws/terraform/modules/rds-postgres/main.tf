@@ -52,6 +52,7 @@ resource "aws_db_instance" "this" {
   allocated_storage      = var.storage_gb
   storage_type           = "gp3"
   iops                   = var.iops
+  storage_throughput     = var.storage_throughput
   db_name                = var.db_name
   username               = var.master_username
   password               = random_password.master.result

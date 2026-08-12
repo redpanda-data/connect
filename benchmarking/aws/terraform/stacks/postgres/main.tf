@@ -28,16 +28,17 @@ data "terraform_remote_state" "shared" {
 }
 
 module "rds" {
-  source         = "../../modules/rds-postgres"
-  name_prefix    = "rpcn-bench-pg"
-  vpc_id         = data.terraform_remote_state.shared.outputs.vpc_id
-  subnet_ids     = data.terraform_remote_state.shared.outputs.private_subnet_ids
-  client_sg_ids  = [
+  source      = "../../modules/rds-postgres"
+  name_prefix = "rpcn-bench-pg"
+  vpc_id      = data.terraform_remote_state.shared.outputs.vpc_id
+  subnet_ids  = data.terraform_remote_state.shared.outputs.private_subnet_ids
+  client_sg_ids = [
     data.terraform_remote_state.shared.outputs.runner_sg_id,
     data.terraform_remote_state.shared.outputs.load_gen_sg_id,
   ]
-  instance_class = var.instance_class
-  storage_gb     = var.storage_gb
-  iops           = var.iops
-  parameters     = var.parameters
+  instance_class     = var.instance_class
+  storage_gb         = var.storage_gb
+  iops               = var.iops
+  storage_throughput = var.storage_throughput
+  parameters         = var.parameters
 }
