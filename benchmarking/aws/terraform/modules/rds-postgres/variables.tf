@@ -46,3 +46,18 @@ variable "storage_throughput" {
   type    = number
   default = null
 }
+variable "iam_auth_enabled" {
+  # Enable RDS IAM database authentication. Soak scenarios turn this on so
+  # the connector runs against ~15-minute IAM tokens (the rotation window
+  # behind #4668/#4258); the DB-side role setup happens in the scenario's
+  # reset steps, not here.
+  type    = bool
+  default = false
+}
+variable "iam_username" {
+  # DB role the connector authenticates as when iam_auth_enabled. Created and
+  # granted by the scenario reset (needs rds_iam + rds_replication); baked
+  # into postgres_iam_dsn and the stack's rds-db:connect policy resource ARN.
+  type    = string
+  default = "bench_iam"
+}

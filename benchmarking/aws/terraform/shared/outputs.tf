@@ -12,6 +12,11 @@ output "orphan_cleanup_sns_topic_arn" { value = aws_sns_topic.orphan_cleanup.arn
 # S3 during reset. RDS-backed stacks (postgres/mysql/oracle) ignore it.
 output "bench_host_instance_profile" { value = aws_iam_instance_profile.bench_host.name }
 
+# Role behind the instance profile, exported so a connector stack can attach
+# narrowly-scoped extra policies (e.g. postgres's rds-db:connect for IAM DB
+# auth) without shared/ needing to know about every stack's needs.
+output "bench_host_role_name" { value = aws_iam_role.bench_host.name }
+
 output "redpanda_broker_endpoints" { value = module.redpanda.broker_endpoints }
 output "redpanda_metrics_endpoint" { value = module.redpanda.metrics_endpoint }
 output "redpanda_metrics_endpoints" { value = module.redpanda.metrics_endpoints }

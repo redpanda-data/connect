@@ -14,3 +14,9 @@ variable "storage_throughput" {
   type    = number
   default = null
 }
+variable "iam_auth_enabled" {
+  # RDS IAM database auth; set by soak scenarios via infra.source. See
+  # modules/rds-postgres for what it exercises and why.
+  type    = bool
+  default = false
+}

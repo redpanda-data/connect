@@ -63,4 +63,10 @@ resource "aws_db_instance" "this" {
   deletion_protection    = false
   publicly_accessible    = false
   apply_immediately      = true
+
+  # IAM DB auth is the soak profile's credential-rotation lever: RDS IAM
+  # tokens live ~15 minutes, so a sustained run with iam_auth_enabled
+  # exercises exactly the token-expiry window behind #4668/#4258. Free to
+  # leave enabled; password auth keeps working alongside it.
+  iam_database_authentication_enabled = var.iam_auth_enabled
 }
