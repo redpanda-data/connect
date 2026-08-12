@@ -75,6 +75,18 @@ type tableEntry struct {
 	tsEncoding         icebergx.TimestampEncoding
 	tsEncodingResolved bool
 
+	// tsEncodingProbeErr negative-caches a probe-bound failure
+	// (errTimestampProbeBoundExceeded) observed on tsEncodingProbeSnapshot:
+	// the scan is deterministic for a given snapshot, so re-running it on
+	// every retried write would re-pay up to maxProbedFiles object-store
+	// footer reads under this entry's lock for the identical answer. The
+	// cache self-heals: a new snapshot (files landed) re-probes, and an
+	// operator setting the pinning property takes the property-present path,
+	// which never consults it. Guarded by mu. Only the deterministic bound
+	// error is ever cached — transient probe failures must retry.
+	tsEncodingProbeErr      error
+	tsEncodingProbeSnapshot int64
+
 	// prohibitedProps persists the catalog-prohibited property keys learned
 	// by this table's committers (mirroring the tsEncoding cache pattern):
 	// writeWithRetry closes the writer on every failure, so without it each
@@ -763,8 +775,24 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 	// the property-ABSENT bootstrap, so the footer probe and pinning stamp run
 	// at most once per table per process.
 	if _, propPresent := writerTbl.Properties()[icebergx.TimestampEncodingProperty]; propPresent || !entry.tsEncodingResolved {
+		// A probe-bound failure is deterministic per snapshot: serve the
+		// cached error instead of re-paying the full footer scan on every
+		// retried write (see tableEntry.tsEncodingProbeErr).
+		if !propPresent && entry.tsEncodingProbeErr != nil {
+			if snap := writerTbl.CurrentSnapshot(); snap != nil && snap.SnapshotID == entry.tsEncodingProbeSnapshot {
+				return nil, entry.tsEncodingProbeErr
+			}
+			entry.tsEncodingProbeErr = nil
+		}
 		enc, stampedTbl, err := resolveTimestampEncoding(ctx, writerTbl, reloadTable, r.logger)
 		if err != nil {
+			if errors.Is(err, errTimestampProbeBoundExceeded) {
+				if snap := writerTbl.CurrentSnapshot(); snap != nil {
+					entry.tsEncodingProbeErr = err
+					entry.tsEncodingProbeSnapshot = snap.SnapshotID
+					r.logger.Warnf("Timestamp-encoding probe for table %v hit its %d-file bound; refusing writes until the %s table property is set (or new data files land) — this result is cached, so retries will not re-scan", key.table, maxProbedFiles, icebergx.TimestampEncodingProperty)
+				}
+			}
 			return nil, err
 		}
 		entry.tsEncoding = enc

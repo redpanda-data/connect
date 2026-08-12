@@ -10,6 +10,7 @@ package iceberg
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/apache/iceberg-go"
@@ -63,6 +64,21 @@ func resolveTimestampEncoding(ctx context.Context, tbl *table.Table, reload func
 	return enc, stamped, nil
 }
 
+// maxProbedFiles bounds how many parquet footers probeTimestampEncoding opens
+// before failing the write (see the bound's comment inside). A variable only
+// so tests can exercise the bound without seeding a thousand files; production
+// code must treat it as a constant. The number is quoted in the docs
+// (rowOperationDocs' timestamp-encoding section, config.go) — keep them in
+// sync when changing it.
+var maxProbedFiles = 1000
+
+// errTimestampProbeBoundExceeded marks the probe giving up after
+// maxProbedFiles non-deciding footers. It is deterministic for a given table
+// snapshot (the scan inspects only committed files), which is what lets the
+// router negative-cache it per snapshot instead of re-paying the full scan on
+// every retried write.
+var errTimestampProbeBoundExceeded = errors.New("timestamp-encoding probe bound exceeded")
+
 // probeTimestampEncoding bootstraps the encoding for a table that predates the
 // pinning property, by inspecting what the table actually contains:
 //
@@ -73,10 +89,12 @@ func resolveTimestampEncoding(ctx context.Context, tbl *table.Table, reload func
 //   - otherwise → open a current-snapshot data file's parquet footer and read
 //     the isAdjustedToUTC annotation off a no-tz timestamp column:
 //     true → legacy, false → spec. Files that don't carry any such column
-//     (e.g. written before the column was evolved in) are skipped; if no
-//     parquet file carries one, resolve spec for the same reason as the
-//     no-column case. Any read/parse failure is a hard error — guessing here
-//     could silently mix annotations within the table.
+//     (e.g. written before the column was evolved in) are skipped; if an
+//     EXHAUSTIVE scan finds no parquet file carrying one, resolve spec for
+//     the same reason as the no-column case. Any read/parse failure is a hard
+//     error, and so is exceeding the maxProbedFiles bound before any footer
+//     decides (errTimestampProbeBoundExceeded) — guessing from a failed or
+//     truncated scan could silently mix annotations within the table.
 func probeTimestampEncoding(ctx context.Context, tbl *table.Table) (icebergx.TimestampEncoding, error) {
 	schema := tbl.Schema()
 	if !icebergx.SchemaHasNoTZTimestamp(schema) {
@@ -98,12 +116,14 @@ func probeTimestampEncoding(ctx context.Context, tbl *table.Table) (icebergx.Tim
 	// reads, executed serially while the router holds the table entry's lock,
 	// so an unbounded loop over a large table whose no-tz timestamp column was
 	// evolved in after its current files were written (no footer ever decides)
-	// would stall the first write behind hundreds of thousands of reads. Files
-	// WITHOUT the column carry no encoding either way, so after this many
-	// non-deciding files we resolve spec on the same reasoning as the
-	// column-absent case below. Operators with unusual layouts can skip the
-	// probe entirely by setting the pinning property on the table themselves.
-	const maxProbedFiles = 1000
+	// would stall the first write behind hundreds of thousands of reads.
+	// Hitting the bound FAILS the write rather than resolving spec: manifest
+	// entries carry no useful ordering, so a legacy-annotated file may sit
+	// beyond the cap while the first thousand all predate the column, and
+	// stamping spec from that absence of evidence would permanently mix
+	// annotations within the table — the exact outcome every other failure in
+	// this path refuses to risk. The error names the escape hatch: set the
+	// pinning property on the table explicitly and the probe never runs.
 	probed := 0
 	for _, m := range manifests {
 		if m.ManifestContent() != iceberg.ManifestContentData {
@@ -123,7 +143,12 @@ func probeTimestampEncoding(ctx context.Context, tbl *table.Table) (icebergx.Tim
 				continue
 			}
 			if probed >= maxProbedFiles {
-				return icebergx.TimestampEncodingSpec, nil
+				return 0, fmt.Errorf(
+					"%w: probed %d parquet data files without finding a no-timezone timestamp column to read the table's existing encoding from; "+
+						"refusing to guess, because a legacy-encoded file beyond the probe bound would then be silently mixed with differently-encoded new files: "+
+						"set the table property %s to \"spec\" (files written with the Iceberg-spec encoding, isAdjustedToUTC=false) or \"legacy\" (isAdjustedToUTC=true) "+
+						"to pin the encoding explicitly and skip the probe",
+					errTimestampProbeBoundExceeded, maxProbedFiles, icebergx.TimestampEncodingProperty)
 			}
 			probed++
 			enc, found, err := probeParquetFooterEncoding(fsys, df.FilePath(), schema)

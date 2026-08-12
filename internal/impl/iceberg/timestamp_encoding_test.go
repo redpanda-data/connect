@@ -502,3 +502,73 @@ func TestCOWLegacyTimestampGuard(t *testing.T) {
 		assert.Equal(t, table.OpOverwrite, snap.Summary.Operation, "the upsert must land as a row-delta overwrite")
 	})
 }
+
+// TestProbeCapFailsClosed pins the probe bound's fail-closed contract: when
+// every probed file lacks a no-tz timestamp leaf (the column was evolved in
+// after they were written) and the bound is hit before any footer decides, the
+// probe must FAIL with an error naming the pinning property — never resolve
+// spec from absence of evidence. Manifest entries carry no useful ordering, so
+// a legacy-annotated file could sit beyond the bound; stamping spec from a
+// truncated scan would permanently mix annotations within the table, the exact
+// outcome the pinning property exists to prevent. The control run shows the
+// legitimate evolution case still resolves spec once the scan is exhaustive.
+func TestProbeCapFailsClosed(t *testing.T) {
+	ctx := t.Context()
+
+	// Files are written against a schema WITHOUT the no-tz timestamp column,
+	// so no footer can ever decide the encoding.
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: false},
+	)
+	_, cat := newEncTable(t, sc, nil)
+	tbl := cat.snapshot()
+	require.NoError(t, os.MkdirAll(filepath.Join(tbl.Location(), "data"), 0o755))
+	w := &writer{table: tbl, caseSensitive: true, tsEncoding: icebergx.TimestampEncodingSpec, logger: service.MockResources().Logger()}
+	tx := tbl.NewTransaction()
+	for i := range 3 {
+		files, err := w.writeDataFiles(ctx, service.MessageBatch{structuredMsg(t, map[string]any{"id": i})})
+		require.NoError(t, err)
+		require.NoError(t, tx.AddDataFiles(ctx, files, nil, table.WithoutAutoNameMapping(), table.WithoutDuplicateCheck()))
+	}
+	_, err := tx.Commit(ctx)
+	require.NoError(t, err)
+
+	// Evolve the no-tz timestamp column in AFTER the files were written.
+	tx2 := cat.snapshot().NewTransaction()
+	require.NoError(t, tx2.UpdateSchema(true, false).
+		AddColumn([]string{"ts"}, iceberg.PrimitiveTypes.Timestamp, "", false, nil).
+		Commit())
+	_, err = tx2.Commit(ctx)
+	require.NoError(t, err)
+
+	old := maxProbedFiles
+	t.Cleanup(func() { maxProbedFiles = old })
+
+	// Bound below the file count: the scan is truncated, so the probe must
+	// refuse to guess and point at the manual pin.
+	maxProbedFiles = 2
+	_, err = probeTimestampEncoding(ctx, cat.snapshot())
+	require.Error(t, err, "a truncated probe must fail closed, not resolve spec")
+	require.ErrorIs(t, err, errTimestampProbeBoundExceeded,
+		"the bound failure must carry its sentinel so the router can negative-cache it")
+	assert.Contains(t, err.Error(), icebergx.TimestampEncodingProperty,
+		"the error must name the pinning property as the escape hatch")
+
+	// The CALLER contract is the dangerous half: resolveTimestampEncoding must
+	// propagate the bound error and — critically — must not have stamped any
+	// encoding onto the table. A refactor that swallowed the error and stamped
+	// spec would reintroduce the permanent mis-pin this test exists to forbid.
+	_, _, err = resolveTimestampEncoding(ctx, cat.snapshot(), reloadFn(cat), nil)
+	require.Error(t, err, "the bootstrap must fail, not stamp a guess")
+	require.ErrorIs(t, err, errTimestampProbeBoundExceeded)
+	assert.NotContains(t, cat.snapshot().Properties(), icebergx.TimestampEncodingProperty,
+		"a failed bootstrap must leave no permanent mark on the table")
+
+	// Control: an exhaustive scan of the same table legitimately resolves
+	// spec — no current file can carry the evolved-in column.
+	maxProbedFiles = 100
+	enc, err := probeTimestampEncoding(ctx, cat.snapshot())
+	require.NoError(t, err)
+	assert.Equal(t, icebergx.TimestampEncodingSpec, enc,
+		"an exhaustive no-column scan still resolves spec (the evolution case)")
+}

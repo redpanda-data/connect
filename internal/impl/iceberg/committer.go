@@ -482,8 +482,11 @@ func (c *committer) cleanupOrphanedOverwriteFiles(ctx context.Context, written m
 	// on the write path, and a scattered copy-on-write batch can orphan
 	// thousands of files — serial per-object round trips against object
 	// storage would stall the batch ack and every queued commit for the table.
+	// The bound keeps the burst polite to object-store rate limits while still
+	// collapsing the sweep's wall clock by roughly its factor.
+	const orphanDeleteConcurrency = 8
 	var wg errgroup.Group
-	wg.SetLimit(8)
+	wg.SetLimit(orphanDeleteConcurrency)
 	for p := range written {
 		if _, ref := referenced[p]; ref {
 			continue
