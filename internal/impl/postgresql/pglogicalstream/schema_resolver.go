@@ -130,15 +130,18 @@ func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (v
 	return schemas, hidden, nil
 }
 
-// resolveExistingTables returns the set of quoted table identifiers that
-// actually exist in the given (already quoted) schema.
+// resolveExistingTables returns the quoted names of the publishable base
+// tables (including partitioned tables) that exist in the given (already
+// quoted) schema.
 //
-// This is used to resolve a schema glob × table list combination per-schema
-// rather than assuming every matched schema contains every listed table. A
-// schema matching the glob but missing one of the configured tables (e.g. a
-// tenant schema that's still being provisioned) would otherwise cause
-// CreatePublication's FOR TABLE clause to reference a non-existent relation,
-// failing publication setup for every schema, not just the drifted one.
+// Used to resolve a schema glob × table list combination per-schema, since a
+// matched schema may not contain a configured table (e.g. still being
+// provisioned) or may have a same-named view/foreign/temporary table
+// instead. table_type is restricted to 'BASE TABLE' so either case is
+// treated as missing and falls through to the caller's "not found, skipping"
+// warning - otherwise CreatePublication's FOR TABLE clause would reference
+// an unpublishable relation and fail setup for every matched schema, not
+// just the drifted one.
 func resolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchema string) (map[string]struct{}, error) {
 	schema, err := sanitize.UnquotePostgresIdentifier(quotedSchema)
 	if err != nil {
@@ -146,7 +149,7 @@ func resolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchem
 	}
 
 	q, err := sanitize.SQLQuery(
-		"SELECT table_name FROM information_schema.tables WHERE table_schema = $1",
+		"SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE'",
 		schema,
 	)
 	if err != nil {

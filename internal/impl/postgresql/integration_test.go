@@ -2062,6 +2062,92 @@ postgres_cdc:
 	assert.Equal(t, "events", collected[0].table)
 }
 
+// TestIntegrationMultiSchemaViewNamesakeDegradesGracefully guards against a
+// relation that exists but isn't publishable: tenant_c matches the schema
+// glob and has an "events" view (e.g. a compatibility shim over a renamed
+// table), not the "events" table configured. Before restricting
+// resolveExistingTables to table_type = 'BASE TABLE', this view counted as
+// present, so CreatePublication's FOR TABLE clause referenced it and failed
+// setup for every matched schema with "... is not supported for views".
+// tenant_c's view should instead be skipped with a warning, the same way a
+// genuinely missing table is, leaving tenant_a free to stream.
+func TestIntegrationMultiSchemaViewNamesakeDegradesGracefully(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	_, err = db.Exec("CREATE SCHEMA tenant_a")
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE TABLE tenant_a.events (id SERIAL PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE SCHEMA tenant_c")
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE VIEW tenant_c.events AS SELECT 1 AS id, 'namesake'::text AS name")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('alice')")
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		dbSchema string
+		table    string
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: view_namesake_degrade_slot
+    stream_snapshot: true
+    schema_pattern: tenant_*
+    tables:
+      - events
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			m := msgMeta{}
+			m.dbSchema, _ = msg.MetaGet("database_schema")
+			m.table, _ = msg.MetaGet("table")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	// tenant_a should keep streaming even though tenant_c's "events" is a
+	// view rather than a publishable table.
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected) >= 1
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for tenant_a snapshot row; a view namesake in tenant_c should not block replication or fail publication setup")
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, collected, 1)
+	assert.Equal(t, "tenant_a", collected[0].dbSchema)
+	assert.Equal(t, "events", collected[0].table)
+}
+
 func TestIntegrationNoSchemasMatchedReturnsError(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
