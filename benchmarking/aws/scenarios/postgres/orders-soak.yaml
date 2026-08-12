@@ -6,12 +6,16 @@ description: |
   search; it exists to catch leaks, stalls, and log/metric-rotation bugs
   that a short max-load sweep point never runs long enough to hit.
 
-  The connector authenticates with RDS IAM auth (aws.enabled below), not the
-  master password: IAM tokens expire after ~15 minutes, so a 90-minute run
-  crosses the token window six times — the credential-rotation bug class
-  (#4668 postgres_cdc IAM heartbeat, #4258 mysql_cdc mid-snapshot expiry)
-  that motivated soak testing in the first place. The seeder and reset steps
-  keep using the master DSN.
+  Password auth, deliberately. IAM auth was tried first and CANNOT work
+  here: RDS PostgreSQL rejects IAM tokens on replication-protocol
+  connections (live-confirmed 2026-08-12 on this exact stack — the same
+  token authenticates a normal connection but `replication=database` fails
+  with 28P01), and logical replication is the heart of postgres_cdc. The
+  IAM plumbing (TF iam_auth_enabled, ${POSTGRES_IAM_DSN}, reset grants) is
+  kept in git history for an Aurora-postgres follow-up; the ~15-min
+  credential-rotation soak lever moves to a future mysql_cdc soak, where
+  IAM auth rides normal-protocol connections (#4258 shows customers run
+  it).
 
 connector: postgres_cdc
 stack: postgres
@@ -28,7 +32,6 @@ infra:
     storage_gb: 400
     iops: 12000
     storage_throughput: 500
-    iam_auth_enabled: true      # ~15-min IAM tokens = the rotation lever (see description)
     parameters:
       rds.logical_replication: "1"
       max_wal_senders: "20"
@@ -49,13 +52,7 @@ workload:
 pipeline:
   input:
     postgres_cdc:
-      # Passwordless DSN (bench_iam user); the aws block's token builder
-      # supplies a fresh ~15-min IAM token as the password on (re)connect.
-      dsn: ${POSTGRES_IAM_DSN}
-      aws:
-        enabled: true
-        endpoint: ${POSTGRES_ENDPOINT}:5432   # BuildAuthToken wants host:port
-        region: ${REGION}
+      dsn: ${POSTGRES_DSN}
       tls:
         skip_cert_verify: true   # RDS-internal CA isn't in the runner image; postgres_cdc uses NewTLSField (no `enabled` toggle)
       stream_snapshot: false
@@ -70,28 +67,10 @@ matrix:
   cpu_points: [2]
 
 reset:
-  # Reset runs as the MASTER user (rds_superuser), which can drop slots the
-  # bench_iam connector created. Both slots are dropped even though soak runs
-  # --engines=connect only, so a --keep re-run against a KC-touched instance
-  # still starts clean.
+  # Both slots are dropped even though soak runs --engines=connect only, so
+  # a --keep re-run against a KC-touched instance still starts clean. The
+  # IAM-era role/publication setup lived here briefly — recover it from git
+  # history for an Aurora follow-up (see the description).
   - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
   - sql: "SELECT pg_drop_replication_slot('kc_bench_slot') FROM pg_replication_slots WHERE slot_name='kc_bench_slot'"
   - sql: "TRUNCATE TABLE orders"
-  # --- IAM-auth role setup (idempotent, master creds) ---
-  # DO-string guards instead of $$-quoting: the SQL is rendered into a bash
-  # double-quoted string (scripts.go uses %q), where $$ would expand to the
-  # shell PID. Single quotes pass through double quotes untouched.
-  - sql: "DO 'BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = ''bench_iam'') THEN CREATE ROLE bench_iam WITH LOGIN; END IF; END';"
-  - sql: "GRANT rds_iam TO bench_iam"          # RDS: allow IAM-token login
-  - sql: "GRANT rds_replication TO bench_iam"  # slot create + logical streaming
-  - sql: "GRANT USAGE ON SCHEMA public TO bench_iam"
-  - sql: "GRANT SELECT ON ALL TABLES IN SCHEMA public TO bench_iam"
-  # CREATE on the DB is required for bench_iam to own the publication below.
-  - sql: "GRANT CREATE ON DATABASE benchdb TO bench_iam"
-  # Pre-create the publication (name = pglog_stream_<slot_name>) with EXACTLY
-  # the connector's table list: postgres_cdc's CreatePublication then no-ops
-  # (docs bless pre-creation to avoid granting create rights to the
-  # replication user). Ownership goes to bench_iam so that even a table-list
-  # drift ends in an ALTER it is allowed to attempt, not a permissions error.
-  - sql: "DO 'BEGIN IF NOT EXISTS (SELECT FROM pg_publication WHERE pubname = ''pglog_stream_bench_slot'') THEN CREATE PUBLICATION pglog_stream_bench_slot FOR TABLE public.orders; END IF; END';"
-  - sql: "ALTER PUBLICATION pglog_stream_bench_slot OWNER TO bench_iam"
