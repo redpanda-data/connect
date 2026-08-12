@@ -297,6 +297,9 @@ pg_stream:
 
 	// Run 1: receive the snapshot rows but never acknowledge them, then simulate
 	// a crash by cancelling the run before the slot can be promoted.
+	run1Ctx, crash := context.WithCancel(context.Background())
+	defer crash()
+
 	received := make(chan struct{}, 1)
 	run1Builder := service.NewStreamBuilder()
 	require.NoError(t, run1Builder.SetLoggerYAML(`level: OFF`))
@@ -306,15 +309,21 @@ pg_stream:
 		case received <- struct{}{}:
 		default:
 		}
-		// Block without acking until the simulated crash cancels our context.
-		<-ctx.Done()
-		return ctx.Err()
+		// Block without acking until the simulated crash. Benthos invokes
+		// consumer funcs with context.Background(), so waiting on the passed
+		// ctx alone would block this goroutine forever and leak it (and the
+		// unacked stream behind it) past the end of the test.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-run1Ctx.Done():
+			return run1Ctx.Err()
+		}
 	}))
 	run1, err := run1Builder.Build()
 	require.NoError(t, err)
 	license.InjectTestService(run1.Resources())
 
-	run1Ctx, crash := context.WithCancel(context.Background())
 	run1Done := make(chan struct{})
 	go func() {
 		defer close(run1Done)
@@ -334,6 +343,14 @@ pg_stream:
 	case <-run1Done:
 	case <-time.After(30 * time.Second):
 		t.Fatal("run 1 did not stop after the simulated crash")
+	}
+	// Run returns as soon as its context is cancelled without tearing the
+	// stream down, so stop it explicitly here; otherwise the crashed stream
+	// (wedged on the never-acknowledged snapshot batch) leaks its goroutines
+	// past the end of the test. Errors are expected: the stream cannot stop
+	// gracefully by construction.
+	if err := run1.StopWithin(10 * time.Second); err != nil {
+		t.Log(err)
 	}
 
 	// The barrier must have prevented the temporary slot from being promoted to
