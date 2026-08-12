@@ -137,6 +137,8 @@ Schema pattern matching runs once at pipeline startup. Schemas created after the
 
 If `+"`"+fieldTables+"`"+` is non-empty and this pattern matches no schema in the database, startup fails with an error. This field has no effect when `+"`"+fieldTables+"`"+` is left empty - see `+"`"+fieldTables+"`"+` below.
 
+This pattern can contain characters that wouldn't be allowed in an unquoted schema name, because it's only ever compared against the real name of each schema in the database - it doesn't have to be a valid name itself. For example, a schema literally named `+"`a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11`"+` (which must have been created using double quotes, since hyphens aren't allowed in an unquoted `+"`CREATE SCHEMA`"+` statement) can still be matched using the unquoted pattern `+"`a0eebc99-*`"+`.
+
 This field is mutually exclusive with `+"`"+fieldSchema+"`"+`; when set, it takes over schema resolution entirely and `+"`"+fieldSchema+"`"+` must be left at its default.`).
 			Examples("tenant_*", "*", `"MyCaseSensitiveSchemaNeedingQuotes"`).
 			Optional().
@@ -535,8 +537,15 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 }
 
 // validateSchemaPattern validates a schema name or glob pattern.
-// Accepts exact postgres identifiers (letters/digits/underscores) and glob
-// patterns that additionally allow '*' as a wildcard character.
+//
+// Unquoted patterns are matched via ILIKE against stored schema names (see
+// resolveSchemas) rather than parsed as an identifier we construct
+// ourselves, so the accepted character set here is deliberately as wide as
+// what's legal inside a quoted schema name, plus '*' as a wildcard - it is
+// not narrowed to unquoted-identifier syntax. This matters because a schema
+// that had to be created with a quoted identifier (e.g. a UUID-suffixed
+// tenant schema, since hyphens are invalid in unquoted identifiers) must
+// still be matchable via an unquoted glob such as "tenant-*" or "a0eebc99-*".
 // Double-quoted identifiers (e.g. "MySchema") are accepted as exact names;
 // wildcards are not allowed inside quotes.
 func validateSchemaPattern(s string) error {
@@ -552,11 +561,8 @@ func validateSchemaPattern(s string) error {
 		}
 		return nil
 	}
-	for i, ch := range s {
-		if unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '_' || ch == '*' {
-			continue
-		}
-		return fmt.Errorf("invalid character %q at position %d in schema pattern %q", ch, i, s)
+	if strings.ContainsRune(s, '"') {
+		return fmt.Errorf("unquoted schema pattern %q must not contain '\"'", s)
 	}
 	first, _ := utf8.DecodeRuneInString(s)
 	if first != '_' && first != '*' && !unicode.IsLetter(first) {

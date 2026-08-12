@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -67,8 +67,14 @@ func TestSchemaPatternValidation(t *testing.T) {
 		{`""`, "invalid quoted schema identifier"},
 		{"1abc", "must start with a letter"},
 		{`"unclosed`, "invalid quoted schema identifier"},
-		{"schema-name", "invalid character"},
+		// Regression test: an unquoted pattern is matched against stored
+		// schema names, not parsed as an identifier, so hyphens (invalid in
+		// unquoted Postgres identifiers) must still be accepted - e.g. to
+		// match a UUID-suffixed tenant schema that had to be created quoted.
+		{"schema-name", ""},
+		{"a0eebc99-*", ""},
 		{`"quoted*"`, "wildcard"},
+		{`a"b`, `must not contain '"'`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.pattern, func(t *testing.T) {

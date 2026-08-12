@@ -1898,6 +1898,91 @@ postgres_cdc:
 	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
 }
 
+func TestIntegrationSchemaPatternMatchesHyphenatedUUIDSchema(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	const uuidSchema = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+	_, err = db.Exec(fmt.Sprintf(`CREATE SCHEMA "%s"`, uuidSchema))
+	require.NoError(t, err)
+	_, err = db.Exec(fmt.Sprintf(`CREATE TABLE "%s".events (id SERIAL PRIMARY KEY, name TEXT)`, uuidSchema))
+	require.NoError(t, err)
+	_, err = db.Exec(fmt.Sprintf(`INSERT INTO "%s".events (name) VALUES ('alice')`, uuidSchema))
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		dbSchema  string
+		table     string
+		operation string
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+	collectedLen := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected)
+	}
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: hyphenated_schema_pattern_slot
+    stream_snapshot: true
+    schema_pattern: a0eebc99-*
+    tables:
+      - events
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			m := msgMeta{}
+			m.dbSchema, _ = msg.MetaGet("database_schema")
+			m.table, _ = msg.MetaGet("table")
+			m.operation, _ = msg.MetaGet("operation")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	assert.Eventually(t, func() bool {
+		return collectedLen() >= 1
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot row from hyphenated UUID schema")
+
+	_, err = db.Exec(fmt.Sprintf(`INSERT INTO "%s".events (name) VALUES ('bob')`, uuidSchema))
+	require.NoError(t, err)
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, 2, collectedLen())
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for CDC row from hyphenated UUID schema")
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, collected, 2)
+	for _, m := range collected {
+		assert.Equal(t, uuidSchema, m.dbSchema, "database_schema metadata should be the raw, unquoted, case-preserved schema name")
+		assert.Equal(t, "events", m.table)
+	}
+}
+
 func TestIntegrationMultiSchemaMissingTableDegradesGracefully(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")

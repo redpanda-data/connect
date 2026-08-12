@@ -202,6 +202,8 @@ Schema pattern matching runs once at pipeline startup. Schemas created after the
 
 If `tables` is non-empty and this pattern matches no schema in the database, startup fails with an error. This field has no effect when `tables` is left empty - see `tables` below.
 
+This pattern is matched against schema names as stored in the database rather than parsed as an identifier, so unquoted patterns may contain characters that are not valid in an unquoted PostgreSQL identifier (e.g. `tenant-*` or `a0eebc99-*` to match a UUID-suffixed schema that had to be created with a quoted identifier).
+
 This field is mutually exclusive with `schema`; when set, it takes over schema resolution entirely and `schema` must be left at its default.
 
 
@@ -623,7 +625,7 @@ Optional external ID for the role assumption.
 
 === `signal_table_name`
 
-The name of the table used to send control signals to the connector, excluding the schema. The table must
+The name of the table used to send control signals to the connector, excluding the schema. Not supported when `schema_pattern` is set, since there is no single schema to anchor the signal table to. The table must
 exist in the schema configured via the `schema` field, and must not also appear in `tables`
 — the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
 it in both places is rejected at startup. It must have at least these columns — startup validation checks
