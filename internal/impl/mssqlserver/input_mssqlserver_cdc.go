@@ -69,14 +69,27 @@ This input adds the following metadata fields to each message:
 == Permissions
 
 When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + fieldCheckpointCacheTableName + "`" + ` for more information.
+
+== Performance
+
+This input does not read the transaction log directly: SQL Server's CDC capture job scans the log asynchronously and publishes rows into per-table change tables, which this input polls. The capture job is an upstream throughput ceiling shared by every CDC consumer, and delivery is inherently bursty — short idle periods followed by large batches are normal under heavy write load and reflect the capture job's publication cadence, not this input. Under sustained load the practical ceiling is usually the database server's storage bandwidth (CDC multiplies physical write volume several times over across the base table, transaction log, change tables and checkpoints) rather than CPU; the input itself needs very little CPU to keep pace with the capture job.
+
+Operational notes:
+
+- ` + "`TRUNCATE TABLE`" + ` is rejected on a CDC-enabled table. To clear one, disable CDC on the table, truncate, then re-enable.
+- On AWS RDS, enable CDC with ` + "`msdb.dbo.rds_cdc_enable_db`" + ` — ` + "`sys.sp_cdc_enable_db`" + ` requires sysadmin, which RDS does not grant.
+- Do not stop the CDC capture job (` + "`cdc.<database>_capture`" + `): while it is stopped nothing is published to the change tables, so this input reads nothing and reports no error.
 		`).
 	Field(service.NewStringField(fieldConnectionString).
 		Description("The connection string of the Microsoft SQL Server database to connect to.").
 		Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
 	).
 	Field(service.NewBoolField(fieldStreamSnapshot).
-		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current Log Sequence Number position.").
-		ShortDescription("Query all existing data as a snapshot first. Otherwise streaming starts from the current LSN.").
+		Description("If set to true, the connector will query all the existing data as a part of snapshot process. "+
+			"If set to false, no snapshot is taken and on first run streaming begins from the start of each table's existing change table — "+
+			"every change retained by SQL Server's CDC capture and cleanup jobs (three days by default) is replayed, not just changes from the current LSN onward. "+
+			"To begin from the present on a table that already holds change history, disable and re-enable CDC on the table immediately before starting the pipeline so that its change table starts empty.").
+		ShortDescription("Snapshot existing data first. Otherwise streaming replays everything retained in the change tables.").
 		Example(true).
 		Default(false),
 	).
@@ -122,10 +135,13 @@ When using the default Microsoft SQL Server based cache, the Connect user requir
 		Default(1024),
 	).
 	Field(service.NewDurationField(fieldStreamBackoffInterval).
-		Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
-		ShortDescription("Interval between checks for new changes once all data is processed.").
+		Description("The interval to wait before checking for new changes after a pass over the change tables completes. "+
+			"Each pass drains changes up to the maximum LSN observed as the pass began, then sleeps for this interval while SQL Server's capture job continues to publish. "+
+			"For low traffic tables increasing this value reduces query load on the server. "+
+			"On high traffic tables it directly reduces throughput, because the input sits idle for the full interval between passes; consider lowering it towards `500ms`, which matches the default poll interval of comparable CDC systems.").
+		ShortDescription("Interval between passes over the change tables. On busy tables lower values increase throughput.").
 		Default("5s").
-		Example("5s").Example("1m"),
+		Example("500ms").Example("5s").Example("1m"),
 	).
 	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField(fieldBatching))
