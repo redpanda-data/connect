@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	iofs "io/fs"
 	"log/slog"
 	"net/url"
 	"os"
@@ -1258,7 +1259,7 @@ func TestCommitOverwriteNoLeakOnConflictThenSuccess(t *testing.T) {
 	// protected) plus the files the winning snapshot references (disjoint from the
 	// seed, since the overwrite rewrote them into fresh files). If attempt 1's
 	// files had leaked, the count would be strictly larger.
-	referenced, err := comm.referencedDataFilePaths(ctx)
+	referenced, err := comm.referencedCandidatePaths(ctx, comm.writes.snapshot(), -1)
 	require.NoError(t, err)
 	require.NotEmpty(t, referenced)
 	assert.Equal(t, seedCount+len(referenced), countParquetFiles(t, final.Location()),
@@ -1434,7 +1435,7 @@ func TestCommitOverwriteCleanupRunsOnDefinitiveFailures(t *testing.T) {
 		require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}))
 		require.Equal(t, 2, cat.calls, "the conflict must force a second attempt")
 
-		referenced, err := comm.referencedDataFilePaths(ctx)
+		referenced, err := comm.referencedCandidatePaths(ctx, comm.writes.snapshot(), -1)
 		require.NoError(t, err)
 		require.NotEmpty(t, referenced)
 		assert.Equal(t, seedCount+len(referenced), countParquetFiles(t, seedTbl.Location()),
@@ -1776,7 +1777,20 @@ func TestCleanupOverwriteReferenceGuard(t *testing.T) {
 	require.NoError(t, err)
 	defer comm.Close()
 
-	referenced, err := comm.referencedDataFilePaths(ctx)
+	// The seeds were written outside this committer, so build the candidate
+	// set from the actual files on disk: the reference scan only ever answers
+	// membership questions about candidates it is handed.
+	candidates := map[string]struct{}{}
+	require.NoError(t, filepath.WalkDir(seedTbl.Location(), func(p string, d iofs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(p, ".parquet") {
+			candidates[p] = struct{}{}
+		}
+		return nil
+	}))
+	referenced, err := comm.referencedCandidatePaths(ctx, candidates, -1)
 	require.NoError(t, err)
 	require.NotEmpty(t, referenced, "the seeded snapshot must reference at least one data file")
 
@@ -1790,7 +1804,7 @@ func TestCleanupOverwriteReferenceGuard(t *testing.T) {
 	for p := range referenced {
 		written[p] = struct{}{}
 	}
-	comm.cleanupOrphanedOverwriteFiles(ctx, written)
+	comm.cleanupOrphanedOverwriteFiles(ctx, written, -1)
 
 	for p := range referenced {
 		_, statErr := os.Stat(p)
@@ -1885,7 +1899,7 @@ func TestCommitOverwriteCleanupFailsClosedOnIncompleteReferenceScan(t *testing.T
 	}
 	assert.Greater(t, countParquetFiles(t, seedTbl.Location()), seedCount,
 		"the landed snapshot's files (and attempt 1's leftovers) must remain on disk")
-	assert.Contains(t, logBuf.String(), "could not verify which files the current snapshot references",
+	assert.Contains(t, logBuf.String(), "could not verify which files committed snapshots reference",
 		"skipping cleanup must be logged as a warning")
 
 	// With the outage over, the committed snapshot must still scan correctly —
@@ -1995,7 +2009,7 @@ func TestCommitOverwriteCleanupSparesForeignFiles(t *testing.T) {
 
 		// Final on-disk parquet: the protected seed, the spared foreign file, and
 		// the winning attempt's referenced files — attempt 1's orphans cleaned.
-		referenced, err := comm.referencedDataFilePaths(ctx)
+		referenced, err := comm.referencedCandidatePaths(ctx, comm.writes.snapshot(), -1)
 		require.NoError(t, err)
 		require.NotEmpty(t, referenced)
 		assert.Equal(t, seedCount+1+len(referenced), countParquetFiles(t, seedTbl.Location()),

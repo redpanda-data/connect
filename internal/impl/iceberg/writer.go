@@ -574,7 +574,17 @@ func deleteKeyJSONValue(t iceberg.Type, v any) (any, error) {
 		return nil, fmt.Errorf("date column requires a time value, got %T", v)
 	case iceberg.TimeType:
 		if tm, ok := v.(time.Time); ok {
-			return tm.UTC().Format("15:04:05.999999999"), nil
+			// Wall clock in the value's OWN location, truncated to
+			// microseconds. Both halves must match what the insert path
+			// stores: the shredder's convertTime extracts H/M/S/ns in the
+			// value's location (14:30 EST stores 14:30, not 19:30 UTC) at
+			// microsecond resolution — formatting tm.UTC() here would shift
+			// the encoded key/value by the zone offset and silently match
+			// nothing. Go's ".999999" verb truncates (never rounds) and
+			// Arrow's time64[us] parsers reject more than 6 fractional
+			// digits, so µs truncation is also what makes the value
+			// parseable downstream.
+			return tm.Format("15:04:05.999999"), nil
 		}
 		return nil, fmt.Errorf("time column requires a time value, got %T", v)
 	case iceberg.TimestampType, iceberg.TimestampTzType:

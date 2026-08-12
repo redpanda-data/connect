@@ -158,7 +158,7 @@ const rowOperationDocs = "\n" +
 	"\n" +
 	"*Memory.* Under `copy-on-write` the whole new-row batch is materialised in memory as a single Arrow record while the batch commits, so a keyed batch's memory scales with its total row bytes. Size keyed batches to stay within the process memory budget rather than making them arbitrarily large.\n" +
 	"\n" +
-	"*Maintenance.* Because every mutating batch rewrites files and adds a snapshot, a high-churn `copy-on-write` workload accumulates data files and snapshots quickly. Run regular table maintenance: compaction (rewrite / bin-pack data files), snapshot expiry, and orphan-file removal. Orphan-file removal matters specifically because a `copy-on-write` commit that fails *ambiguously* (the catalog may or may not have recorded it) can leave newly-written data files unreferenced; the connector cleans these up best-effort, but periodic orphan-file removal is the definitive backstop. Setting `commit.cleanup_on_failure` to `false` turns that connector-side cleanup off altogether — on every write path — which makes periodic orphan-file removal mandatory rather than merely advisable.\n" +
+	"*Maintenance.* Because every mutating batch rewrites files and adds a snapshot, a high-churn `copy-on-write` workload accumulates data files and snapshots quickly. Run regular table maintenance: compaction (rewrite / bin-pack data files), snapshot expiry, and orphan-file removal. Orphan-file removal matters specifically for commits that fail *ambiguously* (the catalog may or may not have recorded them): the connector deliberately never deletes those attempts' newly-written data files, because the commit may still land and reference them — they are left for orphan-file removal to reclaim. The connector's own best-effort cleanup covers only commits whose failure was a definitive catalog rejection (and superseded attempts of a retried success). Setting `commit.cleanup_on_failure` to `false` turns that connector-side cleanup off altogether — on every write path — which makes periodic orphan-file removal mandatory rather than merely advisable.\n" +
 	"\n" +
 	"*Copy-on-write limitations.*\n" +
 	"\n" +
@@ -198,7 +198,7 @@ Write streaming data to Apache Iceberg tables using the REST catalog API. This o
 
 This output is designed to work with REST catalog implementations like Apache Polaris, AWS Glue Data Catalog, and the Databricks Unity Catalog.
 
-Currently only version 2 of the Iceberg specification is supported. Any pre-existing version 1 tables will be upgraded to version 2 automatically.
+Tables are written using version 2 of the Iceberg specification. A pre-existing version 1 table is upgraded to version 2 automatically on first write — irreversibly — unless `+"`merge_strategy`"+` is `+"`copy-on-write`"+`, which only ever writes plain data files and therefore works on version 1 or version 2 tables without forcing the upgrade (see <<merge-strategies,Merge strategies>>).
 
 === Apache Polaris
 

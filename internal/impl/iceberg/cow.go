@@ -11,6 +11,7 @@ package iceberg
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -24,6 +25,7 @@ import (
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/table"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
@@ -763,6 +765,21 @@ func (w *writer) cowMassage(t iceberg.Type, fieldID int, v any, fieldCommons map
 		} else if ok {
 			v = tm
 		}
+		// A string timestamp is accepted by the insert path (the shredder's
+		// convertTimestamp falls back to bloblang.ValueAsTimestamp for
+		// non-numeric values, parsing RFC 3339), so the rewrite path must
+		// accept it identically — rejecting it here would deterministically
+		// fail every mutating batch on data the table already holds.
+		switch t.(type) {
+		case iceberg.TimestampType, iceberg.TimestampTzType:
+			if s, ok := v.(string); ok {
+				tm, err := bloblang.ValueAsTimestamp(s)
+				if err != nil {
+					return nil, fmt.Errorf("timestamp column given unparseable string %q: %w", s, err)
+				}
+				v = tm
+			}
+		}
 		// Iceberg date/time/timestamp columns are microsecond resolution, and the
 		// Arrow JSON readers for those columns reject sub-microsecond strings. A
 		// time.Time carrying nanoseconds is therefore truncated to microseconds so
@@ -773,6 +790,47 @@ func (w *writer) cowMassage(t iceberg.Type, fieldID int, v any, fieldCommons map
 		// never causes a silent no-match.
 		if tm, ok := v.(time.Time); ok {
 			v = tm.Truncate(time.Microsecond)
+		}
+		// The rewritten rows round-trip through JSON into Arrow's JSON
+		// builders, whose parsing conventions differ from json.Marshal's
+		// defaults for three leaf shapes. Each must land EXACTLY the bytes
+		// the insert path (shredder, bloblang.ValueAsBytes /
+		// bloblang.ValueAsFloat64) stores:
+		//   - binary: Arrow's BinaryBuilder base64-DECODES every JSON string,
+		//     so raw bytes/strings must be base64-encoded here — passing a Go
+		//     string through unchanged would store its base64 decoding
+		//     (silent corruption) or fail the batch when it isn't valid
+		//     base64.
+		//   - string fed []byte: json.Marshal base64-ENCODES []byte, so the
+		//     stored text would be the base64 of what the insert path stores
+		//     verbatim.
+		//   - float NaN/±Inf: json.Marshal rejects them outright, but the
+		//     insert path stores them (parquet supports non-finite doubles);
+		//     Arrow's float builders parse them from their strconv string
+		//     forms.
+		switch t.(type) {
+		case iceberg.BinaryType:
+			switch bv := v.(type) {
+			case []byte:
+				return base64.StdEncoding.EncodeToString(bv), nil
+			case string:
+				return base64.StdEncoding.EncodeToString([]byte(bv)), nil
+			}
+		case iceberg.StringType:
+			if b, ok := v.([]byte); ok {
+				return string(b), nil
+			}
+		case iceberg.Float32Type, iceberg.Float64Type:
+			switch f := v.(type) {
+			case float64:
+				if math.IsNaN(f) || math.IsInf(f, 0) {
+					return strconv.FormatFloat(f, 'g', -1, 64), nil
+				}
+			case float32:
+				if f64 := float64(f); math.IsNaN(f64) || math.IsInf(f64, 0) {
+					return strconv.FormatFloat(f64, 'g', -1, 32), nil
+				}
+			}
 		}
 		return deleteKeyJSONValue(t, v)
 	}

@@ -24,6 +24,8 @@ import (
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 )
@@ -212,6 +214,17 @@ func (c *committer) Commit(ctx context.Context, input CommitInput) error {
 		return c.commitRowDelta(ctx, input)
 	}
 	_, err := c.batcher.Submit(ctx, input)
+	if err != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+		// The batcher runs commits on its own background context, so Submit
+		// returning the CALLER's context error does not stop the request:
+		// still queued or mid-flight, it may yet commit these files. That is
+		// an ambiguous outcome exactly like a lost commit response — mark it
+		// with the unknown-state sentinel so the writer's cleanup gate (and
+		// every other errors.Is(err, rest.ErrCommitStateUnknown) check)
+		// leaves the written files alone instead of deleting files a
+		// still-landing snapshot may reference.
+		return fmt.Errorf("%w: %w", rest.ErrCommitStateUnknown, err)
+	}
 	return err
 }
 
@@ -229,11 +242,17 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 		allFiles = append(allFiles, input.Files...)
 	}
 
-	// The append path is idempotent across a reload via dropAlreadyCommitted
-	// (keyed on file paths), not via a commit-id token, so it passes an empty
-	// commitID and keeps its existing dedupe behaviour while still retrying on an
-	// unknown state.
-	if _, err := c.commitLocked(ctx, "", true, func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error {
+	// The append path carries BOTH idempotency mechanisms across a reload:
+	// dropAlreadyCommitted (keyed on file paths) prunes files a lost-but-landed
+	// attempt already committed, and the commit-id token short-circuits the
+	// retry entirely when the landed snapshot is visible. The token is what
+	// survives an external rewriter: if compaction rewrites our landed files
+	// away between the landing and our reload, the path-keyed check can no
+	// longer see them — but the token in the (historical) snapshot summary
+	// still proves the batch landed, so the retry returns success instead of
+	// re-adding the files and duplicating rows.
+	commitID := uuid.NewString()
+	if _, err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error {
 		files := allFiles
 		if reloaded {
 			// A prior attempt can land server-side yet report failure (a lost
@@ -327,6 +346,16 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 	// through this committer, so nothing else records concurrently).
 	c.writes.reset()
 
+	// The snapshot current at entry bounds the post-commit orphan scan: only
+	// snapshots landed after this marker can reference the files this call
+	// writes (paths are uuid-stamped), and among them may be our OWN
+	// landed-but-superseded attempt, whose files must survive cleanup even
+	// when an external rewriter has already replaced the current snapshot.
+	startSnapshotID := int64(-1)
+	if snap := c.table.CurrentSnapshot(); snap != nil {
+		startSnapshotID = snap.SnapshotID
+	}
+
 	// A stable commit-id, generated once before the retry loop, makes this
 	// copy-on-write commit idempotent across a reload: commitLocked stamps it into
 	// the snapshot summary and, on a retry after a failed or ambiguous
@@ -368,7 +397,8 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 	// committer's written-but-not-yet-committed files are absent from our
 	// recorded set, so they are untouchable by construction — no matter how the
 	// commits interleave. A recorded file is deleted only if it is also absent
-	// from c.table's current snapshot (referencedDataFilePaths), which protects
+	// from every snapshot landed since this call began (referencedCandidatePaths),
+	// which protects
 	// the landed attempt's files on a retried success. Safety argument in one
 	// line: authored-by-us AND not-referenced ⇒ orphan of a losing attempt.
 	//
@@ -405,7 +435,7 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 		if c.cfg.DisableCleanupOnFailure {
 			c.logger.Debugf("Skipping copy-on-write orphan cleanup of %d recorded files: %s is disabled; leaving them for Iceberg orphan-file maintenance", len(written), ioFieldCleanupOnFailure)
 		} else {
-			c.cleanupOrphanedOverwriteFiles(ctx, written)
+			c.cleanupOrphanedOverwriteFiles(ctx, written, startSnapshotID)
 		}
 	}
 	if err != nil {
@@ -430,62 +460,108 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 // deleting a possibly-committed file would corrupt the table.
 //
 // Cleanup fails closed: if the reference scan cannot be completed
-// (referencedDataFilePaths errors), it deletes NOTHING and leaves every
+// (referencedCandidatePaths errors), it deletes NOTHING and leaves every
 // recorded file for Iceberg orphan-file maintenance. An incomplete scan
 // cannot tell a losing attempt's orphan from a file the landed snapshot
 // references — on a retried success both attempts' files are in `written`,
 // and treating a still-referenced file as an orphan would delete data the
 // committed snapshot depends on. Deleting nothing is always safe; deleting on
 // an incomplete scan is not.
-func (c *committer) cleanupOrphanedOverwriteFiles(ctx context.Context, written map[string]struct{}) {
+func (c *committer) cleanupOrphanedOverwriteFiles(ctx context.Context, written map[string]struct{}, sinceSnapshotID int64) {
 	fsys, err := c.table.FS(ctx)
 	if err != nil {
 		c.logger.Warnf("Skipping copy-on-write orphan cleanup: could not resolve the table filesystem; leaving %d recorded files for Iceberg orphan-file maintenance: %v", len(written), err)
 		return
 	}
-	referenced, err := c.referencedDataFilePaths(ctx)
+	referenced, err := c.referencedCandidatePaths(ctx, written, sinceSnapshotID)
 	if err != nil {
-		c.logger.Warnf("Skipping copy-on-write orphan cleanup: could not verify which files the current snapshot references; leaving %d recorded files for Iceberg orphan-file maintenance: %v", len(written), err)
+		c.logger.Warnf("Skipping copy-on-write orphan cleanup: could not verify which files committed snapshots reference; leaving %d recorded files for Iceberg orphan-file maintenance: %v", len(written), err)
 		return
 	}
+	// Deletes run with bounded concurrency: this sweep executes under commitMu
+	// on the write path, and a scattered copy-on-write batch can orphan
+	// thousands of files — serial per-object round trips against object
+	// storage would stall the batch ack and every queued commit for the table.
+	var wg errgroup.Group
+	wg.SetLimit(8)
 	for p := range written {
 		if _, ref := referenced[p]; ref {
 			continue
 		}
-		if rmErr := fsys.Remove(p); rmErr != nil {
-			c.logger.Warnf("Failed to remove orphaned copy-on-write file %s: %v", p, rmErr)
-		} else {
-			c.logger.Debugf("Removed orphaned copy-on-write file %s", p)
-		}
+		wg.Go(func() error {
+			if rmErr := fsys.Remove(p); rmErr != nil {
+				c.logger.Warnf("Failed to remove orphaned copy-on-write file %s: %v", p, rmErr)
+			} else {
+				c.logger.Debugf("Removed orphaned copy-on-write file %s", p)
+			}
+			return nil
+		})
 	}
+	_ = wg.Wait()
 }
 
-// referencedDataFilePaths returns the paths referenced by the table's current
-// snapshot, used to guard orphan cleanup. It fails closed: every failure to
-// read the snapshot's manifests is propagated rather than accumulated past —
-// a partial set would make cleanup mistake a still-referenced file for an
-// orphan and delete data the committed snapshot depends on. A nil current
-// snapshot is not an error: an empty table genuinely references nothing.
-func (c *committer) referencedDataFilePaths(ctx context.Context) (map[string]struct{}, error) {
-	refs := make(map[string]struct{})
-	snap := c.table.CurrentSnapshot()
-	if snap == nil {
+// referencedCandidatePaths returns the subset of candidates referenced by any
+// snapshot committed SINCE the given start marker (the snapshot that was
+// current when the commit call began; -1 when the table had none), the current
+// snapshot included. Used to guard orphan cleanup:
+//
+//   - Scanning snapshots-since-start rather than only the current snapshot
+//     protects a file our own landed-but-superseded attempt committed: an
+//     external rewriter (compaction, another copy-on-write writer) can replace
+//     the current snapshot within the retry window, removing our landed files
+//     from it while its historical snapshot still references them.
+//   - Candidate paths are uuid-stamped at write time, so snapshots from BEFORE
+//     the start marker cannot reference them — scanning those would be pure
+//     waste. When nothing landed since the start marker, no manifest is read
+//     at all.
+//   - Only candidate membership is recorded (never the full path set of the
+//     table), so memory is O(candidates) regardless of table size, and the
+//     scan stops early once every candidate is accounted for.
+//
+// It fails closed: every failure to read a snapshot's manifests is propagated
+// rather than accumulated past — a partial result would make cleanup mistake a
+// still-referenced file for an orphan and delete data a committed snapshot
+// depends on.
+func (c *committer) referencedCandidatePaths(ctx context.Context, candidates map[string]struct{}, sinceSnapshotID int64) (map[string]struct{}, error) {
+	refs := make(map[string]struct{}, len(candidates))
+	if len(candidates) == 0 {
+		return refs, nil
+	}
+	// Snapshots() is oldest-first; walk backward and stop at the start marker,
+	// mirroring committedSnapshotHasID.
+	var scan []table.Snapshot
+	for _, s := range slices.Backward(c.table.Metadata().Snapshots()) {
+		if s.SnapshotID == sinceSnapshotID {
+			break
+		}
+		scan = append(scan, s)
+	}
+	if len(scan) == 0 {
 		return refs, nil
 	}
 	fsys, err := c.table.FS(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("resolving table filesystem: %w", err)
 	}
-	manifests, err := snap.Manifests(fsys)
-	if err != nil {
-		return nil, fmt.Errorf("loading current snapshot manifests: %w", err)
-	}
-	for _, m := range manifests {
-		for entry, err := range m.Entries(fsys, true) {
-			if err != nil {
-				return nil, fmt.Errorf("reading manifest entries: %w", err)
+	for _, snap := range scan {
+		manifests, err := snap.Manifests(fsys)
+		if err != nil {
+			return nil, fmt.Errorf("loading snapshot %d manifests: %w", snap.SnapshotID, err)
+		}
+		for _, m := range manifests {
+			for entry, err := range m.Entries(fsys, true) {
+				if err != nil {
+					return nil, fmt.Errorf("reading manifest entries: %w", err)
+				}
+				p := entry.DataFile().FilePath()
+				if _, ok := candidates[p]; !ok {
+					continue
+				}
+				refs[p] = struct{}{}
+				if len(refs) == len(candidates) {
+					return refs, nil
+				}
 			}
-			refs[entry.DataFile().FilePath()] = struct{}{}
 		}
 	}
 	return refs, nil
@@ -676,8 +752,9 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 				// landed the commit server-side. If the reloaded table already
 				// carries our commit-id, the prior attempt succeeded — return
 				// success rather than re-applying the mutation (which would
-				// duplicate it). Only the mutation paths pass a commitID; the
-				// append path relies on dropAlreadyCommitted in its stage instead.
+				// duplicate it). Every commit path passes a commitID; the
+				// append path additionally prunes already-landed files via
+				// dropAlreadyCommitted in its stage.
 				if commitID != "" && c.committedSnapshotHasID(commitID, startSnapshotID) {
 					c.logger.Debugf("Commit %s already landed on a prior attempt (found in reloaded snapshot); treating retry as success", commitID)
 					return attempt > 1, nil

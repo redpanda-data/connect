@@ -94,6 +94,17 @@ func probeTimestampEncoding(ctx context.Context, tbl *table.Table) (icebergx.Tim
 	if err != nil {
 		return 0, fmt.Errorf("listing current-snapshot manifests: %w", err)
 	}
+	// The scan is bounded: each probe is an object-store Open plus footer
+	// reads, executed serially while the router holds the table entry's lock,
+	// so an unbounded loop over a large table whose no-tz timestamp column was
+	// evolved in after its current files were written (no footer ever decides)
+	// would stall the first write behind hundreds of thousands of reads. Files
+	// WITHOUT the column carry no encoding either way, so after this many
+	// non-deciding files we resolve spec on the same reasoning as the
+	// column-absent case below. Operators with unusual layouts can skip the
+	// probe entirely by setting the pinning property on the table themselves.
+	const maxProbedFiles = 1000
+	probed := 0
 	for _, m := range manifests {
 		if m.ManifestContent() != iceberg.ManifestContentData {
 			continue
@@ -102,12 +113,19 @@ func probeTimestampEncoding(ctx context.Context, tbl *table.Table) (icebergx.Tim
 			if err != nil {
 				return 0, fmt.Errorf("reading manifest entries: %w", err)
 			}
+			if err := ctx.Err(); err != nil {
+				return 0, fmt.Errorf("probing timestamp encoding: %w", err)
+			}
 			df := entry.DataFile()
 			if df.FileFormat() != iceberg.ParquetFile {
 				// A non-parquet data file was never written by this connector,
 				// so it cannot carry the legacy encoding; skip it.
 				continue
 			}
+			if probed >= maxProbedFiles {
+				return icebergx.TimestampEncodingSpec, nil
+			}
+			probed++
 			enc, found, err := probeParquetFooterEncoding(fsys, df.FilePath(), schema)
 			if err != nil {
 				return 0, fmt.Errorf("probing parquet footer of %s: %w", df.FilePath(), err)

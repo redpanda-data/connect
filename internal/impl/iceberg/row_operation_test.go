@@ -278,10 +278,16 @@ func TestDeleteKeyJSONValue(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "2026-06-24", v)
 
-	// a time column keeps only the wall-clock time (UTC), to nanosecond precision.
+	// a time column keeps the wall clock in the value's OWN location (matching
+	// the shredder's convertTime, which stores 14:30 EST as 14:30, not 19:30
+	// UTC), truncated — never rounded — to the column's microsecond resolution.
 	v, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Time, time.Date(1970, 1, 1, 15, 4, 5, 123456789, time.UTC))
 	require.NoError(t, err)
-	assert.Equal(t, "15:04:05.123456789", v)
+	assert.Equal(t, "15:04:05.123456", v)
+	est := time.FixedZone("EST", -5*3600)
+	v, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Time, time.Date(2024, 6, 1, 14, 30, 0, 0, est))
+	require.NoError(t, err)
+	assert.Equal(t, "14:30:00", v, "wall clock must be taken in the value's own location, not UTC-shifted")
 
 	// bare numbers into date/time columns are rejected for the same ambiguity reason.
 	_, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Date, int64(20000))
