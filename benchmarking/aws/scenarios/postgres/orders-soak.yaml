@@ -74,3 +74,10 @@ reset:
   - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
   - sql: "SELECT pg_drop_replication_slot('kc_bench_slot') FROM pg_replication_slots WHERE slot_name='kc_bench_slot'"
   - sql: "TRUNCATE TABLE orders"
+  # Drop the publication so the connector recreates it with its own table
+  # list. A stale publication that exists but no longer contains the table
+  # makes postgres_cdc stream SILENCE forever (live-hit 2026-08-12: empty
+  # pglog_stream_bench_slot left by an aborted run on reused infra -> 0
+  # msg/s, active slot, 18 GB WAL lag, zero errors). Named after the slot:
+  # publication name = pglog_stream_<slot_name>.
+  - sql: "DROP PUBLICATION IF EXISTS pglog_stream_bench_slot"
