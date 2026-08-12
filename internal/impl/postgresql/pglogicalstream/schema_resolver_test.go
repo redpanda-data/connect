@@ -38,27 +38,30 @@ func TestGlobToLike(t *testing.T) {
 
 func TestSchemaPatternToLike(t *testing.T) {
 	tests := []struct {
-		pattern     string
-		expected    string
-		errContains string
+		pattern       string
+		expected      string
+		caseSensitive bool
+		errContains   string
 	}{
-		// Unquoted glob patterns — folded to lower-case, '*' → '%', '_' escaped.
-		{"public", "public", ""},
-		{"tenant_*", "tenant!_%", ""},
-		{"*", "%", ""},
-		{"schema_1", "schema!_1", ""},
+		// Unquoted glob patterns — folded to lower-case, '*' → '%', '_' escaped,
+		// matched case-insensitively regardless of how the matched schema was created.
+		{pattern: "public", expected: "public"},
+		{pattern: "tenant_*", expected: "tenant!_%"},
+		{pattern: "*", expected: "%"},
+		{pattern: "schema_1", expected: "schema!_1"},
 		// Upper-case is folded: TENANT_* matches the same rows as tenant_*.
-		{"TENANT_*", "tenant!_%", ""},
-		// Quoted exact identifier — case preserved, no wildcard expansion.
-		{`"MySchema"`, "MySchema", ""},
-		{`"schema_1"`, "schema!_1", ""},
-		{`"has%bang!"`, "has!%bang!!", ""},
+		{pattern: "TENANT_*", expected: "tenant!_%"},
+		// Quoted exact identifier — case preserved, no wildcard expansion,
+		// matched case-sensitively.
+		{pattern: `"MySchema"`, expected: "MySchema", caseSensitive: true},
+		{pattern: `"schema_1"`, expected: "schema!_1", caseSensitive: true},
+		{pattern: `"has%bang!"`, expected: "has!%bang!!", caseSensitive: true},
 		// Unterminated quoted identifier → error.
-		{`"bad`, "", "invalid quoted schema identifier"},
+		{pattern: `"bad`, errContains: "invalid quoted schema identifier"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.pattern, func(t *testing.T) {
-			got, err := schemaPatternToLike(tt.pattern)
+			got, caseSensitive, err := schemaPatternToLike(tt.pattern)
 			if tt.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errContains)
@@ -66,6 +69,7 @@ func TestSchemaPatternToLike(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, got)
+			assert.Equal(t, tt.caseSensitive, caseSensitive)
 		})
 	}
 }

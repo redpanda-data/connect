@@ -20,20 +20,28 @@ import (
 )
 
 // schemaPatternToLike converts a schema name or glob pattern into the LIKE
-// pattern used by resolveSchemas. Extracted for unit testing.
+// pattern used by resolveSchemas, plus whether that pattern must be matched
+// case-sensitively. Extracted for unit testing.
 //
-// For quoted identifiers the inner name is exact-escaped (no wildcard expansion).
-// For unquoted patterns the '*' wildcard is converted to '%' and the input is
-// folded to lower-case to match PostgreSQL's identifier folding.
-func schemaPatternToLike(pattern string) (string, error) {
+// For quoted identifiers the inner name is exact-escaped (no wildcard
+// expansion) and matched case-sensitively, since a quoted identifier's case
+// is significant and PostgreSQL does not fold it. For unquoted patterns the
+// '*' wildcard is converted to '%' and matching is case-insensitive: this
+// mirrors PostgreSQL folding unquoted identifiers to lower-case at creation
+// time for the common case, but must hold even when a schema had to be
+// created with a quoted identifier for an unrelated reason (e.g. a
+// UUID-suffixed tenant schema, which requires quoting because hyphens are
+// invalid in unquoted identifiers) and so kept whatever case it was written
+// with — an unquoted glob like "tenant_*" is still expected to match it.
+func schemaPatternToLike(pattern string) (likePattern string, caseSensitive bool, err error) {
 	if strings.HasPrefix(pattern, `"`) {
 		unquoted, err := sanitize.UnquotePostgresIdentifier(pattern)
 		if err != nil {
-			return "", fmt.Errorf("invalid quoted schema identifier %q: %w", pattern, err)
+			return "", false, fmt.Errorf("invalid quoted schema identifier %q: %w", pattern, err)
 		}
-		return escapeLike(unquoted), nil
+		return escapeLike(unquoted), true, nil
 	}
-	return globToLike(strings.ToLower(pattern)), nil
+	return globToLike(strings.ToLower(pattern)), false, nil
 }
 
 // resolveSchemas returns the schemas matching pattern that the connection's
@@ -45,23 +53,30 @@ func schemaPatternToLike(pattern string) (string, error) {
 // see yet.
 //
 // For unquoted patterns (e.g. "tenant_*") the pattern is matched
-// case-insensitively via LIKE, because PostgreSQL folds unquoted identifiers
-// to lower-case at creation time. For quoted identifiers (e.g. `"MySchema"`)
-// an exact case-sensitive lookup is performed. System schemas (pg_* and
-// information_schema) are always excluded so that wildcard patterns like "*"
-// do not attempt to replicate catalog tables.
+// case-insensitively via ILIKE, regardless of whether the matched schema was
+// itself created case-insensitively. For quoted identifiers (e.g.
+// `"MySchema"`) an exact case-sensitive lookup is performed via LIKE. System
+// schemas (pg_* and information_schema) are always excluded case-sensitively
+// so that wildcard patterns like "*" do not attempt to replicate catalog
+// tables.
 //
 // Returned schema names are quoted PostgreSQL identifiers. Returns an error
 // if either query fails; returns a nil visibleSchemas slice (with a nil err)
 // if no schemas match — callers should treat that as an error condition.
 func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (visibleSchemas, inaccessibleSchemas []string, err error) {
-	likePattern, err := schemaPatternToLike(pattern)
+	likePattern, caseSensitive, err := schemaPatternToLike(pattern)
 	if err != nil {
 		return nil, nil, err
 	}
+	// Fixed, code-chosen operator (never derived from user input), so it's
+	// safe to splice directly into the query text rather than parameterize.
+	op := "ILIKE"
+	if caseSensitive {
+		op = "LIKE"
+	}
 
 	q, err := sanitize.SQLQuery(
-		"SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE $1 ESCAPE '!' AND schema_name NOT LIKE 'pg!_%' ESCAPE '!' AND schema_name != 'information_schema'",
+		fmt.Sprintf("SELECT schema_name FROM information_schema.schemata WHERE schema_name %s $1 ESCAPE '!' AND schema_name NOT LIKE 'pg!_%%' ESCAPE '!' AND schema_name != 'information_schema'", op),
 		likePattern,
 	)
 	if err != nil {
@@ -90,7 +105,7 @@ func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (v
 	// missing from information_schema.schemata means the role lacks USAGE (or
 	// similar) on that schema rather than the schema simply not existing.
 	nsQ, err := sanitize.SQLQuery(
-		"SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE $1 ESCAPE '!' AND nspname NOT LIKE 'pg!_%' ESCAPE '!' AND nspname != 'information_schema'",
+		fmt.Sprintf("SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname %s $1 ESCAPE '!' AND nspname NOT LIKE 'pg!_%%' ESCAPE '!' AND nspname != 'information_schema'", op),
 		likePattern,
 	)
 	if err != nil {

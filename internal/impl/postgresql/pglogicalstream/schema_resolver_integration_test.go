@@ -69,3 +69,93 @@ func TestIntegrationResolveSchemasReportsInaccessibleSchemas(t *testing.T) {
 	assert.Equal(t, []string{`"visible_schema"`}, visible)
 	assert.Equal(t, []string{`"hidden_schema"`}, inaccessible)
 }
+
+func TestIntegrationResolveSchemasUUIDSuffixedSchemas(t *testing.T) {
+	integration.CheckSkip(t)
+
+	_, adminURL := createDockerInstance(t)
+
+	adminDB, err := sql.Open("postgres", adminURL)
+	require.NoError(t, err)
+	defer adminDB.Close()
+
+	// Quoting is mandatory here because of the UUID's hyphens, regardless of
+	// case - so both of these preserve their literal casing exactly as written.
+	const (
+		lowerCaseSchema = `"tenant_a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"`
+		mixedCaseSchema = `"Tenant_9c0b4ef8-bb6d-6bb9-bd38-0a11a0eebc99"`
+	)
+	_, err = adminDB.Exec(`CREATE SCHEMA ` + lowerCaseSchema)
+	require.NoError(t, err)
+	_, err = adminDB.Exec(`CREATE SCHEMA ` + mixedCaseSchema)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, adminURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	visible, inaccessible, err := resolveSchemas(ctx, conn, "tenant_*")
+	require.NoError(t, err)
+
+	// Both schemas match the unquoted glob despite the case difference in
+	// their literal prefix - matching is case-insensitive independent of how
+	// the schema itself was created.
+	assert.ElementsMatch(t, []string{lowerCaseSchema, mixedCaseSchema}, visible)
+	assert.Empty(t, inaccessible)
+
+	// A quoted pattern is still exact and case-sensitive: it picks out only
+	// the schema whose case matches the pattern, with no wildcard expansion.
+	exactVisible, _, err := resolveSchemas(ctx, conn, mixedCaseSchema)
+	require.NoError(t, err)
+	assert.Equal(t, []string{mixedCaseSchema}, exactVisible)
+}
+
+func TestIntegrationResolveSchemasBareUUIDSchema(t *testing.T) {
+	integration.CheckSkip(t)
+
+	_, adminURL := createDockerInstance(t)
+
+	adminDB, err := sql.Open("postgres", adminURL)
+	require.NoError(t, err)
+	defer adminDB.Close()
+
+	// Upper-case hex digits, no prefix - quoting is mandatory purely because
+	// of the hyphens, not because of anything alphabetic.
+	const bareUUIDSchema = `"A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11"`
+	_, err = adminDB.Exec(`CREATE SCHEMA ` + bareUUIDSchema)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, adminURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	// A bare wildcard has no literal characters to case-compare, so this is
+	// unaffected by hex-digit casing either way - included as a baseline.
+	visible, _, err := resolveSchemas(ctx, conn, "*")
+	require.NoError(t, err)
+	assert.Contains(t, visible, bareUUIDSchema)
+
+	// The interesting case: an unquoted pattern whose only literal portion is
+	// a lower-case chunk of the UUID itself (no prefix) must still match the
+	// upper-case schema case-insensitively.
+	visible, _, err = resolveSchemas(ctx, conn, "a0eebc99-*")
+	require.NoError(t, err)
+	assert.Equal(t, []string{bareUUIDSchema}, visible)
+
+	// Same, but the literal chunk sits in the middle rather than at the start.
+	visible, _, err = resolveSchemas(ctx, conn, "*-bb6d-*")
+	require.NoError(t, err)
+	assert.Equal(t, []string{bareUUIDSchema}, visible)
+
+	// A quoted pattern remains an exact, case-sensitive lookup: the
+	// differently-cased quoted form matches nothing.
+	visible, _, err = resolveSchemas(ctx, conn, `"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"`)
+	require.NoError(t, err)
+	assert.Empty(t, visible)
+}
