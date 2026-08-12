@@ -29,6 +29,15 @@ import (
 )
 
 func main() {
+	// Operators run the bench as `runner bench ... | tee run.log`. Ctrl-C
+	// SIGINTs the whole foreground process group, so tee dies alongside us —
+	// and without this, Go's default SIGPIPE disposition kills the process on
+	// its next stdout write, ABORTING the deferred terraform destroy and
+	// stranding paid infrastructure (observed live 2026-08-12, twice).
+	// Ignoring SIGPIPE turns those writes into silently-dropped EPIPE errors
+	// so teardown completes even with nowhere to print.
+	signal.Ignore(syscall.SIGPIPE)
+
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)

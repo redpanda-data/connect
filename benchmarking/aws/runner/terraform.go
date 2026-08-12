@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -108,10 +109,30 @@ func run(name string, args []string, stdout *bytes.Buffer) error {
 	if stdout != nil {
 		cmd.Stdout = stdout
 	} else {
-		cmd.Stdout = os.Stdout
+		// Deliberately NOT os.Stdout directly. When the operator's
+		// `| tee` dies on Ctrl-C, a subprocess handed our real stdout fd
+		// inherits the broken pipe and is killed by its own SIGPIPE —
+		// which aborted `terraform destroy` mid-teardown and stranded
+		// infrastructure (2026-08-12, twice). Wrapping the writer makes
+		// exec route the child through a pipe the runner owns: the child
+		// always has a live fd, and the EPIPE happens on OUR forwarding
+		// write, which is survivable (SIGPIPE is ignored in main).
+		cmd.Stdout = epipeSafeWriter{os.Stdout}
 	}
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = epipeSafeWriter{os.Stderr}
 	return cmd.Run()
+}
+
+// epipeSafeWriter forwards to an underlying writer but reports EPIPE-style
+// failures as successful writes, so a dead downstream pipe never kills the
+// producing subprocess (exec.Cmd stops copying on the first write error).
+type epipeSafeWriter struct{ w io.Writer }
+
+func (s epipeSafeWriter) Write(p []byte) (int, error) {
+	// Console forwarding is best-effort by design: losing teardown output is
+	// vastly better than losing teardown.
+	_, _ = s.w.Write(p)
+	return len(p), nil
 }
 
 // StackDir returns the path to a stack relative to the repo root.
