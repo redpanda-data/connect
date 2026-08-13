@@ -98,8 +98,10 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return nil, err
 	}
 
-	var tables []TableFQN
-	var schema string
+	var (
+		tables []TableFQN
+		schema string
+	)
 	if config.DBSchemaPattern != "" {
 		if config.SignalTableName != "" {
 			return nil, errors.New("signal_table_name is not supported when schema_pattern is set")
