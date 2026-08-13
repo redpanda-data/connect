@@ -462,13 +462,19 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	shutsig := shutdown.NewSignaller()
 	m.shutsig = shutsig
 	go func() {
+		// Defers run LIFO: TriggerHasStopped must be registered first so it
+		// fires only after the flusher has fully stopped — Connect's reconnect
+		// path waits on HasStoppedChan and then calls Start() on the same
+		// Periodic, which is unsynchronized and must never overlap a Stop()
+		// still in flight (an overlapped Start no-ops, leaving the flusher
+		// dead for the new connection).
+		defer shutsig.TriggerHasStopped()
 		ctx, cancel := shutsig.SoftStopCtx(context.Background())
+		defer cancel()
 		if m.checkpointFlusher != nil {
 			m.checkpointFlusher.Start()
 			defer m.checkpointFlusher.Stop()
 		}
-		defer cancel()
-		defer shutsig.TriggerHasStopped()
 
 		opts := options.ChangeStream().
 			SetBatchSize(int32(m.readBatchSize)).
