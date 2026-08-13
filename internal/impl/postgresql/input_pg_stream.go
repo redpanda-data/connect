@@ -483,7 +483,7 @@ type pgStreamInput struct {
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
-	controlSig      *postgresSignaller
+	controlSig      controlSignaller
 	stopSig         *shutdown.Signaller
 
 	// snapshotAckWG tracks in-flight snapshot batches: incremented when a
@@ -602,11 +602,10 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				err   error
 			)
 			for _, msg := range batch {
-				if p.controlSig.enabled() {
-					if _, err := p.controlSig.listen(&msg); err != nil {
-						// Log it and fall through to the normal emit path below.
-						p.logger.Errorf("failed to detect control signal in change event: %s", err)
-					}
+				// noop if not configured
+				if _, err := p.controlSig.listen(&msg); err != nil {
+					// Log it and fall through to the normal emit path below.
+					p.logger.Errorf("failed to detect control signal in change event: %s", err)
 				}
 
 				if mb, err = json.Marshal(msg.Data); err != nil {
