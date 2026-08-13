@@ -44,12 +44,12 @@ tables:
 	require.NoError(t, err)
 }
 
-// TestSchemaPatternValidation verifies that the schema_pattern field is
+// TestSchemaIncludeValidation verifies that the schema_include field is
 // validated during config parsing, before any network I/O is attempted.
 // Success is asserted via newPgStreamInput returning no error - the
 // constructor doesn't dial the database, so a valid pattern implies
 // validation passed.
-func TestSchemaPatternValidation(t *testing.T) {
+func TestSchemaIncludeValidation(t *testing.T) {
 	tests := []struct {
 		pattern     string
 		errContains string
@@ -94,7 +94,7 @@ func TestSchemaPatternValidation(t *testing.T) {
 			// quotes, e.g. `"MySchema"`) reaches validateSchemaPattern verbatim.
 			yaml := fmt.Sprintf(`
 dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
-schema_pattern: '%s'
+schema_include: '%s'
 slot_name: test_slot
 tables:
   - events
@@ -111,30 +111,30 @@ tables:
 	}
 }
 
-// TestSchemaAndSchemaPatternMutuallyExclusive verifies that setting both
-// schema (to a non-default value) and schema_pattern is rejected at config
+// TestSchemaAndSchemaIncludeMutuallyExclusive verifies that setting both
+// schema (to a non-default value) and schema_include is rejected at config
 // construction time.
-func TestSchemaAndSchemaPatternMutuallyExclusive(t *testing.T) {
+func TestSchemaAndSchemaIncludeMutuallyExclusive(t *testing.T) {
 	yaml := `
 dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
 schema: tenant_foo
-schema_pattern: 'tenant_*'
+schema_include: 'tenant_*'
 slot_name: test_slot
 tables:
   - events
 `
 	_, err := parsePgStreamInput(t, yaml)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "schema and schema_pattern are mutually exclusive")
+	assert.Contains(t, err.Error(), "schema and schema_include are mutually exclusive")
 }
 
-// TestSchemaPatternWithDefaultSchemaSucceeds verifies that setting
-// schema_pattern while leaving schema untouched (at its "public" default) is
+// TestSchemaIncludeWithDefaultSchemaSucceeds verifies that setting
+// schema_include while leaving schema untouched (at its "public" default) is
 // allowed.
-func TestSchemaPatternWithDefaultSchemaSucceeds(t *testing.T) {
+func TestSchemaIncludeWithDefaultSchemaSucceeds(t *testing.T) {
 	yaml := `
 dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
-schema_pattern: 'tenant_*'
+schema_include: 'tenant_*'
 slot_name: test_slot
 tables:
   - events
@@ -143,11 +143,11 @@ tables:
 	require.NoError(t, err)
 }
 
-// TestExcludeSchemasValidation verifies that each exclude_schemas entry is
-// validated with the same rules as schema_pattern - validateSchemaPattern is
+// TestSchemaExcludeValidation verifies that each schema_exclude entry is
+// validated with the same rules as schema_include - validateSchemaPattern is
 // reused rather than re-derived, so this exercises the same error cases
-// TestSchemaPatternValidation covers, just reached through a different field.
-func TestExcludeSchemasValidation(t *testing.T) {
+// TestSchemaIncludeValidation covers, just reached through a different field.
+func TestSchemaExcludeValidation(t *testing.T) {
 	tests := []struct {
 		pattern     string
 		errContains string
@@ -166,8 +166,8 @@ func TestExcludeSchemasValidation(t *testing.T) {
 			// quotes, e.g. `"MySchema"`) reaches validateSchemaPattern verbatim.
 			yaml := fmt.Sprintf(`
 dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
-schema_pattern: 'tenant_*'
-exclude_schemas: ['%s']
+schema_include: 'tenant_*'
+schema_exclude: ['%s']
 slot_name: test_slot
 tables:
   - events
@@ -184,28 +184,28 @@ tables:
 	}
 }
 
-// TestExcludeSchemasRequiresSchemaPattern verifies that exclude_schemas is
-// rejected at config-parse time when schema_pattern is left unset. Both
+// TestSchemaExcludeRequiresSchemaInclude verifies that schema_exclude is
+// rejected at config-parse time when schema_include is left unset. Both
 // single-exact-schema mode and FOR ALL TABLES mode (empty tables) have no
 // well-defined candidate set to exclude from, so this is a hard error rather
 // than a silent no-op.
-func TestExcludeSchemasRequiresSchemaPattern(t *testing.T) {
+func TestSchemaExcludeRequiresSchemaInclude(t *testing.T) {
 	yaml := `
 dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
-exclude_schemas: [tenant_test]
+schema_exclude: [tenant_test]
 slot_name: test_slot
 tables:
   - events
 `
 	_, err := parsePgStreamInput(t, yaml)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "exclude_schemas requires schema_pattern to be set")
+	assert.Contains(t, err.Error(), "schema_exclude requires schema_include to be set")
 }
 
-// TestExcludeSchemasEmptyWithoutSchemaPatternSucceeds verifies that leaving
-// exclude_schemas at its default empty list does not trip the
-// requires-schema_pattern check, since there's nothing to exclude.
-func TestExcludeSchemasEmptyWithoutSchemaPatternSucceeds(t *testing.T) {
+// TestSchemaExcludeEmptyWithoutSchemaIncludeSucceeds verifies that leaving
+// schema_exclude at its default empty list does not trip the
+// requires-schema_include check, since there's nothing to exclude.
+func TestSchemaExcludeEmptyWithoutSchemaIncludeSucceeds(t *testing.T) {
 	yaml := `
 dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
 slot_name: test_slot

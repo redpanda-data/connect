@@ -220,12 +220,12 @@ func escapeLike(s string) string {
 
 // schemaMatchesExcludePattern reports whether quotedSchemaName - a schema
 // identifier in the same quoted form resolveSchemas returns - matches
-// excludePattern, an exclude_schemas entry written in the same shape as a
-// schema_pattern value (an exact name, a '*' glob, or a double-quoted exact
+// excludePattern, a schema_exclude entry written in the same shape as a
+// schema_include value (an exact name, a '*' glob, or a double-quoted exact
 // identifier).
 //
 // Matching happens entirely in memory against a schema list we've already
-// resolved, unlike resolveSchemas which queries the database: exclude_schemas
+// resolved, unlike resolveSchemas which queries the database: schema_exclude
 // only ever narrows a candidate set that's already been fetched, so there's
 // no reason to pay for another round-trip per exclude pattern. Semantics
 // mirror schemaPatternToLike without going through SQL: a quoted pattern is

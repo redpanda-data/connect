@@ -44,8 +44,8 @@ input:
     stream_snapshot: false
     snapshot_batch_size: 1000
     schema: public
-    schema_pattern: ""
-    exclude_schemas: []
+    schema_include: ""
+    schema_exclude: []
     tables: [] # No default (required)
     checkpoint_limit: 1024
     temporary_slot: false
@@ -76,8 +76,8 @@ input:
     stream_snapshot: false
     snapshot_batch_size: 1000
     schema: public
-    schema_pattern: ""
-    exclude_schemas: []
+    schema_include: ""
+    schema_exclude: []
     tables: [] # No default (required)
     checkpoint_limit: 1024
     temporary_slot: false
@@ -145,7 +145,7 @@ When set to true, empty messages with operation types BEGIN and COMMIT are gener
 
 === `stream_snapshot`
 
-When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `tables` is left empty and `schema_pattern` is NOT set, since in that case the snapshot is only planned for tables listed in `tables`. When `schema_pattern` IS set, leaving `tables` empty auto-discovers tables to snapshot instead - see `tables` below - and every discovered table must have a primary key.
+When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `tables` is left empty and `schema_include` is NOT set, since in that case the snapshot is only planned for tables listed in `tables`. When `schema_include` IS set, leaving `tables` empty auto-discovers tables to snapshot instead - see `tables` below - and every discovered table must have a primary key.
 
 
 *Type*: `bool`
@@ -190,7 +190,7 @@ schema: public
 schema: '"MyCaseSensitiveSchemaNeedingQuotes"'
 ```
 
-=== `schema_pattern`
+=== `schema_include`
 
 The PostgreSQL schema pattern to replicate data from. Accepts an exact schema name or a glob pattern using `*` as a wildcard to match multiple schemas.
 
@@ -214,20 +214,20 @@ This field is mutually exclusive with `schema`; when set, it takes over schema r
 ```yml
 # Examples
 
-schema_pattern: tenant_*
+schema_include: tenant_*
 
-schema_pattern: '*'
+schema_include: '*'
 
-schema_pattern: '"MyCaseSensitiveSchemaNeedingQuotes"'
+schema_include: '"MyCaseSensitiveSchemaNeedingQuotes"'
 ```
 
-=== `exclude_schemas`
+=== `schema_exclude`
 
-A list of schema names or glob patterns to exclude from the schemas matched by `schema_pattern`. Only valid when `schema_pattern` is set.
+A list of schema names or glob patterns to exclude from the schemas matched by `schema_include`. Only valid when `schema_include` is set.
 
-Each entry uses the same syntax as `schema_pattern`: an exact schema name, a glob pattern using `*` as a wildcard, or a double-quoted exact identifier for an exact, case-sensitive match.
+Each entry uses the same syntax as `schema_include`: an exact schema name, a glob pattern using `*` as a wildcard, or a double-quoted exact identifier for an exact, case-sensitive match.
 
-A schema that matches `schema_pattern` and also matches any entry in this list is excluded from replication. An entry that does not match any schema resolved by `schema_pattern` is silently ignored, so a typo here simply excludes nothing rather than failing startup.
+A schema that matches `schema_include` and also matches any entry in this list is excluded from replication. An entry that does not match any schema resolved by `schema_include` is silently ignored, so a typo here simply excludes nothing rather than failing startup.
 
 This exclusion is applied before `tables` is resolved, so it also takes effect when `tables` is left empty and tables are auto-discovered.
 
@@ -239,7 +239,7 @@ This exclusion is applied before `tables` is resolved, so it also takes effect w
 ```yml
 # Examples
 
-exclude_schemas:
+schema_exclude:
   - tenant_internal
   - tenant_test_*
 ```
@@ -248,11 +248,11 @@ exclude_schemas:
 
 A list of table names to include in the logical replication. Each table should be specified as a separate item.
 
-When `schema_pattern` is set, this list is resolved against each matched schema independently: a table missing from some (but not all) of the matched schemas is skipped for those schemas only (with a warning logged), tolerating multi-tenant setups where a table hasn't been provisioned in every schema yet. A table that's missing from every matched schema, however, is treated as a configuration error (most likely a typo) and startup fails, naming the missing table.
+When `schema_include` is set, this list is resolved against each matched schema independently: a table missing from some (but not all) of the matched schemas is skipped for those schemas only (with a warning logged), tolerating multi-tenant setups where a table hasn't been provisioned in every schema yet. A table that's missing from every matched schema, however, is treated as a configuration error (most likely a typo) and startup fails, naming the missing table.
 
-If left empty while `schema_pattern` is set, every base table in each matched (and un-excluded, see `exclude_schemas`) schema is auto-discovered and published explicitly, instead of listing tables by hand - this is the expected way to replicate "every table" in a multi-tenant, schema-per-tenant setup without also picking up unrelated schemas. Startup fails if no matched schema contains any table.
+If left empty while `schema_include` is set, every base table in each matched (and un-excluded, see `schema_exclude`) schema is auto-discovered and published explicitly, instead of listing tables by hand - this is the expected way to replicate "every table" in a multi-tenant, schema-per-tenant setup without also picking up unrelated schemas. Startup fails if no matched schema contains any table.
 
-If left empty while `schema_pattern` is NOT set, the underlying PostgreSQL publication is instead created `FOR ALL TABLES`, which replicates every table in every schema of the database, ignoring `schema`. This also disables `stream_snapshot`, since the initial snapshot is only planned for tables listed here.
+If left empty while `schema_include` is NOT set, the underlying PostgreSQL publication is instead created `FOR ALL TABLES`, which replicates every table in every schema of the database, ignoring `schema`. This also disables `stream_snapshot`, since the initial snapshot is only planned for tables listed here.
 
 
 *Type*: `array`
@@ -629,7 +629,7 @@ Optional external ID for the role assumption.
 
 === `signal_table_name`
 
-The name of the table used to send control signals to the connector, excluding the schema. Not supported when `schema_pattern` is set, since there is no single schema to anchor the signal table to. The table must
+The name of the table used to send control signals to the connector, excluding the schema. Not supported when `schema_include` is set, since there is no single schema to anchor the signal table to. The table must
 exist in the schema configured via the `schema` field, and must not also appear in `tables`
 — the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
 it in both places is rejected at startup. It must have at least these columns — startup validation checks

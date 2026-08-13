@@ -102,26 +102,26 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		tables []TableFQN
 		schema string
 	)
-	if config.DBSchemaPattern != "" {
+	if config.DBSchemaInclude != "" {
 		if config.SignalTableName != "" {
-			return nil, errors.New("signal_table_name is not supported when schema_pattern is set")
+			return nil, errors.New("signal_table_name is not supported when schema_include is set")
 		}
-		schemas, inaccessibleSchemas, err := resolveSchemas(ctx, dbConn, config.DBSchemaPattern)
+		schemas, inaccessibleSchemas, err := resolveSchemas(ctx, dbConn, config.DBSchemaInclude)
 		if err != nil {
-			return nil, fmt.Errorf("resolving schema pattern %q: %w", config.DBSchemaPattern, err)
+			return nil, fmt.Errorf("resolving schema_include pattern %q: %w", config.DBSchemaInclude, err)
 		}
 
-		if len(config.DBExcludeSchemas) > 0 {
+		if len(config.DBSchemaExclude) > 0 {
 			// Filtering happens entirely against the schemas slice we already
 			// fetched above - no extra DB round-trips per exclude pattern.
 			var excluded []string
 			remaining := make([]string, 0, len(schemas))
 			for _, schema := range schemas {
 				var isExcluded bool
-				for _, pattern := range config.DBExcludeSchemas {
+				for _, pattern := range config.DBSchemaExclude {
 					matched, err := schemaMatchesExcludePattern(schema, pattern)
 					if err != nil {
-						return nil, fmt.Errorf("evaluating exclude_schemas pattern %q against schema %q: %w", pattern, schema, err)
+						return nil, fmt.Errorf("evaluating schema_exclude pattern %q against schema %q: %w", pattern, schema, err)
 					}
 					if matched {
 						isExcluded = true
@@ -135,18 +135,18 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				remaining = append(remaining, schema)
 			}
 			if len(excluded) > 0 {
-				config.Logger.Infof("exclude_schemas %v excluded %d schema(s) %v from schema pattern %q; %d schema(s) remain: %v", config.DBExcludeSchemas, len(excluded), excluded, config.DBSchemaPattern, len(remaining), remaining)
+				config.Logger.Infof("schema_exclude %v excluded %d schema(s) %v from schema_include pattern %q; %d schema(s) remain: %v", config.DBSchemaExclude, len(excluded), excluded, config.DBSchemaInclude, len(remaining), remaining)
 			}
 			schemas = remaining
 		}
 
 		if len(inaccessibleSchemas) > 0 {
-			config.Logger.Warnf("schema pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", config.DBSchemaPattern, inaccessibleSchemas)
+			config.Logger.Warnf("schema_include pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", config.DBSchemaInclude, inaccessibleSchemas)
 		}
 		if len(schemas) == 0 {
-			return nil, fmt.Errorf("no schemas found matching pattern %q", config.DBSchemaPattern)
+			return nil, fmt.Errorf("no schemas found matching schema_include pattern %q", config.DBSchemaInclude)
 		}
-		config.Logger.Infof("Schema pattern %q resolved to %d schema(s): %v", config.DBSchemaPattern, len(schemas), schemas)
+		config.Logger.Infof("schema_include pattern %q resolved to %d schema(s): %v", config.DBSchemaInclude, len(schemas), schemas)
 
 		normalizedTables := make([]string, 0, len(config.DBTables))
 		for _, table := range config.DBTables {
@@ -158,11 +158,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 
 		// With no explicit table list, auto-discover every base table in each
-		// matched (and exclude_schemas-filtered) schema and publish them
+		// matched (and schema_exclude-filtered) schema and publish them
 		// explicitly. Without this, an empty tables list would fall through to
 		// CreatePublication's FOR ALL TABLES fallback below, which replicates
-		// every schema in the database and silently defeats both schema_pattern
-		// and exclude_schemas.
+		// every schema in the database and silently defeats both schema_include
+		// and schema_exclude.
 		autoDiscoverTables := len(normalizedTables) == 0
 
 		tables = make([]TableFQN, 0, len(schemas)*len(normalizedTables))
@@ -180,7 +180,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			}
 			for _, table := range normalizedTables {
 				if _, ok := existingTables[table]; !ok {
-					config.Logger.Warnf("table %s.%s not found, skipping (schema %s matched pattern %q but does not contain this table)", schema, table, schema, config.DBSchemaPattern)
+					config.Logger.Warnf("table %s.%s not found, skipping (schema %s matched schema_include pattern %q but does not contain this table)", schema, table, schema, config.DBSchemaInclude)
 					continue
 				}
 				tables = append(tables, TableFQN{Schema: schema, Table: table})
@@ -189,9 +189,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 		if autoDiscoverTables {
 			if len(tables) == 0 {
-				return nil, fmt.Errorf("no tables found in schema(s) %v matching pattern %q", schemas, config.DBSchemaPattern)
+				return nil, fmt.Errorf("no tables found in schema(s) %v matching schema_include pattern %q", schemas, config.DBSchemaInclude)
 			}
-			config.Logger.Infof("%q has no `tables` list configured: auto-discovered %d table(s) across %d schema(s)", config.DBSchemaPattern, len(tables), len(schemas))
+			config.Logger.Infof("%q has no `tables` list configured: auto-discovered %d table(s) across %d schema(s)", config.DBSchemaInclude, len(tables), len(schemas))
 		} else {
 			// A table must exist in at least one matched schema. Missing from some
 			// (but not all) matched schemas is tolerated above as a multi-tenant gap;
@@ -204,7 +204,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				}
 			}
 			if len(missingTables) > 0 {
-				return nil, fmt.Errorf("table(s) %v not found in any schema matching pattern %q", missingTables, config.DBSchemaPattern)
+				return nil, fmt.Errorf("table(s) %v not found in any schema matching schema_include pattern %q", missingTables, config.DBSchemaInclude)
 			}
 		}
 	} else {

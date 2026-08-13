@@ -1,10 +1,10 @@
 -- Multi-schema CDC test setup
--- Tests: schema glob (tenant_*), exclude_schemas (tenant_c), database_schema
+-- Tests: schema glob (tenant_*), schema_exclude (tenant_c), database_schema
 -- metadata, commit_ts_ms, before (update/delete)
 
 -- ── Tenant schemas ────────────────────────────────────────────────────────────
 -- tenant_a and tenant_b are replicated; tenant_c matches the tenant_* glob in
--- test_config.yaml but is carved out via exclude_schemas — its rows must
+-- test_config.yaml but is carved out via schema_exclude — its rows must
 -- never appear in the pipeline output.
 
 CREATE SCHEMA IF NOT EXISTS tenant_a;
@@ -41,7 +41,7 @@ ALTER TABLE tenant_c.events REPLICA IDENTITY FULL;
 
 -- ── Seed snapshot rows ────────────────────────────────────────────────────────
 -- These are visible during the initial snapshot (stream_snapshot: true).
--- tenant_c's row (mallory) must NOT appear in the output — see exclude_schemas
+-- tenant_c's row (mallory) must NOT appear in the output — see schema_exclude
 -- in test_config.yaml.
 
 INSERT INTO tenant_a.events (name) VALUES ('alice'), ('bob');

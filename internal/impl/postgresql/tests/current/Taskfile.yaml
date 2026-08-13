@@ -73,37 +73,37 @@ tasks:
   # ── Schema validation smoke test ──────────────────────────────────────────────
 
   test:invalid-schema:
-    desc: Confirm that a malformed schema_pattern is rejected at startup, before any DB connection is attempted
+    desc: Confirm that a malformed schema_include is rejected at startup, before any DB connection is attempted
     env:
       PG_DSN: '{{.PG_DSN}}'
     cmds:
       - |
         set +e
         go run ../../../../../cmd/redpanda-connect/main.go run \
-          --set 'input.postgres_cdc.schema_pattern=1abc' \
+          --set 'input.postgres_cdc.schema_include=1abc' \
           ./test_config.yaml 2>&1 | head -5
         echo "exit $?"
-    # Expects: "invalid schema_pattern" error printed, process exits non-zero.
-    # schema_pattern is validated eagerly in newPgStreamInput
+    # Expects: "invalid schema_include" error printed, process exits non-zero.
+    # schema_include is validated eagerly in newPgStreamInput
     # (validateSchemaPattern), unlike schema which is only checked later,
     # against the live DB connection, inside NewPgStream.
-    # Note: an empty schema_pattern is NOT an error - it means "unset", and
+    # Note: an empty schema_include is NOT an error - it means "unset", and
     # the connector falls back to the schema field (default "public").
 
-  test:exclude-schemas-requires-pattern:
-    desc: Confirm exclude_schemas is rejected at startup when schema_pattern is left unset
+  test:schema-exclude-requires-include:
+    desc: Confirm schema_exclude is rejected at startup when schema_include is left unset
     env:
       PG_DSN: '{{.PG_DSN}}'
     cmds:
       - |
         set +e
         go run ../../../../../cmd/redpanda-connect/main.go run \
-          ./test_config_exclude_no_pattern.yaml 2>&1 | head -5
+          ./test_config_schema_exclude_no_include.yaml 2>&1 | head -5
         echo "exit $?"
-    # Expects: "exclude_schemas requires schema_pattern to be set" error
+    # Expects: "schema_exclude requires schema_include to be set" error
     # printed, process exits non-zero. Uses a dedicated fixture file rather
     # than --set on test_config.yaml, since --set rejects an empty RHS
-    # ("foo=" -> "expected foo=bar syntax"), so schema_pattern can't be
+    # ("foo=" -> "expected foo=bar syntax"), so schema_include can't be
     # cleared that way.
 
   # ── Quick sanity ──────────────────────────────────────────────────────────────

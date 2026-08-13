@@ -1658,7 +1658,7 @@ postgres_cdc:
     dsn: %s
     slot_name: multi_schema_test_slot
     stream_snapshot: true
-    schema_pattern: tenant_*
+    schema_include: tenant_*
     tables:
       - events
 `, databaseURL)
@@ -1746,17 +1746,17 @@ postgres_cdc:
 	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
 }
 
-// TestIntegrationMultiSchemaExcludeSchemas verifies that exclude_schemas
-// carves an exception out of a broad schema_pattern: a schema that matches
-// schema_pattern but also matches an exclude_schemas entry contributes no
+// TestIntegrationSchemaExcludeCarvesOutTenant verifies that schema_exclude
+// carves an exception out of a broad schema_include: a schema that matches
+// schema_include but also matches a schema_exclude entry contributes no
 // rows at all, neither during the initial snapshot nor from subsequent CDC
 // changes.
-func TestIntegrationMultiSchemaExcludeSchemas(t *testing.T) {
+func TestIntegrationSchemaExcludeCarvesOutTenant(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	// Three tenant schemas match tenant_*; tenant_c is carved out via exclude_schemas.
+	// Three tenant schemas match tenant_*; tenant_c is carved out via schema_exclude.
 	for _, schema := range []string{"tenant_a", "tenant_b", "tenant_c"} {
 		_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA %s", schema))
 		require.NoError(t, err)
@@ -1794,10 +1794,10 @@ func TestIntegrationMultiSchemaExcludeSchemas(t *testing.T) {
 	tmpl := fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
-    slot_name: exclude_schemas_test_slot
+    slot_name: schema_exclude_test_slot
     stream_snapshot: true
-    schema_pattern: tenant_*
-    exclude_schemas:
+    schema_include: tenant_*
+    schema_exclude:
       - tenant_c
     tables:
       - events
@@ -1898,7 +1898,7 @@ postgres_cdc:
 	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
 }
 
-func TestIntegrationSchemaPatternMatchesHyphenatedUUIDSchema(t *testing.T) {
+func TestIntegrationSchemaIncludeMatchesHyphenatedUUIDSchema(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -1930,9 +1930,9 @@ func TestIntegrationSchemaPatternMatchesHyphenatedUUIDSchema(t *testing.T) {
 	tmpl := fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
-    slot_name: hyphenated_schema_pattern_slot
+    slot_name: hyphenated_schema_include_slot
     stream_snapshot: true
-    schema_pattern: a0eebc99-*
+    schema_include: a0eebc99-*
     tables:
       - events
 `, databaseURL)
@@ -2018,7 +2018,7 @@ postgres_cdc:
     dsn: %s
     slot_name: missing_table_degrade_slot
     stream_snapshot: true
-    schema_pattern: tenant_*
+    schema_include: tenant_*
     tables:
       - events
 `, databaseURL)
@@ -2103,7 +2103,7 @@ postgres_cdc:
     dsn: %s
     slot_name: view_namesake_degrade_slot
     stream_snapshot: true
-    schema_pattern: tenant_*
+    schema_include: tenant_*
     tables:
       - events
 `, databaseURL)
@@ -2156,7 +2156,7 @@ func TestIntegrationNoSchemasMatchedReturnsError(t *testing.T) {
 	tmpl := fmt.Sprintf(`
 dsn: %s
 slot_name: no_schema_match_slot
-schema_pattern: nonexistent_schema_zzz_*
+schema_include: nonexistent_schema_zzz_*
 tables:
   - events
 `, databaseURL)
@@ -2174,21 +2174,21 @@ tables:
 	defer cancel()
 
 	// Bypass the benthos AsyncReader's infinite connect-retry loop by calling
-	// Connect directly: a schema-pattern-not-found error is permanent, but
+	// Connect directly: a schema-include-not-found error is permanent, but
 	// stream.Run has no path to surface it (it only returns once ctx is done),
 	// so going through StreamBuilder/Run here would just time out instead.
 	err = input.Connect(ctx)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no schemas found matching pattern")
+	assert.Contains(t, err.Error(), "no schemas found matching schema_include pattern")
 }
 
-// TestIntegrationSchemaPatternNonMatchingFailsEvenWithEmptyTables guards the
-// fixed behaviour: schema_pattern always scopes replication, even when
-// `tables` is left empty. A schema_pattern matching nothing in the database
+// TestIntegrationSchemaIncludeNonMatchingFailsEvenWithEmptyTables guards the
+// fixed behaviour: schema_include always scopes replication, even when
+// `tables` is left empty. A schema_include matching nothing in the database
 // must fail startup rather than silently falling back to a database-wide
-// FOR ALL TABLES publication (the old behaviour, which made exclude_schemas
+// FOR ALL TABLES publication (the old behaviour, which made schema_exclude
 // meaningless whenever tables was left unset).
-func TestIntegrationSchemaPatternNonMatchingFailsEvenWithEmptyTables(t *testing.T) {
+func TestIntegrationSchemaIncludeNonMatchingFailsEvenWithEmptyTables(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -2196,7 +2196,7 @@ func TestIntegrationSchemaPatternNonMatchingFailsEvenWithEmptyTables(t *testing.
 	tmpl := fmt.Sprintf(`
 dsn: %s
 slot_name: no_schema_match_empty_tables_slot
-schema_pattern: nonexistent_schema_zzz_*
+schema_include: nonexistent_schema_zzz_*
 `, databaseURL)
 
 	conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
@@ -2215,21 +2215,21 @@ schema_pattern: nonexistent_schema_zzz_*
 	// TestIntegrationNoSchemasMatchedReturnsError.
 	err = input.Connect(ctx)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no schemas found matching pattern")
+	assert.Contains(t, err.Error(), "no schemas found matching schema_include pattern")
 }
 
-// TestIntegrationMultiSchemaAutoDiscoverExcludeSchemas is
-// TestIntegrationMultiSchemaExcludeSchemas with `tables` left unset: it
-// verifies that leaving `tables` empty under schema_pattern auto-discovers
+// TestIntegrationSchemaExcludeCarvesOutTenantAutoDiscover is
+// TestIntegrationSchemaExcludeCarvesOutTenant with `tables` left unset: it
+// verifies that leaving `tables` empty under schema_include auto-discovers
 // the "events" table in each matched schema instead of falling back to a
-// database-wide FOR ALL TABLES publication, so exclude_schemas still carves
+// database-wide FOR ALL TABLES publication, so schema_exclude still carves
 // tenant_c out of both the snapshot and CDC.
-func TestIntegrationMultiSchemaAutoDiscoverExcludeSchemas(t *testing.T) {
+func TestIntegrationSchemaExcludeCarvesOutTenantAutoDiscover(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	// Three tenant schemas match tenant_*; tenant_c is carved out via exclude_schemas.
+	// Three tenant schemas match tenant_*; tenant_c is carved out via schema_exclude.
 	for _, schema := range []string{"tenant_a", "tenant_b", "tenant_c"} {
 		_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA %s", schema))
 		require.NoError(t, err)
@@ -2269,10 +2269,10 @@ func TestIntegrationMultiSchemaAutoDiscoverExcludeSchemas(t *testing.T) {
 	tmpl := fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
-    slot_name: auto_discover_exclude_schemas_test_slot
+    slot_name: auto_discover_schema_exclude_test_slot
     stream_snapshot: true
-    schema_pattern: tenant_*
-    exclude_schemas:
+    schema_include: tenant_*
+    schema_exclude:
       - tenant_c
 `, databaseURL)
 
@@ -2425,7 +2425,7 @@ tables:
 		tmpl := fmt.Sprintf(`
 dsn: %s
 slot_name: glob_schema_total_miss_slot
-schema_pattern: tenant_*
+schema_include: tenant_*
 tables:
   - orders
   - ordres
@@ -2479,7 +2479,7 @@ postgres_cdc:
     dsn: %s
     slot_name: glob_schema_partial_match_slot
     stream_snapshot: true
-    schema_pattern: tenant_*
+    schema_include: tenant_*
     tables:
       - orders
       - ordres
@@ -2558,7 +2558,7 @@ postgres_cdc:
     dsn: %s
     slot_name: glob_schema_full_match_slot
     stream_snapshot: true
-    schema_pattern: tenant_*
+    schema_include: tenant_*
     tables:
       - orders
       - ordres

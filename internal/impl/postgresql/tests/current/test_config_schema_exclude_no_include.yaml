@@ -1,12 +1,12 @@
-# Negative-validation fixture for exclude_schemas: schema_pattern is
+# Negative-validation fixture for schema_exclude: schema_include is
 # deliberately left unset. --set can't assign an empty string (the CLI
 # rejects "foo=" as "expected foo=bar syntax"), so this exists as its own
 # file instead of overriding test_config.yaml at run time.
 input:
   postgres_cdc:
     dsn: ${PG_DSN:postgres://postgres:postgres@localhost:5433/testdb?sslmode=disable}
-    slot_name: exclude_schemas_no_pattern_slot
-    exclude_schemas:
+    slot_name: schema_exclude_no_include_slot
+    schema_exclude:
       - tenant_c
     tables:
       - events
