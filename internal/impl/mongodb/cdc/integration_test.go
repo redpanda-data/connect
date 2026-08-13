@@ -13,7 +13,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"math/rand/v2"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -300,8 +304,13 @@ func enablePreAndPostDocuments() setupOption {
 	}
 }
 
-func setup(t *testing.T, template string, opts ...setupOption) (*streamHelper, *databaseHelper, *outputHelper) {
-	integration.CheckSkip(t)
+// startMongoContainer boots a single node replica set and returns a
+// direct-connection URI plus a client that has already been pinged successfully.
+// Tests that need control over the pieces setup hides - the checkpoint cache
+// directory, the logger - build their own stream on top of this.
+//
+// Callers are responsible for integration.CheckSkip.
+func startMongoContainer(t *testing.T, opts ...setupOption) (string, *mongo.Client) {
 	t.Helper()
 	container, err := mongocontainer.Run(
 		t.Context(),
@@ -343,6 +352,13 @@ func setup(t *testing.T, template string, opts ...setupOption) (*streamHelper, *
 	for _, opt := range opts {
 		require.NoError(t, opt(mongoClient))
 	}
+	return uri, mongoClient
+}
+
+func setup(t *testing.T, template string, opts ...setupOption) (*streamHelper, *databaseHelper, *outputHelper) {
+	integration.CheckSkip(t)
+	t.Helper()
+	uri, mongoClient := startMongoContainer(t, opts...)
 	d := &databaseHelper{mongoClient.Database("test")}
 	template = strings.NewReplacer(
 		"$USERNAME", "mongoadmin",
@@ -907,6 +923,226 @@ file:
 			return
 		}
 	}
+}
+
+// logCapture is a slog.Handler that keeps every record it is given, so a test
+// can assert on what the pipeline logged. The cdc input reports change stream
+// failures through ReadBatch, where the framework logs them and reconnects;
+// there is no other hook a test can observe them through.
+type logCapture struct {
+	mu      sync.Mutex
+	records []string
+}
+
+func (*logCapture) Enabled(context.Context, slog.Level) bool { return true }
+
+func (l *logCapture) Handle(_ context.Context, r slog.Record) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.records = append(l.records, r.Level.String()+" "+r.Message)
+	return nil
+}
+
+func (l *logCapture) WithAttrs([]slog.Attr) slog.Handler { return l }
+
+func (l *logCapture) WithGroup(string) slog.Handler { return l }
+
+// matching returns the captured messages containing sub.
+func (l *logCapture) matching(sub string) []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var out []string
+	for _, r := range l.records {
+		if strings.Contains(r, sub) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// TestIntegrationMongoCDCUnresumableCheckpointToken pins the CURRENT behaviour
+// when the checkpoint cache holds a resume token the server cannot resume from:
+// the input neither delivers data nor gives up. Because a checkpoint exists the
+// snapshot is skipped, and because the token is unresumable the change stream
+// refuses to open, so the input fails and is reconnected in a loop, forever,
+// delivering nothing.
+//
+// This is a known limitation, not the desired end state. The intended follow-up
+// is for an unresumable token to clear the checkpoint and re-run the snapshot.
+// When that recovery lands this test should be rewritten to assert the
+// re-snapshot (the two seeded documents get delivered) instead of the stall.
+//
+// The stream is built explicitly rather than via setup because the checkpoint
+// has to be seeded into the cache directory before the first run, and because
+// the failure is only observable through the logger.
+//
+// NOTE: the fast reconnect loop this test produces also exposes a pre-existing
+// race between checkpointFlusher.Start() in a new Connect and the previous
+// stream goroutine's deferred Stop() (input.go's goroutine runs
+// TriggerHasStopped before that deferred Stop, so the waiting Connect resumes
+// first, and asyncroutine.Periodic guards neither). It is unrelated to what this
+// test asserts, and only shows up under -race; integration tests are not run
+// with -race. Do not "fix" it by weakening this test.
+func TestIntegrationMongoCDCUnresumableCheckpointToken(t *testing.T) {
+	integration.CheckSkip(t)
+	uri, mongoClient := startMongoContainer(t)
+	db := &databaseHelper{mongoClient.Database("test")}
+	db.CreateCollection(t, "foo")
+	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
+	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "world"})
+
+	// Seed the checkpoint before the first run. The file cache stores one file
+	// per key whose contents are the raw value bytes, and checkpointCache
+	// encodes the token as canonical extended JSON, so writing the exact bytes
+	// Store would have written makes Load round-trip it.
+	//
+	// The _data payload has to be a keystring the server actually rejects. A
+	// well-formed keystring that merely points at an ancient position is not
+	// enough: a token for timestamp 0 is happily accepted against a replica set
+	// whose oplog has never rolled over, and the stream then replays the oplog
+	// from its start (verified - it delivered both documents below as `insert`
+	// events). "DEADBEEF" is not decodable as a keystring at all, which is what
+	// makes the resume fail rather than succeed from an early position.
+	cacheDir := t.TempDir()
+	rawToken, err := bson.Marshal(bson.M{"_data": "DEADBEEF"})
+	require.NoError(t, err)
+	encoded, err := bson.MarshalExtJSON(bson.Raw(rawToken), true, false)
+	require.NoError(t, err)
+	t.Logf("seeded checkpoint: %s", encoded)
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "mongodb_cdc_checkpoint"), encoded, 0o644))
+
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.AddInputYAML(`
+mongodb_cdc:
+  url: '`+uri+`'
+  database: 'test'
+  checkpoint_cache: 'filecache'
+  stream_snapshot: true
+  json_marshal_mode: relaxed
+  collections:
+    - 'foo'
+`))
+	require.NoError(t, builder.AddCacheYAML(`
+label: filecache
+file:
+  directory: '`+cacheDir+`'`))
+	output := &outputHelper{}
+	require.NoError(t, builder.AddBatchConsumerFunc(output.AddBatch))
+	logs := &logCapture{}
+	builder.SetLogger(slog.New(logs))
+	stream := &streamHelper{builder: builder}
+
+	wait := stream.RunAsync(t)
+	time.Sleep(5 * time.Second)
+
+	// No silent re-snapshot: the checkpoint exists, so the two documents already
+	// in the collection are never read.
+	require.Empty(t, output.Messages(t), "an unresumable checkpoint must not silently re-snapshot")
+	// And no silent success either: the change stream open keeps failing, and
+	// keeps being retried - more than one failure proves the input is cycling
+	// through reconnects rather than having quietly settled into an idle state.
+	failures := logs.matching("error watching MongoDB change stream")
+	require.NotEmpty(t, failures, "expected the change stream open to fail, captured logs: %v", logs.records)
+	require.Greater(t, len(failures), 1, "expected repeated failures from the reconnect loop, got: %v", failures)
+	require.Contains(t, failures[0], "error opening change stream")
+	t.Logf("change stream failure (x%d): %s", len(failures), failures[0])
+
+	stream.StopWithin(t, 30*time.Second)
+	wait()
+	require.Empty(t, output.Messages(t), "an unresumable checkpoint must not silently re-snapshot")
+
+	// The bad checkpoint is left in place - nothing clears it, which is exactly
+	// why the stall is permanent across restarts too. The follow-up that adds
+	// recovery should flip this assertion.
+	after, err := os.ReadFile(filepath.Join(cacheDir, "mongodb_cdc_checkpoint"))
+	require.NoError(t, err)
+	require.Equal(t, string(encoded), string(after), "the unresumable checkpoint is not cleared today")
+}
+
+// TestIntegrationMongoCDCSnapshotRestartChaos restarts the input repeatedly
+// while a snapshot is in flight and requires two things of the result: every
+// document is delivered at least once across all runs (duplicates are expected
+// and fine, gaps are not), and once a snapshot has run to completion a later
+// start does not re-run it.
+func TestIntegrationMongoCDCSnapshotRestartChaos(t *testing.T) {
+	const docCount = 300
+	// read_batch_size is deliberately tiny - it is the snapshot cursor's batch
+	// size, so the documents arrive as many small batches - and a sleep processor
+	// slows their consumption. Both are needed to make the restarts land inside
+	// the snapshot: unthrottled, a local container snapshots 300 (or even 5000)
+	// documents in well under the shortest pause below, and every run would
+	// complete the snapshot instead of interrupting it.
+	stream, db, output := setup(t, `
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  stream_snapshot: true
+  checkpoint_cache: '$CACHE'
+  json_marshal_mode: relaxed
+  read_batch_size: 5
+  collections:
+    - 'foo'
+`)
+	require.NoError(t, stream.builder.AddProcessorYAML(`sleep: {duration: 20ms}`))
+	db.CreateCollection(t, "foo")
+	docs := make([]any, 0, docCount)
+	for id := 1; id <= docCount; id++ {
+		docs = append(docs, bson.M{"_id": id, "data": "hello"})
+	}
+	db.InsertMany(t, "foo", docs...)
+
+	seenIDs := func(t *testing.T) map[int]bool {
+		t.Helper()
+		ids := map[int]bool{}
+		for _, msg := range output.Messages(t) {
+			doc, ok := msg.(map[string]any)
+			require.True(t, ok, "unexpected message shape: %T", msg)
+			num, ok := doc["_id"].(json.Number)
+			require.True(t, ok, "unexpected _id shape: %T", doc["_id"])
+			id, err := num.Int64()
+			require.NoError(t, err)
+			ids[int(id)] = true
+		}
+		return ids
+	}
+	missing := func(ids map[int]bool) []int {
+		var out []int
+		for id := 1; id <= docCount; id++ {
+			if !ids[id] {
+				out = append(out, id)
+			}
+		}
+		return out
+	}
+
+	// Chaos: start and kill the input at randomised - but deterministic - points,
+	// several of which land inside the snapshot.
+	for i := range 4 {
+		r := rand.New(rand.NewPCG(0x5eed, uint64(i)))
+		pause := time.Duration(100+r.IntN(301)) * time.Millisecond
+		t.Logf("chaos run %d: stopping after %v", i, pause)
+		wait := stream.RunAsync(t)
+		time.Sleep(pause)
+		stream.StopWithin(t, 30*time.Second)
+		wait()
+		t.Logf("chaos run %d: %d/%d distinct ids seen so far", i, len(seenIDs(t)), docCount)
+	}
+
+	// Final run, allowed to finish.
+	wait := stream.RunAsync(t)
+	require.Eventually(t, func() bool { return len(missing(seenIDs(t))) == 0 },
+		60*time.Second, 250*time.Millisecond, "documents never delivered: %v", missing(seenIDs(t)))
+	stream.StopWithin(t, 30*time.Second)
+	wait()
+
+	// The completed snapshot was checkpointed, so a further start with no new
+	// writes must not re-read anything.
+	before := len(output.Messages(t))
+	wait = stream.RunAsync(t)
+	time.Sleep(3 * time.Second)
+	stream.StopWithin(t, 30*time.Second)
+	wait()
+	require.Len(t, output.Messages(t), before, "a completed snapshot must not be re-run after a restart")
 }
 
 // ---------------------------------------------------------------------------
