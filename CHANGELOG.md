@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - postgres_cdc: Added support for control signals in PostgreSQL CDC by detecting and forwarding rows inserted into a configurable signal table downstream like regular messages. ([@josephwoodward](https://github.com/josephwoodward), [#4637](https://github.com/redpanda-data/connect/pull/4637))
 
+### Change
+
+- oracledb_cdc: Snapshot performance improvements by reusing seeded schema metadata [@josephwoodward](https://github.com/josephwoodward), [#4695](https://github.com/redpanda-data/connect/pull/4695))
+
 ## 4.104.0 - 2026-08-06
 
 ### Fixed
