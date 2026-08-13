@@ -132,11 +132,12 @@ func isNumberType(dataType string) bool {
 // catalog query, then switches back. Avoids both CDB_* view privilege issues and
 // separate-connection login issues.
 type schemaCache struct {
-	mu      sync.Mutex
-	schemas map[string]*cachedSchema
-	db      *sql.DB
-	pdbName string // non-empty in CDB mode; triggers ALTER SESSION SET CONTAINER per refresh
-	log     *service.Logger
+	mu         sync.Mutex
+	schemas    map[string]*cachedSchema
+	seededMeta map[string][]replication.ColumnMeta // track the ColumnMeta slice for reuse
+	db         *sql.DB
+	pdbName    string // non-empty in CDB mode; triggers ALTER SESSION SET CONTAINER per refresh
+	log        *service.Logger
 }
 
 type cachedSchema struct {
@@ -150,10 +151,11 @@ type cachedSchema struct {
 // will switch the session to that PDB for each catalog query.
 func newSchemaCache(db *sql.DB, pdbName string, log *service.Logger) *schemaCache {
 	return &schemaCache{
-		schemas: make(map[string]*cachedSchema),
-		db:      db,
-		pdbName: pdbName,
-		log:     log,
+		schemas:    make(map[string]*cachedSchema),
+		seededMeta: make(map[string][]replication.ColumnMeta),
+		db:         db,
+		pdbName:    pdbName,
+		log:        log,
 	}
 }
 
@@ -300,6 +302,11 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 
 	tableKey := table.Schema + "." + table.Name
 
+	if sameColumnMeta(sc.seededMeta[tableKey], meta) {
+		return
+	}
+	sc.seededMeta[tableKey] = meta
+
 	children := make([]schema.Common, 0, len(meta))
 	keySet := make(map[string]struct{}, len(meta))
 	colTypes := make(map[string]schema.Common, len(meta))
@@ -317,6 +324,17 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 		Children: children,
 	}
 	sc.schemas[tableKey] = &cachedSchema{schema: c.ToAny(), keys: keySet, colTypes: colTypes}
+}
+
+// sameColumnMeta checks whether a and b are the same underlying slice to enable reuse.
+func sameColumnMeta(a, b []replication.ColumnMeta) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	if len(a) == 0 {
+		return true
+	}
+	return &a[0] == &b[0]
 }
 
 // ---------------------------------------------------------------------------
