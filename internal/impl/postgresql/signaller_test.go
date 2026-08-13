@@ -20,11 +20,11 @@ import (
 func TestPostgresSignallerEnabled(t *testing.T) {
 	s, err := newControlSignaller("dbo", "", nil)
 	require.NoError(t, err)
-	require.False(t, s.enabled(), "expected Enabled to be false when no signal table is configured")
+	require.IsType(t, noopSignaller{}, s, "expected a no-op signaller when no signal table is configured")
 
 	s, err = newControlSignaller("dbo", "rpcn_signal_table", nil)
 	require.NoError(t, err)
-	require.True(t, s.enabled(), "expected Enabled to be true when a signal table is configured")
+	require.IsType(t, &postgresSignaller{}, s, "expected a postgresSignaller when a signal table is configured")
 }
 
 func TestPostgresSignallerListen(t *testing.T) {
