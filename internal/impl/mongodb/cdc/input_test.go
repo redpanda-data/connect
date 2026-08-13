@@ -108,24 +108,71 @@ func TestStoreSnapshotCheckpointStopsOnShutdown(t *testing.T) {
 	m.resumeTokenMu.Unlock()
 }
 
-func TestStoreSnapshotCheckpointSkippedOnCancelledContext(t *testing.T) {
-	// Nothing is pending, but the context is already cancelled: the shutdown
-	// paths resolve the slots of snapshot batches they drop without delivering
-	// them, so a drained checkpointer proves nothing once the connection is
-	// going away. Storing here would let a restart skip an incomplete snapshot.
+func TestStoreSnapshotCheckpointStoredDespiteCancelledContext(t *testing.T) {
+	// The context is cancelled but every snapshot batch was already acked: the
+	// snapshot genuinely completed, so a shutdown arriving now must not throw
+	// the checkpoint away (this method only runs when every batch was
+	// delivered — resolve-without-delivery paths error out of the errgroup).
+	// The store must use a detached context, as the caller's is already dead.
 	cp := checkpoint.NewCapped[bson.Raw](10)
 	require.Zero(t, cp.Pending())
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	m := &mongoCDC{}
-	require.False(t, m.storeSnapshotCheckpoint(ctx, cp, bson.Raw{5, 0, 0, 0, 0}, func(context.Context, bson.Raw) error {
-		t.Error("checkpoint stored after the context was cancelled")
+	token := bson.Raw{5, 0, 0, 0, 0}
+	var stored bson.Raw
+	m := &mongoCDC{logger: service.MockResources().Logger()}
+	require.True(t, m.storeSnapshotCheckpoint(ctx, cp, token, func(storeCtx context.Context, tok bson.Raw) error {
+		require.NoError(t, storeCtx.Err(), "store must receive a live context")
+		stored = tok
 		return nil
 	}))
+	require.Equal(t, token, stored)
 	m.resumeTokenMu.Lock()
-	require.Nil(t, m.resumeToken)
+	require.Equal(t, token, m.resumeToken)
 	m.resumeTokenMu.Unlock()
+}
+
+// rehearsedTracker scripts a sequence of Pending() results, then cancels a
+// context when the script is exhausted, so shutdown-race interleavings can be
+// pinned deterministically instead of with sleeps.
+type rehearsedTracker struct {
+	script []int64
+	then   func()
+	fired  bool
+}
+
+func (r *rehearsedTracker) Pending() int64 {
+	var next int64
+	if len(r.script) > 0 {
+		next = r.script[0]
+		r.script = r.script[1:]
+	}
+	if len(r.script) == 0 && !r.fired {
+		r.fired = true
+		r.then()
+	}
+	return next
+}
+
+func TestStoreSnapshotCheckpointStoredWhenAckWinsShutdownRace(t *testing.T) {
+	// The final ack lands and shutdown cancels the context while the wait loop
+	// is sleeping: the loop wakes on ctx.Done, must re-check the pending count
+	// before giving up, see zero, and store. The tracker scripts exactly that
+	// interleaving: one pending at the loop entry, cancellation fired with the
+	// script's exhaustion, zero on every later check.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cp := &rehearsedTracker{script: []int64{1}, then: cancel}
+
+	token := bson.Raw{5, 0, 0, 0, 0}
+	var stored bson.Raw
+	m := &mongoCDC{logger: service.MockResources().Logger()}
+	require.True(t, m.storeSnapshotCheckpoint(ctx, cp, token, func(_ context.Context, tok bson.Raw) error {
+		stored = tok
+		return nil
+	}))
+	require.Equal(t, token, stored)
 }
 
 func TestStoreSnapshotCheckpointSkippedWithoutToken(t *testing.T) {

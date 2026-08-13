@@ -563,6 +563,11 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	return nil
 }
 
+// snapshotCheckpointWriteTimeout bounds the post-snapshot checkpoint write on
+// its detached context, mirroring the bounded terminal save: a shutdown that
+// raced the final ack should not be extended indefinitely by a slow cache.
+const snapshotCheckpointWriteTimeout = 10 * time.Second
+
 // snapshotAckPollInterval is how often the post-snapshot checkpoint waits for
 // the snapshot batches still in flight to be acknowledged.
 const snapshotAckPollInterval = 100 * time.Millisecond
@@ -575,7 +580,14 @@ type pendingTracker interface {
 
 // storeSnapshotCheckpoint persists the pre-snapshot stream position once every
 // snapshot batch tracked by cp has been resolved downstream, and returns false
-// only when ctx was cancelled while waiting (the caller should then stop).
+// only when ctx was cancelled while acks were still outstanding (the caller
+// should then stop). A cancellation that arrives after the final ack does not
+// discard the checkpoint: the snapshot completed, and persisting it is exactly
+// what lets the next start resume the stream instead of re-running it.
+//
+// Contract: only call this after the snapshot errgroup returned nil, which
+// guarantees every tracked batch was delivered to the framework (all
+// resolve-without-delivery paths return errors).
 //
 // The ack gate is a correctness requirement, not an optimisation: persisting the
 // pre-snapshot position while part of the snapshot is still in flight would let
@@ -598,25 +610,32 @@ func (m *mongoCDC) storeSnapshotCheckpoint(
 	if token == nil {
 		return true
 	}
+	// Pending() == 0 genuinely means "every snapshot batch was acked" here:
+	// this method only runs after g.Wait() returned nil, and every path that
+	// resolves a slot without delivering its batch (the send select's
+	// cancellation branches) returns a non-nil error, making the gate
+	// unreachable. So a completed count may be trusted even when ctx has been
+	// cancelled in the meantime; only outstanding acks at cancellation force
+	// giving up, in which case the snapshot re-runs (the safe failure mode).
 	for cp.Pending() > 0 {
 		select {
 		case <-ctx.Done():
-			return false
+			if cp.Pending() > 0 {
+				return false
+			}
 		case <-time.After(snapshotAckPollInterval):
 		}
 	}
-	// Pending() reaching zero is only evidence of delivery while this
-	// connection is alive: a shutdown resolves the slots of batches it drops on
-	// the floor, so a cancelled context makes the count untrustworthy.
-	if ctx.Err() != nil {
-		return false
-	}
 	// Keep the periodic flusher and the terminal save consistent with what was
-	// written: both dedupe on the token they last saw.
+	// written: both dedupe on the token they last saw. The write uses a
+	// detached context so a shutdown arriving after the last ack still
+	// persists the completed snapshot.
 	m.resumeTokenMu.Lock()
 	m.resumeToken = token
 	m.resumeTokenMu.Unlock()
-	if err := store(ctx, token); err != nil {
+	storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), snapshotCheckpointWriteTimeout)
+	defer cancel()
+	if err := store(storeCtx, token); err != nil {
 		// A failed write only means the snapshot may run again, so warn and
 		// carry on as every other checkpoint store in this file does.
 		m.logger.Warnf("unable to store post-snapshot checkpoint in cache: %v", err)
