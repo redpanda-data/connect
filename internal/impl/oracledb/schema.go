@@ -294,8 +294,14 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 }
 
 // seedFromColumnMeta populates the cache from column metadata collected during
-// a snapshot transaction. The snapshot's READ ONLY transaction provides a
-// consistent view, so this overrides any pre-fetched entry.
+// a snapshot transaction, overriding any pre-fetched entry — unless meta is
+// the same slice (by identity) already used to seed this table, in which case
+// the rebuild is skipped and the cache is left untouched.
+//
+// The identity check is against the last slice this function was called
+// with, not against whatever is currently cached. If schemaForEvent's
+// catalog-refresh path replaces the cached schema in between, a later call
+// here with the same meta slice will not restore the snapshot-derived one.
 func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []replication.ColumnMeta) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()

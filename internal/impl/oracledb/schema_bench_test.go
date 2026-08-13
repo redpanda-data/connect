@@ -17,16 +17,16 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
-// BenchmarkSeedFromColumnMeta covers the hottest schema-cache path: the
-// publisher re-seeds the cache from driver column metadata for EVERY snapshot
-// row published (batcher.go Publish → seedFromColumnMeta), so per-column
-// type-name mapping cost here is paid once per snapshot message, not once per
-// table. Column set mirrors the integration test's ALL_TYPES table using
-// go-ora driver type-name spellings, as buildColumnMeta reports them.
-func BenchmarkSeedFromColumnMeta(b *testing.B) {
-	sc := newSchemaCache(nil, "", service.NewLoggerFromSlog(slog.Default()))
-	tbl := replication.UserTable{Schema: "TESTDB", Name: "ALL_TYPES"}
-	meta := []replication.ColumnMeta{
+// oracleAllTypesColumnMeta returns a fresh []ColumnMeta describing the
+// integration test's ALL_TYPES table, using go-ora driver type-name
+// spellings as buildColumnMeta reports them. Returning a new slice on every
+// call matters for the benchmarks below: seedFromColumnMeta skips its rebuild
+// when handed the same slice as last time, so measuring the rebuild path
+// requires a distinct slice per call, the same as a new snapshot page's
+// []ColumnMeta is distinct from the previous page's even when the columns
+// are identical (see replication/snapshot.go's buildColumnMeta).
+func oracleAllTypesColumnMeta() []replication.ColumnMeta {
+	return []replication.ColumnMeta{
 		{Name: "ID", TypeName: "NUMBER", Precision: 38, Scale: 255, HasDecimalSize: true},
 		{Name: "NUM_PLAIN", TypeName: "NUMBER", Precision: 38, Scale: 255, HasDecimalSize: true},
 		{Name: "NUM_38", TypeName: "NUMBER", Precision: 38, Scale: 0, HasDecimalSize: true},
@@ -46,9 +46,29 @@ func BenchmarkSeedFromColumnMeta(b *testing.B) {
 		{Name: "RW", TypeName: "RAW"},
 		{Name: "DOC", TypeName: "LongVarChar"},
 	}
+}
 
-	b.ReportAllocs()
-	for b.Loop() {
-		sc.seedFromColumnMeta(tbl, meta)
-	}
+func BenchmarkSeedFromColumnMeta(b *testing.B) {
+	b.Run("rebuild", func(b *testing.B) {
+		sc := newSchemaCache(nil, "", service.NewLoggerFromSlog(slog.Default()))
+		tbl := replication.UserTable{Schema: "TESTDB", Name: "ALL_TYPES"}
+
+		b.ReportAllocs()
+		for b.Loop() {
+			sc.seedFromColumnMeta(tbl, oracleAllTypesColumnMeta())
+		}
+	})
+
+	// After the first call this should cost little more than a mutex lock
+	// and a slice identity check, not a schema rebuild.
+	b.Run("same_slice", func(b *testing.B) {
+		sc := newSchemaCache(nil, "", service.NewLoggerFromSlog(slog.Default()))
+		tbl := replication.UserTable{Schema: "TESTDB", Name: "ALL_TYPES"}
+		meta := oracleAllTypesColumnMeta()
+
+		b.ReportAllocs()
+		for b.Loop() {
+			sc.seedFromColumnMeta(tbl, meta)
+		}
+	})
 }
