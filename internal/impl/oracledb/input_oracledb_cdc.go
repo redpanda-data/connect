@@ -36,6 +36,7 @@ const (
 	ociFieldConnectionString          = "connection_string"
 	ociFieldWalletPath                = "wallet_path"
 	ociFieldWalletPassword            = "wallet_password"
+	ociFieldPrefetchRows              = "prefetch_rows"
 	ociFieldStreamSnapshot            = "stream_snapshot"
 	ociFieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	ociFieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
@@ -102,7 +103,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 
 Streaming throughput is bounded by the LogMiner session, not by CPU: each pipeline mines the redo stream through a single synchronous LogMiner reader, so adding cores to Redpanda Connect does not raise the capture rate. To capture more aggregate change volume from one database, run multiple pipelines that each ` + "`include`" + ` a disjoint set of tables: every pipeline gets its own LogMiner reader.
 
-Large transactions and driver fetch size: the Oracle driver fetches 25 rows per network round trip by default, which can make large committed transactions appear minutes late while the database, network and connector all look idle: each round trip costs a full network exchange, and a large transaction requires thousands of them. Raise the fetch size with the ` + "`PREFETCH_ROWS`" + ` query parameter on ` + "`" + ociFieldConnectionString + "`" + `, for example ` + "`?PREFETCH_ROWS=1000`" + `.
+Large transactions and driver fetch size: left to itself, the Oracle driver sizes each fetch to roughly 128 KiB based on the declared maximum width of the selected columns, so wide columns such as LogMiner's redo SQL yield only a handful of rows per network round trip. This can make large committed transactions appear minutes late while the database, network and connector all look idle: each round trip costs a full network exchange, and a large transaction requires thousands of them. The connector therefore fetches ` + "`" + ociFieldPrefetchRows + "`" + ` rows per round trip (500 by default); raise it for large transactions over high-latency links. A ` + "`PREFETCH_ROWS`" + ` query parameter in ` + "`" + ociFieldConnectionString + "`" + ` takes precedence over the field.
 
 Redo log retention must cover idle periods, not just outages: the SCN checkpoint only advances when messages are delivered, so a monitored table set that goes idle leaves the checkpoint stationary while the database ages out redo/archive logs. If the checkpointed SCN is no longer available when activity resumes or the pipeline restarts, the input cannot resume and repeatedly fails with ORA-01292. Ensure archive log retention exceeds the longest plausible idle period, and alert on a stagnant checkpoint SCN or repeated ORA errors.
 
@@ -125,6 +126,12 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		Description("Password for the `ewallet.p12` PKCS#12 wallet file. Only required when the wallet directory contains `ewallet.p12` rather than `cwallet.sso`.").
 		ShortDescription("Password for the ewallet.p12 wallet file. Not needed when the wallet directory holds cwallet.sso.").
 		Optional(),
+	).
+	Field(service.NewIntField(ociFieldPrefetchRows).
+		Description("The number of rows fetched per network round-trip, for both snapshot and streaming reads. Higher values mean fewer round-trips but more memory per fetch, for each table snapshotted in parallel. A `PREFETCH_ROWS` query parameter in `connection_string` takes precedence.").
+		ShortDescription("Rows fetched per network round-trip from Oracle; raising this can reduce round-trip-bound read latency for wide rows at the cost of increased memory.").
+		Default(500).
+		LintRule(`root = if this <= 0 { [ "` + ociFieldPrefetchRows + ` must be greater than 0" ] }`),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
@@ -417,6 +424,9 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	overrides := make(map[string]string)
 	if err := parseWalletConfig(conf, overrides); err != nil {
 		return nil, fmt.Errorf("parsing oracle wallet config: %w", err)
+	}
+	if err := parsePrefetchRowsConfig(conf, overrides, logger); err != nil {
+		return nil, fmt.Errorf("parsing oracle %s config: %w", ociFieldPrefetchRows, err)
 	}
 
 	if connectionString, err = buildConnectionString(connectionString, overrides, logger); err != nil {

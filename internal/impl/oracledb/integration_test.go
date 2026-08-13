@@ -67,7 +67,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 		{
 			cfg := `
 oracledb_cdc:
-  connection_string: ` + cdbConnStr + `
+  connection_string: ` + cdbConnStr + `?prefetch_rows=5000
   pdb_name: ` + pdbName + `
   snapshot_mode: snapshot_and_stream
   max_parallel_snapshot_tables: 2
@@ -80,9 +80,10 @@ oracledb_cdc:
   batching:
     count: 500`
 
+			var logBuf oracledbtest.SyncBuffer
 			streamBuilder := service.NewStreamBuilder()
+			streamBuilder.SetLogger(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logBuf), &slog.HandlerOptions{Level: slog.LevelDebug})))
 			require.NoError(t, streamBuilder.AddInputYAML(cfg))
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				outBatchesMu.Lock()
@@ -104,6 +105,10 @@ oracledb_cdc:
 					t.Error(err)
 				}
 			}()
+
+			assert.Eventually(t, func() bool {
+				return strings.Contains(logBuf.String(), "Using PREFETCH_ROWS value of 5000 from connection_string")
+			}, time.Minute*3, time.Millisecond*500, "expected prefetch rows of 5000")
 
 			t.Log("Verifying snapshot changes from FREEPDB1...")
 			var got int
@@ -176,6 +181,7 @@ oracledb_cdc:
   stream_snapshot: true
   max_parallel_snapshot_tables: 3
   snapshot_max_batch_size: 10
+  prefetch_rows: 2000
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -185,9 +191,10 @@ oracledb_cdc:
   batching:
     count: 500`
 
+			var logBuf oracledbtest.SyncBuffer
 			streamBuilder := service.NewStreamBuilder()
+			streamBuilder.SetLogger(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logBuf), &slog.HandlerOptions{Level: slog.LevelDebug})))
 			require.NoError(t, streamBuilder.AddInputYAML(cfg))
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				outBatchesMu.Lock()
@@ -209,6 +216,10 @@ oracledb_cdc:
 					t.Error(err)
 				}
 			}()
+
+			assert.Eventually(t, func() bool {
+				return strings.Contains(logBuf.String(), "Using PREFETCH_ROWS value of 2000 from configuration")
+			}, time.Minute*3, time.Millisecond*500, "expected prefetch rows of 5000")
 
 			time.Sleep(10 * time.Second)
 
