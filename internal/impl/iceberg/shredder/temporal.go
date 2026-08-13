@@ -30,10 +30,10 @@ const secondsPerDay = 86400
 // shredder's insert path (convertLeafValue -> convertDate / convertTime /
 // convertTimestamp) would, returning the equivalent UTC time.Time.
 //
-// It exists so the copy-on-write rewrite path (which encodes values through
-// deleteKeyJSONValue + array.RecordFromJSON, and historically required a
-// time.Time) can share the shredder's unit interpretation instead of diverging
-// from it. The unit scaling is delegated to the very same helpers the insert
+// It exists so the mutation paths (which encode values through the shared
+// jsonLeafValue canonicaliser + array.RecordFromJSON, and historically
+// required a time.Time) can share the shredder's unit interpretation instead
+// of diverging from it. The unit scaling is delegated to the very same helpers the insert
 // path uses — numericToTimeMicros for TIME and scaleTimestampNumeric for
 // TIMESTAMP, with DATE treated as already-days like convertDate — so the two
 // paths cannot drift on how a bare number is scaled. That drift was the source
