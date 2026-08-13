@@ -976,13 +976,12 @@ func (l *logCapture) matching(sub string) []string {
 // has to be seeded into the cache directory before the first run, and because
 // the failure is only observable through the logger.
 //
-// NOTE: the fast reconnect loop this test produces also exposes a pre-existing
-// race between checkpointFlusher.Start() in a new Connect and the previous
-// stream goroutine's deferred Stop() (input.go's goroutine runs
-// TriggerHasStopped before that deferred Stop, so the waiting Connect resumes
-// first, and asyncroutine.Periodic guards neither). It is unrelated to what this
-// test asserts, and only shows up under -race; integration tests are not run
-// with -race. Do not "fix" it by weakening this test.
+// NOTE: the fast reconnect loop this test produces is what exposed the
+// checkpointFlusher Start/Stop race across reconnects, since fixed by
+// registering TriggerHasStopped first in input.go's stream goroutine so the
+// flusher is fully stopped before a waiting Connect resumes. This test churns
+// through reconnects quickly, so it doubles as a regression exercise for that
+// ordering.
 func TestIntegrationMongoCDCUnresumableCheckpointToken(t *testing.T) {
 	integration.CheckSkip(t)
 	uri, mongoClient := startMongoContainer(t)
@@ -1091,18 +1090,34 @@ mongodb_cdc:
 	}
 	db.InsertMany(t, "foo", docs...)
 
-	seenIDs := func(t *testing.T) map[int]bool {
-		t.Helper()
+	// seenIDs must not fail the test itself: it runs inside require.Eventually
+	// conditions, which testify spawns on a separate goroutine where FailNow
+	// (runtime.Goexit) silently kills the tick instead of failing the test.
+	// Shape problems are returned as an error and asserted on the test
+	// goroutine after the wait.
+	seenIDs := func() (map[int]bool, error) {
 		ids := map[int]bool{}
 		for _, msg := range output.Messages(t) {
 			doc, ok := msg.(map[string]any)
-			require.True(t, ok, "unexpected message shape: %T", msg)
+			if !ok {
+				return nil, fmt.Errorf("unexpected message shape: %T", msg)
+			}
 			num, ok := doc["_id"].(json.Number)
-			require.True(t, ok, "unexpected _id shape: %T", doc["_id"])
+			if !ok {
+				return nil, fmt.Errorf("unexpected _id shape: %T", doc["_id"])
+			}
 			id, err := num.Int64()
-			require.NoError(t, err)
+			if err != nil {
+				return nil, err
+			}
 			ids[int(id)] = true
 		}
+		return ids, nil
+	}
+	mustSeenIDs := func(t *testing.T) map[int]bool {
+		t.Helper()
+		ids, err := seenIDs()
+		require.NoError(t, err)
 		return ids
 	}
 	missing := func(ids map[int]bool) []int {
@@ -1125,13 +1140,16 @@ mongodb_cdc:
 		time.Sleep(pause)
 		stream.StopWithin(t, 30*time.Second)
 		wait()
-		t.Logf("chaos run %d: %d/%d distinct ids seen so far", i, len(seenIDs(t)), docCount)
+		t.Logf("chaos run %d: %d/%d distinct ids seen so far", i, len(mustSeenIDs(t)), docCount)
 	}
 
 	// Final run, allowed to finish.
 	wait := stream.RunAsync(t)
-	require.Eventually(t, func() bool { return len(missing(seenIDs(t))) == 0 },
-		60*time.Second, 250*time.Millisecond, "documents never delivered: %v", missing(seenIDs(t)))
+	require.Eventually(t, func() bool {
+		ids, err := seenIDs()
+		return err == nil && len(missing(ids)) == 0
+	}, 60*time.Second, 250*time.Millisecond, "documents never fully delivered")
+	require.Empty(t, missing(mustSeenIDs(t)))
 	stream.StopWithin(t, 30*time.Second)
 	wait()
 
