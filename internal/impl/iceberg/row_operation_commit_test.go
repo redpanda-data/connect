@@ -10,6 +10,7 @@ package iceberg
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -486,6 +487,75 @@ func TestWriteSkipsCleanupOnAmbiguousCommit(t *testing.T) {
 	require.ErrorIs(t, err, rest.ErrCommitStateUnknown, "exhausted ambiguous attempts must surface as unknown-state")
 	assert.Positive(t, countParquetFiles(t, tbl.Location()),
 		"ambiguous commit outcome: written files must be left for orphan-file maintenance, not deleted")
+}
+
+// TestWriteMORAmbiguousThenConflictStaysSticky pins the production log shape
+// behind the fielded corruption reports, end-to-end through writer.Write on
+// the merge-on-read path: an ambiguous attempt mid-loop, clean-conflict
+// terminal failures, and reloads failing for the WHOLE loop (a catalog outage
+// produces exactly this correlation). The returned error must carry BOTH
+// sentinels — commit-failed from the terminal attempt AND unknown-state from
+// the sticky earlier ambiguity — and no written file may be deleted: the
+// ambiguous attempt may still land, and reloads never got to prove anything.
+func TestWriteMORAmbiguousThenConflictStaysSticky(t *testing.T) {
+	ctx := t.Context()
+	logger := service.MockResources().Logger()
+
+	_, mem := newTestTable(t)
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{
+		commitUnknownNoLand, commitConflict, commitConflict,
+	}}
+	tbl := cat.snapshot()
+	require.NoError(t, os.MkdirAll(filepath.Join(tbl.Location(), "data"), 0o755))
+
+	comm, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 3},
+		func(context.Context) (*table.Table, error) { return nil, errors.New("catalog reload unavailable") }, logger)
+	require.NoError(t, err)
+	defer comm.Close()
+
+	w := newDeleteWriter(t, tbl)
+	w.committer = comm
+	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+
+	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})})
+	require.Error(t, err)
+	require.ErrorIs(t, err, rest.ErrCommitFailed, "the terminal clean conflict must surface")
+	require.ErrorIs(t, err, rest.ErrCommitStateUnknown,
+		"the mid-loop ambiguity must stay sticky through writer.Write even though a differently-classed error terminated the loop")
+	assert.Positive(t, countParquetFiles(t, tbl.Location()),
+		"no written file may be deleted while an attempt's outcome is ambiguous and unproven")
+}
+
+// TestWriteMORLandedFinalAttemptSucceeds closes the writer-level loop on the
+// landed-but-misreported commit: the final attempt applies server-side but
+// reports unknown-state; the retry's reload finds the commit-id token, so
+// writer.Write must return SUCCESS — not an error that nacks the batch into
+// redelivery and duplicate rows — with the mutation applied exactly once.
+func TestWriteMORLandedFinalAttemptSucceeds(t *testing.T) {
+	ctx := t.Context()
+	logger := service.MockResources().Logger()
+
+	_, mem := newTestTable(t)
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{
+		commitConflict, commitLandThenUnknown,
+	}}
+	tbl := cat.snapshot()
+	require.NoError(t, os.MkdirAll(filepath.Join(tbl.Location(), "data"), 0o755))
+
+	comm, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 3},
+		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+	require.NoError(t, err)
+	defer comm.Close()
+
+	w := newDeleteWriter(t, tbl)
+	w.committer = comm
+	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+
+	require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})}),
+		"a landed-but-misreported final attempt must resolve to success via the token check, not surface an error")
+	assert.Equal(t, 2, cat.calls, "conflict, then the landed-but-unknown attempt; the token check must prevent a third")
+	assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+		"the mutation must be applied exactly once")
 }
 
 // morUpsertInput builds an upsert-shaped merge-on-read CommitInput (one data

@@ -822,6 +822,20 @@ func joinUnresolvedUnknown(err, unresolved error) error {
 //     the request and refused it. 400 notably includes engine catalogs'
 //     prohibited-property rejections, whose learn-strip-retry flow depends on
 //     the rejection being definitive.
+//
+// Axiom worth stating plainly: classifying a 409 as definitive assumes a
+// catalog never APPLIES a commit and then reports it as a conflict. The retry
+// machinery deliberately does not share that assumption — the in-loop
+// commit-id check treats a landed-but-reported-failed commit as success on
+// reload (see the commitLandThenFail test outcome) — because for DEDUPE the
+// cost of being wrong is a duplicate, cheap insurance. For CLEANUP the cost
+// of the same wrongness would be deleting a landed snapshot's files, so this
+// classification leans on the REST spec instead: a spec-compliant catalog's
+// 409 is evaluated-and-refused, nothing applied. A catalog that violates
+// that, combined with reloads failing across the whole retry loop (hiding
+// the landed token), is the one residual shape where cleanup could remove a
+// landed file — accepted, and worth remembering if a catalog is ever caught
+// applying-then-409ing in the wild.
 //   - A prohibited-keys rejection recognised by text
 //     (parseProhibitedPropertyKeys) — that text is only ever authored by a
 //     catalog that evaluated and refused the request (in the wild it arrives
