@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
@@ -41,11 +42,39 @@ const (
 	bsoFieldBlobType          = "blob_type"
 	bsoFieldPublicAccessLevel = "public_access_level"
 
-	// bsoMaxTagsPermitted is the maximum number of blob index tags a single
-	// blob may carry, a limit imposed by Azure. See
+	// The following blob index tag limits are imposed by Azure. See
 	// https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs
+
+	// bsoMaxTagsPermitted is the maximum number of blob index tags a single
+	// blob may carry.
 	bsoMaxTagsPermitted = 10
+	// bsoMaxTagKeyLength is the maximum length of a blob index tag key.
+	bsoMaxTagKeyLength = 128
+	// bsoTagAllowedSpecialChars are the non-alphanumeric characters permitted
+	// within blob index tag keys and values.
+	bsoTagAllowedSpecialChars = " +-./:=_"
 )
+
+// bsoValidateTagKey checks a blob index tag key against the length and character
+// set limits imposed by Azure. Tag keys are always static, so an invalid one is
+// worth rejecting at config time rather than failing every message. Tag values
+// are interpolated per message and so cannot be checked here.
+func bsoValidateTagKey(key string) error {
+	for _, r := range key {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case strings.ContainsRune(bsoTagAllowedSpecialChars, r):
+		default:
+			return fmt.Errorf("blob index tag key %q contains unsupported character %q, only alphanumerics and the characters %q are permitted", key, r, bsoTagAllowedSpecialChars)
+		}
+	}
+	// Only ASCII characters reach here, so byte length matches the character
+	// count Azure counts against the limit.
+	if l := len(key); l < 1 || l > bsoMaxTagKeyLength {
+		return fmt.Errorf("blob index tag key %q must be between 1 and %d characters, got %d", key, bsoMaxTagKeyLength, l)
+	}
+	return nil
+}
 
 type bsoTagPair struct {
 	key   string
@@ -87,6 +116,9 @@ func bsoConfigFromParsed(pConf *service.ParsedConfig) (conf bsoConfig, err error
 	}
 	conf.Tags = make([]bsoTagPair, 0, len(tagMap))
 	for k, v := range tagMap {
+		if err = bsoValidateTagKey(k); err != nil {
+			return
+		}
 		conf.Tags = append(conf.Tags, bsoTagPair{key: k, value: v})
 	}
 	sort.Slice(conf.Tags, func(i, j int) bool {
@@ -122,7 +154,27 @@ Supports multiple authentication methods but only one of the following is requir
 If multiple are set then the `+"`storage_connection_string`"+` is given priority.
 
 If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+` parameter, please specify it in the
-`+"`storage_account`"+` field.`+service.OutputPerformanceDocs(true, false)).
+`+"`storage_account`"+` field.
+
+== Tags
+
+The `+"`tags`"+` field allows you to attach key/value pairs to blobs as https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs[blob index tags^], where the values support xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions]:
+
+`+"```yaml"+`
+output:
+  azure_blob_storage:
+    container: TODO
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
+    tags:
+      Environment: production
+      Source: ${!meta("kafka_topic")}
+`+"```"+`
+
+Only values support interpolation; keys are static and are validated against Azure's limits at startup. Values are resolved per message and so are only rejected once Azure sees them.
+
+If authenticating with `+"`storage_sas_token`"+`, the token must include the `+"`t`"+` (tags) permission.
+
+When `+"`blob_type`"+` is `+"`APPEND`"+` the tags are written separately from the message content, so they are refreshed on each append on a best-effort basis and may briefly lag the most recent append. A failure to write them is logged and does not fail the message, because retrying would append the message content a second time.`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewInterpolatedStringField(bsoFieldContainer).
 				Description(`The container for uploading the messages to.`).
@@ -200,6 +252,8 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 				// Another write can create the blob and append to it before this Create. Without If-None-Match,
 				// Create replaces that blob and its data is lost. With it, Create fails if the blob exists. Azurite
 				// returns BlobAlreadyExists (409). The REST docs give 412 for a failed If-None-Match on writes.
+				// Attaching the tags at creation means a newly created blob carries
+				// them even if the refresh below fails.
 				createOpts := &appendblob.CreateOptions{
 					AccessConditions: &blob.AccessConditions{
 						ModifiedAccessConditions: &blob.ModifiedAccessConditions{IfNoneMatch: to.Ptr(azcore.ETagAny)},
@@ -222,14 +276,18 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 				return fmt.Errorf("appending block to blob: %w", err)
 			}
 		}
-		// Tags must be set separately for append blobs since AppendBlock does not
-		// support tags. On creation they are set via CreateOptions, but when
-		// appending to an existing blob we need an explicit SetTags call to ensure
-		// tags reflect the latest configured values.
+		// AppendBlock does not support tags, so they are written separately. This
+		// also covers blobs this output did not create, which never pass through
+		// the creation path above and would otherwise never be tagged.
+		//
+		// A failure here is logged rather than returned: the message content is
+		// already committed at this point, and AppendBlock is not idempotent, so
+		// nacking would append the same content again on redelivery. Losing a tag
+		// update is preferable to duplicating data.
 		if len(tags) > 0 {
 			blobClient := containerClient.NewBlobClient(blobName)
-			if _, err = blobClient.SetTags(ctx, tags, nil); err != nil {
-				return fmt.Errorf("setting blob tags: %w", err)
+			if _, tagErr := blobClient.SetTags(ctx, tags, nil); tagErr != nil {
+				a.log.Warnf("Failed to set blob index tags on append blob %v: %v", blobName, tagErr)
 			}
 		}
 	} else {
