@@ -16,7 +16,9 @@ silent: true
 #   SNOWFLAKE_MAX_IN_FLIGHT      concurrent channels, default: 4
 
 vars:
-  RPCN: "go run ../../../../../../cmd/redpanda-connect/main.go"
+  # Override with RPCN=/path/to/binary to run against a prebuilt redpanda-connect
+  # (e.g. on a deploy target without a Go toolchain -- see deploy/snowflake-aws/).
+  RPCN: '{{.RPCN | default "go run ../../../../../../cmd/redpanda-connect/main.go"}}'
   BATCH: '{{.BATCH | default "1000"}}'
   PERIOD: '{{.PERIOD | default "5s"}}'
   MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "4"}}'
@@ -25,6 +27,62 @@ vars:
   COUNT: '{{.COUNT | default "2000000"}}'
 
 tasks:
+  up:
+    desc: Start local Kafka (for the Kafka Connect comparison bench only -- native bench:run needs no Kafka)
+    cmds:
+      - docker compose up -d
+      - until docker exec rpcns-snowflake-streaming-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 2; done
+      - |
+        # Pre-create Kafka Connect's internal topics with cleanup.policy=compact.
+        # With KAFKA_AUTO_CREATE_TOPICS_ENABLE=true, a metadata fetch can otherwise
+        # auto-create _connect-offsets with the broker's default (delete) policy
+        # before Connect's own explicit-config creation logic runs, which makes the
+        # worker refuse to start ("found the topic currently has cleanup.policy=delete").
+        docker exec rpcns-snowflake-streaming-kafka kafka-topics --bootstrap-server localhost:9092 \
+          --create --if-not-exists --topic _connect-configs --partitions 1 --replication-factor 1 --config cleanup.policy=compact > /dev/null
+        docker exec rpcns-snowflake-streaming-kafka kafka-topics --bootstrap-server localhost:9092 \
+          --create --if-not-exists --topic _connect-offsets --partitions 25 --replication-factor 1 --config cleanup.policy=compact > /dev/null
+        docker exec rpcns-snowflake-streaming-kafka kafka-topics --bootstrap-server localhost:9092 \
+          --create --if-not-exists --topic _connect-status --partitions 5 --replication-factor 1 --config cleanup.policy=compact > /dev/null
+      - echo "Kafka ready"
+
+  down:
+    desc: Stop and remove containers and volumes
+    cmds:
+      - docker compose -f docker-compose.yaml -f docker-compose.kc.yaml down -v --remove-orphans 2>/dev/null || docker compose down -v --remove-orphans
+
+  kc:build:
+    desc: Build the Kafka Connect image (downloads the Snowflake Kafka Connector jar from Maven Central)
+    cmds:
+      - docker compose -f docker-compose.kc.yaml build kafka-connect
+      - echo "Kafka Connect image built"
+
+  kc:up:
+    desc: Start Kafka Connect (requires Kafka already running via task up)
+    cmds:
+      - |
+        docker compose -f docker-compose.kc.yaml up -d kafka-connect
+        echo "Waiting for Kafka Connect REST API..."
+        ATTEMPTS=0
+        until curl -sf http://localhost:8083/connectors >/dev/null 2>&1 || [ $ATTEMPTS -ge 60 ]; do
+          sleep 3; ATTEMPTS=$((ATTEMPTS+1))
+        done
+        if [ $ATTEMPTS -ge 60 ]; then echo "ERROR: Kafka Connect did not start within 3 min"; exit 1; fi
+        echo "Kafka Connect ready at http://localhost:8083"
+
+  bench:load:
+    desc: "Produce COUNT messages to the local Kafka topic, for the Kafka Connect comparison bench (e.g. task bench:load COUNT=2000000)"
+    vars:
+      COUNT: '{{.COUNT | default "2000000"}}'
+    cmds:
+      - |
+        docker exec rpcns-snowflake-streaming-kafka kafka-topics \
+          --bootstrap-server localhost:9092 \
+          --create --if-not-exists \
+          --topic rpcns-snowflake-streaming-bench \
+          --partitions 6 --replication-factor 1 > /dev/null 2>&1 || true
+        {{.RPCN}} run --set "input.generate.count={{.COUNT}}" ./load_config.yaml
+
   bench:run:
     desc: |
       Run Snowpipe Streaming write benchmark.
@@ -63,6 +121,8 @@ tasks:
       DEFAULT_CHUNK_SIZE: '{{.DEFAULT_CHUNK_SIZE | default "50000"}}'
     cmds:
       - |
+        RPCN="{{.RPCN}}"
+
         header() {
           printf "%-8s %-12s %-14s %-11s %-15s %-15s\n" "BATCH" "PARALLELISM" "MAX_IN_FLIGHT" "CHUNK_SIZE" "MSG/SEC" "KB/SEC"
         }
@@ -70,7 +130,7 @@ tasks:
         run_bench() {
           local batch="$1" parallelism="$2" max_in_flight="$3" chunk_size="$4" count="$5"
           local out
-          out=$(task bench:run BATCH="$batch" PARALLELISM="$parallelism" MAX_IN_FLIGHT="$max_in_flight" CHUNK_SIZE="$chunk_size" COUNT="$count" 2>&1) || true
+          out=$(task bench:run BATCH="$batch" PARALLELISM="$parallelism" MAX_IN_FLIGHT="$max_in_flight" CHUNK_SIZE="$chunk_size" COUNT="$count" RPCN="$RPCN" 2>&1) || true
           local line
           line=$(echo "$out" | grep "total stats" | tail -1)
           if [ -z "$line" ]; then
@@ -130,6 +190,8 @@ tasks:
       CHUNK_SIZES: '{{.CHUNK_SIZES | default "50000"}}'
     cmds:
       - |
+        RPCN="{{.RPCN}}"
+
         header() {
           printf "%-8s %-12s %-14s %-11s %-15s %-15s\n" "BATCH" "PARALLELISM" "MAX_IN_FLIGHT" "CHUNK_SIZE" "MSG/SEC" "KB/SEC"
         }
@@ -137,7 +199,7 @@ tasks:
         run_bench() {
           local batch="$1" parallelism="$2" max_in_flight="$3" chunk_size="$4" count="$5"
           local out
-          out=$(task bench:run BATCH="$batch" PARALLELISM="$parallelism" MAX_IN_FLIGHT="$max_in_flight" CHUNK_SIZE="$chunk_size" COUNT="$count" 2>&1) || true
+          out=$(task bench:run BATCH="$batch" PARALLELISM="$parallelism" MAX_IN_FLIGHT="$max_in_flight" CHUNK_SIZE="$chunk_size" COUNT="$count" RPCN="$RPCN" 2>&1) || true
           local line
           line=$(echo "$out" | grep "total stats" | tail -1)
           if [ -z "$line" ]; then
@@ -169,3 +231,167 @@ tasks:
     desc: Truncate BENCH_EVENTS table (requires snowsql in PATH)
     cmds:
       - snowsql -a "$SNOWFLAKE_ACCOUNT" -u "$SNOWFLAKE_USER" ${SNOWFLAKE_ROLE:+-r "$SNOWFLAKE_ROLE"} -d "$SNOWFLAKE_DB" -s "${SNOWFLAKE_SCHEMA:-RAW}" ${SNOWFLAKE_PRIVATE_KEY_PATH:+--private-key-path "$SNOWFLAKE_PRIVATE_KEY_PATH"} -q "TRUNCATE TABLE BENCH_EVENTS;"
+
+  bench:kc:run:
+    desc: |
+      Run write benchmark via the official Snowflake Kafka Connector (Snowpipe Streaming
+      ingestion method -- the KC analogue of snowflake_streaming). Lands in its own
+      BENCH_EVENTS_KC table (RECORD_METADATA/RECORD_CONTENT VARIANT columns,
+      schematization off) so it never collides with the native bench's typed table.
+      Requires connector 2.0.0+ (this harness pins 3.4.0). SNOWFLAKE_ROLE is required
+      for Snowpipe Streaming (unlike classic Snowpipe, where it's optional).
+      Params: BUFFER_COUNT (default 10000), MAX_CLIENT_LAG (seconds, default 1), TASKS (default 1)
+      Example: task bench:kc:run BUFFER_COUNT=20000 MAX_CLIENT_LAG=5 TASKS=4
+    vars:
+      BUFFER_COUNT: '{{.BUFFER_COUNT | default "10000"}}'
+      MAX_CLIENT_LAG: '{{.MAX_CLIENT_LAG | default "1"}}'
+      TASKS: '{{.TASKS | default "1"}}'
+    cmds:
+      - |
+        set +e
+        if [ -z "$SNOWFLAKE_ACCOUNT" ]; then echo "SNOWFLAKE_ACCOUNT env var required"; exit 1; fi
+        if [ -z "$SNOWFLAKE_USER" ]; then echo "SNOWFLAKE_USER env var required"; exit 1; fi
+        if [ -z "$SNOWFLAKE_DB" ]; then echo "SNOWFLAKE_DB env var required"; exit 1; fi
+        if [ -z "$SNOWFLAKE_PRIVATE_KEY" ]; then echo "SNOWFLAKE_PRIVATE_KEY env var required"; exit 1; fi
+        if [ -z "$SNOWFLAKE_ROLE" ]; then echo "SNOWFLAKE_ROLE env var required for Snowpipe Streaming"; exit 1; fi
+
+        # The connector wants the raw base64 key body -- no PEM header/footer/newlines.
+        KC_KEY=$(printf '%s\n' "$SNOWFLAKE_PRIVATE_KEY" | grep -v -- '-----' | tr -d '\r\n')
+
+        TOPIC="rpcns-snowflake-streaming-bench"
+        CONN="snowflake-streaming-kc-$(date +%s)"
+        GROUP="connect-${CONN}"
+        KC_TABLE="BENCH_EVENTS_KC"
+
+        KC_REST="http://localhost:8083"
+        ATTEMPTS=0
+        until curl -sf "${KC_REST}/connectors" >/dev/null 2>&1 || [ $ATTEMPTS -ge 30 ]; do
+          sleep 2; ATTEMPTS=$((ATTEMPTS+1))
+        done
+        if [ $ATTEMPTS -ge 30 ]; then echo "ERROR: Kafka Connect not ready — run: task kc:up"; exit 1; fi
+
+        curl -sf -X DELETE "${KC_REST}/connectors/${CONN}" >/dev/null 2>&1 || true
+        sleep 1
+
+        printf "kc-streaming  buffer_count=%-8s max_client_lag=%-3ss tasks=%s\n" "{{.BUFFER_COUNT}}" "{{.MAX_CLIENT_LAG}}" "{{.TASKS}}"
+
+        curl -sf -X POST "${KC_REST}/connectors" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"name\":\"${CONN}\",
+            \"config\":{
+              \"connector.class\":\"com.snowflake.kafka.connector.SnowflakeSinkConnector\",
+              \"topics\":\"${TOPIC}\",
+              \"snowflake.topic2table.map\":\"${TOPIC}:${KC_TABLE}\",
+              \"snowflake.url.name\":\"${SNOWFLAKE_ACCOUNT}.snowflakecomputing.com:443\",
+              \"snowflake.user.name\":\"${SNOWFLAKE_USER}\",
+              \"snowflake.private.key\":\"${KC_KEY}\",
+              \"snowflake.database.name\":\"${SNOWFLAKE_DB}\",
+              \"snowflake.schema.name\":\"${SNOWFLAKE_SCHEMA:-RAW}\",
+              \"snowflake.role.name\":\"${SNOWFLAKE_ROLE}\",
+              \"snowflake.ingestion.method\":\"SNOWPIPE_STREAMING\",
+              \"buffer.count.records\":\"{{.BUFFER_COUNT}}\",
+              \"snowflake.streaming.max.client.lag\":\"{{.MAX_CLIENT_LAG}}\",
+              \"tasks.max\":\"{{.TASKS}}\",
+              \"consumer.override.auto.offset.reset\":\"earliest\",
+              \"key.converter\":\"org.apache.kafka.connect.storage.StringConverter\",
+              \"value.converter\":\"com.snowflake.kafka.connector.records.SnowflakeJsonConverter\"
+            }
+          }" >/dev/null
+
+        START=$(date +%s)
+        printf "%-10s  %-12s\n" "TIME" "KAFKA_LAG"
+
+        # Snowpipe Streaming commits Kafka offsets only after the Ingest SDK channel
+        # confirms rows were durably inserted, so LAG=0 (after a genuine nonzero
+        # reading) means every row actually landed -- stronger guarantee than the
+        # classic Snowpipe (bulk) bench:kc:run, and matches the native
+        # snowflake_streaming bench's own completion semantics.
+        MAX_WAIT=600
+        ELAPSED=0
+        SEEN_REAL_LAG=false
+        ZERO_STREAK=0
+        while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
+          sleep 2
+          ELAPSED=$((ELAPSED + 2))
+
+          CONN_STATE=$(curl -sf "${KC_REST}/connectors/${CONN}/status" 2>/dev/null \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); ts=[t['state'] for t in d.get('tasks',[])]; print('FAILED' if 'FAILED' in ts or d['connector']['state']=='FAILED' else d['connector']['state'])" 2>/dev/null || echo "UNKNOWN")
+          if [ "$CONN_STATE" = "FAILED" ]; then
+            TRACE=$(curl -sf "${KC_REST}/connectors/${CONN}/status" 2>/dev/null \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); tt=[t.get('trace','') for t in d.get('tasks',[]) if t.get('trace')]; print((tt[0] if tt else d['connector'].get('trace',''))[:300])" 2>/dev/null || echo "")
+            curl -sf -X DELETE "${KC_REST}/connectors/${CONN}" >/dev/null 2>&1 || true
+            echo "ERROR: connector FAILED — $TRACE"; exit 1
+          fi
+
+          CG_RAW=$(docker exec rpcns-snowflake-streaming-kafka kafka-consumer-groups \
+            --bootstrap-server localhost:9092 --group "$GROUP" --describe 2>/dev/null)
+          if echo "$CG_RAW" | grep -qF "$TOPIC" 2>/dev/null; then
+            LAG=$(echo "$CG_RAW" | awk '
+              NR>1 && $6~/^[0-9]+$/ {sum+=$6; n++}
+              END {if (n>0) print sum; else print "?"}')
+          else
+            LAG="?"
+          fi
+
+          printf "%-10s  %-12s\n" "$(date +%H:%M:%S)" "$LAG"
+
+          if [ "${LAG}" != "?" ] && [ "${LAG}" -gt 0 ] 2>/dev/null; then
+            SEEN_REAL_LAG=true
+          fi
+          if [ "${LAG}" = "0" ] 2>/dev/null && [ "$SEEN_REAL_LAG" = "true" ]; then
+            ZERO_STREAK=$((ZERO_STREAK + 1))
+          else
+            ZERO_STREAK=0
+          fi
+          if [ "$ZERO_STREAK" -ge 2 ]; then break; fi
+        done
+
+        curl -sf -X DELETE "${KC_REST}/connectors/${CONN}" >/dev/null 2>&1 || true
+
+        END=$(date +%s)
+        ELAPSED=$((END - START))
+        TOTAL=$(docker exec rpcns-snowflake-streaming-kafka kafka-run-class kafka.tools.GetOffsetShell \
+          --broker-list localhost:9092 --topic "$TOPIC" --time -1 2>/dev/null \
+          | awk -F: '{sum+=$3} END {print sum+0}')
+        AVG=$(awk "BEGIN{printf \"%.0f\",${TOTAL}/($ELAPSED>0?$ELAPSED:1)}")
+        echo "---"
+        printf "kc-streaming  buffer_count=%-8s max_client_lag=%-3ss tasks=%s\n" "{{.BUFFER_COUNT}}" "{{.MAX_CLIENT_LAG}}" "{{.TASKS}}"
+        echo "Total messages : $TOTAL"
+        echo "Elapsed        : ${ELAPSED}s"
+        echo "Avg throughput : ${AVG} msg/s"
+        echo "RESULT_KC buffer_count={{.BUFFER_COUNT}} max_client_lag={{.MAX_CLIENT_LAG}} tasks={{.TASKS}} total=$TOTAL elapsed=${ELAPSED}s avg=$AVG"
+
+  bench:kc:matrix:
+    desc: "Sweep buffer_count x tasks.max over the Kafka Connect Snowpipe Streaming sink — run task bench:load COUNT=<TOTAL> once first (e.g. task bench:kc:matrix OUT=kc_streaming.txt)"
+    vars:
+      OUT: '{{.OUT | default ""}}'
+      BUFFER_COUNTS: '{{.BUFFER_COUNTS | default "1000 2000 4000 8000 16000 32000"}}'
+      TASKS: '{{.TASKS | default "1 2 4 8"}}'
+      MAX_CLIENT_LAG: '{{.MAX_CLIENT_LAG | default "1"}}'
+    cmds:
+      - |
+        OUT_FILE="{{.OUT}}"
+        HDR=$(printf "%-12s  %-8s  %-12s  %-10s  %s\n" "BUFFER_COUNT" "TASKS" "TOTAL" "ELAPSED" "AVG_MSG_S")
+        echo "$HDR"
+        if [ -n "$OUT_FILE" ]; then
+          printf "# kafka-connect snowflake sink (snowpipe streaming) write\n" > "$OUT_FILE"
+          echo "$HDR" >> "$OUT_FILE"
+        fi
+        for buffer_count in {{.BUFFER_COUNTS}}; do
+          for tasks in {{.TASKS}}; do
+            OUTPUT=$(task bench:kc:run BUFFER_COUNT=$buffer_count TASKS=$tasks MAX_CLIENT_LAG={{.MAX_CLIENT_LAG}} 2>&1) || true
+            R=$(echo "$OUTPUT" | grep "^RESULT_KC " || true)
+            TOT=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOT=${TOT:-ERROR}
+            EL=$(echo "$R" | grep -o 'elapsed=[^ ]*' | cut -d= -f2 || true); EL=${EL:-?}
+            AV=$(echo "$R" | grep -o 'avg=[^ ]*' | cut -d= -f2 || true); AV=${AV:-0}
+            ROW=$(printf "%-12s  %-8s  %-12s  %-10s  %s\n" "$buffer_count" "$tasks" "$TOT" "$EL" "$AV")
+            echo "$ROW"
+            if [ -n "$OUT_FILE" ]; then echo "$ROW" >> "$OUT_FILE"; fi
+          done
+        done
+
+  bench:kc:truncate:
+    desc: Truncate BENCH_EVENTS_KC table (requires snowsql in PATH)
+    cmds:
+      - snowsql -a "$SNOWFLAKE_ACCOUNT" -u "$SNOWFLAKE_USER" ${SNOWFLAKE_ROLE:+-r "$SNOWFLAKE_ROLE"} -d "$SNOWFLAKE_DB" -s "${SNOWFLAKE_SCHEMA:-RAW}" -q "TRUNCATE TABLE IF EXISTS BENCH_EVENTS_KC;"

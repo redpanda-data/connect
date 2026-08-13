@@ -109,6 +109,71 @@ task bench:streaming:matrix:full BATCHES="32000 64000 128000" PARALLELS="32 64" 
 
 Practical conclusion: the recommended config above stays the pick — it reaches the same throughput ceiling with far fewer resources (`PARALLELISM=1`, `MAX_IN_FLIGHT=16` vs. 32-64) than what's needed to hit the top of this grid.
 
+### EC2 sweep: one-at-a-time (BATCH / PARALLELISM / MAX_IN_FLIGHT / CHUNK_SIZE)
+
+Same harness, run from an EC2 box (via [`deploy/snowflake-aws/`](../../deploy/snowflake-aws/)) instead of the local/WSL2 machine used for the sweeps above — network path to Snowflake differs, so treat this as a separate environment, not a direct replacement for the local numbers.
+
+```
+task bench:matrix RPCN=./rpcns-snowflake-streaming-bench COUNT=1000000
+```
+
+#### BATCH (others at default: PARALLELISM=1, MAX_IN_FLIGHT=4, CHUNK_SIZE=50000)
+
+| BATCH  | MSG/SEC      | KB/SEC   |
+| ------ | ------------ | -------- |
+| 1,000  | 5,696.3      | 781.3    |
+| 2,000  | 10,786.6     | 1,479.4  |
+| 4,000  | 21,364.9     | 2,930.3  |
+| 8,000  | 38,014.8     | 5,213.9  |
+| 16,000 | **46,569.2** | 6,387.3  |
+| 32,000 | 44,866.2     | 6,153.7  |
+| 64,000 | 45,935.1     | 6,300.2  |
+
+Peaks earlier than local (16,000 vs local's 64,000), but 16,000-64,000 all sit within a tight ~4% band — plausibly the same peak region as local, just noisy enough here that 16,000 edges out the others.
+
+#### PARALLELISM (others at default: BATCH=1000, MAX_IN_FLIGHT=4, CHUNK_SIZE=50000)
+
+| PARALLELISM | MSG/SEC | KB/SEC |
+| ----------- | ------- | ------ |
+| 1           | 3,632.3 | 498.2  |
+| 2           | 4,679.8 | 641.9  |
+| 3           | 5,388.2 | 739.0  |
+| 4           | 5,553.6 | 761.7  |
+| 5           | 5,500.0 | 754.4  |
+| 6           | 5,954.5 | 816.7  |
+| 7           | 5,676.4 | 778.5  |
+| 8           | 5,515.9 | 756.5  |
+
+No effect here either, same conclusion as local — noisier spread (3,632-5,954 vs local's tight 3,600-3,860) but no monotonic trend. Not worth tuning past 1.
+
+#### MAX_IN_FLIGHT (others at default: BATCH=1000, PARALLELISM=1, CHUNK_SIZE=50000)
+
+| MAX_IN_FLIGHT | MSG/SEC  | KB/SEC  |
+| ------------- | -------- | ------- |
+| 1             | 1,457.0  | 199.8   |
+| 2             | 3,112.4  | 426.9   |
+| 4             | 5,699.2  | 781.7   |
+| 8             | 10,264.1 | 1,407.8 |
+| 16            | 17,469.7 | 2,396.1 |
+| 32            | 27,514.1 | 3,773.7 |
+| 64            | 36,395.6 | 4,991.8 |
+
+Same near-linear climb as local, still no plateau at 64 — and this is with `BATCH` stuck at the small default (1,000). Given the BATCH sweep above already hits 46,569 msg/sec at `MAX_IN_FLIGHT=4`, a combined high-`BATCH` + high-`MAX_IN_FLIGHT` config on EC2 (not yet run as a cross-product here) would likely land well above local's 40,442 msg/sec recommended-config ceiling.
+
+#### CHUNK_SIZE (others at default: BATCH=1000, PARALLELISM=1, MAX_IN_FLIGHT=4)
+
+| CHUNK_SIZE | MSG/SEC | KB/SEC |
+| ---------- | ------- | ------ |
+| 6,250      | 5,487.3 | 752.6  |
+| 12,500     | 5,737.0 | 786.9  |
+| 25,000     | 5,700.6 | 781.9  |
+| 50,000     | 3,818.4 | 523.7  |
+| 100,000    | 5,095.2 | 698.8  |
+| 200,000    | 5,527.9 | 758.2  |
+| 400,000    | 5,574.9 | 764.6  |
+
+No clear trend, matches local's finding — left at default. The 50,000 dip here is likely the same run-to-run jitter seen elsewhere in this table (the nominally-identical default config scores 5,696/3,632/3,818 across the three sweeps above), not a real chunk-size effect.
+
 <a id="streaming-raw-sweeps"></a>
 <details>
 <summary>Raw one-at-a-time sweep data (BATCH / PARALLELISM / MAX_IN_FLIGHT / CHUNK_SIZE)</summary>
@@ -263,6 +328,52 @@ task bench:matrix BATCHES="10000 20000 50000" MAX_IN_FLIGHTS="16 32 64" UPLOAD_T
 - `BATCH=50,000` no longer wins now that `MAX_IN_FLIGHT`/`UPLOAD_THREADS` are both swept high — `20,000` takes the top spot, contradicting the earlier "bigger batch always helps" pre-fix finding.
 - Noisy throughout (e.g. `10000/32/32` dips to 16,823 while its neighbors sit near 20-23K) — same jitter pattern as the streaming cross-product, not a real per-parameter effect.
 - `UPLOAD_THREADS=32` only pulls ahead when `MAX_IN_FLIGHT=64`; at lower concurrency, 8 or 16 do just as well.
+
+### EC2 sweep: BATCH x MAX_IN_FLIGHT (UPLOAD_THREADS=16 fixed)
+
+Same harness, run from an EC2 box (via [`deploy/snowflake-aws/`](../../deploy/snowflake-aws/)) instead of the local/WSL2 machine used for the sweep above — network path to Snowflake differs, so treat this as a separate environment, not a direct replacement for the local numbers.
+
+```
+task bench:matrix BATCHES="1000 5000 10000 20000 50000" MAX_IN_FLIGHTS="1 4 8 16 32 64" UPLOAD_THREADS="16" COUNT=1000000
+```
+
+| BATCH  | MAX_IN_FLIGHT | UPLOAD_THREADS | MSG/SEC      | MB/SEC   |
+| ------ | ------------- | --------------- | ------------ | -------- |
+| 1,000  | 1             | 16               | 681.5        | 0.09     |
+| 1,000  | 4             | 16               | 2,772.6      | 0.38     |
+| 1,000  | 8             | 16               | 4,674.3      | 0.64     |
+| 1,000  | 16            | 16               | 9,789.1      | 1.34     |
+| 1,000  | 32            | 16               | 19,556.1     | 2.68     |
+| 1,000  | 64            | 16               | 31,937.5     | 4.38     |
+| 5,000  | 1             | 16               | 2,878.7      | 0.39     |
+| 5,000  | 4             | 16               | 10,668.6     | 1.46     |
+| 5,000  | 8             | 16               | 19,140.2     | 2.63     |
+| 5,000  | 16            | 16               | 31,728.7     | 4.35     |
+| 5,000  | 32            | 16               | 46,268.0     | 6.35     |
+| 5,000  | 64            | 16               | 46,119.0     | 6.33     |
+| 10,000 | 1             | 16               | 5,502.6      | 0.75     |
+| 10,000 | 4             | 16               | 18,934.1     | 2.60     |
+| 10,000 | 8             | 16               | 39,276.8     | 5.39     |
+| 10,000 | 16            | 16               | **47,222.9** | **6.48** |
+| 10,000 | 32            | 16               | 46,076.8     | 6.32     |
+| 10,000 | 64            | 16               | 45,864.1     | 6.29     |
+| 20,000 | 1             | 16               | 9,213.0      | 1.26     |
+| 20,000 | 4             | 16               | 31,374.5     | 4.30     |
+| 20,000 | 8             | 16               | 47,033.8     | 6.45     |
+| 20,000 | 16            | 16               | 37,991.2     | 5.21     |
+| 20,000 | 32            | 16               | 46,606.7     | 6.39     |
+| 20,000 | 64            | 16               | 44,829.0     | 6.15     |
+| 50,000 | 1             | 16               | 23,109.3     | 3.17     |
+| 50,000 | 4             | 16               | 46,363.9     | 6.36     |
+| 50,000 | 8             | 16               | 45,797.7     | 6.28     |
+| 50,000 | 16            | 16               | 46,025.3     | 6.31     |
+| 50,000 | 32            | 16               | 43,780.6     | 6.00     |
+| 50,000 | 64            | 16               | 44,975.7     | 6.17     |
+
+- Peak **47,222.9 msg/sec, 6.48 MB/sec** at `BATCH=10,000 MAX_IN_FLIGHT=16 UPLOAD_THREADS=16` — ~31% above the local sweep's best (36,165.7 msg/sec), plausibly a shorter/more consistent network path from EC2 to Snowflake than from the local/WSL2 machine.
+- Once `MAX_IN_FLIGHT >= 16`, nearly every `BATCH` value clusters in the same 44-47K band regardless of further increases — same ceiling-once-concurrency-is-high pattern as the local sweep, just at a higher ceiling.
+- `BATCH=1,000` is the outlier: still climbing at `MAX_IN_FLIGHT=64` (31,937.5), never reaches the plateau other batch sizes hit by `MAX_IN_FLIGHT=16` — too many small round trips to saturate at this concurrency range.
+- `UPLOAD_THREADS` wasn't swept here (fixed at 16) — this table doesn't confirm or contradict the local sweep's `UPLOAD_THREADS=32` finding, just holds it at the local sweep's second-best value.
 
 <a id="bulk-raw-sweeps"></a>
 <details>
