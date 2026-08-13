@@ -265,7 +265,18 @@ tags:
 		msg := service.NewMessage([]byte("hello world"))
 		require.NoError(t, writer.Write(t.Context(), msg))
 
-		resp, err := client.ServiceClient().NewContainerClient(containerName).NewBlobClient("tagged-blob.txt").GetTags(t.Context(), nil)
+		blobClient := client.ServiceClient().NewContainerClient(containerName).NewBlobClient("tagged-blob.txt")
+
+		// Assert the payload too, so a regression that tags correctly but corrupts
+		// the body cannot pass.
+		dl, err := blobClient.DownloadStream(t.Context(), nil)
+		require.NoError(t, err)
+		body, err := io.ReadAll(dl.Body)
+		require.NoError(t, err)
+		require.NoError(t, dl.Body.Close())
+		assert.Equal(t, "hello world", string(body))
+
+		resp, err := blobClient.GetTags(t.Context(), nil)
 		require.NoError(t, err)
 
 		tags := make(map[string]string)
@@ -277,6 +288,133 @@ tags:
 			"Environment": "production",
 			"Source":      "test-suite",
 		}, tags)
+	})
+
+	t.Run("blob_storage_tags_append", func(t *testing.T) {
+		u4, err := uuid.NewV4()
+		require.NoError(t, err)
+		containerName := u4.String()
+
+		client, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = client.CreateContainer(t.Context(), containerName, nil)
+		require.NoError(t, err)
+
+		env := service.NewEnvironment()
+		outConf, err := bsoSpec().ParseYAML(fmt.Sprintf(`
+storage_connection_string: %s
+container: %s
+path: tagged-append-blob.txt
+blob_type: APPEND
+public_access_level: PRIVATE
+tags:
+  Environment: production
+  Source: ${! content() }
+`, connString, containerName), env)
+		require.NoError(t, err)
+
+		conf, err := bsoConfigFromParsed(outConf)
+		require.NoError(t, err)
+
+		writer, err := newAzureBlobStorageWriter(conf, service.MockResources().Logger())
+		require.NoError(t, err)
+
+		require.NoError(t, writer.Connect(t.Context()))
+		t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+
+		require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("first"))))
+		require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("second"))))
+
+		blobClient := client.ServiceClient().NewContainerClient(containerName).NewBlobClient("tagged-append-blob.txt")
+
+		// Each message must be appended exactly once.
+		dl, err := blobClient.DownloadStream(t.Context(), nil)
+		require.NoError(t, err)
+		body, err := io.ReadAll(dl.Body)
+		require.NoError(t, err)
+		require.NoError(t, dl.Body.Close())
+		assert.Equal(t, "firstsecond", string(body))
+
+		// Tags are refreshed on every append, so Source reflects the most recently
+		// written message.
+		resp, err := blobClient.GetTags(t.Context(), nil)
+		require.NoError(t, err)
+
+		tags := make(map[string]string)
+		for _, tag := range resp.BlobTagSet {
+			tags[*tag.Key] = *tag.Value
+		}
+
+		assert.Equal(t, map[string]string{
+			"Environment": "production",
+			"Source":      "second",
+		}, tags)
+	})
+
+	// A blob this output did not create never passes through the creation path, so
+	// it is the case where tags are easiest to silently drop.
+	t.Run("blob_storage_tags_append_preexisting_blob", func(t *testing.T) {
+		u4, err := uuid.NewV4()
+		require.NoError(t, err)
+		containerName := u4.String()
+
+		client, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = client.CreateContainer(t.Context(), containerName, nil)
+		require.NoError(t, err)
+
+		containerClient := client.ServiceClient().NewContainerClient(containerName)
+
+		// Simulate a blob left behind by an earlier run that had no tags configured.
+		_, err = containerClient.NewAppendBlobClient("existing-blob.txt").Create(t.Context(), nil)
+		require.NoError(t, err)
+
+		env := service.NewEnvironment()
+		outConf, err := bsoSpec().ParseYAML(fmt.Sprintf(`
+storage_connection_string: %s
+container: %s
+path: existing-blob.txt
+blob_type: APPEND
+public_access_level: PRIVATE
+tags:
+  Environment: production
+  Source: test-suite
+`, connString, containerName), env)
+		require.NoError(t, err)
+
+		conf, err := bsoConfigFromParsed(outConf)
+		require.NoError(t, err)
+
+		writer, err := newAzureBlobStorageWriter(conf, service.MockResources().Logger())
+		require.NoError(t, err)
+
+		require.NoError(t, writer.Connect(t.Context()))
+		t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+
+		require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("payload"))))
+
+		blobClient := containerClient.NewBlobClient("existing-blob.txt")
+
+		resp, err := blobClient.GetTags(t.Context(), nil)
+		require.NoError(t, err)
+
+		tags := make(map[string]string)
+		for _, tag := range resp.BlobTagSet {
+			tags[*tag.Key] = *tag.Value
+		}
+
+		assert.Equal(t, map[string]string{
+			"Environment": "production",
+			"Source":      "test-suite",
+		}, tags)
+
+		// The pre-existing blob must be appended to, not recreated.
+		dl, err := blobClient.DownloadStream(t.Context(), nil)
+		require.NoError(t, err)
+		body, err := io.ReadAll(dl.Body)
+		require.NoError(t, err)
+		require.NoError(t, dl.Body.Close())
+		assert.Equal(t, "payload", string(body))
 	})
 
 	t.Run("queue_storage", func(t *testing.T) {

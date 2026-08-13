@@ -89,6 +89,26 @@ If multiple are set then the `storage_connection_string` is given priority.
 If the `storage_connection_string` does not contain the `AccountName` parameter, please specify it in the
 `storage_account` field.
 
+== Tags
+
+The `tags` field allows you to attach key/value pairs to blobs as https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs[blob index tags^], where the values support xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions]:
+
+```yaml
+output:
+  azure_blob_storage:
+    container: TODO
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
+    tags:
+      Environment: production
+      Source: ${!meta("kafka_topic")}
+```
+
+Only values support interpolation; keys are static and are validated against Azure's limits at startup. Values are resolved per message and so are only rejected once Azure sees them.
+
+If authenticating with `storage_sas_token`, the token must include the `t` (tags) permission.
+
+When `blob_type` is `APPEND` the tags are written separately from the message content, so they are refreshed on each append on a best-effort basis and may briefly lag the most recent append. A failure to write them is logged and does not fail the message, because retrying would append the message content a second time.
+
 == Performance
 
 This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `max_in_flight`.
