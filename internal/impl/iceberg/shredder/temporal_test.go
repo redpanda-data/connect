@@ -617,8 +617,15 @@ func TestNumericTemporalToTimeMatchesConvert(t *testing.T) {
 	})
 
 	t.Run("time all units", func(t *testing.T) {
-		const n = int64(45_296_000_000) // fits within a day at every unit up to micros
-		for _, u := range []schema.TimeUnit{schema.TimeUnitSeconds, schema.TimeUnitMillis, schema.TimeUnitMicros, schema.TimeUnitNanos} {
+		// 12:34:56 expressed in each unit, so every case is a valid
+		// time-of-day AFTER scaling. Out-of-range values are pinned below.
+		perUnit := map[schema.TimeUnit]int64{
+			schema.TimeUnitSeconds: 45_296,
+			schema.TimeUnitMillis:  45_296_000,
+			schema.TimeUnitMicros:  45_296_000_000,
+			schema.TimeUnitNanos:   45_296_000_000_000,
+		}
+		for u, n := range perUnit {
 			common := todCommon(u)
 			pq, err := convertTime(n, common, false)
 			require.NoError(t, err)
@@ -627,6 +634,27 @@ func TestNumericTemporalToTimeMatchesConvert(t *testing.T) {
 			require.True(t, ok)
 			// time.UnixMicro round-trips the micros-of-day the insert path stores.
 			assert.Equal(t, pq.Int64(), tm.UnixMicro(), "time unit %v must agree between insert and copy-on-write", u)
+		}
+	})
+
+	t.Run("time out of range rejected after scaling", func(t *testing.T) {
+		// A numeric TIME value outside [0, 24h) POST-scaling has no wall-clock
+		// text: the mutation paths reject it loudly (deliberate divergence —
+		// the insert path stores the raw, spec-invalid microseconds, and
+		// silently wrapping the mutation-side value would match nothing).
+		for _, tc := range []struct {
+			unit schema.TimeUnit
+			n    int64
+		}{
+			{schema.TimeUnitSeconds, 86_400},         // exactly 24h in seconds
+			{schema.TimeUnitMillis, 86_400_000},      // 24h in millis
+			{schema.TimeUnitMicros, 86_400_000_000},  // 24h in micros
+			{schema.TimeUnitMicros, -1},              // negative
+			{schema.TimeUnitSeconds, 45_296_000_000}, // the old wrap case
+		} {
+			_, _, err := NumericTemporalToTime(tc.n, iceberg.TimeType{}, todCommon(tc.unit), false)
+			require.Error(t, err, "unit %v value %d must be rejected", tc.unit, tc.n)
+			assert.Contains(t, err.Error(), "time-of-day range")
 		}
 	})
 

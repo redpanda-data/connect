@@ -410,6 +410,7 @@ func (w *writer) splitByOperation(batch service.MessageBatch) (service.MessageBa
 	}
 	order := make([]string, 0, len(batch))
 	latest := make(map[string]keyedOp, len(batch))
+	var dedup func(*service.Message) (string, error)
 
 	var nInsert int64
 	for i, msg := range batch {
@@ -432,7 +433,16 @@ func (w *writer) splitByOperation(batch service.MessageBatch) (service.MessageBa
 		if len(w.rowOpCfg.IdentifierFields) == 0 {
 			return nil, nil, opCounts{}, fmt.Errorf("%s %q requires %s to be set", ioFieldRowOperation, op, ioFieldIdentifierFields)
 		}
-		key, err := w.dedupKey(msg)
+		if dedup == nil {
+			// Created at the FIRST keyed message and given the batch from that
+			// point, so resolveFieldCommons samples a keyed message's schema
+			// metadata — the same sampling writeEqualityDeletes (deletes[0])
+			// and buildCOWFilter (keyed[0]) apply. Sampling batch[0] could
+			// read a non-keyed insert and canonicalise numeric temporal keys
+			// under a different unit than matching/storage will use.
+			dedup = w.dedupKeyer(batch[i:])
+		}
+		key, err := dedup(msg)
 		if err != nil {
 			return nil, nil, opCounts{}, fmt.Errorf("message %d: %w", i, err)
 		}
@@ -472,31 +482,77 @@ type opCounts struct {
 	deleted  int64
 }
 
-// dedupKey builds a stable identity string from a message's identifier_fields
-// values, used to collapse multiple keyed operations on the same row within a
-// batch. A missing or null identifier value is a hard error.
-func (w *writer) dedupKey(msg *service.Message) (string, error) {
-	structured, err := msg.AsStructured()
-	if err != nil {
-		return "", fmt.Errorf("reading structured message for delete key: %w", err)
-	}
-	row, ok := structured.(map[string]any)
-	if !ok {
-		return "", fmt.Errorf("message for upsert/delete must be an object, got %T", structured)
-	}
-	values := make([]any, len(w.rowOpCfg.IdentifierFields))
-	for i, name := range w.rowOpCfg.IdentifierFields {
-		v, ok := lookupField(row, name, w.caseSensitive)
-		if !ok || v == nil {
-			return "", fmt.Errorf("%s %q is missing or null", ioFieldIdentifierFields, name)
+// dedupKeyer returns the function that builds a stable identity string from a
+// message's identifier_fields values, used to collapse multiple keyed
+// operations on the same row within a batch. A missing or null identifier
+// value is a hard error.
+//
+// The identity is derived from each value's jsonLeafValue CANONICAL encoding —
+// the same encoding matching and storage use — never from the raw Go shape:
+// canonically-equal keys can arrive in different shapes within one batch
+// ([]byte vs string, a nanosecond time.Time vs its microsecond string, a
+// numeric epoch vs a time value), and keying on the raw shapes would let two
+// spellings of one key escape the collapse. That escape is silent data
+// corruption: the collapse is what guarantees at most one keyed operation per
+// row per commit, and a same-commit upsert+delete pair that escapes it leaves
+// the row alive, because equality deletes never remove rows committed in the
+// same snapshot.
+//
+// An identifier field missing from the table schema, or a value the
+// canonicaliser rejects, falls back to the raw JSON shape for the identity
+// only: the write path that follows owns the authoritative error (or the
+// schema-evolution flow) for those, and dedup must not pre-empt it.
+func (w *writer) dedupKeyer(batch service.MessageBatch) func(msg *service.Message) (string, error) {
+	fields := make([]*iceberg.NestedField, len(w.rowOpCfg.IdentifierFields))
+	var commons map[int]*schema.Common
+	if w.table != nil {
+		tableSchema := w.table.Schema()
+		for i, name := range w.rowOpCfg.IdentifierFields {
+			if f, ok := findSchemaField(tableSchema, name, w.caseSensitive); ok {
+				fields[i] = &f
+			}
 		}
-		values[i] = v
+		commons = w.resolveFieldCommons(tableSchema, batch)
 	}
-	b, err := json.Marshal(values)
-	if err != nil {
-		return "", fmt.Errorf("encoding delete key: %w", err)
+	return func(msg *service.Message) (string, error) {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return "", fmt.Errorf("reading structured message for delete key: %w", err)
+		}
+		row, ok := structured.(map[string]any)
+		if !ok {
+			return "", fmt.Errorf("message for upsert/delete must be an object, got %T", structured)
+		}
+		values := make([]any, len(w.rowOpCfg.IdentifierFields))
+		for i, name := range w.rowOpCfg.IdentifierFields {
+			v, ok := lookupField(row, name, w.caseSensitive)
+			if !ok || v == nil {
+				return "", fmt.Errorf("%s %q is missing or null", ioFieldIdentifierFields, name)
+			}
+			values[i] = v
+			if f := fields[i]; f != nil {
+				if jv, err := jsonLeafValue(f.Type, v, commons[f.ID], w.requireSchemaMetadata); err == nil {
+					values[i] = jv
+				} else {
+					// The write path will reject this value; keep it visible to
+					// that authoritative error by NOT collapsing it away. The
+					// fallback identity must be DISJOINT from the canonical
+					// space — a raw string "42" marshals identically to the
+					// canonical form of int 42, and colliding there would let
+					// last-writer-wins silently swallow the invalid spelling
+					// (order-dependently) instead of failing the batch as the
+					// docs promise. Canonical leaf outputs are never JSON
+					// objects, so an object wrapper cannot collide.
+					values[i] = map[string]any{"__uncanonical__": fmt.Sprintf("%T:%v", v, v)}
+				}
+			}
+		}
+		b, err := json.Marshal(values)
+		if err != nil {
+			return "", fmt.Errorf("encoding delete key: %w", err)
+		}
+		return string(b), nil
 	}
-	return string(b), nil
 }
 
 // deleteRecordFields returns the schema fields that must appear in an
@@ -514,10 +570,7 @@ func (w *writer) deleteRecordFields(tableSchema *iceberg.Schema, spec *iceberg.P
 	)
 
 	for _, name := range w.rowOpCfg.IdentifierFields {
-		field, ok := tableSchema.FindFieldByName(name)
-		if !ok && !w.caseSensitive {
-			field, ok = tableSchema.FindFieldByNameCaseInsensitive(name)
-		}
+		field, ok := findSchemaField(tableSchema, name, w.caseSensitive)
 		if !ok {
 			return nil, nil, fmt.Errorf("%s column %q not found in table schema", ioFieldIdentifierFields, name)
 		}
@@ -619,6 +672,14 @@ func (w *writer) writeEqualityDeletes(ctx context.Context, msgs service.MessageB
 		return nil, fmt.Errorf("encoding delete keys: %w", err)
 	}
 
+	// The delete records are written through iceberg-go's Arrow writer, which
+	// always emits the spec timestamp annotation — equality-delete files do
+	// NOT honour the table's timestamp-encoding pin. That is deliberately
+	// self-consistent: the never-mix invariant's scope is DATA files (the
+	// probe skips delete manifests, and the physical int64 micros are
+	// identical either way), so do not "fix" the probe into reading delete
+	// manifests — a legacy-pinned table's delete files would then mis-decide
+	// the pin.
 	delSchema := iceberg.NewSchema(0, delFields...)
 	arrowSc, err := table.SchemaToArrowSchema(delSchema, nil, true, false)
 	if err != nil {
@@ -643,6 +704,19 @@ func (w *writer) writeEqualityDeletes(ctx context.Context, msgs service.MessageB
 		return nil, fmt.Errorf("writing equality deletes: %w", err)
 	}
 	return deleteFiles, nil
+}
+
+// findSchemaField resolves a column name against a table schema, honouring
+// the writer's case-sensitivity setting. It is THE lookup for identifier
+// fields — the creation-time type gate, the dedup identity, and the write
+// paths must all resolve the same name to the same column, so they must all
+// call this one function rather than hand-rolling the fallback.
+func findSchemaField(tableSchema *iceberg.Schema, name string, caseSensitive bool) (iceberg.NestedField, bool) {
+	field, ok := tableSchema.FindFieldByName(name)
+	if !ok && !caseSensitive {
+		field, ok = tableSchema.FindFieldByNameCaseInsensitive(name)
+	}
+	return field, ok
 }
 
 // lookupField finds a value in a structured row by column name, honouring case

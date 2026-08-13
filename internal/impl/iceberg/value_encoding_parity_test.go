@@ -392,7 +392,7 @@ func TestStringTimestampMergeKeyEndToEnd(t *testing.T) {
 // flip-flopping pipeline that only progresses on keyed batches).
 func TestIntegerStringRejectedOnMutationPaths(t *testing.T) {
 	ctx := t.Context()
-	const wantErr = "unsupported value type string for integer column"
+	const wantErr = "unsupported value type string"
 
 	t.Run("copy-on-write filter literal", func(t *testing.T) {
 		sc := iceberg.NewSchema(0, iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Int64, Required: true})
@@ -456,5 +456,5 @@ func TestCOWMapIntegerKeyColumnRejected(t *testing.T) {
 	_, err := w.cowMassage(mt, 2, map[string]any{"5": "x"}, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `map key "5"`, "the error must name the offending key")
-	assert.Contains(t, err.Error(), "unsupported value type string for integer column")
+	assert.Contains(t, err.Error(), "unsupported value type string")
 }

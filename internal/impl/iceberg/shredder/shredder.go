@@ -668,6 +668,23 @@ func convertToDecimal(value any, dt iceberg.DecimalType) (parquet.Value, error) 
 	return parquet.FixedLenByteArrayValue(b), nil
 }
 
+// DecimalNumberToString canonicalises a decimal supplied as text (a string or
+// json.Number) to the column's exact scale, using the SAME parse-and-round the
+// insert path's convertToDecimal applies (stringToUnscaled) so both sides
+// agree by construction. Exported for the mutation paths' shared leaf encoder:
+// every spelling of one decimal ("1.5", "1.50", float 1.5) must canonicalise
+// to one form, or the in-batch key collapse treats equal keys as distinct.
+func DecimalNumberToString(s string, prec, scale int) (string, error) {
+	unscaled, err := stringToUnscaled(s, scale)
+	if err != nil {
+		return "", err
+	}
+	if unscaled.CmpAbs(parquetdecimal.Pow10(prec)) >= 0 {
+		return "", fmt.Errorf("value %v exceeds decimal(%d, %d) precision", s, prec, scale)
+	}
+	return new(big.Rat).SetFrac(unscaled, parquetdecimal.Pow10(scale)).FloatString(scale), nil
+}
+
 // DecimalFloatToString renders a float64 as the decimal string whose parsed
 // unscaled value is EXACTLY what the shredder's insert path stores for the same
 // float in a decimal(prec, scale) column. It is built on floatToUnscaled — the

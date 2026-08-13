@@ -360,12 +360,12 @@ func (w *writer) cowKeyFields(tableSchema *iceberg.Schema) ([]iceberg.NestedFiel
 	}
 	fields := make([]iceberg.NestedField, 0, len(w.rowOpCfg.IdentifierFields))
 	for _, name := range w.rowOpCfg.IdentifierFields {
-		field, ok := tableSchema.FindFieldByName(name)
-		if !ok && !w.caseSensitive {
-			field, ok = tableSchema.FindFieldByNameCaseInsensitive(name)
-		}
+		field, ok := findSchemaField(tableSchema, name, w.caseSensitive)
 		if !ok {
 			return nil, fmt.Errorf("%s column %q not found in table schema", ioFieldIdentifierFields, name)
+		}
+		if err := cowKeyTypeSupported(name, field.Type); err != nil {
+			return nil, err
 		}
 		fields = append(fields, field)
 	}
@@ -388,6 +388,32 @@ func (w *writer) lookupKeyValue(msg *service.Message, field iceberg.NestedField,
 		return nil, fmt.Errorf("%s %q is missing or null in message %d", ioFieldIdentifierFields, field.Name, idx)
 	}
 	return v, nil
+}
+
+// cowKeyTypeSupported returns an actionable error when a column of type t
+// cannot serve as a copy-on-write merge key. Shared by cowKeyFields (so an
+// unsupported key type is caught when the fields are resolved — and, via the
+// router, at writer creation rather than on the first mutating batch) and by
+// cowKeyLiteral (the per-value gate). The boolean and decimal rejections are
+// upstream limitations: iceberg-go's rewrite evaluates the (negated) key
+// predicate row-by-row to keep survivors, and that evaluation is
+// unimplemented for BOOL ("not implemented: unsupported type BOOL") while a
+// decimal literal panics inside the substrait conversion. Both remain valid
+// as non-key columns and as merge-on-read keys.
+func cowKeyTypeSupported(name string, t iceberg.Type) error {
+	switch t.(type) {
+	case iceberg.Int32Type, iceberg.Int64Type, iceberg.StringType,
+		iceberg.DateType, iceberg.TimeType,
+		iceberg.TimestampType, iceberg.TimestampTzType,
+		iceberg.UUIDType:
+		return nil
+	case iceberg.BooleanType:
+		return fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; boolean is not a supported copy-on-write merge key (a known limitation in the underlying iceberg library's overwrite filter) — use merge-on-read for a boolean key", name, t)
+	case iceberg.DecimalType:
+		return fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; decimal is not a supported copy-on-write merge key (a known limitation in the underlying iceberg library's overwrite filter) — use merge-on-read for a decimal key", name, t)
+	default:
+		return fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; supported merge-key types are int, long, string, date, time, timestamp, timestamptz, and uuid (use merge-on-read for other key types)", name, t)
+	}
 }
 
 // cowKeyLiteral builds an iceberg filter literal for a merge-key value.
@@ -466,15 +492,6 @@ func cowKeyLiteral(t iceberg.Type, name string, v any, common *schema.Common, re
 			return nil, fmt.Errorf("%s %q: string column given %T", ioFieldIdentifierFields, name, v)
 		}
 		return iceberg.NewLiteral(s), nil
-	case iceberg.BooleanType:
-		// Like decimal, a boolean merge key cannot be applied by iceberg-go's
-		// copy-on-write rewrite: rewriteFilesWithFilter evaluates the (negated)
-		// key predicate against each data file's rows to keep survivors, and that
-		// row-level evaluation is unimplemented for BOOL ("not implemented:
-		// unsupported type BOOL"), failing the whole overwrite. Refuse up front
-		// with an actionable error rather than let it surface mid-commit. boolean
-		// remains valid as a non-key column and as a merge-on-read key.
-		return nil, fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; boolean is not a supported copy-on-write merge key (a known limitation in the underlying iceberg library's overwrite filter) — use merge-on-read for a boolean key", name, t)
 	case iceberg.TimestampType, iceberg.TimestampTzType:
 		jv, err := jsonLeafValue(t, v, common, requireSchemaMetadata)
 		if err != nil {
@@ -492,10 +509,6 @@ func cowKeyLiteral(t iceberg.Type, name string, v any, common *schema.Common, re
 			return nil, fmt.Errorf("%s %q: %w", ioFieldIdentifierFields, name, err)
 		}
 		return iceberg.NewLiteral(iceberg.Timestamp(tm.UnixMicro())), nil
-	case iceberg.DecimalType:
-		// See the doc comment: an overwrite filter on a decimal column panics
-		// inside iceberg-go's substrait conversion, so refuse loudly here.
-		return nil, fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; decimal is not a supported copy-on-write merge key (a known limitation in the underlying iceberg library's overwrite filter) — use merge-on-read for a decimal key", name, t)
 	case iceberg.DateType, iceberg.TimeType, iceberg.UUIDType:
 		jv, err := jsonLeafValue(t, v, common, requireSchemaMetadata)
 		if err != nil {
@@ -514,7 +527,14 @@ func cowKeyLiteral(t iceberg.Type, name string, v any, common *schema.Common, re
 		}
 		return lit, nil
 	default:
-		return nil, fmt.Errorf("copy-on-write merge_strategy does not support merge key column %q of type %s; supported merge-key types are int, long, string, date, time, timestamp, timestamptz, and uuid (use merge-on-read for other key types)", name, t)
+		// Every type in cowKeyTypeSupported's allow-list MUST have an arm
+		// above: falling through here means the allow-list and this switch
+		// have drifted, and returning cowKeyTypeSupported's nil error would
+		// silently produce a nil literal. Fail loudly instead.
+		if err := cowKeyTypeSupported(name, t); err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("internal: merge key column %q type %s passed cowKeyTypeSupported but has no literal encoding — the allow-list and cowKeyLiteral's switch have drifted", name, t)
 	}
 }
 
@@ -540,10 +560,7 @@ func (w *writer) cowDetectNewColumns(tableSchema *iceberg.Schema, rows service.M
 			return fmt.Errorf("message %d must be an object, got %T", i, structured)
 		}
 		for name, v := range row {
-			_, known := tableSchema.FindFieldByName(name)
-			if !known && !w.caseSensitive {
-				_, known = tableSchema.FindFieldByNameCaseInsensitive(name)
-			}
+			_, known := findSchemaField(tableSchema, name, w.caseSensitive)
 			if known {
 				continue
 			}

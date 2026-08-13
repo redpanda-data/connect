@@ -369,10 +369,27 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 		// default is already copy-on-write, but set it explicitly for safety so
 		// the delete-only path can never fall into merge-on-read. txn.Overwrite
 		// is always copy-on-write regardless of the property.
-		if c.table.Properties()[table.WriteDeleteModeKey] != table.WriteModeCopyOnWrite {
+		//
+		// An EXPLICIT conflicting value is an error, never a silent override:
+		// the property is table-level state other engines' delete jobs read,
+		// so overriding a deliberate merge-on-read setting would flip their
+		// materialisation behind the operator's back — while honouring it
+		// would make the delete-only path write delete files, breaking the
+		// zero-delete-file guarantee this strategy exists for. Only the
+		// property-absent case is stamped.
+		switch mode := c.table.Properties()[table.WriteDeleteModeKey]; mode {
+		case table.WriteModeCopyOnWrite:
+			// Already pinned; nothing to stage.
+		case "":
 			if err := txn.SetProperties(iceberg.Properties{table.WriteDeleteModeKey: table.WriteModeCopyOnWrite}); err != nil {
 				return fmt.Errorf("setting %s: %w", table.WriteDeleteModeKey, err)
 			}
+		default:
+			return fmt.Errorf(
+				"table property %s is explicitly set to %q, which conflicts with merge_strategy: copy-on-write; "+
+					"the connector will not silently override a table-level setting other engines read — "+
+					"unset the property (or set it to %q) to use copy-on-write, or switch this output to merge_strategy: merge-on-read",
+				table.WriteDeleteModeKey, mode, table.WriteModeCopyOnWrite)
 		}
 		if input.NewReader == nil {
 			return txn.Delete(ctx, input.Filter, props)
@@ -583,11 +600,14 @@ func (c *committer) referencedCandidatePaths(ctx context.Context, candidates map
 // provide that idempotency:
 //   - a non-empty commitID: it is stamped into the snapshot summary
 //     (commitIDProp) so that, after a reload, committedSnapshotHasID can detect a
-//     prior attempt that landed and short-circuit to success. Used by the
-//     mutation paths (copy-on-write Overwrite/Delete and merge-on-read RowDelta),
-//     whose stage callbacks are not path-idempotent on their own.
+//     prior attempt that landed and short-circuit to success. Every commit path
+//     passes one — the mutation paths (copy-on-write Overwrite/Delete and
+//     merge-on-read RowDelta) rely on it exclusively, since their stage
+//     callbacks are not path-idempotent on their own.
 //   - stage dropping files the reloaded snapshot already references (the append
-//     path's dropAlreadyCommitted), in which case commitID is empty.
+//     path's dropAlreadyCommitted). The append path carries BOTH mechanisms:
+//     the token survives an external rewrite compacting the landed files away,
+//     which the path-keyed check cannot see.
 //
 // The first return value is retried: true when more than one attempt ran, i.e.
 // the stage executed more than once and so may have written data files that are
@@ -673,6 +693,11 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			}
 		}
 		if err := stage(txn, props, reloaded); err != nil {
+			// Stage failures ARE commit failures for observability: a
+			// deterministic stage error (e.g. a config-vs-table conflict)
+			// stalls the pipeline exactly like a rejected commit, and a
+			// dashboard watching the commit-failure metric must see it.
+			c.incrCommitFailure()
 			return attempt > 1, joinUnresolvedUnknown(err, unresolvedUnknown)
 		}
 		tbl, err := txn.Commit(ctx)

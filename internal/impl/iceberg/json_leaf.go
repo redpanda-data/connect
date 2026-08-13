@@ -125,8 +125,10 @@ func jsonLeafValue(t iceberg.Type, v any, common *schema.Common, requireSchemaMe
 			}
 			return strconv.FormatInt(int64(n), 10), nil
 		default:
-			// Deliberately includes string — see the doc comment.
-			return nil, fmt.Errorf("unsupported value type %T for integer column", v)
+			// Deliberately includes string — see the doc comment. The value is
+			// included (bounded) so the operator can see WHAT arrived, not just
+			// its Go type — "42" vs "forty-two" need different upstream fixes.
+			return nil, fmt.Errorf("unsupported value type %T (%.64v) for integer column; convert stringified numbers upstream (e.g. bloblang .number())", v, v)
 		}
 	case iceberg.DecimalType:
 		// Emitted as a string at the column's exact scale so the encoded value
@@ -135,9 +137,13 @@ func jsonLeafValue(t iceberg.Type, v any, common *schema.Common, requireSchemaMe
 		prec, scale := tt.Precision(), tt.Scale()
 		switch n := v.(type) {
 		case json.Number:
-			return n.String(), nil
+			// Rescaled like every other shape: "1.5" and float 1.5 must share
+			// one canonical form ("1.50" at scale 2) or the dedup collapse
+			// treats equal keys as distinct and a row can survive its own
+			// same-commit delete.
+			return shredder.DecimalNumberToString(string(n), prec, scale)
 		case string:
-			return n, nil
+			return shredder.DecimalNumberToString(n, prec, scale)
 		case float64:
 			// Ties must round half-AWAY-from-zero exactly like the shredder's
 			// unscaled conversion (0.125 at scale 2 stores unscaled 13, so the
@@ -189,7 +195,7 @@ func jsonLeafValue(t iceberg.Type, v any, common *schema.Common, requireSchemaMe
 		if b, ok := v.(bool); ok {
 			return b, nil
 		}
-		return nil, fmt.Errorf("cannot convert %T to boolean", v)
+		return nil, fmt.Errorf("cannot convert %T (%.64v) to boolean; convert stringified booleans upstream (e.g. bloblang .bool())", v, v)
 	case iceberg.StringType:
 		switch s := v.(type) {
 		case []byte:

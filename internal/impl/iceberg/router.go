@@ -87,6 +87,11 @@ type tableEntry struct {
 	tsEncodingProbeErr      error
 	tsEncodingProbeSnapshot int64
 
+	// retryPropWarned dedupes the commit.retry.num-retries hazard warning to
+	// once per table per process (writer recreation would otherwise repeat it
+	// on every failure). Guarded by mu.
+	retryPropWarned bool
+
 	// prohibitedProps persists the catalog-prohibited property keys learned
 	// by this table's committers (mirroring the tsEncoding cache pattern):
 	// writeWithRetry closes the writer on every failure, so without it each
@@ -94,6 +99,38 @@ type tableEntry struct {
 	// commit per generation. Created lazily in createWriter under mu; the set
 	// carries its own lock, so committers share it race-safely.
 	prohibitedProps *prohibitedKeySet
+}
+
+// cachedProbeErr returns the negative-cached probe-bound error when it was
+// observed on tbl's CURRENT snapshot; a different (or absent) snapshot means
+// files have landed since, so the cache is cleared and the probe re-runs.
+// Caller must hold e.mu.
+func (e *tableEntry) cachedProbeErr(tbl *table.Table) error {
+	if e.tsEncodingProbeErr == nil {
+		return nil
+	}
+	if snap := tbl.CurrentSnapshot(); snap != nil && snap.SnapshotID == e.tsEncodingProbeSnapshot {
+		return e.tsEncodingProbeErr
+	}
+	e.tsEncodingProbeErr = nil
+	return nil
+}
+
+// noteProbeErr caches err against tbl's current snapshot when — and only
+// when — it is the deterministic probe-bound failure; transient probe
+// failures are never cached and must retry. Reports whether it cached, so the
+// caller can emit the one-time warning. Caller must hold e.mu.
+func (e *tableEntry) noteProbeErr(tbl *table.Table, err error) bool {
+	if !errors.Is(err, errTimestampProbeBoundExceeded) {
+		return false
+	}
+	snap := tbl.CurrentSnapshot()
+	if snap == nil {
+		return false
+	}
+	e.tsEncodingProbeErr = err
+	e.tsEncodingProbeSnapshot = snap.SnapshotID
+	return true
 }
 
 // Router routes message batches to per-table writers.
@@ -753,6 +790,20 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 		return nil, err
 	}
 
+	// The standard table property commit.retry.num-retries arms iceberg-go's
+	// OWN refresh-and-replay retry loop inside every commit. That replay
+	// re-submits the ORIGINAL updates with only the ref requirement rewritten
+	// — a replayed snapshot's manifest list was built against the old base, so
+	// under concurrent writers a peer's non-conflicting commit can be dropped
+	// from the table state. This committer's retry loop already re-stages
+	// safely from a reloaded snapshot, making the inner loop pure risk here.
+	// Warn (once per table per process) rather than refuse: the property is
+	// legitimately set on tables other engines also write.
+	if n := writerTbl.Properties()[table.CommitNumRetriesKey]; n != "" && n != "0" && !entry.retryPropWarned {
+		entry.retryPropWarned = true
+		r.logger.Warnf("Table %v carries %s=%s, which arms the Iceberg library's internal commit replay; this output's own commit retry already re-stages safely, and the library-level replay can drop a concurrent writer's commit — consider unsetting the property on tables this output writes to", key.table, table.CommitNumRetriesKey, n)
+	}
+
 	// reloadTable creates a fresh catalog client and reloads the table,
 	// allowing the committer to recover from stale metadata or auth errors.
 	reloadTable := func(ctx context.Context) (*table.Table, error) {
@@ -778,20 +829,15 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 		// A probe-bound failure is deterministic per snapshot: serve the
 		// cached error instead of re-paying the full footer scan on every
 		// retried write (see tableEntry.tsEncodingProbeErr).
-		if !propPresent && entry.tsEncodingProbeErr != nil {
-			if snap := writerTbl.CurrentSnapshot(); snap != nil && snap.SnapshotID == entry.tsEncodingProbeSnapshot {
-				return nil, entry.tsEncodingProbeErr
+		if !propPresent {
+			if cached := entry.cachedProbeErr(writerTbl); cached != nil {
+				return nil, cached
 			}
-			entry.tsEncodingProbeErr = nil
 		}
 		enc, stampedTbl, err := resolveTimestampEncoding(ctx, writerTbl, reloadTable, r.logger)
 		if err != nil {
-			if errors.Is(err, errTimestampProbeBoundExceeded) {
-				if snap := writerTbl.CurrentSnapshot(); snap != nil {
-					entry.tsEncodingProbeErr = err
-					entry.tsEncodingProbeSnapshot = snap.SnapshotID
-					r.logger.Warnf("Timestamp-encoding probe for table %v hit its %d-file bound; refusing writes until the %s table property is set (or new data files land) — this result is cached, so retries will not re-scan", key.table, maxProbedFiles, icebergx.TimestampEncodingProperty)
-				}
+			if entry.noteProbeErr(writerTbl, err) {
+				r.logger.Warnf("Timestamp-encoding probe for table %v hit its %d-file bound; refusing writes until the %s table property is set (or new data files land) — this result is cached, so retries will not re-scan", key.table, maxProbedFiles, icebergx.TimestampEncodingProperty)
 			}
 			return nil, err
 		}
@@ -827,6 +873,45 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 	// Create writer with its own table reference and the committer.
 	// The resolver is passed so the writer can use schema metadata to
 	// interpret numeric inputs into time-typed columns at shredding time.
+	// Surface copy-on-write configuration-vs-table conflicts at writer
+	// creation rather than on the first mutating batch — but ONLY for
+	// configurations that can actually mutate. A static `row_operation:
+	// insert` never touches the merge-key or delete-mode machinery, and a
+	// previously-healthy insert-only pipeline must not go down because its
+	// unused identifier_fields column has an unsupported type; mutating() is
+	// false exactly for that class. A dynamic row_operation CAN mutate, but
+	// may in practice never do so, so it gets a WARNING here and the
+	// authoritative error on the first mutating batch. A static upsert/delete
+	// gets the hard error: no batch it produces can ever succeed. Columns
+	// missing from the schema are deliberately not checked at all (the
+	// mutation paths report those with full context).
+	if r.rowOpCfg.MergeStrategy == mergeStrategyCOW && r.rowOpCfg.mutating() {
+		_, staticOp := r.rowOpCfg.Operation.Static()
+		tblSchema := writerTbl.Schema()
+		for _, name := range r.rowOpCfg.IdentifierFields {
+			if field, ok := findSchemaField(tblSchema, name, r.caseSensitive); ok {
+				if err := cowKeyTypeSupported(name, field.Type); err != nil {
+					if staticOp {
+						return nil, err
+					}
+					r.logger.Warnf("Copy-on-write merge key check: %v — every upsert/delete batch will fail until the configuration or table schema changes", err)
+				}
+			}
+		}
+		// The same fail-fast for an explicit write.delete.mode conflict: the
+		// per-commit stage check remains the backstop, but a static mutating
+		// config against a table explicitly pinned to merge-on-read deletes
+		// can never commit a mutation, and surfacing that only per attempt
+		// would nack/redeliver forever.
+		if mode := writerTbl.Properties()[table.WriteDeleteModeKey]; mode != "" && mode != table.WriteModeCopyOnWrite {
+			err := fmt.Errorf("table property %s is explicitly set to %q, which conflicts with merge_strategy: copy-on-write; unset the property (or set it to %q), or switch this output to merge_strategy: merge-on-read", table.WriteDeleteModeKey, mode, table.WriteModeCopyOnWrite)
+			if staticOp {
+				return nil, err
+			}
+			r.logger.Warnf("Copy-on-write delete-mode check: %v — every upsert/delete batch will fail until resolved", err)
+		}
+	}
+
 	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
 	w.metrics = r.metrics
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)

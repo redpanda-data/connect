@@ -350,6 +350,251 @@ func TestCOWWriteAmplification(t *testing.T) {
 	t.Log("tblRewr% = removed-files-size / total seeded bytes (fraction of table COW rewrote)")
 }
 
+// cowCompositeArrowSchema is the Arrow schema matching the composite-key
+// (id int64, region string, payload string) table below. Field names match the
+// iceberg schema so Append can bind them. The key columns are nullable to
+// match the tables this output auto-creates under copy-on-write (identifier
+// columns are deliberately left nullable), so the filter's NotNull conjuncts
+// stay live instead of folding to AlwaysTrue at bind time.
+var cowCompositeArrowSchema = arrow.NewSchema([]arrow.Field{
+	{Name: "id", Type: arrow.PrimitiveTypes.Int64, Nullable: true},
+	{Name: "region", Type: arrow.BinaryTypes.String, Nullable: true},
+	{Name: "payload", Type: arrow.BinaryTypes.String, Nullable: true},
+}, nil)
+
+// newCompositeAmpTable mirrors newAmpTable for the composite-merge-key
+// scenarios: an unpartitioned v2 table (id int64, region string, payload
+// string) backed by an in-memory catalog and the local filesystem.
+func newCompositeAmpTable(tb testing.TB, deleteMode string) (*table.Table, *memCatalog) {
+	tb.Helper()
+	location := filepath.ToSlash(tb.TempDir())
+
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: false},
+		iceberg.NestedField{ID: 2, Name: "region", Type: iceberg.PrimitiveTypes.String, Required: false},
+		iceberg.NestedField{ID: 3, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	props := iceberg.Properties{table.PropertyFormatVersion: "2"}
+	if deleteMode != "" {
+		props[table.WriteDeleteModeKey] = deleteMode
+	}
+	meta, err := table.NewMetadata(sc, iceberg.UnpartitionedSpec, table.UnsortedSortOrder, location, props)
+	require.NoError(tb, err)
+
+	cat := &memCatalog{
+		meta:             meta,
+		metadataLocation: fmt.Sprintf("%s/metadata/00001-%s.metadata.json", location, uuid.New()),
+		ident:            table.Identifier{"default", "amp_composite"},
+		location:         location,
+	}
+	return cat.snapshot(), cat
+}
+
+// compositeRegion derives the second key column deterministically from the id,
+// cycling over a small set of values. Deriving it (rather than randomising)
+// keeps an (id, region) tuple's selectivity identical to the single-column id
+// key, so the composite scenarios isolate the FILTER-SHAPE cost — the
+// OR-of-per-tuple-ANDs evaluated row-by-row in every rewritten file's survivor
+// scan — without changing which rows match.
+func compositeRegion(id int64) string {
+	return fmt.Sprintf("region-%02d", id%16)
+}
+
+// appendCompositeDataFile mirrors appendDataFile for the composite-key table:
+// ONE real parquet file holding `rows` rows with contiguous ids
+// [startID, startID+rows), the derived region column, and a per-row random
+// payload, committed as its own snapshot.
+func appendCompositeDataFile(tb testing.TB, ctx context.Context, tbl *table.Table, rng *rand.Rand, startID int64, rows, payloadBytes int) *table.Table {
+	tb.Helper()
+	mem := memory.NewGoAllocator()
+	bldr := array.NewRecordBuilder(mem, cowCompositeArrowSchema)
+	defer bldr.Release()
+
+	idB := bldr.Field(0).(*array.Int64Builder)
+	regB := bldr.Field(1).(*array.StringBuilder)
+	payB := bldr.Field(2).(*array.StringBuilder)
+	buf := make([]byte, payloadBytes)
+	for i := range rows {
+		id := startID + int64(i)
+		idB.Append(id)
+		regB.Append(compositeRegion(id))
+		for j := range buf {
+			buf[j] = byte('a' + rng.Intn(26))
+		}
+		payB.Append(string(buf))
+	}
+
+	rec := bldr.NewRecordBatch()
+	defer rec.Release()
+	rdr, err := array.NewRecordReader(cowCompositeArrowSchema, []arrow.RecordBatch{rec})
+	require.NoError(tb, err)
+	defer rdr.Release()
+
+	tx := tbl.NewTransaction()
+	require.NoError(tb, tx.Append(ctx, rdr, nil))
+	next, err := tx.Commit(ctx)
+	require.NoError(tb, err)
+	return next
+}
+
+// compositeKeyFilter builds the same filter shape buildCOWFilter produces for
+// a composite (multi-column) merge key: an OR of per-tuple ANDs, each tuple
+// carrying a NotNull conjunct plus an equality per key column. Unlike the
+// single-column IN-shape filter, this expression is evaluated clause-by-clause
+// against every row in each rewritten file's survivor scan, so its cost grows
+// with K (tuples) x rows scanned.
+func compositeKeyFilter(keys []int64) iceberg.BooleanExpression {
+	clauses := make([]iceberg.BooleanExpression, 0, len(keys))
+	for _, id := range keys {
+		clauses = append(clauses, iceberg.NewAnd(
+			iceberg.UnaryPredicate(iceberg.OpNotNull, iceberg.Reference("id")),
+			iceberg.EqualTo(iceberg.Reference("id"), id),
+			iceberg.UnaryPredicate(iceberg.OpNotNull, iceberg.Reference("region")),
+			iceberg.EqualTo(iceberg.Reference("region"), compositeRegion(id)),
+		))
+	}
+	if len(clauses) == 1 {
+		return clauses[0]
+	}
+	return iceberg.NewOr(clauses[0], clauses[1], clauses[2:]...)
+}
+
+// runCompositeAmpScenario mirrors runAmpScenario for the composite-key table
+// and filter shape, measuring the same summary counters and wall clock.
+func runCompositeAmpScenario(tb testing.TB, ctx context.Context, mode string, m, r, k, payloadBytes int, scatter string) ampResult {
+	tb.Helper()
+	rng := rand.New(rand.NewSource(int64(m*1_000_000 + r*1000 + k)))
+
+	tbl, cat := newCompositeAmpTable(tb, mode)
+	for f := range m {
+		tbl = appendCompositeDataFile(tb, ctx, tbl, rng, int64(f)*int64(r), r, payloadBytes)
+	}
+
+	seedFiles, seedBytes := parquetStats(tb, cat.location)
+
+	keys := buildKeys(m, r, k, scatter)
+	filter := compositeKeyFilter(keys)
+
+	tx := tbl.NewTransaction()
+	start := time.Now()
+	require.NoError(tb, tx.Delete(ctx, filter, nil))
+	next, err := tx.Commit(ctx)
+	require.NoError(tb, err)
+	elapsed := time.Since(start)
+
+	snap := next.CurrentSnapshot()
+	require.NotNil(tb, snap)
+	require.NotNil(tb, snap.Summary)
+
+	return ampResult{
+		name: fmt.Sprintf("M=%d R=%d K=%d %s", m, r, k, scatter), mode: mode,
+		m: m, r: r, k: k, scatter: scatter,
+		seedFiles: seedFiles, seedBytes: seedBytes,
+		addedDataFiles:      summaryInt(tb, snap.Summary, "added-data-files"),
+		addedFilesSize:      summaryInt(tb, snap.Summary, "added-files-size"),
+		deletedDataFiles:    summaryInt(tb, snap.Summary, "deleted-data-files"),
+		removedFilesSize:    summaryInt(tb, snap.Summary, "removed-files-size"),
+		addedRecords:        summaryInt(tb, snap.Summary, "added-records"),
+		deletedRecords:      summaryInt(tb, snap.Summary, "deleted-records"),
+		addedDeleteFiles:    summaryInt(tb, snap.Summary, "added-delete-files"),
+		addedPosDelFiles:    summaryInt(tb, snap.Summary, "added-position-delete-files"),
+		addedEqDelFiles:     summaryInt(tb, snap.Summary, "added-equality-delete-files"),
+		deleteManifestFiles: countDeleteManifestFiles(tb, ctx, next),
+		elapsed:             elapsed,
+	}
+}
+
+// TestCOWWriteAmplificationCompositeKey characterises the composite-merge-key
+// cost shape. A single-column key produces an IN-shape filter (see
+// TestCOWWriteAmplification); a composite key produces an OR of per-tuple
+// ANDs, which the survivor scan evaluates against every row of every rewritten
+// file — so a large keyed batch (K clauses) scanning large files is a
+// different cost shape from the single-key IN, even when the bytes rewritten
+// are identical. The scenarios mirror a subset of TestCOWWriteAmplification's
+// (same M/R/K/scatter, same seed layout) so the single-vs-composite wall-clock
+// comparison is direct. Run explicitly with:
+//
+//	go test -run TestCOWWriteAmplificationCompositeKey -v ./internal/impl/iceberg/
+func TestCOWWriteAmplificationCompositeKey(t *testing.T) {
+	integration.CheckSkip(t) // slow characterisation harness: runs only when targeted via -run
+	ctx := t.Context()
+
+	const (
+		R            = 1000 // rows per seeded file
+		payloadBytes = 128  // per-row payload size -> realistic file sizes
+	)
+
+	type scen struct {
+		m, k    int
+		scatter string
+	}
+	scenarios := []scen{
+		// K keys all within ONE file (best case).
+		{50, 1, "within"},
+		{200, 10, "within"},
+		{200, 100, "within"},
+		// K keys spread ONE-PER-FILE across K distinct files (worst case).
+		{10, 10, "perfile"},
+		{50, 50, "perfile"},
+		{200, 10, "perfile"},
+		{200, 100, "perfile"},
+	}
+
+	var results []ampResult
+	for _, s := range scenarios {
+		for _, mode := range []string{table.WriteModeCopyOnWrite, table.WriteModeMergeOnRead} {
+			results = append(results, runCompositeAmpScenario(t, ctx, mode, s.m, R, s.k, payloadBytes, s.scatter))
+		}
+	}
+
+	// Correctness sanity, per the engine-agnostic property: COW must produce
+	// zero delete files; MOR must produce delete files. The composite filter
+	// must also select exactly K rows (region is derived from id, so each
+	// tuple matches the same single row its id would alone): under COW,
+	// deleted-records counts every row of each removed file and added-records
+	// the rewritten survivors, so the net change is the K rows deleted.
+	for _, r := range results {
+		if r.mode == table.WriteModeCopyOnWrite {
+			require.EqualValuesf(t, r.k, r.deletedRecords-r.addedRecords, "composite COW filter for %s must net-delete exactly K rows", r.name)
+			require.Zerof(t, r.deleteManifestFiles, "COW %s must produce zero delete files (found %d)", r.name, r.deleteManifestFiles)
+			require.Zerof(t, r.addedDeleteFiles, "COW %s must not report added-delete-files", r.name)
+		} else {
+			require.Positivef(t, r.deleteManifestFiles, "MOR %s must produce delete files", r.name)
+		}
+	}
+
+	// ---- Report ----
+	t.Log("")
+	t.Logf("Seed layout: R=%d rows/file, payload=%d bytes/row, contiguous non-overlapping id ranges per file (clustered key)", R, payloadBytes)
+	t.Log("Composite key (id int64, region string): OR of per-tuple ANDs, evaluated row-by-row in the survivor scan")
+	t.Log("")
+	t.Logf("%-28s %-13s | %6s %10s | %6s %10s %6s | %5s %8s | %8s %8s | %8s | %9s",
+		"scenario", "mode", "files", "seedBytes", "+files", "+bytes", "-files", "-recs", "-bytes", "delFiles", "amp(x)", "wall", "tblRewr%")
+	t.Log(strings.Repeat("-", 160))
+
+	for _, r := range results {
+		perRowBytes := float64(r.seedBytes) / float64(r.m*r.r)
+		logicalBytes := perRowBytes * float64(r.k)
+
+		var ampX float64
+		if logicalBytes > 0 {
+			ampX = float64(r.addedFilesSize) / logicalBytes
+		}
+		tblRewrPct := 100 * float64(r.removedFilesSize) / float64(r.seedBytes)
+
+		t.Logf("%-28s %-13s | %6d %10d | %6d %10d %6d | %5d %8d | %8d %8.1f | %8s | %8.2f",
+			r.name, r.mode,
+			r.seedFiles, r.seedBytes,
+			r.addedDataFiles, r.addedFilesSize, r.deletedDataFiles,
+			r.deletedRecords, r.removedFilesSize,
+			r.deleteManifestFiles, ampX, r.elapsed.Round(time.Microsecond).String(), tblRewrPct)
+	}
+	t.Log("")
+	t.Log("amp(x)   = bytes written by the mutation / bytes logically changed (~K rows)")
+	t.Log("tblRewr% = removed-files-size / total seeded bytes (fraction of table COW rewrote)")
+	t.Log("Compare wall against TestCOWWriteAmplification's same-shape scenarios to see the composite-filter overhead.")
+}
+
 // TestCOWWriteAmplificationScale confirms the K/M model holds at larger,
 // production-like per-file sizes (up to a few MB per data file) and measures the
 // per-MB rewrite cost, from which 128-512 MB file behaviour extrapolates
