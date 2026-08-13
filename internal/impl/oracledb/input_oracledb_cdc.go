@@ -119,6 +119,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("The number of rows Oracle fetches per network round-trip, for both snapshot and streaming reads. This value is passed straight through to the underlying Oracle connection, which otherwise auto-tunes it based on row width. For narrow rows the resulting value can still be small enough that round-trip latency, rather than throughput, ends up limiting read speed — raising this trades some memory per fetch for fewer round-trips.").
 		ShortDescription("Rows fetched per network round-trip from Oracle; raising this can reduce round-trip-bound read latency for narrow rows.").
 		Example(1000).
+		LintRule(`root = if this <= 0 { [ "` + ociFieldPrefetchRows + ` must be greater than 0" ] }`).
 		Optional(),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
