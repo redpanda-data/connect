@@ -140,10 +140,10 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			schemas = remaining
 		}
 
-		if len(inaccessibleSchemas) > 0 && len(config.DBTables) > 0 {
+		if len(inaccessibleSchemas) > 0 {
 			config.Logger.Warnf("schema pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", config.DBSchemaPattern, inaccessibleSchemas)
 		}
-		if len(schemas) == 0 && len(config.DBTables) > 0 {
+		if len(schemas) == 0 {
 			return nil, fmt.Errorf("no schemas found matching pattern %q", config.DBSchemaPattern)
 		}
 		config.Logger.Infof("Schema pattern %q resolved to %d schema(s): %v", config.DBSchemaPattern, len(schemas), schemas)
@@ -157,12 +157,26 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			normalizedTables = append(normalizedTables, normalized)
 		}
 
+		// With no explicit table list, auto-discover every base table in each
+		// matched (and exclude_schemas-filtered) schema and publish them
+		// explicitly. Without this, an empty tables list would fall through to
+		// CreatePublication's FOR ALL TABLES fallback below, which replicates
+		// every schema in the database and silently defeats both schema_pattern
+		// and exclude_schemas.
+		autoDiscoverTables := len(normalizedTables) == 0
+
 		tables = make([]TableFQN, 0, len(schemas)*len(normalizedTables))
 		foundTables := make(map[string]bool, len(normalizedTables))
 		for _, schema := range schemas {
 			existingTables, err := resolveExistingTables(ctx, dbConn, schema)
 			if err != nil {
 				return nil, fmt.Errorf("resolving tables in schema %q: %w", schema, err)
+			}
+			if autoDiscoverTables {
+				for table := range existingTables {
+					tables = append(tables, TableFQN{Schema: schema, Table: table})
+				}
+				continue
 			}
 			for _, table := range normalizedTables {
 				if _, ok := existingTables[table]; !ok {
@@ -173,18 +187,25 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				foundTables[table] = true
 			}
 		}
-		// A table must exist in at least one matched schema. Missing from some
-		// (but not all) matched schemas is tolerated above as a multi-tenant gap;
-		// missing from every matched schema is indistinguishable from a typo and
-		// must fail loudly rather than silently drop the table.
-		var missingTables []string
-		for i, table := range normalizedTables {
-			if !foundTables[table] {
-				missingTables = append(missingTables, config.DBTables[i])
+		if autoDiscoverTables {
+			if len(tables) == 0 {
+				return nil, fmt.Errorf("no tables found in schema(s) %v matching pattern %q", schemas, config.DBSchemaPattern)
 			}
-		}
-		if len(missingTables) > 0 {
-			return nil, fmt.Errorf("table(s) %v not found in any schema matching pattern %q", missingTables, config.DBSchemaPattern)
+			config.Logger.Infof("%q has no `tables` list configured: auto-discovered %d table(s) across %d schema(s)", config.DBSchemaPattern, len(tables), len(schemas))
+		} else {
+			// A table must exist in at least one matched schema. Missing from some
+			// (but not all) matched schemas is tolerated above as a multi-tenant gap;
+			// missing from every matched schema is indistinguishable from a typo and
+			// must fail loudly rather than silently drop the table.
+			var missingTables []string
+			for i, table := range normalizedTables {
+				if !foundTables[table] {
+					missingTables = append(missingTables, config.DBTables[i])
+				}
+			}
+			if len(missingTables) > 0 {
+				return nil, fmt.Errorf("table(s) %v not found in any schema matching pattern %q", missingTables, config.DBSchemaPattern)
+			}
 		}
 	} else {
 		var err error

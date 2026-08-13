@@ -2182,36 +2182,99 @@ tables:
 	assert.Contains(t, err.Error(), "no schemas found matching pattern")
 }
 
-// TestIntegrationForAllTablesIgnoresNonMatchingSchemaPattern guards the
-// documented behaviour of FOR ALL TABLES mode: when `tables` is left empty,
-// `schema` has no effect and must not block startup even if it matches no
-// schema in the database.
-func TestIntegrationForAllTablesIgnoresNonMatchingSchemaPattern(t *testing.T) {
+// TestIntegrationSchemaPatternNonMatchingFailsEvenWithEmptyTables guards the
+// fixed behaviour: schema_pattern always scopes replication, even when
+// `tables` is left empty. A schema_pattern matching nothing in the database
+// must fail startup rather than silently falling back to a database-wide
+// FOR ALL TABLES publication (the old behaviour, which made exclude_schemas
+// meaningless whenever tables was left unset).
+func TestIntegrationSchemaPatternNonMatchingFailsEvenWithEmptyTables(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	tmpl := fmt.Sprintf(`
+dsn: %s
+slot_name: no_schema_match_empty_tables_slot
+schema_pattern: nonexistent_schema_zzz_*
+`, databaseURL)
+
+	conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
+	require.NoError(t, err)
+
+	mgr := service.MockResources()
+	license.InjectTestService(mgr)
+
+	input, err := newPgStreamInput(conf, mgr)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	// Bypass the benthos AsyncReader's infinite connect-retry loop, same as
+	// TestIntegrationNoSchemasMatchedReturnsError.
+	err = input.Connect(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no schemas found matching pattern")
+}
+
+// TestIntegrationMultiSchemaAutoDiscoverExcludeSchemas is
+// TestIntegrationMultiSchemaExcludeSchemas with `tables` left unset: it
+// verifies that leaving `tables` empty under schema_pattern auto-discovers
+// the "events" table in each matched schema instead of falling back to a
+// database-wide FOR ALL TABLES publication, so exclude_schemas still carves
+// tenant_c out of both the snapshot and CDC.
+func TestIntegrationMultiSchemaAutoDiscoverExcludeSchemas(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	tmpl := fmt.Sprintf(`
-postgres_cdc:
-    dsn: %s
-    slot_name: for_all_tables_ignores_schema_slot
-    schema_pattern: nonexistent_schema_zzz_*
-`, databaseURL)
+	// Three tenant schemas match tenant_*; tenant_c is carved out via exclude_schemas.
+	for _, schema := range []string{"tenant_a", "tenant_b", "tenant_c"} {
+		_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA %s", schema))
+		require.NoError(t, err)
+		_, err = db.Exec(fmt.Sprintf(
+			"CREATE TABLE %s.events (id SERIAL PRIMARY KEY, name TEXT)", schema))
+		require.NoError(t, err)
+	}
 
-	// FOR ALL TABLES mode disables the initial snapshot, so replication only
-	// sees rows written after the slot/publication exist. Insert continuously
-	// (rather than once upfront) so a row lands after startup completes.
-	writer := asyncroutine.NewPeriodic(100*time.Millisecond, func() {
-		_, err := db.Exec("INSERT INTO flights (name, created_at) VALUES ('alice', now());")
-		assert.NoError(t, err)
-	})
-	writer.Start()
-	t.Cleanup(writer.Stop)
+	// Pre-load snapshot data, including a row in the excluded schema that must
+	// never surface.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('alice'), ('bob')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('carol')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_c.events (name) VALUES ('mallory')")
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		dbSchema  string
+		table     string
+		operation string
+		lsn       string
+	}
 
 	var (
 		mu        sync.Mutex
-		collected []string
+		collected []msgMeta
 	)
+	collectedLen := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected)
+	}
+
+	// No `tables` field: every base table in tenant_a/tenant_b must be
+	// auto-discovered without listing "events" by hand.
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: auto_discover_exclude_schemas_test_slot
+    stream_snapshot: true
+    schema_pattern: tenant_*
+    exclude_schemas:
+      - tenant_c
+`, databaseURL)
 
 	sb := service.NewStreamBuilder()
 	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
@@ -2220,8 +2283,12 @@ postgres_cdc:
 		mu.Lock()
 		defer mu.Unlock()
 		for _, msg := range batch {
-			table, _ := msg.MetaGet("table")
-			collected = append(collected, table)
+			m := msgMeta{}
+			m.dbSchema, _ = msg.MetaGet("database_schema")
+			m.table, _ = msg.MetaGet("table")
+			m.operation, _ = msg.MetaGet("operation")
+			m.lsn, _ = msg.MetaGet("lsn")
+			collected = append(collected, m)
 		}
 		return nil
 	}))
@@ -2236,17 +2303,72 @@ postgres_cdc:
 	}()
 	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
 
-	// Non-matching schema pattern must not block FOR ALL TABLES replication:
-	// the "flights" insert above should still arrive.
+	// Wait for the 3 snapshot rows from the two non-excluded schemas; tenant_c's
+	// row must never contribute to this count.
 	assert.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return len(collected) >= 1
-	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for FOR ALL TABLES replication; a non-matching schema pattern should be ignored when tables is empty")
+		return collectedLen() >= 3
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot rows")
+
+	// Insert CDC rows into all three schemas, including the excluded one.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('dave')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('eve')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_c.events (name) VALUES ('trudy')")
+	require.NoError(t, err)
+
+	// Wait for the 2 CDC rows from the non-excluded schemas (total 5).
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, 5, collectedLen())
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for CDC rows")
+
+	// tenant_c's CDC insert above raced the same replication stream as the
+	// tenant_a/tenant_b inserts already confirmed above, so if it were going
+	// to leak through it would have by now; assert the count never climbs
+	// past 5 to catch a delayed leak instead of just checking once.
+	assert.Never(t, func() bool {
+		return collectedLen() > 5
+	}, 3*time.Second, 200*time.Millisecond, "received unexpected message(s) from excluded schema tenant_c")
 
 	mu.Lock()
 	defer mu.Unlock()
-	assert.Contains(t, collected, "flights")
+
+	require.Len(t, collected, 5)
+	for _, m := range collected {
+		assert.NotEqual(t, "tenant_c", m.dbSchema, "tenant_c is excluded and must never appear, got message: %+v", m)
+	}
+
+	var snapshots, cdcMsgs []msgMeta
+	for _, m := range collected {
+		if m.operation == "read" {
+			snapshots = append(snapshots, m)
+		} else {
+			cdcMsgs = append(cdcMsgs, m)
+		}
+	}
+
+	// Snapshot assertions.
+	require.Len(t, snapshots, 3)
+	snapshotSchemas := make(map[string]int)
+	for _, m := range snapshots {
+		assert.Equal(t, "events", m.table, "snapshot: table should be bare name without schema prefix")
+		assert.Empty(t, m.lsn, "snapshot rows have no LSN")
+		snapshotSchemas[m.dbSchema]++
+	}
+	assert.Equal(t, 2, snapshotSchemas["tenant_a"], "expected 2 snapshot rows from tenant_a")
+	assert.Equal(t, 1, snapshotSchemas["tenant_b"], "expected 1 snapshot row from tenant_b")
+
+	// CDC assertions.
+	require.Len(t, cdcMsgs, 2)
+	cdcSchemas := make(map[string]int)
+	for _, m := range cdcMsgs {
+		assert.Equal(t, "insert", m.operation)
+		assert.Equal(t, "events", m.table)
+		assert.NotEmpty(t, m.lsn, "CDC rows must have an LSN")
+		cdcSchemas[m.dbSchema]++
+	}
+	assert.Equal(t, 1, cdcSchemas["tenant_a"], "expected 1 CDC row from tenant_a")
+	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
 }
 
 func TestIntegrationSchemaAndTableMatchingTest(t *testing.T) {

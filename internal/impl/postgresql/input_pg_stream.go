@@ -104,7 +104,7 @@ This input adds the following metadata fields to each message:
 			ShortDescription("Emit empty BEGIN and COMMIT messages at the start and end of each transaction.").
 			Default(false)).
 		Field(service.NewBoolField(fieldStreamSnapshot).
-			Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `" + fieldTables + "` is left empty, since the snapshot is only planned for tables listed there.").
+			Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `" + fieldTables + "` is left empty and `" + fieldSchemaPattern + "` is NOT set, since in that case the snapshot is only planned for tables listed in `" + fieldTables + "`. When `" + fieldSchemaPattern + "` IS set, leaving `" + fieldTables + "` empty auto-discovers tables to snapshot instead - see `" + fieldTables + "` below - and every discovered table must have a primary key.").
 			ShortDescription("Stream a snapshot of all existing data before streaming changes. Snapshot tables must have a primary key.").
 			Example(true).
 			Default(false)).
@@ -133,7 +133,7 @@ Double-quoted identifiers are treated as exact names and do not support wildcard
 
 Schema pattern matching runs once at pipeline startup. Schemas created after the pipeline starts will not be picked up until the pipeline is restarted.
 
-If `+"`"+fieldTables+"`"+` is non-empty and this pattern matches no schema in the database, startup fails with an error. This field has no effect when `+"`"+fieldTables+"`"+` is left empty - see `+"`"+fieldTables+"`"+` below.
+If this pattern matches no schema in the database, startup fails with an error - this holds whether or not `+"`"+fieldTables+"`"+` is set. See `+"`"+fieldTables+"`"+` below for what happens when it's left empty.
 
 This pattern can contain characters that wouldn't be allowed in an unquoted schema name, because it's only ever compared against the real name of each schema in the database - it doesn't have to be a valid name itself. For example, a schema literally named `+"`a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11`"+` (which must have been created using double quotes, since hyphens aren't allowed in an unquoted `+"`CREATE SCHEMA`"+` statement) can still be matched using the unquoted pattern `+"`a0eebc99-*`"+`.
 
@@ -147,7 +147,9 @@ This field is mutually exclusive with `+"`"+fieldSchema+"`"+`; when set, it take
 
 Each entry uses the same syntax as ` + "`" + fieldSchemaPattern + "`" + `: an exact schema name, a glob pattern using ` + "`*`" + ` as a wildcard, or a double-quoted exact identifier for an exact, case-sensitive match.
 
-A schema that matches ` + "`" + fieldSchemaPattern + "`" + ` and also matches any entry in this list is excluded from replication. An entry that does not match any schema resolved by ` + "`" + fieldSchemaPattern + "`" + ` is silently ignored, so a typo here simply excludes nothing rather than failing startup.`).
+A schema that matches ` + "`" + fieldSchemaPattern + "`" + ` and also matches any entry in this list is excluded from replication. An entry that does not match any schema resolved by ` + "`" + fieldSchemaPattern + "`" + ` is silently ignored, so a typo here simply excludes nothing rather than failing startup.
+
+This exclusion is applied before ` + "`" + fieldTables + "`" + ` is resolved, so it also takes effect when ` + "`" + fieldTables + "`" + ` is left empty and tables are auto-discovered.`).
 			Examples([]string{"tenant_internal", "tenant_test_*"}).
 			Optional().
 			Default([]string{}),
@@ -157,7 +159,9 @@ A schema that matches ` + "`" + fieldSchemaPattern + "`" + ` and also matches an
 
 When ` + "`schema_pattern`" + ` is set, this list is resolved against each matched schema independently: a table missing from some (but not all) of the matched schemas is skipped for those schemas only (with a warning logged), tolerating multi-tenant setups where a table hasn't been provisioned in every schema yet. A table that's missing from every matched schema, however, is treated as a configuration error (most likely a typo) and startup fails, naming the missing table.
 
-If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
+If left empty while ` + "`schema_pattern`" + ` is set, every base table in each matched (and un-excluded, see ` + "`" + fieldExcludeSchemas + "`" + `) schema is auto-discovered and published explicitly, instead of listing tables by hand - this is the expected way to replicate "every table" in a multi-tenant, schema-per-tenant setup without also picking up unrelated schemas. Startup fails if no matched schema contains any table.
+
+If left empty while ` + "`schema_pattern`" + ` is NOT set, the underlying PostgreSQL publication is instead created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").

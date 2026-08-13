@@ -145,7 +145,7 @@ When set to true, empty messages with operation types BEGIN and COMMIT are gener
 
 === `stream_snapshot`
 
-When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `tables` is left empty, since the snapshot is only planned for tables listed there.
+When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `tables` is left empty and `schema_pattern` is NOT set, since in that case the snapshot is only planned for tables listed in `tables`. When `schema_pattern` IS set, leaving `tables` empty auto-discovers tables to snapshot instead - see `tables` below - and every discovered table must have a primary key.
 
 
 *Type*: `bool`
@@ -200,7 +200,7 @@ Double-quoted identifiers are treated as exact names and do not support wildcard
 
 Schema pattern matching runs once at pipeline startup. Schemas created after the pipeline starts will not be picked up until the pipeline is restarted.
 
-If `tables` is non-empty and this pattern matches no schema in the database, startup fails with an error. This field has no effect when `tables` is left empty - see `tables` below.
+If this pattern matches no schema in the database, startup fails with an error - this holds whether or not `tables` is set. See `tables` below for what happens when it's left empty.
 
 This pattern can contain characters that wouldn't be allowed in an unquoted schema name, because it's only ever compared against the real name of each schema in the database - it doesn't have to be a valid name itself. For example, a schema literally named `a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11` (which must have been created using double quotes, since hyphens aren't allowed in an unquoted `CREATE SCHEMA` statement) can still be matched using the unquoted pattern `a0eebc99-*`.
 
@@ -229,6 +229,8 @@ Each entry uses the same syntax as `schema_pattern`: an exact schema name, a glo
 
 A schema that matches `schema_pattern` and also matches any entry in this list is excluded from replication. An entry that does not match any schema resolved by `schema_pattern` is silently ignored, so a typo here simply excludes nothing rather than failing startup.
 
+This exclusion is applied before `tables` is resolved, so it also takes effect when `tables` is left empty and tables are auto-discovered.
+
 
 *Type*: `array`
 
@@ -248,7 +250,9 @@ A list of table names to include in the logical replication. Each table should b
 
 When `schema_pattern` is set, this list is resolved against each matched schema independently: a table missing from some (but not all) of the matched schemas is skipped for those schemas only (with a warning logged), tolerating multi-tenant setups where a table hasn't been provisioned in every schema yet. A table that's missing from every matched schema, however, is treated as a configuration error (most likely a typo) and startup fails, naming the missing table.
 
-If left empty, the underlying PostgreSQL publication is created `FOR ALL TABLES`, which replicates every table in every schema of the database, ignoring `schema`. This also disables `stream_snapshot`, since the initial snapshot is only planned for tables listed here.
+If left empty while `schema_pattern` is set, every base table in each matched (and un-excluded, see `exclude_schemas`) schema is auto-discovered and published explicitly, instead of listing tables by hand - this is the expected way to replicate "every table" in a multi-tenant, schema-per-tenant setup without also picking up unrelated schemas. Startup fails if no matched schema contains any table.
+
+If left empty while `schema_pattern` is NOT set, the underlying PostgreSQL publication is instead created `FOR ALL TABLES`, which replicates every table in every schema of the database, ignoring `schema`. This also disables `stream_snapshot`, since the initial snapshot is only planned for tables listed here.
 
 
 *Type*: `array`
