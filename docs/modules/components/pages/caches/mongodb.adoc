@@ -141,7 +141,7 @@ AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against Mo
 
 *Type*: `object`
 
-Requires version 4.105.0 or newer
+Requires version 4.106.0 or newer
 
 === `aws.enabled`
 

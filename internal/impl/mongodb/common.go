@@ -150,7 +150,7 @@ func AWSIAMAuthField() *service.ConfigField {
 		ShortDescription("AWS IAM authentication configuration (MONGODB-AWS).").
 		Advanced().
 		Optional().
-		Version("4.105.0")
+		Version("4.106.0")
 }
 
 // ClientConfig holds parsed MongoDB connection settings so that a client can be
