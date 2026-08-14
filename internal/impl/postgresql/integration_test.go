@@ -1615,27 +1615,27 @@ postgres_cdc:
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
 }
 
-// incrementalSnapshotRow records an observed row's id and how it arrived
-// ("read" backfill vs "insert" live replication).
-type incrementalSnapshotRow struct {
-	id        int64
-	operation string
-}
-
-func TestIntegrationIncrementalSnapshotConcurrentWrites(t *testing.T) {
+func TestIntegrationIncrementalSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
-	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
-	require.NoError(t, err)
 
-	// Pre-existing rows: only ever observable via the incremental snapshot
-	// backfill, since the replication slot is created after these commits.
-	const numPreExisting = 40
-	for range numPreExisting {
-		_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('pre', NOW())`)
-		require.NoError(t, err)
+	type incrementalSnapshotRow struct {
+		id        int64
+		operation string
 	}
 
-	template := fmt.Sprintf(`
+	t.Run("Concurrent Writes", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		// Pre-existing rows: only ever observable via the incremental snapshot
+		// backfill, since the replication slot is created after these commits.
+		const numPreExisting = 1000
+		for range numPreExisting {
+			_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('pre', NOW())`)
+			require.NoError(t, err)
+		}
+
+		template := fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_incremental_concurrent
@@ -1645,143 +1645,16 @@ postgres_cdc:
       - flights
     incremental_snapshot:
         enabled: true
-        chunk_size: 5
+        chunk_size: 20
         checkpoint_cache: snap_cache
 `, databaseURL)
 
-	builder := service.NewStreamBuilder()
-	require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
-	require.NoError(t, builder.AddInputYAML(template))
-	require.NoError(t, builder.AddCacheYAML(`
-label: snap_cache
-memory: {}`))
-
-	var (
-		mu   sync.Mutex
-		rows []incrementalSnapshotRow
-	)
-	require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-		mu.Lock()
-		defer mu.Unlock()
-		for _, msg := range batch {
-			data, err := msg.AsStructured()
-			if err != nil {
-				return err
-			}
-			id, err := data.(map[string]any)["id"].(json.Number).Int64()
-			if err != nil {
-				return err
-			}
-			op, _ := msg.MetaGet("operation")
-			rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
-		}
-		return nil
-	}))
-
-	stream, err := builder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-
-	streamStopped := make(chan struct{})
-	go func() {
-		defer close(streamStopped)
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
-
-	// Wait for at least one backfill row before writing concurrently: it
-	// proves the coordinator's max-PK bound is already frozen, so every
-	// subsequent insert gets a serial PK above it -- immune to the
-	// double-delivery race documented on Coordinator.OnStreamedRow.
-	require.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return len(rows) >= 1
-	}, 30*time.Second, 50*time.Millisecond, "did not observe any snapshot backfill rows before starting the concurrent writer")
-
-	// Write new rows while the backfill is still running, racing chunk
-	// reads against live inserts on the same table.
-	const numConcurrent = 40
-	writerDone := make(chan struct{})
-	go func() {
-		defer close(writerDone)
-		for range numConcurrent {
-			_, err := db.Exec(`INSERT INTO flights (name, created_at) VALUES ('concurrent', NOW())`)
-			require.NoError(t, err)
-			time.Sleep(10 * time.Millisecond)
-		}
-	}()
-	<-writerDone
-
-	var totalRows int64
-	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM flights`).Scan(&totalRows))
-	require.EqualValues(t, numPreExisting+numConcurrent, totalRows)
-
-	require.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return int64(len(rows)) >= totalRows
-	}, 60*time.Second, 100*time.Millisecond, "did not observe every row from the pre-existing backfill and the concurrent writes")
-
-	require.NoError(t, stream.StopWithin(10*time.Second))
-	select {
-	case <-streamStopped:
-	case <-time.After(30 * time.Second):
-		require.Fail(t, "stream did not stop in time")
-	}
-
-	// Every row, backfill or live, must be observed exactly once: dedup must
-	// neither drop nor double-deliver.
-	mu.Lock()
-	defer mu.Unlock()
-	counts := make(map[int64]int, len(rows))
-	for _, r := range rows {
-		counts[r.id]++
-	}
-	assert.Len(t, counts, int(totalRows), "expected exactly %d distinct rows to be observed", totalRows)
-	for id, count := range counts {
-		assert.Equal(t, 1, count, "row id %d observed %d times, expected exactly once", id, count)
-	}
-}
-
-func TestIntegrationIncrementalSnapshotResume(t *testing.T) {
-	integration.CheckSkip(t)
-	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
-	require.NoError(t, err)
-
-	const numRows = 150
-	for range numRows {
-		_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('pre', NOW())`)
-		require.NoError(t, err)
-	}
-
-	// A file cache, not memory, so the checkpoint survives across the two
-	// independent stream instances below, like an actual restart.
-	cacheDir := t.TempDir()
-	template := fmt.Sprintf(`
-postgres_cdc:
-    dsn: %s
-    slot_name: test_slot_incremental_resume
-    schema: public
-    heartbeat_interval: 100ms
-    tables:
-      - flights
-    incremental_snapshot:
-        enabled: true
-        chunk_size: 5
-        checkpoint_cache: snap_cache_resume
-`, databaseURL)
-	cacheTemplate := fmt.Sprintf(`
-label: snap_cache_resume
-file:
-  directory: '%s'`, cacheDir)
-
-	runPartial := func(minRows int) []incrementalSnapshotRow {
 		builder := service.NewStreamBuilder()
 		require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
 		require.NoError(t, builder.AddInputYAML(template))
-		require.NoError(t, builder.AddCacheYAML(cacheTemplate))
+		require.NoError(t, builder.AddCacheYAML(`
+label: snap_cache
+memory: {}`))
 
 		var (
 			mu   sync.Mutex
@@ -1817,11 +1690,39 @@ file:
 			}
 		}()
 
+		// Wait for at least one backfill row before writing concurrently: it
+		// proves the coordinator's max-PK bound is already frozen, so every
+		// subsequent insert gets a serial PK above it -- immune to the
+		// double-delivery race documented on Coordinator.OnStreamedRow.
 		require.Eventually(t, func() bool {
 			mu.Lock()
 			defer mu.Unlock()
-			return len(rows) >= minRows
-		}, 60*time.Second, 20*time.Millisecond, "did not observe the minimum number of rows before stopping")
+			return len(rows) >= 1
+		}, 30*time.Second, 50*time.Millisecond, "did not observe any snapshot backfill rows before starting the concurrent writer")
+
+		// Write new rows while the backfill is still running, racing chunk
+		// reads against live inserts on the same table.
+		const numConcurrent = 1000
+		writerDone := make(chan struct{})
+		go func() {
+			defer close(writerDone)
+			for range numConcurrent {
+				_, err := db.Exec(`INSERT INTO flights (name, created_at) VALUES ('concurrent', NOW())`)
+				require.NoError(t, err)
+				time.Sleep(10 * time.Millisecond)
+			}
+		}()
+		<-writerDone
+
+		var totalRows int64
+		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM flights`).Scan(&totalRows))
+		require.EqualValues(t, numPreExisting+numConcurrent, totalRows)
+
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return int64(len(rows)) >= totalRows
+		}, 60*time.Second, 100*time.Millisecond, "did not observe every row from the pre-existing backfill and the concurrent writes")
 
 		require.NoError(t, stream.StopWithin(10*time.Second))
 		select {
@@ -1830,43 +1731,142 @@ file:
 			require.Fail(t, "stream did not stop in time")
 		}
 
+		// Every row, backfill or live, must be observed exactly once: dedup must
+		// neither drop nor double-deliver.
 		mu.Lock()
 		defer mu.Unlock()
-		return append([]incrementalSnapshotRow(nil), rows...)
-	}
+		counts := make(map[int64]int, len(rows))
+		for _, r := range rows {
+			counts[r.id]++
+		}
+		assert.Len(t, counts, int(totalRows), "expected exactly %d distinct rows to be observed", totalRows)
+		for id, count := range counts {
+			assert.Equal(t, 1, count, "row id %d observed %d times, expected exactly once", id, count)
+		}
+	})
 
-	// Stop early, leaving the backfill (and its checkpoint) partway through.
-	firstRun := runPartial(10)
-	require.NotEmpty(t, firstRun)
-	require.Less(t, len(firstRun), numRows, "first run should not have completed the entire backfill; the test can't exercise resume otherwise")
+	t.Run("Resume", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
 
-	// Reuses the same slot and cache directory: a correct resume picks up
-	// from the checkpoint, so none of the first run's rows should reappear.
-	secondRun := runPartial(numRows - len(firstRun))
+		const numRows = 1000
+		for range numRows {
+			_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('pre', NOW())`)
+			require.NoError(t, err)
+		}
 
-	firstIDs := make(map[int64]struct{}, len(firstRun))
-	for _, r := range firstRun {
-		firstIDs[r.id] = struct{}{}
-	}
-	for _, r := range secondRun {
-		_, seenBefore := firstIDs[r.id]
-		assert.False(t, seenBefore, "row id %d observed in both the first and second run; resume should not re-deliver already-observed rows", r.id)
-	}
+		// A file cache, not memory, so the checkpoint survives across the two
+		// independent stream instances below, like an actual restart.
+		cacheDir := t.TempDir()
+		template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_incremental_resume
+    schema: public
+    heartbeat_interval: 100ms
+    tables:
+      - flights
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 20
+        checkpoint_cache: snap_cache_resume
+`, databaseURL)
+		cacheTemplate := fmt.Sprintf(`
+label: snap_cache_resume
+file:
+  directory: '%s'`, cacheDir)
 
-	allCounts := make(map[int64]int, numRows)
-	for _, r := range firstRun {
-		allCounts[r.id]++
-	}
-	for _, r := range secondRun {
-		allCounts[r.id]++
-	}
+		runPartial := func(minRows int) []incrementalSnapshotRow {
+			builder := service.NewStreamBuilder()
+			require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
+			require.NoError(t, builder.AddInputYAML(template))
+			require.NoError(t, builder.AddCacheYAML(cacheTemplate))
 
-	var totalRows int64
-	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM flights`).Scan(&totalRows))
-	require.EqualValues(t, numRows, totalRows)
+			var (
+				mu   sync.Mutex
+				rows []incrementalSnapshotRow
+			)
+			require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					id, err := data.(map[string]any)["id"].(json.Number).Int64()
+					if err != nil {
+						return err
+					}
+					op, _ := msg.MetaGet("operation")
+					rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
+				}
+				return nil
+			}))
 
-	assert.Len(t, allCounts, int(totalRows), "expected exactly %d distinct rows across both runs combined", totalRows)
-	for id, count := range allCounts {
-		assert.Equal(t, 1, count, "row id %d observed %d times across both runs, expected exactly once", id, count)
-	}
+			stream, err := builder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			streamStopped := make(chan struct{})
+			go func() {
+				defer close(streamStopped)
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+
+			require.Eventually(t, func() bool {
+				mu.Lock()
+				defer mu.Unlock()
+				return len(rows) >= minRows
+			}, 60*time.Second, 20*time.Millisecond, "did not observe the minimum number of rows before stopping")
+
+			require.NoError(t, stream.StopWithin(10*time.Second))
+			select {
+			case <-streamStopped:
+			case <-time.After(30 * time.Second):
+				require.Fail(t, "stream did not stop in time")
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]incrementalSnapshotRow(nil), rows...)
+		}
+
+		// Stop early, leaving the backfill (and its checkpoint) partway through.
+		firstRun := runPartial(10)
+		require.NotEmpty(t, firstRun)
+		require.Less(t, len(firstRun), numRows, "first run should not have completed the entire backfill; the test can't exercise resume otherwise")
+
+		// Reuses the same slot and cache directory: a correct resume picks up
+		// from the checkpoint, so none of the first run's rows should reappear.
+		secondRun := runPartial(numRows - len(firstRun))
+
+		firstIDs := make(map[int64]struct{}, len(firstRun))
+		for _, r := range firstRun {
+			firstIDs[r.id] = struct{}{}
+		}
+		for _, r := range secondRun {
+			_, seenBefore := firstIDs[r.id]
+			assert.False(t, seenBefore, "row id %d observed in both the first and second run; resume should not re-deliver already-observed rows", r.id)
+		}
+
+		allCounts := make(map[int64]int, numRows)
+		for _, r := range firstRun {
+			allCounts[r.id]++
+		}
+		for _, r := range secondRun {
+			allCounts[r.id]++
+		}
+
+		var totalRows int64
+		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM flights`).Scan(&totalRows))
+		require.EqualValues(t, numRows, totalRows)
+
+		assert.Len(t, allCounts, int(totalRows), "expected exactly %d distinct rows across both runs combined", totalRows)
+		for id, count := range allCounts {
+			assert.Equal(t, 1, count, "row id %d observed %d times across both runs, expected exactly once", id, count)
+		}
+	})
 }
