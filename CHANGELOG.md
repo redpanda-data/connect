@@ -3,11 +3,25 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.105.0 - TBD
+## 4.105.0 - 2026-08-13
 
 ### Added
 
-- mongodb, mongodb_cdc: Added AWS IAM authentication (`MONGODB-AWS`) for MongoDB Atlas to the `mongodb` input, output, processor and cache, and to the `mongodb_cdc` input, via a new `aws` configuration block supporting the ambient credential chain, static keys, and assume-role chaining. ([@squiidz](https://github.com/squiidz), [#4690](https://github.com/redpanda-data/connect/pull/4690))
+- postgres_cdc: Added support for control signals in PostgreSQL CDC by detecting and forwarding rows inserted into a configurable signal table downstream like regular messages. ([@josephwoodward](https://github.com/josephwoodward), [#4637](https://github.com/redpanda-data/connect/pull/4637))
+- iceberg: Added an opt-in `merge_strategy: copy-on-write` for row-level `upsert`/`delete`, which materialises mutations by rewriting whole data files so the table only ever contains plain data files. This makes mutations readable by engine-backed catalogs that cannot handle merge-on-read equality deletes, such as the Databricks Unity Catalog and Snowflake. The default remains `merge-on-read`. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+- iceberg: Added a `commit.cleanup_on_failure` field (default `true`) to disable connector-side cleanup of files written by failed commits, as an escape hatch for incident recovery. Disabling it can only leak orphan files, which regular orphan-file maintenance reclaims. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+
+### Fixed
+
+- iceberg: Fixed a regression introduced in 4.99.0 where a commit that landed server-side but was reported as failed (ambiguous 5xx, timeout, lost acknowledgement, or an unclassified error) had its just-written parquet files deleted by the failure-path cleanup, leaving the table unreadable. Failure cleanup is now gated on a provable catalog rejection, and commits detected as landed are reported as success, which also prevents the duplicate rows that redelivery produced. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+- iceberg: Fixed no-timezone `timestamp` columns being written to parquet with `isAdjustedToUTC=true`, which is spec-incorrect and made them read back as `timestamptz`. New tables are written correctly; the encoding is pinned per table via a `redpanda-connect.timestamp-encoding` property so an existing table never changes or mixes encodings. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+- iceberg: Fixed commits failing against catalogs that prohibit clients setting particular table properties (for example the Databricks Unity Catalog and `schema.name-mapping.default`) by learning the prohibited keys from the catalog's rejection and stripping them from subsequent commits. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+- iceberg: Fixed several `identifier_fields` value shapes that silently matched no rows on `upsert`/`delete` — non-UTC `time` values, decimal floating-point ties, and `[]byte` values for string key columns — and fixed base64 mangling of binary and fixed column values during copy-on-write rewrites. All write paths now share a single value canonicaliser with the insert path. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+
+### Change
+
+- oracledb_cdc: Snapshot performance improvements by reusing seeded schema metadata [@josephwoodward](https://github.com/josephwoodward), [#4695](https://github.com/redpanda-data/connect/pull/4695))
+- iceberg: Merge-key input strictness now matches the insert path: string-typed values for integer and boolean key columns (for example `{"id": "42"}` against a `BIGINT` key) previously matched by accident and are now rejected with an actionable error, and nanosecond-precision timestamp `identifier_fields` are now rejected under `merge-on-read` as they already were under copy-on-write. A table whose `write.delete.mode` property is explicitly `merge-on-read` also now rejects `copy-on-write` mutations rather than silently overriding the property. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
 
 ## 4.104.0 - 2026-08-06
 

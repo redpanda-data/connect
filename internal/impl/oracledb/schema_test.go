@@ -573,6 +573,62 @@ func TestSchemaCacheSeedFromColumnMetaOverride(t *testing.T) {
 	require.Len(t, c2.Children, 3)
 }
 
+func TestSeedFromColumnMetaIdentitySkip(t *testing.T) {
+	newMeta := func() []replication.ColumnMeta {
+		return []replication.ColumnMeta{
+			{Name: "A", TypeName: "VARCHAR2"},
+			{Name: "B", TypeName: "NUMBER", Precision: 5, Scale: 0, HasDecimalSize: true},
+		}
+	}
+
+	t.Run("same slice skips rebuild", func(t *testing.T) {
+		sc := testSchemaCache(t)
+		tbl := replication.UserTable{Schema: "S", Name: "T"}
+		meta := newMeta()
+
+		sc.seedFromColumnMeta(tbl, meta)
+		tableKey := tbl.Schema + "." + tbl.Name
+		first := sc.schemas[tableKey]
+		require.NotNil(t, first)
+
+		sc.seedFromColumnMeta(tbl, meta)
+		assert.Same(t, first, sc.schemas[tableKey],
+			"re-seeding with the same slice must skip the rebuild and leave the cached schema untouched")
+	})
+
+	t.Run("different slice with equal content still rebuilds", func(t *testing.T) {
+		sc := testSchemaCache(t)
+		tbl := replication.UserTable{Schema: "S", Name: "T"}
+		meta := newMeta()
+
+		sc.seedFromColumnMeta(tbl, meta)
+		tableKey := tbl.Schema + "." + tbl.Name
+		first := sc.schemas[tableKey]
+		require.NotNil(t, first)
+
+		freshCopy := make([]replication.ColumnMeta, len(meta))
+		copy(freshCopy, meta)
+		sc.seedFromColumnMeta(tbl, freshCopy)
+		assert.NotSame(t, first, sc.schemas[tableKey],
+			"re-seeding with a different (even if equal-content) slice must rebuild the cached schema")
+	})
+
+	t.Run("sameColumnMeta edge cases", func(t *testing.T) {
+		a := newMeta()
+		sameSlice := a
+		equalContent := make([]replication.ColumnMeta, len(a))
+		copy(equalContent, a)
+		var emptyA, emptyB []replication.ColumnMeta
+
+		assert.True(t, sameColumnMeta(a, sameSlice), "identical slice header must be reported as same")
+		assert.True(t, sameColumnMeta(nil, nil), "two nil slices must be reported as same")
+		assert.True(t, sameColumnMeta(emptyA, emptyB), "two nil/empty slices must be reported as same regardless of identity")
+		assert.False(t, sameColumnMeta(a, equalContent), "distinct slices with equal content must not be reported as same")
+		assert.False(t, sameColumnMeta(a, nil), "non-nil vs nil must not be reported as same")
+		assert.False(t, sameColumnMeta(a, a[:1]), "different lengths must not be reported as same")
+	})
+}
+
 func TestSchemaCacheMultiTable(t *testing.T) {
 	sc := testSchemaCache(t)
 	s1 := seedCache(t, sc, "S", "T1", []replication.ColumnMeta{
