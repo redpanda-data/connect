@@ -100,6 +100,12 @@ input:
       role_external_id: "" # No default (optional)
       roles: [] # No default (optional)
     signal_table_name: ""
+    incremental_snapshot:
+      enabled: false
+      tables: [] # No default (optional)
+      chunk_size: 1024
+      checkpoint_cache: "" # No default (optional)
+      checkpoint_cache_key: postgres_cdc_incremental_snapshot
     auto_replay_nacks: true
     batching:
       count: 0
@@ -617,6 +623,59 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 
 signal_table_name: rpcn_signal_table
 ```
+
+=== `incremental_snapshot`
+
+Configures Debezium-style incremental snapshotting of one or more tables, which runs automatically and concurrently with logical replication streaming once enabled.
+
+
+*Type*: `object`
+
+
+=== `incremental_snapshot.enabled`
+
+When set to true, the connector performs a Debezium-style incremental (chunked) snapshot of the configured tables automatically, starting as soon as logical replication streaming begins. Unlike `stream_snapshot`, this requires no dedicated up-front snapshot phase, does not block replication from starting, and needs no signal table or external trigger. It is independent of `stream_snapshot`, so the two can be enabled together or used separately.
+
+Correctness (no duplicate rows) is only guaranteed for tables whose primary key is monotonically increasing for new rows (for example a serial/identity column, or a UUIDv7-style key) during the snapshot. Rows inserted with a primary key that reuses or fills a gap below the table's current maximum key while the snapshot is in progress may be delivered twice: once from replication, once from the backfill. Consumers should treat incoming rows as idempotent upserts keyed by primary key, as is standard CDC practice.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `incremental_snapshot.tables`
+
+The tables to incrementally snapshot. If omitted, the tables configured in `tables` are used instead.
+
+
+*Type*: `array`
+
+
+=== `incremental_snapshot.chunk_size`
+
+The number of rows to read per chunk while incrementally snapshotting a table.
+
+
+*Type*: `int`
+
+*Default*: `1024`
+
+=== `incremental_snapshot.checkpoint_cache`
+
+A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] used to durably store the incremental snapshot's progress, allowing it to resume from where it left off after a restart instead of starting over. Required when `enabled` is `true`.
+
+
+*Type*: `string`
+
+
+=== `incremental_snapshot.checkpoint_cache_key`
+
+The key used to store the incremental snapshot progress in `checkpoint_cache`. An alternative key can be provided if multiple incremental snapshots share the same cache.
+
+
+*Type*: `string`
+
+*Default*: `"postgres_cdc_incremental_snapshot"`
 
 === `auto_replay_nacks`
 

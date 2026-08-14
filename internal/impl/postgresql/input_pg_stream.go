@@ -27,6 +27,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/snapshot"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -262,6 +263,29 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 			Example("rpcn_signal_table").
 			Default("").
 			Advanced()).
+		Field(service.NewObjectField(fieldIncrementalSnapshot,
+			service.NewBoolField(fieldIncrementalSnapshotEnabled).
+				Description("When set to true, the connector performs a Debezium-style incremental (chunked) snapshot of the configured tables automatically, starting as soon as logical replication streaming begins. Unlike `"+fieldStreamSnapshot+"`, this requires no dedicated up-front snapshot phase, does not block replication from starting, and needs no signal table or external trigger. It is independent of `"+fieldStreamSnapshot+"`, so the two can be enabled together or used separately.\n\nCorrectness (no duplicate rows) is only guaranteed for tables whose primary key is monotonically increasing for new rows (for example a serial/identity column, or a UUIDv7-style key) during the snapshot. Rows inserted with a primary key that reuses or fills a gap below the table's current maximum key while the snapshot is in progress may be delivered twice: once from replication, once from the backfill. Consumers should treat incoming rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
+				ShortDescription("Automatically and continuously snapshot the configured tables in chunks, concurrently with replication streaming.").
+				Default(false),
+			service.NewStringListField(fieldIncrementalSnapshotTables).
+				Description("The tables to incrementally snapshot. If omitted, the tables configured in `"+fieldTables+"` are used instead.").
+				Optional(),
+			service.NewIntField(fieldIncrementalSnapshotChunkSize).
+				Description("The number of rows to read per chunk while incrementally snapshotting a table.").
+				Default(1024),
+			service.NewStringField(fieldIncrementalSnapshotCheckpointCache).
+				Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] used to durably store the incremental snapshot's progress, allowing it to resume from where it left off after a restart instead of starting over. Required when `"+fieldIncrementalSnapshotEnabled+"` is `true`.").
+				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
+				Optional(),
+			service.NewStringField(fieldIncrementalSnapshotCheckpointCacheKey).
+				Description("The key used to store the incremental snapshot progress in `"+fieldIncrementalSnapshotCheckpointCache+"`. An alternative key can be provided if multiple incremental snapshots share the same cache.").
+				Default(defaultIncrementalSnapshotCheckpointKey),
+		).
+			Description("Configures Debezium-style incremental snapshotting of one or more tables, which runs automatically and concurrently with logical replication streaming once enabled.").
+			ShortDescription("Configures automatic, chunked incremental snapshotting that runs concurrently with replication streaming.").
+			Advanced().
+			Optional()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
@@ -286,6 +310,12 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		iamAuthEnabled            bool
 		iamAuthTokenBuilder       TokenBuilder
 		signalTableName           string
+
+		incrementalSnapshotEnabled            bool
+		incrementalSnapshotTables             []string
+		incrementalSnapshotChunkSize          int
+		incrementalSnapshotCheckpointCache    string
+		incrementalSnapshotCheckpointCacheKey string
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -468,6 +498,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
 			SignalTableName:          signalTableName,
+			IncrementalSnapshot:      incrementalSnapshot,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,
@@ -700,6 +731,16 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if _, err := p.controlSig.listen(&msg); err != nil {
 					// Log it and fall through to the normal emit path below.
 					p.logger.Errorf("failed to detect control signal in change event: %s", err)
+				}
+
+				if msg.IncrementalSnapshotState != nil {
+					pendingIncrementalState = msg.IncrementalSnapshotState
+				}
+				if msg.Operation == pglogicalstream.IncrementalSnapshotCheckpointOpType {
+					// Defensive: buildIncrementalSnapshotMessages never mixes
+					// this sentinel into a batch alongside other messages
+					// today, but never forward it downstream if that changes.
+					continue
 				}
 
 				if mb, err = json.Marshal(msg.Data); err != nil {
