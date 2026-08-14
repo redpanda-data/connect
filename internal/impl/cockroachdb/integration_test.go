@@ -354,13 +354,15 @@ file:
 			}
 		}()
 
-		var got int
-		require.Eventually(t, func() bool {
+		reached := assert.Eventually(t, func() bool {
 			seenMut.Lock()
-			got = len(seen)
-			seenMut.Unlock()
-			return got == rowCount
-		}, time.Minute, time.Millisecond*100, "backfill rows were skipped after ack-one-then-crash: got %v of %v", got, rowCount)
+			defer seenMut.Unlock()
+			return len(seen) == rowCount
+		}, time.Minute, time.Millisecond*100)
+		seenMut.Lock()
+		got := len(seen)
+		seenMut.Unlock()
+		require.True(t, reached, "backfill rows were skipped after ack-one-then-crash: got %v of %v", got, rowCount)
 
 		require.NoError(t, streamOut.StopWithin(time.Second*10))
 	}

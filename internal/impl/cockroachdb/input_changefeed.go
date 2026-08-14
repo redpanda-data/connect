@@ -72,6 +72,16 @@ type crdbChangefeedInput struct {
 	statement          string
 	cursorCache        string
 	cursorCheckpointer *checkpoint.Capped[string]
+	// lastResolved is the most recent resolved timestamp seen in stream order.
+	// Data rows carry it as their tracker payload so an out-of-order ack can
+	// never mask a pending resolved timestamp behind an empty payload. Only
+	// touched from the Read goroutine.
+	lastResolved string
+	// persistMu serializes release+persistCursor pairs. Releases hand out
+	// monotonically increasing timestamps, but acks (pipeline goroutines) and
+	// resolved records (Read goroutine) persist concurrently: without a shared
+	// critical section two writes can land out of order and regress the cursor.
+	persistMu sync.Mutex
 
 	pgConfig *pgxpool.Config
 	pgPool   *pgxpool.Pool
@@ -318,24 +328,32 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 				if err != nil {
 					return nil, nil, fmt.Errorf("tracking resolved cursor: %w", err)
 				}
+				c.lastResolved = resolvedTs
+				c.persistMu.Lock()
 				if cursorTimestamp := releaseFn(); cursorTimestamp != nil && *cursorTimestamp != "" {
 					if err := c.persistCursor(ctx, *cursorTimestamp); err != nil {
 						c.logger.Errorf("Failed to persist resolved cursor: %v", err)
 					}
 				}
+				c.persistMu.Unlock()
 				continue
 			}
 		}
 
 		var cursorReleaseFn func() *string
 		if c.cursorCache != "" {
-			// Data rows are tracked with an empty payload: they hold the
-			// ordered tracker's frontier (so no resolved timestamp can persist
-			// past an un-acked row) but never advance the cursor themselves.
-			// Row-level `updated` timestamps are unsafe cursors: every row of
-			// a transaction — and the entire initial backfill — shares one,
-			// and CURSOR resume is exclusive.
-			if cursorReleaseFn, err = c.cursorCheckpointer.Track(ctx, "", 1); err != nil {
+			// Data rows carry the last resolved timestamp seen before them as
+			// payload: they hold the ordered tracker's frontier (so no resolved
+			// timestamp can persist past an un-acked row) without masking one —
+			// if rows tracked with an empty payload resolved out of order, the
+			// frontier payload could regress to "" and a safe pending resolved
+			// timestamp would never persist. A row tracked after resolved T
+			// only becomes contiguously resolved once T and everything before
+			// it acked, so carrying T is always safe. Row-level `updated`
+			// timestamps are unsafe cursors: every row of a transaction — and
+			// the entire initial backfill — shares one, and CURSOR resume is
+			// exclusive.
+			if cursorReleaseFn, err = c.cursorCheckpointer.Track(ctx, c.lastResolved, 1); err != nil {
 				return nil, nil, fmt.Errorf("tracking row checkpoint: %w", err)
 			}
 		}
@@ -359,6 +377,8 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 			if cursorReleaseFn == nil {
 				return nil
 			}
+			c.persistMu.Lock()
+			defer c.persistMu.Unlock()
 			cursorTimestamp := cursorReleaseFn()
 			if cursorTimestamp == nil || *cursorTimestamp == "" {
 				return nil
