@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package replication
+package incrementalsnapshot
 
 import (
 	"testing"

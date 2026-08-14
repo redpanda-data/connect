@@ -16,7 +16,7 @@ import (
 	"github.com/Masterminds/squirrel"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
-	"github.com/redpanda-data/connect/v4/internal/replication"
+	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 // rowTuple renders a PrimaryKey as a Postgres ROW(...) constructor with
@@ -51,7 +51,7 @@ func quotedRowExpr(pkColsUnquoted []string) string {
 	return "ROW(" + strings.Join(quotedColumns(pkColsUnquoted), ", ") + ")"
 }
 
-func quotedTableName(table replication.TableID) string {
+func quotedTableName(table incrementalsnapshot.TableID) string {
 	return sanitize.QuotePostgresIdentifier(table.Schema) + "." + sanitize.QuotePostgresIdentifier(table.Table)
 }
 
@@ -64,7 +64,7 @@ func quotedTableName(table replication.TableID) string {
 // The SELECT clause is always "*" rather than an explicit column list, since
 // this package doesn't know the full column list at this layer; callers are
 // responsible for decoding whatever columns come back.
-func buildChunkQuery(table replication.TableID, pkColsUnquoted []string, lower, upper replication.PrimaryKey, limit int) (query string, args []any, err error) {
+func buildChunkQuery(table incrementalsnapshot.TableID, pkColsUnquoted []string, lower, upper incrementalsnapshot.PrimaryKey, limit int) (query string, args []any, err error) {
 	if len(pkColsUnquoted) == 0 {
 		return "", nil, errors.New("buildChunkQuery: no primary key columns provided")
 	}
@@ -100,7 +100,7 @@ func buildChunkQuery(table replication.TableID, pkColsUnquoted []string, lower, 
 
 // buildMaxKeyQuery builds a query to fetch the table's current maximum
 // primary key (ORDER BY pk DESC LIMIT 1).
-func buildMaxKeyQuery(table replication.TableID, pkColsUnquoted []string) (query string, err error) {
+func buildMaxKeyQuery(table incrementalsnapshot.TableID, pkColsUnquoted []string) (query string, err error) {
 	if len(pkColsUnquoted) == 0 {
 		return "", errors.New("buildMaxKeyQuery: no primary key columns provided")
 	}

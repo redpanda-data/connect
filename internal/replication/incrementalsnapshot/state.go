@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package replication
+package incrementalsnapshot
 
 // CurrentStateVersion is bumped manually whenever the State shape changes in
 // a way that requires migration handling by callers.

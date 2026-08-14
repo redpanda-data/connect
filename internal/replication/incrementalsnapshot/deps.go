@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package replication
+package incrementalsnapshot
 
 import (
 	"context"
@@ -66,7 +66,7 @@ func (c Config) Validate() error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("replication: missing required Deps function(s): %v", missing)
+		return fmt.Errorf("incrementalsnapshot: missing required Deps function(s): %v", missing)
 	}
 
 	return nil

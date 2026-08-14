@@ -6,14 +6,14 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-// Package replication provides database-agnostic building blocks shared by
-// connectors implementing Debezium-style incremental snapshotting: table and
-// primary-key identifiers, a dedup window buffer, resumable checkpoint
-// state, and the Deps injection contract a per-database coordinator depends
-// on. It has zero dependency on any concrete database driver -- every
-// side-effecting operation (querying a database, resolving primary keys,
-// etc.) is injected by the caller.
-package replication
+// Package incrementalsnapshot provides database-agnostic building blocks
+// shared by connectors implementing Debezium-style incremental
+// snapshotting: table and primary-key identifiers, a dedup window buffer,
+// resumable checkpoint state, and the Deps injection contract a
+// per-database coordinator depends on. It has zero dependency on any
+// concrete database driver -- every side-effecting operation (querying a
+// database, resolving primary keys, etc.) is injected by the caller.
+package incrementalsnapshot
 
 import "fmt"
 

@@ -17,7 +17,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/replication"
+	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 // IncrementalSnapshotConfig configures Debezium-style incremental
@@ -31,7 +31,7 @@ type IncrementalSnapshotConfig struct {
 	ChunkSize int
 	// ResumeState, if non-nil, resumes a previously persisted incremental
 	// snapshot from where it left off instead of starting fresh.
-	ResumeState *replication.State
+	ResumeState *incrementalsnapshot.State
 }
 
 // Config is the configuration for the pglogicalstream plugin

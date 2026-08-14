@@ -28,7 +28,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/license"
-	"github.com/redpanda-data/connect/v4/internal/replication"
+	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 const (
@@ -904,7 +904,7 @@ func (p *pgStreamInput) flushBatch(
 // loadIncrementalSnapshotState reads the persisted incremental snapshot
 // checkpoint from checkpointCache, if any. A missing key means there's no
 // checkpoint yet (fresh start), not an error.
-func (p *pgStreamInput) loadIncrementalSnapshotState(ctx context.Context) (*replication.State, error) {
+func (p *pgStreamInput) loadIncrementalSnapshotState(ctx context.Context) (*incrementalsnapshot.State, error) {
 	var (
 		cacheVal []byte
 		cErr     error
@@ -921,7 +921,7 @@ func (p *pgStreamInput) loadIncrementalSnapshotState(ctx context.Context) (*repl
 	} else if cacheVal == nil {
 		return nil, nil
 	}
-	state := new(replication.State)
+	state := new(incrementalsnapshot.State)
 	if err := json.Unmarshal(cacheVal, state); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal incremental snapshot checkpoint: %w", err)
 	}

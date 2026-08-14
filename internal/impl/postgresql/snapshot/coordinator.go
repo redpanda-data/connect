@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/redpanda-data/connect/v4/internal/replication"
+	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 // Coordinator drives Debezium's read-only incremental snapshot algorithm:
@@ -31,22 +31,22 @@ import (
 // single-threaded design -- and should not be "fixed" by introducing
 // concurrency here.
 type Coordinator struct {
-	cfg replication.Config
+	cfg incrementalsnapshot.Config
 
 	// resume holds the state passed to NewCoordinator until Start consumes
 	// it; nil once Start has run.
-	resume *replication.State
+	resume *incrementalsnapshot.State
 
-	remaining    []replication.TableID
-	current      *replication.TableID
+	remaining    []incrementalsnapshot.TableID
+	current      *incrementalsnapshot.TableID
 	pkCols       map[string][]string
-	maxPK        replication.PrimaryKey
-	lastSentPK   replication.PrimaryKey
+	maxPK        incrementalsnapshot.PrimaryKey
+	lastSentPK   incrementalsnapshot.PrimaryKey
 	low          Watermark
 	high         Watermark
 	windowOpened bool
 	done         bool
-	window       *replication.WindowBuffer
+	window       *incrementalsnapshot.WindowBuffer
 
 	// committed mirrors remaining/current/maxPK/lastSentPK, but only ever
 	// advances when a chunk is actually flushed (see OnCommit and Start). It
@@ -57,16 +57,16 @@ type Coordinator struct {
 	// will simply refetch them. Without this split, a resumed coordinator
 	// would silently skip any chunk that was fetched but not yet flushed at
 	// the moment State() was last captured.
-	committedRemaining  []replication.TableID
-	committedCurrent    *replication.TableID
-	committedMaxPK      replication.PrimaryKey
-	committedLastSentPK replication.PrimaryKey
+	committedRemaining  []incrementalsnapshot.TableID
+	committedCurrent    *incrementalsnapshot.TableID
+	committedMaxPK      incrementalsnapshot.PrimaryKey
+	committedLastSentPK incrementalsnapshot.PrimaryKey
 }
 
 // NewCoordinator constructs a Coordinator. If resume is non-nil, the
 // coordinator picks up where that state left off once Start is called;
 // otherwise it starts fresh from cfg.Tables.
-func NewCoordinator(cfg replication.Config, resume *replication.State) (*Coordinator, error) {
+func NewCoordinator(cfg incrementalsnapshot.Config, resume *incrementalsnapshot.State) (*Coordinator, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func NewCoordinator(cfg replication.Config, resume *replication.State) (*Coordin
 		cfg:    cfg,
 		resume: resume.Clone(),
 		pkCols: make(map[string][]string),
-		window: replication.NewWindowBuffer(),
+		window: incrementalsnapshot.NewWindowBuffer(),
 	}, nil
 }
 
@@ -150,7 +150,7 @@ func (c *Coordinator) Done() bool {
 // incremental snapshot for primary-key-changing updates; consumers should
 // treat incremental snapshot rows as idempotent upserts by primary key, as
 // is standard CDC practice.
-func (c *Coordinator) OnStreamedRow(table replication.TableID, pk replication.PrimaryKey) (removed bool) {
+func (c *Coordinator) OnStreamedRow(table incrementalsnapshot.TableID, pk incrementalsnapshot.PrimaryKey) (removed bool) {
 	if c.done || c.current == nil || table != *c.current {
 		return false
 	}
@@ -161,7 +161,7 @@ func (c *Coordinator) OnStreamedRow(table replication.TableID, pk replication.Pr
 // table(s) it touched) with that transaction's txid. txid == 0 is treated as
 // "unknown/no-op": some callers may not always have a txid available (e.g.
 // empty transactions), and such calls must never open or close the window.
-func (c *Coordinator) OnCommit(ctx context.Context, txid uint64) (emitted []replication.Row, changed bool, err error) {
+func (c *Coordinator) OnCommit(ctx context.Context, txid uint64) (emitted []incrementalsnapshot.Row, changed bool, err error) {
 	if c.done || txid == 0 {
 		return nil, false, nil
 	}
@@ -199,12 +199,12 @@ func (c *Coordinator) OnCommit(ctx context.Context, txid uint64) (emitted []repl
 // zero rows, which never buffers anything into window, so there is never an
 // unflushed chunk hiding behind it -- it's always safe to report Done
 // immediately, even on a round where committed hasn't caught up to done yet.
-func (c *Coordinator) State() *replication.State {
+func (c *Coordinator) State() *incrementalsnapshot.State {
 	if c.done {
-		return &replication.State{Version: replication.CurrentStateVersion, Done: true}
+		return &incrementalsnapshot.State{Version: incrementalsnapshot.CurrentStateVersion, Done: true}
 	}
-	s := &replication.State{
-		Version:         replication.CurrentStateVersion,
+	s := &incrementalsnapshot.State{
+		Version:         incrementalsnapshot.CurrentStateVersion,
 		CurrentTable:    c.committedCurrent,
 		LastSentPK:      c.committedLastSentPK,
 		MaxPK:           c.committedMaxPK,
@@ -290,7 +290,7 @@ func (c *Coordinator) planNextChunk(ctx context.Context) error {
 	}
 }
 
-func (c *Coordinator) resolvePKCols(ctx context.Context, table replication.TableID) ([]string, error) {
+func (c *Coordinator) resolvePKCols(ctx context.Context, table incrementalsnapshot.TableID) ([]string, error) {
 	key := table.String()
 	if cols, exists := c.pkCols[key]; exists {
 		return cols, nil
@@ -304,7 +304,7 @@ func (c *Coordinator) resolvePKCols(ctx context.Context, table replication.Table
 	return cols, nil
 }
 
-func (c *Coordinator) resolveMaxPK(ctx context.Context, table replication.TableID, pkCols []string) error {
+func (c *Coordinator) resolveMaxPK(ctx context.Context, table incrementalsnapshot.TableID, pkCols []string) error {
 	if c.maxPK != nil {
 		return nil
 	}
@@ -324,7 +324,7 @@ func (c *Coordinator) resolveMaxPK(ctx context.Context, table replication.TableI
 
 // resolveFreshWatermark forces a fresh transaction before resolving the
 // watermark, since a long-lived connection may otherwise observe a stale
-// snapshot (e.g. under REPEATABLE READ isolation). replication.Deps.
+// snapshot (e.g. under REPEATABLE READ isolation). incrementalsnapshot.Deps.
 // ResolveWatermark returns an opaque any (the watermark shape is
 // database-specific), so this is also the one place that type-asserts it
 // back to the concrete Postgres Watermark this package's algorithm actually
