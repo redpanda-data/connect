@@ -11,12 +11,13 @@ input:
       # - products
       - cart
     slot_name: bench_slot
+    heartbeat_interval: 1s
     batching:
       count: 1000
       period: 1s
     incremental_snapshot:
         enabled: true
-        chunk_size: 10
+        chunk_size: 100
         checkpoint_cache: snap_cache
 
 cache_resources:
