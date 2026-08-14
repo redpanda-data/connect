@@ -37,7 +37,13 @@ type segmentCheckpoint struct {
 }
 
 type segmentAckState struct {
-	tracker *checkpoint.Uncapped[segmentCheckpoint]
+	// persistMu serializes the whole resolve+compute+write+commit sequence
+	// for one segment. Acks for a segment's batches arrive on concurrent
+	// pipeline goroutines: without this, two acks can both trip the persist
+	// check and race their store writes, landing an older position (or a
+	// Complete=false row) over a newer one. Always acquired before t.mu.
+	persistMu sync.Mutex
+	tracker   *checkpoint.Uncapped[segmentCheckpoint]
 	// frontier is the highest contiguous acked checkpoint.
 	frontier    segmentCheckpoint
 	hasFrontier bool
@@ -99,10 +105,18 @@ func (t *snapshotAckTracker) TrackBatch(segment int, lastKey map[string]dynamodb
 func (t *snapshotAckTracker) Ack(ctx context.Context, segment, n int, resolve func() *segmentCheckpoint) error {
 	t.mu.Lock()
 	st, ok := t.segments[segment]
+	t.mu.Unlock()
 	if !ok {
-		t.mu.Unlock()
 		return nil
 	}
+
+	// One ack at a time per segment, held across the store write: each
+	// persist is computed after the previous write finished, so the durable
+	// row can only move forward, and the interval check cannot double-fire.
+	st.persistMu.Lock()
+	defer st.persistMu.Unlock()
+
+	t.mu.Lock()
 	if fr := resolve(); fr != nil {
 		st.frontier = *fr
 		st.hasFrontier = true
@@ -123,6 +137,7 @@ func (t *snapshotAckTracker) Ack(ctx context.Context, segment, n int, resolve fu
 			records = st.ackedRecords
 		}
 	}
+	ackedAtCompute := st.ackedBatches
 	t.mu.Unlock()
 
 	if toPersist == nil {
@@ -142,7 +157,7 @@ func (t *snapshotAckTracker) Ack(ctx context.Context, segment, n int, resolve fu
 	}
 
 	t.mu.Lock()
-	st.persistedBatches = st.ackedBatches
+	st.persistedBatches = ackedAtCompute
 	if toPersist.complete {
 		st.persistedComplete = true
 	}

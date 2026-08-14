@@ -533,7 +533,6 @@ credentials:
 	assert.NotEmpty(t, batch2, "Should read new events after resumption")
 }
 
-// TestIntegrationDynamoDBSnapshot tests snapshot functionality.
 // TestIntegrationDynamoDBSnapshotAckGate verifies that snapshot progress and
 // completion are gated on downstream acks: a crash after the scan has read
 // (and emitted) everything but before acknowledgement must leave no snapshot
@@ -654,6 +653,7 @@ credentials:
 	}
 }
 
+// TestIntegrationDynamoDBSnapshot tests snapshot functionality.
 func TestIntegrationDynamoDBSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 

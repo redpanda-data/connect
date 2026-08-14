@@ -11,6 +11,7 @@ package dynamodb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"testing"
@@ -163,6 +164,44 @@ func TestSnapshotAckTracker(t *testing.T) {
 		got := store.recorded()
 		require.Len(t, got, 1)
 		require.Equal(t, "k2", keyVal(got[0].lastKey))
+	})
+
+	t.Run("concurrent acks never persist positions out of order", func(t *testing.T) {
+		// Acks arrive on concurrent pipeline goroutines. Each persist must be
+		// computed after the previous store write finished, otherwise a stale
+		// in-flight write can land over a newer position (or overwrite the
+		// Complete=true row). interval 1 makes every ack a persist candidate.
+		tracker, store := newTestSnapshotAckTracker(1)
+
+		const batches = 200
+		resolves := make([]func() *segmentCheckpoint, batches)
+		keys := make([]string, batches)
+		for i := range batches {
+			keys[i] = fmt.Sprintf("k%06d", i)
+			resolves[i] = tracker.TrackBatch(7, scanKey(keys[i]), 1)
+		}
+
+		var wg sync.WaitGroup
+		for i := range batches {
+			wg.Go(func() {
+				require.NoError(t, tracker.Ack(ctx, 7, 1, resolves[i]))
+			})
+		}
+		wg.Wait()
+		require.NoError(t, tracker.SealSegment(ctx, 7))
+
+		got := store.recorded()
+		require.NotEmpty(t, got)
+		prev := ""
+		for i, u := range got {
+			if u.lastKey == nil {
+				require.Equal(t, len(got)-1, i, "Complete=true must be the final write, nothing may land after it")
+				continue
+			}
+			k := keyVal(u.lastKey)
+			require.GreaterOrEqual(t, k, prev, "persisted position regressed at write %d: %q after %q", i, k, prev)
+			prev = k
+		}
 	})
 
 	t.Run("a never-acked batch pins the segment forever", func(t *testing.T) {
