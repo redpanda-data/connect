@@ -676,7 +676,11 @@ func snapshotAckFn(resolve func() *bson.Raw) service.AckFunc {
 	return func(_ context.Context, _ error) error {
 		resumeToken := resolve()
 		if resumeToken != nil && *resumeToken != nil {
-			return fmt.Errorf("unexpected resume token for snapshot batch: %s", resumeToken.String())
+			// Snapshot slots are tracked with a nil token (only streaming
+			// slots carry one), so a token here means snapshot and streaming
+			// acks were misrouted in the checkpoint tracker - a regression,
+			// not an operational error.
+			return fmt.Errorf("invariant violation: snapshot batch resolved with resume token %s, which only streaming batches carry; snapshot and streaming acks were misrouted in the checkpoint tracker", resumeToken.String())
 		}
 		return nil
 	}
