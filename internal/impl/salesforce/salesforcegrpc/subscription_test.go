@@ -170,3 +170,68 @@ func TestReceiveLoopBlockedSendEscapesOnClose(t *testing.T) {
 	}
 	require.Zero(t, s.eventsDropped.Load())
 }
+
+// TestRecordDecodeFailure verifies the consecutive-failure bookkeeping: the
+// count trips only after maxConsecutiveDecodeFailures failures at the SAME
+// replay position, resets when the failing position changes, and clears on a
+// successful decode.
+func TestRecordDecodeFailure(t *testing.T) {
+	s := &Subscription{}
+
+	for i := range maxConsecutiveDecodeFailures - 1 {
+		require.False(t, s.recordDecodeFailure([]byte{0x01}), "failure %d must not trip the bound", i+1)
+	}
+	require.True(t, s.recordDecodeFailure([]byte{0x01}), "failure %d at one position must trip the bound", maxConsecutiveDecodeFailures)
+
+	// A different position starts a fresh count.
+	require.False(t, s.recordDecodeFailure([]byte{0x02}), "a new position must reset the count")
+
+	// A successful decode clears everything.
+	s.clearDecodeFailures()
+	for i := range maxConsecutiveDecodeFailures - 1 {
+		require.False(t, s.recordDecodeFailure([]byte{0x02}), "failure %d after a clear must not trip the bound", i+1)
+	}
+	require.True(t, s.recordDecodeFailure([]byte{0x02}))
+}
+
+// TestReceiveLoopTerminalDecodeFailure verifies that once an event at one
+// replay position has exhausted the consecutive decode-failure bound, the
+// receive loop fails the stream terminally - streamErr surfaces the failure
+// and no reconnect is attempted - instead of redelivering forever.
+func TestReceiveLoopTerminalDecodeFailure(t *testing.T) {
+	streamCtx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s := newBackpressureTestSubscription(t, streamCtx, 1, 1)
+	// Feed an undecodable payload for the known schema.
+	s.stream = &fakeSubscribeStream{
+		ctx: streamCtx,
+		queue: []*FetchResponse{{
+			Events: []*ConsumerEvent{{
+				Event:    &ProducerEvent{SchemaId: "s1", Payload: []byte{0xff}},
+				ReplayId: []byte{0x2a},
+			}},
+			PendingNumRequested: 1,
+		}},
+	}
+	// This position has already failed on every prior redelivery; the next
+	// failure exhausts the bound. (Earlier failures exercise the reconnect
+	// path, which needs a real Pub/Sub connection - covered by the counting
+	// test above.)
+	s.decodeFailures = maxConsecutiveDecodeFailures - 1
+	s.decodeFailureReplayID = []byte{0x2a}
+
+	go s.receiveLoop(t.Context(), streamCtx)
+
+	select {
+	case <-s.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("receive loop did not exit on a terminal decode failure")
+	}
+	require.ErrorContains(t, s.StreamErr(), "permanently undecodable",
+		"the exhausted bound must surface a terminal stream error")
+	s.mu.Lock()
+	require.Equal(t, StreamStateDisconnected, s.state)
+	s.mu.Unlock()
+	require.Zero(t, s.reconnectCount.Load(), "a terminal decode failure must not reconnect")
+}

@@ -9,6 +9,7 @@
 package salesforcegrpc
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -30,6 +31,14 @@ import (
 // provides safety margin without meaningfully slowing startup.
 const subscribeSettleDelay = 5 * time.Second
 
+// maxConsecutiveDecodeFailures bounds redelivery attempts for an event whose
+// schema fetch or Avro decode keeps failing at the same replay position. Each
+// failure reconnects and redelivers the batch (transient schema-fetch errors
+// heal that way); once the same position has failed this many times in a row
+// the payload is treated as permanently undecodable and the stream fails
+// loudly instead of redelivering the batch prefix forever.
+const maxConsecutiveDecodeFailures = 5
+
 // Subscription owns one subscribe stream for a single Pub/Sub topic. It reuses
 // the parent Client's connection, auth, and schema cache.
 type Subscription struct {
@@ -46,6 +55,11 @@ type Subscription struct {
 	ready        chan struct{}
 	streamErr    error
 	state        StreamState
+	// decodeFailures counts consecutive schema/decode failures at
+	// decodeFailureReplayID; guarded by mu. Reset on any successful decode or
+	// when the failing position changes.
+	decodeFailures        int
+	decodeFailureReplayID []byte
 
 	// Atomic counters for health reporting.
 	eventsReceived     atomic.Int64
@@ -126,6 +140,47 @@ func (s *Subscription) connectLocked(ctx context.Context) error {
 	return nil
 }
 
+// failDecode routes a schema/decode failure: reconnect-and-redeliver while
+// the position is under the consecutive-failure bound, terminal stream
+// failure once it is exceeded.
+func (s *Subscription) failDecode(replayID []byte, failStream func(error), err error) {
+	if !s.recordDecodeFailure(replayID) {
+		failStream(err)
+		return
+	}
+	terminalErr := fmt.Errorf("decoding event at replay position %x: %d consecutive failures, treating as permanently undecodable: %w", replayID, maxConsecutiveDecodeFailures, err)
+	s.lastError.Store(terminalErr)
+	s.lastErrorTime.Store(time.Now().UnixNano())
+	s.mu.Lock()
+	s.streamErr = terminalErr
+	s.state = StreamStateDisconnected
+	s.mu.Unlock()
+	s.client.log.Errorf("Pub/Sub stream failed permanently (topic=%s): %v", s.config.TopicName, terminalErr)
+}
+
+// recordDecodeFailure counts a schema/decode failure at the given replay
+// position and reports whether the position has now failed
+// maxConsecutiveDecodeFailures times in a row.
+func (s *Subscription) recordDecodeFailure(replayID []byte) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !bytes.Equal(replayID, s.decodeFailureReplayID) {
+		s.decodeFailureReplayID = append([]byte(nil), replayID...)
+		s.decodeFailures = 0
+	}
+	s.decodeFailures++
+	return s.decodeFailures >= maxConsecutiveDecodeFailures
+}
+
+// clearDecodeFailures resets the consecutive-failure count after a
+// successful decode.
+func (s *Subscription) clearDecodeFailures() {
+	s.mu.Lock()
+	s.decodeFailures = 0
+	s.decodeFailureReplayID = nil
+	s.mu.Unlock()
+}
+
 // receiveLoop reads from the gRPC stream and pushes decoded events into the
 // buffer. On stream errors it attempts reconnection with backoff instead of
 // exiting. streamCtx is this stream's cancellation context: it unblocks a
@@ -188,22 +243,25 @@ func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 			// A schema fetch or decode failure must not skip the event: the
 			// batch's replay ID would advance past it and the event would be
 			// silently lost. Reconnect instead — lastReplayID still points
-			// before this batch, so it is redelivered. Transient failures
-			// (schema fetch) heal on retry; a genuinely undecodable event
-			// stalls the topic loudly rather than vanishing.
+			// before this batch, so it is redelivered and transient failures
+			// (schema fetch) heal on retry. Redelivery is bounded: once the
+			// same position fails maxConsecutiveDecodeFailures times in a row
+			// the stream fails terminally (streamErr is surfaced through the
+			// health tick) instead of re-emitting the batch prefix forever.
 			schema, err := s.client.schemaCache.GetSchema(ctx, event.SchemaId)
 			if err != nil {
 				s.eventsDecodeErrors.Add(1)
-				failStream(fmt.Errorf("get schema for event (schemaID=%s): %w", event.SchemaId, err))
+				s.failDecode(consumerEvent.ReplayId, failStream, fmt.Errorf("get schema for event (schemaID=%s): %w", event.SchemaId, err))
 				return
 			}
 
 			decoded, err := DecodeAvroPayload(schema, event.Payload)
 			if err != nil {
 				s.eventsDecodeErrors.Add(1)
-				failStream(fmt.Errorf("decode Avro payload (schemaID=%s): %w", event.SchemaId, err))
+				s.failDecode(consumerEvent.ReplayId, failStream, fmt.Errorf("decode Avro payload (schemaID=%s): %w", event.SchemaId, err))
 				return
 			}
+			s.clearDecodeFailures()
 
 			pubsubEvent := &PubSubEvent{
 				ReplayID:   consumerEvent.ReplayId,
