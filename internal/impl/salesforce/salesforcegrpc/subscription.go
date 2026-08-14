@@ -172,12 +172,18 @@ func (s *Subscription) recordDecodeFailure(replayID []byte) bool {
 	return s.decodeFailures >= maxConsecutiveDecodeFailures
 }
 
-// clearDecodeFailures resets the consecutive-failure count after a
-// successful decode.
-func (s *Subscription) clearDecodeFailures() {
+// clearDecodeFailures resets the consecutive-failure count when the event at
+// the tracked failing position decodes successfully. Successes at OTHER
+// positions must not reset it: a reconnect redelivers the whole batch, so the
+// decodable events preceding a permanently undecodable one succeed on every
+// redelivery cycle - clearing on any success would keep the count oscillating
+// below the bound forever.
+func (s *Subscription) clearDecodeFailures(replayID []byte) {
 	s.mu.Lock()
-	s.decodeFailures = 0
-	s.decodeFailureReplayID = nil
+	if s.decodeFailureReplayID != nil && bytes.Equal(replayID, s.decodeFailureReplayID) {
+		s.decodeFailures = 0
+		s.decodeFailureReplayID = nil
+	}
 	s.mu.Unlock()
 }
 
@@ -261,7 +267,7 @@ func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 				s.failDecode(consumerEvent.ReplayId, failStream, fmt.Errorf("decode Avro payload (schemaID=%s): %w", event.SchemaId, err))
 				return
 			}
-			s.clearDecodeFailures()
+			s.clearDecodeFailures(consumerEvent.ReplayId)
 
 			pubsubEvent := &PubSubEvent{
 				ReplayID:   consumerEvent.ReplayId,

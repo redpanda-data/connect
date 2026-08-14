@@ -186,12 +186,24 @@ func TestRecordDecodeFailure(t *testing.T) {
 	// A different position starts a fresh count.
 	require.False(t, s.recordDecodeFailure([]byte{0x02}), "a new position must reset the count")
 
-	// A successful decode clears everything.
-	s.clearDecodeFailures()
+	// A successful decode at the FAILING position clears everything.
+	s.clearDecodeFailures([]byte{0x02})
 	for i := range maxConsecutiveDecodeFailures - 1 {
 		require.False(t, s.recordDecodeFailure([]byte{0x02}), "failure %d after a clear must not trip the bound", i+1)
 	}
 	require.True(t, s.recordDecodeFailure([]byte{0x02}))
+
+	// A success at an UNRELATED position must NOT clear the tracked failure:
+	// reconnects redeliver the whole batch, so decodable events before an
+	// undecodable one succeed on every cycle - clearing on them would keep the
+	// count below the bound forever.
+	s.clearDecodeFailures([]byte{0x02})
+	for i := range maxConsecutiveDecodeFailures - 1 {
+		require.False(t, s.recordDecodeFailure([]byte{0x03}), "failure %d must not trip the bound", i+1)
+		s.clearDecodeFailures([]byte{0x01}) // prefix event succeeding again
+	}
+	require.True(t, s.recordDecodeFailure([]byte{0x03}),
+		"an unrelated success must not reset the failing position's count")
 }
 
 // TestReceiveLoopTerminalDecodeFailure verifies that once an event at one
@@ -233,5 +245,47 @@ func TestReceiveLoopTerminalDecodeFailure(t *testing.T) {
 	s.mu.Lock()
 	require.Equal(t, StreamStateDisconnected, s.state)
 	s.mu.Unlock()
+	require.Zero(t, s.reconnectCount.Load(), "a terminal decode failure must not reconnect")
+}
+
+// TestReceiveLoopTerminalDecodeFailureAfterDecodablePrefix verifies the bound
+// still trips when the undecodable event is preceded by a decodable one in the
+// same batch - the realistic BatchSize>1 shape. Each redelivery decodes the
+// prefix successfully; that success must not reset the failing event's count.
+func TestReceiveLoopTerminalDecodeFailureAfterDecodablePrefix(t *testing.T) {
+	streamCtx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s := newBackpressureTestSubscription(t, streamCtx, 1, 2)
+
+	schema, err := avro.Parse(testSchemaJSON)
+	require.NoError(t, err)
+	goodPayload, err := schema.Encode(map[string]any{"EventUuid": "u-good"})
+	require.NoError(t, err)
+
+	s.stream = &fakeSubscribeStream{
+		ctx: streamCtx,
+		queue: []*FetchResponse{{
+			Events: []*ConsumerEvent{
+				{Event: &ProducerEvent{SchemaId: "s1", Payload: goodPayload}, ReplayId: []byte{0x01}},
+				{Event: &ProducerEvent{SchemaId: "s1", Payload: []byte{0xff}}, ReplayId: []byte{0x2a}},
+			},
+			PendingNumRequested: 1,
+		}},
+	}
+	// The undecodable event has already failed on every prior redelivery; this
+	// delivery decodes the prefix again and then exhausts the bound.
+	s.decodeFailures = maxConsecutiveDecodeFailures - 1
+	s.decodeFailureReplayID = []byte{0x2a}
+
+	go s.receiveLoop(t.Context(), streamCtx)
+
+	select {
+	case <-s.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("receive loop did not exit on a terminal decode failure")
+	}
+	require.ErrorContains(t, s.StreamErr(), "permanently undecodable",
+		"the decodable prefix must not reset the failing event's count")
 	require.Zero(t, s.reconnectCount.Load(), "a terminal decode failure must not reconnect")
 }
