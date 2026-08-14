@@ -6,14 +6,14 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-// Package snapshot implements Debezium's read-only incremental snapshot
-// algorithm for Postgres, decoupled from any concrete driver. The package is
-// pure algorithm: every side effect (querying Postgres, resolving primary
-// keys, etc.) is injected via the Deps struct in deps.go, so this package has
-// zero dependency on pgx, database/sql, or the pglogicalstream package. This
-// keeps the dependency graph acyclic: pglogicalstream imports snapshot, never
-// the reverse.
-package snapshot
+// Package replication provides database-agnostic building blocks shared by
+// connectors implementing Debezium-style incremental snapshotting: table and
+// primary-key identifiers, a dedup window buffer, resumable checkpoint
+// state, and the Deps injection contract a per-database coordinator depends
+// on. It has zero dependency on any concrete database driver -- every
+// side-effecting operation (querying a database, resolving primary keys,
+// etc.) is injected by the caller.
+package replication
 
 import "fmt"
 

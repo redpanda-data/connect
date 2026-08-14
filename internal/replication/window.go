@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package snapshot
+package replication
 
 import (
 	"fmt"
@@ -35,22 +35,23 @@ func newWindowKey(table TableID, pk PrimaryKey) windowKey {
 	return windowKey(b.String())
 }
 
-// windowBuffer is an ordered, deduplicated buffer of Rows keyed by (table,
+// WindowBuffer is an ordered, deduplicated buffer of Rows keyed by (table,
 // primary key). Rows are held in the order they were added; Remove excises a
 // row from the middle without disturbing the order of the rest.
-type windowBuffer struct {
+type WindowBuffer struct {
 	rows    []Row
 	indexOf map[windowKey]int
 }
 
-func newWindowBuffer() *windowBuffer {
-	return &windowBuffer{
+// NewWindowBuffer constructs an empty WindowBuffer.
+func NewWindowBuffer() *WindowBuffer {
+	return &WindowBuffer{
 		indexOf: make(map[windowKey]int),
 	}
 }
 
 // Add appends a row to the buffer, preserving insertion order.
-func (w *windowBuffer) Add(row Row) {
+func (w *WindowBuffer) Add(row Row) {
 	key := newWindowKey(row.Table, row.PK)
 	w.indexOf[key] = len(w.rows)
 	w.rows = append(w.rows, row)
@@ -58,7 +59,7 @@ func (w *windowBuffer) Add(row Row) {
 
 // Remove excises the row matching table and pk from the buffer, if present.
 // It returns true if a row was removed.
-func (w *windowBuffer) Remove(table TableID, pk PrimaryKey) bool {
+func (w *WindowBuffer) Remove(table TableID, pk PrimaryKey) bool {
 	key := newWindowKey(table, pk)
 	idx, exists := w.indexOf[key]
 	if !exists {
@@ -80,7 +81,7 @@ func (w *windowBuffer) Remove(table TableID, pk PrimaryKey) bool {
 
 // Flush returns the buffered rows in original insertion order and clears the
 // buffer.
-func (w *windowBuffer) Flush() []Row {
+func (w *WindowBuffer) Flush() []Row {
 	rows := w.rows
 	w.rows = nil
 	w.indexOf = make(map[windowKey]int)
@@ -88,6 +89,6 @@ func (w *windowBuffer) Flush() []Row {
 }
 
 // Len returns the number of rows currently buffered.
-func (w *windowBuffer) Len() int {
+func (w *WindowBuffer) Len() int {
 	return len(w.rows)
 }

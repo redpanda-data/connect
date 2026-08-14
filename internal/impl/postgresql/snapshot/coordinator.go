@@ -12,6 +12,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
+
+	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
 // Coordinator drives Debezium's read-only incremental snapshot algorithm:
@@ -29,22 +31,22 @@ import (
 // single-threaded design -- and should not be "fixed" by introducing
 // concurrency here.
 type Coordinator struct {
-	cfg Config
+	cfg replication.Config
 
 	// resume holds the state passed to NewCoordinator until Start consumes
 	// it; nil once Start has run.
-	resume *State
+	resume *replication.State
 
-	remaining    []TableID
-	current      *TableID
+	remaining    []replication.TableID
+	current      *replication.TableID
 	pkCols       map[string][]string
-	maxPK        PrimaryKey
-	lastSentPK   PrimaryKey
+	maxPK        replication.PrimaryKey
+	lastSentPK   replication.PrimaryKey
 	low          Watermark
 	high         Watermark
 	windowOpened bool
 	done         bool
-	window       *windowBuffer
+	window       *replication.WindowBuffer
 
 	// committed mirrors remaining/current/maxPK/lastSentPK, but only ever
 	// advances when a chunk is actually flushed (see OnCommit and Start). It
@@ -55,17 +57,17 @@ type Coordinator struct {
 	// will simply refetch them. Without this split, a resumed coordinator
 	// would silently skip any chunk that was fetched but not yet flushed at
 	// the moment State() was last captured.
-	committedRemaining  []TableID
-	committedCurrent    *TableID
-	committedMaxPK      PrimaryKey
-	committedLastSentPK PrimaryKey
+	committedRemaining  []replication.TableID
+	committedCurrent    *replication.TableID
+	committedMaxPK      replication.PrimaryKey
+	committedLastSentPK replication.PrimaryKey
 }
 
 // NewCoordinator constructs a Coordinator. If resume is non-nil, the
 // coordinator picks up where that state left off once Start is called;
 // otherwise it starts fresh from cfg.Tables.
-func NewCoordinator(cfg Config, resume *State) (*Coordinator, error) {
-	if err := cfg.validate(); err != nil {
+func NewCoordinator(cfg replication.Config, resume *replication.State) (*Coordinator, error) {
+	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -73,7 +75,7 @@ func NewCoordinator(cfg Config, resume *State) (*Coordinator, error) {
 		cfg:    cfg,
 		resume: resume.Clone(),
 		pkCols: make(map[string][]string),
-		window: newWindowBuffer(),
+		window: replication.NewWindowBuffer(),
 	}, nil
 }
 
@@ -148,7 +150,7 @@ func (c *Coordinator) Done() bool {
 // incremental snapshot for primary-key-changing updates; consumers should
 // treat incremental snapshot rows as idempotent upserts by primary key, as
 // is standard CDC practice.
-func (c *Coordinator) OnStreamedRow(table TableID, pk PrimaryKey) (removed bool) {
+func (c *Coordinator) OnStreamedRow(table replication.TableID, pk replication.PrimaryKey) (removed bool) {
 	if c.done || c.current == nil || table != *c.current {
 		return false
 	}
@@ -159,7 +161,7 @@ func (c *Coordinator) OnStreamedRow(table TableID, pk PrimaryKey) (removed bool)
 // table(s) it touched) with that transaction's txid. txid == 0 is treated as
 // "unknown/no-op": some callers may not always have a txid available (e.g.
 // empty transactions), and such calls must never open or close the window.
-func (c *Coordinator) OnCommit(ctx context.Context, txid uint64) (emitted []Row, changed bool, err error) {
+func (c *Coordinator) OnCommit(ctx context.Context, txid uint64) (emitted []replication.Row, changed bool, err error) {
 	if c.done || txid == 0 {
 		return nil, false, nil
 	}
@@ -197,12 +199,12 @@ func (c *Coordinator) OnCommit(ctx context.Context, txid uint64) (emitted []Row,
 // zero rows, which never buffers anything into window, so there is never an
 // unflushed chunk hiding behind it -- it's always safe to report Done
 // immediately, even on a round where committed hasn't caught up to done yet.
-func (c *Coordinator) State() *State {
+func (c *Coordinator) State() *replication.State {
 	if c.done {
-		return &State{Version: currentStateVersion, Done: true}
+		return &replication.State{Version: replication.CurrentStateVersion, Done: true}
 	}
-	s := &State{
-		Version:         currentStateVersion,
+	s := &replication.State{
+		Version:         replication.CurrentStateVersion,
 		CurrentTable:    c.committedCurrent,
 		LastSentPK:      c.committedLastSentPK,
 		MaxPK:           c.committedMaxPK,
@@ -288,7 +290,7 @@ func (c *Coordinator) planNextChunk(ctx context.Context) error {
 	}
 }
 
-func (c *Coordinator) resolvePKCols(ctx context.Context, table TableID) ([]string, error) {
+func (c *Coordinator) resolvePKCols(ctx context.Context, table replication.TableID) ([]string, error) {
 	key := table.String()
 	if cols, exists := c.pkCols[key]; exists {
 		return cols, nil
@@ -302,7 +304,7 @@ func (c *Coordinator) resolvePKCols(ctx context.Context, table TableID) ([]strin
 	return cols, nil
 }
 
-func (c *Coordinator) resolveMaxPK(ctx context.Context, table TableID, pkCols []string) error {
+func (c *Coordinator) resolveMaxPK(ctx context.Context, table replication.TableID, pkCols []string) error {
 	if c.maxPK != nil {
 		return nil
 	}
@@ -322,14 +324,22 @@ func (c *Coordinator) resolveMaxPK(ctx context.Context, table TableID, pkCols []
 
 // resolveFreshWatermark forces a fresh transaction before resolving the
 // watermark, since a long-lived connection may otherwise observe a stale
-// snapshot (e.g. under REPEATABLE READ isolation).
+// snapshot (e.g. under REPEATABLE READ isolation). replication.Deps.
+// ResolveWatermark returns an opaque any (the watermark shape is
+// database-specific), so this is also the one place that type-asserts it
+// back to the concrete Postgres Watermark this package's algorithm actually
+// operates on.
 func (c *Coordinator) resolveFreshWatermark(ctx context.Context) (Watermark, error) {
 	if err := c.cfg.Deps.ForceFreshTransaction(ctx); err != nil {
 		return Watermark{}, fmt.Errorf("forcing fresh transaction: %w", err)
 	}
-	wm, err := c.cfg.Deps.ResolveWatermark(ctx)
+	wmAny, err := c.cfg.Deps.ResolveWatermark(ctx)
 	if err != nil {
 		return Watermark{}, fmt.Errorf("resolving watermark: %w", err)
+	}
+	wm, ok := wmAny.(Watermark)
+	if !ok {
+		return Watermark{}, fmt.Errorf("resolving watermark: Deps.ResolveWatermark returned %T, expected snapshot.Watermark", wmAny)
 	}
 	return wm, nil
 }

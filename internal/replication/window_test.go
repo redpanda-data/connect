@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package snapshot
+package replication
 
 import (
 	"testing"
@@ -17,7 +17,7 @@ import (
 
 func TestWindowBufferInsertionOrderPreserved(t *testing.T) {
 	table := TableID{Schema: "public", Table: "orders"}
-	w := newWindowBuffer()
+	w := NewWindowBuffer()
 
 	rows := []Row{
 		{Table: table, PK: PrimaryKey{1}, Data: map[string]any{"v": "a"}},
@@ -34,7 +34,7 @@ func TestWindowBufferInsertionOrderPreserved(t *testing.T) {
 
 func TestWindowBufferRemoveAbsentIsNoop(t *testing.T) {
 	table := TableID{Schema: "public", Table: "orders"}
-	w := newWindowBuffer()
+	w := NewWindowBuffer()
 	w.Add(Row{Table: table, PK: PrimaryKey{1}})
 
 	removed := w.Remove(table, PrimaryKey{999})
@@ -44,7 +44,7 @@ func TestWindowBufferRemoveAbsentIsNoop(t *testing.T) {
 
 func TestWindowBufferFlushClearsBuffer(t *testing.T) {
 	table := TableID{Schema: "public", Table: "orders"}
-	w := newWindowBuffer()
+	w := NewWindowBuffer()
 	w.Add(Row{Table: table, PK: PrimaryKey{1}})
 
 	first := w.Flush()
@@ -57,7 +57,7 @@ func TestWindowBufferFlushClearsBuffer(t *testing.T) {
 
 func TestWindowBufferCompositePrimaryKeys(t *testing.T) {
 	table := TableID{Schema: "public", Table: "orders"}
-	w := newWindowBuffer()
+	w := NewWindowBuffer()
 
 	rowA := Row{Table: table, PK: PrimaryKey{1, "a"}, Data: map[string]any{"v": "row-a"}}
 	rowB := Row{Table: table, PK: PrimaryKey{1, "b"}, Data: map[string]any{"v": "row-b"}}
@@ -75,7 +75,7 @@ func TestWindowBufferCompositePrimaryKeys(t *testing.T) {
 
 func TestWindowBufferRemoveMiddlePreservesOrderOfRest(t *testing.T) {
 	table := TableID{Schema: "public", Table: "orders"}
-	w := newWindowBuffer()
+	w := NewWindowBuffer()
 
 	rowA := Row{Table: table, PK: PrimaryKey{1}}
 	rowB := Row{Table: table, PK: PrimaryKey{2}}
@@ -92,7 +92,7 @@ func TestWindowBufferRemoveMiddlePreservesOrderOfRest(t *testing.T) {
 func TestWindowBufferDifferentTablesSamePKAreDistinct(t *testing.T) {
 	tableA := TableID{Schema: "public", Table: "orders"}
 	tableB := TableID{Schema: "public", Table: "customers"}
-	w := newWindowBuffer()
+	w := NewWindowBuffer()
 
 	rowA := Row{Table: tableA, PK: PrimaryKey{1}}
 	rowB := Row{Table: tableB, PK: PrimaryKey{1}}

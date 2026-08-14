@@ -6,17 +6,18 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package snapshot
+package replication
 
-// currentStateVersion is bumped manually whenever the State shape changes in
+// CurrentStateVersion is bumped manually whenever the State shape changes in
 // a way that requires migration handling by callers.
-const currentStateVersion = 1
+const CurrentStateVersion = 1
 
-// State is the resumable, persistable state of a Coordinator. Callers are
-// expected to serialize this (e.g. to JSON) as a checkpoint and pass it back
-// into NewCoordinator to resume after a restart. Watermarks are deliberately
-// not part of this struct: they must always be re-derived fresh on resume,
-// never reused, since a persisted watermark could be arbitrarily stale.
+// State is the resumable, persistable state of an incremental snapshot
+// coordinator. Callers are expected to serialize this (e.g. to JSON) as a
+// checkpoint and pass it back in to resume after a restart. Watermarks are
+// deliberately not part of this struct: they must always be re-derived
+// fresh on resume, never reused, since a persisted watermark could be
+// arbitrarily stale.
 type State struct {
 	Version         int        `json:"version"`
 	Done            bool       `json:"done"`

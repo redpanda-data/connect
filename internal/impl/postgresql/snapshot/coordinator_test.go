@@ -15,6 +15,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
 // mockTable is a hand-rolled fixture describing the fake rows a table
@@ -22,8 +24,8 @@ import (
 // real database.
 type mockTable struct {
 	pkCols []string
-	rows   []Row // full ordered set of rows in the table, PK-ascending
-	maxPK  PrimaryKey
+	rows   []replication.Row // full ordered set of rows in the table, PK-ascending
+	maxPK  replication.PrimaryKey
 }
 
 // scriptedMockDeps builds a Deps that serves chunk data purely from an
@@ -52,15 +54,15 @@ func (m *scriptedMockDeps) pushWatermark(wm Watermark) {
 	m.watermarks = append(m.watermarks, wm)
 }
 
-func (m *scriptedMockDeps) deps(chunkSize int) Deps {
-	return Deps{
-		ResolvePrimaryKey: func(_ context.Context, table TableID) ([]string, error) {
+func (m *scriptedMockDeps) deps(chunkSize int) replication.Deps {
+	return replication.Deps{
+		ResolvePrimaryKey: func(_ context.Context, table replication.TableID) ([]string, error) {
 			return m.tables[table.String()].pkCols, nil
 		},
-		ResolveMaxKey: func(_ context.Context, table TableID, _ []string, _ string) (PrimaryKey, error) {
+		ResolveMaxKey: func(_ context.Context, table replication.TableID, _ []string, _ string) (replication.PrimaryKey, error) {
 			return m.tables[table.String()].maxPK, nil
 		},
-		ResolveWatermark: func(context.Context) (Watermark, error) {
+		ResolveWatermark: func(context.Context) (any, error) {
 			idx := m.watermarkCalls
 			if idx >= len(m.watermarks) {
 				idx = len(m.watermarks) - 1
@@ -72,7 +74,7 @@ func (m *scriptedMockDeps) deps(chunkSize int) Deps {
 			m.forceFreshCalls++
 			return nil
 		},
-		FetchChunk: func(_ context.Context, table TableID, _ []string, _ string, _ []any) ([]Row, error) {
+		FetchChunk: func(_ context.Context, table replication.TableID, _ []string, _ string, _ []any) ([]replication.Row, error) {
 			key := table.String()
 			mt := m.tables[key]
 			start := m.cursor[key]
@@ -87,30 +89,30 @@ func (m *scriptedMockDeps) deps(chunkSize int) Deps {
 	}
 }
 
-func rowFor(table TableID, pk int) Row {
-	return Row{
+func rowFor(table replication.TableID, pk int) replication.Row {
+	return replication.Row{
 		Table: table,
-		PK:    PrimaryKey{pk},
+		PK:    replication.PrimaryKey{pk},
 		Data:  map[string]any{"id": pk},
 	}
 }
 
 func TestCoordinator_FullScenario(t *testing.T) {
-	tableA := TableID{Schema: "public", Table: "a"}
-	tableB := TableID{Schema: "public", Table: "b"}
+	tableA := replication.TableID{Schema: "public", Table: "a"}
+	tableB := replication.TableID{Schema: "public", Table: "b"}
 
 	const chunkSize = 3
 
 	// Table A has exactly one full chunk (3 rows) then a short/empty
 	// follow-up (0 rows) - exercises the "advance on zero rows" path.
-	rowsA := []Row{rowFor(tableA, 1), rowFor(tableA, 2), rowFor(tableA, 3)}
+	rowsA := []replication.Row{rowFor(tableA, 1), rowFor(tableA, 2), rowFor(tableA, 3)}
 	// Table B has fewer rows than a full chunk (2 rows) - exercises the
 	// "advance on short chunk" path in the same pass rows are buffered.
-	rowsB := []Row{rowFor(tableB, 10), rowFor(tableB, 11)}
+	rowsB := []replication.Row{rowFor(tableB, 10), rowFor(tableB, 11)}
 
 	mock := newScriptedMockDeps(map[string]*mockTable{
-		tableA.String(): {pkCols: []string{"id"}, rows: rowsA, maxPK: PrimaryKey{3}},
-		tableB.String(): {pkCols: []string{"id"}, rows: rowsB, maxPK: PrimaryKey{11}},
+		tableA.String(): {pkCols: []string{"id"}, rows: rowsA, maxPK: replication.PrimaryKey{3}},
+		tableB.String(): {pkCols: []string{"id"}, rows: rowsB, maxPK: replication.PrimaryKey{11}},
 	})
 
 	// Watermark sequence: low/high pair for table A's full chunk, then
@@ -123,8 +125,8 @@ func TestCoordinator_FullScenario(t *testing.T) {
 	mock.pushWatermark(Watermark{Xmin: 120, Xmax: 120}) // low, B chunk 1
 	mock.pushWatermark(Watermark{Xmin: 125, Xmax: 125}) // high, B chunk 1
 
-	cfg := Config{
-		Tables:    []TableID{tableA, tableB},
+	cfg := replication.Config{
+		Tables:    []replication.TableID{tableA, tableB},
 		ChunkSize: chunkSize,
 		Deps:      mock.deps(chunkSize),
 	}
@@ -136,16 +138,16 @@ func TestCoordinator_FullScenario(t *testing.T) {
 	require.False(t, coord.Done())
 	require.NotNil(t, coord.current)
 	assert.Equal(t, tableA, *coord.current)
-	assert.Equal(t, PrimaryKey{3}, coord.lastSentPK)
+	assert.Equal(t, replication.PrimaryKey{3}, coord.lastSentPK)
 	assert.Equal(t, 3, coord.window.Len())
 
 	// Simulate the replication stream delivering a fresher version of row
 	// PK=2 while it's still sitting in the buffered window.
-	removed := coord.OnStreamedRow(tableA, PrimaryKey{2})
+	removed := coord.OnStreamedRow(tableA, replication.PrimaryKey{2})
 	assert.True(t, removed)
 
 	// A streamed row for a different table must never touch the window.
-	removedOther := coord.OnStreamedRow(tableB, PrimaryKey{999})
+	removedOther := coord.OnStreamedRow(tableB, replication.PrimaryKey{999})
 	assert.False(t, removedOther)
 
 	// txid below low.Xmin: window must not open yet.
@@ -180,8 +182,8 @@ func TestCoordinator_FullScenario(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, changed)
 	require.Len(t, emitted, 2)
-	assert.Equal(t, PrimaryKey{1}, emitted[0].PK)
-	assert.Equal(t, PrimaryKey{3}, emitted[1].PK)
+	assert.Equal(t, replication.PrimaryKey{1}, emitted[0].PK)
+	assert.Equal(t, replication.PrimaryKey{3}, emitted[1].PK)
 
 	// Table A's zero-row follow-up chunk should have advanced us straight to
 	// table B, whose chunk (2 rows) was short (< chunkSize=3). Since a short
@@ -189,7 +191,7 @@ func TestCoordinator_FullScenario(t *testing.T) {
 	// reset to nil immediately (skipping a wasted zero-row round-trip on the
 	// next advance) rather than continuing to point at table B.
 	assert.Nil(t, coord.current)
-	assert.Equal(t, PrimaryKey{11}, coord.lastSentPK)
+	assert.Equal(t, replication.PrimaryKey{11}, coord.lastSentPK)
 	assert.Equal(t, 2, coord.window.Len())
 
 	// Drive table B's window open/close cycle using the watermarks pushed
@@ -206,8 +208,8 @@ func TestCoordinator_FullScenario(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, changed)
 	require.Len(t, emitted, 2)
-	assert.Equal(t, PrimaryKey{10}, emitted[0].PK)
-	assert.Equal(t, PrimaryKey{11}, emitted[1].PK)
+	assert.Equal(t, replication.PrimaryKey{10}, emitted[0].PK)
+	assert.Equal(t, replication.PrimaryKey{11}, emitted[1].PK)
 
 	// Table B's chunk was short, so planNextChunk should have advanced
 	// straight to "no more tables" and marked the coordinator done, without
@@ -216,17 +218,17 @@ func TestCoordinator_FullScenario(t *testing.T) {
 }
 
 func TestCoordinator_ZeroRowAdvanceBetweenTables(t *testing.T) {
-	tableA := TableID{Schema: "public", Table: "a"}
-	tableB := TableID{Schema: "public", Table: "b"}
+	tableA := replication.TableID{Schema: "public", Table: "a"}
+	tableB := replication.TableID{Schema: "public", Table: "b"}
 
 	const chunkSize = 2
 
-	rowsA := []Row{rowFor(tableA, 1), rowFor(tableA, 2)}
-	rowsB := []Row{rowFor(tableB, 5), rowFor(tableB, 6)}
+	rowsA := []replication.Row{rowFor(tableA, 1), rowFor(tableA, 2)}
+	rowsB := []replication.Row{rowFor(tableB, 5), rowFor(tableB, 6)}
 
 	mock := newScriptedMockDeps(map[string]*mockTable{
-		tableA.String(): {pkCols: []string{"id"}, rows: rowsA, maxPK: PrimaryKey{2}},
-		tableB.String(): {pkCols: []string{"id"}, rows: rowsB, maxPK: PrimaryKey{6}},
+		tableA.String(): {pkCols: []string{"id"}, rows: rowsA, maxPK: replication.PrimaryKey{2}},
+		tableB.String(): {pkCols: []string{"id"}, rows: rowsB, maxPK: replication.PrimaryKey{6}},
 	})
 
 	// A's only chunk is exactly chunkSize (2 rows) so it is NOT short - the
@@ -242,8 +244,8 @@ func TestCoordinator_ZeroRowAdvanceBetweenTables(t *testing.T) {
 	mock.pushWatermark(Watermark{Xmin: 16, Xmax: 16})
 	mock.pushWatermark(Watermark{Xmin: 17, Xmax: 17})
 
-	cfg := Config{
-		Tables:    []TableID{tableA, tableB},
+	cfg := replication.Config{
+		Tables:    []replication.TableID{tableA, tableB},
 		ChunkSize: chunkSize,
 		Deps:      mock.deps(chunkSize),
 	}
@@ -286,7 +288,7 @@ func TestCoordinator_ZeroRowAdvanceBetweenTables(t *testing.T) {
 }
 
 func TestCoordinator_OnCommitNoopsWhenDone(t *testing.T) {
-	cfg := Config{
+	cfg := replication.Config{
 		Tables:    nil,
 		ChunkSize: 10,
 		Deps:      newScriptedMockDeps(map[string]*mockTable{}).deps(10),
@@ -302,27 +304,27 @@ func TestCoordinator_OnCommitNoopsWhenDone(t *testing.T) {
 	assert.False(t, changed)
 	assert.Nil(t, emitted)
 
-	assert.False(t, coord.OnStreamedRow(TableID{Schema: "public", Table: "a"}, PrimaryKey{1}))
+	assert.False(t, coord.OnStreamedRow(replication.TableID{Schema: "public", Table: "a"}, replication.PrimaryKey{1}))
 }
 
 func TestCoordinator_ResumeAlwaysDerivesFreshWatermark(t *testing.T) {
-	tableA := TableID{Schema: "public", Table: "a"}
-	tableB := TableID{Schema: "public", Table: "b"}
+	tableA := replication.TableID{Schema: "public", Table: "a"}
+	tableB := replication.TableID{Schema: "public", Table: "b"}
 
 	const chunkSize = 2
 
-	rowsA := []Row{rowFor(tableA, 1), rowFor(tableA, 2)}
-	rowsB := []Row{rowFor(tableB, 5)}
+	rowsA := []replication.Row{rowFor(tableA, 1), rowFor(tableA, 2)}
+	rowsB := []replication.Row{rowFor(tableB, 5)}
 
 	mock := newScriptedMockDeps(map[string]*mockTable{
-		tableA.String(): {pkCols: []string{"id"}, rows: rowsA, maxPK: PrimaryKey{2}},
-		tableB.String(): {pkCols: []string{"id"}, rows: rowsB, maxPK: PrimaryKey{5}},
+		tableA.String(): {pkCols: []string{"id"}, rows: rowsA, maxPK: replication.PrimaryKey{2}},
+		tableB.String(): {pkCols: []string{"id"}, rows: rowsB, maxPK: replication.PrimaryKey{5}},
 	})
 	mock.pushWatermark(Watermark{Xmin: 1, Xmax: 1})
 	mock.pushWatermark(Watermark{Xmin: 2, Xmax: 2})
 
-	cfg := Config{
-		Tables:    []TableID{tableA, tableB},
+	cfg := replication.Config{
+		Tables:    []replication.TableID{tableA, tableB},
 		ChunkSize: chunkSize,
 		Deps:      mock.deps(chunkSize),
 	}
@@ -341,7 +343,7 @@ func TestCoordinator_ResumeAlwaysDerivesFreshWatermark(t *testing.T) {
 	state := coord.State()
 	require.False(t, state.Done)
 	assert.Nil(t, state.CurrentTable)
-	assert.Equal(t, []TableID{tableA, tableB}, state.RemainingTables)
+	assert.Equal(t, []replication.TableID{tableA, tableB}, state.RemainingTables)
 
 	// New watermarks for the "restart".
 	mock.pushWatermark(Watermark{Xmin: 3, Xmax: 3})
@@ -366,7 +368,7 @@ func TestCoordinator_ResumeAlwaysDerivesFreshWatermark(t *testing.T) {
 // permanently skips) a chunk that was fetched but never flushed before a
 // simulated crash. Assumes single-column int primary keys, which is all this
 // test needs.
-func sortedRowsAfter(rows []Row, lower PrimaryKey, limit int) []Row {
+func sortedRowsAfter(rows []replication.Row, lower replication.PrimaryKey, limit int) []replication.Row {
 	start := 0
 	if lower != nil {
 		start = len(rows)
@@ -390,10 +392,10 @@ func sortedRowsAfter(rows []Row, lower PrimaryKey, limit int) []Row {
 // pins down the fix: State() must only ever advance once a chunk has
 // actually been flushed.
 func TestCoordinator_ResumeRefetchesUnflushedChunk(t *testing.T) {
-	tableA := TableID{Schema: "public", Table: "a"}
+	tableA := replication.TableID{Schema: "public", Table: "a"}
 	const chunkSize = 2
-	rowsA := []Row{rowFor(tableA, 1), rowFor(tableA, 2), rowFor(tableA, 3), rowFor(tableA, 4)}
-	maxPK := PrimaryKey{4}
+	rowsA := []replication.Row{rowFor(tableA, 1), rowFor(tableA, 2), rowFor(tableA, 3), rowFor(tableA, 4)}
+	maxPK := replication.PrimaryKey{4}
 
 	watermarks := []Watermark{
 		{Xmin: 1, Xmax: 1}, {Xmin: 2, Xmax: 2}, // chunk 1 ([1,2]): low, high
@@ -402,26 +404,28 @@ func TestCoordinator_ResumeRefetchesUnflushedChunk(t *testing.T) {
 	var watermarkCalls int
 	var fetchLog []string
 
-	deps := Deps{
-		ResolvePrimaryKey:     func(context.Context, TableID) ([]string, error) { return []string{"id"}, nil },
-		ResolveMaxKey:         func(context.Context, TableID, []string, string) (PrimaryKey, error) { return maxPK, nil },
+	deps := replication.Deps{
+		ResolvePrimaryKey: func(context.Context, replication.TableID) ([]string, error) { return []string{"id"}, nil },
+		ResolveMaxKey: func(context.Context, replication.TableID, []string, string) (replication.PrimaryKey, error) {
+			return maxPK, nil
+		},
 		ForceFreshTransaction: func(context.Context) error { return nil },
-		ResolveWatermark: func(context.Context) (Watermark, error) {
+		ResolveWatermark: func(context.Context) (any, error) {
 			idx := min(watermarkCalls, len(watermarks)-1)
 			watermarkCalls++
 			return watermarks[idx], nil
 		},
-		FetchChunk: func(_ context.Context, _ TableID, _ []string, _ string, args []any) ([]Row, error) {
-			var lower PrimaryKey
+		FetchChunk: func(_ context.Context, _ replication.TableID, _ []string, _ string, args []any) ([]replication.Row, error) {
+			var lower replication.PrimaryKey
 			if len(args) > 1 {
-				lower = PrimaryKey{args[0]}
+				lower = replication.PrimaryKey{args[0]}
 			}
 			fetchLog = append(fetchLog, fmt.Sprint(lower))
 			return sortedRowsAfter(rowsA, lower, chunkSize), nil
 		},
 	}
 
-	cfg := Config{Tables: []TableID{tableA}, ChunkSize: chunkSize, Deps: deps}
+	cfg := replication.Config{Tables: []replication.TableID{tableA}, ChunkSize: chunkSize, Deps: deps}
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
@@ -435,8 +439,8 @@ func TestCoordinator_ResumeRefetchesUnflushedChunk(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, changed)
 	require.Len(t, emitted, 2)
-	assert.Equal(t, PrimaryKey{1}, emitted[0].PK)
-	assert.Equal(t, PrimaryKey{2}, emitted[1].PK)
+	assert.Equal(t, replication.PrimaryKey{1}, emitted[0].PK)
+	assert.Equal(t, replication.PrimaryKey{2}, emitted[1].PK)
 
 	// "Crash" here: chunk 2 ([3,4]) has been fetched into the window but
 	// never flushed. The checkpoint must reflect only chunk 1.
@@ -444,7 +448,7 @@ func TestCoordinator_ResumeRefetchesUnflushedChunk(t *testing.T) {
 	require.False(t, state.Done)
 	require.NotNil(t, state.CurrentTable)
 	assert.Equal(t, tableA, *state.CurrentTable)
-	assert.Equal(t, PrimaryKey{2}, state.LastSentPK)
+	assert.Equal(t, replication.PrimaryKey{2}, state.LastSentPK)
 	require.Len(t, fetchLog, 2, "sanity: exactly one FetchChunk call for chunk 1's fetch so far")
 
 	resumed, err := NewCoordinator(cfg, state)
@@ -458,27 +462,27 @@ func TestCoordinator_ResumeRefetchesUnflushedChunk(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, changed)
 	require.Len(t, emitted, 2, "chunk 2's rows must still be emitted exactly once, on the resumed coordinator")
-	assert.Equal(t, PrimaryKey{3}, emitted[0].PK)
-	assert.Equal(t, PrimaryKey{4}, emitted[1].PK)
+	assert.Equal(t, replication.PrimaryKey{3}, emitted[0].PK)
+	assert.Equal(t, replication.PrimaryKey{4}, emitted[1].PK)
 }
 
 func TestCoordinator_ConfigValidation(t *testing.T) {
 	validDeps := newScriptedMockDeps(map[string]*mockTable{}).deps(1)
 
 	t.Run("zero chunk size", func(t *testing.T) {
-		_, err := NewCoordinator(Config{ChunkSize: 0, Deps: validDeps}, nil)
+		_, err := NewCoordinator(replication.Config{ChunkSize: 0, Deps: validDeps}, nil)
 		require.Error(t, err)
 	})
 
 	t.Run("negative chunk size", func(t *testing.T) {
-		_, err := NewCoordinator(Config{ChunkSize: -1, Deps: validDeps}, nil)
+		_, err := NewCoordinator(replication.Config{ChunkSize: -1, Deps: validDeps}, nil)
 		require.Error(t, err)
 	})
 
 	t.Run("missing dep", func(t *testing.T) {
 		deps := validDeps
 		deps.FetchChunk = nil
-		_, err := NewCoordinator(Config{ChunkSize: 1, Deps: deps}, nil)
+		_, err := NewCoordinator(replication.Config{ChunkSize: 1, Deps: deps}, nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "FetchChunk")
 	})

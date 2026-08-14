@@ -15,6 +15,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/snapshot"
+	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
 // setupIncrementalSnapshot wires a snapshot.Coordinator into the stream when
@@ -40,8 +41,8 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 		tableNames = config.DBTables
 	}
 
-	tables := make([]snapshot.TableID, 0, len(tableNames))
-	tableSet := make(map[snapshot.TableID]struct{}, len(tableNames))
+	tables := make([]replication.TableID, 0, len(tableNames))
+	tableSet := make(map[replication.TableID]struct{}, len(tableNames))
 	for _, name := range tableNames {
 		table, err := normalizeTableID(config.DBSchema, name)
 		if err != nil {
@@ -56,13 +57,20 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 	s.incrementalPKCache = make(map[string][]string)
 	s.incrementalSnapshotTables = tableSet
 
-	coordinator, err := snapshot.NewCoordinator(snapshot.Config{
+	coordinator, err := snapshot.NewCoordinator(replication.Config{
 		Tables:    tables,
 		ChunkSize: isConf.ChunkSize,
-		Deps: snapshot.Deps{
-			ResolvePrimaryKey:     s.resolveIncrementalPK,
-			ResolveMaxKey:         s.resolveIncrementalMaxKey,
-			ResolveWatermark:      s.resolveIncrementalWatermark,
+		Deps: replication.Deps{
+			ResolvePrimaryKey: s.resolveIncrementalPK,
+			ResolveMaxKey:     s.resolveIncrementalMaxKey,
+			// Deps.ResolveWatermark returns an opaque any (the watermark
+			// shape is database-specific); resolveIncrementalWatermark
+			// itself returns the concrete Postgres snapshot.Watermark this
+			// package's coordinator expects, so it's wrapped here to satisfy
+			// the generic signature.
+			ResolveWatermark: func(ctx context.Context) (any, error) {
+				return s.resolveIncrementalWatermark(ctx)
+			},
 			ForceFreshTransaction: s.forceFreshIncrementalTransaction,
 			FetchChunk:            s.fetchIncrementalChunk,
 		},
@@ -79,34 +87,34 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 }
 
 // normalizeTableID applies the same identifier normalization NewPgStream uses
-// for DBSchema/DBTables, then unquotes the result, since snapshot.TableID
+// for DBSchema/DBTables, then unquotes the result, since replication.TableID
 // must hold unquoted names (matching the raw schema/table postgres reports
 // on replication messages, which this must line up against).
-func normalizeTableID(schemaRaw, tableRaw string) (snapshot.TableID, error) {
+func normalizeTableID(schemaRaw, tableRaw string) (replication.TableID, error) {
 	schemaNorm, err := sanitize.NormalizePostgresIdentifier(schemaRaw)
 	if err != nil {
-		return snapshot.TableID{}, fmt.Errorf("invalid schema name %q: %w", schemaRaw, err)
+		return replication.TableID{}, fmt.Errorf("invalid schema name %q: %w", schemaRaw, err)
 	}
 	tableNorm, err := sanitize.NormalizePostgresIdentifier(tableRaw)
 	if err != nil {
-		return snapshot.TableID{}, fmt.Errorf("invalid table name %q: %w", tableRaw, err)
+		return replication.TableID{}, fmt.Errorf("invalid table name %q: %w", tableRaw, err)
 	}
 	schema, err := sanitize.UnquotePostgresIdentifier(schemaNorm)
 	if err != nil {
-		return snapshot.TableID{}, fmt.Errorf("unquoting normalized schema name %q: %w", schemaNorm, err)
+		return replication.TableID{}, fmt.Errorf("unquoting normalized schema name %q: %w", schemaNorm, err)
 	}
 	table, err := sanitize.UnquotePostgresIdentifier(tableNorm)
 	if err != nil {
-		return snapshot.TableID{}, fmt.Errorf("unquoting normalized table name %q: %w", tableNorm, err)
+		return replication.TableID{}, fmt.Errorf("unquoting normalized table name %q: %w", tableNorm, err)
 	}
-	return snapshot.TableID{Schema: schema, Table: table}, nil
+	return replication.TableID{Schema: schema, Table: table}, nil
 }
 
 // incrementalPKColumns resolves and caches the unquoted primary key columns
 // for table. It backs both the coordinator's ResolvePrimaryKey dependency and
 // incrementalStreamedRowPK, which needs the same columns independently since
 // OnStreamedRow only accepts an already-built PrimaryKey, never column names.
-func (s *Stream) incrementalPKColumns(ctx context.Context, table snapshot.TableID) ([]string, error) {
+func (s *Stream) incrementalPKColumns(ctx context.Context, table replication.TableID) ([]string, error) {
 	key := table.String()
 	if cols, exists := s.incrementalPKCache[key]; exists {
 		return cols, nil
@@ -133,30 +141,30 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table snapshot.TableI
 	return cols, nil
 }
 
-// resolveIncrementalPK implements snapshot.Deps.ResolvePrimaryKey.
-func (s *Stream) resolveIncrementalPK(ctx context.Context, table snapshot.TableID) ([]string, error) {
+// resolveIncrementalPK implements replication.Deps.ResolvePrimaryKey.
+func (s *Stream) resolveIncrementalPK(ctx context.Context, table replication.TableID) ([]string, error) {
 	return s.incrementalPKColumns(ctx, table)
 }
 
-// incrementalStreamedRowPK builds the snapshot.PrimaryKey for a streamed DML
-// row so it can be passed to Coordinator.OnStreamedRow, which itself only
-// accepts already-extracted primary key values.
-func (s *Stream) incrementalStreamedRowPK(ctx context.Context, table snapshot.TableID, data any) (snapshot.PrimaryKey, error) {
+// incrementalStreamedRowPK builds the replication.PrimaryKey for a streamed
+// DML row so it can be passed to Coordinator.OnStreamedRow, which itself
+// only accepts already-extracted primary key values.
+func (s *Stream) incrementalStreamedRowPK(ctx context.Context, table replication.TableID, data any) (replication.PrimaryKey, error) {
 	pkCols, err := s.incrementalPKColumns(ctx, table)
 	if err != nil {
 		return nil, err
 	}
 
 	values, _ := data.(map[string]any)
-	pk := make(snapshot.PrimaryKey, len(pkCols))
+	pk := make(replication.PrimaryKey, len(pkCols))
 	for i, col := range pkCols {
 		pk[i] = values[col]
 	}
 	return pk, nil
 }
 
-// resolveIncrementalMaxKey implements snapshot.Deps.ResolveMaxKey.
-func (s *Stream) resolveIncrementalMaxKey(ctx context.Context, table snapshot.TableID, pkCols []string, query string) (snapshot.PrimaryKey, error) {
+// resolveIncrementalMaxKey implements replication.Deps.ResolveMaxKey.
+func (s *Stream) resolveIncrementalMaxKey(ctx context.Context, table replication.TableID, pkCols []string, query string) (replication.PrimaryKey, error) {
 	rows, err := s.incrementalDB.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("querying max key for table %s: %w", table, err)
@@ -180,7 +188,7 @@ func (s *Stream) resolveIncrementalMaxKey(ctx context.Context, table snapshot.Ta
 		return nil, fmt.Errorf("scanning max key row for table %s: %w", table, err)
 	}
 
-	pk := make(snapshot.PrimaryKey, len(pkCols))
+	pk := make(replication.PrimaryKey, len(pkCols))
 	for i, getter := range valueGetters {
 		val, err := getter(scanArgs[i])
 		if err != nil {
@@ -191,7 +199,9 @@ func (s *Stream) resolveIncrementalMaxKey(ctx context.Context, table snapshot.Ta
 	return pk, nil
 }
 
-// resolveIncrementalWatermark implements snapshot.Deps.ResolveWatermark.
+// resolveIncrementalWatermark implements the concrete Postgres side of
+// replication.Deps.ResolveWatermark (wrapped in setupIncrementalSnapshot to
+// satisfy that field's opaque any signature).
 func (s *Stream) resolveIncrementalWatermark(ctx context.Context) (snapshot.Watermark, error) {
 	var raw string
 	if err := s.incrementalDB.QueryRowContext(ctx, "SELECT txid_current_snapshot()").Scan(&raw); err != nil {
@@ -204,7 +214,7 @@ func (s *Stream) resolveIncrementalWatermark(ctx context.Context) (snapshot.Wate
 	return wm, nil
 }
 
-// forceFreshIncrementalTransaction implements snapshot.Deps.ForceFreshTransaction.
+// forceFreshIncrementalTransaction implements replication.Deps.ForceFreshTransaction.
 func (s *Stream) forceFreshIncrementalTransaction(ctx context.Context) error {
 	var txid uint64
 	if err := s.incrementalDB.QueryRowContext(ctx, "SELECT txid_current()").Scan(&txid); err != nil {
@@ -213,8 +223,8 @@ func (s *Stream) forceFreshIncrementalTransaction(ctx context.Context) error {
 	return nil
 }
 
-// fetchIncrementalChunk implements snapshot.Deps.FetchChunk.
-func (s *Stream) fetchIncrementalChunk(ctx context.Context, table snapshot.TableID, pkCols []string, query string, args []any) ([]snapshot.Row, error) {
+// fetchIncrementalChunk implements replication.Deps.FetchChunk.
+func (s *Stream) fetchIncrementalChunk(ctx context.Context, table replication.TableID, pkCols []string, query string, args []any) ([]replication.Row, error) {
 	rows, err := s.incrementalDB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("fetching chunk for table %s: %w", table, err)
@@ -241,7 +251,7 @@ func (s *Stream) fetchIncrementalChunk(ctx context.Context, table snapshot.Table
 		}
 	}
 
-	var result []snapshot.Row
+	var result []replication.Row
 	for rows.Next() {
 		if err := rows.Scan(scanArgs...); err != nil {
 			return nil, fmt.Errorf("scanning row for table %s: %w", table, err)
@@ -256,12 +266,12 @@ func (s *Stream) fetchIncrementalChunk(ctx context.Context, table snapshot.Table
 			data[columnNames[i]] = val
 		}
 
-		pk := make(snapshot.PrimaryKey, len(pkCols))
+		pk := make(replication.PrimaryKey, len(pkCols))
 		for i, pos := range pkPositions {
 			pk[i] = data[columnNames[pos]]
 		}
 
-		result = append(result, snapshot.Row{
+		result = append(result, replication.Row{
 			Table:        table,
 			PK:           pk,
 			Data:         data,
@@ -280,7 +290,7 @@ func (s *Stream) fetchIncrementalChunk(ctx context.Context, table snapshot.Table
 // the coordinator's state can advance without any rows being flushed (e.g.
 // every buffered row having already been deduplicated against the
 // replication stream).
-func buildIncrementalSnapshotMessages(emitted []snapshot.Row, state []byte) []StreamMessage {
+func buildIncrementalSnapshotMessages(emitted []replication.Row, state []byte) []StreamMessage {
 	if len(emitted) == 0 {
 		return []StreamMessage{{
 			Operation:                IncrementalSnapshotCheckpointOpType,

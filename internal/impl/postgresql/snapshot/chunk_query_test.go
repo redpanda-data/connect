@@ -13,12 +13,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
 func TestBuildChunkQueryFirstChunkSingleColumnPK(t *testing.T) {
-	table := TableID{Schema: "public", Table: "orders"}
+	table := replication.TableID{Schema: "public", Table: "orders"}
 
-	query, args, err := buildChunkQuery(table, []string{"id"}, nil, PrimaryKey{100}, 500)
+	query, args, err := buildChunkQuery(table, []string{"id"}, nil, replication.PrimaryKey{100}, 500)
 	require.NoError(t, err)
 
 	assert.Equal(
@@ -30,13 +32,13 @@ func TestBuildChunkQueryFirstChunkSingleColumnPK(t *testing.T) {
 }
 
 func TestBuildChunkQuerySubsequentChunkCompositePK(t *testing.T) {
-	table := TableID{Schema: "public", Table: "line_items"}
+	table := replication.TableID{Schema: "public", Table: "line_items"}
 
 	query, args, err := buildChunkQuery(
 		table,
 		[]string{"order_id", "line_no"},
-		PrimaryKey{5, 2},
-		PrimaryKey{50, 9},
+		replication.PrimaryKey{5, 2},
+		replication.PrimaryKey{50, 9},
 		250,
 	)
 	require.NoError(t, err)
@@ -50,21 +52,21 @@ func TestBuildChunkQuerySubsequentChunkCompositePK(t *testing.T) {
 }
 
 func TestBuildChunkQueryNilUpperIsError(t *testing.T) {
-	table := TableID{Schema: "public", Table: "orders"}
+	table := replication.TableID{Schema: "public", Table: "orders"}
 
 	_, _, err := buildChunkQuery(table, []string{"id"}, nil, nil, 500)
 	require.Error(t, err)
 }
 
 func TestBuildChunkQueryNoPKColumnsIsError(t *testing.T) {
-	table := TableID{Schema: "public", Table: "orders"}
+	table := replication.TableID{Schema: "public", Table: "orders"}
 
-	_, _, err := buildChunkQuery(table, nil, nil, PrimaryKey{1}, 500)
+	_, _, err := buildChunkQuery(table, nil, nil, replication.PrimaryKey{1}, 500)
 	require.Error(t, err)
 }
 
 func TestBuildMaxKeyQuery(t *testing.T) {
-	table := TableID{Schema: "public", Table: "orders"}
+	table := replication.TableID{Schema: "public", Table: "orders"}
 
 	query, err := buildMaxKeyQuery(table, []string{"id"})
 	require.NoError(t, err)
@@ -72,7 +74,7 @@ func TestBuildMaxKeyQuery(t *testing.T) {
 }
 
 func TestBuildMaxKeyQueryCompositePK(t *testing.T) {
-	table := TableID{Schema: "public", Table: "line_items"}
+	table := replication.TableID{Schema: "public", Table: "line_items"}
 
 	query, err := buildMaxKeyQuery(table, []string{"order_id", "line_no"})
 	require.NoError(t, err)
@@ -84,7 +86,7 @@ func TestBuildMaxKeyQueryCompositePK(t *testing.T) {
 }
 
 func TestBuildMaxKeyQueryNoPKColumnsIsError(t *testing.T) {
-	table := TableID{Schema: "public", Table: "orders"}
+	table := replication.TableID{Schema: "public", Table: "orders"}
 
 	_, err := buildMaxKeyQuery(table, nil)
 	require.Error(t, err)

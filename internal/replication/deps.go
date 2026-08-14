@@ -6,39 +6,44 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package snapshot
+package replication
 
 import (
 	"context"
 	"fmt"
 )
 
-// Deps injects every side-effecting operation the Coordinator needs, so
-// this package stays free of any concrete database driver dependency.
+// Deps injects every side-effecting operation an incremental snapshot
+// coordinator needs, so the coordinator implementation stays free of any
+// concrete database driver dependency.
 type Deps struct {
 	// ResolvePrimaryKey returns the primary key columns (unquoted) for the
 	// given table.
 	ResolvePrimaryKey func(ctx context.Context, table TableID) (columns []string, err error)
-	// ResolveMaxKey executes the query produced by buildMaxKeyQuery and
-	// returns the table's current maximum primary key.
+	// ResolveMaxKey executes the query produced by the caller's chunk-query
+	// builder and returns the table's current maximum primary key.
 	ResolveMaxKey func(ctx context.Context, table TableID, pkColumnsUnquoted []string, query string) (PrimaryKey, error)
-	// ResolveWatermark returns a fresh watermark (e.g. by parsing the
-	// result of Postgres's txid_current_snapshot()).
-	ResolveWatermark func(ctx context.Context) (Watermark, error)
+	// ResolveWatermark returns a fresh watermark. The concrete type is
+	// opaque here (any) since the shape of a "watermark" is inherently
+	// database-specific (e.g. a Postgres MVCC snapshot's xmin/xmax pair vs.
+	// a single monotonic marker like a MySQL GTID or an Oracle SCN) -- the
+	// coordinator implementation that supplies this Deps knows the concrete
+	// type it expects back and is responsible for asserting it.
+	ResolveWatermark func(ctx context.Context) (any, error)
 	// ForceFreshTransaction ensures the next watermark resolution observes
 	// a fresh transaction snapshot (e.g. by starting and committing a
 	// trivial transaction).
 	ForceFreshTransaction func(ctx context.Context) error
-	// FetchChunk executes the query produced by buildChunkQuery and returns
-	// the decoded rows.
+	// FetchChunk executes the query produced by the caller's chunk-query
+	// builder and returns the decoded rows.
 	FetchChunk func(ctx context.Context, table TableID, pkColumnsUnquoted []string, query string, args []any) ([]Row, error)
 }
 
-// validate checks that the Config is usable, returning a clear error naming
+// Validate checks that the Config is usable, returning a clear error naming
 // the specific missing/invalid field. A nil Deps function would otherwise
 // panic confusingly deep inside the algorithm rather than failing fast at
 // construction time.
-func (c Config) validate() error {
+func (c Config) Validate() error {
 	if c.ChunkSize <= 0 {
 		return fmt.Errorf("chunk size must be > 0, got %d", c.ChunkSize)
 	}
@@ -61,13 +66,13 @@ func (c Config) validate() error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("snapshot: missing required Deps function(s): %v", missing)
+		return fmt.Errorf("replication: missing required Deps function(s): %v", missing)
 	}
 
 	return nil
 }
 
-// Config configures a Coordinator.
+// Config configures an incremental snapshot coordinator.
 type Config struct {
 	Tables    []TableID
 	ChunkSize int

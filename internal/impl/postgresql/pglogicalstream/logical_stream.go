@@ -30,6 +30,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/snapshot"
+	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
 const decodingPlugin = "pgoutput"
@@ -82,7 +83,7 @@ type Stream struct {
 	// incrementalSnapshotTables is the set of tables under incremental
 	// snapshot, used to avoid resolving primary key columns for DML on
 	// tables the incremental snapshot doesn't care about.
-	incrementalSnapshotTables map[snapshot.TableID]struct{}
+	incrementalSnapshotTables map[replication.TableID]struct{}
 
 	// willEmitLegacySnapshot is true only when this session will actually run
 	// the one-shot upfront stream_snapshot backfill (and so will emit a
@@ -696,7 +697,7 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	if s.snapshotCoordinator != nil {
 		switch message.Operation {
 		case InsertOpType, UpdateOpType, DeleteOpType:
-			table := snapshot.TableID{Schema: message.Schema, Table: message.Table}
+			table := replication.TableID{Schema: message.Schema, Table: message.Table}
 			if _, tracked := s.incrementalSnapshotTables[table]; tracked {
 				pk, err := s.incrementalStreamedRowPK(ctx, table, message.Data)
 				if err != nil {
