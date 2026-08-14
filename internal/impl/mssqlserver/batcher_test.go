@@ -315,6 +315,81 @@ func TestTrackOrderUnderConcurrentFlush(t *testing.T) {
 	}
 }
 
+// TestPersistOrderUnderConcurrentAcksAndWindows locks in that the cached
+// resume position never regresses when batch acks (pipeline goroutines) and
+// CheckpointWindow markers (stream goroutine) persist concurrently: the
+// resolve+persist pair must be a single critical section, otherwise two
+// persists can land out of order.
+func TestPersistOrderUnderConcurrentAcksAndWindows(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cp := checkpoint.NewCapped[replication.LSN](1000)
+
+	batcher, err := (service.BatchPolicy{Count: 1}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+
+	publisher := newBatchPublisher(batcher, cp, logger)
+	t.Cleanup(func() { publisher.shutSig.TriggerSoftStop() })
+
+	var (
+		mu        sync.Mutex
+		persisted []replication.LSN
+	)
+	publisher.cacheLSN = func(_ context.Context, lsn replication.LSN) error {
+		mu.Lock()
+		defer mu.Unlock()
+		persisted = append(persisted, lsn)
+		return nil
+	}
+
+	// Consumer: ack every batch on its own goroutine so acks complete out of
+	// order relative to each other and to the window markers.
+	var ackWG sync.WaitGroup
+	consumerDone := make(chan struct{})
+	consumerCtx, stopConsumer := context.WithCancel(ctx)
+	go func() {
+		defer close(consumerDone)
+		for {
+			select {
+			case m := <-publisher.msgs():
+				ackWG.Go(func() {
+					_ = m.ackFn(ctx, nil)
+				})
+			case <-consumerCtx.Done():
+				return
+			}
+		}
+	}()
+
+	const events = 400
+	for i := range events {
+		lsn := fmt.Sprintf("%08d", i)
+		require.NoError(t, publisher.Publish(ctx, streamingEvent(lsn, lsn)))
+		// A drained polling window ends every 10 rows; its end LSN persists
+		// via an immediately-resolved marker racing the in-flight acks.
+		if i%10 == 9 {
+			require.NoError(t, publisher.CheckpointWindow(ctx, replication.LSN(lsn)))
+		}
+	}
+
+	finalLSN := fmt.Sprintf("%08d", events-1)
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(persisted) > 0 && string(persisted[len(persisted)-1]) == finalLSN
+	}, 10*time.Second, 10*time.Millisecond, "final LSN was never persisted")
+	stopConsumer()
+	<-consumerDone
+	ackWG.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	for i := 1; i < len(persisted); i++ {
+		require.GreaterOrEqual(t, string(persisted[i]), string(persisted[i-1]),
+			"persisted checkpoint regressed at index %d: %v", i, persisted)
+	}
+}
+
 // newTestBatchPublisher builds a publisher whose batcher flushes on every
 // published event (count=1), so tests drive the production
 // Publish->trackBatchLocked->sendTracked path directly.

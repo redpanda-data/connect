@@ -47,6 +47,12 @@ type batchPublisher struct {
 	// acknowledged downstream. The snapshot->streaming handoff blocks on it so
 	// the post-snapshot LSN is never persisted while snapshot rows are in flight.
 	snapshotAckWG sync.WaitGroup
+	// persistMu serializes resolve+persist pairs. The ordered tracker hands
+	// out monotonically increasing frontiers, but ack functions and
+	// CheckpointWindow run on different goroutines: without a shared critical
+	// section around resolveFn()+cacheLSN, two persists can land out of order
+	// and regress the cached resume position.
+	persistMu sync.Mutex
 	// pendingCheckpointLSN mirrors the CheckpointLSN of the most recently
 	// added message (or a stronger drained-window LSN, see CheckpointWindow):
 	// the start LSN of the last transaction whose rows are all published, the
@@ -282,6 +288,8 @@ func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.Mes
 				if isSnapshotBatch {
 					defer b.snapshotAckWG.Done()
 				}
+				b.persistMu.Lock()
+				defer b.persistMu.Unlock()
 				lsn := resolveFn()
 				if lsn != nil && len(*lsn) != 0 {
 					return b.cacheLSN(ctx, *lsn)
@@ -352,6 +360,8 @@ func (b *batchPublisher) CheckpointWindow(ctx context.Context, lsn replication.L
 	// Resolve the marker immediately: if everything before it is already
 	// acked this persists lsn now; otherwise the last outstanding ack's
 	// resolve will surface it.
+	b.persistMu.Lock()
+	defer b.persistMu.Unlock()
 	if resolved := resolveFn(); resolved != nil && len(*resolved) != 0 {
 		return b.cacheLSN(ctx, *resolved)
 	}
