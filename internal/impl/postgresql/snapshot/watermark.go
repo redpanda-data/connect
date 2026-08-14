@@ -23,16 +23,10 @@ type Watermark struct {
 	Xmax uint64
 }
 
-// ParseSnapshot parses Postgres's txid_current_snapshot() text
-// representation, e.g. "100:104:101,103" (xmin:xmax:xip_list, where the
-// xip_list may be empty, e.g. "100:104:").
-//
-// The xip list (in-progress transaction ids at the time the snapshot was
-// taken) is parsed only for validation of the input format. It is not
-// retained: this package's window-open/close reconciliation only needs the
-// xmin/xmax bounds, since it treats any transaction id in [xmin, xmax] that
-// isn't explicitly reconciled by the concurrent replication stream as
-// "already accounted for" rather than tracking individual in-progress ids.
+// ParseSnapshot parses Postgres's txid_current_snapshot() text, e.g.
+// "100:104:101,103" (xmin:xmax:xip_list; xip_list may be empty). The xip
+// list is validated but not retained: window open/close reconciliation only
+// needs the xmin/xmax bounds.
 func ParseSnapshot(raw string) (Watermark, error) {
 	parts := strings.Split(raw, ":")
 	const expectedParts = 3

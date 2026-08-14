@@ -265,7 +265,7 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 			Advanced()).
 		Field(service.NewObjectField(fieldIncrementalSnapshot,
 			service.NewBoolField(fieldIncrementalSnapshotEnabled).
-				Description("When set to true, the connector performs a Debezium-style incremental (chunked) snapshot of the configured tables automatically, starting as soon as logical replication streaming begins. Unlike `"+fieldStreamSnapshot+"`, this requires no dedicated up-front snapshot phase, does not block replication from starting, and needs no signal table or external trigger. It is independent of `"+fieldStreamSnapshot+"`, so the two can be enabled together or used separately.\n\nCorrectness (no duplicate rows) is only guaranteed for tables whose primary key is monotonically increasing for new rows (for example a serial/identity column, or a UUIDv7-style key) during the snapshot. Rows inserted with a primary key that reuses or fills a gap below the table's current maximum key while the snapshot is in progress may be delivered twice: once from replication, once from the backfill. Consumers should treat incoming rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
+				Description("When set to true, the connector performs an incremental (chunked) snapshot of the configured tables automatically, starting as soon as logical replication streaming begins. Unlike `"+fieldStreamSnapshot+"`, this requires no dedicated up-front snapshot phase, does not block replication from starting, and needs no signal table or external trigger. It is independent of `"+fieldStreamSnapshot+"`, so the two can be enabled together or used separately.\n\nCorrectness (no duplicate rows) is only guaranteed for tables whose primary key is monotonically increasing for new rows (for example a serial/identity column, or a UUIDv7-style key) during the snapshot. Rows inserted with a primary key that reuses or fills a gap below the table's current maximum key while the snapshot is in progress may be delivered twice: once from replication, once from the backfill. Consumers should treat incoming rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
 				ShortDescription("Automatically and continuously snapshot the configured tables in chunks, concurrently with replication streaming.").
 				Default(false),
 			service.NewStringListField(fieldIncrementalSnapshotTables).
@@ -282,7 +282,7 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 				Description("The key used to store the incremental snapshot progress in `"+fieldIncrementalSnapshotCheckpointCache+"`. An alternative key can be provided if multiple incremental snapshots share the same cache.").
 				Default(defaultIncrementalSnapshotCheckpointKey),
 		).
-			Description("Configures Debezium-style incremental snapshotting of one or more tables, which runs automatically and concurrently with logical replication streaming once enabled.").
+			Description("Configures incremental snapshotting of one or more tables, which runs automatically and concurrently with logical replication streaming once enabled.").
 			ShortDescription("Configures automatic, chunked incremental snapshotting that runs concurrently with replication streaming.").
 			Advanced().
 			Optional()).
@@ -311,9 +311,9 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		iamAuthTokenBuilder       TokenBuilder
 		signalTableName           string
 
-		incrementalSnapshotEnabled            bool
-		incrementalSnapshotTables             []string
-		incrementalSnapshotChunkSize          int
+		incSnapshotEnabled                    bool
+		incSnapshotTables                     []string
+		incSnapshotChunkSize                  int
 		incrementalSnapshotCheckpointCache    string
 		incrementalSnapshotCheckpointCacheKey string
 	)
@@ -413,30 +413,30 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
-	incrementalSnapshotConf := conf.Namespace(fieldIncrementalSnapshot)
-	if incrementalSnapshotEnabled, err = incrementalSnapshotConf.FieldBool(fieldIncrementalSnapshotEnabled); err != nil {
+	incSnapshotConf := conf.Namespace(fieldIncrementalSnapshot)
+	if incSnapshotEnabled, err = incSnapshotConf.FieldBool(fieldIncrementalSnapshotEnabled); err != nil {
 		return nil, err
 	}
-	if incrementalSnapshotConf.Contains(fieldIncrementalSnapshotTables) {
-		if incrementalSnapshotTables, err = incrementalSnapshotConf.FieldStringList(fieldIncrementalSnapshotTables); err != nil {
+	if incSnapshotConf.Contains(fieldIncrementalSnapshotTables) {
+		if incSnapshotTables, err = incSnapshotConf.FieldStringList(fieldIncrementalSnapshotTables); err != nil {
 			return nil, err
 		}
 	}
-	if incrementalSnapshotChunkSize, err = incrementalSnapshotConf.FieldInt(fieldIncrementalSnapshotChunkSize); err != nil {
+	if incSnapshotChunkSize, err = incSnapshotConf.FieldInt(fieldIncrementalSnapshotChunkSize); err != nil {
 		return nil, err
 	}
-	if incrementalSnapshotConf.Contains(fieldIncrementalSnapshotCheckpointCache) {
-		if incrementalSnapshotCheckpointCache, err = incrementalSnapshotConf.FieldString(fieldIncrementalSnapshotCheckpointCache); err != nil {
+	if incSnapshotConf.Contains(fieldIncrementalSnapshotCheckpointCache) {
+		if incrementalSnapshotCheckpointCache, err = incSnapshotConf.FieldString(fieldIncrementalSnapshotCheckpointCache); err != nil {
 			return nil, err
 		}
 	}
-	if incrementalSnapshotCheckpointCacheKey, err = incrementalSnapshotConf.FieldString(fieldIncrementalSnapshotCheckpointCacheKey); err != nil {
+	if incrementalSnapshotCheckpointCacheKey, err = incSnapshotConf.FieldString(fieldIncrementalSnapshotCheckpointCacheKey); err != nil {
 		return nil, err
 	}
-	if incrementalSnapshotEnabled && incrementalSnapshotCheckpointCache == "" {
+	if incSnapshotEnabled && incrementalSnapshotCheckpointCache == "" {
 		return nil, fmt.Errorf("%s.%s is required when %s.%s is true", fieldIncrementalSnapshot, fieldIncrementalSnapshotCheckpointCache, fieldIncrementalSnapshot, fieldIncrementalSnapshotEnabled)
 	}
-	if incrementalSnapshotEnabled && !conf.Resources().HasCache(incrementalSnapshotCheckpointCache) {
+	if incSnapshotEnabled && !conf.Resources().HasCache(incrementalSnapshotCheckpointCache) {
 		return nil, fmt.Errorf("unknown cache resource: %s", incrementalSnapshotCheckpointCache)
 	}
 
@@ -468,12 +468,12 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	snapshotMetrics := mgr.Metrics().NewGauge("postgres_snapshot_progress", "table")
 	replicationLag := mgr.Metrics().NewGauge("postgres_replication_lag_bytes")
 
-	var incrementalSnapshot *pglogicalstream.IncrementalSnapshotConfig
-	if incrementalSnapshotEnabled {
-		incrementalSnapshot = &pglogicalstream.IncrementalSnapshotConfig{
+	var incrementalSnapshot *pglogicalstream.IncrementalSnapshotCfg
+	if incSnapshotEnabled {
+		incrementalSnapshot = &pglogicalstream.IncrementalSnapshotCfg{
 			Enabled:   true,
-			Tables:    incrementalSnapshotTables,
-			ChunkSize: incrementalSnapshotChunkSize,
+			Tables:    incSnapshotTables,
+			ChunkSize: incSnapshotChunkSize,
 		}
 	}
 
@@ -573,9 +573,8 @@ type pgStreamInput struct {
 	// IAM authentication fields
 	iamAuthEnabled bool
 
-	// checkpointCache and checkpointCacheKey are only meaningful when
-	// streamConfig.IncrementalSnapshot is non-nil; checkpointCache is empty
-	// otherwise, keeping the cache-access branch skipped entirely.
+	// checkpointCache/checkpointCacheKey matter only when IncrementalSnapshot
+	// is enabled; otherwise checkpointCache is empty and unused.
 	checkpointCache    string
 	checkpointCacheKey string
 }
@@ -641,20 +640,16 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	// offsets are nilable since we don't provide offset tracking during the snapshot phase
 	cp := checkpoint.NewCapped[checkpointOffset](int64(p.checkpointLimit))
 
-	// legacySnapshotComplete gates the isSnapshot/snapshotAckWG barrier so it
-	// only ever applies to the one-shot upfront stream_snapshot phase (also
-	// nil-LSN), never to incremental snapshot batches (also nil-LSN, but
-	// running continuously for the life of the connection): starts true when
-	// this session won't run that upfront phase at all (which, unlike the
-	// stream_snapshot config flag alone, also accounts for the replication
-	// slot having already existed at startup - see WillEmitLegacySnapshot),
-	// and flips true once that phase's completion sentinel has been handled.
+	// legacySnapshotComplete restricts the isSnapshot/snapshotAckWG barrier to
+	// the one-shot stream_snapshot phase, not the also-nil-LSN but continuous
+	// incremental snapshot batches. Starts true unless this session will
+	// actually run that phase (see WillEmitLegacySnapshot), then flips true
+	// once its completion sentinel is handled.
 	legacySnapshotComplete := !pgStream.WillEmitLegacySnapshot()
 
-	// pendingIncrementalState carries forward the most recent incremental
-	// snapshot checkpoint state seen since it was last included in a tracked
-	// checkpointOffset, so it rides along with whichever downstream flush
-	// happens next, mirroring how a message's own "lsn" metadata rides along.
+	// pendingIncrementalState carries the most recent checkpoint state until
+	// it rides along with the next downstream flush, like a message's own
+	// "lsn" metadata does.
 	var pendingIncrementalState []byte
 
 	for !p.stopSig.IsSoftStopSignalled() {
@@ -709,13 +704,10 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				break
 			}
 			if len(batch) == 1 && batch[0].Operation == pglogicalstream.IncrementalSnapshotCheckpointOpType {
-				// The coordinator's state advanced without emitting any rows
-				// (e.g. every buffered row was already deduplicated against the
-				// replication stream). There's no accompanying message to ride
-				// along with, so track and resolve this position immediately;
-				// resolution still only surfaces once every earlier tracked
-				// batch has also resolved, preserving the same ordering
-				// guarantee real batches get.
+				// State advanced with no rows emitted (e.g. every buffered row
+				// was deduplicated), so there's no message to ride along with
+				// -- track and resolve immediately, still ordered behind any
+				// earlier unresolved batch.
 				if err := p.commitIncrementalSnapshotCheckpoint(ctx, pgStream, cp, batch[0].IncrementalSnapshotState); err != nil {
 					p.logger.Debugf("failed to commit incremental snapshot checkpoint: %s", err)
 				}
@@ -737,9 +729,8 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					pendingIncrementalState = msg.IncrementalSnapshotState
 				}
 				if msg.Operation == pglogicalstream.IncrementalSnapshotCheckpointOpType {
-					// Defensive: buildIncrementalSnapshotMessages never mixes
-					// this sentinel into a batch alongside other messages
-					// today, but never forward it downstream if that changes.
+					// Defensive: this sentinel never shares a batch with other
+					// messages today, but never forward it if that changes.
 					continue
 				}
 
@@ -794,21 +785,18 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	}
 }
 
-// checkpointOffset is the payload tracked per batch by the LSN checkpointer.
-// IncrementalSnapshotState is non-nil only when the batch (or the phantom,
-// row-less checkpoint tracked via commitIncrementalSnapshotCheckpoint) carried
-// a freshly advanced incremental snapshot checkpoint. It is generalized
-// alongside LSN, rather than persisted through an independent mechanism, so
-// incremental snapshot progress inherits the exact same ack-ordering
-// discipline already relied on for LSN acknowledgement.
+// checkpointOffset is the per-batch payload tracked by the LSN checkpointer.
+// IncrementalSnapshotState is non-nil when a batch (or the phantom row-less
+// one from commitIncrementalSnapshotCheckpoint) carries a checkpoint;
+// bundling it with LSN gives it the same ack-ordering discipline.
 type checkpointOffset struct {
 	lsn                      *string
 	incrementalSnapshotState []byte
 }
 
-// commitCheckpoint applies a resolved checkpointOffset: it acks the LSN with
-// postgres first, then persists the incremental snapshot state, so a crash
-// never leaves acknowledged-but-unpersisted incremental snapshot progress.
+// commitCheckpoint applies a resolved checkpointOffset: acks the LSN first,
+// then persists the incremental snapshot state, so a crash never leaves
+// acknowledged-but-unpersisted progress.
 func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, offset checkpointOffset) error {
 	if offset.lsn != nil {
 		if err := pgStream.AckLSN(ctx, *offset.lsn); err != nil {
@@ -824,10 +812,9 @@ func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogica
 }
 
 // commitIncrementalSnapshotCheckpoint tracks and immediately resolves a
-// row-less incremental snapshot checkpoint. Tracking it (rather than
-// persisting state directly) still gates it behind every earlier tracked
-// batch via the checkpointer's ordering, so it can never surface ahead of
-// unacknowledged rows that came before it in the stream.
+// row-less checkpoint. Tracking it (rather than persisting directly) still
+// gates it behind every earlier tracked batch, so it can't surface ahead of
+// unacknowledged rows earlier in the stream.
 func (p *pgStreamInput) commitIncrementalSnapshotCheckpoint(
 	ctx context.Context,
 	pgStream *pglogicalstream.Stream,
@@ -869,12 +856,11 @@ func (p *pgStreamInput) flushBatch(
 		return fmt.Errorf("unable to checkpoint: %w", err)
 	}
 
-	// The one-shot upfront stream_snapshot phase also carries no LSN. Track
-	// those batches so the snapshot->stream handoff can block until they are
-	// acknowledged downstream (see the sentinel handling in the read loop).
-	// Incremental snapshot batches also carry no LSN but run continuously for
-	// the life of the connection, so legacySnapshotComplete excludes them
-	// from that one-shot barrier once the upfront phase has completed.
+	// The one-shot stream_snapshot phase also carries no LSN; track those
+	// batches so the snapshot->stream handoff can block on their ack (see the
+	// sentinel handling in the read loop). Incremental snapshot batches are
+	// also nil-LSN but run continuously, so legacySnapshotComplete excludes
+	// them from that one-shot barrier once the upfront phase has completed.
 	isSnapshot := lsn == nil && !legacySnapshotComplete
 
 	ackFn := func(ctx context.Context, _ error) error {

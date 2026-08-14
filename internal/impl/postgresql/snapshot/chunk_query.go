@@ -19,10 +19,8 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
-// rowTuple renders a PrimaryKey as a Postgres ROW(...) constructor with
-// placeholder args, e.g. "ROW(?, ?)" with args [v1, v2]. This lets us build
-// row-wise (lexicographic) comparisons such as ROW(pk1, pk2) > ROW(?, ?),
-// which correctly implements "PK tuple greater than bound tuple" semantics
+// rowTuple renders a PrimaryKey as a Postgres ROW(...) constructor, e.g.
+// "ROW(?, ?)", enabling row-wise comparisons like ROW(pk1, pk2) > ROW(?, ?)
 // for composite primary keys.
 type rowTuple struct {
 	values []any
@@ -55,15 +53,10 @@ func quotedTableName(table incrementalsnapshot.TableID) string {
 	return sanitize.QuotePostgresIdentifier(table.Schema) + "." + sanitize.QuotePostgresIdentifier(table.Table)
 }
 
-// buildChunkQuery builds the paginated chunk SELECT. lower may be nil (first
-// chunk of a table - omit the lower-bound predicate). upper is the table's
-// fixed max-PK bound (also may be nil only if the table truly has no rows,
-// in which case callers should not be calling this - treat nil upper as an
-// error).
-//
-// The SELECT clause is always "*" rather than an explicit column list, since
-// this package doesn't know the full column list at this layer; callers are
-// responsible for decoding whatever columns come back.
+// buildChunkQuery builds the paginated chunk SELECT. lower may be nil for a
+// table's first chunk (omits the lower bound); upper is the table's fixed
+// max-PK bound and must not be nil. Selects "*" since this package doesn't
+// know the column list; callers decode whatever comes back.
 func buildChunkQuery(table incrementalsnapshot.TableID, pkColsUnquoted []string, lower, upper incrementalsnapshot.PrimaryKey, limit int) (query string, args []any, err error) {
 	if len(pkColsUnquoted) == 0 {
 		return "", nil, errors.New("buildChunkQuery: no primary key columns provided")

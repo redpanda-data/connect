@@ -28,12 +28,9 @@ type mockTable struct {
 	maxPK  incrementalsnapshot.PrimaryKey
 }
 
-// scriptedMockDeps builds a Deps that serves chunk data purely from an
-// in-memory fixture, and lets the test script the watermark sequence
-// returned by ResolveWatermark. It tracks, per table, how many rows have
-// already been served, and serves the next chunk (bounded by chunkSize)
-// directly from the fixture -- avoiding any need to parse the generated
-// SQL/args from buildChunkQuery.
+// scriptedMockDeps builds a Deps serving chunk data from an in-memory
+// fixture and a scripted ResolveWatermark sequence, tracking per-table
+// cursor position without needing to parse buildChunkQuery's SQL/args.
 type scriptedMockDeps struct {
 	tables map[string]*mockTable
 	cursor map[string]int
@@ -185,11 +182,8 @@ func TestCoordinator_FullScenario(t *testing.T) {
 	assert.Equal(t, incrementalsnapshot.PrimaryKey{1}, emitted[0].PK)
 	assert.Equal(t, incrementalsnapshot.PrimaryKey{3}, emitted[1].PK)
 
-	// Table A's zero-row follow-up chunk should have advanced us straight to
-	// table B, whose chunk (2 rows) was short (< chunkSize=3). Since a short
-	// chunk means the table is already known to be exhausted, current is
-	// reset to nil immediately (skipping a wasted zero-row round-trip on the
-	// next advance) rather than continuing to point at table B.
+	// Advanced straight to table B (short chunk, < chunkSize=3, so current
+	// resets to nil immediately instead of pointing at B).
 	assert.Nil(t, coord.current)
 	assert.Equal(t, incrementalsnapshot.PrimaryKey{11}, coord.lastSentPK)
 	assert.Equal(t, 2, coord.window.Len())
@@ -231,10 +225,9 @@ func TestCoordinator_ZeroRowAdvanceBetweenTables(t *testing.T) {
 		tableB.String(): {pkCols: []string{"id"}, rows: rowsB, maxPK: incrementalsnapshot.PrimaryKey{6}},
 	})
 
-	// A's only chunk is exactly chunkSize (2 rows) so it is NOT short - the
-	// coordinator must issue a genuine zero-row follow-up fetch for A before
-	// advancing to B. That's 4 watermark pairs total: A full chunk, A empty
-	// chunk, B full chunk, B empty chunk (which finally sets done=true).
+	// A's chunk is exactly chunkSize (not short), so a genuine zero-row
+	// follow-up fetch is required before advancing to B: 4 watermark pairs
+	// (A full, A empty, B full, B empty -- which sets done=true).
 	mock.pushWatermark(Watermark{Xmin: 10, Xmax: 10})
 	mock.pushWatermark(Watermark{Xmin: 11, Xmax: 11})
 	mock.pushWatermark(Watermark{Xmin: 12, Xmax: 12})
@@ -336,10 +329,8 @@ func TestCoordinator_ResumeAlwaysDerivesFreshWatermark(t *testing.T) {
 	callsBeforeResume := mock.watermarkCalls
 	require.Positive(t, callsBeforeResume)
 
-	// Take a checkpoint immediately after Start, before anything has been
-	// flushed: State() must report the pre-fetch baseline (both tables still
-	// fully pending), not tableA's just-fetched-but-unflushed first chunk --
-	// otherwise a crash right here would resume past that chunk and skip it.
+	// Checkpoint right after Start, before any flush: State() must report
+	// the pre-fetch baseline, not tableA's unflushed first chunk.
 	state := coord.State()
 	require.False(t, state.Done)
 	assert.Nil(t, state.CurrentTable)
@@ -353,21 +344,17 @@ func TestCoordinator_ResumeAlwaysDerivesFreshWatermark(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, resumed.Start(context.Background()))
 
-	// A fresh watermark call must have happened on resume: the call count
-	// must have increased, proving the coordinator never reused a
-	// persisted watermark (State carries none) and always re-derives one.
+	// The call count must have increased: watermarks are never persisted or
+	// reused, only re-derived.
 	assert.Greater(t, mock.watermarkCalls, callsBeforeResume)
 	assert.Positive(t, mock.forceFreshCalls)
 }
 
 // sortedRowsAfter models a "WHERE pk > lower ORDER BY pk LIMIT limit" query
-// against a static, PK-sorted row set, purely as a function of (lower,
-// limit) -- unlike scriptedMockDeps' cursor-based FetchChunk, this makes
-// re-querying the same lower bound idempotent, which is essential for
-// testing that a resumed Coordinator correctly refetches (rather than
-// permanently skips) a chunk that was fetched but never flushed before a
-// simulated crash. Assumes single-column int primary keys, which is all this
-// test needs.
+// as a pure function of (lower, limit), unlike scriptedMockDeps' stateful
+// cursor -- needed so re-querying the same lower bound is idempotent, to
+// prove a resumed Coordinator refetches rather than skips a chunk. Assumes
+// single-column int primary keys.
 func sortedRowsAfter(rows []incrementalsnapshot.Row, lower incrementalsnapshot.PrimaryKey, limit int) []incrementalsnapshot.Row {
 	start := 0
 	if lower != nil {
@@ -385,12 +372,9 @@ func sortedRowsAfter(rows []incrementalsnapshot.Row, lower incrementalsnapshot.P
 	return rows[start:min(start+limit, len(rows))]
 }
 
-// TestCoordinator_ResumeRefetchesUnflushedChunk is a regression test for a
-// bug where State() reported the boundary of a chunk that had been fetched
-// (and so was about to be skipped on resume) but never flushed to any
-// caller, permanently losing that chunk's rows after a crash/restart. It
-// pins down the fix: State() must only ever advance once a chunk has
-// actually been flushed.
+// TestCoordinator_ResumeRefetchesUnflushedChunk is a regression test: State()
+// must only advance once a chunk is actually flushed, or a resumed
+// coordinator would skip a fetched-but-unflushed chunk's rows entirely.
 func TestCoordinator_ResumeRefetchesUnflushedChunk(t *testing.T) {
 	tableA := incrementalsnapshot.TableID{Schema: "public", Table: "a"}
 	const chunkSize = 2

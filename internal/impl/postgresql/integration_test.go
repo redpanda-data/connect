@@ -1615,10 +1615,8 @@ postgres_cdc:
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
 }
 
-// incrementalSnapshotRow captures the bits of an observed message relevant to
-// the incremental snapshot tests below: which row (by "id") was observed, and
-// whether it arrived via the snapshot backfill ("read") or live replication
-// ("insert").
+// incrementalSnapshotRow records an observed row's id and how it arrived
+// ("read" backfill vs "insert" live replication).
 type incrementalSnapshotRow struct {
 	id        int64
 	operation string
@@ -1692,27 +1690,18 @@ memory: {}`))
 		}
 	}()
 
-	// Wait until at least one backfill row has been observed before starting
-	// the concurrent writer below. The coordinator resolves and freezes its
-	// max-PK bound for a table once, before fetching that table's first
-	// chunk, so seeing a row here guarantees that freeze has already
-	// happened. Every row concurrently inserted from this point on is
-	// therefore guaranteed a serial PK strictly greater than the frozen
-	// bound, which is what makes such inserts immune to the known,
-	// documented double-delivery race described on
-	// Coordinator.OnStreamedRow (a row inserted, and committed, before the
-	// bound is frozen can land at-or-below it despite using a monotonically
-	// increasing PK, and is not a scenario this test is meant to exercise).
+	// Wait for at least one backfill row before writing concurrently: it
+	// proves the coordinator's max-PK bound is already frozen, so every
+	// subsequent insert gets a serial PK above it -- immune to the
+	// double-delivery race documented on Coordinator.OnStreamedRow.
 	require.Eventually(t, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
 		return len(rows) >= 1
 	}, 30*time.Second, 50*time.Millisecond, "did not observe any snapshot backfill rows before starting the concurrent writer")
 
-	// Concurrently write new rows while the incremental snapshot is
-	// backfilling the pre-existing ones, so both the snapshot's chunk reads
-	// and the replication stream's live inserts are racing over the same
-	// table at once.
+	// Write new rows while the backfill is still running, racing chunk
+	// reads against live inserts on the same table.
 	const numConcurrent = 40
 	writerDone := make(chan struct{})
 	go func() {
@@ -1742,10 +1731,8 @@ memory: {}`))
 		require.Fail(t, "stream did not stop in time")
 	}
 
-	// Every row (whether delivered via the snapshot backfill or live
-	// replication) must be observed exactly once: the incremental snapshot's
-	// deduplication against the replication stream must neither drop nor
-	// double-deliver a row.
+	// Every row, backfill or live, must be observed exactly once: dedup must
+	// neither drop nor double-deliver.
 	mu.Lock()
 	defer mu.Unlock()
 	counts := make(map[int64]int, len(rows))
@@ -1769,10 +1756,8 @@ func TestIntegrationIncrementalSnapshotResume(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// A file cache backed by a directory on disk, rather than a memory
-	// cache, so the persisted checkpoint actually survives across two
-	// independent stream instances below, just as it would survive an actual
-	// process restart.
+	// A file cache, not memory, so the checkpoint survives across the two
+	// independent stream instances below, like an actual restart.
 	cacheDir := t.TempDir()
 	template := fmt.Sprintf(`
 postgres_cdc:
@@ -1850,17 +1835,13 @@ file:
 		return append([]incrementalSnapshotRow(nil), rows...)
 	}
 
-	// First run: stop as soon as a small handful of rows have been observed,
-	// so the incremental snapshot is left partway through the backfill (its
-	// checkpoint persisted to the file cache) rather than having completed.
+	// Stop early, leaving the backfill (and its checkpoint) partway through.
 	firstRun := runPartial(10)
 	require.NotEmpty(t, firstRun)
 	require.Less(t, len(firstRun), numRows, "first run should not have completed the entire backfill; the test can't exercise resume otherwise")
 
-	// Second run: reuses the same replication slot and checkpoint cache
-	// directory. If this resumed correctly, it should pick up from the
-	// persisted checkpoint rather than starting the backfill over, so none
-	// of the rows the first run already observed should reappear.
+	// Reuses the same slot and cache directory: a correct resume picks up
+	// from the checkpoint, so none of the first run's rows should reappear.
 	secondRun := runPartial(numRows - len(firstRun))
 
 	firstIDs := make(map[int64]struct{}, len(firstRun))

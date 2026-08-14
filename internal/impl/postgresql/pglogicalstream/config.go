@@ -20,10 +20,10 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
-// IncrementalSnapshotConfig configures incremental snapshotting, which runs
+// IncrementalSnapshotCfg configures incremental snapshotting, which runs
 // automatically and concurrently with logical replication streaming once
 // enabled: no signal table or trigger required.
-type IncrementalSnapshotConfig struct {
+type IncrementalSnapshotCfg struct {
 	Enabled bool
 	// Tables lists the (unqualified, same-schema-as-DBSchema) tables to
 	// incrementally snapshot. If empty, DBTables is used instead.
@@ -73,5 +73,5 @@ type Config struct {
 
 	// IncrementalSnapshot configures incremental snapshotting. Nil (the
 	// default) disables it entirely.
-	IncrementalSnapshot *IncrementalSnapshotConfig
+	IncrementalSnapshot *IncrementalSnapshotCfg
 }

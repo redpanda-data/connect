@@ -16,20 +16,16 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
-// Coordinator drives Debezium's read-only incremental snapshot algorithm:
-// it reads a set of tables in ordered, primary-key-bounded chunks while a
-// live replication stream keeps flowing concurrently, deduplicating
-// buffered snapshot rows against anything the replication stream has
-// already delivered more recently.
+// Coordinator reads a set of tables in ordered, primary-key-bounded chunks
+// while a live replication stream keeps flowing concurrently, deduplicating
+// buffered rows against anything the stream has already delivered more
+// recently.
 //
-// Usage contract: Coordinator is NOT safe for concurrent use. Callers must
-// invoke OnStreamedRow and OnCommit from a single goroutine, strictly in the
-// order the corresponding events occurred on the replication stream.
-// OnCommit's chunk-fetch may block on I/O, since the functions in Deps
-// (FetchChunk, ResolveWatermark, etc.) run synchronously on the calling
-// goroutine. This is intentional -- it mirrors Debezium's own
-// single-threaded design -- and should not be "fixed" by introducing
-// concurrency here.
+// Not safe for concurrent use: OnStreamedRow and OnCommit must be called
+// from a single goroutine, in the order events occurred on the stream.
+// OnCommit's chunk-fetch may block on I/O (Deps functions run synchronously
+// on the calling goroutine) -- this single-threaded design is intentional,
+// not something to "fix" with concurrency.
 type Coordinator struct {
 	cfg incrementalsnapshot.Config
 
@@ -48,15 +44,11 @@ type Coordinator struct {
 	done         bool
 	window       *incrementalsnapshot.WindowBuffer
 
-	// committed mirrors remaining/current/maxPK/lastSentPK, but only ever
-	// advances when a chunk is actually flushed (see OnCommit and Start). It
-	// deliberately lags behind the live fields above whenever a chunk has
-	// been fetched into window but not yet flushed: State() reports
-	// committed, never the live fields, so a crash between fetching a chunk
-	// and flushing it can never resume past that chunk's rows -- planNextChunk
-	// will simply refetch them. Without this split, a resumed coordinator
-	// would silently skip any chunk that was fetched but not yet flushed at
-	// the moment State() was last captured.
+	// committed mirrors remaining/current/maxPK/lastSentPK but only advances
+	// once a chunk is actually flushed (see OnCommit/Start). It lags behind
+	// the live fields while a chunk sits fetched-but-unflushed: State()
+	// reports only committed, so a crash before a flush just re-fetches that
+	// chunk on resume instead of silently skipping it.
 	committedRemaining  []incrementalsnapshot.TableID
 	committedCurrent    *incrementalsnapshot.TableID
 	committedMaxPK      incrementalsnapshot.PrimaryKey
@@ -99,24 +91,18 @@ func (c *Coordinator) Start(ctx context.Context) error {
 		}
 	}
 
-	// committed must start in sync with the live fields above: this is the
-	// baseline nothing-fetched-yet-this-cycle position (whether fresh or
-	// resumed), and planNextChunk below is about to advance the live fields
-	// past it to fetch the first not-yet-flushed chunk.
+	// Baseline: nothing fetched yet this cycle. planNextChunk below advances
+	// the live fields past it to fetch the first unflushed chunk.
 	c.commitLiveState()
 
-	// A persisted State never captures an in-flight, unflushed chunk (the
-	// window buffer itself is never persisted), so resuming always means
-	// planning the next chunk. Watermarks are re-derived from scratch here
-	// via planNextChunk -> ResolveWatermark; they are never read from resume,
-	// since State intentionally has no watermark fields.
+	// A persisted State never captures an unflushed chunk (window isn't
+	// persisted), so resuming always means planning the next one.
+	// Watermarks are always re-derived here, never read from resume.
 	return c.planNextChunk(ctx)
 }
 
-// commitLiveState snapshots the live remaining/current/maxPK/lastSentPK
-// fields into their committed counterparts. Must only be called when
-// everything fetched so far has also been flushed -- i.e. right before
-// planNextChunk is about to fetch a chunk that hasn't been flushed yet.
+// commitLiveState snapshots the live fields into their committed
+// counterparts. Call only once everything fetched so far has been flushed.
 func (c *Coordinator) commitLiveState() {
 	c.committedRemaining = slices.Clone(c.remaining)
 	c.committedCurrent = c.current
@@ -129,27 +115,19 @@ func (c *Coordinator) Done() bool {
 	return c.done
 }
 
-// OnStreamedRow must be cheap and do no I/O. It removes pk from the
-// currently buffered window if, and only if, table is the table currently
-// being snapshotted -- rows for any other table, or any row once snapshotting
-// has completed, are ignored.
+// OnStreamedRow must be cheap and do no I/O. It removes pk from the buffered
+// window only if table is the one currently being snapshotted; otherwise,
+// or once snapshotting is done, it's a no-op.
 //
-// Known limitation: this only dedups a row if its streamed event arrives
-// while that row is already sitting in the window (i.e. after the chunk
-// containing it was fetched, before the window closes). A row inserted with
-// a primary key at or below the table's already-resolved MaxPK bound, whose
-// streamed INSERT is processed before the chunk that will eventually
-// contain it has been fetched, gets no further dedup opportunity once that
-// later chunk fetch picks it up -- it will be delivered twice (once live,
-// once via backfill). This cannot happen for monotonically increasing
-// primary keys (serial/identity columns, UUIDv7, etc): a row inserted after
-// a table's scan begins always gets a key above that table's MaxPK bound and
-// so is never included in any chunk fetch. It can happen if primary keys are
-// reused or backfilled into gaps below the frozen bound while the table is
-// being scanned. This mirrors an equivalent limitation in Debezium's own
-// incremental snapshot for primary-key-changing updates; consumers should
-// treat incremental snapshot rows as idempotent upserts by primary key, as
-// is standard CDC practice.
+// Known limitation: dedup only works if the row is already in the window
+// when its streamed event arrives. A row whose primary key is inserted at
+// or below the table's resolved MaxPK bound, and whose INSERT streams in
+// before the chunk covering it is fetched, gets delivered twice (live and
+// via backfill). This can't happen for monotonically increasing keys
+// (serial/identity, UUIDv7) since new rows always land above MaxPK -- only
+// reused or backfilled keys below the frozen bound are affected. Consumers
+// should treat incremental snapshot rows as idempotent upserts by primary
+// key, as is standard CDC practice.
 func (c *Coordinator) OnStreamedRow(table incrementalsnapshot.TableID, pk incrementalsnapshot.PrimaryKey) (removed bool) {
 	if c.done || c.current == nil || table != *c.current {
 		return false
@@ -157,10 +135,9 @@ func (c *Coordinator) OnStreamedRow(table incrementalsnapshot.TableID, pk increm
 	return c.window.Remove(table, pk)
 }
 
-// OnCommit is called once per completed transaction (regardless of which
-// table(s) it touched) with that transaction's txid. txid == 0 is treated as
-// "unknown/no-op": some callers may not always have a txid available (e.g.
-// empty transactions), and such calls must never open or close the window.
+// OnCommit is called once per completed transaction with its txid. txid == 0
+// means "unknown" (some callers can't always supply one) and must never
+// open or close the window.
 func (c *Coordinator) OnCommit(ctx context.Context, txid uint64) (emitted []incrementalsnapshot.Row, changed bool, err error) {
 	if c.done || txid == 0 {
 		return nil, false, nil
@@ -179,9 +156,8 @@ func (c *Coordinator) OnCommit(ctx context.Context, txid uint64) (emitted []incr
 	emitted = c.window.Flush()
 	c.windowOpened = false
 
-	// Everything fetched so far has now been flushed (emitted, above), so
-	// it's safe to advance committed to match live before planNextChunk
-	// fetches the next, not-yet-flushed chunk.
+	// Everything fetched so far is now flushed, so it's safe to advance
+	// committed before planNextChunk fetches the next chunk.
 	c.commitLiveState()
 
 	if err := c.planNextChunk(ctx); err != nil {
@@ -191,14 +167,10 @@ func (c *Coordinator) OnCommit(ctx context.Context, txid uint64) (emitted []incr
 	return emitted, true, nil
 }
 
-// State returns a snapshot of the coordinator's current resumable state. It
-// is safe to call anytime after Start.
-//
-// This reports committed*, not the live fields, except when c.done is true:
-// done can only become true immediately after a chunk fetch that returned
-// zero rows, which never buffers anything into window, so there is never an
-// unflushed chunk hiding behind it -- it's always safe to report Done
-// immediately, even on a round where committed hasn't caught up to done yet.
+// State returns the coordinator's current resumable state; safe to call
+// anytime after Start. It reports committed*, not the live fields, except
+// when done: a zero-row chunk fetch (the only way done becomes true) never
+// buffers anything, so there's no unflushed chunk to hide.
 func (c *Coordinator) State() *incrementalsnapshot.State {
 	if c.done {
 		return &incrementalsnapshot.State{Version: incrementalsnapshot.CurrentStateVersion, Done: true}
@@ -213,10 +185,9 @@ func (c *Coordinator) State() *incrementalsnapshot.State {
 	return s.Clone()
 }
 
-// planNextChunk advances the snapshot by exactly one round of chunk
-// fetching: it either buffers the next chunk of the current table, or
-// exhausts the current table and moves on to the next one, repeating until
-// it has something to buffer or has run out of tables entirely.
+// planNextChunk advances by one round: buffers the current table's next
+// chunk, or exhausts it and moves to the next, until it has rows to buffer
+// or runs out of tables.
 func (c *Coordinator) planNextChunk(ctx context.Context) error {
 	for {
 		if c.current == nil {
@@ -267,8 +238,7 @@ func (c *Coordinator) planNextChunk(ctx context.Context) error {
 		c.high = high
 
 		if len(rows) == 0 {
-			// Table is exhausted; advance to the next table and keep
-			// looping until we find one with rows, or run out entirely.
+			// Exhausted; keep looping until a table has rows or none remain.
 			c.current = nil
 			continue
 		}
@@ -279,10 +249,8 @@ func (c *Coordinator) planNextChunk(ctx context.Context) error {
 		c.lastSentPK = rows[len(rows)-1].PK
 
 		if len(rows) < c.cfg.ChunkSize {
-			// Final, partial chunk for this table. Buffer it now (still
-			// emit this chunk through the normal window cycle), but avoid a
-			// wasted extra round-trip next time by advancing to the next
-			// table up front.
+			// Final, partial chunk: buffer it as usual, but advance to the
+			// next table now to skip a wasted empty round-trip later.
 			c.current = nil
 		}
 
@@ -322,13 +290,10 @@ func (c *Coordinator) resolveMaxPK(ctx context.Context, table incrementalsnapsho
 	return nil
 }
 
-// resolveFreshWatermark forces a fresh transaction before resolving the
-// watermark, since a long-lived connection may otherwise observe a stale
-// snapshot (e.g. under REPEATABLE READ isolation). incrementalsnapshot.Deps.
-// ResolveWatermark returns an opaque any (the watermark shape is
-// database-specific), so this is also the one place that type-asserts it
-// back to the concrete Postgres Watermark this package's algorithm actually
-// operates on.
+// resolveFreshWatermark forces a fresh transaction first, since a
+// long-lived connection could otherwise see a stale snapshot. Deps.
+// ResolveWatermark returns an opaque any, so this is also where it's
+// asserted back to the concrete Postgres Watermark.
 func (c *Coordinator) resolveFreshWatermark(ctx context.Context) (Watermark, error) {
 	if err := c.cfg.Deps.ForceFreshTransaction(ctx); err != nil {
 		return Watermark{}, fmt.Errorf("forcing fresh transaction: %w", err)
