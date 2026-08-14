@@ -20,9 +20,9 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
-// IncrementalSnapshotConfig configures Debezium-style incremental
-// snapshotting, which runs automatically and concurrently with logical
-// replication streaming once enabled: no signal table or trigger required.
+// IncrementalSnapshotConfig configures incremental snapshotting, which runs
+// automatically and concurrently with logical replication streaming once
+// enabled: no signal table or trigger required.
 type IncrementalSnapshotConfig struct {
 	Enabled bool
 	// Tables lists the (unqualified, same-schema-as-DBSchema) tables to
@@ -71,7 +71,7 @@ type Config struct {
 	// The interval to send logical messages
 	HeartbeatInterval time.Duration
 
-	// IncrementalSnapshot configures Debezium-style incremental
-	// snapshotting. Nil (the default) disables it entirely.
+	// IncrementalSnapshot configures incremental snapshotting. Nil (the
+	// default) disables it entirely.
 	IncrementalSnapshot *IncrementalSnapshotConfig
 }

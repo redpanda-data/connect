@@ -626,7 +626,7 @@ signal_table_name: rpcn_signal_table
 
 === `incremental_snapshot`
 
-Configures Debezium-style incremental snapshotting of one or more tables, which runs automatically and concurrently with logical replication streaming once enabled.
+Configures incremental snapshotting of one or more tables, which runs automatically and concurrently with logical replication streaming once enabled.
 
 
 *Type*: `object`
@@ -634,7 +634,7 @@ Configures Debezium-style incremental snapshotting of one or more tables, which 
 
 === `incremental_snapshot.enabled`
 
-When set to true, the connector performs a Debezium-style incremental (chunked) snapshot of the configured tables automatically, starting as soon as logical replication streaming begins. Unlike `stream_snapshot`, this requires no dedicated up-front snapshot phase, does not block replication from starting, and needs no signal table or external trigger. It is independent of `stream_snapshot`, so the two can be enabled together or used separately.
+When set to true, the connector performs an incremental (chunked) snapshot of the configured tables automatically, starting as soon as logical replication streaming begins. Unlike `stream_snapshot`, this requires no dedicated up-front snapshot phase, does not block replication from starting, and needs no signal table or external trigger. It is independent of `stream_snapshot`, so the two can be enabled together or used separately.
 
 Correctness (no duplicate rows) is only guaranteed for tables whose primary key is monotonically increasing for new rows (for example a serial/identity column, or a UUIDv7-style key) during the snapshot. Rows inserted with a primary key that reuses or fills a gap below the table's current maximum key while the snapshot is in progress may be delivered twice: once from replication, once from the backfill. Consumers should treat incoming rows as idempotent upserts keyed by primary key, as is standard CDC practice.
 

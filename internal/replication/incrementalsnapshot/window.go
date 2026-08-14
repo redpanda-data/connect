@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -13,14 +13,9 @@ import (
 	"strings"
 )
 
-// windowKey uniquely identifies a buffered row by table and primary key. It
-// is built via fmt.Sprintf("%v", ...) of the table and each PK element,
-// joined with a separator that's unlikely to appear in practice. This is
-// simple and correct for the scalar PK values we expect (ints, strings,
-// etc); the only caveat is a theoretical collision if a PK element's string
-// representation happens to contain the separator itself in a way that
-// aliases with a different tuple - not a concern for the numeric/string
-// primary keys this package targets.
+// windowKey identifies a buffered row by table and primary key, formed by
+// joining their string forms with a separator unlikely to collide in
+// practice for the scalar PK values this package targets.
 type windowKey string
 
 const windowKeySeparator = "\x1f"
@@ -69,8 +64,7 @@ func (w *WindowBuffer) Remove(table TableID, pk PrimaryKey) bool {
 	delete(w.indexOf, key)
 	w.rows = append(w.rows[:idx], w.rows[idx+1:]...)
 
-	// Removing a row shifts every subsequent row's index down by one; fix
-	// up the index map so future lookups remain correct.
+	// Shift every later row's index down by one to match.
 	for k, i := range w.indexOf {
 		if i > idx {
 			w.indexOf[k] = i - 1

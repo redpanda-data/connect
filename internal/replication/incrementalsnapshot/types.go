@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -6,13 +6,11 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-// Package incrementalsnapshot provides database-agnostic building blocks
-// shared by connectors implementing Debezium-style incremental
-// snapshotting: table and primary-key identifiers, a dedup window buffer,
-// resumable checkpoint state, and the Deps injection contract a
-// per-database coordinator depends on. It has zero dependency on any
-// concrete database driver -- every side-effecting operation (querying a
-// database, resolving primary keys, etc.) is injected by the caller.
+// Package incrementalsnapshot provides database-agnostic building blocks for
+// incremental snapshotting: table/PK identifiers, a dedup window buffer,
+// resumable state, and the Deps injection contract a per-database
+// coordinator depends on. Every side effect is injected by the caller, so
+// this package has no database driver dependency.
 package incrementalsnapshot
 
 import "fmt"

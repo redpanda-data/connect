@@ -67,39 +67,32 @@ type Stream struct {
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
 
-	// snapshotCoordinator drives Debezium-style incremental snapshotting
-	// concurrently with replication streaming; nil unless enabled via
-	// Config.IncrementalSnapshot. Only ever touched from the streamMessages
-	// goroutine, matching Coordinator's single-goroutine usage contract.
+	// snapshotCoordinator drives incremental snapshotting concurrently with
+	// replication streaming; nil unless enabled via Config.IncrementalSnapshot.
+	// Only touched from the streamMessages goroutine.
 	snapshotCoordinator *snapshot.Coordinator
 	// incrementalDB is a dedicated connection for incremental snapshot
-	// queries, kept separate from pgConn since pgConn is occupied by the
-	// replication protocol once streaming starts.
+	// queries; pgConn is occupied by the replication protocol once
+	// streaming starts.
 	incrementalDB *sql.DB
-	// incrementalPKCache caches, per table (keyed by TableID.String()), the
-	// unquoted primary key columns resolved for incremental snapshotting.
-	// Populated lazily so each table's primary key is only looked up once.
+	// incrementalPKCache caches unquoted primary key columns per table
+	// (keyed by TableID.String()), resolved lazily on first use.
 	incrementalPKCache map[string][]string
 	// incrementalSnapshotTables is the set of tables under incremental
-	// snapshot, used to avoid resolving primary key columns for DML on
-	// tables the incremental snapshot doesn't care about.
+	// snapshot, so DML on other tables skips PK resolution.
 	incrementalSnapshotTables map[incrementalsnapshot.TableID]struct{}
 
-	// willEmitLegacySnapshot is true only when this session will actually run
-	// the one-shot upfront stream_snapshot backfill (and so will emit a
-	// SnapshotCompleteOpType sentinel). This is false whenever the
-	// replication slot already existed at startup, even if StreamOldData is
-	// configured true, since that backfill only ever runs against a freshly
-	// created slot.
+	// willEmitLegacySnapshot is true only when this session will run the
+	// one-shot stream_snapshot backfill (and emit a SnapshotCompleteOpType
+	// sentinel) -- false whenever the slot already existed at startup, since
+	// that backfill only ever runs against a fresh slot.
 	willEmitLegacySnapshot bool
 }
 
-// WillEmitLegacySnapshot reports whether this stream will run the one-shot
-// upfront stream_snapshot backfill (and thus emit a SnapshotCompleteOpType
-// sentinel) during this session. Callers use this to distinguish nil-LSN
-// batches belonging to that one-shot phase from nil-LSN batches produced by
-// incremental snapshotting, which runs continuously and never emits that
-// sentinel.
+// WillEmitLegacySnapshot reports whether this session will run the one-shot
+// stream_snapshot backfill (and emit a SnapshotCompleteOpType sentinel).
+// Callers use it to distinguish those nil-LSN batches from incremental
+// snapshotting's, which never emits that sentinel.
 func (s *Stream) WillEmitLegacySnapshot() bool {
 	return s.willEmitLegacySnapshot
 }
@@ -624,10 +617,9 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 		*currentTxnCommitTime = begin.CommitTime
 		*currentTxnXid = uint64(begin.Xid)
 	} else if _, ok := logicalMsg.(*CommitMessage); ok {
-		// The incremental snapshot must advance, and any rows/checkpoint it emits
-		// must be sent, before this transaction's own commit message (below) is
-		// forwarded downstream, so a consumer never observes replication progress
-		// past a commit whose incremental snapshot side effects aren't yet visible.
+		// The incremental snapshot must advance (and anything it emits be
+		// sent) before this commit is forwarded, so a consumer never
+		// observes progress past effects that aren't yet visible.
 		if s.snapshotCoordinator != nil {
 			emitted, changed, err := s.snapshotCoordinator.OnCommit(ctx, *currentTxnXid)
 			if err != nil {

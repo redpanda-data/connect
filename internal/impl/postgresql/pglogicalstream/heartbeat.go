@@ -22,11 +22,10 @@ type heartbeat struct {
 	task          *asyncroutine.Periodic
 	logger        *service.Logger
 	prefix, value string
-	// transactional controls whether the heartbeat's logical message is
-	// emitted transactionally. It must be true when an incremental snapshot
-	// is running, since the coordinator's OnCommit only observes a txid for
-	// transactional messages, and heartbeats are otherwise the only write
-	// traffic guaranteed to occur on tables with no other activity.
+	// transactional controls whether the heartbeat is emitted
+	// transactionally. Must be true during an incremental snapshot: OnCommit
+	// only sees a txid for transactional messages, and heartbeats may be the
+	// only write traffic on otherwise-quiet tables.
 	transactional bool
 }
 
@@ -53,9 +52,8 @@ func (h *heartbeat) Start() {
 }
 
 func (h *heartbeat) run(ctx context.Context) {
-	// Preserved verbatim (transactional literal inline, not a placeholder)
-	// when incremental snapshotting is disabled, so this is a strict no-op
-	// for existing users.
+	// Unchanged (literal inline, not a placeholder) when incremental
+	// snapshotting is disabled -- a strict no-op for existing users.
 	query := "SELECT pg_logical_emit_message(false, $1, $2)"
 	if h.transactional {
 		query = "SELECT pg_logical_emit_message(true, $1, $2)"

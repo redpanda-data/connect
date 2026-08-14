@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -13,11 +13,9 @@ package incrementalsnapshot
 const CurrentStateVersion = 1
 
 // State is the resumable, persistable state of an incremental snapshot
-// coordinator. Callers are expected to serialize this (e.g. to JSON) as a
-// checkpoint and pass it back in to resume after a restart. Watermarks are
-// deliberately not part of this struct: they must always be re-derived
-// fresh on resume, never reused, since a persisted watermark could be
-// arbitrarily stale.
+// coordinator, serialized (e.g. to JSON) as a checkpoint. Watermarks are
+// deliberately excluded: they must always be re-derived fresh on resume,
+// never reused, since a persisted one could be arbitrarily stale.
 type State struct {
 	Version         int        `json:"version"`
 	Done            bool       `json:"done"`
@@ -27,10 +25,9 @@ type State struct {
 	RemainingTables []TableID  `json:"remaining_tables,omitempty"`
 }
 
-// Clone returns a deep-enough copy of the State for safe internal use. New
-// slices/pointers are allocated, but PrimaryKey elements themselves are
-// copied by value since they're expected to be JSON scalars (numbers,
-// strings, bools, nil).
+// Clone returns a deep-enough copy for safe internal use: new
+// slices/pointers, but PrimaryKey elements are copied by value since they're
+// expected to be JSON scalars.
 func (s *State) Clone() *State {
 	if s == nil {
 		return nil

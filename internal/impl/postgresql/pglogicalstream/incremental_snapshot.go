@@ -63,11 +63,9 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 		Deps: incrementalsnapshot.Deps{
 			ResolvePrimaryKey: s.resolveIncrementalPK,
 			ResolveMaxKey:     s.resolveIncrementalMaxKey,
-			// Deps.ResolveWatermark returns an opaque any (the watermark
-			// shape is database-specific); resolveIncrementalWatermark
-			// itself returns the concrete Postgres snapshot.Watermark this
-			// package's coordinator expects, so it's wrapped here to satisfy
-			// the generic signature.
+			// Wrapped to satisfy Deps' opaque any signature;
+			// resolveIncrementalWatermark itself returns the concrete
+			// Postgres snapshot.Watermark.
 			ResolveWatermark: func(ctx context.Context) (any, error) {
 				return s.resolveIncrementalWatermark(ctx)
 			},
@@ -86,10 +84,9 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 	return nil
 }
 
-// normalizeTableID applies the same identifier normalization NewPgStream uses
-// for DBSchema/DBTables, then unquotes the result, since incrementalsnapshot.TableID
-// must hold unquoted names (matching the raw schema/table postgres reports
-// on replication messages, which this must line up against).
+// normalizeTableID applies the same normalization NewPgStream uses for
+// DBSchema/DBTables, then unquotes: incrementalsnapshot.TableID must hold
+// unquoted names to match what postgres reports on replication messages.
 func normalizeTableID(schemaRaw, tableRaw string) (incrementalsnapshot.TableID, error) {
 	schemaNorm, err := sanitize.NormalizePostgresIdentifier(schemaRaw)
 	if err != nil {
@@ -110,10 +107,9 @@ func normalizeTableID(schemaRaw, tableRaw string) (incrementalsnapshot.TableID, 
 	return incrementalsnapshot.TableID{Schema: schema, Table: table}, nil
 }
 
-// incrementalPKColumns resolves and caches the unquoted primary key columns
-// for table. It backs both the coordinator's ResolvePrimaryKey dependency and
-// incrementalStreamedRowPK, which needs the same columns independently since
-// OnStreamedRow only accepts an already-built PrimaryKey, never column names.
+// incrementalPKColumns resolves and caches table's unquoted PK columns.
+// Backs both ResolvePrimaryKey and incrementalStreamedRowPK, which needs the
+// same columns to build a PrimaryKey for OnStreamedRow.
 func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnapshot.TableID) ([]string, error) {
 	key := table.String()
 	if cols, exists := s.incrementalPKCache[key]; exists {
@@ -146,9 +142,8 @@ func (s *Stream) resolveIncrementalPK(ctx context.Context, table incrementalsnap
 	return s.incrementalPKColumns(ctx, table)
 }
 
-// incrementalStreamedRowPK builds the incrementalsnapshot.PrimaryKey for a streamed
-// DML row so it can be passed to Coordinator.OnStreamedRow, which itself
-// only accepts already-extracted primary key values.
+// incrementalStreamedRowPK builds a PrimaryKey for a streamed DML row, since
+// OnStreamedRow only accepts already-extracted values.
 func (s *Stream) incrementalStreamedRowPK(ctx context.Context, table incrementalsnapshot.TableID, data any) (incrementalsnapshot.PrimaryKey, error) {
 	pkCols, err := s.incrementalPKColumns(ctx, table)
 	if err != nil {
@@ -199,9 +194,8 @@ func (s *Stream) resolveIncrementalMaxKey(ctx context.Context, table incremental
 	return pk, nil
 }
 
-// resolveIncrementalWatermark implements the concrete Postgres side of
-// incrementalsnapshot.Deps.ResolveWatermark (wrapped in setupIncrementalSnapshot to
-// satisfy that field's opaque any signature).
+// resolveIncrementalWatermark is the concrete Postgres implementation
+// wrapped by setupIncrementalSnapshot to satisfy Deps' opaque any signature.
 func (s *Stream) resolveIncrementalWatermark(ctx context.Context) (snapshot.Watermark, error) {
 	var raw string
 	if err := s.incrementalDB.QueryRowContext(ctx, "SELECT txid_current_snapshot()").Scan(&raw); err != nil {
@@ -284,12 +278,10 @@ func (s *Stream) fetchIncrementalChunk(ctx context.Context, table incrementalsna
 	return result, nil
 }
 
-// buildIncrementalSnapshotMessages converts a batch of incrementally
-// snapshotted rows into StreamMessages. If emitted is empty, a single
-// sentinel checkpoint message carrying just state is produced instead, since
-// the coordinator's state can advance without any rows being flushed (e.g.
-// every buffered row having already been deduplicated against the
-// replication stream).
+// buildIncrementalSnapshotMessages converts emitted rows into StreamMessages.
+// If emitted is empty, a single sentinel checkpoint message carries just the
+// state, since state can advance with nothing flushed (e.g. every buffered
+// row was deduplicated).
 func buildIncrementalSnapshotMessages(emitted []incrementalsnapshot.Row, state []byte) []StreamMessage {
 	if len(emitted) == 0 {
 		return []StreamMessage{{

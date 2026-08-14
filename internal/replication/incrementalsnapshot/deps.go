@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -23,12 +23,10 @@ type Deps struct {
 	// ResolveMaxKey executes the query produced by the caller's chunk-query
 	// builder and returns the table's current maximum primary key.
 	ResolveMaxKey func(ctx context.Context, table TableID, pkColumnsUnquoted []string, query string) (PrimaryKey, error)
-	// ResolveWatermark returns a fresh watermark. The concrete type is
-	// opaque here (any) since the shape of a "watermark" is inherently
-	// database-specific (e.g. a Postgres MVCC snapshot's xmin/xmax pair vs.
-	// a single monotonic marker like a MySQL GTID or an Oracle SCN) -- the
-	// coordinator implementation that supplies this Deps knows the concrete
-	// type it expects back and is responsible for asserting it.
+	// ResolveWatermark returns a fresh watermark. The type is opaque (any)
+	// since a watermark's shape is database-specific (e.g. a Postgres
+	// xmin/xmax pair vs. a single MySQL GTID or Oracle SCN); the coordinator
+	// that supplies this Deps knows the concrete type and asserts it.
 	ResolveWatermark func(ctx context.Context) (any, error)
 	// ForceFreshTransaction ensures the next watermark resolution observes
 	// a fresh transaction snapshot (e.g. by starting and committing a
