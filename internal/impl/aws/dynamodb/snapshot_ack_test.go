@@ -181,13 +181,20 @@ func TestSnapshotAckTracker(t *testing.T) {
 			resolves[i] = tracker.TrackBatch(7, scanKey(keys[i]), 1)
 		}
 
+		// Ack errors are collected and asserted after Wait: require inside a
+		// non-test goroutine panics instead of failing the test.
+		ackErrs := make(chan error, batches)
 		var wg sync.WaitGroup
 		for i := range batches {
 			wg.Go(func() {
-				require.NoError(t, tracker.Ack(ctx, 7, 1, resolves[i]))
+				ackErrs <- tracker.Ack(ctx, 7, 1, resolves[i])
 			})
 		}
 		wg.Wait()
+		close(ackErrs)
+		for err := range ackErrs {
+			require.NoError(t, err)
+		}
 		require.NoError(t, tracker.SealSegment(ctx, 7))
 
 		got := store.recorded()

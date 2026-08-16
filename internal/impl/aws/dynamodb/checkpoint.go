@@ -348,6 +348,12 @@ func (c *Checkpointer) HasAnyState(ctx context.Context) (bool, error) {
 			":hv": &types.AttributeValueMemberS{Value: c.hashKeyValue()},
 		},
 		Limit: aws.Int32(1),
+		// This probe is the sole gate for honoring start_from: latest. An
+		// eventually consistent read could miss checkpoint rows written
+		// moments before a crash-restart and reposition shards at LATEST,
+		// silently skipping their backlog; Limit 1 makes the strong read
+		// nearly free.
+		ConsistentRead: aws.Bool(true),
 	})
 	if err != nil {
 		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {

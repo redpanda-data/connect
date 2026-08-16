@@ -499,9 +499,6 @@ type snapshotState struct {
 	scanner       *SnapshotScanner
 	recordsRead   atomic.Int64
 	segmentsTotal int
-
-	// ackTracker gates snapshot progress persistence on downstream acks.
-	ackTracker *snapshotAckTracker
 }
 
 // waitAckGate blocks until every batch counted on gate has been acked or
@@ -1357,11 +1354,15 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	// Initialize snapshot scanner. Progress persistence is ack-gated: the
 	// tracker below persists a segment's position only once every batch at or
 	// below it has been acknowledged downstream.
-	d.snapshot.ackTracker = newSnapshotAckTracker(d.checkpointer, defaultSnapshotCheckpointBatchInterval, d.log)
-	// The completion gate is scoped to this connection attempt: it counts only
-	// batches this attempt emits, so batches orphaned in a previous attempt's
-	// msgChan cannot leave it permanently un-drainable.
-	ackGate := &sync.WaitGroup{}
+	// The tracker and completion gate are scoped to this connection attempt
+	// and captured by the scanner callbacks below: a previous attempt's
+	// still-live scanner keeps its own pair, so it can neither interleave a
+	// second scan cursor into this attempt's ordered tracker (which would
+	// break TrackBatch's scan-order contract and could persist positions or
+	// Complete=true past un-acked items) nor leave this attempt's gate
+	// permanently un-drainable via batches orphaned in a replaced msgChan.
+	ackTracker := newSnapshotAckTracker(d.checkpointer, defaultSnapshotCheckpointBatchInterval, d.log)
+	ackGate := new(sync.WaitGroup)
 	d.snapshot.scanner = NewSnapshotScanner(SnapshotScannerConfig{
 		Client:    d.dynamoClient,
 		Table:     tableName,
@@ -1373,7 +1374,7 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 
 	// Set batch callback to send snapshot records to msgChan
 	d.snapshot.scanner.SetBatchCallback(func(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, lastKey map[string]dynamodbtypes.AttributeValue) error {
-		return d.handleSnapshotBatch(ctx, items, segment, tableName, lastKey, ackGate)
+		return d.handleSnapshotBatch(ctx, items, segment, tableName, lastKey, ackTracker, ackGate)
 	})
 
 	// Set progress callback to update metrics
@@ -1384,7 +1385,7 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	// Seal each segment behind its in-flight batches so Complete=true only
 	// persists after they are all acknowledged.
 	d.snapshot.scanner.SetSegmentSealedCallback(func(ctx context.Context, segment int) error {
-		if err := d.snapshot.ackTracker.SealSegment(ctx, segment); err != nil {
+		if err := ackTracker.SealSegment(ctx, segment); err != nil {
 			d.metrics.checkpointFailures.Incr(1)
 			return err
 		}
@@ -2759,7 +2760,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 // handleSnapshotBatch processes a batch of items from the snapshot scan.
 // lastKey is the scan position after this batch; it is registered with the
 // segment's ordered ack tracker and persisted only once acknowledged.
-func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, tableName string, lastKey map[string]dynamodbtypes.AttributeValue, ackGate *sync.WaitGroup) error {
+func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, tableName string, lastKey map[string]dynamodbtypes.AttributeValue, tracker *snapshotAckTracker, ackGate *sync.WaitGroup) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -2817,9 +2818,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 
 	// Register with the segment's ordered ack tracker: the scan position is
 	// only persisted once this batch (and everything before it) is acked.
-	snapshot := d.snapshot
-	resolve := snapshot.ackTracker.TrackBatch(segment, lastKey, len(batch))
-	tracker := snapshot.ackTracker
+	resolve := tracker.TrackBatch(segment, lastKey, len(batch))
 
 	// Track pending acks: the global gauge and the snapshot completion gate.
 	d.pendingAcks.Add(1)
