@@ -672,18 +672,37 @@ func (m *mongoCDC) readParallelSnapshot(
 // messages that fail ("If set to false these messages will instead be
 // deleted"), so the stream must continue past them rather than pin the
 // tracker and back-pressure forever.
-func snapshotAckFn(resolve func() *bson.Raw) service.AckFunc {
-	return func(_ context.Context, _ error) error {
+//
+// A non-nil resolved token is a legitimate outcome, not a misroute: snapshot
+// and streaming batches share one ordered tracker, and streaming tracking
+// starts once snapshot batches are enqueued (not acked). Under out-of-order
+// acks a snapshot slot's resolve can therefore surface a streaming batch's
+// resume token as the new contiguous frontier - and because every snapshot
+// slot precedes every streaming slot in the tracker, that frontier proves the
+// whole snapshot has settled. It must be persisted exactly like the streaming
+// ack path would, or the checkpoint is silently dropped.
+func snapshotAckFn(resolve func() *bson.Raw, persist func(context.Context, bson.Raw) error) service.AckFunc {
+	return func(ctx context.Context, _ error) error {
 		resumeToken := resolve()
-		if resumeToken != nil && *resumeToken != nil {
-			// Snapshot slots are tracked with a nil token (only streaming
-			// slots carry one), so a token here means snapshot and streaming
-			// acks were misrouted in the checkpoint tracker - a regression,
-			// not an operational error.
-			return fmt.Errorf("invariant violation: snapshot batch resolved with resume token %s, which only streaming batches carry; snapshot and streaming acks were misrouted in the checkpoint tracker", resumeToken.String())
+		if resumeToken == nil || *resumeToken == nil {
+			return nil
 		}
-		return nil
+		return persist(ctx, *resumeToken)
 	}
+}
+
+// persistResumeToken records token as the in-memory resume position and, when
+// no interval flusher owns persistence, stores it in the checkpoint cache.
+// Shared by the streaming ack path and snapshot acks that surface a streaming
+// token via the shared tracker.
+func (m *mongoCDC) persistResumeToken(ctx context.Context, token bson.Raw) error {
+	m.resumeTokenMu.Lock()
+	defer m.resumeTokenMu.Unlock()
+	m.resumeToken = token
+	if m.checkpointFlusher == nil {
+		return m.checkpoint.Store(ctx, m.resumeToken)
+	}
+	return nil
 }
 
 func (m *mongoCDC) readSnapshotRange(
@@ -727,7 +746,7 @@ func (m *mongoCDC) readSnapshotRange(
 			if err != nil {
 				return fmt.Errorf("unable to create batch: %w", err)
 			}
-			b := mongoBatch{mb, snapshotAckFn(resolve)}
+			b := mongoBatch{mb, snapshotAckFn(resolve, m.persistResumeToken)}
 			select {
 			case m.readChan <- b:
 			case <-ctx.Done():
@@ -945,13 +964,7 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 				if resumeToken == nil || *resumeToken == nil {
 					return nil
 				}
-				m.resumeTokenMu.Lock()
-				defer m.resumeTokenMu.Unlock()
-				m.resumeToken = *resumeToken
-				if m.checkpointFlusher == nil {
-					return m.checkpoint.Store(ctx, m.resumeToken)
-				}
-				return nil
+				return m.persistResumeToken(ctx, *resumeToken)
 			}
 			select {
 			case m.readChan <- mongoBatch{mb, ackFn}:

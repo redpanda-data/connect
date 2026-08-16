@@ -9,6 +9,7 @@
 package cdc
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -17,12 +18,16 @@ import (
 )
 
 func TestSnapshotAckFn(t *testing.T) {
+	noPersist := func(context.Context, bson.Raw) error {
+		return errors.New("persist must not be called for a nil token")
+	}
+
 	t.Run("a nack resolves too: auto_replay_nacks off is an opt-in drop", func(t *testing.T) {
 		resolved := false
 		ackFn := snapshotAckFn(func() *bson.Raw {
 			resolved = true
 			return nil
-		})
+		}, noPersist)
 		require.NoError(t, ackFn(t.Context(), errors.New("downstream failure")))
 		require.True(t, resolved, "a nacked batch is deleted per the auto_replay_nacks contract; the stream must continue past it")
 	})
@@ -32,14 +37,23 @@ func TestSnapshotAckFn(t *testing.T) {
 		ackFn := snapshotAckFn(func() *bson.Raw {
 			resolved = true
 			return nil
-		})
+		}, noPersist)
 		require.NoError(t, ackFn(t.Context(), nil))
 		require.True(t, resolved)
 	})
 
-	t.Run("ack rejects an unexpected non-nil resume token", func(t *testing.T) {
-		token := bson.Raw("unexpected")
-		ackFn := snapshotAckFn(func() *bson.Raw { return &token })
-		require.Error(t, ackFn(t.Context(), nil))
+	t.Run("a streaming token surfaced by out-of-order acks is persisted", func(t *testing.T) {
+		// Snapshot and streaming share one ordered tracker: when a streaming
+		// batch acks before an earlier snapshot batch, the snapshot slot's
+		// resolve legitimately returns the streaming token as the contiguous
+		// frontier. It must be persisted, not dropped.
+		token := bson.Raw("streaming-token")
+		var persisted bson.Raw
+		ackFn := snapshotAckFn(func() *bson.Raw { return &token }, func(_ context.Context, tok bson.Raw) error {
+			persisted = tok
+			return nil
+		})
+		require.NoError(t, ackFn(t.Context(), nil))
+		require.Equal(t, token, persisted, "the resolved streaming checkpoint must persist through the same path as a streaming ack")
 	})
 }
