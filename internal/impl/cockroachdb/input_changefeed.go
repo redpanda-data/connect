@@ -59,7 +59,7 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 				ShortDescription("Cache resource storing the last delivered cursor, so restarts resume instead of re-reading the table.").
 				Optional(),
 			service.NewStringListField("options").
-				Description("A list of options to be included in the changefeed (WITH X, Y...).\n\nNOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Redpanda Connect in this case. A RESOLVED option is also added (unless one is supplied here): the stored cursor only ever advances to resolved timestamps whose rows have all been acknowledged downstream, so a restart redelivers at most the changes since the last resolved timestamp (bounded by the `changefeed.min_checkpoint_frequency` cluster setting) and never skips data.").
+				Description("A list of options to be included in the changefeed (WITH X, Y...).\n\nNOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Redpanda Connect in this case. A RESOLVED option is also added (unless one is supplied here): the stored cursor only ever advances to resolved timestamps whose rows have all been acknowledged downstream, so a restart redelivers at most the changes since the last resolved timestamp (bounded by the `changefeed.min_checkpoint_frequency` cluster setting) and never skips data. Resolved records are internal cursor bookkeeping and are never emitted as messages; without a `cursor_cache` they are discarded.").
 				ShortDescription("Options to include in the changefeed. CURSOR and UPDATED are ignored when cursor_cache is set, and RESOLVED is added.").
 				Example([]string{`virtual_columns="omitted"`}).
 				Advanced().
@@ -82,6 +82,9 @@ type crdbChangefeedInput struct {
 	// resolved records (Read goroutine) persist concurrently: without a shared
 	// critical section two writes can land out of order and regress the cursor.
 	persistMu sync.Mutex
+	// resolvedDropWarning fires once when resolved records are discarded
+	// because no cursor_cache is configured.
+	resolvedDropWarning sync.Once
 
 	pgConfig *pgxpool.Config
 	pgPool   *pgxpool.Pool
@@ -322,6 +325,14 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		if gErr == nil {
 			if resolvedTs, _ := gObj.S("resolved").Data().(string); resolvedTs != "" {
 				if c.cursorCache == "" {
+					// Resolved records are cursor bookkeeping, never emitted as
+					// messages; without a cursor_cache there is no cursor to
+					// advance, so they are dropped. Warn once so a user who
+					// supplied resolved='...' expecting output can see why
+					// nothing surfaces.
+					c.resolvedDropWarning.Do(func() {
+						c.logger.Warnf("Discarding RESOLVED timestamp records: they are cursor bookkeeping and are never emitted as messages, and without a cursor_cache there is no cursor to advance")
+					})
 					continue
 				}
 				releaseFn, err := c.cursorCheckpointer.Track(ctx, resolvedTs, 1)
