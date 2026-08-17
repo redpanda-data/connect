@@ -85,9 +85,9 @@ Operational notes:
 		Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
 	).
 	Field(service.NewBoolField(fieldStreamSnapshot).
-		Description("If set to true, the connector will query all the existing data as a part of snapshot process. "+
-			"If set to false, no snapshot is taken and on first run streaming begins from the start of each table's existing change table — "+
-			"every change retained by SQL Server's CDC capture and cleanup jobs (three days by default) is replayed, not just changes from the current LSN onward. "+
+		Description("If set to true, the connector will query all the existing data as a part of snapshot process. " +
+			"If set to false, no snapshot is taken and on first run streaming begins from the start of each table's existing change table — " +
+			"every change retained by SQL Server's CDC capture and cleanup jobs (three days by default) is replayed, not just changes from the current LSN onward. " +
 			"To begin from the present on a table that already holds change history, disable and re-enable CDC on the table immediately before starting the pipeline so that its change table starts empty.").
 		ShortDescription("Snapshot existing data first. Otherwise streaming replays everything retained in the change tables.").
 		Example(true).
@@ -135,9 +135,9 @@ Operational notes:
 		Default(1024),
 	).
 	Field(service.NewDurationField(fieldStreamBackoffInterval).
-		Description("The interval to wait before checking for new changes after a pass over the change tables completes. "+
-			"Each pass drains changes up to the maximum LSN observed as the pass began, then sleeps for this interval while SQL Server's capture job continues to publish. "+
-			"For low traffic tables increasing this value reduces query load on the server. "+
+		Description("The interval to wait before checking for new changes after a pass over the change tables completes. " +
+			"Each pass drains changes up to the maximum LSN observed as the pass began, then sleeps for this interval while SQL Server's capture job continues to publish. " +
+			"For low traffic tables increasing this value reduces query load on the server. " +
 			"On high traffic tables it directly reduces throughput, because the input sits idle for the full interval between passes; consider lowering it towards `500ms`, which matches the default poll interval of comparable CDC systems.").
 		ShortDescription("Interval between passes over the change tables. On busy tables lower values increase throughput.").
 		Default("5s").
