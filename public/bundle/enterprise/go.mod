@@ -444,7 +444,7 @@ require (
 	github.com/substrait-io/substrait-protobuf/go v0.85.0 // indirect
 	github.com/tilinna/z85 v1.0.0 // indirect
 	github.com/timandy/routine v1.1.5 // indirect
-	github.com/twmb/avro v1.7.3-0.20260513193503-1e5c2a3fc070 // indirect
+	github.com/twmb/avro v1.8.0 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/twpayne/go-geom v1.6.1 // indirect
 	github.com/urfave/cli/v2 v2.27.7 // indirect

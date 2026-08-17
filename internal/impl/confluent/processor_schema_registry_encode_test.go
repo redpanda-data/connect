@@ -320,12 +320,12 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 			output: "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
 		},
 		{
-			// The normalizer auto-wraps plain values for nullable unions,
-			// so unwrapped input that previously required lame-union format
-			// now succeeds. Verify via round-trip decode.
-			name:   "message with unwrapped unions succeeds with normalizer",
+			// Bare union values are accepted alongside the tagged form, so
+			// unwrapped input that once required the tagged shape encodes to
+			// the same bytes.
+			name:   "message with unwrapped unions",
 			input:  `{"int_time_millis":35245000,"long_time_micros":20192000000000,"long_timestamp_micros":null,"pos_0_33333333":"!"}`,
-			output: "", // verified via round-trip below
+			output: "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x00\x02\x02!",
 		},
 		{
 			// Wrong union key ("long.time-millis" instead of "int.time-millis")
@@ -356,15 +356,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 
 				b, bErr := outBatches[0][0].AsBytes()
 				require.NoError(t, bErr)
-
-				if test.output != "" {
-					assert.Equal(t, test.output, string(b))
-				} else {
-					// No expected bytes — just verify valid Confluent wire
-					// format: magic byte + 4-byte schema ID + Avro binary.
-					require.Greater(t, len(b), 5, "output must have wire header")
-					assert.Equal(t, byte(0x00), b[0], "magic byte")
-				}
+				assert.Equal(t, test.output, string(b))
 			}
 		})
 	}
@@ -453,6 +445,81 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 	encoder.cacheMut.Lock()
 	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
+}
+
+// TestSchemaRegistryAvroDecodeEncodeRoundTrip pins the symmetry of the two
+// processors: whatever schema_registry_decode emits must re-encode, through
+// schema_registry_encode on the same schema, to the exact bytes it was decoded
+// from — in both avro_raw_json modes, which differ only in whether unions are
+// tagged.
+//
+// Decimals backed by bytes are the case that broke this. Avro JSON spells a
+// bytes value as one codepoint per byte, so the unscaled value 0x21 is emitted
+// as "!", which the native encoder read as a decimal in decimal notation and
+// rejected.
+func TestSchemaRegistryAvroDecodeEncodeRoundTrip(t *testing.T) {
+	byID, err := json.Marshal(struct {
+		Schema string `json:"schema"`
+	}{
+		Schema: testSchemaLogicalTypes,
+	})
+	require.NoError(t, err)
+
+	bySubject, err := json.Marshal(struct {
+		Schema string `json:"schema"`
+		ID     int    `json:"id"`
+	}{
+		Schema: testSchemaLogicalTypes,
+		ID:     4,
+	})
+	require.NoError(t, err)
+
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		switch path {
+		case "/schemas/ids/4":
+			return byID, nil
+		case "/subjects/foo/versions/latest":
+			return bySubject, nil
+		}
+		return nil, errors.New("nope")
+	})
+
+	subj, err := service.NewInterpolatedString("foo")
+	require.NoError(t, err)
+
+	for _, rawJSON := range []bool{false, true} {
+		t.Run(fmt.Sprintf("avro_raw_json=%v", rawJSON), func(t *testing.T) {
+			cfg := decodingConfig{}
+			cfg.avro.rawUnions = rawJSON
+			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
+			require.NoError(t, err)
+			defer func() { _ = decoder.Close(t.Context()) }()
+
+			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, rawJSON, time.Minute*10, time.Minute, service.MockResources())
+			require.NoError(t, err)
+			defer func() { _ = encoder.Close(t.Context()) }()
+
+			for _, wire := range []string{
+				"\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
+				// Every union on its null branch.
+				"\x00\x00\x00\x00\x04\x00\x00\x00\x00",
+			} {
+				decoded, err := decoder.Process(t.Context(), service.NewMessage([]byte(wire)))
+				require.NoError(t, err)
+				require.Len(t, decoded, 1)
+
+				outBatches, err := encoder.ProcessBatch(t.Context(), service.MessageBatch{decoded[0]})
+				require.NoError(t, err)
+				require.Len(t, outBatches, 1)
+				require.Len(t, outBatches[0], 1)
+				require.NoError(t, outBatches[0][0].GetError())
+
+				b, err := outBatches[0][0].AsBytes()
+				require.NoError(t, err)
+				assert.Equal(t, wire, string(b))
+			}
+		})
+	}
 }
 
 func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
