@@ -971,28 +971,30 @@ func (l *logCapture) matching(sub string) []string {
 	return out
 }
 
-// TestIntegrationMongoCDCUnresumableCheckpointToken pins the CURRENT behaviour
-// when the checkpoint cache holds a resume token the server cannot resume from:
-// the input neither delivers data nor gives up. Because a checkpoint exists the
-// snapshot is skipped, and because the token is unresumable the change stream
-// refuses to open, so the input fails and is reconnected in a loop, forever,
+// TestIntegrationMongoCDCUnresumableCheckpointToken is the regression test for
+// unresumable-checkpoint recovery. When the cache holds a resume token the server
+// cannot resume from, the input has no usable position: the checkpoint's presence
+// would skip the snapshot, and the dead token stops the change stream from
+// opening at all. Retrying that position can never succeed, so the input must
+// recognise the failure, clear the checkpoint and re-run the snapshot - the
+// at-least-once recovery (duplicates, never loss) - rather than loop forever
 // delivering nothing.
 //
-// This is a known limitation, not the desired end state. The intended follow-up
-// is for an unresumable token to clear the checkpoint and re-run the snapshot.
-// When that recovery lands this test should be rewritten to assert the
-// re-snapshot (the two seeded documents get delivered) instead of the stall.
+// Asserted here: the recovery is announced in the log, both seeded documents
+// arrive from the re-run snapshot, and a later restart reads nothing more,
+// proving the replacement checkpoint is one the server accepts. Without the
+// recovery this test fails on all three: no warning, no documents, and the
+// unchanged garbage token still in the cache file.
 //
 // The stream is built explicitly rather than via setup because the checkpoint
 // has to be seeded into the cache directory before the first run, and because
-// the failure is only observable through the logger.
+// the recovery is only observable through the logger.
 //
-// NOTE: the fast reconnect loop this test produces is what exposed the
-// checkpointFlusher Start/Stop race across reconnects, since fixed by
-// registering TriggerHasStopped first in input.go's stream goroutine so the
-// flusher is fully stopped before a waiting Connect resumes. This test churns
-// through reconnects quickly, so it doubles as a regression exercise for that
-// ordering.
+// NOTE: before the recovery existed this test produced a fast reconnect loop,
+// which is what exposed the checkpointFlusher Start/Stop race across reconnects,
+// since fixed by registering TriggerHasStopped first in input.go's stream
+// goroutine so the flusher is fully stopped before a waiting Connect resumes.
+// The recovery path still crosses one reconnect, so the ordering stays exercised.
 func TestIntegrationMongoCDCUnresumableCheckpointToken(t *testing.T) {
 	integration.CheckSkip(t)
 	uri, mongoClient := startMongoContainer(t)
@@ -1043,33 +1045,51 @@ file:
 	stream := &streamHelper{builder: builder}
 
 	wait := stream.RunAsync(t)
-	time.Sleep(5 * time.Second)
 
-	// No silent re-snapshot: the checkpoint exists, so the two documents already
-	// in the collection are never read.
-	require.Empty(t, output.Messages(t), "an unresumable checkpoint must not silently re-snapshot")
-	// And no silent success either: the change stream open keeps failing, and
-	// keeps being retried - more than one failure proves the input is cycling
-	// through reconnects rather than having quietly settled into an idle state.
+	// The dead token is detected on the first change stream open, its checkpoint
+	// cleared, and the reconnect then finds no checkpoint and re-runs the
+	// snapshot - which is how the two documents already in the collection get
+	// delivered despite the input having started with a checkpoint.
+	//
+	// output.messages() is used rather than Messages(t) inside the condition:
+	// testify runs it on its own goroutine where a require failure would
+	// silently kill the tick instead of failing the test.
+	require.Eventually(t, func() bool {
+		msgs, err := output.messages()
+		return err == nil && len(msgs) >= 2
+	}, 60*time.Second, 250*time.Millisecond, "the re-run snapshot never delivered the seeded documents")
+
+	// logs.matching snapshots under the capture's mutex: the stream is still
+	// running here, so reading logs.records directly would race Handle, and
+	// assertion message args are evaluated eagerly even on success.
+	cleared := logs.matching("no longer resumable, clearing the checkpoint")
+	require.NotEmpty(t, cleared, "expected the unresumable position to be reported and cleared, captured logs: %v", logs.matching(""))
+	t.Logf("recovery (x%d): %s", len(cleared), cleared[0])
+	// The clear is triggered by the failure to open the stream on the dead token,
+	// so that failure is still surfaced - it is what makes the framework
+	// reconnect into the re-snapshot.
 	failures := logs.matching("error watching MongoDB change stream")
-	// logs.matching("") snapshots under the capture's mutex: the stream is
-	// still running here, so reading logs.records directly would race Handle,
-	// and assertion message args are evaluated eagerly even on success.
-	require.NotEmpty(t, failures, "expected the change stream open to fail, captured logs: %v", logs.matching(""))
-	require.Greater(t, len(failures), 1, "expected repeated failures from the reconnect loop, got: %v", failures)
+	require.NotEmpty(t, failures, "expected the change stream open to fail before the recovery")
 	require.Contains(t, failures[0], "error opening change stream")
-	t.Logf("change stream failure (x%d): %s", len(failures), failures[0])
 
 	stream.StopWithin(t, 30*time.Second)
 	wait()
-	require.Empty(t, output.Messages(t), "an unresumable checkpoint must not silently re-snapshot")
+	require.Len(t, output.Messages(t), 2, "the re-run snapshot must deliver each document once")
 
-	// The bad checkpoint is left in place - nothing clears it, which is exactly
-	// why the stall is permanent across restarts too. The follow-up that adds
-	// recovery should flip this assertion.
+	// The garbage token is gone, replaced by a position the server accepted.
 	after, err := os.ReadFile(filepath.Join(cacheDir, "mongodb_cdc_checkpoint"))
 	require.NoError(t, err)
-	require.Equal(t, string(encoded), string(after), "the unresumable checkpoint is not cleared today")
+	require.NotEqual(t, string(encoded), string(after), "the unresumable checkpoint must not survive the recovery")
+	t.Logf("checkpoint after recovery: %s", after)
+
+	// And that replacement really is resumable: a restart with no new writes
+	// resumes the stream instead of re-running the snapshot or recovering again.
+	wait = stream.RunAsync(t)
+	time.Sleep(5 * time.Second)
+	stream.StopWithin(t, 30*time.Second)
+	wait()
+	require.Len(t, output.Messages(t), 2, "the recovered checkpoint must resume rather than re-snapshot")
+	require.Len(t, logs.matching("no longer resumable, clearing the checkpoint"), len(cleared), "the recovery must not repeat once a valid checkpoint is stored")
 }
 
 // TestIntegrationMongoCDCSnapshotRestartChaos restarts the input repeatedly

@@ -97,6 +97,8 @@ input:
 
 Read from a MongoDB replica set using https://www.mongodb.com/docs/manual/changeStreams/[^Change Streams]. It's only possible to watch for changes when using a sharded MongoDB or a MongoDB cluster running as a replica set.
 
+If a stored resume position can no longer be resumed (for example it has aged out of the oplog), the input clears its checkpoint and re-runs the snapshot rather than retrying a dead position.
+
 By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
 
 == Metadata

@@ -10,6 +10,7 @@ package cdc
 
 import (
 	"context"
+	"errors"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -57,4 +58,22 @@ func (c *checkpointCache) Load(ctx context.Context) (bson.Raw, error) {
 		return nil, err
 	}
 	return resumeToken, nil
+}
+
+// Delete removes the stored checkpoint, so that the next start behaves as if one
+// had never been written. An already absent key is success: the caller's goal is
+// that no checkpoint remains, and Load treats the same condition as "no
+// checkpoint" too.
+func (c *checkpointCache) Delete(ctx context.Context) error {
+	var cErr error
+	err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
+		cErr = cache.Delete(ctx, c.cacheKey)
+	})
+	if err == nil {
+		err = cErr
+	}
+	if errors.Is(err, service.ErrKeyNotFound) {
+		return nil
+	}
+	return err
 }

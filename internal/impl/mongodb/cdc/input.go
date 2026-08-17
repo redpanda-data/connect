@@ -57,12 +57,51 @@ const (
 
 	marshalModeCanonical string = "canonical"
 	marshalModeRelaxed   string = "relaxed"
+
+	// MongoDB server error codes that mean a change stream's resume position can
+	// never be resumed from again, no matter how many times it is retried.
+	//
+	// codeChangeStreamHistoryLost is reported when the position has aged out of
+	// the oplog window, codeInvalidResumeToken when the server considers the
+	// token itself invalid, and codeKeyStringFormatError when the token's
+	// keystring payload cannot even be decoded.
+	codeChangeStreamHistoryLost = 286
+	codeInvalidResumeToken      = 260
+	codeKeyStringFormatError    = 50811
 )
+
+// isUnresumableTokenError reports whether err means the change stream's resume
+// position is permanently unusable, as opposed to a transient failure.
+//
+// The asymmetry of the two mistakes sets how conservative this has to be:
+// misclassifying a transient error costs a re-run snapshot and therefore
+// duplicates, while failing to spot a genuinely dead position wedges the input
+// forever. Only provably dead positions may qualify, so classification is by
+// specific server error code and never by message text or error category -
+// network blips, timeouts, elections and authentication failures all surface as
+// something other than a ServerError, or as a code that is not listed here.
+//
+// mongo.ServerError covers both paths a dead position arrives through: the
+// server's rejection of the aggregate that opens the stream (a
+// mongo.CommandError, which implements ServerError) and a mid-stream
+// stream.Err(). errors.As walks wrapped errors, so callers may classify before
+// or after adding context.
+func isUnresumableTokenError(err error) bool {
+	var se mongo.ServerError
+	if !errors.As(err, &se) {
+		return false
+	}
+	return se.HasErrorCode(codeChangeStreamHistoryLost) ||
+		se.HasErrorCode(codeInvalidResumeToken) ||
+		se.HasErrorCode(codeKeyStringFormatError)
+}
 
 func spec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Summary(`Streams changes from a MongoDB replica set.`).
 		Description(`Read from a MongoDB replica set using https://www.mongodb.com/docs/manual/changeStreams/[^Change Streams]. It's only possible to watch for changes when using a sharded MongoDB or a MongoDB cluster running as a replica set.
+
+If a stored resume position can no longer be resumed (for example it has aged out of the oplog), the input clears its checkpoint and re-runs the snapshot rather than retrying a dead position.
 
 By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
 
@@ -547,6 +586,9 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			}
 		}
 		if err := m.readFromStream(ctx, cp, opts); err != nil {
+			if isUnresumableTokenError(err) {
+				m.clearUnresumableCheckpoint(ctx, err)
+			}
 			select {
 			case m.errorChan <- fmt.Errorf("error watching MongoDB change stream: %w", err):
 			default:
@@ -569,10 +611,11 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	return nil
 }
 
-// snapshotCheckpointWriteTimeout bounds the post-snapshot checkpoint write on
-// its detached context, mirroring the bounded terminal save: a shutdown that
-// raced the final ack should not be extended indefinitely by a slow cache.
-const snapshotCheckpointWriteTimeout = 10 * time.Second
+// checkpointWriteTimeout bounds the checkpoint writes that run on a detached
+// context - the post-snapshot store and the unresumable-checkpoint clear -
+// mirroring the bounded terminal save: a shutdown that raced either of them
+// should not be extended indefinitely by a slow cache.
+const checkpointWriteTimeout = 10 * time.Second
 
 // snapshotAckPollInterval is how often the post-snapshot checkpoint waits for
 // the snapshot batches still in flight to be acknowledged.
@@ -639,7 +682,7 @@ func (m *mongoCDC) storeSnapshotCheckpoint(
 	m.resumeTokenMu.Lock()
 	m.resumeToken = token
 	m.resumeTokenMu.Unlock()
-	storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), snapshotCheckpointWriteTimeout)
+	storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), checkpointWriteTimeout)
 	defer cancel()
 	if err := store(storeCtx, token); err != nil {
 		// A failed write only means the snapshot may run again, so warn and
@@ -647,6 +690,35 @@ func (m *mongoCDC) storeSnapshotCheckpoint(
 		m.logger.Warnf("unable to store post-snapshot checkpoint in cache: %v", err)
 	}
 	return true
+}
+
+// clearUnresumableCheckpoint drops the stream position that `cause` proved to be
+// permanently dead, so the next Connect starts over - re-running the snapshot
+// when one is configured - instead of retrying the same position forever. That
+// is at-least-once behaviour: a re-snapshot can duplicate, it cannot lose.
+//
+// The in-memory token is cleared first and under the same mutex the flusher and
+// the terminal save take, because both store whatever non-nil token they find:
+// leaving it set would write the dead position straight back after this delete.
+//
+// The delete runs on a detached, bounded context rather than ctx: the caller's
+// ctx is cancelled on every shutdown path, and a shutdown racing the failure
+// would otherwise leave the dead checkpoint in place, wedging the input for one
+// more start. Nothing here is on the happy path, so the bounded wait cannot slow
+// an ordinary shutdown.
+func (m *mongoCDC) clearUnresumableCheckpoint(ctx context.Context, cause error) {
+	m.logger.Warnf("Change stream position is no longer resumable, clearing the checkpoint to re-run the snapshot: %v", cause)
+	m.resumeTokenMu.Lock()
+	m.resumeToken = nil
+	m.resumeTokenMu.Unlock()
+	deleteCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), checkpointWriteTimeout)
+	defer cancel()
+	if err := m.checkpoint.Delete(deleteCtx); err != nil {
+		// Warn and carry on: the input is already failing over, and a checkpoint
+		// left behind self-heals on the next failure rather than changing what
+		// this run reports.
+		m.logger.Warnf("unable to clear the unresumable checkpoint: %v", err)
+	}
 }
 
 func (m *mongoCDC) readSnapshot(

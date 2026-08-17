@@ -10,12 +10,15 @@ package cdc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -35,6 +38,67 @@ mongodb_cdc:
       - role: arn:aws:iam::123456789012:role/foo
 `)
 	require.NoError(t, err)
+}
+
+func TestIsUnresumableTokenError(t *testing.T) {
+	// The three unresumable codes are what a real server reports; the observed
+	// shape for a malformed keystring is
+	// `(Location50811) KeyString format error: Unknown type: 222` arriving as a
+	// mongo.CommandError, which is why CommandError is the classified type here.
+	for _, test := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "change stream history lost",
+			err:  mongo.CommandError{Code: codeChangeStreamHistoryLost, Name: "ChangeStreamHistoryLost"},
+			want: true,
+		},
+		{
+			name: "invalid resume token",
+			err:  mongo.CommandError{Code: codeInvalidResumeToken, Name: "InvalidResumeToken"},
+			want: true,
+		},
+		{
+			name: "keystring format error",
+			err:  mongo.CommandError{Code: codeKeyStringFormatError, Name: "Location50811", Message: "KeyString format error: Unknown type: 222"},
+			want: true,
+		},
+		{
+			name: "wrapped unresumable error is still classified",
+			err:  fmt.Errorf("error watching MongoDB change stream: %w", fmt.Errorf("error opening change stream: %w", mongo.CommandError{Code: codeChangeStreamHistoryLost})),
+			want: true,
+		},
+		{
+			// A server error that has nothing to do with the resume position must
+			// not clear a perfectly good checkpoint.
+			name: "unrelated server error",
+			err:  mongo.CommandError{Code: 11000, Name: "DuplicateKey"},
+			want: false,
+		},
+		{
+			// Transient failures are the expensive false positive: clearing here
+			// would re-snapshot (and duplicate) on every network blip.
+			name: "network error",
+			err:  errors.New("network"),
+			want: false,
+		},
+		{
+			name: "context cancellation",
+			err:  fmt.Errorf("reading change stream: %w", context.Canceled),
+			want: false,
+		},
+		{
+			name: "nil",
+			err:  nil,
+			want: false,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.want, isUnresumableTokenError(test.err))
+		})
+	}
 }
 
 func TestStoreSnapshotCheckpointWaitsForSnapshotAcks(t *testing.T) {
