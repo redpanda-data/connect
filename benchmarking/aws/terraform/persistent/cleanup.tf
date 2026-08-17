@@ -1,6 +1,13 @@
 # Orphan-cleanup Lambda — runs every 15 minutes, destroys any
 # Project=redpanda-connect-bench resource older than var.orphan_ttl_hours.
 #
+# Lives in persistent/ (NOT shared/) as of 2026-08-17: when it lived inside
+# the session stack, an interrupted `terraform destroy` deleted the
+# EventBridge rule FIRST (dependency order) and died before the expensive
+# resources — disarming the safety net and then stranding a full stack for
+# five days (~$240). The reaper must never share a lifecycle with what it
+# guards. Requires cleanup-lambda/bootstrap.zip (`make zip`) at apply time.
+#
 # Tags are applied automatically via the provider's default_tags block in
 # main.tf; no explicit tags block is needed on these resources.
 
