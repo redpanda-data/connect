@@ -384,7 +384,9 @@ Time to wait between polling attempts when no records are available.
 
 === `start_from`
 
-Where to start reading when no checkpoint exists. `trim_horizon` starts from the oldest available record, `latest` starts from new records.
+Where to start reading on a genuinely fresh pipeline (no checkpoint state exists yet under this `checkpoint_namespace` for the stream). `trim_horizon` starts from the oldest available record, `latest` starts from new records.
+
+`latest` is honoured only on that first discovery: once any checkpoint state exists, shards discovered later - rotation children found by the periodic refresh, and any checkpoint-less shard after a restart - always start at `trim_horizon` so their backlog is never skipped. In practice a restart under `latest` therefore replays from each shard's oldest retained record rather than only new records; at-least-once delivery takes precedence over the configured start position.
 
 
 *Type*: `string`

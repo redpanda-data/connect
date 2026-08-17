@@ -233,8 +233,8 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(defaultDynamoDBPollInterval).
 				Advanced(),
 			service.NewStringEnumField(dciFieldStartFrom, "trim_horizon", "latest").
-				Description("Where to start reading when no checkpoint exists. `trim_horizon` starts from the oldest available record, `latest` starts from new records.").
-				ShortDescription("Where to start when no checkpoint exists: trim_horizon for the oldest record, or latest.").
+				Description("Where to start reading on a genuinely fresh pipeline (no checkpoint state exists yet under this `checkpoint_namespace` for the stream). `trim_horizon` starts from the oldest available record, `latest` starts from new records.\n\n`latest` is honoured only on that first discovery: once any checkpoint state exists, shards discovered later - rotation children found by the periodic refresh, and any checkpoint-less shard after a restart - always start at `trim_horizon` so their backlog is never skipped. In practice a restart under `latest` therefore replays from each shard's oldest retained record rather than only new records; at-least-once delivery takes precedence over the configured start position.").
+				ShortDescription("Where a fresh pipeline starts: trim_horizon for the oldest record, or latest. After any checkpoint state exists, new shards always start at trim_horizon.").
 				Default("trim_horizon"),
 			service.NewIntField(dciFieldCheckpointLimit).
 				Description("Maximum number of unacknowledged messages before forcing a checkpoint update. Lower values provide better recovery guarantees but increase write overhead.").
