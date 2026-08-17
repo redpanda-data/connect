@@ -1,0 +1,103 @@
+name: Nightly Soak
+
+# Scheduled soak runs for flagship CDC connectors (CON-179 R6, increment 3).
+#
+# Credentials: the job assumes rpcn-bench-gha-provisioner in the dedicated
+# bench account via GitHub OIDC (no stored keys), with a 4h session so
+# credentials outlive the ~2h20m run — the failure mode that killed two
+# laptop-driven soaks. The enterprise license comes from Secrets Manager
+# (REDPANDA_LICENSE_SECRET), never from the repo or workflow secrets.
+#
+# NOTE on the cron: GitHub only evaluates schedules from the repository's
+# DEFAULT branch. While this workflow lives on a feature branch it can only
+# be run via workflow_dispatch (Actions tab -> Nightly Soak -> Run workflow,
+# selecting the branch); the schedule arms automatically once the file
+# reaches the default branch.
+#
+# One-time setup (operator):
+#   1. task aws:persistent            (OIDC provider, provisioner role,
+#                                      archive bucket, dashboards, reaper)
+#   2. aws secretsmanager create-secret \
+#        --name redpanda-connect-bench/license \
+#        --secret-string file://rpcn.license --region us-east-2
+
+on:
+  schedule:
+    # 08:10 UTC nightly (avoid the top-of-hour scheduler crunch).
+    - cron: '10 8 * * *'
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Soak scenario (path under benchmarking/aws/scenarios, no .yaml)'
+        required: false
+        default: 'postgres/orders-soak'
+        type: string
+
+# Never two soaks at once: they would fight over the shared Terraform state
+# and the fixed-name session resources.
+concurrency:
+  group: bench-soak
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    # Provisioning (~15m) + 95m window + teardown (~15m) + slack. Must stay
+    # under the 4h credential session below.
+    timeout-minutes: 220
+    env:
+      REDPANDA_LICENSE_SECRET: redpanda-connect-bench/license
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
+          aws-region: us-east-2
+          role-duration-seconds: 14400
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Install Task
+        uses: ./.github/actions/setup-task
+
+      - name: Run soak
+        working-directory: benchmarking/aws
+        run: |
+          task aws:bench scenario="${{ github.event.inputs.scenario || 'postgres/orders-soak' }}" 2>&1 | tee "$RUNNER_TEMP/soak-run.log"
+
+      - name: Verify teardown actually completed
+        if: always()
+        run: |
+          LIVE=$(aws ec2 describe-instances --region us-east-2 \
+            --filters Name=tag:Project,Values=redpanda-connect-bench Name=instance-state-name,Values=pending,running,stopping,stopped \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+          RDS=$(aws rds describe-db-instances --region us-east-2 \
+            --query "DBInstances[].DBInstanceIdentifier" --output text)
+          if [ -n "$LIVE$RDS" ]; then
+            echo "::error::Teardown left resources behind (EC2: ${LIVE:-none}; RDS: ${RDS:-none}). The orphan reaper will sweep them within its TTL, but investigate the run log."
+            exit 1
+          fi
+          echo "account clean: no bench EC2, no RDS"
+
+      - name: Upload run log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: soak-run-log
+          path: ${{ runner.temp }}/soak-run.log
+          retention-days: 30
