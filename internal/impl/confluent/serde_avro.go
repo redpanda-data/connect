@@ -177,14 +177,29 @@ func (*schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, er
 		return nil, fmt.Errorf("parsing Avro schema: %w", err)
 	}
 
-	// Encode accepts both bare values (standard JSON) and tagged union
-	// maps (Avro JSON), so both avroRawJSON modes use the same path.
+	// Avro JSON is the canonical input: it is what schema_registry_decode
+	// emits (EncodeJSON) in both avroRawJSON modes — only union tagging
+	// differs, and DecodeJSON accepts tagged and bare unions alike — so one
+	// path still serves both. DecodeJSON is also the only reader that
+	// implements Avro JSON's bytes and fixed semantics, where a JSON string
+	// carries one byte per codepoint. Encode does not: it reads a Go string
+	// as UTF-8, mangling any byte above 0x7f, and for a decimal it accepts
+	// only numeric text, so every decimal backed by bytes or fixed failed to
+	// re-encode from what the decoder emitted.
+	//
+	// Input that is not Avro JSON falls through to Encode, which is the more
+	// permissive of the two: it also takes RFC 3339 strings and time.Time
+	// for timestamp fields, a shape CDC sources emit and Avro JSON cannot
+	// spell. Its error is therefore the one worth reporting.
 	return func(m *service.Message) error {
-		data, err := m.AsStructuredMut()
-		if err != nil {
-			return fmt.Errorf("extracting structured data: %w", err)
+		var native any
+		b, err := m.AsBytes()
+		if err != nil || schema.DecodeJSON(b, &native) != nil {
+			if native, err = m.AsStructuredMut(); err != nil {
+				return fmt.Errorf("extracting structured data: %w", err)
+			}
 		}
-		binary, err := schema.Encode(data)
+		binary, err := schema.Encode(native)
 		if err != nil {
 			return err
 		}
