@@ -431,16 +431,20 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 	}
 	b.batcherMu.Lock()
 	remaining, err := b.batcher.Flush(ctx)
-	var ticket uint64
-	if err == nil && len(remaining) > 0 {
-		ticket = b.takeTicketLocked()
-	}
+	// The ticket is taken unconditionally - even when the batcher is empty -
+	// so that admission below doubles as a sequence barrier: another flusher
+	// (the timed loop) may already hold the final snapshot rows while parked
+	// in checkpoint.Track, before it has counted them on the snapshot ack
+	// gate. Being admitted proves every earlier flush has finished
+	// trackBatch+send, so once flushCurrent returns the gate counts every
+	// published snapshot batch and waitSnapshotAcks cannot release early.
+	ticket := b.takeTicketLocked()
 	b.batcherMu.Unlock()
+	b.admit(ticket)
+	defer b.release()
 	if err != nil || len(remaining) == 0 {
 		return err
 	}
-	b.admit(ticket)
-	defer b.release()
 	tracked, err := b.trackBatch(ctx, remaining)
 	if err != nil {
 		return err
