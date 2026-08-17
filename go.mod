@@ -72,6 +72,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kinesis v1.43.5
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.5
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.99.1
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.4
 	github.com/aws/aws-sdk-go-v2/service/sns v1.39.14
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.42.24
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.68.2
@@ -235,7 +236,6 @@ require (
 	github.com/RoaringBitmap/roaring/v2 v2.15.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apache/arrow/go/v12 v12.0.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.10 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect

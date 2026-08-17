@@ -11,8 +11,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/exec"
@@ -25,6 +27,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -82,13 +85,27 @@ type benchOpts struct {
 	region       string
 	repoRoot     string
 	licenseFile  string
-	engines      []string
+	// licenseSecret is the AWS Secrets Manager secret name or ARN to fall
+	// back to when licenseFile is unset or doesn't open — see
+	// resolveLicensePath. Scheduled runs (GitHub Actions) have no license
+	// file on disk, so this is how they get one.
+	licenseSecret string
+	// soakArchiveBucket is the persistent S3 bucket a soak run's result and
+	// raw artifacts are copied to — see uploadSoakResult. Unlike the
+	// session results bucket, this one is NOT force_destroy'd at teardown.
+	soakArchiveBucket string
+	engines           []string
 	// enginesExplicit records whether --engines was set on the command line
 	// (vs. inherited from the flag default). A soak scenario silently narrows
 	// the DEFAULT engine pair to connect-only, but refuses an EXPLICIT
 	// non-connect choice — the operator asked for something soak can't mean.
 	enginesExplicit bool
 }
+
+// defaultSoakArchiveBucket is the persistent soak archive bucket's name,
+// created by the persistent terraform stack (`task aws:persistent`) — not
+// by any bench session's own apply, and not force_destroy'd alongside it.
+const defaultSoakArchiveBucket = "redpanda-connect-bench-soak-archive"
 
 func benchCmd(args []string) error {
 	fs := flag.NewFlagSet("bench", flag.ExitOnError)
@@ -99,9 +116,17 @@ func benchCmd(args []string) error {
 	repoRoot := fs.String("repo-root", ".", "path to the connect repo root")
 	licenseFile := fs.String("license-file", os.Getenv("REDPANDA_LICENSE_FILEPATH"),
 		"path to a Redpanda Enterprise license file (defaults to $REDPANDA_LICENSE_FILEPATH). "+
-			"Required for enterprise connectors like postgres_cdc.")
+			"Required for enterprise connectors like postgres_cdc, unless --license-secret is set.")
+	licenseSecret := fs.String("license-secret", os.Getenv("REDPANDA_LICENSE_SECRET"),
+		"name or ARN of an AWS Secrets Manager secret whose SecretString is a Redpanda Enterprise "+
+			"license (defaults to $REDPANDA_LICENSE_SECRET). Used when --license-file is unset or "+
+			"doesn't open — the case for scheduled runs with no license file on disk.")
 	engines := fs.String("engines", "connect,kafka_connect",
 		"Comma-separated engines to sweep at each vCPU point. Default runs both Connect and Kafka Connect side-by-side.")
+	soakArchiveBucket := fs.String("soak-archive-bucket", defaultSoakArchiveBucket,
+		"S3 bucket a soak run's result.json + raw artifacts are archived to, since the session results "+
+			"bucket is force_destroy'd at teardown. Created by the persistent terraform stack "+
+			"(`task aws:persistent`).")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -122,14 +147,16 @@ func benchCmd(args []string) error {
 	}
 
 	opts := benchOpts{
-		scenarioPath:    *scenario,
-		keep:            *keep,
-		keepOnFail:      *keepOnFail,
-		region:          *region,
-		repoRoot:        *repoRoot,
-		licenseFile:     *licenseFile,
-		engines:         engineList,
-		enginesExplicit: enginesExplicit,
+		scenarioPath:      *scenario,
+		keep:              *keep,
+		keepOnFail:        *keepOnFail,
+		region:            *region,
+		repoRoot:          *repoRoot,
+		licenseFile:       *licenseFile,
+		licenseSecret:     *licenseSecret,
+		soakArchiveBucket: *soakArchiveBucket,
+		engines:           engineList,
+		enginesExplicit:   enginesExplicit,
 	}
 	return runBench(opts)
 }
@@ -139,17 +166,23 @@ func runBench(opts benchOpts) (errOut error) {
 	if err != nil {
 		return err
 	}
-	if opts.licenseFile == "" {
-		return fmt.Errorf("--license-file is required (or set REDPANDA_LICENSE_FILEPATH); enterprise connectors won't start without one")
-	}
-	// Actually open the file (not just stat) so macOS TCC / sandbox / permissions
-	// failures surface before we provision any AWS infrastructure.
-	if f, err := os.Open(opts.licenseFile); err != nil {
-		return fmt.Errorf("license file %q: %w", opts.licenseFile, err)
-	} else {
-		f.Close()
-	}
 	fmt.Printf("[1/7] loaded scenario %s\n", s.Name)
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	// Resolve the license BEFORE any AWS infrastructure is provisioned, same
+	// reasoning as the old file-open check this replaces: surface a bad
+	// license source immediately rather than minutes into a paid run.
+	// resolveLicensePath tries --license-file first (unchanged local-operator
+	// workflow) and falls back to --license-secret (scheduled runs, which
+	// have no license file on disk).
+	licensePath, cleanupLicense, err := resolveLicensePath(ctx, opts, NewSecretsManagerClient)
+	if err != nil {
+		return err
+	}
+	defer cleanupLicense()
+	opts.licenseFile = licensePath
 
 	// matrix.arms compares Connect launch topologies (one iceberg pipeline vs.
 	// N streams-mode pipelines), not engines — Kafka Connect has no notion of
@@ -212,9 +245,6 @@ func runBench(opts benchOpts) (errOut error) {
 	if err != nil {
 		return err
 	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 
 	// BackendFile must be absolute: `terraform -chdir=<stack>` changes the
 	// working directory before resolving the -backend-config path.
@@ -485,15 +515,19 @@ func runBench(opts benchOpts) (errOut error) {
 		// because the project-level summary couldn't be rewritten.
 		fmt.Fprintf(os.Stderr, "warning: refresh SUMMARY.md: %v\n", err)
 	}
-	// A soak run's result also lands in S3: the full JSON at a session-scoped
-	// key (so it's fetchable without a checkout of this repo), plus a small
-	// index line under soak-index/<scenario>/ that a future rolling-baseline
-	// comparator can list without downloading every run's full JSON. Non-fatal
-	// — a bench run that produced a valid local result must not fail because
-	// of an S3 hiccup on the upload.
+	// A soak run's result also lands in the PERSISTENT soak archive bucket:
+	// the full JSON at a session-scoped key (so it's fetchable without a
+	// checkout of this repo), a small index line under soak-index/<scenario>/
+	// that a future rolling-baseline comparator can list without downloading
+	// every run's full JSON, and copies of the raw per-point artifacts
+	// (sweep log, Prometheus dump, broker scrape) the bench script already
+	// wrote to the session results bucket — which is force_destroy'd by the
+	// teardown defer just below, minutes from now. Non-fatal — a bench run
+	// that produced a valid local result must not fail because of an S3
+	// hiccup on the archive upload.
 	if s.Soak {
-		if err := uploadSoakResult(ctx, opts.region, sharedOuts["results_bucket"], sessionID, s, result, jsonPath); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: upload soak result to S3: %v\n", err)
+		if err := uploadSoakResult(ctx, opts.region, sharedOuts["results_bucket"], opts.soakArchiveBucket, sessionID, s, result, jsonPath, topo, logFetcher); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: archive soak result to S3: %v\n", err)
 		}
 	}
 	fmt.Printf("\n✓ done — JSON: %s\n           md: %s\n           summary: %s\n", jsonPath, mdPath, summaryPath)
@@ -515,15 +549,60 @@ type soakIndexEntry struct {
 	BacklogMaxSec float64   `json:"backlog_max_sec"`
 }
 
-// uploadSoakResult uploads a soak run's full result JSON to
-// s3://<bucket>/runs/<sessionID>/result.json and appends a soakIndexEntry to
-// s3://<bucket>/soak-index/<scenario>/<sessionID>.json. A soak scenario is
-// validated (see Scenario.Validate) to have exactly one cpu_points entry, so
-// result.Points has exactly one element in the success path — but this
-// degrades to zero values rather than panicking if that ever changes.
-func uploadSoakResult(ctx context.Context, region, bucket, sessionID string, s *Scenario, result *Result, jsonPath string) error {
-	if bucket == "" {
-		return fmt.Errorf("no results bucket in terraform outputs")
+// soakArchivePlan is the set of S3 keys one soak run's archive upload
+// writes (ResultKey, IndexKey) and copies (RawKeys) — computed without
+// touching AWS so the destination layout can be unit-tested (see
+// TestBuildSoakArchivePlan) independently of any S3 call. RawKeys use the
+// IDENTICAL key in both the session results bucket (source — the bench
+// script wrote them there) and the archive bucket (destination), so the
+// raw evidence lands at exactly the path its S3 key already implies.
+type soakArchivePlan struct {
+	ResultKey string
+	IndexKey  string
+	RawKeys   []string
+}
+
+// buildSoakArchivePlan computes soakArchivePlan for one soak run. key is the
+// sweepPoint key (see sweepPoint.Key) of the run's single measured point;
+// brokerArtifact is Topology.MetricArtifact(engine, key), or "" when no
+// Topology was available to compute it (that raw file is then simply
+// skipped, same as key == "").
+func buildSoakArchivePlan(sessionID, scenarioName, key, brokerArtifact string) soakArchivePlan {
+	plan := soakArchivePlan{
+		ResultKey: fmt.Sprintf("runs/%s/result.json", sessionID),
+		IndexKey:  fmt.Sprintf("soak-index/%s/%s.json", scenarioName, sessionID),
+	}
+	if key == "" {
+		return plan
+	}
+	plan.RawKeys = append(plan.RawKeys,
+		fmt.Sprintf("runs/%s/sweep-%s.log", sessionID, key),
+		fmt.Sprintf("runs/%s/prom-%s.txt", sessionID, key),
+	)
+	if brokerArtifact != "" {
+		plan.RawKeys = append(plan.RawKeys, fmt.Sprintf("runs/%s/%s", sessionID, brokerArtifact))
+	}
+	return plan
+}
+
+// uploadSoakResult archives a soak run's full result JSON, a soakIndexEntry
+// summary, and its raw per-point artifacts (sweep log, Prometheus dump,
+// broker scrape) to archiveBucket — the PERSISTENT bucket the terraform
+// persistent stack creates (`task aws:persistent`), not the session results
+// bucket (sessionBucket), which is force_destroy'd at teardown minutes
+// after this returns. sessionBucket + logFetcher are read-only here: they
+// are where the bench script already wrote the raw artifacts this function
+// copies onward.
+//
+// A soak scenario is validated (see Scenario.Validate) to have exactly one
+// cpu_points entry and engines=connect, so result.Points has exactly one
+// element in the success path — but this degrades to zero values rather
+// than panicking if that ever changes. The raw-artifact copy is non-fatal
+// per file: a missing or unfetchable artifact is logged and skipped, so one
+// gap never costs the run its result.json / soak-index entry.
+func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket, sessionID string, s *Scenario, result *Result, jsonPath string, topo Topology, logFetcher LogFetcher) error {
+	if archiveBucket == "" {
+		return fmt.Errorf("no soak archive bucket configured (--soak-archive-bucket)")
 	}
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 	if err != nil {
@@ -531,15 +610,22 @@ func uploadSoakResult(ctx context.Context, region, bucket, sessionID string, s *
 	}
 	client := s3.NewFromConfig(cfg)
 
+	var key, brokerArtifact string
+	if len(result.Points) > 0 {
+		p := result.Points[0]
+		key = sweepPoint{VCPU: p.VCPU, ArmID: p.Arm}.Key()
+		if topo != nil {
+			brokerArtifact = topo.MetricArtifact(p.Engine, key)
+		}
+	}
+	plan := buildSoakArchivePlan(sessionID, s.Name, key, brokerArtifact)
+
 	raw, err := os.ReadFile(jsonPath)
 	if err != nil {
 		return fmt.Errorf("read local result JSON %s: %w", jsonPath, err)
 	}
-	resultKey := fmt.Sprintf("runs/%s/result.json", sessionID)
-	if _, err := client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: &bucket, Key: &resultKey, Body: bytes.NewReader(raw),
-	}); err != nil {
-		return fmt.Errorf("upload result.json to %s: %w", resultKey, err)
+	if err := putSoakArchiveObject(ctx, client, archiveBucket, plan.ResultKey, raw); err != nil {
+		return err
 	}
 
 	entry := soakIndexEntry{
@@ -568,13 +654,63 @@ func uploadSoakResult(ctx context.Context, region, bucket, sessionID string, s *
 	if err != nil {
 		return fmt.Errorf("marshal soak index entry: %w", err)
 	}
-	indexKey := fmt.Sprintf("soak-index/%s/%s.json", s.Name, sessionID)
-	if _, err := client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: &bucket, Key: &indexKey, Body: bytes.NewReader(indexRaw),
-	}); err != nil {
-		return fmt.Errorf("upload soak index entry to %s: %w", indexKey, err)
+	if err := putSoakArchiveObject(ctx, client, archiveBucket, plan.IndexKey, indexRaw); err != nil {
+		return err
+	}
+
+	if sessionBucket == "" || logFetcher == nil {
+		return nil
+	}
+	for _, rawKey := range plan.RawKeys {
+		if err := copySoakArtifact(ctx, logFetcher, client, sessionBucket, archiveBucket, rawKey); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: archive raw soak artifact %s (non-fatal): %v\n", rawKey, err)
+		}
 	}
 	return nil
+}
+
+// putSoakArchiveObject uploads body to key in the soak archive bucket,
+// rewriting a missing-bucket error into an actionable one via
+// wrapSoakArchiveUploadErr.
+func putSoakArchiveObject(ctx context.Context, client *s3.Client, bucket, key string, body []byte) error {
+	if _, err := client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: &bucket, Key: &key, Body: bytes.NewReader(body),
+	}); err != nil {
+		return wrapSoakArchiveUploadErr(key, bucket, err)
+	}
+	return nil
+}
+
+// wrapSoakArchiveUploadErr adds an actionable hint to a soak-archive upload
+// error when it's specifically a missing bucket: that bucket is created by
+// the persistent terraform stack, not by any bench session's own apply, so
+// a fresh account (or one where the persistent stack hasn't been applied
+// yet) hits this on its very first soak run, and "NoSuchBucket" alone gives
+// no clue what to do about it. Split out from putSoakArchiveObject so the
+// message can be pinned in a test without a real S3 client (see
+// TestWrapSoakArchiveUploadErr_NoSuchBucket).
+func wrapSoakArchiveUploadErr(key, bucket string, err error) error {
+	var nsb *s3types.NoSuchBucket
+	if errors.As(err, &nsb) {
+		return fmt.Errorf("upload %s to soak archive bucket %q: bucket does not exist — run `task aws:persistent` to create it: %w", key, bucket, err)
+	}
+	return fmt.Errorf("upload %s to soak archive bucket %q: %w", key, bucket, err)
+}
+
+// copySoakArtifact streams one raw per-point artifact from the session
+// results bucket (where the bench script wrote it) into the archive
+// bucket, under the identical key.
+func copySoakArtifact(ctx context.Context, fetcher LogFetcher, client *s3.Client, sessionBucket, archiveBucket, key string) error {
+	body, err := fetcher.Fetch(ctx, sessionBucket, key)
+	if err != nil {
+		return fmt.Errorf("fetch from session bucket %q: %w", sessionBucket, err)
+	}
+	defer body.Close()
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		return fmt.Errorf("read: %w", err)
+	}
+	return putSoakArchiveObject(ctx, client, archiveBucket, key, raw)
 }
 
 func hashScenario(s *Scenario) string {
