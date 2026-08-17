@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -26,8 +27,25 @@ import (
 // batchPublisher is responsible processing individual events into a batch and flushing
 // them to the pipeline using service.Batcher.
 type batchPublisher struct {
-	batcher   *service.Batcher
+	batcher *service.Batcher
+	// batcherMu guards only the batcher's buffer (Add/Flush/UntilNext).
 	batcherMu sync.Mutex
+	// Flush tickets keep the checkpoint sequence exact without a lock held
+	// across Track: each flush takes a ticket under batcherMu - atomically
+	// with the Flush, so the user's batching policy stays exact - and
+	// Track+send admission happens in ticket order. Track can block on
+	// checkpoint_limit under downstream backpressure; only the admitted
+	// ticket holder (and flushers queued behind it) waits, while Publish
+	// calls keep buffering and the timed-flush ticker keeps reading
+	// UntilNext.
+	ticketMu   sync.Mutex
+	ticketCond *sync.Cond
+	nextTicket uint64 // next ticket to hand out; guarded by batcherMu
+	admitted   uint64 // next ticket allowed to Track+send; guarded by ticketMu
+	// poisoned is set when a tracked batch could not be handed to ReadBatch:
+	// its checkpoint slot can never resolve, so this publisher can never
+	// checkpoint past it. Connect rebuilds a poisoned publisher.
+	poisoned atomic.Bool
 
 	checkpoint *checkpoint.Capped[replication.SCN]
 	msgChan    chan asyncMessage
@@ -51,8 +69,36 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 		log:        logger,
 		shutSig:    shutdown.NewSignaller(),
 	}
+	b.ticketCond = sync.NewCond(&b.ticketMu)
 	go b.loop()
 	return b
+}
+
+// takeTicketLocked hands out the next flush ticket. MUST be called with
+// batcherMu held, atomically with the Flush that produced the batch, so
+// ticket order is exactly flush order.
+func (b *batchPublisher) takeTicketLocked() uint64 {
+	t := b.nextTicket
+	b.nextTicket++
+	return t
+}
+
+// admit blocks until it is ticket's turn to Track+send. Pair with release.
+func (b *batchPublisher) admit(ticket uint64) {
+	b.ticketMu.Lock()
+	for b.admitted != ticket {
+		b.ticketCond.Wait()
+	}
+	b.ticketMu.Unlock()
+}
+
+// release passes the sequence to the next ticket. Every taken ticket must be
+// released exactly once, error paths included, or the sequence wedges.
+func (b *batchPublisher) release() {
+	b.ticketMu.Lock()
+	b.admitted++
+	b.ticketCond.Broadcast()
+	b.ticketMu.Unlock()
 }
 
 // loop creates a long-running process that periodically flushes batches by configured interval.
@@ -103,40 +149,35 @@ func (p *batchPublisher) loop() {
 		adjustTimedFlush()
 		select {
 		case <-flushBatch:
-			var (
-				tracked  *trackedBatch
-				trackErr error
-			)
-
-			// Wrap this in a closure to make locking/unlocking easier. Track
-			// happens under the same lock as the flush so the checkpoint
-			// sequence matches flush order.
-			func() {
+			flushBatch = nil
+			if err := func() error {
 				p.batcherMu.Lock()
-				defer p.batcherMu.Unlock()
-
-				flushBatch = nil
 				if tNext, exists := p.batcher.UntilNext(); !exists || tNext > 1 {
 					// This can happen if a pushed message triggered a batch before
 					// the last known flush period. In this case we simply enter the
 					// loop again which readjusts our flush batch timer.
-					return
+					p.batcherMu.Unlock()
+					return nil
+				}
+				sendBatch, _ := p.batcher.Flush(hardStopCtx)
+				var ticket uint64
+				if len(sendBatch) > 0 {
+					ticket = p.takeTicketLocked()
+				}
+				p.batcherMu.Unlock()
+				if len(sendBatch) == 0 {
+					return nil
 				}
 
-				var sendBatch service.MessageBatch
-				if sendBatch, _ = p.batcher.Flush(hardStopCtx); len(sendBatch) == 0 {
-					return
+				p.admit(ticket)
+				defer p.release()
+				tracked, err := p.trackBatch(hardStopCtx, sendBatch)
+				if err != nil {
+					return err
 				}
-				tracked, trackErr = p.trackBatchLocked(hardStopCtx, sendBatch)
-			}()
-			if trackErr != nil {
+				return p.sendTracked(hardStopCtx, tracked)
+			}(); err != nil {
 				return
-			}
-
-			if tracked != nil {
-				if err := p.sendTracked(hardStopCtx, tracked); err != nil {
-					return
-				}
 			}
 		case <-p.shutSig.SoftStopChan():
 			return
@@ -211,44 +252,55 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		msg.MetaSetImmut("schema", service.ImmutableAny{V: schemaAny})
 	}
 
-	// Flush and Track must be atomic: Track order defines the checkpoint
-	// sequence, so another flusher (the timed-flush loop) must not interleave
-	// between our flush and our Track. Only the channel send happens outside
-	// the lock.
-	var tracked *trackedBatch
+	// Add and Flush are atomic under batcherMu so the user's batching policy
+	// stays exact, and the flush ticket taken in the same critical section
+	// pins this batch's position in the checkpoint sequence. Track+send then
+	// run outside batcherMu in ticket order: a Track blocked on
+	// checkpoint_limit stalls only the ticket queue, never concurrent
+	// buffering or the timed-flush ticker.
+	var (
+		flushedBatch service.MessageBatch
+		ticket       uint64
+	)
 	b.batcherMu.Lock()
 	if b.batcher.Add(msg) {
-		var flushedBatch []*service.Message
 		if flushedBatch, err = b.batcher.Flush(ctx); err == nil && len(flushedBatch) > 0 {
-			tracked, err = b.trackBatchLocked(ctx, flushedBatch)
+			ticket = b.takeTicketLocked()
 		}
 	}
 	b.batcherMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("flushing batch due to reaching count limit: %w", err)
 	}
-
-	// If a batch was flushed, publish it outside the lock
-	if tracked != nil {
-		if err := b.sendTracked(ctx, tracked); err != nil {
-			return fmt.Errorf("publishing flushed batch: %w", err)
-		}
+	if len(flushedBatch) == 0 {
+		return nil
 	}
 
+	b.admit(ticket)
+	defer b.release()
+	tracked, err := b.trackBatch(ctx, flushedBatch)
+	if err != nil {
+		return err
+	}
+	if err := b.sendTracked(ctx, tracked); err != nil {
+		return fmt.Errorf("publishing flushed batch: %w", err)
+	}
 	return nil
 }
 
 // trackedBatch pairs a ready-to-send asyncMessage with the bookkeeping needed
 // to roll back its snapshot-gate slot if the send fails.
 type trackedBatch struct {
-	msg        asyncMessage
+	msgs       asyncMessage
 	isSnapshot bool
 }
 
-// trackBatchLocked registers the batch with the ordered checkpoint tracker and
-// builds its ack function. It MUST be called with batcherMu held: Track order
-// defines the checkpoint sequence, so it has to match flush order exactly.
-func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.MessageBatch) (*trackedBatch, error) {
+// trackBatch registers the batch with the ordered checkpoint tracker and
+// builds its ack function. It MUST be called by the admitted ticket holder:
+// Track order defines the checkpoint sequence, so it has to match flush
+// (ticket) order exactly. Track may block on checkpoint_limit, which is why
+// batcherMu must NOT be held here.
+func (b *batchPublisher) trackBatch(ctx context.Context, batch service.MessageBatch) (*trackedBatch, error) {
 	lastMsg := batch[len(batch)-1]
 
 	// ensure we don't checkpoint snapshot batches
@@ -284,7 +336,7 @@ func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.Mes
 	}
 	return &trackedBatch{
 		isSnapshot: isSnapshotBatch,
-		msg: asyncMessage{
+		msgs: asyncMessage{
 			msg: batch,
 			// The ack error is deliberately ignored: nacks are replayed by
 			// auto_replay_nacks (the default), and disabling that is a
@@ -309,17 +361,25 @@ func (b *batchPublisher) trackBatchLocked(ctx context.Context, batch service.Mes
 	}, nil
 }
 
-// sendTracked hands a tracked batch to ReadBatch. Must be called WITHOUT
-// batcherMu held (the send blocks until consumed). A failed send releases the
-// batch's snapshot-gate slot.
+// sendTracked hands a tracked batch to ReadBatch. Must be called by the
+// admitted ticket holder, never under batcherMu: the send blocks until
+// consumed. A failed send releases the batch's snapshot-gate slot and poisons
+// the publisher.
 func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch) error {
 	select {
-	case b.msgChan <- tracked.msg:
+	case b.msgChan <- tracked.msgs:
 		return nil
 	case <-ctx.Done():
 		if tracked.isSnapshot {
 			b.snapshotAckWG.Done()
 		}
+		// The batch's checkpoint slot is registered but its ackFn will never
+		// run, so the tracker is permanently pinned before this batch: mark
+		// the publisher poisoned so Connect rebuilds it with a fresh tracker.
+		// Resolving the slot here instead would be unsafe - another flusher
+		// may already have delivered a later-tracked batch, and its ack would
+		// then persist an SCN past these undelivered rows.
+		b.poisoned.Store(true)
 		return ctx.Err()
 	}
 }
@@ -369,14 +429,20 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 	if b.batcher == nil {
 		return nil
 	}
-	var tracked *trackedBatch
 	b.batcherMu.Lock()
 	remaining, err := b.batcher.Flush(ctx)
+	var ticket uint64
 	if err == nil && len(remaining) > 0 {
-		tracked, err = b.trackBatchLocked(ctx, remaining)
+		ticket = b.takeTicketLocked()
 	}
 	b.batcherMu.Unlock()
-	if err != nil || tracked == nil {
+	if err != nil || len(remaining) == 0 {
+		return err
+	}
+	b.admit(ticket)
+	defer b.release()
+	tracked, err := b.trackBatch(ctx, remaining)
+	if err != nil {
 		return err
 	}
 	return b.sendTracked(ctx, tracked)

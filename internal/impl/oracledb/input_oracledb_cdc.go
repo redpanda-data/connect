@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -265,6 +266,19 @@ type oracleDBCDCInput struct {
 	snapshotOnlyDone atomic.Bool
 	log              *service.Logger
 	cpCache          service.Cache
+
+	// batching and checkpointLimit are retained so Connect can rebuild a
+	// poisoned publisher (see batchPublisher.poisoned).
+	batching        service.BatchPolicy
+	checkpointLimit int
+
+	// persistMu serializes cacheSCN writes and lastPersistedSCN keeps them
+	// monotonic: ack functions run on concurrent pipeline goroutines, and
+	// after a publisher rebuild a previous session's late acks may still
+	// arrive - without ordering, a stale write could regress the durable
+	// resume position.
+	persistMu        sync.Mutex
+	lastPersistedSCN replication.SCN
 }
 
 func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
@@ -403,13 +417,15 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 				Exclude: tableExcludes,
 			},
 		},
-		lmCfg:     lmCfg,
-		res:       resources,
-		log:       logger,
-		metrics:   resources.Metrics(),
-		stopSig:   shutdown.NewSignaller(),
-		publisher: newBatchPublisher(batcher, cp, logger),
-		cpCache:   cpCache,
+		lmCfg:           lmCfg,
+		res:             resources,
+		log:             logger,
+		metrics:         resources.Metrics(),
+		stopSig:         shutdown.NewSignaller(),
+		publisher:       newBatchPublisher(batcher, cp, logger),
+		cpCache:         cpCache,
+		batching:        policy,
+		checkpointLimit: checkpointLimit,
 	}
 
 	defer func() {
@@ -438,6 +454,24 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		err        error
 		isCDB      bool
 	)
+
+	// A failed batch send leaves an unresolvable slot in the ordered tracker
+	// (see sendTracked), so a poisoned publisher can never checkpoint again.
+	// Rebuild it with a fresh tracker: the new session resumes from the last
+	// durable SCN, which is necessarily before the orphaned rows, and the old
+	// session's late acks resolve into the abandoned tracker (cacheSCN's
+	// monotonic guard turns any stale write into a no-op).
+	if o.publisher.poisoned.Load() {
+		o.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+		o.publisher.Close()
+		batcher, batcherErr := o.batching.NewBatcher(o.res)
+		if batcherErr != nil {
+			return fmt.Errorf("rebuilding batcher: %w", batcherErr)
+		}
+		o.publisher = newBatchPublisher(batcher, checkpoint.NewCapped[replication.SCN](int64(o.checkpointLimit)), o.log)
+		o.publisher.cacheSCN = o.cacheSCN
+	}
+
 	if o.db != nil {
 		_ = o.db.Close()
 		o.db = nil
@@ -711,6 +745,16 @@ func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 		return errors.New("SCN for caching is empty")
 	}
 
+	// Serialized and monotonic: concurrent acks (and, after a publisher
+	// rebuild, a previous session's late acks) must never land a stale SCN
+	// over a newer durable position. SCNs only grow, so skipping
+	// non-advancing writes is always safe.
+	o.persistMu.Lock()
+	defer o.persistMu.Unlock()
+	if o.lastPersistedSCN.IsValid() && scn <= o.lastPersistedSCN {
+		return nil
+	}
+
 	// Use internal Oracle-based cache if set (when no external cache configured),
 	// otherwise use external cache resource
 	var cErr error
@@ -727,6 +771,7 @@ func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 	if cErr != nil {
 		return fmt.Errorf("persisting checkpoint to cache: %w", cErr)
 	}
+	o.lastPersistedSCN = scn
 	return nil
 }
 
