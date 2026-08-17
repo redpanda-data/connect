@@ -204,17 +204,28 @@ func (o *outputHelper) AddBatch(_ context.Context, batch service.MessageBatch) e
 
 func (o *outputHelper) Messages(t *testing.T) []any {
 	t.Helper()
+	msgs, err := o.messages()
+	require.NoError(t, err)
+	return msgs
+}
+
+// messages is the non-failing variant of Messages for use inside Eventually
+// conditions: require's FailNow runs on testify's tick goroutine there, which
+// kills the tick silently instead of failing the test.
+func (o *outputHelper) messages() ([]any, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	var msgs []any
 	for _, b := range o.batches {
 		for _, m := range b {
 			msg, err := m.AsStructured()
-			require.NoError(t, err)
+			if err != nil {
+				return nil, err
+			}
 			msgs = append(msgs, msg)
 		}
 	}
-	return msgs
+	return msgs, nil
 }
 
 func (o *outputHelper) MessagesJSON(t *testing.T) string {
@@ -1041,7 +1052,10 @@ file:
 	// keeps being retried - more than one failure proves the input is cycling
 	// through reconnects rather than having quietly settled into an idle state.
 	failures := logs.matching("error watching MongoDB change stream")
-	require.NotEmpty(t, failures, "expected the change stream open to fail, captured logs: %v", logs.records)
+	// logs.matching("") snapshots under the capture's mutex: the stream is
+	// still running here, so reading logs.records directly would race Handle,
+	// and assertion message args are evaluated eagerly even on success.
+	require.NotEmpty(t, failures, "expected the change stream open to fail, captured logs: %v", logs.matching(""))
 	require.Greater(t, len(failures), 1, "expected repeated failures from the reconnect loop, got: %v", failures)
 	require.Contains(t, failures[0], "error opening change stream")
 	t.Logf("change stream failure (x%d): %s", len(failures), failures[0])
@@ -1096,8 +1110,12 @@ mongodb_cdc:
 	// Shape problems are returned as an error and asserted on the test
 	// goroutine after the wait.
 	seenIDs := func() (map[int]bool, error) {
+		msgs, err := output.messages()
+		if err != nil {
+			return nil, err
+		}
 		ids := map[int]bool{}
-		for _, msg := range output.Messages(t) {
+		for _, msg := range msgs {
 			doc, ok := msg.(map[string]any)
 			if !ok {
 				return nil, fmt.Errorf("unexpected message shape: %T", msg)
