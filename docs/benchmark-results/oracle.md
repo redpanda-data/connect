@@ -508,3 +508,80 @@ Caveats: single instance class (db.r5.2xlarge, 24K IOPS gp3); arm order means
 s1 inherited a partially warm cache (its fast phase measures the warm-cache
 regime, not steady-state); PK-vs-physical-order scatter is worst-case-ish here
 because of the 16-worker interleaved seed.
+
+
+## AWS — orders-snapshot — 2026-08-17
+
+**Scenario:** Snapshot a pre-seeded 30M-row (36 GB logical) Oracle orders table via
+oracledb_cdc stream_snapshot, A/B-ing go-ora's default 25-row prefetch
+against PREFETCH_ROWS=1000. Bounded-dataset mode: no workload, warmup 0,
+snapshot visible from t=0.
+
+**Git SHA:** [`77022a2f4`](https://github.com/redpanda-data/connect/commit/77022a2f4d2f0224ed20aa88fec2bf93bcff1d65)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 30,000,000 rows × 1200 B = ~33 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 8          | s0-prefetch-default | connect       |            8 |        8.342 |         7,155 |            8 |           8 |            9 |         7,000 |                    |
+| 4    | 8          | s1-prefetch-1000 | connect       |            9 |       16.262 |        13,939 |            9 |           8 |           90 |         7,500 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/oracle/orders-snapshot/2026-08-17T17-47-43Z.json`](results/oracle/orders-snapshot/2026-08-17T17-47-43Z.json)
+
+
+## AWS — orders-snapshot — 2026-08-17
+
+**Scenario:** Snapshot a pre-seeded 30M-row (36 GB logical) Oracle orders table via
+oracledb_cdc stream_snapshot, A/B-ing go-ora's default 25-row prefetch
+against PREFETCH_ROWS=1000. Bounded-dataset mode: no workload, warmup 0,
+snapshot visible from t=0.
+
+**Git SHA:** [`25c304708`](https://github.com/redpanda-data/connect/commit/25c3047081de5375ad8b7d9f4cc328ff11be0f96)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 30,000,000 rows × 1200 B = ~33 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 8          | s0-prefetch-default | connect       |           32 |       32.020 |        27,223 |           32 |          31 |           33 |        27,440 |                    |
+| 4    | 8          | s1-prefetch-1000 | connect       |            0 |       39.106 |        33,255 |            0 |           0 |           92 |             0 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/oracle/orders-snapshot/2026-08-17T19-04-08Z.json`](results/oracle/orders-snapshot/2026-08-17T19-04-08Z.json)
+
+### Snapshot fix validation — #4695 + snapshot-ordering removal (2026-08-17)
+
+Re-ran `oracle/orders-snapshot` (same 30M-row / 36 GB rig as 2026-08-12) twice:
+first on merged main (includes #4695, the ~50% schema-metadata reuse), then with
+`3abe4c374` (`jw/oracledb_snapshot_ordering`, removes the PK ORDER BY) merged on
+top. Two arms per run: default go-ora prefetch vs `?PREFETCH_ROWS=1000`.
+
+Delivered rate (self-report), per configuration:
+
+| configuration | default prefetch | PREFETCH_ROWS=1000 |
+|---|---|---|
+| 2026-08-12 (pre-#4695) | flat 8.0 MB/s | 66-70 warm → 9.3 cold |
+| main + #4695 | flat 9.2 MB/s (+15%) | ~98 warm → 9.8 cold |
+| + ordering removal | **flat 34.6 MB/s (4.3×)** | **~98 MB/s steady — full 30M rows done in ~6.5 min** |
+
+CloudWatch during the ordering-removal run: ~18-27 MiB/s of physical reads while
+delivering 34.6 MB/s of rows — the ~12× read amplification measured on 08-12 is
+gone (now <1×). The s1 arm ran on a cache warmed by s0's scan, so its 98 MB/s is
+the warm ceiling; s0 is the disk-relevant datapoint. #4695 alone helped only the
+non-disk-bound regimes (warm phase 70→98, default 8→9.2); the amplification and
+the cold-data wall belonged entirely to the PK-ordered pagination.
+
+Remaining caveats: the seed had just written the table before s0, so even s0 was
+partially cache-assisted — a fresh-instance cold run would put a floor under the
+34.6; and the 98 MB/s completion suggests the next ceiling is the fetch/produce
+pipeline, not Oracle. Bench code for these runs: benchmarking @77022a2f4 with
+`3abe4c374` merged in a throwaway worktree (deliberately NOT kept on this branch
+so future benches don't run unreviewed connector code).
