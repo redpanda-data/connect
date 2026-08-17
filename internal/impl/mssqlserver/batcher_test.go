@@ -390,6 +390,92 @@ func TestPersistOrderUnderConcurrentAcksAndWindows(t *testing.T) {
 	}
 }
 
+// TestPublishBuffersWhileTrackBlocked verifies that a flusher blocked in
+// checkpoint.Track (checkpoint_limit reached, nothing acked) holds only
+// sendMu: other Publish calls must still be able to buffer rows instead of
+// freezing on batcherMu behind the blocked Track.
+func TestPublishBuffersWhileTrackBlocked(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	// Capacity for exactly one 2-row batch: the second flush blocks in Track.
+	cp := checkpoint.NewCapped[replication.LSN](2)
+
+	batcher, err := (service.BatchPolicy{Count: 2}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher.cacheLSN = func(context.Context, replication.LSN) error { return nil }
+	t.Cleanup(func() { publisher.shutSig.TriggerSoftStop() })
+
+	// Batch 1 fills the tracker to capacity; consume it but do not ack. The
+	// flushing Publish blocks on the unbuffered channel send until the batch
+	// is consumed, so it runs on its own goroutine.
+	require.NoError(t, publisher.Publish(ctx, streamingEvent("00000001", "00000001")))
+	firstPublished := make(chan error, 1)
+	go func() { firstPublished <- publisher.Publish(ctx, streamingEvent("00000002", "00000002")) }()
+	first := <-publisher.msgs()
+	require.NoError(t, <-firstPublished)
+
+	// Batch 2 flushes and blocks in Track (capacity exhausted).
+	blocked := make(chan error, 1)
+	go func() {
+		blocked <- func() error {
+			if err := publisher.Publish(ctx, streamingEvent("00000003", "00000003")); err != nil {
+				return err
+			}
+			return publisher.Publish(ctx, streamingEvent("00000004", "00000004"))
+		}()
+	}()
+
+	// Give the flusher time to reach Track and park there.
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case err := <-blocked:
+		t.Fatalf("expected the second batch's flusher to block in Track, but it returned: %v", err)
+	default:
+	}
+
+	// The key assertion: a concurrent Publish that only buffers (no flush due)
+	// completes promptly even though a flusher is parked in Track.
+	buffered := make(chan error, 1)
+	go func() { buffered <- publisher.Publish(ctx, streamingEvent("00000005", "00000005")) }()
+	select {
+	case err := <-buffered:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("a buffering Publish froze behind a Track blocked on checkpoint_limit")
+	}
+
+	// Ack batch 1 to release the blocked flusher and drain.
+	require.NoError(t, first.ackFn(ctx, nil))
+	go func() {
+		for m := range publisher.msgs() {
+			_ = m.ackFn(ctx, nil)
+		}
+	}()
+	select {
+	case err := <-blocked:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("blocked flusher never released after the ack freed tracker capacity")
+	}
+}
+
+// TestFailedSendPoisonsPublisher verifies that a tracked batch that cannot be
+// handed to ReadBatch marks the publisher poisoned: its checkpoint slot can
+// never resolve, so Connect must rebuild the publisher rather than reuse a
+// permanently pinned tracker.
+func TestFailedSendPoisonsPublisher(t *testing.T) {
+	publisher, _ := newTestBatchPublisher(t)
+
+	sendCtx, cancel := context.WithCancel(t.Context())
+	cancel() // nobody consumes msgs(): the send can only fail
+
+	err := publisher.Publish(sendCtx, streamingEvent("00000001", "00000001"))
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, publisher.poisoned.Load(),
+		"a failed send orphans its tracker slot; the publisher must be marked for rebuild")
+}
+
 // newTestBatchPublisher builds a publisher whose batcher flushes on every
 // published event (count=1), so tests drive the production
 // Publish->trackBatchLocked->sendTracked path directly.

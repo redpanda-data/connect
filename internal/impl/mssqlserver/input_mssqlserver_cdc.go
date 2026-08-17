@@ -9,6 +9,7 @@
 package mssqlserver
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -160,6 +161,18 @@ type sqlServerCDCInput struct {
 	stopSig *shutdown.Signaller
 	log     *service.Logger
 	cpCache service.Cache
+
+	// batching and checkpointLimit are retained so Connect can rebuild a
+	// poisoned publisher (see batchPublisher.poisoned).
+	batching        service.BatchPolicy
+	checkpointLimit int
+
+	// lastPersistedMu serializes cacheLSN writes across publisher generations
+	// and lastPersistedLSN keeps them monotonic: after a rebuild a previous
+	// session's late acks may still arrive, and a stale write must never
+	// regress the durable resume position.
+	lastPersistedMu  sync.Mutex
+	lastPersistedLSN replication.LSN
 }
 
 func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
@@ -266,12 +279,14 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 				Exclude: tableExcludes,
 			},
 		},
-		res:       resources,
-		log:       logger,
-		metrics:   resources.Metrics(),
-		stopSig:   shutdown.NewSignaller(),
-		publisher: newBatchPublisher(batcher, cp, logger),
-		cpCache:   cpCache,
+		res:             resources,
+		log:             logger,
+		metrics:         resources.Metrics(),
+		stopSig:         shutdown.NewSignaller(),
+		publisher:       newBatchPublisher(batcher, cp, logger),
+		cpCache:         cpCache,
+		batching:        policy,
+		checkpointLimit: checkpointLimit,
 	}
 
 	i.publisher.cacheLSN = i.cacheLSN
@@ -298,6 +313,23 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	case <-i.stopSig.HasStoppedChan():
 	default:
 		return nil
+	}
+
+	// A failed batch send leaves an unresolvable slot in the ordered tracker
+	// (see sendTracked), so a poisoned publisher can never checkpoint again.
+	// Rebuild it with a fresh tracker: the new session resumes from the last
+	// durable LSN, which is necessarily before the orphaned rows, and the old
+	// session's late acks resolve into the abandoned tracker (cacheLSN's
+	// monotonic guard turns any stale write into a no-op).
+	if i.publisher.poisoned.Load() {
+		i.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+		i.publisher.close()
+		batcher, batcherErr := i.batching.NewBatcher(i.res)
+		if batcherErr != nil {
+			return fmt.Errorf("rebuilding batcher: %w", batcherErr)
+		}
+		i.publisher = newBatchPublisher(batcher, checkpoint.NewCapped[replication.LSN](int64(i.checkpointLimit)), i.log)
+		i.publisher.cacheLSN = i.cacheLSN
 	}
 
 	var (
@@ -447,6 +479,16 @@ func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn replication.LSN) e
 		return errors.New("LSN for caching is empty")
 	}
 
+	// Serialized and monotonic across publisher generations: a previous
+	// session's late acks must never land a stale LSN over a newer durable
+	// position. LSNs are fixed-width and byte-ordered, so skipping
+	// non-advancing writes is always safe.
+	i.lastPersistedMu.Lock()
+	defer i.lastPersistedMu.Unlock()
+	if len(i.lastPersistedLSN) != 0 && bytes.Compare(lsn, i.lastPersistedLSN) <= 0 {
+		return nil
+	}
+
 	var cErr error
 	if i.cpCache != nil {
 		cErr = i.cpCache.Set(ctx, i.cfg.lsnCacheKey, lsn, nil)
@@ -461,6 +503,7 @@ func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn replication.LSN) e
 	if cErr != nil {
 		return fmt.Errorf("unable persist checkpoint to cache: %w", cErr)
 	}
+	i.lastPersistedLSN = lsn
 	return nil
 }
 
