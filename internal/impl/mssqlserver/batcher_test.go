@@ -391,9 +391,9 @@ func TestPersistOrderUnderConcurrentAcksAndWindows(t *testing.T) {
 }
 
 // TestPublishBuffersWhileTrackBlocked verifies that a flusher blocked in
-// checkpoint.Track (checkpoint_limit reached, nothing acked) holds only
-// sendMu: other Publish calls must still be able to buffer rows instead of
-// freezing on batcherMu behind the blocked Track.
+// checkpoint.Track (checkpoint_limit reached, nothing acked) waits only in
+// the ticket queue: other Publish calls must still be able to buffer rows
+// instead of freezing on batcherMu behind the blocked Track.
 func TestPublishBuffersWhileTrackBlocked(t *testing.T) {
 	ctx := t.Context()
 	logger := service.NewLoggerFromSlog(slog.Default())
@@ -457,6 +457,77 @@ func TestPublishBuffersWhileTrackBlocked(t *testing.T) {
 		require.NoError(t, err)
 	case <-time.After(5 * time.Second):
 		t.Fatal("blocked flusher never released after the ack freed tracker capacity")
+	}
+}
+
+// TestFlushCurrentBarriersParkedFlusher encodes the snapshot-handoff crash
+// window: the timed-flush loop can hold the final snapshot rows while parked
+// in checkpoint.Track (before counting them on the snapshot ack gate). The
+// handoff's flushCurrent must not return - and waitSnapshotAcks must not
+// release - until that parked flusher has registered and delivered its batch,
+// otherwise the post-snapshot LSN persists ahead of undelivered rows.
+func TestFlushCurrentBarriersParkedFlusher(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	// Capacity for exactly one 2-row batch: the second flush parks in Track.
+	cp := checkpoint.NewCapped[replication.LSN](2)
+
+	batcher, err := (service.BatchPolicy{Count: 2}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher.cacheLSN = func(context.Context, replication.LSN) error { return nil }
+	t.Cleanup(func() { publisher.shutSig.TriggerSoftStop() })
+
+	// Snapshot batch 1 fills the tracker; consume it but do not ack (gate=1).
+	require.NoError(t, publisher.Publish(ctx, snapshotEvent()))
+	firstPublished := make(chan error, 1)
+	go func() { firstPublished <- publisher.Publish(ctx, snapshotEvent()) }()
+	first := <-publisher.msgs()
+	require.NoError(t, <-firstPublished)
+
+	// Snapshot batch 2 flushes, takes its ticket, and parks in Track - the
+	// exact state the timed-flush loop can be in at the handoff.
+	parked := make(chan error, 1)
+	go func() {
+		parked <- func() error {
+			if err := publisher.Publish(ctx, snapshotEvent()); err != nil {
+				return err
+			}
+			return publisher.Publish(ctx, snapshotEvent())
+		}()
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	// The handoff: flushCurrent sees an empty batcher but must still barrier
+	// behind the parked flusher's ticket.
+	flushed := make(chan error, 1)
+	go func() { flushed <- publisher.flushCurrent(ctx) }()
+	select {
+	case err := <-flushed:
+		t.Fatalf("flushCurrent returned (%v) while a flusher holding snapshot rows was still parked in Track: the ack gate does not yet count those rows", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	// Ack batch 1: the parked flusher tracks, counts, and delivers batch 2.
+	require.NoError(t, first.ackFn(ctx, nil))
+	second := <-publisher.msgs()
+	require.NoError(t, <-parked)
+	require.NoError(t, <-flushed)
+
+	// The gate must now hold for batch 2: it is published but un-acked.
+	gate := make(chan error, 1)
+	go func() { gate <- publisher.waitSnapshotAcks(ctx) }()
+	select {
+	case err := <-gate:
+		t.Fatalf("waitSnapshotAcks returned (%v) with a published snapshot batch still un-acked", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	require.NoError(t, second.ackFn(ctx, nil))
+	select {
+	case err := <-gate:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("gate never released after the final ack")
 	}
 }
 
