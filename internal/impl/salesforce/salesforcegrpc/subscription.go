@@ -39,6 +39,11 @@ const subscribeSettleDelay = 5 * time.Second
 // loudly instead of redelivering the batch prefix forever.
 const maxConsecutiveDecodeFailures = 5
 
+// unanchoredSchemaRetryDelay is the base backoff between inline schema-fetch
+// retries on a fresh stream with no replay anchor (variable so tests can
+// shorten it).
+var unanchoredSchemaRetryDelay = time.Second
+
 // Subscription owns one subscribe stream for a single Pub/Sub topic. It reuses
 // the parent Client's connection, auth, and schema cache.
 type Subscription struct {
@@ -140,22 +145,40 @@ func (s *Subscription) connectLocked(ctx context.Context) error {
 	return nil
 }
 
-// failDecode routes a schema/decode failure: reconnect-and-redeliver while
-// the position is under the consecutive-failure bound, terminal stream
-// failure once it is exceeded.
+// anchored reports whether a replay resume position exists: only then can a
+// reconnect redeliver the current batch (CUSTOM replay is exclusive-after).
+// On a fresh stream with no anchor, a reconnect falls back to the configured
+// preset - with LATEST that silently drops the batch, so unanchored failures
+// must never take the reconnect path.
+func (s *Subscription) anchored() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.lastReplayID) > 0
+}
+
+// failTerminal fails the stream permanently: streamErr surfaces through the
+// health tick and no reconnect is attempted.
+func (s *Subscription) failTerminal(err error) {
+	s.lastError.Store(err)
+	s.lastErrorTime.Store(time.Now().UnixNano())
+	s.mu.Lock()
+	s.streamErr = err
+	s.state = StreamStateDisconnected
+	s.mu.Unlock()
+	s.client.log.Errorf("Pub/Sub stream failed permanently (topic=%s): %v", s.config.TopicName, err)
+}
+
+// failDecode routes an Avro decode failure: reconnect-and-redeliver while the
+// position is under the consecutive-failure bound, terminal stream failure
+// once it is exceeded. Schema-fetch failures do NOT come through here - they
+// are transport-class errors governed by the reconnect policy, not evidence
+// of an undecodable payload.
 func (s *Subscription) failDecode(replayID []byte, failStream func(error), err error) {
 	if !s.recordDecodeFailure(replayID) {
 		failStream(err)
 		return
 	}
-	terminalErr := fmt.Errorf("decoding event at replay position %x: %d consecutive failures, treating as permanently undecodable: %w", replayID, maxConsecutiveDecodeFailures, err)
-	s.lastError.Store(terminalErr)
-	s.lastErrorTime.Store(time.Now().UnixNano())
-	s.mu.Lock()
-	s.streamErr = terminalErr
-	s.state = StreamStateDisconnected
-	s.mu.Unlock()
-	s.client.log.Errorf("Pub/Sub stream failed permanently (topic=%s): %v", s.config.TopicName, terminalErr)
+	s.failTerminal(fmt.Errorf("decoding event at replay position %x: %d consecutive failures, treating as permanently undecodable: %w", replayID, maxConsecutiveDecodeFailures, err))
 }
 
 // recordDecodeFailure counts a schema/decode failure at the given replay
@@ -248,22 +271,47 @@ func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 
 			// A schema fetch or decode failure must not skip the event: the
 			// batch's replay ID would advance past it and the event would be
-			// silently lost. Reconnect instead — lastReplayID still points
-			// before this batch, so it is redelivered and transient failures
-			// (schema fetch) heal on retry. Redelivery is bounded: once the
-			// same position fails maxConsecutiveDecodeFailures times in a row
-			// the stream fails terminally (streamErr is surfaced through the
-			// health tick) instead of re-emitting the batch prefix forever.
+			// silently lost. When a replay anchor exists, reconnect instead —
+			// lastReplayID advances per delivered event, so redelivery resumes
+			// exactly at the failing event. Schema-fetch failures are
+			// transport-class and stay governed by the reconnect policy; Avro
+			// decode failures against a fetched schema are deterministic, so
+			// they are bounded (failDecode) and turn terminal. On a fresh
+			// stream with NO anchor a reconnect would fall back to the
+			// configured preset and could silently drop the batch (LATEST),
+			// so schema fetches retry inline and decode failures fail the
+			// stream terminally instead.
 			schema, err := s.client.schemaCache.GetSchema(ctx, event.SchemaId)
+			if err != nil && !s.anchored() {
+				for attempt := 1; err != nil && attempt < maxConsecutiveDecodeFailures; attempt++ {
+					select {
+					case <-time.After(time.Duration(attempt) * unanchoredSchemaRetryDelay):
+					case <-streamCtx.Done():
+						return
+					case <-ctx.Done():
+						return
+					}
+					schema, err = s.client.schemaCache.GetSchema(ctx, event.SchemaId)
+				}
+				if err != nil {
+					s.eventsDecodeErrors.Add(1)
+					s.failTerminal(fmt.Errorf("fetching schema for the first event of a fresh stream (schemaID=%s, no replay anchor to redeliver from): %w", event.SchemaId, err))
+					return
+				}
+			}
 			if err != nil {
 				s.eventsDecodeErrors.Add(1)
-				s.failDecode(consumerEvent.ReplayId, failStream, fmt.Errorf("get schema for event (schemaID=%s): %w", event.SchemaId, err))
+				failStream(fmt.Errorf("get schema for event (schemaID=%s): %w", event.SchemaId, err))
 				return
 			}
 
 			decoded, err := DecodeAvroPayload(schema, event.Payload)
 			if err != nil {
 				s.eventsDecodeErrors.Add(1)
+				if !s.anchored() {
+					s.failTerminal(fmt.Errorf("decoding the first event of a fresh stream (schemaID=%s, replay position %x): payload is undecodable and no replay anchor exists to redeliver from: %w", event.SchemaId, consumerEvent.ReplayId, err))
+					return
+				}
 				s.failDecode(consumerEvent.ReplayId, failStream, fmt.Errorf("decode Avro payload (schemaID=%s): %w", event.SchemaId, err))
 				return
 			}
@@ -296,6 +344,13 @@ func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 			case s.eventBuffer <- pubsubEvent:
 				s.eventsReceived.Add(1)
 				s.lastEventTime.Store(time.Now().UnixNano())
+				// Advance the replay anchor past this event: CUSTOM replay is
+				// exclusive-after, so a reconnect now redelivers from exactly
+				// the next (possibly failing) event - no lost first batch, no
+				// re-emitted prefix.
+				s.mu.Lock()
+				s.lastReplayID = pubsubEvent.ReplayID
+				s.mu.Unlock()
 				s.client.log.Debugf("Pub/Sub event received (topic=%s, schemaID=%s, replayID=%x)", pubsubEvent.TopicName, pubsubEvent.SchemaID, pubsubEvent.ReplayID)
 			case <-streamCtx.Done():
 				return

@@ -226,10 +226,12 @@ func TestReceiveLoopTerminalDecodeFailure(t *testing.T) {
 			PendingNumRequested: 1,
 		}},
 	}
-	// This position has already failed on every prior redelivery; the next
-	// failure exhausts the bound. (Earlier failures exercise the reconnect
-	// path, which needs a real Pub/Sub connection - covered by the counting
-	// test above.)
+	// An anchor exists (a previous event was delivered), so the failure takes
+	// the bounded path. This position has already failed on every prior
+	// redelivery; the next failure exhausts the bound. (Earlier failures
+	// exercise the reconnect path, which needs a real Pub/Sub connection -
+	// covered by the counting test above.)
+	s.lastReplayID = []byte{0x29}
 	s.decodeFailures = maxConsecutiveDecodeFailures - 1
 	s.decodeFailureReplayID = []byte{0x2a}
 
@@ -246,6 +248,75 @@ func TestReceiveLoopTerminalDecodeFailure(t *testing.T) {
 	require.Equal(t, StreamStateDisconnected, s.state)
 	s.mu.Unlock()
 	require.Zero(t, s.reconnectCount.Load(), "a terminal decode failure must not reconnect")
+}
+
+// TestReceiveLoopUnanchoredDecodeFailureIsTerminal verifies the fresh-stream
+// case: with no replay anchor a reconnect would fall back to the configured
+// preset (LATEST drops the batch silently), so an undecodable first event
+// must fail the stream terminally and loudly instead of reconnecting.
+func TestReceiveLoopUnanchoredDecodeFailureIsTerminal(t *testing.T) {
+	streamCtx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s := newBackpressureTestSubscription(t, streamCtx, 1, 1)
+	s.stream = &fakeSubscribeStream{
+		ctx: streamCtx,
+		queue: []*FetchResponse{{
+			Events: []*ConsumerEvent{{
+				Event:    &ProducerEvent{SchemaId: "s1", Payload: []byte{0xff}},
+				ReplayId: []byte{0x01},
+			}},
+			PendingNumRequested: 1,
+		}},
+	}
+	// No lastReplayID: nothing has ever been delivered on this stream.
+
+	go s.receiveLoop(t.Context(), streamCtx)
+
+	select {
+	case <-s.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("receive loop did not exit on an unanchored decode failure")
+	}
+	require.ErrorContains(t, s.StreamErr(), "no replay anchor",
+		"an unanchored decode failure must fail terminally, never reconnect via the preset")
+	require.Zero(t, s.reconnectCount.Load())
+}
+
+// TestReceiveLoopAdvancesAnchorPerEvent verifies that the replay anchor moves
+// past each event as it is buffered, so a mid-batch failure redelivers from
+// exactly the failing event rather than re-emitting the batch prefix (or, on
+// a fresh stream, losing the batch entirely to a preset reconnect).
+func TestReceiveLoopAdvancesAnchorPerEvent(t *testing.T) {
+	streamCtx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	const events = 3
+	s := newBackpressureTestSubscription(t, streamCtx, events, events)
+	go s.receiveLoop(t.Context(), streamCtx)
+
+	for i := range events {
+		select {
+		case <-s.Events():
+		case <-time.After(5 * time.Second):
+			t.Fatalf("event %d was never delivered", i+1)
+		}
+	}
+	require.Eventually(t, func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return len(s.lastReplayID) > 0 && s.lastReplayID[0] == byte(events)
+	}, 5*time.Second, 10*time.Millisecond, "the anchor must advance to the last buffered event's replay ID")
+
+	s.mu.Lock()
+	s.state = StreamStateClosing
+	s.mu.Unlock()
+	cancel()
+	select {
+	case <-s.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("receive loop did not exit")
+	}
 }
 
 // TestReceiveLoopTerminalDecodeFailureAfterDecodablePrefix verifies the bound
