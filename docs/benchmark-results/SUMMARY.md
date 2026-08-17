@@ -26,11 +26,11 @@ Last updated: 2026-03-16
 <!-- Copyright 2025 Redpanda Data, Inc. -->
 ## AWS Bench Results
 
-Last refreshed: 2026-08-12
+Last refreshed: 2026-08-17
 
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
-| oracle / orders-snapshot |         4 |            9 |      —    |                   —  | 2026-08-12  |
+| mysql / orders-snapshot |         4 |           22 |      —    |                   —  | 2026-08-17  |
 
 Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
 
