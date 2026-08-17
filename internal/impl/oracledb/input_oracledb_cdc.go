@@ -95,6 +95,14 @@ This input adds the following metadata fields to each message:
 == Permissions
 
 When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
+
+== Performance
+
+Streaming throughput is bounded by the LogMiner session, not by CPU: each pipeline mines the redo stream through a single synchronous LogMiner reader, so adding cores to Redpanda Connect does not raise the capture rate. To capture more aggregate change volume from one database, run multiple pipelines that each ` + "`include`" + ` a disjoint set of tables — every pipeline gets its own LogMiner reader.
+
+Large transactions and driver fetch size: the Oracle driver fetches 25 rows per network round trip by default, which can make large committed transactions appear minutes late while the database, network and connector all look idle — each round trip costs a full network exchange, and a large transaction requires thousands of them. Raise the fetch size with the ` + "`PREFETCH_ROWS`" + ` query parameter on ` + "`" + ociFieldConnectionString + "`" + `, for example ` + "`?PREFETCH_ROWS=1000`" + `.
+
+Redo log retention must cover idle periods, not just outages: the SCN checkpoint only advances when messages are delivered, so a monitored table set that goes idle leaves the checkpoint stationary while the database ages out redo/archive logs. If the checkpointed SCN is no longer available when activity resumes or the pipeline restarts, the input cannot resume and repeatedly fails with ORA-01292. Ensure archive log retention exceeds the longest plausible idle period, and alert on a stagnant checkpoint SCN or repeated ORA errors.
 		`).
 	Field(service.NewStringField(ociFieldConnectionString).
 		Description("The connection string of the Oracle database to connect to. Additional connection options can be supplied as URL query parameters, for example: `oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true`.").
