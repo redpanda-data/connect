@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-faker/faker/v4"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,28 +31,14 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pgtest"
 	"github.com/redpanda-data/connect/v4/internal/license"
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-type FakeFlightRecord struct {
-	RealAddress faker.RealAddress `faker:"real_address"`
-	CreatedAt   int64             `fake:"unix_time"`
-}
-
-func GetFakeFlightRecord() FakeFlightRecord {
-	flightRecord := FakeFlightRecord{}
-	err := faker.FakeData(&flightRecord)
-	if err != nil {
-		panic(err)
-	}
-
-	return flightRecord
-}
-
-func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *sql.DB, error) {
+func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *pgtest.TestDB, error) {
 	ctr, err := testcontainers.Run(t.Context(), "postgres:"+version,
 		testcontainers.WithExposedPorts("5432/tcp"),
 		testcontainers.WithEnv(map[string]string{
@@ -158,7 +143,8 @@ func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *sql.D
 		}
 	})
 
-	return databaseURL, db, nil
+	testDB := &pgtest.TestDB{DB: db}
+	return databaseURL, testDB, nil
 }
 
 func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
@@ -169,7 +155,7 @@ func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := range 10 {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
@@ -218,7 +204,7 @@ pg_stream:
 	}, time.Second*25, time.Millisecond*100)
 
 	for i := 10; i < 20; i++ {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 		_, err = db.Exec(`INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);`, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
@@ -261,7 +247,7 @@ pg_stream:
 
 	time.Sleep(time.Second * 5)
 	for i := 20; i < 30; i++ {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
@@ -273,6 +259,143 @@ pg_stream:
 	}, time.Second*20, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
+// TestIntegrationPostgresSnapshotAckBarrier verifies that a crash during the
+// snapshot->stream handoff (after snapshot rows are emitted but before they are
+// acknowledged) does not lose data: because the replication slot is only
+// promoted once every snapshot message is acked, the snapshot must re-run on
+// restart. See CON-489.
+func TestIntegrationPostgresSnapshotAckBarrier(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	const rowCount = 5
+	for i := range rowCount {
+		f := pgtest.GetFakeFlightRecord()
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+
+	// batching.count == rowCount forces all snapshot rows into a single output
+	// batch, so the run-1 consumer receives them all at once and can then block
+	// without acking - reproducing the "emitted but not yet acked" handoff state.
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_snapshot_ack_barrier
+    stream_snapshot: true
+    snapshot_batch_size: 1000
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+    batching:
+      count: %d
+      period: 1h
+`, databaseURL, rowCount)
+
+	// Run 1: receive the snapshot rows but never acknowledge them, then simulate
+	// a crash by cancelling the run before the slot can be promoted.
+	received := make(chan struct{}, 1)
+	run1Builder := service.NewStreamBuilder()
+	require.NoError(t, run1Builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, run1Builder.AddInputYAML(template))
+	require.NoError(t, run1Builder.AddBatchConsumerFunc(func(ctx context.Context, _ service.MessageBatch) error {
+		select {
+		case received <- struct{}{}:
+		default:
+		}
+		// Block without acking until the simulated crash cancels our context.
+		<-ctx.Done()
+		return ctx.Err()
+	}))
+	run1, err := run1Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run1.Resources())
+
+	run1Ctx, crash := context.WithCancel(context.Background())
+	run1Done := make(chan struct{})
+	go func() {
+		defer close(run1Done)
+		_ = run1.Run(run1Ctx)
+	}()
+
+	select {
+	case <-received:
+	case <-time.After(30 * time.Second):
+		t.Fatal("snapshot rows were never delivered to the run-1 output")
+	}
+	// Give the stream time to reach the ack barrier (and, in the buggy version,
+	// to promote the slot) before we crash.
+	time.Sleep(2 * time.Second)
+	crash()
+	select {
+	case <-run1Done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("run 1 did not stop after the simulated crash")
+	}
+
+	// The barrier must have prevented the temporary slot from being promoted to
+	// a permanent one, since the snapshot was never acknowledged. This is the
+	// core guarantee: without it the permanent slot would exist here and the
+	// snapshot would be skipped on restart.
+	var permanentSlots int
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_ack_barrier'`).Scan(&permanentSlots))
+	require.Zero(t, permanentSlots, "replication slot must not be promoted before snapshot rows are acknowledged")
+
+	// A real process crash drops the connection, so postgres releases the
+	// temporary snapshot slot promptly (the socket close is immediate at the
+	// OS level). Our in-process cancel does not: confirmed empirically, the
+	// slot still reports "active for PID ..." 30+ seconds after run1Ctx is
+	// cancelled, since Go's graceful shutdown path doesn't force-close the
+	// underlying connection that fast. Terminate the backend still holding the
+	// temporary slot to faithfully model the crash's prompt socket teardown,
+	// and wait for the slot to be released before restarting.
+	require.Eventually(t, func() bool {
+		_, _ = db.Exec(`SELECT pg_terminate_backend(active_pid) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_ack_barrier_tmp' AND active_pid IS NOT NULL`)
+		var tmpSlots int
+		if err := db.QueryRow(`SELECT count(*) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_ack_barrier_tmp'`).Scan(&tmpSlots); err != nil {
+			return false
+		}
+		return tmpSlots == 0
+	}, 30*time.Second, 500*time.Millisecond, "temporary snapshot slot from the crashed run was not released")
+
+	// Run 2: restart against the same slot. Since run 1 never acked the
+	// snapshot, the slot must not have been promoted, so the snapshot re-runs
+	// and every row is delivered again. The temporary slot is already gone by
+	// this point, so Connect's drop-before-create guard (added for CON-489's
+	// review) takes its "does not exist" path here and proceeds straight to
+	// creating a fresh one - the guard's other path, dropping a slot that
+	// still exists but whose owning session has died without yet being
+	// reaped, isn't reachable from this harness (see comment above: emulating
+	// that state needs the same terminate-then-wait this test already does,
+	// which collapses it into the "does not exist" case by construction).
+	var mu sync.Mutex
+	var reads int
+	run2Builder := service.NewStreamBuilder()
+	require.NoError(t, run2Builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, run2Builder.AddInputYAML(template))
+	require.NoError(t, run2Builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		if op, _ := m.MetaGet("operation"); op == "read" { // ReadOpType: snapshot row
+			mu.Lock()
+			reads++
+			mu.Unlock()
+		}
+		return nil
+	}))
+	run2, err := run2Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run2.Resources())
+	go func() { _ = run2.Run(t.Context()) }()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Equal(c, rowCount, reads, "snapshot should have re-run and re-delivered every row after the crash")
+	}, 30*time.Second, 100*time.Millisecond)
+
+	require.NoError(t, run2.StopWithin(10*time.Second))
 }
 
 func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
@@ -349,7 +472,7 @@ func TestIntegrationPostgresIncludeTxnMarkers(t *testing.T) {
 	require.NoError(t, err)
 
 	for range 10000 {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
@@ -400,7 +523,7 @@ pg_stream:
 	}, time.Second*25, time.Millisecond*100)
 
 	for range 10 {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
@@ -445,7 +568,7 @@ pg_stream:
 
 	time.Sleep(time.Second * 5)
 	for range 10 {
-		f := GetFakeFlightRecord()
+		f := pgtest.GetFakeFlightRecord()
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
@@ -567,7 +690,7 @@ func TestIntegrationMultiplePostgresVersions(t *testing.T) {
 			require.NoError(t, err)
 
 			for range 1000 {
-				f := GetFakeFlightRecord()
+				f := pgtest.GetFakeFlightRecord()
 				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 				require.NoError(t, err)
 			}
@@ -620,7 +743,7 @@ pg_stream:
 			}, time.Minute, time.Millisecond*100)
 
 			for range 1000 {
-				f := GetFakeFlightRecord()
+				f := pgtest.GetFakeFlightRecord()
 				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 				require.NoError(t, err)
 				_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
@@ -665,7 +788,7 @@ pg_stream:
 
 			time.Sleep(time.Second * 5)
 			for range 1000 {
-				f := GetFakeFlightRecord()
+				f := pgtest.GetFakeFlightRecord()
 				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 				require.NoError(t, err)
 			}
@@ -804,8 +927,8 @@ func TestIntegrationSnapshotConsistency(t *testing.T) {
 
 	template := fmt.Sprintf(`
 read_until:
-  # Stop when we're idle for 3 seconds, which means our writer stopped
-  idle_timeout: 3s
+  # Stop when we're idle for 10 seconds, which means our writer stopped
+  idle_timeout: 10s
   input:
     pg_stream:
         dsn: %s
@@ -841,9 +964,16 @@ read_until:
 	}))
 
 	// Continuously write so there is a chance we skip data between snapshot and stream hand off.
+	var (
+		writerMu       sync.Mutex
+		lastInsertedID int64
+	)
 	writer := asyncroutine.NewPeriodic(time.Microsecond, func() {
-		_, err := db.Exec("INSERT INTO seq DEFAULT VALUES")
-		require.NoError(t, err)
+		var id int64
+		require.NoError(t, db.QueryRow("INSERT INTO seq DEFAULT VALUES RETURNING id").Scan(&id))
+		writerMu.Lock()
+		lastInsertedID = id
+		writerMu.Unlock()
 	})
 	writer.Start()
 	t.Cleanup(writer.Stop)
@@ -864,13 +994,24 @@ read_until:
 	// Let the writer write a little more
 	time.Sleep(5 * time.Second)
 	writer.Stop()
-	// Okay now wait for the stream to finish (the stream auto closes after it gets nothing for 3 seconds)
+
+	writerMu.Lock()
+	targetID := lastInsertedID
+	writerMu.Unlock()
+
+	// Wait for the consumer to actually observe the last write.
+	require.Eventually(t, func() bool {
+		batchMu.Lock()
+		defer batchMu.Unlock()
+		return len(sequenceNumbers) > 0 && sequenceNumbers[len(sequenceNumbers)-1] >= targetID
+	}, 30*time.Second, 50*time.Millisecond, "stream did not catch up to last write")
+
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
 	select {
 	case <-streamStopped:
 	case <-time.After(30 * time.Second):
 		require.Fail(t, "stream did not complete in time")
 	}
-	require.NoError(t, streamOut.StopWithin(10*time.Second))
 
 	// Read the actual committed count from the database rather than
 	// relying on the atomic counter, which can race with the last

@@ -337,3 +337,190 @@ func TestResolveResume_NonGlobalFallsBackToGet(t *testing.T) {
 	require.Equal(t, resumeExact, d.Mode)
 	require.Equal(t, "seq-42", d.SequenceNumber)
 }
+
+// sharedStoreAPI returns a fakeCheckpointAPI backed by a shared in-memory item
+// store keyed by "<hashValue>|<shardID>", so multiple Checkpointers can
+// exercise cross-namespace visibility against one "table".
+func sharedStoreAPI(store map[string]map[string]types.AttributeValue) *fakeCheckpointAPI {
+	keyOf := func(m map[string]types.AttributeValue) string {
+		attrStr := func(name string) string {
+			if v, ok := m[name].(*types.AttributeValueMemberS); ok {
+				return v.Value
+			}
+			return ""
+		}
+		// Global-mode items carry a non-key StreamArn attribute alongside the
+		// TableId hash key, so prefer TableId when present.
+		hash := attrStr(checkpointHashKeyGlobal)
+		if hash == "" {
+			hash = attrStr(checkpointHashKeyDefault)
+		}
+		return hash + "|" + attrStr(checkpointRangeKey)
+	}
+	return &fakeCheckpointAPI{
+		describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{TableStatus: types.TableStatusActive}}, nil
+		},
+		putItem: func(_ context.Context, in *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+			store[keyOf(in.Item)] = in.Item
+			return &dynamodb.PutItemOutput{}, nil
+		},
+		getItem: func(_ context.Context, in *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			return &dynamodb.GetItemOutput{Item: store[keyOf(in.Key)]}, nil
+		},
+	}
+}
+
+func TestCheckpointer_NamespacePrefixesHashKeyValue(t *testing.T) {
+	cases := []struct {
+		name      string
+		namespace string
+		global    bool
+		wantAttr  string
+		wantValue string
+	}{
+		{"default mode no namespace", "", false, "StreamArn", "arn:A"},
+		{"default mode namespaced", "dev-alice", false, "StreamArn", "dev-alice#arn:A"},
+		{"global mode no namespace", "", true, "TableId", "t"},
+		{"global mode namespaced", "dev-alice", true, "TableId", "dev-alice#t"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var put *dynamodb.PutItemInput
+			api := &fakeCheckpointAPI{
+				describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+					desc := &types.TableDescription{TableStatus: types.TableStatusActive}
+					if tc.global {
+						desc.KeySchema = globalTableKeySchema()
+						desc.Replicas = []types.ReplicaDescription{
+							{RegionName: aws.String("us-east-1")},
+							{RegionName: aws.String("us-west-2")},
+						}
+					}
+					return &dynamodb.DescribeTableOutput{Table: desc}, nil
+				},
+				putItem: func(_ context.Context, in *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+					put = in
+					return &dynamodb.PutItemOutput{}, nil
+				},
+			}
+			cfg := CheckpointerConfig{
+				TableName: "cps", SourceTable: "t", StreamArn: "arn:A",
+				Namespace: tc.namespace, CheckpointLimit: 1,
+			}
+			if tc.global {
+				cfg.GlobalTable = true
+				cfg.Region = "us-east-1"
+				cfg.ReplicaRegions = []string{"us-west-2"}
+			}
+			c, err := NewCheckpointer(context.Background(), api, cfg, checkpointTestLogger())
+			require.NoError(t, err)
+
+			require.NoError(t, c.Set(context.Background(), "shard-1", "seq-1", ""))
+			require.Equal(t, tc.wantValue, put.Item[tc.wantAttr].(*types.AttributeValueMemberS).Value)
+			require.Equal(t, "shard-1", put.Item[checkpointRangeKey].(*types.AttributeValueMemberS).Value,
+				"range key must never be namespaced")
+		})
+	}
+}
+
+func TestCheckpointer_NamespaceIsolation(t *testing.T) {
+	store := map[string]map[string]types.AttributeValue{}
+	api := sharedStoreAPI(store)
+
+	newCP := func(ns string) *Checkpointer {
+		c, err := NewCheckpointer(context.Background(), api, CheckpointerConfig{
+			TableName: "cps", SourceTable: "t", StreamArn: "arn:A",
+			Namespace: ns, CheckpointLimit: 1,
+		}, checkpointTestLogger())
+		require.NoError(t, err)
+		return c
+	}
+	alice, bob, unscoped := newCP("dev-alice"), newCP("dev-bob"), newCP("")
+
+	require.NoError(t, alice.Set(context.Background(), "shard-1", "seq-alice", ""))
+	require.NoError(t, unscoped.Set(context.Background(), "shard-1", "seq-legacy", ""))
+
+	got, err := alice.Get(context.Background(), "shard-1")
+	require.NoError(t, err)
+	require.Equal(t, "seq-alice", got, "a namespace must read back its own checkpoint")
+
+	got, err = bob.Get(context.Background(), "shard-1")
+	require.NoError(t, err)
+	require.Empty(t, got, "a namespace must not see another namespace's checkpoint")
+
+	got, err = unscoped.Get(context.Background(), "shard-1")
+	require.NoError(t, err)
+	require.Equal(t, "seq-legacy", got, "un-namespaced reader must not see namespaced rows")
+}
+
+func TestSnapshotCheckpoints_UseNamespacedHashValue(t *testing.T) {
+	var getIn *dynamodb.GetItemInput
+	var queryIn *dynamodb.QueryInput
+	var putIn *dynamodb.PutItemInput
+	api := &fakeCheckpointAPI{
+		describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{TableStatus: types.TableStatusActive}}, nil
+		},
+		getItem: func(_ context.Context, in *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			getIn = in
+			return &dynamodb.GetItemOutput{}, nil
+		},
+		query: func(_ context.Context, in *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			queryIn = in
+			return &dynamodb.QueryOutput{}, nil
+		},
+		putItem: func(_ context.Context, in *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+			putIn = in
+			return &dynamodb.PutItemOutput{}, nil
+		},
+	}
+	c, err := NewCheckpointer(context.Background(), api, CheckpointerConfig{
+		TableName: "cps", SourceTable: "t", StreamArn: "arn:A",
+		Namespace: "dev-alice", CheckpointLimit: 1,
+	}, checkpointTestLogger())
+	require.NoError(t, err)
+
+	_, err = c.SnapshotProgress(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "dev-alice#arn:A", getIn.Key["StreamArn"].(*types.AttributeValueMemberS).Value,
+		"snapshot completion sentinel must use the namespaced hash value")
+	require.Equal(t, "dev-alice#arn:A", queryIn.ExpressionAttributeValues[":hash"].(*types.AttributeValueMemberS).Value,
+		"snapshot segment query must use the namespaced hash value")
+
+	require.NoError(t, c.UpdateSnapshotProgress(context.Background(), 3, nil, 42))
+	require.Equal(t, "dev-alice#arn:A", putIn.Item["StreamArn"].(*types.AttributeValueMemberS).Value,
+		"snapshot segment writes must use the namespaced hash value")
+	require.Equal(t, "snapshot#segment#3", putIn.Item[checkpointRangeKey].(*types.AttributeValueMemberS).Value)
+}
+
+func TestPrepareResume_UsesNamespacedHashValue(t *testing.T) {
+	var queryIn *dynamodb.QueryInput
+	api := &fakeCheckpointAPI{
+		describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{
+				TableName:   aws.String("cps"),
+				TableStatus: types.TableStatusActive,
+				KeySchema:   globalTableKeySchema(),
+				Replicas: []types.ReplicaDescription{
+					{RegionName: aws.String("us-east-1")},
+					{RegionName: aws.String("us-west-2")},
+				},
+			}}, nil
+		},
+		query: func(_ context.Context, in *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			queryIn = in
+			return &dynamodb.QueryOutput{}, nil
+		},
+	}
+	c, err := NewCheckpointer(context.Background(), api, CheckpointerConfig{
+		TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+		Namespace: "dev-alice", GlobalTable: true, Region: "us-east-1", ReplicaRegions: []string{"us-west-2"},
+	}, checkpointTestLogger())
+	require.NoError(t, err)
+
+	_, err = c.ResolveResume(context.Background(), "shard-1")
+	require.NoError(t, err)
+	require.Equal(t, "dev-alice#t", queryIn.ExpressionAttributeValues[":hash"].(*types.AttributeValueMemberS).Value,
+		"global-mode resume partition query must use the namespaced hash value")
+}

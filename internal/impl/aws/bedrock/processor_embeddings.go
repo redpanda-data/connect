@@ -52,7 +52,8 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 		Fields(config.SessionFields()...).
 		Field(service.NewStringField(bedepFieldModel).
 			Examples("amazon.titan-embed-text-v1", "amazon.titan-embed-text-v2:0", "cohere.embed-english-v3", "cohere.embed-multilingual-v3", "cohere.embed-v4:0").
-			Description("The model ID to use. For a full list see the https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html[AWS Bedrock documentation^].")).
+			Description("The model ID to use. For a full list see the https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html[AWS Bedrock documentation^].").
+			ShortDescription("The model ID to use.")).
 		Field(service.NewStringField(bedepFieldText).
 			Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
 			Optional()).

@@ -48,6 +48,7 @@ type CheckpointerConfig struct {
 	TableName       string // checkpoint table name
 	SourceTable     string // source table name (portable key in global mode)
 	StreamArn       string // current region's stream ARN
+	Namespace       string // optional logical-reader scope, prefixed to the hash key value
 	CheckpointLimit int
 	GlobalTable     bool
 	Region          string   // pipeline's own region (global mode)
@@ -61,6 +62,7 @@ type Checkpointer struct {
 	tableName       string
 	sourceTable     string
 	streamArn       string
+	namespace       string
 	checkpointLimit int
 	globalTable     bool
 	region          string
@@ -87,6 +89,7 @@ func NewCheckpointer(
 		tableName:       cfg.TableName,
 		sourceTable:     cfg.SourceTable,
 		streamArn:       cfg.StreamArn,
+		namespace:       cfg.Namespace,
 		checkpointLimit: cfg.CheckpointLimit,
 		globalTable:     cfg.GlobalTable,
 		region:          cfg.Region,
@@ -149,10 +152,7 @@ func (c *Checkpointer) ensureTableExists(ctx context.Context) error {
 	}
 
 	// Table doesn't exist, create it.
-	hashAttr := checkpointHashKeyDefault
-	if c.globalTable {
-		hashAttr = checkpointHashKeyGlobal
-	}
+	hashAttr := c.hashAttrName()
 	input := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []types.AttributeDefinition{
 			{AttributeName: aws.String(hashAttr), AttributeType: types.ScalarAttributeTypeS},
@@ -246,19 +246,36 @@ func (c *Checkpointer) waitForTableActive(ctx context.Context) error {
 	return nil
 }
 
-// checkpointKey builds the primary key for a shard's checkpoint row. In global
-// mode the hash key is the source table name (portable across regions); in the
-// default mode it is the current stream ARN.
-func (c *Checkpointer) checkpointKey(shardID string) map[string]types.AttributeValue {
+// hashKeyValue returns the value stored in the checkpoint table's hash key:
+// the source table name in global mode (portable across regions), otherwise
+// the current stream ARN. A configured checkpoint namespace is prefixed as
+// "<namespace>#<value>" so independent logical readers sharing one checkpoint
+// table occupy separate partitions.
+func (c *Checkpointer) hashKeyValue() string {
+	v := c.streamArn
 	if c.globalTable {
-		return map[string]types.AttributeValue{
-			checkpointHashKeyGlobal: &types.AttributeValueMemberS{Value: c.sourceTable},
-			checkpointRangeKey:      &types.AttributeValueMemberS{Value: shardID},
-		}
+		v = c.sourceTable
 	}
+	if c.namespace == "" {
+		return v
+	}
+	return c.namespace + "#" + v
+}
+
+// hashAttrName returns the name of the checkpoint table's hash key attribute
+// for the current mode.
+func (c *Checkpointer) hashAttrName() string {
+	if c.globalTable {
+		return checkpointHashKeyGlobal
+	}
+	return checkpointHashKeyDefault
+}
+
+// checkpointKey builds the primary key for a shard's checkpoint row.
+func (c *Checkpointer) checkpointKey(shardID string) map[string]types.AttributeValue {
 	return map[string]types.AttributeValue{
-		checkpointHashKeyDefault: &types.AttributeValueMemberS{Value: c.streamArn},
-		checkpointRangeKey:       &types.AttributeValueMemberS{Value: shardID},
+		c.hashAttrName():   &types.AttributeValueMemberS{Value: c.hashKeyValue()},
+		checkpointRangeKey: &types.AttributeValueMemberS{Value: shardID},
 	}
 }
 
@@ -272,8 +289,8 @@ func (c *Checkpointer) Get(ctx context.Context, shardID string) (string, error) 
 		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
 			return "", nil
 		}
-		return "", fmt.Errorf("getting checkpoint for table=%s stream=%s shard=%s: %w",
-			c.tableName, c.streamArn, shardID, err)
+		return "", fmt.Errorf("getting checkpoint for table=%s key=%s shard=%s: %w",
+			c.tableName, c.hashKeyValue(), shardID, err)
 	}
 
 	if result.Item == nil {
@@ -304,8 +321,8 @@ func (c *Checkpointer) Set(ctx context.Context, shardID, sequenceNumber, approxC
 		Item:      item,
 	})
 	if err != nil {
-		return fmt.Errorf("setting checkpoint for table=%s stream=%s shard=%s seq=%s: %w",
-			c.tableName, c.streamArn, shardID, sequenceNumber, err)
+		return fmt.Errorf("setting checkpoint for table=%s key=%s shard=%s seq=%s: %w",
+			c.tableName, c.hashKeyValue(), shardID, sequenceNumber, err)
 	}
 	return nil
 }
@@ -380,7 +397,7 @@ func (c *Checkpointer) prepareResume(ctx context.Context) error {
 			TableName:              aws.String(c.tableName),
 			KeyConditionExpression: aws.String("TableId = :hash"),
 			ExpressionAttributeValues: map[string]types.AttributeValue{
-				":hash": &types.AttributeValueMemberS{Value: c.sourceTable},
+				":hash": &types.AttributeValueMemberS{Value: c.hashKeyValue()},
 			},
 			ExclusiveStartKey: startKey,
 		})
@@ -388,7 +405,7 @@ func (c *Checkpointer) prepareResume(ctx context.Context) error {
 			if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
 				return nil
 			}
-			return fmt.Errorf("querying checkpoint partition for %s: %w", c.sourceTable, err)
+			return fmt.Errorf("querying checkpoint partition for %s: %w", c.hashKeyValue(), err)
 		}
 		for _, item := range out.Items {
 			seqAttr, isShardRow := item["SequenceNumber"].(*types.AttributeValueMemberS)
@@ -465,10 +482,7 @@ func (c *Checkpointer) SnapshotProgress(ctx context.Context) (*SnapshotCheckpoin
 		}
 	}
 
-	hashName, hashVal := "StreamArn", c.streamArn
-	if c.globalTable {
-		hashName, hashVal = "TableId", c.sourceTable
-	}
+	hashName, hashVal := c.hashAttrName(), c.hashKeyValue()
 	queryRes, err := c.svc.Query(ctx, &dynamodb.QueryInput{
 		TableName:              aws.String(c.tableName),
 		KeyConditionExpression: aws.String(hashName + " = :hash AND begins_with(ShardID, :snapshot_prefix)"),

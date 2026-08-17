@@ -31,6 +31,7 @@ func RawProcessorConfig() *service.ConfigSpec {
 	rawQueryExecOnly := func() *service.ConfigField {
 		return service.NewBoolField("exec_only").
 			Description("Whether the query result should be discarded. When set to `true` the message contents will remain unchanged, which is useful in cases where you are executing inserts, updates, etc. By default this is true for the last query, and previous queries don't change the results. If set to true for any query but the last one, the subsequent `args_mappings` input is overwritten.").
+			ShortDescription("Discard the query result, leaving message contents unchanged. Useful for inserts and updates.").
 			Optional()
 	}
 
@@ -49,6 +50,7 @@ If the query fails to execute then the message will remain unchanged and the err
 			Optional()).
 		Field(service.NewBoolField("unsafe_dynamic_query").
 			Description("Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Great care should be made to ensure your queries are defended against injection attacks.").
+			ShortDescription("Enable interpolation functions in the query. Take care to defend against injection attacks.").
 			Advanced().
 			Default(false)).
 		Field(rawQueryArgsMappingField()).
@@ -60,6 +62,7 @@ If the query fails to execute then the message will remain unchanged and the err
 			rawQueryExecOnly(),
 		).
 			Description("A list of statements to run in addition to `query`. When specifying multiple statements, they are all executed within a transaction. The output of the processor is always the last query that runs, unless `exec_only` is used.").
+			ShortDescription("Statements to run in addition to query, all executed within a transaction.").
 			Optional()).
 		Fields(connFields()...).
 		Example(

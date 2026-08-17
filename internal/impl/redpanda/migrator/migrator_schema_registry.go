@@ -106,7 +106,8 @@ func schemaRegistryField(extraFields ...*service.ConfigField) *service.ConfigFie
 	fields = append(fields, extraFields...)
 
 	return service.NewObjectField(srObjectField, fields...).
-		Description("Configuration for schema registry integration. Enables migration of schema subjects, versions, and compatibility settings between clusters.")
+		Description("Configuration for schema registry integration. Enables migration of schema subjects, versions, and compatibility settings between clusters.").
+		ShortDescription("Configuration for schema registry integration, enabling migration of subjects, versions and compatibility settings.")
 }
 
 func schemaRegistryMigratorFields() []*service.ConfigField {
@@ -124,6 +125,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			Description("Regular expressions for schema subjects to include in migration. " +
 				"If empty, all subjects are included (unless excluded). " +
 				"Note: the migrator consumer group is always ignored.").
+			ShortDescription("Regular expressions for schema subjects to include in migration. All subjects are included if empty.").
 			Example(`["prod-.*", "staging-.*"]`).
 			Example(`["user-.*", "order-.*"]`).
 			Optional(),
@@ -131,6 +133,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			Description("Regular expressions for schema subjects to exclude from migration. " +
 				"Takes precedence over include patterns. " +
 				"Note: the migrator consumer group is always ignored.").
+			ShortDescription("Regular expressions for schema subjects to exclude from migration. Takes precedence over include.").
 			Example(`[".*-test", ".*-temp"]`).
 			Example(`["dev-.*", "local-.*"]`).
 			Optional(),
@@ -141,9 +144,11 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			Optional(),
 		service.NewStringEnumField(srFieldVersions, VersionsLatest.String(), VersionsAll.String()).
 			Description("Which schema versions to migrate. 'latest' migrates only the current version, 'all' migrates complete version history for better compatibility.").
+			ShortDescription("Which schema versions to migrate: the latest only, or the complete version history.").
 			Default(VersionsAll.String()),
 		service.NewBoolField(srFieldIncludeDeleted).
 			Description("Whether to include soft-deleted schemas in migration. Useful for complete migration but may not be supported by all schema registries.").
+			ShortDescription("Whether to include soft-deleted schemas in migration. Not supported by all schema registries.").
 			Default(false),
 		service.NewBoolField(srFieldTranslateIDs).
 			Description("Whether to translate schema IDs during migration.").
@@ -156,6 +161,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 				"When false (default), unknown schema IDs are passed through unchanged, " +
 				"allowing migration of topics with mixed message formats. " +
 				"Note: messages with 0-byte prefixes (e.g., protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
+			ShortDescription("Error on unknown schema IDs. Only relevant when translate_ids is true.").
 			Default(false),
 		service.NewIntField(srFieldMaxParallelHTTPRequest).
 			Description("Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.").

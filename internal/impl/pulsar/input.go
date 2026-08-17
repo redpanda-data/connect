@@ -80,6 +80,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 			Description("Specify the subscription name for this consumer.")).
 		Field(service.NewStringEnumField("subscription_type", "shared", "key_shared", "failover", "exclusive").
 			Description("Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement[Pulsar documentation^] and https://github.com/apache/pulsar/issues/12208[this Github issue^] for more details.").
+			ShortDescription("The subscription type for this consumer. key_shared allows out-of-order delivery.").
 			Default(defaultSubscriptionType)).
 		Field(service.NewStringEnumField("subscription_initial_position", "latest", "earliest").
 			Description("Specify the subscription initial position for this consumer.").
@@ -87,6 +88,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 		Field(service.NewObjectField("tls",
 			service.NewStringField("root_cas_file").
 				Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").
+				ShortDescription("An optional path to a root certificate authority file, often a .pem containing a certificate chain.").
 				Default("").
 				Example("./root_cas.pem")).
 			Description("Specify the path to a custom CA certificate to trust broker TLS service.")).

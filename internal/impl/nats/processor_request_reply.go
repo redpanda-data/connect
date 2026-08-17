@@ -71,6 +71,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			Optional()).
 		Field(service.NewStringField("timeout").
 			Description("A duration string is a possibly signed sequence of decimal numbers, each with optional fraction and a unit suffix, such as 300ms, -1.5h or 2h45m. Valid time units are ns, us (or µs), ms, s, m, h.").
+			ShortDescription("A duration string such as 300ms, 1.5h or 2h45m. Valid units are ns, us, ms, s, m and h.").
 			Optional().
 			Default("3s")).
 		Fields(connectionTailFields()...)

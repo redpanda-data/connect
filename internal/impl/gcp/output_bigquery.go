@@ -192,7 +192,8 @@ For the CSV format when the field ` + "`csv.header`" + ` is specified a header r
 For parquet, the data can be encoded using the ` + "`parquet_encode`" + ` processor and each message that is sent to the output must be a full parquet message.
 
 ` + service.OutputPerformanceDocs(true, true)).
-		Field(service.NewStringField("project").Description("The project ID of the dataset to insert data to. If not set, it will be inferred from the credentials or read from the GOOGLE_CLOUD_PROJECT environment variable.").Default("")).
+		Field(service.NewStringField("project").Description("The project ID of the dataset to insert data to. If not set, it will be inferred from the credentials or read from the GOOGLE_CLOUD_PROJECT environment variable.").
+			ShortDescription("The project ID of the dataset to insert into. Inferred from credentials or GOOGLE_CLOUD_PROJECT if unset.").Default("")).
 		Field(service.NewStringField("job_project").Description("The project ID in which jobs will be executed. If not set, project will be used.").Default("")).
 		Field(service.NewStringField("dataset").Description("The BigQuery Dataset ID.")).
 		Field(service.NewStringField("table").Description("The table to insert messages to.")).
@@ -209,10 +210,12 @@ For parquet, the data can be encoded using the ` + "`parquet_encode`" + ` proces
 			Default(string(bigquery.WriteAppend))).
 		Field(service.NewStringEnumField("create_disposition", string(bigquery.CreateIfNeeded), string(bigquery.CreateNever)).
 			Description("Specifies the circumstances under which destination table will be created. If CREATE_IF_NEEDED is used the GCP BigQuery will create the table if it does not already exist and tables are created atomically on successful completion of a job. The CREATE_NEVER option ensures the table must already exist and will not be automatically created.").
+			ShortDescription("When the destination table should be created, such as CREATE_IF_NEEDED.").
 			Advanced().
 			Default(string(bigquery.CreateIfNeeded))).
 		Field(service.NewBoolField("ignore_unknown_values").
 			Description("Causes values not matching the schema to be tolerated. Unknown values are ignored. For CSV this ignores extra values at the end of a line. For JSON this ignores named values that do not match any column name. If this field is set to false (the default value), records containing unknown values are treated as bad records. The max_bad_records field can be used to customize how bad records are handled.").
+			ShortDescription("Tolerate values that do not match the schema, ignoring them rather than failing the write.").
 			Advanced().
 			Default(false)).
 		Field(service.NewIntField("max_bad_records").
@@ -221,6 +224,7 @@ For parquet, the data can be encoded using the ` + "`parquet_encode`" + ` proces
 			Default(0)).
 		Field(service.NewBoolField("auto_detect").
 			Description("Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exist and this field is set to `false` the output may not be able to insert data and will throw insertion error. Be careful using this field since it delegates to the GCP BigQuery service the schema detection and values like `\"no\"` may be treated as booleans for the CSV format.").
+			ShortDescription("Automatically infer options and schema for CSV and JSON sources.").
 			Advanced().
 			Default(false)).
 		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the load job.").Default(map[string]any{})).
@@ -228,6 +232,7 @@ For parquet, the data can be encoded using the ` + "`parquet_encode`" + ` proces
 		Field(service.NewObjectField("csv",
 			service.NewStringListField("header").
 				Description("A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header.").
+				ShortDescription("Values to use as the header for each batch. The first line of each message is used if unset.").
 				Default([]any{}),
 			service.NewStringField("field_delimiter").
 				Description("The separator for fields in a CSV file, used when reading or exporting data.").
@@ -246,6 +251,7 @@ For parquet, the data can be encoded using the ` + "`parquet_encode`" + ` proces
 				Default(string(bigquery.UTF_8)),
 			service.NewIntField("skip_leading_rows").
 				Description("The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is 1 since Redpanda Connect will add the specified header in the first line of each batch sent to BigQuery.").
+				ShortDescription("Number of rows at the top of a CSV file that BigQuery skips when reading.").
 				Advanced().
 				Default(1),
 		).Description("Specify how CSV data should be interpreted.")).

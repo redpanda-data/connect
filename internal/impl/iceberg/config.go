@@ -43,6 +43,7 @@ const (
 	// the Iceberg spec's identifier-field-ids (primary-key columns).
 	ioFieldRowOperation     = "row_operation"
 	ioFieldIdentifierFields = "identifier_fields"
+	ioFieldMergeStrategy    = "merge_strategy"
 
 	// Storage fields - common
 	ioFieldStorage = "storage"
@@ -89,6 +90,7 @@ const (
 	ioFieldManifestMergeEnabled = "manifest_merge_enabled"
 	ioFieldMaxSnapshotAge       = "max_snapshot_age"
 	ioFieldMaxCommitRetries     = "max_retries"
+	ioFieldCleanupOnFailure     = "cleanup_on_failure"
 
 	// Performance fields
 	ioFieldBatching    = "batching"
@@ -117,11 +119,13 @@ const rowOperationDocs = "\n" +
 	"\n" +
 	"`row_operation` supports interpolation, so the operation can be driven by the data itself — for example by mapping a change-data-capture stream's operation field — but no CDC-specific format is assumed (see the change-data-capture example below). It is named `row_operation` to distinguish it from Iceberg's snapshot-level operation.\n" +
 	"\n" +
-	"`upsert` and `delete` require `identifier_fields` and use Iceberg merge-on-read equality deletes, which require table format version 2. A version-1 table is automatically upgraded to version 2 on the first `upsert`/`delete`; *this upgrade is irreversible*.\n" +
+	"`upsert` and `delete` require `identifier_fields`. How those mutations are materialised on disk — and, critically, which query engines can then read the table — is controlled by `merge_strategy`. See <<merge-strategies,Merge strategies: merge-on-read vs copy-on-write>> below for the decision guide, support matrix, and maintenance guidance.\n" +
 	"\n" +
-	"*Identifier fields.* `identifier_fields` must reference existing table columns of a primitive, non-floating-point type. A static `upsert`/`delete` is validated at startup; an interpolated `row_operation` is validated per message at write time, so an empty `identifier_fields` is not caught until the first `upsert`/`delete` message arrives. Identifier columns of a temporal type (`timestamp`, `timestamptz`, `date`, `time`) must arrive as time values, not bare numbers — a numeric epoch is ambiguous as a delete key and is rejected at write time; convert it to a timestamp upstream. If the table is partitioned, every partition source column must be one of the `identifier_fields`, since equality deletes are partition-scoped.\n" +
+	"*Identifier fields.* `identifier_fields` must reference existing table columns of a primitive, non-floating-point type. A static `upsert`/`delete` is validated at startup; an interpolated `row_operation` is validated per message at write time, so an empty `identifier_fields` is not caught until the first `upsert`/`delete` message arrives. Identifier columns of a temporal type (`timestamp`, `timestamptz`, `date`, `time`) are interpreted exactly like their data columns: time values and RFC 3339 strings are unambiguous, and a bare numeric epoch is interpreted using the batch's schema metadata when present, falling back to the same default units the insert path applies (the key is interpreted by the identical rules as the insert path, so it encodes what the insert stored whenever both batches carry the same unit declaration). Beware feeding numeric epochs *without* schema metadata in a unit other than that default — the key would silently match nothing; set `require_schema_metadata: true` to make an undeclared unit fail loudly instead, or convert to a timestamp upstream. If the table is partitioned, `merge-on-read` additionally requires every partition source column to be one of the `identifier_fields`, since equality deletes are partition-scoped; `copy-on-write` carries no such restriction (it rewrites whole files by filter and routes new rows by value, and can even move a key across partitions). See the support matrix for the merge-key types each strategy accepts.\n" +
 	"\n" +
-	"When this output auto-creates a table (via `schema_evolution`), the `identifier_fields` columns are created as *required* and registered as the table's Iceberg identifier-field-ids, so downstream engines and other writers see the primary key. A consequence is that a null or missing value in an identifier column is rejected on write, even for `insert`. Identifier columns must therefore be present at creation — in the first message or declared via `schema_metadata`. Pre-existing tables are never modified.\n" +
+	"*Strict key and value typing.* Merge keys and row values on the `upsert`/`delete` paths are validated as strictly as the insert path has always been: a string-typed integer or boolean (for example `{\"id\": \"42\"}` into a `long` column, or `\"true\"` into a `boolean` column) previously worked by accident on the mutation paths and now fails the batch with an actionable error, matching the insert path's rejections. Convert such values upstream (for example with Bloblang's `.number()` or `.bool()`) if a source emits stringified scalars.\n" +
+	"\n" +
+	"Under `merge-on-read`, when this output auto-creates a table (via `schema_evolution`), the `identifier_fields` columns are created as *required* and registered as the table's Iceberg identifier-field-ids, so downstream engines and other writers see the primary key. A consequence is that a null or missing value in an identifier column is rejected on write, even for `insert`; identifier columns must therefore be present at creation — in the first message or declared via `schema_metadata`. Under `copy-on-write` the identifier fields are used only as the connector-side merge key and are *not* registered as identifier-field-ids, so auto-created columns are not forced required (this is also what lets engine-backed catalogs such as the Databricks Unity Catalog, which rejects identifier-field-ids at table creation, accept the `CREATE TABLE`). Pre-existing tables are never modified.\n" +
 	"\n" +
 	"*Batching and ordering.* Within a single batch the last `upsert`/`delete` per `identifier_fields` key wins. Each batch containing an `upsert`/`delete` is committed as its own snapshot (these commits are never coalesced, which is required for correctness), so a high-throughput mutation workload produces one snapshot per batch. Size batches accordingly and run regular table maintenance (snapshot expiry and compaction) to keep metadata manageable. Pure `insert`-only batches keep the original append fast path, which does coalesce commits.\n" +
 	"\n" +
@@ -130,7 +134,56 @@ const rowOperationDocs = "\n" +
 	"[CAUTION]\n" +
 	"====\n" +
 	"`insert` is an unconditional append and is *not* keyed or de-duplicated. For keyed data (including change-data-capture), map create/read events to `upsert`, never `insert` — mixing `insert` with `upsert`/`delete` on the same key in one batch produces duplicate rows.\n" +
-	"====\n"
+	"====\n" +
+	"\n" +
+	"[[merge-strategies]]\n" +
+	"=== Merge strategies: merge-on-read vs copy-on-write\n" +
+	"\n" +
+	"`merge_strategy` controls how `upsert`/`delete` mutations are written, which sets both the write cost and — most importantly — which query engines can read the table.\n" +
+	"\n" +
+	"* `merge-on-read` (the default) writes Iceberg v2 equality-delete files and applies them at read time. Writes stay cheap and streaming-friendly, but only catalog-native / Flink-world engines (Apache Polaris, Flink, Trino, Spark) can read equality deletes. Engine-backed catalogs — Snowflake and the Databricks Unity Catalog — cannot. It requires table format version 2, so a version-1 table is automatically upgraded to version 2 on the first `upsert`/`delete`; *this upgrade is irreversible*.\n" +
+	"* `copy-on-write` instead rewrites whole data files so the table only ever holds plain data files — no equality- or positional-delete files. Every engine that reads Iceberg data files can read the result: Snowflake and the Databricks Unity Catalog as well as Polaris, Flink and Trino. Because it writes only plain data files it works on version-1 or version-2 tables and never forces the irreversible v1->v2 upgrade.\n" +
+	"\n" +
+	"*Which to choose.*\n" +
+	"\n" +
+	"* Choose `merge-on-read` for streaming or high-throughput mutation into a lake read by Polaris, Flink, Trino or Spark, where write cost must stay low.\n" +
+	"* Choose `copy-on-write` when the table must be correct on Snowflake or the Databricks Unity Catalog (or any engine that cannot read equality deletes), and the workload is batch or moderate-throughput so the write amplification is acceptable.\n" +
+	"\n" +
+	"*Copy-on-write support matrix.*\n" +
+	"\n" +
+	"* *Column types:* all flat primitives (`boolean`, `int`, `long`, `float`, `double`, `string`, `date`, `time`, `timestamp`, `timestamptz`, `decimal`, `uuid`, `binary`, `fixed`), and nested `struct`/`list`/`map` columns whose leaves are all supported primitives.\n" +
+	"* *Merge-key (`identifier_fields`) types:* `int`, `long`, `string`, `date`, `time`, `timestamp`, `timestamptz` and `uuid`. `decimal` and `boolean` merge keys are *not* supported and error with a message pointing you at `merge-on-read` (an upstream limitation in the Iceberg library's overwrite filter — it cannot apply a `decimal` or `boolean` predicate when rewriting files); both are fine as non-key columns.\n" +
+	"* *Partitioned tables:* supported, with no requirement that the partition columns be a subset of `identifier_fields`. A `copy-on-write` `upsert` can even move a key from one partition to another.\n" +
+	"* *Table format:* version 1 or version 2, with no forced upgrade.\n" +
+	"\n" +
+	"*Write amplification and throughput.* `copy-on-write` rewrites every data file that contains a touched key: a batch of K keys scattered over M files rewrites roughly K/M of the table, and touching even a single key in a file rewrites that whole file — so a one-row change to a 512 MB file rewrites all 512 MB. To keep amplification low, sort the table by the identifier key so a batch's keys cluster into as few files as possible, and use large batches. This is a batch / moderate-throughput mode, not a streaming one.\n" +
+	"\n" +
+	"*Memory.* Under `copy-on-write` the whole new-row batch is materialised in memory as a single Arrow record while the batch commits, so a keyed batch's memory scales with its total row bytes. Size keyed batches to stay within the process memory budget rather than making them arbitrarily large.\n" +
+	"\n" +
+	"*Maintenance.* Because every mutating batch rewrites files and adds a snapshot, a high-churn `copy-on-write` workload accumulates data files and snapshots quickly. Run regular table maintenance: compaction (rewrite / bin-pack data files), snapshot expiry, and orphan-file removal. Orphan-file removal matters specifically for commits that fail *ambiguously* (the catalog may or may not have recorded them): the connector deliberately never deletes those attempts' newly-written data files, because the commit may still land and reference them — they are left for orphan-file removal to reclaim. The connector's own best-effort cleanup covers only commits whose failure was a definitive catalog rejection (and superseded attempts of a retried success). Setting `commit.cleanup_on_failure` to `false` turns that connector-side cleanup off altogether — on every write path — which makes periodic orphan-file removal mandatory rather than merely advisable.\n" +
+	"\n" +
+	"*Commit retries.* Leave the standard Iceberg table property `commit.retry.num-retries` at its default `0` on tables this output writes to. The output's own commit retry (`commit.max_retries`) re-stages every attempt from a freshly reloaded table snapshot, which is safe under concurrent writers; the library-level replay a non-zero `commit.retry.num-retries` arms instead re-submits the original updates built against a now-stale snapshot, and under concurrent writers that replay can drop a peer commit's files from the table state. The output logs a warning when it finds the property armed on a table it writes to.\n" +
+	"\n" +
+	"*Copy-on-write limitations.*\n" +
+	"\n" +
+	"* A `decimal` merge key is not supported — use `merge-on-read` for a decimal key (a `decimal` non-key column is fine).\n" +
+	"* Schema evolution covers new *top-level* columns only; new fields appearing inside an existing nested `struct`/`list`/`map` column are not auto-surfaced for evolution.\n" +
+	"* It is a batch / moderate-throughput mode: expect heavy write amplification under scattered, high-frequency keyed mutations.\n" +
+	"* Tables pinned to the legacy timestamp encoding whose schema contains a no-timezone `timestamp` column reject `upsert`/`delete` — see <<timestamp-encoding,Timestamp encoding on existing tables>> for why and for the migration path.\n" +
+	"* A table whose `write.delete.mode` property is *explicitly* set to `merge-on-read` (for example by a Spark `TBLPROPERTIES` clause) rejects `copy-on-write` mutations with an actionable error: the connector will not silently override a table-level setting other engines read, and honouring it would produce the delete files this strategy exists to avoid. Unset the property, set it to `copy-on-write`, or use `merge_strategy: merge-on-read`. (Previous releases silently overrode the property.)\n" +
+	"\n" +
+	"[[timestamp-encoding]]\n" +
+	"=== Timestamp encoding on existing tables\n" +
+	"\n" +
+	"Older versions of this output annotated no-timezone `timestamp` columns in the parquet files they wrote with `isAdjustedToUTC=true` — the annotation the Iceberg spec reserves for `timestamptz`. The stored microsecond instants are correct, and appends and most readers are unaffected, but the annotation makes some readers treat the column as UTC-adjusted, and it prevents `copy-on-write` from rewriting those files (the file's annotation reads back as `timestamptz`, which cannot be written into a `timestamp` column). Current versions write the spec-correct `isAdjustedToUTC=false`.\n" +
+	"\n" +
+	"To guarantee an existing table never ends up with a mix of the two annotations, the encoding is pinned *per table* via the table property `redpanda-connect.timestamp-encoding` (`spec` or `legacy`):\n" +
+	"\n" +
+	"* Tables created by this output carry `redpanda-connect.timestamp-encoding: spec` from creation.\n" +
+	"* For an existing table without the property, the output resolves the encoding automatically on first contact and stamps the result onto the table: if the schema has no no-timezone `timestamp` column, or the table has no data files, it resolves `spec`; otherwise the output inspects one data file's parquet footer and adopts whatever that file already contains (`legacy` for `isAdjustedToUTC=true`). A table that cannot be probed fails the write rather than risk mixing annotations — whether because a footer is unreadable, or because the first 1000 parquet data files probed (in manifest order) carry no no-timezone `timestamp` column at all (possible when the column was added by later schema evolution on a large table); in the latter case the error names the fix: set the property on the table explicitly and the probe never runs. The stamp itself is a `SetProperties` catalog commit, so the principal this output authenticates as needs permission to write table properties in addition to writing data — a principal without it turns a previously-healthy insert pipeline into a hard failure on first contact after upgrading, until the permission is granted or the property is set out-of-band. On a catalog that forbids *all* custom table properties, the set-it-explicitly escape hatch is unavailable by the same rule — the `redpanda-connect.` prefix carries connector semantics and is never silently stripped, so such writes fail loudly rather than risk mixing annotations.\n" +
+	"* Once stamped, the property is authoritative and the probe never runs again. An unrecognised property value is a hard error.\n" +
+	"\n" +
+	"A table pinned `legacy` keeps receiving the legacy annotation on every new file — byte-identical to what previous releases wrote — so appends and `merge-on-read` continue working unchanged forever. The one restriction is mutating `copy-on-write` (`upsert`/`delete`): it must rewrite existing files, which the legacy annotation prevents, so such writes fail upfront with an actionable error (pure `insert` batches still work). To migrate a legacy table to the spec encoding: rewrite/compact the table's data files with an engine that writes the spec annotation (e.g. Spark's `rewrite_data_files`), then set the table property `redpanda-connect.timestamp-encoding` to `spec`, keeping any running instances of this output that write to the table stopped (or restarting them) around the migration — a live writer only re-reads the property when its writer is recreated. A table whose existing files already mix both annotations (for example one written to by several engines or connector versions over time) can be pinned either way by the probe, depending on which file it happens to read first, and a `copy-on-write` mutation on such a table may then fail mid-rewrite with the underlying library's type-promotion error rather than the upfront migration message — compact or rewrite such a table to a single encoding before mutating it. Alternatively, keep the table on `merge-on-read`.\n"
 
 // icebergOutputConfig returns the configuration spec for the Iceberg output.
 func icebergOutputConfig() *service.ConfigSpec {
@@ -150,7 +203,7 @@ Write streaming data to Apache Iceberg tables using the REST catalog API. This o
 
 This output is designed to work with REST catalog implementations like Apache Polaris, AWS Glue Data Catalog, and the Databricks Unity Catalog.
 
-Currently only version 2 of the Iceberg specification is supported. Any pre-existing version 1 tables will be upgraded to version 2 automatically.
+Tables are written using version 2 of the Iceberg specification. A pre-existing version 1 table is upgraded to version 2 automatically on first write — irreversibly — unless `+"`merge_strategy`"+` is `+"`copy-on-write`"+`, which only ever writes plain data files and therefore works on version 1 or version 2 tables without forcing the upgrade (see <<merge-strategies,Merge strategies>>).
 
 === Apache Polaris
 
@@ -166,7 +219,7 @@ To use with AWS Glue Data Catalog:
 
 * Set `+"`catalog.url`"+` to `+"`https://glue.<region>.amazonaws.com/iceberg`"+` (the REST client appends the API version automatically).
 * Set `+"`catalog.warehouse`"+` to your AWS account ID (the Glue catalog identifier).
-* Set `+"`schema_evolution.table_location`"+` to an S3 prefix (e.g., `+"`s3://my-bucket/`"+`) since Glue does not automatically assign table locations.
+* Set `+"`schema_evolution.table_location`"+` to an S3 prefix (e.g., `+"`s3://my-bucket/`"+` — a trailing slash is optional) since Glue does not automatically assign table locations.
 * Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
 * Configure `+"`storage.aws_s3`"+` with the same bucket and region.
 
@@ -256,12 +309,14 @@ array:list
 
 			service.NewBoolField(ioFieldCaseSensitiveColumns).
 				Description("Controls how message field names are matched against table column names, and how column references in the partition spec are resolved. When `true` (the default), names must match exactly. When `false`, matching is case-insensitive — set this when your downstream catalog or query engine treats column names as case-insensitive (the iceberg specification's recommended convention) so that, for example, a message keyed `\"COLUMN\"` lands in an existing `column` rather than triggering schema evolution. Ambiguous case-only duplicates in the input are rejected.").
+				ShortDescription("Whether message field names must match table column names exactly.").
 				Default(true).
 				Advanced(),
 
 			// Row-level operation mapping (insert / upsert / delete).
 			service.NewInterpolatedStringField(ioFieldRowOperation).
 				Description("The row-level operation to apply for each message: `insert` (append), `upsert` (replace rows matching `identifier_fields`, then append), or `delete` (remove rows matching `identifier_fields`). Supports interpolation so the operation can be driven by the data — e.g. a change-data-capture stream's operation field. Defaults to `insert`, preserving the original append-only behaviour.\n\nSee the <<row-level-operations,Row-level operations>> section above for the full semantics, the format-version-2 upgrade, batching behaviour, and important caveats.").
+				ShortDescription("The row-level operation per message: insert, upsert or delete.").
 				Example("insert").
 				Example(`${! metadata("op") }`).
 				Example(`${! this.op == "d" ? "delete" : "upsert" }`).
@@ -270,9 +325,16 @@ array:list
 
 			service.NewStringListField(ioFieldIdentifierFields).
 				Description("The columns forming the row identity (the Iceberg identifier fields / equality-delete key) used by `upsert` and `delete`. Required when `row_operation` can evaluate to `upsert` or `delete`, and must reference existing table columns of a primitive, non-floating-point type.\n\nSee the <<row-level-operations,Row-level operations>> section above for the full constraints, including the temporal-type and partitioning rules and when the requirement is enforced.").
+				ShortDescription("Columns forming the row identity, used by upsert and delete. Required when either can be evaluated.").
 				Example([]string{"id"}).
 				Example([]string{"tenant_id", "user_id"}).
 				Default([]string{}).
+				Advanced(),
+
+			service.NewStringEnumField(ioFieldMergeStrategy, string(mergeStrategyMOR), string(mergeStrategyCOW)).
+				Description("How `upsert` and `delete` are materialised on disk.\n\n* `merge-on-read` (the default) writes Iceberg v2 equality-delete files. Deletes are applied at read time, so writes stay cheap and streaming-friendly, but only catalog-native / Flink-world engines can read the result — engine-backed catalogs such as Snowflake and the Databricks Unity Catalog cannot read equality deletes.\n* `copy-on-write` rewrites whole data files so the table only ever contains plain data files (no delete files), which every engine can read — including Snowflake and Databricks Unity Catalog. It works on version-1 or version-2 tables and never forces the irreversible v1->v2 upgrade. The trade-off is heavy write amplification: each mutating batch rewrites every data file that contains a touched key, so it is a batch / moderate-throughput mode. Sort the table by the identifier key and use large batches so each rewrite touches as few files as possible.\n\nSee the <<merge-strategies,Merge strategies>> section above for the full decision guide, copy-on-write support matrix (column and merge-key types, partitioning, table format), and maintenance guidance.").
+				ShortDescription("How upsert and delete are materialised: merge-on-read (equality deletes) or copy-on-write (plain data files every engine can read).").
+				Default(string(mergeStrategyMOR)).
 				Advanced(),
 
 			// Storage configuration - one of s3, gcs, or azure must be specified
@@ -321,6 +383,7 @@ array:list
 						Advanced(),
 					service.NewStringField(ioFieldGCSCredType).
 						Description("The type of credentials to use. Valid values: `service_account`, `authorized_user`, `impersonated_service_account`, `external_account`.").
+						ShortDescription("The type of credentials to use: service_account, authorized_user, impersonated_service_account or external_account.").
 						Optional().
 						Example("service_account"),
 					service.NewStringField(ioFieldGCSKeyPath).
@@ -328,6 +391,7 @@ array:list
 						Optional(),
 					service.NewStringField(ioFieldGCSJSONKey).
 						Description("GCP credentials JSON content. Use this or `credentials_file`, not both.").
+						ShortDescription("GCP credentials JSON content. Use this or credentials_file, not both.").
 						Optional().
 						Secret(),
 				).Description("Google Cloud Storage configuration.").
@@ -359,7 +423,8 @@ array:list
 						Secret(),
 				).Description("Azure Blob Storage (ADLS Gen2) configuration.").
 					Optional(),
-			).Description("Storage backend configuration for data files. Exactly one of `aws_s3`, `gcp_cloud_storage`, or `azure_blob_storage` must be specified."),
+			).Description("Storage backend configuration for data files. Exactly one of `aws_s3`, `gcp_cloud_storage`, or `azure_blob_storage` must be specified.").
+				ShortDescription("Storage backend for data files. Exactly one of aws_s3, gcp_cloud_storage or azure_blob_storage."),
 
 			// Schema evolution
 			service.NewObjectField(ioFieldSchemaEvolution,
@@ -368,6 +433,7 @@ array:list
 					Default(false),
 				service.NewInterpolatedStringField(ioFieldSchemaEvolutionPartitionSpec).
 					Description("A bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an iceberg partition spec in the same string format as the https://docs.redpanda.com/current/manage/iceberg/about-iceberg-topics/#use-custom-partitioning[^Redpanda Streaming Topic Property]").
+					ShortDescription("A Bloblang expression evaluated on table creation to determine the table's Iceberg partition spec.").
 					Example(`(col1)`).
 					Example(`(nested.col)`).
 					Example(`(year(my_ts_col))`).
@@ -378,19 +444,23 @@ array:list
 					Default("()"),
 				service.NewStringField(ioFieldSchemaEvolutionTableLoc).
 					Description("A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived as `{prefix}{namespace}/{table}`.").
+					ShortDescription("A location prefix for new tables, for catalogs such as AWS Glue that require one explicitly.").
 					Example("s3://my-iceberg-bucket/").
 					Optional(),
 				service.NewStringField(ioFieldSchemaEvolutionSchemaMetadata).
 					Description("The name of a message metadata field containing a schema definition. When set, the schema is used to determine column types during schema evolution and table creation instead of inferring types from values. The schema must be in the standard common schema format (the same format used by the `parquet_encode` processor's `schema_metadata` field). For batches of messages, the first message's schema is used. Record presence drives schema shape: fields declared in the schema metadata that are absent from the record are not added to the table, while the metadata controls column ordering, naming, and types for fields that are present. In case-insensitive mode, top-level column names use the metadata's casing — record keys are matched by case-folding and the metadata's name is what lands in the table.").
+					ShortDescription("A message metadata field containing a schema definition, used to determine column types instead of inferring them.").
 					Default("").
 					Optional().
 					Advanced(),
 				service.NewBloblangField(ioFieldSchemaEvolutionNewColumnTypeMapping).
 					Description("An optional Bloblang mapping to customize column types during schema evolution. This mapping is executed for each new column and can override the inferred or schema-metadata-derived type. The mapping receives an object with fields `name` (column name), `path` (dot-separated path), `value` (sample value), `inferred_type` (the type that would be used without this mapping), `message` (the full message body), `namespace`, and `table`. It must return a string with a valid Iceberg type name: `boolean`, `int`, `long`, `float`, `double`, `string`, `binary`, `date`, `time`, `timestamp`, `timestamptz`, `uuid`, `decimal(p,s)`, or `fixed[n]`.").
+					ShortDescription("An optional Bloblang mapping customising column types during schema evolution.").
 					Optional().
 					Advanced(),
 				service.NewBoolField(ioFieldSchemaEvolutionRequireSchemaMetadata).
 					Description("When `true`, writing a numeric value into a `timestamp`, `timestamptz`, `date`, or `time` column without `schema_metadata` registered for that column is a hard error. The default `false` permits a fallback path that interprets bare numeric timestamps as Unix seconds and bare numeric times as already-microseconds — convenient, but silently wrong if upstream produced milliseconds. Enable this when you cannot guarantee the upstream attaches schema metadata and want to fail loudly rather than corrupt dates by ~50,000 years. No effect on time-typed columns receiving `time.Time`/`time.Duration` Go values, which carry their own unit unambiguously, and no effect on non-time columns. Requires `schema_metadata` to be set.").
+					ShortDescription("Treat a numeric value written to a temporal column without registered schema_metadata as a hard error.").
 					Default(false).
 					Advanced(),
 			).Description("Schema evolution configuration.").
@@ -407,7 +477,16 @@ array:list
 					Default("24h"),
 				service.NewIntField(ioFieldMaxCommitRetries).
 					Description("Maximum number of times to retry a failed transaction commit.").
-					Default(3),
+					Default(3).
+					// A commit needs at least one attempt: the retry loop runs
+					// `max_retries` times, so 0 or a negative value would never
+					// attempt the commit at all. Require >= 1.
+					LintRule(`root = if this < 1 { [ "max_retries must be at least 1" ] }`),
+				service.NewBoolField(ioFieldCleanupOnFailure).
+					Description("Whether to remove the files a failed commit had already written. A commit's data files (and, under `merge-on-read`, its equality-delete files) are written to storage before the catalog commit, so a failed commit leaves them referenced by no snapshot; the default `true` removes them best-effort to limit orphaned objects. The same sweep reclaims the superseded files of earlier attempts when a `copy-on-write` commit succeeds on retry (each attempt re-stages fresh rewrites). This applies to every write path: append, `merge-on-read`, and `copy-on-write`.\n\nCleanup is already skipped automatically whenever a commit's outcome is ambiguous — such a commit may still land server-side, and deleting files a landed snapshot references would corrupt the table — so those leftovers are always deferred to table maintenance regardless of this setting.\n\nSetting this to `false` disables cleanup entirely, as a safety valve: writes then never delete anything, and every failed commit leaves its files orphaned in storage for Iceberg orphan-file maintenance (snapshot expiry plus `remove_orphan_files`) to reclaim. See the <<merge-strategies,Merge strategies>> section above for that maintenance guidance.").
+					ShortDescription("Remove the files a failed commit had already written, and a retried commit's superseded earlier attempts. Disabling it leaves them orphaned for table maintenance to reclaim.").
+					Default(true).
+					Advanced(),
 			).Description("Commit behavior configuration.").
 				Advanced().
 				Optional(),
@@ -416,6 +495,7 @@ array:list
 			service.NewObjectField(ioFieldParquet,
 				service.NewStringEnumField(ioFieldParquetStringEncoding, "plain", "delta_length_byte_array").
 					Description("The encoding to use for string and binary columns. Use `plain` for compatibility with readers that do not support `DELTA_LENGTH_BYTE_ARRAY` encoding, such as AWS Redshift Spectrum.").
+					ShortDescription("Encoding for string and binary columns. Use plain for readers lacking DELTA_LENGTH_BYTE_ARRAY.").
 					Default("delta_length_byte_array"),
 			).Description("Parquet writer configuration.").
 				Advanced().
@@ -465,6 +545,49 @@ output:
     # Keyed writes must stay ordered: a single batch in flight prevents
     # concurrent batches from committing a stale update over a newer one.
     max_in_flight: 1
+    storage:
+      aws_s3:
+        bucket: my-iceberg-data
+        region: us-east-1
+`,
+		).
+		Example(
+			"CDC into a Snowflake- or Databricks-readable table (copy-on-write)",
+			"Materialize a change-data-capture stream into an Iceberg table that must be read by an engine-backed catalog such as Snowflake or the Databricks Unity Catalog, which cannot read merge-on-read equality deletes. `merge_strategy: copy-on-write` rewrites whole data files so the table only ever holds plain data files that every engine can read. As with any keyed workload it requires `max_in_flight: 1`; because copy-on-write rewrites every file containing a touched key, prefer large batches and a table sorted by the identifier key, and run regular compaction and snapshot expiry.",
+			`
+input:
+  redpanda:
+    seed_brokers: [ localhost:9092 ]
+    topics: [ dbserver.inventory.customers ]
+    consumer_group: iceberg_sink_cow
+
+pipeline:
+  processors:
+    - mapping: |
+        meta op = match this.op {
+          "d" => "delete",
+          _   => "upsert",
+        }
+        root = this.after | this.before
+
+output:
+  iceberg:
+    catalog:
+      url: http://localhost:8181/api/catalog
+    namespace: inventory
+    table: customers
+    row_operation: ${! metadata("op") }
+    identifier_fields: [ id ]
+    # copy-on-write produces only plain data files, so Snowflake and the
+    # Databricks Unity Catalog can read the result (unlike equality deletes).
+    merge_strategy: copy-on-write
+    # Keyed writes must stay ordered; a single batch in flight prevents a stale
+    # update from overwriting a newer one for the same key.
+    max_in_flight: 1
+    # Amortise the file rewrites over larger commits.
+    batching:
+      count: 5000
+      period: 30s
     storage:
       aws_s3:
         bucket: my-iceberg-data

@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
@@ -247,6 +248,38 @@ func (w *parquetWriter) Close() ([]byte, *format.FileMetaData, error) {
 		return nil, nil, err
 	}
 	return w.b.Bytes(), w.w.File().Metadata(), nil
+}
+
+// verifyRowCounts checks that the parquet footer agrees with the rows that
+// were actually serialized into each row group. It guards against internally
+// inconsistent files produced by the concurrent row group writer being
+// uploaded to Snowflake, mirroring the Java SDK's verifyRowCounts check for
+// the same class of bug (SNOW-1465503). expectedRowsPerGroup holds the number
+// of rows written to each row group in order. The BDEC schema is flat, so
+// every column chunk must record exactly one value (nulls included) per row
+// of its group.
+func verifyRowCounts(expectedRowsPerGroup []int64, md *format.FileMetaData) error {
+	var expectedTotal int64
+	for _, n := range expectedRowsPerGroup {
+		expectedTotal += n
+	}
+	if md.NumRows != expectedTotal {
+		return fmt.Errorf("parquet row count verification failed: footer reports %d rows, expected %d rows; refusing to upload corrupted file", md.NumRows, expectedTotal)
+	}
+	if len(md.RowGroups) != len(expectedRowsPerGroup) {
+		return fmt.Errorf("parquet row count verification failed: footer reports %d row groups, expected %d row groups; refusing to upload corrupted file", len(md.RowGroups), len(expectedRowsPerGroup))
+	}
+	for i, rg := range md.RowGroups {
+		if rg.NumRows != expectedRowsPerGroup[i] {
+			return fmt.Errorf("parquet row count verification failed: row group %d reports %d rows, expected %d rows; refusing to upload corrupted file", i, rg.NumRows, expectedRowsPerGroup[i])
+		}
+		for _, col := range rg.Columns {
+			if col.MetaData.NumValues != rg.NumRows {
+				return fmt.Errorf("parquet row count verification failed: column %q in row group %d reports %d values, expected %d; refusing to upload corrupted file", strings.Join(col.MetaData.PathInSchema, "."), i, col.MetaData.NumValues, rg.NumRows)
+			}
+		}
+	}
+	return nil
 }
 
 func totalUncompressedSize(metadata *format.FileMetaData) int32 {

@@ -64,6 +64,7 @@ output:
     topic: ${! @kafka_topic }
     topic_replication_factor: "3" # No default (optional)
     sync_topic_acls: false
+    headers: {} # No default (optional)
     max_in_flight: 10
 ```
 
@@ -159,6 +160,7 @@ output:
     sync_topic_interval: 5m
     sync_topic_acls: false
     serverless: false
+    headers: {} # No default (optional)
     provenance_header: redpanda-migrator-provenance
     offset_header: redpanda-migrator-offset
     max_in_flight: 10
@@ -222,7 +224,7 @@ What gets synchronised:
 How it runs:
 
 - Topics: synced on demand. The first write triggers discovery and creation; subsequent writes create on first encounter per topic.
-- Schema Registry: one sync at connect, then triggered when topic record has unknown schema; optional background loop controlled by `schema_registry.interval`.
+- Schema Registry: one sync at connect, then periodic syncing via the background loop controlled by `schema_registry.interval` (set to `0s` to sync only once at connect). Schema IDs unknown at write time are not resynced on demand; they are handled per `schema_registry.strict`.
 - Consumer Groups: background loop controlled by `consumer_groups.interval` and filtered by the current topic mappings.
 
 Guarantees:
@@ -1007,7 +1009,7 @@ max_buffered_bytes: 50mib
 
 === `max_in_flight_requests`
 
-The maximum number of produce requests in flight per broker connection. When `idempotent_write` is enabled, this is capped at 5 by the Kafka protocol (and at 1 for Kafka < v1.0.0). When `idempotent_write` is disabled, higher values improve throughput by pipelining requests but may cause out-of-order delivery.
+The maximum number of produce requests in flight per broker connection. While `idempotent_write` is enabled (the default) this must be `1`, as the client relies on a single in-flight request per broker to guarantee ordering. To use higher values you must set `idempotent_write` to `false`, which allows requests to be pipelined for throughput but may cause duplicate and out-of-order delivery on retries. Note that this is distinct from the output's `max_in_flight` field, which counts message batches being written in parallel rather than produce requests on the wire. A value of `1` is not a throughput ceiling: records from concurrent writes are coalesced into fewer, larger produce requests.
 
 
 *Type*: `int`
@@ -1679,6 +1681,23 @@ Enable serverless mode for Redpanda Cloud serverless clusters. This restricts to
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `headers`
+
+Custom headers to add to migrated records, keyed by header name with interpolated string values. Useful for injecting metadata such as processing timestamps or latency measurements that should surface as header values on the destination cluster. A custom header name that collides with `provenance_header` or `offset_header` is ignored, so those migration-critical headers are always protected.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `object`
+
+
+```yml
+# Examples
+
+headers:
+  x-migration-latency-ms: ${! timestamp_unix_milli() - meta("kafka_timestamp_ms") }
+  x-migration-processed-at: ${! timestamp_unix_milli() }
+```
 
 === `provenance_header`
 

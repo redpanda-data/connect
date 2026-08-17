@@ -76,7 +76,8 @@ func redpandaOutputConfigFields() []*service.ConfigField {
 				Description("The maximum number of batches to be sending in parallel at any given time.").
 				Default(256),
 			service.NewBatchPolicyField(roFieldBatching).
-				Description("Optional explicit batching policy for the output. Note that when batches are formed at the input level they can be expanded by this policy, but not contracted. When consuming data from a Redpanda input it is recommended to tune batches from the input config via the `max_yield_batch_bytes` field, or the `unordered_processing.batching` field if appropriate."),
+				Description("Optional explicit batching policy for the output. Note that when batches are formed at the input level they can be expanded by this policy, but not contracted. When consuming data from a Redpanda input it is recommended to tune batches from the input config via the `max_yield_batch_bytes` field, or the `unordered_processing.batching` field if appropriate.").
+				ShortDescription("Optional explicit batching policy for the output. Input-level batches can be expanded by this policy but not contracted."),
 			service.NewInjectTracingSpanMappingField(),
 		},
 		FranzProducerFields(),

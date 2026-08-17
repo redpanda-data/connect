@@ -102,9 +102,11 @@ We will be considering alternative approaches in future so please https://redpan
 			Advanced().Default(false).Version("3.59.0").Deprecated()).
 		Field(service.NewStringField(sreFieldSchemaMeta).
 			Description("When set, the processor reads a schema in benthos common schema format from this metadata key on each message, converts it to the format specified by `format`, registers it with the schema registry under the configured subject, and encodes the message. When empty (the default), the processor pulls the latest schema from the registry instead.").
+			ShortDescription("Read a common-format schema from this metadata key, register it, and encode the message with it.").
 			Default("")).
 		Field(service.NewStringEnumField(sreFieldFormat, "avro", "json_schema").
 			Description("The encoding format to use when converting a common schema from metadata. Required when `schema_metadata` is set.").
+			ShortDescription("The encoding format used when converting a common schema from metadata. Required with schema_metadata.").
 			Optional()).
 		Field(service.NewBoolField(sreFieldNormalize).
 			Description("Whether to normalize the schema before registering with the schema registry (schema_metadata mode only).").
@@ -114,9 +116,11 @@ We will be considering alternative approaches in future so please https://redpan
 		service.NewObjectField(sreFieldAvro,
 			service.NewBoolField(sreFieldAvroRawJSON).
 				Description("Whether messages encoded in Avro format should be parsed as normal JSON rather than Avro JSON. Overrides the deprecated top-level `avro_raw_json` when set.").
+				ShortDescription("Parse Avro-encoded messages as plain JSON rather than Avro JSON.").
 				Optional(),
 			service.NewStringField(sreFieldAvroRecordName).
 				Description("The name to use for the root Avro record type when encoding from a common schema (schema_metadata mode). If empty, derived from the subject.").
+				ShortDescription("Name for the root Avro record type when encoding from a common schema. Derived from the subject if empty.").
 				Default("").Optional(),
 			service.NewStringField(sreFieldAvroNamespace).
 				Description("The Avro namespace for the root record type when encoding from a common schema (schema_metadata mode).").

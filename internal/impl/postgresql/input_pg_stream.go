@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -45,6 +47,7 @@ const (
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
+	fieldSignalTableName           = "signal_table_name"
 	fieldAWSIAMAuth                = "aws"
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
@@ -90,16 +93,20 @@ This input adds the following metadata fields to each message:
 		`).
 		Field(service.NewStringField(fieldDSN).
 			Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
+			ShortDescription("The Data Source Name for the PostgreSQL database, in postgres:// URL form.").
 			Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")).
 		Field(service.NewBoolField(fieldIncludeTxnMarkers).
 			Description(`When set to true, empty messages with operation types BEGIN and COMMIT are generated for the beginning and end of each transaction. Messages with operation metadata set to "begin" or "commit" will have null message payloads.`).
+			ShortDescription("Emit empty BEGIN and COMMIT messages at the start and end of each transaction.").
 			Default(false)).
 		Field(service.NewBoolField(fieldStreamSnapshot).
-			Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized.").
+			Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `" + fieldTables + "` is left empty, since the snapshot is only planned for tables listed there.").
+			ShortDescription("Stream a snapshot of all existing data before streaming changes. Snapshot tables must have a primary key.").
 			Example(true).
 			Default(false)).
 		Field(service.NewFloatField(fieldSnapshotMemSafetyFactor).
 			Description("Determines the fraction of available memory that can be used for streaming the snapshot. Values between 0 and 1 represent the percentage of memory to use. Lower values make initial streaming slower but help prevent out-of-memory errors.").
+			ShortDescription("Fraction of available memory, between 0 and 1, that may be used for streaming the snapshot.").
 			Example(0.2).
 			Default(1).
 			Deprecated()).
@@ -112,10 +119,13 @@ This input adds the following metadata fields to each message:
 			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`),
 		).
 		Field(service.NewStringListField(fieldTables).
-			Description("A list of table names to include in the logical replication. Each table should be specified as a separate item.").
+			Description(`A list of table names to include in the logical replication. Each table should be specified as a separate item.
+
+If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			ShortDescription("The maximum number of messages that can be processed at a given time.").
 			Default(1024)).
 		Field(service.NewBoolField(fieldTemporarySlot).
 			Description("If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.").
@@ -126,6 +136,7 @@ This input adds the following metadata fields to each message:
 Note: To avoid needing to grant the replication user permission to create publications, you can manually create the publications ahead of time.
 This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name>`" + `, so be sure to create them using this convention.
 			`).
+			ShortDescription("The name of the PostgreSQL logical replication slot to use. A random name is generated if not provided.").
 			Example("my_test_slot")).
 		Field(service.NewDurationField(fieldPgStandbyTimeout).
 			Description("Specify the standby timeout before refreshing an idle connection.").
@@ -140,12 +151,14 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Default(1)).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
 			Description("The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.").
+			ShortDescription("The value to emit when TOAST values are unchanged in the stream.").
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
 			Optional().
 			Advanced()).
 		Field(service.NewDurationField(fieldHeartbeatInterval).
 			Description("The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.").
+			ShortDescription("Interval at which to write heartbeat messages, keeping the replication slot current on low-traffic tables.").
 			Default("1h").
 			Example("0s").
 			Example("24h").
@@ -155,9 +168,11 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 		Field(service.NewObjectField(fieldAWSIAMAuth,
 			service.NewBoolField(FieldAWSIAMAuthEnabled).
 				Description("Enable AWS IAM authentication for PostgreSQL. When enabled, an IAM authentication token is generated and used as the password.").
+				ShortDescription("Enable AWS IAM authentication, generating a temporary token to use as the password.").
 				Default(false),
 			service.NewStringField("region").
 				Description("The AWS region where the PostgreSQL instance is located. If no region is specified then the environment default will be used.").
+				ShortDescription("The AWS region where the PostgreSQL instance is located. Defaults to the environment region.").
 				Optional(),
 			service.NewStringField("endpoint").
 				Description("The PostgreSQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
@@ -172,9 +187,11 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 				Optional().Advanced(),
 			service.NewStringField("role").
 				Description("Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.").
+				ShortDescription("Optional AWS IAM role ARN to assume for authentication.").
 				Optional(),
 			service.NewStringField("role_external_id").
 				Description("Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.").
+				ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
 				Optional(),
 			service.NewObjectListField("roles",
 				service.NewStringField("role").
@@ -186,11 +203,57 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 					Optional(),
 			).
 				Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.").
+				ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
 				Optional(),
 		).
 			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
+			ShortDescription("AWS IAM authentication configuration for PostgreSQL instances.").
 			Advanced().
 			Optional()).
+		Field(service.NewStringField(fieldSignalTableName).
+			Description(`The name of the table used to send control signals to the connector, excluding the schema. The table must
+exist in the schema configured via the ` + "`schema`" + ` field, and must not also appear in ` + "`" + fieldTables + "`" + `
+— the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
+it in both places is rejected at startup. It must have at least these columns — startup validation checks
+column names only, not types, so a wrong column type (e.g. ` + "`data JSONB`" + ` instead of ` + "`TEXT`" + `)
+is only caught at runtime, on the first signal row read:
+
+- **id** — any type representable as a string (e.g. ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
+- **type** — should be ` + "`VARCHAR`" + ` or another string type — the signal type (see supported signals below)
+- **data** — should be ` + "`TEXT`" + ` — a JSON object containing signal parameters
+
+Create the table with:
+
+` + "```sql" + `
+CREATE TABLE <schema>.<signal_table_name> (
+    id   SERIAL PRIMARY KEY,
+    type VARCHAR(32),
+    data TEXT
+);
+` + "```" + `
+
+Signal rows are published as regular output messages (` + "`operation=insert`" + `, ` + "`table=<signal_table_name>`" + `).
+To exclude them from downstream processing, filter on the ` + "`table`" + ` metadata field using a
+` + "`mapping`" + ` processor:
+
+` + "```yaml" + `
+pipeline:
+  processors:
+    - mapping: |
+        root = if @table == "rpcn_signal_table" { deleted() } else { this }
+` + "```" + `
+
+**Supported signals**
+
+**` + "`log`" + `** — recognized and logged when received. The ` + "`data`" + ` column must contain
+a JSON object with a ` + "`message`" + ` key, whose value is written to the connector's log output.
+
+` + "```sql" + `
+INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message": "Signal message"}');
+` + "```").
+			Example("rpcn_signal_table").
+			Default("").
+			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
@@ -214,6 +277,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		heartbeatInterval         time.Duration
 		iamAuthEnabled            bool
 		iamAuthTokenBuilder       TokenBuilder
+		signalTableName           string
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -288,6 +352,26 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	if signalTableName, err = conf.FieldString(fieldSignalTableName); err != nil {
+		return nil, err
+	}
+
+	if signalTableName != "" {
+		normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(signalTableName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s %q: %w", fieldSignalTableName, signalTableName, err)
+		}
+		for _, table := range tables {
+			normalizedTable, err := sanitize.NormalizePostgresIdentifier(table)
+			if err != nil {
+				return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+			}
+			if normalizedTable == normalizedSignalTable {
+				return nil, fmt.Errorf("%s %q must not also appear in %s - the signal table is implicitly added to the publication and excluded from snapshot scans", fieldSignalTableName, signalTableName, fieldTables)
+			}
+		}
+	}
+
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
@@ -339,6 +423,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			Logger:                   logger,
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
+			SignalTableName:          signalTableName,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,
@@ -351,6 +436,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		stopSig:         shutdown.NewSignaller(),
 
 		iamAuthEnabled: iamAuthEnabled,
+	}
+
+	if i.controlSig, err = newControlSignaller(schema, signalTableName, logger); err != nil {
+		return nil, err
 	}
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
@@ -394,7 +483,14 @@ type pgStreamInput struct {
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
+	controlSig      controlSignaller
 	stopSig         *shutdown.Signaller
+
+	// snapshotAckWG tracks in-flight snapshot batches: incremented when a
+	// snapshot batch (nil LSN) is enqueued and decremented when it is
+	// acknowledged. The snapshot->stream handoff blocks until it drains so the
+	// replication slot is not promoted before snapshot rows are durable.
+	snapshotAckWG sync.WaitGroup
 
 	// IAM authentication fields
 	iamAuthEnabled bool
@@ -466,12 +562,52 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				break
 			}
 		case batch := <-pgStream.Messages():
+			if len(batch) == 1 && batch[0].Operation == pglogicalstream.SnapshotCompleteOpType {
+				// Snapshot fully emitted. Flush any buffered rows, then block
+				// until every snapshot batch is acknowledged downstream before
+				// signalling the stream to promote the replication slot. Blocks
+				// until acks drain or soft-stop (no timeout, by design).
+				nextTimedBatchChan = nil
+				flushedBatch, err := batcher.Flush(ctx)
+				if err != nil {
+					p.logger.Debugf("error flushing snapshot completion batch: %s", err)
+					// The sentinel is a one-shot signal; if we bail here without
+					// acking, the barrier's snapshot goroutine blocks on
+					// snapshotAcked forever. Trigger a restart instead of stalling.
+					p.stopSig.TriggerSoftStop()
+					break
+				}
+				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
+					p.logger.Debugf("failed to flush snapshot completion batch: %s", err)
+					p.stopSig.TriggerSoftStop()
+					break
+				}
+				drained := make(chan struct{})
+				go func() {
+					// May outlive the select below if soft-stop fires while the
+					// downstream is stalled; bounded by process lifetime.
+					p.snapshotAckWG.Wait()
+					close(drained)
+				}()
+				select {
+				case <-drained:
+					pgStream.MarkSnapshotAcknowledged()
+				case <-p.stopSig.SoftStopChan():
+				}
+				break
+			}
 			var (
 				flush bool
 				mb    []byte
 				err   error
 			)
 			for _, msg := range batch {
+				// noop if not configured
+				if _, err := p.controlSig.listen(&msg); err != nil {
+					// Log it and fall through to the normal emit path below.
+					p.logger.Errorf("failed to detect control signal in change event: %s", err)
+				}
+
 				if mb, err = json.Marshal(msg.Data); err != nil {
 					p.logger.Errorf("failure to marshal message: %s", err)
 					break
@@ -543,7 +679,15 @@ func (p *pgStreamInput) flushBatch(
 		return fmt.Errorf("unable to checkpoint: %w", err)
 	}
 
+	// Snapshot batches carry no LSN. Track them so the snapshot->stream handoff
+	// can block until they are acknowledged downstream (see the sentinel handling
+	// in the read loop).
+	isSnapshot := lsn == nil
+
 	ackFn := func(ctx context.Context, _ error) error {
+		if isSnapshot {
+			defer p.snapshotAckWG.Done()
+		}
 		maxOffset := resolveFn()
 		if maxOffset == nil {
 			return nil
@@ -557,9 +701,15 @@ func (p *pgStreamInput) flushBatch(
 		}
 		return nil
 	}
+	if isSnapshot {
+		p.snapshotAckWG.Add(1)
+	}
 	select {
 	case p.msgChan <- asyncMessage{msg: batch, ackFn: ackFn}:
 	case <-ctx.Done():
+		if isSnapshot {
+			p.snapshotAckWG.Done()
+		}
 		return ctx.Err()
 	}
 	return nil

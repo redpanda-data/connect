@@ -552,3 +552,42 @@ func TestTableTagMatching(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckpointNamespaceConfigParsing(t *testing.T) {
+	spec := dynamoDBCDCInputConfig()
+	env := service.NewEnvironment()
+
+	parsed, err := spec.ParseYAML(`
+tables: [mytable]
+checkpoint_namespace: dev-alice
+`, env)
+	require.NoError(t, err)
+	cfg, err := dynamoCDCInputConfigFromParsed(parsed)
+	require.NoError(t, err)
+	require.Equal(t, "dev-alice", cfg.checkpointNamespace)
+
+	parsed, err = spec.ParseYAML(`
+tables: [mytable]
+`, env)
+	require.NoError(t, err)
+	cfg, err = dynamoCDCInputConfigFromParsed(parsed)
+	require.NoError(t, err)
+	require.Empty(t, cfg.checkpointNamespace, "namespace must default to empty")
+}
+
+func TestCheckpointNamespaceValidation_RejectsDelimiter(t *testing.T) {
+	conf := dynamoDBCDCConfig{
+		tables:              []string{"t"},
+		checkpointTable:     "cps",
+		checkpointNamespace: "dev#alice",
+		startFrom:           "trim_horizon",
+		batchSize:           100,
+		snapshot:            snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100},
+	}
+	err := validateDynamoDBCDCConfig(conf)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "checkpoint_namespace")
+
+	conf.checkpointNamespace = "dev-alice"
+	require.NoError(t, validateDynamoDBCDCConfig(conf))
+}
