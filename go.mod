@@ -4,6 +4,10 @@ go 1.26.5
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
+// Prototype: local benthos fork with the SnapshotAsync/SnapshotBatchInput
+// ack-barrier for CDC snapshot phases. Not for merge.
+replace github.com/redpanda-data/benthos/v4 => /Users/joseph.woodward/code/benthos
+
 ignore (
 	./bin
 	./config

@@ -23,22 +23,8 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
-func TestPublishBatch(t *testing.T) {
-	t.Run("snapshot batches never persist via ackFn", func(t *testing.T) {
-		ctx := t.Context()
-		publisher, cachedSCNs := newTestBatchPublisher(t)
-
-		msg := publishAndReceive(t, ctx, publisher, snapshotEvent(100))
-		msg1 := publishAndReceive(t, ctx, publisher, snapshotEvent(100))
-
-		require.NoError(t, msg.ackFn(ctx, nil))
-		require.Empty(t, cachedSCNs(), "cacheSCN must not be called after acking only the first snapshot batch")
-
-		require.NoError(t, msg1.ackFn(ctx, nil))
-		require.Empty(t, cachedSCNs(), "cacheSCN must not be called after acking all snapshot batches")
-	})
-
-	t.Run("streaming batch still persists via ackFn", func(t *testing.T) {
+func TestPublish(t *testing.T) {
+	t.Run("streaming batch persists via ackFn", func(t *testing.T) {
 		ctx := t.Context()
 		publisher, cachedSCNs := newTestBatchPublisher(t)
 
@@ -50,44 +36,20 @@ func TestPublishBatch(t *testing.T) {
 		require.Equal(t, replication.SCN(200), scns[0])
 	})
 
-	t.Run("mixed snapshot and streaming batch persists", func(t *testing.T) {
-		ctx := t.Context()
-		// Count=2 groups the snapshot and streaming events into one batch.
-		publisher, cachedSCNs := newTestBatchPublisherWithCount(t, 2)
-
-		got := make(chan asyncMessage, 1)
-		go func() { got <- <-publisher.msgs() }()
-		require.NoError(t, publisher.Publish(ctx, snapshotEvent(100)))
-		require.NoError(t, publisher.Publish(ctx, streamingEvent(300)))
-
-		var msg asyncMessage
-		select {
-		case msg = <-got:
-			require.Len(t, msg.msg, 2)
-		case <-time.After(5 * time.Second):
-			t.Fatal("mixed batch was never published")
-		}
-		require.NoError(t, msg.ackFn(ctx, nil))
-
-		scns := cachedSCNs()
-		require.Len(t, scns, 1, "expected cacheSCN to be called exactly once for a batch whose last message is streaming")
-		require.Equal(t, replication.SCN(300), scns[0], "expected the streaming SCN from the last message, not the leftover snapshot SCN")
-	})
-
-	t.Run("streaming SCN survives an out-of-order snapshot ack", func(t *testing.T) {
+	t.Run("SCN persists in delivery order regardless of ack order", func(t *testing.T) {
 		ctx := t.Context()
 		publisher, cachedSCNs := newTestBatchPublisher(t)
 
-		snapshotMsg := publishAndReceive(t, ctx, publisher, snapshotEvent(100))
-		streamingMsg := publishAndReceive(t, ctx, publisher, streamingEvent(200))
+		first := publishAndReceive(t, ctx, publisher, streamingEvent(100))
+		second := publishAndReceive(t, ctx, publisher, streamingEvent(200))
 
-		require.NoError(t, streamingMsg.ackFn(ctx, nil))
-		require.Empty(t, cachedSCNs(), "cacheSCN must not be called while the snapshot batch is still the unresolved head")
-		require.NoError(t, snapshotMsg.ackFn(ctx, nil))
+		require.NoError(t, second.ackFn(ctx, nil))
+		require.Empty(t, cachedSCNs(), "cacheSCN must not be called while an earlier batch is still the unresolved head")
 
+		require.NoError(t, first.ackFn(ctx, nil))
 		scns := cachedSCNs()
-		require.Len(t, scns, 1, "expected cacheSCN to be called exactly once when the snapshot batch resolves the streaming SCN")
-		require.Equal(t, replication.SCN(200), scns[0], "expected the streaming batch's SCN to survive the out-of-order snapshot ack")
+		require.Len(t, scns, 1, "expected cacheSCN to be called exactly once once the head resolves")
+		require.Equal(t, replication.SCN(200), scns[0], "expected the later batch's SCN to survive the out-of-order ack")
 	})
 
 	t.Run("a nack resolves too: auto_replay_nacks off is an opt-in drop", func(t *testing.T) {
@@ -109,87 +71,61 @@ func TestPublishBatch(t *testing.T) {
 	})
 }
 
-func TestSnapshotAckGate(t *testing.T) {
-	t.Run("blocks until the snapshot batch is acked", func(t *testing.T) {
+func TestPublishSnapshot(t *testing.T) {
+	t.Run("snapshot batches never persist via ackFn", func(t *testing.T) {
 		ctx := t.Context()
-		publisher, _ := newTestBatchPublisher(t)
+		publisher, cachedSCNs := newTestBatchPublisher(t)
 
-		msg := publishAndReceive(t, ctx, publisher, snapshotEvent(100))
-
-		done := make(chan error, 1)
-		go func() { done <- publisher.waitSnapshotAcks(ctx) }()
-
-		select {
-		case err := <-done:
-			t.Fatalf("waitSnapshotAcks returned before the snapshot batch was acked: %v", err)
-		case <-time.After(100 * time.Millisecond):
-		}
+		msg := publishSnapshotAndReceive(t, ctx, publisher, snapshotEvent(100))
+		msg1 := publishSnapshotAndReceive(t, ctx, publisher, snapshotEvent(100))
 
 		require.NoError(t, msg.ackFn(ctx, nil))
-		select {
-		case err := <-done:
-			require.NoError(t, err)
-		case <-time.After(5 * time.Second):
-			t.Fatal("waitSnapshotAcks did not return after the snapshot batch was acked")
-		}
+		require.NoError(t, msg1.ackFn(ctx, nil))
+		require.Empty(t, cachedSCNs(), "cacheSCN must never be called for a snapshot batch: SnapshotComplete owns persisting the post-snapshot SCN")
 	})
 
-	t.Run("a nack also releases the gate", func(t *testing.T) {
+	t.Run("a nack is also a no-op: replay is owned by AutoRetryNacksBatched", func(t *testing.T) {
 		ctx := t.Context()
-		publisher, _ := newTestBatchPublisher(t)
+		publisher, cachedSCNs := newTestBatchPublisher(t)
 
-		msg := publishAndReceive(t, ctx, publisher, snapshotEvent(100))
-		// Nacks count as settled: replay is owned by auto_replay_nacks, and
-		// disabling it is a documented opt-in to drop rejections.
+		msg := publishSnapshotAndReceive(t, ctx, publisher, snapshotEvent(100))
 		require.NoError(t, msg.ackFn(ctx, errors.New("downstream failure")))
-		require.NoError(t, publisher.waitSnapshotAcks(ctx))
+		require.Empty(t, cachedSCNs())
 	})
 
-	t.Run("streaming batches do not hold the gate", func(t *testing.T) {
+	t.Run("streaming batches are delivered separately from snapshot batches", func(t *testing.T) {
 		ctx := t.Context()
 		publisher, _ := newTestBatchPublisher(t)
 
-		// Published but never acked: must not block the gate.
-		publishAndReceive(t, ctx, publisher, streamingEvent(200))
-
-		require.NoError(t, publisher.waitSnapshotAcks(ctx))
-	})
-
-	t.Run("context cancellation escapes the gate", func(t *testing.T) {
-		publisher, _ := newTestBatchPublisher(t)
-
-		ctx, cancel := context.WithCancel(t.Context())
-		publishAndReceive(t, ctx, publisher, snapshotEvent(100))
-
-		done := make(chan error, 1)
-		go func() { done <- publisher.waitSnapshotAcks(ctx) }()
-		cancel()
-
+		go func() { _ = publisher.Publish(ctx, streamingEvent(200)) }()
 		select {
-		case err := <-done:
-			require.ErrorIs(t, err, context.Canceled)
+		case <-publisher.snapshotMsgs():
+			t.Fatal("a streaming batch must never be delivered on the snapshot channel")
+		case m := <-publisher.msgs():
+			require.Len(t, m.msg, 1)
 		case <-time.After(5 * time.Second):
-			t.Fatal("waitSnapshotAcks did not return after context cancellation")
+			t.Fatal("streaming batch was never published")
 		}
 	})
 }
 
-func TestFlushCurrent(t *testing.T) {
+func TestFlushSnapshotRemaining(t *testing.T) {
 	ctx := t.Context()
-	// Count=100 keeps published events buffered in the batcher until flushed.
+	// Count=100 keeps published events buffered in the snapshot batcher
+	// until explicitly flushed.
 	publisher, _ := newTestBatchPublisherWithCount(t, 100)
 
 	publishEvent := func(v int) {
 		t.Helper()
 		e := snapshotEvent(100)
 		e.Data = map[string]any{"a": v}
-		require.NoError(t, publisher.Publish(ctx, e))
+		require.NoError(t, publisher.PublishSnapshot(ctx, e))
 	}
 	receive := func(failMsg string) {
 		t.Helper()
 		got := make(chan asyncMessage, 1)
-		go func() { got <- <-publisher.msgs() }()
-		require.NoError(t, publisher.flushCurrent(ctx))
+		go func() { got <- <-publisher.snapshotMsgs() }()
+		require.NoError(t, publisher.flushSnapshotRemaining(ctx))
 		select {
 		case m := <-got:
 			require.Len(t, m.msg, 1)
@@ -199,12 +135,12 @@ func TestFlushCurrent(t *testing.T) {
 	}
 
 	publishEvent(1)
-	receive("flushCurrent did not publish the buffered partial batch")
+	receive("flushSnapshotRemaining did not publish the buffered partial batch")
 
-	// The loop must still be alive after flushCurrent (unlike FlushRemaining):
-	// a second publish+flush must work identically.
+	// The loop and snapshot batcher must still be usable afterwards: a
+	// second publish+flush must work identically.
 	publishEvent(2)
-	receive("publisher loop no longer functional after flushCurrent")
+	receive("snapshot batcher no longer functional after flushSnapshotRemaining")
 }
 
 // TestTrackOrderUnderConcurrentFlush stresses the two concurrent flushers (the
@@ -220,10 +156,13 @@ func TestTrackOrderUnderConcurrentFlush(t *testing.T) {
 	cp := checkpoint.NewCapped[replication.SCN](1000)
 
 	// Count 2 + a tiny period keeps both flush paths active concurrently.
-	batcher, err := (service.BatchPolicy{Count: 2, Period: "1ms"}).NewBatcher(service.MockResources())
+	policy := service.BatchPolicy{Count: 2, Period: "1ms"}
+	batcher, err := policy.NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	snapshotBatcher, err := policy.NewBatcher(service.MockResources())
 	require.NoError(t, err)
 
-	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher := newBatchPublisher(batcher, snapshotBatcher, cp, logger)
 	t.Cleanup(publisher.Close)
 
 	var (
@@ -262,7 +201,6 @@ func TestTrackOrderUnderConcurrentFlush(t *testing.T) {
 			Data:          map[string]any{"i": i},
 		}))
 	}
-	require.NoError(t, publisher.flushCurrent(ctx))
 
 	require.Eventually(t, func() bool {
 		mu.Lock()
@@ -280,9 +218,9 @@ func TestTrackOrderUnderConcurrentFlush(t *testing.T) {
 	}
 }
 
-// newTestBatchPublisher builds a publisher whose batcher flushes on every
+// newTestBatchPublisher builds a publisher whose batchers flush on every
 // published event (count=1), so tests drive the production
-// Publish->trackBatchLocked->sendTracked path directly.
+// Publish/PublishSnapshot->trackBatchLocked->send path directly.
 func newTestBatchPublisher(t *testing.T) (*batchPublisher, func() []replication.SCN) {
 	t.Helper()
 	return newTestBatchPublisherWithCount(t, 1)
@@ -294,10 +232,13 @@ func newTestBatchPublisherWithCount(t *testing.T, count int) (*batchPublisher, f
 	logger := service.NewLoggerFromSlog(slog.Default())
 	cp := checkpoint.NewCapped[replication.SCN](100)
 
-	batcher, err := (service.BatchPolicy{Count: count}).NewBatcher(service.MockResources())
+	policy := service.BatchPolicy{Count: count}
+	batcher, err := policy.NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	snapshotBatcher, err := policy.NewBatcher(service.MockResources())
 	require.NoError(t, err)
 
-	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher := newBatchPublisher(batcher, snapshotBatcher, cp, logger)
 	t.Cleanup(publisher.Close)
 
 	var (
@@ -340,13 +281,24 @@ func streamingEvent(checkpointSCN replication.SCN) *replication.MessageEvent {
 	}
 }
 
-// publishAndReceive publishes a single event through the production Publish
-// path (count=1 batcher: every event flushes, tracks, and sends immediately)
-// and returns the delivered asyncMessage.
+// publishAndReceive publishes a single streaming event through the
+// production Publish path (count=1 batcher: every event flushes, tracks, and
+// sends immediately) and returns the delivered asyncMessage.
 func publishAndReceive(t *testing.T, ctx context.Context, publisher *batchPublisher, event *replication.MessageEvent) asyncMessage {
 	t.Helper()
 	go func() {
 		_ = publisher.Publish(ctx, event)
 	}()
 	return <-publisher.msgs()
+}
+
+// publishSnapshotAndReceive is publishAndReceive's snapshot-phase
+// counterpart: it drives the production PublishSnapshot path and returns
+// the delivered asyncMessage from the snapshot channel.
+func publishSnapshotAndReceive(t *testing.T, ctx context.Context, publisher *batchPublisher, event *replication.MessageEvent) asyncMessage {
+	t.Helper()
+	go func() {
+		_ = publisher.PublishSnapshot(ctx, event)
+	}()
+	return <-publisher.snapshotMsgs()
 }

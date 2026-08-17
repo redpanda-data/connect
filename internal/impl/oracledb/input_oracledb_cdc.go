@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -252,6 +253,13 @@ type Config struct {
 	PDBName              string
 }
 
+// streamProcessor is the subset of logminer.Miner used to drive streaming
+// once the snapshot phase (if any) has fully settled downstream.
+type streamProcessor interface {
+	FindStartPos(ctx context.Context) (replication.SCN, error)
+	ReadChanges(ctx context.Context, startPos replication.SCN) error
+}
+
 type oracleDBCDCInput struct {
 	cfg   Config
 	lmCfg *logminer.Config
@@ -265,6 +273,23 @@ type oracleDBCDCInput struct {
 	snapshotOnlyDone atomic.Bool
 	log              *service.Logger
 	cpCache          service.Cache
+
+	// Snapshot/streaming handoff state. (Re)populated by Connect() for each
+	// connect cycle and driven by SnapshotReadBatch/SnapshotComplete, which
+	// AsyncReader calls in place of the old snapshot-then-streaming
+	// background goroutine: it guarantees SnapshotComplete only runs once
+	// every batch read via SnapshotReadBatch has been acknowledged (or
+	// nacked) downstream, so it's the safe point to persist startSCN and
+	// kick off streaming.
+	softCtx              context.Context
+	snapshotter          *replication.Snapshot
+	streaming            streamProcessor
+	startSCN             replication.SCN
+	snapshotRanThisCycle bool
+
+	snapshotOnce sync.Once
+	snapshotDone chan struct{}
+	snapshotErr  error
 }
 
 func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
@@ -276,7 +301,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 
 		scnCache, scnCacheKey        string
 		tableIncludes, tableExcludes []*regexp.Regexp
-		batcher                      *service.Batcher
+		batcher, snapshotBatcher     *service.Batcher
 		cp                           *checkpoint.Capped[replication.SCN]
 		cpCache                      service.Cache
 		cpCacheTableName             string
@@ -376,6 +401,9 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if batcher, err = policy.NewBatcher(resources); err != nil {
 		return nil, err
 	}
+	if snapshotBatcher, err = policy.NewBatcher(resources); err != nil {
+		return nil, err
+	}
 
 	// connecting string flags
 	overrides := make(map[string]string)
@@ -408,7 +436,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		log:       logger,
 		metrics:   resources.Metrics(),
 		stopSig:   shutdown.NewSignaller(),
-		publisher: newBatchPublisher(batcher, cp, logger),
+		publisher: newBatchPublisher(batcher, snapshotBatcher, cp, logger),
 		cpCache:   cpCache,
 	}
 
@@ -553,10 +581,6 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	// setup snapshotting and streaming
 
-	type streamProcessor interface {
-		FindStartPos(ctx context.Context) (replication.SCN, error)
-		ReadChanges(ctx context.Context, startPos replication.SCN) error
-	}
 	var (
 		snapshotter *replication.Snapshot
 		// logminer processor
@@ -594,82 +618,111 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		o.log.Infof("No cached SCN found, fetched current position from database: %d", cachedSCN)
 	}
 
-	// Reset our stop signal and snapshot-only completion flag
+	// Reset our stop signal, snapshot-only completion flag, and the
+	// per-cycle snapshot handoff state driven by SnapshotReadBatch /
+	// SnapshotComplete below.
 	o.stopSig = shutdown.NewSignaller()
 	o.snapshotOnlyDone.Store(false)
+	o.softCtx, _ = o.stopSig.SoftStopCtx(context.Background())
+	o.snapshotter = snapshotter
+	o.streaming = streaming
+	o.startSCN = cachedSCN
+	o.snapshotRanThisCycle = snapshotter != nil
+	o.snapshotOnce = sync.Once{}
+	o.snapshotDone = nil
+	o.snapshotErr = nil
 
-	go func() {
-		var (
-			err      error
-			startSCN = cachedSCN
-		)
-		softCtx, cancel := o.stopSig.SoftStopCtx(context.Background())
-		defer cancel()
+	return nil
+}
 
-		// snapshot if no SCN exists then store checkpoint once complete
-		if snapshotter != nil {
-			if startSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
+// SnapshotReadBatch implements service.SnapshotBatchInput. It lazily starts
+// the snapshot's row producer on its first call, forwards each flushed
+// snapshot batch as it's published, and signals
+// service.ErrSnapshotComplete once the snapshot (including its trailing
+// partial batch) has been fully read. AsyncReader guarantees every batch
+// returned here is acknowledged or nacked downstream before SnapshotComplete
+// is called, replacing the ack-counting barrier this connector used to have
+// to build itself.
+func (o *oracleDBCDCInput) SnapshotReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	if o.snapshotter == nil {
+		return nil, nil, service.ErrSnapshotComplete
+	}
+
+	o.snapshotOnce.Do(func() {
+		o.snapshotDone = make(chan struct{})
+		go func() {
+			defer close(o.snapshotDone)
+
+			startSCN, err := o.processSnapshot(o.softCtx, o.snapshotter)
+			if err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					o.log.Infof("Snapshotting stopped: %s", err)
 				} else {
 					o.log.Errorf("Snapshotting failed: %s", err)
 				}
-				o.stopSig.TriggerHasStopped()
+				o.snapshotErr = err
 				return
 			}
+			o.startSCN = startSCN
 
-			// Flush the partial snapshot batch still held by the batcher, then
-			// block until every snapshot batch is acknowledged downstream.
-			// Persisting the SCN any earlier would let a crash in this window
-			// skip un-acked snapshot rows on restart. Blocks until acks drain
-			// or soft-stop (no timeout, by design; see postgres_cdc's
-			// equivalent barrier).
-			if err = o.publisher.flushCurrent(softCtx); err != nil {
+			// Flush the trailing partial snapshot batch so every row reaches
+			// SnapshotReadBatch before it signals completion.
+			if err := o.publisher.flushSnapshotRemaining(o.softCtx); err != nil {
 				o.log.Errorf("Failed to flush remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
-				o.stopSig.TriggerHasStopped()
-				return
+				o.snapshotErr = err
 			}
-			if err = o.publisher.waitSnapshotAcks(softCtx); err != nil {
-				o.log.Infof("Interrupted while waiting for snapshot acknowledgements. Snapshot will re-run on restart (may cause duplicate data): %s", err)
-				o.stopSig.TriggerHasStopped()
-				return
-			}
+		}()
+	})
 
-			if err = o.cacheSCN(softCtx, startSCN); err != nil {
-				o.log.Errorf("Failed to capture SCN after snapshot completion. Snapshot will re-run on restart (may cause duplicate data): %s", err)
-				o.stopSig.TriggerHasStopped()
-				return
-			}
-
-			o.log.Infof("Successfully captured SCN following snapshot: %d", startSCN)
+	select {
+	case m := <-o.publisher.snapshotMsgs():
+		return m.msg, m.ackFn, nil
+	case <-o.snapshotDone:
+		if o.snapshotErr != nil {
+			return nil, nil, o.snapshotErr
 		}
+		return nil, nil, service.ErrSnapshotComplete
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+}
 
-		if o.cfg.SnapshotMode.IsSnapshotOnly() {
-			if err = o.publisher.FlushRemaining(softCtx); err != nil {
-				o.log.Errorf("Failed to flush remaining snapshot events: %s", err)
-			}
-			o.log.Infof("Snapshot-only mode complete, stopping at SCN %s", startSCN)
-			o.snapshotOnlyDone.Store(true)
-			o.stopSig.TriggerHasStopped()
-			return
+// SnapshotComplete implements service.SnapshotCompleter. By the time
+// AsyncReader calls this, every snapshot batch is guaranteed settled
+// downstream, so it's safe to persist the post-snapshot SCN before handing
+// off to streaming - the barrier that used to be built by hand with
+// snapshotAckWG/waitSnapshotAcks is now the caller's responsibility.
+func (o *oracleDBCDCInput) SnapshotComplete(ctx context.Context) error {
+	if o.snapshotRanThisCycle {
+		if err := o.cacheSCN(ctx, o.startSCN); err != nil {
+			return fmt.Errorf("capturing SCN after snapshot completion: %w", err)
 		}
+		o.log.Infof("Successfully captured SCN following snapshot: %d", o.startSCN)
+	}
 
-		// streaming
-		wg, _ := errgroup.WithContext(softCtx)
+	if o.cfg.SnapshotMode.IsSnapshotOnly() {
+		o.log.Infof("Snapshot-only mode complete, stopping at SCN %s", o.startSCN)
+		o.snapshotOnlyDone.Store(true)
+		o.stopSig.TriggerHasStopped()
+		return nil
+	}
+
+	startSCN := o.startSCN
+	go func() {
+		wg, _ := errgroup.WithContext(o.softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChanges(softCtx, startSCN); err != nil {
+			if err := o.streaming.ReadChanges(o.softCtx, startSCN); err != nil {
 				return fmt.Errorf("streaming from logminer: %w", err)
 			}
 			return nil
 		})
-		if err := wg.Wait(); err != nil && softCtx.Err() == nil && !errors.Is(err, context.Canceled) {
+		if err := wg.Wait(); err != nil && o.softCtx.Err() == nil && !errors.Is(err, context.Canceled) {
 			o.log.Errorf("Error during Oracle CDC Component: %s", err)
 		} else {
 			o.log.Info("Successfully shutdown Oracle CDC Component")
 		}
 		o.stopSig.TriggerHasStopped()
 	}()
-
 	return nil
 }
 
