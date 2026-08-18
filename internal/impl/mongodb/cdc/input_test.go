@@ -155,7 +155,7 @@ func TestOpeningChangeStreamErrorKeepsItsMessage(t *testing.T) {
 
 func TestStoreSnapshotCheckpointWaitsForSnapshotAcks(t *testing.T) {
 	cp := checkpoint.NewCapped[bson.Raw](10)
-	resolve, err := cp.Track(context.Background(), nil, 5)
+	resolve, err := cp.Track(t.Context(), nil, 5)
 	require.NoError(t, err)
 	require.Equal(t, int64(5), cp.Pending())
 
@@ -164,7 +164,7 @@ func TestStoreSnapshotCheckpointWaitsForSnapshotAcks(t *testing.T) {
 	stored := make(chan bson.Raw, 1)
 	proceed := make(chan bool, 1)
 	go func() {
-		proceed <- m.storeSnapshotCheckpoint(context.Background(), m.tokenEpoch, cp, token, func(_ context.Context, rt bson.Raw) error {
+		proceed <- m.storeSnapshotCheckpoint(t.Context(), m.tokenEpoch, cp, token, func(_ context.Context, rt bson.Raw) error {
 			stored <- rt
 			return nil
 		})
@@ -199,10 +199,10 @@ func TestStoreSnapshotCheckpointWaitsForSnapshotAcks(t *testing.T) {
 
 func TestStoreSnapshotCheckpointStopsOnShutdown(t *testing.T) {
 	cp := checkpoint.NewCapped[bson.Raw](10)
-	_, err := cp.Track(context.Background(), nil, 1)
+	_, err := cp.Track(t.Context(), nil, 1)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	m := &mongoCDC{}
 	proceed := make(chan bool, 1)
 	go func() {
@@ -232,7 +232,7 @@ func TestStoreSnapshotCheckpointStoredDespiteCancelledContext(t *testing.T) {
 	// The store must use a detached context, as the caller's is already dead.
 	cp := checkpoint.NewCapped[bson.Raw](10)
 	require.Zero(t, cp.Pending())
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	token := bson.Raw{5, 0, 0, 0, 0}
@@ -277,7 +277,7 @@ func TestStoreSnapshotCheckpointStoredWhenAckWinsShutdownRace(t *testing.T) {
 	// before giving up, see zero, and store. The tracker scripts exactly that
 	// interleaving: one pending at the loop entry, cancellation fired with the
 	// script's exhaustion, zero on every later check.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	cp := &rehearsedTracker{script: []int64{1}, then: cancel}
 
@@ -294,7 +294,7 @@ func TestStoreSnapshotCheckpointStoredWhenAckWinsShutdownRace(t *testing.T) {
 func TestStoreSnapshotCheckpointSkippedWithoutToken(t *testing.T) {
 	cp := checkpoint.NewCapped[bson.Raw](10)
 	m := &mongoCDC{}
-	require.True(t, m.storeSnapshotCheckpoint(context.Background(), m.tokenEpoch, cp, nil, func(context.Context, bson.Raw) error {
+	require.True(t, m.storeSnapshotCheckpoint(t.Context(), m.tokenEpoch, cp, nil, func(context.Context, bson.Raw) error {
 		t.Error("checkpoint stored without a resume token to store")
 		return nil
 	}))
@@ -313,7 +313,7 @@ func TestStoreSnapshotCheckpointSkippedWhenEpochMovedOn(t *testing.T) {
 	stale := m.tokenEpoch
 	m.beginTokenEpoch(nil)
 
-	require.True(t, m.storeSnapshotCheckpoint(context.Background(), stale, cp, bson.Raw{5, 0, 0, 0, 0}, func(context.Context, bson.Raw) error {
+	require.True(t, m.storeSnapshotCheckpoint(t.Context(), stale, cp, bson.Raw{5, 0, 0, 0, 0}, func(context.Context, bson.Raw) error {
 		t.Error("a superseded snapshot position was stored")
 		return nil
 	}))
@@ -334,7 +334,7 @@ func TestStoreSnapshotCheckpointSkippedWhenEpochMovedOn(t *testing.T) {
 // rather than parking the token for the flusher, so the epoch check is the only
 // thing standing between a stale ack and the cache.
 func TestCommitResumeTokenDropsSupersededEpoch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	const cacheName = "checkpoints"
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
 	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
@@ -380,7 +380,7 @@ func TestCommitResumeTokenDefersToFlusher(t *testing.T) {
 	// With a flusher configured the ack only parks the token; the periodic write
 	// is what persists it. Pinning this keeps the epoch guard from being confused
 	// with the write-through behaviour it also protects.
-	ctx := context.Background()
+	ctx := t.Context()
 	const cacheName = "checkpoints"
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
 	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
@@ -402,7 +402,7 @@ func TestCommitResumeTokenDefersToFlusher(t *testing.T) {
 }
 
 func TestCheckpointCacheRoundTripAndRecoverableFailures(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	const cacheName = "checkpoints"
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
 	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}

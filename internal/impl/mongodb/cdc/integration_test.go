@@ -356,9 +356,26 @@ func startMongoContainer(t *testing.T, opts ...setupOption) (string, *mongo.Clie
 		SetDirect(true))
 	require.NoError(t, err)
 	// The replica set can take a moment after container readiness before it
-	// accepts client connections through the mapped port, so retry the ping.
+	// accepts client connections through the mapped port, so retry the ping. A
+	// ping succeeds as soon as the server answers, which is before the single
+	// node has elected itself primary, so callers would race the election and
+	// get `(NotWritablePrimary) not primary` from their first write. Ask the
+	// server directly whether it is writable before declaring readiness.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.NoError(c, mongoClient.Ping(t.Context(), nil))
+		if !assert.NoError(c, mongoClient.Ping(t.Context(), nil)) {
+			return
+		}
+		hello, err := mongoClient.Database("admin").RunCommand(t.Context(), bson.M{"hello": 1}).Raw()
+		if !assert.NoError(c, err) {
+			return
+		}
+		writable, err := hello.LookupErr("isWritablePrimary")
+		if !assert.NoError(c, err, "hello reply carried no isWritablePrimary field: %v", hello) {
+			return
+		}
+		isPrimary, ok := writable.BooleanOK()
+		assert.True(c, ok, "isWritablePrimary was not a boolean: %v", writable)
+		assert.True(c, isPrimary, "the replica set has not elected a primary yet")
 	}, 60*time.Second, time.Second)
 	for _, opt := range opts {
 		require.NoError(t, opt(mongoClient))
