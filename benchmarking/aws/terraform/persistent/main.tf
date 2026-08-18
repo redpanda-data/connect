@@ -22,7 +22,12 @@ provider "aws" {
   region = var.region
   default_tags {
     tags = {
-      Project   = "redpanda-connect-bench"
+      # NOT "redpanda-connect-bench": the orphan reaper sweeps every
+      # EC2/RDS/S3/IAM resource carrying that tag past its TTL, and the
+      # persistent stack must never be on its own reaper's menu — the
+      # 2026-08-17 enabled-window ate the (empty) soak-archive bucket at
+      # age 4h. Session stacks keep the reapable tag; persistent opts out.
+      Project   = "redpanda-connect-bench-persistent"
       Stack     = "persistent"
       ManagedBy = "terraform"
     }

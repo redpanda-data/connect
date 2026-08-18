@@ -77,6 +77,11 @@ jobs:
 
       - name: Run soak
         working-directory: benchmarking/aws
+        # Explicit `shell: bash` turns on pipefail. GitHub's DEFAULT run shell
+        # is `bash -e {0}` WITHOUT pipefail, so `task ... | tee` reported
+        # tee's exit code and a failed soak went green (2026-08-17, run
+        # 32063533072 — terraform apply failed, job concluded success).
+        shell: bash
         run: |
           task aws:bench scenario="${{ github.event.inputs.scenario || 'postgres/orders-soak' }}" 2>&1 | tee "$RUNNER_TEMP/soak-run.log"
 
