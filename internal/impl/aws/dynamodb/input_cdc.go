@@ -233,8 +233,8 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(defaultDynamoDBPollInterval).
 				Advanced(),
 			service.NewStringEnumField(dciFieldStartFrom, "trim_horizon", "latest").
-				Description("Where to start reading when no checkpoint exists. `trim_horizon` starts from the oldest available record, `latest` starts from new records.").
-				ShortDescription("Where to start when no checkpoint exists: trim_horizon for the oldest record, or latest.").
+				Description("Where to start reading on a genuinely fresh pipeline (no checkpoint state exists yet under this `checkpoint_namespace` for the stream). `trim_horizon` starts from the oldest available record, `latest` starts from new records.\n\n`latest` is honoured only on that first discovery: once any checkpoint state exists, shards discovered later - rotation children found by the periodic refresh, and any checkpoint-less shard after a restart - always start at `trim_horizon` so their backlog is never skipped. In practice a restart under `latest` therefore replays from each shard's oldest retained record rather than only new records; at-least-once delivery takes precedence over the configured start position.").
+				ShortDescription("Where a fresh pipeline starts: trim_horizon for the oldest record, or latest. After any checkpoint state exists, new shards always start at trim_horizon.").
 				Default("trim_horizon"),
 			service.NewIntField(dciFieldCheckpointLimit).
 				Description("Maximum number of unacknowledged messages before forcing a checkpoint update. Lower values provide better recovery guarantees but increase write overhead.").
@@ -245,6 +245,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Description("Maximum number of shards to track simultaneously. Prevents memory issues with extremely large tables.").
 				Default(10000).
 				Advanced(),
+			service.NewAutoRetryNacksToggleField(),
 			service.NewDurationField(dciFieldThrottleBackoff).
 				Description("Time to wait when applying backpressure due to too many in-flight messages.").
 				Default(defaultDynamoDBThrottleBackoff).
@@ -360,7 +361,14 @@ func init() {
 	err := service.RegisterBatchInput(
 		"aws_dynamodb_cdc", dynamoDBCDCInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			return newDynamoDBCDCInputFromConfig(conf, mgr)
+			in, err := newDynamoDBCDCInputFromConfig(conf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			// With the toggle on (default) transient downstream failures are
+			// replayed in-process; with it off a nack pins the shard's
+			// checkpoint frontier and redelivery happens on restart.
+			return service.AutoRetryNacksBatchedToggled(conf, in)
 		})
 	if err != nil {
 		panic(err)
@@ -406,6 +414,13 @@ type tableStream struct {
 	shardReaders   map[string]*dynamoDBShardReader
 	snapshot       *snapshotState
 	shardRefreshCh chan struct{} // Signal coordinator to refresh shards immediately
+
+	// honorStartFrom is true only until the first successful shard discovery
+	// of a pipeline with no pre-existing checkpoint state. start_from applies
+	// exclusively to that case: shards that appear later (stream rotation
+	// children) or after a restart with state must start at TRIM_HORIZON, or
+	// their backlog would be silently skipped under start_from: latest.
+	honorStartFrom atomic.Bool
 }
 
 // dynamoDBCDCInput is the main input struct for DynamoDB CDC.
@@ -438,6 +453,14 @@ type dynamoDBCDCInput struct {
 	pendingAcks       sync.WaitGroup
 	backgroundWorkers sync.WaitGroup // Tracks background goroutines for proper cleanup
 	closed            atomic.Bool
+
+	// honorStartFrom (single-table path; see tableStream.honorStartFrom for
+	// multi-table) is true only until the first successful shard discovery of
+	// a pipeline with no pre-existing checkpoint state. start_from applies
+	// exclusively to that case: shards that appear later (stream rotation
+	// children) or after a restart with state must start at TRIM_HORIZON, or
+	// their backlog would be silently skipped under start_from: latest.
+	honorStartFrom atomic.Bool
 }
 
 type dynamoDBCDCMetrics struct {
@@ -476,6 +499,25 @@ type snapshotState struct {
 	scanner       *SnapshotScanner
 	recordsRead   atomic.Int64
 	segmentsTotal int
+}
+
+// waitAckGate blocks until every batch counted on gate has been acked or
+// nacked, or ctx is cancelled. The gate is per connection attempt: batches a
+// previous attempt left buffered in a replaced msgChan settle (or leak) on
+// their own attempt's gate and can never wedge the current one.
+func waitAckGate(ctx context.Context, gate *sync.WaitGroup) error {
+	drained := make(chan struct{})
+	go func() {
+		// May outlive this call if ctx fires first; bounded by process lifetime.
+		gate.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // snapshotSequenceBuffer tracks sequence numbers seen during snapshot for deduplication.
@@ -1030,6 +1072,15 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 	// Initialize record batcher
 	d.recordBatcher = NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
 
+	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
+	// state already exists, shards without checkpoints are rotation children
+	// created while we were down and must be read from TRIM_HORIZON.
+	hasState, err := d.checkpointer.HasAnyState(ctx)
+	if err != nil {
+		return fmt.Errorf("probing checkpoint state: %w", err)
+	}
+	d.honorStartFrom.Store(!hasState)
+
 	d.log.Infof("Connected to DynamoDB stream: %s", *d.streamArn)
 
 	// Handle snapshot mode
@@ -1143,6 +1194,15 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 	// Initialize record batcher for this table
 	recordBatcher := NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
 
+	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
+	// state already exists for this table, shards without checkpoints are
+	// rotation children created while we were down and must be read from
+	// TRIM_HORIZON.
+	hasState, err := checkpointer.HasAnyState(ctx)
+	if err != nil {
+		return false, fmt.Errorf("probing checkpoint state for table %s: %w", tableName, err)
+	}
+
 	// Re-check under write lock before inserting (another goroutine may have
 	// initialized this table concurrently during periodic discovery).
 	d.mu.Lock()
@@ -1164,6 +1224,7 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 		shardReaders:   make(map[string]*dynamoDBShardReader),
 		shardRefreshCh: make(chan struct{}, 1),
 	}
+	ts.honorStartFrom.Store(!hasState)
 
 	d.tableStreams[tableName] = ts
 	d.log.Infof("Initialized table stream for %s (stream ARN: %s)", tableName, streamArn)
@@ -1290,21 +1351,30 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	d.snapshot.state.Store(snapshotStateInProgress)
 	d.metrics.snapshotState.Set(int64(snapshotStateInProgress))
 
-	// Initialize snapshot scanner
+	// Initialize snapshot scanner. Progress persistence is ack-gated: the
+	// tracker below persists a segment's position only once every batch at or
+	// below it has been acknowledged downstream.
+	// The tracker and completion gate are scoped to this connection attempt
+	// and captured by the scanner callbacks below: a previous attempt's
+	// still-live scanner keeps its own pair, so it can neither interleave a
+	// second scan cursor into this attempt's ordered tracker (which would
+	// break TrackBatch's scan-order contract and could persist positions or
+	// Complete=true past un-acked items) nor leave this attempt's gate
+	// permanently un-drainable via batches orphaned in a replaced msgChan.
+	ackTracker := newSnapshotAckTracker(d.checkpointer, defaultSnapshotCheckpointBatchInterval, d.log)
+	ackGate := new(sync.WaitGroup)
 	d.snapshot.scanner = NewSnapshotScanner(SnapshotScannerConfig{
-		Client:             d.dynamoClient,
-		Table:              tableName,
-		Segments:           d.conf.snapshot.segments,
-		BatchSize:          d.conf.snapshot.batchSize,
-		Throttle:           d.conf.snapshot.throttle,
-		Checkpointer:       d.checkpointer,
-		CheckpointInterval: 10, // Checkpoint every 10 batches (10x cost reduction)
-		Logger:             d.log,
+		Client:    d.dynamoClient,
+		Table:     tableName,
+		Segments:  d.conf.snapshot.segments,
+		BatchSize: d.conf.snapshot.batchSize,
+		Throttle:  d.conf.snapshot.throttle,
+		Logger:    d.log,
 	})
 
 	// Set batch callback to send snapshot records to msgChan
-	d.snapshot.scanner.SetBatchCallback(func(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int) error {
-		return d.handleSnapshotBatch(ctx, items, segment, tableName)
+	d.snapshot.scanner.SetBatchCallback(func(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, lastKey map[string]dynamodbtypes.AttributeValue) error {
+		return d.handleSnapshotBatch(ctx, items, segment, tableName, lastKey, ackTracker, ackGate)
 	})
 
 	// Set progress callback to update metrics
@@ -1312,9 +1382,18 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 		d.metrics.snapshotSegmentsActive.Set(int64(d.snapshot.scanner.ActiveSegments()))
 	})
 
-	// Set checkpoint failure callback to track failures
-	d.snapshot.scanner.SetCheckpointFailedCallback(func(_ int, _ error) {
-		d.metrics.checkpointFailures.Incr(1)
+	// Seal each segment behind its in-flight batches so Complete=true only
+	// persists after they are all acknowledged. A failed completion WRITE is
+	// non-fatal: aborting the scan over a retryable store error would cancel
+	// every sibling segment and discard their un-persisted acked progress.
+	// The marker is already registered in the tracker either way, and the
+	// write is re-driven by FlushCompleted once the ack gate drains.
+	d.snapshot.scanner.SetSegmentSealedCallback(func(ctx context.Context, segment int) error {
+		if err := ackTracker.SealSegment(ctx, segment); err != nil {
+			d.metrics.checkpointFailures.Incr(1)
+			d.log.Warnf("Failed to persist completion for snapshot segment %d (will retry once all acks drain): %v", segment, err)
+		}
+		return nil
 	})
 
 	// Set segment completion callback to track scan duration
@@ -1350,6 +1429,43 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 				d.metrics.snapshotState.Set(int64(snapshotStateFailed))
 				return
 			}
+		}
+
+		// The scan has read everything, but the snapshot is only complete once
+		// every emitted batch has settled downstream: marking it complete any
+		// earlier would let a crash skip un-acked items on restart. Blocks
+		// until acks drain or soft-stop.
+		if err := waitAckGate(scanCtx, ackGate); err == nil {
+			// Every batch has settled; re-drive any completion write that
+			// failed transiently at seal time (nothing else can retry it -
+			// the seal is each segment's last settle event). Failure here is
+			// non-fatal: the global complete marker below is the durable
+			// fact once written, and a restart before it merely re-scans
+			// from the last durable per-segment position (duplicates, never
+			// loss).
+			if flushErr := ackTracker.FlushCompleted(scanCtx); flushErr != nil {
+				d.metrics.checkpointFailures.Incr(1)
+				d.log.Warnf("Failed to re-drive snapshot completion writes for table %s: %v", tableName, flushErr)
+			}
+		} else {
+			if errors.Is(err, context.Canceled) {
+				// Graceful shutdown mid-snapshot: nothing is wrong, the
+				// un-acked items simply resume from acknowledged progress on
+				// the next run. Info rather than warn - a clean stop is normal
+				// operation - but visible, since the snapshot will resume and
+				// redeliver on the next run (matching oracledb/mssqlserver's
+				// interrupted-handoff logging).
+				d.log.Infof("Snapshot for table %s interrupted by shutdown; it will resume from acknowledged progress on the next run", tableName)
+				return
+			}
+			wrappedErr := fmt.Errorf("snapshot completion gate for table %s: %w", tableName, err)
+			d.log.Errorf("%v (the snapshot will resume from acknowledged progress on restart)", wrappedErr)
+			d.snapshot.errOnce.Do(func() {
+				d.snapshot.err = wrappedErr
+			})
+			d.snapshot.state.Store(snapshotStateFailed)
+			d.metrics.snapshotState.Set(int64(snapshotStateFailed))
+			return
 		}
 
 		// Snapshot complete
@@ -1557,12 +1673,8 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 			cutoff = decision.Cutoff
 			d.log.Infof("Failover resume for shard %s from trim horizon, skipping records at/before %s", shardID, cutoff.Format(time.RFC3339))
 		default:
-			if d.conf.startFrom == "latest" {
-				iteratorType = types.ShardIteratorTypeLatest
-			} else {
-				iteratorType = types.ShardIteratorTypeTrimHorizon
-			}
-			d.log.Infof("Starting shard %s from %s", shardID, d.conf.startFrom)
+			iteratorType = initialIteratorType(d.conf.startFrom, d.honorStartFrom.Load())
+			d.log.Infof("Starting shard %s from %s", shardID, iteratorType)
 		}
 
 		// Get shard iterator (I/O operation - do not hold lock)
@@ -1603,6 +1715,10 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 		d.log.Infof("Tracking %d shards", totalShards)
 		d.metrics.shardsTracked.Set(int64(totalShards))
 	}
+
+	// The first successful discovery has positioned the fresh pipeline's
+	// initial shards; anything discovered from here on is a rotation child.
+	d.honorStartFrom.Store(false)
 
 	return nil
 }
@@ -1858,12 +1974,8 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 			cutoff = decision.Cutoff
 			d.log.Infof("Failover resume for shard %s (table %s) from trim horizon, skipping records at/before %s", shardID, tableName, cutoff.Format(time.RFC3339))
 		default:
-			if d.conf.startFrom == "latest" {
-				iteratorType = types.ShardIteratorTypeLatest
-			} else {
-				iteratorType = types.ShardIteratorTypeTrimHorizon
-			}
-			d.log.Infof("Starting shard %s (table %s) from %s", shardID, tableName, d.conf.startFrom)
+			iteratorType = initialIteratorType(d.conf.startFrom, ts.honorStartFrom.Load())
+			d.log.Infof("Starting shard %s (table %s) from %s", shardID, tableName, iteratorType)
 		}
 
 		// Get shard iterator
@@ -1904,6 +2016,10 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		d.updateTotalShardsMetric()
 	}
 
+	// The first successful discovery has positioned the fresh pipeline's
+	// initial shards; anything discovered from here on is a rotation child.
+	ts.honorStartFrom.Store(false)
+
 	return nil
 }
 
@@ -1943,20 +2059,35 @@ func lastRecordSequenceNumber(records []types.Record) string {
 	return ""
 }
 
+// initialIteratorType decides where a shard with no checkpoint state starts.
+// start_from is honored only while honorStartFrom is true — the first shard
+// discovery of a pipeline with no prior checkpoint state. Shards discovered
+// on later refresh cycles (or after a restart with existing state) are stream
+// rotation children: starting them at LATEST would silently skip their
+// backlog.
+func initialIteratorType(startFrom string, honorStartFrom bool) types.ShardIteratorType {
+	if startFrom == "latest" && honorStartFrom {
+		return types.ShardIteratorTypeLatest
+	}
+	return types.ShardIteratorTypeTrimHorizon
+}
+
 // resolveResumeIterator decides which iterator type and sequence number to use
 // when re-acquiring an iterator after the previous one expired. It prefers the
 // last sequence number actually read from the shard (resuming exactly where a
 // healthy iterator would be, so no records are skipped or re-read beyond the
 // pipeline's normal at-least-once guarantee), then the persisted checkpoint,
-// and finally the configured start position when nothing has been read yet.
-func resolveResumeIterator(lastSeq, checkpoint, startFrom string) (types.ShardIteratorType, *string) {
+// and otherwise the trim horizon. LATEST is never used here: the shard was
+// already positioned when its previous iterator was acquired, so re-acquiring
+// LATEST would silently skip everything published since — including the whole
+// backlog of a TRIM_HORIZON-positioned rotation child that expired before its
+// first read.
+func resolveResumeIterator(lastSeq, checkpoint string) (types.ShardIteratorType, *string) {
 	switch {
 	case lastSeq != "":
 		return types.ShardIteratorTypeAfterSequenceNumber, &lastSeq
 	case checkpoint != "":
 		return types.ShardIteratorTypeAfterSequenceNumber, &checkpoint
-	case startFrom == "latest":
-		return types.ShardIteratorTypeLatest, nil
 	default:
 		return types.ShardIteratorTypeTrimHorizon, nil
 	}
@@ -1978,7 +2109,7 @@ func (d *dynamoDBCDCInput) refreshExpiredIterator(ctx context.Context, cp *Check
 		}
 	}
 
-	iteratorType, sequenceNumber := resolveResumeIterator(lastSeq, checkpoint, d.conf.startFrom)
+	iteratorType, sequenceNumber := resolveResumeIterator(lastSeq, checkpoint)
 
 	iter, err := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
 		StreamArn:         &streamArn,
@@ -2645,8 +2776,10 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 	}
 }
 
-// handleSnapshotBatch processes a batch of items from the snapshot scan
-func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, tableName string) error {
+// handleSnapshotBatch processes a batch of items from the snapshot scan.
+// lastKey is the scan position after this batch; it is registered with the
+// segment's ordered ack tracker and persisted only once acknowledged.
+func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, tableName string, lastKey map[string]dynamodbtypes.AttributeValue, tracker *snapshotAckTracker, ackGate *sync.WaitGroup) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -2702,23 +2835,32 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 		d.log.Warn("Snapshot deduplication buffer overflowed - duplicates may occur during CDC overlap")
 	}
 
-	// Track pending ack
-	d.pendingAcks.Add(1)
+	// Register with the segment's ordered ack tracker: the scan position is
+	// only persisted once this batch (and everything before it) is acked.
+	resolve := tracker.TrackBatch(segment, lastKey, len(batch))
 
-	// Create simple ack function for snapshot records
-	ackFunc := func(_ context.Context, err error) error {
+	// Track pending acks: the global gauge and the snapshot completion gate.
+	d.pendingAcks.Add(1)
+	ackGate.Add(1)
+
+	ackFunc := func(ackCtx context.Context, _ error) error {
 		defer d.pendingAcks.Done()
+		defer ackGate.Done()
 
 		if d.closed.Load() {
 			d.log.Debug("Received snapshot ack after close, dropping")
 			return nil
 		}
 
-		if err != nil {
-			d.log.Warnf("Snapshot batch nacked from segment %d: %v", segment, err)
-			return err
+		// The ack error is deliberately ignored: nacks are replayed by
+		// auto_replay_nacks (the default), and disabling that is a documented
+		// opt-in to DROP rejected messages, so the segment's checkpoint must
+		// advance past them rather than pin the tracker.
+		if ackErr := tracker.Ack(ackCtx, segment, len(batch), resolve); ackErr != nil {
+			d.metrics.checkpointFailures.Incr(1)
+			d.log.Errorf("Failed to checkpoint snapshot segment %d after ack: %v", segment, ackErr)
+			return ackErr
 		}
-
 		return nil
 	}
 
@@ -2726,6 +2868,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	select {
 	case <-ctx.Done():
 		d.pendingAcks.Done() // Undo the Add(1) above
+		ackGate.Done()
 		return ctx.Err()
 	case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 		d.log.Debugf("Sent snapshot batch of %d records from segment %d", len(batch), segment)

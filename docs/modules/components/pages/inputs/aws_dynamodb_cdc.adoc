@@ -43,6 +43,7 @@ input:
     checkpoint_table: redpanda_dynamodb_checkpoints
     checkpoint_namespace: ""
     start_from: trim_horizon
+    auto_replay_nacks: true
     snapshot_mode: none
 ```
 
@@ -69,6 +70,7 @@ input:
     start_from: trim_horizon
     checkpoint_limit: 1000
     max_tracked_shards: 10000
+    auto_replay_nacks: true
     throttle_backoff: 100ms
     snapshot_mode: none
     snapshot_segments: 1
@@ -382,7 +384,9 @@ Time to wait between polling attempts when no records are available.
 
 === `start_from`
 
-Where to start reading when no checkpoint exists. `trim_horizon` starts from the oldest available record, `latest` starts from new records.
+Where to start reading on a genuinely fresh pipeline (no checkpoint state exists yet under this `checkpoint_namespace` for the stream). `trim_horizon` starts from the oldest available record, `latest` starts from new records.
+
+`latest` is honoured only on that first discovery: once any checkpoint state exists, shards discovered later - rotation children found by the periodic refresh, and any checkpoint-less shard after a restart - always start at `trim_horizon` so their backlog is never skipped. In practice a restart under `latest` therefore replays from each shard's oldest retained record rather than only new records; at-least-once delivery takes precedence over the configured start position.
 
 
 *Type*: `string`
@@ -411,6 +415,15 @@ Maximum number of shards to track simultaneously. Prevents memory issues with ex
 *Type*: `int`
 
 *Default*: `10000`
+
+=== `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+*Type*: `bool`
+
+*Default*: `true`
 
 === `throttle_backoff`
 
