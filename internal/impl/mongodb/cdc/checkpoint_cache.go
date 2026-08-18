@@ -11,11 +11,19 @@ package cdc
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
+
+// errCorruptCheckpoint marks a checkpoint whose stored bytes are not decodable
+// as a resume token. Unlike a cache that is merely unreachable this can never
+// succeed on a retry, so callers treat it as recoverable-by-clearing rather than
+// as a reason to keep failing Connect.
+var errCorruptCheckpoint = errors.New("stored checkpoint could not be decoded")
 
 type checkpointCache struct {
 	resources *service.Resources
@@ -47,7 +55,7 @@ func (c *checkpointCache) Load(ctx context.Context) (bson.Raw, error) {
 	if err == nil {
 		err = cErr
 	}
-	if err == service.ErrKeyNotFound {
+	if errors.Is(err, service.ErrKeyNotFound) {
 		return nil, nil
 	}
 	if err != nil {
@@ -55,15 +63,19 @@ func (c *checkpointCache) Load(ctx context.Context) (bson.Raw, error) {
 	}
 	var resumeToken bson.Raw
 	if err = bson.UnmarshalExtJSON(cVal, true, &resumeToken); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", errCorruptCheckpoint, err)
 	}
 	return resumeToken, nil
 }
 
 // Delete removes the stored checkpoint, so that the next start behaves as if one
-// had never been written. An already absent key is success: the caller's goal is
-// that no checkpoint remains, and Load treats the same condition as "no
-// checkpoint" too.
+// had never been written.
+//
+// A key that is already absent is success, since the caller's goal is that no
+// checkpoint remains. Both spellings of that condition are accepted: the
+// documented service.ErrKeyNotFound, and fs.ErrNotExist for cache
+// implementations that surface a filesystem error instead (the `file` cache
+// returns os.Remove's error unwrapped).
 func (c *checkpointCache) Delete(ctx context.Context) error {
 	var cErr error
 	err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
@@ -72,7 +84,7 @@ func (c *checkpointCache) Delete(ctx context.Context) error {
 	if err == nil {
 		err = cErr
 	}
-	if errors.Is(err, service.ErrKeyNotFound) {
+	if errors.Is(err, service.ErrKeyNotFound) || errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
 	return err

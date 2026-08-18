@@ -68,32 +68,64 @@ const (
 	codeChangeStreamHistoryLost = 286
 	codeInvalidResumeToken      = 260
 	codeKeyStringFormatError    = 50811
+
+	// keyStringFormatErrorMessage narrows codeKeyStringFormatError, which is a
+	// generic Location code, to the keystring decode failure a malformed resume
+	// token produces.
+	keyStringFormatErrorMessage = "KeyString format error"
 )
 
-// isUnresumableTokenError reports whether err means the change stream's resume
-// position is permanently unusable, as opposed to a transient failure.
+// errOpeningChangeStream marks failures that came from opening the change
+// stream, i.e. from the server rejecting the position the input asked to resume
+// from. It distinguishes those from mid-stream failures, where the position the
+// server complains about is one the driver holds internally rather than the one
+// loaded from the checkpoint cache.
+var errOpeningChangeStream = errors.New("error opening change stream")
+
+// isUnresumableTokenError reports whether err proves the position stored in the
+// checkpoint cache is permanently unusable, as opposed to a transient failure or
+// a failure that implicates some other position.
 //
 // The asymmetry of the two mistakes sets how conservative this has to be:
 // misclassifying a transient error costs a re-run snapshot and therefore
 // duplicates, while failing to spot a genuinely dead position wedges the input
 // forever. Only provably dead positions may qualify, so classification is by
-// specific server error code and never by message text or error category -
-// network blips, timeouts, elections and authentication failures all surface as
-// something other than a ServerError, or as a code that is not listed here.
+// specific server error code and never by message text alone or by error
+// category - network blips, timeouts, elections and authentication failures all
+// surface as something other than a ServerError, or as a code not listed here.
 //
-// mongo.ServerError covers both paths a dead position arrives through: the
-// server's rejection of the aggregate that opens the stream (a
-// mongo.CommandError, which implements ServerError) and a mid-stream
-// stream.Err(). errors.As walks wrapped errors, so callers may classify before
-// or after adding context.
+// The phase matters for two of the three codes:
+//
+//   - ChangeStreamHistoryLost means the oplog no longer reaches back to the
+//     position at all. The oplog is a capped FIFO, so every position at or
+//     before the lost one is equally gone - including the cached one - whichever
+//     phase reported it. It therefore clears regardless of phase.
+//   - InvalidResumeToken and the KeyString decode failure say a specific token
+//     was malformed. Only when they come from opening the stream is that token
+//     provably the cached one; mid-stream they implicate the driver's in-memory
+//     token, and clearing a cached position that may be perfectly good would
+//     cost a needless re-snapshot.
+//
+// mongo.ServerError covers both paths these arrive through: the server's
+// rejection of the aggregate that opens the stream (a mongo.CommandError, which
+// implements ServerError) and a mid-stream stream.Err(). errors.As and errors.Is
+// walk wrapped errors, so callers may classify before or after adding context.
 func isUnresumableTokenError(err error) bool {
 	var se mongo.ServerError
 	if !errors.As(err, &se) {
 		return false
 	}
-	return se.HasErrorCode(codeChangeStreamHistoryLost) ||
-		se.HasErrorCode(codeInvalidResumeToken) ||
-		se.HasErrorCode(codeKeyStringFormatError)
+	if se.HasErrorCode(codeChangeStreamHistoryLost) {
+		return true
+	}
+	if !errors.Is(err, errOpeningChangeStream) {
+		return false
+	}
+	// The 50811 code is a generic "Location" code shared by unrelated keystring
+	// failures, so it is only accepted together with the message that identifies
+	// a resume token decode (HasErrorCodeWithMessage is a substring match).
+	return se.HasErrorCode(codeInvalidResumeToken) ||
+		se.HasErrorCodeWithMessage(codeKeyStringFormatError, keyStringFormatErrorMessage)
 }
 
 func spec() *service.ConfigSpec {
@@ -101,7 +133,7 @@ func spec() *service.ConfigSpec {
 		Summary(`Streams changes from a MongoDB replica set.`).
 		Description(`Read from a MongoDB replica set using https://www.mongodb.com/docs/manual/changeStreams/[^Change Streams]. It's only possible to watch for changes when using a sharded MongoDB or a MongoDB cluster running as a replica set.
 
-If a stored resume position can no longer be resumed (for example it has aged out of the oplog), the input clears its checkpoint and re-runs the snapshot rather than retrying a dead position.
+If a stored resume position can no longer be resumed (for example it has aged out of the oplog), the input clears its checkpoint and re-runs the snapshot rather than retrying a dead position. With `+"`stream_snapshot`"+` disabled there is no snapshot to re-run, so streaming restarts from the current oplog position and changes since the lost position are skipped.
 
 By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
 
@@ -365,11 +397,57 @@ type mongoCDC struct {
 	checkpointFlusher *asyncroutine.Periodic
 	checkpointLimit   int
 
+	// resumeToken is the position to checkpoint next, and tokenEpoch identifies
+	// the generation of checkpoint state it belongs to. Both are guarded by
+	// resumeTokenMu.
+	//
+	// The epoch exists because acks outlive the goroutine that produced them: the
+	// framework can resolve a batch at any later moment, including after the
+	// stored position has been abandoned (a reconnect loading a different
+	// checkpoint, or the recovery clearing an unresumable one). Writing such a
+	// token back would resurrect a position the input has deliberately moved off
+	// - fatal for ChangeStreamHistoryLost, where every token at or before the
+	// lost position is equally gone. Each ack captures the epoch it was created
+	// under and is discarded if the epoch has since moved on.
 	resumeToken   bson.Raw
+	tokenEpoch    uint64
 	resumeTokenMu sync.Mutex
 
 	collectionSchemas   map[string]*cachedSchema
 	collectionSchemasMu sync.RWMutex
+}
+
+// commitResumeToken records token as the position to checkpoint next, and - when
+// no periodic flusher is configured, so nothing else ever will - writes it
+// through to the cache immediately.
+//
+// epoch is the checkpoint generation the caller captured when its token was
+// produced. A token from a superseded generation is dropped silently: it is not
+// an error, just a late ack for a position the input no longer intends to resume
+// from.
+func (m *mongoCDC) commitResumeToken(ctx context.Context, epoch uint64, token bson.Raw) error {
+	m.resumeTokenMu.Lock()
+	defer m.resumeTokenMu.Unlock()
+	if epoch != m.tokenEpoch {
+		return nil
+	}
+	m.resumeToken = token
+	if m.checkpointFlusher == nil {
+		return m.checkpoint.Store(ctx, token)
+	}
+	return nil
+}
+
+// beginTokenEpoch abandons every resume token currently in flight and installs
+// token as the position this generation starts from, returning the new epoch.
+// Callers pass the token they intend to resume from, or nil to start with no
+// position at all.
+func (m *mongoCDC) beginTokenEpoch(token bson.Raw) uint64 {
+	m.resumeTokenMu.Lock()
+	defer m.resumeTokenMu.Unlock()
+	m.resumeToken = token
+	m.tokenEpoch++
+	return m.tokenEpoch
 }
 
 type cachedSchema struct {
@@ -445,10 +523,26 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	if version.Major() < 4 {
 		return fmt.Errorf("`mongodc_cdc` requires MongoDB version 4 or higher - current version: %v", version.String())
 	}
-	m.resumeToken, err = m.checkpoint.Load(ctx)
+	resumeToken, err := m.checkpoint.Load(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to load checkpoints from cache: %w", err)
+		if !errors.Is(err, errCorruptCheckpoint) {
+			return fmt.Errorf("unable to load checkpoints from cache: %w", err)
+		}
+		// Undecodable bytes cannot become decodable on a retry, so failing here
+		// would wedge the input exactly as an unresumable token used to. Same
+		// recovery, same trade: clear it and start over.
+		m.logger.Warnf("Stored checkpoint is corrupt, clearing it to start over: %v", err)
+		if derr := m.checkpoint.Delete(ctx); derr != nil {
+			return fmt.Errorf("unable to clear the corrupt checkpoint: %w", derr)
+		}
+		resumeToken = nil
 	}
+	// Open this connection's checkpoint generation, abandoning any token still in
+	// flight from a previous one: those belong to a position this connection is
+	// not resuming from, and the loaded checkpoint is the only start position that
+	// counts now. resumeToken is used locally from here on, since the field can be
+	// advanced concurrently by acks once the stream is running.
+	tokenEpoch := m.beginTokenEpoch(resumeToken)
 	// Set the stream start when starting fresh to be the current oplog end time.
 	r = m.db.RunCommand(ctx, bson.M{"hello": 1})
 	if r.Err() != nil {
@@ -468,7 +562,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	// needs a token: without a snapshot there is nothing to checkpoint early,
 	// and when a checkpoint already exists the stream resumes from it.
 	var initialResumeToken bson.Raw = nil
-	if m.resumeToken == nil && (m.snapshotParallelism > 0 || !hasTS) {
+	if resumeToken == nil && (m.snapshotParallelism > 0 || !hasTS) {
 		token, err := m.getCurrentResumeToken(ctx)
 		switch {
 		case err == nil:
@@ -531,23 +625,22 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				opts = opts.SetShowExpandedEvents(true)
 			}
 		}
-		func() {
-			m.resumeTokenMu.Lock()
-			defer m.resumeTokenMu.Unlock()
-			if m.resumeToken != nil {
-				// TODO: Handle the resume token becoming invalid due to collection rename/drop
-				opts = opts.SetResumeAfter(m.resumeToken)
-			} else if initialResumeToken != nil {
-				opts = opts.SetResumeAfter(initialResumeToken)
-			} else {
-				// If there are no writes between snapshot and streaming, we want to skip the last
-				// document that will be read in the snapshot.
-				nextTS := nextTimestamp(ts)
-				opts = opts.SetStartAtOperationTime(&nextTS)
-			}
-		}()
+		// resumeToken is this connection's start position, fixed when the epoch
+		// opened, so no locking is needed to read it - unlike m.resumeToken, which
+		// acks advance while the stream runs.
+		if resumeToken != nil {
+			// TODO: Handle the resume token becoming invalid due to collection rename/drop
+			opts = opts.SetResumeAfter(resumeToken)
+		} else if initialResumeToken != nil {
+			opts = opts.SetResumeAfter(initialResumeToken)
+		} else {
+			// If there are no writes between snapshot and streaming, we want to skip the last
+			// document that will be read in the snapshot.
+			nextTS := nextTimestamp(ts)
+			opts = opts.SetStartAtOperationTime(&nextTS)
+		}
 		cp := checkpoint.NewCapped[bson.Raw](int64(m.checkpointLimit))
-		if m.resumeToken == nil {
+		if resumeToken == nil {
 			g, gctx := errgroup.WithContext(ctx)
 			for _, name := range m.collections {
 				coll := m.db.Collection(name)
@@ -563,7 +656,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			// CONTRIBUTING §5.4.1: checkpoint as soon as the snapshot completes
 			// rather than waiting for the first streamed message, so that a
 			// restart resumes the stream instead of re-running the snapshot.
-			if !m.storeSnapshotCheckpoint(ctx, cp, initialResumeToken, m.checkpoint.Store) {
+			if !m.storeSnapshotCheckpoint(ctx, tokenEpoch, cp, initialResumeToken, m.checkpoint.Store) {
 				return
 			}
 			if m.snapshotParallelism > 0 && m.cc.AssumesRole() {
@@ -585,7 +678,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				m.client, m.db = client, db
 			}
 		}
-		if err := m.readFromStream(ctx, cp, opts); err != nil {
+		if err := m.readFromStream(ctx, tokenEpoch, cp, opts); err != nil {
 			if isUnresumableTokenError(err) {
 				m.clearUnresumableCheckpoint(ctx, err)
 			}
@@ -650,8 +743,13 @@ type pendingTracker interface {
 // token is nil when no resume token could be captured for this run, in which
 // case nothing is stored and behaviour degrades to re-running the snapshot after
 // a failure - never to a checkpoint that cannot be resumed from.
+//
+// epoch is the checkpoint generation this snapshot belongs to. Waiting for acks
+// can take arbitrarily long, so the generation may be superseded in the meantime;
+// the position is then no longer the one to resume from and is not stored.
 func (m *mongoCDC) storeSnapshotCheckpoint(
 	ctx context.Context,
+	epoch uint64,
 	cp pendingTracker,
 	token bson.Raw,
 	store func(context.Context, bson.Raw) error,
@@ -680,8 +778,18 @@ func (m *mongoCDC) storeSnapshotCheckpoint(
 	// detached context so a shutdown arriving after the last ack still
 	// persists the completed snapshot.
 	m.resumeTokenMu.Lock()
-	m.resumeToken = token
+	current := epoch == m.tokenEpoch
+	if current {
+		m.resumeToken = token
+	}
 	m.resumeTokenMu.Unlock()
+	if !current {
+		// The generation moved on while acks were outstanding, so this position is
+		// no longer the one to resume from. Returning true still lets the caller
+		// continue to the streaming phase; it is the connection's failure handling,
+		// not this write, that decides what happens next.
+		return true
+	}
 	storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), checkpointWriteTimeout)
 	defer cancel()
 	if err := store(storeCtx, token); err != nil {
@@ -693,13 +801,27 @@ func (m *mongoCDC) storeSnapshotCheckpoint(
 }
 
 // clearUnresumableCheckpoint drops the stream position that `cause` proved to be
-// permanently dead, so the next Connect starts over - re-running the snapshot
-// when one is configured - instead of retrying the same position forever. That
-// is at-least-once behaviour: a re-snapshot can duplicate, it cannot lose.
+// permanently dead, so the next Connect starts over instead of retrying the same
+// position forever.
 //
-// The in-memory token is cleared first and under the same mutex the flusher and
-// the terminal save take, because both store whatever non-nil token they find:
-// leaving it set would write the dead position straight back after this delete.
+// What "starting over" costs depends on the configuration:
+//
+//   - With stream_snapshot enabled the snapshot re-runs, which is at-least-once:
+//     it can duplicate rows already delivered, but it cannot lose any.
+//   - With stream_snapshot disabled there is no snapshot to re-run, so streaming
+//     restarts from the current oplog position and every change between the lost
+//     position and now is skipped. That is a gap, and the warning says so. It is
+//     not a choice between gap and no gap, though: the stored position is
+//     unreadable, so nothing between it and now was recoverable by any means -
+//     the only alternative is failing forever.
+//
+// Opening a new epoch (rather than just nil-ing the token) is what makes the
+// clear stick. Acks outlive the goroutine that produced them, and every token
+// tracked by this connection is at or before the dead position - fatally so for
+// ChangeStreamHistoryLost, where the oplog's capped FIFO has discarded that whole
+// prefix - so a late ack writing one back would restore an equally dead
+// checkpoint. The epoch bump invalidates all of them at once, and covers the
+// direct cache write an ack performs when checkpoint_interval is 0.
 //
 // The delete runs on a detached, bounded context rather than ctx: the caller's
 // ctx is cancelled on every shutdown path, and a shutdown racing the failure
@@ -707,10 +829,12 @@ func (m *mongoCDC) storeSnapshotCheckpoint(
 // more start. Nothing here is on the happy path, so the bounded wait cannot slow
 // an ordinary shutdown.
 func (m *mongoCDC) clearUnresumableCheckpoint(ctx context.Context, cause error) {
-	m.logger.Warnf("Change stream position is no longer resumable, clearing the checkpoint to re-run the snapshot: %v", cause)
-	m.resumeTokenMu.Lock()
-	m.resumeToken = nil
-	m.resumeTokenMu.Unlock()
+	if m.snapshotParallelism == 0 {
+		m.logger.Warnf("Change stream position is no longer resumable and stream_snapshot is disabled; clearing the checkpoint and restarting from the current oplog position — changes since the lost position will be skipped: %v", cause)
+	} else {
+		m.logger.Warnf("Change stream position is no longer resumable, clearing the checkpoint to re-run the snapshot: %v", cause)
+	}
+	m.beginTokenEpoch(nil)
 	deleteCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), checkpointWriteTimeout)
 	defer cancel()
 	if err := m.checkpoint.Delete(deleteCtx); err != nil {
@@ -971,13 +1095,23 @@ func (m *mongoCDC) getCurrentResumeToken(ctx context.Context) (bson.Raw, error) 
 	return nil, errors.New("unable to determine start position prior to snapshot phase")
 }
 
-func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bson.Raw], opts *options.ChangeStreamOptionsBuilder) error {
+// readFromStream streams changes until the stream fails or ctx ends. epoch is the
+// checkpoint generation every position it records belongs to; it is captured once
+// for the whole run rather than per batch, because the generation can only change
+// in Connect (before this is called) or in the unresumable-token recovery (after
+// it returns), so every token this run produces shares one generation. Acks
+// carrying it can still be resolved much later, which is exactly when the check
+// earns its keep.
+func (m *mongoCDC) readFromStream(ctx context.Context, epoch uint64, cp *checkpoint.Capped[bson.Raw], opts *options.ChangeStreamOptionsBuilder) error {
 	filter := []bson.M{{"$match": bson.M{
 		"ns.coll": bson.M{"$in": slices.Clone(m.collections)},
 	}}}
 	stream, err := m.db.Watch(ctx, filter, opts)
 	if err != nil {
-		return fmt.Errorf("error opening change stream: %w", err)
+		// Tagged with errOpeningChangeStream so the recovery classifier can tell
+		// a rejected start position from a mid-stream failure. The sentinel's
+		// text is the message prefix this has always carried.
+		return fmt.Errorf("%w: %w", errOpeningChangeStream, err)
 	}
 	stream.SetBatchSize(int32(m.readBatchSize))
 	var mb service.MessageBatch
@@ -997,15 +1131,9 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 			// If there are batches in flight, then we just drop the resume token - we can pick up it back up
 			// next time after we poll for changes.
 			if cp.Pending() == 0 {
-				m.resumeTokenMu.Lock()
-				m.resumeToken = stream.ResumeToken()
-				if m.checkpointFlusher == nil {
-					err := m.checkpoint.Store(ctx, m.resumeToken)
-					if err != nil {
-						m.logger.Warnf("unable to store checkpoint in cache: %v", err)
-					}
+				if err := m.commitResumeToken(ctx, epoch, stream.ResumeToken()); err != nil {
+					m.logger.Warnf("unable to store checkpoint in cache: %v", err)
 				}
-				m.resumeTokenMu.Unlock()
 			}
 		}
 	}
@@ -1150,13 +1278,9 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 				if resumeToken == nil || *resumeToken == nil {
 					return nil
 				}
-				m.resumeTokenMu.Lock()
-				defer m.resumeTokenMu.Unlock()
-				m.resumeToken = *resumeToken
-				if m.checkpointFlusher == nil {
-					return m.checkpoint.Store(ctx, m.resumeToken)
-				}
-				return nil
+				// This can run long after the stream died, so the epoch decides
+				// whether the position is still one the input wants to resume from.
+				return m.commitResumeToken(ctx, epoch, *resumeToken)
 			}
 			select {
 			case m.readChan <- mongoBatch{mb, ackFn}:

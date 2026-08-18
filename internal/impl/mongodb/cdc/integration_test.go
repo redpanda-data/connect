@@ -584,6 +584,44 @@ mongodb_cdc:
 	require.JSONEq(t, `[{"_id":{"$numberInt":"1"},"data":"hello"},{"_id":{"$numberInt":"2"},"data":"world"}]`, output.MessagesJSON(t))
 }
 
+// TestIntegrationMongoCDCResumeStreamWithoutFlusher is TestIntegrationMongoCDCResumeStream
+// with checkpoint_interval: 0, which disables the periodic flusher and makes acks
+// write to the cache directly. That write-through path shares the epoch guard with
+// every other checkpoint write, so it needs its own coverage: a guard that
+// dropped these writes would leave nothing to resume from, and the resume would
+// silently become a re-read.
+func TestIntegrationMongoCDCResumeStreamWithoutFlusher(t *testing.T) {
+	stream, db, output := setup(t, `
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  stream_snapshot: true
+  checkpoint_cache: '$CACHE'
+  checkpoint_interval: 0s
+  collections:
+    - 'foo'
+`)
+	db.CreateCollection(t, "foo")
+
+	wait := stream.RunAsync(t)
+	time.Sleep(time.Second)
+	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
+	require.Eventually(t, func() bool { return len(output.Messages(t)) > 0 }, 30*time.Second, 10*time.Millisecond)
+	stream.StopWithin(t, 30*time.Second)
+	wait()
+	require.JSONEq(t, `[{"_id":{"$numberInt":"1"}, "data":"hello"}]`, output.MessagesJSON(t))
+
+	// The ack of the first event wrote its position through to the cache, so this
+	// run resumes after it rather than replaying it.
+	wait = stream.RunAsync(t)
+	time.Sleep(time.Second)
+	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "world"})
+	require.Eventually(t, func() bool { return len(output.Messages(t)) > 1 }, 30*time.Second, 10*time.Millisecond)
+	stream.StopWithin(t, 30*time.Second)
+	wait()
+	require.JSONEq(t, `[{"_id":{"$numberInt":"1"},"data":"hello"},{"_id":{"$numberInt":"2"},"data":"world"}]`, output.MessagesJSON(t))
+}
+
 func TestIntegrationMongoCDCResumeWithSnapshot(t *testing.T) {
 	stream, db, output := setup(t, `
 mongodb_cdc:
@@ -1072,15 +1110,32 @@ file:
 	require.NotEmpty(t, failures, "expected the change stream open to fail before the recovery")
 	require.Contains(t, failures[0], "error opening change stream")
 
+	// Wait for the replacement checkpoint to actually reach the cache before
+	// stopping. Delivery of the documents only proves the snapshot ran; the
+	// post-snapshot store happens after the last ack, so stopping on the message
+	// count alone would race it and make the restart phase below assert against
+	// whichever side won. The file is briefly absent between the clear and the
+	// store, which counts as "not yet".
+	checkpointFile := filepath.Join(cacheDir, "mongodb_cdc_checkpoint")
+	require.Eventually(t, func() bool {
+		b, err := os.ReadFile(checkpointFile)
+		return err == nil && string(b) != string(encoded)
+	}, 60*time.Second, 250*time.Millisecond, "the recovery never stored a replacement checkpoint")
+
 	stream.StopWithin(t, 30*time.Second)
 	wait()
 	require.Len(t, output.Messages(t), 2, "the re-run snapshot must deliver each document once")
 
 	// The garbage token is gone, replaced by a position the server accepted.
-	after, err := os.ReadFile(filepath.Join(cacheDir, "mongodb_cdc_checkpoint"))
+	after, err := os.ReadFile(checkpointFile)
 	require.NoError(t, err)
 	require.NotEqual(t, string(encoded), string(after), "the unresumable checkpoint must not survive the recovery")
 	t.Logf("checkpoint after recovery: %s", after)
+
+	// Count the recoveries only once the first run has fully stopped, so the
+	// comparison after the restart cannot be thrown off by a clear that landed
+	// between the snapshot above and the shutdown.
+	clearedBeforeRestart := len(logs.matching("no longer resumable, clearing the checkpoint"))
 
 	// And that replacement really is resumable: a restart with no new writes
 	// resumes the stream instead of re-running the snapshot or recovering again.
@@ -1089,7 +1144,81 @@ file:
 	stream.StopWithin(t, 30*time.Second)
 	wait()
 	require.Len(t, output.Messages(t), 2, "the recovered checkpoint must resume rather than re-snapshot")
-	require.Len(t, logs.matching("no longer resumable, clearing the checkpoint"), len(cleared), "the recovery must not repeat once a valid checkpoint is stored")
+	require.Len(t, logs.matching("no longer resumable, clearing the checkpoint"), clearedBeforeRestart,
+		"the recovery must not repeat once a valid checkpoint is stored")
+}
+
+// TestIntegrationMongoCDCCorruptCheckpoint covers the sibling of an unresumable
+// token: a checkpoint whose bytes are not decodable as a resume token at all.
+// That is equally permanent - no retry makes malformed bytes parse - so Connect
+// would otherwise fail on every attempt and never start. The input clears it and
+// starts over, which for a snapshot-enabled config means the snapshot runs and
+// both seeded documents arrive.
+func TestIntegrationMongoCDCCorruptCheckpoint(t *testing.T) {
+	integration.CheckSkip(t)
+	uri, mongoClient := startMongoContainer(t)
+	db := &databaseHelper{mongoClient.Database("test")}
+	db.CreateCollection(t, "foo")
+	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
+	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "world"})
+
+	// Not extended JSON, so Load's unmarshal fails rather than producing a token
+	// the server later rejects - a different failure point from the unresumable
+	// case above, reached before MongoDB is ever consulted.
+	cacheDir := t.TempDir()
+	checkpointFile := filepath.Join(cacheDir, "mongodb_cdc_checkpoint")
+	require.NoError(t, os.WriteFile(checkpointFile, []byte("}{ not extended json"), 0o644))
+
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.AddInputYAML(`
+mongodb_cdc:
+  url: '`+uri+`'
+  database: 'test'
+  checkpoint_cache: 'filecache'
+  stream_snapshot: true
+  json_marshal_mode: relaxed
+  collections:
+    - 'foo'
+`))
+	require.NoError(t, builder.AddCacheYAML(`
+label: filecache
+file:
+  directory: '`+cacheDir+`'`))
+	output := &outputHelper{}
+	require.NoError(t, builder.AddBatchConsumerFunc(output.AddBatch))
+	logs := &logCapture{}
+	builder.SetLogger(slog.New(logs))
+	stream := &streamHelper{builder: builder}
+
+	wait := stream.RunAsync(t)
+	require.Eventually(t, func() bool {
+		msgs, err := output.messages()
+		return err == nil && len(msgs) >= 2
+	}, 60*time.Second, 250*time.Millisecond, "a corrupt checkpoint must not stop the snapshot from running")
+
+	corrupt := logs.matching("Stored checkpoint is corrupt")
+	require.NotEmpty(t, corrupt, "expected the corrupt checkpoint to be reported, captured logs: %v", logs.matching(""))
+	t.Logf("recovery (x%d): %s", len(corrupt), corrupt[0])
+
+	require.Eventually(t, func() bool {
+		b, err := os.ReadFile(checkpointFile)
+		return err == nil && string(b) != "}{ not extended json"
+	}, 60*time.Second, 250*time.Millisecond, "the corrupt checkpoint was never replaced")
+
+	stream.StopWithin(t, 30*time.Second)
+	wait()
+	require.Len(t, output.Messages(t), 2, "the snapshot must deliver each document once")
+
+	// The replacement is a real checkpoint, so a restart resumes rather than
+	// re-snapshotting or reporting corruption again.
+	corruptBeforeRestart := len(logs.matching("Stored checkpoint is corrupt"))
+	wait = stream.RunAsync(t)
+	time.Sleep(5 * time.Second)
+	stream.StopWithin(t, 30*time.Second)
+	wait()
+	require.Len(t, output.Messages(t), 2, "the replacement checkpoint must resume rather than re-snapshot")
+	require.Len(t, logs.matching("Stored checkpoint is corrupt"), corruptBeforeRestart,
+		"the corruption must not be reported again once a valid checkpoint is stored")
 }
 
 // TestIntegrationMongoCDCSnapshotRestartChaos restarts the input repeatedly
