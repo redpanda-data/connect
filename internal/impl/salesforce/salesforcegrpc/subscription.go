@@ -180,6 +180,41 @@ func (s *Subscription) failDecode(replayID []byte, failStream func(error), err e
 	s.failTerminal(fmt.Errorf("decoding event at replay position %x: %d consecutive failures, treating as permanently undecodable: %w", replayID, maxConsecutiveDecodeFailures, err))
 }
 
+// TerminalStreamError wraps a failure that is a terminal verdict by the
+// subscription itself (a permanently undecodable payload or unfetchable
+// schema) rather than a stream transport error. Consumers must treat it as
+// fatal for the topic and must NOT reinterpret the wrapped cause - in
+// particular, a gRPC InvalidArgument inside a terminal schema error is a
+// statement about the schema, not a stale replay ID, and must never clear
+// the persisted checkpoint.
+type TerminalStreamError struct{ Err error }
+
+func (e *TerminalStreamError) Error() string { return e.Err.Error() }
+func (e *TerminalStreamError) Unwrap() error { return e.Err }
+
+// deterministicSchemaFailure reports whether a schema-fetch error can never
+// heal by retrying: the schema itself is bad or inaccessible (NotFound,
+// InvalidArgument, PermissionDenied, Unimplemented), or the fetched
+// SchemaJson failed to compile (no gRPC status at all). Transport-class
+// statuses (Unavailable, Unauthenticated, ResourceExhausted, ...) and
+// context cancellations are transient.
+func deterministicSchemaFailure(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	if st, ok := status.FromError(err); ok {
+		switch st.Code() {
+		case codes.NotFound, codes.InvalidArgument, codes.PermissionDenied, codes.Unimplemented:
+			return true
+		default:
+			return false
+		}
+	}
+	// No gRPC status and not a context error: the fetch itself succeeded but
+	// the schema failed to compile (avro.Parse) - deterministic.
+	return true
+}
+
 // positionFailures counts consecutive failures pinned to one replay
 // position. A failure at a different position resets the count (the stream
 // has moved on); a success clears it only when it lands at the tracked
@@ -226,19 +261,23 @@ func (s *Subscription) clearDecodeFailures(replayID []byte) {
 }
 
 // recordSchemaFailure counts a schema-fetch failure at the given replay
-// position against the reconnect policy: with reconnect_max_attempts 0
-// (unlimited) it never trips - the user asked for indefinite retries on
-// transport-class failures - but a bounded policy must also bound this path.
-// Each reconnect here succeeds (the transport is healthy, the schema is
-// not), so reconnectWithBackoff's own per-call budget never accumulates: a
-// deterministically unfetchable schema (uncompilable SchemaJson, permanent
-// NotFound) would otherwise reconnect-redeliver forever without ever
-// surfacing an error, the same livelock the decode bound exists for.
-func (s *Subscription) recordSchemaFailure(replayID []byte) bool {
+// position. Deterministic failures - the schema itself is bad or
+// inaccessible, so no amount of retrying heals it - are bounded by
+// maxConsecutiveDecodeFailures regardless of the reconnect policy (with the
+// shipped default reconnect_max_attempts: 0 a policy-based budget would
+// never engage and the livelock would persist out of the box). Transient
+// failures stay governed by the reconnect policy: bounded policies bound
+// this path too (each reconnect here succeeds, so reconnectWithBackoff's
+// per-call budget never accumulates), 0 retries indefinitely.
+func (s *Subscription) recordSchemaFailure(replayID []byte, deterministic bool) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	count := s.schemaFailures.record(replayID)
+	if deterministic {
+		return count >= maxConsecutiveDecodeFailures
+	}
 	budget := s.client.maxReconnect
-	return budget > 0 && s.schemaFailures.record(replayID) >= budget
+	return budget > 0 && count >= budget
 }
 
 // clearSchemaFailures resets the schema-failure count when a fetch succeeds
@@ -331,6 +370,10 @@ func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 				// reconnect would use (reconnect_min_delay/_max_delay and
 				// reconnect_max_attempts; 0 = retry indefinitely).
 				for attempt := 0; err != nil; attempt++ {
+					if deterministicSchemaFailure(err) && attempt >= maxConsecutiveDecodeFailures-1 {
+						// A bad or inaccessible schema cannot heal by retrying.
+						break
+					}
 					if s.client.maxReconnect > 0 && attempt >= s.client.maxReconnect {
 						break
 					}
@@ -350,19 +393,19 @@ func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 				}
 				if err != nil {
 					s.eventsDecodeErrors.Add(1)
-					s.failTerminal(fmt.Errorf("fetching schema for the first event of a fresh stream (schemaID=%s): no replay anchor to redeliver from and reconnect_max_attempts (%d) exhausted: %w", event.SchemaId, s.client.maxReconnect, err))
+					s.failTerminal(fmt.Errorf("fetching schema for the first event of a fresh stream (schemaID=%s): no replay anchor to redeliver from and the retry budget is exhausted: %w", event.SchemaId, err))
 					return
 				}
 			}
 			if err != nil {
 				s.eventsDecodeErrors.Add(1)
-				// Bounded by the reconnect policy: each reconnect below
-				// succeeds (the transport is healthy), so the per-call
-				// reconnect budget never accumulates - the per-position count
-				// is what makes reconnect_max_attempts meaningful for a
-				// deterministically unfetchable schema. 0 = retry forever.
-				if s.recordSchemaFailure(consumerEvent.ReplayId) {
-					s.failTerminal(fmt.Errorf("fetching schema (schemaID=%s) failed %d consecutive times at replay position %x (reconnect_max_attempts exhausted): %w", event.SchemaId, s.client.maxReconnect, consumerEvent.ReplayId, err))
+				// Deterministic failures (bad or inaccessible schema) are
+				// bounded by maxConsecutiveDecodeFailures - retrying cannot
+				// heal them, and each reconnect below succeeds, so no
+				// reconnect budget would ever accumulate. Transient failures
+				// stay governed by the reconnect policy (0 = retry forever).
+				if s.recordSchemaFailure(consumerEvent.ReplayId, deterministicSchemaFailure(err)) {
+					s.failTerminal(fmt.Errorf("fetching schema (schemaID=%s) failed repeatedly at replay position %x with no sign of healing: %w", event.SchemaId, consumerEvent.ReplayId, err))
 					return
 				}
 				failStream(fmt.Errorf("get schema for event (schemaID=%s): %w", event.SchemaId, err))

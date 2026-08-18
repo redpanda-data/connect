@@ -11,6 +11,7 @@ package salesforcegrpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"testing"
@@ -19,6 +20,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/avro"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -401,39 +404,60 @@ func TestReceiveLoopUnanchoredSchemaRetryHonorsReconnectPolicy(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("receive loop did not exit after the schema retry budget was exhausted")
 	}
-	require.ErrorContains(t, s.StreamErr(), "reconnect_max_attempts (3) exhausted",
-		"the terminal error must name the exhausted reconnect policy")
+	require.ErrorContains(t, s.StreamErr(), "retry budget is exhausted",
+		"the terminal error must name the exhausted retry budget")
 	require.ErrorContains(t, s.StreamErr(), "fetching schema",
 		"the terminal error must name the schema stage, not the payload")
 	require.Zero(t, s.reconnectCount.Load(), "an unanchored schema failure must never reconnect via the preset")
 }
 
-// TestRecordSchemaFailure verifies the schema-fetch bound: it trips only when
-// reconnect_max_attempts is set (0 means the user asked for indefinite
-// retries), counts per replay position, and clears on a success at the
-// tracked position only.
+// TestRecordSchemaFailure verifies the schema-fetch bound: transient
+// failures are governed by the reconnect policy (0 = indefinite retries),
+// deterministic failures trip at maxConsecutiveDecodeFailures regardless of
+// policy - including under the shipped default of unlimited reconnects - and
+// counts are per replay position with position-scoped clearing.
 func TestRecordSchemaFailure(t *testing.T) {
 	s := &Subscription{client: &Client{maxReconnect: 3}}
 
-	require.False(t, s.recordSchemaFailure([]byte{0x01}))
-	require.False(t, s.recordSchemaFailure([]byte{0x01}))
-	require.True(t, s.recordSchemaFailure([]byte{0x01}), "the third failure at one position must exhaust reconnect_max_attempts=3")
+	require.False(t, s.recordSchemaFailure([]byte{0x01}, false))
+	require.False(t, s.recordSchemaFailure([]byte{0x01}, false))
+	require.True(t, s.recordSchemaFailure([]byte{0x01}, false), "the third transient failure at one position must exhaust reconnect_max_attempts=3")
 
 	// A new position starts fresh.
-	require.False(t, s.recordSchemaFailure([]byte{0x02}))
+	require.False(t, s.recordSchemaFailure([]byte{0x02}, false))
 	// A success at an unrelated position must not reset the tracked count.
 	s.clearSchemaFailures([]byte{0x09})
-	require.False(t, s.recordSchemaFailure([]byte{0x02}))
+	require.False(t, s.recordSchemaFailure([]byte{0x02}, false))
 	// A success at the tracked position clears it.
 	s.clearSchemaFailures([]byte{0x02})
-	require.False(t, s.recordSchemaFailure([]byte{0x02}))
+	require.False(t, s.recordSchemaFailure([]byte{0x02}, false))
 
-	// Unlimited policy: never trips.
+	// Unlimited policy: transient failures never trip...
 	unlimited := &Subscription{client: &Client{maxReconnect: 0}}
 	for range 100 {
-		require.False(t, unlimited.recordSchemaFailure([]byte{0x01}),
-			"reconnect_max_attempts=0 is an explicit opt-in to indefinite retries")
+		require.False(t, unlimited.recordSchemaFailure([]byte{0x01}, false),
+			"reconnect_max_attempts=0 retries transient failures indefinitely")
 	}
+	// ...but deterministic failures still trip at the decode bound: the
+	// shipped default must not leave an unfetchable schema livelocking.
+	fresh := &Subscription{client: &Client{maxReconnect: 0}}
+	for i := range maxConsecutiveDecodeFailures - 1 {
+		require.False(t, fresh.recordSchemaFailure([]byte{0x03}, true), "failure %d must not trip yet", i+1)
+	}
+	require.True(t, fresh.recordSchemaFailure([]byte{0x03}, true),
+		"a deterministic schema failure must terminate even under unlimited reconnects")
+}
+
+// TestDeterministicSchemaFailure locks in the failure classification.
+func TestDeterministicSchemaFailure(t *testing.T) {
+	require.True(t, deterministicSchemaFailure(status.Error(codes.NotFound, "no such schema")))
+	require.True(t, deterministicSchemaFailure(status.Error(codes.InvalidArgument, "bad schema id")))
+	require.True(t, deterministicSchemaFailure(status.Error(codes.PermissionDenied, "nope")))
+	require.True(t, deterministicSchemaFailure(errors.New("parse schema x: invalid avro")), "a compile failure has no gRPC status and cannot heal")
+	require.False(t, deterministicSchemaFailure(status.Error(codes.Unavailable, "endpoint down")))
+	require.False(t, deterministicSchemaFailure(status.Error(codes.Unauthenticated, "token expired")))
+	require.False(t, deterministicSchemaFailure(context.Canceled))
+	require.False(t, deterministicSchemaFailure(fmt.Errorf("fetch schema: %w", context.DeadlineExceeded)))
 }
 
 // TestReceiveLoopAnchoredSchemaFailureExhaustsReconnectPolicy verifies that a
@@ -461,10 +485,12 @@ func TestReceiveLoopAnchoredSchemaFailureExhaustsReconnectPolicy(t *testing.T) {
 	}
 	// Anchored (an earlier event was delivered), and this position has already
 	// failed on every prior redelivery cycle; the next failure exhausts the
-	// budget. (The intermediate reconnect hops need a real Pub/Sub connection,
-	// covered by the counting test above.)
+	// budget. The stub's error carries no gRPC status, so it classifies as
+	// deterministic and is bounded by maxConsecutiveDecodeFailures. (The
+	// intermediate reconnect hops need a real Pub/Sub connection, covered by
+	// the counting test above.)
 	s.lastReplayID = []byte{0x29}
-	s.schemaFailures = positionFailures{count: s.client.maxReconnect - 1, replayID: []byte{0x2a}}
+	s.schemaFailures = positionFailures{count: maxConsecutiveDecodeFailures - 1, replayID: []byte{0x2a}}
 
 	go s.receiveLoop(t.Context(), streamCtx)
 
@@ -473,7 +499,7 @@ func TestReceiveLoopAnchoredSchemaFailureExhaustsReconnectPolicy(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("receive loop did not exit after the schema budget was exhausted")
 	}
-	require.ErrorContains(t, s.StreamErr(), "reconnect_max_attempts exhausted",
+	require.ErrorContains(t, s.StreamErr(), "failed repeatedly",
 		"a deterministically unfetchable schema must eventually surface a terminal error")
 	require.ErrorContains(t, s.StreamErr(), "fetching schema")
 	require.Zero(t, s.reconnectCount.Load(), "the exhausted budget must fail terminally, not reconnect again")

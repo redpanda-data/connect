@@ -969,7 +969,17 @@ func setMetaIfNonEmpty(msg *service.Message, key, value string) {
 // handleStreamErr handles a per-topic permanent stream failure. A stale
 // replay_id (codes.InvalidArgument) is recoverable: clear it, persist, and
 // return true so the caller resubscribes via the configured preset.
+//
+// Terminal verdicts from the subscription (undecodable payload, unfetchable
+// schema) are never treated as a stale replay ID, even when they wrap a gRPC
+// InvalidArgument: that status describes the schema, and clearing the
+// checkpoint would resubscribe via the preset and silently skip everything
+// between the checkpoint and now.
 func (e *salesforceCDCInputExecutor) handleStreamErr(ctx context.Context, topic string, err error) bool {
+	var terminal *salesforcegrpc.TerminalStreamError
+	if errors.As(err, &terminal) {
+		return false
+	}
 	if grpcErr, ok := status.FromError(err); ok && grpcErr.Code() == codes.InvalidArgument {
 		e.logger.Warnf("topic %s replay_id rejected (%s); clearing and reconnecting via configured preset", topic, grpcErr.Message())
 
