@@ -10,6 +10,7 @@ package salesforcegrpc
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"testing"
@@ -359,4 +360,52 @@ func TestReceiveLoopTerminalDecodeFailureAfterDecodablePrefix(t *testing.T) {
 	require.ErrorContains(t, s.StreamErr(), "permanently undecodable",
 		"the decodable prefix must not reset the failing event's count")
 	require.Zero(t, s.reconnectCount.Load(), "a terminal decode failure must not reconnect")
+}
+
+// failingSchemaPubSub satisfies PubSubClient via embedding; only GetSchema is
+// ever called by SchemaCache on the paths under test.
+type failingSchemaPubSub struct{ PubSubClient }
+
+func (failingSchemaPubSub) GetSchema(context.Context, *SchemaRequest, ...grpc.CallOption) (*SchemaInfo, error) {
+	return nil, errors.New("schema endpoint down")
+}
+
+// TestReceiveLoopUnanchoredSchemaRetryHonorsReconnectPolicy verifies that a
+// schema-fetch failure on a fresh stream (no replay anchor, so reconnecting
+// via the preset could drop the batch) retries inline under the configured
+// reconnect policy and, once reconnect_max_attempts is exhausted, fails the
+// stream terminally with an error naming the schema stage - never silently.
+func TestReceiveLoopUnanchoredSchemaRetryHonorsReconnectPolicy(t *testing.T) {
+	streamCtx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s := newBackpressureTestSubscription(t, streamCtx, 1, 1)
+	s.client.schemaCache = NewSchemaCache(failingSchemaPubSub{}, "", "", "")
+	s.client.baseBackoff = time.Millisecond
+	s.client.maxBackoff = 2 * time.Millisecond
+	s.client.maxReconnect = 3
+
+	s.stream = &fakeSubscribeStream{
+		ctx: streamCtx,
+		queue: []*FetchResponse{{
+			Events: []*ConsumerEvent{{
+				Event:    &ProducerEvent{SchemaId: "s-unknown", Payload: []byte{0x01}},
+				ReplayId: []byte{0x01},
+			}},
+			PendingNumRequested: 1,
+		}},
+	}
+
+	go s.receiveLoop(t.Context(), streamCtx)
+
+	select {
+	case <-s.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("receive loop did not exit after the schema retry budget was exhausted")
+	}
+	require.ErrorContains(t, s.StreamErr(), "reconnect_max_attempts (3) exhausted",
+		"the terminal error must name the exhausted reconnect policy")
+	require.ErrorContains(t, s.StreamErr(), "fetching schema",
+		"the terminal error must name the schema stage, not the payload")
+	require.Zero(t, s.reconnectCount.Load(), "an unanchored schema failure must never reconnect via the preset")
 }

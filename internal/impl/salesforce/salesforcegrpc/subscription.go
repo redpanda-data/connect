@@ -32,17 +32,14 @@ import (
 const subscribeSettleDelay = 5 * time.Second
 
 // maxConsecutiveDecodeFailures bounds redelivery attempts for an event whose
-// schema fetch or Avro decode keeps failing at the same replay position. Each
-// failure reconnects and redelivers the batch (transient schema-fetch errors
-// heal that way); once the same position has failed this many times in a row
-// the payload is treated as permanently undecodable and the stream fails
-// loudly instead of redelivering the batch prefix forever.
+// Avro decode keeps failing at the same replay position. A decode failure
+// against a successfully fetched schema is deterministic, and the replay
+// anchor advances per delivered event, so each reconnect redelivers from
+// exactly the failing event; once the same position has failed this many
+// times in a row the payload is treated as permanently undecodable and the
+// stream fails loudly. Schema-fetch failures never count toward this bound -
+// they are transport-class errors governed by the reconnect policy.
 const maxConsecutiveDecodeFailures = 5
-
-// unanchoredSchemaRetryDelay is the base backoff between inline schema-fetch
-// retries on a fresh stream with no replay anchor (variable so tests can
-// shorten it).
-var unanchoredSchemaRetryDelay = time.Second
 
 // Subscription owns one subscribe stream for a single Pub/Sub topic. It reuses
 // the parent Client's connection, auth, and schema cache.
@@ -283,19 +280,32 @@ func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 			// stream terminally instead.
 			schema, err := s.client.schemaCache.GetSchema(ctx, event.SchemaId)
 			if err != nil && !s.anchored() {
-				for attempt := 1; err != nil && attempt < maxConsecutiveDecodeFailures; attempt++ {
+				// A reconnect here would resume via the configured preset and
+				// could silently drop this batch (LATEST), so the fetch retries
+				// inline instead - governed by the same reconnect policy a
+				// reconnect would use (reconnect_min_delay/_max_delay and
+				// reconnect_max_attempts; 0 = retry indefinitely).
+				for attempt := 0; err != nil; attempt++ {
+					if s.client.maxReconnect > 0 && attempt >= s.client.maxReconnect {
+						break
+					}
+					delay := grpcBackoffWithJitter(s.client.baseBackoff, s.client.maxBackoff, attempt)
+					s.client.log.Warnf("Schema fetch failed on a fresh stream with no replay anchor to redeliver from (topic=%s, schemaID=%s), retrying inline in %v (attempt %d): %v", s.config.TopicName, event.SchemaId, delay, attempt+1, err)
+					t := time.NewTimer(delay)
 					select {
-					case <-time.After(time.Duration(attempt) * unanchoredSchemaRetryDelay):
+					case <-t.C:
 					case <-streamCtx.Done():
+						t.Stop()
 						return
 					case <-ctx.Done():
+						t.Stop()
 						return
 					}
 					schema, err = s.client.schemaCache.GetSchema(ctx, event.SchemaId)
 				}
 				if err != nil {
 					s.eventsDecodeErrors.Add(1)
-					s.failTerminal(fmt.Errorf("fetching schema for the first event of a fresh stream (schemaID=%s, no replay anchor to redeliver from): %w", event.SchemaId, err))
+					s.failTerminal(fmt.Errorf("fetching schema for the first event of a fresh stream (schemaID=%s): no replay anchor to redeliver from and reconnect_max_attempts (%d) exhausted: %w", event.SchemaId, s.client.maxReconnect, err))
 					return
 				}
 			}
