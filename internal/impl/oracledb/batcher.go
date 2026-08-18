@@ -37,11 +37,18 @@ type batchPublisher struct {
 	// checkpoint_limit under downstream backpressure; only the admitted
 	// ticket holder (and flushers queued behind it) waits, while Publish
 	// calls keep buffering and the timed-flush ticker keeps reading
-	// UntilNext.
+	// UntilNext. Admission is cancellable: an abandoned ticket is skipped
+	// when its turn comes, so a graceful stop unwinds queued flushers
+	// instead of wedging them behind a send parked under hardStopCtx.
 	ticketMu   sync.Mutex
-	ticketCond *sync.Cond
-	nextTicket uint64 // next ticket to hand out; guarded by batcherMu
-	admitted   uint64 // next ticket allowed to Track+send; guarded by ticketMu
+	nextTicket uint64                   // next ticket to hand out; guarded by batcherMu
+	admitted   uint64                   // next ticket allowed to Track+send; guarded by ticketMu
+	waiters    map[uint64]chan struct{} // parked admit calls; guarded by ticketMu
+	abandoned  map[uint64]struct{}      // cancelled tickets to skip; guarded by ticketMu
+	// closed marks the batcher as torn down (guarded by batcherMu): Close's
+	// batcher.Close races in-flight Publish calls otherwise, and the batcher
+	// is not goroutine-safe.
+	closed bool
 	// poisoned is set when a tracked batch could not be handed to ReadBatch:
 	// its checkpoint slot can never resolve, so this publisher can never
 	// checkpoint past it. Connect rebuilds a poisoned publisher.
@@ -69,7 +76,8 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 		log:        logger,
 		shutSig:    shutdown.NewSignaller(),
 	}
-	b.ticketCond = sync.NewCond(&b.ticketMu)
+	b.waiters = make(map[uint64]chan struct{})
+	b.abandoned = make(map[uint64]struct{})
 	go b.loop()
 	return b
 }
@@ -83,21 +91,58 @@ func (b *batchPublisher) takeTicketLocked() uint64 {
 	return t
 }
 
-// admit blocks until it is ticket's turn to Track+send. Pair with release.
-func (b *batchPublisher) admit(ticket uint64) {
+// admit blocks until it is ticket's turn to Track+send, or ctx is cancelled.
+// On success, pair with release. On cancellation the ticket is marked
+// abandoned - release skips it when its turn comes - and the caller must NOT
+// release it; the flushed batch was never tracked, so its rows are re-read
+// from the last durable checkpoint by the next session.
+func (b *batchPublisher) admit(ctx context.Context, ticket uint64) error {
 	b.ticketMu.Lock()
-	for b.admitted != ticket {
-		b.ticketCond.Wait()
+	if b.admitted == ticket {
+		b.ticketMu.Unlock()
+		return nil
 	}
+	ch := make(chan struct{})
+	b.waiters[ticket] = ch
 	b.ticketMu.Unlock()
+
+	select {
+	case <-ch:
+		return nil
+	case <-ctx.Done():
+		b.ticketMu.Lock()
+		select {
+		case <-ch:
+			// Admitted between cancellation and the lock: proceed normally,
+			// the caller owns the release.
+			b.ticketMu.Unlock()
+			return nil
+		default:
+		}
+		delete(b.waiters, ticket)
+		b.abandoned[ticket] = struct{}{}
+		b.ticketMu.Unlock()
+		return ctx.Err()
+	}
 }
 
-// release passes the sequence to the next ticket. Every taken ticket must be
-// released exactly once, error paths included, or the sequence wedges.
+// release passes the sequence to the next live ticket, skipping abandoned
+// ones. Every ADMITTED ticket must be released exactly once, error paths
+// included, or the sequence wedges.
 func (b *batchPublisher) release() {
 	b.ticketMu.Lock()
 	b.admitted++
-	b.ticketCond.Broadcast()
+	for {
+		if _, ok := b.abandoned[b.admitted]; !ok {
+			break
+		}
+		delete(b.abandoned, b.admitted)
+		b.admitted++
+	}
+	if ch, ok := b.waiters[b.admitted]; ok {
+		close(ch)
+		delete(b.waiters, b.admitted)
+	}
 	b.ticketMu.Unlock()
 }
 
@@ -169,7 +214,9 @@ func (p *batchPublisher) loop() {
 					return nil
 				}
 
-				p.admit(ticket)
+				if err := p.admit(hardStopCtx, ticket); err != nil {
+					return err
+				}
 				defer p.release()
 				tracked, err := p.trackBatch(hardStopCtx, sendBatch)
 				if err != nil {
@@ -263,6 +310,10 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		ticket       uint64
 	)
 	b.batcherMu.Lock()
+	if b.closed {
+		b.batcherMu.Unlock()
+		return context.Canceled
+	}
 	if b.batcher.Add(msg) {
 		if flushedBatch, err = b.batcher.Flush(ctx); err == nil && len(flushedBatch) > 0 {
 			ticket = b.takeTicketLocked()
@@ -276,7 +327,9 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		return nil
 	}
 
-	b.admit(ticket)
+	if err := b.admit(ctx, ticket); err != nil {
+		return err
+	}
 	defer b.release()
 	tracked, err := b.trackBatch(ctx, flushedBatch)
 	if err != nil {
@@ -430,6 +483,10 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 		return nil
 	}
 	b.batcherMu.Lock()
+	if b.closed {
+		b.batcherMu.Unlock()
+		return context.Canceled
+	}
 	remaining, err := b.batcher.Flush(ctx)
 	// The ticket is taken unconditionally - even when the batcher is empty -
 	// so that admission below doubles as a sequence barrier: another flusher
@@ -440,7 +497,9 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 	// published snapshot batch and waitSnapshotAcks cannot release early.
 	ticket := b.takeTicketLocked()
 	b.batcherMu.Unlock()
-	b.admit(ticket)
+	if admitErr := b.admit(ctx, ticket); admitErr != nil {
+		return admitErr
+	}
 	defer b.release()
 	if err != nil || len(remaining) == 0 {
 		return err
@@ -471,6 +530,12 @@ func (b *batchPublisher) Close() {
 	b.shutSig.TriggerHardStop()
 	<-b.shutSig.HasStoppedChan()
 	if b.batcher != nil {
+		// The batcher is not goroutine-safe and session goroutines may still
+		// be inside Publish: close it under batcherMu and mark it closed so
+		// later flush paths refuse instead of touching a closed batcher.
+		b.batcherMu.Lock()
+		b.closed = true
 		_ = b.batcher.Close(context.Background())
+		b.batcherMu.Unlock()
 	}
 }
