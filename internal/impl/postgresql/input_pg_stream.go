@@ -27,6 +27,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/snapshot"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
@@ -54,13 +55,12 @@ const (
 	FieldAWSIAMAuthEnabled = "enabled"
 	shutdownTimeout        = 5 * time.Second
 
-	fieldIncSnapshot                        = "incremental_snapshot"
-	fieldIncSnapshotEnabled                 = "enabled"
-	fieldIncrementalSnapshotTables          = "tables"
-	fieldIncrementalSnapshotChunkSize       = "chunk_size"
-	fieldIncSnapshotCheckpointCache         = "checkpoint_cache"
-	fieldIncSnapshotCheckpointCacheKey      = "checkpoint_cache_key"
-	defaultIncrementalSnapshotCheckpointKey = "postgres_cdc_incremental_snapshot"
+	fieldIncSnapshot                   = "incremental_snapshot"
+	fieldIncSnapshotEnabled            = "enabled"
+	fieldIncrementalSnapshotTables     = "tables"
+	fieldIncrementalSnapshotChunkSize  = "chunk_size"
+	fieldIncSnapshotCheckpointCache    = "checkpoint_cache"
+	fieldIncSnapshotCheckpointCacheKey = "checkpoint_cache_key"
 )
 
 func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *pgconn.Config, _ *service.Logger) (TokenBuilder, error) {
@@ -263,24 +263,25 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 			Example("rpcn_signal_table").
 			Default("").
 			Advanced()).
+		// incremental snapshot config
 		Field(service.NewObjectField(fieldIncSnapshot,
 			service.NewBoolField(fieldIncSnapshotEnabled).
 				Description("When set to true, the connector performs an incremental (chunked) snapshot of the configured tables automatically, starting as soon as logical replication streaming begins. Unlike `"+fieldStreamSnapshot+"`, this requires no dedicated up-front snapshot phase, does not block replication from starting, and needs no signal table or external trigger. It is independent of `"+fieldStreamSnapshot+"`, so the two can be enabled together or used separately.\n\nCorrectness (no duplicate rows) is only guaranteed for tables whose primary key is monotonically increasing for new rows (for example a serial/identity column, or a UUIDv7-style key) during the snapshot. Rows inserted with a primary key that reuses or fills a gap below the table's current maximum key while the snapshot is in progress may be delivered twice: once from replication, once from the backfill. Consumers should treat incoming rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
 				ShortDescription("Automatically and continuously snapshot the configured tables in chunks, concurrently with replication streaming.").
-				Default(false),
+				Default(snapshot.DefaultIncSnapshotEnabled),
 			service.NewStringListField(fieldIncrementalSnapshotTables).
 				Description("The tables to incrementally snapshot. If omitted, the tables configured in `"+fieldTables+"` are used instead.").
 				Optional(),
 			service.NewIntField(fieldIncrementalSnapshotChunkSize).
 				Description("The number of rows to read per chunk while incrementally snapshotting a table.").
-				Default(1024),
+				Default(snapshot.DefaultIncSnapshotChunkSize),
 			service.NewStringField(fieldIncSnapshotCheckpointCache).
 				Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] used to durably store the incremental snapshot's progress, allowing it to resume from where it left off after a restart instead of starting over. Required when `"+fieldIncSnapshotEnabled+"` is `true`.").
 				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
 				Optional(),
 			service.NewStringField(fieldIncSnapshotCheckpointCacheKey).
 				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. An alternative key can be provided if multiple incremental snapshots share the same cache.").
-				Default(defaultIncrementalSnapshotCheckpointKey),
+				Default(snapshot.DefaultIncSnapshotCheckpointKey),
 		).
 			Description("Configures incremental snapshotting of one or more tables, which runs automatically and concurrently with logical replication streaming once enabled.").
 			ShortDescription("Configures automatic, chunked incremental snapshotting that runs concurrently with replication streaming.").
@@ -468,9 +469,9 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	snapshotMetrics := mgr.Metrics().NewGauge("postgres_snapshot_progress", "table")
 	replicationLag := mgr.Metrics().NewGauge("postgres_replication_lag_bytes")
 
-	var incSnapshotCfg *pglogicalstream.IncrementalSnapshotCfg
+	var incSnapshotCfg *snapshot.IncrementalSnapshotCfg
 	if incSnapshotEnabled {
-		incSnapshotCfg = &pglogicalstream.IncrementalSnapshotCfg{
+		incSnapshotCfg = &snapshot.IncrementalSnapshotCfg{
 			Enabled:   true,
 			Tables:    incSnapshotTables,
 			ChunkSize: incSnapshotChunkSize,
@@ -512,8 +513,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 		iamAuthEnabled: iamAuthEnabled,
 
-		checkpointCache:    incSnapshotCheckpointCache,
-		checkpointCacheKey: incSnapshotCheckpointCacheKey,
+		incSnapshotCheckpointCache:    incSnapshotCheckpointCache,
+		incSnapshotCheckpointCacheKey: incSnapshotCheckpointCacheKey,
 	}
 
 	if i.controlSig, err = newControlSignaller(schema, signalTableName, logger); err != nil {
@@ -573,10 +574,9 @@ type pgStreamInput struct {
 	// IAM authentication fields
 	iamAuthEnabled bool
 
-	// checkpointCache/checkpointCacheKey matter only when IncrementalSnapshot
-	// is enabled; otherwise checkpointCache is empty and unused.
-	checkpointCache    string
-	checkpointCacheKey string
+	// only applies to incremental snapshot when enabled
+	incSnapshotCheckpointCache    string
+	incSnapshotCheckpointCacheKey string
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -588,7 +588,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	}
 
 	if p.streamConfig.IncrementalSnapshot != nil {
-		state, err := p.loadIncrementalSnapshotState(ctx)
+		state, err := p.loadCachedIncSnapshotState(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to load incremental snapshot checkpoint: %w", err)
 		}
@@ -815,12 +815,7 @@ func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogica
 // row-less checkpoint. Tracking it (rather than persisting directly) still
 // gates it behind every earlier tracked batch, so it can't surface ahead of
 // unacknowledged rows earlier in the stream.
-func (p *pgStreamInput) commitIncrementalSnapshotCheckpoint(
-	ctx context.Context,
-	pgStream *pglogicalstream.Stream,
-	checkpointer *checkpoint.Capped[checkpointOffset],
-	state []byte,
-) error {
+func (p *pgStreamInput) commitIncrementalSnapshotCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, checkpointer *checkpoint.Capped[checkpointOffset], state []byte) error {
 	resolveFn, err := checkpointer.Track(ctx, checkpointOffset{incrementalSnapshotState: state}, 0)
 	if err != nil {
 		return fmt.Errorf("unable to checkpoint incremental snapshot state: %w", err)
@@ -837,7 +832,7 @@ func (p *pgStreamInput) flushBatch(
 	pgStream *pglogicalstream.Stream,
 	checkpointer *checkpoint.Capped[checkpointOffset],
 	batch service.MessageBatch,
-	incrementalSnapshotState []byte,
+	incSnapshotState []byte,
 	blockingSnapshotComplete bool,
 ) error {
 	if len(batch) == 0 {
@@ -850,7 +845,7 @@ func (p *pgStreamInput) flushBatch(
 	if ok {
 		lsn = &lsnStr
 	}
-	offset := checkpointOffset{lsn: lsn, incrementalSnapshotState: incrementalSnapshotState}
+	offset := checkpointOffset{lsn: lsn, incrementalSnapshotState: incSnapshotState}
 	resolveFn, err := checkpointer.Track(ctx, offset, int64(len(batch)))
 	if err != nil {
 		return fmt.Errorf("unable to checkpoint: %w", err)
@@ -887,16 +882,16 @@ func (p *pgStreamInput) flushBatch(
 	return nil
 }
 
-// loadIncrementalSnapshotState reads the persisted incremental snapshot
+// loadCachedIncSnapshotState reads the persisted incremental snapshot
 // checkpoint from checkpointCache, if any. A missing key means there's no
 // checkpoint yet (fresh start), not an error.
-func (p *pgStreamInput) loadIncrementalSnapshotState(ctx context.Context) (*incrementalsnapshot.State, error) {
+func (p *pgStreamInput) loadCachedIncSnapshotState(ctx context.Context) (*incrementalsnapshot.State, error) {
 	var (
 		cacheVal []byte
 		cErr     error
 	)
-	if err := p.mgr.AccessCache(ctx, p.checkpointCache, func(c service.Cache) {
-		cacheVal, cErr = c.Get(ctx, p.checkpointCacheKey)
+	if err := p.mgr.AccessCache(ctx, p.incSnapshotCheckpointCache, func(c service.Cache) {
+		cacheVal, cErr = c.Get(ctx, p.incSnapshotCheckpointCacheKey)
 	}); err != nil {
 		return nil, fmt.Errorf("unable to access cache for reading: %w", err)
 	}
@@ -918,8 +913,8 @@ func (p *pgStreamInput) loadIncrementalSnapshotState(ctx context.Context) (*incr
 // snapshot checkpoint to checkpointCache.
 func (p *pgStreamInput) saveIncrementalSnapshotState(ctx context.Context, state []byte) error {
 	var cErr error
-	if err := p.mgr.AccessCache(ctx, p.checkpointCache, func(c service.Cache) {
-		cErr = c.Set(ctx, p.checkpointCacheKey, state, nil)
+	if err := p.mgr.AccessCache(ctx, p.incSnapshotCheckpointCache, func(c service.Cache) {
+		cErr = c.Set(ctx, p.incSnapshotCheckpointCacheKey, state, nil)
 	}); err != nil {
 		return fmt.Errorf("unable to access cache for writing: %w", err)
 	}
