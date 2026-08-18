@@ -713,3 +713,25 @@ test('sqlserver answers carry the means-not-medians caveat', () => {
   assert.equal(r.cores, 2, '12.48 MB/s required clears at the 19.8 mean, not the 12.3 one')
   assert.ok(r.warnings.some((w) => /window means/.test(w)))
 })
+
+test('partnersFor lists exactly the tested endpoints for each side', () => {
+  assert.deepEqual(core.partnersFor('input', 'postgres_cdc'), ['redpanda'])
+  assert.deepEqual(core.partnersFor('input', 'oracledb_cdc').sort(), ['redpanda', 'sqlserver_insert'])
+  assert.deepEqual(core.partnersFor('input', 'redpanda').sort(), ['iceberg', 'snowflake'])
+  assert.deepEqual(core.partnersFor('output', 'redpanda').sort(), [
+    'dynamodb_cdc', 'mongodb_cdc', 'mysql_cdc', 'oracledb_cdc', 'postgres_cdc', 'sqlserver_cdc',
+  ])
+  assert.deepEqual(core.partnersFor('output', 'snowflake'), ['redpanda'])
+  assert.deepEqual(core.partnersFor('output', 'sqlserver_insert'), ['oracledb_cdc'])
+  assert.deepEqual(core.partnersFor('input', 'nope'), [])
+})
+
+test('every measured pair is reachable through partner filtering in two steps', () => {
+  // The UI filters the opposite dropdown to partnersFor; this proves that for every
+  // entry, choosing its input offers its output and choosing its output offers its
+  // input — i.e. the filter never hides a measured pair from both directions.
+  for (const [key, c] of Object.entries(core.CONNECTORS)) {
+    assert.ok(core.partnersFor('input', c.input).includes(c.output), `${key}: output unreachable from its input`)
+    assert.ok(core.partnersFor('output', c.output).includes(c.input), `${key}: input unreachable from its output`)
+  }
+})

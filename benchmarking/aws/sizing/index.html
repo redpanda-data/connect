@@ -373,6 +373,20 @@ export function halvesFor(input, output) {
   }
 }
 
+// The endpoints measured together with `key` on the given side: the tested outputs for
+// an input, or the tested inputs for an output. The UI filters the OPPOSITE dropdown to
+// this list whenever one changes, so an untested pair can never even be displayed —
+// while the dropdown just touched keeps the full list, which is what keeps every
+// measured pair reachable (a symmetric filter would deadlock: postgres→redpanda could
+// never step to redpanda→snowflake, because each list would hide the stepping stone).
+export function partnersFor(side, key) {
+  const entries = Object.values(CONNECTORS)
+  if (side === 'input') {
+    return [...new Set(entries.filter((c) => c.input === key).map((c) => c.output))]
+  }
+  return [...new Set(entries.filter((c) => c.output === key).map((c) => c.input))]
+}
+
 // A blank or nonsensical input must not produce a confident "1 core" — the guard lives
 // here, not in the UI, so it is testable.
 export function hasSizeableInput(bytesPerSec) {
@@ -513,7 +527,7 @@ export function sizeFor({
 window.__sizingCore = {
   MIB, MB, UNIT_DIVISOR, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX,
   EVENT_BYTES_DEVIATION_FACTOR, INPUT_UNITS, TAX, SCALE_OUT_UNMEASURED, CONNECTORS,
-  INPUTS, OUTPUTS, pipelineFor, halvesFor,
+  INPUTS, OUTPUTS, pipelineFor, halvesFor, partnersFor,
   bytesPerSecFromEvents, bytesPerSecFromThroughput, inCurveUnit,
   throughputFromEvents, eventsPerSecFromThroughput,
   ORACLE_READER_SCALING, readerRate, measuredReaderCounts, readersNeededFor,
@@ -1030,13 +1044,13 @@ window.__sizingCore = {
       <div class="field">
         <label for="inputSel">Input</label>
         <select id="inputSel"></select>
-        <span class="helper">CDC source, or a Redpanda topic for sinks</span>
+        <span class="helper">Changing this filters Output to tested pairs</span>
       </div>
 
       <div class="field">
         <label for="outputSel">Output</label>
         <select id="outputSel"></select>
-        <span class="helper">Redpanda topic, or a measured destination</span>
+        <span class="helper">Changing this filters Input to tested pairs</span>
       </div>
 
       <div class="field">
@@ -1099,7 +1113,7 @@ window.__sizingCore = {
 
 <script type="module">
   const { CONNECTORS, TAX, VCPU_POINTS, INPUT_UNITS, INPUTS, OUTPUTS,
-          pipelineFor, halvesFor, sizeFor,
+          pipelineFor, halvesFor, partnersFor, sizeFor,
           throughputFromEvents, eventsPerSecFromThroughput,
           measuredReaderCounts } = window.__sizingCore
 
@@ -1120,9 +1134,14 @@ window.__sizingCore = {
   const resultHost = document.getElementById('result')
   const curveHost = document.getElementById('curveHost')
 
-  // --- populate selects from the core's data, once ---
-  function fillEndpointSelect(select, registry) {
+  // --- endpoint selects: rebuilt on every change, never populated just once ---
+  // allowed === null means the full registry; otherwise only keys in the set (plus the
+  // "Something else…" escape hatch, which must never be filtered away). The previous
+  // value survives the rebuild when still allowed; otherwise the first option wins.
+  function rebuildEndpointSelect(select, registry, allowed, keepValue) {
+    select.innerHTML = ''
     for (const [key, label] of Object.entries(registry)) {
+      if (allowed && !allowed.has(key)) continue
       const opt = document.createElement('option')
       opt.value = key
       opt.textContent = label
@@ -1132,11 +1151,30 @@ window.__sizingCore = {
     other.value = '__other'
     other.textContent = 'Something else…'
     select.appendChild(other)
+    select.value = [...select.options].some((o) => o.value === keepValue)
+      ? keepValue
+      : select.options[0].value
   }
-  fillEndpointSelect(inputSelect, INPUTS)
-  fillEndpointSelect(outputSelect, OUTPUTS)
-  inputSelect.value = 'postgres_cdc'
-  outputSelect.value = 'redpanda'
+
+  // The dropdown just touched keeps the full list; the OTHER one shows only endpoints
+  // measured with the touched side's value (see partnersFor in the core for why the
+  // filter cannot be symmetric). "Something else…" on the touched side unfilters the
+  // partner list — there is nothing measured to filter by.
+  function syncPartnerOptions(changed) {
+    const touched = changed === 'input' ? inputSelect : outputSelect
+    const partner = changed === 'input' ? outputSelect : inputSelect
+    const touchedRegistry = changed === 'input' ? INPUTS : OUTPUTS
+    const partnerRegistry = changed === 'input' ? OUTPUTS : INPUTS
+    rebuildEndpointSelect(touched, touchedRegistry, null, touched.value)
+    const allowed = touched.value === '__other'
+      ? null
+      : new Set(partnersFor(changed, touched.value))
+    rebuildEndpointSelect(partner, partnerRegistry, allowed, partner.value)
+  }
+
+  rebuildEndpointSelect(inputSelect, INPUTS, null, 'postgres_cdc')
+  rebuildEndpointSelect(outputSelect, OUTPUTS, null, 'redpanda')
+  syncPartnerOptions('input')
 
   for (const [key, t] of Object.entries(TAX)) {
     const opt = document.createElement('option')
@@ -1486,8 +1524,8 @@ window.__sizingCore = {
     bytesInput.addEventListener(ev, linked(showThroughputFromEvents))
     throughputInput.addEventListener(ev, linked(showEventsFromThroughput))
     throughputUnitSelect.addEventListener(ev, linked(showThroughputFromEvents))
-    inputSelect.addEventListener(ev, render)
-    outputSelect.addEventListener(ev, render)
+    inputSelect.addEventListener(ev, () => { syncPartnerOptions('input'); render() })
+    outputSelect.addEventListener(ev, () => { syncPartnerOptions('output'); render() })
     readersSelect.addEventListener(ev, render)
     taxSelect.addEventListener(ev, render)
     headroomInput.addEventListener(ev, render)
