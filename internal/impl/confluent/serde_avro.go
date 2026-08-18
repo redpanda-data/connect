@@ -177,7 +177,10 @@ func (*schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, er
 		return nil, fmt.Errorf("parsing Avro schema: %w", err)
 	}
 
-	// Avro JSON is the canonical input: it is what schema_registry_decode
+	// Neither reader is a superset of the other, so which one a message
+	// gets depends on the form it arrives in.
+	//
+	// A raw byte payload is Avro JSON: it is what schema_registry_decode
 	// emits (EncodeJSON) in both avroRawJSON modes — only union tagging
 	// differs, and DecodeJSON accepts tagged and bare unions alike — so one
 	// path still serves both. DecodeJSON is also the only reader that
@@ -187,25 +190,48 @@ func (*schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, er
 	// only numeric text, so every decimal backed by bytes or fixed failed to
 	// re-encode from what the decoder emitted.
 	//
-	// Input that is not Avro JSON falls through to Encode, which is the more
-	// permissive of the two: it also takes RFC 3339 strings and time.Time
-	// for timestamp fields, a shape CDC sources emit and Avro JSON cannot
-	// spell. Its error is therefore the one worth reporting.
+	// A structured message must never be routed that way. Serialising it to
+	// get bytes goes through encoding/json, which writes a nested []byte as
+	// base64 text; DecodeJSON would then read those base64 characters as the
+	// value and succeed, silently encoding the wrong bytes. Encode is also
+	// the only reader that takes the Go values a structured message carries:
+	// []byte for bytes and fixed, and time.Time or an RFC 3339 string for
+	// timestamps, a shape CDC sources emit and Avro JSON cannot spell.
+	//
+	// HasStructured reports the form without converting either way, so the
+	// choice costs nothing. Raw JSON that DecodeJSON rejects still falls
+	// through to Encode, the more permissive reader, and its error is the
+	// one worth reporting.
+	//
+	// A message can hold both forms — a raw payload that something upstream
+	// read as structured caches the parse — and those go to Encode. That is
+	// the reader they had before either was a choice, so nothing regresses:
+	// a bytes-backed decimal reaching Encode fails loudly rather than
+	// encoding the wrong bytes.
 	return func(m *service.Message) error {
-		var native any
-		b, err := m.AsBytes()
-		if err != nil || schema.DecodeJSON(b, &native) != nil {
-			if native, err = m.AsStructuredMut(); err != nil {
-				return fmt.Errorf("extracting structured data: %w", err)
+		if !m.HasStructured() {
+			if b, err := m.AsBytes(); err == nil {
+				var native any
+				if err := schema.DecodeJSON(b, &native); err == nil {
+					return encodeAvro(m, schema, native)
+				}
 			}
 		}
-		binary, err := schema.Encode(native)
+		native, err := m.AsStructuredMut()
 		if err != nil {
-			return err
+			return fmt.Errorf("extracting structured data: %w", err)
 		}
-		m.SetBytes(binary)
-		return nil
+		return encodeAvro(m, schema, native)
 	}, nil
+}
+
+func encodeAvro(m *service.Message, schema *avro.Schema, native any) error {
+	binary, err := schema.Encode(native)
+	if err != nil {
+		return err
+	}
+	m.SetBytes(binary)
+	return nil
 }
 
 func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, aschema franz_sr.Schema) (schemaDecoder, error) {
