@@ -21,10 +21,17 @@ infra:
     instance_type: c8g.4xlarge
 
 dataset:
-  initial_rows: 80000000   # ~90 GiB at 1200 B/row → ~960 s at 100 MB/s ≥ 15 min floor
+  # Sized so the FASTEST point cannot drain the topic inside its 15-min
+  # window: the buffered smoke measured ~15-20 MB/s at 1 vCPU (2026-08-18,
+  # median 15.2 / peak 30.4), so near-linear scaling could reach ~200 MB/s
+  # at 8 vCPU — 160M rows (~180 GiB) outlasts that. The 1-vCPU smoke's own
+  # 12M rows drained ~3 min early and deflated its mean; don't repeat that
+  # at sweep scale. Extra data costs only seed time; every point re-reads
+  # the same topic from offset 0.
+  initial_rows: 160000000
   row_size_bytes: 1200
   seeder: json-orders
-  expected_peak_mb_s: 100  # revisit after the smoke measures the real 1-vCPU rate
+  expected_peak_mb_s: 200
 
 pipeline:
   # Same recipe the smoke validates; see orders-sink-smoke.yaml for the
