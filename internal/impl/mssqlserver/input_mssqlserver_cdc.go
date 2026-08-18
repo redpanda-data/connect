@@ -406,7 +406,15 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 			// or soft-stop (no timeout, by design; see postgres_cdc's
 			// equivalent barrier).
 			if err = i.publisher.flushCurrent(softCtx); err != nil {
-				i.log.Errorf("Failed to flush remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				// A graceful stop lands here whenever shutdown hits the
+				// handoff window (nothing drains msgChan any more, so the
+				// blocked send exits via softCtx): normal operation, Info.
+				// Genuine flush failures keep the error level.
+				if errors.Is(err, context.Canceled) && !i.stopSig.IsHardStopSignalled() {
+					i.log.Infof("Interrupted while flushing remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				} else {
+					i.log.Errorf("Failed to flush remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				}
 				i.stopSig.TriggerHasStopped()
 				return
 			}
