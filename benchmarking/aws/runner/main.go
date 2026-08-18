@@ -288,21 +288,13 @@ func runBench(opts benchOpts) (errOut error) {
 	defer cleanupLicense()
 	opts.licenseFile = licensePath
 
-	// matrix.arms compares Connect launch topologies (one iceberg pipeline vs.
-	// N streams-mode pipelines), not engines — Kafka Connect has no notion of
-	// streams, so arms require the sweep to be Connect-only. Checked here,
-	// before any infra apply / build / render / seed, so an invalid
-	// combination fails immediately instead of after minutes of wall-clock
-	// and real AWS spend.
-	if len(s.Matrix.Arms) > 0 {
-		if len(opts.engines) != 1 || opts.engines[0] != "connect" {
-			return fmt.Errorf("matrix.arms requires --engines=connect (got %v): arms compare Connect launch topologies, not engines", opts.engines)
-		}
-	}
 	// soak is a sustained-load leak/stall/rotation check on Connect alone, not
 	// an engine comparison — checked here (not Scenario.Validate) because
 	// engines is a CLI flag, not a scenario field. Failing before any infra
-	// apply, same reasoning as the matrix.arms check above.
+	// apply. ORDER MATTERS: the soak narrowing must run BEFORE the
+	// matrix.arms engine check below, or a soak-with-binary-arms scenario
+	// trips over the default engine pair it was about to narrow (live-hit
+	// 2026-08-18, /soak run 32188761543).
 	if s.Soak {
 		if !opts.enginesExplicit {
 			// The flag DEFAULT is the head-to-head pair; a soak scenario
@@ -312,6 +304,17 @@ func runBench(opts benchOpts) (errOut error) {
 			fmt.Println("soak profile: narrowing default --engines to connect (soak measures Connect alone)")
 		} else if len(opts.engines) != 1 || opts.engines[0] != "connect" {
 			return fmt.Errorf("scenario %s is a soak profile and requires --engines=connect (got %v): soak measures Connect alone over a sustained window, not an engine comparison", s.Name, opts.engines)
+		}
+	}
+	// matrix.arms compares Connect launch topologies (one iceberg pipeline vs.
+	// N streams-mode pipelines), not engines — Kafka Connect has no notion of
+	// streams, so arms require the sweep to be Connect-only. Checked here,
+	// before any infra apply / build / render / seed, so an invalid
+	// combination fails immediately instead of after minutes of wall-clock
+	// and real AWS spend. Runs AFTER the soak narrowing above by design.
+	if len(s.Matrix.Arms) > 0 {
+		if len(opts.engines) != 1 || opts.engines[0] != "connect" {
+			return fmt.Errorf("matrix.arms requires --engines=connect (got %v): arms compare Connect launch topologies, not engines", opts.engines)
 		}
 	}
 	// --binary mappings must cover exactly the logical binaries the
