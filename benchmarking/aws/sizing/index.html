@@ -738,6 +738,29 @@ window.__sizingCore = {
     color: var(--text-muted);
   }
 
+  .ghost-btn {
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 0.5rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    color: var(--accent-strong);
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+  }
+
+  .ghost-btn:hover {
+    border-color: var(--accent);
+  }
+
+  .ghost-btn:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+  }
+
   .range-row {
     display: flex;
     align-items: center;
@@ -1054,6 +1077,12 @@ window.__sizingCore = {
       </div>
 
       <div class="field">
+        <label for="showAll">Filtered to tested pairs</label>
+        <button id="showAll" type="button" class="ghost-btn">Show all inputs and outputs</button>
+        <span class="helper">Unfilters both lists; your next pick re-filters</span>
+      </div>
+
+      <div class="field">
         <label for="eventBytes">Average event size (bytes)</label>
         <input id="eventBytes" type="number" min="1" value="1200">
         <span class="helper">Benchmarks used 1200 B (4096 B for DynamoDB)</span>
@@ -1171,6 +1200,15 @@ window.__sizingCore = {
       : new Set(partnersFor(changed, touched.value))
     rebuildEndpointSelect(partner, partnerRegistry, allowed, partner.value)
   }
+
+  // The escape from any filtered state: both lists back to the full registries, current
+  // selections kept (they were a measured pair, so they stay one). The next endpoint
+  // change re-applies the partner filter through the normal handlers.
+  document.getElementById('showAll').addEventListener('click', () => {
+    rebuildEndpointSelect(inputSelect, INPUTS, null, inputSelect.value)
+    rebuildEndpointSelect(outputSelect, OUTPUTS, null, outputSelect.value)
+    render()
+  })
 
   rebuildEndpointSelect(inputSelect, INPUTS, null, 'postgres_cdc')
   rebuildEndpointSelect(outputSelect, OUTPUTS, null, 'redpanda')
@@ -1437,6 +1475,7 @@ window.__sizingCore = {
       renderUnbenchmarked()
       curveHost.innerHTML = ''
       readerSection.hidden = true
+      readersField.hidden = true
       return
     }
     const pipeline = pipelineFor(inputKey, outputKey)
@@ -1444,6 +1483,7 @@ window.__sizingCore = {
       renderUnmeasuredPair(inputKey, outputKey)
       curveHost.innerHTML = `<p class="empty-curve-note">No measured curve — this pair was not benchmarked end to end.</p>`
       readerSection.hidden = true
+      readersField.hidden = true
       return
     }
     const connector = pipeline.key
