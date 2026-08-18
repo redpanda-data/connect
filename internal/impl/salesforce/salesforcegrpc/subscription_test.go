@@ -176,23 +176,23 @@ func TestReceiveLoopBlockedSendEscapesOnClose(t *testing.T) {
 }
 
 // TestRecordDecodeFailure verifies the consecutive-failure bookkeeping: the
-// count trips only after maxConsecutiveDecodeFailures failures at the SAME
+// count trips only after maxDeterministicPositionFailures failures at the SAME
 // replay position, resets when the failing position changes, and clears on a
 // successful decode.
 func TestRecordDecodeFailure(t *testing.T) {
 	s := &Subscription{}
 
-	for i := range maxConsecutiveDecodeFailures - 1 {
+	for i := range maxDeterministicPositionFailures - 1 {
 		require.False(t, s.recordDecodeFailure([]byte{0x01}), "failure %d must not trip the bound", i+1)
 	}
-	require.True(t, s.recordDecodeFailure([]byte{0x01}), "failure %d at one position must trip the bound", maxConsecutiveDecodeFailures)
+	require.True(t, s.recordDecodeFailure([]byte{0x01}), "failure %d at one position must trip the bound", maxDeterministicPositionFailures)
 
 	// A different position starts a fresh count.
 	require.False(t, s.recordDecodeFailure([]byte{0x02}), "a new position must reset the count")
 
 	// A successful decode at the FAILING position clears everything.
 	s.clearDecodeFailures([]byte{0x02})
-	for i := range maxConsecutiveDecodeFailures - 1 {
+	for i := range maxDeterministicPositionFailures - 1 {
 		require.False(t, s.recordDecodeFailure([]byte{0x02}), "failure %d after a clear must not trip the bound", i+1)
 	}
 	require.True(t, s.recordDecodeFailure([]byte{0x02}))
@@ -202,7 +202,7 @@ func TestRecordDecodeFailure(t *testing.T) {
 	// undecodable one succeed on every cycle - clearing on them would keep the
 	// count below the bound forever.
 	s.clearDecodeFailures([]byte{0x02})
-	for i := range maxConsecutiveDecodeFailures - 1 {
+	for i := range maxDeterministicPositionFailures - 1 {
 		require.False(t, s.recordDecodeFailure([]byte{0x03}), "failure %d must not trip the bound", i+1)
 		s.clearDecodeFailures([]byte{0x01}) // prefix event succeeding again
 	}
@@ -236,7 +236,7 @@ func TestReceiveLoopTerminalDecodeFailure(t *testing.T) {
 	// exercise the reconnect path, which needs a real Pub/Sub connection -
 	// covered by the counting test above.)
 	s.lastReplayID = []byte{0x29}
-	s.decodeFailures = positionFailures{count: maxConsecutiveDecodeFailures - 1, replayID: []byte{0x2a}}
+	s.decodeFailures = positionFailures{count: maxDeterministicPositionFailures - 1, replayID: []byte{0x2a}}
 
 	go s.receiveLoop(t.Context(), streamCtx)
 
@@ -247,6 +247,9 @@ func TestReceiveLoopTerminalDecodeFailure(t *testing.T) {
 	}
 	require.ErrorContains(t, s.StreamErr(), "permanently undecodable",
 		"the exhausted bound must surface a terminal stream error")
+	var terminal *TerminalStreamError
+	require.ErrorAs(t, s.StreamErr(), &terminal,
+		"terminal verdicts must carry the TerminalStreamError marker so the input never mistakes them for a stale replay ID")
 	s.mu.Lock()
 	require.Equal(t, StreamStateDisconnected, s.state)
 	s.mu.Unlock()
@@ -349,7 +352,7 @@ func TestReceiveLoopTerminalDecodeFailureAfterDecodablePrefix(t *testing.T) {
 	}
 	// The undecodable event has already failed on every prior redelivery; this
 	// delivery decodes the prefix again and then exhausts the bound.
-	s.decodeFailures = positionFailures{count: maxConsecutiveDecodeFailures - 1, replayID: []byte{0x2a}}
+	s.decodeFailures = positionFailures{count: maxDeterministicPositionFailures - 1, replayID: []byte{0x2a}}
 
 	go s.receiveLoop(t.Context(), streamCtx)
 
@@ -413,7 +416,7 @@ func TestReceiveLoopUnanchoredSchemaRetryHonorsReconnectPolicy(t *testing.T) {
 
 // TestRecordSchemaFailure verifies the schema-fetch bound: transient
 // failures are governed by the reconnect policy (0 = indefinite retries),
-// deterministic failures trip at maxConsecutiveDecodeFailures regardless of
+// deterministic failures trip at maxDeterministicPositionFailures regardless of
 // policy - including under the shipped default of unlimited reconnects - and
 // counts are per replay position with position-scoped clearing.
 func TestRecordSchemaFailure(t *testing.T) {
@@ -441,7 +444,7 @@ func TestRecordSchemaFailure(t *testing.T) {
 	// ...but deterministic failures still trip at the decode bound: the
 	// shipped default must not leave an unfetchable schema livelocking.
 	fresh := &Subscription{client: &Client{maxReconnect: 0}}
-	for i := range maxConsecutiveDecodeFailures - 1 {
+	for i := range maxDeterministicPositionFailures - 1 {
 		require.False(t, fresh.recordSchemaFailure([]byte{0x03}, true), "failure %d must not trip yet", i+1)
 	}
 	require.True(t, fresh.recordSchemaFailure([]byte{0x03}, true),
@@ -486,11 +489,11 @@ func TestReceiveLoopAnchoredSchemaFailureExhaustsReconnectPolicy(t *testing.T) {
 	// Anchored (an earlier event was delivered), and this position has already
 	// failed on every prior redelivery cycle; the next failure exhausts the
 	// budget. The stub's error carries no gRPC status, so it classifies as
-	// deterministic and is bounded by maxConsecutiveDecodeFailures. (The
+	// deterministic and is bounded by maxDeterministicPositionFailures. (The
 	// intermediate reconnect hops need a real Pub/Sub connection, covered by
 	// the counting test above.)
 	s.lastReplayID = []byte{0x29}
-	s.schemaFailures = positionFailures{count: maxConsecutiveDecodeFailures - 1, replayID: []byte{0x2a}}
+	s.schemaFailures = positionFailures{count: maxDeterministicPositionFailures - 1, replayID: []byte{0x2a}}
 
 	go s.receiveLoop(t.Context(), streamCtx)
 
@@ -501,6 +504,30 @@ func TestReceiveLoopAnchoredSchemaFailureExhaustsReconnectPolicy(t *testing.T) {
 	}
 	require.ErrorContains(t, s.StreamErr(), "failed repeatedly",
 		"a deterministically unfetchable schema must eventually surface a terminal error")
+	var terminal *TerminalStreamError
+	require.ErrorAs(t, s.StreamErr(), &terminal,
+		"terminal schema verdicts must carry the TerminalStreamError marker")
 	require.ErrorContains(t, s.StreamErr(), "fetching schema")
 	require.Zero(t, s.reconnectCount.Load(), "the exhausted budget must fail terminally, not reconnect again")
+}
+
+// TestLastErrorMixedTypeStoresDoNotPanic guards the lastError atomic.Value:
+// Store panics when concrete types differ across calls, and the reconnect
+// path (wrapped fmt/gRPC errors) and terminal path (TerminalStreamError)
+// naturally store different types in one stream's lifetime.
+func TestLastErrorMixedTypeStoresDoNotPanic(t *testing.T) {
+	streamCtx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s := newBackpressureTestSubscription(t, streamCtx, 0, 1)
+
+	// The sequence a real stream produces: a transport-class failure recorded
+	// by failStream/reconnect, then a terminal verdict.
+	s.lastError.Store(storedErr{err: fmt.Errorf("get schema: %w", status.Error(codes.Unavailable, "down"))})
+	require.NotPanics(t, func() {
+		s.failTerminal(errors.New("payload permanently undecodable"))
+	})
+
+	var terminal *TerminalStreamError
+	require.ErrorAs(t, s.StreamErr(), &terminal)
+	require.ErrorContains(t, s.Health().LastError, "permanently undecodable")
 }
