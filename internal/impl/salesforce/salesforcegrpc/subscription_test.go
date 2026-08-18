@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -539,4 +540,78 @@ func TestLastErrorMixedTypeStoresDoNotPanic(t *testing.T) {
 	var terminal *TerminalStreamError
 	require.ErrorAs(t, s.StreamErr(), &terminal)
 	require.ErrorContains(t, s.Health().LastError, "permanently undecodable")
+}
+
+// unauthedUntilRefreshPubSub fails GetSchema with Unauthenticated until
+// credentials are refreshed, then serves the test schema.
+type unauthedUntilRefreshPubSub struct {
+	PubSubClient
+	healed atomic.Bool
+}
+
+func (p *unauthedUntilRefreshPubSub) GetSchema(context.Context, *SchemaRequest, ...grpc.CallOption) (*SchemaInfo, error) {
+	if p.healed.Load() {
+		return &SchemaInfo{SchemaJson: testSchemaJSON, SchemaId: "s-auth"}, nil
+	}
+	return nil, status.Error(codes.Unauthenticated, "token expired")
+}
+
+// TestReceiveLoopUnanchoredSchemaRetryRefreshesAuth verifies the fresh-stream
+// inline retry recovers from an expired token: the anchored path refreshes
+// credentials via reconnectWithBackoff, and this branch (which deliberately
+// never reconnects) must do the same explicitly - otherwise a low-traffic
+// topic whose first event arrives after token expiry stalls forever under
+// the default unlimited policy, invisibly to Health().
+func TestReceiveLoopUnanchoredSchemaRetryRefreshesAuth(t *testing.T) {
+	streamCtx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s := newBackpressureTestSubscription(t, streamCtx, 1, 1)
+	pubsub := &unauthedUntilRefreshPubSub{}
+	refreshes := atomic.Int64{}
+	s.client.schemaCache = NewSchemaCache(pubsub, "", "", "")
+	s.client.baseBackoff = time.Millisecond
+	s.client.maxBackoff = 2 * time.Millisecond
+	s.client.onAuthRefresh = func(context.Context) (string, string, string, error) {
+		refreshes.Add(1)
+		pubsub.healed.Store(true)
+		return "fresh-token", "url", "tenant", nil
+	}
+
+	schema, err := avro.Parse(testSchemaJSON)
+	require.NoError(t, err)
+	payload, err := schema.Encode(map[string]any{"EventUuid": "u-auth"})
+	require.NoError(t, err)
+	s.stream = &fakeSubscribeStream{
+		ctx: streamCtx,
+		queue: []*FetchResponse{{
+			Events: []*ConsumerEvent{{
+				Event:    &ProducerEvent{SchemaId: "s-auth", Payload: payload},
+				ReplayId: []byte{0x01},
+			}},
+			PendingNumRequested: 1,
+		}},
+	}
+
+	go s.receiveLoop(t.Context(), streamCtx)
+
+	select {
+	case ev := <-s.Events():
+		require.Equal(t, "s-auth", ev.SchemaID)
+	case <-time.After(5 * time.Second):
+		t.Fatal("event was never delivered: the inline schema retry did not recover via credential refresh")
+	}
+	require.GreaterOrEqual(t, refreshes.Load(), int64(1), "an Unauthenticated schema failure must trigger a credential refresh")
+	require.Error(t, s.Health().LastError, "the stall must be visible to Health() while retrying")
+	require.Zero(t, s.reconnectCount.Load(), "recovery must happen inline, never via a preset reconnect")
+
+	s.mu.Lock()
+	s.state = StreamStateClosing
+	s.mu.Unlock()
+	cancel()
+	select {
+	case <-s.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("receive loop did not exit")
+	}
 }

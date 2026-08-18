@@ -392,6 +392,11 @@ func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 					if s.client.maxReconnect > 0 && attempt >= s.client.maxReconnect {
 						break
 					}
+					// Record the failure so Health() sees the stall - this
+					// branch never reaches the reconnect path that would
+					// otherwise do it.
+					s.lastError.Store(storedErr{err: err})
+					s.lastErrorTime.Store(time.Now().UnixNano())
 					delay := grpcBackoffWithJitter(s.client.baseBackoff, s.client.maxBackoff, attempt)
 					s.client.log.Warnf("Schema fetch failed on a fresh stream with no replay anchor to redeliver from (topic=%s, schemaID=%s), retrying inline in %v (attempt %d): %v", s.config.TopicName, event.SchemaId, delay, attempt+1, err)
 					t := time.NewTimer(delay)
@@ -403,6 +408,16 @@ func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 					case <-ctx.Done():
 						t.Stop()
 						return
+					}
+					// An expired token only heals with fresh credentials. The
+					// anchored path gets this from reconnectWithBackoff; this
+					// branch deliberately avoids reconnecting, so it must
+					// refresh explicitly (propagates to the schema cache via
+					// UpdateAuth).
+					if st, ok := status.FromError(err); ok && st.Code() == codes.Unauthenticated {
+						if refreshErr := s.client.refreshAuth(ctx); refreshErr != nil {
+							s.client.log.Warnf("Refreshing credentials for schema retry (topic=%s): %v", s.config.TopicName, refreshErr)
+						}
 					}
 					schema, err = s.client.schemaCache.GetSchema(ctx, event.SchemaId)
 				}
