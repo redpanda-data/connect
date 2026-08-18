@@ -32,6 +32,7 @@ Last refreshed: 2026-08-18
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
 | mysql / orders-snapshot |         4 |           22 |      —    |                   —  | 2026-08-17  |
 | mysql / orders-snapshot-sweep |         4 |           21 |      —    |                   —  | 2026-08-18  |
+| snowflake / orders-sink-smoke |         1 |            0 |      —    |                   —  | 2026-08-18  |
 
 Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
 

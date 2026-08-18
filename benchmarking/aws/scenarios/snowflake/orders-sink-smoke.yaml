@@ -30,6 +30,12 @@ pipeline:
   # snowflake_streaming connection fields (SSM-backed TF outputs + key file);
   # everything below is scenario-owned tuning.
   #
+  # Memory buffer for the same reason as iceberg recipe A: it acks the input
+  # immediately, decoupling the fast reader from the commit-bound output.
+  # Without it the first smoke (2026-08-18, session 192838) crawled at ~44
+  # rows/s: the input's default checkpoint_limit (1024 unacked messages)
+  # chained every ~1024 rows to a full Snowpipe commit round-trip.
+  #
   # Batching sized toward the component's own guidance: >= 16 MiB of
   # compressed output per batch (50000 rows x 1200 B = 57 MiB raw). The 10s
   # period bounds flush latency on the tail. max_in_flight 4 is the
@@ -39,6 +45,12 @@ pipeline:
   # the full json-orders schema, so any drift should fail loud rather than
   # trigger silent ALTERs mid-run (which would also pollute the throughput
   # window with DDL).
+  buffer:
+    memory:
+      limit: 524288000   # 500 MiB; size to throughput x commit interval
+      batch_policy:
+        count: 50000
+        period: 10s
   output:
     snowflake_streaming:
       max_in_flight: 4

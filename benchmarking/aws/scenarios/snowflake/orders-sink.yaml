@@ -28,7 +28,15 @@ dataset:
 
 pipeline:
   # Same recipe the smoke validates; see orders-sink-smoke.yaml for the
-  # batching and schema_evolution rationale.
+  # buffer, batching, and schema_evolution rationale (the buffer is
+  # essential: without it the input's checkpoint_limit chains reads to
+  # Snowpipe commit latency and throughput collapses to ~44 rows/s).
+  buffer:
+    memory:
+      limit: 524288000   # 500 MiB; size to throughput x commit interval
+      batch_policy:
+        count: 50000
+        period: 10s
   output:
     snowflake_streaming:
       max_in_flight: 4
