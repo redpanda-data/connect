@@ -4,7 +4,6 @@ output "vpc_id" { value = aws_vpc.main.id }
 output "private_subnet_ids" { value = aws_subnet.private[*].id }
 output "public_subnet_ids" { value = aws_subnet.public[*].id }
 output "results_bucket" { value = aws_s3_bucket.results.bucket }
-output "orphan_cleanup_sns_topic_arn" { value = aws_sns_topic.orphan_cleanup.arn }
 
 # Instance profile shared by the runner + load-gen hosts (SSM + S3 access). A
 # connector stack that provisions its OWN EC2 source (e.g. self-hosted mongod)
