@@ -32,3 +32,12 @@ type IncrementalSnapshotCfg struct {
 	// snapshot from where it left off instead of starting fresh.
 	ResumeState *incrementalsnapshot.State
 }
+
+// CheckpointOffset is the per-batch payload tracked by the LSN checkpointer.
+// IncrementalSnapshotState is non-nil when a batch (or the phantom row-less
+// one from commitIncrementalSnapshotCheckpoint) carries a checkpoint;
+// bundling it with LSN gives it the same ack-ordering discipline.
+type CheckpointOffset struct {
+	LSN              *string
+	IncSnapshotState []byte
+}

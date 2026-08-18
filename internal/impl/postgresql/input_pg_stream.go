@@ -638,7 +638,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	var nextTimedBatchChan <-chan time.Time
 
 	// offsets are nilable since we don't provide offset tracking during the snapshot phase
-	cp := checkpoint.NewCapped[checkpointOffset](int64(p.checkpointLimit))
+	cp := checkpoint.NewCapped[snapshot.CheckpointOffset](int64(p.checkpointLimit))
 
 	// blockingSnapshotComplete restricts the isSnapshot/snapshotAckWG barrier to
 	// the one-shot stream_snapshot phase, not the also-nil-LSN but continuous
@@ -785,26 +785,17 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	}
 }
 
-// checkpointOffset is the per-batch payload tracked by the LSN checkpointer.
-// IncrementalSnapshotState is non-nil when a batch (or the phantom row-less
-// one from commitIncrementalSnapshotCheckpoint) carries a checkpoint;
-// bundling it with LSN gives it the same ack-ordering discipline.
-type checkpointOffset struct {
-	lsn                      *string
-	incrementalSnapshotState []byte
-}
-
 // commitCheckpoint applies a resolved checkpointOffset: acks the LSN first,
 // then persists the incremental snapshot state, so a crash never leaves
 // acknowledged-but-unpersisted progress.
-func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, offset checkpointOffset) error {
-	if offset.lsn != nil {
-		if err := pgStream.AckLSN(ctx, *offset.lsn); err != nil {
+func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, offset snapshot.CheckpointOffset) error {
+	if offset.LSN != nil {
+		if err := pgStream.AckLSN(ctx, *offset.LSN); err != nil {
 			return fmt.Errorf("unable to ack LSN to postgres: %w", err)
 		}
 	}
-	if offset.incrementalSnapshotState != nil {
-		if err := p.saveIncrementalSnapshotState(ctx, offset.incrementalSnapshotState); err != nil {
+	if offset.IncSnapshotState != nil {
+		if err := p.saveIncrementalSnapshotState(ctx, offset.IncSnapshotState); err != nil {
 			return fmt.Errorf("unable to persist incremental snapshot checkpoint: %w", err)
 		}
 	}
@@ -815,8 +806,8 @@ func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogica
 // row-less checkpoint. Tracking it (rather than persisting directly) still
 // gates it behind every earlier tracked batch, so it can't surface ahead of
 // unacknowledged rows earlier in the stream.
-func (p *pgStreamInput) commitIncrementalSnapshotCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, checkpointer *checkpoint.Capped[checkpointOffset], state []byte) error {
-	resolveFn, err := checkpointer.Track(ctx, checkpointOffset{incrementalSnapshotState: state}, 0)
+func (p *pgStreamInput) commitIncrementalSnapshotCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, checkpointer *checkpoint.Capped[snapshot.CheckpointOffset], state []byte) error {
+	resolveFn, err := checkpointer.Track(ctx, snapshot.CheckpointOffset{IncSnapshotState: state}, 0)
 	if err != nil {
 		return fmt.Errorf("unable to checkpoint incremental snapshot state: %w", err)
 	}
@@ -830,7 +821,7 @@ func (p *pgStreamInput) commitIncrementalSnapshotCheckpoint(ctx context.Context,
 func (p *pgStreamInput) flushBatch(
 	ctx context.Context,
 	pgStream *pglogicalstream.Stream,
-	checkpointer *checkpoint.Capped[checkpointOffset],
+	checkpointer *checkpoint.Capped[snapshot.CheckpointOffset],
 	batch service.MessageBatch,
 	incSnapshotState []byte,
 	blockingSnapshotComplete bool,
@@ -845,7 +836,7 @@ func (p *pgStreamInput) flushBatch(
 	if ok {
 		lsn = &lsnStr
 	}
-	offset := checkpointOffset{lsn: lsn, incrementalSnapshotState: incSnapshotState}
+	offset := snapshot.CheckpointOffset{LSN: lsn, IncSnapshotState: incSnapshotState}
 	resolveFn, err := checkpointer.Track(ctx, offset, int64(len(batch)))
 	if err != nil {
 		return fmt.Errorf("unable to checkpoint: %w", err)
