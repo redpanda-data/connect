@@ -622,6 +622,12 @@ window.__sizingCore = {
 
   * { box-sizing: border-box; }
 
+  /* The hidden attribute must always win: the UA's [hidden]{display:none} is
+     user-agent origin, so any author display (like .field's flex) silently
+     overrides it — which kept the LogMiner readers field visible on
+     non-Oracle selections. */
+  [hidden] { display: none !important; }
+
   html, body {
     margin: 0;
     overflow-x: hidden;
