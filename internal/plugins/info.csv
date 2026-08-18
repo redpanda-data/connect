@@ -318,8 +318,8 @@ ttlru                     ,cache     ,ttlru                     ,community  ,n  
 twitter_search            ,input     ,twitter_search            ,community  ,n          ,n     ,n              ,not yet certified for cloud
 unarchive                 ,processor ,unarchive                 ,certified  ,n          ,y     ,y              ,
 wasm                      ,processor ,wasm                      ,community  ,n          ,n     ,n              ,WASM runtime not enabled in cloud
-websocket                 ,input     ,websocket                 ,certified  ,n          ,n     ,n              ,long-lived persistent connection not suitable for cloud
-websocket                 ,output    ,websocket                 ,certified  ,n          ,n     ,n              ,long-lived persistent connection not suitable for cloud
+websocket                 ,input     ,websocket                 ,certified  ,n          ,y     ,y              ,
+websocket                 ,output    ,websocket                 ,certified  ,n          ,y     ,y              ,
 while                     ,processor ,while                     ,certified  ,n          ,y     ,y              ,
 workflow                  ,processor ,workflow                  ,certified  ,n          ,y     ,y              ,
 xml                       ,processor ,xml                       ,community  ,n          ,y     ,y              ,
