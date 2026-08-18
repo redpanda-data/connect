@@ -211,6 +211,35 @@ func TestSnapshotAckTracker(t *testing.T) {
 		}
 	})
 
+	t.Run("FlushCompleted re-drives a completion write that failed at seal time", func(t *testing.T) {
+		// The seal is a segment's last settle event: when its Complete=true
+		// write fails transiently, no later ack exists to retry it. Without
+		// the post-gate re-drive the durable row stays Complete=false and the
+		// next run re-scans the segment's tail.
+		tracker, store := newTestSnapshotAckTracker(1)
+
+		r1 := tracker.TrackBatch(5, scanKey("k1"), 3)
+		require.NoError(t, tracker.Ack(ctx, 5, 3, r1))
+
+		store.mu.Lock()
+		store.failNext = errStoreDown
+		store.mu.Unlock()
+		require.Error(t, tracker.SealSegment(ctx, 5), "the throttled completion write surfaces its error")
+
+		before := store.recorded()
+		require.NoError(t, tracker.FlushCompleted(ctx))
+		got := store.recorded()
+		require.Len(t, got, len(before)+1, "the re-drive must issue exactly the missing completion write")
+		last := got[len(got)-1]
+		require.Equal(t, 5, last.segment)
+		require.Nil(t, last.lastKey, "the re-driven write must be the Complete=true marker")
+		require.Equal(t, int64(3), last.recordsRead)
+
+		// Idempotent: nothing left to re-drive.
+		require.NoError(t, tracker.FlushCompleted(ctx))
+		require.Len(t, store.recorded(), len(got))
+	})
+
 	t.Run("a never-acked batch pins the segment forever", func(t *testing.T) {
 		tracker, store := newTestSnapshotAckTracker(1)
 

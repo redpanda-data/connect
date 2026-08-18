@@ -1383,11 +1383,15 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	})
 
 	// Seal each segment behind its in-flight batches so Complete=true only
-	// persists after they are all acknowledged.
+	// persists after they are all acknowledged. A failed completion WRITE is
+	// non-fatal: aborting the scan over a retryable store error would cancel
+	// every sibling segment and discard their un-persisted acked progress.
+	// The marker is already registered in the tracker either way, and the
+	// write is re-driven by FlushCompleted once the ack gate drains.
 	d.snapshot.scanner.SetSegmentSealedCallback(func(ctx context.Context, segment int) error {
 		if err := ackTracker.SealSegment(ctx, segment); err != nil {
 			d.metrics.checkpointFailures.Incr(1)
-			return err
+			d.log.Warnf("Failed to persist completion for snapshot segment %d (will retry once all acks drain): %v", segment, err)
 		}
 		return nil
 	})
@@ -1431,7 +1435,19 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 		// every emitted batch has settled downstream: marking it complete any
 		// earlier would let a crash skip un-acked items on restart. Blocks
 		// until acks drain or soft-stop.
-		if err := waitAckGate(scanCtx, ackGate); err != nil {
+		if err := waitAckGate(scanCtx, ackGate); err == nil {
+			// Every batch has settled; re-drive any completion write that
+			// failed transiently at seal time (nothing else can retry it -
+			// the seal is each segment's last settle event). Failure here is
+			// non-fatal: the global complete marker below is the durable
+			// fact once written, and a restart before it merely re-scans
+			// from the last durable per-segment position (duplicates, never
+			// loss).
+			if flushErr := ackTracker.FlushCompleted(scanCtx); flushErr != nil {
+				d.metrics.checkpointFailures.Incr(1)
+				d.log.Warnf("Failed to re-drive snapshot completion writes for table %s: %v", tableName, flushErr)
+			}
+		} else {
 			if errors.Is(err, context.Canceled) {
 				// Graceful shutdown mid-snapshot: nothing is wrong, the
 				// un-acked items simply resume from acknowledged progress on

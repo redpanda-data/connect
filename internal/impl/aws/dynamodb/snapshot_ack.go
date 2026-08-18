@@ -10,6 +10,8 @@ package dynamodb
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/Jeffail/checkpoint"
@@ -150,9 +152,11 @@ func (t *snapshotAckTracker) Ack(ctx context.Context, segment, n int, resolve fu
 		persistErr = t.store.UpdateSnapshotProgress(ctx, segment, toPersist.lastKey, records)
 	}
 	if persistErr != nil {
-		// Bookkeeping is deliberately untouched: the next ack (or seal) for
-		// this segment retries the write instead of silently treating the
-		// failed position as durable.
+		// Bookkeeping is deliberately untouched so the failed position is
+		// never treated as durable. Interval persists are retried by the
+		// segment's next ack; a failed COMPLETION write has no later ack to
+		// retry it (the seal is the segment's last settle event), so it is
+		// re-driven by FlushCompleted once the snapshot's ack gate drains.
 		return persistErr
 	}
 
@@ -163,6 +167,44 @@ func (t *snapshotAckTracker) Ack(ctx context.Context, segment, n int, resolve fu
 	}
 	t.mu.Unlock()
 	return nil
+}
+
+// FlushCompleted re-drives the Complete=true write for every segment whose
+// frontier has fully resolved to its seal marker but whose completion was
+// never durably persisted - a throttled completion PutItem otherwise stays
+// lost forever, and the next run re-scans the segment's tail from a stale
+// position. Called after the snapshot ack gate has drained, so no acks are
+// in flight; per-segment persistMu is still taken for consistency.
+func (t *snapshotAckTracker) FlushCompleted(ctx context.Context) error {
+	t.mu.Lock()
+	var pending []int
+	for seg, st := range t.segments {
+		if st.hasFrontier && st.frontier.complete && !st.persistedComplete {
+			pending = append(pending, seg)
+		}
+	}
+	t.mu.Unlock()
+
+	var errs []error
+	for _, seg := range pending {
+		t.mu.Lock()
+		st := t.segments[seg]
+		records := st.ackedRecords
+		t.mu.Unlock()
+
+		st.persistMu.Lock()
+		err := t.store.UpdateSnapshotProgress(ctx, seg, nil, records)
+		if err == nil {
+			t.mu.Lock()
+			st.persistedComplete = true
+			t.mu.Unlock()
+		}
+		st.persistMu.Unlock()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("re-driving completion for segment %d: %w", seg, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // SealSegment registers the segment-complete marker. Segments can end on an
