@@ -82,19 +82,19 @@ type Stream struct {
 	// snapshot, so DML on other tables skips PK resolution.
 	incrementalSnapshotTables map[incrementalsnapshot.TableID]struct{}
 
-	// willEmitLegacySnapshot is true only when this session will run the
+	// willEmitBlockingSnapshot is true only when this session will run the
 	// one-shot stream_snapshot backfill (and emit a SnapshotCompleteOpType
 	// sentinel) -- false whenever the slot already existed at startup, since
 	// that backfill only ever runs against a fresh slot.
-	willEmitLegacySnapshot bool
+	willEmitBlockingSnapshot bool
 }
 
-// WillEmitLegacySnapshot reports whether this session will run the one-shot
+// WillEmitBlockingSnapshot reports whether this session will run the one-shot
 // stream_snapshot backfill (and emit a SnapshotCompleteOpType sentinel).
 // Callers use it to distinguish those nil-LSN batches from incremental
 // snapshotting's, which never emits that sentinel.
-func (s *Stream) WillEmitLegacySnapshot() bool {
-	return s.willEmitLegacySnapshot
+func (s *Stream) WillEmitBlockingSnapshot() bool {
+	return s.willEmitBlockingSnapshot
 }
 
 // NewPgStream creates a new instance of the Stream struct.
@@ -294,7 +294,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	var snapshotter *snapshotter
 	if config.StreamOldData {
-		stream.willEmitLegacySnapshot = true
+		stream.willEmitBlockingSnapshot = true
 		// A crash between snapshot completion and slot promotion leaves <slot>_tmp
 		// behind, owned by the dead session. We only get here when no permanent
 		// slot exists, so any leftover _tmp slot is necessarily stale - drop it
