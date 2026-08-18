@@ -1175,8 +1175,17 @@ window.__sizingCore = {
   // allowed === null means the full registry; otherwise only keys in the set (plus the
   // "Something else…" escape hatch, which must never be filtered away). The previous
   // value survives the rebuild when still allowed; otherwise the first option wins.
-  function rebuildEndpointSelect(select, registry, allowed, keepValue) {
+  // withPlaceholder prepends a disabled "Select component…" row — the post-Clear state,
+  // which only survives until the first real pick (disabled, so never re-selectable).
+  function rebuildEndpointSelect(select, registry, allowed, keepValue, withPlaceholder = false) {
     select.innerHTML = ''
+    if (withPlaceholder) {
+      const ph = document.createElement('option')
+      ph.value = '__none'
+      ph.textContent = 'Select component…'
+      ph.disabled = true
+      select.appendChild(ph)
+    }
     for (const [key, label] of Object.entries(registry)) {
       if (allowed && !allowed.has(key)) continue
       const opt = document.createElement('option')
@@ -1203,18 +1212,19 @@ window.__sizingCore = {
     const touchedRegistry = changed === 'input' ? INPUTS : OUTPUTS
     const partnerRegistry = changed === 'input' ? OUTPUTS : INPUTS
     rebuildEndpointSelect(touched, touchedRegistry, null, touched.value)
-    const allowed = touched.value === '__other'
+    const allowed = touched.value === '__other' || touched.value === '__none'
       ? null
       : new Set(partnersFor(changed, touched.value))
     rebuildEndpointSelect(partner, partnerRegistry, allowed, partner.value)
   }
 
-  // The escape from any filtered state: both lists back to the full registries, current
-  // selections kept (they were a measured pair, so they stay one). The next endpoint
-  // change re-applies the partner filter through the normal handlers.
+  // The escape from any filtered state: both lists back to the full registries, both
+  // set to the "Select component…" placeholder. The first real pick drops the
+  // placeholder on that side and snaps the other side to a tested partner through the
+  // normal handlers.
   document.getElementById('clearFilters').addEventListener('click', () => {
-    rebuildEndpointSelect(inputSelect, INPUTS, null, inputSelect.value)
-    rebuildEndpointSelect(outputSelect, OUTPUTS, null, outputSelect.value)
+    rebuildEndpointSelect(inputSelect, INPUTS, null, '__none', true)
+    rebuildEndpointSelect(outputSelect, OUTPUTS, null, '__none', true)
     render()
   })
 
@@ -1479,6 +1489,14 @@ window.__sizingCore = {
 
     const inputKey = inputSelect.value
     const outputKey = outputSelect.value
+    if (inputKey === '__none' || outputKey === '__none') {
+      resultCard.className = 'panel result-card state-empty'
+      resultHost.innerHTML = `<p class="headline-unbenched">Select an input and an output component to size a pipeline.</p>`
+      curveHost.innerHTML = ''
+      readerSection.hidden = true
+      readersField.hidden = true
+      return
+    }
     if (inputKey === '__other' || outputKey === '__other') {
       renderUnbenchmarked()
       curveHost.innerHTML = ''
