@@ -219,3 +219,17 @@ func TestRenderPointConfigs_SnowflakeScenarios(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateEngines_ConnectOnlySink(t *testing.T) {
+	s := &Scenario{Connector: "snowflake", Direction: DirectionSink}
+	if err := validateEngines(s, []string{"connect", "kafka_connect"}); err == nil {
+		t.Error("default engine list must fail fast for a Connect-only sink")
+	}
+	if err := validateEngines(s, []string{"connect"}); err != nil {
+		t.Errorf("engines=connect must pass: %v", err)
+	}
+	// iceberg has a KC counterpart; both engines stay valid.
+	if err := validateEngines(&Scenario{Connector: "iceberg", Direction: DirectionSink}, []string{"connect", "kafka_connect"}); err != nil {
+		t.Errorf("iceberg dual-engine must pass: %v", err)
+	}
+}

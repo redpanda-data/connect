@@ -5,7 +5,10 @@
 
 package main
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+)
 
 // sinkSpec captures the per-connector wiring for a sink bench, analogous to
 // engineSpec for sources. Add a sink connector by adding one entry to
@@ -65,4 +68,24 @@ func sinkHelperBinaries() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// validateEngines rejects engine lists a scenario's connector cannot serve,
+// BEFORE any infra apply — a Connect-only sink (nil KCConfig) swept with the
+// default "connect,kafka_connect" list must fail as a flag error in
+// milliseconds, not as a KCConfig error after apply + seed.
+func validateEngines(s *Scenario, engines []string) error {
+	if s.Direction != DirectionSink {
+		return nil
+	}
+	sp, ok := sinkSpecFor(s.Connector)
+	if !ok || sp.KCConfig != nil {
+		return nil
+	}
+	for _, e := range engines {
+		if e == "kafka_connect" {
+			return fmt.Errorf("connector %q is Connect-only (no Kafka Connect counterpart wired); run with --engines=connect (got %v)", s.Connector, engines)
+		}
+	}
+	return nil
 }

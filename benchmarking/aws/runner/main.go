@@ -139,6 +139,13 @@ func runBench(opts benchOpts) (errOut error) {
 			return fmt.Errorf("matrix.arms requires --engines=connect (got %v): arms compare Connect launch topologies, not engines", opts.engines)
 		}
 	}
+	// Same fail-fast rationale for Connect-only sinks: KCConfig's late ok=false
+	// check otherwise fires only after apply + seed (~15 min of wall-clock and
+	// real AWS spend for a flag error — the 2026-08-18 snowflake smoke did
+	// exactly that on the default engine list).
+	if err := validateEngines(s, opts.engines); err != nil {
+		return err
+	}
 
 	topo, err := topologyFor(s.Direction)
 	if err != nil {
