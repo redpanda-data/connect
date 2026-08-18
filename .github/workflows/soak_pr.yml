@@ -78,9 +78,9 @@ jobs:
           echo "base_sha=${BASE_SHA}" >> "$GITHUB_OUTPUT"
           echo "pr_sha=$(git rev-parse HEAD^2)" >> "$GITHUB_OUTPUT"
           git checkout --detach "${BASE_SHA}"
-          go build -o "$RUNNER_TEMP/rc-base" ./cmd/redpanda-connect
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/rc-base" ./cmd/redpanda-connect
           git checkout --detach "${MERGE_SHA}"
-          go build -o "$RUNNER_TEMP/rc-pr" ./cmd/redpanda-connect
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/rc-pr" ./cmd/redpanda-connect
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
