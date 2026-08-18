@@ -744,27 +744,32 @@ window.__sizingCore = {
     color: var(--text-muted);
   }
 
-  .ghost-btn {
+  .label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .clear-btn {
     font: inherit;
-    font-size: 0.88rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    padding: 0.5rem 0.6rem;
-    border-radius: 6px;
-    border: 1px solid var(--border-strong);
-    background: var(--surface-2);
-    color: var(--accent-strong);
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
     cursor: pointer;
-    width: 100%;
-    text-align: left;
   }
 
-  .ghost-btn:hover {
-    border-color: var(--accent);
+  .clear-btn:hover {
+    text-decoration: underline;
+    color: var(--accent-strong);
   }
 
-  .ghost-btn:focus-visible {
+  .clear-btn:focus-visible {
     outline: 2px solid var(--focus-ring);
-    outline-offset: 1px;
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 
   .range-row {
@@ -1071,7 +1076,10 @@ window.__sizingCore = {
     <p class="panel-label">Inputs</p>
     <div class="input-grid">
       <div class="field">
-        <label for="inputSel">Input</label>
+        <div class="label-row">
+          <label for="inputSel">Input</label>
+          <button id="clearFilters" type="button" class="clear-btn">Clear</button>
+        </div>
         <select id="inputSel"></select>
         <span class="helper">Changing this filters Output to tested pairs</span>
       </div>
@@ -1080,12 +1088,6 @@ window.__sizingCore = {
         <label for="outputSel">Output</label>
         <select id="outputSel"></select>
         <span class="helper">Changing this filters Input to tested pairs</span>
-      </div>
-
-      <div class="field">
-        <label for="showAll">Filtered to tested pairs</label>
-        <button id="showAll" type="button" class="ghost-btn">Show all inputs and outputs</button>
-        <span class="helper">Unfilters both lists; your next pick re-filters</span>
       </div>
 
       <div class="field">
@@ -1210,7 +1212,7 @@ window.__sizingCore = {
   // The escape from any filtered state: both lists back to the full registries, current
   // selections kept (they were a measured pair, so they stay one). The next endpoint
   // change re-applies the partner filter through the normal handlers.
-  document.getElementById('showAll').addEventListener('click', () => {
+  document.getElementById('clearFilters').addEventListener('click', () => {
     rebuildEndpointSelect(inputSelect, INPUTS, null, inputSelect.value)
     rebuildEndpointSelect(outputSelect, OUTPUTS, null, outputSelect.value)
     render()
