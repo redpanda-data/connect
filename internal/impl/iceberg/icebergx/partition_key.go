@@ -211,6 +211,20 @@ func PartitionKeyToPath(spec iceberg.PartitionSpec, key PartitionKey) (string, e
 
 // formatLiteralValue formats an iceberg Literal using the transform's ToHumanStr method.
 // It handles truncation for string/binary values.
+//
+// ToHumanStr is deprecated in favour of ToHumanStrType, but the two differ for
+// exactly one case: IdentityTransform on timestamptz/timestamptz_ns, where
+// ToHumanStrType appends "+00:00". Every other transform's ToHumanStrType
+// ignores the type and delegates straight to ToHumanStr.
+//
+// Adopting it would rename the partition directory of every identity-partitioned
+// timestamptz column — "ts=2025-02-21T13:18:49" becomes
+// "ts=2025-02-21T13%3A18%3A49%2B00%3A00" — which splits new writes from the
+// files already written under the old name and diverges from Redpanda's C++
+// datalake writer (partition_key_path.h) that this file mirrors and that may
+// target the same table. Java renders the suffix, so the switch is arguably
+// spec-correct, but it is a storage-layout change and belongs in its own change
+// with its own migration story, not in a dependency bump.
 func formatLiteralValue(transform iceberg.Transform, lit iceberg.Literal) string {
 	val := lit.Any()
 
@@ -226,7 +240,7 @@ func formatLiteralValue(transform iceberg.Transform, lit iceberg.Literal) string
 		}
 	}
 
-	return transform.ToHumanStr(val)
+	return transform.ToHumanStr(val) //nolint:staticcheck // see above: ToHumanStrType would rename timestamptz partition dirs
 }
 
 // ParsePartitionSpec parses a Spark-like DDL expression string into an iceberg PartitionSpec.
