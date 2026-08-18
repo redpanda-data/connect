@@ -100,6 +100,10 @@ type benchOpts struct {
 	// the DEFAULT engine pair to connect-only, but refuses an EXPLICIT
 	// non-connect choice — the operator asked for something soak can't mean.
 	enginesExplicit bool
+	// preflightOn gates the concurrent-bench-session guard (see
+	// preflightCheck). Defaults to true; --preflight=off is the emergency
+	// escape hatch for an operator who is certain no other session is live.
+	preflightOn bool
 }
 
 // defaultSoakArchiveBucket is the persistent soak archive bucket's name,
@@ -127,6 +131,11 @@ func benchCmd(args []string) error {
 		"S3 bucket a soak run's result.json + raw artifacts are archived to, since the session results "+
 			"bucket is force_destroy'd at teardown. Created by the persistent terraform stack "+
 			"(`task aws:persistent`).")
+	preflight := &preflightFlag{on: true}
+	fs.Var(preflight, "preflight",
+		`"on" (default) or "off": guard against a concurrent bench session already holding the shared `+
+			`Terraform stack. "off" is an emergency escape hatch only — concurrent sessions destroy `+
+			`each other's infrastructure.`)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -157,8 +166,36 @@ func benchCmd(args []string) error {
 		soakArchiveBucket: *soakArchiveBucket,
 		engines:           engineList,
 		enginesExplicit:   enginesExplicit,
+		preflightOn:       preflight.on,
 	}
 	return runBench(opts)
+}
+
+// preflightFlag is a flag.Value accepting "on"/"off" rather than Go's
+// default bool string parsing, so --preflight=off reads as the deliberate
+// emergency escape hatch it is instead of an easily-fat-fingered
+// --preflight=false.
+type preflightFlag struct {
+	on bool
+}
+
+func (f *preflightFlag) String() string {
+	if f.on {
+		return "on"
+	}
+	return "off"
+}
+
+func (f *preflightFlag) Set(s string) error {
+	switch strings.ToLower(s) {
+	case "on":
+		f.on = true
+	case "off":
+		f.on = false
+	default:
+		return fmt.Errorf(`invalid --preflight value %q: must be "on" or "off"`, s)
+	}
+	return nil
 }
 
 func runBench(opts benchOpts) (errOut error) {
@@ -170,6 +207,25 @@ func runBench(opts benchOpts) (errOut error) {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+
+	// Every bench session applies and later DESTROYS the same shared
+	// Terraform stack, so two concurrent sessions destroy each other's
+	// infrastructure mid-run (observed live 2026-08-17: a laptop bench and
+	// the scheduled soak collided). Checked before any AWS call this run
+	// makes — including license resolution just below — so the conflict is
+	// caught before this session touches anything.
+	if opts.preflightOn {
+		ec2Client, err := NewEC2Client(ctx, opts.region)
+		if err != nil {
+			return fmt.Errorf("build EC2 client for preflight check: %w", err)
+		}
+		if err := preflightCheck(ctx, ec2Client); err != nil {
+			return err
+		}
+		fmt.Println("preflight: no concurrent bench session detected")
+	} else {
+		fmt.Println("⚠ preflight check DISABLED (--preflight=off): a concurrent bench session will destroy this one's infrastructure (or vice versa) with no warning")
+	}
 
 	// Resolve the license BEFORE any AWS infrastructure is provisioned, same
 	// reasoning as the old file-open check this replaces: surface a bad
@@ -278,6 +334,16 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 	stackVars := translateInfraSource(s.Infra.Source, opts.region)
 
+	// soakRegressionOnly is set just before runBench's final return, when the
+	// only reason errOut is non-nil is the rolling-baseline comparator (see
+	// compareSoakRunToBaseline) — never for any earlier, genuine failure.
+	// The teardown defer below reads it to distinguish the two: a
+	// regression is a verdict about a run that itself SUCCEEDED (its full
+	// result is already archived in S3 by the time the comparator even
+	// runs), so unlike every other error it must never be treated as a
+	// reason to honor --keep-on-fail and strand infrastructure.
+	var soakRegressionOnly bool
+
 	// Register destroy BEFORE any apply, so a partial apply still gets torn
 	// down. terraform destroy is idempotent against a no-op state.
 	defer func() {
@@ -285,7 +351,7 @@ func runBench(opts benchOpts) (errOut error) {
 			fmt.Println("[7/7] keep=true: skipping teardown")
 			return
 		}
-		if errOut != nil && opts.keepOnFail {
+		if errOut != nil && opts.keepOnFail && !soakRegressionOnly {
 			fmt.Println("[7/7] keep-on-fail=true and run errored: skipping teardown")
 			return
 		}
@@ -518,20 +584,35 @@ func runBench(opts benchOpts) (errOut error) {
 	// A soak run's result also lands in the PERSISTENT soak archive bucket:
 	// the full JSON at a session-scoped key (so it's fetchable without a
 	// checkout of this repo), a small index line under soak-index/<scenario>/
-	// that a future rolling-baseline comparator can list without downloading
-	// every run's full JSON, and copies of the raw per-point artifacts
-	// (sweep log, Prometheus dump, broker scrape) the bench script already
-	// wrote to the session results bucket — which is force_destroy'd by the
-	// teardown defer just below, minutes from now. Non-fatal — a bench run
-	// that produced a valid local result must not fail because of an S3
-	// hiccup on the archive upload.
+	// that the rolling-baseline comparator just below lists without
+	// downloading every run's full JSON, and copies of the raw per-point
+	// artifacts (sweep log, Prometheus dump, broker scrape) the bench script
+	// already wrote to the session results bucket — which is
+	// force_destroy'd by the teardown defer just below, minutes from now.
+	// The upload itself is non-fatal — a bench run that produced a valid
+	// local result must not fail because of an S3 hiccup on the archive
+	// upload — but a REGRESSION the comparator finds against a mature
+	// baseline, after a successful upload, is not: see soakRegressionErr
+	// below.
+	var soakRegressionErr error
 	if s.Soak {
-		if err := uploadSoakResult(ctx, opts.region, sharedOuts["results_bucket"], opts.soakArchiveBucket, sessionID, s, result, jsonPath, topo, logFetcher); err != nil {
+		entry, err := uploadSoakResult(ctx, opts.region, sharedOuts["results_bucket"], opts.soakArchiveBucket, sessionID, s, result, jsonPath, topo, logFetcher)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: archive soak result to S3: %v\n", err)
+		} else {
+			soakRegressionErr = compareSoakRunToBaseline(ctx, opts, s, sessionID, entry, logFetcher)
 		}
 	}
 	fmt.Printf("\n✓ done — JSON: %s\n           md: %s\n           summary: %s\n", jsonPath, mdPath, summaryPath)
-	return nil
+	// soakRegressionErr is returned LAST, only after every step above
+	// (including the archive upload) has already run. soakRegressionOnly is
+	// set here, immediately before the return the deferred teardown above
+	// observes — see its own comment for why a regression must never be
+	// treated like an ordinary failure for --keep-on-fail purposes.
+	if soakRegressionErr != nil {
+		soakRegressionOnly = true
+	}
+	return soakRegressionErr
 }
 
 // soakIndexEntry is the small per-run record a rolling-baseline comparator
@@ -594,19 +675,20 @@ func buildSoakArchivePlan(sessionID, scenarioName, key, brokerArtifact string) s
 // are where the bench script already wrote the raw artifacts this function
 // copies onward.
 //
-// A soak scenario is validated (see Scenario.Validate) to have exactly one
-// cpu_points entry and engines=connect, so result.Points has exactly one
-// element in the success path — but this degrades to zero values rather
-// than panicking if that ever changes. The raw-artifact copy is non-fatal
-// per file: a missing or unfetchable artifact is logged and skipped, so one
-// gap never costs the run its result.json / soak-index entry.
-func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket, sessionID string, s *Scenario, result *Result, jsonPath string, topo Topology, logFetcher LogFetcher) error {
+// The soakIndexEntry is returned even on error (see buildSoakIndexEntry) so
+// a caller that only needs the entry for comparison, not the upload
+// itself, isn't forced to rebuild it after a failure. The raw-artifact copy
+// is non-fatal per file: a missing or unfetchable artifact is logged and
+// skipped, so one gap never costs the run its result.json / soak-index
+// entry.
+func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket, sessionID string, s *Scenario, result *Result, jsonPath string, topo Topology, logFetcher LogFetcher) (soakIndexEntry, error) {
+	entry := buildSoakIndexEntry(sessionID, s, result)
 	if archiveBucket == "" {
-		return fmt.Errorf("no soak archive bucket configured (--soak-archive-bucket)")
+		return entry, fmt.Errorf("no soak archive bucket configured (--soak-archive-bucket)")
 	}
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 	if err != nil {
-		return err
+		return entry, err
 	}
 	client := s3.NewFromConfig(cfg)
 
@@ -622,51 +704,66 @@ func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket,
 
 	raw, err := os.ReadFile(jsonPath)
 	if err != nil {
-		return fmt.Errorf("read local result JSON %s: %w", jsonPath, err)
+		return entry, fmt.Errorf("read local result JSON %s: %w", jsonPath, err)
 	}
 	if err := putSoakArchiveObject(ctx, client, archiveBucket, plan.ResultKey, raw); err != nil {
-		return err
+		return entry, err
 	}
 
-	entry := soakIndexEntry{
-		Scenario:  s.Name,
-		Connector: s.Connector,
-		SessionID: sessionID,
-		StartedAt: result.StartedAt,
-	}
-	if len(result.Points) > 0 {
-		p := result.Points[0]
-		entry.MedianMBps = p.Summary.MedianMBPerSec
-		entry.P5MBps = p.Summary.P5MBPerSec
-		entry.P95MBps = p.Summary.P95MBPerSec
-		for _, pp := range p.Prom {
-			if pp.RSSBytes > entry.RSSMaxBytes {
-				entry.RSSMaxBytes = pp.RSSBytes
-			}
-		}
-		for _, b := range p.Backlog {
-			if b.BacklogSec > entry.BacklogMaxSec {
-				entry.BacklogMaxSec = b.BacklogSec
-			}
-		}
-	}
 	indexRaw, err := json.Marshal(entry)
 	if err != nil {
-		return fmt.Errorf("marshal soak index entry: %w", err)
+		return entry, fmt.Errorf("marshal soak index entry: %w", err)
 	}
 	if err := putSoakArchiveObject(ctx, client, archiveBucket, plan.IndexKey, indexRaw); err != nil {
-		return err
+		return entry, err
 	}
 
 	if sessionBucket == "" || logFetcher == nil {
-		return nil
+		return entry, nil
 	}
 	for _, rawKey := range plan.RawKeys {
 		if err := copySoakArtifact(ctx, logFetcher, client, sessionBucket, archiveBucket, rawKey); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: archive raw soak artifact %s (non-fatal): %v\n", rawKey, err)
 		}
 	}
-	return nil
+	return entry, nil
+}
+
+// buildSoakIndexEntry computes the small per-run record uploadSoakResult
+// archives under soak-index/<scenario>/ from sessionID, the scenario, and
+// its Result — pure, so both uploadSoakResult and the rolling-baseline
+// comparator's caller (see runBench) can build the SAME entry without a
+// round trip through S3.
+//
+// A soak scenario is validated (see Scenario.Validate) to have exactly one
+// cpu_points entry and engines=connect, so result.Points has exactly one
+// element in the success path — but this degrades to zero values rather
+// than panicking if that ever changes.
+func buildSoakIndexEntry(sessionID string, s *Scenario, result *Result) soakIndexEntry {
+	entry := soakIndexEntry{
+		Scenario:  s.Name,
+		Connector: s.Connector,
+		SessionID: sessionID,
+		StartedAt: result.StartedAt,
+	}
+	if len(result.Points) == 0 {
+		return entry
+	}
+	p := result.Points[0]
+	entry.MedianMBps = p.Summary.MedianMBPerSec
+	entry.P5MBps = p.Summary.P5MBPerSec
+	entry.P95MBps = p.Summary.P95MBPerSec
+	for _, pp := range p.Prom {
+		if pp.RSSBytes > entry.RSSMaxBytes {
+			entry.RSSMaxBytes = pp.RSSBytes
+		}
+	}
+	for _, b := range p.Backlog {
+		if b.BacklogSec > entry.BacklogMaxSec {
+			entry.BacklogMaxSec = b.BacklogSec
+		}
+	}
+	return entry
 }
 
 // putSoakArchiveObject uploads body to key in the soak archive bucket,

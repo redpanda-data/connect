@@ -39,6 +39,13 @@ const (
 	metricGoroutines        = "Goroutines"
 	metricBacklogSeconds    = "BacklogSeconds"
 	metricRunActive         = "RunActive"
+	// metricRSSSlopeBytesPerMin is a per-cycle gauge (like RunActive, stamped
+	// "now" rather than backfilled to a past minute) rather than a per-minute
+	// series datum: rssSlopeBytesPerMin fits a trend line across a trailing
+	// WINDOW of samples, so successive cycles' values overlap and re-emitting
+	// one as of a past minute would misrepresent it as an independent
+	// measurement of that minute alone.
+	metricRSSSlopeBytesPerMin = "RSSSlopeBytesPerMin"
 )
 
 // CloudWatch unit strings (cwtypes.StandardUnit's own enum values).
@@ -48,6 +55,12 @@ const (
 	unitBytes              = "Bytes"
 	unitCount              = "Count"
 	unitSeconds            = "Seconds"
+	// unitNone is used for RSSSlopeBytesPerMin: CloudWatch's StandardUnit
+	// enum has no bytes-per-MINUTE unit (only Bytes/Second and other
+	// per-second rates), and rescaling the value to bytes/second would make
+	// the raw number in the console misleading relative to the metric's own
+	// name.
+	unitNone = "None"
 )
 
 // secondsPerMinute is the bucket width aggregateSoakMinutes groups every
@@ -355,4 +368,60 @@ func aggregateSoakMinutes(
 		newHW = minute
 	}
 	return data, newHW
+}
+
+// rssSlopeMaxWindowMinutes bounds how far back rssSlopeBytesPerMin looks
+// when fitting its trend line, so a day-long soak's slope reflects the
+// RECENT trajectory — what an operator watching a live dashboard cares
+// about — rather than smearing an early transient (e.g. page-cache warmup)
+// across the whole run.
+const rssSlopeMaxWindowMinutes = 120
+
+// rssSlopeMinSamples is rssSlopeBytesPerMin's minimum input size. Below it,
+// a fitted slope is noise dressed up as a number, so the caller (see
+// emitAggregated) skips the metric entirely rather than publishing one.
+const rssSlopeMinSamples = 10
+
+// rssSlopeBytesPerMin fits an ordinary least-squares line to RSSBytes vs. T
+// (seconds) over the trailing rssSlopeMaxWindowMinutes minutes of prom (all
+// of it, if it spans less than that), and returns the fitted line's slope
+// in bytes per minute. ok is false when prom has fewer than
+// rssSlopeMinSamples points total.
+func rssSlopeBytesPerMin(prom []PromPoint) (float64, bool) {
+	if len(prom) < rssSlopeMinSamples {
+		return 0, false
+	}
+
+	maxT := prom[0].T
+	for _, pp := range prom {
+		if pp.T > maxT {
+			maxT = pp.T
+		}
+	}
+	windowStart := maxT - rssSlopeMaxWindowMinutes*secondsPerMinute
+
+	var n, sumX, sumY, sumXY, sumXX float64
+	for _, pp := range prom {
+		if pp.T < windowStart {
+			continue
+		}
+		x := float64(pp.T)
+		y := float64(pp.RSSBytes)
+		n++
+		sumX += x
+		sumY += y
+		sumXY += x * y
+		sumXX += x * x
+	}
+	if n < 2 {
+		return 0, true
+	}
+	denom := n*sumXX - sumX*sumX
+	if denom == 0 {
+		// Every windowed sample landed at the same T: no time variance to
+		// fit a line against.
+		return 0, true
+	}
+	slopePerSecond := (n*sumXY - sumX*sumY) / denom
+	return slopePerSecond * secondsPerMinute, true
 }

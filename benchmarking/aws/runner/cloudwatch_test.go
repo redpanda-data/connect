@@ -198,3 +198,101 @@ func TestFakeEmitter_ErrShortCircuitsWithoutRecording(t *testing.T) {
 	require.ErrorIs(t, err, wantErr)
 	require.Empty(t, f.Calls, "a failed Emit must not be recorded as if it succeeded")
 }
+
+// promPointsAtRSS builds prom fixtures at a fixed scrape cadence (matching
+// soakPromScrapeSec's real-world 60s), one RSSBytes value per point.
+func promPointsAtRSS(rss ...uint64) []PromPoint {
+	pts := make([]PromPoint, len(rss))
+	for i, v := range rss {
+		pts[i] = PromPoint{T: i * secondsPerMinute, RSSBytes: v}
+	}
+	return pts
+}
+
+func TestRSSSlopeBytesPerMin(t *testing.T) {
+	tests := []struct {
+		name      string
+		prom      []PromPoint
+		wantOK    bool
+		wantSlope float64
+		delta     float64
+	}{
+		{
+			name:   "fewer than 10 samples is not ok",
+			prom:   promPointsAtRSS(1, 2, 3, 4, 5, 6, 7, 8, 9),
+			wantOK: false,
+		},
+		{
+			name:      "flat series has ~zero slope",
+			prom:      promPointsAtRSS(500, 500, 500, 500, 500, 500, 500, 500, 500, 500),
+			wantOK:    true,
+			wantSlope: 0,
+			delta:     1e-6,
+		},
+		{
+			name: "linear growth of 1MB/min fits to ~1e6 bytes/min",
+			prom: promPointsAtRSS(
+				0, 1_000_000, 2_000_000, 3_000_000, 4_000_000, 5_000_000,
+				6_000_000, 7_000_000, 8_000_000, 9_000_000, 10_000_000, 11_000_000,
+			),
+			wantOK:    true,
+			wantSlope: 1_000_000,
+			delta:     1e-3,
+		},
+		{
+			name: "sawtooth GC pattern around a flat mean is near zero",
+			prom: promPointsAtRSS(
+				100_000_000, 120_000_000, 90_000_000, 130_000_000, 95_000_000,
+				125_000_000, 100_000_000, 115_000_000, 92_000_000, 128_000_000,
+				98_000_000, 118_000_000,
+			),
+			wantOK:    true,
+			wantSlope: 0,
+			delta:     2_000_000, // near zero, not exactly zero for a noisy series
+		},
+		{
+			name:   "too few samples",
+			prom:   promPointsAtRSS(1, 2, 3),
+			wantOK: false,
+		},
+		{
+			name:   "empty",
+			prom:   nil,
+			wantOK: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := rssSlopeBytesPerMin(tt.prom)
+			require.Equal(t, tt.wantOK, ok)
+			if tt.wantOK {
+				require.InDelta(t, tt.wantSlope, got, tt.delta)
+			}
+		})
+	}
+}
+
+// TestRSSSlopeBytesPerMin_WindowLimitsToTrailing120Minutes pins that a run
+// longer than rssSlopeMaxWindowMinutes fits its line against only the
+// trailing window, not the whole history — an early, unrepresentative
+// transient (e.g. page-cache warmup) must not drag the reported slope away
+// from what is actually happening now.
+func TestRSSSlopeBytesPerMin_WindowLimitsToTrailing120Minutes(t *testing.T) {
+	var prom []PromPoint
+	// Minutes 0..29: a steep 10MB/min climb (outside the trailing window
+	// once the series passes 120 minutes).
+	for i := 0; i < 30; i++ {
+		prom = append(prom, PromPoint{T: i * secondsPerMinute, RSSBytes: uint64(i) * 10_000_000})
+	}
+	// Minutes 30..179 (150 more minutes): flat at the last climbed value.
+	// Total series length is 180 minutes; only the trailing 120 (minutes
+	// 60..179) should influence the fit, and that whole window is flat.
+	flatValue := uint64(29) * 10_000_000
+	for i := 30; i < 180; i++ {
+		prom = append(prom, PromPoint{T: i * secondsPerMinute, RSSBytes: flatValue})
+	}
+
+	got, ok := rssSlopeBytesPerMin(prom)
+	require.True(t, ok)
+	require.InDelta(t, 0, got, 1e-6, "the early climb must have aged out of the trailing 120-minute window")
+}

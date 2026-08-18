@@ -666,6 +666,13 @@ func (m *MatrixRunner) emitAggregated(ctx context.Context, samples []Sample, pro
 	normalized := offsetSampleT(samples, int(warmup.Seconds()))
 	data, newHW := aggregateSoakMinutes(normalized, prom, broker, backlog, pointStart, hw.get())
 	data = append(data, MetricDatum{Name: metricRunActive, Value: 1, Unit: unitCount, At: time.Now()})
+	// Per-cycle gauge, stamped "now" like RunActive rather than backfilled to
+	// a past minute — see metricRSSSlopeBytesPerMin's doc comment. Skipped
+	// (not appended at all) until there is enough history to fit a
+	// meaningful trend line.
+	if slope, ok := rssSlopeBytesPerMin(prom); ok {
+		data = append(data, MetricDatum{Name: metricRSSSlopeBytesPerMin, Value: slope, Unit: unitNone, At: time.Now()})
+	}
 	if err := m.Emitter.Emit(ctx, data); err != nil {
 		fmt.Fprintf(stdout, "[soak] emit metrics (non-fatal): %v\n", err)
 		return

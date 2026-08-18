@@ -1269,6 +1269,44 @@ func TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints(t
 	require.True(t, sawMinute2Throughput, "the newly-completed minute must actually be emitted, not just silently advance the mark")
 }
 
+// TestMatrixRunner_EmitAggregated_IncludesRSSSlopeOnceEnoughPromHistory
+// exercises emitAggregated's own wiring of rssSlopeBytesPerMin (the
+// aggregation contract itself is covered by TestRSSSlopeBytesPerMin in
+// cloudwatch_test.go): fewer than 10 prom points must never publish the
+// metric, and once there are enough, it must land stamped "now" like
+// RunActive rather than backfilled to a past minute.
+func TestMatrixRunner_EmitAggregated_IncludesRSSSlopeOnceEnoughPromHistory(t *testing.T) {
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	promFew := []PromPoint{{T: 0, RSSBytes: 100}, {T: 60, RSSBytes: 200}}
+	var promEnough []PromPoint
+	for i := 0; i < 12; i++ {
+		promEnough = append(promEnough, PromPoint{T: i * secondsPerMinute, RSSBytes: uint64(i) * 1_000_000})
+	}
+
+	emitter := &FakeEmitter{}
+	mr := &MatrixRunner{Emitter: emitter}
+	pointStart := time.Now()
+
+	mr.emitAggregated(context.Background(), nil, promFew, nil, nil, pointStart, 0, newSoakHighWater())
+	for _, d := range emitter.LastCall() {
+		require.NotEqual(t, metricRSSSlopeBytesPerMin, d.Name, "too few prom samples must never publish the slope metric")
+	}
+
+	mr.emitAggregated(context.Background(), nil, promEnough, nil, nil, pointStart, 0, newSoakHighWater())
+	var found *MetricDatum
+	for i, d := range emitter.LastCall() {
+		if d.Name == metricRSSSlopeBytesPerMin {
+			found = &emitter.LastCall()[i]
+		}
+	}
+	require.NotNil(t, found, "expected an RSSSlopeBytesPerMin datum once prom has enough history")
+	require.Equal(t, unitNone, found.Unit)
+	require.InDelta(t, 1_000_000, found.Value, 1e-3)
+}
+
 // TestMatrixRunner_StartSoakEmitLoop_TicksAndStopsCleanly exercises the
 // actual goroutine wiring startSoakEmitLoop returns — the one piece of this
 // feature the other soak tests deliberately avoid driving through a real
