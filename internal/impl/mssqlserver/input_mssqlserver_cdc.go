@@ -544,6 +544,17 @@ func (i *sqlServerCDCInput) Close(ctx context.Context) error {
 		return nil // Never connected
 	}
 	i.stopSig.TriggerSoftStop()
+	// Shut the publisher down alongside the session: its timed-flush loop
+	// runs under the publisher's OWN signaller, and a flush parked in
+	// sendTracked (nothing drains msgChan once ReadBatch stops) would
+	// otherwise hold its flush ticket forever - wedging every other flusher
+	// waiting in admit() and leaking the session goroutines past the
+	// timeout. Cancelling the loop's context releases its ticket, and the
+	// chain then drains: each later ticket holder's Track/send escapes via
+	// its stopSig-derived context.
+	if i.publisher != nil {
+		i.publisher.shutSig.TriggerSoftStop()
+	}
 	select {
 	case <-ctx.Done():
 	case <-time.After(shutdownTimeout):

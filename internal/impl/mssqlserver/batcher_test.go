@@ -531,6 +531,68 @@ func TestFlushCurrentBarriersParkedFlusher(t *testing.T) {
 	}
 }
 
+// TestShutdownUnwindsWedgedTicketChain encodes the shutdown wedge: the timed
+// flush loop parks in sendTracked holding its ticket (nothing drains msgChan
+// once ReadBatch stops), and another flusher waits in admit() with no escape
+// of its own. Triggering the publisher's soft stop - which the input's Close
+// now does - must release the loop's ticket and let the chain drain via each
+// caller's cancelled context, instead of leaking both goroutines past the
+// shutdown timeout.
+func TestShutdownUnwindsWedgedTicketChain(t *testing.T) {
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cp := checkpoint.NewCapped[replication.LSN](100)
+
+	// Count 2 with a tiny period keeps the timed loop flushing.
+	batcher, err := (service.BatchPolicy{Count: 2, Period: "1ms"}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher.cacheLSN = func(context.Context, replication.LSN) error { return nil }
+
+	producerCtx, cancelProducer := context.WithCancel(t.Context())
+
+	// One buffered event: the timed loop flushes it and parks in sendTracked
+	// (ticket 0) - nobody consumes msgs().
+	require.NoError(t, publisher.Publish(producerCtx, streamingEvent("00000001", "00000001")))
+	require.Eventually(t, func() bool {
+		publisher.batcherMu.Lock()
+		defer publisher.batcherMu.Unlock()
+		return publisher.nextTicket == 1
+	}, 5*time.Second, time.Millisecond, "the timed loop never flushed the first batch")
+
+	// A second flusher takes ticket 1 and wedges in admit behind the loop.
+	blocked := make(chan error, 1)
+	go func() {
+		blocked <- func() error {
+			if err := publisher.Publish(producerCtx, streamingEvent("00000002", "00000002")); err != nil {
+				return err
+			}
+			return publisher.Publish(producerCtx, streamingEvent("00000003", "00000003"))
+		}()
+	}()
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case err := <-blocked:
+		t.Fatalf("expected the second flusher to wedge in admit, but it returned: %v", err)
+	default:
+	}
+
+	// Shutdown as the input's Close performs it: publisher soft stop plus
+	// cancellation of the producers' contexts.
+	publisher.shutSig.TriggerSoftStop()
+	cancelProducer()
+
+	select {
+	case <-blocked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the wedged flusher never unwound after shutdown")
+	}
+	select {
+	case <-publisher.shutSig.HasStoppedChan():
+	case <-time.After(5 * time.Second):
+		t.Fatal("the flush loop never stopped after shutdown")
+	}
+}
+
 // TestFailedSendPoisonsPublisher verifies that a tracked batch that cannot be
 // handed to ReadBatch marks the publisher poisoned: its checkpoint slot can
 // never resolve, so Connect must rebuild the publisher rather than reuse a
