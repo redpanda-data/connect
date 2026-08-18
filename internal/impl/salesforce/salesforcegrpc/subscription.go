@@ -285,8 +285,12 @@ func (s *Subscription) recordSchemaFailure(replayID []byte, deterministic bool) 
 	if deterministic {
 		return count >= maxDeterministicPositionFailures
 	}
+	// budget grants that many redelivery attempts (failures may number
+	// budget+1, matching the unanchored inline retry and
+	// reconnectWithBackoff): reconnect_max_attempts 1 must mean one retry,
+	// not terminal on the first blip.
 	budget := s.client.maxReconnect
-	return budget > 0 && count >= budget
+	return budget > 0 && count > budget
 }
 
 // clearSchemaFailures resets the schema-failure count when a fetch succeeds
@@ -309,9 +313,10 @@ func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 	done := s.done
 	defer close(done)
 
-	// failStream logs err and hands control to the reconnect path. Because
-	// s.lastReplayID has not been advanced past the current batch, the
-	// reconnected stream redelivers it: duplicates, never loss.
+	// failStream logs err and hands control to the reconnect path. The
+	// replay anchor advances only past DELIVERED events, never past the
+	// failing one, so the reconnected stream redelivers from exactly the
+	// failing event: duplicates at most, never loss, no re-emitted prefix.
 	failStream := func(err error) {
 		s.client.log.Errorf("Pub/Sub stream error (topic=%s), reconnecting: %v", s.config.TopicName, err)
 		s.lastError.Store(storedErr{err: err})

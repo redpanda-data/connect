@@ -422,9 +422,18 @@ func TestReceiveLoopUnanchoredSchemaRetryHonorsReconnectPolicy(t *testing.T) {
 func TestRecordSchemaFailure(t *testing.T) {
 	s := &Subscription{client: &Client{maxReconnect: 3}}
 
+	// The budget grants that many redelivery attempts: with 3 attempts,
+	// failures 1-3 each earn a retry and only the 4th failure is terminal.
 	require.False(t, s.recordSchemaFailure([]byte{0x01}, false))
 	require.False(t, s.recordSchemaFailure([]byte{0x01}, false))
-	require.True(t, s.recordSchemaFailure([]byte{0x01}, false), "the third transient failure at one position must exhaust reconnect_max_attempts=3")
+	require.False(t, s.recordSchemaFailure([]byte{0x01}, false))
+	require.True(t, s.recordSchemaFailure([]byte{0x01}, false), "the failure after the third granted retry must exhaust reconnect_max_attempts=3")
+
+	// reconnect_max_attempts: 1 grants exactly one retry - the first blip
+	// must never be terminal.
+	one := &Subscription{client: &Client{maxReconnect: 1}}
+	require.False(t, one.recordSchemaFailure([]byte{0x01}, false), "the first transient failure earns its one retry")
+	require.True(t, one.recordSchemaFailure([]byte{0x01}, false))
 
 	// A new position starts fresh.
 	require.False(t, s.recordSchemaFailure([]byte{0x02}, false))
