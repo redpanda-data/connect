@@ -251,11 +251,11 @@ func runBench(opts benchOpts) (errOut error) {
 			sets = append(sets, set)
 		}
 	}
-	// Upload the iceberg-tablegen binary (sink scenarios only) BEFORE
+	// Upload the connector's table helper binary (sink scenarios only) BEFORE
 	// stageArtefacts, whose SSM script downloads it onto the runner — otherwise
 	// the object isn't in S3 yet and the best-effort download no-ops.
 	if err := stageTableGenForSink(ctx, opts, s, sharedOuts); err != nil {
-		return fmt.Errorf("stage iceberg-tablegen: %w", err)
+		return fmt.Errorf("stage sink table helper: %w", err)
 	}
 	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy); err != nil {
 		return fmt.Errorf("stage artefacts: %w", err)
@@ -1066,6 +1066,14 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 	if err != nil {
 		return err
 	}
+	// Sink helper binaries download best-effort: only the connector-under-test's
+	// helper exists in S3 (see stageTableGenForSink), the rest no-op.
+	var helperDl []string
+	for _, name := range sinkHelperBinaries() {
+		helperDl = append(helperDl, fmt.Sprintf(
+			"aws s3 cp s3://%s/stage/%s /opt/bench/%s 2>/dev/null && chmod +x /opt/bench/%s || true",
+			bucket, name, name, name))
+	}
 	script := fmt.Sprintf(`
 set -euo pipefail
 aws s3 cp s3://%s/stage/redpanda-connect /opt/bench/redpanda-connect
@@ -1073,28 +1081,33 @@ aws s3 cp s3://%s/stage/license.jwt /opt/bench/license.jwt
 %s
 chmod +x /opt/bench/redpanda-connect
 chmod 0600 /opt/bench/license.jwt
-aws s3 cp s3://%s/stage/iceberg-tablegen /opt/bench/iceberg-tablegen 2>/dev/null && chmod +x /opt/bench/iceberg-tablegen || true
-`, bucket, bucket, strings.Join(dl, "\n"), bucket)
+%s
+`, bucket, bucket, strings.Join(dl, "\n"), strings.Join(helperDl, "\n"))
 	return ssmExec.Run(ctx, outs["runner_instance_id"], script, streamingOnLine(os.Stdout, "stage"))
 }
 
-// stageTableGenForSink builds the iceberg-tablegen binary and uploads it to
-// s3://<bucket>/stage/iceberg-tablegen for sink scenarios. The runner downloads
-// it in stageArtefacts; sinkTopology.ResetScript invokes it to pre-create tables.
+// stageTableGenForSink builds the connector's table helper binary (see
+// sinkSpec.HelperBinary) and uploads it to s3://<bucket>/stage/<name> for
+// sink scenarios. The runner downloads it in stageArtefacts; the connector's
+// ResetScript and SidecarSetup hooks invoke it.
 func stageTableGenForSink(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string) error {
 	if s.Direction != DirectionSink {
 		return nil
 	}
+	sp, ok := sinkSpecFor(s.Connector)
+	if !ok || sp.HelperBinary == "" {
+		return nil
+	}
 	dist := filepath.Join(opts.repoRoot, "benchmarking/aws/seeders/dist")
 	_ = os.MkdirAll(dist, 0o755)
-	binOut := filepath.Join(dist, "iceberg-tablegen")
-	cmd := exec.Command("go", "build", "-o", binOut, "./benchmarking/aws/seeders/iceberg-tablegen")
+	binOut := filepath.Join(dist, sp.HelperBinary)
+	cmd := exec.Command("go", "build", "-o", binOut, "./benchmarking/aws/seeders/"+sp.HelperBinary)
 	cmd.Dir = opts.repoRoot
 	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("build iceberg-tablegen: %w", err)
+		return fmt.Errorf("build %s: %w", sp.HelperBinary, err)
 	}
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
 	if err != nil {
@@ -1107,7 +1120,7 @@ func stageTableGenForSink(ctx context.Context, opts benchOpts, s *Scenario, outs
 		return err
 	}
 	defer f.Close()
-	key := "stage/iceberg-tablegen"
+	key := "stage/" + sp.HelperBinary
 	_, err = uploader.Upload(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &key, Body: f})
 	return err
 }

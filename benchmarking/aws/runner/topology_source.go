@@ -68,7 +68,7 @@ func (sourceTopology) EngineSeries(in MetricInputs, engine string) ([]TopicPoint
 	return byEngine[engine], nil
 }
 
-func (sourceTopology) MetricArtifact(engine, key string) string {
+func (sourceTopology) MetricArtifact(_, engine, key string) string {
 	suffix := engine
 	if engine == "kafka_connect" {
 		suffix = "kc"
@@ -100,7 +100,7 @@ func (sourceTopology) KCConfig(s *Scenario, outs map[string]string, n BenchNames
 }
 
 func (t sourceTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
-	artifact := t.MetricArtifact(args.Engine, args.ArtifactKey())
+	artifact := t.MetricArtifact(args.Names.Connector, args.Engine, args.ArtifactKey())
 	endpoints := args.Outs["redpanda_metrics_endpoints"]
 	if endpoints == "" {
 		endpoints = args.Outs["redpanda_metrics_endpoint"]

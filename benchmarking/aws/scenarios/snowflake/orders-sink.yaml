@@ -1,0 +1,42 @@
+name: snowflake-orders-sink
+description: |
+  Drain a pre-seeded Redpanda topic of flat JSON records into a Snowflake
+  table via the snowflake_streaming output (Snowpipe Streaming), across a
+  vCPU sweep. Throughput is server-side committed truth: snowflake-tablegen
+  polls SHOW TABLES (metadata-only, no warehouse credits) for the table's
+  bytes/rows every 10s. Bounded dataset (no sustained workload): the topic is
+  the fixed input; each sweep point re-reads it from the beginning against a
+  freshly CREATE OR REPLACEd table. Connect-only — no Kafka Connect
+  counterpart is wired for this sink.
+
+  Run the smoke scenario (orders-sink-smoke.yaml) first on a fresh setup;
+  one-time SSM/Snowflake setup is in scenarios/snowflake/README.md.
+
+direction: sink
+connector: snowflake
+stack: snowflake
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 80000000   # ~90 GiB at 1200 B/row → ~960 s at 100 MB/s ≥ 15 min floor
+  row_size_bytes: 1200
+  seeder: json-orders
+  expected_peak_mb_s: 100  # revisit after the smoke measures the real 1-vCPU rate
+
+pipeline:
+  # Same recipe the smoke validates; see orders-sink-smoke.yaml for the
+  # batching and schema_evolution rationale.
+  output:
+    snowflake_streaming:
+      max_in_flight: 4
+      batching:
+        count: 50000
+        period: 10s
+      schema_evolution:
+        enabled: false
+
+matrix:
+  cpu_points: [1, 2, 4, 8]

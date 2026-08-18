@@ -426,7 +426,7 @@ func (m *MatrixRunner) fetchBrokerSeriesForEngine(ctx context.Context, engine, k
 		fmt.Fprintf(stdout, "[bench] no Topology configured; metric fetch skipped\n")
 		return nil
 	}
-	s3Key := fmt.Sprintf("runs/%s/%s", m.SessionID, m.Topology.MetricArtifact(engine, key))
+	s3Key := fmt.Sprintf("runs/%s/%s", m.SessionID, m.Topology.MetricArtifact(m.Names.Connector, engine, key))
 	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, s3Key)
 	if err != nil {
 		fmt.Fprintf(stdout, "[bench] fetch broker metrics %s (non-fatal): %v\n", engine, err)

@@ -308,27 +308,27 @@ func TestSourceTopology_KCConfig_Postgres(t *testing.T) {
 }
 
 func TestSourceTopology_MetricArtifact(t *testing.T) {
-	if got := (sourceTopology{}).MetricArtifact("connect", "2"); got != "redpanda-2-connect.txt" {
+	if got := (sourceTopology{}).MetricArtifact("postgres_cdc", "connect", "2"); got != "redpanda-2-connect.txt" {
 		t.Errorf("connect artifact = %q", got)
 	}
-	if got := (sourceTopology{}).MetricArtifact("kafka_connect", "4"); got != "redpanda-4-kc.txt" {
+	if got := (sourceTopology{}).MetricArtifact("postgres_cdc", "kafka_connect", "4"); got != "redpanda-4-kc.txt" {
 		t.Errorf("kc artifact = %q", got)
 	}
 }
 
 func TestMetricArtifact_KeyedByPointKey(t *testing.T) {
 	// A bare vCPU key reproduces the historical filenames exactly.
-	if got := (sourceTopology{}).MetricArtifact("connect", "4"); got != "redpanda-4-connect.txt" {
+	if got := (sourceTopology{}).MetricArtifact("postgres_cdc", "connect", "4"); got != "redpanda-4-connect.txt" {
 		t.Errorf("source MetricArtifact = %q, want redpanda-4-connect.txt", got)
 	}
-	if got := (sourceTopology{}).MetricArtifact("kafka_connect", "4"); got != "redpanda-4-kc.txt" {
+	if got := (sourceTopology{}).MetricArtifact("postgres_cdc", "kafka_connect", "4"); got != "redpanda-4-kc.txt" {
 		t.Errorf("source MetricArtifact(kc) = %q, want redpanda-4-kc.txt", got)
 	}
-	if got := (sinkTopology{}).MetricArtifact("connect", "2"); got != "iceberg-2-connect.txt" {
+	if got := (sinkTopology{}).MetricArtifact("iceberg", "connect", "2"); got != "iceberg-2-connect.txt" {
 		t.Errorf("sink MetricArtifact = %q, want iceberg-2-connect.txt", got)
 	}
 	// An arm key flows straight through, giving each arm its own artifact.
-	if got := (sinkTopology{}).MetricArtifact("connect", "2-b-2pipe-gmp4"); got != "iceberg-2-b-2pipe-gmp4-connect.txt" {
+	if got := (sinkTopology{}).MetricArtifact("iceberg", "connect", "2-b-2pipe-gmp4"); got != "iceberg-2-b-2pipe-gmp4-connect.txt" {
 		t.Errorf("sink MetricArtifact(arm) = %q", got)
 	}
 }

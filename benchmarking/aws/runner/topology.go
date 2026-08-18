@@ -270,7 +270,9 @@ type Topology interface {
 	// MetricArtifact is the per-engine, per-point metrics dump basename that
 	// the bench script uploads and EngineSeries later parses. key is the
 	// sweepPoint key: a bare vCPU count without arms, "<vcpu>-<armID>" with.
-	MetricArtifact(engine, key string) string
+	// connector selects the sink connector's artifact prefix; the source
+	// topology ignores it (every source dump is a Redpanda scrape).
+	MetricArtifact(connector, engine, key string) string
 	// MetricSidecar returns the bash that samples throughput during a bench
 	// window. Setup launches a background poller (polling $PID every interval,
 	// framing samples under "###timestamp=<unix>" into $RP) and ends by setting

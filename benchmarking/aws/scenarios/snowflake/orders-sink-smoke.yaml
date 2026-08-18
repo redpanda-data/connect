@@ -1,0 +1,52 @@
+name: snowflake-orders-sink-smoke
+description: |
+  One-point smoke for the snowflake_streaming sink path: seed a small topic,
+  drain it into one Snowflake table at 1 vCPU, and verify the whole chain
+  (SSM params -> TF outputs -> key fetch -> tablegen reset -> Snowpipe
+  Streaming ingest -> SHOW TABLES polling) before committing to the full
+  sweep. Also validates the known risk: SHOW TABLES BYTES may lag streaming
+  commits, in which case ROW_COUNT (total_records) is the dependable signal.
+  Connect-only — no Kafka Connect counterpart is wired for this sink.
+
+  One-time setup (SSM params + Snowflake user/key-pair) is documented in
+  scenarios/snowflake/README.md.
+
+direction: sink
+connector: snowflake
+stack: snowflake
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 12000000    # ~13.7 GiB at 1200 B/row → ~915 s at 15 MB/s ≥ 15 min floor
+  row_size_bytes: 1200
+  seeder: json-orders
+  expected_peak_mb_s: 15    # conservative; snowflake_streaming 1-vCPU rate is unmeasured
+
+pipeline:
+  # sinkTopology injects the redpanda INPUT (the pre-seeded topic) and the
+  # snowflake_streaming connection fields (SSM-backed TF outputs + key file);
+  # everything below is scenario-owned tuning.
+  #
+  # Batching sized toward the component's own guidance: >= 16 MiB of
+  # compressed output per batch (50000 rows x 1200 B = 57 MiB raw). The 10s
+  # period bounds flush latency on the tail. max_in_flight 4 is the
+  # component default, one channel per in-flight batch.
+  #
+  # schema_evolution stays OFF: snowflake-tablegen pre-creates the table with
+  # the full json-orders schema, so any drift should fail loud rather than
+  # trigger silent ALTERs mid-run (which would also pollute the throughput
+  # window with DDL).
+  output:
+    snowflake_streaming:
+      max_in_flight: 4
+      batching:
+        count: 50000
+        period: 10s
+      schema_evolution:
+        enabled: false
+
+matrix:
+  cpu_points: [1]
