@@ -153,6 +153,33 @@ func (rs *RecordShredder) shredStruct(
 	repLevel, defLevel, maxRepLevel int,
 	sink Sink,
 ) error {
+	// Case-sensitive matching makes the match-key the identity function, so
+	// schema fields can be looked up directly in the input map and neither of
+	// the two per-record maps below is needed. That path is split out because
+	// this function runs once per record (and once per nested struct within
+	// it), and a 1-vCPU allocation profile attributed a material share of the
+	// sink's total allocations to those two maps.
+	if rs.caseSensitive {
+		return rs.shredStructExact(fields, value, path, repLevel, defLevel, maxRepLevel, sink)
+	}
+
+	return rs.shredStructFolded(fields, value, path, repLevel, defLevel, maxRepLevel, sink)
+}
+
+// shredStructFolded is the case-insensitive path: input keys are matched against
+// schema field names by their folded (lowercased) form, which means several
+// distinct input keys can collide on one schema field and that collision has to
+// be reported rather than silently resolved.
+//
+// shredStructExact must stay behaviourally identical to this for input that
+// happens to match exactly; TestShredStructPathsAgree pins that.
+func (rs *RecordShredder) shredStructFolded(
+	fields []iceberg.NestedField,
+	value map[string]any,
+	path icebergx.Path,
+	repLevel, defLevel, maxRepLevel int,
+	sink Sink,
+) error {
 	// Build an index of input keys by their match-key (the original key in
 	// case-sensitive mode, or its lowercase form in case-insensitive mode).
 	// In case-insensitive mode, multiple input keys may collide on the same
@@ -220,6 +247,83 @@ func (rs *RecordShredder) shredStruct(
 	// Detect unknown fields in input.
 	for key, val := range value {
 		if _, ok := matched[key]; !ok {
+			sink.OnNewField(slices.Clone(path), key, val)
+		}
+	}
+
+	return nil
+}
+
+// shredStructExact is shredStruct's case-sensitive equivalent: input keys must
+// match schema field names byte-for-byte, so a field's value is just
+// value[field.Name] and case-collision ambiguity is impossible (Go map keys are
+// themselves case-sensitive).
+//
+// It must stay behaviourally identical to the general path for case-sensitive
+// shredders — same required-field errors, same null handling, same
+// OnNewField notifications, same traversal order of fields.
+func (rs *RecordShredder) shredStructExact(
+	fields []iceberg.NestedField,
+	value map[string]any,
+	path icebergx.Path,
+	repLevel, defLevel, maxRepLevel int,
+	sink Sink,
+) error {
+	// Count how many input keys were claimed by a schema field, so unknown-field
+	// detection below can usually be skipped without tracking a set.
+	matchedKeys := 0
+
+	for _, field := range fields {
+		fieldValue, exists := value[field.Name]
+		if exists {
+			matchedKeys++
+		}
+
+		// Validate required fields.
+		if field.Required && (!exists || fieldValue == nil) {
+			return &RequiredFieldNullError{field, path}
+		}
+
+		// Compute this field's definition level contribution.
+		fieldDefLevel := defLevel
+		if !field.Required {
+			fieldDefLevel++ // Optional field adds to max def level.
+		}
+
+		// Build path for this field. The schema's casing is the input's casing
+		// here, so no canonicalisation is needed.
+		fieldPath := append(path, icebergx.PathSegment{Kind: icebergx.PathField, Name: field.Name})
+
+		if !exists || fieldValue == nil {
+			// Field is null or missing - emit null for all leaf descendants.
+			if err := rs.shredNull(field.Type, field.ID, repLevel, defLevel, sink); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := rs.shredValue(field.Type, field.ID, fieldValue, fieldPath, repLevel, fieldDefLevel, maxRepLevel, sink); err != nil {
+			return fmt.Errorf("field %q: %w", field.Name, err)
+		}
+	}
+
+	// Detect unknown fields in input. Field names are unique within a struct,
+	// so each matched field claimed exactly one distinct input key: when the
+	// counts agree, every key is accounted for and there is nothing to report.
+	// That is the steady state once a schema has stabilised, and it makes the
+	// common case allocation-free. (A count above len(value) is impossible for
+	// a well-formed schema, and would simply fall through to the scan.)
+	if matchedKeys == len(value) {
+		return nil
+	}
+
+	// Something is unknown: pay for a lookup set now, on the rare path only.
+	known := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		known[field.Name] = struct{}{}
+	}
+	for key, val := range value {
+		if _, ok := known[key]; !ok {
 			sink.OnNewField(slices.Clone(path), key, val)
 		}
 	}
