@@ -623,7 +623,12 @@ mongodb_cdc:
 	wait := stream.RunAsync(t)
 	time.Sleep(time.Second)
 	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
-	require.Eventually(t, func() bool { return len(output.Messages(t)) > 0 }, 30*time.Second, 10*time.Millisecond)
+	// output.messages() rather than Messages(t): require inside an Eventually
+	// condition FailNows on testify's tick goroutine and silently kills it.
+	require.Eventually(t, func() bool {
+		msgs, err := output.messages()
+		return err == nil && len(msgs) > 0
+	}, 30*time.Second, 10*time.Millisecond)
 	stream.StopWithin(t, 30*time.Second)
 	wait()
 	require.JSONEq(t, `[{"_id":{"$numberInt":"1"}, "data":"hello"}]`, output.MessagesJSON(t))
@@ -633,7 +638,10 @@ mongodb_cdc:
 	wait = stream.RunAsync(t)
 	time.Sleep(time.Second)
 	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "world"})
-	require.Eventually(t, func() bool { return len(output.Messages(t)) > 1 }, 30*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool {
+		msgs, err := output.messages()
+		return err == nil && len(msgs) > 1
+	}, 30*time.Second, 10*time.Millisecond)
 	stream.StopWithin(t, 30*time.Second)
 	wait()
 	require.JSONEq(t, `[{"_id":{"$numberInt":"1"},"data":"hello"},{"_id":{"$numberInt":"2"},"data":"world"}]`, output.MessagesJSON(t))
