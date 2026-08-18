@@ -593,6 +593,84 @@ func TestShutdownUnwindsWedgedTicketChain(t *testing.T) {
 	}
 }
 
+// TestAdmitEscapesOnContextCancel verifies admission is cancellable: a
+// flusher queued in admit behind a ticket whose holder is parked under a
+// DIFFERENT, still-live context must unwind via its own context - the
+// abandoned ticket is skipped when its turn comes, and the sequence stays
+// intact for later flushers.
+func TestAdmitEscapesOnContextCancel(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cp := checkpoint.NewCapped[replication.LSN](100)
+
+	batcher, err := (service.BatchPolicy{Count: 2}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher.cacheLSN = func(context.Context, replication.LSN) error { return nil }
+	t.Cleanup(func() { publisher.shutSig.TriggerSoftStop() })
+
+	// Ticket 0's holder parks in sendTracked under a live context (nobody
+	// consumes msgs()) - the state the timed loop is in at a soft stop.
+	holderDone := make(chan error, 1)
+	go func() {
+		holderDone <- func() error {
+			if err := publisher.Publish(ctx, streamingEvent("00000001", "00000001")); err != nil {
+				return err
+			}
+			return publisher.Publish(ctx, streamingEvent("00000002", "00000002"))
+		}()
+	}()
+	require.Eventually(t, func() bool {
+		publisher.batcherMu.Lock()
+		defer publisher.batcherMu.Unlock()
+		return publisher.nextTicket == 1
+	}, 5*time.Second, time.Millisecond)
+
+	// A flusher with a cancellable context queues behind it (ticket 1).
+	flusherCtx, cancelFlusher := context.WithCancel(ctx)
+	queued := make(chan error, 1)
+	go func() { queued <- publisher.flushCurrent(flusherCtx) }()
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case err := <-queued:
+		t.Fatalf("expected the flusher to queue in admit, but it returned: %v", err)
+	default:
+	}
+
+	// Cancelling ONLY the flusher's context must unwind it promptly, without
+	// touching the parked ticket holder.
+	cancelFlusher()
+	select {
+	case err := <-queued:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(2 * time.Second):
+		t.Fatal("admit did not escape on context cancellation")
+	}
+
+	// The sequence must remain intact: drain the parked holder and prove a
+	// later flusher still gets admitted (the abandoned ticket is skipped).
+	first := <-publisher.msgs()
+	require.NoError(t, first.ackFn(ctx, nil))
+	require.NoError(t, <-holderDone)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- func() error {
+			if err := publisher.Publish(ctx, streamingEvent("00000003", "00000003")); err != nil {
+				return err
+			}
+			return publisher.Publish(ctx, streamingEvent("00000004", "00000004"))
+		}()
+	}()
+	select {
+	case m := <-publisher.msgs():
+		require.NoError(t, m.ackFn(ctx, nil))
+	case <-time.After(5 * time.Second):
+		t.Fatal("a later flusher was never admitted: the abandoned ticket wedged the sequence")
+	}
+	require.NoError(t, <-done)
+}
+
 // TestFailedSendPoisonsPublisher verifies that a tracked batch that cannot be
 // handed to ReadBatch marks the publisher poisoned: its checkpoint slot can
 // never resolve, so Connect must rebuild the publisher rather than reuse a
