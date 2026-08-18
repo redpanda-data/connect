@@ -111,3 +111,57 @@ PK order) — representative of typical InnoDB usage, but not a scatter-seeded
 worst case; secondary-index-heavy or UUID-PK tables would fragment leaf pages
 and could raise the amplification somewhat. Insert-only dataset, single table,
 one instance class (db.r6g.4xlarge, gp3 24,000 IOPS).
+
+
+## AWS — orders-snapshot-sweep — 2026-08-18
+
+**Scenario:** CPU sweep (1/2/4/8 vCPU) of mysql_cdc stream_snapshot over a pre-seeded
+30M-row (36 GB) InnoDB orders table at the deployed default config, buffer
+pool pinned to 16 GiB. Tests whether the ~21 MB/s snapshot ceiling from the
+batch-size A/B scales with cores (expected: flat 2-8, possible dip at 1).
+
+**Git SHA:** [`1d2863c58`](https://github.com/redpanda-data/connect/commit/1d2863c583f1bad42c401772986ba1526a36b2af)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r6g.4xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 30,000,000 rows × 1200 B = ~33 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 1    | 1          |                | connect       |           20 |       19.963 |        16,409 |           20 |          19 |           21 |        16,500 |                    |
+| 2    | 2          |                | connect       |           21 |       21.499 |        17,672 |           21 |          21 |           23 |        17,500 |                    |
+| 4    | 4          |                | connect       |           21 |       21.617 |        17,756 |           21 |          21 |           23 |        17,500 |                    |
+| 8    | 8          |                | connect       |           21 |       21.625 |        17,760 |           21 |          21 |           23 |        17,500 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/mysql/orders-snapshot-sweep/2026-08-18T00-31-18Z.json`](results/mysql/orders-snapshot-sweep/2026-08-18T00-31-18Z.json)
+
+### Findings — the snapshot ceiling does not scale with cores
+
+Flat across the sweep: 20.0 / 21.5 / 21.6 / 21.6 mean MB/s at 1/2/4/8 vCPU
+(GOMAXPROCS = vCPU pin). The 4-vCPU point replicates the batch-size A/B's
+21.2-21.3 MB/s almost exactly. RDS CloudWatch shows the same signature at
+every point: physical reads ~21-28 MB/s (~1.2x delivered), DB CPU ~1.4%,
+ReadIOPS ~7% of provisioned — the database never becomes the constraint at
+any core count.
+
+Two conclusions:
+
+1. **One core is enough for a MySQL snapshot.** Even at 1 vCPU the rate holds
+   ~20 MB/s (-7% vs the plateau) — the whole pipeline (scan, mappers, batcher,
+   producer) fits in one core's budget because the serial snapshot path leaves
+   the core mostly idle waiting on the wire. Do not size up Connect for
+   initial loads on MySQL; extra cores buy nothing.
+2. **The ceiling is a serial code path, not a resource.** No resource —
+   Connect CPU, DB CPU, disk, round trips (per the A/B) — moves it. Combined
+   with the A/B this pins the ~21 MB/s (~17.5K rows/s, ~57 µs/row) on the
+   single-goroutine per-row snapshot path. The levers that could move it are
+   code changes: profile the path (`/debug/pprof/profile` on :4195 works
+   as shipped), or chunk a single table's snapshot across the existing
+   multi-worker transactions by PK range.
+
+Caveats: same dataset/caveats as the orders-snapshot A/B above (auto-inc PK,
+insert-only, single table); GOMAXPROCS above the pin was already shown not to
+matter there (the A/B ran GOMAXPROCS 8 at 4 vCPU with identical results).
