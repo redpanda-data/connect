@@ -23,35 +23,56 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
-// batchPublisher is responsible processing individual events into a batch and flushing
-// them to the pipeline using service.Batcher.
+// batchPublisher processes individual events into batches and flushes them
+// to the pipeline using service.Batcher.
+//
+// Streaming (CDC) rows and snapshot rows are kept on entirely separate
+// paths: streaming rows go through Publish, are tracked against the ordered
+// SCN checkpoint tracker, and are delivered via msgs() to ReadBatch.
+// Snapshot rows go through PublishSnapshot, are never registered with the
+// checkpoint tracker, and are delivered via snapshotMsgs() to
+// oracleDBCDCInput.BackfillReadBatch. benthos's BackfillBatchInput ack
+// barrier (see input_oracledb_cdc.go) is what guarantees every snapshot
+// batch is settled before the post-snapshot SCN is persisted, so this type
+// no longer needs its own ack-counting gate for the snapshot phase.
 type batchPublisher struct {
 	batcher   *service.Batcher
 	batcherMu sync.Mutex
 
-	checkpoint *checkpoint.Capped[replication.SCN]
-	msgChan    chan asyncMessage
-	cacheSCN   func(ctx context.Context, scn replication.SCN) error
-	schemas    *schemaCache
+	snapshotBatcher   *service.Batcher
+	snapshotBatcherMu sync.Mutex
+
+	checkpoint      *checkpoint.Capped[replication.SCN]
+	msgChan         chan asyncMessage
+	snapshotMsgChan chan asyncMessage
+
+	cacheSCN func(ctx context.Context, scn replication.SCN) error
+	schemas  *schemaCache
 
 	log     *service.Logger
 	shutSig *shutdown.Signaller
 }
 
 // newBatchPublisher creates an instance of batchPublisher.
-func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[replication.SCN], logger *service.Logger) *batchPublisher {
+func newBatchPublisher(batcher, snapshotBatcher *service.Batcher, checkpoint *checkpoint.Capped[replication.SCN], logger *service.Logger) *batchPublisher {
 	b := &batchPublisher{
-		batcher:    batcher,
-		checkpoint: checkpoint,
-		msgChan:    make(chan asyncMessage),
-		log:        logger,
-		shutSig:    shutdown.NewSignaller(),
+		batcher:         batcher,
+		snapshotBatcher: snapshotBatcher,
+		checkpoint:      checkpoint,
+		msgChan:         make(chan asyncMessage),
+		snapshotMsgChan: make(chan asyncMessage),
+		log:             logger,
+		shutSig:         shutdown.NewSignaller(),
 	}
 	go b.loop()
 	return b
 }
 
-// loop creates a long-running process that periodically flushes batches by configured interval.
+// loop creates a long-running process that periodically flushes the
+// streaming batcher by configured interval. There's no equivalent timed
+// flush for the snapshot batcher: BackfillReadBatch drives it synchronously
+// and flushes its trailing partial batch itself once the snapshot's row
+// producer finishes (see flushSnapshotRemaining).
 // lifted from internal/impl/kafka/franz_reader_ordered.go
 func (p *batchPublisher) loop() {
 	defer p.shutSig.TriggerHasStopped()
@@ -85,7 +106,7 @@ func (p *batchPublisher) loop() {
 		flushBatch = flushBatchTicker.C
 	}
 
-	// hardStopCtx survives a soft stop so that an in-flight publishBatch send can
+	// hardStopCtx survives a soft stop so that an in-flight send can
 	// complete before the loop exits. Only a hard stop (triggered by Close)
 	// cancels it, which is the forced-shutdown last resort.
 	hardStopCtx, done := p.shutSig.HardStopCtx(context.Background())
@@ -126,9 +147,10 @@ func (p *batchPublisher) loop() {
 	}
 }
 
-// Publish turns the provided message into a service.Message before batching and
-// flushing them based on batch size or time elapsed.
-func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEvent) error {
+// buildMessage converts a replication.MessageEvent into a service.Message,
+// applying schema resolution/coercion and metadata common to both streaming
+// and snapshot rows.
+func (b *batchPublisher) buildMessage(ctx context.Context, m *replication.MessageEvent) (*service.Message, error) {
 	// Resolve schema first — needed both for metadata and value coercion.
 	var schemaAny any
 	if b.schemas != nil {
@@ -163,7 +185,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 
 	data, err := json.Marshal(m.Data)
 	if err != nil {
-		return fmt.Errorf("marshalling message: %w", err)
+		return nil, fmt.Errorf("marshalling message: %w", err)
 	}
 
 	msg := service.NewMessage(data)
@@ -192,6 +214,17 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	if schemaAny != nil {
 		msg.MetaSetImmut("schema", service.ImmutableAny{V: schemaAny})
 	}
+	return msg, nil
+}
+
+// Publish turns the provided streaming (CDC) event into a service.Message
+// before batching and flushing based on batch size or time elapsed. Every
+// flushed batch is registered with the ordered SCN checkpoint tracker.
+func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEvent) error {
+	msg, err := b.buildMessage(ctx, m)
+	if err != nil {
+		return err
+	}
 
 	var flushedBatch []*service.Message
 	b.batcherMu.Lock()
@@ -213,6 +246,8 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	return nil
 }
 
+// publishBatch registers a streaming batch with the ordered checkpoint
+// tracker and hands it to ReadBatch.
 func (b *batchPublisher) publishBatch(ctx context.Context, batch service.MessageBatch) error {
 	if len(batch) == 0 {
 		return nil
@@ -220,18 +255,9 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 
 	lastMsg := batch[len(batch)-1]
 
-	// ensure we don't checkpoint snapshot batches
-	isSnapshotBatch := false
-	if op, ok := lastMsg.MetaGet("operation"); ok && op == replication.MessageOperationRead.String() {
-		isSnapshotBatch = true
-	}
-
 	var checkpointSCN replication.SCN
 	// Prefer checkpoint_scn. It accounts for open transactions.
 	// Use scn if checkpoint_scn is absent.
-	// Snapshot rows never carry checkpoint_scn.
-	// All rows in one snapshot run share the same scn, captured once in Snapshot.Prepare().
-	// So the fallback always selects that shared scn for snapshot batches.
 	scnKey := "checkpoint_scn"
 	if _, ok := lastMsg.MetaGet(scnKey); !ok {
 		scnKey = "scn"
@@ -255,11 +281,6 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 			if scn == nil || !scn.IsValid() {
 				return nil
 			}
-			if isSnapshotBatch && *scn <= checkpointSCN {
-				// Resolved value is this snapshot batch's own shared SCN (or older) —
-				// nothing new to persist, and persisting it would be premature.
-				return nil
-			}
 			return b.cacheSCN(ctx, *scn)
 		},
 	}
@@ -269,6 +290,73 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// PublishSnapshot turns the provided snapshot row into a service.Message
+// before batching and flushing based on batch size or time elapsed.
+// Snapshot batches are never registered with the SCN checkpoint tracker:
+// benthos's BackfillBatchInput ack barrier (driven by
+// oracleDBCDCInput.BackfillReadBatch/BackfillComplete) guarantees every
+// batch is settled downstream before the post-snapshot SCN is persisted, so
+// there's nothing here that needs ordering against the checkpoint.
+func (b *batchPublisher) PublishSnapshot(ctx context.Context, m *replication.MessageEvent) error {
+	msg, err := b.buildMessage(ctx, m)
+	if err != nil {
+		return err
+	}
+
+	var flushed service.MessageBatch
+	b.snapshotBatcherMu.Lock()
+	if b.snapshotBatcher.Add(msg) {
+		flushed, err = b.snapshotBatcher.Flush(ctx)
+	}
+	b.snapshotBatcherMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("flushing snapshot batch: %w", err)
+	}
+
+	if len(flushed) > 0 {
+		if err := b.sendSnapshot(ctx, flushed); err != nil {
+			return fmt.Errorf("publishing flushed snapshot batch: %w", err)
+		}
+	}
+	return nil
+}
+
+// sendSnapshot hands a flushed snapshot batch to BackfillReadBatch. Must be
+// called WITHOUT snapshotBatcherMu held (the send blocks until consumed).
+func (b *batchPublisher) sendSnapshot(ctx context.Context, batch service.MessageBatch) error {
+	msg := asyncMessage{
+		msg: batch,
+		// No-op regardless of ack/nack: there's no checkpoint state tied to
+		// a snapshot batch to resolve. A nack is replayed by
+		// AutoRetryNacksBatched (via benthos's independent backfill retry
+		// list) exactly like a nacked streaming batch would be; disabling
+		// auto_replay_nacks is the documented opt-in to drop it instead.
+		// Either way this ackFn has nothing left to do.
+		ackFn: func(context.Context, error) error { return nil },
+	}
+	select {
+	case b.snapshotMsgChan <- msg:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// flushSnapshotRemaining flushes any partial batch still held by the
+// snapshot batcher and publishes it. Called by BackfillReadBatch once the
+// snapshot's row producer (replication.Snapshot.Read) has returned, so the
+// final trailing partial batch reaches the pipeline before signalling
+// service.ErrBackfillComplete.
+func (b *batchPublisher) flushSnapshotRemaining(ctx context.Context) error {
+	b.snapshotBatcherMu.Lock()
+	remaining, err := b.snapshotBatcher.Flush(ctx)
+	b.snapshotBatcherMu.Unlock()
+	if err != nil || len(remaining) == 0 {
+		return err
+	}
+	return b.sendSnapshot(ctx, remaining)
 }
 
 // mapKeys extracts the keys from a map for use in drift detection.
@@ -288,22 +376,8 @@ func (b *batchPublisher) msgs() <-chan asyncMessage {
 	return b.msgChan
 }
 
-// FlushRemaining stops the loop goroutine and then flushes any partial batch
-// still held in the batcher, blocking until it is consumed by ReadBatch.
-func (b *batchPublisher) FlushRemaining(ctx context.Context) error {
-	if b.batcher == nil {
-		return nil
-	}
-	b.shutSig.TriggerSoftStop()
-	<-b.shutSig.HasStoppedChan()
-
-	b.batcherMu.Lock()
-	remaining, err := b.batcher.Flush(ctx)
-	b.batcherMu.Unlock()
-	if err != nil || len(remaining) == 0 {
-		return err
-	}
-	return b.publishBatch(ctx, remaining)
+func (b *batchPublisher) snapshotMsgs() <-chan asyncMessage {
+	return b.snapshotMsgChan
 }
 
 // Close signals the publisher's loop goroutine to stop and waits for it to exit.
@@ -315,5 +389,8 @@ func (b *batchPublisher) Close() {
 	<-b.shutSig.HasStoppedChan()
 	if b.batcher != nil {
 		_ = b.batcher.Close(context.Background())
+	}
+	if b.snapshotBatcher != nil {
+		_ = b.snapshotBatcher.Close(context.Background())
 	}
 }

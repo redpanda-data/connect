@@ -4,6 +4,11 @@ go 1.26.5
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
+// Demo: benthos jw/backfillasync POC (SnapshotAsync/SnapshotBatchInput ack
+// barrier for CDC snapshot phases), wired against main to show what changes
+// oracledb_cdc needs. Not for merge.
+replace github.com/redpanda-data/benthos/v4 => /private/tmp/claude-502/-Users-joseph-woodward-code-connect/caa6c17e-a6f0-4f49-9047-4412d5b25e20/scratchpad/worktrees/benthos-backfillasync
+
 ignore (
 	./bin
 	./config
