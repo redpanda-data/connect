@@ -46,6 +46,7 @@ const (
 const (
 	defaultMetadataTableFormat = "cdc_metadata_%s"
 	shutdownTimeout            = 5 * time.Second
+	defaultCheckpointLimit     = 1024
 )
 
 type spannerCDCInputConfig struct {
@@ -165,7 +166,7 @@ https://cloud.google.com/spanner/docs/change-streams
 		Field(service.NewIntField(siFieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time per partition. Increasing this limit enables parallel processing and batching at the output level. Any given partition watermark will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			ShortDescription("The maximum number of in-flight messages per partition.").
-			Default(1024)).
+			Default(defaultCheckpointLimit)).
 		Field(service.NewAutoRetryNacksToggleField())
 }
 
@@ -194,7 +195,6 @@ type spannerCDCReader struct {
 
 	batching   service.BatchPolicy
 	batcher    *spannerPartitionBatcherFactory
-	res        *service.Resources
 	resCh      chan asyncMessage
 	subscriber *changestreams.Subscriber
 	stopSig    *shutdown.Signaller
@@ -233,7 +233,6 @@ func newSpannerCDCReader(conf spannerCDCInputConfig, batching service.BatchPolic
 		metrics:  changestreams.NewMetrics(mgr.Metrics(), conf.StreamID),
 		batching: batching,
 		batcher:  newSpannerPartitionBatcherFactory(batching, mgr, conf.CheckpointLimit),
-		res:      mgr,
 		resCh:    make(chan asyncMessage),
 		stopSig:  shutdown.NewSignaller(),
 	}
@@ -245,8 +244,8 @@ func newSpannerCDCReader(conf spannerCDCInputConfig, batching service.BatchPolic
 // re-delivers those rows anyway. The factory is reset in place (never
 // swapped) because straggler goroutines from the previous session may still
 // hold the pointer.
-func (r *spannerCDCReader) resetPartitionBatchers() {
-	r.batcher.Reset(context.Background())
+func (r *spannerCDCReader) resetPartitionBatchers(ctx context.Context) {
+	r.batcher.Reset(ctx)
 }
 
 func (r *spannerCDCReader) emit(
@@ -382,7 +381,7 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 	// their buffered rows were never acked and will be re-read from the
 	// persisted watermarks; reusing them would duplicate rows into mixed
 	// batches and misalign the ack tracker.
-	r.resetPartitionBatchers()
+	r.resetPartitionBatchers(ctx)
 
 	var err error
 	r.subscriber, err = changestreams.NewSubscriber(ctx, r.conf.Config, cb, r.log, r.metrics)

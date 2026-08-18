@@ -198,7 +198,7 @@ func newSpannerPartitionBatcherFactory(
 	checkpointLimit int,
 ) *spannerPartitionBatcherFactory {
 	if checkpointLimit <= 0 {
-		checkpointLimit = 1024
+		checkpointLimit = defaultCheckpointLimit
 	}
 	return &spannerPartitionBatcherFactory{
 		batching:        batching,

@@ -165,7 +165,7 @@ func TestSpannerConnectResetsPartitionBatchers(t *testing.T) {
 	require.True(t, existed)
 
 	// ...and a fresh one after the reset performed on (re)connect.
-	r.resetPartitionBatchers()
+	r.resetPartitionBatchers(t.Context())
 	_, existed, err = r.batcher.forPartition("p1")
 	require.NoError(t, err)
 	require.False(t, existed, "reconnect must not reuse stale partition batcher state")
