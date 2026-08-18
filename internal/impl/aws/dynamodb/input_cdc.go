@@ -1435,8 +1435,11 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 			if errors.Is(err, context.Canceled) {
 				// Graceful shutdown mid-snapshot: nothing is wrong, the
 				// un-acked items simply resume from acknowledged progress on
-				// the next run.
-				d.log.Debug("Snapshot completion gate interrupted by shutdown")
+				// the next run. Info rather than warn - a clean stop is normal
+				// operation - but visible, since the snapshot will resume and
+				// redeliver on the next run (matching oracledb/mssqlserver's
+				// interrupted-handoff logging).
+				d.log.Infof("Snapshot for table %s interrupted by shutdown; it will resume from acknowledged progress on the next run", tableName)
 				return
 			}
 			wrappedErr := fmt.Errorf("snapshot completion gate for table %s: %w", tableName, err)
