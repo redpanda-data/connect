@@ -659,7 +659,15 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			// or soft-stop (no timeout, by design; see postgres_cdc's
 			// equivalent barrier).
 			if err = o.publisher.flushCurrent(softCtx); err != nil {
-				o.log.Errorf("Failed to flush remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				// A graceful stop lands here whenever shutdown hits the
+				// handoff window (nothing drains msgChan any more, so the
+				// blocked send exits via softCtx): normal operation, Info.
+				// Genuine flush failures keep the error level.
+				if errors.Is(err, context.Canceled) && !o.stopSig.IsHardStopSignalled() {
+					o.log.Infof("Interrupted while flushing remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				} else {
+					o.log.Errorf("Failed to flush remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				}
 				o.stopSig.TriggerHasStopped()
 				return
 			}
