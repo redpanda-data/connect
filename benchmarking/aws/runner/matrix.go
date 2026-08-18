@@ -138,7 +138,12 @@ type SweepPoint struct {
 	// single-config run, >1 for a streams-mode arm. Carried through so a
 	// result JSON is re-analysable without inferring it from the arm-id
 	// naming convention (e.g. "b-2pipe-gmp4").
-	Streams      int
+	Streams int
+	// Binary is the logical binary name (see Arm.Binary) this point
+	// launched, or "" for the scenario's single default staged binary.
+	// Carried through so a result JSON is re-analysable without inferring
+	// which build an arm measured from its id.
+	Binary       string
 	Engine       string
 	Samples      []Sample
 	Summary      Summary
@@ -258,7 +263,7 @@ func (m *MatrixRunner) Run(
 					ConfigPath:               cfg.Single,
 					RootConfigPath:           cfg.Root,
 					StreamsDir:               cfg.Dir,
-					BinaryPath:               m.BinaryPath,
+					BinaryPath:               m.binaryPathFor(pt),
 					Bucket:                   m.Bucket,
 					SessionID:                m.SessionID,
 					RedpandaMetricsEndpoint:  m.RedpandaMetricsEndpoint,
@@ -396,6 +401,7 @@ func (m *MatrixRunner) Run(
 				ArmID:        pt.ArmID,
 				GOMAXPROCS:   pt.GOMAXPROCS,
 				Streams:      pt.Streams,
+				Binary:       pt.Binary,
 				Engine:       engine,
 				Samples:      samples,
 				Summary:      summary,
@@ -452,6 +458,19 @@ func (m *MatrixRunner) configPathsFor(key string) pointConfigPaths {
 		return cfg
 	}
 	return pointConfigPaths{Single: m.ConfigPath}
+}
+
+// binaryPathFor resolves the launch binary for one sweep point: an arm that
+// set Arm.Binary launches the correspondingly-named staged binary
+// (runnerBinaryPath — see main.go's stageArtefacts, which stages exactly
+// this path for every --binary mapping); every other point (arm-less, or an
+// arm that left Binary empty) launches the scenario's single default staged
+// binary, m.BinaryPath — byte-identical to every pre-binary-arm scenario.
+func (m *MatrixRunner) binaryPathFor(pt sweepPoint) string {
+	if pt.Binary == "" {
+		return m.BinaryPath
+	}
+	return runnerBinaryPath(pt.Binary)
 }
 
 // fetchLog downloads the per-point Connect log uploaded by the bench script.

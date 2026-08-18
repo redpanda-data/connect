@@ -149,6 +149,28 @@ func TestBuildSweepPlan_ArmsCarryFanIn(t *testing.T) {
 	require.True(t, plan[1].FanIn, "fanin arm's fan_in must reach the sweep point")
 }
 
+// TestBuildSweepPlan_ArmsCarryBinary pins Arm.Binary reaching the sweep
+// point unchanged (see sweepPoint.Binary), and confirms an arm that leaves
+// Binary unset still defaults to "" — the scenario's single default staged
+// binary, unchanged from before this field existed.
+func TestBuildSweepPlan_ArmsCarryBinary(t *testing.T) {
+	s := &Scenario{
+		Matrix: MatrixSpec{
+			CPUPoints: []int{2},
+			Arms: []Arm{
+				{ID: "base", Binary: "base"},
+				{ID: "pr", Binary: "pr"},
+				{ID: "bare"},
+			},
+		},
+	}
+	plan := buildSweepPlan(s)
+	require.Len(t, plan, 3)
+	require.Equal(t, "base", plan[0].Binary)
+	require.Equal(t, "pr", plan[1].Binary)
+	require.Empty(t, plan[2].Binary, "an arm that doesn't set binary defaults to the scenario's single staged binary")
+}
+
 func TestPlanMaxStreams(t *testing.T) {
 	require.Equal(t, 1, planMaxStreams([]sweepPoint{{Streams: 1}, {Streams: 1}}))
 	require.Equal(t, 2, planMaxStreams([]sweepPoint{{Streams: 1}, {Streams: 2}}))

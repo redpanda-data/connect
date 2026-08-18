@@ -29,6 +29,11 @@ type sweepPoint struct {
 	// Pipeline is the scenario pipeline with this arm's overrides merged in.
 	// nil for arm-less scenarios, whose callers use Scenario.Pipeline directly.
 	Pipeline map[string]any
+	// Binary mirrors Arm.Binary: the logical binary name this point launches,
+	// or "" for the scenario's single default staged binary (every
+	// arm-less point, and every arm that doesn't set one). See
+	// MatrixRunner.binaryPathFor for how this resolves to a runner-host path.
+	Binary string
 }
 
 // Key identifies the point in log filenames and S3 keys. Arm-less points key
@@ -69,6 +74,7 @@ func buildSweepPlan(s *Scenario) []sweepPoint {
 				Streams:    streams,
 				FanIn:      a.FanIn,
 				Pipeline:   mergePipeline(s.Pipeline, a.Pipeline),
+				Binary:     a.Binary,
 			})
 		}
 	}

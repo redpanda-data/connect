@@ -1,0 +1,74 @@
+name: postgres-orders-soak-pr
+description: |
+  PR before/after soak (CON-179 R6 increment 5): the same sustained-moderate
+  postgres_cdc load as postgres-orders-soak, run twice on the SAME
+  infrastructure — once with the PR's base build, once with the PR's build —
+  so the only variable is the binary. 30 minutes per arm keeps the whole
+  /soak round under ~2.5h while still long enough for leak slopes and
+  stalls to separate from noise.
+
+  The scenario name deliberately differs from the nightly's: CloudWatch
+  metrics land in a separate series that no alarm matches, and the runner
+  skips both the rolling-baseline comparator and the soak-index entry for
+  binary-arm runs — a deliberate A/B is not a nightly baseline sample.
+
+connector: postgres_cdc
+stack: postgres
+soak: true
+
+infra:
+  source:
+    instance_class: db.r6g.xlarge
+    # 400 GB gp3 floor: below it RDS forbids iops/storage_throughput, and
+    # 12000/500 are the >=400 GB tier's free baseline (see orders-soak.yaml).
+    storage_gb: 400
+    iops: 12000
+    storage_throughput: 500
+    parameters:
+      rds.logical_replication: "1"
+      max_wal_senders: "20"
+  runner:
+    instance_type: c8g.xlarge   # 4 vCPU: reservedCores(2) + cpu_points[2] == 4
+
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-postgres
+
+workload:
+  write_rate_per_sec: 10000
+  duration: 30m
+  warmup: 5m
+
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      tls:
+        skip_cert_verify: true   # RDS-internal CA isn't in the runner image
+      stream_snapshot: false
+      schema: public
+      tables: [orders]
+      slot_name: bench_slot
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [2]
+  # Arms differ ONLY by binary — the runner enforces this for soak A/Bs.
+  # The workflow supplies the paths via --binary base=... --binary pr=...
+  arms:
+    - id: base
+      binary: base
+    - id: pr
+      binary: pr
+
+reset:
+  - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
+  - sql: "SELECT pg_drop_replication_slot('kc_bench_slot') FROM pg_replication_slots WHERE slot_name='kc_bench_slot'"
+  - sql: "TRUNCATE TABLE orders"
+  # Recreate the publication per arm — a stale one that lost its table makes
+  # postgres_cdc stream silence forever (live-hit 2026-08-12).
+  - sql: "DROP PUBLICATION IF EXISTS pglog_stream_bench_slot"

@@ -187,6 +187,17 @@ type Arm struct {
 	// Pipeline is deep-merged over the scenario-level pipeline block for this
 	// arm, so an arm declares only what differs. Applied to every stream.
 	Pipeline map[string]any `yaml:"pipeline,omitempty"`
+	// Binary names the LOGICAL binary this arm launches (e.g. "base", "pr"),
+	// resolved at runtime to a staged path on the runner host — see
+	// --binary in main.go and MatrixRunner.binaryPathFor in matrix.go. Empty
+	// (the default for every pre-existing scenario) means the scenario's own
+	// single staged binary, unchanged from before this field existed.
+	//
+	// This is the only shape a SOAK scenario's arms may take (see
+	// Scenario.Validate): a base-vs-PR build comparison must hold everything
+	// else — gomaxprocs, streams, fan_in, pipeline — constant, or the two
+	// runs are no longer an apples-to-apples comparison of the build alone.
+	Binary string `yaml:"binary,omitempty"`
 }
 
 type ResetStep struct {
@@ -389,12 +400,45 @@ func (s *Scenario) Validate() error {
 	// bench profile already answers — checked here, before the general arms
 	// validation below, so a soak+arms scenario gets this specific message
 	// rather than getting tangled in arm-detail errors.
+	//
+	// The one exception (CON-179 R6 increment 5) is a base-vs-PR BUILD
+	// comparison: running the identical soak configuration twice, once per
+	// binary, is still "one configuration over time" — only the binary
+	// launched differs. Arm.Binary is how a scenario opts into that shape,
+	// and it is all-or-nothing: every arm must set a non-empty Binary, or a
+	// mix of binary and non-binary arms would leave it ambiguous which arms
+	// are even part of the comparison. Within that shape, no arm may also
+	// override gomaxprocs/streams/fan_in/pipeline — a soak A/B must hold
+	// everything constant except the build, or a throughput delta could be
+	// explained by the override instead of the code change under test.
 	if s.Soak {
 		if len(s.Matrix.CPUPoints) != 1 {
 			return fmt.Errorf("soak scenarios must set exactly one matrix.cpu_points entry (got %v): soak measures one configuration over time, not a sweep across configurations", s.Matrix.CPUPoints)
 		}
 		if len(s.Matrix.Arms) > 0 {
-			return fmt.Errorf("soak scenarios must not set matrix.arms: soak measures one configuration over time, not an A/B comparison")
+			allBinary := true
+			for _, a := range s.Matrix.Arms {
+				if a.Binary == "" {
+					allBinary = false
+					break
+				}
+			}
+			if !allBinary {
+				return fmt.Errorf("soak scenarios must not set matrix.arms unless every arm sets a non-empty binary (a base-vs-PR build comparison): soak measures one configuration over time, not an A/B comparison")
+			}
+			if len(s.Matrix.Arms) < 2 {
+				return fmt.Errorf("soak scenarios using matrix.arms[].binary must set at least 2 arms (got %d): a build comparison needs two builds to compare", len(s.Matrix.Arms))
+			}
+			seenBinary := map[string]bool{}
+			for i, a := range s.Matrix.Arms {
+				if seenBinary[a.Binary] {
+					return fmt.Errorf("matrix.arms[%d].binary %q is a duplicate; soak binary arms must have unique binary values", i, a.Binary)
+				}
+				seenBinary[a.Binary] = true
+				if a.GOMAXPROCS != 0 || a.Streams != 0 || a.FanIn || a.Pipeline != nil {
+					return fmt.Errorf("matrix.arms[%d] (binary %q) must not override gomaxprocs/streams/fan_in/pipeline: a soak A/B must hold everything constant except the build", i, a.Binary)
+				}
+			}
 		}
 	}
 
@@ -497,6 +541,23 @@ func (s *Scenario) Validate() error {
 		}
 	}
 	return nil
+}
+
+// IsBinaryArmScenario reports whether s.Matrix.Arms is in the soak
+// base-vs-PR binary-arm shape Validate enforces: every arm sets a
+// non-empty Binary. runBench uses this to gate the soak-index upload, the
+// rolling-baseline comparator, and the base-vs-PR comparison markdown —
+// all three only make sense in this shape (see main.go).
+func (s *Scenario) IsBinaryArmScenario() bool {
+	if len(s.Matrix.Arms) == 0 {
+		return false
+	}
+	for _, a := range s.Matrix.Arms {
+		if a.Binary == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // vcpuForInstanceType returns the vCPU count for known instance types or 0 if

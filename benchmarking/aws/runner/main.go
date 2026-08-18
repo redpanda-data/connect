@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -104,6 +105,12 @@ type benchOpts struct {
 	// preflightCheck). Defaults to true; --preflight=off is the emergency
 	// escape hatch for an operator who is certain no other session is live.
 	preflightOn bool
+	// binaries maps a logical binary name (matrix.arms[].binary) to a local
+	// path a PR-triggered workflow already built (e.g. "base"/"pr" for a
+	// merge-base vs. PR-head soak comparison — see CON-179 R6 increment 5).
+	// nil/empty is the default single-binary path: runBench builds
+	// redpanda-connect itself, unchanged from before this field existed.
+	binaries map[string]string
 }
 
 // defaultSoakArchiveBucket is the persistent soak archive bucket's name,
@@ -136,6 +143,13 @@ func benchCmd(args []string) error {
 		`"on" (default) or "off": guard against a concurrent bench session already holding the shared `+
 			`Terraform stack. "off" is an emergency escape hatch only — concurrent sessions destroy `+
 			`each other's infrastructure.`)
+	binaries := &binaryFlag{}
+	fs.Var(binaries, "binary",
+		`Repeatable "name=path" mapping a logical binary (matrix.arms[].binary, e.g. "base" or "pr") to a `+
+			`pre-built redpanda-connect binary on disk. Used by a PR-triggered soak comparison, which builds `+
+			`the merge-base and PR-head binaries itself and passes both in rather than letting the runner `+
+			`build one. Every name a scenario's arms reference must be mapped, and every mapping must be `+
+			`referenced — an unreferenced mapping is very likely a typo.`)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -167,6 +181,7 @@ func benchCmd(args []string) error {
 		engines:           engineList,
 		enginesExplicit:   enginesExplicit,
 		preflightOn:       preflight.on,
+		binaries:          binaries.m,
 	}
 	return runBench(opts)
 }
@@ -195,6 +210,39 @@ func (f *preflightFlag) Set(s string) error {
 	default:
 		return fmt.Errorf(`invalid --preflight value %q: must be "on" or "off"`, s)
 	}
+	return nil
+}
+
+// binaryFlag is a flag.Value that accumulates repeated `--binary name=path`
+// flags into a map, since flag.FlagSet has no built-in repeatable-flag type.
+type binaryFlag struct {
+	m map[string]string
+}
+
+func (f *binaryFlag) String() string {
+	if len(f.m) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(f.m))
+	for name, path := range f.m {
+		parts = append(parts, name+"="+path)
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+func (f *binaryFlag) Set(s string) error {
+	name, path, ok := strings.Cut(s, "=")
+	if !ok || name == "" || path == "" {
+		return fmt.Errorf(`invalid --binary value %q: must be "name=path"`, s)
+	}
+	if f.m == nil {
+		f.m = map[string]string{}
+	}
+	if _, exists := f.m[name]; exists {
+		return fmt.Errorf("--binary %q specified more than once", name)
+	}
+	f.m[name] = path
 	return nil
 }
 
@@ -265,6 +313,12 @@ func runBench(opts benchOpts) (errOut error) {
 		} else if len(opts.engines) != 1 || opts.engines[0] != "connect" {
 			return fmt.Errorf("scenario %s is a soak profile and requires --engines=connect (got %v): soak measures Connect alone over a sustained window, not an engine comparison", s.Name, opts.engines)
 		}
+	}
+	// --binary mappings must cover exactly the logical binaries the
+	// scenario's arms reference — no more, no less — before any AWS spend,
+	// same reasoning as the checks above.
+	if err := validateBinaryFlags(s, opts.binaries); err != nil {
+		return err
 	}
 
 	warmup, duration := sweepWarmupDuration(s)
@@ -388,11 +442,20 @@ func runBench(opts benchOpts) (errOut error) {
 	// calls (catalog region, glue CLI --region) read it from outs["aws_region"].
 	sharedOuts["aws_region"] = opts.region
 
-	binPath, err := buildConnect(opts.repoRoot)
-	if err != nil {
-		return fmt.Errorf("build connect: %w", err)
+	// --binary mappings supply pre-built binaries (a PR-triggered soak
+	// comparison builds merge-base and PR-head itself), so there is no
+	// default binary to build in that case — validateBinaryFlags already
+	// confirmed every arm that needs one has a mapping.
+	var binPath string
+	if len(opts.binaries) == 0 {
+		binPath, err = buildConnect(opts.repoRoot)
+		if err != nil {
+			return fmt.Errorf("build connect: %w", err)
+		}
+		fmt.Println("[3/7] built redpanda-connect")
+	} else {
+		fmt.Printf("[3/7] skipping default build: staging provided --binary mappings %v\n", sortedBinaryNames(opts.binaries))
 	}
-	fmt.Println("[3/7] built redpanda-connect")
 
 	plan := buildSweepPlan(s)
 	// legacy scenarios (no matrix.arms) share one config across every point,
@@ -551,6 +614,7 @@ func runBench(opts benchOpts) (errOut error) {
 			Prom:         p.Prom,
 			BrokerSeries: p.BrokerSeries,
 			Arm:          p.ArmID,
+			Binary:       p.Binary,
 			GOMAXPROCS:   p.GOMAXPROCS,
 			Streams:      p.Streams,
 			Backlog:      p.Backlog,
@@ -594,13 +658,24 @@ func runBench(opts benchOpts) (errOut error) {
 	// upload — but a REGRESSION the comparator finds against a mature
 	// baseline, after a successful upload, is not: see soakRegressionErr
 	// below.
+	//
+	// A binary-arm soak (base vs. PR, see IsBinaryArmScenario) is a
+	// deliberate one-off A/B, not a nightly baseline sample: uploadSoakResult
+	// skips its soak-index entry so it never pollutes the rolling baseline's
+	// median, and the rolling-baseline comparator itself is skipped in favor
+	// of the two-run comparison markdown below.
 	var soakRegressionErr error
 	if s.Soak {
 		entry, err := uploadSoakResult(ctx, opts.region, sharedOuts["results_bucket"], opts.soakArchiveBucket, sessionID, s, result, jsonPath, topo, logFetcher)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: archive soak result to S3: %v\n", err)
-		} else {
+		} else if !s.IsBinaryArmScenario() {
 			soakRegressionErr = compareSoakRunToBaseline(ctx, opts, s, sessionID, entry, logFetcher)
+		}
+		if s.IsBinaryArmScenario() {
+			if err := reportSoakComparison(ctx, opts, s, sessionID, result); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: soak comparison (non-fatal): %v\n", err)
+			}
 		}
 	}
 	fmt.Printf("\n✓ done — JSON: %s\n           md: %s\n           summary: %s\n", jsonPath, mdPath, summaryPath)
@@ -643,25 +718,58 @@ type soakArchivePlan struct {
 	RawKeys   []string
 }
 
+// soakRawArtifactKeys returns the raw per-point artifact keys (sweep log,
+// Prometheus dump, and — when a Topology supplied one — the broker scrape)
+// for ONE measured point, under runs/<sessionID>/. Split out of
+// buildSoakArchivePlan so uploadSoakResult can call it once per point of a
+// binary-arm soak's multiple measured points (one per arm), not just the
+// single key buildSoakArchivePlan itself was designed around.
+func soakRawArtifactKeys(sessionID, key, brokerArtifact string) []string {
+	if key == "" {
+		return nil
+	}
+	keys := []string{
+		fmt.Sprintf("runs/%s/sweep-%s.log", sessionID, key),
+		fmt.Sprintf("runs/%s/prom-%s.txt", sessionID, key),
+	}
+	if brokerArtifact != "" {
+		keys = append(keys, fmt.Sprintf("runs/%s/%s", sessionID, brokerArtifact))
+	}
+	return keys
+}
+
 // buildSoakArchivePlan computes soakArchivePlan for one soak run. key is the
 // sweepPoint key (see sweepPoint.Key) of the run's single measured point;
 // brokerArtifact is Topology.MetricArtifact(engine, key), or "" when no
 // Topology was available to compute it (that raw file is then simply
 // skipped, same as key == "").
 func buildSoakArchivePlan(sessionID, scenarioName, key, brokerArtifact string) soakArchivePlan {
+	return soakArchivePlan{
+		ResultKey: fmt.Sprintf("runs/%s/result.json", sessionID),
+		IndexKey:  fmt.Sprintf("soak-index/%s/%s.json", scenarioName, sessionID),
+		RawKeys:   soakRawArtifactKeys(sessionID, key, brokerArtifact),
+	}
+}
+
+// buildSoakArchivePlanForPoints extends buildSoakArchivePlan to a soak run's
+// FULL result.Points rather than just its single measured point: EVERY
+// point contributes its own raw artifact keys, not just the first. A
+// binary-arm soak (see Scenario.IsBinaryArmScenario) measures multiple
+// points in one session — one per arm — and each arm's raw evidence (sweep
+// log, Prometheus dump, broker scrape) must be archived, or the PR arm's
+// half of the comparison would be silently missing from the archive.
+func buildSoakArchivePlanForPoints(sessionID, scenarioName string, points []PointResult, topo Topology) soakArchivePlan {
 	plan := soakArchivePlan{
 		ResultKey: fmt.Sprintf("runs/%s/result.json", sessionID),
 		IndexKey:  fmt.Sprintf("soak-index/%s/%s.json", scenarioName, sessionID),
 	}
-	if key == "" {
-		return plan
-	}
-	plan.RawKeys = append(plan.RawKeys,
-		fmt.Sprintf("runs/%s/sweep-%s.log", sessionID, key),
-		fmt.Sprintf("runs/%s/prom-%s.txt", sessionID, key),
-	)
-	if brokerArtifact != "" {
-		plan.RawKeys = append(plan.RawKeys, fmt.Sprintf("runs/%s/%s", sessionID, brokerArtifact))
+	for _, p := range points {
+		key := sweepPoint{VCPU: p.VCPU, ArmID: p.Arm}.Key()
+		var brokerArtifact string
+		if topo != nil {
+			brokerArtifact = topo.MetricArtifact(p.Engine, key)
+		}
+		plan.RawKeys = append(plan.RawKeys, soakRawArtifactKeys(sessionID, key, brokerArtifact)...)
 	}
 	return plan
 }
@@ -681,6 +789,13 @@ func buildSoakArchivePlan(sessionID, scenarioName, key, brokerArtifact string) s
 // is non-fatal per file: a missing or unfetchable artifact is logged and
 // skipped, so one gap never costs the run its result.json / soak-index
 // entry.
+//
+// A binary-arm soak (see Scenario.IsBinaryArmScenario) measures MULTIPLE
+// points in one session — one per arm — unlike the single-point soak this
+// function was originally built for: every point's raw artifacts are
+// archived (not just the first), and the soak-index entry is skipped
+// entirely, since a one-off base-vs-PR A/B must never be mixed into the
+// rolling baseline's median (see compareSoakBaseline).
 func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket, sessionID string, s *Scenario, result *Result, jsonPath string, topo Topology, logFetcher LogFetcher) (soakIndexEntry, error) {
 	entry := buildSoakIndexEntry(sessionID, s, result)
 	if archiveBucket == "" {
@@ -692,15 +807,7 @@ func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket,
 	}
 	client := s3.NewFromConfig(cfg)
 
-	var key, brokerArtifact string
-	if len(result.Points) > 0 {
-		p := result.Points[0]
-		key = sweepPoint{VCPU: p.VCPU, ArmID: p.Arm}.Key()
-		if topo != nil {
-			brokerArtifact = topo.MetricArtifact(p.Engine, key)
-		}
-	}
-	plan := buildSoakArchivePlan(sessionID, s.Name, key, brokerArtifact)
+	plan := buildSoakArchivePlanForPoints(sessionID, s.Name, result.Points, topo)
 
 	raw, err := os.ReadFile(jsonPath)
 	if err != nil {
@@ -710,12 +817,16 @@ func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket,
 		return entry, err
 	}
 
-	indexRaw, err := json.Marshal(entry)
-	if err != nil {
-		return entry, fmt.Errorf("marshal soak index entry: %w", err)
-	}
-	if err := putSoakArchiveObject(ctx, client, archiveBucket, plan.IndexKey, indexRaw); err != nil {
-		return entry, err
+	// A binary-arm soak's entry must never land in soak-index/ — see the
+	// doc comment above.
+	if !s.IsBinaryArmScenario() {
+		indexRaw, err := json.Marshal(entry)
+		if err != nil {
+			return entry, fmt.Errorf("marshal soak index entry: %w", err)
+		}
+		if err := putSoakArchiveObject(ctx, client, archiveBucket, plan.IndexKey, indexRaw); err != nil {
+			return entry, err
+		}
 	}
 
 	if sessionBucket == "" || logFetcher == nil {
@@ -808,6 +919,43 @@ func copySoakArtifact(ctx context.Context, fetcher LogFetcher, client *s3.Client
 		return fmt.Errorf("read: %w", err)
 	}
 	return putSoakArchiveObject(ctx, client, archiveBucket, key, raw)
+}
+
+// soakComparisonBaseArm and soakComparisonPRArm are the fixed logical arm
+// ids reportSoakComparison compares. A PR-triggered soak workflow always
+// supplies exactly these two --binary mappings (see the binary-arm shape
+// Scenario.Validate enforces); a scenario using different arm ids simply
+// has no base/pr pair to compare, so BuildSoakComparisonMarkdown's own
+// "arm not found" error becomes a skip below rather than a failure.
+const (
+	soakComparisonBaseArm = "base"
+	soakComparisonPRArm   = "pr"
+)
+
+// reportSoakComparison builds the base-vs-PR markdown for a binary-arm soak
+// (see Scenario.IsBinaryArmScenario), prints it to stdout between fixed
+// delimiters a calling GitHub Actions workflow greps between to post it as
+// a PR comment, and uploads it alongside the run's other soak archive
+// artifacts. Non-fatal by design at the call site (runBench): a soak run
+// that measured successfully must not fail because this reporting step
+// couldn't reach S3.
+func reportSoakComparison(ctx context.Context, opts benchOpts, s *Scenario, sessionID string, result *Result) error {
+	md, err := BuildSoakComparisonMarkdown(s.Name, result.Points, soakComparisonBaseArm, soakComparisonPRArm)
+	if err != nil {
+		fmt.Printf("soak comparison: %v (skipping)\n", err)
+		return nil
+	}
+	fmt.Println("---SOAK-COMPARISON-BEGIN---")
+	fmt.Println(md)
+	fmt.Println("---SOAK-COMPARISON-END---")
+
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
+	if err != nil {
+		return fmt.Errorf("load AWS config for soak comparison upload: %w", err)
+	}
+	client := s3.NewFromConfig(cfg)
+	key := fmt.Sprintf("runs/%s/comparison.md", sessionID)
+	return putSoakArchiveObject(ctx, client, opts.soakArchiveBucket, key, []byte(md))
 }
 
 func hashScenario(s *Scenario) string {
@@ -1276,6 +1424,80 @@ func stageCfgPrefix(key string) string {
 	return "stage/cfg/" + key
 }
 
+// runnerBinaryPath is the on-host path a named --binary mapping is staged to
+// and launched from. Mirrors hostCfgDir's reasoning: this is the single
+// source of truth so stageArtefacts' download/chmod commands and
+// MatrixRunner.binaryPathFor's launch path (matrix.go) can never drift
+// apart — a drift there would mean the engine launches a path that was
+// never downloaded.
+func runnerBinaryPath(name string) string {
+	return "/opt/bench/redpanda-connect-" + name
+}
+
+// stageBinaryKey is the S3 key prefix (under the results bucket) a named
+// --binary mapping is uploaded to. Mirrors runnerBinaryPath on the S3 side.
+func stageBinaryKey(name string) string {
+	return "stage/redpanda-connect-" + name
+}
+
+// sortedBinaryNames returns m's keys sorted, for deterministic logging and
+// script rendering — Go's map iteration order is randomized.
+func sortedBinaryNames(m map[string]string) []string {
+	names := make([]string, 0, len(m))
+	for name := range m {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// binaryNamesReferenced returns the set of distinct non-empty Arm.Binary
+// values s's matrix.arms reference.
+func binaryNamesReferenced(s *Scenario) map[string]bool {
+	out := map[string]bool{}
+	for _, a := range s.Matrix.Arms {
+		if a.Binary != "" {
+			out[a.Binary] = true
+		}
+	}
+	return out
+}
+
+// validateBinaryFlags checks --binary mappings against the scenario's
+// referenced logical binary names BEFORE any AWS spend: every name an arm
+// references must have a mapping, and every mapping must be referenced by
+// some arm. The second half is a typo guard — e.g. --binary bas=/tmp/x
+// against a scenario whose arm says "base" would otherwise silently stage a
+// binary nothing launches, while the arm that actually needed "base" fails
+// the first check anyway; catching both in one pass gives a single clear
+// error instead of two confusing ones.
+func validateBinaryFlags(s *Scenario, binaries map[string]string) error {
+	referenced := binaryNamesReferenced(s)
+
+	var missing []string
+	for name := range referenced {
+		if _, ok := binaries[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		return fmt.Errorf("scenario %s's matrix.arms reference binaries %v with no matching --binary mapping", s.Name, missing)
+	}
+
+	var unreferenced []string
+	for name := range binaries {
+		if !referenced[name] {
+			unreferenced = append(unreferenced, name)
+		}
+	}
+	sort.Strings(unreferenced)
+	if len(unreferenced) > 0 {
+		return fmt.Errorf("--binary mapping(s) %v are not referenced by any matrix.arms[].binary in scenario %s (likely a typo)", unreferenced, s.Name)
+	}
+	return nil
+}
+
 // runnerConfigPaths maps each point key to where its configs land on the runner
 // host after staging.
 func runnerConfigPaths(sets []renderedPointConfigs) map[string]pointConfigPaths {
@@ -1470,9 +1692,41 @@ func buildStagePlan(sets []renderedPointConfigs, bucket string, legacy bool) (it
 	return items, dl
 }
 
-// stageArtefacts uploads the binary, license, and per-point config(s) to S3 and
-// downloads them onto the runner host over SSM. See buildStagePlan for the
-// legacy vs. arms path-building logic.
+// buildBinaryStagePlan computes the S3 upload items and the runner-host
+// download+chmod commands for the launch binary (or binaries), without
+// touching AWS — mirrors buildStagePlan's split for the config-staging
+// case, so the staged key and the download/launch path can be
+// unit-tested for agreement independently of any S3 call.
+//
+// When binaries is empty, this reproduces the historical single-binary
+// shape byte-for-byte: binPath is staged at stage/redpanda-connect and
+// downloaded to /opt/bench/redpanda-connect. When --binary mappings are
+// present, binPath is ignored (runBench skips building it) and each named
+// binary is staged/downloaded under its own stageBinaryKey/runnerBinaryPath
+// instead, sorted by name for a deterministic script across runs.
+func buildBinaryStagePlan(binaries map[string]string, binPath, bucket string) (items []upload, download, chmod string) {
+	if len(binaries) == 0 {
+		return []upload{{"stage/redpanda-connect", binPath}},
+			fmt.Sprintf(`aws s3 cp s3://%s/stage/redpanda-connect /opt/bench/redpanda-connect`, bucket),
+			`chmod +x /opt/bench/redpanda-connect`
+	}
+	names := sortedBinaryNames(binaries)
+	items = make([]upload, 0, len(names))
+	dlLines := make([]string, 0, len(names))
+	chmodLines := make([]string, 0, len(names))
+	for _, name := range names {
+		items = append(items, upload{stageBinaryKey(name), binaries[name]})
+		dlLines = append(dlLines, fmt.Sprintf(`aws s3 cp s3://%s/%s %s`, bucket, stageBinaryKey(name), runnerBinaryPath(name)))
+		chmodLines = append(chmodLines, fmt.Sprintf(`chmod +x %s`, runnerBinaryPath(name)))
+	}
+	return items, strings.Join(dlLines, "\n"), strings.Join(chmodLines, "\n")
+}
+
+// stageArtefacts uploads the binary (or binaries), license, and per-point
+// config(s) to S3 and downloads them onto the runner host over SSM. See
+// buildStagePlan for the legacy vs. arms config path-building logic and
+// buildBinaryStagePlan for the single vs. named-binaries path-building
+// logic.
 func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string, binPath string, sets []renderedPointConfigs, legacy bool, execTimeout time.Duration) error {
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
 	if err != nil {
@@ -1481,10 +1735,9 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
 	bucket := outs["results_bucket"]
 
-	items := []upload{
-		{"stage/redpanda-connect", binPath},
-		{"stage/license.jwt", opts.licenseFile},
-	}
+	binItems, binDownload, binChmod := buildBinaryStagePlan(opts.binaries, binPath, bucket)
+	items := append([]upload{}, binItems...)
+	items = append(items, upload{"stage/license.jwt", opts.licenseFile})
 	planItems, dl := buildStagePlan(sets, bucket, legacy)
 	items = append(items, planItems...)
 
@@ -1509,13 +1762,13 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 	}
 	script := fmt.Sprintf(`
 set -euo pipefail
-aws s3 cp s3://%s/stage/redpanda-connect /opt/bench/redpanda-connect
+%s
 aws s3 cp s3://%s/stage/license.jwt /opt/bench/license.jwt
 %s
-chmod +x /opt/bench/redpanda-connect
+%s
 chmod 0600 /opt/bench/license.jwt
 aws s3 cp s3://%s/stage/iceberg-tablegen /opt/bench/iceberg-tablegen 2>/dev/null && chmod +x /opt/bench/iceberg-tablegen || true
-`, bucket, bucket, strings.Join(dl, "\n"), bucket)
+`, binDownload, bucket, strings.Join(dl, "\n"), binChmod, bucket)
 	return ssmExec.Run(ctx, outs["runner_instance_id"], script, streamingOnLine(os.Stdout, "stage"))
 }
 

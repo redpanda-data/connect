@@ -868,3 +868,87 @@ func TestScenarioValidate_AcceptsSoakSingleCPUPointNoArms(t *testing.T) {
 	}
 	require.NoError(t, s.Validate())
 }
+
+// soakScenarioWithArms builds a minimal valid soak scenario except for its
+// matrix.arms, which the caller supplies — shared setup for the CON-179 R6
+// increment 5 binary-arm validation tests below.
+func soakScenarioWithArms(arms []Arm) *Scenario {
+	return &Scenario{
+		Name: "soak-x", Connector: "postgres_cdc", Stack: "postgres", Soak: true,
+		Infra:    InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.xlarge"}},
+		Dataset:  DatasetSpec{Tables: []string{"orders"}},
+		Pipeline: map[string]any{"input": map[string]any{"postgres_cdc": map[string]any{}}},
+		Workload: &WorkloadSpec{Warmup: minWarmup, Duration: 90 * time.Minute},
+		Matrix:   MatrixSpec{CPUPoints: []int{2}, Arms: arms},
+	}
+}
+
+// TestScenarioValidate_AcceptsSoakBinaryArms is the positive case CON-179 R6
+// increment 5 adds: a soak scenario MAY set matrix.arms when every arm sets
+// a non-empty, unique Binary and overrides nothing else.
+func TestScenarioValidate_AcceptsSoakBinaryArms(t *testing.T) {
+	s := soakScenarioWithArms([]Arm{{ID: "base", Binary: "base"}, {ID: "pr", Binary: "pr"}})
+	require.NoError(t, s.Validate())
+	require.True(t, s.IsBinaryArmScenario())
+}
+
+// TestScenarioValidate_RejectsSoakBinaryArmWithOverride pins the "hold
+// everything constant except the build" rule: a binary arm that ALSO
+// overrides gomaxprocs/streams/fan_in/pipeline is rejected, since the
+// override — not the build — could then explain any measured delta.
+func TestScenarioValidate_RejectsSoakBinaryArmWithOverride(t *testing.T) {
+	tests := []struct {
+		name string
+		arms []Arm
+	}{
+		{"gomaxprocs", []Arm{{ID: "base", Binary: "base"}, {ID: "pr", Binary: "pr", GOMAXPROCS: 4}}},
+		{"streams", []Arm{{ID: "base", Binary: "base"}, {ID: "pr", Binary: "pr", Streams: 2}}},
+		{"fan_in", []Arm{{ID: "base", Binary: "base"}, {ID: "pr", Binary: "pr", FanIn: true}}},
+		{"pipeline", []Arm{{ID: "base", Binary: "base"}, {ID: "pr", Binary: "pr", Pipeline: map[string]any{"x": 1}}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := soakScenarioWithArms(tt.arms).Validate()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "must not override")
+			require.Contains(t, err.Error(), "hold everything constant except the build")
+		})
+	}
+}
+
+// TestScenarioValidate_RejectsSoakArmsMissingBinary covers a mix of binary
+// and non-binary arms (or every arm bare) — the all-or-nothing rule.
+func TestScenarioValidate_RejectsSoakArmsMissingBinary(t *testing.T) {
+	s := soakScenarioWithArms([]Arm{{ID: "base", Binary: "base"}, {ID: "bare"}})
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "soak scenarios must not set matrix.arms")
+	require.Contains(t, err.Error(), "non-empty binary")
+}
+
+// TestScenarioValidate_RejectsSoakSingleBinaryArm pins the >= 2 arms rule: a
+// build comparison needs two builds.
+func TestScenarioValidate_RejectsSoakSingleBinaryArm(t *testing.T) {
+	s := soakScenarioWithArms([]Arm{{ID: "base", Binary: "base"}})
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "at least 2 arms")
+}
+
+// TestScenarioValidate_RejectsSoakDuplicateBinary pins uniqueness of the
+// Binary values themselves, independent of the (already-checked) arm ID
+// uniqueness.
+func TestScenarioValidate_RejectsSoakDuplicateBinary(t *testing.T) {
+	s := soakScenarioWithArms([]Arm{{ID: "a0", Binary: "base"}, {ID: "a1", Binary: "base"}})
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate")
+	require.Contains(t, err.Error(), `binary "base"`)
+}
+
+func TestIsBinaryArmScenario(t *testing.T) {
+	require.False(t, (&Scenario{}).IsBinaryArmScenario(), "no arms at all")
+	require.False(t, (&Scenario{Matrix: MatrixSpec{Arms: []Arm{{ID: "a0"}}}}).IsBinaryArmScenario(), "arm with no binary")
+	require.False(t, (&Scenario{Matrix: MatrixSpec{Arms: []Arm{{ID: "a0", Binary: "base"}, {ID: "a1"}}}}).IsBinaryArmScenario(), "mixed")
+	require.True(t, (&Scenario{Matrix: MatrixSpec{Arms: []Arm{{ID: "a0", Binary: "base"}, {ID: "a1", Binary: "pr"}}}}).IsBinaryArmScenario())
+}

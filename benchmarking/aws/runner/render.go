@@ -59,6 +59,10 @@ type PointResult struct {
 
 	// Arm is the matrix.arms id this point measured; empty for arm-less sweeps.
 	Arm string `json:"arm,omitempty"`
+	// Binary is the logical binary name (see Arm.Binary) this point
+	// launched, or "" for the scenario's single default staged binary. Set
+	// for a soak base-vs-PR run's points, empty for every other scenario.
+	Binary string `json:"binary,omitempty"`
 	// GOMAXPROCS is the runtime P count measured at this point. Equal to VCPU
 	// unless an arm oversubscribed it.
 	GOMAXPROCS int `json:"gomaxprocs,omitempty"`

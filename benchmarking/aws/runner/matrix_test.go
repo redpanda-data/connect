@@ -97,6 +97,58 @@ func TestMatrixRunner_RunSweepsEveryArm(t *testing.T) {
 	require.Contains(t, scripts, "GOMAXPROCS=4")
 }
 
+// TestMatrixRunner_BinaryPathFor pins binaryPathFor's two branches: an
+// arm-less point (or an arm that left Binary empty) launches the scenario's
+// single default staged binary, unchanged from before matrix.arms[].binary
+// existed; an arm with Binary set launches the correspondingly-named
+// runnerBinaryPath instead.
+func TestMatrixRunner_BinaryPathFor(t *testing.T) {
+	mr := &MatrixRunner{BinaryPath: "/opt/bench/redpanda-connect"}
+	require.Equal(t, "/opt/bench/redpanda-connect", mr.binaryPathFor(sweepPoint{VCPU: 2}))
+	require.Equal(t, "/opt/bench/redpanda-connect-base", mr.binaryPathFor(sweepPoint{VCPU: 2, ArmID: "base", Binary: "base"}))
+	require.Equal(t, "/opt/bench/redpanda-connect-pr", mr.binaryPathFor(sweepPoint{VCPU: 2, ArmID: "pr", Binary: "pr"}))
+}
+
+// TestMatrixRunner_RunUsesPerArmBinaryPath is the end-to-end version of
+// TestMatrixRunner_BinaryPathFor: a binary-arm soak's two points must each
+// launch their OWN staged binary, and the resulting SweepPoint must carry
+// Binary through for re-analysis (see PointResult.Binary in main.go).
+func TestMatrixRunner_RunUsesPerArmBinaryPath(t *testing.T) {
+	const sessionID = "sess-bin"
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-2-base.log", sessionID): makeLog(30, 60),
+			fmt.Sprintf("runs/%s/sweep-2-pr.log", sessionID):   makeLog(30, 62),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": {"bench point complete"}}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM: ssm, LogFetcher: fetcher, RunnerInstance: "i-runner",
+		Bucket: "b", SessionID: sessionID,
+		ConfigPaths: map[string]pointConfigPaths{
+			"2-base": {Single: "/opt/bench/cfg/2-base/config.yaml"},
+			"2-pr":   {Single: "/opt/bench/cfg/2-pr/config.yaml"},
+		},
+	}
+	plan := []sweepPoint{
+		{VCPU: 2, ArmID: "base", GOMAXPROCS: 2, Streams: 1, Binary: "base"},
+		{VCPU: 2, ArmID: "pr", GOMAXPROCS: 2, Streams: 1, Binary: "pr"},
+	}
+	points, err := mr.Run(context.Background(), plan, 2, 0, 30*time.Second, "", "")
+	require.NoError(t, err)
+	require.Len(t, points, 2)
+	require.Equal(t, "base", points[0].Binary)
+	require.Equal(t, "pr", points[1].Binary)
+
+	scripts := strings.Join(ssm.Scripts, "\n---\n")
+	require.Contains(t, scripts, "/opt/bench/redpanda-connect-base run /opt/bench/cfg/2-base/config.yaml")
+	require.Contains(t, scripts, "/opt/bench/redpanda-connect-pr run /opt/bench/cfg/2-pr/config.yaml")
+}
+
 func TestMatrixRunner_RejectsPlanPointMissingFromConfigPaths(t *testing.T) {
 	// Finding #8: configPathsFor used to silently fall back to the legacy
 	// ConfigPath on a key miss. For a multi-stream point that fallback

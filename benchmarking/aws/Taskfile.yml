@@ -16,7 +16,8 @@ tasks:
         cd ../.. && {{.RUNNER}} bench \
           --scenario=benchmarking/aws/scenarios/{{.scenario}}.yaml \
           --repo-root=. \
-          {{if .engines}}--engines={{.engines}}{{end}}
+          {{if .engines}}--engines={{.engines}}{{end}} \
+          {{.extra_flags}}
 
   aws:validate:
     desc: "Validate a scenario YAML + terraform plan (no AWS spend)"

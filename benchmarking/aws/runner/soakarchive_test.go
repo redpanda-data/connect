@@ -82,6 +82,45 @@ func TestBuildSoakArchivePlan_EmptyBrokerArtifactSkipsThirdRawKey(t *testing.T) 
 	}, plan.RawKeys)
 }
 
+// TestBuildSoakArchivePlanForPoints_ArchivesEveryPoint is the CON-179 R6
+// increment 5 regression this function exists to prevent: a binary-arm
+// soak measures TWO points (one per arm) in one session, and
+// buildSoakArchivePlan alone (built for a single-point soak) would silently
+// archive only the first. Every point's raw keys must appear, using each
+// point's OWN arm-keyed sweepPoint.Key(), not just point 0's.
+func TestBuildSoakArchivePlanForPoints_ArchivesEveryPoint(t *testing.T) {
+	points := []PointResult{
+		{VCPU: 2, Arm: "base", Engine: "connect"},
+		{VCPU: 2, Arm: "pr", Engine: "connect"},
+	}
+	plan := buildSoakArchivePlanForPoints("bench-x", "scenario-y", points, nil)
+	require.Equal(t, "runs/bench-x/result.json", plan.ResultKey)
+	require.Equal(t, "soak-index/scenario-y/bench-x.json", plan.IndexKey)
+	require.Equal(t, []string{
+		"runs/bench-x/sweep-2-base.log", "runs/bench-x/prom-2-base.txt",
+		"runs/bench-x/sweep-2-pr.log", "runs/bench-x/prom-2-pr.txt",
+	}, plan.RawKeys)
+}
+
+// TestBuildSoakArchivePlanForPoints_SinglePointMatchesLegacyPlan is the
+// parity guard: a single-point (non-binary-arm) soak's plan must be
+// identical to what buildSoakArchivePlan itself would have produced, byte
+// for byte.
+func TestBuildSoakArchivePlanForPoints_SinglePointMatchesLegacyPlan(t *testing.T) {
+	points := []PointResult{{VCPU: 4, Engine: "connect"}}
+	got := buildSoakArchivePlanForPoints("bench-x", "postgres_cdc-soak", points, nil)
+	want := buildSoakArchivePlan("bench-x", "postgres_cdc-soak", sweepPoint{VCPU: 4}.Key(), "")
+	require.Equal(t, want, got)
+}
+
+// TestBuildSoakArchivePlanForPoints_NoPointsMeansNoRawArtifacts covers the
+// empty-result degrade path.
+func TestBuildSoakArchivePlanForPoints_NoPointsMeansNoRawArtifacts(t *testing.T) {
+	plan := buildSoakArchivePlanForPoints("bench-x", "scenario-y", nil, nil)
+	require.Equal(t, "runs/bench-x/result.json", plan.ResultKey)
+	require.Empty(t, plan.RawKeys)
+}
+
 // TestWrapSoakArchiveUploadErr_NoSuchBucket pins the actionable hint a
 // missing archive bucket must carry: the bucket is created by the
 // persistent terraform stack, not by any bench session's own apply, so the

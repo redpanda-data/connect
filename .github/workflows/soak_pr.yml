@@ -1,0 +1,155 @@
+name: PR Soak Comparison
+
+# /soak on a pull request (CON-179 R6, increment 5): builds the PR's base
+# and head into two binaries, runs the same sustained soak scenario for
+# each on ONE set of infrastructure (matrix.arms with per-arm binaries),
+# and posts a sticky before/after comment on the PR.
+#
+# Security model (mirrors /integration): issue_comment workflows execute
+# the DEFAULT branch's copy of this file, so a PR cannot edit the workflow
+# that grants it credentials; only commenters with write access get past
+# the gate; and the PR's code executes under the bench roles inside the
+# dedicated disposable account. Deliberately comment-triggered only — no
+# automatic runs (decided 2026-08-18).
+#
+# Usage (maintainers): comment `/soak` on a PR, optionally
+# `/soak <scenario>` (default postgres/orders-soak-pr).
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: bench-soak
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  soak-compare:
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/soak')
+    runs-on: ubuntu-latest
+    timeout-minutes: 210
+    env:
+      REDPANDA_LICENSE_SECRET: redpanda-connect-bench/license
+    steps:
+      - name: Check commenter permissions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PERMISSION=$(gh api "repos/${{ github.repository }}/collaborators/${{ github.event.comment.user.login }}/permission" --jq '.permission')
+          if [[ "${PERMISSION}" != "admin" && "${PERMISSION}" != "write" ]]; then
+            echo "::error::User ${{ github.event.comment.user.login }} does not have write access"
+            exit 1
+          fi
+
+      - name: Parse scenario from comment
+        id: parse
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          SCENARIO=$(echo "${COMMENT_BODY}" | sed 's|^/soak||' | xargs)
+          echo "scenario=${SCENARIO:-postgres/orders-soak-pr}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR merge ref
+        uses: actions/checkout@v6
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/merge
+          fetch-depth: 0
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Build base and PR binaries
+        id: build
+        shell: bash
+        run: |
+          # On a merge ref: HEAD^1 = base branch tip, HEAD = base + PR.
+          # Comparing them isolates exactly the PR's effect.
+          MERGE_SHA=$(git rev-parse HEAD)
+          BASE_SHA=$(git rev-parse HEAD^1)
+          echo "base_sha=${BASE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "pr_sha=$(git rev-parse HEAD^2)" >> "$GITHUB_OUTPUT"
+          git checkout --detach "${BASE_SHA}"
+          go build -o "$RUNNER_TEMP/rc-base" ./cmd/redpanda-connect
+          git checkout --detach "${MERGE_SHA}"
+          go build -o "$RUNNER_TEMP/rc-pr" ./cmd/redpanda-connect
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
+          aws-region: us-east-2
+          role-duration-seconds: 14400
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Install Task
+        uses: ./.github/actions/setup-task
+
+      - name: Run A/B soak
+        working-directory: benchmarking/aws
+        shell: bash
+        run: |
+          task aws:bench scenario="${{ steps.parse.outputs.scenario }}" \
+            extra_flags="--binary base=$RUNNER_TEMP/rc-base --binary pr=$RUNNER_TEMP/rc-pr" \
+            2>&1 | tee "$RUNNER_TEMP/soak-pr.log"
+
+      - name: Post comparison comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          MARKER="<!-- rpcn-soak-comparison -->"
+          BODY_FILE="$RUNNER_TEMP/comment.md"
+          {
+            echo "$MARKER"
+            if COMPARISON=$(sed -n '/---SOAK-COMPARISON-BEGIN---/,/---SOAK-COMPARISON-END---/p' "$RUNNER_TEMP/soak-pr.log" 2>/dev/null | sed '1d;$d') && [ -n "$COMPARISON" ]; then
+              echo "$COMPARISON"
+            else
+              echo "## Soak comparison failed"
+              echo "The A/B soak did not produce a comparison — see the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+            fi
+            echo ""
+            echo "_base: \`${{ steps.build.outputs.base_sha }}\` · pr: \`${{ steps.build.outputs.pr_sha }}\` · [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
+          } > "$BODY_FILE"
+          # Sticky: update the existing marker comment if present, else create.
+          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" --paginate --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | head -1)
+          if [ -n "$EXISTING" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$EXISTING" -F body=@"$BODY_FILE" >/dev/null
+          else
+            gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" -F body=@"$BODY_FILE" >/dev/null
+          fi
+
+      - name: Verify teardown actually completed
+        if: always()
+        run: |
+          LIVE=$(aws ec2 describe-instances --region us-east-2 \
+            --filters Name=tag:Project,Values=redpanda-connect-bench Name=instance-state-name,Values=pending,running,stopping,stopped \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+          RDS=$(aws rds describe-db-instances --region us-east-2 \
+            --query "DBInstances[].DBInstanceIdentifier" --output text)
+          if [ -n "$LIVE$RDS" ]; then
+            echo "::error::Teardown left resources behind (EC2: ${LIVE:-none}; RDS: ${RDS:-none})."
+            exit 1
+          fi
+          echo "account clean: no bench EC2, no RDS"
+
+      - name: Upload run log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: soak-pr-log
+          path: ${{ runner.temp }}/soak-pr.log
+          retention-days: 30
