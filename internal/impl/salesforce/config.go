@@ -177,7 +177,8 @@ func grpcFieldSpec() *service.ConfigField {
 			Description("Maximum delay for gRPC reconnection backoff.").
 			Default("30s"),
 		service.NewIntField(sfFieldGRPCReconnectMaxAttempts).
-			Description("Maximum number of gRPC reconnection attempts. 0 means unlimited.").
+			Description("Maximum number of gRPC reconnection attempts. 0 means unlimited. This budget also governs transient schema-fetch failures: an event whose schema fetch keeps failing at the same replay position is retried (by reconnect-and-redeliver, or inline before the first event is delivered) this many times before the topic fails permanently. Deterministic schema failures - a schema that is missing, inaccessible, or fails to compile - and payloads that repeatedly fail to decode give up after a small fixed number of attempts regardless of this setting, since retrying cannot change the outcome.").
+			ShortDescription("Maximum gRPC reconnection attempts (0 = unlimited); also bounds transient schema-fetch retries before the topic fails permanently.").
 			Default(0),
 		service.NewDurationField(sfFieldGRPCShutdownTimeout).
 			Description("Timeout for graceful gRPC client shutdown.").

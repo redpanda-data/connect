@@ -727,6 +727,10 @@ func (e *salesforceCDCInputExecutor) emitSnapshot(
 		return fmt.Errorf("track snapshot checkpoint: %w", err)
 	}
 
+	// The ack error is deliberately ignored: nacks are replayed by
+	// auto_replay_nacks (the default), and disabling that is a documented
+	// opt-in to DROP rejected messages, so the checkpoint must advance past
+	// them rather than pin the tracker.
 	ackFn := func(ackCtx context.Context, _ error) error {
 		resolved := resolveFn()
 		if resolved == nil {
@@ -740,11 +744,11 @@ func (e *salesforceCDCInputExecutor) emitSnapshot(
 		e.stateMu.Lock()
 		e.state.SnapshotComplete = acked.SnapshotComplete
 		e.state.RestCursor = acked.RestCursor
-		err := e.saveStateLocked(ackCtx)
+		persistErr := e.saveStateLocked(ackCtx)
 		e.stateMu.Unlock()
 
-		if err != nil {
-			return fmt.Errorf("persist snapshot checkpoint: %w", err)
+		if persistErr != nil {
+			return fmt.Errorf("persist snapshot checkpoint: %w", persistErr)
 		}
 		return nil
 	}
@@ -900,6 +904,10 @@ func (e *salesforceCDCInputExecutor) flushTopic(
 		return fmt.Errorf("track checkpoint for %s: %w", topic, err)
 	}
 
+	// The ack error is deliberately ignored: nacks are replayed by
+	// auto_replay_nacks (the default), and disabling that is a documented
+	// opt-in to DROP rejected messages, so the checkpoint must advance past
+	// them rather than pin the tracker.
 	ackFn := func(ackCtx context.Context, _ error) error {
 		resolved := resolveFn()
 		if resolved == nil {
@@ -912,11 +920,11 @@ func (e *salesforceCDCInputExecutor) flushTopic(
 
 		e.stateMu.Lock()
 		e.state.Topics[topic] = acked
-		err := e.saveStateLocked(ackCtx)
+		persistErr := e.saveStateLocked(ackCtx)
 		e.stateMu.Unlock()
 
-		if err != nil {
-			return fmt.Errorf("persist checkpoint: %w", err)
+		if persistErr != nil {
+			return fmt.Errorf("persist checkpoint: %w", persistErr)
 		}
 		return nil
 	}
@@ -961,7 +969,17 @@ func setMetaIfNonEmpty(msg *service.Message, key, value string) {
 // handleStreamErr handles a per-topic permanent stream failure. A stale
 // replay_id (codes.InvalidArgument) is recoverable: clear it, persist, and
 // return true so the caller resubscribes via the configured preset.
+//
+// Terminal verdicts from the subscription (undecodable payload, unfetchable
+// schema) are never treated as a stale replay ID, even when they wrap a gRPC
+// InvalidArgument: that status describes the schema, and clearing the
+// checkpoint would resubscribe via the preset and silently skip everything
+// between the checkpoint and now.
 func (e *salesforceCDCInputExecutor) handleStreamErr(ctx context.Context, topic string, err error) bool {
+	var terminal *salesforcegrpc.TerminalStreamError
+	if errors.As(err, &terminal) {
+		return false
+	}
 	if grpcErr, ok := status.FromError(err); ok && grpcErr.Code() == codes.InvalidArgument {
 		e.logger.Warnf("topic %s replay_id rejected (%s); clearing and reconnecting via configured preset", topic, grpcErr.Message())
 
