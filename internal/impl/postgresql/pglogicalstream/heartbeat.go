@@ -35,13 +35,12 @@ func newHeartbeat(config *Config, prefix, value string) (*heartbeat, error) {
 		return nil, err
 	}
 	h := &heartbeat{
-		db:     dbConn,
-		task:   nil,
-		logger: config.Logger,
-		prefix: prefix,
-		value:  value,
-		transactional: config.IncrementalSnapshot != nil &&
-			config.IncrementalSnapshot.Enabled,
+		db:            dbConn,
+		task:          nil,
+		logger:        config.Logger,
+		prefix:        prefix,
+		value:         value,
+		transactional: config.IncSnapshotEnabled(),
 	}
 	h.task = asyncroutine.NewPeriodicWithContext(config.HeartbeatInterval, h.run)
 	return h, nil

@@ -640,11 +640,9 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	// offsets are nilable since we don't provide offset tracking during the snapshot phase
 	cp := checkpoint.NewCapped[snapshot.CheckpointOffset](int64(p.checkpointLimit))
 
-	// blockingSnapshotComplete restricts the isSnapshot/snapshotAckWG barrier to
-	// the one-shot stream_snapshot phase, not the also-nil-LSN but continuous
-	// incremental snapshot batches. Starts true unless this session will
-	// actually run that phase (see WillEmitBlockingSnapshot), then flips true
-	// once its completion sentinel is handled.
+	// blockingSnapshotComplete gates the isSnapshot/snapshotAckWG barrier to
+	// the one-shot stream_snapshot phase, never to incremental snapshot's
+	// nil-LSN batches. See WillEmitBlockingSnapshot.
 	blockingSnapshotComplete := !pgStream.WillEmitBlockingSnapshot()
 
 	// pendingIncrementalState carries the most recent checkpoint state until
