@@ -33,6 +33,11 @@ type IncrementalSnapshotCfg struct {
 	ResumeState *incrementalsnapshot.State
 }
 
+// IncSnapshotEnabled returns whether incremental snapshot is enabled or not.
+func (c *IncrementalSnapshotCfg) IsEnabled() bool {
+	return c != nil && c.Enabled
+}
+
 // CheckpointOffset is the per-batch payload tracked by the LSN checkpointer.
 // IncrementalSnapshotState is non-nil when a batch (or the phantom row-less
 // one from commitIncrementalSnapshotCheckpoint) carries a checkpoint;

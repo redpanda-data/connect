@@ -62,6 +62,9 @@ type Config struct {
 }
 
 // IncSnapshotEnabled returns whether incremental snapshot is enabled or not.
-func (c *Config) IncSnapshotEnabled() bool {
-	return c != nil && c.IncrementalSnapshot != nil && c.IncrementalSnapshot.Enabled
+func (c *Config) IncrementalSnapshotCfg() *snapshot.IncrementalSnapshotCfg {
+	if c != nil && c.IncrementalSnapshot != nil {
+		return c.IncrementalSnapshot
+	}
+	return nil
 }

@@ -22,8 +22,8 @@ import (
 // Config.IncrementalSnapshot is enabled. It is a no-op (leaving both
 // s.snapshotCoordinator and s.incrementalDB nil) otherwise.
 func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) error {
-	isConf := config.IncrementalSnapshot
-	if isConf == nil || !isConf.Enabled {
+	incSnapshotCfg := config.IncrementalSnapshotCfg()
+	if !incSnapshotCfg.IsEnabled() {
 		return nil
 	}
 
@@ -36,7 +36,7 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 		return fmt.Errorf("pinging incremental snapshot connection: %w", err)
 	}
 
-	tableNames := isConf.Tables
+	tableNames := incSnapshotCfg.Tables
 	if len(tableNames) == 0 {
 		tableNames = config.DBTables
 	}
@@ -59,7 +59,7 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 
 	coordinator, err := snapshot.NewCoordinator(incrementalsnapshot.Config{
 		Tables:    tables,
-		ChunkSize: isConf.ChunkSize,
+		ChunkSize: incSnapshotCfg.ChunkSize,
 		Deps: incrementalsnapshot.Deps{
 			ResolvePrimaryKey: s.resolveIncrementalPK,
 			ResolveMaxKey:     s.resolveIncrementalMaxKey,
@@ -72,7 +72,7 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 			ForceFreshTransaction: s.forceFreshIncrementalTransaction,
 			FetchChunk:            s.fetchIncrementalChunk,
 		},
-	}, isConf.ResumeState)
+	}, incSnapshotCfg.ResumeState)
 	if err != nil {
 		_ = db.Close()
 		s.incrementalDB = nil
