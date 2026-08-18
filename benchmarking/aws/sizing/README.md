@@ -1,7 +1,15 @@
 # Compute sizing page
 
-Self-serve tool: pick a connector, state the volume, set a processing-tax setting and a
-headroom percentage; get back a licensable core count.
+Self-serve tool: pick an input and an output, state the volume, set a processing-tax
+setting and a headroom percentage; get back a licensable core count.
+
+The tool sizes **pipelines**, not bare connectors. Most measured entries pair one side
+with a Redpanda topic (a CDC source producing into it, or a sink draining it); one pair —
+Oracle CDC → SQL Server (`sql_insert`) — was measured end to end with no broker in the
+middle. Picking a pair nobody ran (say `postgres_cdc` → Snowflake) gets a refusal that
+names whichever halves WERE measured; the tool never composes two half-curves into a
+pipeline number, because chaining through a topic is a deployment shape, not a
+measurement.
 
 Volume can be typed either way a customer states it. **Events/sec and throughput are two
 views of one quantity and stay linked** — edit either and the other follows, with the
@@ -19,6 +27,23 @@ Published URL: https://claude.ai/code/artifact/febb2295-eb57-4115-b2ab-94c1717f7
 (private until shared from the page's share menu). To update it, republish this same
 file path and pass that URL as `url` — a fresh conversation that skips the `url` mints a
 new link, which strands anyone who bookmarked the old one.
+
+## 2026-08-18 data refresh — what changed and why
+
+- **Oracle's vCPU curve went 13-flat → 19-flat.** Every oracle run before 2026-08-05 is
+  void: its load generator was self-throttling (a Ticker gating a blocking insert), so the
+  old curve measured the generator. 19 MB/s is the saturated single-reader figure from the
+  reader run; the page's always-on caveat says a reader keeping up in real time sustains
+  7-12 MB/s and that cores were measured irrelevant.
+- **SQL Server CDC added** from the collated 2026-08-10..11 sweep. Window MEANS, not
+  medians — the capture is bursty (duty cycle 44-86%) and medians read ~0 between bursts.
+  2 vCPU is the sweet spot; the 8 vCPU dip is an artifact window.
+- **Snowflake sink added** from the 2026-08-18 sweep (post-unit-fix, so decimal MB/s).
+  The curve requires the benchmarked memory-buffer recipe — without it throughput
+  collapses to 0.04 MB/s (measured) because input acks chain to Snowpipe commit latency.
+  Plateau ~66-71 MB/s from 2 vCPU up is the commit path, not compute.
+- **Oracle → SQL Server end-to-end added** (2026-08-18): flat ~6.4 MB/s at any core count,
+  ~0.12 cores used — size it at 1 core.
 
 ## Oracle scales with readers, not cores
 
@@ -56,12 +81,13 @@ same shape; `sizeFor` picks up the reader path from its presence alone.
 
 ## The hard boundary
 
-Only six connectors have a number: `postgres_cdc`, `mysql_cdc`, `mongodb_cdc`,
+Only nine pipelines have a number: `postgres_cdc`, `mysql_cdc`, `mongodb_cdc`,
+`sqlserver_cdc`, `snowflake_sink`, `oracle_to_sqlserver`,
 `dynamodb_cdc`, `oracledb_cdc`, and the `iceberg` sink. Anything else — including
 `kinesis`, which has tuning runs but no throughput sweep — renders "not benchmarked,
 ask the perf team" and no number. This is deliberate: every figure on the page must be
 defensible back to a specific run, and one plausible-looking guess for an unbenched
-connector would destroy that guarantee for all six real ones. Do not add a seventh
+pipeline would destroy that guarantee for all nine real ones. Do not add a tenth
 row by analogy or interpolation.
 
 ## Testing
@@ -84,7 +110,7 @@ Two are worth knowing about specifically:
   so a stale name in that bridge throws at load, blanks the entire UI, and leaves the suite
   green. That happened once; this test checks both sides of the bridge against the file.
 
-One of them is a **literal data snapshot** pinning all 24 curve points, the six SHAs, run
+One of them is a **literal data snapshot** pinning all 36 curve points, the SHAs, run
 paths, dates, peak-heap figures and `benchedEventBytes`, the event-size constants, and the
 `measured` flag on all three tax settings. It exists because these numbers go straight into
 customer quotes and the earlier `typeof`-only checks let a transposed digit through. The

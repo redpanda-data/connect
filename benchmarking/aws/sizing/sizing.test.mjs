@@ -147,6 +147,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
   const actual = {}
   for (const [key, c] of Object.entries(core.CONNECTORS)) {
     actual[key] = {
+      input: c.input,
+      output: c.output,
       curve: core.VCPU_POINTS.map((v) => c.curve[v]),
       benchedEventBytes: c.benchedEventBytes,
       peakHeapMB: c.peakHeapMB,
@@ -162,6 +164,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
 
   assert.deepEqual(actual, {
     postgres_cdc: {
+      input: 'postgres_cdc',
+      output: 'redpanda',
       curve: [51, 83, 102, 102],
       benchedEventBytes: 1200,
       peakHeapMB: 118,
@@ -174,6 +178,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       confidence: 'high',
     },
     mysql_cdc: {
+      input: 'mysql_cdc',
+      output: 'redpanda',
       curve: [70, 102, 108, 111],
       benchedEventBytes: 1200,
       peakHeapMB: 378,
@@ -186,6 +192,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       confidence: 'high',
     },
     mongodb_cdc: {
+      input: 'mongodb_cdc',
+      output: 'redpanda',
       curve: [26, 33, 33, 33],
       benchedEventBytes: 1200,
       peakHeapMB: 157,
@@ -198,6 +206,8 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       confidence: 'high',
     },
     dynamodb_cdc: {
+      input: 'dynamodb_cdc',
+      output: 'redpanda',
       curve: [40, 72, 81, 82],
       benchedEventBytes: 4096,
       peakHeapMB: 936,
@@ -210,18 +220,39 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       confidence: 'high',
     },
     oracledb_cdc: {
-      curve: [13, 13, 13, 13],
+      input: 'oracledb_cdc',
+      output: 'redpanda',
+      // 19-flat replaced the void 13-flat: the pre-2026-08-05 oracle runs measured a
+      // self-throttling load generator, not the connector.
+      curve: [19, 19, 19, 19],
       benchedEventBytes: 1200,
       peakHeapMB: 190,
-      runPath: 'oracle/orders-cdc/2026-06-22T16-31-22Z.json',
-      runDate: '2026-06-22',
-      runSha: '63ea466c5',
+      runPath: 'oracle/orders-5table-readers/2026-08-06T15-02-03Z.json',
+      runDate: '2026-08-06',
+      runSha: 'f1ccf5289',
       curveUnit: 'MB',
       hasCeiling: true,
       sourceKind: 'cdc',
       confidence: 'high',
     },
+    sqlserver_cdc: {
+      input: 'sqlserver_cdc',
+      output: 'redpanda',
+      // Window means (bursty capture; medians unusable), collated sweep 2026-08-10..11.
+      curve: [12.3, 19.8, 20.7, 12.7],
+      benchedEventBytes: 1200,
+      peakHeapMB: null,
+      runPath: 'docs/benchmark-results/sqlserver.md — collated 4-point sweep',
+      runDate: '2026-08-11',
+      runSha: '8964f2755',
+      curveUnit: 'MB',
+      hasCeiling: true,
+      sourceKind: 'cdc',
+      confidence: 'medium',
+    },
     iceberg_sink: {
+      input: 'redpanda',
+      output: 'iceberg',
       curve: [34, 65, 97, 128],
       benchedEventBytes: 1200,
       peakHeapMB: 2681,
@@ -231,6 +262,34 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       curveUnit: 'MiB',
       hasCeiling: false,
       sourceKind: 'sink',
+      confidence: 'medium',
+    },
+    snowflake_sink: {
+      input: 'redpanda',
+      output: 'snowflake',
+      curve: [20.2, 65.6, 60.8, 70.9],
+      benchedEventBytes: 1200,
+      peakHeapMB: 4710,
+      runPath: 'snowflake/orders-sink/2026-08-18T20-32-57Z.json',
+      runDate: '2026-08-18',
+      runSha: 'c7709c869',
+      curveUnit: 'MB',
+      hasCeiling: true,
+      sourceKind: 'sink',
+      confidence: 'high',
+    },
+    oracle_to_sqlserver: {
+      input: 'oracledb_cdc',
+      output: 'sqlserver_insert',
+      curve: [6.3, 6.4, 3.5, 6.4],
+      benchedEventBytes: 1200,
+      peakHeapMB: 222,
+      runPath: 'oracle-mssql/oracle-orders-to-sqlserver/2026-08-18T04-25-31Z.json',
+      runDate: '2026-08-18',
+      runSha: '0ccd97ae3',
+      curveUnit: 'MB',
+      hasCeiling: true,
+      sourceKind: 'cdc',
       confidence: 'medium',
     },
   })
@@ -257,6 +316,12 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
 
 test('run paths point at real result files, extension included', () => {
   for (const [key, c] of Object.entries(core.CONNECTORS)) {
+    // sqlserver is collated across per-point runs, so it cites the doc's sweep table
+    // instead of a single JSON — the one sanctioned exception.
+    if (key === 'sqlserver_cdc') {
+      assert.match(c.run.path, /^docs\/benchmark-results\/[a-z0-9-]+\.md /, `${key} must cite the collated doc`)
+      continue
+    }
     assert.match(c.run.path, /^[a-z0-9-]+\/[a-z0-9-]+\/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.json$/, `${key} run path is not a paste-able results/ path`)
   }
 })
@@ -266,16 +331,20 @@ test('every connector reports provenance and a peak heap figure', () => {
     assert.ok(c.run.sha, `${key} missing git sha`)
     assert.ok(c.run.date, `${key} missing run date`)
     assert.ok(c.run.path, `${key} missing run path`)
-    assert.ok(c.peakHeapMB > 0, `${key} missing peak heap`)
+    // peakHeapMB is either a real measurement or an explicit null (sqlserver's sweep
+    // doc records no heap) — undefined would mean the field was forgotten.
+    assert.ok(c.peakHeapMB === null || c.peakHeapMB > 0, `${key} missing peak heap`)
+    assert.notEqual(c.peakHeapMB, undefined, `${key} peakHeapMB must be set or an explicit null`)
     for (const v of core.VCPU_POINTS) {
       assert.equal(typeof c.curve[v], 'number', `${key} missing curve point at ${v} vCPU`)
     }
   }
 })
 
-test('the six blessed connectors are present and kinesis is not', () => {
+test('the nine blessed pipelines are present and kinesis is not', () => {
   assert.deepEqual(Object.keys(core.CONNECTORS).sort(), [
-    'dynamodb_cdc', 'iceberg_sink', 'mongodb_cdc', 'mysql_cdc', 'oracledb_cdc', 'postgres_cdc',
+    'dynamodb_cdc', 'iceberg_sink', 'mongodb_cdc', 'mysql_cdc', 'oracle_to_sqlserver',
+    'oracledb_cdc', 'postgres_cdc', 'snowflake_sink', 'sqlserver_cdc',
   ])
 })
 
@@ -439,7 +508,7 @@ test('the oracle reader curve is pinned, sublinear, and short of the offered loa
 
 test('only oracle is reader-scaled; the others ignore a readers argument', () => {
   assert.deepEqual(core.measuredReaderCounts(core.CONNECTORS.oracledb_cdc), [1, 2, 5])
-  for (const key of ['postgres_cdc', 'mysql_cdc', 'mongodb_cdc', 'dynamodb_cdc', 'iceberg_sink']) {
+  for (const key of ['postgres_cdc', 'mysql_cdc', 'mongodb_cdc', 'dynamodb_cdc', 'iceberg_sink', 'sqlserver_cdc', 'snowflake_sink', 'oracle_to_sqlserver']) {
     assert.deepEqual(core.measuredReaderCounts(core.CONNECTORS[key]), [])
     const withReaders = core.sizeFor({ connector: key, eventsPerSec: 10_000, eventBytes: 1200, readers: 3 })
     const without = core.sizeFor({ connector: key, eventsPerSec: 10_000, eventBytes: 1200 })
@@ -549,4 +618,98 @@ test('the UI bridge names match the core exports and cover what the UI destructu
   for (const name of destructure[1].split(',').map((s) => s.trim()).filter(Boolean)) {
     assert.ok(bridged.includes(name), `UI destructures "${name}", which the bridge does not provide`)
   }
+})
+
+test('every entry names an input/output pair that exists in the registries', () => {
+  for (const [key, c] of Object.entries(core.CONNECTORS)) {
+    assert.ok(c.input in core.INPUTS, `${key} input "${c.input}" is not in INPUTS`)
+    assert.ok(c.output in core.OUTPUTS, `${key} output "${c.output}" is not in OUTPUTS`)
+  }
+  // No two entries may claim the same pair, or pipelineFor becomes order-dependent.
+  const pairs = Object.values(core.CONNECTORS).map((c) => `${c.input}→${c.output}`)
+  assert.equal(new Set(pairs).size, pairs.length, 'duplicate input/output pair')
+})
+
+test('pipelineFor resolves measured pairs and refuses everything else', () => {
+  assert.equal(core.pipelineFor('postgres_cdc', 'redpanda').key, 'postgres_cdc')
+  assert.equal(core.pipelineFor('redpanda', 'iceberg').key, 'iceberg_sink')
+  assert.equal(core.pipelineFor('redpanda', 'snowflake').key, 'snowflake_sink')
+  assert.equal(core.pipelineFor('oracledb_cdc', 'sqlserver_insert').key, 'oracle_to_sqlserver')
+  assert.equal(core.pipelineFor('sqlserver_cdc', 'redpanda').key, 'sqlserver_cdc')
+  // Cross combinations with measured halves are still not measured pairs.
+  assert.equal(core.pipelineFor('postgres_cdc', 'snowflake'), null)
+  assert.equal(core.pipelineFor('mysql_cdc', 'iceberg'), null)
+  assert.equal(core.pipelineFor('redpanda', 'redpanda'), null)
+})
+
+test('halvesFor names the measured halves of an unmeasured pair without composing them', () => {
+  const both = core.halvesFor('postgres_cdc', 'snowflake')
+  assert.equal(both.source.key, 'postgres_cdc')
+  assert.equal(both.sink.key, 'snowflake_sink')
+  // sqlserver as an OUTPUT half: only the e2e pair covers sql_insert, so no redpanda-side
+  // sink half exists for it.
+  const e2eOnly = core.halvesFor('mysql_cdc', 'sqlserver_insert')
+  assert.equal(e2eOnly.source.key, 'mysql_cdc')
+  assert.equal(e2eOnly.sink, null)
+  // A redpanda endpoint has no "half" of its own.
+  assert.equal(core.halvesFor('redpanda', 'snowflake').source, null)
+})
+
+test('acceptance: redpanda → snowflake sizes at 2 cores for 40k/s of 1200 B events', () => {
+  // 48 MB/s + 30% headroom = 62.4, cleared by the 65.6 MB/s point at 2 vCPU.
+  const r = core.sizeFor({
+    connector: 'snowflake_sink', eventsPerSec: 40_000, eventBytes: 1200,
+    tax: 'passthrough', headroomPct: 30,
+  })
+  assert.equal(r.status, 'ok')
+  assert.equal(r.cores, 2)
+  assert.equal(r.measuredRate, 65.6)
+  assert.equal(r.unit, 'MB', 'the snowflake run postdates the unit fix, so it stores decimal MB/s')
+  // The recipe caveat must ride along on every answer, not only refusals.
+  assert.ok(r.warnings.some((w) => /memory buffer/.test(w)), 'buffer-recipe caveat missing')
+})
+
+test('snowflake refusals blame the commit path and not cores', () => {
+  const r = core.sizeFor({
+    connector: 'snowflake_sink', eventsPerSec: 80_000, eventBytes: 1200,
+    tax: 'passthrough', headroomPct: 30,
+  })
+  assert.equal(r.status, 'ceiling')
+  assert.equal(r.measuredCeilingRate, 70.9)
+  assert.match(r.ceiling.reason, /commit/)
+  assert.match(r.ceiling.fix, /max_in_flight/)
+})
+
+test('acceptance: oracle → SQL Server end to end sizes at 1 core and refuses past ~6.4', () => {
+  // 4,000/s at 1200 B = 4.8 MB/s + 30% = 6.24, cleared by the 6.3 MB/s 1 vCPU point.
+  const ok = core.sizeFor({
+    connector: 'oracle_to_sqlserver', eventsPerSec: 4_000, eventBytes: 1200,
+    tax: 'passthrough', headroomPct: 30,
+  })
+  assert.equal(ok.status, 'ok')
+  assert.equal(ok.cores, 1)
+  // 6,000/s = 7.2 MB/s: past every measured point — flat pipeline, cores refused.
+  const over = core.sizeFor({
+    connector: 'oracle_to_sqlserver', eventsPerSec: 6_000, eventBytes: 1200,
+    tax: 'passthrough', headroomPct: 30,
+  })
+  assert.equal(over.status, 'ceiling')
+  assert.match(over.ceiling.reason, /0\.12 cores/)
+  assert.ok(over.warnings.some((w) => /outlier window/.test(w)), 'the 4 vCPU outlier caveat must ride along')
+})
+
+test('the oracle vCPU curve is the saturated single-reader figure, not the void 13-flat', () => {
+  const c = core.CONNECTORS.oracledb_cdc
+  for (const v of core.VCPU_POINTS) assert.equal(c.curve[v], 19)
+  assert.equal(c.run.path, 'oracle/orders-5table-readers/2026-08-06T15-02-03Z.json')
+  // The always-on caveat that explains the flat drawing and the sustained 7-12 figure.
+  const r = core.sizeFor({ connector: 'oracledb_cdc', eventsPerSec: 5_000, eventBytes: 1200, readers: 1 })
+  assert.ok(r.warnings.some((w) => /7-12 MB\/s/.test(w)), 'sustained-rate caveat missing')
+})
+
+test('sqlserver answers carry the means-not-medians caveat', () => {
+  const r = core.sizeFor({ connector: 'sqlserver_cdc', eventsPerSec: 8_000, eventBytes: 1200, tax: 'passthrough', headroomPct: 30 })
+  assert.equal(r.status, 'ok')
+  assert.equal(r.cores, 2, '12.48 MB/s required clears at the 19.8 mean, not the 12.3 one')
+  assert.ok(r.warnings.some((w) => /window means/.test(w)))
 })

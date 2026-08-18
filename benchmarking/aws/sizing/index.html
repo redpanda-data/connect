@@ -82,16 +82,42 @@ export const ORACLE_READER_SCALING = {
   run: { path: 'oracle/orders-5table-readers/2026-08-06T15-02-03Z.json', date: '2026-08-06', sha: 'f1ccf5289' },
   corroboration: { path: 'oracle/orders-5table-readers-fastio/2026-08-06T22-17-54Z.json', date: '2026-08-06', sha: '3e8bf51d4' },
   notes: [
-    'Readers partition tables — each is an oracledb_cdc input with its own table list. A single hot table cannot be split, so if the write load sits in one table, no reader count and no core count will beat the 13 MB/s measured on the single-table run.',
+    'Readers partition tables — each is an oracledb_cdc input with its own table list. A single hot table cannot be split, so if the write load sits in one table no reader count and no core count helps; the most a single-table reader was measured sustaining while keeping up is ~7.7 MB/s, and its saturated maximum was never measured.',
+    'The 19 MB/s single-reader figure is a reader DRAINING BACKLOG at full tilt. A reader that must keep up in real time sustains 7-12 MB/s — plan capacity on that, and treat 19 as catch-up speed after an outage.',
     'Scaling is sublinear and does not reach the offered load: 5x the readers bought 1.55x the throughput, and 29-30 MB/s was the most ever seen against a 36.7 MB/s write rate. A per-database ceiling somewhere near 31 MB/s is the most likely explanation, so treat ~30 MB/s as the practical Oracle ceiling until something above it is measured.',
     'Both runs held vCPU at 4. Cores were never the constraint on this connector, so the core count below is what the measurement used, not a figure that scales.',
   ],
 }
 
+// The page sizes PIPELINES: an input and an output, chosen separately. Most benches
+// measured one half against a Redpanda topic (a CDC source producing to it, or a sink
+// draining it); one pair so far — Oracle → SQL Server — was measured end to end. A pair
+// with no entry in CONNECTORS renders a refusal that names whichever halves WERE
+// measured, because composing halves is not a measurement.
+export const INPUTS = {
+  postgres_cdc: 'PostgreSQL CDC (postgres_cdc)',
+  mysql_cdc: 'MySQL CDC (mysql_cdc)',
+  mongodb_cdc: 'MongoDB CDC (mongodb_cdc)',
+  dynamodb_cdc: 'DynamoDB CDC (aws_dynamodb_cdc)',
+  oracledb_cdc: 'Oracle CDC (oracle_cdc)',
+  sqlserver_cdc: 'SQL Server CDC (microsoft_sql_server_cdc)',
+  redpanda: 'Redpanda topic',
+}
+
+export const OUTPUTS = {
+  redpanda: 'Redpanda topic',
+  iceberg: 'Apache Iceberg (iceberg)',
+  snowflake: 'Snowflake (snowflake_streaming)',
+  sqlserver_insert: 'SQL Server (sql_insert)',
+}
+
 // Connect median throughput at 1/2/4/8 vCPU, all measured on a c8g.4xlarge runner.
 // Each curve is in the unit its own run stored — see curveUnit and the UNITS note above.
+// Each entry names the input/output pair it measured; pipelineFor resolves a pair to
+// its entry, or to nothing.
 export const CONNECTORS = {
   postgres_cdc: {
+    input: 'postgres_cdc', output: 'redpanda',
     label: 'PostgreSQL CDC (postgres_cdc)',
     curve: { 1: 51, 2: 83, 4: 102, 8: 102 },
     benchedEventBytes: 1200,
@@ -103,6 +129,7 @@ export const CONNECTORS = {
     confidence: 'high',
   },
   mysql_cdc: {
+    input: 'mysql_cdc', output: 'redpanda',
     label: 'MySQL CDC (mysql_cdc)',
     curve: { 1: 70, 2: 102, 4: 108, 8: 111 },
     benchedEventBytes: 1200,
@@ -114,6 +141,7 @@ export const CONNECTORS = {
     confidence: 'high',
   },
   mongodb_cdc: {
+    input: 'mongodb_cdc', output: 'redpanda',
     label: 'MongoDB CDC (mongodb_cdc)',
     curve: { 1: 26, 2: 33, 4: 33, 8: 33 },
     benchedEventBytes: 1200,
@@ -128,6 +156,7 @@ export const CONNECTORS = {
     confidence: 'high',
   },
   dynamodb_cdc: {
+    input: 'dynamodb_cdc', output: 'redpanda',
     label: 'DynamoDB CDC (aws_dynamodb_cdc)',
     curve: { 1: 40, 2: 72, 4: 81, 8: 82 },
     benchedEventBytes: 4096,
@@ -142,11 +171,15 @@ export const CONNECTORS = {
     confidence: 'high',
   },
   oracledb_cdc: {
+    input: 'oracledb_cdc', output: 'redpanda',
     label: 'Oracle CDC (oracle_cdc)',
-    curve: { 1: 13, 2: 13, 4: 13, 8: 13 },
+    // Saturated single-reader rate from the reader run. The old 13-flat curve came from
+    // a pre-2026-08-05 run whose load generator was later found to be self-throttling
+    // (a Ticker gating a blocking insert), which voids everything it measured.
+    curve: { 1: 19, 2: 19, 4: 19, 8: 19 },
     benchedEventBytes: 1200,
     peakHeapMB: 190,
-    run: { path: 'oracle/orders-cdc/2026-06-22T16-31-22Z.json', date: '2026-06-22', sha: '63ea466c5' },
+    run: { path: 'oracle/orders-5table-readers/2026-08-06T15-02-03Z.json', date: '2026-08-06', sha: 'f1ccf5289' },
     curveUnit: 'MB',
     ceiling: {
       reason: 'one LogMiner reader — the ceiling is per reader, and vCPU count is irrelevant to it',
@@ -155,8 +188,36 @@ export const CONNECTORS = {
     sourceKind: 'cdc',
     confidence: 'high',
     readerScaling: ORACLE_READER_SCALING,
+    pipelineNote:
+      'This curve was measured at 4 vCPU only and is drawn flat because cores were measured ' +
+      'irrelevant: Connect never used more than ~1 core in any configuration, and the ' +
+      'Oracle-to-SQL-Server end-to-end run measured flat throughput at 1, 2, 4 and 8 vCPU. ' +
+      '19 MB/s is a reader draining backlog; a reader keeping up in real time sustains 7-12 MB/s.',
+  },
+  sqlserver_cdc: {
+    input: 'sqlserver_cdc', output: 'redpanda',
+    label: 'SQL Server CDC (microsoft_sql_server_cdc)',
+    // Window MEANS, not medians: this capture alternates burst and idle (duty cycle
+    // 44-86%), so the median reads ~0 between bursts and is unusable. Values are the
+    // collated 4-point sweep's mean rec/s x 1200 B, which the doc carries as mean MB/s.
+    curve: { 1: 12.3, 2: 19.8, 4: 20.7, 8: 12.7 },
+    benchedEventBytes: 1200,
+    peakHeapMB: null,
+    run: { path: 'docs/benchmark-results/sqlserver.md — collated 4-point sweep', date: '2026-08-11', sha: '8964f2755' },
+    curveUnit: 'MB',
+    ceiling: {
+      reason: "the source, not Connect — the capture job's burst/idle duty cycle plus the RDS volume's storage throughput. Provisioning storage_throughput at 1000 MiB/s lifted the same 2 vCPU point by 41%.",
+      fix: 'Provision source storage throughput before adding Connect cores. 2 vCPU is the sweet spot; past it the curve is flat-to-noisy.',
+    },
+    sourceKind: 'cdc',
+    confidence: 'medium',
+    confidenceNote:
+      'Medium confidence: these are window means of a bursty capture (duty cycle 44-86%) — ' +
+      'medians read near zero between bursts and are unusable on this connector. The 8 vCPU ' +
+      'dip is an artifact window, not a scaling effect; 2 vCPU is the sweet spot.',
   },
   iceberg_sink: {
+    input: 'redpanda', output: 'iceberg',
     label: 'Iceberg sink (iceberg output)',
     curve: { 1: 34, 2: 65, 4: 97, 8: 128 },
     benchedEventBytes: 1200,
@@ -167,6 +228,47 @@ export const CONNECTORS = {
     sourceKind: 'sink',
     confidence: 'medium',
     confidenceNote: 'Medium confidence: a sibling Iceberg scenario produced 241, 78, 49 and 128 MiB/s at 8 vCPU across four runs. This blessed run is the well-behaved one; treat the 8 vCPU point as indicative.',
+  },
+  snowflake_sink: {
+    input: 'redpanda', output: 'snowflake',
+    label: 'Snowflake sink (snowflake_streaming)',
+    curve: { 1: 20.2, 2: 65.6, 4: 60.8, 8: 70.9 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 4710,
+    run: { path: 'snowflake/orders-sink/2026-08-18T20-32-57Z.json', date: '2026-08-18', sha: 'c7709c869' },
+    curveUnit: 'MB',
+    ceiling: {
+      reason: 'the Snowpipe commit path, not compute — the process never used more than ~2 cores at any vCPU point, so the plateau from 2 vCPU up is the commit round-trip on max_in_flight: 4 channels into one table',
+      fix: 'More cores will not move it. The untested levers are raising max_in_flight (more channels per table) and splitting streams across tables.',
+    },
+    sourceKind: 'sink',
+    confidence: 'high',
+    pipelineNote:
+      'These figures require the benchmarked recipe: a memory buffer between the Redpanda ' +
+      'input and the output. Without it the input acks chain to Snowpipe commit latency and ' +
+      'throughput collapses to 0.04 MB/s — measured on the same rig, not hypothetical.',
+  },
+  oracle_to_sqlserver: {
+    input: 'oracledb_cdc', output: 'sqlserver_insert',
+    label: 'Oracle CDC → SQL Server (oracledb_cdc → sql_insert)',
+    // The only pair measured END TO END: no Redpanda in the middle, one process doing
+    // LogMiner capture and batched inserts. Flat ~6.4 MB/s (~5,300 rows/s of 1.2 KB rows,
+    // ~23 GB/h) at every core count; Connect used ~0.12 cores at every point.
+    curve: { 1: 6.3, 2: 6.4, 4: 3.5, 8: 6.4 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 222,
+    run: { path: 'oracle-mssql/oracle-orders-to-sqlserver/2026-08-18T04-25-31Z.json', date: '2026-08-18', sha: '0ccd97ae3' },
+    curveUnit: 'MB',
+    ceiling: {
+      reason: 'one LogMiner reader feeding one insert path — Connect used ~0.12 cores at every point, wholly I/O-bound on the capture and insert round-trips',
+      fix: 'Cores will not move it; run this on the smallest box. Raising it means more readers on the capture side (measured to ~31 MB/s source-side) plus a faster insert path — that combination is unmeasured end to end.',
+    },
+    sourceKind: 'cdc',
+    confidence: 'medium',
+    confidenceNote:
+      'Medium confidence: the 4 vCPU point (3.5 MB/s) is a source-side outlier window that ' +
+      'fully recovered at 8 vCPU — not a scaling effect. Treat the pipeline as flat ~6.4 MB/s ' +
+      'at any core count.',
   },
 }
 
@@ -247,8 +349,28 @@ export function warningsFor(c, eventBytes) {
     )
   }
 
+  // A pipeline-level fact the number is conditional on (a required recipe, a
+  // measurement basis) renders with every result, not only on refusals.
+  if (c.pipelineNote) out.push(c.pipelineNote)
   if (c.confidence !== 'high' && c.confidenceNote) out.push(c.confidenceNote)
   return out
+}
+
+// Resolve an input/output pair to the entry that measured it, or null. Keys are the
+// INPUTS/OUTPUTS keys; the entry keys in CONNECTORS stay the sizeFor identifiers.
+export function pipelineFor(input, output) {
+  const hit = Object.entries(CONNECTORS).find(([, c]) => c.input === input && c.output === output)
+  return hit ? { key: hit[0], entry: hit[1] } : null
+}
+
+// For an unmeasured pair, the halves that WERE measured — the input against a Redpanda
+// topic and a Redpanda topic into the output — so the refusal can name what exists
+// without composing it into a number nobody ran.
+export function halvesFor(input, output) {
+  return {
+    source: input === 'redpanda' ? null : pipelineFor(input, 'redpanda'),
+    sink: output === 'redpanda' ? null : pipelineFor('redpanda', output),
+  }
 }
 
 // A blank or nonsensical input must not produce a confident "1 core" — the guard lives
@@ -391,6 +513,7 @@ export function sizeFor({
 window.__sizingCore = {
   MIB, MB, UNIT_DIVISOR, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX,
   EVENT_BYTES_DEVIATION_FACTOR, INPUT_UNITS, TAX, SCALE_OUT_UNMEASURED, CONNECTORS,
+  INPUTS, OUTPUTS, pipelineFor, halvesFor,
   bytesPerSecFromEvents, bytesPerSecFromThroughput, inCurveUnit,
   throughputFromEvents, eventsPerSecFromThroughput,
   ORACLE_READER_SCALING, readerRate, measuredReaderCounts, readersNeededFor,
@@ -895,8 +1018,9 @@ window.__sizingCore = {
   <header class="masthead">
     <h1>Redpanda Connect — Compute Sizing</h1>
     <p>
-      Self-serve core sizing from blessed benchmark runs. Answers only for connectors with
-      measured data — everything else is a refusal, on purpose.
+      Self-serve core sizing from blessed benchmark runs. Pick an input and an output;
+      the tool answers only for pairs with measured data — everything else is a refusal,
+      on purpose.
     </p>
   </header>
 
@@ -904,8 +1028,15 @@ window.__sizingCore = {
     <p class="panel-label">Inputs</p>
     <div class="input-grid">
       <div class="field">
-        <label for="connector">Connector</label>
-        <select id="connector"></select>
+        <label for="inputSel">Input</label>
+        <select id="inputSel"></select>
+        <span class="helper">CDC source, or a Redpanda topic for sinks</span>
+      </div>
+
+      <div class="field">
+        <label for="outputSel">Output</label>
+        <select id="outputSel"></select>
+        <span class="helper">Redpanda topic, or a measured destination</span>
       </div>
 
       <div class="field">
@@ -967,11 +1098,13 @@ window.__sizingCore = {
 </div>
 
 <script type="module">
-  const { CONNECTORS, TAX, VCPU_POINTS, INPUT_UNITS, sizeFor,
+  const { CONNECTORS, TAX, VCPU_POINTS, INPUT_UNITS, INPUTS, OUTPUTS,
+          pipelineFor, halvesFor, sizeFor,
           throughputFromEvents, eventsPerSecFromThroughput,
           measuredReaderCounts } = window.__sizingCore
 
-  const connectorSelect = document.getElementById('connector')
+  const inputSelect = document.getElementById('inputSel')
+  const outputSelect = document.getElementById('outputSel')
   const eventsInput = document.getElementById('eventsPerSec')
   const bytesInput = document.getElementById('eventBytes')
   const throughputInput = document.getElementById('throughput')
@@ -988,17 +1121,22 @@ window.__sizingCore = {
   const curveHost = document.getElementById('curveHost')
 
   // --- populate selects from the core's data, once ---
-  for (const [key, c] of Object.entries(CONNECTORS)) {
-    const opt = document.createElement('option')
-    opt.value = key
-    opt.textContent = c.label
-    connectorSelect.appendChild(opt)
+  function fillEndpointSelect(select, registry) {
+    for (const [key, label] of Object.entries(registry)) {
+      const opt = document.createElement('option')
+      opt.value = key
+      opt.textContent = label
+      select.appendChild(opt)
+    }
+    const other = document.createElement('option')
+    other.value = '__other'
+    other.textContent = 'Something else…'
+    select.appendChild(other)
   }
-  const otherOpt = document.createElement('option')
-  otherOpt.value = '__other'
-  otherOpt.textContent = 'Something else…'
-  connectorSelect.appendChild(otherOpt)
-  connectorSelect.value = 'postgres_cdc'
+  fillEndpointSelect(inputSelect, INPUTS)
+  fillEndpointSelect(outputSelect, OUTPUTS)
+  inputSelect.value = 'postgres_cdc'
+  outputSelect.value = 'redpanda'
 
   for (const [key, t] of Object.entries(TAX)) {
     const opt = document.createElement('option')
@@ -1072,6 +1210,9 @@ window.__sizingCore = {
     const memNote = r.peakHeapMB > 1024
       ? `<p class="memory-note">Peak heap on this run exceeded 1024 MB — memory, not cores, may end up driving the instance choice here.</p>`
       : ''
+    const heapLine = r.peakHeapMB
+      ? `<p class="support-line">Peak heap: ${int(r.peakHeapMB)} MB</p>`
+      : `<p class="support-line">Peak heap: not recorded for this run</p>`
     resultHost.innerHTML = `
       <div class="headline-ok">
         <span class="core-count">${r.cores}</span>
@@ -1079,7 +1220,7 @@ window.__sizingCore = {
       </div>
       <p class="support-line">Needs ${r1(r.required)} ${r.unit}/s (target ${r1(r.target)} ${r.unit}/s + ${r.headroomPct}% headroom). Measured ${r1(r.measuredRate)} ${r.unit}/s at ${r.cores} vCPU${r.readerScaling ? ` with ${r.readers} reader${r.readers === 1 ? '' : 's'}` : ''}.</p>
       ${r.readerScaling ? `<p class="support-line">Throughput here comes from reader count, not cores — ${r.cores} vCPU is what the reader runs used, and adding cores did not move this connector.</p>` : ''}
-      <p class="support-line">Peak heap: ${int(r.peakHeapMB)} MB</p>
+      ${heapLine}
       ${memNote}
       ${provenanceHtml(r.run)}
       ${badgeHtml(r)}
@@ -1145,7 +1286,28 @@ window.__sizingCore = {
   function renderUnbenchmarked() {
     resultCard.className = 'panel result-card state-unbenchmarked'
     resultHost.innerHTML = `
-      <p class="headline-unbenched">Not benchmarked. This tool only answers for the six connectors with a blessed benchmark run. Ask the perf team rather than extrapolating.</p>
+      <p class="headline-unbenched">Not benchmarked. This tool only answers for input/output pairs with a blessed benchmark run. Ask the perf team rather than extrapolating.</p>
+    `
+  }
+
+  // The pair itself was never run, but one or both halves may have been — name them,
+  // with their top measured figures, and refuse to compose them into a pipeline number.
+  function renderUnmeasuredPair(inputKey, outputKey) {
+    resultCard.className = 'panel result-card state-unbenchmarked'
+    const { source, sink } = halvesFor(inputKey, outputKey)
+    const half = (p, direction) => {
+      if (!p) return null
+      const top = Math.max(...VCPU_POINTS.map((v) => p.entry.curve[v]))
+      return `${p.entry.label} was measured ${direction} a Redpanda topic — up to ${r1(top)} ${p.entry.curveUnit}/s.`
+    }
+    const halves = [half(source, 'into'), half(sink, 'out of')].filter(Boolean)
+    const halvesText = halves.length
+      ? `<p class="body-text">${halves.join(' ')}</p>
+         <p class="body-text">Chaining those halves through a topic is a real deployment shape, but the combination was never measured, and composing two curves is not a measurement — the tool declines to invent the number. Ask the perf team.</p>`
+      : `<p class="body-text">Neither side of this pair has a blessed run. Ask the perf team rather than extrapolating.</p>`
+    resultHost.innerHTML = `
+      <p class="headline-unbenched">This input/output pair was never benchmarked end to end.</p>
+      ${halvesText}
     `
   }
 
@@ -1179,7 +1341,7 @@ window.__sizingCore = {
     curveHost.innerHTML = `
       <div class="curve-wrap">
         <table class="curve-table">
-          <caption>${c.label} — measured ${c.curveUnit}/s by vCPU (c8g.4xlarge)${c.readerScaling ? `, one busy table on one reader. Flat: cores never moved it. The reader curve below is a different, ${c.readerScaling.tables}-table run — that is why its figures are higher.` : ''}</caption>
+          <caption>${c.label} — measured ${c.curveUnit}/s by vCPU (c8g.4xlarge)${c.readerScaling ? `, one saturated reader on ${c.readerScaling.tables} tables. Measured at 4 vCPU and drawn flat: cores were measured irrelevant on this connector.` : ''}</caption>
           <thead>
             <tr><th scope="col">vCPU</th><th scope="col">Measured ${c.curveUnit}/s</th><th scope="col">Relative</th></tr>
           </thead>
@@ -1231,12 +1393,22 @@ window.__sizingCore = {
     const headroomPct = Number(headroomInput.value)
     headroomVal.textContent = headroomPct + '%'
 
-    const connector = connectorSelect.value
-    if (connector === '__other' || !CONNECTORS[connector]) {
+    const inputKey = inputSelect.value
+    const outputKey = outputSelect.value
+    if (inputKey === '__other' || outputKey === '__other') {
       renderUnbenchmarked()
       curveHost.innerHTML = ''
+      readerSection.hidden = true
       return
     }
+    const pipeline = pipelineFor(inputKey, outputKey)
+    if (!pipeline) {
+      renderUnmeasuredPair(inputKey, outputKey)
+      curveHost.innerHTML = `<p class="empty-curve-note">No measured curve — this pair was not benchmarked end to end.</p>`
+      readerSection.hidden = true
+      return
+    }
+    const connector = pipeline.key
 
     syncReaderOptions(connector)
     const readers = readersField.hidden ? 1 : Number(readersSelect.value)
@@ -1314,7 +1486,8 @@ window.__sizingCore = {
     bytesInput.addEventListener(ev, linked(showThroughputFromEvents))
     throughputInput.addEventListener(ev, linked(showEventsFromThroughput))
     throughputUnitSelect.addEventListener(ev, linked(showThroughputFromEvents))
-    connectorSelect.addEventListener(ev, render)
+    inputSelect.addEventListener(ev, render)
+    outputSelect.addEventListener(ev, render)
     readersSelect.addEventListener(ev, render)
     taxSelect.addEventListener(ev, render)
     headroomInput.addEventListener(ev, render)
