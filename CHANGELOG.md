@@ -130,6 +130,12 @@ All notable changes to this project will be documented in this file.
 - oracledb_cdc: Oracle CDC now correctly handles out-of-order LOB writes by deferring and replaying them at commit time. ([@josephwoodward](https://github.com/josephwoodward), [#4574](https://github.com/redpanda-data/connect/pull/4574))
 - salesforce: Salesforce sink now correctly includes createable fields in the writable field set and makes field cache operation-aware. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4553](https://github.com/redpanda-data/connect/pull/4553))
 - kafka: Broker connectivity failures (connection, read, and write errors such as `i/o timeout`) from the franz-go client are now logged at WARN instead of only at debug level, so they can be alerted on without enabling debug logging. Emissions are throttled per broker. Affects all franz-based connectors (`kafka_franz`, `redpanda`, `redpanda_migrator`, ...).
+=======
+## Unreleased
+
+### Added
+
+- `aws_s3` input: added an `sqs.message_timeout` field that periodically refreshes the visibility timeout of an in-flight SQS notification while its S3 object is being processed, preventing slow or large objects from being redelivered and reprocessed. Defaults to `0s` (disabled), preserving existing behaviour. ([@peczenyj](https://github.com/peczenyj), [#4468](https://github.com/redpanda-data/connect/issues/4468))
 
 ## 4.98.0 - 2026-06-26
 
