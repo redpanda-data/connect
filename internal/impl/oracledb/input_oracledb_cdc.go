@@ -35,6 +35,7 @@ const (
 	ociFieldConnectionString          = "connection_string"
 	ociFieldWalletPath                = "wallet_path"
 	ociFieldWalletPassword            = "wallet_password"
+	ociFieldPrefetchRows              = "prefetch_rows"
 	ociFieldStreamSnapshot            = "stream_snapshot"
 	ociFieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	ociFieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
@@ -120,6 +121,13 @@ Redo log retention must cover idle periods, not just outages: the SCN checkpoint
 		Secret().
 		Description("Password for the `ewallet.p12` PKCS#12 wallet file. Only required when the wallet directory contains `ewallet.p12` rather than `cwallet.sso`.").
 		ShortDescription("Password for the ewallet.p12 wallet file. Not needed when the wallet directory holds cwallet.sso.").
+		Optional(),
+	).
+	Field(service.NewIntField(ociFieldPrefetchRows).
+		Description("The number of rows Oracle fetches per network round-trip, for both snapshot and streaming reads. This value is passed straight through to the underlying Oracle connection, which otherwise auto-tunes it based on row width. For narrow rows the resulting value can still be small enough that round-trip latency, rather than throughput, ends up limiting read speed — raising this trades some memory per fetch for fewer round-trips.").
+		ShortDescription("Rows fetched per network round-trip from Oracle; raising this can reduce round-trip-bound read latency for narrow rows.").
+		Example(1000).
+		LintRule(`root = if this <= 0 { [ "` + ociFieldPrefetchRows + ` must be greater than 0" ] }`).
 		Optional(),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
@@ -397,6 +405,9 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	overrides := make(map[string]string)
 	if err := parseWalletConfig(conf, overrides); err != nil {
 		return nil, fmt.Errorf("parsing oracle wallet config: %w", err)
+	}
+	if err := parsePrefetchRowsConfig(conf, overrides); err != nil {
+		return nil, fmt.Errorf("parsing oracle %s config: %w", ociFieldPrefetchRows, err)
 	}
 
 	if connectionString, err = buildConnectionString(connectionString, overrides, logger); err != nil {

@@ -9,6 +9,7 @@
 package oracledb
 
 import (
+	"fmt"
 	"net/url"
 	"testing"
 
@@ -225,4 +226,72 @@ logminer: {}
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestParsePrefetchRowsConfig(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+logminer: {}
+`
+	t.Run("unset is a no-op", func(t *testing.T) {
+		conf, err := oracleDBStreamConfigSpec.ParseYAML(minimalOracleCDCYAML, nil)
+		require.NoError(t, err)
+
+		overrides := map[string]string{}
+		require.NoError(t, parsePrefetchRowsConfig(conf, overrides))
+		assert.Empty(t, overrides)
+	})
+
+	t.Run("set value becomes a PREFETCH_ROWS override", func(t *testing.T) {
+		conf, err := oracleDBStreamConfigSpec.ParseYAML(minimalOracleCDCYAML+"prefetch_rows: 5000\n", nil)
+		require.NoError(t, err)
+
+		overrides := map[string]string{}
+		require.NoError(t, parsePrefetchRowsConfig(conf, overrides))
+		assert.Equal(t, map[string]string{"PREFETCH_ROWS": "5000"}, overrides)
+	})
+
+	for _, tt := range []struct {
+		name  string
+		value int
+	}{
+		{"zero rejected", 0},
+		{"negative rejected", -1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := oracleDBStreamConfigSpec.ParseYAML(
+				fmt.Sprintf(minimalOracleCDCYAML+"prefetch_rows: %d\n", tt.value), nil)
+			require.NoError(t, err)
+
+			overrides := map[string]string{}
+			err = parsePrefetchRowsConfig(conf, overrides)
+			assert.Error(t, err)
+			assert.Empty(t, overrides)
+		})
+	}
+
+	t.Run("prefetch_rows field replaces an existing PREFETCH_ROWS query param in connection_string", func(t *testing.T) {
+		conf, err := oracleDBStreamConfigSpec.ParseYAML(`connection_string: "oracle://user:pass@host:1521/svc?PREFETCH_ROWS=100"
+include:
+  - SCHEMA.TABLE
+logminer: {}
+prefetch_rows: 5000
+`, nil)
+		require.NoError(t, err)
+
+		connStr, err := conf.FieldString(ociFieldConnectionString)
+		require.NoError(t, err)
+
+		overrides := map[string]string{}
+		require.NoError(t, parsePrefetchRowsConfig(conf, overrides))
+
+		built, err := buildConnectionString(connStr, overrides, service.MockResources().Logger())
+		require.NoError(t, err)
+
+		parsed, err := url.Parse(built)
+		require.NoError(t, err)
+		assert.Equal(t, "5000", parsed.Query().Get("PREFETCH_ROWS"),
+			"prefetch_rows field must win over the PREFETCH_ROWS already present in connection_string")
+	})
 }

@@ -42,6 +42,7 @@ input:
     connection_string: oracle://username:password@host:port/service_name # No default (required)
     wallet_path: /opt/oracle/wallet # No default (optional)
     wallet_password: "" # No default (optional)
+    prefetch_rows: 1000 # No default (optional)
     snapshot_mode: "" # No default (optional)
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
@@ -86,6 +87,7 @@ input:
     connection_string: oracle://username:password@host:port/service_name # No default (required)
     wallet_path: /opt/oracle/wallet # No default (optional)
     wallet_password: "" # No default (optional)
+    prefetch_rows: 1000 # No default (optional)
     snapshot_mode: "" # No default (optional)
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
@@ -194,6 +196,20 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 *Type*: `string`
 
+
+=== `prefetch_rows`
+
+The number of rows Oracle fetches per network round-trip, for both snapshot and streaming reads. This value is passed straight through to the underlying Oracle connection, which otherwise auto-tunes it based on row width. For narrow rows the resulting value can still be small enough that round-trip latency, rather than throughput, ends up limiting read speed — raising this trades some memory per fetch for fewer round-trips.
+
+
+*Type*: `int`
+
+
+```yml
+# Examples
+
+prefetch_rows: 1000
+```
 
 === `snapshot_mode`
 
