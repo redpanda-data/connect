@@ -258,8 +258,11 @@ type oracleDBCDCInput struct {
 	lmCfg *logminer.Config
 	db    *sql.DB
 
-	res       *service.Resources
-	publisher *batchPublisher
+	res *service.Resources
+	// publisher is rebuilt by Connect when poisoned, and read by ReadBatch
+	// and Close on other goroutines: atomic so those reads can never observe
+	// a torn or stale pointer and Close always stops the CURRENT publisher.
+	publisher atomic.Pointer[batchPublisher]
 	metrics   *service.Metrics
 
 	stopSig          *shutdown.Signaller
@@ -422,19 +425,20 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		log:             logger,
 		metrics:         resources.Metrics(),
 		stopSig:         shutdown.NewSignaller(),
-		publisher:       newBatchPublisher(batcher, cp, logger),
 		cpCache:         cpCache,
 		batching:        policy,
 		checkpointLimit: checkpointLimit,
 	}
 
+	pub := newBatchPublisher(batcher, cp, logger)
+	pub.cacheSCN = o.cacheSCN
+	o.publisher.Store(pub)
+
 	defer func() {
 		if err != nil {
-			o.publisher.Close()
+			pub.Close()
 		}
 	}()
-
-	o.publisher.cacheSCN = o.cacheSCN
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
 	o.stopSig.TriggerHasStopped()
@@ -461,15 +465,17 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	// durable SCN, which is necessarily before the orphaned rows, and the old
 	// session's late acks resolve into the abandoned tracker (cacheSCN's
 	// monotonic guard turns any stale write into a no-op).
-	if o.publisher.poisoned.Load() {
+	publisher := o.publisher.Load()
+	if publisher.poisoned.Load() {
 		o.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
-		o.publisher.Close()
+		publisher.Close()
 		batcher, batcherErr := o.batching.NewBatcher(o.res)
 		if batcherErr != nil {
 			return fmt.Errorf("rebuilding batcher: %w", batcherErr)
 		}
-		o.publisher = newBatchPublisher(batcher, checkpoint.NewCapped[replication.SCN](int64(o.checkpointLimit)), o.log)
-		o.publisher.cacheSCN = o.cacheSCN
+		publisher = newBatchPublisher(batcher, checkpoint.NewCapped[replication.SCN](int64(o.checkpointLimit)), o.log)
+		publisher.cacheSCN = o.cacheSCN
+		o.publisher.Store(publisher)
 	}
 
 	if o.db != nil {
@@ -566,7 +572,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		}
 	}
 
-	o.publisher.schemas = schemas
+	publisher.schemas = schemas
 
 	if cachedSCN, err = o.getCachedSCN(ctx); err != nil {
 		if errors.Is(err, service.ErrKeyNotFound) {
@@ -599,7 +605,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	// no cached SCN means we're not recovering from a restart
 	if !o.cfg.SnapshotMode.IsSnapshotNone() && cachedSCN == replication.InvalidSCN {
-		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.cfg.SnapshotFilters, o.publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
+		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.cfg.SnapshotFilters, publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 		defer func() {
@@ -616,7 +622,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		if o.lmCfg.TransactionCacheConfig.CacheName != "" {
 			txnCache = logminer.NewConnectCacheResource(o.res, o.lmCfg.TransactionCacheConfig, o.metrics, o.log)
 		}
-		streaming = logminer.NewMiner(o.db, userTables, o.publisher, o.lmCfg, txnCache, o.metrics, o.log)
+		streaming = logminer.NewMiner(o.db, userTables, publisher, o.lmCfg, txnCache, o.metrics, o.log)
 	} else {
 		return errors.New("logminer configuration required for streaming")
 	}
@@ -658,7 +664,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			// skip un-acked snapshot rows on restart. Blocks until acks drain
 			// or soft-stop (no timeout, by design; see postgres_cdc's
 			// equivalent barrier).
-			if err = o.publisher.flushCurrent(softCtx); err != nil {
+			if err = publisher.flushCurrent(softCtx); err != nil {
 				// A graceful stop lands here whenever shutdown hits the
 				// handoff window (nothing drains msgChan any more, so the
 				// blocked send exits via softCtx): normal operation, Info.
@@ -671,7 +677,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 				o.stopSig.TriggerHasStopped()
 				return
 			}
-			if err = o.publisher.waitSnapshotAcks(softCtx); err != nil {
+			if err = publisher.waitSnapshotAcks(softCtx); err != nil {
 				o.log.Infof("Interrupted while waiting for snapshot acknowledgements. Snapshot will re-run on restart (may cause duplicate data): %s", err)
 				o.stopSig.TriggerHasStopped()
 				return
@@ -687,7 +693,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		}
 
 		if o.cfg.SnapshotMode.IsSnapshotOnly() {
-			if err = o.publisher.FlushRemaining(softCtx); err != nil {
+			if err = publisher.FlushRemaining(softCtx); err != nil {
 				o.log.Errorf("Failed to flush remaining snapshot events: %s", err)
 			}
 			o.log.Infof("Snapshot-only mode complete, stopping at SCN %s", startSCN)
@@ -785,7 +791,7 @@ func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 
 func (o *oracleDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	select {
-	case m := <-o.publisher.msgs():
+	case m := <-o.publisher.Load().msgs():
 		return m.msg, m.ackFn, nil
 	case <-o.stopSig.HasStoppedChan():
 		if o.snapshotOnlyDone.Load() {
@@ -837,8 +843,8 @@ func (o *oracleDBCDCInput) Close(ctx context.Context) error {
 	case <-o.stopSig.HasStoppedChan():
 	}
 
-	if o.publisher != nil {
-		o.publisher.Close()
+	if pub := o.publisher.Load(); pub != nil {
+		pub.Close()
 	}
 
 	// Close both resources and combine errors to avoid resource leaks
