@@ -171,10 +171,42 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schemaRef fr
 	return s.newAvroEncoder(schemaSpec)
 }
 
-func (*schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, error) {
+func (s *schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, error) {
 	schema, err := avro.Parse(avroJSON)
 	if err != nil {
 		return nil, fmt.Errorf("parsing Avro schema: %w", err)
+	}
+
+	switch s.avroInputEnc {
+	case avroInputEncAvroJSON:
+		// Every message is Avro JSON, whatever form it arrives in. This is
+		// what a pipeline sets when its data came from
+		// schema_registry_decode and something in between — a mapping, a
+		// branch — has parsed the payload, leaving Avro JSON values in a
+		// structured message that auto would read the other way.
+		return func(m *service.Message) error {
+			b, err := avroJSONBytes(m)
+			if err != nil {
+				return err
+			}
+			var native any
+			if err := schema.DecodeJSON(b, &native); err != nil {
+				return err
+			}
+			return encodeAvro(m, schema, native)
+		}, nil
+	case avroInputEncNative:
+		// Every message is Go and plain JSON values. Encode is the only
+		// reader that takes []byte, time.Time and RFC 3339 text, and the only
+		// one that reads a string for a decimal as decimal notation, so
+		// hand-written JSON keeps the meaning its author intended.
+		return func(m *service.Message) error {
+			native, err := m.AsStructuredMut()
+			if err != nil {
+				return fmt.Errorf("extracting structured data: %w", err)
+			}
+			return encodeAvro(m, schema, native)
+		}, nil
 	}
 
 	// Neither reader is a superset of the other, so which one a message
@@ -223,6 +255,89 @@ func (*schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, er
 		}
 		return encodeAvro(m, schema, native)
 	}, nil
+}
+
+// avroJSONBytes returns the message as the Avro JSON bytes to decode.
+//
+// A message holding only a raw payload gives it up directly. A structured one
+// has to be serialised, and that is faithful only while every value in the tree
+// is one encoding/json spells unambiguously — a []byte becomes base64 text that
+// reads back as an entirely different byte sequence, and a time.Time becomes
+// RFC 3339 text that Avro JSON cannot spell at all. Those are refused rather
+// than silently encoded as the wrong value, because a tree carrying them was
+// never Avro JSON to begin with.
+//
+// The bytes come from marshalling the tree that was checked, never from the
+// message. AsBytes caches a serialisation of the structured form the moment
+// anything asks for the payload — a log processor, an output interpolation, or
+// this processor's own subject interpolation — so HasBytes says nothing about
+// where those bytes came from, and a message can be holding the base64 text of
+// the very []byte this check exists to reject. Marshalling here also keeps the
+// message untouched when serialisation fails, which AsBytes does not: it
+// reports no error and caches the empty result, emptying the payload that a
+// dead-letter output still needs.
+func avroJSONBytes(m *service.Message) ([]byte, error) {
+	if !m.HasStructured() {
+		return m.AsBytes()
+	}
+	// AsStructured rather than AsStructuredMut: the latter drops the raw
+	// payload, and reading the message must not change what it holds.
+	native, err := m.AsStructured()
+	if err != nil {
+		return nil, fmt.Errorf("extracting structured data: %w", err)
+	}
+	if !jsonNativeTree(native) {
+		return nil, fmt.Errorf(
+			"message holds values Avro JSON cannot spell, such as []byte, time.Time, or a typed map or slice: "+
+				"set %v.%v to %v or %v to encode it",
+			sreFieldAvro, sreFieldAvroInputEnc, avroInputEncNative, avroInputEncAuto)
+	}
+	b, err := json.Marshal(native)
+	if err != nil {
+		// Non-finite floats land here: jsonNativeTree admits float64 and
+		// float32 because almost all of them are spelled faithfully, and JSON
+		// has no spelling for the handful that are not. Avro binary spells
+		// them without trouble, so the other two modes encode these — worth
+		// saying, since only the Avro JSON hop is the obstacle.
+		return nil, fmt.Errorf(
+			"serialising structured data as Avro JSON: %w: set %v.%v to %v or %v to encode it",
+			err, sreFieldAvro, sreFieldAvroInputEnc, avroInputEncNative, avroInputEncAuto)
+	}
+	return b, nil
+}
+
+// jsonNativeTree reports whether v holds only values encoding/json spells
+// unambiguously, so that serialising it yields back the same Avro JSON the
+// values came from.
+//
+// It is a check on types, not on values: NaN and the infinities are admitted
+// here and rejected by json.Marshal instead, since JSON cannot spell them.
+func jsonNativeTree(v any) bool {
+	switch v := v.(type) {
+	case nil, bool, string, float64, float32,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		json.Number:
+		return true
+	case map[string]any:
+		for _, e := range v {
+			if !jsonNativeTree(e) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		for _, e := range v {
+			if !jsonNativeTree(e) {
+				return false
+			}
+		}
+		return true
+	default:
+		// []byte, time.Time, big.Rat, avro.Duration and anything else a
+		// mapping or a decoder can leave in the tree.
+		return false
+	}
 }
 
 func encodeAvro(m *service.Message, schema *avro.Schema, native any) error {

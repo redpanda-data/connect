@@ -66,6 +66,7 @@ schema_registry_encode:
   normalize: true
   avro:
     raw_json: false # No default (optional)
+    input_encoding: auto
     record_name: ""
     namespace: ""
   oauth:
@@ -221,6 +222,29 @@ Whether messages encoded in Avro format should be parsed as normal JSON rather t
 
 *Type*: `bool`
 
+
+=== `avro.input_encoding`
+
+How the values in each message should be read.
+
+Avro JSON and plain JSON disagree about strings, and neither reading is a superset of the other. Avro JSON spells a `bytes` or `fixed` value as one codepoint per byte, so the unscaled decimal `0x21` is the string `"!"`; the plain reading takes a string for a decimal as decimal notation, so `"3.33"` means 3.33. The same JSON string is therefore a different value under each, and only the pipeline knows which was meant.
+
+- `auto` (the default) picks the reader from the form each message arrives in: a raw payload is read as Avro JSON, a structured message as Go values. This is right for `schema_registry_decode` feeding this processor directly, and for CDC sources, but a processor in between — a `mapping`, a `branch` — parses the payload and leaves the message structured, at which point its Avro JSON values are read the plain way and a bytes-backed decimal fails to encode.
+- `avro_json` reads every message as Avro JSON. Set this when the data came from `schema_registry_decode`, including when something between the two processors has parsed it. A message that carries Go values Avro JSON has no spelling for — a `[]byte` from `content()` or `decode("base64")`, or the `[]byte` and `time.Time` values that `preserve_logical_types` produces for bytes, fixed and timestamp fields — is rejected rather than encoded as the wrong value, so a pipeline that mixes those with Avro JSON values has no mode that reads both: map such fields to their Avro JSON spelling first, or split the encode.
+- `native` reads every message as Go and plain JSON values. Set this for hand-written JSON and for sources that spell decimals in decimal notation.
+
+This is independent of `raw_json`, which does not affect how values are read.
+
+
+*Type*: `string`
+
+*Default*: `"auto"`
+
+Options:
+`auto`
+, `avro_json`
+, `native`
+.
 
 === `avro.record_name`
 
