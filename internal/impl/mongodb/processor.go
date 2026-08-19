@@ -49,6 +49,7 @@ func ProcessorSpec() *service.ConfigSpec {
 			writeConcernDocs(),
 		).
 		Fields(writeMapsFields()...).
+		Fields(compatibilityFields()...).
 		Field(service.NewStringAnnotatedEnumField(mpFieldJSONMarshalMode, map[string]string{
 			string(JSONMarshalModeCanonical): "A string format that emphasizes type preservation at the expense of readability and interoperability. That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases. ",
 			string(JSONMarshalModeRelaxed):   "A string format that emphasizes readability and interoperability at the expense of type preservation. That is, conversion from relaxed format to BSON can lose type information.",
