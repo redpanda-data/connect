@@ -500,6 +500,71 @@ func TestAdmitEscapesOnContextCancel(t *testing.T) {
 	require.NoError(t, <-done)
 }
 
+// TestAbandonedBatchSealsQueue encodes the abandonment loss window: a flusher
+// whose rows are already out of the batcher abandons its ticket on
+// cancellation. Nothing pins the tracker for those rows, so if any LATER
+// batch could still be tracked and acked, its resolve would persist an SCN
+// past the dropped rows - silent loss on restart. The abandon must therefore
+// seal the queue (no later admission can ever track) and poison the
+// publisher so Connect rebuilds and re-reads from the last durable SCN.
+func TestAbandonedBatchSealsQueue(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cp := checkpoint.NewCapped[replication.SCN](100)
+
+	batcher, err := (service.BatchPolicy{Count: 2}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher.cacheSCN = func(context.Context, replication.SCN) error { return nil }
+	t.Cleanup(publisher.Close)
+
+	// Ticket 0's holder parks in sendTracked under a live context.
+	holderDone := make(chan error, 1)
+	go func() {
+		holderDone <- func() error {
+			if err := publisher.Publish(ctx, streamingEvent(100)); err != nil {
+				return err
+			}
+			return publisher.Publish(ctx, streamingEvent(101))
+		}()
+	}()
+	require.Eventually(t, func() bool {
+		publisher.batcherMu.Lock()
+		defer publisher.batcherMu.Unlock()
+		return publisher.nextTicket == 1
+	}, 5*time.Second, time.Millisecond)
+
+	// A flusher with ROWS (ticket 1) queues behind it and is cancelled: its
+	// batch left the batcher but was never tracked.
+	abandonCtx, cancelAbandon := context.WithCancel(ctx)
+	abandoned := make(chan error, 1)
+	go func() {
+		abandoned <- func() error {
+			if err := publisher.Publish(abandonCtx, streamingEvent(200)); err != nil {
+				return err
+			}
+			return publisher.Publish(abandonCtx, streamingEvent(201))
+		}()
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancelAbandon()
+	require.ErrorIs(t, <-abandoned, context.Canceled)
+
+	// The abandon dropped SCN 200-201 rows: the queue must be sealed and the
+	// publisher poisoned so nothing can ever be tracked (and persisted) past
+	// them from this generation.
+	require.True(t, publisher.poisoned.Load(),
+		"abandoning a flushed-but-untracked batch must poison the publisher")
+	laterErr := func() error {
+		if err := publisher.Publish(ctx, streamingEvent(300)); err != nil {
+			return err
+		}
+		return publisher.Publish(ctx, streamingEvent(301))
+	}()
+	require.ErrorIs(t, laterErr, errQueueSealed,
+		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
+}
+
 // TestFailedSendPoisonsPublisher verifies that a tracked batch that cannot be
 // handed to ReadBatch marks the publisher poisoned: its checkpoint slot can
 // never resolve, so Connect must rebuild the publisher rather than reuse a

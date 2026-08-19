@@ -11,6 +11,7 @@ package oracledb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -45,6 +46,12 @@ type batchPublisher struct {
 	admitted   uint64                   // next ticket allowed to Track+send; guarded by ticketMu
 	waiters    map[uint64]chan struct{} // parked admit calls; guarded by ticketMu
 	abandoned  map[uint64]struct{}      // cancelled tickets to skip; guarded by ticketMu
+	// sealed refuses all further admissions (guarded by ticketMu): set when
+	// an abandoned ticket owned a flushed batch. Admission is strictly
+	// ordered, so at that moment nothing after the dropped rows has been
+	// tracked - sealing guarantees nothing ever is, so no ack can persist an
+	// SCN past them before Connect rebuilds the poisoned publisher.
+	sealed bool
 	// closed marks the batcher as torn down (guarded by batcherMu): Close's
 	// batcher.Close races in-flight Publish calls otherwise, and the batcher
 	// is not goroutine-safe.
@@ -91,13 +98,25 @@ func (b *batchPublisher) takeTicketLocked() uint64 {
 	return t
 }
 
+// errQueueSealed refuses admission after an abandoned ticket dropped a
+// flushed batch: nothing may be tracked past that gap until Connect rebuilds
+// the poisoned publisher.
+var errQueueSealed = errors.New("publisher flush queue sealed after an abandoned batch; reconnecting rebuilds the publisher")
+
 // admit blocks until it is ticket's turn to Track+send, or ctx is cancelled.
 // On success, pair with release. On cancellation the ticket is marked
 // abandoned - release skips it when its turn comes - and the caller must NOT
-// release it; the flushed batch was never tracked, so its rows are re-read
-// from the last durable checkpoint by the next session.
+// release it. A caller whose ticket owned a non-empty flushed batch MUST call
+// sealQueue after an abandon: the batch was never tracked, so only sealing
+// (no later ticket can ever track) plus the poison rebuild guarantees its
+// rows are re-read from the last durable checkpoint rather than silently
+// skipped by a later batch's ack.
 func (b *batchPublisher) admit(ctx context.Context, ticket uint64) error {
 	b.ticketMu.Lock()
+	if b.sealed {
+		b.ticketMu.Unlock()
+		return errQueueSealed
+	}
 	if b.admitted == ticket {
 		b.ticketMu.Unlock()
 		return nil
@@ -106,16 +125,29 @@ func (b *batchPublisher) admit(ctx context.Context, ticket uint64) error {
 	b.waiters[ticket] = ch
 	b.ticketMu.Unlock()
 
+	wake := func() error {
+		b.ticketMu.Lock()
+		defer b.ticketMu.Unlock()
+		if b.sealed {
+			return errQueueSealed
+		}
+		return nil
+	}
+
 	select {
 	case <-ch:
-		return nil
+		return wake()
 	case <-ctx.Done():
 		b.ticketMu.Lock()
 		select {
 		case <-ch:
-			// Admitted between cancellation and the lock: proceed normally,
-			// the caller owns the release.
+			// Woken between cancellation and the lock: either admitted
+			// normally (caller owns the release) or the queue was sealed.
+			sealed := b.sealed
 			b.ticketMu.Unlock()
+			if sealed {
+				return errQueueSealed
+			}
 			return nil
 		default:
 		}
@@ -124,6 +156,21 @@ func (b *batchPublisher) admit(ctx context.Context, ticket uint64) error {
 		b.ticketMu.Unlock()
 		return ctx.Err()
 	}
+}
+
+// sealQueue permanently refuses further admissions and poisons the publisher:
+// called when an abandoned ticket dropped a flushed-but-untracked batch, so
+// no later batch can be tracked (and therefore no ack can persist a position)
+// past the dropped rows before Connect rebuilds.
+func (b *batchPublisher) sealQueue() {
+	b.ticketMu.Lock()
+	b.sealed = true
+	for t, ch := range b.waiters {
+		close(ch)
+		delete(b.waiters, t)
+	}
+	b.ticketMu.Unlock()
+	b.poisoned.Store(true)
 }
 
 // release passes the sequence to the next live ticket, skipping abandoned
@@ -215,6 +262,9 @@ func (p *batchPublisher) loop() {
 				}
 
 				if err := p.admit(hardStopCtx, ticket); err != nil {
+					if !errors.Is(err, errQueueSealed) && len(sendBatch) > 0 {
+						p.sealQueue()
+					}
 					return err
 				}
 				defer p.release()
@@ -328,6 +378,9 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	}
 
 	if err := b.admit(ctx, ticket); err != nil {
+		if !errors.Is(err, errQueueSealed) && len(flushedBatch) > 0 {
+			b.sealQueue()
+		}
 		return err
 	}
 	defer b.release()
@@ -498,6 +551,9 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 	ticket := b.takeTicketLocked()
 	b.batcherMu.Unlock()
 	if admitErr := b.admit(ctx, ticket); admitErr != nil {
+		if !errors.Is(admitErr, errQueueSealed) && len(remaining) > 0 {
+			b.sealQueue()
+		}
 		return admitErr
 	}
 	defer b.release()
