@@ -97,13 +97,14 @@ const (
 	onUnresumablePositionFail  = "fail"
 	onUnresumablePositionReset = "reset"
 
-	// maxConsecutiveUnresumableRecoveries bounds how many times the input will
-	// clear an unresumable position and re-run the snapshot without the stream ever
-	// advancing in between.
+	// maxConsecutiveUnresumableRecoveries bounds how many consecutive unresumable
+	// positions the input tolerates without the stream ever advancing in between:
+	// the first two clear the checkpoint and re-run the snapshot, and the third
+	// consecutive failure refuses instead.
 	//
 	// Why three: one recovery is an ordinary response to a transient anomaly (a
 	// brief oplog spike, a long-running restart), so refusing on the first would
-	// turn a self-healing situation into a page. Three consecutive clears with no
+	// turn a self-healing situation into a page. A third dead position with no
 	// intervening stream progress is no longer an anomaly - it is the livelock
 	// where the snapshot takes longer than the oplog window, so the position
 	// checkpointed when it finishes has already aged out, and the input re-snapshots
@@ -181,9 +182,9 @@ func spec() *service.ConfigSpec {
 		Summary(`Streams changes from a MongoDB replica set.`).
 		Description(`Read from a MongoDB replica set using https://www.mongodb.com/docs/manual/changeStreams/[^Change Streams]. It's only possible to watch for changes when using a sharded MongoDB or a MongoDB cluster running as a replica set.
 
-If a stored resume position can no longer be resumed (for example it has aged out of the oplog), the input clears its checkpoint and re-runs the snapshot rather than retrying a dead position. If that happens `+strconv.Itoa(maxConsecutiveUnresumableRecoveries)+` times in a row without the change stream ever advancing in between - which usually means the snapshot is taking longer than the oplog window - the input stops with an error instead of re-snapshotting forever.
+If a stored resume position can no longer be resumed (for example it has aged out of the oplog), the input clears its checkpoint and re-runs the snapshot rather than retrying a dead position. After `+strconv.Itoa(maxConsecutiveUnresumableRecoveries-1)+` such recoveries in a row without the change stream ever advancing in between - which usually means the snapshot is taking longer than the oplog window - the next failure keeps the checkpoint and the input fails on every reconnect with an actionable error instead of re-snapshotting forever; after addressing the cause, restart the pipeline (or delete the checkpoint cache entry) to resume recovery.
 
-With `+"`stream_snapshot`"+` disabled there is no snapshot to re-run, so recovery would have to skip the changes between the lost position and now. The input refuses to do that silently: by default it stops with an error and preserves the checkpoint, and skipping the gap has to be opted into with `+"`on_unresumable_position: reset`"+`.
+With `+"`stream_snapshot`"+` disabled there is no snapshot to re-run, so recovery would have to skip the changes between the lost position and now. The input refuses to do that silently: by default it fails with an error on every reconnect and preserves the checkpoint, and skipping the gap has to be opted into with `+"`on_unresumable_position: reset`"+`.
 
 By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
 
@@ -538,6 +539,13 @@ func (m *mongoCDC) commitResumeToken(ctx context.Context, epoch uint64, token bs
 func (m *mongoCDC) beginTokenEpoch(token bson.Raw) uint64 {
 	m.resumeTokenMu.Lock()
 	defer m.resumeTokenMu.Unlock()
+	return m.beginTokenEpochLocked(token)
+}
+
+// beginTokenEpochLocked is beginTokenEpoch for callers already holding
+// resumeTokenMu, letting them compose the epoch bump with other state changes
+// in one critical section.
+func (m *mongoCDC) beginTokenEpochLocked(token bson.Raw) uint64 {
 	m.resumeToken = token
 	m.tokenEpoch++
 	return m.tokenEpoch
@@ -939,8 +947,10 @@ const (
 )
 
 // planUnresumableRecovery decides what to do about a dead position and, when the
-// answer is to clear it, counts the recovery. It returns the plan and the
-// consecutive-recovery count it was decided on.
+// answer is to clear it, counts the recovery and opens a new token epoch in the
+// same critical section (so no in-flight ack can reset the breaker between the
+// count and the epoch bump). It returns the plan and the consecutive-recovery
+// count it was decided on.
 //
 // The gap refusal is checked before the counter so that a configuration which
 // never clears cannot accumulate a count at all: the two refusals are different
@@ -959,6 +969,11 @@ func (m *mongoCDC) planUnresumableRecovery() (unresumableRecoveryPlan, int) {
 		m.unresumableRecoveries = maxConsecutiveUnresumableRecoveries
 		return unresumableRecoveryRefuseChurn, m.unresumableRecoveries
 	}
+	// Open the new epoch inside the same critical section as the counter
+	// increment: a live-epoch ack landing between the two would reset the
+	// breaker without genuine progress. After the bump every in-flight ack is
+	// stale and is dropped instead.
+	m.beginTokenEpochLocked(nil)
 	return unresumableRecoveryClear, m.unresumableRecoveries
 }
 
@@ -1013,7 +1028,7 @@ func (m *mongoCDC) recoverFromUnresumablePosition(ctx context.Context, cause err
 			m.logger.Errorf("Change stream position is no longer resumable and `stream_snapshot` is disabled, so there is no snapshot to recover with. Clearing the checkpoint would restart streaming from the current oplog position and silently skip every change since the lost position, so it is being kept for inspection and the input will fail until this is resolved. To opt into skipping those changes set `on_unresumable_position: reset`; to recover without losing anything enable `stream_snapshot`: %v", cause)
 			err = fmt.Errorf("%w: %w", errUnresumableGapRefused, cause)
 		case unresumableRecoveryRefuseChurn:
-			m.logger.Errorf("Change stream position has aged out of the oplog %d times in a row without the change stream ever advancing in between, which means the snapshot is very likely taking longer than the oplog window: each re-run only produces another position that is already dead. Refusing to clear the checkpoint again - it is kept in place so the input stops churning, and it will now fail on every reconnect. Remediation: grow the oplog window (`replSetResizeOplog`), or shorten the snapshot by narrowing `collections`, raising `snapshot_parallelism` or tuning `read_batch_size`, or - when using `aws` role assumption - make sure `session_duration` covers the whole snapshot: %v", recoveries, cause)
+			m.logger.Errorf("Change stream position has aged out of the oplog %d times in a row without the change stream ever advancing in between, which means the snapshot is very likely taking longer than the oplog window: each re-run only produces another position that is already dead. Refusing to clear the checkpoint again - it is kept in place so the input stops churning, and it will now fail on every reconnect. Remediation: grow the oplog window (`replSetResizeOplog`), or shorten the snapshot by narrowing `collections`, raising `snapshot_parallelism` or tuning `read_batch_size`, or - when using `aws` role assumption - make sure `session_duration` covers the whole snapshot. Then restart the pipeline (this refusal is remembered per process) or delete the checkpoint cache entry to trigger recovery immediately: %v", recoveries, cause)
 			err = fmt.Errorf("%w (%d consecutive recoveries): %w", errUnresumableChurnRefused, recoveries, cause)
 		}
 		// The buffer holds one error and the caller sends the generic stream failure
@@ -1030,7 +1045,9 @@ func (m *mongoCDC) recoverFromUnresumablePosition(ctx context.Context, cause err
 	} else {
 		m.logger.Warnf("Change stream position is no longer resumable, clearing the checkpoint to re-run the snapshot: %v", cause)
 	}
-	m.beginTokenEpoch(nil)
+	// The epoch was already opened atomically with the counter increment in
+	// planUnresumableRecovery, so every ack in flight at decision time is
+	// already stale here.
 	deleteCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.checkpointWriteTimeout)
 	defer cancel()
 	if err := m.checkpoint.Delete(deleteCtx); err != nil {
