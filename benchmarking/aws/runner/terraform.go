@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -84,12 +87,26 @@ func (t *Terraform) Outputs() (map[string]string, error) {
 	if err := run("terraform", args, &buf); err != nil {
 		return nil, err
 	}
-	var raw map[string]struct {
-		Sensitive bool            `json:"sensitive"`
-		Type      json.RawMessage `json:"type"`
-		Value     json.RawMessage `json:"value"`
-	}
-	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+	return decodeTerraformOutputs(buf.Bytes())
+}
+
+// terraformOutputValue mirrors one entry of `terraform output -json`.
+type terraformOutputValue struct {
+	Sensitive bool            `json:"sensitive"`
+	Type      json.RawMessage `json:"type"`
+	Value     json.RawMessage `json:"value"`
+}
+
+// decodeTerraformOutputs turns the raw `terraform output -json` bytes into a
+// map[string]string: string-typed outputs are unwrapped to their bare value;
+// everything else (numbers, bools, lists, objects) passes through as its
+// original JSON text, since callers only ever need outputs as
+// -var-compatible strings. Sensitive is part of terraform's output shape
+// but doesn't change parsing here — the CLI always emits the real value in
+// Value regardless of the sensitive flag, so there's nothing to mask.
+func decodeTerraformOutputs(data []byte) (map[string]string, error) {
+	var raw map[string]terraformOutputValue
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
 	out := make(map[string]string, len(raw))
