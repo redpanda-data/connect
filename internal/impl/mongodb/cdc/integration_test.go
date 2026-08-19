@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
 	mongocontainer "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -315,21 +316,36 @@ func enablePreAndPostDocuments() setupOption {
 	}
 }
 
-// startMongoContainer boots a single node replica set and returns a
-// direct-connection URI plus a client that has already been pinged successfully.
-// Tests that need control over the pieces setup hides - the checkpoint cache
-// directory, the logger - build their own stream on top of this.
+// startMongoContainer boots a single node replica set with root credentials and
+// returns a direct-connection URI plus a client that has already been pinged
+// successfully. Tests that need control over the pieces setup hides - the
+// checkpoint cache directory, the logger - build their own stream on top of this.
 //
 // Callers are responsible for integration.CheckSkip.
 func startMongoContainer(t *testing.T, opts ...setupOption) (string, *mongo.Client) {
 	t.Helper()
-	container, err := mongocontainer.Run(
-		t.Context(),
-		"mongo:7",
+	return runMongoContainer(t, []testcontainers.ContainerCustomizer{
 		mongocontainer.WithUsername("mongoadmin"),
 		mongocontainer.WithPassword("secret"),
 		mongocontainer.WithReplicaSet("rs0"),
-	)
+	}, opts...)
+}
+
+// startMongoContainerWithoutAuth boots the same single node replica set with
+// authentication disabled, so its URI carries no userinfo. That is what the
+// credential-refresh tests need: they stub the credential builder to return no
+// credential at all, and a MONGODB-AWS credential could not authenticate against
+// a test container anyway.
+func startMongoContainerWithoutAuth(t *testing.T, opts ...setupOption) (string, *mongo.Client) {
+	t.Helper()
+	return runMongoContainer(t, []testcontainers.ContainerCustomizer{
+		mongocontainer.WithReplicaSet("rs0"),
+	}, opts...)
+}
+
+func runMongoContainer(t *testing.T, customizers []testcontainers.ContainerCustomizer, opts ...setupOption) (string, *mongo.Client) {
+	t.Helper()
+	container, err := mongocontainer.Run(t.Context(), "mongo:7", customizers...)
 	t.Cleanup(func() {
 		// t.Context() is already cancelled when cleanup runs
 		if err := container.Terminate(context.Background()); err != nil {

@@ -569,6 +569,15 @@ func TestCheckpointCacheRoundTripAndRecoverableFailures(t *testing.T) {
 	require.Nil(t, loaded)
 }
 
+// recoveryCount reads the consecutive unresumable-recovery count under the lock
+// that guards it. It exists so the tests do not reach through a chained selector
+// to lock a mutex they do not own.
+func (m *mongoCDC) recoveryCount() int {
+	m.resumeTokenMu.Lock()
+	defer m.resumeTokenMu.Unlock()
+	return m.unresumableRecoveries
+}
+
 // recoveryFixture builds a mongoCDC wired for the unresumable-recovery tests: a
 // real checkpoint cache (so a clear is observable as the position disappearing)
 // and the one-slot error channel the input reports fatal failures through.
@@ -656,9 +665,7 @@ func TestUnresumableRecoveryBreaksAfterConsecutiveRecoveries(t *testing.T) {
 	// than growing without bound.
 	f.m.recoverFromUnresumablePosition(t.Context(), cause)
 	require.Equal(t, f.token, f.stored(t), "the refusal must hold across reconnects")
-	f.m.resumeTokenMu.Lock()
-	require.Equal(t, maxConsecutiveUnresumableRecoveries, f.m.unresumableRecoveries)
-	f.m.resumeTokenMu.Unlock()
+	require.Equal(t, maxConsecutiveUnresumableRecoveries, f.m.recoveryCount())
 }
 
 // TestUnresumableRecoveryCounterResetsOnStreamProgress is the other half of the
@@ -678,17 +685,13 @@ func TestUnresumableRecoveryCounterResetsOnStreamProgress(t *testing.T) {
 		f.seed(t)
 		f.m.recoverFromUnresumablePosition(t.Context(), cause)
 	}
-	f.m.resumeTokenMu.Lock()
-	require.Equal(t, maxConsecutiveUnresumableRecoveries-1, f.m.unresumableRecoveries)
-	f.m.resumeTokenMu.Unlock()
+	require.Equal(t, maxConsecutiveUnresumableRecoveries-1, f.m.recoveryCount())
 
 	// The stream then opens and advances past the recovered position.
 	progress, err := bson.Marshal(bson.M{"_data": "advanced"})
 	require.NoError(t, err)
 	require.NoError(t, f.m.commitResumeToken(t.Context(), f.m.tokenEpoch, bson.Raw(progress)))
-	f.m.resumeTokenMu.Lock()
-	require.Zero(t, f.m.unresumableRecoveries, "stream progress must reset the consecutive count")
-	f.m.resumeTokenMu.Unlock()
+	require.Zero(t, f.m.recoveryCount(), "stream progress must reset the consecutive count")
 
 	// So the budget is whole again: the next recoveries clear rather than refuse.
 	for i := 1; i < maxConsecutiveUnresumableRecoveries; i++ {
@@ -709,16 +712,12 @@ func TestUnresumableRecoveryStaleAckDoesNotResetBreaker(t *testing.T) {
 
 	f.seed(t)
 	f.m.recoverFromUnresumablePosition(t.Context(), mongo.CommandError{Code: codeChangeStreamHistoryLost})
-	f.m.resumeTokenMu.Lock()
-	require.Equal(t, 1, f.m.unresumableRecoveries)
-	f.m.resumeTokenMu.Unlock()
+	require.Equal(t, 1, f.m.recoveryCount())
 
 	token, err := bson.Marshal(bson.M{"_data": "late"})
 	require.NoError(t, err)
 	require.NoError(t, f.m.commitResumeToken(t.Context(), stale, bson.Raw(token)))
-	f.m.resumeTokenMu.Lock()
-	require.Equal(t, 1, f.m.unresumableRecoveries, "a superseded ack proves nothing about the new generation")
-	f.m.resumeTokenMu.Unlock()
+	require.Equal(t, 1, f.m.recoveryCount(), "a superseded ack proves nothing about the new generation")
 }
 
 // TestUnresumableRecoveryWithoutSnapshot covers on_unresumable_position, which
@@ -738,9 +737,7 @@ func TestUnresumableRecoveryWithoutSnapshot(t *testing.T) {
 
 		// A configuration that never clears must not accumulate breaker state: the
 		// two refusals are different failures and must not report each other.
-		f.m.resumeTokenMu.Lock()
-		require.Zero(t, f.m.unresumableRecoveries)
-		f.m.resumeTokenMu.Unlock()
+		require.Zero(t, f.m.recoveryCount())
 
 		// Repeating the failure keeps reporting the same actionable reason.
 		f.m.recoverFromUnresumablePosition(t.Context(), cause)
