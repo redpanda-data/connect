@@ -93,6 +93,7 @@ input:
       wait_time_seconds: 0
       nack_visibility_timeout: 0
       zero_key_warn_interval: 30s
+      on_missing_object: drop
 ```
 
 --
@@ -447,5 +448,19 @@ zero_key_warn_interval: 10s
 
 zero_key_warn_interval: 0s
 ```
+
+=== `sqs.on_missing_object`
+
+How to handle an SQS notification whose S3 object cannot be found (a `NoSuchKey`/404 on download). `drop` (the default, and the historical behaviour) logs a warning, acks the notification and discards it - appropriate when `delete_objects` is enabled, since a redelivered notification for an already-deleted object is expected and harmless. `nack` instead logs an error and returns the notification to the queue so that an SQS redrive policy can dead-letter it after its `maxReceiveCount`; this is only safe when `delete_objects` is `false`, otherwise notifications for legitimately-deleted objects would be dead-lettered.
+
+
+*Type*: `string`
+
+*Default*: `"drop"`
+
+Options:
+`drop`
+, `nack`
+.
 
 

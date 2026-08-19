@@ -113,6 +113,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - aws_dynamodb_cdc: DynamoDB CDC now supports an optional checkpoint_namespace field, allowing multiple independent pipelines to share a single checkpoint table without overwriting each other's checkpoints. ([@squiidz](https://github.com/squiidz), [#4602](https://github.com/redpanda-data/connect/pull/4602))
+- aws_s3: Added `sqs.on_missing_object` field to control how an SQS notification whose S3 object cannot be found is handled. The default `drop` preserves the historical behaviour (warn, ack and discard); `nack` instead logs an error and returns the notification to the queue so an SQS redrive policy can dead-letter it. ([@peczenyj](https://github.com/peczenyj), [#4475](https://github.com/redpanda-data/connect/pull/4475))
 
 ### Fixed
 
