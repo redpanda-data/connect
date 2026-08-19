@@ -390,9 +390,8 @@ func TestLoadScenario_ParsesArms(t *testing.T) {
 
 // TestLoadScenario_RejectsMultiStreamArmsOnSource pins the narrowed rule: arms
 // themselves are legal on a source scenario (single-pipeline arms render
-// through the topology-agnostic renderPipelineConfig, which is what
-// scenarios/oracle/orders-5table-split.yaml relies on to compare one input
-// mining 1 table vs. 5 on the same instance under the same load). Only the
+// through the topology-agnostic renderPipelineConfig, which is what the
+// /soak base-vs-pr comparison relies on). Only the
 // sink-shaped arm features — streams > 1 and fan_in — remain rejected, because
 // their renderers derive per-topic names and sink tables.
 func TestLoadScenario_RejectsMultiStreamArmsOnSource(t *testing.T) {
@@ -405,7 +404,7 @@ func TestLoadScenario_RejectsMultiStreamArmsOnSource(t *testing.T) {
 // TestLoadScenario_AcceptsSinglePipelineArmsOnSource is the positive half of
 // the rule above.
 func TestLoadScenario_AcceptsSinglePipelineArmsOnSource(t *testing.T) {
-	s, err := LoadScenario("../scenarios/oracle/orders-5table-split.yaml")
+	s, err := LoadScenario("../scenarios/postgres/orders-soak-pr.yaml")
 	require.NoError(t, err)
 	require.Equal(t, DirectionSource, s.Direction)
 	require.Len(t, s.Matrix.Arms, 2)
