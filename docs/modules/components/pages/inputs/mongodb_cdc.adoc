@@ -81,6 +81,7 @@ input:
     checkpoint_cache: "" # No default (required)
     checkpoint_interval: 5s
     checkpoint_limit: 1000
+    on_unresumable_position: fail
     read_batch_size: 1000
     read_max_wait: 1s
     stream_snapshot: false
@@ -97,7 +98,9 @@ input:
 
 Read from a MongoDB replica set using https://www.mongodb.com/docs/manual/changeStreams/[^Change Streams]. It's only possible to watch for changes when using a sharded MongoDB or a MongoDB cluster running as a replica set.
 
-If a stored resume position can no longer be resumed (for example it has aged out of the oplog), the input clears its checkpoint and re-runs the snapshot rather than retrying a dead position. With `stream_snapshot` disabled there is no snapshot to re-run, so streaming restarts from the current oplog position and changes since the lost position are skipped.
+If a stored resume position can no longer be resumed (for example it has aged out of the oplog), the input clears its checkpoint and re-runs the snapshot rather than retrying a dead position. If that happens 3 times in a row without the change stream ever advancing in between - which usually means the snapshot is taking longer than the oplog window - the input stops with an error instead of re-snapshotting forever.
+
+With `stream_snapshot` disabled there is no snapshot to re-run, so recovery would have to skip the changes between the lost position and now. The input refuses to do that silently: by default it stops with an error and preserves the checkpoint, and skipping the gap has to be opted into with `on_unresumable_position: reset`.
 
 By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
 
@@ -321,6 +324,20 @@ Sorry! This field is missing documentation.
 *Type*: `int`
 
 *Default*: `1000`
+
+=== `on_unresumable_position`
+
+What to do when the stored stream position can no longer be resumed from (for example it has aged out of the oplog) and `stream_snapshot` is disabled, so there is no snapshot to recover with: `fail` stops the input with an error, preserving the checkpoint for inspection; `reset` clears the checkpoint and restarts streaming from the current oplog position, skipping the changes between the lost position and now. When `stream_snapshot` is enabled this field has no effect: recovery re-runs the snapshot, which loses nothing.
+
+
+*Type*: `string`
+
+*Default*: `"fail"`
+
+Options:
+`fail`
+, `reset`
+.
 
 === `read_batch_size`
 

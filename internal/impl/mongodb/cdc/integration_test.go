@@ -1173,6 +1173,132 @@ file:
 		"the recovery must not repeat once a valid checkpoint is stored")
 }
 
+// TestIntegrationMongoCDCUnresumablePositionWithoutSnapshot covers the recovery
+// path that cannot be lossless. With stream_snapshot disabled there is no
+// snapshot to re-run, so clearing a dead position restarts streaming from the
+// current oplog position and every change since that position is skipped.
+// on_unresumable_position decides whether that is acceptable, and it defaults to
+// refusing.
+//
+// The garbage token is seeded the same way as
+// TestIntegrationMongoCDCUnresumableCheckpointToken, and for the same reason:
+// "DEADBEEF" is not decodable as a keystring, so the server rejects the resume
+// rather than accepting an early position and replaying the oplog.
+func TestIntegrationMongoCDCUnresumablePositionWithoutSnapshot(t *testing.T) {
+	integration.CheckSkip(t)
+	uri, mongoClient := startMongoContainer(t)
+
+	rawToken, err := bson.Marshal(bson.M{"_data": "DEADBEEF"})
+	require.NoError(t, err)
+	encoded, err := bson.MarshalExtJSON(bson.Raw(rawToken), true, false)
+	require.NoError(t, err)
+
+	// run boots an input against a fresh database and checkpoint file seeded with
+	// the dead token, and returns the pieces the assertions need.
+	run := func(t *testing.T, database, mode string) (*databaseHelper, *outputHelper, *logCapture, *streamHelper, string) {
+		t.Helper()
+		db := &databaseHelper{mongoClient.Database(database)}
+		db.CreateCollection(t, "foo")
+
+		cacheDir := t.TempDir()
+		checkpointFile := filepath.Join(cacheDir, "mongodb_cdc_checkpoint")
+		require.NoError(t, os.WriteFile(checkpointFile, encoded, 0o644))
+
+		conf := `
+mongodb_cdc:
+  url: '` + uri + `'
+  database: '` + database + `'
+  checkpoint_cache: 'filecache'
+  stream_snapshot: false
+  json_marshal_mode: relaxed
+  collections:
+    - 'foo'
+`
+		if mode != "" {
+			conf += "  on_unresumable_position: " + mode + "\n"
+		}
+		builder := service.NewStreamBuilder()
+		require.NoError(t, builder.AddInputYAML(conf))
+		require.NoError(t, builder.AddCacheYAML(`
+label: filecache
+file:
+  directory: '`+cacheDir+`'`))
+		output := &outputHelper{}
+		require.NoError(t, builder.AddBatchConsumerFunc(output.AddBatch))
+		logs := &logCapture{}
+		builder.SetLogger(slog.New(logs))
+		return db, output, logs, &streamHelper{builder: builder}, checkpointFile
+	}
+
+	t.Run("the default refuses to skip the gap", func(t *testing.T) {
+		// No on_unresumable_position at all, so the default is what is under test.
+		db, output, logs, stream, checkpointFile := run(t, "faildb", "")
+		wait := stream.RunAsync(t)
+		t.Cleanup(wait)
+
+		// A write that a `reset` would have streamed, so "nothing was delivered"
+		// below means the input really did stop rather than simply having had
+		// nothing to read.
+		db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
+
+		require.Eventually(t, func() bool {
+			return len(logs.matching("no snapshot to recover with")) > 0
+		}, 60*time.Second, 250*time.Millisecond,
+			"expected the refusal to be reported, captured logs: %v", logs.matching(""))
+		refusal := logs.matching("no snapshot to recover with")
+		t.Logf("refusal: %s", refusal[0])
+		require.Contains(t, refusal[0], "ERROR", "the refusal must be logged at error level, it needs an operator")
+		require.Contains(t, refusal[0], "on_unresumable_position: reset", "the log must name the opt-in")
+
+		// The checkpoint is preserved exactly as it was, for inspection.
+		after, err := os.ReadFile(checkpointFile)
+		require.NoError(t, err)
+		require.Equal(t, string(encoded), string(after), "the checkpoint must be preserved untouched")
+
+		// And nothing was delivered: the input fails rather than skipping ahead.
+		require.Empty(t, output.Messages(t), "refusing must not deliver anything")
+
+		stream.StopWithin(t, 30*time.Second)
+		after, err = os.ReadFile(checkpointFile)
+		require.NoError(t, err)
+		require.Equal(t, string(encoded), string(after), "shutdown must not rewrite the preserved checkpoint")
+	})
+
+	t.Run("reset opts into skipping the gap", func(t *testing.T) {
+		_, output, logs, stream, checkpointFile := run(t, "resetdb", "reset")
+		wait := stream.RunAsync(t)
+		t.Cleanup(wait)
+
+		require.Eventually(t, func() bool {
+			return len(logs.matching("changes since the lost position will be skipped")) > 0
+		}, 60*time.Second, 250*time.Millisecond,
+			"expected the honest skip warning, captured logs: %v", logs.matching(""))
+
+		// Streaming resumes from the current oplog position, so only writes made
+		// after the restart are seen. Which write that is cannot be pinned from
+		// outside - the reconnect happens asynchronously - so keep writing until one
+		// lands rather than racing a single insert against the reconnect.
+		id := 0
+		require.Eventually(t, func() bool {
+			id++
+			if _, err := mongoClient.Database("resetdb").Collection("foo").
+				InsertOne(t.Context(), bson.M{"_id": id, "data": "hello"}); err != nil {
+				return false
+			}
+			msgs, err := output.messages()
+			return err == nil && len(msgs) > 0
+		}, 60*time.Second, 500*time.Millisecond, "streaming never resumed after the reset")
+
+		// The dead token is gone, replaced by a position the server accepted.
+		require.Eventually(t, func() bool {
+			b, err := os.ReadFile(checkpointFile)
+			return err == nil && string(b) != string(encoded)
+		}, 60*time.Second, 250*time.Millisecond, "the cleared checkpoint was never replaced")
+
+		stream.StopWithin(t, 30*time.Second)
+	})
+}
+
 // TestIntegrationMongoCDCCollectionDropAndRename settles what a collection drop
 // or rename actually does to this input, which a long-standing TODO on the
 // SetResumeAfter call assumed would invalidate the stored resume token.

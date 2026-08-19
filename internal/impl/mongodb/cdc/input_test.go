@@ -566,6 +566,208 @@ func TestCheckpointCacheRoundTripAndRecoverableFailures(t *testing.T) {
 	require.Nil(t, loaded)
 }
 
+// recoveryFixture builds a mongoCDC wired for the unresumable-recovery tests: a
+// real checkpoint cache (so a clear is observable as the position disappearing)
+// and the one-slot error channel the input reports fatal failures through.
+type recoveryFixture struct {
+	m     *mongoCDC
+	cp    *checkpointCache
+	token bson.Raw
+}
+
+func newRecoveryFixture(t *testing.T, snapshotParallelism int, onUnresumable string) *recoveryFixture {
+	t.Helper()
+	const cacheName = "checkpoints"
+	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
+	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
+	m := &mongoCDC{
+		logger:                res.Logger(),
+		checkpoint:            cp,
+		errorChan:             make(chan error, 1),
+		snapshotParallelism:   snapshotParallelism,
+		onUnresumablePosition: onUnresumable,
+	}
+	raw, err := bson.Marshal(bson.M{"_data": "position"})
+	require.NoError(t, err)
+	return &recoveryFixture{m: m, cp: cp, token: bson.Raw(raw)}
+}
+
+// seed writes a checkpoint, so that the next assertion can tell "kept" from
+// "cleared" rather than "never there".
+func (f *recoveryFixture) seed(t *testing.T) {
+	t.Helper()
+	require.NoError(t, f.cp.Store(t.Context(), f.token))
+	loaded, err := f.cp.Load(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, f.token, loaded)
+}
+
+func (f *recoveryFixture) stored(t *testing.T) bson.Raw {
+	t.Helper()
+	loaded, err := f.cp.Load(t.Context())
+	require.NoError(t, err)
+	return loaded
+}
+
+func (f *recoveryFixture) reportedError(t *testing.T) error {
+	t.Helper()
+	select {
+	case err := <-f.m.errorChan:
+		return err
+	default:
+		return nil
+	}
+}
+
+// TestUnresumableRecoveryBreaksAfterConsecutiveRecoveries pins the livelock
+// breaker. The sequence it guards is: a snapshot outlives the oplog window, so
+// the position checkpointed when it finishes has already aged out, the stream
+// fails to open on it, recovery clears it and re-runs the snapshot - which takes
+// just as long, producing another dead position. Left alone that repeats forever,
+// re-delivering the collection on every pass behind a warning. After
+// maxConsecutiveUnresumableRecoveries the input must stop instead, keeping the
+// checkpoint and reporting a reason.
+func TestUnresumableRecoveryBreaksAfterConsecutiveRecoveries(t *testing.T) {
+	f := newRecoveryFixture(t, 1, onUnresumablePositionFail) // snapshot enabled: the knob must not apply
+	cause := mongo.CommandError{Code: codeChangeStreamHistoryLost, Name: "ChangeStreamHistoryLost"}
+
+	// The first two recoveries clear and let the snapshot re-run.
+	for i := 1; i < maxConsecutiveUnresumableRecoveries; i++ {
+		f.seed(t)
+		f.m.recoverFromUnresumablePosition(t.Context(), cause)
+		require.Nil(t, f.stored(t), "recovery %d must clear the dead position", i)
+		require.NoError(t, f.reportedError(t), "recovery %d must not fail the input", i)
+	}
+
+	// The next one refuses: the position is kept and the input is failed with a
+	// reason naming the churn rather than the generic stream error.
+	f.seed(t)
+	f.m.recoverFromUnresumablePosition(t.Context(), cause)
+	require.Equal(t, f.token, f.stored(t), "the breaker must keep the checkpoint so the input stops churning")
+	err := f.reportedError(t)
+	require.ErrorIs(t, err, errUnresumableChurnRefused)
+	require.ErrorAs(t, err, &mongo.CommandError{}, "the reported error must still carry the server's cause")
+
+	// And it stays refused on every later reconnect, with the counter pinned rather
+	// than growing without bound.
+	f.m.recoverFromUnresumablePosition(t.Context(), cause)
+	require.Equal(t, f.token, f.stored(t), "the refusal must hold across reconnects")
+	f.m.resumeTokenMu.Lock()
+	require.Equal(t, maxConsecutiveUnresumableRecoveries, f.m.unresumableRecoveries)
+	f.m.resumeTokenMu.Unlock()
+}
+
+// TestUnresumableRecoveryCounterResetsOnStreamProgress is the other half of the
+// breaker: it may only fire on *consecutive* recoveries, so a run where the
+// stream genuinely advanced must not count towards it. Streaming progress is
+// signalled by commitResumeToken accepting a live-generation token, which is
+// reached only from the streaming phase - snapshot completion writes the position
+// directly, precisely so that it cannot reset the counter (every pass of the
+// re-snapshot loop completes a snapshot, so resetting there would disable the
+// breaker).
+func TestUnresumableRecoveryCounterResetsOnStreamProgress(t *testing.T) {
+	f := newRecoveryFixture(t, 1, onUnresumablePositionFail)
+	cause := mongo.CommandError{Code: codeChangeStreamHistoryLost, Name: "ChangeStreamHistoryLost"}
+
+	// Two recoveries, taking the count to one short of the limit.
+	for range maxConsecutiveUnresumableRecoveries - 1 {
+		f.seed(t)
+		f.m.recoverFromUnresumablePosition(t.Context(), cause)
+	}
+	f.m.resumeTokenMu.Lock()
+	require.Equal(t, maxConsecutiveUnresumableRecoveries-1, f.m.unresumableRecoveries)
+	f.m.resumeTokenMu.Unlock()
+
+	// The stream then opens and advances past the recovered position.
+	progress, err := bson.Marshal(bson.M{"_data": "advanced"})
+	require.NoError(t, err)
+	require.NoError(t, f.m.commitResumeToken(t.Context(), f.m.tokenEpoch, bson.Raw(progress)))
+	f.m.resumeTokenMu.Lock()
+	require.Zero(t, f.m.unresumableRecoveries, "stream progress must reset the consecutive count")
+	f.m.resumeTokenMu.Unlock()
+
+	// So the budget is whole again: the next recoveries clear rather than refuse.
+	for i := 1; i < maxConsecutiveUnresumableRecoveries; i++ {
+		f.seed(t)
+		f.m.recoverFromUnresumablePosition(t.Context(), cause)
+		require.Nil(t, f.stored(t), "recovery %d after progress must clear", i)
+		require.NoError(t, f.reportedError(t))
+	}
+}
+
+// TestUnresumableRecoveryStaleAckDoesNotResetBreaker guards the reset signal
+// itself. Acks outlive the generation they were created under, so a late one can
+// resolve after a recovery; it is already dropped for checkpointing purposes, and
+// it must not launder itself into evidence of progress either.
+func TestUnresumableRecoveryStaleAckDoesNotResetBreaker(t *testing.T) {
+	f := newRecoveryFixture(t, 1, onUnresumablePositionFail)
+	stale := f.m.beginTokenEpoch(nil)
+
+	f.seed(t)
+	f.m.recoverFromUnresumablePosition(t.Context(), mongo.CommandError{Code: codeChangeStreamHistoryLost})
+	f.m.resumeTokenMu.Lock()
+	require.Equal(t, 1, f.m.unresumableRecoveries)
+	f.m.resumeTokenMu.Unlock()
+
+	token, err := bson.Marshal(bson.M{"_data": "late"})
+	require.NoError(t, err)
+	require.NoError(t, f.m.commitResumeToken(t.Context(), stale, bson.Raw(token)))
+	f.m.resumeTokenMu.Lock()
+	require.Equal(t, 1, f.m.unresumableRecoveries, "a superseded ack proves nothing about the new generation")
+	f.m.resumeTokenMu.Unlock()
+}
+
+// TestUnresumableRecoveryWithoutSnapshot covers on_unresumable_position, which
+// only governs the case where recovery cannot be lossless: no snapshot to re-run
+// means clearing the position skips every change since it died.
+func TestUnresumableRecoveryWithoutSnapshot(t *testing.T) {
+	cause := mongo.CommandError{Code: codeChangeStreamHistoryLost, Name: "ChangeStreamHistoryLost"}
+
+	t.Run("fail keeps the checkpoint and stops the input", func(t *testing.T) {
+		f := newRecoveryFixture(t, 0, onUnresumablePositionFail)
+		f.seed(t)
+		f.m.recoverFromUnresumablePosition(t.Context(), cause)
+		require.Equal(t, f.token, f.stored(t), "the default must preserve the checkpoint for inspection")
+		err := f.reportedError(t)
+		require.ErrorIs(t, err, errUnresumableGapRefused)
+		require.ErrorAs(t, err, &mongo.CommandError{})
+
+		// A configuration that never clears must not accumulate breaker state: the
+		// two refusals are different failures and must not report each other.
+		f.m.resumeTokenMu.Lock()
+		require.Zero(t, f.m.unresumableRecoveries)
+		f.m.resumeTokenMu.Unlock()
+
+		// Repeating the failure keeps reporting the same actionable reason.
+		f.m.recoverFromUnresumablePosition(t.Context(), cause)
+		require.Equal(t, f.token, f.stored(t))
+		require.ErrorIs(t, f.reportedError(t), errUnresumableGapRefused)
+	})
+
+	t.Run("reset clears the checkpoint and skips the gap", func(t *testing.T) {
+		f := newRecoveryFixture(t, 0, onUnresumablePositionReset)
+		f.seed(t)
+		f.m.recoverFromUnresumablePosition(t.Context(), cause)
+		require.Nil(t, f.stored(t), "reset opts into clearing and streaming from now")
+		require.NoError(t, f.reportedError(t), "reset is a warning, not a failure")
+	})
+}
+
+// TestUnresumablePositionFieldDefaultsToFail pins the default, which is the whole
+// point of the field: skipping changes has to be opted into, never inherited.
+func TestUnresumablePositionFieldDefaultsToFail(t *testing.T) {
+	parsed, err := spec().ParseYAML(`
+url: mongodb://localhost:27017
+database: foo
+collections: [bar]
+checkpoint_cache: baz
+`, nil)
+	require.NoError(t, err)
+	mode, err := parsed.FieldString(fieldOnUnresumablePosition)
+	require.NoError(t, err)
+	require.Equal(t, onUnresumablePositionFail, mode)
+}
+
 func TestBeginTokenEpochAdvancesAndInstallsToken(t *testing.T) {
 	m := &mongoCDC{}
 	loaded := bson.Raw{5, 0, 0, 0, 0}
