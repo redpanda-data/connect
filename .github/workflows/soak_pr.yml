@@ -39,6 +39,7 @@ jobs:
       REDPANDA_LICENSE_SECRET: redpanda-connect-bench/license
     steps:
       - name: Check commenter permissions
+        id: gate
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -47,6 +48,13 @@ jobs:
             echo "::error::User ${{ github.event.comment.user.login }} does not have write access"
             exit 1
           fi
+          # The comment is the authorization; freeze WHAT it authorized. The
+          # merge ref is resolved at checkout, minutes later — without this
+          # pin, commits force-pushed after the approving comment would run
+          # with the provisioner role (TOCTOU).
+          APPROVED_HEAD=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}" --jq '.head.sha')
+          echo "approved_head=${APPROVED_HEAD}" >> "$GITHUB_OUTPUT"
+          echo "authorized head: ${APPROVED_HEAD}"
 
       - name: Parse scenario from comment
         id: parse
@@ -57,15 +65,28 @@ jobs:
           echo "scenario=${SCENARIO:-postgres/orders-soak-pr}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout PR merge ref
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: refs/pull/${{ github.event.issue.number }}/merge
           fetch-depth: 0
 
+      - name: Verify merge ref matches the authorized head
+        shell: bash
+        run: |
+          ACTUAL=$(git rev-parse HEAD^2)
+          if [ "$ACTUAL" != "${{ steps.gate.outputs.approved_head }}" ]; then
+            echo "::error::PR head moved after authorization (approved ${{ steps.gate.outputs.approved_head }}, merge ref contains $ACTUAL). Re-comment /soak to authorize the current head."
+            exit 1
+          fi
+
       - name: Install Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: 'go.mod'
+          # This job executes PR-controlled code; a cache save would land in
+          # the default-branch scope where trusted workflows restore from
+          # (GOCACHE poisoning). Slower builds are the price of isolation.
+          cache: false
 
       - name: Build base and PR binaries
         id: build
@@ -83,14 +104,14 @@ jobs:
           GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/rc-pr" ./cmd/redpanda-connect
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
           aws-region: us-east-2
           role-duration-seconds: 14400
 
       - name: Install Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_wrapper: false
 
@@ -148,7 +169,7 @@ jobs:
 
       - name: Upload run log
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: soak-pr-log
           path: ${{ runner.temp }}/soak-pr.log

@@ -53,12 +53,12 @@ jobs:
       REDPANDA_LICENSE_SECRET: redpanda-connect-bench/license
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
           aws-region: us-east-2
@@ -100,13 +100,13 @@ jobs:
 
       - name: Install Go
         if: steps.gate.outputs.run == 'true'
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: 'go.mod'
 
       - name: Install Terraform
         if: steps.gate.outputs.run == 'true'
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_wrapper: false
 
@@ -141,7 +141,7 @@ jobs:
 
       - name: Upload run log
         if: always() && steps.gate.outputs.run == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: soak-run-log
           path: ${{ runner.temp }}/soak-run.log
