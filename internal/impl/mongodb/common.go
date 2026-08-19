@@ -146,7 +146,7 @@ func AWSIAMAuthField() *service.ConfigField {
 			ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
 			Optional(),
 	).
-		Description("AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against MongoDB Atlas. When enabled, IAM credentials are used instead of a static username and password. Role-derived session credentials are resolved when the component connects and are re-resolved whenever it reconnects. The `mongodb` processor and cache establish their client once at creation and cannot refresh expiring session credentials, so `role` and `roles` are rejected for those components; use the ambient credential chain or static keys with them. For long-running pipelines, prefer the ambient credential chain (leave keys and roles unset), which the driver refreshes automatically.").
+		Description("AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against MongoDB Atlas. When enabled, IAM credentials are used instead of a static username and password. Role-derived session credentials are resolved when the component connects and are re-resolved whenever it reconnects. The `mongodb` processor and cache establish their client once at creation and cannot refresh expiring session credentials, so `role`, `roles` and session tokens are rejected for those components; use the ambient credential chain or long-lived access keys with them. For long-running pipelines, prefer the ambient credential chain (leave keys and roles unset), which the driver refreshes automatically.").
 		ShortDescription("AWS IAM authentication configuration (MONGODB-AWS).").
 		Advanced().
 		Optional().
@@ -156,13 +156,14 @@ func AWSIAMAuthField() *service.ConfigField {
 // ClientConfig holds parsed MongoDB connection settings so that a client can be
 // built - and rebuilt with freshly resolved credentials - at connect time.
 type ClientConfig struct {
-	url         string
-	appName     string
-	database    string
-	username    string
-	password    string
-	credBuilder CredentialBuilder // nil unless aws.enabled
-	assumesRole bool
+	url              string
+	appName          string
+	database         string
+	username         string
+	password         string
+	credBuilder      CredentialBuilder // nil unless aws.enabled
+	assumesRole      bool
+	usesSessionToken bool
 }
 
 // AssumesRole reports whether the aws block is configured with role
@@ -170,6 +171,36 @@ type ClientConfig struct {
 // refreshed by rebuilding the client.
 func (c *ClientConfig) AssumesRole() bool {
 	return c.assumesRole
+}
+
+// UsesSessionToken reports whether the aws block is configured with a static
+// STS session token, which is an expiring snapshot of session credentials that
+// can only be replaced by editing the config - there is no refresh path.
+func (c *ClientConfig) UsesSessionToken() bool {
+	return c.usesSessionToken
+}
+
+// uriHasUserInfo reports whether a MongoDB connection string carries a
+// userinfo section. Detection is textual - the userinfo, when present, is the
+// segment between the scheme separator and an '@' occurring before the first
+// '/' or '?' - so that mongodb+srv URLs can be checked without the SRV
+// resolution that the driver's parser performs eagerly.
+//
+// A raw '@' cannot appear inside the userinfo: the driver's parser splits on
+// the first '@' and then rejects any further '@' in the host section
+// ("unescaped @ sign in user info"), so '@' in a username or password must be
+// percent-encoded. Presence therefore reduces to "does that segment contain an
+// '@'", which is the same answer under either the first-@ or last-@ delimiter
+// convention.
+func uriHasUserInfo(uri string) bool {
+	_, rest, ok := strings.Cut(uri, "://")
+	if !ok {
+		return false
+	}
+	if idx := strings.IndexAny(rest, "/?"); idx >= 0 {
+		rest = rest[:idx]
+	}
+	return strings.Contains(rest, "@")
 }
 
 // ClientConfigFromParsed parses and validates the connection fields shared by
@@ -196,11 +227,18 @@ func ClientConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		return nil, err
 	}
 
-	// Probe the URL once so that malformed connection strings are rejected at
-	// startup, and so we can tell whether it already carries credentials.
-	probe := options.Client().ApplyURI(c.url)
-	if err := probe.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid url: %w", err)
+	// Probe the URL so that malformed connection strings are rejected at
+	// startup - but only for plain `mongodb://` URLs, where parsing is cheap and
+	// DNS-free. The driver resolves SRV and TXT records while parsing a
+	// `mongodb+srv://` URL (connstring.Parse installs dns.DefaultResolver), and
+	// a constructor is never retried, so a transient DNS failure here would kill
+	// the pipeline. Connect() applies the same URL and *is* retried, which is
+	// the whole point of the lazy-connect design, so parse and DNS errors for
+	// SRV URLs are left to surface there.
+	if !strings.HasPrefix(c.url, "mongodb+srv://") {
+		if err := options.Client().ApplyURI(c.url).Validate(); err != nil {
+			return nil, fmt.Errorf("invalid url: %w", err)
+		}
 	}
 
 	awsConf := conf.Namespace(FieldAWSIAMAuth)
@@ -210,13 +248,15 @@ func ClientConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		}
 		// Only userinfo in the URL is a conflict: URLs which merely name the
 		// mechanism (`?authSource=$external&authMechanism=MONGODB-AWS`, as Atlas
-		// suggests for IAM users) also populate probe.Auth and are fine.
-		if probe.Auth != nil && (probe.Auth.Username != "" || probe.Auth.PasswordSet) {
+		// suggests for IAM users) carry no credentials and are fine.
+		if uriHasUserInfo(c.url) {
 			return nil, errors.New("credentials embedded in the url cannot be combined with aws.enabled; the MONGODB-AWS mechanism authenticates with IAM credentials instead")
 		}
 		role, _ := awsConf.FieldString(FieldAWSIAMAuthRole)
 		roles, _ := awsConf.FieldObjectList(FieldAWSIAMAuthRoles)
 		c.assumesRole = role != "" || len(roles) > 0
+		token, _ := awsConf.FieldString(FieldAWSIAMAuthToken)
+		c.usesSessionToken = token != ""
 		if c.credBuilder, err = AWSOptFn(awsConf, logger); err != nil {
 			return nil, err
 		}

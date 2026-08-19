@@ -153,7 +153,7 @@ The client application name.
 
 === `aws`
 
-AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against MongoDB Atlas. When enabled, IAM credentials are used instead of a static username and password. Role-derived session credentials are resolved when the component connects and are re-resolved whenever it reconnects. The `mongodb` processor and cache establish their client once at creation and cannot refresh expiring session credentials, so `role` and `roles` are rejected for those components; use the ambient credential chain or static keys with them. For long-running pipelines, prefer the ambient credential chain (leave keys and roles unset), which the driver refreshes automatically.
+AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against MongoDB Atlas. When enabled, IAM credentials are used instead of a static username and password. Role-derived session credentials are resolved when the component connects and are re-resolved whenever it reconnects. The `mongodb` processor and cache establish their client once at creation and cannot refresh expiring session credentials, so `role`, `roles` and session tokens are rejected for those components; use the ambient credential chain or long-lived access keys with them. For long-running pipelines, prefer the ambient credential chain (leave keys and roles unset), which the driver refreshes automatically.
 
 
 *Type*: `object`

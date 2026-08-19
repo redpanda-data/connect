@@ -60,8 +60,8 @@ func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig, logger *service
 	if err != nil {
 		return nil, err
 	}
-	if cc.AssumesRole() {
-		return nil, errors.New("aws.role and aws.roles cannot be used with the mongodb cache: role-derived session credentials expire and this component has no reconnect lifecycle to refresh them; use the ambient credential chain or static keys instead")
+	if cc.AssumesRole() || cc.UsesSessionToken() {
+		return nil, errors.New("aws.role, aws.roles and aws.token cannot be used with the mongodb cache: session credentials expire and this component has no reconnect lifecycle to refresh them; use the ambient credential chain or long-lived access keys instead")
 	}
 	connectCtx, cancel := context.WithTimeout(context.Background(), clientConstructTimeout)
 	defer cancel()

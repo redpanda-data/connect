@@ -1054,11 +1054,12 @@ func (m *mongoCDC) readSnapshotRange(
 }
 
 // getCurrentResumeToken opens a short-lived change stream over the watched
-// collections and returns its initial post-batch resume token, i.e. the current
-// end of the stream. This works on any deployment that supports change streams:
-// sharded clusters, where it is the only available start position, and replica
-// sets, where servers report a post-batch resume token from 4.0.7 onwards. Older
-// servers return no token and this returns an error.
+// collections and returns a resume token for the current end of the stream:
+// either the post-batch resume token of an empty poll, or the token of an event
+// the poll happened to deliver. This works on any deployment that supports
+// change streams: sharded clusters, where it is the only available start
+// position, and replica sets, where servers report a post-batch resume token
+// from 4.0.7 onwards. Older servers return no token and this returns an error.
 func (m *mongoCDC) getCurrentResumeToken(ctx context.Context) (bson.Raw, error) {
 	filter := []bson.M{{"$match": bson.M{
 		"ns.coll": bson.M{"$in": slices.Clone(m.collections)},
@@ -1079,13 +1080,17 @@ func (m *mongoCDC) getCurrentResumeToken(ctx context.Context) (bson.Raw, error) 
 		_ = stream.Close(ctx)
 	}()
 	if stream.TryNext(ctx) {
-		// A batchSize of 0 means the server sends no events in the first batch,
-		// so this should be unreachable. If it ever happens the cached token is
-		// that event's `_id` and resuming after it would skip the event, so
-		// report no token instead: the caller then falls back to the oplog
-		// timestamp, or fails when no timestamp exists.
-		m.logger.Debugf("change stream returned an event while capturing the start position, ignoring the token to avoid skipping it")
-		return nil, errors.New("unable to determine start position prior to snapshot phase: stream returned an event")
+		// A batchSize of 0 only empties the *first* batch: TryNext still issues
+		// one getMore, which the server answers with its default batch size, so
+		// a collection being written to can hand us an event here. The event's
+		// token is a perfectly good start position: adopting it makes that event
+		// pre-snapshot data by definition, and the snapshot scan - which only
+		// starts once this call returns, and reads the collection's current
+		// state rather than an as-of-`ts` view - therefore captures its effect.
+		// Anything later than the token is streamed as usual, so at-least-once
+		// still holds. This is the behaviour sharded clusters already had, where
+		// a token is the only available start position.
+		m.logger.Debugf("change stream returned an event while capturing the start position, adopting its resume token as the pre-snapshot position")
 	}
 	if rt := stream.ResumeToken(); rt != nil {
 		// The driver hands back a token aliasing the cursor's batch buffer, so
