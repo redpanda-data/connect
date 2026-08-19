@@ -47,6 +47,11 @@ files named below.
   any bench EC2 exists (`--preflight=off` is the loudly-warned override).
   This applies across machines: laptop benches and scheduled soaks
   collide.
+- **The nightly is change-gated** (schedule only; manual dispatch always
+  runs): it compares HEAD against the `build_sha` of the scenario's last
+  soak-index entry over `internal/`, `cmd/`, `go.mod`, `benchmarking/`, and
+  the workflows — no relevant merge, no run. Fails open: a missing entry or
+  unknown SHA runs the soak.
 - **One-time account setup** (already done in 605419575229, needed again
   only for a new account): `make -C cleanup-lambda zip && task
   aws:persistent`; create the license secret: `aws secretsmanager

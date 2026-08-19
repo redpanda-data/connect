@@ -54,6 +54,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -62,20 +64,58 @@ jobs:
           aws-region: us-east-2
           role-duration-seconds: 14400
 
+      # Change gate (schedule only; manual dispatch always runs): skip the
+      # soak when nothing that could affect it merged since the last soaked
+      # commit. Fails open — no prior entry, no build_sha, or an unknown SHA
+      # all mean "run".
+      - name: Change gate
+        id: gate
+        shell: bash
+        env:
+          SCENARIO: ${{ github.event.inputs.scenario || 'postgres/orders-soak' }}
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "manual dispatch — gate bypassed"
+            exit 0
+          fi
+          NAME=$(grep -m1 '^name:' "benchmarking/aws/scenarios/${SCENARIO}.yaml" | awk '{print $2}')
+          LAST=$(aws s3 ls "s3://redpanda-connect-bench-soak-archive/soak-index/${NAME}/" 2>/dev/null | awk '{print $4}' | sort | tail -1)
+          if [ -z "$LAST" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "no prior soak — running"; exit 0
+          fi
+          SHA=$(aws s3 cp "s3://redpanda-connect-bench-soak-archive/soak-index/${NAME}/${LAST}" - | jq -r '.build_sha // empty')
+          if [ -z "$SHA" ] || ! git cat-file -e "$SHA" 2>/dev/null; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "last soaked SHA unavailable — running"; exit 0
+          fi
+          CHANGED=$(git diff --name-only "$SHA"..HEAD -- internal cmd go.mod go.sum benchmarking .github/workflows | head -20)
+          if [ -n "$CHANGED" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "relevant changes since ${SHA:0:9}:"; echo "$CHANGED"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "## Soak skipped" >> "$GITHUB_STEP_SUMMARY"
+            echo "No relevant changes since last soaked commit \`${SHA:0:9}\` — nothing new to soak." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Install Go
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
 
       - name: Install Terraform
+        if: steps.gate.outputs.run == 'true'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
 
       - name: Install Task
+        if: steps.gate.outputs.run == 'true'
         uses: ./.github/actions/setup-task
 
       - name: Run soak
+        if: steps.gate.outputs.run == 'true'
         working-directory: benchmarking/aws
         # Explicit `shell: bash` turns on pipefail. GitHub's DEFAULT run shell
         # is `bash -e {0}` WITHOUT pipefail, so `task ... | tee` reported
@@ -86,7 +126,7 @@ jobs:
           task aws:bench scenario="${{ github.event.inputs.scenario || 'postgres/orders-soak' }}" 2>&1 | tee "$RUNNER_TEMP/soak-run.log"
 
       - name: Verify teardown actually completed
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         run: |
           LIVE=$(aws ec2 describe-instances --region us-east-2 \
             --filters Name=tag:Project,Values=redpanda-connect-bench Name=instance-state-name,Values=pending,running,stopping,stopped \
@@ -100,7 +140,7 @@ jobs:
           echo "account clean: no bench EC2, no RDS"
 
       - name: Upload run log
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: soak-run-log

@@ -706,6 +706,11 @@ type soakIndexEntry struct {
 	P95MBps       float64   `json:"p95"`
 	RSSMaxBytes   uint64    `json:"rss_max_bytes"`
 	BacklogMaxSec float64   `json:"backlog_max_sec"`
+	// BuildSHA is the git commit the soaked binary was built from. The
+	// nightly workflow's change gate diffs HEAD against the last soaked SHA
+	// to skip runs when nothing relevant merged. Empty when git metadata is
+	// unavailable (gate then runs the soak — fail open, toward coverage).
+	BuildSHA string `json:"build_sha,omitempty"`
 }
 
 // soakArchivePlan is the set of S3 keys one soak run's archive upload
@@ -801,6 +806,7 @@ func buildSoakArchivePlanForPoints(sessionID, scenarioName string, points []Poin
 // rolling baseline's median (see compareSoakBaseline).
 func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket, sessionID string, s *Scenario, result *Result, jsonPath string, topo Topology, logFetcher LogFetcher) (soakIndexEntry, error) {
 	entry := buildSoakIndexEntry(sessionID, s, result)
+	entry.BuildSHA = gitHeadSHA()
 	if archiveBucket == "" {
 		return entry, fmt.Errorf("no soak archive bucket configured (--soak-archive-bucket)")
 	}
@@ -853,6 +859,16 @@ func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket,
 // cpu_points entry and engines=connect, so result.Points has exactly one
 // element in the success path — but this degrades to zero values rather
 // than panicking if that ever changes.
+// gitHeadSHA returns the working tree's HEAD commit, or "" when git is
+// unavailable — the change gate treats "" as "always run".
+func gitHeadSHA() string {
+	out, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 func buildSoakIndexEntry(sessionID string, s *Scenario, result *Result) soakIndexEntry {
 	entry := soakIndexEntry{
 		Scenario:  s.Name,
