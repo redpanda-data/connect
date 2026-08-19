@@ -629,9 +629,20 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		if !errors.Is(err, errCorruptCheckpoint) {
 			return fmt.Errorf("unable to load checkpoints from cache: %w", err)
 		}
-		// Undecodable bytes cannot become decodable on a retry, so failing here
-		// would wedge the input exactly as an unresumable token used to. Same
-		// recovery, same trade: clear it and start over.
+		// Undecodable bytes cannot become decodable on a retry, so retrying the
+		// load would wedge the input exactly as an unresumable token used to. A
+		// corrupt entry is an unresumable position by another route, so it goes
+		// through the same policy: without a snapshot to re-run, clearing it
+		// silently skips every change since the stored position, which the
+		// operator must opt into; and repeated clears without stream progress
+		// trip the same breaker rather than churning forever.
+		plan, recoveries := m.planUnresumableRecovery()
+		switch plan {
+		case unresumableRecoveryRefuseGap:
+			return fmt.Errorf("the stored checkpoint cannot be decoded and `stream_snapshot` is disabled, so clearing it would restart streaming from the current oplog position and silently skip every change since the stored position; set `on_unresumable_position: reset` to opt into skipping them, or repair or delete the checkpoint cache entry: %w", err)
+		case unresumableRecoveryRefuseChurn:
+			return fmt.Errorf("the stored checkpoint cannot be decoded and has been cleared %d times in a row without the change stream ever advancing in between; refusing to clear it again - repair or delete the checkpoint cache entry, then restart the pipeline: %w", recoveries, err)
+		}
 		m.logger.Warnf("Stored checkpoint is corrupt, clearing it to start over: %v", err)
 		if derr := m.checkpoint.Delete(ctx); derr != nil {
 			return fmt.Errorf("unable to clear the corrupt checkpoint: %w", derr)

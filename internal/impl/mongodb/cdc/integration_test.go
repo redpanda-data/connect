@@ -1507,6 +1507,58 @@ file:
 		"the corruption must not be reported again once a valid checkpoint is stored")
 }
 
+// TestIntegrationMongoCDCCorruptCheckpointWithoutSnapshot pins that a corrupt
+// checkpoint goes through the same recovery policy as an unresumable position:
+// with stream_snapshot disabled and the default on_unresumable_position: fail,
+// clearing it would silently skip every change since the stored position, so the
+// input must refuse — keeping the corrupt entry for inspection and failing on
+// every reconnect instead of quietly starting over from the oplog end.
+func TestIntegrationMongoCDCCorruptCheckpointWithoutSnapshot(t *testing.T) {
+	integration.CheckSkip(t)
+	uri, mongoClient := startMongoContainer(t)
+	db := &databaseHelper{mongoClient.Database("test")}
+	db.CreateCollection(t, "foo")
+	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
+
+	cacheDir := t.TempDir()
+	checkpointFile := filepath.Join(cacheDir, "mongodb_cdc_checkpoint")
+	const corruptBytes = "}{ not extended json"
+	require.NoError(t, os.WriteFile(checkpointFile, []byte(corruptBytes), 0o644))
+
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.AddInputYAML(`
+mongodb_cdc:
+  url: '`+uri+`'
+  database: 'test'
+  checkpoint_cache: 'filecache'
+  stream_snapshot: false
+  json_marshal_mode: relaxed
+  collections:
+    - 'foo'
+`))
+	require.NoError(t, builder.AddCacheYAML(`
+label: filecache
+file:
+  directory: '`+cacheDir+`'`))
+	output := &outputHelper{}
+	require.NoError(t, builder.AddBatchConsumerFunc(output.AddBatch))
+	logs := &logCapture{}
+	builder.SetLogger(slog.New(logs))
+	stream := &streamHelper{builder: builder}
+
+	wait := stream.RunAsync(t)
+	require.Eventually(t, func() bool {
+		return len(logs.matching("cannot be decoded")) > 0
+	}, 30*time.Second, 250*time.Millisecond, "expected the refusal to be reported, captured logs: %v", logs.matching(""))
+	stream.StopWithin(t, 30*time.Second)
+	wait()
+
+	require.Empty(t, output.Messages(t), "a refused corrupt checkpoint must not deliver anything")
+	b, err := os.ReadFile(checkpointFile)
+	require.NoError(t, err)
+	require.Equal(t, corruptBytes, string(b), "the corrupt entry must be preserved for inspection")
+}
+
 // TestIntegrationMongoCDCSnapshotRestartChaos restarts the input repeatedly
 // while a snapshot is in flight and requires two things of the result: every
 // document is delivered at least once across all runs (duplicates are expected
