@@ -23,6 +23,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 func TestSpecParsesAWSBlock(t *testing.T) {
@@ -78,11 +79,13 @@ func TestIsUnresumableTokenError(t *testing.T) {
 			want: true,
 		},
 		{
-			// ChangeStreamFatalError is the rest of the server's
-			// NonResumableChangeStreamError category, and is what resuming past a
-			// collection drop or rename reports. Like history loss it is a statement
-			// about the stream rather than about one token, so the phase is
-			// irrelevant.
+			// ChangeStreamFatalError and ShardRemovedError complete the server's
+			// NonResumableChangeStreamError category. Like history loss they are
+			// statements about the stream rather than about one token, so the phase is
+			// irrelevant. Neither has a reproduction here - see
+			// TestIntegrationMongoCDCCollectionDropAndRename for what a drop or rename
+			// actually does, which is not this - so they are classified on the
+			// strength of the server's own taxonomy.
 			name: "change stream fatal error while opening",
 			err:  opening(mongo.CommandError{Code: codeChangeStreamFatalError, Name: "ChangeStreamFatalError"}),
 			want: true,
@@ -184,7 +187,7 @@ func TestStoreSnapshotCheckpointWaitsForSnapshotAcks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(5), cp.Pending())
 
-	m := &mongoCDC{}
+	m := &mongoCDC{checkpointWriteTimeout: defaultCheckpointWriteTimeout}
 	token := bson.Raw{5, 0, 0, 0, 0}
 	stored := make(chan bson.Raw, 1)
 	proceed := make(chan bool, 1)
@@ -228,7 +231,7 @@ func TestStoreSnapshotCheckpointStopsOnShutdown(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(t.Context())
-	m := &mongoCDC{}
+	m := &mongoCDC{checkpointWriteTimeout: defaultCheckpointWriteTimeout}
 	proceed := make(chan bool, 1)
 	go func() {
 		proceed <- m.storeSnapshotCheckpoint(ctx, m.tokenEpoch, cp, bson.Raw{5, 0, 0, 0, 0}, func(context.Context, bson.Raw) error {
@@ -262,7 +265,7 @@ func TestStoreSnapshotCheckpointStoredDespiteCancelledContext(t *testing.T) {
 
 	token := bson.Raw{5, 0, 0, 0, 0}
 	var stored bson.Raw
-	m := &mongoCDC{logger: service.MockResources().Logger()}
+	m := &mongoCDC{logger: service.MockResources().Logger(), checkpointWriteTimeout: defaultCheckpointWriteTimeout}
 	require.True(t, m.storeSnapshotCheckpoint(ctx, m.tokenEpoch, cp, token, func(storeCtx context.Context, tok bson.Raw) error {
 		require.NoError(t, storeCtx.Err(), "store must receive a live context")
 		stored = tok
@@ -308,7 +311,7 @@ func TestStoreSnapshotCheckpointStoredWhenAckWinsShutdownRace(t *testing.T) {
 
 	token := bson.Raw{5, 0, 0, 0, 0}
 	var stored bson.Raw
-	m := &mongoCDC{logger: service.MockResources().Logger()}
+	m := &mongoCDC{logger: service.MockResources().Logger(), checkpointWriteTimeout: defaultCheckpointWriteTimeout}
 	require.True(t, m.storeSnapshotCheckpoint(ctx, m.tokenEpoch, cp, token, func(_ context.Context, tok bson.Raw) error {
 		stored = tok
 		return nil
@@ -318,7 +321,7 @@ func TestStoreSnapshotCheckpointStoredWhenAckWinsShutdownRace(t *testing.T) {
 
 func TestStoreSnapshotCheckpointSkippedWithoutToken(t *testing.T) {
 	cp := checkpoint.NewCapped[bson.Raw](10)
-	m := &mongoCDC{}
+	m := &mongoCDC{checkpointWriteTimeout: defaultCheckpointWriteTimeout}
 	require.True(t, m.storeSnapshotCheckpoint(t.Context(), m.tokenEpoch, cp, nil, func(context.Context, bson.Raw) error {
 		t.Error("checkpoint stored without a resume token to store")
 		return nil
@@ -344,7 +347,7 @@ func TestStoreSnapshotCheckpointWaitsForAcksWithoutToken(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(3), cp.Pending())
 
-	m := &mongoCDC{}
+	m := &mongoCDC{checkpointWriteTimeout: defaultCheckpointWriteTimeout}
 	proceed := make(chan bool, 1)
 	go func() {
 		proceed <- m.storeSnapshotCheckpoint(t.Context(), m.tokenEpoch, cp, nil, func(context.Context, bson.Raw) error {
@@ -382,7 +385,7 @@ func TestStoreSnapshotCheckpointStopsOnShutdownWithoutToken(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(t.Context())
-	m := &mongoCDC{}
+	m := &mongoCDC{checkpointWriteTimeout: defaultCheckpointWriteTimeout}
 	proceed := make(chan bool, 1)
 	go func() {
 		proceed <- m.storeSnapshotCheckpoint(ctx, m.tokenEpoch, cp, nil, func(context.Context, bson.Raw) error {
@@ -434,7 +437,7 @@ func TestStoreSnapshotCheckpointSkippedWhenEpochMovedOn(t *testing.T) {
 	// resume from and must not be written.
 	cp := checkpoint.NewCapped[bson.Raw](10)
 	require.Zero(t, cp.Pending())
-	m := &mongoCDC{logger: service.MockResources().Logger()}
+	m := &mongoCDC{logger: service.MockResources().Logger(), checkpointWriteTimeout: defaultCheckpointWriteTimeout}
 	stale := m.tokenEpoch
 	m.beginTokenEpoch(nil)
 
@@ -581,11 +584,12 @@ func newRecoveryFixture(t *testing.T, snapshotParallelism int, onUnresumable str
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
 	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
 	m := &mongoCDC{
-		logger:                res.Logger(),
-		checkpoint:            cp,
-		errorChan:             make(chan error, 1),
-		snapshotParallelism:   snapshotParallelism,
-		onUnresumablePosition: onUnresumable,
+		logger:                 res.Logger(),
+		checkpoint:             cp,
+		errorChan:              make(chan error, 1),
+		snapshotParallelism:    snapshotParallelism,
+		onUnresumablePosition:  onUnresumable,
+		checkpointWriteTimeout: defaultCheckpointWriteTimeout,
 	}
 	raw, err := bson.Marshal(bson.M{"_data": "position"})
 	require.NoError(t, err)
@@ -768,8 +772,43 @@ checkpoint_cache: baz
 	require.Equal(t, onUnresumablePositionFail, mode)
 }
 
+// TestCheckpointWriteTimeoutField covers the field that replaced the hard-coded
+// bound, including the rejection of a non-positive one: these writes run on a
+// context detached from the read loop's, so zero would not mean "unbounded" but
+// "already expired", silently dropping the post-snapshot checkpoint.
+func TestCheckpointWriteTimeoutField(t *testing.T) {
+	parse := func(t *testing.T, extra string) (*service.ParsedConfig, error) {
+		t.Helper()
+		return spec().ParseYAML(`
+url: mongodb://localhost:27017
+database: foo
+collections: [bar]
+checkpoint_cache: baz
+`+extra, nil)
+	}
+
+	parsed, err := parse(t, "")
+	require.NoError(t, err)
+	d, err := parsed.FieldDuration(fieldCheckpointWriteTimeout)
+	require.NoError(t, err)
+	require.Equal(t, defaultCheckpointWriteTimeout, d, "the default must match the bound this replaced")
+
+	parsed, err = parse(t, "checkpoint_write_timeout: 45s\n")
+	require.NoError(t, err)
+	d, err = parsed.FieldDuration(fieldCheckpointWriteTimeout)
+	require.NoError(t, err)
+	require.Equal(t, 45*time.Second, d)
+
+	res := service.MockResources(service.MockResourcesOptAddCache("baz"))
+	license.InjectTestService(res)
+	parsed, err = parse(t, "checkpoint_write_timeout: 0s\n")
+	require.NoError(t, err)
+	_, err = newMongoCDC(parsed, res)
+	require.ErrorContains(t, err, fieldCheckpointWriteTimeout)
+}
+
 func TestBeginTokenEpochAdvancesAndInstallsToken(t *testing.T) {
-	m := &mongoCDC{}
+	m := &mongoCDC{checkpointWriteTimeout: defaultCheckpointWriteTimeout}
 	loaded := bson.Raw{5, 0, 0, 0, 0}
 
 	first := m.beginTokenEpoch(loaded)

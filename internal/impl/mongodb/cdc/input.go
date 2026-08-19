@@ -38,24 +38,25 @@ import (
 )
 
 const (
-	fieldClientURL             = "url"
-	fieldClientDatabase        = "database"
-	fieldClientUsername        = "username"
-	fieldClientPassword        = "password"
-	fieldClientAppName         = "app_name"
-	fieldCollections           = "collections"
-	fieldStreamSnapshot        = "stream_snapshot"
-	fieldSnapshotParallelism   = "snapshot_parallelism"
-	fieldBucketSharding        = "snapshot_auto_bucket_sharding"
-	fieldCheckpointKey         = "checkpoint_key"
-	fieldCheckpointCache       = "checkpoint_cache"
-	fieldCheckpointInterval    = "checkpoint_interval"
-	fieldCheckpointLimit       = "checkpoint_limit"
-	fieldOnUnresumablePosition = "on_unresumable_position"
-	fieldReadBatchSize         = "read_batch_size"
-	fieldReadMaxWait           = "read_max_wait"
-	fieldDocumentMode          = "document_mode"
-	fieldJSONMarshalMode       = "json_marshal_mode"
+	fieldClientURL              = "url"
+	fieldClientDatabase         = "database"
+	fieldClientUsername         = "username"
+	fieldClientPassword         = "password"
+	fieldClientAppName          = "app_name"
+	fieldCollections            = "collections"
+	fieldStreamSnapshot         = "stream_snapshot"
+	fieldSnapshotParallelism    = "snapshot_parallelism"
+	fieldBucketSharding         = "snapshot_auto_bucket_sharding"
+	fieldCheckpointKey          = "checkpoint_key"
+	fieldCheckpointCache        = "checkpoint_cache"
+	fieldCheckpointInterval     = "checkpoint_interval"
+	fieldCheckpointLimit        = "checkpoint_limit"
+	fieldCheckpointWriteTimeout = "checkpoint_write_timeout"
+	fieldOnUnresumablePosition  = "on_unresumable_position"
+	fieldReadBatchSize          = "read_batch_size"
+	fieldReadMaxWait            = "read_max_wait"
+	fieldDocumentMode           = "document_mode"
+	fieldJSONMarshalMode        = "json_marshal_mode"
 
 	marshalModeCanonical string = "canonical"
 	marshalModeRelaxed   string = "relaxed"
@@ -237,6 +238,11 @@ Schema metadata is discovered using a two-tier strategy:
 			service.NewIntField(fieldCheckpointLimit).
 				Description("").
 				Default(1000),
+			service.NewDurationField(fieldCheckpointWriteTimeout).
+				Description("Bounds the checkpoint writes that run outside the normal read loop - storing the position a completed snapshot reached, and clearing a position that can no longer be resumed from - so that a shutdown racing either of them is not extended indefinitely by a slow cache. Raise this for slow remote caches (for example `redis` or `dynamodb`), where losing the post-snapshot write costs a full re-snapshot on the next start.").
+				ShortDescription("Bounds the detached checkpoint writes so a slow cache cannot extend shutdown indefinitely.").
+				Default(defaultCheckpointWriteTimeout.String()).
+				Advanced(),
 			service.NewStringEnumField(fieldOnUnresumablePosition, onUnresumablePositionFail, onUnresumablePositionReset).
 				Description("What to do when the stored stream position can no longer be resumed from (for example it has aged out of the oplog) and `stream_snapshot` is disabled, so there is no snapshot to recover with: `fail` stops the input with an error, preserving the checkpoint for inspection; `reset` clears the checkpoint and restarts streaming from the current oplog position, skipping the changes between the lost position and now. When `stream_snapshot` is enabled this field has no effect: recovery re-runs the snapshot, which loses nothing.").
 				ShortDescription("What to do when the stored position is unresumable and there is no snapshot to recover with.").
@@ -408,6 +414,15 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 	if cdc.checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
 		return
 	}
+	if cdc.checkpointWriteTimeout, err = conf.FieldDuration(fieldCheckpointWriteTimeout); err != nil {
+		return
+	}
+	if cdc.checkpointWriteTimeout <= 0 {
+		// These writes run on a context detached from the read loop's, so a
+		// non-positive bound would not mean "unbounded" but "already expired",
+		// silently dropping the post-snapshot checkpoint and the unresumable clear.
+		return nil, fmt.Errorf("field %s must be greater than zero", fieldCheckpointWriteTimeout)
+	}
 	if cdc.onUnresumablePosition, err = conf.FieldString(fieldOnUnresumablePosition); err != nil {
 		return
 	}
@@ -450,10 +465,11 @@ type mongoCDC struct {
 	snapshotSemaphore      *semaphore.Weighted
 	useAutoBucketSnapshots bool
 
-	checkpoint            *checkpointCache
-	checkpointFlusher     *asyncroutine.Periodic
-	checkpointLimit       int
-	onUnresumablePosition string
+	checkpoint             *checkpointCache
+	checkpointFlusher      *asyncroutine.Periodic
+	checkpointLimit        int
+	checkpointWriteTimeout time.Duration
+	onUnresumablePosition  string
 
 	// resumeToken is the position to checkpoint next, and tokenEpoch identifies
 	// the generation of checkpoint state it belongs to. Both are guarded by
@@ -792,11 +808,12 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	return nil
 }
 
-// checkpointWriteTimeout bounds the checkpoint writes that run on a detached
-// context - the post-snapshot store and the unresumable-checkpoint clear -
-// mirroring the bounded terminal save: a shutdown that raced either of them
-// should not be extended indefinitely by a slow cache.
-const checkpointWriteTimeout = 10 * time.Second
+// defaultCheckpointWriteTimeout is the default for checkpoint_write_timeout,
+// which bounds the checkpoint writes that run on a detached context - the
+// post-snapshot store and the unresumable-checkpoint clear - mirroring the
+// bounded terminal save: a shutdown that raced either of them should not be
+// extended indefinitely by a slow cache.
+const defaultCheckpointWriteTimeout = 10 * time.Second
 
 // snapshotAckPollInterval is how often the post-snapshot checkpoint waits for
 // the snapshot batches still in flight to be acknowledged.
@@ -895,7 +912,7 @@ func (m *mongoCDC) storeSnapshotCheckpoint(
 		// not this write, that decides what happens next.
 		return true
 	}
-	storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), checkpointWriteTimeout)
+	storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.checkpointWriteTimeout)
 	defer cancel()
 	if err := store(storeCtx, token); err != nil {
 		// A failed write only means the snapshot may run again, so warn and
@@ -1014,7 +1031,7 @@ func (m *mongoCDC) recoverFromUnresumablePosition(ctx context.Context, cause err
 		m.logger.Warnf("Change stream position is no longer resumable, clearing the checkpoint to re-run the snapshot: %v", cause)
 	}
 	m.beginTokenEpoch(nil)
-	deleteCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), checkpointWriteTimeout)
+	deleteCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.checkpointWriteTimeout)
 	defer cancel()
 	if err := m.checkpoint.Delete(deleteCtx); err != nil {
 		// Warn and carry on: the input is already failing over, and a checkpoint

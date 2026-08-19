@@ -81,6 +81,7 @@ input:
     checkpoint_cache: "" # No default (required)
     checkpoint_interval: 5s
     checkpoint_limit: 1000
+    checkpoint_write_timeout: 10s
     on_unresumable_position: fail
     read_batch_size: 1000
     read_max_wait: 1s
@@ -324,6 +325,15 @@ Sorry! This field is missing documentation.
 *Type*: `int`
 
 *Default*: `1000`
+
+=== `checkpoint_write_timeout`
+
+Bounds the checkpoint writes that run outside the normal read loop - storing the position a completed snapshot reached, and clearing a position that can no longer be resumed from - so that a shutdown racing either of them is not extended indefinitely by a slow cache. Raise this for slow remote caches (for example `redis` or `dynamodb`), where losing the post-snapshot write costs a full re-snapshot on the next start.
+
+
+*Type*: `string`
+
+*Default*: `"10s"`
 
 === `on_unresumable_position`
 
