@@ -14,6 +14,13 @@ provider "aws" {
       Project   = "redpanda-connect-bench"
       Stack     = "postgres"
       ManagedBy = "terraform"
+      # The cleanup lambda derives creation time for RDS subnet/parameter
+      # groups and security groups EXCLUSIVELY from this tag (see
+      # cleanup-lambda/sweep.go sessionCreatedAt) — those resources carry no
+      # creation-time field of their own. Without it, an aborted teardown
+      # leaves this stack's groups unsweepable forever, and the surviving
+      # security group blocks the shared VPC's deletion on every sweep.
+      "bench-session-id" = var.bench_session_id
     }
   }
 }

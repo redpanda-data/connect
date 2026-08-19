@@ -39,7 +39,13 @@ type PromPoint struct {
 type promSnapshot struct {
 	UnixTime int64
 	Body     string
-	Errored  bool // true when the scraper logged ###scrape_error inside the snapshot
+	// Errored is true when the scraper logged a ###scrape_error marker
+	// inside the snapshot. The broker-metrics sidecar (topology_source.go)
+	// appends a per-endpoint suffix to the marker (###scrape_error_$EP,
+	// one per failed curl against a broker), so the marker text is a
+	// PREFIX match, not an exact one; the single-endpoint prom sidecar
+	// still emits the bare marker with no suffix.
+	Errored bool
 }
 
 // extractPromPoint pulls the curated metrics out of a single snapshot
@@ -125,7 +131,10 @@ func parseSnapshots(r io.Reader) []promSnapshot {
 		if current == nil {
 			continue // ignore noise before first marker
 		}
-		if line == "###scrape_error" {
+		// Prefix match, not equality: the broker-metrics sidecar suffixes
+		// the marker with the failed endpoint (###scrape_error_$EP), one
+		// per curl that failed against a given broker.
+		if strings.HasPrefix(line, "###scrape_error") {
 			current.Errored = true
 			continue
 		}

@@ -80,15 +80,27 @@ jobs:
             exit 0
           fi
           NAME=$(grep -m1 '^name:' "benchmarking/aws/scenarios/${SCENARIO}.yaml" | awk '{print $2}')
-          LAST=$(aws s3 ls "s3://redpanda-connect-bench-soak-archive/soak-index/${NAME}/" 2>/dev/null | awk '{print $4}' | sort | tail -1)
+          # `shell: bash` above means `-eo pipefail`, so every probe that is
+          # ALLOWED to come up empty needs `|| true`: `aws s3 ls` exits 1 on
+          # an empty prefix (the first soak of a scenario), and pipefail
+          # would otherwise turn each of these fail-open paths into a step
+          # failure.
+          LAST=$(aws s3 ls "s3://redpanda-connect-bench-soak-archive/soak-index/${NAME}/" 2>/dev/null | awk '{print $4}' | sort | tail -1 || true)
           if [ -z "$LAST" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "no prior soak — running"; exit 0
           fi
-          SHA=$(aws s3 cp "s3://redpanda-connect-bench-soak-archive/soak-index/${NAME}/${LAST}" - | jq -r '.build_sha // empty')
+          SHA=$(aws s3 cp "s3://redpanda-connect-bench-soak-archive/soak-index/${NAME}/${LAST}" - 2>/dev/null | jq -r '.build_sha // empty' || true)
           if [ -z "$SHA" ] || ! git cat-file -e "$SHA" 2>/dev/null; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "last soaked SHA unavailable — running"; exit 0
           fi
-          CHANGED=$(git diff --name-only "$SHA"..HEAD -- internal cmd go.mod go.sum benchmarking .github/workflows | head -20)
+          # awk, not `head -20`: head closing the pipe early would kill git
+          # with SIGPIPE (141), which pipefail turns into a step failure on
+          # exactly the busy weeks that most need soaking. `public` is in the
+          # pathspec because cmd/redpanda-connect imports public/schema and
+          # public/components — changes there alter the shipped binary.
+          if ! CHANGED=$(git diff --name-only "$SHA"..HEAD -- internal cmd public go.mod go.sum benchmarking .github/workflows | awk 'NR<=20'); then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "git diff against ${SHA:0:9} failed — running"; exit 0
+          fi
           if [ -n "$CHANGED" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             echo "relevant changes since ${SHA:0:9}:"; echo "$CHANGED"

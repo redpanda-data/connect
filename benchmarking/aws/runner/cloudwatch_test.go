@@ -19,62 +19,78 @@ import (
 
 func TestAggregateSoakMinutes_NoDataReturnsUnchangedHighWater(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	data, newHW := aggregateSoakMinutes(nil, nil, nil, nil, base, -1)
+	noneYet := soakHighWaterMarks{Samples: -1, Prom: -1, Broker: -1, Backlog: -1}
+	data, newMarks := aggregateSoakMinutes(nil, nil, nil, nil, base, noneYet)
 	require.Nil(t, data)
-	require.Equal(t, -1, newHW)
+	require.Equal(t, noneYet, newMarks)
 
 	// A pre-existing high-water mark must survive untouched too — a cycle
 	// that fetched nothing new (e.g. the checkpoint hasn't landed yet) must
-	// never regress the mark.
-	data, newHW = aggregateSoakMinutes(nil, nil, nil, nil, base, 7)
+	// never regress any family's mark.
+	allAtSeven := soakHighWaterMarks{Samples: 7, Prom: 7, Broker: 7, Backlog: 7}
+	data, newMarks = aggregateSoakMinutes(nil, nil, nil, nil, base, allAtSeven)
 	require.Nil(t, data)
-	require.Equal(t, 7, newHW)
+	require.Equal(t, allAtSeven, newMarks)
 }
 
 func TestAggregateSoakMinutes_BucketsMeansAndLastsExcludingIncompleteMinute(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
+	// Every family carries a point past minute 1 so minute 1 is complete
+	// FROM EACH FAMILY'S OWN PERSPECTIVE — aggregateSoakMinutes now derives
+	// "current incomplete minute" per family, not from a single shared
+	// maximum across all four series (see soakHighWaterMarks).
 	broker := []TopicPoint{
 		{T: 0, MBPerSec: 1, MsgPerSec: 10},
 		{T: 30, MBPerSec: 3, MsgPerSec: 30}, // minute 0: mean 2 / 20
 		{T: 60, MBPerSec: 5, MsgPerSec: 50},
 		{T: 90, MBPerSec: 7, MsgPerSec: 70},  // minute 1: mean 6 / 60
-		{T: 120, MBPerSec: 9, MsgPerSec: 90}, // minute 2: the current incomplete minute
+		{T: 120, MBPerSec: 9, MsgPerSec: 90}, // minute 2: broker's own current incomplete minute
 	}
 	samples := []Sample{
 		{T: 0, MBPerSec: 100},
 		{T: 30, MBPerSec: 300}, // minute 0: mean 200
 		{T: 60, MBPerSec: 500},
-		{T: 90, MBPerSec: 700}, // minute 1: mean 600
+		{T: 90, MBPerSec: 700},  // minute 1: mean 600
+		{T: 120, MBPerSec: 900}, // minute 2: samples' own current incomplete minute
 	}
 	prom := []PromPoint{
 		{T: 0, RSSBytes: 100, HeapInUseMB: 10, Goroutines: 5},
-		{T: 50, RSSBytes: 200, HeapInUseMB: 20, Goroutines: 6}, // minute 0: last of these two
-		{T: 65, RSSBytes: 300, HeapInUseMB: 30, Goroutines: 7}, // minute 1: last (only point)
+		{T: 50, RSSBytes: 200, HeapInUseMB: 20, Goroutines: 6},  // minute 0: last of these two
+		{T: 65, RSSBytes: 300, HeapInUseMB: 30, Goroutines: 7},  // minute 1: last
+		{T: 125, RSSBytes: 400, HeapInUseMB: 40, Goroutines: 8}, // minute 2: prom's own current incomplete minute
 	}
 	backlog := []BacklogPoint{
-		{T: 0, BacklogSec: 5},   // minute 0
-		{T: 60, BacklogSec: 15}, // minute 1
+		{T: 0, BacklogSec: 5},    // minute 0
+		{T: 60, BacklogSec: 15},  // minute 1
+		{T: 120, BacklogSec: 25}, // minute 2: backlog's own current incomplete minute
 	}
 
-	data, newHW := aggregateSoakMinutes(samples, prom, broker, backlog, base, -1)
-	require.Equal(t, 1, newHW, "the current incomplete minute (2) must never be emitted")
+	noneYet := soakHighWaterMarks{Samples: -1, Prom: -1, Broker: -1, Backlog: -1}
+	data, newMarks := aggregateSoakMinutes(samples, prom, broker, backlog, base, noneYet)
+	require.Equal(t, soakHighWaterMarks{Samples: 1, Prom: 1, Broker: 1, Backlog: 1}, newMarks,
+		"each family's own current incomplete minute (2) must never be emitted")
 
+	// Datums are grouped per family (broker, samples, prom, backlog), not
+	// interleaved per minute — a consequence of each family now walking its
+	// own minute range independently.
 	want := []MetricDatum{
 		{Name: metricThroughputMBps, Value: 2, Unit: unitMegabytesPerSecond, At: base},
 		{Name: metricRecordsPerSec, Value: 20, Unit: unitCountPerSecond, At: base},
+		{Name: metricThroughputMBps, Value: 6, Unit: unitMegabytesPerSecond, At: base.Add(time.Minute)},
+		{Name: metricRecordsPerSec, Value: 60, Unit: unitCountPerSecond, At: base.Add(time.Minute)},
+
 		{Name: metricLogThroughputMBps, Value: 200, Unit: unitMegabytesPerSecond, At: base},
+		{Name: metricLogThroughputMBps, Value: 600, Unit: unitMegabytesPerSecond, At: base.Add(time.Minute)},
+
 		{Name: metricRSSBytes, Value: 200, Unit: unitBytes, At: base},
 		{Name: metricHeapInUseBytes, Value: 20_000_000, Unit: unitBytes, At: base},
 		{Name: metricGoroutines, Value: 6, Unit: unitCount, At: base},
-		{Name: metricBacklogSeconds, Value: 5, Unit: unitSeconds, At: base},
-
-		{Name: metricThroughputMBps, Value: 6, Unit: unitMegabytesPerSecond, At: base.Add(time.Minute)},
-		{Name: metricRecordsPerSec, Value: 60, Unit: unitCountPerSecond, At: base.Add(time.Minute)},
-		{Name: metricLogThroughputMBps, Value: 600, Unit: unitMegabytesPerSecond, At: base.Add(time.Minute)},
 		{Name: metricRSSBytes, Value: 300, Unit: unitBytes, At: base.Add(time.Minute)},
 		{Name: metricHeapInUseBytes, Value: 30_000_000, Unit: unitBytes, At: base.Add(time.Minute)},
 		{Name: metricGoroutines, Value: 7, Unit: unitCount, At: base.Add(time.Minute)},
+
+		{Name: metricBacklogSeconds, Value: 5, Unit: unitSeconds, At: base},
 		{Name: metricBacklogSeconds, Value: 15, Unit: unitSeconds, At: base.Add(time.Minute)},
 	}
 	require.Equal(t, want, data)
@@ -87,10 +103,12 @@ func TestAggregateSoakMinutes_SinceMinuteSkipsAlreadyEmitted(t *testing.T) {
 		{T: 60, MBPerSec: 2, MsgPerSec: 20},
 		{T: 120, MBPerSec: 3, MsgPerSec: 30}, // current incomplete minute (2)
 	}
-	// sinceMinute=0 (minute 0 already emitted by an earlier cycle) must only
-	// yield minute 1 this time, not a repeat of minute 0.
-	data, newHW := aggregateSoakMinutes(nil, nil, broker, nil, base, 0)
-	require.Equal(t, 1, newHW)
+	// Broker's mark at 0 (minute 0 already emitted by an earlier cycle) must
+	// only yield minute 1 this time, not a repeat of minute 0. The other
+	// three families have never seen data, so their marks stay at -1.
+	since := soakHighWaterMarks{Samples: -1, Prom: -1, Broker: 0, Backlog: -1}
+	data, newMarks := aggregateSoakMinutes(nil, nil, broker, nil, base, since)
+	require.Equal(t, soakHighWaterMarks{Samples: -1, Prom: -1, Broker: 1, Backlog: -1}, newMarks)
 	require.Len(t, data, 2, "only ThroughputMBps and RecordsPerSec have data — no samples/prom/backlog in this call")
 	for _, d := range data {
 		require.Equal(t, base.Add(time.Minute), d.At, "must be minute 1, not a re-emit of minute 0")
@@ -106,10 +124,72 @@ func TestAggregateSoakMinutes_BacklogOmittedWhenSeriesEmpty(t *testing.T) {
 		{T: 0, MBPerSec: 1, MsgPerSec: 10},
 		{T: 120, MBPerSec: 2, MsgPerSec: 20},
 	}
-	data, _ := aggregateSoakMinutes(nil, nil, broker, nil, base, -1)
+	noneYet := soakHighWaterMarks{Samples: -1, Prom: -1, Broker: -1, Backlog: -1}
+	data, _ := aggregateSoakMinutes(nil, nil, broker, nil, base, noneYet)
 	for _, d := range data {
 		require.NotEqual(t, metricBacklogSeconds, d.Name)
 	}
+}
+
+// TestAggregateSoakMinutes_PerFamilyMarksAvoidPermanentHoles is the
+// regression test for Finding #D: a single shared high-water mark used to
+// advance off the MAX minute across all four series, so a family that
+// missed a cycle entirely (e.g. fetchBrokerSeries failing while
+// fetchLog/fetchProm succeeded) found its own minutes already behind the
+// shared mark once it recovered — permanently skipped, a silent hole in
+// ThroughputMBps/RecordsPerSec that a CloudWatch alarm watching for gaps
+// would miss. Per-family marks fix this: cycle 1 emits log+prom for
+// minutes 0-3 with NO broker data (simulating the failed fetch); cycle 2
+// brings broker data for minutes 0-3, which must now be emitted in full —
+// while log/prom, whose own marks already cover 0-3, must NOT be
+// re-emitted (CloudWatch treats a repeated (metric, timestamp) pair as a
+// duplicate datum, not an idempotent update).
+func TestAggregateSoakMinutes_PerFamilyMarksAvoidPermanentHoles(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Minutes 0-3 complete, minute 4 is the still-open one — for both
+	// samples and prom.
+	var samples []Sample
+	var prom []PromPoint
+	for i := 0; i <= 4; i++ {
+		t := i * secondsPerMinute
+		samples = append(samples, Sample{T: t, MBPerSec: float64(10 + i)})
+		prom = append(prom, PromPoint{T: t, RSSBytes: uint64(100 + i)})
+	}
+
+	noneYet := soakHighWaterMarks{Samples: -1, Prom: -1, Broker: -1, Backlog: -1}
+
+	// Cycle 1: broker fetch failed this cycle -> empty slice, non-fatal.
+	data1, marks1 := aggregateSoakMinutes(samples, prom, nil, nil, base, noneYet)
+	require.Equal(t, soakHighWaterMarks{Samples: 3, Prom: 3, Broker: -1, Backlog: -1}, marks1,
+		"log/prom must advance on their own data even with no broker series this cycle")
+	for _, d := range data1 {
+		require.NotEqual(t, metricThroughputMBps, d.Name, "no broker data yet -> no broker datum")
+		require.NotEqual(t, metricRecordsPerSec, d.Name)
+	}
+	require.NotEmpty(t, data1, "log/prom minutes 0-3 must still be emitted despite the broker gap")
+
+	// Cycle 2: the broker fetch recovers with minutes 0-3 (and an open
+	// minute 4), log/prom content is unchanged (same checkpoint, nothing
+	// new to report).
+	var broker []TopicPoint
+	for i := 0; i <= 4; i++ {
+		broker = append(broker, TopicPoint{T: i * secondsPerMinute, MBPerSec: 5, MsgPerSec: 50})
+	}
+	data2, marks2 := aggregateSoakMinutes(samples, prom, broker, nil, base, marks1)
+	require.Equal(t, soakHighWaterMarks{Samples: 3, Prom: 3, Broker: 3, Backlog: -1}, marks2,
+		"the recovered broker series must catch all the way up to minute 3, not stay stuck behind the earlier gap")
+
+	var sawThroughputMinutes []time.Time
+	for _, d := range data2 {
+		require.NotEqual(t, metricLogThroughputMBps, d.Name, "log minutes 0-3 were already emitted in cycle 1")
+		require.NotEqual(t, metricRSSBytes, d.Name, "prom minutes 0-3 were already emitted in cycle 1")
+		if d.Name == metricThroughputMBps {
+			sawThroughputMinutes = append(sawThroughputMinutes, d.At)
+		}
+	}
+	require.ElementsMatch(t, []time.Time{base, base.Add(time.Minute), base.Add(2 * time.Minute), base.Add(3 * time.Minute)}, sawThroughputMinutes,
+		"broker minutes 0-3 must be emitted in full once the fetch recovers, with no permanent hole")
 }
 
 // TestAggregateSoakMinutes_WarmupOffsetAlignment is the regression test for
@@ -136,9 +216,11 @@ func TestAggregateSoakMinutes_WarmupOffsetAlignment(t *testing.T) {
 		{T: 120, MBPerSec: 1, MsgPerSec: 1},  // minute 2 (current incomplete)
 	}
 
+	noneYet := soakHighWaterMarks{Samples: -1, Prom: -1, Broker: -1, Backlog: -1}
+
 	// Without the shift, the log sample lands in minute 0 — a minute the
 	// broker series has no data for at all, and the wrong minute besides.
-	unshifted, _ := aggregateSoakMinutes(rawSamples, nil, broker, nil, base, -1)
+	unshifted, _ := aggregateSoakMinutes(rawSamples, nil, broker, nil, base, noneYet)
 	for _, d := range unshifted {
 		if d.Name == metricLogThroughputMBps {
 			require.NotEqual(t, base.Add(time.Minute), d.At,
@@ -147,8 +229,8 @@ func TestAggregateSoakMinutes_WarmupOffsetAlignment(t *testing.T) {
 	}
 
 	shifted := offsetSampleT(rawSamples, warmupSec)
-	data, newHW := aggregateSoakMinutes(shifted, nil, broker, nil, base, -1)
-	require.Equal(t, 1, newHW)
+	data, newMarks := aggregateSoakMinutes(shifted, nil, broker, nil, base, noneYet)
+	require.Equal(t, soakHighWaterMarks{Samples: 1, Prom: -1, Broker: 1, Backlog: -1}, newMarks)
 
 	var gotLog, gotThroughput bool
 	for _, d := range data {

@@ -125,6 +125,81 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1
 	}
 }
 
+// TestBrokerMetrics_TopicSeries_SkipsPerEndpointScrapeError is the
+// regression test for the broker sidecar's per-endpoint error marker: the
+// sidecar (topology_source.go) curls every broker endpoint in a single
+// frame and appends "_$EP" to the marker for each failed curl
+// (###scrape_error_10.0.0.5:9644), unlike the single-endpoint prom
+// sidecar which emits the bare marker. Before this fix, parseSnapshots
+// only matched the marker by exact equality, so a suffixed marker was
+// never recognized: the frame parsed as good (partial) data, corrupting
+// prevBytes and inflating the next delta's rate.
+func TestBrokerMetrics_TopicSeries_SkipsPerEndpointScrapeError(t *testing.T) {
+	const body = `###timestamp=1000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 0
+###timestamp=1010
+###scrape_error_10.0.0.5:9644
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 5000000
+###timestamp=1020
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 20000000
+`
+	frames, err := parseBrokerFrames(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("parseBrokerFrames: %v", err)
+	}
+	if len(frames) != 3 {
+		t.Fatalf("want 3 frames, got %d", len(frames))
+	}
+	if !frames[1].Errored {
+		t.Errorf("frame with suffixed ###scrape_error_$EP marker must be Errored=true")
+	}
+
+	series, err := ParseTopicSeries(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("ParseTopicSeries: %v", err)
+	}
+	t1 := series["t1"]
+	// The errored middle frame must be skipped entirely rather than
+	// contributing a corrupted delta: frame 0 (t=1000, 0 bytes) to frame 2
+	// (t=1020, 20MB) over 20s = 1 MB/s, not the ~5x inflated spike that
+	// treating frame 1's partial 5MB as real data would produce.
+	if len(t1) != 1 {
+		t.Fatalf("expected exactly 1 point (errored frame skipped); got %d: %+v", len(t1), t1)
+	}
+	if want := 1.0; t1[0].MBPerSec < want-0.01 || t1[0].MBPerSec > want+0.01 {
+		t.Errorf("MB/s = %f, want ~%f (over the full 20s span, not the corrupted 10s)", t1[0].MBPerSec, want)
+	}
+}
+
+// TestBrokerMetrics_TopicSeries_IntervalSkipsErroredFrame is the table-test
+// version of the regression above, pinning the exact interval computed:
+// frames at t=0,10,20 with the middle frame errored must produce ONE point
+// spanning the full 20s gap between the two good frames, not the 10s gap
+// to the immediately preceding (errored) frame.
+func TestBrokerMetrics_TopicSeries_IntervalSkipsErroredFrame(t *testing.T) {
+	const body = `###timestamp=0
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 0
+###timestamp=10
+###scrape_error
+###timestamp=20
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 2000000
+`
+	series, err := ParseTopicSeries(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("ParseTopicSeries: %v", err)
+	}
+	t1 := series["t1"]
+	if len(t1) != 1 {
+		t.Fatalf("want exactly 1 point (errored middle frame produces none), got %d: %+v", len(t1), t1)
+	}
+	if t1[0].IntervalSec != 20 {
+		t.Errorf("IntervalSec = %d, want 20 (span between the two good frames, not 10 to the errored one)", t1[0].IntervalSec)
+	}
+	if want := 0.1; t1[0].MBPerSec < want-0.001 || t1[0].MBPerSec > want+0.001 {
+		t.Errorf("MBPerSec = %f, want ~%f (2MB over 20s)", t1[0].MBPerSec, want)
+	}
+}
+
 func TestBrokerMetrics_TopicSeries_HandlesCounterReset(t *testing.T) {
 	// If a counter goes BACKWARDS between frames (broker restart) the
 	// delta is non-meaningful — skip rather than report a negative rate.

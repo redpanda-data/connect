@@ -247,10 +247,10 @@ func runBench(opts benchOpts) (errOut error) {
 		if err != nil {
 			return fmt.Errorf("build EC2 client for preflight check: %w", err)
 		}
-		if err := preflightCheck(ctx, ec2Client); err != nil {
+		if err := preflightCheck(ctx, ec2Client, opts.region, NewEC2Client); err != nil {
 			return err
 		}
-		fmt.Println("preflight: no concurrent bench session detected")
+		fmt.Println("preflight: no concurrent bench session detected in any enabled region")
 	} else {
 		fmt.Println("⚠ preflight check DISABLED (--preflight=off): a concurrent bench session will destroy this one's infrastructure (or vice versa) with no warning")
 	}
@@ -341,6 +341,12 @@ func runBench(opts benchOpts) (errOut error) {
 		"bench_session_id":     sessionID,
 	}
 	stackVars := translateInfraSource(s.Infra.Source, opts.region)
+	// The per-connector stack (e.g. the postgres stack's RDS instance,
+	// subnet/parameter groups, and SGs) stamps this onto its resources via
+	// default_tags on the terraform side — it's the cleanup lambda's ONLY
+	// age signal for resource types that carry no creation-time attribute
+	// of their own.
+	stackVars["bench_session_id"] = sessionID
 
 	// soakRegressionOnly is set just before runBench's final return, when the
 	// only reason errOut is non-nil is the rolling-baseline comparator (see
@@ -758,16 +764,6 @@ func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket,
 	return entry, nil
 }
 
-// buildSoakIndexEntry computes the small per-run record uploadSoakResult
-// archives under soak-index/<scenario>/ from sessionID, the scenario, and
-// its Result — pure, so both uploadSoakResult and the rolling-baseline
-// comparator's caller (see runBench) can build the SAME entry without a
-// round trip through S3.
-//
-// A soak scenario is validated (see Scenario.Validate) to have exactly one
-// cpu_points entry and engines=connect, so result.Points has exactly one
-// element in the success path — but this degrades to zero values rather
-// than panicking if that ever changes.
 // gitHeadSHA returns the working tree's HEAD commit, or "" when git is
 // unavailable — the change gate treats "" as "always run".
 func gitHeadSHA() string {
@@ -778,6 +774,16 @@ func gitHeadSHA() string {
 	return strings.TrimSpace(string(out))
 }
 
+// buildSoakIndexEntry computes the small per-run record uploadSoakResult
+// archives under soak-index/<scenario>/ from sessionID, the scenario, and
+// its Result — pure, so both uploadSoakResult and the rolling-baseline
+// comparator's caller (see runBench) can build the SAME entry without a
+// round trip through S3.
+//
+// A soak scenario is validated (see Scenario.Validate) to have exactly one
+// cpu_points entry and engines=connect, so result.Points has exactly one
+// element in the success path — but this degrades to zero values rather
+// than panicking if that ever changes.
 func buildSoakIndexEntry(sessionID string, s *Scenario, result *Result) soakIndexEntry {
 	entry := soakIndexEntry{
 		Scenario:  s.Name,

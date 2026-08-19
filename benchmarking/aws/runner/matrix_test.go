@@ -211,6 +211,111 @@ func TestMatrixRunner_ArmlessPlanUsesLegacyConfigPath(t *testing.T) {
 		"arm-less artifact keys stay bare-vCPU")
 }
 
+// TestMatrixRunner_WorkloadFailureFailsThePoint is the regression test for
+// Finding #C: a workload script that crashes mid-run used to only be
+// logged, after the bench window ran out its full duration measuring an
+// idle engine — the point still landed with >0 samples and a near-zero
+// result that would poison the rolling soak baseline. Run must now return
+// an error for the point instead of a result.
+func TestMatrixRunner_WorkloadFailureFailsThePoint(t *testing.T) {
+	const sessionID = "sess-workload-fail"
+	ssm := &FakeSSM{
+		Transcripts: map[string][]string{"i-runner": {"bench point complete"}},
+		Errs: map[string]error{
+			"i-loadgen": fmt.Errorf("load-gen crashed: connection refused"),
+		},
+	}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:             ssm,
+		LogFetcher:      &FakeLogFetcher{},
+		RunnerInstance:  "i-runner",
+		LoadGenInstance: "i-loadgen",
+		Bucket:          "b",
+		SessionID:       sessionID,
+	}
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "workload.sh")
+	require.Error(t, err, "a real workload failure must fail the point, not just log it")
+	require.Contains(t, err.Error(), "workload script failed")
+	require.Contains(t, err.Error(), "load-gen crashed")
+	require.Nil(t, points)
+}
+
+// TestMatrixRunner_WorkloadFailureCancelsInFlightBench pins the other half
+// of Finding #C: the bench SSM command must be cancelled the moment the
+// workload dies, not left to run out its full window measuring an idle
+// source. FakeSSM is synchronous and ignores ctx directly, so this asserts
+// the observable contract instead: the bench error path, when the workload
+// died with a real error, surfaces the WORKLOAD error as the cause (the
+// bench's own error on that path is normally just the cancellation the
+// workload goroutine triggered).
+func TestMatrixRunner_WorkloadFailureCancelsInFlightBench(t *testing.T) {
+	const sessionID = "sess-workload-cancels-bench"
+	ssm := &FakeSSM{
+		Errs: map[string]error{
+			"i-runner":  fmt.Errorf("ssm command i-runner ended with status Cancelled"),
+			"i-loadgen": fmt.Errorf("load-gen crashed: connection refused"),
+		},
+	}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:             ssm,
+		LogFetcher:      &FakeLogFetcher{},
+		RunnerInstance:  "i-runner",
+		LoadGenInstance: "i-loadgen",
+		Bucket:          "b",
+		SessionID:       sessionID,
+	}
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "workload.sh")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "workload script failed",
+		"the workload error must be surfaced as the cause, not the bench cancellation it triggered")
+	require.Contains(t, err.Error(), "load-gen crashed")
+	require.Nil(t, points)
+}
+
+// TestMatrixRunner_WorkloadCancellationOnSuccessIsNotAFailure guards against
+// over-correcting Finding #C: cancelWorkload() on the happy path (after the
+// bench window completes normally) makes FakeSSM's Run return whatever is
+// in Errs, but a REAL client would return context.Canceled wrapped or bare
+// — either way, the runner's own cancellation of a workload that never
+// otherwise failed must NOT fail the point.
+func TestMatrixRunner_WorkloadCancellationOnSuccessIsNotAFailure(t *testing.T) {
+	const sessionID = "sess-workload-ok"
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): makeLog(180, 50),
+		},
+	}
+	ssm := &FakeSSM{
+		Transcripts: map[string][]string{"i-runner": {"bench point complete"}},
+		Errs: map[string]error{
+			"i-loadgen": context.Canceled,
+		},
+	}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:             ssm,
+		LogFetcher:      fetcher,
+		RunnerInstance:  "i-runner",
+		LoadGenInstance: "i-loadgen",
+		Bucket:          "b",
+		SessionID:       sessionID,
+	}
+	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "workload.sh")
+	require.NoError(t, err)
+	require.Len(t, points, 1)
+}
+
 func TestMatrixRunner_HappyPath(t *testing.T) {
 	const sessionID = "bench-test"
 	const bucket = "results-bucket"
@@ -915,8 +1020,18 @@ func TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints(t
 	pointStart := time.Now()
 	warmup := 60 * time.Second
 
+	// This fixture never fetches prom or sets ExpectedRecordsPerSec, so
+	// those two families' marks stay at -1 (never emitted, never advanced)
+	// throughout — only the log-derived (Samples) and broker-derived
+	// (Broker) families carry data.
+	wantNoPromOrBacklog := soakHighWaterMarks{Prom: -1, Backlog: -1}
+
 	mr.emitSoakCycle(context.Background(), key, pointStart, warmup, hw)
-	require.Equal(t, 1, hw.get())
+	got := hw.get()
+	require.Equal(t, 1, got.Samples)
+	require.Equal(t, 1, got.Broker)
+	require.Equal(t, wantNoPromOrBacklog.Prom, got.Prom)
+	require.Equal(t, wantNoPromOrBacklog.Backlog, got.Backlog)
 	require.NotEmpty(t, emitter.All())
 
 	// Second cycle against the IDENTICAL checkpoint content (as if the
@@ -924,7 +1039,9 @@ func TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints(t
 	// NOTHING new — the high-water mark is what prevents a duplicate
 	// minute 0/1 emission.
 	mr.emitSoakCycle(context.Background(), key, pointStart, warmup, hw)
-	require.Equal(t, 1, hw.get(), "the high-water mark must not move when there is nothing new to emit")
+	got = hw.get()
+	require.Equal(t, 1, got.Samples, "the high-water mark must not move when there is nothing new to emit")
+	require.Equal(t, 1, got.Broker, "the high-water mark must not move when there is nothing new to emit")
 	secondCallData := emitter.LastCall()
 	for _, d := range secondCallData {
 		require.Equal(t, metricRunActive, d.Name,
@@ -935,7 +1052,9 @@ func TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints(t
 	// data to be complete, and minute 3 is the new open minute.
 	setCheckpoint(240, 21)
 	mr.emitSoakCycle(context.Background(), key, pointStart, warmup, hw)
-	require.Equal(t, 2, hw.get(), "the high-water mark must advance to the newly-completed minute 2")
+	got = hw.get()
+	require.Equal(t, 2, got.Samples, "the high-water mark must advance to the newly-completed minute 2")
+	require.Equal(t, 2, got.Broker, "the high-water mark must advance to the newly-completed minute 2")
 	thirdCallData := emitter.LastCall()
 	var sawMinute2Throughput bool
 	for _, d := range thirdCallData {

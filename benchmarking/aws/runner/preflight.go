@@ -45,14 +45,27 @@ var preflightActiveStates = []string{"pending", "running"}
 // NewEC2Client.
 type EC2Client interface {
 	DescribeInstances(ctx context.Context, in *ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error)
+	// DescribeRegions lists this account's ENABLED regions (the default —
+	// see preflightCheck, which deliberately never passes AllRegions=true).
+	// A disabled-but-not-opted-out region is not somewhere this account's
+	// terraform could ever have applied a stack, so scanning it would only
+	// slow the guard down for no safety benefit.
+	DescribeRegions(ctx context.Context, in *ec2.DescribeRegionsInput) (*ec2.DescribeRegionsOutput, error)
 }
+
+// EC2ClientFactory builds a region-scoped EC2Client on demand. preflightCheck
+// takes one of these (rather than a fixed list of clients) so it can scan
+// however many regions DescribeRegions reports without the caller having to
+// pre-construct a client per region — and so tests can fake per-region
+// client construction without a real EC2 API in the loop.
+type EC2ClientFactory func(ctx context.Context, region string) (EC2Client, error)
 
 type awsEC2 struct {
 	client *ec2.Client
 }
 
 // NewEC2Client builds an EC2Client backed by the AWS SDK in the given
-// region.
+// region. Also usable directly as an EC2ClientFactory.
 func NewEC2Client(ctx context.Context, region string) (EC2Client, error) {
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 	if err != nil {
@@ -65,8 +78,18 @@ func (a *awsEC2) DescribeInstances(ctx context.Context, in *ec2.DescribeInstance
 	return a.client.DescribeInstances(ctx, in)
 }
 
-// FakeEC2Client returns a canned DescribeInstances response or error — for
-// tests.
+func (a *awsEC2) DescribeRegions(ctx context.Context, in *ec2.DescribeRegionsInput) (*ec2.DescribeRegionsOutput, error) {
+	return a.client.DescribeRegions(ctx, in)
+}
+
+// fakeDefaultRegion is the single region FakeEC2Client.DescribeRegions
+// reports when Regions is left nil — every pre-multi-region preflight test
+// passes this same string as its homeRegion, so those tests keep working
+// unmodified beyond the signature change to preflightCheck itself.
+const fakeDefaultRegion = "us-east-1"
+
+// FakeEC2Client returns canned DescribeInstances/DescribeRegions responses
+// or errors — for tests.
 type FakeEC2Client struct {
 	Output *ec2.DescribeInstancesOutput
 	Err    error
@@ -74,6 +97,11 @@ type FakeEC2Client struct {
 	// with, in call order — so a test can assert on the exact filters
 	// preflightCheck sent without a real EC2 API in the loop.
 	Requests []*ec2.DescribeInstancesInput
+
+	// Regions is the canned DescribeRegions response. Nil defaults to a
+	// single region named fakeDefaultRegion.
+	Regions    *ec2.DescribeRegionsOutput
+	RegionsErr error
 }
 
 func (f *FakeEC2Client) DescribeInstances(_ context.Context, in *ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error) {
@@ -87,6 +115,18 @@ func (f *FakeEC2Client) DescribeInstances(_ context.Context, in *ec2.DescribeIns
 	return f.Output, nil
 }
 
+func (f *FakeEC2Client) DescribeRegions(_ context.Context, _ *ec2.DescribeRegionsInput) (*ec2.DescribeRegionsOutput, error) {
+	if f.RegionsErr != nil {
+		return nil, f.RegionsErr
+	}
+	if f.Regions != nil {
+		return f.Regions, nil
+	}
+	return &ec2.DescribeRegionsOutput{
+		Regions: []ec2types.Region{{RegionName: aws.String(fakeDefaultRegion)}},
+	}, nil
+}
+
 // runningBenchSession is one already-launching-or-running EC2 instance
 // preflightCheck found tagged as bench infrastructure — enough detail for
 // an operator to go identify (and, if truly abandoned, tear down) the
@@ -94,19 +134,76 @@ func (f *FakeEC2Client) DescribeInstances(_ context.Context, in *ec2.DescribeIns
 type runningBenchSession struct {
 	InstanceID string
 	SessionID  string
+	Region     string
 	LaunchTime time.Time
 }
 
 // preflightCheck fails loudly when another bench session's EC2 instances
 // (runner and/or load-gen, tagged Project=redpanda-connect-bench by every
-// session's own terraform apply) are already pending or running. Every
-// bench session applies and later destroys the SAME shared Terraform
-// stack, so two concurrent sessions destroy each other's infrastructure
-// mid-run — observed live twice on 2026-08-17 (a laptop bench and the
-// scheduled soak collided). Called from runBench before any terraform
-// apply, so the conflict is caught before either session's state is
-// touched.
-func preflightCheck(ctx context.Context, client EC2Client) error {
+// session's own terraform apply) are already pending or running IN ANY OF
+// this account's enabled regions. Every bench session applies and later
+// destroys the SAME shared Terraform stack, and that stack's own state key
+// is region-free (see terraform.go) — a session in one region does not
+// merely risk colliding with another session in the SAME region, it
+// collides with one in ANY region, and the shared stack also owns
+// globally-named IAM roles. Observed live on 2026-08-17: a laptop bench in
+// one region and the scheduled soak in another mutually destroyed each
+// other's infrastructure. Called from runBench before any terraform apply,
+// so the conflict is caught before either session's state is touched.
+//
+// homeClient is reused for homeRegion (the region this run itself targets)
+// rather than round-tripping it through newClient; newClient builds a
+// region-scoped client for every OTHER enabled region DescribeRegions
+// reports (see EC2ClientFactory — NewEC2Client satisfies this directly in
+// production).
+//
+// A DescribeRegions failure, or a DescribeInstances failure in any single
+// region, fails the whole check loudly rather than skipping that region:
+// a silently skipped region is a silent hole in the guard, defeating the
+// reason this check exists. The operator can still disable the guard
+// entirely via --preflight=off if that tradeoff is ever wrong for them.
+func preflightCheck(ctx context.Context, homeClient EC2Client, homeRegion string, newClient EC2ClientFactory) error {
+	regionsOut, err := homeClient.DescribeRegions(ctx, &ec2.DescribeRegionsInput{})
+	if err != nil {
+		return fmt.Errorf("preflight: describe regions: %w", err)
+	}
+
+	var sessions []runningBenchSession
+	for _, r := range regionsOut.Regions {
+		region := aws.ToString(r.RegionName)
+		client := homeClient
+		if region != homeRegion {
+			client, err = newClient(ctx, region)
+			if err != nil {
+				return fmt.Errorf("preflight: build EC2 client for region %s: %w", region, err)
+			}
+		}
+		regionSessions, err := preflightCheckRegion(ctx, client, region)
+		if err != nil {
+			return fmt.Errorf("preflight: region %s: %w", region, err)
+		}
+		sessions = append(sessions, regionSessions...)
+	}
+	if len(sessions) == 0 {
+		return nil
+	}
+
+	sort.Slice(sessions, func(i, j int) bool {
+		if sessions[i].Region != sessions[j].Region {
+			return sessions[i].Region < sessions[j].Region
+		}
+		return sessions[i].InstanceID < sessions[j].InstanceID
+	})
+	return fmt.Errorf(
+		"preflight: %d concurrent bench session(s) already running — concurrent sessions destroy each other's infrastructure, refusing to proceed (use --preflight=off to override, at your own risk):\n%s",
+		len(sessions), formatRunningBenchSessions(sessions))
+}
+
+// preflightCheckRegion is preflightCheck's single-region core: it queries
+// one EC2Client for pending/running bench-tagged instances and returns
+// them as runningBenchSessions, tagged with region so a multi-region
+// caller can name where each conflict actually lives.
+func preflightCheckRegion(ctx context.Context, client EC2Client, region string) ([]runningBenchSession, error) {
 	out, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
 		Filters: []ec2types.Filter{
 			{Name: aws.String("tag:Project"), Values: []string{preflightProjectTag}},
@@ -114,13 +211,13 @@ func preflightCheck(ctx context.Context, client EC2Client) error {
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("preflight: describe EC2 instances: %w", err)
+		return nil, fmt.Errorf("describe EC2 instances: %w", err)
 	}
 
 	var sessions []runningBenchSession
 	for _, r := range out.Reservations {
 		for _, inst := range r.Instances {
-			s := runningBenchSession{InstanceID: aws.ToString(inst.InstanceId)}
+			s := runningBenchSession{InstanceID: aws.ToString(inst.InstanceId), Region: region}
 			for _, t := range inst.Tags {
 				if aws.ToString(t.Key) == preflightSessionTagKey {
 					s.SessionID = aws.ToString(t.Value)
@@ -132,19 +229,13 @@ func preflightCheck(ctx context.Context, client EC2Client) error {
 			sessions = append(sessions, s)
 		}
 	}
-	if len(sessions) == 0 {
-		return nil
-	}
-
-	sort.Slice(sessions, func(i, j int) bool { return sessions[i].InstanceID < sessions[j].InstanceID })
-	return fmt.Errorf(
-		"preflight: %d concurrent bench session(s) already running — concurrent sessions destroy each other's infrastructure, refusing to proceed (use --preflight=off to override, at your own risk):\n%s",
-		len(sessions), formatRunningBenchSessions(sessions))
+	return sessions, nil
 }
 
 // formatRunningBenchSessions renders one line per session for
-// preflightCheck's error, naming the session ID an operator would look
-// for in CI/scheduling logs rather than only the opaque instance ID.
+// preflightCheck's error, naming the session ID and region an operator
+// would look for in CI/scheduling logs rather than only the opaque
+// instance ID.
 func formatRunningBenchSessions(sessions []runningBenchSession) string {
 	lines := make([]string, 0, len(sessions))
 	for _, s := range sessions {
@@ -156,7 +247,7 @@ func formatRunningBenchSessions(sessions []runningBenchSession) string {
 		if !s.LaunchTime.IsZero() {
 			launch = s.LaunchTime.UTC().Format(time.RFC3339)
 		}
-		lines = append(lines, fmt.Sprintf("  - instance %s: bench-session-id=%s, launched %s", s.InstanceID, sessionID, launch))
+		lines = append(lines, fmt.Sprintf("  - instance %s (region %s): bench-session-id=%s, launched %s", s.InstanceID, s.Region, sessionID, launch))
 	}
 	return strings.Join(lines, "\n")
 }

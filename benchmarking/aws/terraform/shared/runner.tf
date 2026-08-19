@@ -3,14 +3,16 @@ data "aws_ssm_parameter" "al2023_arm64_ami" {
 }
 
 locals {
-  # The runner gets the full Kafka Connect install (Plan 2 spawns the KC
-  # worker JVM here for the head-to-head). The load-gen only runs the
-  # workload binary against the source DB — installing KC there would put
-  # a second worker into the kc-bench-workers group and break leader-only
-  # request forwarding for the runner's connector PUT.
+  # install_kc = false: nothing in this tree can drive a Kafka Connect
+  # worker (the runner's KC support was removed with the scope reduction to
+  # Connect-only soaks), and an idle 2G-heap JVM plus ~500MB of plugin
+  # downloads on the measured host would contend with the pinned Connect
+  # process whose RSS trend and throughput the soak exists to measure. The
+  # KC branch of runner-user-data.tftpl comes back with the kafka-connect
+  # bench PR, which reintroduces the head-to-head.
   runner_cloud_init = templatefile("${path.module}/runner-user-data.tftpl", {
     redpanda_brokers = module.redpanda.broker_endpoints
-    install_kc       = true
+    install_kc       = false
   })
   load_gen_cloud_init = templatefile("${path.module}/runner-user-data.tftpl", {
     redpanda_brokers = module.redpanda.broker_endpoints

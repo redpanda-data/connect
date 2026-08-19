@@ -11,6 +11,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -185,11 +186,21 @@ func (m *MatrixRunner) Run(
 			}
 		}
 
+		// benchCtx is separate from workloadCtx: the workload goroutine
+		// below cancels benchCtx (not the other way around) the moment
+		// the workload script itself fails, so a crashed load generator
+		// aborts the in-flight bench SSM command immediately instead of
+		// running out the rest of the window measuring an idle engine.
+		benchCtx, cancelBench := context.WithCancel(ctx)
 		workloadCtx, cancelWorkload := context.WithCancel(ctx)
 		workloadDone := make(chan error, 1)
 		if workloadScript != "" {
 			go func() {
-				workloadDone <- m.SSM.Run(workloadCtx, m.LoadGenInstance, workloadScript, streamingOnLine(stdout, "load"))
+				werr := m.SSM.Run(workloadCtx, m.LoadGenInstance, workloadScript, streamingOnLine(stdout, "load"))
+				workloadDone <- werr
+				if werr != nil && !errors.Is(werr, context.Canceled) {
+					cancelBench()
+				}
 			}()
 		} else {
 			close(workloadDone)
@@ -254,12 +265,21 @@ func (m *MatrixRunner) Run(
 		// the runner host and uploads it to S3 after termination. SSM
 		// stdout only carries the script's own status echos and a
 		// per-minute heartbeat (well under the ~24KB SSM content cap), so
-		// streaming every line is safe.
-		if err := m.SSM.Run(ctx, m.RunnerInstance, script, streamingOnLine(stdout, "bench")); err != nil {
+		// streaming every line is safe. Run against benchCtx, not ctx
+		// directly, so the workload goroutine above can cut this short.
+		if err := m.SSM.Run(benchCtx, m.RunnerInstance, script, streamingOnLine(stdout, "bench")); err != nil {
 			stopEmit()
 			cancelWorkload()
-			if werr := <-workloadDone; werr != nil && werr != context.Canceled {
-				fmt.Fprintf(stdout, "[bench] workload exited with error: %v\n", werr)
+			cancelBench()
+			werr := <-workloadDone
+			if werr != nil && !errors.Is(werr, context.Canceled) {
+				// The workload error is almost always the real cause here:
+				// the bench error on this path is usually nothing more
+				// than the cancellation the workload goroutine itself
+				// triggered via cancelBench(). Surface the workload
+				// failure as the point's error, not the downstream
+				// cancellation.
+				return nil, fmt.Errorf("workload script failed during bench at %d vCPU: %w", n, werr)
 			}
 			return nil, fmt.Errorf("bench at %d vCPU: %w", n, err)
 		}
@@ -268,8 +288,16 @@ func (m *MatrixRunner) Run(
 		// hwm, and neither is safe to run concurrently with the other.
 		stopEmit()
 		cancelWorkload()
-		if werr := <-workloadDone; werr != nil && werr != context.Canceled {
-			fmt.Fprintf(stdout, "[bench] workload exited with error: %v\n", werr)
+		cancelBench()
+		if werr := <-workloadDone; werr != nil && !errors.Is(werr, context.Canceled) {
+			// The bench window completed, but the workload that was
+			// supposed to be driving it died partway through — the
+			// engine spent some portion of the window measuring an idle
+			// source. That's a failed point, not a footnote: return an
+			// error instead of just logging it, so a load-gen crash
+			// can't silently archive a near-zero result that poisons the
+			// rolling soak baseline.
+			return nil, fmt.Errorf("workload script failed during bench at %d vCPU: %w", n, werr)
 		}
 
 		raw, err := m.fetchLog(ctx, key)
@@ -479,31 +507,35 @@ func offsetSampleT(samples []Sample, offsetSec int) []Sample {
 }
 
 // soakHighWater tracks the last CloudWatch minute already emitted for one
-// sweep point. It is shared between the mid-run emit loop
-// (runSoakEmitLoop) and the point's own final emit (see Run) so neither
-// re-emits a minute the other already sent — the two never run
-// concurrently by construction (startSoakEmitLoop's stop func blocks until
-// the loop has exited before Run touches hwm again), but the type still
-// encapsulates its own mutex rather than relying on that invariant holding
-// forever.
+// sweep point, per artifact family (see soakHighWaterMarks). It is shared
+// between the mid-run emit loop (runSoakEmitLoop) and the point's own final
+// emit (see Run) so neither re-emits a minute the other already sent — the
+// two never run concurrently by construction (startSoakEmitLoop's stop
+// func blocks until the loop has exited before Run touches hwm again), but
+// the type still encapsulates its own mutex rather than relying on that
+// invariant holding forever. get/set always copy the whole marks struct so
+// the four families stay consistent with each other across concurrent
+// access, even though only aggregateSoakMinutes ever needs more than one
+// at a time.
 type soakHighWater struct {
 	mu sync.Mutex
-	v  int
+	v  soakHighWaterMarks
 }
 
-// newSoakHighWater starts at -1: "nothing emitted yet", so minute 0 becomes
-// eligible as soon as the data shows it complete.
+// newSoakHighWater starts every family at -1: "nothing emitted yet", so
+// minute 0 becomes eligible for each family independently as soon as that
+// family's own data shows it complete.
 func newSoakHighWater() *soakHighWater {
-	return &soakHighWater{v: -1}
+	return &soakHighWater{v: soakHighWaterMarks{Samples: -1, Prom: -1, Broker: -1, Backlog: -1}}
 }
 
-func (h *soakHighWater) get() int {
+func (h *soakHighWater) get() soakHighWaterMarks {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.v
 }
 
-func (h *soakHighWater) set(v int) {
+func (h *soakHighWater) set(v soakHighWaterMarks) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.v = v
@@ -576,14 +608,15 @@ func (m *MatrixRunner) emitSoakCycle(ctx context.Context, key string, pointStart
 }
 
 // emitAggregated normalizes samples' warmup offset (see offsetSampleT),
-// aggregates every newly-complete minute since hw (see
-// aggregateSoakMinutes), appends a RunActive heartbeat datum stamped at
-// call time, and emits the batch. Emit failure is logged and swallowed —
-// never fatal, and hw is left unmoved so the same range is retried on the
-// next cycle instead of being silently dropped.
+// aggregates every newly-complete minute since hw's four per-family marks
+// (see aggregateSoakMinutes and soakHighWaterMarks), appends a RunActive
+// heartbeat datum stamped at call time, and emits the batch. Emit failure
+// is logged and swallowed — never fatal, and ALL FOUR marks in hw are left
+// unmoved together (never partially advanced) so the same range is retried
+// in full on the next cycle instead of any of it being silently dropped.
 func (m *MatrixRunner) emitAggregated(ctx context.Context, samples []Sample, prom []PromPoint, broker []TopicPoint, backlog []BacklogPoint, pointStart time.Time, warmup time.Duration, hw *soakHighWater) {
 	normalized := offsetSampleT(samples, int(warmup.Seconds()))
-	data, newHW := aggregateSoakMinutes(normalized, prom, broker, backlog, pointStart, hw.get())
+	data, newMarks := aggregateSoakMinutes(normalized, prom, broker, backlog, pointStart, hw.get())
 	data = append(data, MetricDatum{Name: metricRunActive, Value: 1, Unit: unitCount, At: time.Now()})
 	// Per-cycle gauge, stamped "now" like RunActive rather than backfilled to
 	// a past minute — see metricRSSSlopeBytesPerMin's doc comment. Skipped
@@ -596,7 +629,7 @@ func (m *MatrixRunner) emitAggregated(ctx context.Context, samples []Sample, pro
 		fmt.Fprintf(stdout, "[soak] emit metrics (non-fatal): %v\n", err)
 		return
 	}
-	hw.set(newHW)
+	hw.set(newMarks)
 }
 
 type benchScriptArgs struct {

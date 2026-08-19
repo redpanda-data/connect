@@ -2,6 +2,14 @@ variable "region" {
   type    = string
   default = "us-east-2"
 }
+variable "bench_session_id" {
+  # Runner-generated session ID ("bench-YYYYMMDD-HHMMSS", see newSessionID).
+  # Stamped on every resource via default_tags; the cleanup lambda decodes
+  # the embedded timestamp as the only age signal for resources whose
+  # Describe response carries no creation time. Same contract as the shared
+  # stack's variable of the same name.
+  type = string
+}
 variable "instance_class" { type = string }
 variable "storage_gb" { type = number }
 variable "iops" { type = number }

@@ -295,20 +295,49 @@ func appendLast(data []MetricDatum, buckets map[int]*minuteAgg, minute int, name
 	return append(data, MetricDatum{Name: name, Value: a.last, Unit: unit, At: at})
 }
 
+// soakHighWaterMarks is the last CloudWatch minute already emitted for
+// each of the four independent artifact families aggregateSoakMinutes
+// aggregates: broker-side throughput+records, Connect's own log-derived
+// throughput, prom-derived process metrics, and the backlog series. -1
+// means "nothing emitted yet" for that family.
+//
+// Four marks, not one: fetchLog/fetchProm/fetchBrokerSeries
+// (matrix.go) each fail independently and non-fatally, so a single
+// checkpoint fetch can legitimately hand aggregateSoakMinutes data for
+// some families and an empty slice for others. A single shared mark used
+// to advance off the MAX minute across all four series — so a broker
+// fetch failure in one cycle, once it recovered in a LATER cycle, found
+// its own minutes already behind the shared mark and permanently skipped
+// them: a hole in ThroughputMBps/RecordsPerSec/BacklogSeconds that a
+// CloudWatch alarm watching for gaps would silently miss. Tracking each
+// family's own mark means a family that is absent (or briefly failing)
+// never blocks another family's progress, and never loses its own data
+// once the fetch recovers.
+type soakHighWaterMarks struct {
+	Samples int // Connect log-derived LogThroughputMBps
+	Prom    int // RSSBytes / HeapInUseBytes / Goroutines
+	Broker  int // ThroughputMBps / RecordsPerSec
+	Backlog int // BacklogSeconds
+}
+
 // aggregateSoakMinutes buckets samples/prom/broker/backlog into whole
 // minutes offset from base (the sweep point's own wall-clock launch time)
-// and returns the MetricDatum set for every minute that is both newly
-// available (strictly after sinceMinute) and no longer at risk of getting
-// more data in a future checkpoint (strictly before the CURRENT incomplete
-// minute).
+// and returns the MetricDatum set for every minute that, WITHIN ITS OWN
+// FAMILY, is both newly available (strictly after that family's mark in
+// since) and no longer at risk of getting more data in a future checkpoint
+// (strictly before that family's own current-incomplete minute).
 //
-// "Current incomplete minute" is derived purely from the data itself — the
-// highest minute bucket touched by any of the four series — never from
-// time.Now(). That is what makes this a pure, deterministic function: the
-// same inputs always produce the same output, so the mid-run emit loop and
-// the final post-point emit can share it without either one's behavior
-// depending on wall-clock skew between the call and the data it's looking
-// at.
+// Each family's own "current incomplete minute" is derived purely from
+// that family's own data — the highest minute bucket ITS series touched —
+// never from time.Now() and never from another family's series. That is
+// what makes this a pure, deterministic function (the same inputs always
+// produce the same output, so the mid-run emit loop and the final
+// post-point emit can share it without either one's behavior depending on
+// wall-clock skew) AND what keeps one family's fetch failure from either
+// punching permanent holes in that family's own series or forcing a
+// re-emit of another family's already-sent minutes (CloudWatch treats a
+// re-emitted (metric, dimensions, timestamp) triple as a duplicate datum,
+// not an update).
 //
 // All four series MUST already share one base: T=0 means "at base" for
 // every one of them. Sample.T does NOT satisfy this on its own — parseAndTrim
@@ -317,17 +346,16 @@ func appendLast(data []MetricDatum, buckets map[int]*minuteAgg, minute int, name
 // by +warmup (see offsetSampleT in matrix.go) before calling this function;
 // aggregateSoakMinutes itself has no warmup concept and trusts the caller.
 //
-// Returns (nil, sinceMinute) unchanged when there is no data in any series,
-// or when every minute present has already been emitted (max minute - 1 <=
-// sinceMinute).
+// Returns (nil, since) unchanged when there is no data in any series, or
+// when every minute present in every family has already been emitted.
 func aggregateSoakMinutes(
 	samples []Sample,
 	prom []PromPoint,
 	broker []TopicPoint,
 	backlog []BacklogPoint,
 	base time.Time,
-	sinceMinute int,
-) ([]MetricDatum, int) {
+	since soakHighWaterMarks,
+) ([]MetricDatum, soakHighWaterMarks) {
 	throughput := map[int]*minuteAgg{}
 	records := map[int]*minuteAgg{}
 	logThroughput := map[int]*minuteAgg{}
@@ -336,41 +364,51 @@ func aggregateSoakMinutes(
 	goroutines := map[int]*minuteAgg{}
 	backlogSec := map[int]*minuteAgg{}
 
-	maxMinute := -1
+	brokerMax, samplesMax, promMax, backlogMax := -1, -1, -1, -1
 	for _, p := range broker {
-		bucketMean(throughput, &maxMinute, p.T, p.MBPerSec)
-		bucketMean(records, &maxMinute, p.T, p.MsgPerSec)
+		bucketMean(throughput, &brokerMax, p.T, p.MBPerSec)
+		bucketMean(records, &brokerMax, p.T, p.MsgPerSec)
 	}
 	for _, s := range samples {
-		bucketMean(logThroughput, &maxMinute, s.T, s.MBPerSec)
+		bucketMean(logThroughput, &samplesMax, s.T, s.MBPerSec)
 	}
 	for _, pp := range prom {
-		bucketLast(rss, &maxMinute, pp.T, float64(pp.RSSBytes))
-		bucketLast(heap, &maxMinute, pp.T, pp.HeapInUseMB*1_000_000)
-		bucketLast(goroutines, &maxMinute, pp.T, float64(pp.Goroutines))
+		bucketLast(rss, &promMax, pp.T, float64(pp.RSSBytes))
+		bucketLast(heap, &promMax, pp.T, pp.HeapInUseMB*1_000_000)
+		bucketLast(goroutines, &promMax, pp.T, float64(pp.Goroutines))
 	}
 	for _, b := range backlog {
-		bucketLast(backlogSec, &maxMinute, b.T, b.BacklogSec)
-	}
-
-	if maxMinute < 0 {
-		return nil, sinceMinute
+		bucketLast(backlogSec, &backlogMax, b.T, b.BacklogSec)
 	}
 
 	var data []MetricDatum
-	newHW := sinceMinute
-	for minute := sinceMinute + 1; minute < maxMinute; minute++ {
+	newMarks := since
+
+	for minute := since.Broker + 1; minute < brokerMax; minute++ {
 		at := base.Add(time.Duration(minute) * time.Minute)
 		data = appendMean(data, throughput, minute, metricThroughputMBps, unitMegabytesPerSecond, at)
 		data = appendMean(data, records, minute, metricRecordsPerSec, unitCountPerSecond, at)
+		newMarks.Broker = minute
+	}
+	for minute := since.Samples + 1; minute < samplesMax; minute++ {
+		at := base.Add(time.Duration(minute) * time.Minute)
 		data = appendMean(data, logThroughput, minute, metricLogThroughputMBps, unitMegabytesPerSecond, at)
+		newMarks.Samples = minute
+	}
+	for minute := since.Prom + 1; minute < promMax; minute++ {
+		at := base.Add(time.Duration(minute) * time.Minute)
 		data = appendLast(data, rss, minute, metricRSSBytes, unitBytes, at)
 		data = appendLast(data, heap, minute, metricHeapInUseBytes, unitBytes, at)
 		data = appendLast(data, goroutines, minute, metricGoroutines, unitCount, at)
-		data = appendLast(data, backlogSec, minute, metricBacklogSeconds, unitSeconds, at)
-		newHW = minute
+		newMarks.Prom = minute
 	}
-	return data, newHW
+	for minute := since.Backlog + 1; minute < backlogMax; minute++ {
+		at := base.Add(time.Duration(minute) * time.Minute)
+		data = appendLast(data, backlogSec, minute, metricBacklogSeconds, unitSeconds, at)
+		newMarks.Backlog = minute
+	}
+
+	return data, newMarks
 }
 
 // rssSlopeMaxWindowMinutes bounds how far back rssSlopeBytesPerMin looks

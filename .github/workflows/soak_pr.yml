@@ -8,9 +8,13 @@ name: PR Soak Comparison
 # Security model (mirrors /integration): issue_comment workflows execute
 # the DEFAULT branch's copy of this file, so a PR cannot edit the workflow
 # that grants it credentials; only commenters with write access get past
-# the gate; and the PR's code executes under the bench roles inside the
-# dedicated disposable account. Deliberately comment-triggered only — no
-# automatic runs (decided 2026-08-18).
+# the gate; the merge ref is checked out ONLY to build the rc-pr binary,
+# after which the workspace returns to the base tree — so the Taskfile,
+# runner, terraform, and local actions that run with the provisioner role
+# are never PR-controlled, and the PR's code executes only as the rc-pr
+# binary under the bench roles inside the dedicated disposable account.
+# Deliberately comment-triggered only — no automatic runs (decided
+# 2026-08-18).
 #
 # Usage (maintainers): comment `/soak` on a PR, optionally
 # `/soak <scenario>` (default postgres/orders-soak-pr).
@@ -102,6 +106,13 @@ jobs:
           GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/rc-base" ./cmd/redpanda-connect
           git checkout --detach "${MERGE_SHA}"
           GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/rc-pr" ./cmd/redpanda-connect
+          # Leave the workspace on the BASE tree. Every later step runs with
+          # the provisioner role's credentials, and the local setup-task
+          # action, the Taskfile, the runner, and the terraform stacks are
+          # all read from the workspace — none of them may be PR-controlled.
+          # The PR's effect enters the soak ONLY through the rc-pr binary
+          # built above ("the only variable being the binary").
+          git checkout --detach "${BASE_SHA}"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
@@ -127,7 +138,10 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/soak-pr.log"
 
       - name: Post comparison comment
-        if: always()
+        # Gated on the permission check: a bare always() would run even after
+        # the gate step failed, letting an unauthorized /soak overwrite a
+        # genuine earlier comparison with a spurious "failed" sticky comment.
+        if: always() && steps.gate.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -154,7 +168,7 @@ jobs:
           fi
 
       - name: Verify teardown actually completed
-        if: always()
+        if: always() && steps.gate.outcome == 'success'
         run: |
           LIVE=$(aws ec2 describe-instances --region us-east-2 \
             --filters Name=tag:Project,Values=redpanda-connect-bench Name=instance-state-name,Values=pending,running,stopping,stopped \
@@ -168,7 +182,7 @@ jobs:
           echo "account clean: no bench EC2, no RDS"
 
       - name: Upload run log
-        if: always()
+        if: always() && steps.gate.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: soak-pr-log
