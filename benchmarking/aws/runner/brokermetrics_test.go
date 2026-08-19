@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -139,54 +142,31 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1
 	}
 }
 
-func TestBrokerMetrics_AttributeByEngine_Postgres(t *testing.T) {
+func TestAttributeConnect_Postgres(t *testing.T) {
 	series := map[string][]TopicPoint{
 		"bench_sess1_postgres_cdc_connect": {
 			{T: 10, MBPerSec: 50}, {T: 20, MBPerSec: 52},
-		},
-		"bench_sess1_postgres_cdc_kc.public.orders": {
-			{T: 10, MBPerSec: 30}, {T: 20, MBPerSec: 31},
-		},
-		"bench_sess1_postgres_cdc_kc.public.shipments": {
-			{T: 10, MBPerSec: 7}, {T: 20, MBPerSec: 8},
 		},
 		"some_unrelated_topic": {
 			{T: 10, MBPerSec: 999},
 		},
 	}
-	got, err := AttributeByEngine(series, "sess1", "postgres_cdc")
-	if err != nil {
-		t.Fatalf("AttributeByEngine: %v", err)
+	got := AttributeConnect(series, "sess1", "postgres_cdc")
+	if len(got) != 2 {
+		t.Errorf("connect should have 2 points; got %d", len(got))
 	}
-	if len(got["connect"]) != 2 {
-		t.Errorf("connect should have 2 points; got %d", len(got["connect"]))
-	}
-	if got["connect"][0].MBPerSec != 50 {
-		t.Errorf("connect t=10 = %f, want 50", got["connect"][0].MBPerSec)
-	}
-	// KC has TWO topics (orders + shipments). At T=10 the engine total
-	// is 30 + 7 = 37. At T=20 it's 31 + 8 = 39.
-	if len(got["kafka_connect"]) != 2 {
-		t.Errorf("kafka_connect should have 2 points; got %d", len(got["kafka_connect"]))
-	}
-	if got["kafka_connect"][0].MBPerSec != 37 {
-		t.Errorf("kc T=10 sum = %f, want 37", got["kafka_connect"][0].MBPerSec)
-	}
-	if got["kafka_connect"][1].MBPerSec != 39 {
-		t.Errorf("kc T=20 sum = %f, want 39", got["kafka_connect"][1].MBPerSec)
+	if got[0].MBPerSec != 50 {
+		t.Errorf("connect t=10 = %f, want 50", got[0].MBPerSec)
 	}
 }
 
-func TestBrokerMetrics_AttributeByEngine_UnrelatedTopicsIgnored(t *testing.T) {
+func TestAttributeConnect_UnrelatedTopicsIgnored(t *testing.T) {
 	series := map[string][]TopicPoint{
 		"unrelated":                   {{T: 10, MBPerSec: 999}},
 		"bench_other_session_connect": {{T: 10, MBPerSec: 100}},
 	}
-	got, err := AttributeByEngine(series, "sess1", "postgres_cdc")
-	if err != nil {
-		t.Fatalf("AttributeByEngine: %v", err)
-	}
-	if len(got["connect"]) != 0 || len(got["kafka_connect"]) != 0 {
+	got := AttributeConnect(series, "sess1", "postgres_cdc")
+	if len(got) != 0 {
 		t.Errorf("unrelated topics leaked into attribution; got %+v", got)
 	}
 }
@@ -255,30 +235,5 @@ redpanda_kafka_records_produced_total{redpanda_namespace="kafka",redpanda_topic=
 	// 10 MB over 10s = 1 MB/s (decimal), proving bytes still work alongside records.
 	if pts[0].MBPerSec != 1 {
 		t.Errorf("MBPerSec = %v, want 1", pts[0].MBPerSec)
-	}
-}
-
-// TestAttributeByEngine_MergesRecordsAcrossKCTopics covers the KC-specific
-// path: Debezium writes one topic per table, so KC's series are always merged.
-// Summing bytes but not records there would zero out the compression-
-// independent metric for the very engine it exists to compare.
-func TestAttributeByEngine_MergesRecordsAcrossKCTopics(t *testing.T) {
-	series := map[string][]TopicPoint{
-		"bench_sess1_mysql_cdc_kc.benchdb.orders":   {{T: 10, MBPerSec: 2, MsgPerSec: 1000}},
-		"bench_sess1_mysql_cdc_kc.benchdb.payments": {{T: 10, MBPerSec: 3, MsgPerSec: 1500}},
-	}
-	out, err := AttributeByEngine(series, "sess1", "mysql_cdc")
-	if err != nil {
-		t.Fatalf("AttributeByEngine: %v", err)
-	}
-	kc := out["kafka_connect"]
-	if len(kc) != 1 {
-		t.Fatalf("want 1 merged point, got %d", len(kc))
-	}
-	if kc[0].MBPerSec != 5 {
-		t.Errorf("merged MBPerSec = %v, want 5", kc[0].MBPerSec)
-	}
-	if kc[0].MsgPerSec != 2500 {
-		t.Errorf("merged MsgPerSec = %v, want 2500 (records must merge, not just bytes)", kc[0].MsgPerSec)
 	}
 }

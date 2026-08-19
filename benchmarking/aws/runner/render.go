@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -28,12 +31,6 @@ type Result struct {
 	Infra        ResultInfra   `json:"infra"`
 	Dataset      ResultDataset `json:"dataset"`
 	Points       []PointResult `json:"points"`
-
-	// CrossEngineAnomalies flags vCPU points where Connect and KC
-	// diverged by more than a configured ratio. Populated by runBench
-	// after both engines' points are gathered; empty for single-engine
-	// runs.
-	CrossEngineAnomalies []CrossEngineAnomaly `json:"cross_engine_anomalies,omitempty"`
 }
 
 type ResultInfra struct {
@@ -75,10 +72,9 @@ type PointResult struct {
 	// arm-less rows byte-identical to pre-arms JSON.
 	Streams int `json:"streams,omitempty"`
 
-	// BrokerSeries is the broker-side throughput attributed to this engine
-	// at this vCPU point. For Connect, it's a cross-check against the
-	// rolling-stats-derived Summary. For KC (which has no rolling-stats
-	// line to parse), Summary is derived from this series — see Task 6.
+	// BrokerSeries is the broker-side throughput at this vCPU point — the
+	// canonical fairness instrument Summary is derived from. It also serves
+	// as a cross-check against the rolling-stats-derived samples above.
 	BrokerSeries []TopicPoint `json:"broker_series,omitempty"`
 
 	// Backlog is the end-to-end backlog proxy (see ComputeBacklog), present
@@ -114,18 +110,17 @@ func WriteResultJSON(dir string, r *Result) (string, error) {
 var resultMarkdownTmpl string
 
 type markdownView struct {
-	ScenarioShort        string
-	Date                 string
-	Description          string
-	GitSHA               string
-	GitShortSHA          string
-	Infra                ResultInfra
-	Dataset              ResultDataset
-	WorkloadLine         string
-	Rows                 []markdownRow
-	Anomalies            []anomalyView
-	CrossEngineAnomalies []CrossEngineAnomaly // populated for dual-engine runs
-	JSONPath             string
+	ScenarioShort string
+	Date          string
+	Description   string
+	GitSHA        string
+	GitShortSHA   string
+	Infra         ResultInfra
+	Dataset       ResultDataset
+	WorkloadLine  string
+	Rows          []markdownRow
+	Anomalies     []anomalyView
+	JSONPath      string
 }
 
 type markdownRow struct {
@@ -140,7 +135,6 @@ type markdownRow struct {
 	P5MB           string
 	P95MB          string
 	MedianMsgFC    string
-	DeltaVsConnect string // blank for connect rows; "+3 MB/s (+10%)" or similar for KC rows
 }
 
 type anomalyView struct {
@@ -158,89 +152,37 @@ func AppendMarkdown(target string, r *Result, description string) error {
 		return fmt.Errorf("scenario %q is not connector/scenario", r.Scenario)
 	}
 
-	// First pass: group points by (vCPU, arm) and capture iteration order. The
-	// arm is part of the key so an A/B at one vCPU yields one row group per
-	// arm; for arm-less runs the arm is "" and grouping is by vCPU as before,
-	// which keeps the connect/KC pairing (and the delta column) intact.
-	type groupKey struct {
-		vcpu int
-		arm  string
-	}
-	type vGroup struct {
-		key      groupKey
-		byEngine map[string]PointResult
-	}
-	groups := map[groupKey]*vGroup{}
-	var order []groupKey
-	for _, p := range r.Points {
-		k := groupKey{vcpu: p.VCPU, arm: p.Arm}
-		g, ok := groups[k]
-		if !ok {
-			g = &vGroup{key: k, byEngine: map[string]PointResult{}}
-			groups[k] = g
-			order = append(order, k)
-		}
-		g.byEngine[p.Engine] = p
-	}
-
-	// Second pass: emit one row per (vcpu, arm, engine) — connect first, then
-	// kafka_connect. For KC rows, compute the delta column from the matching
-	// Connect row in the same group.
+	// One row per point, in result order (arm-less sweeps: one per vCPU;
+	// arm sweeps: one per vCPU × arm).
 	var rows []markdownRow
 	var anomalies []anomalyView
-	for _, k := range order {
-		g := groups[k]
-		for _, engine := range []string{"connect", "kafka_connect"} {
-			p, ok := g.byEngine[engine]
-			if !ok {
-				continue
+	for _, p := range r.Points {
+		var brokerMedian float64
+		if len(p.BrokerSeries) > 0 {
+			rates := make([]float64, len(p.BrokerSeries))
+			for j, b := range p.BrokerSeries {
+				rates[j] = b.MBPerSec
 			}
-			var brokerMedian float64
-			if len(p.BrokerSeries) > 0 {
-				rates := make([]float64, len(p.BrokerSeries))
-				for j, b := range p.BrokerSeries {
-					rates[j] = b.MBPerSec
-				}
-				sort.Float64s(rates)
-				brokerMedian = rates[len(rates)/2]
-			}
-			// The head-to-head delta is a RECORDS comparison, not a byte one.
-			//
-			// Bytes are not comparable between the engines even now that both are
-			// measured at the broker: the two producers use different compression
-			// settings, and Debezium's JSON envelope is fatter per record than
-			// Connect's output. A real measured example — Connect 9,400 vs
-			// Debezium 10,319 records/sec (within 10%) but 11.47 vs 18.48 MB/s —
-			// rendered as "+61%" on bytes, which reads as Debezium being much
-			// faster when it is simply more verbose. Records/sec is immune to both
-			// effects: one row in, one record out.
-			deltaStr := ""
-			if engine == "kafka_connect" {
-				if connectPt, hasConnect := g.byEngine["connect"]; hasConnect && connectPt.Summary.MedianMsgPerSec > 0 {
-					diff := p.Summary.MedianMsgPerSec - connectPt.Summary.MedianMsgPerSec
-					pct := 100.0 * diff / connectPt.Summary.MedianMsgPerSec
-					deltaStr = fmt.Sprintf("%+s msg/s (%+.0f%%)", formatThousands(int64(diff)), pct)
-				}
-			}
-			rows = append(rows, markdownRow{
-				VCPU:           p.VCPU,
-				GOMAXPROCS:     p.GOMAXPROCS,
-				Arm:            p.Arm,
-				Engine:         p.Engine,
-				MedianMB:       fmt.Sprintf("%12.0f", p.Summary.MedianMBPerSec),
-				MeanMB:         fmt.Sprintf("%12.3f", p.Summary.MeanMBPerSec),
-				MeanMsg:        formatThousands(int64(p.Summary.MeanMsgPerSec)),
-				BrokerMedianMB: fmt.Sprintf("%12.0f", brokerMedian),
-				P5MB:           fmt.Sprintf("%11.0f", p.Summary.P5MBPerSec),
-				P95MB:          fmt.Sprintf("%12.0f", p.Summary.P95MBPerSec),
-				MedianMsgFC:    formatThousands(int64(p.Summary.MedianMsgPerSec)),
-				DeltaVsConnect: deltaStr,
+			sort.Float64s(rates)
+			brokerMedian = rates[len(rates)/2]
+		}
+		rows = append(rows, markdownRow{
+			VCPU:           p.VCPU,
+			GOMAXPROCS:     p.GOMAXPROCS,
+			Arm:            p.Arm,
+			Engine:         p.Engine,
+			MedianMB:       fmt.Sprintf("%12.0f", p.Summary.MedianMBPerSec),
+			MeanMB:         fmt.Sprintf("%12.3f", p.Summary.MeanMBPerSec),
+			MeanMsg:        formatThousands(int64(p.Summary.MeanMsgPerSec)),
+			BrokerMedianMB: fmt.Sprintf("%12.0f", brokerMedian),
+			P5MB:           fmt.Sprintf("%11.0f", p.Summary.P5MBPerSec),
+			P95MB:          fmt.Sprintf("%12.0f", p.Summary.P95MBPerSec),
+			MedianMsgFC:    formatThousands(int64(p.Summary.MedianMsgPerSec)),
+		})
+		for _, a := range p.Anomalies {
+			anomalies = append(anomalies, anomalyView{
+				VCPU: p.VCPU, DurationSec: a.DurationSec, MinRatio: a.MinRatio, StartT: a.StartT,
 			})
-			for _, a := range p.Anomalies {
-				anomalies = append(anomalies, anomalyView{
-					VCPU: p.VCPU, DurationSec: a.DurationSec, MinRatio: a.MinRatio, StartT: a.StartT,
-				})
-			}
 		}
 	}
 
@@ -256,18 +198,17 @@ func AppendMarkdown(target string, r *Result, description string) error {
 	}
 
 	view := markdownView{
-		ScenarioShort:        parts[1],
-		Date:                 r.StartedAt.UTC().Format("2006-01-02"),
-		Description:          description,
-		GitSHA:               r.GitSHA,
-		GitShortSHA:          gitShort,
-		Infra:                r.Infra,
-		Dataset:              r.Dataset,
-		WorkloadLine:         workload,
-		Rows:                 rows,
-		Anomalies:            anomalies,
-		CrossEngineAnomalies: r.CrossEngineAnomalies,
-		JSONPath:             fmt.Sprintf("results/%s/%s/%s.json", parts[0], parts[1], r.StartedAt.UTC().Format("2006-01-02T15-04-05Z")),
+		ScenarioShort: parts[1],
+		Date:          r.StartedAt.UTC().Format("2006-01-02"),
+		Description:   description,
+		GitSHA:        r.GitSHA,
+		GitShortSHA:   gitShort,
+		Infra:         r.Infra,
+		Dataset:       r.Dataset,
+		WorkloadLine:  workload,
+		Rows:          rows,
+		Anomalies:     anomalies,
+		JSONPath:      fmt.Sprintf("results/%s/%s/%s.json", parts[0], parts[1], r.StartedAt.UTC().Format("2006-01-02T15-04-05Z")),
 	}
 
 	t, err := template.New("result").Parse(resultMarkdownTmpl)

@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -131,22 +134,6 @@ func TestBuildSweepPlan_ArmsExpandAcrossMultipleCPUPoints(t *testing.T) {
 	require.Equal(t, 2, plan[1].VCPU)
 	require.Equal(t, 4, plan[2].VCPU)
 	require.Equal(t, 4, plan[3].VCPU)
-}
-
-func TestBuildSweepPlan_ArmsCarryFanIn(t *testing.T) {
-	s := &Scenario{
-		Matrix: MatrixSpec{
-			CPUPoints: []int{2},
-			Arms: []Arm{
-				{ID: "streams7", Streams: 7},
-				{ID: "fanin", FanIn: true},
-			},
-		},
-	}
-	plan := buildSweepPlan(s)
-	require.Len(t, plan, 2)
-	require.False(t, plan[0].FanIn, "streams7 arm must not carry fan_in")
-	require.True(t, plan[1].FanIn, "fanin arm's fan_in must reach the sweep point")
 }
 
 // TestBuildSweepPlan_ArmsCarryBinary pins Arm.Binary reaching the sweep

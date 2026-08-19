@@ -67,7 +67,6 @@ matrix:
 
 reset:
   - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
-  - sql: "SELECT pg_drop_replication_slot('kc_bench_slot') FROM pg_replication_slots WHERE slot_name='kc_bench_slot'"
   - sql: "TRUNCATE TABLE orders"
   # Recreate the publication per arm — a stale one that lost its table makes
   # postgres_cdc stream silence forever (live-hit 2026-08-12).

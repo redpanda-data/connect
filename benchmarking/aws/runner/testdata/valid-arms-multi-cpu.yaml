@@ -1,54 +1,47 @@
-name: iceberg-orders-sink-streams-ab
+name: postgres-orders-arms-ab
 description: arms x cpu_points product within the maxArmSweepPoints guard (previously rejected outright)
-direction: sink
-connector: iceberg
-stack: iceberg
+connector: postgres_cdc
+stack: postgres
 
 infra:
   runner:
     instance_type: c8g.4xlarge
+  source:
+    instance_class: db.r6g.2xlarge
+    storage_gb: 400
 
 dataset:
-  # 110M rows @ 1200B clears the 15-min bounded-dataset floor at 133 MB/s
-  # (100M rows would estimate ~860s, just under the 900s minimum).
-  initial_rows: 110000000
+  initial_rows: 0
   row_size_bytes: 1200
-  seeder: json-orders
-  expected_peak_mb_s: 133
+  tables: [orders]
+  seeder: cdc-rows-postgres
+
+workload:
+  write_rate_per_sec: 5000
+  duration: 15m
+  warmup: 2m
 
 pipeline:
-  buffer:
-    memory:
-      limit: 524288000
-      batch_policy:
-        count: 10000
-        period: 10s
-  output:
-    iceberg:
-      max_in_flight: 16
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      tables: [orders]
       batching:
-        count: 10000
-        period: 10s
-      commit:
-        max_snapshot_age: 24h
+        count: 5000
+        period: 1s
 
 matrix:
   # 2 cpu_points x 3 arms = 6 sweep points, within the maxArmSweepPoints (8) guard.
   cpu_points: [1, 2]
   arms:
-    - id: a0-1pipe-gmp2
+    - id: a0-gmp2
       gomaxprocs: 2
-      streams: 1
-    - id: a1-1pipe-gmp4
+    - id: a1-gmp4
       gomaxprocs: 4
-      streams: 1
-    - id: b-2pipe-gmp4
-      gomaxprocs: 4
-      streams: 2
+    - id: b-gmp8
+      gomaxprocs: 8
       pipeline:
-        buffer:
-          memory:
-            limit: 262144000
-        output:
-          iceberg:
-            max_in_flight: 8
+        input:
+          postgres_cdc:
+            batching:
+              count: 10000

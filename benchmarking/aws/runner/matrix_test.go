@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -314,98 +317,22 @@ func TestMatrixRunner_EarlyAbortOnZeroSamples(t *testing.T) {
 	require.Contains(t, buf.String(), "license invalid")
 }
 
-func TestMatrixRunner_EarlyAbortFiresPerEngineAtFirstPoint(t *testing.T) {
-	// Regression test for the early-abort guard's key. It must fire once per
-	// engine at the FIRST plan point (pt.Key() == plan[0].Key()) — not once
-	// per sweep (len(out) == 1, a bug introduced and then caught in this
-	// task's first pass). A dual-engine sweep where only the SECOND engine's
-	// first point produces zero throughput must still abort the whole sweep,
-	// not silently continue to later points and burn the rest of a real
-	// multi-hour bench on a broken engine.
-	//
-	// This is exercised under Direction: DirectionSink because that is the
-	// only direction whose early-abort switch inspects every engine — its
-	// first case (m.Direction == DirectionSink) matches unconditionally on
-	// engine. The source-direction switch only has a case for
-	// engine == "connect": under source direction, kafka_connect's own
-	// zero-throughput signal is never inspected by this guard at all,
-	// regardless of the guard's key. That is a pre-existing limitation of the
-	// direction/engine switch's case list (frozen, out of scope for this
-	// task — see the fix report for detail), not something this guard-key
-	// fix can address, so a literal source-direction dual-engine version of
-	// this test cannot be constructed to demonstrate an abort.
-	const sessionID = "sess-guard"
-	const connector = "iceberg"
-
-	const icebergConnect = `###timestamp=1000
-total_files_size_bytes 0
-###timestamp=1010
-total_files_size_bytes 500000000
-`
-	fetcher := &FakeLogFetcher{
-		Contents: map[string]string{
-			fmt.Sprintf("runs/%s/sweep-1.log", sessionID):           "INFO starting redpanda-connect\nINFO output connected\n",
-			fmt.Sprintf("runs/%s/iceberg-1-connect.txt", sessionID): icebergConnect,
-			// Deliberately no iceberg-1-kc.txt: kafka_connect's first point
-			// captures zero metric samples, simulating a broken KC connector.
-			// No sweep-2.log / iceberg-2-*.txt either — if the guard fails to
-			// abort, the run should blow up on THIS point (point 2 doesn't
-			// exist for KC), not silently produce clean-looking output.
-		},
-	}
-	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
-	prev := stdout
-	stdout = &bytes.Buffer{}
-	defer func() { stdout = prev }()
-
-	mr := &MatrixRunner{
-		SSM:            ssm,
-		LogFetcher:     fetcher,
-		RunnerInstance: "i-runner",
-		Bucket:         "b",
-		SessionID:      sessionID,
-		Topology:       sinkTopology{},
-		Names:          newBenchNames(sessionID, connector),
-		Engines:        []string{"connect", "kafka_connect"},
-		Direction:      DirectionSink,
-	}
-	plan := []sweepPoint{
-		{VCPU: 1, GOMAXPROCS: 1, Streams: 1},
-		{VCPU: 2, GOMAXPROCS: 2, Streams: 1},
-	}
-	points, err := mr.Run(context.Background(), plan, 1, 60*time.Second, 120*time.Second, "", "")
-	require.Error(t, err, "kafka_connect's empty first point must abort the sweep, not just connect's")
-	require.Contains(t, err.Error(), "first sweep point at 1 vCPU captured 0 metric samples")
-	require.Len(t, points, 2, "connect@1 and kafka_connect@1 were recorded before the abort fired")
-	require.Equal(t, "connect", points[0].Engine)
-	require.Equal(t, "kafka_connect", points[1].Engine)
-	require.Empty(t, points[1].BrokerSeries, "kafka_connect's first point produced no metric samples")
-}
-
 func TestMatrixRunner_EarlyAbortFiresForLaterArmToo(t *testing.T) {
 	// Regression test for finding #1 of the final whole-branch review: the
 	// early-abort guard used to fire ONLY at plan[0] ("later points would
 	// fail the same way — true when points differ only in vCPU, false when
-	// they differ in launch mechanism"). Arm "a0" here launches via `run`
-	// and succeeds; arm "b" launches via `streams` and produces zero
-	// throughput. Before the fix (pt.Key() == plan[0].Key() only), arm b
-	// would sail through with a 0 MB/s point and no error — the exact
-	// "looks like an answer" failure mode this whole review exists to catch.
+	// they differ in launch mechanism"). Arm "a0" launches and succeeds; arm
+	// "b" produces zero rolling-stats samples (e.g. it failed to start).
+	// Before the fix (pt.Key() == plan[0].Key() only), arm b would sail
+	// through with a 0 MB/s point and no error — the exact "looks like an
+	// answer" failure mode this whole review exists to catch.
 	const sessionID = "sess-guard-arm"
-	const connector = "iceberg"
 
-	const icebergA0 = `###timestamp=1000
-total_files_size_bytes 0
-###timestamp=1010
-total_files_size_bytes 500000000
-`
 	fetcher := &FakeLogFetcher{
 		Contents: map[string]string{
-			fmt.Sprintf("runs/%s/iceberg-2-a0-connect.txt", sessionID): icebergA0,
-			fmt.Sprintf("runs/%s/sweep-2-a0.log", sessionID):           "INFO starting redpanda-connect\nINFO output connected\n",
-			fmt.Sprintf("runs/%s/sweep-2-b.log", sessionID):            "INFO starting redpanda-connect\nINFO output connected\n",
-			// Deliberately no iceberg-2-b-connect.txt: arm b's streams-mode
-			// launch produced zero metric samples (e.g. it failed to start).
+			fmt.Sprintf("runs/%s/sweep-2-a0.log", sessionID): makeLog(30, 60),
+			// Arm b's log has zero rolling-stats lines: its launch failed.
+			fmt.Sprintf("runs/%s/sweep-2-b.log", sessionID): "INFO starting redpanda-connect\nERROR failed to start\n",
 		},
 	}
 	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
@@ -419,22 +346,18 @@ total_files_size_bytes 500000000
 		RunnerInstance: "i-runner",
 		Bucket:         "b",
 		SessionID:      sessionID,
-		Topology:       sinkTopology{},
-		Names:          newBenchNames(sessionID, connector),
-		Engines:        []string{"connect"},
-		Direction:      DirectionSink,
 	}
 	plan := []sweepPoint{
 		{VCPU: 2, ArmID: "a0", GOMAXPROCS: 2, Streams: 1},
-		{VCPU: 2, ArmID: "b", GOMAXPROCS: 4, Streams: 2},
+		{VCPU: 2, ArmID: "b", GOMAXPROCS: 4, Streams: 1},
 	}
-	points, err := mr.Run(context.Background(), plan, 1, 60*time.Second, 120*time.Second, "", "")
-	require.Error(t, err, "arm b's empty metric series must abort the sweep, not just plan[0]'s arm")
-	require.Contains(t, err.Error(), "first sweep point at 2 vCPU captured 0 metric samples")
+	points, err := mr.Run(context.Background(), plan, 1, 0, 5*time.Second, "", "")
+	require.Error(t, err, "arm b's empty sample set must abort the sweep, not just plan[0]'s arm")
+	require.Contains(t, err.Error(), "first sweep point at 2 vCPU captured 0 samples")
 	require.Len(t, points, 2, "both arms were recorded before the abort fired")
 	require.Equal(t, "a0", points[0].ArmID)
 	require.Equal(t, "b", points[1].ArmID)
-	require.Empty(t, points[1].BrokerSeries, "arm b produced no metric samples")
+	require.Empty(t, points[1].Samples, "arm b produced no samples")
 }
 
 func TestMatrixRunner_WarmupTrimsAndReindexes(t *testing.T) {
@@ -600,7 +523,7 @@ func TestRenderBenchScript_RedpandaScraperWhenEndpointSet(t *testing.T) {
 	// scraper still wraps it in the IFS-split shell construct (single-
 	// element list) so the script shape matches the multi-broker case.
 	sc := sourceTopology{}.MetricSidecar(MetricSidecarArgs{
-		Engine: "connect", VCPU: 4,
+		VCPU:   4,
 		Bucket: "results-bucket", SessionID: "sess-abc",
 		Outs: map[string]string{"redpanda_metrics_endpoint": "10.42.10.10:9644"},
 	})
@@ -646,7 +569,7 @@ func TestRenderBenchScript_RedpandaScrapesAllBrokers(t *testing.T) {
 	// despite 2.9M records written).
 	endpoints := "10.42.10.10:9644,10.42.11.10:9644,10.42.12.10:9644"
 	sc := sourceTopology{}.MetricSidecar(MetricSidecarArgs{
-		Engine: "connect", VCPU: 4,
+		VCPU:   4,
 		Bucket: "results-bucket", SessionID: "sess-abc",
 		Outs: map[string]string{"redpanda_metrics_endpoints": endpoints},
 	})
@@ -677,7 +600,7 @@ func TestRenderBenchScript_PluralEndpointsTakePrecedence(t *testing.T) {
 	// When both legacy and new fields are set (transition window),
 	// the plural wins so we get cluster-wide scrape coverage.
 	sc := sourceTopology{}.MetricSidecar(MetricSidecarArgs{
-		Engine: "connect", VCPU: 1,
+		VCPU:   1,
 		Bucket: "results-bucket", SessionID: "sess-abc",
 		Outs: map[string]string{
 			"redpanda_metrics_endpoint":  "10.42.10.10:9644",
@@ -785,303 +708,6 @@ func TestRenderBenchScript_CheckpointOmittedWhenZero(t *testing.T) {
 	require.NotContains(t, out, "CHECKPOINT")
 }
 
-func TestMatrixRun_EngineInnerLoop_BothEngines(t *testing.T) {
-	const sessionID = "sess"
-	// Seed connect logs for both vCPUs. KC engine doesn't fetch.
-	logFor := func(vcpu int) string { return makeLog(180, float64(50+vcpu)) }
-	fetcher := &FakeLogFetcher{
-		Contents: map[string]string{
-			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): logFor(1),
-			fmt.Sprintf("runs/%s/sweep-2.log", sessionID): logFor(2),
-		},
-		// Prom is fetched non-fatally — return an error so we don't need to seed it.
-		Errs: map[string]error{
-			fmt.Sprintf("runs/%s/prom-1.txt", sessionID): fmt.Errorf("not found"),
-			fmt.Sprintf("runs/%s/prom-2.txt", sessionID): fmt.Errorf("not found"),
-		},
-	}
-	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
-	prev := stdout
-	stdout = &bytes.Buffer{}
-	defer func() { stdout = prev }()
-
-	mr := &MatrixRunner{
-		SSM:                   ssm,
-		LogFetcher:            fetcher,
-		RunnerInstance:        "i-runner",
-		Bucket:                "b",
-		SessionID:             sessionID,
-		Engines:               []string{"connect", "kafka_connect"},
-		KCConnectorName:       "bench_pg",
-		KCConnectorConfigJSON: `{"connector.class":"x"}`,
-	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
-	require.NoError(t, err)
-	require.Len(t, points, 4, "expected 4 sweep points (2 vcpu × 2 engines)")
-
-	wantOrder := []struct {
-		vcpu   int
-		engine string
-	}{
-		{1, "connect"},
-		{1, "kafka_connect"},
-		{2, "connect"},
-		{2, "kafka_connect"},
-	}
-	for i, w := range wantOrder {
-		require.Equal(t, w.vcpu, points[i].VCPU, "points[%d].VCPU", i)
-		require.Equal(t, w.engine, points[i].Engine, "points[%d].Engine", i)
-	}
-
-	// Connect points have samples; KC points are empty (Plan 2 doesn't parse KC logs).
-	require.NotEmpty(t, points[0].Samples, "connect at vcpu 1 should have samples")
-	require.Empty(t, points[1].Samples, "kc at vcpu 1 should have no samples in Plan 2")
-	require.NotEmpty(t, points[2].Samples, "connect at vcpu 2 should have samples")
-	require.Empty(t, points[3].Samples, "kc at vcpu 2 should have no samples in Plan 2")
-}
-
-func TestMatrixRun_PopulatesBrokerSeriesForBothEngines(t *testing.T) {
-	const sessionID = "sess1"
-	const connector = "postgres_cdc"
-
-	// Per-engine scrape files: each engine scrapes during its own window,
-	// so the Connect file holds only Connect's topic and the KC file holds
-	// only KC's topic. fetchBrokerSeriesForEngine reads the engine's own
-	// file with no cross-engine merge.
-	const rpConnect = `###timestamp=1000
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 0
-###timestamp=1010
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 500000000
-###timestamp=1020
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 1000000000
-`
-	const rpKC = `###timestamp=2000
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_kc.public.orders"} 0
-###timestamp=2010
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_kc.public.orders"} 300000000
-###timestamp=2020
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_kc.public.orders"} 629145600
-`
-
-	connectLog := makeLog(180, 50)
-	fetcher := &FakeLogFetcher{
-		Contents: map[string]string{
-			fmt.Sprintf("runs/%s/sweep-1.log", sessionID):            connectLog,
-			fmt.Sprintf("runs/%s/redpanda-1-connect.txt", sessionID): rpConnect,
-			fmt.Sprintf("runs/%s/redpanda-1-kc.txt", sessionID):      rpKC,
-		},
-		Errs: map[string]error{
-			fmt.Sprintf("runs/%s/prom-1.txt", sessionID): fmt.Errorf("not found"),
-		},
-	}
-	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
-	prev := stdout
-	stdout = &bytes.Buffer{}
-	defer func() { stdout = prev }()
-
-	mr := &MatrixRunner{
-		SSM:                      ssm,
-		LogFetcher:               fetcher,
-		RunnerInstance:           "i-runner",
-		Bucket:                   "b",
-		SessionID:                sessionID,
-		Topology:                 sourceTopology{},
-		Names:                    newBenchNames(sessionID, connector),
-		Engines:                  []string{"connect", "kafka_connect"},
-		KCConnectorName:          "bench_postgres_cdc",
-		KCConnectorConfigJSON:    `{"connector.class":"x"}`,
-		RedpandaMetricsEndpoints: "10.42.0.10:9644,10.42.1.10:9644,10.42.0.11:9644",
-	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
-	require.NoError(t, err)
-	require.Len(t, points, 2)
-
-	connectPt := points[0]
-	require.Equal(t, "connect", connectPt.Engine)
-	require.NotEmpty(t, connectPt.BrokerSeries, "connect BrokerSeries must be populated from redpanda-1-connect.txt")
-	// Connect produced 500 MB in 10s → 50 MB/s.
-	require.InDelta(t, 50.0, connectPt.BrokerSeries[0].MBPerSec, 0.1)
-
-	kcPt := points[1]
-	require.Equal(t, "kafka_connect", kcPt.Engine)
-	require.NotEmpty(t, kcPt.BrokerSeries, "kc BrokerSeries must be populated")
-	// KC produced 300 MiB in 10s → 30 MB/s.
-	require.InDelta(t, 30.0, kcPt.BrokerSeries[0].MBPerSec, 0.1)
-	// KC's Summary should now have non-zero median (derived from broker bytes).
-	require.Greater(t, kcPt.Summary.MedianMBPerSec, 0.0, "KC Summary should be derived from broker bytes")
-}
-
-func TestMatrixRun_SinkDerivesSummaryFromBrokerSeries(t *testing.T) {
-	const sessionID = "sess-sink"
-	const connector = "iceberg"
-
-	// A sink's Connect pipeline has no benchmark processor, so there is no
-	// rolling-stats log to fetch/parse — log samples are empty by design.
-	// Throughput is the Iceberg committed-bytes series scraped into the
-	// per-engine metric artifact (iceberg-1-connect.txt for vCPU 1).
-	const iceberg = `###timestamp=1000
-total_files_size_bytes 0
-###timestamp=1010
-total_files_size_bytes 500000000
-###timestamp=1020
-total_files_size_bytes 1000000000
-`
-	fetcher := &FakeLogFetcher{
-		Contents: map[string]string{
-			fmt.Sprintf("runs/%s/iceberg-1-connect.txt", sessionID): iceberg,
-			// A sink Connect run still produces a (rolling-stats-free) log;
-			// parseAndTrim yields no samples from it.
-			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): "INFO starting redpanda-connect\nINFO output connected\n",
-		},
-		Errs: map[string]error{
-			fmt.Sprintf("runs/%s/prom-1.txt", sessionID): fmt.Errorf("not found"),
-		},
-	}
-	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
-	prev := stdout
-	stdout = &bytes.Buffer{}
-	defer func() { stdout = prev }()
-
-	mr := &MatrixRunner{
-		SSM:            ssm,
-		LogFetcher:     fetcher,
-		RunnerInstance: "i-runner",
-		Bucket:         "b",
-		SessionID:      sessionID,
-		Topology:       sinkTopology{},
-		Names:          newBenchNames(sessionID, connector),
-		Engines:        []string{"connect"},
-		Direction:      DirectionSink,
-	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
-	// No spurious early-abort even though log samples are empty: the sink's
-	// metric series is non-empty.
-	require.NoError(t, err)
-	require.Len(t, points, 1)
-
-	p := points[0]
-	require.Equal(t, "connect", p.Engine)
-	require.Empty(t, p.Samples, "sink Connect pipeline produces no rolling-stats samples")
-	require.NotEmpty(t, p.BrokerSeries, "sink BrokerSeries must come from the Iceberg metric series")
-	// 500 MB committed in 10s → 50 MB/s (decimal).
-	require.Greater(t, p.Summary.MedianMBPerSec, 0.0, "Summary derived from brokerSeries, not empty log samples")
-	require.InDelta(t, 50.0, p.Summary.MedianMBPerSec, 0.1)
-}
-
-func TestMatrixRunner_SidecarPollsEveryStreamTableForMultiStreamArm(t *testing.T) {
-	// Regression test: MetricSidecar's Names must be scoped to the point's
-	// own Streams count. Before the fix, MatrixRunner.Run passed m.Names
-	// straight through (Streams == 0), so sinkTopology.MetricSidecar's
-	// IcebergTables(engine) always returned only the unsuffixed base table —
-	// even for a 2-stream arm whose two pipelines commit to ..._s0 and
-	// ..._s1. The sidecar would poll a table nothing writes to (the base
-	// table the reset union still creates), silently reporting ~0 MB/s with
-	// no error raised anywhere: exactly the silent-corruption class this
-	// plan exists to catch. Assert against the actual script text submitted
-	// to FakeSSM — the sidecar's Setup is spliced into it — so this pins the
-	// real end-to-end path from the plan point to the polled tables, not
-	// just the Names.WithStreams call in isolation.
-	const sessionID = "sess-multi"
-	const connector = "iceberg"
-
-	const iceberg = `###timestamp=1000
-total_files_size_bytes 0
-###timestamp=1010
-total_files_size_bytes 500000000
-###timestamp=1020
-total_files_size_bytes 1000000000
-`
-	fetcher := &FakeLogFetcher{
-		Contents: map[string]string{
-			fmt.Sprintf("runs/%s/iceberg-2-connect.txt", sessionID): iceberg,
-			fmt.Sprintf("runs/%s/sweep-2.log", sessionID):           "INFO starting redpanda-connect\nINFO output connected\n",
-		},
-		Errs: map[string]error{
-			fmt.Sprintf("runs/%s/prom-2.txt", sessionID): fmt.Errorf("not found"),
-		},
-	}
-	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
-	prev := stdout
-	stdout = &bytes.Buffer{}
-	defer func() { stdout = prev }()
-
-	mr := &MatrixRunner{
-		SSM:            ssm,
-		LogFetcher:     fetcher,
-		RunnerInstance: "i-runner",
-		Bucket:         "b",
-		SessionID:      sessionID,
-		Topology:       sinkTopology{},
-		Names:          newBenchNames(sessionID, connector),
-		Engines:        []string{"connect"},
-		Direction:      DirectionSink,
-	}
-	plan := []sweepPoint{{VCPU: 2, GOMAXPROCS: 4, Streams: 2}}
-	_, err := mr.Run(context.Background(), plan, 1, 60*time.Second, 120*time.Second, "", "")
-	require.NoError(t, err)
-	require.Len(t, ssm.Scripts, 1)
-	script := ssm.Scripts[0]
-	require.Contains(t, script, "bench_sess_multi_iceberg_connect_s0",
-		"sidecar must poll stream 0's table")
-	require.Contains(t, script, "bench_sess_multi_iceberg_connect_s1",
-		"sidecar must poll stream 1's table")
-}
-
-func TestMatrixRunner_SidecarPollsEveryTopicTableForMultiTopicScenario(t *testing.T) {
-	// Regression test mirroring TestMatrixRunner_SidecarPollsEveryStreamTableForMultiStreamArm:
-	// MatrixRunner.Topics must be chained onto Names when building the
-	// sidecar's MetricSidecarArgs, exactly the way pt.Streams already is.
-	// Before this wiring, a 7-topic scenario's sidecar would poll only the
-	// unsuffixed base table (which nothing writes to when Topics > 1),
-	// silently reporting ~0 MB/s with no error anywhere — the same class of
-	// bug the streams precedent (2026-08-04) already caught once.
-	const sessionID = "sess-topics"
-	const connector = "iceberg"
-
-	const iceberg = `###timestamp=1000
-total_files_size_bytes 0
-###timestamp=1010
-total_files_size_bytes 500000000
-###timestamp=1020
-total_files_size_bytes 1000000000
-`
-	fetcher := &FakeLogFetcher{
-		Contents: map[string]string{
-			fmt.Sprintf("runs/%s/iceberg-2-connect.txt", sessionID): iceberg,
-			fmt.Sprintf("runs/%s/sweep-2.log", sessionID):           "INFO starting redpanda-connect\nINFO output connected\n",
-		},
-		Errs: map[string]error{
-			fmt.Sprintf("runs/%s/prom-2.txt", sessionID): fmt.Errorf("not found"),
-		},
-	}
-	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
-	prev := stdout
-	stdout = &bytes.Buffer{}
-	defer func() { stdout = prev }()
-
-	mr := &MatrixRunner{
-		SSM:            ssm,
-		LogFetcher:     fetcher,
-		RunnerInstance: "i-runner",
-		Bucket:         "b",
-		SessionID:      sessionID,
-		Topology:       sinkTopology{},
-		Names:          newBenchNames(sessionID, connector),
-		Topics:         7,
-		Engines:        []string{"connect"},
-		Direction:      DirectionSink,
-	}
-	plan := []sweepPoint{{VCPU: 2, GOMAXPROCS: 2, Streams: 1}}
-	_, err := mr.Run(context.Background(), plan, 1, 60*time.Second, 120*time.Second, "", "")
-	require.NoError(t, err)
-	require.Len(t, ssm.Scripts, 1)
-	script := ssm.Scripts[0]
-	for i := 0; i < 7; i++ {
-		require.Contains(t, script, fmt.Sprintf("bench_sess_topics_iceberg_connect_t%d", i),
-			"sidecar must poll topic %d's table", i)
-	}
-}
-
 func TestMatrixRun_EngineInnerLoop_ConnectOnly(t *testing.T) {
 	const sessionID = "sess"
 	logFor := func(vcpu int) string { return makeLog(180, float64(50+vcpu)) }
@@ -1108,7 +734,6 @@ func TestMatrixRun_EngineInnerLoop_ConnectOnly(t *testing.T) {
 		RunnerInstance: "i-runner",
 		Bucket:         "b",
 		SessionID:      sessionID,
-		Engines:        []string{"connect"},
 	}
 	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}, {VCPU: 4, GOMAXPROCS: 4, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)
@@ -1290,7 +915,7 @@ func TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints(t
 	pointStart := time.Now()
 	warmup := 60 * time.Second
 
-	mr.emitSoakCycle(context.Background(), "connect", key, pointStart, warmup, hw)
+	mr.emitSoakCycle(context.Background(), key, pointStart, warmup, hw)
 	require.Equal(t, 1, hw.get())
 	require.NotEmpty(t, emitter.All())
 
@@ -1298,7 +923,7 @@ func TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints(t
 	// bench script hasn't re-uploaded since the last cycle) must add
 	// NOTHING new — the high-water mark is what prevents a duplicate
 	// minute 0/1 emission.
-	mr.emitSoakCycle(context.Background(), "connect", key, pointStart, warmup, hw)
+	mr.emitSoakCycle(context.Background(), key, pointStart, warmup, hw)
 	require.Equal(t, 1, hw.get(), "the high-water mark must not move when there is nothing new to emit")
 	secondCallData := emitter.LastCall()
 	for _, d := range secondCallData {
@@ -1309,7 +934,7 @@ func TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints(t
 	// Third checkpoint: the run has progressed — minute 2 now has enough
 	// data to be complete, and minute 3 is the new open minute.
 	setCheckpoint(240, 21)
-	mr.emitSoakCycle(context.Background(), "connect", key, pointStart, warmup, hw)
+	mr.emitSoakCycle(context.Background(), key, pointStart, warmup, hw)
 	require.Equal(t, 2, hw.get(), "the high-water mark must advance to the newly-completed minute 2")
 	thirdCallData := emitter.LastCall()
 	var sawMinute2Throughput bool
@@ -1393,7 +1018,7 @@ func TestMatrixRunner_StartSoakEmitLoop_TicksAndStopsCleanly(t *testing.T) {
 	hw := newSoakHighWater()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	stop := mr.startSoakEmitLoop(ctx, "connect", key, time.Now(), 60*time.Second, hw)
+	stop := mr.startSoakEmitLoop(ctx, key, time.Now(), 60*time.Second, hw)
 
 	require.Eventually(t, func() bool {
 		return emitter.CallCount() > 0

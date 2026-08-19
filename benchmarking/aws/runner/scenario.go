@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -28,18 +31,6 @@ const (
 	// oversubscribe by 15x with no error until the AWS run is already paying
 	// for it.
 	maxArmGOMAXPROCS = 64
-	// maxArmStreams bounds Arm.Streams. Each stream adds one rendered config,
-	// one Iceberg table, and one retried iceberg-tablegen pre-create PER
-	// ENGINE at every between-points reset (see IcebergResetTables) — a
-	// typo like `streams: 1000` would render ~1001 tables in the reset
-	// union and ~2002 tablegen invocations per reset, all against real AWS
-	// spend. 8 is generous headroom over the plan's own 2-stream arm B.
-	maxArmStreams = 8
-	// maxDatasetTopics bounds DatasetSpec.Topics. Each topic adds one seeder
-	// invocation, one Iceberg table, and (in streams mode) one consumer
-	// group — 16 mirrors the generous headroom maxArmStreams already gives
-	// per-stream resources, well above the 7-topic case this exists for.
-	maxDatasetTopics = 16
 	// maxArmSweepPoints bounds len(matrix.cpu_points) * len(matrix.arms). Arms
 	// used to require exactly one cpu_points entry; lifting that restriction
 	// (topology × core count is the whole point of the 7-table consolidation
@@ -94,18 +85,11 @@ type Scenario struct {
 	Pipeline    map[string]any `yaml:"pipeline"`
 	Matrix      MatrixSpec     `yaml:"matrix"`
 	Reset       []ResetStep    `yaml:"reset"`
-	// KafkaConnect is an optional override map applied on top of the
-	// kcConnectorSpec registry entry's PropsTemplate at render time. The
-	// fields here are shallow-merged into the resulting KC connector config
-	// JSON. Use this to tune e.g. snapshot.mode without editing the registry.
-	KafkaConnect map[string]any `yaml:"kafka_connect,omitempty"`
 	// Soak marks this scenario as a long, single-CPU-point, sustained-moderate-
 	// load run whose purpose is catching leaks/stalls/rotation bugs over wall
 	// clock — unlike the short max-load sweeps matrix.cpu_points/arms are for.
 	// Validate restricts a soak scenario to exactly one cpu_points entry and no
-	// arms (see Validate); runBench additionally requires --engines=connect
-	// (checked there, not here, since engines is a CLI flag rather than a
-	// scenario field).
+	// arms (see Validate).
 	Soak bool `yaml:"soak,omitempty"`
 }
 
@@ -124,28 +108,6 @@ type DatasetSpec struct {
 	Tables            []string `yaml:"tables"`
 	Seeder            string   `yaml:"seeder"`
 	ExpectedPeakMBSec int      `yaml:"expected_peak_mb_s,omitempty"`
-	// Topics splits InitialRows evenly across N pre-seeded source topics
-	// instead of one. 0 (absent) and 1 both mean single-topic, which keeps
-	// every existing scenario byte-identical: same topic name, same table
-	// name, same consumer group, same seed script. Sink-only (see Validate).
-	// See BenchNames.WithTopics/WithTopic for the corresponding naming.
-	Topics int `yaml:"topics,omitempty"`
-	// PartitionsPerTopic is the per-topic partition count the seeder
-	// pre-creates when Topics > 1. Ignored when Topics <= 1 — the seeder's
-	// own --partitions default (16) applies instead, unchanged. See
-	// partitionsPerTopic for the Topics > 1 default (4).
-	PartitionsPerTopic int `yaml:"partitions_per_topic,omitempty"`
-}
-
-// partitionsPerTopic is the effective per-topic partition count to seed with
-// when Topics > 1, defaulting to 4 (7 topics x 4 = 28 partitions, ample for
-// <=4 cores and far faster to seed than reusing the single-topic default of
-// 16 per topic).
-func (d DatasetSpec) partitionsPerTopic() int {
-	if d.PartitionsPerTopic > 0 {
-		return d.PartitionsPerTopic
-	}
-	return 4
 }
 
 type WorkloadSpec struct {
@@ -160,30 +122,32 @@ type MatrixSpec struct {
 	Overrides         map[int]map[string]any `yaml:"overrides,omitempty"`
 	// Arms turns a single cpu_points entry into an A/B: each arm is measured
 	// at that same vCPU pin but with its own launch topology (GOMAXPROCS,
-	// stream count) and pipeline overrides. Sink-only, Connect-only. Empty
-	// for every pre-existing scenario, which keeps the classic
-	// one-point-per-cpu_points behaviour.
+	// stream count) and pipeline overrides, or with a different binary (see
+	// Arm.Binary). Empty for every pre-existing scenario, which keeps the
+	// classic one-point-per-cpu_points behaviour.
+	//
+	// Streams > 1 (multiple launched pipelines per arm, each writing its own
+	// per-stream-named resources) and fan_in (a single pipeline fanning N
+	// pre-seeded topics into per-topic tables) were direction: sink-only
+	// features; both return with the iceberg-sink stack PR. The remaining
+	// source-direction shape — one pipeline per arm, distinguished by
+	// gomaxprocs/pipeline overrides or by binary — is what
+	// scenarios/postgres/orders-soak-pr.yaml uses today.
 	Arms []Arm `yaml:"arms,omitempty"`
 }
 
 // Arm is one leg of an A/B at a fixed vCPU point. GOMAXPROCS may exceed the
-// pinned core count deliberately: Connect counts licensed cores off the machine
-// CPU rather than GOMAXPROCS, so oversubscribing is free, and an I/O-blocked
-// output (e.g. iceberg commits) can leave pinned cores idle without it.
-// Streams > 1 launches `redpanda-connect streams` with one config per stream
-// instead of `redpanda-connect run`.
+// pinned core count deliberately: Connect counts licensed cores off the
+// machine CPU rather than GOMAXPROCS, so oversubscribing is free.
 type Arm struct {
 	ID         string `yaml:"id"`
 	GOMAXPROCS int    `yaml:"gomaxprocs,omitempty"`
-	Streams    int    `yaml:"streams,omitempty"`
-	// FanIn true renders this arm as ONE pipeline subscribed to all of
-	// dataset.topics' N topics, routing each record to its topic-derived
-	// Iceberg table via an interpolated `table` field (see fanInTableExpr in
-	// main.go) instead of streams mode's one-stream-per-topic default.
-	// Requires dataset.topics > 1 (fanning a single topic in is meaningless)
-	// and is mutually exclusive with Streams > 1 (fan-in IS a single
-	// pipeline) — Validate enforces both.
-	FanIn bool `yaml:"fan_in,omitempty"`
+	// Streams > 1 launches `redpanda-connect streams` with one config per
+	// stream instead of `redpanda-connect run`. Validate rejects Streams > 1
+	// for the only direction this build supports (source) — the per-stream
+	// resource naming that made multi-stream meaningful was sink-only and
+	// returns with the iceberg-sink stack PR.
+	Streams int `yaml:"streams,omitempty"`
 	// Pipeline is deep-merged over the scenario-level pipeline block for this
 	// arm, so an arm declares only what differs. Applied to every stream.
 	Pipeline map[string]any `yaml:"pipeline,omitempty"`
@@ -195,8 +159,8 @@ type Arm struct {
 	//
 	// This is the only shape a SOAK scenario's arms may take (see
 	// Scenario.Validate): a base-vs-PR build comparison must hold everything
-	// else — gomaxprocs, streams, fan_in, pipeline — constant, or the two
-	// runs are no longer an apples-to-apples comparison of the build alone.
+	// else — gomaxprocs, streams, pipeline — constant, or the two runs are
+	// no longer an apples-to-apples comparison of the build alone.
 	Binary string `yaml:"binary,omitempty"`
 }
 
@@ -237,91 +201,14 @@ type engineSpec struct {
 	ExtraEnvVars map[string]string
 }
 
+// engineSpecs is the registry mechanism a connector's stack PR extends —
+// see the type doc above. mysql_cdc, oracledb_cdc, microsoft_sql_server_cdc,
+// mongodb_cdc, and aws_dynamodb_cdc were trimmed out of this scope-reduced
+// tree (postgres_cdc soak testing only); each returns with its own stack PR.
 var engineSpecs = map[string]engineSpec{
 	"postgres_cdc": {
 		DSNOutputKey: "postgres_dsn",
 		DSNEnvVar:    "POSTGRES_DSN",
-	},
-	"mysql_cdc": {
-		DSNOutputKey:       "mysql_dsn",
-		DSNEnvVar:          "MYSQL_DSN",
-		ResetHostOutputKey: "mysql_host",
-		ResetPortOutputKey: "mysql_port",
-		ResetUserOutputKey: "mysql_user",
-		ResetPassOutputKey: "mysql_password",
-		ResetDBOutputKey:   "mysql_db",
-	},
-	// oracledb_cdc connects via a go-ora DSN URL (connection_string). Oracle has
-	// no psql/mysql CLI on the runner, so the scenario's reset is a bash: step
-	// that shells out to the cdc-rows-oracle seeder's `exec` subcommand. The
-	// discrete Reset*OutputKey fields here drive the KC (Debezium Oracle) render
-	// in main.go, which needs host/port/user/password/dbname split out.
-	"oracledb_cdc": {
-		DSNOutputKey:       "oracle_dsn",
-		DSNEnvVar:          "ORACLE_DSN",
-		ResetHostOutputKey: "oracle_host",
-		ResetPortOutputKey: "oracle_port",
-		ResetUserOutputKey: "oracle_user",
-		ResetPassOutputKey: "oracle_password",
-		ResetDBOutputKey:   "oracle_db",
-	},
-	// microsoft_sql_server_cdc connects via a go-mssqldb DSN URL
-	// (connection_string). The discrete Reset*OutputKey fields drive the KC
-	// (Debezium SQL Server) render in main.go, which needs host/port/user/
-	// password/dbname split out.
-	//
-	// MSSQL_MASTER_DSN is the SQL-Server-only wrinkle: RDS rejects `db_name` for
-	// every sqlserver engine, so the instance comes up with only its system
-	// databases and MSSQL_DSN isn't connectable until something CREATEs the
-	// application database. The seeder does that against the master DSN first,
-	// which is also where database-level CDC gets enabled (via
-	// msdb.dbo.rds_cdc_enable_db — the native sys.sp_cdc_enable_db needs
-	// sysadmin, which RDS does not grant).
-	//
-	// There is no sqlcmd on the runner, so the scenario's reset is a bash: step
-	// shelling out to the cdc-rows-mssql seeder's `reset` subcommand.
-	"microsoft_sql_server_cdc": {
-		DSNOutputKey:       "mssql_dsn",
-		DSNEnvVar:          "MSSQL_DSN",
-		ResetHostOutputKey: "mssql_host",
-		ResetPortOutputKey: "mssql_port",
-		ResetUserOutputKey: "mssql_user",
-		ResetPassOutputKey: "mssql_password",
-		ResetDBOutputKey:   "mssql_db",
-		ExtraEnvVars: map[string]string{
-			"MSSQL_MASTER_DSN": "mssql_master_dsn",
-		},
-	},
-	// mongodb_cdc streams MongoDB change streams from a self-hosted single-node
-	// replica set (terraform modules/mongodb-ec2). mongod runs without auth, so
-	// the mongodb_user / mongodb_password terraform outputs are empty strings and
-	// the KC connection-string template omits credentials; the discrete
-	// Reset*OutputKey fields still feed Host/Port into buildKCRenderInputs. There
-	// is no mongosh on the runner, so the scenario's reset is a bash: step that
-	// shells out to the cdc-rows-mongodb seeder's `exec` subcommand.
-	"mongodb_cdc": {
-		DSNOutputKey:       "mongodb_dsn",
-		DSNEnvVar:          "MONGODB_DSN",
-		ResetHostOutputKey: "mongodb_host",
-		ResetPortOutputKey: "mongodb_port",
-		ResetUserOutputKey: "mongodb_user",
-		ResetPassOutputKey: "mongodb_password",
-		ResetDBOutputKey:   "mongodb_db",
-	},
-	// aws_dynamodb_cdc uses IAM auth (no DSN). The seeder reads AWS_REGION and
-	// DDB_TABLE from its env, and the bash reset steps reference them via
-	// ${AWS_REGION} / ${DYNAMODB_TABLE_NAME} placeholders. No KC counterpart —
-	// Debezium 2.7.x doesn't ship a DynamoDB connector and the bench cloud-init
-	// doesn't install a paid alternative, so this scenario only runs against
-	// --engines=connect.
-	"aws_dynamodb_cdc": {
-		NoDSN: true,
-		ExtraEnvVars: map[string]string{
-			"AWS_REGION":     "aws_region",
-			"DDB_TABLE":      "dynamodb_table_name",
-			"READ_CAPACITY":  "read_capacity",
-			"WRITE_CAPACITY": "write_capacity",
-		},
 	},
 }
 
@@ -435,32 +322,26 @@ func (s *Scenario) Validate() error {
 					return fmt.Errorf("matrix.arms[%d].binary %q is a duplicate; soak binary arms must have unique binary values", i, a.Binary)
 				}
 				seenBinary[a.Binary] = true
-				if a.GOMAXPROCS != 0 || a.Streams != 0 || a.FanIn || a.Pipeline != nil {
-					return fmt.Errorf("matrix.arms[%d] (binary %q) must not override gomaxprocs/streams/fan_in/pipeline: a soak A/B must hold everything constant except the build", i, a.Binary)
+				if a.GOMAXPROCS != 0 || a.Streams != 0 || a.Pipeline != nil {
+					return fmt.Errorf("matrix.arms[%d] (binary %q) must not override gomaxprocs/streams/pipeline: a soak A/B must hold everything constant except the build", i, a.Binary)
 				}
 			}
 		}
 	}
 
 	if len(s.Matrix.Arms) > 0 {
-		// Source scenarios may use arms, but only in the shape that renders
-		// through the topology-agnostic renderPipelineConfig: one pipeline per
-		// arm, arms differing by their pipeline override (e.g. an oracledb_cdc
-		// arm mining one table vs. all five, on the same RDS instance and the
-		// same load — the whole point of an arm rather than two separate runs).
-		//
-		// fan_in and streams > 1 stay sink-only because their renderers are
-		// sink-shaped: renderFanInConfig requires a redpanda input plus a
-		// table-bearing output, and multi-stream rendering derives per-topic
-		// names and Iceberg tables. Neither has any meaning for a CDC source.
-		if s.Direction != DirectionSink {
-			for i, a := range s.Matrix.Arms {
-				if a.FanIn {
-					return fmt.Errorf("matrix.arms[%d].fan_in is only supported for direction: sink (got %q); fan-in renders a redpanda input into a table-bearing output", i, s.Direction)
-				}
-				if a.Streams > 1 {
-					return fmt.Errorf("matrix.arms[%d].streams must be <= 1 for direction: %q (got %d); multi-stream rendering derives per-topic names and sink tables", i, s.Direction, a.Streams)
-				}
+		// By the time we get here, topologyFor above has already rejected
+		// direction: sink, so s.Direction is always source. Source arms
+		// render through the topology-agnostic renderPipelineConfig: one
+		// pipeline per arm, arms differing by their pipeline override (e.g.
+		// an oracledb_cdc arm mining one table vs. all five) or by binary
+		// (the /soak base-vs-PR comparison). Streams > 1 stays rejected: its
+		// renderer derives per-stream Iceberg table names, which has no
+		// meaning for a CDC source and returns with the iceberg-sink stack
+		// PR.
+		for i, a := range s.Matrix.Arms {
+			if a.Streams > 1 {
+				return fmt.Errorf("matrix.arms[%d].streams must be <= 1 (got %d): multi-stream rendering derives per-stream Iceberg table names, which returns with the iceberg-sink stack PR", i, a.Streams)
 			}
 		}
 		if product := len(s.Matrix.CPUPoints) * len(s.Matrix.Arms); product > maxArmSweepPoints {
@@ -485,28 +366,6 @@ func (s *Scenario) Validate() error {
 			if a.Streams < 0 {
 				return fmt.Errorf("matrix.arms[%d].streams must be non-negative (got %d); 0 means use the default", i, a.Streams)
 			}
-			if a.Streams > maxArmStreams {
-				return fmt.Errorf("matrix.arms[%d].streams must be <= %d (got %d); each stream adds a rendered config, an Iceberg table, and a retried tablegen pre-create per engine at every between-points reset", i, maxArmStreams, a.Streams)
-			}
-			if a.FanIn && s.Dataset.Topics <= 1 {
-				return fmt.Errorf("matrix.arms[%d].fan_in requires dataset.topics > 1 (got %d); fanning a single topic in is meaningless", i, s.Dataset.Topics)
-			}
-			if a.FanIn && a.Streams > 1 {
-				return fmt.Errorf("matrix.arms[%d].fan_in is mutually exclusive with streams > 1 (got streams: %d); fan-in is a single pipeline", i, a.Streams)
-			}
-		}
-	}
-
-	if s.Dataset.Topics > 1 {
-		if s.Direction != DirectionSink {
-			return fmt.Errorf("dataset.topics > 1 is only supported for direction: sink (got %q)", s.Direction)
-		}
-		if s.Dataset.Topics > maxDatasetTopics {
-			return fmt.Errorf("dataset.topics must be <= %d (got %d)", maxDatasetTopics, s.Dataset.Topics)
-		}
-		if s.Dataset.InitialRows%int64(s.Dataset.Topics) != 0 {
-			return fmt.Errorf("dataset.initial_rows (%d) must be evenly divisible by dataset.topics (%d) so the per-topic split is exact",
-				s.Dataset.InitialRows, s.Dataset.Topics)
 		}
 	}
 

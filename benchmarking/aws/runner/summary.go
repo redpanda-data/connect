@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -24,8 +27,6 @@ type summaryRow struct {
 	ConnectorScenario string  // "postgres / orders-cdc"
 	BestVCPU          int     // 0 sentinel when no points
 	ConnectMedianMB   float64 // Connect's median at BestVCPU
-	KCMedianMB        float64 // KC's median at the same vCPU; 0 if KC didn't run
-	GapStr            string  // "+28 MB/s (+39%)" — Connect minus KC; blank when KC absent
 	LastRunDate       string  // YYYY-MM-DD
 	ResultJSONPath    string  // relative to repo root, for footnote linking
 }
@@ -107,56 +108,20 @@ func derivedRow(connector, scenario, jsonPath string) (summaryRow, error) {
 		ResultJSONPath:    jsonPath,
 	}
 
-	// Split by engine, pick the best Connect point, find the matching KC
-	// point at the same vCPU. The KC point may not exist (single-engine run
-	// or KC never made it to that vCPU).
-	var connectPts, kcPts []PointResult
+	// Pick the best point by median MB/s. Every point in this scope-reduced
+	// tree is a Connect point; "connect"/"" (empty-engine results pre-date
+	// Plan 2) are both treated as Connect.
+	var best PointResult
 	for _, p := range r.Points {
 		switch p.Engine {
-		case "connect", "": // empty-engine results pre-date Plan 2 — treat as connect
-			connectPts = append(connectPts, p)
-		case "kafka_connect":
-			kcPts = append(kcPts, p)
+		case "connect", "":
+			if p.Summary.MedianMBPerSec > best.Summary.MedianMBPerSec {
+				best = p
+			}
 		}
 	}
-	var bestConnect PointResult
-	for _, p := range connectPts {
-		if p.Summary.MedianMBPerSec > bestConnect.Summary.MedianMBPerSec {
-			bestConnect = p
-		}
-	}
-	row.BestVCPU = bestConnect.VCPU
-	row.ConnectMedianMB = bestConnect.Summary.MedianMBPerSec
-
-	var matchingKC PointResult
-	for _, p := range kcPts {
-		if p.VCPU == bestConnect.VCPU {
-			matchingKC = p
-			break
-		}
-	}
-	if matchingKC.Engine != "" {
-		row.KCMedianMB = matchingKC.Summary.MedianMBPerSec
-		// Gap is a RECORDS comparison — see the delta note in render.go. Bytes
-		// are not comparable across the engines (different producer compression,
-		// and Debezium's envelope is fatter per record), so a byte gap reads as a
-		// speed difference when it is a verbosity difference. Older result files
-		// carry MedianMsgPerSec = 0 on their KC points, because that field was
-		// never populated before the records fix; those rows get no gap rather
-		// than a misleading one.
-		if bestConnect.Summary.MedianMsgPerSec > 0 && matchingKC.Summary.MedianMsgPerSec > 0 {
-			diff := bestConnect.Summary.MedianMsgPerSec - matchingKC.Summary.MedianMsgPerSec
-			pct := 100.0 * diff / bestConnect.Summary.MedianMsgPerSec
-			row.GapStr = fmt.Sprintf("%+s msg/s (%+.0f%%)", formatThousands(int64(diff)), pct)
-		}
-	}
-
-	// Plan 3: append a ⚠ marker if the latest result flagged cross-engine
-	// divergence. The marker bubbles up so a reader scanning the SUMMARY
-	// table sees at a glance which scenarios diverged.
-	if len(r.CrossEngineAnomalies) > 0 {
-		row.ConnectorScenario += " ⚠"
-	}
+	row.BestVCPU = best.VCPU
+	row.ConnectMedianMB = best.Summary.MedianMBPerSec
 
 	return row, nil
 }

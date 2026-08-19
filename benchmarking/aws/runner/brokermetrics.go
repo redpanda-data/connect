@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -9,7 +12,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -237,64 +239,18 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 	return out, nil
 }
 
-// AttributeByEngine groups per-topic series into per-engine series for a
-// given bench session. The mapping rules mirror the topic-naming
-// conventions baked into Plan 2:
+// AttributeConnect picks Connect's series out of a full per-topic series map
+// for a given bench session. Connect writes to exactly one topic:
+// bench_<session>_<connector>_connect.
 //
-//	Connect → exactly one topic:  bench_<session>_<connector>_connect
-//	KC      → many topics:        bench_<session>_<connector>_kc.<schema>.<table>
-//	                              (Debezium prepends topic.prefix to a
-//	                              per-table topic)
-//
-// KC's per-table series are summed point-wise on matching T values; if
-// the per-topic series have ragged T values, missing values count as
-// zero. (In practice all Plan 2 KC topics scrape at the same cadence,
-// so the merge is straightforward.)
-func AttributeByEngine(series map[string][]TopicPoint, sessionID, connector string) (map[string][]TopicPoint, error) {
+// This used to fan out into a per-engine map (AttributeByEngine) that also
+// merged Kafka Connect's topic-per-table series (Debezium prepends
+// topic.prefix to a per-table topic, so KC's throughput was the point-wise
+// sum across all of them). That merge — and the KC half of the attribution
+// — returns with the kafka-connect bench PR.
+func AttributeConnect(series map[string][]TopicPoint, sessionID, connector string) []TopicPoint {
 	connectTopic := fmt.Sprintf("bench_%s_%s_connect", sessionID, connector)
-	kcPrefix := fmt.Sprintf("bench_%s_%s_kc", sessionID, connector)
-	out := map[string][]TopicPoint{
-		"connect":       nil,
-		"kafka_connect": nil,
-	}
-	if pts := series[connectTopic]; pts != nil {
-		out["connect"] = pts
-	}
-	var kcTopics []string
-	for t := range series {
-		if t == kcPrefix || strings.HasPrefix(t, kcPrefix+".") {
-			kcTopics = append(kcTopics, t)
-		}
-	}
-	if len(kcTopics) > 0 {
-		out["kafka_connect"] = mergeTopicSeries(series, kcTopics)
-	}
-	return out, nil
-}
-
-func mergeTopicSeries(series map[string][]TopicPoint, topics []string) []TopicPoint {
-	byT := map[int]float64{}
-	// Records must be merged alongside bytes. This is the KC path specifically
-	// (Debezium writes a topic per table, so its series always come through
-	// here), and dropping MsgPerSec here would zero out the compression-
-	// independent metric for exactly the engine it is needed to compare.
-	msgByT := map[int]float64{}
-	for _, t := range topics {
-		for _, p := range series[t] {
-			byT[p.T] += p.MBPerSec
-			msgByT[p.T] += p.MsgPerSec
-		}
-	}
-	ts := make([]int, 0, len(byT))
-	for t := range byT {
-		ts = append(ts, t)
-	}
-	sort.Ints(ts)
-	out := make([]TopicPoint, len(ts))
-	for i, t := range ts {
-		out[i] = TopicPoint{T: t, MBPerSec: byT[t], MsgPerSec: msgByT[t]}
-	}
-	return out
+	return series[connectTopic]
 }
 
 // splitLabeledMetric parses a single metric line of the form

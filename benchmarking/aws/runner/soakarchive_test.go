@@ -1,7 +1,10 @@
 // Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -16,8 +19,8 @@ import (
 
 // TestBuildSoakArchivePlan_AgreesWithFetchKeys pins buildSoakArchivePlan's
 // three RawKeys entries to the EXACT source keys MatrixRunner.fetchLog,
-// fetchProm, and fetchBrokerSeriesForEngine read (see matrix.go) — those
-// three functions and this one independently format
+// fetchProm, and fetchBrokerSeries read (see matrix.go) — those three
+// functions and this one independently format
 // "runs/<sessionID>/sweep-<key>.log" etc., and nothing else asserts they
 // stay in sync. A drift here means the archive silently copies the wrong
 // object (or none), which looks like "the soak archived fine" rather than
@@ -25,8 +28,7 @@ import (
 func TestBuildSoakArchivePlan_AgreesWithFetchKeys(t *testing.T) {
 	const sessionID = "bench-20260101-000000"
 	const key = "4"
-	const engine = "connect"
-	brokerArtifact := sourceTopology{}.MetricArtifact(engine, key)
+	brokerArtifact := sourceTopology{}.MetricArtifact(key)
 
 	plan := buildSoakArchivePlan(sessionID, "postgres_cdc-soak", key, brokerArtifact)
 

@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -15,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -95,12 +97,6 @@ type benchOpts struct {
 	// raw artifacts are copied to — see uploadSoakResult. Unlike the
 	// session results bucket, this one is NOT force_destroy'd at teardown.
 	soakArchiveBucket string
-	engines           []string
-	// enginesExplicit records whether --engines was set on the command line
-	// (vs. inherited from the flag default). A soak scenario silently narrows
-	// the DEFAULT engine pair to connect-only, but refuses an EXPLICIT
-	// non-connect choice — the operator asked for something soak can't mean.
-	enginesExplicit bool
 	// preflightOn gates the concurrent-bench-session guard (see
 	// preflightCheck). Defaults to true; --preflight=off is the emergency
 	// escape hatch for an operator who is certain no other session is live.
@@ -132,8 +128,6 @@ func benchCmd(args []string) error {
 		"name or ARN of an AWS Secrets Manager secret whose SecretString is a Redpanda Enterprise "+
 			"license (defaults to $REDPANDA_LICENSE_SECRET). Used when --license-file is unset or "+
 			"doesn't open — the case for scheduled runs with no license file on disk.")
-	engines := fs.String("engines", "connect,kafka_connect",
-		"Comma-separated engines to sweep at each vCPU point. Default runs both Connect and Kafka Connect side-by-side.")
 	soakArchiveBucket := fs.String("soak-archive-bucket", defaultSoakArchiveBucket,
 		"S3 bucket a soak run's result.json + raw artifacts are archived to, since the session results "+
 			"bucket is force_destroy'd at teardown. Created by the persistent terraform stack "+
@@ -157,18 +151,6 @@ func benchCmd(args []string) error {
 		return fmt.Errorf("--scenario is required")
 	}
 
-	enginesExplicit := false
-	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "engines" {
-			enginesExplicit = true
-		}
-	})
-
-	engineList := strings.Split(*engines, ",")
-	for i, e := range engineList {
-		engineList[i] = strings.TrimSpace(e)
-	}
-
 	opts := benchOpts{
 		scenarioPath:      *scenario,
 		keep:              *keep,
@@ -178,8 +160,6 @@ func benchCmd(args []string) error {
 		licenseFile:       *licenseFile,
 		licenseSecret:     *licenseSecret,
 		soakArchiveBucket: *soakArchiveBucket,
-		engines:           engineList,
-		enginesExplicit:   enginesExplicit,
 		preflightOn:       preflight.on,
 		binaries:          binaries.m,
 	}
@@ -288,35 +268,6 @@ func runBench(opts benchOpts) (errOut error) {
 	defer cleanupLicense()
 	opts.licenseFile = licensePath
 
-	// soak is a sustained-load leak/stall/rotation check on Connect alone, not
-	// an engine comparison — checked here (not Scenario.Validate) because
-	// engines is a CLI flag, not a scenario field. Failing before any infra
-	// apply. ORDER MATTERS: the soak narrowing must run BEFORE the
-	// matrix.arms engine check below, or a soak-with-binary-arms scenario
-	// trips over the default engine pair it was about to narrow (live-hit
-	// 2026-08-18, /soak run 32188761543).
-	if s.Soak {
-		if !opts.enginesExplicit {
-			// The flag DEFAULT is the head-to-head pair; a soak scenario
-			// narrows it rather than making every operator remember
-			// engines=connect on the command line.
-			opts.engines = []string{"connect"}
-			fmt.Println("soak profile: narrowing default --engines to connect (soak measures Connect alone)")
-		} else if len(opts.engines) != 1 || opts.engines[0] != "connect" {
-			return fmt.Errorf("scenario %s is a soak profile and requires --engines=connect (got %v): soak measures Connect alone over a sustained window, not an engine comparison", s.Name, opts.engines)
-		}
-	}
-	// matrix.arms compares Connect launch topologies (one iceberg pipeline vs.
-	// N streams-mode pipelines), not engines — Kafka Connect has no notion of
-	// streams, so arms require the sweep to be Connect-only. Checked here,
-	// before any infra apply / build / render / seed, so an invalid
-	// combination fails immediately instead of after minutes of wall-clock
-	// and real AWS spend. Runs AFTER the soak narrowing above by design.
-	if len(s.Matrix.Arms) > 0 {
-		if len(opts.engines) != 1 || opts.engines[0] != "connect" {
-			return fmt.Errorf("matrix.arms requires --engines=connect (got %v): arms compare Connect launch topologies, not engines", opts.engines)
-		}
-	}
 	// --binary mappings must cover exactly the logical binaries the
 	// scenario's arms reference — no more, no less — before any AWS spend,
 	// same reasoning as the checks above.
@@ -438,11 +389,10 @@ func runBench(opts benchOpts) (errOut error) {
 		sharedOuts[k] = v
 	}
 	// The runner-provided session ID is a Terraform input, not output — inject
-	// it here so per-engine renderers (renderPipelineConfig, buildKCRenderInputs,
-	// combineReset) can read it via outs["bench_session_id"].
+	// it here so per-engine renderers (renderPipelineConfig, combineReset) can
+	// read it via outs["bench_session_id"].
 	sharedOuts["bench_session_id"] = sessionID
-	// aws_region is data the runner already holds (not a TF output). Sink Glue
-	// calls (catalog region, glue CLI --region) read it from outs["aws_region"].
+	// aws_region is data the runner already holds (not a TF output).
 	sharedOuts["aws_region"] = opts.region
 
 	// --binary mappings supply pre-built binaries (a PR-triggered soak
@@ -481,12 +431,6 @@ func runBench(opts benchOpts) (errOut error) {
 			sets = append(sets, set)
 		}
 	}
-	// Upload the iceberg-tablegen binary (sink scenarios only) BEFORE
-	// stageArtefacts, whose SSM script downloads it onto the runner — otherwise
-	// the object isn't in S3 yet and the best-effort download no-ops.
-	if err := stageTableGenForSink(ctx, opts, s, sharedOuts); err != nil {
-		return fmt.Errorf("stage iceberg-tablegen: %w", err)
-	}
 	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy, execTimeout); err != nil {
 		return fmt.Errorf("stage artefacts: %w", err)
 	}
@@ -506,26 +450,6 @@ func runBench(opts benchOpts) (errOut error) {
 		return err
 	}
 
-	var kcConnectorName, kcConfigJSON string
-	needsKC := false
-	for _, e := range opts.engines {
-		if e == "kafka_connect" {
-			needsKC = true
-			break
-		}
-	}
-	if needsKC {
-		res, ok, err := topo.KCConfig(s, sharedOuts, names)
-		if err != nil {
-			return fmt.Errorf("KC config: %w", err)
-		}
-		if !ok {
-			return fmt.Errorf("engine list includes kafka_connect but direction %q has no KC counterpart", s.Direction)
-		}
-		kcConnectorName = res.ConnectorName
-		kcConfigJSON = res.ConfigJSON
-	}
-
 	mr := &MatrixRunner{
 		SSM:             ssmExec,
 		LogFetcher:      logFetcher,
@@ -543,14 +467,9 @@ func runBench(opts benchOpts) (errOut error) {
 		SessionID:                sessionID,
 		RedpandaMetricsEndpoint:  sharedOuts["redpanda_metrics_endpoint"],
 		RedpandaMetricsEndpoints: sharedOuts["redpanda_metrics_endpoints"],
-		Engines:                  opts.engines,
-		KCConnectorName:          kcConnectorName,
-		KCConnectorConfigJSON:    kcConfigJSON,
 		Topology:                 topo,
 		Names:                    names,
-		Topics:                   s.Dataset.Topics,
 		Outs:                     sharedOuts,
-		Direction:                s.Direction,
 		HeartbeatSec:             heartbeatSec,
 		PromScrapeSec:            promScrapeSec,
 		CheckpointSec:            checkpointSec,
@@ -623,16 +542,6 @@ func runBench(opts benchOpts) (errOut error) {
 			Backlog:      p.Backlog,
 		})
 	}
-	var connectPts, kcPts []PointResult
-	for _, p := range result.Points {
-		switch p.Engine {
-		case "connect":
-			connectPts = append(connectPts, p)
-		case "kafka_connect":
-			kcPts = append(kcPts, p)
-		}
-	}
-	result.CrossEngineAnomalies = DetectCrossEngineAnomalies(connectPts, kcPts, 2.0)
 	resultsDir := filepath.Join(opts.repoRoot, "benchmarking/aws/results")
 	jsonPath, err := WriteResultJSON(resultsDir, result)
 	if err != nil {
@@ -748,9 +657,9 @@ func soakRawArtifactKeys(sessionID, key, brokerArtifact string) []string {
 
 // buildSoakArchivePlan computes soakArchivePlan for one soak run. key is the
 // sweepPoint key (see sweepPoint.Key) of the run's single measured point;
-// brokerArtifact is Topology.MetricArtifact(engine, key), or "" when no
-// Topology was available to compute it (that raw file is then simply
-// skipped, same as key == "").
+// brokerArtifact is Topology.MetricArtifact(key), or "" when no Topology was
+// available to compute it (that raw file is then simply skipped, same as
+// key == "").
 func buildSoakArchivePlan(sessionID, scenarioName, key, brokerArtifact string) soakArchivePlan {
 	return soakArchivePlan{
 		ResultKey: fmt.Sprintf("runs/%s/result.json", sessionID),
@@ -775,7 +684,7 @@ func buildSoakArchivePlanForPoints(sessionID, scenarioName string, points []Poin
 		key := sweepPoint{VCPU: p.VCPU, ArmID: p.Arm}.Key()
 		var brokerArtifact string
 		if topo != nil {
-			brokerArtifact = topo.MetricArtifact(p.Engine, key)
+			brokerArtifact = topo.MetricArtifact(key)
 		}
 		plan.RawKeys = append(plan.RawKeys, soakRawArtifactKeys(sessionID, key, brokerArtifact)...)
 	}
@@ -1263,85 +1172,11 @@ func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, na
 	return writeTempYAML(cfg, outs, "bench-config-*.yaml")
 }
 
-// fanInTableExpr routes a fan-in arm's iceberg output table by the record's
-// source topic, so fan-in writes the exact same N tables that streams mode
-// writes for a multi-topic scenario (see BenchNames.IcebergTablesForTopics
-// and TestFanInTableExpr_MatchesTopicDerivedTableNames, which asserts the
-// equivalence element-for-element). kafka_topic metadata is set by the
-// redpanda input for every consumed record (internal/impl/kafka/
-// franz_reader.go). Glue table identifiers cannot contain '-', hence the
-// dash->underscore replacement (mirrors BenchNames.icebergTableBase); the
-// second replace maps a topic's _src_t<i> suffix to the table's _connect_t<i>
-// suffix, matching IcebergTable's Topics > 1 naming rule.
-const fanInTableExpr = `${! @kafka_topic.replace_all("-","_").replace_all("_src_t","_connect_t") }`
-
-// renderFanInConfig renders the single config for a fan-in arm: one pipeline
-// whose redpanda input subscribes to all of dataset.topics' N source topics
-// under the unsuffixed consumer group (one group, N subscriptions), and whose
-// output's table is fanInTableExpr rather than the literal name
-// topo.Pipeline would otherwise set — that literal is for exactly ONE topic's
-// table and would misroute every other topic's records if left in place.
-// This mutates a fresh copy of topo.Pipeline's result rather than changing
-// sinkTopology.Pipeline's behaviour for other callers.
-func renderFanInConfig(s *Scenario, outs map[string]string, topo Topology, names BenchNames) (string, error) {
-	n := s.Dataset.Topics
-	if n <= 1 {
-		return "", fmt.Errorf("fan-in requires dataset.topics > 1 (got %d)", n)
-	}
-	scoped := names.WithTopics(n)
-
-	// topo.Pipeline needs SOME topic-scoped BenchNames to build the
-	// redpanda-input/iceberg-output skeleton; topic 0 is as good as any
-	// since its topics list and table are both overwritten below.
-	input, output, err := topo.Pipeline(s, scoped.WithTopic(0))
-	if err != nil {
-		return "", fmt.Errorf("render fan-in pipeline: %w", err)
-	}
-
-	redpandaIn, ok := input["redpanda"].(map[string]any)
-	if !ok {
-		return "", fmt.Errorf("fan-in: expected a redpanda input, got %T", input["redpanda"])
-	}
-	topics := make([]any, n)
-	for i := 0; i < n; i++ {
-		topics[i] = scoped.WithTopic(i).SourceTopic()
-	}
-	redpandaIn["topics"] = topics
-	// The unsuffixed group: names is not topic-scoped (Topics <= 1), so
-	// ConsumerGroup reproduces today's exact single-topic name — one group,
-	// N subscriptions, per the design's fan-in wiring.
-	redpandaIn["consumer_group"] = names.ConsumerGroup("connect")
-
-	// output has exactly one entry (the sink's output component, e.g.
-	// "iceberg") — topo.Pipeline's contract. Overwrite its table with the
-	// interpolated expression instead of the single literal table name
-	// topo.Pipeline set for topic 0.
-	for _, v := range output {
-		icfg, ok := v.(map[string]any)
-		if !ok {
-			return "", fmt.Errorf("fan-in: expected output component to be a map, got %T", v)
-		}
-		icfg["table"] = fanInTableExpr
-	}
-
-	cfg := rootSections(s)
-	cfg["input"] = input
-	cfg["output"] = output
-	if buf, ok := s.Pipeline["buffer"]; ok {
-		cfg["buffer"] = buf
-	}
-	return writeTempYAML(cfg, outs, "bench-config-*.yaml")
-}
-
 // renderPointConfigs renders the launch config(s) for one sweep point. A
-// fan-in point gets one config (renderFanInConfig). A point with Streams <= 1
-// gets a single config identical in shape to the pre-arms renderer. A
-// multi-stream point gets a root config (observability only) plus one stream
-// config per pipeline. For a single-topic scenario each stream shares the
-// source topic and consumer group, distinguished only by table (_s<i>); for
-// a multi-topic scenario (dataset.topics > 1) each stream instead reads its
-// OWN topic (_t<i>) under its own group and table, and Streams must equal
-// dataset.topics or every extra topic would sit unconsumed.
+// point with Streams <= 1 gets a single config identical in shape to the
+// pre-arms renderer. A multi-stream point gets a root config (observability
+// only) plus one stream config per pipeline, each stream distinguished only
+// by BenchNames (WithStreams/WithStream, _s<i>).
 func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, names BenchNames, p sweepPoint) (renderedPointConfigs, error) {
 	out := renderedPointConfigs{Key: p.Key()}
 
@@ -1349,15 +1184,6 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 	armScenario := *s
 	if p.Pipeline != nil {
 		armScenario.Pipeline = p.Pipeline
-	}
-
-	if p.FanIn {
-		path, err := renderFanInConfig(&armScenario, outs, topo, names)
-		if err != nil {
-			return renderedPointConfigs{}, fmt.Errorf("render fan-in config for %s: %w", out.Key, err)
-		}
-		out.Single = path
-		return out, nil
 	}
 
 	if p.Streams <= 1 {
@@ -1369,43 +1195,22 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 		return out, nil
 	}
 
-	if s.Dataset.Topics > 1 && p.Streams != s.Dataset.Topics {
-		return renderedPointConfigs{}, fmt.Errorf(
-			"point %s: streams (%d) must equal dataset.topics (%d) for a multi-topic scenario in streams mode; a mismatch would silently leave topics unconsumed, which looks like low throughput rather than a misconfiguration",
-			out.Key, p.Streams, s.Dataset.Topics)
-	}
-
 	rootPath, err := writeTempYAML(rootSections(&armScenario), outs, "bench-root-*.yaml")
 	if err != nil {
 		return renderedPointConfigs{}, fmt.Errorf("render root config for %s: %w", out.Key, err)
 	}
 	out.Root = rootPath
 
-	// topo.Pipeline (e.g. sinkTopology.Pipeline) mutates and returns a map
-	// that ALIASES armScenario.Pipeline["output"][<component>] in place — it
-	// does not copy it. Each stream's output map must therefore be marshalled
-	// to disk (writeTempYAML, below) BEFORE the next iteration calls
-	// topo.Pipeline again and re-mutates that same shared map for the next
-	// stream's table name. That ordering holds today because the loop is
-	// sequential. Do NOT parallelize this loop: two goroutines mutating the
-	// same aliased map concurrently would race, and the most likely visible
-	// symptom is two streams silently marshalling the SAME table name and
-	// committing to one Iceberg table instead of two — exactly the class of
-	// silent-corruption failure this whole review exists to catch, and not
-	// something a test would reliably catch either.
+	// topo.Pipeline mutates and returns a map that ALIASES
+	// armScenario.Pipeline["output"][<component>] in place — it does not
+	// copy it. Each stream's output map must therefore be marshalled to disk
+	// (writeTempYAML, below) BEFORE the next iteration calls topo.Pipeline
+	// again and re-mutates that same shared map for the next stream. That
+	// ordering holds today because the loop is sequential. Do NOT
+	// parallelize this loop: two goroutines mutating the same aliased map
+	// concurrently would race.
 	for i := 0; i < p.Streams; i++ {
-		// Single-topic (or arm-less) scenarios: streams share the topic and
-		// group, distinguished only by table (WithStreams/WithStream, _s<i>).
-		// Multi-topic scenarios: each stream is scoped to its OWN topic
-		// instead (WithTopics/WithTopic, _t<i>), so it reads only that topic
-		// under its own group and writes only that topic's table — the
-		// mapping the "Design decision that keeps the comparison honest"
-		// section requires so streams7 writes the identical tables fanin
-		// does.
 		streamNames := names.WithStreams(p.Streams).WithStream(i)
-		if s.Dataset.Topics > 1 {
-			streamNames = names.WithTopics(s.Dataset.Topics).WithTopic(i)
-		}
 		input, output, err := topo.Pipeline(&armScenario, streamNames)
 		if err != nil {
 			return renderedPointConfigs{}, fmt.Errorf("render stream %d of %s: %w", i, out.Key, err)
@@ -1533,125 +1338,6 @@ func runnerConfigPaths(sets []renderedPointConfigs) map[string]pointConfigPaths 
 		out[set.Key] = p
 	}
 	return out
-}
-
-// buildKCRenderInputs gathers the values needed to render a Kafka Connect
-// connector config from a scenario and the terraform outputs. Postgres engines
-// expose a DSN URL output; MySQL exposes discrete host/port/user/pass/db
-// outputs — we handle both via engineSpec metadata.
-func buildKCRenderInputs(s *Scenario, es engineSpec, outs map[string]string, sessionID string) (kcRenderInputs, error) {
-	in := kcRenderInputs{
-		TopicPrefix:      fmt.Sprintf("bench_%s_%s_kc", sessionID, s.Connector),
-		BootstrapServers: outs["redpanda_broker_endpoints"],
-	}
-	// Tables come from the scenario's pipeline.input map.
-	if inputMap, ok := s.Pipeline["input"].(map[string]any); ok {
-		for _, v := range inputMap {
-			if connMap, ok := v.(map[string]any); ok {
-				if tbls, ok := connMap["tables"].([]any); ok {
-					for _, t := range tbls {
-						if ts, ok := t.(string); ok {
-							in.Tables = append(in.Tables, ts)
-						}
-					}
-				}
-			}
-		}
-	}
-	// Fallback: connectors that select tables via a non-"tables" field (e.g.
-	// oracledb_cdc uses `include`) leave in.Tables empty above. The canonical
-	// table list lives on the scenario dataset, so use that.
-	if len(in.Tables) == 0 {
-		in.Tables = append(in.Tables, s.Dataset.Tables...)
-	}
-
-	// Connection parts.
-	if es.ResetHostOutputKey != "" {
-		// MySQL-style: discrete TF outputs.
-		in.Host = outs[es.ResetHostOutputKey]
-		in.Port = outs[es.ResetPortOutputKey]
-		in.User = outs[es.ResetUserOutputKey]
-		in.Password = outs[es.ResetPassOutputKey]
-		in.Database = outs[es.ResetDBOutputKey]
-	} else {
-		// Postgres-style: parse DSN URL.
-		dsn := outs[es.DSNOutputKey]
-		u, err := url.Parse(dsn)
-		if err != nil {
-			return in, fmt.Errorf("parse DSN %q: %w", dsn, err)
-		}
-		in.Host = u.Hostname()
-		in.Port = u.Port()
-		if in.Port == "" {
-			in.Port = "5432"
-		}
-		if u.User != nil {
-			in.User = u.User.Username()
-			pw, _ := u.User.Password()
-			in.Password = pw
-		}
-		in.Database = strings.TrimPrefix(u.Path, "/")
-	}
-
-	// SchemaTables formatting depends on engine. Must come AFTER in.Database is
-	// populated, since the mysql_cdc branch uses it as the schema prefix.
-	switch s.Connector {
-	case "postgres_cdc":
-		schema := "public"
-		if inputMap, ok := s.Pipeline["input"].(map[string]any); ok {
-			if pgMap, ok := inputMap["postgres_cdc"].(map[string]any); ok {
-				if sc, ok := pgMap["schema"].(string); ok {
-					schema = sc
-				}
-			}
-		}
-		var sb strings.Builder
-		for i, t := range in.Tables {
-			if i > 0 {
-				sb.WriteString(",")
-			}
-			sb.WriteString(schema + "." + t)
-		}
-		in.SchemaTables = sb.String()
-	case "mysql_cdc":
-		var sb strings.Builder
-		for i, t := range in.Tables {
-			if i > 0 {
-				sb.WriteString(",")
-			}
-			sb.WriteString(in.Database + "." + t)
-		}
-		in.SchemaTables = sb.String()
-	case "oracledb_cdc":
-		// Debezium Oracle table.include.list is SCHEMA.TABLE, both upper-cased.
-		// The owning schema is the connecting user (RDS master, e.g. BENCH).
-		schema := strings.ToUpper(in.User)
-		parts := make([]string, 0, len(in.Tables))
-		for _, t := range in.Tables {
-			parts = append(parts, schema+"."+strings.ToUpper(t))
-		}
-		in.SchemaTables = strings.Join(parts, ",")
-	case "microsoft_sql_server_cdc":
-		// Debezium SQL Server table.include.list is <schema>.<table> — NOT
-		// database-qualified, even though the topic names are (the database comes
-		// from database.names instead). dbo matches the schema the
-		// cdc-rows-mssql seeder creates the table in.
-		parts := make([]string, 0, len(in.Tables))
-		for _, t := range in.Tables {
-			parts = append(parts, "dbo."+t)
-		}
-		in.SchemaTables = strings.Join(parts, ",")
-	case "mongodb_cdc":
-		// Debezium MongoDB collection.include.list is <db>.<collection>. The db is
-		// the connecting database (in.Database, from the mongodb_db output).
-		parts := make([]string, 0, len(in.Tables))
-		for _, t := range in.Tables {
-			parts = append(parts, in.Database+"."+t)
-		}
-		in.SchemaTables = strings.Join(parts, ",")
-	}
-
-	return in, nil
 }
 
 func substitutePlaceholders(in string, outs map[string]string) string {
@@ -1786,43 +1472,8 @@ aws s3 cp s3://%s/stage/license.jwt /opt/bench/license.jwt
 %s
 %s
 chmod 0600 /opt/bench/license.jwt
-aws s3 cp s3://%s/stage/iceberg-tablegen /opt/bench/iceberg-tablegen 2>/dev/null && chmod +x /opt/bench/iceberg-tablegen || true
-`, binDownload, bucket, strings.Join(dl, "\n"), binChmod, bucket)
+`, binDownload, bucket, strings.Join(dl, "\n"), binChmod)
 	return ssmExec.Run(ctx, outs["runner_instance_id"], script, streamingOnLine(os.Stdout, "stage"))
-}
-
-// stageTableGenForSink builds the iceberg-tablegen binary and uploads it to
-// s3://<bucket>/stage/iceberg-tablegen for sink scenarios. The runner downloads
-// it in stageArtefacts; sinkTopology.ResetScript invokes it to pre-create tables.
-func stageTableGenForSink(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string) error {
-	if s.Direction != DirectionSink {
-		return nil
-	}
-	dist := filepath.Join(opts.repoRoot, "benchmarking/aws/seeders/dist")
-	_ = os.MkdirAll(dist, 0o755)
-	binOut := filepath.Join(dist, "iceberg-tablegen")
-	cmd := exec.Command("go", "build", "-o", binOut, "./benchmarking/aws/seeders/iceberg-tablegen")
-	cmd.Dir = opts.repoRoot
-	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("build iceberg-tablegen: %w", err)
-	}
-	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
-	if err != nil {
-		return err
-	}
-	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
-	bucket := outs["results_bucket"]
-	f, err := os.Open(binOut)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	key := "stage/iceberg-tablegen"
-	_, err = uploader.Upload(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &key, Body: f})
-	return err
 }
 
 func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string, topo Topology, names BenchNames, execTimeout time.Duration) error {

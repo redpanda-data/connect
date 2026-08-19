@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -35,10 +38,12 @@ func sampleResult() *Result {
 				VCPU:    1,
 				Engine:  "connect",
 				Samples: []Sample{{T: 0, MBPerSec: 153, MsgPerSec: 127344}},
-				Summary: Summary{MedianMBPerSec: 153, P5MBPerSec: 144, P95MBPerSec: 161, PeakMBPerSec: 167,
+				Summary: Summary{
+					MedianMBPerSec: 153, P5MBPerSec: 144, P95MBPerSec: 161, PeakMBPerSec: 167,
 					MeanMBPerSec:    0.123,
 					MedianMsgPerSec: 127344, P5MsgPerSec: 119800, P95MsgPerSec: 134000, PeakMsgPerSec: 138200,
-					MeanMsgPerSec: 125000},
+					MeanMsgPerSec: 125000,
+				},
 			},
 		},
 	}
@@ -59,65 +64,16 @@ func TestWriteResultJSON(t *testing.T) {
 	require.Equal(t, r.Points[0].Summary.MedianMBPerSec, got.Points[0].Summary.MedianMBPerSec)
 }
 
-func sampleDualEngineResult() *Result {
-	r := sampleResult()
-	r.Points = []PointResult{
-		{
-			VCPU:   1,
-			Engine: "connect",
-			Summary: Summary{MedianMBPerSec: 100, P5MBPerSec: 90, P95MBPerSec: 110, PeakMBPerSec: 115,
-				MedianMsgPerSec: 100000},
-		},
-		{
-			VCPU:    1,
-			Engine:  "kafka_connect",
-			Summary: Summary{MedianMBPerSec: 72, P5MBPerSec: 65, P95MBPerSec: 78, PeakMBPerSec: 80, MedianMsgPerSec: 110000},
-			BrokerSeries: []TopicPoint{
-				{T: 10, MBPerSec: 70}, {T: 20, MBPerSec: 72}, {T: 30, MBPerSec: 74},
-			},
-		},
-	}
-	return r
-}
-
-func TestAppendMarkdown_DualEngineWithDelta(t *testing.T) {
-	dir := t.TempDir()
-	target := filepath.Join(dir, "postgres.md")
-	require.NoError(t, os.WriteFile(target, []byte("# Postgres\n"), 0o644))
-
-	r := sampleDualEngineResult()
-	require.NoError(t, AppendMarkdown(target, r, "desc"))
-
-	out, err := os.ReadFile(target)
-	require.NoError(t, err)
-	s := string(out)
-	// Both engines appear:
-	require.Contains(t, s, "connect")
-	require.Contains(t, s, "kafka_connect")
-	// Delta column header:
-	require.Contains(t, s, "Δ vs Connect")
-
-	// The delta is a RECORDS comparison, not a byte one. The fixture is built so
-	// the two bases disagree in sign: KC is 100000 -> 110000 records/sec (+10%)
-	// while being 100 -> 72 MB/s (-28%). Bytes would call KC 28% slower when it
-	// is moving 10% MORE records with a fatter envelope, which is exactly the
-	// misreading this column used to invite.
-	require.Contains(t, s, "+10%", "delta must be records-based; full markdown:\n"+s)
-	require.NotContains(t, s, "-28%", "delta must NOT be byte-based")
-	require.Contains(t, s, "msg/s", "delta unit should name records, not MB")
-	// Connect row's delta column is blank — no "+0%" / "-0%" anywhere.
-	require.NotContains(t, s, "+0%", "connect row should not have a delta value")
-}
-
 func TestAppendMarkdown_PointOrderingIsRobust(t *testing.T) {
-	// Build the same dual-engine result two ways: interleaved
-	// [connect, kc] versus reverse-engine order [kc, connect] within
-	// the same vCPU. The grouping logic should produce identical
-	// markdown output.
-	r1 := sampleDualEngineResult()
-	r2 := sampleDualEngineResult()
-	// Swap order in r2: [kc, connect] instead of [connect, kc].
-	r2.Points = []PointResult{r2.Points[1], r2.Points[0]}
+	// Build the same result two ways: two points in one order versus the
+	// reverse order. The rendering is one row per point in result order, so
+	// swapping the points must swap the rendered rows too.
+	r1 := sampleResult()
+	r1.Points = append(r1.Points, PointResult{
+		VCPU: 2, Engine: "connect", Summary: Summary{MedianMBPerSec: 200},
+	})
+	r2 := sampleResult()
+	r2.Points = []PointResult{r1.Points[1], r1.Points[0]}
 
 	dir := t.TempDir()
 	target1 := filepath.Join(dir, "r1.md")
@@ -131,40 +87,8 @@ func TestAppendMarkdown_PointOrderingIsRobust(t *testing.T) {
 	require.NoError(t, err)
 	b2, err := os.ReadFile(target2)
 	require.NoError(t, err)
-	require.Equal(t, string(b1), string(b2),
-		"markdown output should be invariant to point ordering within a vCPU group")
-}
-
-func TestAppendMarkdown_RendersCrossEngineDivergence(t *testing.T) {
-	r := sampleDualEngineResult()
-	r.CrossEngineAnomalies = []CrossEngineAnomaly{{
-		VCPU: 4, FasterEngine: "connect", SlowerEngine: "kafka_connect",
-		Ratio: 3.2, FasterMBPerS: 128, SlowerMBPerS: 40,
-	}}
-	dir := t.TempDir()
-	target := filepath.Join(dir, "r.md")
-	require.NoError(t, os.WriteFile(target, []byte{}, 0o644))
-	require.NoError(t, AppendMarkdown(target, r, "desc"))
-
-	body, err := os.ReadFile(target)
-	require.NoError(t, err)
-	s := string(body)
-	require.Contains(t, s, "Cross-engine divergence")
-	require.Contains(t, s, "3.20x")
-	require.Contains(t, s, "connect")
-	require.Contains(t, s, "kafka_connect")
-}
-
-func TestAppendMarkdown_NoDivergenceSection_WhenEmpty(t *testing.T) {
-	r := sampleDualEngineResult()
-	// No CrossEngineAnomalies set — section should not appear.
-	dir := t.TempDir()
-	target := filepath.Join(dir, "r.md")
-	require.NoError(t, os.WriteFile(target, []byte{}, 0o644))
-	require.NoError(t, AppendMarkdown(target, r, "desc"))
-	body, _ := os.ReadFile(target)
-	require.NotContains(t, string(body), "Cross-engine divergence",
-		"section should be absent when CrossEngineAnomalies is empty")
+	require.NotEqual(t, string(b1), string(b2),
+		"rows render in result order, so swapping the points must change the output")
 }
 
 func TestAppendMarkdown(t *testing.T) {
@@ -228,12 +152,18 @@ func TestAppendMarkdown_RendersArmRows(t *testing.T) {
 		GitSHA:    "abcdef1234567890",
 		StartedAt: time.Now().UTC(),
 		Points: []PointResult{
-			{VCPU: 2, GOMAXPROCS: 2, Arm: "a0-1pipe-gmp2", Engine: "connect",
-				Summary: Summary{MedianMBPerSec: 69, MeanMBPerSec: 69.1}},
-			{VCPU: 2, GOMAXPROCS: 4, Arm: "a1-1pipe-gmp4", Engine: "connect",
-				Summary: Summary{MedianMBPerSec: 80, MeanMBPerSec: 80.2}},
-			{VCPU: 2, GOMAXPROCS: 4, Arm: "b-2pipe-gmp4", Engine: "connect",
-				Summary: Summary{MedianMBPerSec: 95, MeanMBPerSec: 95.3}},
+			{
+				VCPU: 2, GOMAXPROCS: 2, Arm: "a0-1pipe-gmp2", Engine: "connect",
+				Summary: Summary{MedianMBPerSec: 69, MeanMBPerSec: 69.1},
+			},
+			{
+				VCPU: 2, GOMAXPROCS: 4, Arm: "a1-1pipe-gmp4", Engine: "connect",
+				Summary: Summary{MedianMBPerSec: 80, MeanMBPerSec: 80.2},
+			},
+			{
+				VCPU: 2, GOMAXPROCS: 4, Arm: "b-2pipe-gmp4", Engine: "connect",
+				Summary: Summary{MedianMBPerSec: 95, MeanMBPerSec: 95.3},
+			},
 		},
 	}
 	require.NoError(t, AppendMarkdown(target, r, "arms A/B"))
@@ -263,14 +193,12 @@ func TestAppendMarkdown_ArmlessRowsKeepBlankArm(t *testing.T) {
 		StartedAt: time.Now().UTC(),
 		Points: []PointResult{
 			{VCPU: 1, GOMAXPROCS: 1, Engine: "connect", Summary: Summary{MedianMBPerSec: 10, MedianMsgPerSec: 10000}},
-			{VCPU: 1, GOMAXPROCS: 1, Engine: "kafka_connect", Summary: Summary{MedianMBPerSec: 8, MedianMsgPerSec: 8000}},
 		},
 	}
 	require.NoError(t, AppendMarkdown(target, r, "cdc"))
 	raw, err := os.ReadFile(target)
 	require.NoError(t, err)
 	out := string(raw)
-	// The KC delta column still works: connect and KC group together when
-	// neither carries an arm. Records-based (see the delta note in render.go).
-	require.Contains(t, out, "-2,000 msg/s (-20%)")
+	require.Contains(t, out, "| connect", "arm-less row still renders under the blank arm column")
+	require.Contains(t, out, "10,000", "median msg/s formats with a thousands separator")
 }

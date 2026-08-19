@@ -1,12 +1,14 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 )
 
@@ -56,51 +58,24 @@ func (sourceTopology) ResetScript(s *Scenario, outs map[string]string, n BenchNa
 	return combineReset(s.Connector, s.Reset, outs)
 }
 
-func (sourceTopology) EngineSeries(in MetricInputs, engine string) ([]TopicPoint, error) {
+// EngineSeries turns a Redpanda /public_metrics dump into Connect's
+// attributed throughput series. Connect-only: the per-engine attribution
+// this used to fan out to (Kafka Connect's topic-per-table series) returns
+// with the kafka-connect bench PR.
+func (sourceTopology) EngineSeries(in MetricInputs) ([]TopicPoint, error) {
 	series, err := ParseTopicSeries(in.Body)
 	if err != nil {
 		return nil, err
 	}
-	byEngine, err := AttributeByEngine(series, in.Names.SessionID, in.Names.Connector)
-	if err != nil {
-		return nil, err
-	}
-	return byEngine[engine], nil
+	return AttributeConnect(series, in.Names.SessionID, in.Names.Connector), nil
 }
 
-func (sourceTopology) MetricArtifact(engine, key string) string {
-	suffix := engine
-	if engine == "kafka_connect" {
-		suffix = "kc"
-	}
-	return fmt.Sprintf("redpanda-%s-%s.txt", key, suffix)
-}
-
-func (sourceTopology) KCConfig(s *Scenario, outs map[string]string, n BenchNames) (KCRenderResult, bool, error) {
-	es, ok := engineSpecFor(s.Connector)
-	if !ok {
-		return KCRenderResult{}, false, fmt.Errorf("no engineSpec for %q", s.Connector)
-	}
-	in, err := buildKCRenderInputs(s, es, outs, n.SessionID)
-	if err != nil {
-		return KCRenderResult{}, false, fmt.Errorf("build KC render inputs: %w", err)
-	}
-	cfg, err := renderKCConfig(s, in)
-	if err != nil {
-		return KCRenderResult{}, false, fmt.Errorf("render KC config: %w", err)
-	}
-	raw, err := json.Marshal(cfg)
-	if err != nil {
-		return KCRenderResult{}, false, err
-	}
-	return KCRenderResult{
-		ConnectorName: fmt.Sprintf("bench_%s", s.Connector),
-		ConfigJSON:    string(raw),
-	}, true, nil
+func (sourceTopology) MetricArtifact(key string) string {
+	return fmt.Sprintf("redpanda-%s-connect.txt", key)
 }
 
 func (t sourceTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
-	artifact := t.MetricArtifact(args.Engine, args.ArtifactKey())
+	artifact := t.MetricArtifact(args.ArtifactKey())
 	endpoints := args.Outs["redpanda_metrics_endpoints"]
 	if endpoints == "" {
 		endpoints = args.Outs["redpanda_metrics_endpoint"]

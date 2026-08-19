@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -15,23 +18,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func icebergArmScenario(t *testing.T) (*Scenario, map[string]string, Topology) {
-	t.Helper()
-	s, err := LoadScenario("testdata/valid-iceberg-arms.yaml")
-	require.NoError(t, err)
-	outs := map[string]string{
-		"redpanda_broker_endpoints": "b1:9092",
-		"glue_rest_uri":             "https://glue.example",
-		"warehouse_account_id":      "1234",
-		"aws_region":                "us-east-2",
-		"s3_bucket":                 "wh-bucket",
-		"warehouse_s3_uri":          "s3://wh-bucket/wh",
-	}
-	topo, err := topologyFor(s.Direction)
-	require.NoError(t, err)
-	return s, outs, topo
-}
-
 func readYAML(t *testing.T, path string) map[string]any {
 	t.Helper()
 	raw, err := os.ReadFile(path)
@@ -42,13 +28,20 @@ func readYAML(t *testing.T, path string) map[string]any {
 }
 
 func TestRenderPointConfigs_SingleStreamArm(t *testing.T) {
-	s, outs, topo := icebergArmScenario(t)
-	names := newBenchNames("sess-x", "iceberg")
-	plan := buildSweepPlan(s)
+	s := &Scenario{
+		Connector: "postgres_cdc",
+		Pipeline: map[string]any{
+			"input":  map[string]any{"postgres_cdc": map[string]any{"dsn": "${POSTGRES_DSN}"}},
+			"buffer": map[string]any{"memory": map[string]any{"limit": 524288000}},
+		},
+	}
+	names := newBenchNames("sess-x", "postgres_cdc")
+	outs := map[string]string{}
+	pt := sweepPoint{VCPU: 2, ArmID: "a1", GOMAXPROCS: 4, Streams: 1}
 
-	got, err := renderPointConfigs(s, outs, topo, names, plan[1]) // a1-1pipe-gmp4
+	got, err := renderPointConfigs(s, outs, sourceTopology{}, names, pt)
 	require.NoError(t, err)
-	require.Equal(t, "2-a1-1pipe-gmp4", got.Key)
+	require.Equal(t, "2-a1", got.Key)
 	require.NotEmpty(t, got.Single)
 	require.Empty(t, got.Root)
 	require.Empty(t, got.Streams)
@@ -58,19 +51,31 @@ func TestRenderPointConfigs_SingleStreamArm(t *testing.T) {
 	for _, k := range []string{"http", "redpanda", "input", "output", "logger", "metrics", "buffer"} {
 		require.Contains(t, cfg, k, "single-stream config must keep section %q", k)
 	}
-	ice := cfg["output"].(map[string]any)["iceberg"].(map[string]any)
-	require.Equal(t, "bench_sess_x_iceberg_connect", ice["table"], "single-stream arm keeps the unsuffixed table")
-	require.Equal(t, 16, ice["max_in_flight"], "arm a1 inherits the scenario's max_in_flight")
+	rp := cfg["output"].(map[string]any)["redpanda"].(map[string]any)
+	require.Equal(t, "bench_${BENCH_SESSION_ID}_postgres_cdc_connect", rp["topic"])
 }
 
+// TestRenderPointConfigs_StreamsModeSplitsRootAndStreams pins the streams-mode
+// render mechanics (root/streams split, per-stream pipeline override) using a
+// source scenario. Streams > 1 has no validated real-world use for source
+// (see Scenario.Validate) — the per-stream Iceberg naming that made it
+// meaningful returns with the iceberg-sink stack PR — but renderPointConfigs
+// itself doesn't consult Validate, so the render mechanics stay covered here.
 func TestRenderPointConfigs_StreamsModeSplitsRootAndStreams(t *testing.T) {
-	s, outs, topo := icebergArmScenario(t)
-	names := newBenchNames("sess-x", "iceberg")
-	plan := buildSweepPlan(s)
+	s := &Scenario{
+		Connector: "postgres_cdc",
+		Pipeline: map[string]any{
+			"input":  map[string]any{"postgres_cdc": map[string]any{"dsn": "${POSTGRES_DSN}"}},
+			"buffer": map[string]any{"memory": map[string]any{"limit": 524288000}},
+		},
+	}
+	names := newBenchNames("sess-x", "postgres_cdc")
+	outs := map[string]string{"redpanda_broker_endpoints": "b1:9092"}
+	pt := sweepPoint{VCPU: 2, ArmID: "b", GOMAXPROCS: 4, Streams: 2}
 
-	got, err := renderPointConfigs(s, outs, topo, names, plan[2]) // b-2pipe-gmp4
+	got, err := renderPointConfigs(s, outs, sourceTopology{}, names, pt)
 	require.NoError(t, err)
-	require.Equal(t, "2-b-2pipe-gmp4", got.Key)
+	require.Equal(t, "2-b", got.Key)
 	require.Empty(t, got.Single)
 	require.NotEmpty(t, got.Root)
 	require.Len(t, got.Streams, 2)
@@ -97,30 +102,7 @@ func TestRenderPointConfigs_StreamsModeSplitsRootAndStreams(t *testing.T) {
 		for _, k := range []string{"http", "logger", "metrics"} {
 			require.NotContains(t, sc, k, "stream %d must not carry root field %q", i, k)
 		}
-		ice := sc["output"].(map[string]any)["iceberg"].(map[string]any)
-		require.Equal(t, 8, ice["max_in_flight"], "arm B's override must reach every stream")
-		buf := sc["buffer"].(map[string]any)["memory"].(map[string]any)
-		require.Equal(t, 262144000, buf["limit"], "arm B halves each stream's buffer")
 	}
-
-	// Distinct tables per stream, shared topic and consumer group.
-	s0 := readYAML(t, got.Streams[0])
-	s1 := readYAML(t, got.Streams[1])
-	t0 := s0["output"].(map[string]any)["iceberg"].(map[string]any)["table"]
-	t1 := s1["output"].(map[string]any)["iceberg"].(map[string]any)["table"]
-	require.Equal(t, "bench_sess_x_iceberg_connect_s0", t0)
-	require.Equal(t, "bench_sess_x_iceberg_connect_s1", t1)
-
-	in0 := s0["input"].(map[string]any)["redpanda"].(map[string]any)
-	in1 := s1["input"].(map[string]any)["redpanda"].(map[string]any)
-	require.Equal(t, in0["consumer_group"], in1["consumer_group"],
-		"both streams share the group so the 16 partitions split, not double")
-	require.Equal(t, in0["topics"], in1["topics"])
-
-	// Placeholders must be resolved, not left as ${...}.
-	require.NotContains(t, t0, "${")
-	require.Equal(t, "https://glue.example",
-		s0["output"].(map[string]any)["iceberg"].(map[string]any)["catalog"].(map[string]any)["url"])
 }
 
 func TestRunnerConfigPaths_MapsKeysToRunnerHostPaths(t *testing.T) {

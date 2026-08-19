@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -143,8 +146,10 @@ func TestRenderSection_ZeroPeakShowsDash(t *testing.T) {
 	require.Contains(t, out, "—")
 }
 
-const markerStart = "<!-- bench:aws:start - auto-generated, do not edit by hand -->"
-const markerEnd = "<!-- bench:aws:end -->"
+const (
+	markerStart = "<!-- bench:aws:start - auto-generated, do not edit by hand -->"
+	markerEnd   = "<!-- bench:aws:end -->"
+)
 
 func writeSummaryFile(t *testing.T, contents string) string {
 	t.Helper()
@@ -205,62 +210,7 @@ func TestRefreshSummary_AtomicTmpRename(t *testing.T) {
 	require.True(t, os.IsNotExist(err), "tmp file should be gone after rename")
 }
 
-func TestRefreshSummary_FlagsDivergentScenarios(t *testing.T) {
-	dir := t.TempDir()
-	resultsRoot := filepath.Join(dir, "results")
-	require.NoError(t, os.MkdirAll(filepath.Join(resultsRoot, "postgres_cdc", "orders-cdc"), 0o755))
-	raw, _ := json.MarshalIndent(&Result{
-		Scenario:   "postgres/orders-cdc",
-		StartedAt:  time.Date(2026, 5, 19, 14, 2, 11, 0, time.UTC),
-		FinishedAt: time.Date(2026, 5, 19, 15, 33, 48, 0, time.UTC),
-		Points: []PointResult{
-			{VCPU: 1, Engine: "connect", Summary: Summary{MedianMBPerSec: 100}},
-			{VCPU: 1, Engine: "kafka_connect", Summary: Summary{MedianMBPerSec: 30}},
-		},
-		CrossEngineAnomalies: []CrossEngineAnomaly{{
-			VCPU: 1, FasterEngine: "connect", SlowerEngine: "kafka_connect", Ratio: 3.33,
-		}},
-	}, "", "  ")
-	resultPath := filepath.Join(resultsRoot, "postgres_cdc", "orders-cdc", "2026-05-19T14-02-11Z.json")
-	require.NoError(t, os.WriteFile(resultPath, raw, 0o644))
-
-	summaryPath := filepath.Join(dir, "SUMMARY.md")
-	require.NoError(t, os.WriteFile(summaryPath, []byte(SummaryMarkerStart+"\n"+SummaryMarkerEnd+"\n"), 0o644))
-
-	require.NoError(t, RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC)))
-
-	body, _ := os.ReadFile(summaryPath)
-	s := string(body)
-	require.Contains(t, s, "postgres_cdc / orders-cdc ⚠",
-		"divergent scenario should be marked with ⚠; full body:\n"+s)
-}
-
-func TestRefreshSummary_DoesNotFlagWhenNoDivergence(t *testing.T) {
-	dir := t.TempDir()
-	resultsRoot := filepath.Join(dir, "results")
-	require.NoError(t, os.MkdirAll(filepath.Join(resultsRoot, "postgres_cdc", "orders-cdc"), 0o755))
-	raw, _ := json.MarshalIndent(&Result{
-		Scenario:   "postgres/orders-cdc",
-		FinishedAt: time.Date(2026, 5, 19, 15, 33, 48, 0, time.UTC),
-		Points: []PointResult{
-			{VCPU: 1, Engine: "connect", Summary: Summary{MedianMBPerSec: 100}},
-			{VCPU: 1, Engine: "kafka_connect", Summary: Summary{MedianMBPerSec: 95}},
-		},
-		// CrossEngineAnomalies is nil (no divergence above threshold).
-	}, "", "  ")
-	resultPath := filepath.Join(resultsRoot, "postgres_cdc", "orders-cdc", "2026-05-19T14-02-11Z.json")
-	require.NoError(t, os.WriteFile(resultPath, raw, 0o644))
-
-	summaryPath := filepath.Join(dir, "SUMMARY.md")
-	require.NoError(t, os.WriteFile(summaryPath, []byte(SummaryMarkerStart+"\n"+SummaryMarkerEnd+"\n"), 0o644))
-	require.NoError(t, RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC)))
-
-	body, _ := os.ReadFile(summaryPath)
-	s := string(body)
-	require.NotContains(t, s, "⚠", "non-divergent scenario should not have ⚠ marker")
-}
-
-func TestRefreshSummary_DualEngineRow(t *testing.T) {
+func TestRefreshSummary_ConnectRow(t *testing.T) {
 	dir := t.TempDir()
 	resultsRoot := filepath.Join(dir, "results")
 	require.NoError(t, os.MkdirAll(filepath.Join(resultsRoot, "postgres_cdc", "orders-cdc"), 0o755))
@@ -270,7 +220,6 @@ func TestRefreshSummary_DualEngineRow(t *testing.T) {
 		FinishedAt: time.Date(2026, 5, 19, 15, 33, 48, 0, time.UTC),
 		Points: []PointResult{
 			{VCPU: 1, Engine: "connect", Summary: Summary{MedianMBPerSec: 100, PeakMBPerSec: 110, MedianMsgPerSec: 100000}},
-			{VCPU: 1, Engine: "kafka_connect", Summary: Summary{MedianMBPerSec: 72, PeakMBPerSec: 80, MedianMsgPerSec: 110000}},
 		},
 	}, "", "  ")
 	resultPath := filepath.Join(resultsRoot, "postgres_cdc", "orders-cdc", "2026-05-19T14-02-11Z.json")
@@ -284,12 +233,5 @@ func TestRefreshSummary_DualEngineRow(t *testing.T) {
 	body, _ := os.ReadFile(summaryPath)
 	s := string(body)
 	require.Contains(t, s, "postgres_cdc / orders-cdc")
-	// Connect median 100 MB/s @ 100,000 msg/s; KC 72 MB/s @ 110,000 msg/s.
-	// The MB/s columns still report bytes, but the GAP is records-based, so it
-	// reads -10,000 msg/s (-10%) rather than the +28 MB/s (+28%) a byte
-	// comparison would give. The two disagree in sign, which is the point.
 	require.Contains(t, s, "100")
-	require.Contains(t, s, "72")
-	require.Contains(t, s, "-10,000 msg/s (-10%)")
-	require.NotContains(t, s, "+28 MB/s", "gap must not be byte-based")
 }

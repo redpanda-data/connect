@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -58,34 +61,13 @@ type MatrixRunner struct {
 	// interval because Redpanda emits per-topic byte counters only on
 	// the broker leading the partition.
 	RedpandaMetricsEndpoints string
-	// Engines lists the engines to sweep at each vCPU point, in order.
-	// Default ["connect"] preserves the pre-Plan-2 behavior.
-	Engines []string
-	// KCConnectorName is the name to submit the KC connector under.
-	// Empty when Engines does not include "kafka_connect".
-	KCConnectorName string
-	// KCConnectorConfigJSON is the rendered JSON config posted to KC's REST API.
-	KCConnectorConfigJSON string
 	// Topology supplies the direction-specific metric parser used by
-	// fetchBrokerSeriesForEngine.
+	// fetchBrokerSeries.
 	Topology Topology
 	// Names is the per-session naming value passed into Topology.EngineSeries.
 	Names BenchNames
-	// Topics is the scenario's dataset.topics count (0/1 = single-topic).
-	// Chained onto Names alongside WithStreams(pt.Streams) when building the
-	// per-point MetricSidecar args, so a multi-topic scenario's sidecar polls
-	// every per-topic table (see IcebergTablesForTopics) instead of just the
-	// unsuffixed base table. Without this a 7-topic scenario's sidecar would
-	// poll a table nothing writes to and silently report ~0 MB/s — the same
-	// class of bug that WithStreams(pt.Streams) below already exists to
-	// prevent for the stream case.
-	Topics int
 	// Outs is the TF output map, passed into Topology.MetricSidecar.
 	Outs map[string]string
-	// Direction selects how throughput is measured: source benches parse
-	// Connect's rolling-stats log (samples); sink benches use the metric
-	// series in brokerSeries (e.g. Iceberg committed bytes).
-	Direction Direction
 	// HeartbeatSec overrides the bench script's per-minute heartbeat cadence.
 	// 0 means 60 (the sweep default). A soak run widens this so the SSM
 	// stdout content cap (~24KB) isn't exceeded over many hours — see
@@ -169,10 +151,6 @@ func (m *MatrixRunner) Run(
 	resetScript string,
 	workloadScript string,
 ) ([]SweepPoint, error) {
-	engines := m.Engines
-	if len(engines) == 0 {
-		engines = []string{"connect"}
-	}
 	// Validate up front, before any AWS spend in this sweep, that every plan
 	// point has a staged config path. m.ConfigPaths and plan are always built
 	// from the same list (runnerConfigPaths(sets) and buildSweepPlan(s) both
@@ -190,261 +168,190 @@ func (m *MatrixRunner) Run(
 			}
 		}
 	}
-	out := make([]SweepPoint, 0, len(plan)*len(engines))
+	out := make([]SweepPoint, 0, len(plan))
 	for _, pt := range plan {
 		n := pt.VCPU
 		key := pt.Key()
-		for _, engine := range engines {
-			if pt.ArmID == "" {
-				fmt.Printf("=== sweep point: %d vCPU, engine=%s (warmup %s, window %s) ===\n", n, engine, warmup, duration)
-			} else {
-				fmt.Printf("=== sweep point: %d vCPU, arm=%s (GOMAXPROCS %d, %d streams), engine=%s (warmup %s, window %s) ===\n",
-					n, pt.ArmID, pt.GOMAXPROCS, pt.Streams, engine, warmup, duration)
-			}
+		if pt.ArmID == "" {
+			fmt.Printf("=== sweep point: %d vCPU (warmup %s, window %s) ===\n", n, warmup, duration)
+		} else {
+			fmt.Printf("=== sweep point: %d vCPU, arm=%s (GOMAXPROCS %d, %d streams) (warmup %s, window %s) ===\n",
+				n, pt.ArmID, pt.GOMAXPROCS, pt.Streams, warmup, duration)
+		}
 
-			if resetScript != "" {
-				if err := m.SSM.Run(ctx, m.RunnerInstance, resetScript, streamingOnLine(stdout, "reset")); err != nil {
-					return nil, fmt.Errorf("reset at %d vCPU (%s): %w", n, engine, err)
-				}
+		if resetScript != "" {
+			if err := m.SSM.Run(ctx, m.RunnerInstance, resetScript, streamingOnLine(stdout, "reset")); err != nil {
+				return nil, fmt.Errorf("reset at %d vCPU: %w", n, err)
 			}
+		}
 
-			workloadCtx, cancelWorkload := context.WithCancel(ctx)
-			workloadDone := make(chan error, 1)
-			if workloadScript != "" {
-				go func() {
-					workloadDone <- m.SSM.Run(workloadCtx, m.LoadGenInstance, workloadScript, streamingOnLine(stdout, "load"))
-				}()
-			} else {
-				close(workloadDone)
-			}
+		workloadCtx, cancelWorkload := context.WithCancel(ctx)
+		workloadDone := make(chan error, 1)
+		if workloadScript != "" {
+			go func() {
+				workloadDone <- m.SSM.Run(workloadCtx, m.LoadGenInstance, workloadScript, streamingOnLine(stdout, "load"))
+			}()
+		} else {
+			close(workloadDone)
+		}
 
-			// Topology may be nil in narrow unit tests that exercise only the
-			// connect log-parsing path; those produce no scrape sidecar.
-			var sidecar MetricSidecar
-			if m.Topology != nil {
-				sidecar = m.Topology.MetricSidecar(MetricSidecarArgs{
-					Engine:    engine,
-					VCPU:      n,
-					Key:       key,
-					Bucket:    m.Bucket,
-					SessionID: m.SessionID,
-					Outs:      m.Outs,
-					// WithStreams scopes Names to this point's stream count so
-					// sinkTopology.MetricSidecar's IcebergTables(engine) polls
-					// every per-stream table (..._s0, ..._s1, ...) a multi-
-					// stream arm actually writes to, not just the unsuffixed
-					// base table (which the reset union creates but nothing
-					// writes when Streams > 1). Without this, a 2-stream arm's
-					// sidecar polls a table that never grows and the arm
-					// reports ~0 MB/s with no error anywhere.
-					Names: m.Names.WithStreams(pt.Streams).WithTopics(m.Topics),
-					// The sidecar's own scrape/checkpoint cadence reuses the SAME
-					// fields the Connect-side scraper and log checkpoint already
-					// use (see benchScriptArgs above) — a soak run wants both
-					// pollers on the same cadence, and giving the sidecar its own
-					// separate knobs would just be two places to keep in sync.
-					ScrapeIntervalSec: m.PromScrapeSec,
-					CheckpointSec:     m.CheckpointSec,
-				})
-			}
+		// Topology may be nil in narrow unit tests that exercise only the
+		// connect log-parsing path; those produce no scrape sidecar.
+		var sidecar MetricSidecar
+		if m.Topology != nil {
+			sidecar = m.Topology.MetricSidecar(MetricSidecarArgs{
+				VCPU:      n,
+				Key:       key,
+				Bucket:    m.Bucket,
+				SessionID: m.SessionID,
+				Outs:      m.Outs,
+				Names:     m.Names.WithStreams(pt.Streams),
+				// The sidecar's own scrape/checkpoint cadence reuses the SAME
+				// fields the Connect-side scraper and log checkpoint already
+				// use (see benchScriptArgs above) — a soak run wants both
+				// pollers on the same cadence, and giving the sidecar its own
+				// separate knobs would just be two places to keep in sync.
+				ScrapeIntervalSec: m.PromScrapeSec,
+				CheckpointSec:     m.CheckpointSec,
+			})
+		}
 
-			var script string
-			switch engine {
-			case "connect":
-				cfg := m.configPathsFor(key)
-				script = renderBenchScript(benchScriptArgs{
-					VCPU:                     n,
-					GOMAXPROCS:               pt.GOMAXPROCS,
-					Streams:                  pt.Streams,
-					Key:                      key,
-					MemLimitGiB:              memLimitPerVCPU * n,
-					WarmupSec:                int(warmup.Seconds()),
-					DurationSec:              int(duration.Seconds()),
-					ConfigPath:               cfg.Single,
-					RootConfigPath:           cfg.Root,
-					StreamsDir:               cfg.Dir,
-					BinaryPath:               m.binaryPathFor(pt),
-					Bucket:                   m.Bucket,
-					SessionID:                m.SessionID,
-					RedpandaMetricsEndpoint:  m.RedpandaMetricsEndpoint,
-					RedpandaMetricsEndpoints: m.RedpandaMetricsEndpoints,
-					ScrapeSetup:              sidecar.Setup,
-					ScrapeUpload:             sidecar.Upload,
-					HeartbeatSec:             m.HeartbeatSec,
-					PromScrapeSec:            m.PromScrapeSec,
-					CheckpointSec:            m.CheckpointSec,
-				})
-			case "kafka_connect":
-				// Per-vCPU connector name. KC stores Debezium offsets in
-				// the _kc_offsets topic keyed by connector name; if every
-				// sweep point reuses the same name, the connector at
-				// vCPU=N+1 wakes up trying to resume from vCPU=N's LSN —
-				// which Postgres has aged out of WAL between sweep points.
-				// Verified live in the 2026-05-29 postgres real bench:
-				// every KC point past the first produced 0 MB/s with
-				// "redo log is no longer available" warnings.
-				vcpuConnectorName := fmt.Sprintf("%s_v%d", m.KCConnectorName, n)
-				script = renderKCBenchScript(kcBenchScriptArgs{
-					VCPU:                     n,
-					MemLimitGiB:              memLimitPerVCPU * n,
-					WarmupSec:                int(warmup.Seconds()),
-					DurationSec:              int(duration.Seconds()),
-					ConnectorName:            vcpuConnectorName,
-					ConnectorConfigJSON:      m.KCConnectorConfigJSON,
-					Bucket:                   m.Bucket,
-					SessionID:                m.SessionID,
-					RedpandaMetricsEndpoint:  m.RedpandaMetricsEndpoint,
-					RedpandaMetricsEndpoints: m.RedpandaMetricsEndpoints,
-					ScrapeSetup:              sidecar.Setup,
-					ScrapeUpload:             sidecar.Upload,
-				})
-			default:
-				cancelWorkload()
-				if werr := <-workloadDone; werr != nil && werr != context.Canceled {
-					fmt.Fprintf(stdout, "[bench] workload exited with error: %v\n", werr)
-				}
-				return nil, fmt.Errorf("unknown engine %q at vcpu %d", engine, n)
-			}
+		cfg := m.configPathsFor(key)
+		script := renderBenchScript(benchScriptArgs{
+			VCPU:                     n,
+			GOMAXPROCS:               pt.GOMAXPROCS,
+			Streams:                  pt.Streams,
+			Key:                      key,
+			MemLimitGiB:              memLimitPerVCPU * n,
+			WarmupSec:                int(warmup.Seconds()),
+			DurationSec:              int(duration.Seconds()),
+			ConfigPath:               cfg.Single,
+			RootConfigPath:           cfg.Root,
+			StreamsDir:               cfg.Dir,
+			BinaryPath:               m.binaryPathFor(pt),
+			Bucket:                   m.Bucket,
+			SessionID:                m.SessionID,
+			RedpandaMetricsEndpoint:  m.RedpandaMetricsEndpoint,
+			RedpandaMetricsEndpoints: m.RedpandaMetricsEndpoints,
+			ScrapeSetup:              sidecar.Setup,
+			ScrapeUpload:             sidecar.Upload,
+			HeartbeatSec:             m.HeartbeatSec,
+			PromScrapeSec:            m.PromScrapeSec,
+			CheckpointSec:            m.CheckpointSec,
+		})
 
-			// pointStart is this point's wall-clock launch — the base every
-			// CloudWatch minute bucket for this point is offset from (see
-			// aggregateSoakMinutes). hwm is this point's high-water mark: the
-			// last minute already emitted, shared between the mid-run loop
-			// below and the final emit after the point completes so neither
-			// re-emits a minute the other already sent.
-			pointStart := time.Now()
-			hwm := newSoakHighWater()
-			stopEmit := m.startSoakEmitLoop(ctx, engine, key, pointStart, warmup, hwm)
+		// pointStart is this point's wall-clock launch — the base every
+		// CloudWatch minute bucket for this point is offset from (see
+		// aggregateSoakMinutes). hwm is this point's high-water mark: the
+		// last minute already emitted, shared between the mid-run loop
+		// below and the final emit after the point completes so neither
+		// re-emits a minute the other already sent.
+		pointStart := time.Now()
+		hwm := newSoakHighWater()
+		stopEmit := m.startSoakEmitLoop(ctx, key, pointStart, warmup, hwm)
 
-			// The bench script writes the engine's stdout/stderr to a per-engine
-			// log file on the runner host and uploads it to S3 after termination.
-			// SSM stdout only carries the script's own status echos and a
-			// per-minute heartbeat (well under the ~24KB SSM content cap), so
-			// streaming every line is safe.
-			if err := m.SSM.Run(ctx, m.RunnerInstance, script, streamingOnLine(stdout, fmt.Sprintf("bench-%s", engine))); err != nil {
-				stopEmit()
-				cancelWorkload()
-				if werr := <-workloadDone; werr != nil && werr != context.Canceled {
-					fmt.Fprintf(stdout, "[bench] workload exited with error: %v\n", werr)
-				}
-				return nil, fmt.Errorf("bench at %d vCPU (%s): %w", n, engine, err)
-			}
-			// Stop the mid-run loop now, before fetching this point's final
-			// artifacts below — the loop and the final emit both read/write
-			// hwm, and neither is safe to run concurrently with the other.
+		// The bench script writes Connect's stdout/stderr to a log file on
+		// the runner host and uploads it to S3 after termination. SSM
+		// stdout only carries the script's own status echos and a
+		// per-minute heartbeat (well under the ~24KB SSM content cap), so
+		// streaming every line is safe.
+		if err := m.SSM.Run(ctx, m.RunnerInstance, script, streamingOnLine(stdout, "bench")); err != nil {
 			stopEmit()
 			cancelWorkload()
 			if werr := <-workloadDone; werr != nil && werr != context.Canceled {
 				fmt.Fprintf(stdout, "[bench] workload exited with error: %v\n", werr)
 			}
+			return nil, fmt.Errorf("bench at %d vCPU: %w", n, err)
+		}
+		// Stop the mid-run loop now, before fetching this point's final
+		// artifacts below — the loop and the final emit both read/write
+		// hwm, and neither is safe to run concurrently with the other.
+		stopEmit()
+		cancelWorkload()
+		if werr := <-workloadDone; werr != nil && werr != context.Canceled {
+			fmt.Fprintf(stdout, "[bench] workload exited with error: %v\n", werr)
+		}
 
-			// Per-engine fetch + parse. KC's broker-side metrics are scraped on
-			// the runner and uploaded to S3 (Plan 3 parses them); the Plan 2
-			// orchestrator does not read the KC log here.
-			var samples []Sample
-			var rawLog []byte
-			if engine == "connect" {
-				raw, err := m.fetchLog(ctx, key)
-				if err != nil {
-					return nil, fmt.Errorf("fetch log at %d vCPU (%s): %w", n, engine, err)
+		raw, err := m.fetchLog(ctx, key)
+		if err != nil {
+			return nil, fmt.Errorf("fetch log at %d vCPU: %w", n, err)
+		}
+		rawLog := raw
+		samples := parseAndTrim(raw, warmup)
+		promPts := m.fetchProm(ctx, key)
+
+		// Broker-side: the bench script scrapes /public_metrics during its
+		// window and uploads it to this point's artifact.
+		brokerSeries := m.fetchBrokerSeries(ctx, key)
+
+		// Summary is derived from the broker-side series — the canonical
+		// fairness instrument — not Connect's own rolling-stats log.
+		// Connect's log reports uncompressed logical bytes; the broker
+		// reports what actually arrived. Records/sec (see brokermetrics.go)
+		// is immune to compression effects.
+		//
+		// Connect's log is NOT discarded: Samples below still carries every
+		// rolling-stats line, so the log-derived view can be recomputed
+		// from any result file.
+		summary := SummariseTopicPoints(brokerSeries)
+
+		// Anomaly detection deliberately keeps using the LOG-derived median.
+		// It judges the Connect log's internal consistency — how far
+		// individual log samples stray from their own centre — so handing it
+		// a broker-derived median would compare two instruments and flag
+		// nearly every sample.
+		logMedian := Summarise(samples).MedianMBPerSec
+		anomalies := DetectAnomaliesWithProm(samples, logMedian, promPts)
+		backlog := ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
+
+		// Final emit: whatever tail minutes the mid-run loop above never
+		// got to (it may never have ticked at all, e.g. a point shorter
+		// than CheckpointSec+soakEmitGrace) land here, from the same
+		// hwm — so a point never emits a minute twice regardless of how
+		// many mid-run cycles ran before this.
+		if m.Emitter != nil {
+			m.emitAggregated(ctx, samples, promPts, brokerSeries, backlog, pointStart, warmup, hwm)
+		}
+		out = append(out, SweepPoint{
+			VCPU:         n,
+			ArmID:        pt.ArmID,
+			GOMAXPROCS:   pt.GOMAXPROCS,
+			Streams:      pt.Streams,
+			Binary:       pt.Binary,
+			Engine:       "connect",
+			Samples:      samples,
+			Summary:      summary,
+			Anomalies:    anomalies,
+			Prom:         promPts,
+			BrokerSeries: brokerSeries,
+			Backlog:      backlog,
+		})
+		fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
+			len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
+
+		// Early-abort if this point produced no throughput data. For the
+		// very first plan point, "later points would fail the same way"
+		// holds because every arm-less point shares the same launch
+		// mechanism (run mode), so checking plan[0] once is sufficient.
+		// That reasoning does NOT extend to arms: a0/a1 launch via
+		// `run cfg.yaml` while b launches via `streams -o root.yaml
+		// streams/` — a different launch mechanism entirely — so one
+		// arm succeeding predicts nothing about another arm's launch.
+		// Connect runs backgrounded (`… &`) in the bench script, so
+		// `set -e` cannot see it die; a launch failure would otherwise
+		// silently produce `median 0.00 MB/s` with no error. So: check
+		// the first point unconditionally (pre-arms behaviour), AND
+		// check every point that carries an arm, regardless of position
+		// in the plan.
+		if pt.Key() == plan[0].Key() || pt.ArmID != "" {
+			if len(samples) == 0 {
+				const tailMax = 4 * 1024
+				tail := rawLog
+				if len(rawLog) > tailMax {
+					tail = rawLog[len(rawLog)-tailMax:]
 				}
-				rawLog = raw
-				samples = parseAndTrim(raw, warmup)
-			}
-			promPts := m.fetchProm(ctx, key)
-
-			// Broker-side: each engine scrapes /public_metrics during its
-			// own window and uploads to a per-engine filename, so we fetch
-			// only the matching engine's file here.
-			brokerSeries := m.fetchBrokerSeriesForEngine(ctx, engine, key)
-
-			// EVERY engine's Summary is now derived from the SAME instrument:
-			// the broker-side series attributed to that engine.
-			//
-			// It used to depend on the engine — Connect from its own
-			// rolling-stats log, KC from broker counters — which made the
-			// `Δ vs Connect` column a comparison between two different
-			// measurements. Connect's log reports uncompressed logical bytes;
-			// the broker reports what actually arrived. Those differed by
-			// 11-17x on postgres, mysql, oracle and sqlserver, because the
-			// seeders reused one identical row payload and the resulting
-			// batches compressed ~14x. Records/sec (now populated for both
-			// engines, see brokermetrics.go) is immune to that, and with the
-			// seeders emitting distinct payloads the byte figures are
-			// meaningful again too.
-			//
-			// Connect's log is NOT discarded: Samples below still carries every
-			// rolling-stats line, so the log-derived view can be recomputed
-			// from any result file.
-			summary := SummariseTopicPoints(brokerSeries)
-
-			// Anomaly detection deliberately keeps using the LOG-derived median.
-			// It judges the Connect log's internal consistency — how far
-			// individual log samples stray from their own centre — so handing it
-			// a broker-derived median would compare two instruments and flag
-			// nearly every sample. KC has no log, so this is zero there, exactly
-			// as before.
-			logMedian := Summarise(samples).MedianMBPerSec
-			anomalies := DetectAnomaliesWithProm(samples, logMedian, promPts)
-			backlog := ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
-
-			// Final emit: whatever tail minutes the mid-run loop above never
-			// got to (it may never have ticked at all, e.g. a point shorter
-			// than CheckpointSec+soakEmitGrace) land here, from the same
-			// hwm — so a point never emits a minute twice regardless of how
-			// many mid-run cycles ran before this.
-			if m.Emitter != nil {
-				m.emitAggregated(ctx, samples, promPts, brokerSeries, backlog, pointStart, warmup, hwm)
-			}
-			out = append(out, SweepPoint{
-				VCPU:         n,
-				ArmID:        pt.ArmID,
-				GOMAXPROCS:   pt.GOMAXPROCS,
-				Streams:      pt.Streams,
-				Binary:       pt.Binary,
-				Engine:       engine,
-				Samples:      samples,
-				Summary:      summary,
-				Anomalies:    anomalies,
-				Prom:         promPts,
-				BrokerSeries: brokerSeries,
-				Backlog:      backlog,
-			})
-			fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
-				len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
-
-			// Early-abort if this point produced no throughput data. For the
-			// very first plan point, "later points would fail the same way"
-			// holds because every arm-less point shares the same launch
-			// mechanism (run mode), so checking plan[0] once is sufficient.
-			// That reasoning does NOT extend to arms: a0/a1 launch via
-			// `run cfg.yaml` while b launches via `streams -o root.yaml
-			// streams/` — a different launch mechanism entirely — so one
-			// arm succeeding predicts nothing about another arm's launch.
-			// The engine runs backgrounded (`… &`) in the bench script, so
-			// `set -e` cannot see it die; a launch failure would otherwise
-			// silently produce `median 0.00 MB/s` with no error. So: check
-			// the first point unconditionally (pre-arms behaviour), AND
-			// check every point that carries an arm, regardless of position
-			// in the plan.
-			if pt.Key() == plan[0].Key() || pt.ArmID != "" {
-				var empty bool
-				var what string
-				switch {
-				case m.Direction == DirectionSink:
-					empty, what = len(brokerSeries) == 0, "metric samples"
-				case engine == "connect":
-					empty, what = len(samples) == 0, "samples"
-				}
-				if empty {
-					const tailMax = 4 * 1024
-					tail := rawLog
-					if len(rawLog) > tailMax {
-						tail = rawLog[len(rawLog)-tailMax:]
-					}
-					fmt.Fprintf(stdout, "[bench] connect log tail (last %d bytes):\n%s\n", len(tail), tail)
-					return out, fmt.Errorf("first sweep point at %d vCPU captured 0 %s — see log tail above", n, what)
-				}
+				fmt.Fprintf(stdout, "[bench] connect log tail (last %d bytes):\n%s\n", len(tail), tail)
+				return out, fmt.Errorf("first sweep point at %d vCPU captured 0 samples — see log tail above", n)
 			}
 		}
 	}
@@ -509,15 +416,10 @@ func (m *MatrixRunner) fetchProm(ctx context.Context, key string) []PromPoint {
 	return pts
 }
 
-// fetchBrokerSeriesForEngine downloads the per-engine, per-point broker
-// metrics dump and returns the topic series attributed to that engine.
-// Non-fatal: a missing or unparseable file logs and returns nil.
-//
-// Each engine writes its own scrape file (Connect → redpanda-N-connect.txt,
-// KC → redpanda-N-kc.txt) covering only that engine's bench window, so
-// we don't need to merge across engines — the file FOR an engine already
-// contains only that engine's bytes (the other engine wasn't running).
-func (m *MatrixRunner) fetchBrokerSeriesForEngine(ctx context.Context, engine, key string) []TopicPoint {
+// fetchBrokerSeries downloads this point's broker metrics dump and returns
+// Connect's attributed topic series. Non-fatal: a missing or unparseable
+// file logs and returns nil.
+func (m *MatrixRunner) fetchBrokerSeries(ctx context.Context, key string) []TopicPoint {
 	if m.LogFetcher == nil {
 		return nil
 	}
@@ -525,16 +427,16 @@ func (m *MatrixRunner) fetchBrokerSeriesForEngine(ctx context.Context, engine, k
 		fmt.Fprintf(stdout, "[bench] no Topology configured; metric fetch skipped\n")
 		return nil
 	}
-	s3Key := fmt.Sprintf("runs/%s/%s", m.SessionID, m.Topology.MetricArtifact(engine, key))
+	s3Key := fmt.Sprintf("runs/%s/%s", m.SessionID, m.Topology.MetricArtifact(key))
 	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, s3Key)
 	if err != nil {
-		fmt.Fprintf(stdout, "[bench] fetch broker metrics %s (non-fatal): %v\n", engine, err)
+		fmt.Fprintf(stdout, "[bench] fetch broker metrics (non-fatal): %v\n", err)
 		return nil
 	}
 	defer body.Close()
-	pts, err := m.Topology.EngineSeries(MetricInputs{Body: body, Names: m.Names}, engine)
+	pts, err := m.Topology.EngineSeries(MetricInputs{Body: body, Names: m.Names})
 	if err != nil {
-		fmt.Fprintf(stdout, "[bench] EngineSeries(%s) failed: %v\n", engine, err)
+		fmt.Fprintf(stdout, "[bench] EngineSeries failed: %v\n", err)
 		return nil
 	}
 	return pts
@@ -615,7 +517,7 @@ func (h *soakHighWater) set(v int) {
 //
 // Disabled (no Emitter, or CheckpointSec <= 0) returns a no-op stop func so
 // callers never need to branch on whether the loop is actually running.
-func (m *MatrixRunner) startSoakEmitLoop(ctx context.Context, engine, key string, pointStart time.Time, warmup time.Duration, hw *soakHighWater) (stop func()) {
+func (m *MatrixRunner) startSoakEmitLoop(ctx context.Context, key string, pointStart time.Time, warmup time.Duration, hw *soakHighWater) (stop func()) {
 	if m.Emitter == nil || m.CheckpointSec <= 0 {
 		return func() {}
 	}
@@ -624,7 +526,7 @@ func (m *MatrixRunner) startSoakEmitLoop(ctx context.Context, engine, key string
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		m.runSoakEmitLoop(loopCtx, engine, key, pointStart, warmup, hw)
+		m.runSoakEmitLoop(loopCtx, key, pointStart, warmup, hw)
 	}()
 	return func() {
 		cancel()
@@ -638,7 +540,7 @@ func (m *MatrixRunner) startSoakEmitLoop(ctx context.Context, engine, key string
 // CloudWatch, so a dashboard watching a multi-hour run doesn't have to wait
 // for the point to finish. Returns as soon as ctx is cancelled — see
 // startSoakEmitLoop.
-func (m *MatrixRunner) runSoakEmitLoop(ctx context.Context, engine, key string, pointStart time.Time, warmup time.Duration, hw *soakHighWater) {
+func (m *MatrixRunner) runSoakEmitLoop(ctx context.Context, key string, pointStart time.Time, warmup time.Duration, hw *soakHighWater) {
 	interval := time.Duration(m.CheckpointSec) * time.Second
 	timer := time.NewTimer(interval + soakEmitGrace)
 	defer timer.Stop()
@@ -647,7 +549,7 @@ func (m *MatrixRunner) runSoakEmitLoop(ctx context.Context, engine, key string, 
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			m.emitSoakCycle(ctx, engine, key, pointStart, warmup, hw)
+			m.emitSoakCycle(ctx, key, pointStart, warmup, hw)
 			timer.Reset(interval)
 		}
 	}
@@ -659,18 +561,16 @@ func (m *MatrixRunner) runSoakEmitLoop(ctx context.Context, engine, key string, 
 // transient S3 hiccup) must not fail a run that may have hours left to run;
 // the next cycle simply tries again against the checkpoint's ever-growing
 // content.
-func (m *MatrixRunner) emitSoakCycle(ctx context.Context, engine, key string, pointStart time.Time, warmup time.Duration, hw *soakHighWater) {
+func (m *MatrixRunner) emitSoakCycle(ctx context.Context, key string, pointStart time.Time, warmup time.Duration, hw *soakHighWater) {
+	raw, err := m.fetchLog(ctx, key)
 	var samples []Sample
-	if engine == "connect" {
-		raw, err := m.fetchLog(ctx, key)
-		if err != nil {
-			fmt.Fprintf(stdout, "[soak] fetch log checkpoint (non-fatal): %v\n", err)
-		} else {
-			samples = parseAndTrim(raw, warmup)
-		}
+	if err != nil {
+		fmt.Fprintf(stdout, "[soak] fetch log checkpoint (non-fatal): %v\n", err)
+	} else {
+		samples = parseAndTrim(raw, warmup)
 	}
 	promPts := m.fetchProm(ctx, key)
-	brokerSeries := m.fetchBrokerSeriesForEngine(ctx, engine, key)
+	brokerSeries := m.fetchBrokerSeries(ctx, key)
 	backlog := ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
 	m.emitAggregated(ctx, samples, promPts, brokerSeries, backlog, pointStart, warmup, hw)
 }

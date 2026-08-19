@@ -67,12 +67,9 @@ matrix:
   cpu_points: [2]
 
 reset:
-  # Both slots are dropped even though soak runs --engines=connect only, so
-  # a --keep re-run against a KC-touched instance still starts clean. The
-  # IAM-era role/publication setup lived here briefly — recover it from git
-  # history for an Aurora follow-up (see the description).
+  # The IAM-era role/publication setup lived here briefly — recover it
+  # from git history for an Aurora follow-up (see the description).
   - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
-  - sql: "SELECT pg_drop_replication_slot('kc_bench_slot') FROM pg_replication_slots WHERE slot_name='kc_bench_slot'"
   - sql: "TRUNCATE TABLE orders"
   # Drop the publication so the connector recreates it with its own table
   # list. A stale publication that exists but no longer contains the table

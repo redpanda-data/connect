@@ -1,7 +1,10 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License included
-// in the licenses/BSL.md file.
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package main
 
@@ -21,11 +24,6 @@ type sweepPoint struct {
 	ArmID      string
 	GOMAXPROCS int
 	Streams    int
-	// FanIn mirrors Arm.FanIn: renderPointConfigs renders this point as one
-	// pipeline subscribed to all of dataset.topics' topics instead of the
-	// per-Streams rendering below. false for every arm-less scenario and for
-	// arms that don't set fan_in.
-	FanIn bool
 	// Pipeline is the scenario pipeline with this arm's overrides merged in.
 	// nil for arm-less scenarios, whose callers use Scenario.Pipeline directly.
 	Pipeline map[string]any
@@ -72,7 +70,6 @@ func buildSweepPlan(s *Scenario) []sweepPoint {
 				ArmID:      a.ID,
 				GOMAXPROCS: gmp,
 				Streams:    streams,
-				FanIn:      a.FanIn,
 				Pipeline:   mergePipeline(s.Pipeline, a.Pipeline),
 				Binary:     a.Binary,
 			})
@@ -81,10 +78,7 @@ func buildSweepPlan(s *Scenario) []sweepPoint {
 	return pts
 }
 
-// planMaxStreams is the largest stream count in the plan. The between-points
-// reset pre-creates the union of every arm's tables (see
-// BenchNames.IcebergResetTables), which lets one precomputed reset script serve
-// every arm regardless of its own stream count.
+// planMaxStreams is the largest stream count in the plan.
 func planMaxStreams(plan []sweepPoint) int {
 	max := 1
 	for _, p := range plan {
