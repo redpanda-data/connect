@@ -22,16 +22,11 @@ resource "aws_iam_openid_connect_provider" "github" {
 variable "github_trusted" {
   # repo → branch refs whose workflows may assume the provisioner role.
   # Keep this SHORT — every entry is a branch whose workflow code runs with
-  # the permissions below.
-  #
-  # The fork entry exists only for the PR-4713 migration window (the
-  # workflows can't be dispatched org-side until they reach the org default
-  # branch, and the rolling baseline needs runs meanwhile). DELETE the fork
-  # entry when PR 4713 merges.
+  # the permissions below, and personal forks must never appear here: they
+  # carry none of the org's branch protection, SSO, or audit controls.
   type = map(list(string))
   default = {
-    "redpanda-data/connect"          = ["refs/heads/main"]
-    "prakhargarg105/connect_prakhar" = ["refs/heads/main"]
+    "redpanda-data/connect" = ["refs/heads/main"]
   }
 }
 
