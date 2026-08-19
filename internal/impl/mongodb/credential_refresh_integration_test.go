@@ -37,7 +37,6 @@ package mongodb
 
 import (
 	"context"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -281,10 +280,8 @@ query: 'root = {}'
 	require.NoError(t, client.Ping(t.Context(), nil))
 	require.Equal(t, "testdb", db.Name())
 
-	// And the connection is genuinely usable, not merely constructed.
+	// And the connection is genuinely usable, not merely constructed - an
+	// authentication failure would surface here as an insert error.
 	_, err = db.Collection("testcoll").InsertOne(t.Context(), bson.M{"_id": 1})
 	require.NoError(t, err)
-	if err != nil && strings.Contains(err.Error(), "auth") {
-		t.Fatalf("unexpected authentication involvement: %v", err)
-	}
 }

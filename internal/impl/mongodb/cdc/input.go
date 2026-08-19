@@ -958,8 +958,15 @@ const (
 func (m *mongoCDC) planUnresumableRecovery() (unresumableRecoveryPlan, int) {
 	m.resumeTokenMu.Lock()
 	defer m.resumeTokenMu.Unlock()
-	if m.snapshotParallelism == 0 && m.onUnresumablePosition == onUnresumablePositionFail {
-		return unresumableRecoveryRefuseGap, m.unresumableRecoveries
+	if m.snapshotParallelism == 0 {
+		if m.onUnresumablePosition == onUnresumablePositionFail {
+			return unresumableRecoveryRefuseGap, m.unresumableRecoveries
+		}
+		// `reset` promises the checkpoint is always cleared, and the churn
+		// breaker counts snapshot re-runs - a livelock that cannot exist when
+		// no snapshot runs - so the counter does not apply here.
+		m.beginTokenEpochLocked(nil)
+		return unresumableRecoveryClear, 0
 	}
 	m.unresumableRecoveries++
 	if m.unresumableRecoveries >= maxConsecutiveUnresumableRecoveries {
@@ -1295,14 +1302,21 @@ func (m *mongoCDC) getCurrentResumeToken(ctx context.Context) (bson.Raw, error) 
 	if stream.TryNext(ctx) {
 		// A batchSize of 0 only empties the *first* batch: TryNext still issues
 		// one getMore, which the server answers with its default batch size, so
-		// a collection being written to can hand us an event here. The event's
-		// token is a perfectly good start position: adopting it makes that event
-		// pre-snapshot data by definition, and the snapshot scan - which only
-		// starts once this call returns, and reads the collection's current
-		// state rather than an as-of-`ts` view - therefore captures its effect.
-		// Anything later than the token is streamed as usual, so at-least-once
-		// still holds. This is the behaviour sharded clusters already had, where
-		// a token is the only available start position.
+		// a collection being written to can hand us an event here. The driver's
+		// cached token is now that event's _id, and resuming after it never
+		// delivers the event itself - this short-lived stream is discarded.
+		//
+		// With a snapshot about to run that is fine: adopting the token makes
+		// the event pre-snapshot data by definition, and the snapshot scan -
+		// which only starts once this call returns, and reads the collection's
+		// current state rather than an as-of-`ts` view - captures its effect,
+		// so at-least-once holds. Without a snapshot nothing covers the event,
+		// so returning its token would silently skip a change; error instead,
+		// which the sharded no-snapshot caller turns into a retried Connect
+		// failure - loud and recoverable rather than silently lossy.
+		if m.snapshotParallelism == 0 {
+			return nil, errors.New("unable to determine start position prior to streaming: the change stream returned an event while capturing the start position and no snapshot is configured to cover it; retrying, or enable `stream_snapshot` to make first starts robust on busy clusters")
+		}
 		m.logger.Debugf("change stream returned an event while capturing the start position, adopting its resume token as the pre-snapshot position")
 	}
 	if rt := stream.ResumeToken(); rt != nil {
