@@ -32,6 +32,7 @@ func baseConfigFieldsWithModels(modelExamples ...any) []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(opFieldServerAddress).
 			Description("The Open API endpoint that the processor sends requests to. Update the default value to use another OpenAI compatible service.").
+			ShortDescription("The endpoint requests are sent to. Change it to use another OpenAI compatible service.").
 			Default("https://api.openai.com/v1"),
 		service.NewStringField(opFieldAPIKey).
 			Secret().

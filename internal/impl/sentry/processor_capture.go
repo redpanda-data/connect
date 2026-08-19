@@ -48,18 +48,21 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 			service.NewBloblangField("context").
 				Optional().
 				Description("A mapping that must evaluate to an object-of-objects or `deleted()`. If this mapping produces a value, then it is set on a sentry event as additional context.").
+				ShortDescription("A mapping evaluating to an object-of-objects, set on the Sentry event as additional context.").
 				Example(`root = {"order": {"product_id": "P93174", "quantity": 5}}`).
 				Example(`root = deleted()`),
 
 			service.NewBloblangField("extras").
-				Description("A mapping that must evaluate to an object. If this mapping produces a value, then it is set on a sentry event as extras.").
+				Description("A mapping that must evaluate to an object. If this mapping produces a value, then it is attached to the sentry event as a context named `extras`. (Prior to v4.x this populated the event's deprecated Additional Data section, which the upstream sentry-go SDK removed.)").
+				ShortDescription("A mapping evaluating to an object, attached to the Sentry event as a context named extras.").
 				Optional().
 				Example(`root.foo = "bar"`).
 				Example(`root = this.without("password")`),
 
 			service.NewInterpolatedStringMapField("tags").
 				Optional().
-				Description("Sets key/value string tags on an event. Unlike context, these are indexed and searchable on Sentry but have length limitations."),
+				Description("Sets key/value string tags on an event. Unlike context, these are indexed and searchable on Sentry but have length limitations.").
+				ShortDescription("Key/value string tags on an event. Indexed and searchable, but length limited."),
 
 			service.NewStringField("environment").
 				Default("").
@@ -67,7 +70,8 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 
 			service.NewStringField("release").
 				Default("").
-				Description("The version of the code deployed to an environment. If left empty, then the Sentry client will attempt to detect the release from the environment."),
+				Description("The version of the code deployed to an environment. If left empty, then the Sentry client will attempt to detect the release from the environment.").
+				ShortDescription("The version of the code deployed to an environment. Detected automatically if left empty."),
 
 			service.NewStringEnumField("level", "DEBUG", "INFO", "WARN", "ERROR", "FATAL").
 				Default("INFO").
@@ -75,7 +79,8 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 
 			service.NewStringEnumField("transport_mode", transportAsync, transportSync).
 				Default(transportAsync).
-				Description("Determines how events are sent. A sync transport will block when sending each event until a response is received from the Sentry server. The recommended async transport will enqueue events in a buffer and send them in the background."),
+				Description("Determines how events are sent. A sync transport will block when sending each event until a response is received from the Sentry server. The recommended async transport will enqueue events in a buffer and send them in the background.").
+				ShortDescription("How events are sent. sync blocks on each event; the recommended async enqueues them in a buffer."),
 
 			service.NewDurationField("flush_timeout").
 				Default("5s").
@@ -84,7 +89,8 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 			service.NewFloatField("sampling_rate").
 				Default(1.0).
 				LintRule(`root = if this < 0 || this > 1 { ["sampling rate must be between 0.0 and 1.0" ] }`).
-				Description("The rate at which events are sent to the server. A value of 0 disables capturing sentry events entirely. A value of 1 results in sending all events to Sentry. Any value in between results sending some percentage of events."),
+				Description("The rate at which events are sent to the server. A value of 0 disables capturing sentry events entirely. A value of 1 results in sending all events to Sentry. Any value in between results sending some percentage of events.").
+				ShortDescription("The rate at which events are sent to the server. 0 disables capture entirely, 1 sends everything."),
 		)
 }
 
@@ -274,7 +280,16 @@ func (proc *captureProcessor) Process(_ context.Context, msg *service.Message) (
 	hub.WithScope(func(scope *sentry.Scope) {
 		scope.SetContexts(sentryCtx)
 		scope.SetTags(tags)
-		scope.SetExtras(extras) //nolint:staticcheck
+		// sentry-go v0.47.0 removed the deprecated Scope.SetExtras/Event.Extra
+		// API in favour of attributes (which only apply to logs, not to the
+		// error/message events this processor captures). To preserve the
+		// extras data on captured events we attach it as a dedicated context
+		// named "extras" instead. The data now surfaces under the event's
+		// Contexts section in Sentry rather than the legacy Additional Data
+		// section.
+		if len(extras) > 0 {
+			scope.SetContext("extras", extras)
+		}
 
 		hub.CaptureMessage(message)
 	})

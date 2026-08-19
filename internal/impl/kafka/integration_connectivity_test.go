@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import (
 func TestRedpandaConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	brokerAddr, _ := startRedpanda(t)
+	brokerAddr, _ := sharedRedpanda(t)
 
 	require.Eventually(t, func() bool {
 		return createKafkaTopic(t.Context(), brokerAddr, "testtopic", 1) == nil
@@ -250,7 +250,7 @@ redpanda:
 func TestRedpandaConnectionTestPrematureConnectIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	brokerAddr, _ := startRedpanda(t)
+	brokerAddr, _ := sharedRedpanda(t)
 
 	require.Eventually(t, func() bool {
 		return createKafkaTopic(t.Context(), brokerAddr, "testtopic", 1) == nil

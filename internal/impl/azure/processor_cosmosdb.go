@@ -44,7 +44,8 @@ The `+"`partition_keys`"+` field must resolve to the same value(s) across the en
 		Fields(cosmosdb.ContainerClientConfigFields()...).
 		Field(cosmosdb.PartitionKeysField(false)).
 		Fields(cosmosdb.CRUDFields(true)...).
-		Field(service.NewBoolField(cdbpFieldEnableContentResponseOnWrite).Description("Enable content response on write operations. To save some bandwidth, set this to false if you don't need to receive the updated message(s) from the server, in which case the processor will not modify the content of the messages which are fed into it. Applies to every operation except Read.").Default(true).Advanced()).
+		Field(service.NewBoolField(cdbpFieldEnableContentResponseOnWrite).Description("Enable content response on write operations. To save some bandwidth, set this to false if you don't need to receive the updated message(s) from the server, in which case the processor will not modify the content of the messages which are fed into it. Applies to every operation except Read.").
+			ShortDescription("Enable content response on write operations. Disable to save bandwidth when the updated messages are not needed.").Default(true).Advanced()).
 		LintRule("root = []"+cosmosdb.CommonLintRules+cosmosdb.CRUDLintRules).
 		Example("Patch documents", "Query documents from a container and patch them.", `
 input:

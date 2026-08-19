@@ -137,6 +137,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Default(false),
 			service.NewBoolField(siFieldStartFromOldest).
 				Description("If a position is not found for a queue, determines whether to consume from the oldest available message, otherwise messages are consumed from the latest.").
+				ShortDescription("When no position is found for a queue, consume from the oldest available message.").
 				Advanced().
 				Default(true),
 			service.NewIntField(siFieldMaxInflight).

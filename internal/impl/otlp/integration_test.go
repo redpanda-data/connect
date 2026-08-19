@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moby/moby/api/types/container"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -233,6 +234,13 @@ func runOtelgen(t *testing.T, cmd []string) {
 			Image:      "ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest",
 			Cmd:        cmd,
 			WaitingFor: wait.ForExit().WithExitTimeout((*soakDuration) + 30*time.Second),
+			// telemetrygen reaches the collector (published on the host) via
+			// host.docker.internal, which only resolves automatically on Docker
+			// Desktop. Map it to the host gateway so the container can reach the
+			// host on Linux CI runners too.
+			HostConfigModifier: func(hc *container.HostConfig) {
+				hc.ExtraHosts = []string{"host.docker.internal:host-gateway"}
+			},
 		},
 		Started: true,
 	})

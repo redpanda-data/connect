@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -74,6 +74,13 @@ type Sink interface {
 // and definition levels that allow perfect reconstruction.
 type RecordShredder struct {
 	schema *iceberg.Schema
+	// rootFields caches schema.Fields() once. iceberg-go's (*Schema).Fields()
+	// defensively clones the whole NestedField slice on every call, so calling
+	// it per-record in Shred was the single largest allocator on the write path
+	// (a 1-vCPU alloc profile attributed ~6.5% of all bytes to that clone). The
+	// schema is immutable for the shredder's lifetime and shredStruct only reads
+	// the slice, so caching one clone is safe.
+	rootFields []iceberg.NestedField
 	// caseSensitive controls how input record keys are matched against schema
 	// field names. When true (the historical default) names are matched
 	// exactly; when false, matching is case-insensitive — which aligns with
@@ -110,6 +117,7 @@ type RecordShredder struct {
 func NewRecordShredder(schema *iceberg.Schema, caseSensitive bool) *RecordShredder {
 	return &RecordShredder{
 		schema:        schema,
+		rootFields:    schema.Fields(),
 		caseSensitive: caseSensitive,
 	}
 }
@@ -133,7 +141,7 @@ func (rs *RecordShredder) SetFieldSchemaMetadata(byID map[int]*schema.Common) {
 // The record should be a map[string]any matching the schema structure.
 // The sink receives each leaf value and notifications of unknown fields.
 func (rs *RecordShredder) Shred(record map[string]any, sink Sink) error {
-	return rs.shredStruct(rs.schema.Fields(), record, nil, 0, 0, 0, sink)
+	return rs.shredStruct(rs.rootFields, record, nil, 0, 0, 0, sink)
 }
 
 // shredStruct processes a struct value.
@@ -465,7 +473,7 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common, strict
 		// Honour the schema's unit and emit the wire-equivalent integer.
 		// Strict mode (require_schema_metadata=true) disables this bridge
 		// and refuses the type disagreement loudly instead.
-		if n, ok := coerceTemporalToNumeric(value, common); ok {
+		if n, ok := CoerceTemporalToNumeric(value, common); ok {
 			if strictTemporal {
 				return parquet.NullValue(), fmt.Errorf("int column received %T while schema metadata declares type %v; require_schema_metadata=true demands the existing column type match the schema metadata — recreate the table to migrate", value, common.Type)
 			}
@@ -480,7 +488,16 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common, strict
 			return parquet.Int32Value(int32(n)), nil
 		}
 		i, err := bloblang.ValueAsInt64(value)
-		return parquet.Int32Value(int32(i)), err
+		if err != nil {
+			return parquet.NullValue(), err
+		}
+		// Range-check before narrowing: a bare int32(i) silently wraps
+		// (4294967297 would store 1), corrupting the stored value with no
+		// error anywhere.
+		if i > math.MaxInt32 || i < math.MinInt32 {
+			return parquet.NullValue(), fmt.Errorf("int (32-bit) column given value %d outside the int32 range [%d, %d]; values that size need a long (64-bit) column", i, math.MinInt32, math.MaxInt32)
+		}
+		return parquet.Int32Value(int32(i)), nil
 
 	case iceberg.Int64Type:
 		// Coerce-to-existing-column-type: see the Int32Type arm above. For
@@ -489,7 +506,7 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common, strict
 		// time.Time for timestamp-millis with preserve_logical_types=true)
 		// keep writing to a pre-existing BIGINT column that pre-dates the
 		// metadata fix.
-		if n, ok := coerceTemporalToNumeric(value, common); ok {
+		if n, ok := CoerceTemporalToNumeric(value, common); ok {
 			if strictTemporal {
 				return parquet.NullValue(), fmt.Errorf("bigint column received %T while schema metadata declares type %v; require_schema_metadata=true demands the existing column type match the schema metadata — recreate the table to migrate", value, common.Type)
 			}
@@ -649,6 +666,49 @@ func convertToDecimal(value any, dt iceberg.DecimalType) (parquet.Value, error) 
 
 	b := parquetdecimal.EncodeBytes(unscaled, dt.Precision())
 	return parquet.FixedLenByteArrayValue(b), nil
+}
+
+// DecimalNumberToString canonicalises a decimal supplied as text (a string or
+// json.Number) to the column's exact scale, using the SAME parse-and-round the
+// insert path's convertToDecimal applies (stringToUnscaled) so both sides
+// agree by construction. Exported for the mutation paths' shared leaf encoder:
+// every spelling of one decimal ("1.5", "1.50", float 1.5) must canonicalise
+// to one form, or the in-batch key collapse treats equal keys as distinct.
+func DecimalNumberToString(s string, prec, scale int) (string, error) {
+	unscaled, err := stringToUnscaled(s, scale)
+	if err != nil {
+		return "", err
+	}
+	if unscaled.CmpAbs(parquetdecimal.Pow10(prec)) >= 0 {
+		return "", fmt.Errorf("value %v exceeds decimal(%d, %d) precision", s, prec, scale)
+	}
+	return new(big.Rat).SetFrac(unscaled, parquetdecimal.Pow10(scale)).FloatString(scale), nil
+}
+
+// DecimalFloatToString renders a float64 as the decimal string whose parsed
+// unscaled value is EXACTLY what the shredder's insert path stores for the same
+// float in a decimal(prec, scale) column. It is built on floatToUnscaled — the
+// very conversion convertToDecimal applies — so parity holds by construction,
+// including the half-AWAY-from-zero tie rounding (0.125 at scale 2 renders as
+// "0.13", matching the stored unscaled 13; strconv.FormatFloat's half-to-even
+// would render "0.12" and silently diverge on every exact binary tie). It
+// mirrors convertToDecimal's NaN/±Inf rejection and precision validation, so an
+// input the insert path refuses is refused here too.
+//
+// Exported for the iceberg output's mutation paths (copy-on-write rewrite,
+// equality-delete keys), which encode values as JSON strings and must agree
+// byte-for-byte with what inserts store.
+func DecimalFloatToString(f float64, prec, scale int) (string, error) {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return "", fmt.Errorf("cannot convert %v to decimal", f)
+	}
+	unscaled := floatToUnscaled(f, scale)
+	if unscaled.CmpAbs(parquetdecimal.Pow10(prec)) >= 0 {
+		return "", fmt.Errorf("value %v exceeds decimal(%d, %d) precision", f, prec, scale)
+	}
+	// The fraction is exact (denominator 10^scale), so FloatString performs no
+	// rounding of its own.
+	return new(big.Rat).SetFrac(unscaled, parquetdecimal.Pow10(scale)).FloatString(scale), nil
 }
 
 // floatToUnscaled converts a float64 to an unscaled big.Int by multiplying by 10^scale.

@@ -59,6 +59,22 @@ type Server struct {
 	resources        *service.Resources
 }
 
+// serverOptions holds optional NewServer configuration.
+type serverOptions struct {
+	injectTestLicense bool
+}
+
+// ServerOption customises optional NewServer behaviour.
+type ServerOption func(*serverOptions)
+
+// WithTestLicense injects an enterprise test license into the server's
+// resources instead of loading one from the license configuration. It exists
+// so tests can exercise enterprise-gated behaviour (such as authorization
+// policies) without a real signed license.
+func WithTestLicense() ServerOption {
+	return func(o *serverOptions) { o.injectTestLicense = true }
+}
+
 // NewServer initializes the MCP server.
 func NewServer(
 	repositoryDir string,
@@ -68,7 +84,13 @@ func NewServer(
 	tagFilterFunc func(tags []string) bool,
 	licenseConfig license.Config,
 	auth *Authorizer,
+	opts ...ServerOption,
 ) (*Server, error) {
+	var options serverOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	// Create MCP server
 	s := mcp.NewServer(&mcp.Implementation{
 		Name:    "Redpanda Runtime",
@@ -170,7 +192,11 @@ func NewServer(
 		mux.ServeHTTP(w, r)
 	})
 
-	license.RegisterService(resources, licenseConfig)
+	if options.injectTestLicense {
+		license.InjectTestService(resources)
+	} else {
+		license.RegisterService(resources, licenseConfig)
+	}
 
 	// Add metrics middleware to track all MCP method calls
 	mcpMetrics := metrics.NewMetrics(resources.Metrics())

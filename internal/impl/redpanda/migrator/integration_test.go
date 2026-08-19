@@ -47,6 +47,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/migrator"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 )
 
@@ -1299,4 +1300,103 @@ logger:
 		})
 		return emptyTotal == 0
 	}, 3*time.Second, 200*time.Millisecond, "Empty topic should have 0 messages on destination")
+}
+
+func TestIntegrationMigratorOutputCustomHeaders(t *testing.T) {
+	integration.CheckSkip(t)
+
+	getHeader := func(headers []kgo.RecordHeader, key string) ([]byte, bool) {
+		for i := len(headers) - 1; i >= 0; i-- {
+			if headers[i].Key == key {
+				return headers[i].Value, true
+			}
+		}
+		return nil, false
+	}
+
+	t.Log("Given: Redpanda clusters without schema registry")
+	src, dst := startRedpandaSourceAndDestination(t)
+	src.SchemaRegistryURL = ""
+	dst.SchemaRegistryURL = ""
+
+	t.Log("When: Migrator is started with a custom header configured, including ones that collide with the default offset and provenance header names")
+	const yamlTmpl = `
+input:
+  redpanda_migrator:
+    seed_brokers:
+      - {{.Src.BrokerAddr}}
+    topics:
+      - {{.Topic}}
+    consumer_group: redpanda_migrator_cg
+output:
+  redpanda_migrator:
+    seed_brokers: [ {{.Dst.BrokerAddr}} ]
+    headers:
+      x-migration-source: 'test-pipeline'
+      {{.OffsetHeader}}: 'should-be-overridden'
+      {{.ProvenanceHeader}}: 'bogus-cluster-id'
+    consumer_groups:
+      interval: 1s
+logger:
+  level: DEBUG
+`
+	tmpl, err := template.New("migrator").Parse(yamlTmpl)
+	require.NoError(t, err)
+
+	data := struct {
+		Src              EmbeddedRedpandaCluster
+		Dst              EmbeddedRedpandaCluster
+		Topic            string
+		OffsetHeader     string
+		ProvenanceHeader string
+	}{
+		Src:              src,
+		Dst:              dst,
+		Topic:            migratorTestTopic,
+		OffsetHeader:     migrator.DefaultOffsetHeader,
+		ProvenanceHeader: migrator.DefaultProvenanceHeader,
+	}
+	var yamlBuf bytes.Buffer
+	require.NoError(t, tmpl.Execute(&yamlBuf, data))
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetYAML(yamlBuf.String()))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+		t.Log("Migrator pipeline shutdown")
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, stream.StopWithin(stopStreamTimeout))
+	})
+
+	t.Log("And: A message is produced to src")
+	src.Produce(migratorTestTopic, []byte("hello"))
+
+	t.Log("Then: The migrated record on dst carries the custom header with the configured value")
+	records := readTopicContent(dst, 1)
+	require.Len(t, records, 1)
+
+	val, ok := getHeader(records[0].Headers, "x-migration-source")
+	require.True(t, ok, "expected custom header %q to be present on migrated record", "x-migration-source")
+	assert.Equal(t, "test-pipeline", string(val))
+
+	t.Log("And: The offset header is not overridden by the colliding custom header value, protecting exact offset migration")
+	offsetVal, ok := getHeader(records[0].Headers, migrator.DefaultOffsetHeader)
+	require.True(t, ok, "expected offset header %q to be present on migrated record", migrator.DefaultOffsetHeader)
+	assert.NotEqual(t, []byte("should-be-overridden"), offsetVal)
+	assert.Equal(t, migrator.EncodeOffsetHeader(0), offsetVal, "offset header should carry the real source offset (0), not the colliding custom header value")
+
+	t.Log("And: The provenance header is not overridden by the colliding custom header value, protecting loop-prevention/data-corruption guards")
+	srcMetadata, err := src.Admin.Metadata(t.Context())
+	require.NoError(t, err)
+	provenanceVal, ok := getHeader(records[0].Headers, migrator.DefaultProvenanceHeader)
+	require.True(t, ok, "expected provenance header %q to be present on migrated record", migrator.DefaultProvenanceHeader)
+	assert.NotEqual(t, []byte("bogus-cluster-id"), provenanceVal)
+	assert.Equal(t, []byte(srcMetadata.Cluster), provenanceVal, "provenance header should carry the real source cluster ID, not the colliding custom header value")
 }

@@ -1,0 +1,14 @@
+# Example: stream DynamoDB CDC with a multi-region (Global Table) checkpoint table.
+# Run the same config in two regions; after a regional failover the secondary
+# resumes near the last committed position instead of replaying the whole stream.
+input:
+  aws_dynamodb_cdc:
+    tables: [orders]
+    checkpoint_table: redpanda_dynamodb_checkpoints
+    global_table: true
+    global_table_replicas:
+      - us-west-2
+    region: us-east-1
+
+output:
+  stdout: {}

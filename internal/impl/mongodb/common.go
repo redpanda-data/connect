@@ -267,6 +267,7 @@ func writeConcernDocs() *service.ConfigField {
 	return service.NewObjectField(commonFieldWriteConcern,
 		service.NewStringField(commonFieldWriteConcernW).
 			Description(`W requests acknowledgement that write operations propagate to the specified number of mongodb instances. Can be the string "majority" to wait for a calculated majority of nodes to acknowledge the write operation, or an integer value specifying an minimum number of nodes to acknowledge the operation, or a string specifying the name of a custom write concern configured in the cluster.`).
+			ShortDescription("How many MongoDB instances must acknowledge a write. Can be majority to wait for a calculated majority.").
 			Default("majority"),
 		service.NewBoolField(commonFieldWriteConcernJ).
 			Description("J requests acknowledgement from MongoDB that write operations are written to the journal.").
@@ -332,21 +333,25 @@ func writeMapsFields() []*service.ConfigField {
 		service.NewBloblangField(commonFieldDocumentMap).
 			Description("A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations " +
 				"insert-one, replace-one, update-one and aggregate.").
+			ShortDescription("A Bloblang map producing the document to store in MongoDB, as extended JSON in canonical form.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldFilterMap).
 			Description("A bloblang map representing a filter for a MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The filter map is required for all operations except " +
 				"insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should " +
 				"have the fields required to locate the document to delete.").
+			ShortDescription("A Bloblang map producing a MongoDB filter, as extended JSON in canonical form.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldHintMap).
 			Description("A bloblang map representing the hint for the MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. This map is optional and is used with all operations " +
 				"except insert-one. It is used to improve performance of finding the documents in the mongodb.").
+			ShortDescription("An optional Bloblang map producing the MongoDB command hint, as extended JSON in canonical form.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBoolField(commonFieldUpsert).
 			Description("The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.").
+			ShortDescription("Insert the document when the filter matches nothing. Applies only to update-one and replace-one.").
 			Version("3.60.0").
 			Default(false),
 	}

@@ -78,6 +78,15 @@ type shardAckTracker struct {
 	frontier string
 	// persisted is the last sequence written to the checkpoint store.
 	persisted string
+	// seqTimes maps a tracked batch's checkpoint sequence to that record's
+	// ApproximateCreationDateTime (RFC3339Nano). Used to persist the timestamp
+	// alongside the frontier in global-table mode; entries are pruned once the
+	// frontier advances past them. Only the batch frontier can advance, which
+	// may differ from the batch currently being acked, so the lookup must be by
+	// sequence rather than off the acked batch.
+	seqTimes map[string]string
+	// frontierTime is the ApproximateCreationDateTime of the current frontier.
+	frontierTime string
 }
 
 // NewRecordBatcher creates a new [RecordBatcher] for DynamoDB CDC.
@@ -119,11 +128,14 @@ func (b *RecordBatcher) AddMessages(batch service.MessageBatch, shardID string) 
 
 	st, ok := b.shards[shardID]
 	if !ok {
-		st = &shardAckTracker{tracker: checkpoint.NewUncapped[string]()}
+		st = &shardAckTracker{tracker: checkpoint.NewUncapped[string](), seqTimes: map[string]string{}}
 		b.shards[shardID] = st
 	}
 
-	seq, _ := batch[len(batch)-1].MetaGet("dynamodb_sequence_number")
+	last := batch[len(batch)-1]
+	seq, _ := last.MetaGet("dynamodb_sequence_number")
+	approxCreationTime, _ := last.MetaGet("dynamodb_approximate_creation_time")
+	st.seqTimes[seq] = approxCreationTime
 	tb := &trackedBatch{
 		shardID: shardID,
 		size:    len(batch),
@@ -164,8 +176,20 @@ func (b *RecordBatcher) RemoveMessages(batch service.MessageBatch) {
 }
 
 type checkpointer interface {
-	Set(ctx context.Context, shardID, sequenceNumber string) error
+	Set(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error
 	CheckpointLimit() int
+}
+
+// advanceFrontier records the resolved contiguous frontier and its associated
+// record timestamp, pruning seqTimes entries the frontier has passed.
+func (st *shardAckTracker) advanceFrontier(frontier string) {
+	st.frontier = frontier
+	st.frontierTime = st.seqTimes[frontier]
+	for seq := range st.seqTimes {
+		if seq <= frontier {
+			delete(st.seqTimes, seq)
+		}
+	}
 }
 
 // AckMessages marks a batch as acknowledged, advances the shard's contiguous
@@ -196,7 +220,7 @@ func (b *RecordBatcher) AckMessages(
 
 	st := b.shards[tb.shardID]
 	if frontier := tb.resolve(); frontier != nil {
-		st.frontier = *frontier
+		st.advanceFrontier(*frontier)
 	}
 	st.pending += tb.size
 
@@ -204,7 +228,7 @@ func (b *RecordBatcher) AckMessages(
 	// the last persisted position. A pinned frontier (nacked batch ahead of
 	// us in stream order) accumulates pending acks without persisting.
 	if st.pending >= cp.CheckpointLimit() && st.frontier != "" && st.frontier != st.persisted {
-		if err := cp.Set(ctx, tb.shardID, st.frontier); err != nil {
+		if err := cp.Set(ctx, tb.shardID, st.frontier, st.frontierTime); err != nil {
 			return err
 		}
 		st.persisted = st.frontier
@@ -218,14 +242,17 @@ func (b *RecordBatcher) AckMessages(
 // PendingCheckpoints returns, per shard, the highest contiguous acked
 // sequence that has not been persisted yet. Used to flush checkpoints on
 // shutdown.
-func (b *RecordBatcher) PendingCheckpoints() map[string]string {
+func (b *RecordBatcher) PendingCheckpoints() map[string]CheckpointValue {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	checkpoints := make(map[string]string, len(b.shards))
+	checkpoints := make(map[string]CheckpointValue, len(b.shards))
 	for shardID, st := range b.shards {
 		if st.frontier != "" && st.frontier != st.persisted {
-			checkpoints[shardID] = st.frontier
+			checkpoints[shardID] = CheckpointValue{
+				SequenceNumber:     st.frontier,
+				ApproxCreationTime: st.frontierTime,
+			}
 		}
 	}
 	return checkpoints

@@ -44,6 +44,7 @@ func sqlInsertOutputConfig() *service.ConfigSpec {
 			Example([]string{"foo", "bar", "baz"})).
 		Field(service.NewBloblangField("args_mapping").
 			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of columns specified.").
+			ShortDescription("A Bloblang mapping evaluating to an array of values matching the number of columns specified.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`)).
 		Field(service.NewStringField("prefix").

@@ -47,6 +47,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 		Fields(connectionHeadFields()...).
 		Field(service.NewStringField("subject").
 			Description("A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.").
+			ShortDescription("A subject to consume from, supporting wildcards. Either a subject or stream is required.").
 			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
 		Field(service.NewStringField("queue").
 			Description("An optional queue group to consume as.").
@@ -54,6 +55,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBoolField("send_ack").
 			Description("Control whether ACKS are sent as a reply to each message. When enabled, these replies are sent only once the data has been delivered to all outputs.").
+			ShortDescription("Send ACKs in reply to each message, once the data has been delivered to all outputs.").
 			Default(true)).
 		Field(service.NewDurationField("nak_delay").
 			Description("An optional delay duration on redelivering a message when negatively acknowledged.").

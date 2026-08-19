@@ -135,6 +135,25 @@ func TestParseTest(t *testing.T) {
 				"COL2": "2",
 			},
 		},
+		// Oracle LogMiner emits ROWID-based WHERE clauses for tables without a primary key
+		// or without supplemental logging enabled.
+		{
+			name: "DELETE with ROWID in WHERE clause",
+			sql:  `delete from "CMMSAPP"."FWEQPEQUIPMENT" where ROWID = 'AAABCDefgHIJKLM'`,
+			wantOldValues: map[string]any{
+				"ROWID": "AAABCDefgHIJKLM",
+			},
+		},
+		{
+			name: "UPDATE with ROWID in WHERE clause",
+			sql:  `update "CMMSAPP"."FWEQPEQUIPMENT" set "STATUS" = 'ACTIVE' where ROWID = 'AAABCDefgHIJKLM'`,
+			wantNewValues: map[string]any{
+				"STATUS": "ACTIVE",
+			},
+			wantOldValues: map[string]any{
+				"ROWID": "AAABCDefgHIJKLM",
+			},
+		},
 		// IS NULL / IS NOT NULL predicates in WHERE must be excluded from the result map
 		{
 			name: "IS NULL and IS NOT NULL in WHERE clause excluded from result",

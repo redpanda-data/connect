@@ -65,6 +65,12 @@ func spec() *service.ConfigSpec {
 
 By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
 
+== Scaling
+
+All configured collections are consumed through a single database-level change stream: the collection list is a server-side filter on that one stream, not a set of independent streams. Because a change stream is one totally-ordered cursor over the replica set's oplog, throughput does not increase with additional collections, and CPU beyond roughly two cores is not used. This is a property of MongoDB change streams rather than of this input. To scale beyond the single-stream ceiling, shard the cluster — a change stream against a sharded cluster merges parallel per-shard cursors on the server side.
+
+Size the oplog for consumer lag: a change stream resumes from a position in the oplog, so if this input falls behind, or is stopped, for longer than the oplog retains data, the resume position is lost and the stream is invalidated. Ensure the oplog window comfortably exceeds the longest expected lag or downtime under peak write load.
+
 == Metadata
 
 Each message emitted by this plugin has the following metadata:
@@ -113,13 +119,15 @@ Schema metadata is discovered using a two-tier strategy:
 				Description("The interval between writing checkpoints to the cache.").
 				Default("5s"),
 			service.NewIntField(fieldCheckpointLimit).
-				Description("").
+				Description("The maximum number of messages that can be in flight at a given time. Increasing this limit enables parallel processing and batching at the output level. The stream's resume position is only checkpointed once all messages before it are delivered, preserving at least once delivery guarantees.").
+				ShortDescription("The maximum number of messages that can be in flight at a given time.").
 				Default(1000),
 			service.NewIntField(fieldReadBatchSize).
 				Description("The batch size of documents for MongoDB to return.").
 				Default(1000),
 			service.NewDurationField(fieldReadMaxWait).
 				Description("The maximum time MongoDB waits to fulfill `read_batch_size` on the change stream before returning documents.").
+				ShortDescription("Maximum time MongoDB waits to fill read_batch_size on the change stream before returning.").
 				Default("1s"),
 			service.NewBoolField(fieldStreamSnapshot).
 				Description("If to read initial snapshot before streaming changes.").
@@ -132,6 +140,7 @@ Schema metadata is discovered using a two-tier strategy:
 }`),
 			service.NewBoolField(fieldBucketSharding).
 				Description("If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `splitVector` command. This allows parallel collection reading in environments where privileged access to the MongoDB cluster is not allowed such as MongoDB Atlas.").
+				ShortDescription("Use $bucketAuto rather than splitVector to determine parallel snapshot chunks, avoiding privileged access.").
 				Default(false).
 				Advanced(),
 			service.NewStringAnnotatedEnumField(fieldDocumentMode, map[string]string{

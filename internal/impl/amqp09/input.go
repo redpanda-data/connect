@@ -65,6 +65,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations].`).Fields(
 		service.NewURLListField(urlsField).
 			Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
+			ShortDescription("URLs to connect to. The first to connect successfully is used until the connection closes.").
 			Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
 			Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
 			Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
@@ -132,6 +133,7 @@ Integer specified in milliseconds.
 Enables Single Active Consumer, Expects a Boolean.
 
 See https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c85e8dc431/types.go#L282-L362 for more information on available arguments.`).
+				ShortDescription("Optional arguments specific to the server's queue implementation, for queue types needing extra parameters.").
 				Advanced().
 				Optional().
 				Example(map[string]any{
@@ -141,6 +143,7 @@ See https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c8
 				}),
 		).
 			Description(`Allows you to passively declare the target queue. If the queue already exists then the declaration passively verifies that they match the target fields.`).
+			ShortDescription("Passively declare the target queue, verifying an existing queue matches the target fields.").
 			Advanced().
 			Optional(),
 		service.NewObjectListField(bindingsDeclareField,
@@ -165,10 +168,12 @@ See https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c8
 			Default(""),
 		service.NewBoolField(autoAckField).
 			Description("Acknowledge messages automatically as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from blocking but at the cost of eliminating delivery guarantees.").
+			ShortDescription("Acknowledge messages as they are consumed rather than waiting for downstream acknowledgements.").
 			Default(false).
 			Advanced(),
 		service.NewStringListField(nackRejectPattensField).
 			Description("A list of regular expression patterns whereby if a message that has failed to be delivered by Redpanda Connect has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.").
+			ShortDescription("Regular expressions matching delivery errors that should be dropped rather than retried.").
 			Example([]string{"^reject me please:.+$"}).
 			Advanced().
 			Version("3.64.0").

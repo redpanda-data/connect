@@ -67,23 +67,9 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 		message.Operation = InsertOpType
 		message.Schema = rel.Namespace
 		message.Table = rel.RelationName
-		values := map[string]any{}
-		for idx, col := range logicalMsg.Tuple.Columns {
-			colName := rel.Columns[idx].Name
-			switch col.DataType {
-			case 'n': // null
-				values[colName] = nil
-			case 'u': // unchanged toast
-				values[colName] = unchangedToastValue
-			case 't': // text
-				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType, rel.Columns[idx].TypeModifier)
-				if err != nil {
-					return nil, fmt.Errorf("unable to decode column data: %w", err)
-				}
-				values[colName] = val
-			default:
-				return nil, fmt.Errorf("unable to decode column data, unknown data type: %d", col.DataType)
-			}
+		values, err := decodeTuple(logicalMsg.Tuple, rel, typeMap, unchangedToastValue, nil)
+		if err != nil {
+			return nil, fmt.Errorf("decoding data for insert message: %w", err)
 		}
 		message.Data = values
 	case *UpdateMessage:
@@ -94,45 +80,24 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 		message.Operation = UpdateOpType
 		message.Schema = rel.Namespace
 		message.Table = rel.RelationName
-		values := map[string]any{}
-		for idx, col := range logicalMsg.NewTuple.Columns {
-			colName := rel.Columns[idx].Name
-			switch col.DataType {
-			case 'n': // null
-				values[colName] = nil
-			case 'u': // unchanged toast
-				values[colName] = unchangedToastValue
-				// In the case of an update of an unchanged toast value and the replica is set to
-				// IDENTITY FULL, we need to look at the old tuple in order to get the data, it's
-				// just marked as unchanged in the new tuple.
-				if logicalMsg.OldTupleType == 'O' && logicalMsg.OldTuple != nil && idx < len(logicalMsg.OldTuple.Columns) {
-					col = logicalMsg.OldTuple.Columns[idx]
-					switch col.DataType {
-					case 'n': // null
-						values[colName] = nil
-					case 'u': // unchanged toast
-						values[colName] = unchangedToastValue
-					case 't':
-						val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType, rel.Columns[idx].TypeModifier)
-						if err != nil {
-							return nil, fmt.Errorf("unable to decode column data: %w", err)
-						}
-						values[colName] = val
-					default:
-						return nil, fmt.Errorf("unable to decode column data, unknown data type: %d", col.DataType)
-					}
-				}
-			case 't': // text
-				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType, rel.Columns[idx].TypeModifier)
-				if err != nil {
-					return nil, fmt.Errorf("unable to decode column data: %w", err)
-				}
-				values[colName] = val
-			default:
-				return nil, fmt.Errorf("unable to decode column data, unknown data type: %d", col.DataType)
-			}
+		// When REPLICA IDENTITY FULL is set, unchanged TOAST columns in the new tuple
+		// are resolved against the old tuple which carries the actual pre-update value.
+		var toastFallback *TupleData
+		if logicalMsg.OldTupleType == 'O' {
+			toastFallback = logicalMsg.OldTuple
+		}
+		values, err := decodeTuple(logicalMsg.NewTuple, rel, typeMap, unchangedToastValue, toastFallback)
+		if err != nil {
+			return nil, fmt.Errorf("decoding new data for update message: %w", err)
 		}
 		message.Data = values
+		if logicalMsg.OldTuple != nil {
+			before, err := decodeTuple(logicalMsg.OldTuple, rel, typeMap, unchangedToastValue, nil)
+			if err != nil {
+				return nil, fmt.Errorf("decoding before data for update message: %w", err)
+			}
+			message.BeforeData = before
+		}
 	case *DeleteMessage:
 		rel, ok := relations[logicalMsg.RelationID]
 		if !ok {
@@ -141,24 +106,12 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 		message.Operation = DeleteOpType
 		message.Schema = rel.Namespace
 		message.Table = rel.RelationName
-		values := map[string]any{}
-		for idx, col := range logicalMsg.OldTuple.Columns {
-			colName := rel.Columns[idx].Name
-			switch col.DataType {
-			case 'n': // null
-				values[colName] = nil
-			case 'u': // unchanged toast
-				values[colName] = unchangedToastValue
-			case 't': // text
-				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType, rel.Columns[idx].TypeModifier)
-				if err != nil {
-					return nil, fmt.Errorf("unable to decode column data: %w", err)
-				}
-				values[colName] = val
-			default:
-			}
+		values, err := decodeTuple(logicalMsg.OldTuple, rel, typeMap, unchangedToastValue, nil)
+		if err != nil {
+			return nil, fmt.Errorf("decoding data for delete message: %w", err)
 		}
 		message.Data = values
+		message.BeforeData = values
 	case *TruncateMessage:
 	case *TypeMessage:
 	case *OriginMessage:
@@ -169,6 +122,48 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 	}
 
 	return message, nil
+}
+
+func decodeTuple(tuple *TupleData, rel *RelationMessage, typeMap *pgtype.Map, unchangedToastValue any, toastFallback *TupleData) (map[string]any, error) {
+	values := map[string]any{}
+	for idx, col := range tuple.Columns {
+		if idx >= len(rel.Columns) {
+			break
+		}
+		colName := rel.Columns[idx].Name
+		switch col.DataType {
+		case 'n': // null
+			values[colName] = nil
+		case 'u': // unchanged toast
+			values[colName] = unchangedToastValue
+			if toastFallback != nil && idx < len(toastFallback.Columns) {
+				col = toastFallback.Columns[idx]
+				switch col.DataType {
+				case 'n':
+					values[colName] = nil
+				case 'u':
+					values[colName] = unchangedToastValue
+				case 't':
+					val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType, rel.Columns[idx].TypeModifier)
+					if err != nil {
+						return nil, fmt.Errorf("unable to decode column data: %w", err)
+					}
+					values[colName] = val
+				default:
+					return nil, fmt.Errorf("unable to decode column data, unknown data type: %d", col.DataType)
+				}
+			}
+		case 't': // text
+			val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType, rel.Columns[idx].TypeModifier)
+			if err != nil {
+				return nil, fmt.Errorf("unable to decode column data: %w", err)
+			}
+			values[colName] = val
+		default:
+			return nil, fmt.Errorf("unable to decode column data, unknown data type: %d", col.DataType)
+		}
+	}
+	return values, nil
 }
 
 func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32, typeModifier int32) (any, error) {

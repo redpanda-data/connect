@@ -295,6 +295,20 @@ func isTrimmedDataAccessError(err error) bool {
 	return ok
 }
 
+// isExpiredIteratorError returns true when a GetRecords call fails because the
+// shard iterator has expired. DynamoDB Streams iterators are only valid for 15
+// minutes, so a shard that is not read within that window (prolonged output
+// backpressure, a long idle period, or a stale iterator obtained just before a
+// restart) expires. The caller should obtain a fresh iterator from the last
+// processed position and retry rather than spinning on the dead iterator.
+func isExpiredIteratorError(err error) bool {
+	if err == nil {
+		return false
+	}
+	_, ok := errors.AsType[*streamstypes.ExpiredIteratorException](err)
+	return ok
+}
+
 // SnapshotCheckpoint holds the progress of a snapshot scan.
 type SnapshotCheckpoint struct {
 	Complete        bool
