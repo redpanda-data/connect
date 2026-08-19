@@ -451,13 +451,17 @@ func (b *batchPublisher) trackBatch(ctx context.Context, batch service.MessageBa
 		isSnapshot: isSnapshotBatch,
 		msgs: asyncMessage{
 			msg: batch,
-			// The ack error is deliberately ignored: nacks are replayed by
-			// auto_replay_nacks (the default), and disabling that is a
-			// documented opt-in to DROP rejected messages, so the checkpoint
-			// must advance past them rather than pin the tracker.
-			ackFn: func(ctx context.Context, _ error) error {
+			// Nacks resolve like acks: they are replayed by auto_replay_nacks
+			// (the default), and disabling that is a documented opt-in to DROP
+			// rejected messages, so the checkpoint must advance past them
+			// rather than pin the tracker. The drop is logged - it is the one
+			// place rows become unrecoverable by design.
+			ackFn: func(ctx context.Context, ackErr error) error {
 				if isSnapshotBatch {
 					defer b.snapshotAckWG.Done()
+				}
+				if ackErr != nil {
+					b.log.Warnf("Dropping batch of %d messages rejected downstream (snapshot=%v, checkpoint LSN %X): auto_replay_nacks is disabled, so the checkpoint advances past the dropped rows: %v", len(batch), isSnapshotBatch, checkpointLSN, ackErr)
 				}
 				b.persistMu.Lock()
 				defer b.persistMu.Unlock()
@@ -489,6 +493,7 @@ func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch)
 		// Resolving the slot here instead would be unsafe - another flusher
 		// may already have delivered a later-tracked batch, and its ack would
 		// then persist an LSN past these undelivered rows.
+		b.log.Warnf("Batch of %d messages could not be handed to the pipeline; the publisher is marked for rebuild and its rows re-read from the last durable LSN on reconnect", len(tracked.msgs.msg))
 		b.poisoned.Store(true)
 		return ctx.Err()
 	}
