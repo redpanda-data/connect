@@ -106,9 +106,18 @@ func combineReset(connector string, steps []ResetStep, outs map[string]string) (
 	brokers := outs["redpanda_broker_endpoints"]
 	if sessionID != "" && brokers != "" {
 		connectTopic := fmt.Sprintf("bench_%s_%s_connect", sessionID, connector)
+		// rpk is installed on the runner host by runner-user-data.tftpl
+		// (Kafka's CLI is only present when install_kc is set). Regex mode
+		// (-r) makes the first point — before Connect's first write
+		// auto-creates the topic — a clean no-op. A broker-connectivity
+		// failure exits non-zero and aborts the reset under `set -euo
+		// pipefail`; a per-topic delete error exits 0 but rpk prints it in
+		// the status table, which lands in the streamed reset log rather
+		// than being discarded. Session IDs and connector names are
+		// [A-Za-z0-9_-], so the anchored literal needs no regex escaping.
 		sb.WriteString(fmt.Sprintf(
-			`/opt/kafka/bin/kafka-topics.sh --bootstrap-server %q --delete --topic %q 2>/dev/null || true`+"\n",
-			brokers, connectTopic,
+			`/usr/local/bin/rpk topic delete -r %q -X brokers=%q`+"\n",
+			"^"+connectTopic+"$", brokers,
 		))
 	}
 	return sb.String(), nil

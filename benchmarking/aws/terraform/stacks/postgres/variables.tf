@@ -7,8 +7,12 @@ variable "bench_session_id" {
   # Stamped on every resource via default_tags; the cleanup lambda decodes
   # the embedded timestamp as the only age signal for resources whose
   # Describe response carries no creation time. Same contract as the shared
-  # stack's variable of the same name.
-  type = string
+  # stack's variable of the same name, including the empty default: `runner
+  # down` rebuilds stack vars from the scenario's infra.source only, so a
+  # required variable would abort the destroy (-input=false) and strand paid
+  # infra until the reaper's TTL. The tag value doesn't matter during destroy.
+  type    = string
+  default = ""
 }
 variable "instance_class" { type = string }
 variable "storage_gb" { type = number }

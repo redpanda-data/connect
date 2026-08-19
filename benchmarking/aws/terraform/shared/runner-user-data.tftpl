@@ -58,6 +58,15 @@ write_files:
 runcmd:
   - mkdir -p /opt/bench
   - chmod 0755 /opt/bench
+
+  # rpk for the between-point topic reset (runner/scripts.go). Standalone
+  # static arm64 binary, pinned like the other artifact downloads in this
+  # file. Installed outside the install_kc branch because the reset must
+  # work on Connect-only hosts, where no Kafka CLI exists.
+  - curl -sSL -o /tmp/rpk.zip https://github.com/redpanda-data/redpanda/releases/download/v26.1.16/rpk-linux-arm64.zip
+  - unzip -o /tmp/rpk.zip -d /usr/local/bin rpk
+  - chmod 0755 /usr/local/bin/rpk
+  - rm -f /tmp/rpk.zip
 %{ if install_kc ~}
   - mkdir -p /opt/kafka /opt/kafka-connect/plugins
 

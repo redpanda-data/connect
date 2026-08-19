@@ -52,19 +52,29 @@ resource "aws_cloudwatch_metric_alarm" "soak_stall" {
 
 # Shape 2 — the slow leak (inc-2861, #4527, #4657): sustained positive RSS
 # slope. The metric is least-squares-fitted by the orchestrator
-# (RSSSlopeBytesPerMin); 2 MB/min sustained for 15 minutes is far above the
-# healthy baseline (~0.07 MB/min measured on the first clean soak) while
-# still catching an OOM-in-hours leak early in a 90-minute window.
+# (RSSSlopeBytesPerMin); 2 MB/min sustained is far above the healthy
+# baseline (~0.07 MB/min measured on the first clean soak) while still
+# catching an OOM-in-hours leak early in a 90-minute window.
+#
+# Unlike ThroughputMBps/BacklogSeconds (backfilled per minute), this metric
+# is emitted once per checkpoint cycle — every 600s for a soak
+# (soakCheckpointSec, runner/main.go) — so the period must match that
+# cadence: a finer period leaves empty periods between datapoints that
+# notBreaching evaluates as OK, resetting any consecutive-breach streak and
+# making the alarm unreachable. 2-of-3 datapoints_to_alarm pages after two
+# breaching checkpoints (~20 min of sustained leak) while tolerating one
+# datapoint straddling a period boundary.
 resource "aws_cloudwatch_metric_alarm" "soak_rss_slope" {
   for_each            = local.soak_alarm_dims
   alarm_name          = "rpcn-soak-${each.key}-rss-slope"
-  alarm_description   = "Soak RSS climbing >= 2 MB/min sustained — the slow-leak class (inc-2861/#4527/#4657)."
+  alarm_description   = "Soak RSS climbing >= 2 MB/min across consecutive 10-minute checkpoints — the slow-leak class (inc-2861/#4527/#4657)."
   namespace           = "RedpandaConnect/Bench"
   metric_name         = "RSSSlopeBytesPerMin"
   dimensions          = each.value
   statistic           = "Average"
-  period              = 300
+  period              = 600
   evaluation_periods  = 3
+  datapoints_to_alarm = 2
   threshold           = 2000000
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"

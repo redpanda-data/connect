@@ -132,11 +132,11 @@ func TestCombineReset_AppendsTopicCleanup_Postgres(t *testing.T) {
 		t.Errorf("expected original SQL to remain; got:\n%s", out)
 	}
 	// Connect's per-session output topic is torn down between points.
-	if !strings.Contains(out, "kafka-topics.sh") {
-		t.Errorf("expected kafka-topics.sh delete; got:\n%s", out)
+	if !strings.Contains(out, "rpk topic delete") {
+		t.Errorf("expected rpk topic delete; got:\n%s", out)
 	}
-	if !strings.Contains(out, "bench_sess-abc_postgres_cdc_connect") {
-		t.Errorf("expected Connect topic delete; got:\n%s", out)
+	if !strings.Contains(out, `"^bench_sess-abc_postgres_cdc_connect$"`) {
+		t.Errorf("expected anchored Connect topic regex; got:\n%s", out)
 	}
 }
 
@@ -152,7 +152,7 @@ func TestCombineReset_NoOpWhenSessionIDMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("combineReset: %v", err)
 	}
-	if strings.Contains(out, "kafka-topics.sh") {
+	if strings.Contains(out, "rpk topic delete") {
 		t.Errorf("topic delete should be skipped when session id is empty; got:\n%s", out)
 	}
 }
