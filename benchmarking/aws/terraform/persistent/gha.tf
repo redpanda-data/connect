@@ -19,19 +19,20 @@ resource "aws_iam_openid_connect_provider" "github" {
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 }
 
-variable "github_repo" {
-  # owner/name of the repo whose workflows may assume the provisioner role.
-  # Currently the personal fork; re-pin when the workflows move to the org
-  # repo (that migration is a named phase gate before team-wide use).
-  type    = string
-  default = "prakhargarg105/connect_prakhar"
-}
-
-variable "github_refs" {
-  # Branch refs allowed to assume the role. Keep this list SHORT — every
-  # entry is a branch whose workflow code runs with the permissions below.
-  type    = list(string)
-  default = ["refs/heads/main", "refs/heads/con-179-r6-soak"]
+variable "github_trusted" {
+  # repo → branch refs whose workflows may assume the provisioner role.
+  # Keep this SHORT — every entry is a branch whose workflow code runs with
+  # the permissions below.
+  #
+  # The fork entry exists only for the PR-4713 migration window (the
+  # workflows can't be dispatched org-side until they reach the org default
+  # branch, and the rolling baseline needs runs meanwhile). DELETE the fork
+  # entry when PR 4713 merges.
+  type = map(list(string))
+  default = {
+    "redpanda-data/connect"          = ["refs/heads/main"]
+    "prakhargarg105/connect_prakhar" = ["refs/heads/main"]
+  }
 }
 
 resource "aws_iam_role" "gha_provisioner" {
@@ -49,7 +50,11 @@ resource "aws_iam_role" "gha_provisioner" {
         }
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            for ref in var.github_refs : "repo:${var.github_repo}:ref:${ref}"
+            for sub in flatten([
+              for repo, refs in var.github_trusted : [
+                for ref in refs : "repo:${repo}:ref:${ref}"
+              ]
+            ]) : sub
           ]
         }
       }
