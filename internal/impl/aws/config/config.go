@@ -36,6 +36,7 @@ func SessionFields() []*service.ConfigField {
 		service.NewObjectField("credentials",
 			service.NewStringField("profile").
 				Description("A profile from `~/.aws/credentials` to use.").
+				ShortDescription("A profile from ~/.aws/credentials to use.").
 				Optional(),
 			service.NewStringField("id").
 				Description("The ID of credentials to use.").
@@ -48,6 +49,7 @@ func SessionFields() []*service.ConfigField {
 				Optional().Advanced(),
 			service.NewBoolField("from_ec2_role").
 				Description("Use the credentials of a host EC2 machine configured to assume https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html[an IAM role associated with the instance^].").
+				ShortDescription("Use the credentials of a host EC2 machine assuming an IAM role associated with the instance.").
 				Optional().Version("4.2.0"),
 			service.NewStringField("role").
 				Description("A role ARN to assume.").
@@ -57,6 +59,7 @@ func SessionFields() []*service.ConfigField {
 				Optional().Advanced()).
 			Advanced().
 			Optional().
-			Description("Optional manual configuration of AWS credentials to use. More information can be found in xref:guides:cloud/aws.adoc[]."),
+			Description("Optional manual configuration of AWS credentials to use. More information can be found in xref:guides:cloud/aws.adoc[].").
+			ShortDescription("Optional manual configuration of AWS credentials to use."),
 	}
 }

@@ -30,6 +30,9 @@ const (
 	// defaultStoredProcName schema is inferred from the provided checkpoint cache config
 	// the stored procedure name cannot be configured by the user
 	defaultStoredProcName = "CdcCheckpointCacheUpdate"
+	// lsnByteLength is the fixed byte width of a SQL Server LSN (Log Sequence Number):
+	// 4 bytes VLF sequence number + 4 bytes log block offset + 2 bytes slot number.
+	lsnByteLength = 10
 )
 
 // allowedTableIdentifiers is used for validating cache table names
@@ -81,11 +84,6 @@ func newCheckpointCache(
 		return nil, fmt.Errorf("connecting to microsoft sql server for caching checkpoints: %w", err)
 	}
 
-	if err := createUpsertStoredProc(ctx, db, cacheTable); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("creating checkpoint cache write stored procedure: %w", err)
-	}
-
 	if created, err := createCacheTable(ctx, db, cacheTable); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("creating checkpoint cache table '%s': %w", cacheTable.String(), err)
@@ -93,6 +91,15 @@ func newCheckpointCache(
 		log.Infof("Created checkpoint cache table '%s'", cacheTable.String())
 	} else {
 		log.Infof("Found existing checkpoint cache table '%s'", cacheTable.String())
+	}
+
+	if err := validateCacheColumnType(ctx, db, cacheTable.String(), log); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("validating checkpoint cache table '%s': %w", cacheTable.String(), err)
+	}
+	if err := createUpsertStoredProc(ctx, db, cacheTable); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("creating checkpoint cache write stored procedure: %w", err)
 	}
 
 	// create a prepared statement for calling the stored proc (created in same schema as cache table) during Set operations to remove avoidable overhead
@@ -120,20 +127,34 @@ func newCheckpointCache(
 }
 
 // Get a cache item, we only do this at start up, key can be ignored as we only ever store one entry.
+//
+// cache_val is read via CONVERT(varbinary(10), cache_val), which recovers a legacy
+// varchar column byte-for-byte and is a no-op if already varbinary. DATALENGTH guards
+// against CONVERT silently truncating a too-long source.
 func (c *checkpointCache) Get(ctx context.Context, _ string) ([]byte, error) {
 	if c.db == nil {
 		return nil, fmt.Errorf("checkpoint cache not initialised for get operation: %w", service.ErrNotConnected)
 	}
 
-	var val []byte
-	q := "SELECT cache_val FROM %s WHERE cache_key = ?;"
-	if err := c.db.QueryRowContext(ctx, fmt.Sprintf(q, c.cacheTableName.String()), defaultCacheKey).Scan(&val); err != nil {
+	var (
+		converted []byte
+		rawLen    sql.NullInt64
+	)
+	q := "SELECT CONVERT(varbinary(%d), cache_val), DATALENGTH(cache_val) FROM %s WHERE cache_key = ?;"
+	if err := c.db.QueryRowContext(ctx, fmt.Sprintf(q, lsnByteLength, c.cacheTableName.String()), defaultCacheKey).Scan(&converted, &rawLen); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, service.ErrKeyNotFound
 		}
 		return nil, fmt.Errorf("querying checkpoint cache: %w", err)
 	}
-	return val, nil
+	if !rawLen.Valid {
+		// cache_val is NULL - no checkpoint cached yet
+		return nil, nil
+	}
+	if rawLen.Int64 != lsnByteLength {
+		return nil, fmt.Errorf("checkpoint cache table '%s' has a cache_val entry that is not a valid %d-byte LSN and cannot be safely recovered; please drop the cache entry and resnapshot data if necessary", c.cacheTableName.String(), lsnByteLength)
+	}
+	return converted, nil
 }
 
 // Set a cache item, specifying an optional TTL. It is okay for caches to
@@ -167,16 +188,44 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 	BEGIN
 		CREATE TABLE %s (
 			cache_key varchar(7) NOT NULL PRIMARY KEY,
-			cache_val varchar(100)
+			cache_val varbinary(%d)
 		);
 		SET @created = 1;
 	END;
 	SELECT @created;`
 	var created bool
-	if err := db.QueryRowContext(ctx, fmt.Sprintf(q, tbl.schema, tbl.name, tbl.String())).Scan(&created); err != nil {
+	if err := db.QueryRowContext(ctx, fmt.Sprintf(q, tbl.schema, tbl.name, tbl.String(), lsnByteLength)).Scan(&created); err != nil {
 		return false, err
 	}
 	return created, nil
+}
+
+// validateCacheColumnType only accepts varchar (legacy) and varbinary (current) - the
+// only two shapes this connector has ever produced. No DDL is run; Get recovers a
+// legacy varchar column via CONVERT on read.
+func validateCacheColumnType(ctx context.Context, db *sql.DB, tableName string, log *service.Logger) error {
+	var typeName string
+	q := `
+	SELECT t.name FROM sys.columns c JOIN sys.types t ON t.user_type_id = c.user_type_id
+	WHERE c.object_id = OBJECT_ID(?) AND c.name = 'cache_val';`
+	if err := db.QueryRowContext(ctx, q, tableName).Scan(&typeName); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// table/column not found is unexpected here since createCacheTable runs first,
+			// but treat as nothing to validate rather than failing startup.
+			return nil
+		}
+		return fmt.Errorf("inspecting checkpoint cache column type: %w", err)
+	}
+
+	switch typeName {
+	case "varchar":
+		log.Infof("Checkpoint cache table '%s' has a legacy varchar cache_val column; LSNs will be recovered via CONVERT on read rather than migrated. No action is required. If a cached value is ever found not to be a valid %d-byte LSN, this pipeline will fail to start until the entry is cleared.", tableName, lsnByteLength)
+		return nil
+	case "varbinary":
+		return nil
+	default:
+		return fmt.Errorf("checkpoint cache table '%s' has a cache_val column of unexpected type '%s'; expected varchar (legacy) or varbinary (current) - manual inspection is required", tableName, typeName)
+	}
 }
 
 func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTable) error {
@@ -186,7 +235,7 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 	q := `
 	CREATE OR ALTER PROCEDURE %s
 		@Key varchar(7),
-		@Value varchar(100)
+		@Value varbinary(%d)
 	AS
 	BEGIN
 		SET NOCOUNT ON;
@@ -195,7 +244,7 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 		ELSE
 			INSERT INTO %s (cache_key, cache_val) VALUES (@Key, @Value);
 	END;`
-	if _, err := db.ExecContext(ctx, fmt.Sprintf(q, storedProcFullName, tableName, tableName, tableName)); err != nil {
+	if _, err := db.ExecContext(ctx, fmt.Sprintf(q, storedProcFullName, lsnByteLength, tableName, tableName, tableName)); err != nil {
 		return err
 	}
 	return nil

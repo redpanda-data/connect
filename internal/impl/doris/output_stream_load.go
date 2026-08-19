@@ -182,11 +182,13 @@ func dorisStreamLoadSpec() *service.ConfigSpec {
 		Description(dorisStreamLoadDescription()).
 		Field(service.NewStringField(dsFieldURL).
 			Description("Backward-compatible single Doris FE HTTP URL, for example http://fe_host:8030. When fe_urls is provided it takes precedence.").
+			ShortDescription("A single Doris FE HTTP URL. fe_urls takes precedence when provided.").
 			Example("http://127.0.0.1:8030").
 			Optional().
 			Advanced()).
 		Field(service.NewStringListField(dsFieldFEURLs).
 			Description("A list of Doris FE HTTP URLs. The sink will try these FE endpoints in order with per-request failover, and the starting FE is rotated across requests.").
+			ShortDescription("Doris FE HTTP URLs, tried in order with per-request failover.").
 			Example([]string{"http://fe1:8030", "http://fe2:8030"}).
 			Default([]any{}).
 			Optional()).
@@ -204,6 +206,7 @@ func dorisStreamLoadSpec() *service.ConfigSpec {
 			Secret()).
 		Field(service.NewIntField(dsFieldQueryPort).
 			Description("Doris FE MySQL query port, used by ConnectionTest to verify that the target database and table exist. Set to 0 to disable query-port checks.").
+			ShortDescription("Doris FE MySQL query port, used to verify the target database and table exist. Set to 0 to disable.").
 			Default(dsDefaultQueryPort).
 			Advanced()).
 		Field(service.NewStringEnumField(dsFieldFormat, "json", "csv").
@@ -244,6 +247,7 @@ func dorisStreamLoadSpec() *service.ConfigSpec {
 			Advanced()).
 		Field(service.NewStringField(dsFieldGroupCommit).
 			Description("Optional Doris group_commit mode. Valid values are sync_mode, async_mode, and off_mode. When omitted Doris uses the server default behavior.").
+			ShortDescription("Optional Doris group_commit mode: sync_mode, async_mode or off_mode.").
 			Default("").
 			Optional().
 			Advanced()).

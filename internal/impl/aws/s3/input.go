@@ -42,16 +42,17 @@ import (
 
 const (
 	// S3 Input SQS Fields
-	s3iSQSFieldURL              = "url"
-	s3iSQSFieldEndpoint         = "endpoint"
-	s3iSQSFieldEnvelopePath     = "envelope_path"
-	s3iSQSFieldKeyPath          = "key_path"
-	s3iSQSFieldBucketPath       = "bucket_path"
-	s3iSQSFieldDelayPeriod      = "delay_period"
-	s3iSQSFieldMaxMessages      = "max_messages"
-	s3iSQSFieldWaitTimeSeconds  = "wait_time_seconds"
-	s3iSQSNackVisibilityTimeout = "nack_visibility_timeout"
-	s3iSQSFieldOnMissingObject  = "on_missing_object"
+	s3iSQSFieldURL                 = "url"
+	s3iSQSFieldEndpoint            = "endpoint"
+	s3iSQSFieldEnvelopePath        = "envelope_path"
+	s3iSQSFieldKeyPath             = "key_path"
+	s3iSQSFieldBucketPath          = "bucket_path"
+	s3iSQSFieldDelayPeriod         = "delay_period"
+	s3iSQSFieldMaxMessages         = "max_messages"
+	s3iSQSFieldWaitTimeSeconds     = "wait_time_seconds"
+	s3iSQSNackVisibilityTimeout    = "nack_visibility_timeout"
+	s3iSQSFieldZeroKeyWarnInterval = "zero_key_warn_interval"
+	s3iSQSFieldOnMissingObject     = "on_missing_object"
 
 	// Values for s3iSQSFieldOnMissingObject.
 	s3iSQSOnMissingObjectDrop = "drop"
@@ -66,16 +67,17 @@ const (
 )
 
 type s3iSQSConfig struct {
-	URL               string
-	Endpoint          string
-	EnvelopePath      string
-	KeyPath           string
-	BucketPath        string
-	DelayPeriod       string
-	MaxMessages       int64
-	WaitTimeSeconds   int64
-	VisibilityTimeout int32
-	OnMissingObject   string
+	URL                 string
+	Endpoint            string
+	EnvelopePath        string
+	KeyPath             string
+	BucketPath          string
+	DelayPeriod         string
+	MaxMessages         int64
+	WaitTimeSeconds     int64
+	VisibilityTimeout   int32
+	ZeroKeyWarnInterval time.Duration
+	OnMissingObject     string
 }
 
 func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err error) {
@@ -104,6 +106,9 @@ func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err
 		return
 	}
 	if conf.VisibilityTimeout, err = baws.Int32Field(pConf, s3iSQSNackVisibilityTimeout); err != nil {
+		return
+	}
+	if conf.ZeroKeyWarnInterval, err = pConf.FieldDuration(s3iSQSFieldZeroKeyWarnInterval); err != nil {
 		return
 	}
 	if conf.OnMissingObject, err = pConf.FieldString(s3iSQSFieldOnMissingObject); err != nil {
@@ -165,6 +170,8 @@ If your notification events are being routed to SQS via an SNS topic then the ev
 
 When using SQS please make sure you have sensible values for `+"`sqs.max_messages`"+` and also the visibility timeout of the queue itself. When Redpanda Connect consumes an S3 object the SQS message that triggered it is not deleted until the S3 object has been sent onwards. This ensures at-least-once crash resiliency, but also means that if the S3 object takes longer to process than the visibility timeout of your queue then the same objects might be processed multiple times.
 
+Amazon S3 sends an `+"`s3:TestEvent`"+` notification whenever a bucket's event configuration is saved, to verify the queue is reachable. Redpanda Connect detects these (including via an SNS envelope) and deletes them automatically. Any other message with no extractable target key, for example due to a misconfigured `+"`sqs.key_path`"+`/`+"`sqs.bucket_path`"+`, is logged as a warning and left on the queue instead.
+
 == Download large files
 
 When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a `+"<<scanner, `scanner`>>"+` can be specified that determines how to break the input into smaller individual messages.
@@ -190,6 +197,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 		Fields(
 			service.NewStringField(s3iFieldBucket).
 				Description("The bucket to consume from. If the field `sqs.url` is specified this field is optional.").
+				ShortDescription("The bucket to consume from. Optional when sqs.url is specified.").
 				Default(""),
 			service.NewStringField(s3iFieldPrefix).
 				Description("An optional path prefix, if set only objects with the prefix are consumed when walking a bucket.").
@@ -199,6 +207,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 		Fields(
 			service.NewBoolField(s3iFieldForcePathStyleURLs).
 				Description("Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints.").
+				ShortDescription("Use path style URLs when downloading keys, often required for custom endpoints.").
 				Default(false).
 				Advanced(),
 			service.NewBoolField(s3iFieldDeleteObjects).
@@ -218,16 +227,20 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Advanced(),
 				service.NewStringField(s3iSQSFieldKeyPath).
 					Description("A xref:configuration:field_paths.adoc[dot path] whereby object keys are found in SQS messages.").
+					ShortDescription("A dot path locating object keys within SQS messages.").
 					Default("Records.*.s3.object.key"),
 				service.NewStringField(s3iSQSFieldBucketPath).
 					Description("A xref:configuration:field_paths.adoc[dot path] whereby the bucket name can be found in SQS messages.").
+					ShortDescription("A dot path locating the bucket name within SQS messages.").
 					Default("Records.*.s3.bucket.name"),
 				service.NewStringField(s3iSQSFieldEnvelopePath).
 					Description("A xref:configuration:field_paths.adoc[dot path] of a field to extract an enveloped JSON payload for further extracting the key and bucket from SQS messages. This is specifically useful when subscribing an SQS queue to an SNS topic that receives bucket events.").
+					ShortDescription("Dot path to a field holding an enveloped JSON payload, from which the key and bucket are extracted.").
 					Default("").
 					Example("Message"),
 				service.NewStringField(s3iSQSFieldDelayPeriod).
 					Description("An optional period of time to wait from when a notification was originally sent to when the target key download is attempted.").
+					ShortDescription("How long to wait after a notification was sent before attempting the target key download.").
 					Example("10s").
 					Example("5m").
 					Default("").
@@ -244,6 +257,14 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Description("Custom SQS Nack Visibility timeout in seconds. Default is 0").
 					Default(0).
 					Optional(),
+				service.NewDurationField(s3iSQSFieldZeroKeyWarnInterval).
+					Description("A message from which no target key can be extracted (e.g. due to a misconfigured `key_path`/`bucket_path`) is never deleted, so it's redelivered and re-evaluated repeatedly until the underlying issue is fixed. This field limits how often that condition is logged as a warning, to avoid flooding the logs; every occurrence is still logged at debug level. Set to `0s` to warn on every occurrence.").
+					ShortDescription("How often to repeat the warning for a message with no extractable target key.").
+					Example("10s").
+					Example("0s").
+					Default("30s").
+					LintRule(`root = if this.parse_duration().catch(0) < 0 { [ "`+s3iSQSFieldZeroKeyWarnInterval+` must not be negative" ] }`).
+					Advanced(),
 				service.NewStringEnumField(s3iSQSFieldOnMissingObject, s3iSQSOnMissingObjectDrop, s3iSQSOnMissingObjectNack).
 					Description("How to handle an SQS notification whose S3 object cannot be found (a `NoSuchKey`/404 on download). `drop` (the default, and the historical behaviour) logs a warning, acks the notification and discards it - appropriate when `delete_objects` is enabled, since a redelivered notification for an already-deleted object is expected and harmless. `nack` instead logs an error and returns the notification to the queue so that an SQS redrive policy can dead-letter it after its `maxReceiveCount`; this is only safe when `delete_objects` is `false`, otherwise notifications for legitimately-deleted objects would be dead-lettered.").
 					Default(s3iSQSOnMissingObjectDrop).
@@ -418,6 +439,8 @@ type sqsTargetReader struct {
 	nextRequest time.Time
 
 	pending []*s3ObjectTarget
+
+	lastZeroKeyWarnAt time.Time
 }
 
 func newSQSTargetReader(
@@ -483,20 +506,20 @@ func digStrsFromSlices(slice []any) []string {
 	return strs
 }
 
-func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, error) {
+func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) (*gabs.Container, []s3ObjectTarget, error) {
 	gObj, err := gabs.ParseJSON([]byte(*sqsMsg))
 	if err != nil {
-		return nil, fmt.Errorf("parsing SQS message: %v", err)
+		return nil, nil, fmt.Errorf("parsing SQS message: %v", err)
 	}
 
 	if s.conf.SQS.EnvelopePath != "" {
 		d := gObj.Path(s.conf.SQS.EnvelopePath).Data()
 		if str, ok := d.(string); ok {
 			if gObj, err = gabs.ParseJSON([]byte(str)); err != nil {
-				return nil, fmt.Errorf("parsing enveloped message: %v", err)
+				return nil, nil, fmt.Errorf("parsing enveloped message: %v", err)
 			}
 		} else {
-			return nil, fmt.Errorf("expected string at envelope path, found %T", d)
+			return nil, nil, fmt.Errorf("expected string at envelope path, found %T", d)
 		}
 	}
 
@@ -521,14 +544,14 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 	objects := make([]s3ObjectTarget, 0, len(keys))
 	for i, key := range keys {
 		if key, err = url.QueryUnescape(key); err != nil {
-			return nil, fmt.Errorf("parsing key from SQS message: %v", err)
+			return nil, nil, fmt.Errorf("parsing key from SQS message: %v", err)
 		}
 		bucket := s.conf.Bucket
 		if len(buckets) > i {
 			bucket = buckets[i]
 		}
 		if bucket == "" {
-			return nil, errors.New("required bucket was not found in SQS message")
+			return nil, nil, errors.New("required bucket was not found in SQS message")
 		}
 		objects = append(objects, s3ObjectTarget{
 			key:    key,
@@ -536,7 +559,8 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 		})
 	}
 
-	return objects, nil
+	// return gabs.Container to save reparsing
+	return gObj, objects, nil
 }
 
 func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget, error) {
@@ -581,15 +605,30 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 			continue
 		}
 
-		objects, err := s.parseObjectPaths(sqsMsg.Body)
+		gObj, objects, err := s.parseObjectPaths(sqsMsg.Body)
 		if err != nil {
 			addDudFn(sqsMsg)
 			s.log.Errorf("SQS extract key error: %v", err)
 			continue
 		}
 		if len(objects) == 0 {
+			if isS3TestEvent(gObj) {
+				s.log.Debugf("Received S3 test event, deleting: %s", *sqsMsg.Body)
+				if err := s.ackSQSMessage(ctx, sqsMsg); err != nil {
+					s.log.Errorf("Failed to delete SQS test event message: %v", err)
+				}
+				continue
+			}
 			addDudFn(sqsMsg)
-			s.log.Debug("Extracted zero target keys from SQS message")
+			if now := time.Now(); now.Sub(s.lastZeroKeyWarnAt) >= s.conf.SQS.ZeroKeyWarnInterval {
+				s.lastZeroKeyWarnAt = now
+				s.log.Warnf(
+					"Extracted zero target keys from SQS message using key_path %q (bucket_path %q) - this likely indicates a misconfigured key_path/bucket_path, or an unrecognised notification event type: %s",
+					s.conf.SQS.KeyPath, s.conf.SQS.BucketPath, *sqsMsg.Body,
+				)
+			} else {
+				s.log.Debugf("Extracted zero target keys from SQS message: %s", *sqsMsg.Body)
+			}
 			continue
 		}
 
@@ -681,6 +720,14 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg sqstypes.Messag
 		ReceiptHandle: msg.ReceiptHandle,
 	})
 	return err
+}
+
+func isS3TestEvent(gObj *gabs.Container) bool {
+	if gObj == nil {
+		return false
+	}
+	event, ok := gObj.Path("Event").Data().(string)
+	return ok && event == "s3:TestEvent"
 }
 
 //------------------------------------------------------------------------------

@@ -10,9 +10,13 @@ package oracledb_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -64,7 +68,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 oracledb_cdc:
   connection_string: ` + cdbConnStr + `
   pdb_name: ` + pdbName + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   max_parallel_snapshot_tables: 2
   snapshot_max_batch_size: 10
   logminer:
@@ -269,7 +273,7 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	}
 
 	var (
-		outBatches   []string
+		outBatches   []*service.Message
 		outBatchesMu sync.Mutex
 		stream       *service.Stream
 		err          error
@@ -279,7 +283,7 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_only
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
   logminer:
@@ -291,15 +295,13 @@ oracledb_cdc:
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
 			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				outBatches = append(outBatches, string(msgBytes))
+				outBatches = append(outBatches, msg)
 			}
 			return nil
 		}))
@@ -325,6 +327,111 @@ oracledb_cdc:
 			return got >= want
 		}, time.Minute*5, time.Second*1)
 		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
+		outBatchesMu.Lock()
+
+		expectedSCN, _ := outBatches[0].MetaGetMut("scn")
+		expectedCommitTs, _ := outBatches[0].MetaGetMut("commit_ts_ms")
+		for i, msg := range outBatches {
+			scn, ok := msg.MetaGet("scn")
+			assert.Truef(t, ok, "Expected snapshot message[%d] to have scn metadata", i)
+			assert.NotEmptyf(t, scn, "Expected snapshot message[%d] scn metadata to be non-empty", i)
+			assert.Equal(t, expectedSCN, scn, "Expected snapshot scn to be identical for all messages but was not")
+
+			commitTs, ok := msg.MetaGet("commit_ts_ms")
+			assert.Truef(t, ok, "Expected snapshot message[%d] to have commit_ts_ms metadata", i)
+			assert.NotEmptyf(t, commitTs, "Expected snapshot message[%d] commit_ts_ms metadata to be non-empty", i)
+			assert.Equal(t, expectedCommitTs, commitTs, "Expected snapshot commit_ts_ms to be identical for all messages but was not")
+		}
+		outBatchesMu.Unlock()
+	}
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
+}
+
+func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
+	integration.CheckSkip(t)
+
+	// Create tables
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
+
+	// Insert 2000 rows across tables for initial snapshot streaming
+	want := 1000
+	for range 1000 {
+		db.MustExec("INSERT INTO testdb.foo (id, name, excluded_col) VALUES (DEFAULT, 'foo_name', 'should_not_appear')")
+		db.MustExec("INSERT INTO testdb.foo2 (id, name, excluded_col) VALUES (DEFAULT, 'foo2_name', 'should_not_appear')")
+	}
+
+	// wait for changes to propagate to redo logs
+	time.Sleep(5 * time.Second)
+
+	var (
+		outBatches   []string
+		outBatchesMu sync.Mutex
+		stream       *service.Stream
+		err          error
+	)
+	t.Log("Launching component...")
+	{
+		cfg := `
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: true
+  snapshot_filters:
+    testdb.foo: "SELECT ID, NAME FROM TESTDB.FOO WHERE ID > 500"
+    TESTDB.FOO2: "SELECT ID, NAME FROM TESTDB.FOO2 WHERE ID > 500"
+  snapshot_max_batch_size: 10
+  max_parallel_snapshot_tables: 3
+  logminer:
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.FOO", "TESTDB.FOO2"]
+  exclude: ["TESTDB.DOESNOTEXIST"]`
+
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				assert.NoError(t, err)
+				outBatches = append(outBatches, string(msgBytes))
+			}
+			return nil
+		}))
+
+		stream, err = streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		t.Log("Verifying snapshot changes...")
+		var got int
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			got = len(outBatches)
+			return got >= want
+		}, time.Minute*5, time.Second*1)
+		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
+
+		outBatchesMu.Lock()
+		for _, msg := range outBatches {
+			var row map[string]any
+			require.NoError(t, json.Unmarshal([]byte(msg), &row))
+			assert.Contains(t, row, "NAME", "expected NAME column in snapshot row")
+			assert.NotContains(t, row, "EXCLUDED_COL", "expected EXCLUDED_COL to be absent from snapshot row")
+		}
+		outBatchesMu.Unlock()
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
@@ -345,7 +452,7 @@ func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -540,22 +647,24 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
+    max_session_age: 5s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]
   batching:
     count: 500`
 
+		var logBuf oracledbtest.SyncBuffer
+
 		t.Log("Launching component...")
 		{
 			streamBuilder := service.NewStreamBuilder()
+			streamBuilder.SetLogger(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logBuf), &slog.HandlerOptions{Level: slog.LevelDebug})))
 			require.NoError(t, streamBuilder.AddInputYAML(cfg))
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				for _, msg := range mb {
 					msgChan <- msg
@@ -599,6 +708,13 @@ oracledb_cdc:
 			assert.Len(t, row, 2)
 			assert.Contains(t, row, "ID")
 			assert.EqualValues(t, "1", row["VAL"])
+		})
+
+		t.Run("Session is forcibly ended after max_session_age", func(t *testing.T) {
+			require.Eventually(t, func() bool {
+				return strings.Contains(logBuf.String(), "exceeding max_session_age of 5s")
+			}, 30*time.Second, 4*time.Second,
+				"expected a LogMiner session-expiry debug log entry within max_session_age (5s)")
 		})
 
 		t.Run("Streaming update changes...", func(t *testing.T) {
@@ -648,7 +764,7 @@ oracledb_cdc:
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -784,7 +900,7 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 			cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   logminer:
     lob_enabled: false
     min_scn_window_size: 0
@@ -875,6 +991,7 @@ oracledb_cdc:
 oracledb_cdc:
   connection_string: ` + connStr + `
   stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   logminer:
     lob_enabled: true
     min_scn_window_size: 0
@@ -945,11 +1062,105 @@ oracledb_cdc:
 		"OUTOFLINELOB": "`+outofline+`"
 		}`, batch.Clone()[0], "Failed to assert streaming LOB columns")
 		}
+
+		// Stop inside the subtest: leaving this stream running would let its
+		// in-flight acks re-write the shared default checkpoint key while
+		// later legs run.
+		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
 
-	if stream != nil {
-		require.NoError(t, stream.StopWithin(time.Second*10))
+	// Non-inline LOB fetching: with `lob fetch=stream` (or `post`) in the
+	// connection string, go-ora reports LOB columns under their locator type
+	// names (OCIClobLocator/OCIBlobLocator) instead of rewriting them to
+	// LongVarChar/LongRaw as inline mode does — a different set of driver
+	// spellings feeding the snapshot scanner, the schema mapping, and the
+	// lob_enabled filter. These legs assert snapshot behaviour only: the
+	// LogMiner streaming path reads redo records and is independent of the
+	// client's LOB fetch mode, which the inline legs above already cover.
+	//
+	// Each leg uses its own checkpoint_cache_key: the default key is shared
+	// by every oracledb_cdc input against this database, so a stream from an
+	// earlier subtest that is still flushing acks could re-write a checkpoint
+	// between our TRUNCATE and Connect(), making the leg silently skip the
+	// snapshot it exists to assert.
+	streamFetchConnStr := connStr + "?lob%20fetch=stream"
+	blobPayload := []byte(strings.Repeat("C", 4000))
+	lobStreamRows := 5
+
+	runLobStreamLeg := func(t *testing.T, table string, lobEnabled bool, wantRow string) {
+		t.Helper()
+		sql := `CREATE TABLE ` + table + ` (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),cloblob NCLOB,bloblob BLOB)`
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), table, sql))
+		for range lobStreamRows {
+			db.MustExec("INSERT INTO "+table+" (varcharcol, cloblob, bloblob) VALUES (:1, :2, :3)", "snapshot", outofline, blobPayload)
+		}
+
+		var batch oracledbtest.Batch
+		cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  snapshot_mode: snapshot_and_stream
+  checkpoint_cache_key: %s
+  logminer:
+    lob_enabled: %t
+    min_scn_window_size: 0
+  include: ["%s"]`, streamFetchConnStr, strings.ReplaceAll(table, ".", "_"), lobEnabled, strings.ToUpper(table))
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			batch.Lock()
+			defer batch.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				assert.NoError(t, err)
+				batch.Msgs = append(batch.Msgs, string(msgBytes))
+			}
+			return nil
+		}))
+
+		leg, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(leg.Resources())
+		// Cleanup rather than a caller-side StopWithin: a require failure
+		// below must not leak a live stream into subsequent legs.
+		t.Cleanup(func() {
+			if err := leg.StopWithin(time.Second * 10); err != nil {
+				t.Errorf("stopping %s stream: %v", table, err)
+			}
+		})
+		go func() {
+			if err := leg.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		var got int
+		assert.Eventually(t, func() bool {
+			got = batch.Count()
+			return got >= lobStreamRows
+		}, time.Minute*5, time.Second*1)
+		require.Truef(t, (got == lobStreamRows), "Wanted %d snapshot messages but got %d", lobStreamRows, got)
+		require.JSONEq(t, wantRow, batch.Clone()[0], "Failed to assert snapshot LOB columns under lob fetch=stream")
 	}
+
+	t.Run("lob_enabled=false lob-fetch=stream", func(t *testing.T) {
+		runLobStreamLeg(t, "testdb.lobstreamdisabled", false, `{
+		"ID": "1",
+		"VARCHARCOL": "snapshot",
+		"CLOBLOB": null,
+		"BLOBLOB": null
+		}`)
+	})
+
+	t.Run("lob_enabled=true lob-fetch=stream", func(t *testing.T) {
+		runLobStreamLeg(t, "testdb.lobstreamenabled", true, `{
+		"ID": "1",
+		"VARCHARCOL": "snapshot",
+		"CLOBLOB": "`+outofline+`",
+		"BLOBLOB": "`+base64.StdEncoding.EncodeToString(blobPayload)+`"
+		}`)
+	})
 }
 
 func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
@@ -2258,4 +2469,75 @@ oracledb_cdc:
 
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
+}
+
+// TestIntegrationOracleDBCDCNationalCharset verifies that non-ASCII data in
+// NVARCHAR2 columns — which Oracle LogMiner emits as UNISTR('...\XXXX...') in
+// SQL_REDO — is decoded to the correct UTF-8 string end-to-end.
+func TestIntegrationOracleDBCDCNationalCharset(t *testing.T) {
+	integration.CheckSkip(t)
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	ctx := t.Context()
+
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, "testdb.natchar",
+		"CREATE TABLE testdb.natchar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, nv NVARCHAR2(50))"))
+
+	msgChan := make(chan *service.Message, 64)
+	cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  snapshot_mode: none
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["TESTDB.NATCHAR"]
+  batching:
+    count: 1`
+
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(cfg))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			select {
+			case msgChan <- msg:
+			default:
+			}
+		}
+		return nil
+	}))
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() { _ = stream.Run(ctx) }()
+
+	time.Sleep(10 * time.Second)
+	// café (BMP) and 😀 (U+1F600, requires a UTF-16 surrogate pair).
+	db.MustExec("INSERT INTO testdb.natchar (nv) VALUES (:1)", "café 😀")
+
+	var got string
+	require.Eventually(t, func() bool {
+		select {
+		case msg := <-msgChan:
+			b, err := msg.AsBytes()
+			if err != nil {
+				return false
+			}
+			var row map[string]any
+			if err := json.Unmarshal(b, &row); err != nil {
+				return false
+			}
+			if v, ok := row["NV"].(string); ok && v != "" {
+				got = v
+				return true
+			}
+			return false
+		default:
+			return false
+		}
+	}, 30*time.Second, 250*time.Millisecond, "did not receive the NVARCHAR2 change event")
+
+	assert.Equal(t, "café 😀", got, "NVARCHAR2 value should be decoded from UNISTR to correct UTF-8")
+	_ = stream.StopWithin(10 * time.Second)
 }

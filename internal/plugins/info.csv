@@ -121,7 +121,8 @@ inproc                    ,output    ,inproc                    ,certified  ,n  
 insert_part               ,processor ,insert_part               ,certified  ,n          ,y     ,y              ,
 jaeger                    ,tracer    ,jaeger                    ,community  ,n          ,n     ,n              ,cloud uses a managed tracing integration
 javascript                ,processor ,javascript                ,certified  ,n          ,n     ,n              ,security: arbitrary code execution
-jira                      ,processor ,jira                      ,certified  ,n          ,y     ,n              ,
+jira                      ,input     ,jira                      ,certified  ,n          ,y     ,n              ,
+jira                      ,processor ,jira                      ,certified  ,y          ,y     ,n              ,
 jmespath                  ,processor ,JMESPath                  ,certified  ,n          ,y     ,y              ,
 jq                        ,processor ,jq                        ,certified  ,n          ,y     ,y              ,
 json_api                  ,metric    ,json_api                  ,certified  ,n          ,n     ,n              ,cloud uses a managed metrics integration
@@ -312,6 +313,7 @@ timeplus                  ,input     ,timeplus                  ,community  ,n  
 timeplus                  ,output    ,timeplus                  ,community  ,n          ,y     ,y              ,
 to_the_end                ,scanner   ,to_the_end                ,certified  ,n          ,y     ,y              ,
 try                       ,processor ,try                       ,certified  ,n          ,y     ,y              ,
+try_catch                 ,processor ,try_catch                 ,community  ,n          ,y     ,y              ,
 ttlru                     ,cache     ,ttlru                     ,community  ,n          ,y     ,y              ,
 twitter_search            ,input     ,twitter_search            ,community  ,n          ,n     ,n              ,not yet certified for cloud
 unarchive                 ,processor ,unarchive                 ,certified  ,n          ,y     ,y              ,

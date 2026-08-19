@@ -10,7 +10,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      CGO_ENABLED: 0
+      CGO_ENABLED: 1
     steps:
       - name: Free disk space
         run: |

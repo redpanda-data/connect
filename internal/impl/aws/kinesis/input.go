@@ -124,6 +124,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 `).Fields(
 		service.NewStringListField(kiFieldStreams).
 			Description("One or more Kinesis data streams to consume from. Streams can either be specified by their name or full ARN. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").
+			ShortDescription("One or more Kinesis data streams to consume from, by name or full ARN. Shards are balanced across consumers automatically.").
 			Examples([]any{"foo", "arn:aws:kinesis:*:111122223333:stream/my-stream"}),
 		service.NewObjectField(kiFieldDynamoDB,
 			append([]*service.ConfigField{
@@ -139,19 +140,23 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 					Advanced(),
 				service.NewIntField(kiddbFieldReadCapacityUnits).
 					Description("Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
+					ShortDescription("Provisioned read capacity when creating the table with a billing_mode of PROVISIONED.").
 					Default(0).
 					Advanced(),
 				service.NewIntField(kiddbFieldWriteCapacityUnits).
 					Description("Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
+					ShortDescription("Provisioned write capacity when creating the table with a billing_mode of PROVISIONED.").
 					Default(0).
 					Advanced(),
 			},
 				config.SessionFields()...,
 			)...,
 		).
-			Description("Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams."),
+			Description("Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams.").
+			ShortDescription("The table used to store consumed sequence numbers per shard and coordinate balanced consumers."),
 		service.NewIntField(kiFieldCheckpointLimit).
 			Description("The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			ShortDescription("Maximum gap between the in-flight sequence and the latest acknowledged sequence.").
 			Default(1024),
 		service.NewAutoRetryNacksToggleField(),
 		service.NewDurationField(kiFieldCommitPeriod).
@@ -159,6 +164,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			Default("5s"),
 		service.NewDurationField(kiFieldStealGracePeriod).
 			Description("Determines how long beyond the next commit period a client will wait when stealing a shard for the current owner to store a checkpoint. A longer value increases the time taken to balance shards but reduces the likelihood of processing duplicate messages.").
+			ShortDescription("How long past the next commit period to wait for a shard's current owner to store a checkpoint.").
 			Default("2s"),
 		service.NewDurationField(kiFieldRebalancePeriod).
 			Description("The period of time between each attempt to rebalance shards across clients.").

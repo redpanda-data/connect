@@ -40,11 +40,14 @@ func FranzReaderToggledConfigFields() []*service.ConfigField {
 				Default(false),
 			service.NewIntField(krtFieldUnorderedCheckpointLimit).
 				Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
+				ShortDescription("How many messages of the same partition may be processed in parallel before back pressure is applied.").
 				Default(1024),
 			service.NewBatchPolicyField(krtFieldUnorderedBatching).
-				Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions."),
+				Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
+				ShortDescription("Batching policy applied per topic partition, grouping messages before they are flushed for processing."),
 		).
 			Description("Configures partition consumers to allow parallel and therefore unordered processing of messages of any given partition. This allows for better utilization of processing threads and asynchronous publishing at the output level. The maximum parallelization of each partition is determined by the checkpoint_limit field.").
+			ShortDescription("Allow parallel, and therefore unordered, processing of messages within a single partition.").
 			Advanced(),
 	)
 }
@@ -67,6 +70,13 @@ func NewFranzReaderToggledFromConfig(conf *service.ParsedConfig, res *service.Re
 
 			clientOpts:         optsFn,
 			franzRecordToMsgFn: FranzRecordToMessageV1,
+
+			// The toggled reader is only used by Redpanda branded inputs, and
+			// toggling unordered processing must not change the name of the
+			// consumer lag gauge, otherwise enabling it silently breaks lag
+			// dashboards and alerts. Hence we deliberately use the Redpanda
+			// name here rather than the default of the unordered reader.
+			lagMetricName: lagMetricNameRedpanda,
 		}
 
 		var err error

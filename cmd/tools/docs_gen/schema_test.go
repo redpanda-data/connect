@@ -45,7 +45,10 @@ func TestComponentExamples(t *testing.T) {
 				require.NoError(t, err)
 				for _, l := range lints {
 					// TODO: Remove this once kafka is out of the benthos repo examples
-					if !strings.Contains(l.What, "component kafka is deprecated") {
+					// The jira processor is deprecated in favour of the jira input but
+					// retains examples for its still-supported enrichment use case.
+					if !strings.Contains(l.What, "component kafka is deprecated") &&
+						!strings.Contains(l.What, "component jira is deprecated") {
 						t.Error(l.Error())
 					}
 				}

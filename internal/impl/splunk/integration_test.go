@@ -11,7 +11,6 @@ package splunk
 import (
 	"crypto/tls"
 	"io"
-	"runtime"
 	"testing"
 	"time"
 
@@ -29,20 +28,23 @@ import (
 
 func TestIntegrationSplunk(t *testing.T) {
 	integration.CheckSkip(t)
-	if runtime.GOOS == "darwin" {
-		t.Skip("CON-376: Splunk image is x86-only; Rosetta startup exceeds testcontainers 60s deadline")
-	}
 
 	dummySplunkPassword := "blobfishAreC00l!"
 	containerInputPort := "8089/tcp"
 	containerOutputPort := "8088/tcp"
 
-	// Splunk uses Ansible internally on startup and takes a long time.
+	// Splunk uses Ansible internally on startup and can take well over a minute
+	// to become ready.
 	startupTimeout := 10 * time.Minute
 	if deadline, ok := t.Deadline(); ok {
 		startupTimeout = time.Until(deadline) - 100*time.Millisecond
 	}
 
+	// WithStartupTimeout must be set on the strategy itself: the deadline passed
+	// to WithWaitStrategyAndDeadline only bounds the outer wait.ForAll, while the
+	// inner HTTP strategy otherwise falls back to its 60s default (which caps the
+	// wait via context.WithTimeout and wins over the longer outer deadline). See
+	// CON-376.
 	ctr, err := testcontainers.Run(t.Context(), "splunk/splunk:9.3.3",
 		testcontainers.WithImagePlatform("linux/amd64"),
 		testcontainers.WithExposedPorts(containerInputPort, containerOutputPort),
@@ -54,6 +56,7 @@ func TestIntegrationSplunk(t *testing.T) {
 		testcontainers.WithWaitStrategyAndDeadline(startupTimeout,
 			wait.ForHTTP("/services/collector/health").
 				WithPort(containerOutputPort).
+				WithStartupTimeout(startupTimeout).
 				WithTLS(true, &tls.Config{InsecureSkipVerify: true}). //nolint:gosec
 				WithResponseMatcher(func(body io.Reader) bool {
 					b, err := io.ReadAll(body)
@@ -90,7 +93,9 @@ output:
           event_source: "blobsource"
           event_sourcetype: "blobsourcetype"
           event_index: "main"
-          skip_cert_verify: true
+          tls:
+            enabled: true
+            skip_cert_verify: true
         processors:
           - mapping: |
               root = {
@@ -110,7 +115,9 @@ input:
     password: "$VAR3"
     query: |
       index="main" earliest=-5m@m latest=now id=$ID
-    skip_cert_verify: true
+    tls:
+      enabled: true
+      skip_cert_verify: true
   processors:
     - mapping: |
         root = this.result._raw.parse_json().data

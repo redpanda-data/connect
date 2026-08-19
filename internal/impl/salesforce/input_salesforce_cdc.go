@@ -110,37 +110,46 @@ Each ` + "`/data/...`" + ` topic requires Change Data Capture to be enabled for 
 	spec = spec.Fields(authFieldSpecs()...).
 		Field(service.NewStringListField(sfciFieldTopics).
 			Description("Pub/Sub topics to subscribe to. Each entry is one of: a bare sObject name (`Account` → `/data/AccountChangeEvent`), an explicit CDC channel (`/data/AccountChangeEvent`), the CDC firehose (`/data/ChangeEvents`), or a Platform Event topic (`/event/Order__e`, `/event/LoginEventStream`). Each topic gets its own gRPC subscription with an independent replay cursor.").
+			ShortDescription("Pub/Sub topics to subscribe to, as sObject names, explicit CDC channels, or platform events.").
 			Example([]string{"Account", "Contact"}).
 			Example([]string{"/data/ChangeEvents"}).
 			Example([]string{"Account", "/event/Order__e"}).
 			Example([]string{"Opportunity", "MyCustom__c", "/event/Sync_Requested__e"})).
 		Field(service.NewBoolField(sfciFieldStreamSnapshot).
 			Description("When true (default), paginate a full REST snapshot of every CDC sObject in `topics` before opening any streaming subscription. When false, skip the snapshot and start streaming immediately. Platform Event topics (`/event/...`) are always skipped — they have no REST equivalent.").
+			ShortDescription("Paginate a full REST snapshot of every CDC sObject in topics before opening a streaming subscription.").
 			Default(true)).
 		Field(service.NewStringEnumField(sfciFieldReplayPreset, sfciReplayLatest, sfciReplayEarliest).
 			Description("Initial replay position used per topic only on first run (when no checkpoint exists in the cache); ignored once a topic's replay ID has been written.\n\n- `latest`: Start from new events only; any changes between prior run and Connect are skipped.\n- `earliest`: Replay from the retention start (24h standard, 72h with enhanced retention). Use to recover missed events after outages.").
+			ShortDescription("Initial replay position per topic, used only on the first run when no checkpoint exists.").
 			Default(sfciReplayLatest)).
 		Field(service.NewIntField(sfciFieldSnapshotMaxBatchSize).
 			Description("Page size for the REST snapshot query — records per `/query` response. Must be between 200 and 2000 per Salesforce REST API limits. Larger pages reduce HTTP round trips; smaller pages reduce peak memory per fetch.").
+			ShortDescription("Records per REST snapshot query response. Must be between 200 and 2000.").
 			Default(2000).
 			Example(2000).
 			Example(500)).
 		Field(service.NewIntField(sfciFieldStreamBatchSize).
 			Description("Number of events requested per gRPC `Fetch` call, per topic. Higher values improve throughput at the cost of peak batch memory; lower values give steadier latency under load.").
+			ShortDescription("Number of events requested per gRPC Fetch call, per topic.").
 			Default(100).
 			Example(100).
 			Example(500)).
 		Field(service.NewIntField(sfciFieldMaxParallelSnapshotObjs).
 			Description("Number of sObjects snapshotted concurrently during the REST snapshot phase. Each in-flight snapshot consumes one HTTP connection and Salesforce API call quota. Default 1 serializes the work — raise when snapshotting many sObjects and your API limits permit.").
+			ShortDescription("Number of sObjects snapshotted concurrently during the REST snapshot phase.").
 			Default(1)).
 		Field(service.NewStringField(sfFieldCheckpointCache).
 			Description("Name of the cache resource used to persist snapshot cursor and per-topic replay IDs across restarts. The cache must be declared under the top-level `cache_resources` block. Choose a durable cache (Redis, Postgres, DynamoDB) for production; in-memory caches lose checkpoints on restart.").
+			ShortDescription("Cache resource persisting the snapshot cursor and per-topic replay IDs across restarts.").
 			Example("persistent_cache")).
 		Field(service.NewStringField(sfFieldCheckpointCacheKey).
 			Description("Key inside the checkpoint cache where this input's state is stored. Change when running multiple `salesforce_cdc` inputs against the same cache resource to avoid collisions.").
+			ShortDescription("Key within the checkpoint cache where this input's state is stored.").
 			Default("salesforce_cdc")).
 		Field(service.NewIntField(sfFieldCheckpointLimit).
 			Description("Maximum number of unacknowledged batches in flight (per topic) before that topic pauses reading. Prevents unbounded memory growth when downstream components stall. Higher values increase throughput in steady state; lower values bound memory under backpressure.").
+			ShortDescription("Maximum unacknowledged batches in flight per topic before that topic pauses reading.").
 			Default(1024)).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(grpcFieldSpec()).

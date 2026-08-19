@@ -1,4 +1,9 @@
 -- PostgreSQL Benchmark Setup Script
+CREATE TABLE IF NOT EXISTS public.rpcn_signal_table (
+    id SERIAL PRIMARY KEY,
+    type VARCHAR(32),
+    data TEXT
+);
 
 CREATE TABLE IF NOT EXISTS public.users (
     id            SERIAL PRIMARY KEY,
@@ -13,6 +18,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     login_count   INT             NOT NULL DEFAULT 0,
     balance       DECIMAL(10,2)   NOT NULL DEFAULT 0.00
 );
+ALTER TABLE public.users REPLICA IDENTITY FULL;
 
 CREATE TABLE IF NOT EXISTS public.products (
     id            SERIAL PRIMARY KEY,
@@ -25,6 +31,7 @@ CREATE TABLE IF NOT EXISTS public.products (
     created_at    TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     is_available  BOOLEAN         NOT NULL DEFAULT TRUE
 );
+ALTER TABLE public.products REPLICA IDENTITY FULL;
 
 CREATE TABLE IF NOT EXISTS public.cart (
     id         SERIAL PRIMARY KEY,
@@ -34,3 +41,4 @@ CREATE TABLE IF NOT EXISTS public.cart (
     price      DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     info       TEXT          NOT NULL
 );
+ALTER TABLE public.cart REPLICA IDENTITY FULL;

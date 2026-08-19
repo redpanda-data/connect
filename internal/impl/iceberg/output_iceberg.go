@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -67,6 +67,61 @@ type icebergOutput struct {
 	logger *service.Logger
 }
 
+// opMetrics holds counters for row-level operations and commit health. Row
+// operations share a single counter labelled by operation (insert/upsert/
+// delete), following the Prometheus convention of one metric with a label
+// rather than one metric per verb, so they aggregate cleanly. The holder is nil
+// in tests that construct writers/committers directly; the incr* methods are
+// nil-safe so callers need not check.
+type opMetrics struct {
+	rowOps         *service.MetricCounter // labelled by "operation"
+	commitFailures *service.MetricCounter
+}
+
+func newOpMetrics(m *service.Metrics) *opMetrics {
+	return &opMetrics{
+		rowOps:         m.NewCounter("iceberg_row_operations_total", "operation"),
+		commitFailures: m.NewCounter("iceberg_commit_failures_total"),
+	}
+}
+
+// NOTE: there is no importable seam here to assert emitted
+// counter *values* in a unit test. service.MockResources() backs its Metrics
+// with metrics.Noop() (which discards writes), and the only readable in-memory
+// implementation (metrics.NewLocal) lives in benthos-internal
+// internal/component/metrics, which a different module cannot import; nor is
+// there a public constructor for *service.Metrics that accepts a recording
+// MetricsExporter. Reading a value would therefore require either putting
+// opMetrics behind an interface (the refactor deliberately avoided) or standing
+// up a full stream + Prometheus scrape (disproportionate). Instead the row-count
+// values that feed rowOps are pinned by TestSplitByOperationCOWCountsFeedMetrics
+// on the writer side; the incr* label wiring is covered by the incr* methods'
+// own trivial mapping. Revisit if benthos exposes a public readable metrics mock.
+
+func (m *opMetrics) incrInserted(n int64) {
+	if m != nil && n > 0 {
+		m.rowOps.Incr(n, "insert")
+	}
+}
+
+func (m *opMetrics) incrUpserted(n int64) {
+	if m != nil && n > 0 {
+		m.rowOps.Incr(n, "upsert")
+	}
+}
+
+func (m *opMetrics) incrDeleted(n int64) {
+	if m != nil && n > 0 {
+		m.rowOps.Incr(n, "delete")
+	}
+}
+
+func (m *opMetrics) incrCommitFailure() {
+	if m != nil {
+		m.commitFailures.Incr(1)
+	}
+}
+
 // newIcebergOutputFromConfig creates a new Iceberg output from parsed configuration.
 func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*icebergOutput, error) {
 	// Parse catalog configuration
@@ -103,6 +158,41 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		return nil, fmt.Errorf("parsing commit config: %w", err)
 	}
 
+	// Parse row-level operation config
+	rowOpCfg, err := parseRowOpConfig(conf)
+	if err != nil {
+		return nil, fmt.Errorf("parsing row operation config: %w", err)
+	}
+
+	// Keyed (upsert/delete) writes rely on per-key ordering, but with more than
+	// one batch in flight concurrent batches can commit out of order, letting a
+	// stale upsert overwrite a newer one. Config linting flags this, but linting
+	// is advisory and easily skipped, so warn at startup too. mutating() is
+	// conservative — an interpolated row_operation is treated as potentially
+	// mutating.
+	if rowOpCfg.mutating() {
+		if maxInFlight, err := conf.FieldInt(ioFieldMaxInFlight); err == nil && maxInFlight > 1 {
+			mgr.Logger().Warnf("row_operation can produce upsert/delete operations but max_in_flight is %d; concurrent batches may commit out of order and corrupt the last-writer-wins result. Set max_in_flight: 1 for keyed (change-data-capture) workloads.", maxInFlight)
+		}
+	}
+
+	// Copy-on-write trades write amplification for engine-readable (delete-file-
+	// free) tables. Surface that characteristic and its mitigations once at
+	// startup so it is not a surprise in production. This is distinct from the
+	// max_in_flight ordering warning above (which is about correctness, not cost)
+	// and stays silent for merge-on-read and append-only configs.
+	if msg, ok := rowOpCfg.cowAmplificationWarning(); ok {
+		mgr.Logger().Infof("%s", msg)
+	}
+
+	// Cleanup of a failed commit's files is on by default; turning it off is an
+	// incident escape hatch that trades orphaned storage for never deleting
+	// anything. Say so once at startup so the resulting object growth is not a
+	// mystery later — the per-commit skips are logged at debug only.
+	if commitCfg.DisableCleanupOnFailure {
+		mgr.Logger().Infof("%s.%s is disabled: failed commits will leave their written files orphaned in storage on every write path. Run Iceberg table maintenance (snapshot expiry plus orphan-file removal) to reclaim them.", ioFieldCommit, ioFieldCleanupOnFailure)
+	}
+
 	// Parse parquet config
 	var writerOpts []parquet.WriterOption
 	if conf.Contains(ioFieldParquet) {
@@ -120,7 +210,8 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		}
 	}
 
-	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, caseSensitive, schemaEvoCfg, commitCfg, writerOpts, mgr.Logger())
+	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, caseSensitive, schemaEvoCfg, commitCfg, rowOpCfg, writerOpts, mgr.Logger())
+	rtr.metrics = newOpMetrics(mgr.Metrics())
 	return &icebergOutput{
 		router: rtr,
 		logger: mgr.Logger(),
@@ -497,6 +588,52 @@ func parseSchemaEvolutionConfig(conf *service.ParsedConfig) (SchemaEvolutionConf
 	return cfg, nil
 }
 
+// parseRowOpConfig parses the row-level operation configuration and validates
+// the static case at startup. When row_operation is a static literal it must be
+// a known operation, and a static upsert/delete requires identifier_fields.
+// Dynamic (interpolated) operations cannot be checked here, so they are
+// validated per message at write time (a hard error on an unknown value or a
+// missing identifier_fields key, never a silent insert).
+func parseRowOpConfig(conf *service.ParsedConfig) (RowOpConfig, error) {
+	cfg := RowOpConfig{}
+
+	op, err := conf.FieldInterpolatedString(ioFieldRowOperation)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.Operation = op
+
+	cfg.IdentifierFields, err = conf.FieldStringList(ioFieldIdentifierFields)
+	if err != nil {
+		return cfg, err
+	}
+
+	// merge_strategy carries Default(merge-on-read) and is a validated enum, so
+	// FieldString returns a known value without a Contains guard.
+	strategy, err := conf.FieldString(ioFieldMergeStrategy)
+	if err != nil {
+		return cfg, err
+	}
+	switch mergeStrategy(strategy) {
+	case mergeStrategyMOR, mergeStrategyCOW:
+		cfg.MergeStrategy = mergeStrategy(strategy)
+	default:
+		return cfg, fmt.Errorf("invalid %s %q: must be %q or %q", ioFieldMergeStrategy, strategy, mergeStrategyMOR, mergeStrategyCOW)
+	}
+
+	if static, ok := op.Static(); ok {
+		parsed, err := parseRowOperation(static)
+		if err != nil {
+			return cfg, err
+		}
+		if (parsed == rowOpUpsert || parsed == rowOpDelete) && len(cfg.IdentifierFields) == 0 {
+			return cfg, fmt.Errorf("%s %q requires %s to be set", ioFieldRowOperation, parsed, ioFieldIdentifierFields)
+		}
+	}
+
+	return cfg, nil
+}
+
 // parseCommitConfig parses the commit configuration.
 func parseCommitConfig(conf *service.ParsedConfig) (CommitConfig, error) {
 	cfg := CommitConfig{
@@ -520,6 +657,14 @@ func parseCommitConfig(conf *service.ParsedConfig) (CommitConfig, error) {
 	if err != nil {
 		return cfg, err
 	}
+	// The config field is positively named (`cleanup_on_failure`, defaulting to
+	// true) while the Go field is the negation, so that a zero-value
+	// CommitConfig keeps cleanup enabled — see CommitConfig.
+	cleanupOnFailure, err := conf.FieldBool(ioFieldCommit, ioFieldCleanupOnFailure)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.DisableCleanupOnFailure = !cleanupOnFailure
 	return cfg, nil
 }
 

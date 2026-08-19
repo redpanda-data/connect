@@ -324,7 +324,7 @@ sequenceDiagram
 
 - **Initial sync on connect** - One sync when output connects
 - **Optional periodic sync** - Background loop controlled by `interval` setting
-- **On-demand sync** - Triggered when record has unknown schema ID
+- **Unknown schema handling** - A record whose schema ID is not yet synced to the destination is passed through unchanged, or rejected when `strict` is enabled (there is no on-demand resync)
 - **ID translation modes** - Create-or-reuse (translate) vs fixed IDs
 - **Compatibility propagation** - Only when explicitly set per-subject
 
