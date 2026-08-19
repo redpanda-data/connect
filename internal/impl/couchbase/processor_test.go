@@ -65,7 +65,7 @@ couchbase:
   id: '${! json("id") }'
   operation: 'insert'
 `,
-			errContains: `content must be set for insert, replace and upsert operations.`,
+			errContains: `content must be set for insert, replace, upsert, increment and decrement operations.`,
 		},
 		{
 			name: "missing replace content",
@@ -76,7 +76,7 @@ couchbase:
   id: '${! json("id") }'
   operation: 'replace'
 `,
-			errContains: `content must be set for insert, replace and upsert operations.`,
+			errContains: `content must be set for insert, replace, upsert, increment and decrement operations.`,
 		},
 		{
 			name: "missing upsert content",
@@ -87,7 +87,7 @@ couchbase:
   id: '${! json("id") }'
   operation: 'upsert'
 `,
-			errContains: `content must be set for insert, replace and upsert operations.`,
+			errContains: `content must be set for insert, replace, upsert, increment and decrement operations.`,
 		},
 		{
 			name: "insert with content",
@@ -97,8 +97,51 @@ couchbase:
   bucket: 'bucket'
   id: '${! json("id") }'
   content: 'root = this'
-  operation: 'insert'
+  operation: 'insert'`,
+		},
+		{
+			name: "increment",
+			config: `
+couchbase:
+  url: 'url'
+  bucket: 'bucket'
+  id: '${! json("id") }'
+  operation: 'increment'
+  content: '1'
 `,
+		},
+		{
+			name: "decrement",
+			config: `
+couchbase:
+  url: 'url'
+  bucket: 'bucket'
+  id: '${! json("id") }'
+  operation: 'decrement'
+  content: '1'
+`,
+		},
+		{
+			name: "increment without content",
+			config: `
+couchbase:
+  url: 'url'
+  bucket: 'bucket'
+  id: '${! json("id") }'
+  operation: 'increment'
+`,
+			errContains: `content must be set for insert, replace, upsert, increment and decrement operations.`,
+		},
+		{
+			name: "decrement without content",
+			config: `
+couchbase:
+  url: 'url'
+  bucket: 'bucket'
+  id: '${! json("id") }'
+  operation: 'decrement'
+`,
+			errContains: `content must be set for insert, replace, upsert, increment and decrement operations.`,
 		},
 	}
 
@@ -164,6 +207,52 @@ func TestIntegrationCouchbaseProcessor(t *testing.T) {
 		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
 		time.Sleep(5 * time.Second)
 		testCouchbaseProcessorGetMissing(uid, bucket, servicePort, t)
+	})
+	// counters tests (entry cleared by ttl before)
+	t.Run("Increment non existing", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "increment", "1", "1", bucket, servicePort, t)
+	})
+	t.Run("Decrement to minimal value", func(t *testing.T) { // minimum value of counter is zero
+		testCouchbaseProcessorCounter(uid, "decrement", "2", "0", bucket, servicePort, t)
+	})
+	t.Run("Increment", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "increment", "8", "8", bucket, servicePort, t)
+	})
+	t.Run("Decrement", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "decrement", "2", "6", bucket, servicePort, t)
+	})
+	// noop only retrive value
+	t.Run("Increment zero", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "increment", "0", "6", bucket, servicePort, t)
+	})
+	t.Run("Decrement zero", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "decrement", "0", "6", bucket, servicePort, t)
+	})
+
+	t.Run("Remove", func(t *testing.T) {
+		testCouchbaseProcessorRemove(uid, bucket, servicePort, t)
+	})
+	t.Run("Decrement non existing with negative initial", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "decrement", "-10", "10", bucket, servicePort, t)
+	})
+
+	t.Run("Error increment empty", func(t *testing.T) {
+		testCouchbaseProcessorCounterError(uid, "increment", "", bucket, servicePort, t)
+	})
+	t.Run("Error decrement empty", func(t *testing.T) {
+		testCouchbaseProcessorCounterError(uid, "decrement", "", bucket, servicePort, t)
+	})
+	t.Run("Error increment float", func(t *testing.T) {
+		testCouchbaseProcessorCounterError(uid, "increment", "0.1", bucket, servicePort, t)
+	})
+	t.Run("Error decrement float", func(t *testing.T) {
+		testCouchbaseProcessorCounterError(uid, "decrement", "0.1", bucket, servicePort, t)
+	})
+	t.Run("Error increment invalid", func(t *testing.T) {
+		testCouchbaseProcessorCounterError(uid, "increment", "invalid", bucket, servicePort, t)
+	})
+	t.Run("Error decrement invalid", func(t *testing.T) {
+		testCouchbaseProcessorCounterError(uid, "decrement", "invalid", bucket, servicePort, t)
 	})
 }
 
@@ -363,4 +452,54 @@ ttl: 3s
 	dataOut, err := msgOut[0][0].AsBytes()
 	assert.NoError(t, err)
 	assert.JSONEq(t, payload, string(dataOut))
+}
+
+func testCouchbaseProcessorCounter(uid, operation, value, expected, bucket, port string, t *testing.T) {
+	config := fmt.Sprintf(`
+url: 'couchbase://localhost:%s'
+bucket: %s
+username: %s
+password: %s
+id: '${! meta("id") }'
+content: 'root = this.or(null)'
+operation: '%s'
+`, port, bucket, username, password, operation)
+
+	msg := service.NewMessage([]byte(value))
+	msg.MetaSetMut("id", uid)
+	msgOut, err := getProc(t, config).ProcessBatch(t.Context(), service.MessageBatch{
+		msg,
+	})
+
+	// batch processing should be fine and contain one message.
+	assert.NoError(t, err)
+	assert.Len(t, msgOut, 1)
+	assert.Len(t, msgOut[0], 1)
+
+	// message content should be the counter value
+	dataOut, err := msgOut[0][0].AsBytes()
+	assert.NoError(t, err)
+	// The result of increment is the new value.
+	assert.Equal(t, expected, string(dataOut))
+}
+
+func testCouchbaseProcessorCounterError(uid, operation, value, bucket, port string, t *testing.T) {
+	config := fmt.Sprintf(`
+url: 'couchbase://localhost:%s'
+bucket: %s
+username: %s
+password: %s
+id: '${! meta("id") }'
+content: 'root = this.or(null)'
+operation: '%s'
+`, port, bucket, username, password, operation)
+
+	msg := service.NewMessage([]byte(value))
+	msg.MetaSetMut("id", uid)
+	_, err := getProc(t, config).ProcessBatch(t.Context(), service.MessageBatch{
+		msg,
+	})
+
+	// batch processing should fail.
+	require.Error(t, err)
 }

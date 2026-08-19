@@ -55,7 +55,7 @@ couchbase:
   id: '${! json("id") }'
   operation: 'insert'
 `,
-			errContains: `content must be set for insert, replace and upsert operations.`,
+			errContains: `content must be set for insert, replace, upsert, increment and decrement operations.`,
 		},
 		{
 			name: "missing replace content",
@@ -66,7 +66,7 @@ couchbase:
   id: '${! json("id") }'
   operation: 'replace'
 `,
-			errContains: `content must be set for insert, replace and upsert operations.`,
+			errContains: `content must be set for insert, replace, upsert, increment and decrement operations.`,
 		},
 		{
 			name: "missing upsert content",
@@ -77,7 +77,7 @@ couchbase:
   id: '${! json("id") }'
   operation: 'upsert'
 `,
-			errContains: `content must be set for insert, replace and upsert operations.`,
+			errContains: `content must be set for insert, replace, upsert, increment and decrement operations.`,
 		},
 		{
 			name: "insert with content",
