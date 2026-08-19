@@ -113,6 +113,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - aws_dynamodb_cdc: DynamoDB CDC now supports an optional checkpoint_namespace field, allowing multiple independent pipelines to share a single checkpoint table without overwriting each other's checkpoints. ([@squiidz](https://github.com/squiidz), [#4602](https://github.com/redpanda-data/connect/pull/4602))
+- aws_s3: Added `sqs.idle_poll_period` field to back off SQS polling when the queue is empty. The default `0s` preserves the historical fixed 500ms throttle between empty receives; a larger duration reduces `ReceiveMessage` request volume on idle queues at the cost of first-message latency. ([@peczenyj](https://github.com/peczenyj), [#4479](https://github.com/redpanda-data/connect/pull/4479))
 
 ### Fixed
 
