@@ -522,7 +522,12 @@ func (r *periodicallyFlushingSpannerCDCReader) onDataChangeRecord(ctx context.Co
 		return fmt.Errorf("no active flusher for partition %s", partitionToken)
 	}
 
-	errCh := make(chan error)
+	// Buffered so the flusher's reply can never block: the requester abandons
+	// errCh when the errgroup context is cancelled mid-wait, and an
+	// unbuffered send would wedge the flusher forever - Run then blocks in
+	// flushersDone() before TriggerHasStopped, so the input would never
+	// reconnect.
+	errCh := make(chan error, 1)
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
