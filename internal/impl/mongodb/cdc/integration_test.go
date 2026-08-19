@@ -1173,6 +1173,125 @@ file:
 		"the recovery must not repeat once a valid checkpoint is stored")
 }
 
+// TestIntegrationMongoCDCCollectionDropAndRename settles what a collection drop
+// or rename actually does to this input, which a long-standing TODO on the
+// SetResumeAfter call assumed would invalidate the stored resume token.
+//
+// Measured here, against mongo:7: it does not. The input opens a
+// *database*-level change stream (m.db.Watch with an ns.coll $match), and a
+// database-level stream is not invalidated by a collection being dropped or
+// renamed - the server emits an ordinary `drop`/`rename` event, which the event
+// switch skips as an uninteresting operation type, and the stream continues.
+// Neither operation costs the input anything: no error, no recovery, no
+// re-snapshot, and writes to a recreated collection keep streaming through the
+// same cursor.
+//
+// (For completeness, the two adjacent behaviours were measured the same way and
+// are not asserted here because they need a second container each: dropping the
+// whole database does end the stream, but its `invalidate` event is filtered out
+// by the ns.coll $match, so the cursor simply closes with a nil error and the
+// framework's reconnect resumes from the last position successfully. And
+// resuming with a token captured before a drop or rename is accepted by the
+// server, which replays the drop/rename event. So `ChangeStreamFatalError` (280)
+// is not reachable through any of these paths for this input - it is classified
+// as position-fatal on the strength of the server's own
+// NonResumableChangeStreamError taxonomy, not on a reproduction.)
+//
+// The assertion that carries the weight is the negative one: no
+// unresumable-position recovery is triggered. If a drop did invalidate the
+// position, the checkpoint would be cleared and the snapshot re-run, and doc 1
+// would be delivered a second time.
+func TestIntegrationMongoCDCCollectionDropAndRename(t *testing.T) {
+	integration.CheckSkip(t)
+	uri, mongoClient := startMongoContainer(t)
+	db := &databaseHelper{mongoClient.Database("test")}
+	db.CreateCollection(t, "foo")
+	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "one"})
+
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.AddInputYAML(`
+mongodb_cdc:
+  url: '`+uri+`'
+  database: 'test'
+  checkpoint_cache: 'filecache'
+  stream_snapshot: true
+  json_marshal_mode: relaxed
+  collections:
+    - 'foo'
+`))
+	require.NoError(t, builder.AddCacheYAML(`
+label: filecache
+file:
+  directory: '`+t.TempDir()+`'`))
+	output := &outputHelper{}
+	require.NoError(t, builder.AddBatchConsumerFunc(output.AddBatch))
+	logs := &logCapture{}
+	builder.SetLogger(slog.New(logs))
+	stream := &streamHelper{builder: builder}
+
+	wait := stream.RunAsync(t)
+	t.Cleanup(wait)
+
+	// awaitCount waits for the delivered message count to reach n. Counting is
+	// enough to sequence the phases because every phase adds exactly one document,
+	// and the ids are checked at the end.
+	awaitCount := func(n int, why string) {
+		t.Helper()
+		require.Eventually(t, func() bool {
+			msgs, err := output.messages()
+			return err == nil && len(msgs) >= n
+		}, 60*time.Second, 250*time.Millisecond, why)
+	}
+
+	// Phase 1: the snapshot delivers doc 1, so the stream phase has begun.
+	awaitCount(1, "the snapshot never delivered the seeded document")
+
+	// Phase 2: an ordinary streamed insert, which pins that streaming is live
+	// before the collection is disturbed.
+	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "two"})
+	awaitCount(2, "the streamed insert never arrived")
+
+	// Phase 3: drop the watched collection mid-stream, recreate it, and write
+	// again. The write must arrive on the same stream. (A drop emits one `drop`
+	// event, not a delete per document, so it adds nothing to the delivered
+	// count - the skipped event types never reach the output.)
+	require.NoError(t, mongoClient.Database("test").Collection("foo").Drop(t.Context()))
+	db.CreateCollection(t, "foo")
+	db.InsertOne(t, "foo", bson.M{"_id": 3, "data": "three"})
+	awaitCount(3, "the insert after the collection was dropped and recreated never arrived")
+
+	// Phase 4: rename the watched collection away, recreate it, and write again.
+	res := mongoClient.Database("admin").RunCommand(t.Context(), bson.D{
+		{Key: "renameCollection", Value: "test.foo"},
+		{Key: "to", Value: "test.renamed"},
+	})
+	require.NoError(t, res.Err())
+	db.CreateCollection(t, "foo")
+	db.InsertOne(t, "foo", bson.M{"_id": 4, "data": "four"})
+	awaitCount(4, "the insert after the collection was renamed away never arrived")
+
+	// No recovery was needed for any of it: the position stayed resumable
+	// throughout. This is the assertion the stale TODO was really about.
+	require.Empty(t, logs.matching("no longer resumable"),
+		"a drop or rename must not invalidate the stored position, captured logs: %v", logs.matching(""))
+	require.Empty(t, logs.matching("error watching MongoDB change stream"),
+		"the change stream must survive a drop and a rename")
+
+	stream.StopWithin(t, 30*time.Second)
+
+	// Every document written was delivered exactly once, in order, through one
+	// uninterrupted stream: the snapshot's doc 1, the streamed doc 2, then the
+	// writes that followed the drop and the rename. A re-snapshot triggered by
+	// either operation would show up here as a repeated id.
+	var ids []string
+	for _, m := range output.Messages(t) {
+		doc, ok := m.(map[string]any)
+		require.True(t, ok, "unexpected message shape: %T", m)
+		ids = append(ids, fmt.Sprintf("%v", doc["_id"]))
+	}
+	require.Equal(t, []string{"1", "2", "3", "4"}, ids)
+}
+
 // TestIntegrationMongoCDCCorruptCheckpoint covers the sibling of an unresumable
 // token: a checkpoint whose bytes are not decodable as a resume token at all.
 // That is equally permanent - no retry makes malformed bytes parse - so Connect

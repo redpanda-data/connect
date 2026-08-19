@@ -78,6 +78,31 @@ func TestIsUnresumableTokenError(t *testing.T) {
 			want: true,
 		},
 		{
+			// ChangeStreamFatalError is the rest of the server's
+			// NonResumableChangeStreamError category, and is what resuming past a
+			// collection drop or rename reports. Like history loss it is a statement
+			// about the stream rather than about one token, so the phase is
+			// irrelevant.
+			name: "change stream fatal error while opening",
+			err:  opening(mongo.CommandError{Code: codeChangeStreamFatalError, Name: "ChangeStreamFatalError"}),
+			want: true,
+		},
+		{
+			name: "change stream fatal error mid-stream",
+			err:  mongo.CommandError{Code: codeChangeStreamFatalError, Name: "ChangeStreamFatalError"},
+			want: true,
+		},
+		{
+			name: "shard removed while opening",
+			err:  opening(mongo.CommandError{Code: codeShardRemovedError, Name: "ShardRemovedError"}),
+			want: true,
+		},
+		{
+			name: "shard removed mid-stream",
+			err:  mongo.CommandError{Code: codeShardRemovedError, Name: "ShardRemovedError"},
+			want: true,
+		},
+		{
 			name: "invalid resume token while opening",
 			err:  opening(mongo.CommandError{Code: codeInvalidResumeToken, Name: "InvalidResumeToken"}),
 			want: true,
@@ -301,6 +326,106 @@ func TestStoreSnapshotCheckpointSkippedWithoutToken(t *testing.T) {
 	m.resumeTokenMu.Lock()
 	require.Nil(t, m.resumeToken)
 	m.resumeTokenMu.Unlock()
+}
+
+// TestStoreSnapshotCheckpointWaitsForAcksWithoutToken pins the half of the ack
+// gate that has nothing to do with the checkpoint write. On the no-token path
+// (replica sets before 4.0.7, which report no pre-snapshot resume token) there is
+// nothing to store, but streaming must still not begin while snapshot slots are
+// unresolved: the streaming phase tracks into the same checkpointer, and the
+// library's resolve copies a resolving node's payload onto its predecessor
+// (`newNode.prev.payload = newNode.payload` in Uncapped.Track), so a stream batch
+// resolving first hands its token to a snapshot slot. That slot's ack then trips
+// the "unexpected resume token for snapshot batch" guard and the commit that
+// token should have produced is lost.
+func TestStoreSnapshotCheckpointWaitsForAcksWithoutToken(t *testing.T) {
+	cp := checkpoint.NewCapped[bson.Raw](10)
+	resolve, err := cp.Track(t.Context(), nil, 3)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), cp.Pending())
+
+	m := &mongoCDC{}
+	proceed := make(chan bool, 1)
+	go func() {
+		proceed <- m.storeSnapshotCheckpoint(t.Context(), m.tokenEpoch, cp, nil, func(context.Context, bson.Raw) error {
+			t.Error("checkpoint stored without a resume token to store")
+			return nil
+		})
+	}()
+
+	select {
+	case <-proceed:
+		t.Fatal("returned while a snapshot batch was in flight, letting the streaming phase share the checkpointer")
+	case <-time.After(3 * snapshotAckPollInterval):
+	}
+
+	resolve()
+
+	select {
+	case ok := <-proceed:
+		require.True(t, ok)
+	case <-time.After(time.Minute):
+		t.Fatal("did not return after the snapshot batch resolved")
+	}
+	m.resumeTokenMu.Lock()
+	require.Nil(t, m.resumeToken, "the no-token path must leave the position untouched")
+	m.resumeTokenMu.Unlock()
+}
+
+// TestStoreSnapshotCheckpointStopsOnShutdownWithoutToken is the no-token
+// counterpart of the shutdown case: the return contract is about whether the
+// caller may proceed to streaming, not about whether anything was written, so an
+// unresolved slot at cancellation must still stop the caller.
+func TestStoreSnapshotCheckpointStopsOnShutdownWithoutToken(t *testing.T) {
+	cp := checkpoint.NewCapped[bson.Raw](10)
+	_, err := cp.Track(t.Context(), nil, 1)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	m := &mongoCDC{}
+	proceed := make(chan bool, 1)
+	go func() {
+		proceed <- m.storeSnapshotCheckpoint(ctx, m.tokenEpoch, cp, nil, func(context.Context, bson.Raw) error {
+			t.Error("checkpoint stored without a resume token to store")
+			return nil
+		})
+	}()
+	cancel()
+
+	select {
+	case ok := <-proceed:
+		require.False(t, ok, "an unresolved slot at cancellation must stop the caller even with no token")
+	case <-time.After(time.Minute):
+		t.Fatal("wait loop did not exit on context cancellation")
+	}
+}
+
+// TestSnapshotSlotInheritsStreamTokenWithoutGate demonstrates, against the real
+// checkpoint library, the failure the gate above prevents: it is the mechanism
+// that makes the no-token ack gate a correctness requirement rather than a
+// tidiness one. If streaming were allowed to track into the same checkpointer
+// while a snapshot slot is unresolved, resolving the stream slot first makes the
+// snapshot slot inherit the stream's token, and the snapshot ack - which asserts
+// it never sees a token - fails.
+func TestSnapshotSlotInheritsStreamTokenWithoutGate(t *testing.T) {
+	cp := checkpoint.NewCapped[bson.Raw](10)
+	// A snapshot batch, tracked with no payload, as readSnapshotRange does.
+	resolveSnapshot, err := cp.Track(t.Context(), nil, 1)
+	require.NoError(t, err)
+	// A streaming batch tracked afterwards, carrying a resume token.
+	streamToken := bson.Raw{5, 0, 0, 0, 0}
+	resolveStream, err := cp.Track(t.Context(), streamToken, 1)
+	require.NoError(t, err)
+
+	// The stream batch is acked first, which is entirely possible: acks arrive in
+	// whatever order the pipeline finishes batches in.
+	require.Nil(t, resolveStream(), "nothing may commit while the earlier snapshot slot is pending")
+
+	// Now the snapshot slot resolves as the head - and hands back the stream's
+	// token, which is what the snapshot ackFn refuses.
+	inherited := resolveSnapshot()
+	require.NotNil(t, inherited)
+	require.Equal(t, streamToken, *inherited, "the snapshot slot inherited the stream token")
 }
 
 func TestStoreSnapshotCheckpointSkippedWhenEpochMovedOn(t *testing.T) {

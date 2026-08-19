@@ -61,11 +61,24 @@ const (
 	// MongoDB server error codes that mean a change stream's resume position can
 	// never be resumed from again, no matter how many times it is retried.
 	//
-	// codeChangeStreamHistoryLost is reported when the position has aged out of
-	// the oplog window, codeInvalidResumeToken when the server considers the
-	// token itself invalid, and codeKeyStringFormatError when the token's
-	// keystring payload cannot even be decoded.
+	// The first three are exactly the server's own NonResumableChangeStreamError
+	// category (error_codes.yml): codeChangeStreamHistoryLost is reported when the
+	// position has aged out of the oplog window, codeChangeStreamFatalError when
+	// the stream hit a condition it can never continue past, and
+	// codeShardRemovedError when a shard the position spans has left the cluster.
+	// The latter two are covered because the server groups them with history loss,
+	// not because a reproduction exists for either: they are rare, deployment
+	// shaped (464 is sharded-only), and treating them as anything but position
+	// fatal would wedge the input for exactly as long as the operator left it.
+	//
+	// The last two are not in that category: codeInvalidResumeToken is reported
+	// when the server considers the token itself invalid, and
+	// codeKeyStringFormatError when the token's keystring payload cannot even be
+	// decoded. Both name one specific token rather than the stream's history, so
+	// they are phase-gated below.
 	codeChangeStreamHistoryLost = 286
+	codeChangeStreamFatalError  = 280
+	codeShardRemovedError       = 464
 	codeInvalidResumeToken      = 260
 	codeKeyStringFormatError    = 50811
 
@@ -94,17 +107,20 @@ var errOpeningChangeStream = errors.New("error opening change stream")
 // category - network blips, timeouts, elections and authentication failures all
 // surface as something other than a ServerError, or as a code not listed here.
 //
-// The phase matters for two of the three codes:
+// The phase matters for two of the five codes:
 //
-//   - ChangeStreamHistoryLost means the oplog no longer reaches back to the
-//     position at all. The oplog is a capped FIFO, so every position at or
-//     before the lost one is equally gone - including the cached one - whichever
-//     phase reported it. It therefore clears regardless of phase.
-//   - InvalidResumeToken and the KeyString decode failure say a specific token
-//     was malformed. Only when they come from opening the stream is that token
-//     provably the cached one; mid-stream they implicate the driver's in-memory
-//     token, and clearing a cached position that may be perfectly good would
-//     cost a needless re-snapshot.
+//   - The server's NonResumableChangeStreamError category - ChangeStreamHistoryLost,
+//     ChangeStreamFatalError and ShardRemovedError - is position-fatal by the
+//     server's own taxonomy: no position in this stream's history can be resumed
+//     from once one of these is reported, so the cached position is gone too
+//     whichever phase reported it. ChangeStreamHistoryLost illustrates why: the
+//     oplog is a capped FIFO, so every position at or before the lost one is
+//     equally gone. These therefore clear regardless of phase.
+//   - InvalidResumeToken and the KeyString decode failure are not in that
+//     category; they say a specific token was malformed. Only when they come from
+//     opening the stream is that token provably the cached one; mid-stream they
+//     implicate the driver's in-memory token, and clearing a cached position that
+//     may be perfectly good would cost a needless re-snapshot.
 //
 // mongo.ServerError covers both paths these arrive through: the server's
 // rejection of the aggregate that opens the stream (a mongo.CommandError, which
@@ -115,8 +131,15 @@ func isUnresumableTokenError(err error) bool {
 	if !errors.As(err, &se) {
 		return false
 	}
-	if se.HasErrorCode(codeChangeStreamHistoryLost) {
-		return true
+	// The NonResumableChangeStreamError category, which is phase-independent.
+	for _, code := range [...]int{
+		codeChangeStreamHistoryLost,
+		codeChangeStreamFatalError,
+		codeShardRemovedError,
+	} {
+		if se.HasErrorCode(code) {
+			return true
+		}
 	}
 	if !errors.Is(err, errOpeningChangeStream) {
 		return false
@@ -629,7 +652,18 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		// opened, so no locking is needed to read it - unlike m.resumeToken, which
 		// acks advance while the stream runs.
 		if resumeToken != nil {
-			// TODO: Handle the resume token becoming invalid due to collection rename/drop
+			// This used to carry a TODO about the resume token being invalidated by a
+			// collection drop or rename. Measured against a mongo:7 replica set, that
+			// does not happen to the stream this input opens: the watch is
+			// database-level (m.db.Watch below), and a database-level stream is not
+			// invalidated by a collection being dropped or renamed - the change
+			// arrives as an ordinary `drop`/`rename` event, which the event switch
+			// skips, and the stream carries on. Resuming from a token captured before
+			// either operation is accepted by the server and simply replays it.
+			// Dropping the whole database does end the stream, but the `invalidate`
+			// event is filtered out by the ns.coll $match, so the cursor just closes
+			// and the next connection resumes from the last position, again
+			// successfully. See TestIntegrationMongoCDCCollectionDropAndRename.
 			opts = opts.SetResumeAfter(resumeToken)
 		} else if initialResumeToken != nil {
 			opts = opts.SetResumeAfter(initialResumeToken)
@@ -720,21 +754,36 @@ type pendingTracker interface {
 	Pending() int64
 }
 
-// storeSnapshotCheckpoint persists the pre-snapshot stream position once every
-// snapshot batch tracked by cp has been resolved downstream, and returns false
-// only when ctx was cancelled while acks were still outstanding (the caller
-// should then stop). A cancellation that arrives after the final ack does not
-// discard the checkpoint: the snapshot completed, and persisting it is exactly
-// what lets the next start resume the stream instead of re-running it.
+// storeSnapshotCheckpoint waits for every snapshot batch tracked by cp to be
+// resolved downstream and then persists the pre-snapshot stream position. It
+// returns false only when ctx was cancelled while acks were still outstanding
+// (the caller should then stop, whether or not there was a token to store). A
+// cancellation that arrives after the final ack does not discard the checkpoint:
+// the snapshot completed, and persisting it is exactly what lets the next start
+// resume the stream instead of re-running it.
 //
 // Contract: only call this after the snapshot errgroup returned nil, which
 // guarantees every tracked batch was delivered to the framework (all
 // resolve-without-delivery paths return errors).
 //
-// The ack gate is a correctness requirement, not an optimisation: persisting the
-// pre-snapshot position while part of the snapshot is still in flight would let
-// a restart load the checkpoint, skip the snapshot entirely, and silently lose
-// the undelivered tail. Re-running the snapshot is the safe failure mode.
+// The ack gate is a correctness requirement, not an optimisation, and it runs
+// whether or not there is a token to store - it guards two distinct invariants:
+//
+//   - Persisting the pre-snapshot position while part of the snapshot is still
+//     in flight would let a restart load the checkpoint, skip the snapshot
+//     entirely, and silently lose the undelivered tail. Re-running the snapshot
+//     is the safe failure mode.
+//   - The streaming phase tracks its batches in the same cp as the snapshot, so
+//     starting it while snapshot slots are unresolved lets a stream batch resolve
+//     ahead of an earlier snapshot batch. The checkpointer's resolve then copies
+//     the stream payload onto the preceding node (`newNode.prev.payload =
+//     newNode.payload`), so the snapshot slot inherits the stream token; when it
+//     later resolves as the head its ack is handed a token it never tracked and
+//     trips its own "unexpected resume token for snapshot batch" guard - a
+//     spurious error, plus the commit that token should have produced is lost.
+//     The wait keeps the two phases from ever sharing cp concurrently, which is
+//     why a nil token skips only the store below and never this gate.
+//
 // Waiting here is safe because every snapshot batch has already been handed to
 // the framework and their acks arrive independently of this goroutine; if they
 // never arrive the pipeline is already wedged, and shutdown still exits through
@@ -754,9 +803,6 @@ func (m *mongoCDC) storeSnapshotCheckpoint(
 	token bson.Raw,
 	store func(context.Context, bson.Raw) error,
 ) bool {
-	if token == nil {
-		return true
-	}
 	// Pending() == 0 genuinely means "every snapshot batch was acked" here:
 	// this method only runs after g.Wait() returned nil, and every path that
 	// resolves a slot without delivering its batch (the send select's
@@ -772,6 +818,11 @@ func (m *mongoCDC) storeSnapshotCheckpoint(
 			}
 		case <-time.After(snapshotAckPollInterval):
 		}
+	}
+	if token == nil {
+		// Nothing storable for this run, but the gate above still had to be
+		// passed before streaming may begin.
+		return true
 	}
 	// Keep the periodic flusher and the terminal save consistent with what was
 	// written: both dedupe on the token they last saw. The write uses a
