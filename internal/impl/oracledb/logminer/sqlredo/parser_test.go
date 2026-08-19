@@ -9,6 +9,7 @@
 package sqlredo_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"testing"
 	"time"
@@ -308,4 +309,36 @@ func TestExtractValuesWithConverter(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRedoEventToDMLEvent_UserName(t *testing.T) {
+	p := sqlredo.NewParser()
+
+	t.Run("valid username is copied through", func(t *testing.T) {
+		redoEvent := &sqlredo.RedoEvent{
+			Operation:  sqlredo.OpInsert,
+			SQLRedo:    sql.NullString{String: `insert into "TESTDB"."USERS"("ID") values ('1')`, Valid: true},
+			SchemaName: sql.NullString{String: "TESTDB", Valid: true},
+			TableName:  sql.NullString{String: "USERS", Valid: true},
+			UserName:   sql.NullString{String: "ALICE", Valid: true},
+		}
+
+		event, err := p.RedoEventToDMLEvent(redoEvent)
+		require.NoError(t, err)
+		assert.Equal(t, "ALICE", event.UserName)
+	})
+
+	t.Run("NULL username leaves DMLEvent.UserName empty", func(t *testing.T) {
+		redoEvent := &sqlredo.RedoEvent{
+			Operation:  sqlredo.OpInsert,
+			SQLRedo:    sql.NullString{String: `insert into "TESTDB"."USERS"("ID") values ('1')`, Valid: true},
+			SchemaName: sql.NullString{String: "TESTDB", Valid: true},
+			TableName:  sql.NullString{String: "USERS", Valid: true},
+			UserName:   sql.NullString{Valid: false},
+		}
+
+		event, err := p.RedoEventToDMLEvent(redoEvent)
+		require.NoError(t, err)
+		assert.Empty(t, event.UserName)
+	})
 }

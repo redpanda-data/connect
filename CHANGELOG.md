@@ -42,6 +42,10 @@ All notable changes to this project will be documented in this file.
 
 ## 4.103.2 - TBD
 
+### Added
+
+- oracledb_cdc: Added `user_name` metadata field, sourced from Oracle LogMiner's `USERNAME` column, identifying the database user that executed each captured change.
+
 ### Fixed
 
 - redpanda: Enabling `unordered_processing` no longer renames the consumer lag gauge from `redpanda_lag` to `kafka_lag`. The `redpanda` input now emits `redpanda_lag` in both modes, as documented. ([@prakhargarg105](https://github.com/prakhargarg105), [#4663](https://github.com/redpanda-data/connect/issues/4663))

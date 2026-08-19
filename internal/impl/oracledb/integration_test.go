@@ -341,6 +341,9 @@ oracledb_cdc:
 			assert.Truef(t, ok, "Expected snapshot message[%d] to have commit_ts_ms metadata", i)
 			assert.NotEmptyf(t, commitTs, "Expected snapshot message[%d] commit_ts_ms metadata to be non-empty", i)
 			assert.Equal(t, expectedCommitTs, commitTs, "Expected snapshot commit_ts_ms to be identical for all messages but was not")
+
+			_, ok = msg.MetaGet("user_name")
+			assert.False(t, ok, "message %d: user_name should be absent on snapshot (read) messages", i)
 		}
 		outBatchesMu.Unlock()
 	}
@@ -630,6 +633,11 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 			txID, ok := msg.MetaGet("transaction_id")
 			require.Truef(t, ok, "message %d missing 'transaction_id' metadata", i)
 			assert.Regexpf(t, `^\d+\.\d+\.\d+$`, txID, "message %d: transaction_id %q not in USN.SLOT.SEQ format", i, txID)
+
+			// assert user_name metadata
+			userName, ok := msg.MetaGet("user_name")
+			require.Truef(t, ok, "message %d missing 'user_name' metadata", i)
+			assert.NotEmptyf(t, userName, "message %d: user_name should not be empty", i)
 		}
 
 		for _, expectedKey := range []string{"TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"} {
@@ -2168,6 +2176,12 @@ func TestIntegrationOracleDBCDCLOB(t *testing.T) {
 		)`))
 
 		var batch oracledbtest.Batch
+		// userNames is kept index-aligned with batch.Msgs (both appended under
+		// batch.Lock() in the same critical section) so that a matched message
+		// index can be used to look up its user_name metadata below. This is a
+		// regression check for the synthetic LOB-assembly UPDATE event (see
+		// logminer.go), which must carry user_name like any other DML event.
+		var userNames []string
 
 		cfg := `
 oracledb_cdc:
@@ -2190,6 +2204,8 @@ oracledb_cdc:
 				msgBytes, err := msg.AsBytes()
 				assert.NoError(t, err)
 				batch.Msgs = append(batch.Msgs, string(msgBytes))
+				userName, _ := msg.MetaGet("user_name")
+				userNames = append(userNames, userName)
 			}
 			return nil
 		}))
@@ -2223,18 +2239,27 @@ oracledb_cdc:
 			updatedClob := strings.Repeat("B", 5000)
 			db.MustExec("UPDATE testdb.lobtrim SET clobcol = :1 WHERE id = 1", updatedClob)
 
+			var matchedUserName string
+			var matchedFound bool
 			assert.Eventually(t, func() bool {
-				for _, msg := range batch.Clone() {
+				batch.Lock()
+				defer batch.Unlock()
+				for i, msg := range batch.Msgs {
 					var row map[string]any
 					if err := json.Unmarshal([]byte(msg), &row); err != nil {
 						continue
 					}
 					if v, ok := row["CLOBCOL"].(string); ok && v == updatedClob {
+						matchedUserName = userNames[i]
+						matchedFound = true
 						return true
 					}
 				}
 				return false
 			}, time.Minute*2, time.Millisecond*500, "expected a CDC event carrying the updated CLOB value after LOB_TRIM handling")
+
+			assert.True(t, matchedFound, "expected to find the updated CLOB message to assert its user_name metadata")
+			assert.NotEmpty(t, matchedUserName, "expected non-empty user_name metadata on the LOB-assembly UPDATE event")
 		}
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	})

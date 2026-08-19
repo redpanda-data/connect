@@ -163,6 +163,9 @@ type DMLEvent struct {
 	OldValues     map[string]any
 	Timestamp     time.Time
 	TransactionID TransactionID
+	// UserName is the Oracle database user that executed the change, from
+	// V$LOGMNR_CONTENTS.USERNAME. Empty for internal/recursive transactions.
+	UserName string
 }
 
 // RedoEvent represents a redo log row from V$LOGMNR_CONTENTS
@@ -175,4 +178,6 @@ type RedoEvent struct {
 	SchemaName    sql.NullString
 	Timestamp     time.Time
 	TransactionID TransactionID
+	// UserName is NULL for internal/recursive/background transactions.
+	UserName sql.NullString
 }
