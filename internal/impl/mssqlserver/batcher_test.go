@@ -736,6 +736,58 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an LSN that skips them")
 }
 
+// TestTrackFailureSealsQueue is TestAbandonedBatchSealsQueue's sibling: an
+// ADMITTED flusher parked in checkpoint.Track (capacity exhausted) whose
+// context cancels returns with its rows flushed but untracked, while the
+// deferred release advances the queue - the same unpinned gap. The failure
+// must seal and poison so no later ticket can persist past the dropped rows.
+func TestTrackFailureSealsQueue(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	// Capacity for exactly one 2-row batch: the next Track parks.
+	cp := checkpoint.NewCapped[replication.LSN](2)
+
+	batcher, err := (service.BatchPolicy{Count: 2}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher.cacheLSN = func(context.Context, replication.LSN) error { return nil }
+	t.Cleanup(func() { publisher.shutSig.TriggerSoftStop() })
+
+	// Batch 1 fills the tracker; consume it but do not ack.
+	require.NoError(t, publisher.Publish(ctx, streamingEvent("00000001", "00000001")))
+	firstPublished := make(chan error, 1)
+	go func() { firstPublished <- publisher.Publish(ctx, streamingEvent("00000002", "00000002")) }()
+	<-publisher.msgs()
+	require.NoError(t, <-firstPublished)
+
+	// Batch 2 is admitted and parks in Track; cancelling its context fails
+	// the Track with the rows already out of the batcher.
+	trackCtx, cancelTrack := context.WithCancel(ctx)
+	parked := make(chan error, 1)
+	go func() {
+		parked <- func() error {
+			if err := publisher.Publish(trackCtx, streamingEvent("00000003", "00000003")); err != nil {
+				return err
+			}
+			return publisher.Publish(trackCtx, streamingEvent("00000004", "00000004"))
+		}()
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancelTrack()
+	require.Error(t, <-parked)
+
+	require.True(t, publisher.poisoned.Load(),
+		"a failed Track stranded flushed-but-untracked rows; the publisher must be marked for rebuild")
+	laterErr := func() error {
+		if err := publisher.Publish(ctx, streamingEvent("00000005", "00000005")); err != nil {
+			return err
+		}
+		return publisher.Publish(ctx, streamingEvent("00000006", "00000006"))
+	}()
+	require.ErrorIs(t, laterErr, errQueueSealed,
+		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an LSN that skips them")
+}
+
 // TestFailedSendPoisonsPublisher verifies that a tracked batch that cannot be
 // handed to ReadBatch marks the publisher poisoned: its checkpoint slot can
 // never resolve, so Connect must rebuild the publisher rather than reuse a

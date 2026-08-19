@@ -309,6 +309,10 @@ func (p *batchPublisher) loop() {
 				defer p.release()
 				tracked, err := p.trackBatch(closeAtLeisureCtx, sendBatch, checkpointLSN)
 				if err != nil {
+					// The rows left the batcher but were never tracked, and
+					// the deferred release lets later tickets proceed: seal so
+					// nothing can be tracked (and persisted) past the gap.
+					p.sealQueue()
 					return err
 				}
 				return p.sendTracked(closeAtLeisureCtx, tracked)
@@ -405,6 +409,10 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	defer b.release()
 	tracked, err := b.trackBatch(ctx, flushedBatch, checkpointLSN)
 	if err != nil {
+		// The rows left the batcher but were never tracked, and the deferred
+		// release lets later tickets proceed: seal so nothing can be tracked
+		// (and persisted) past the gap.
+		b.sealQueue()
 		return err
 	}
 	if err := b.sendTracked(ctx, tracked); err != nil {
@@ -602,11 +610,22 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 		return admitErr
 	}
 	defer b.release()
-	if err != nil || len(remaining) == 0 {
+	if err != nil {
+		if len(remaining) > 0 {
+			// Rows came out of the batcher alongside the error: they were
+			// never tracked, so seal before the deferred release lets later
+			// tickets persist past them.
+			b.sealQueue()
+		}
 		return err
+	}
+	if len(remaining) == 0 {
+		return nil
 	}
 	tracked, err := b.trackBatch(ctx, remaining, checkpointLSN)
 	if err != nil {
+		// Same gap as above: flushed but untracked.
+		b.sealQueue()
 		return err
 	}
 	return b.sendTracked(ctx, tracked)
