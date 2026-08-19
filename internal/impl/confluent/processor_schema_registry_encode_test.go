@@ -24,6 +24,7 @@ import (
 	"io"
 	"io/fs"
 	"maps"
+	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -771,6 +772,390 @@ func TestSchemaRegistryAvroPreserveLogicalTypesRoundTrip(t *testing.T) {
 			assert.Equal(t, test.wire, string(b))
 		})
 	}
+}
+
+// newTestAvroEncoderInputEnc is newTestAvroEncoder with the input_encoding
+// field set, which the plain helper leaves at its auto default.
+func newTestAvroEncoderInputEnc(t *testing.T, urlStr string, inputEnc string) *schemaRegistryEncoder {
+	t.Helper()
+
+	encoder := newTestAvroEncoder(t, urlStr, false)
+	encoder.avroInputEnc = inputEnc
+	return encoder
+}
+
+// TestSchemaRegistryAvroDecodeMappedEncodeRoundTrip is the round trip through
+// the pipeline shape that reaches production: decode, then some processor in
+// between, then encode. A mapping, a branch, a jq — anything that reads the
+// message structurally parses the payload and drops it, so the message arrives
+// at the encoder carrying Avro JSON values in structured form.
+//
+// Nothing distinguishes that message from one a mapping built from scratch:
+// AsStructuredMut clears the raw bytes, so both are a structured message with
+// no payload behind it, and the Avro JSON string "!" is the same Go value as a
+// decimal written "3.33". Form cannot answer it and neither can the values, so
+// auto reads these the plain way and fails on the bytes-backed decimal. Only a
+// declared input_encoding gets the round trip back.
+func TestSchemaRegistryAvroDecodeMappedEncodeRoundTrip(t *testing.T) {
+	for _, schemaCase := range []struct {
+		name   string
+		schema string
+		wire   string
+	}{
+		{name: "logical_types", schema: testSchemaLogicalTypes, wire: "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!"},
+		{name: "bytes_and_fixed", schema: testSchemaBytesFixed, wire: testWireBytesFixed},
+	} {
+		t.Run(schemaCase.name, func(t *testing.T) {
+			urlStr := runAvroSchemaRegistry(t, schemaCase.schema)
+
+			for _, rawJSON := range []bool{false, true} {
+				t.Run(fmt.Sprintf("avro_raw_json=%v", rawJSON), func(t *testing.T) {
+					cfg := decodingConfig{}
+					cfg.avro.rawUnions = rawJSON
+					decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
+					require.NoError(t, err)
+					defer func() { _ = decoder.Close(t.Context()) }()
+
+					decoded, err := decoder.Process(t.Context(), service.NewMessage([]byte(schemaCase.wire)))
+					require.NoError(t, err)
+					require.Len(t, decoded, 1)
+					require.False(t, decoded[0].HasStructured(), "decoder without preserve_logical_types emits a raw payload")
+
+					// The processor in between.
+					_, err = decoded[0].AsStructuredMut()
+					require.NoError(t, err)
+					require.True(t, decoded[0].HasStructured(), "reading the message structurally caches the parse")
+					require.False(t, decoded[0].HasBytes(), "and drops the payload it parsed")
+
+					encoder := newTestAvroEncoderInputEnc(t, urlStr, avroInputEncAvroJSON)
+					outBatches, err := encoder.ProcessBatch(t.Context(), service.MessageBatch{decoded[0]})
+					require.NoError(t, err)
+					require.Len(t, outBatches, 1)
+					require.Len(t, outBatches[0], 1)
+					require.NoError(t, outBatches[0][0].GetError())
+
+					b, err := outBatches[0][0].AsBytes()
+					require.NoError(t, err)
+					assert.Equal(t, schemaCase.wire, string(b))
+				})
+			}
+		})
+	}
+}
+
+// TestSchemaRegistryEncodeAvroInputEncoding pins what each input_encoding does
+// with the values only one reader understands, and that the modes disagree
+// where they are meant to: the same JSON string is a different value under
+// each, which is the whole reason the field exists.
+func TestSchemaRegistryEncodeAvroInputEncoding(t *testing.T) {
+	const schemaDecimal = `{
+		"type": "record",
+		"name": "Decimal",
+		"fields": [{"name": "dec", "type": {"type": "bytes", "logicalType": "decimal", "precision": 16, "scale": 2}}]
+	}`
+
+	// The unscaled 0x21 at scale 2, which is 0.33, and 3.33 as the unscaled 333.
+	const (
+		wireAvroJSONReading = "\x00\x00\x00\x00\x04\x02!"
+		wireNativeReading   = "\x00\x00\x00\x00\x04\x04\x01M"
+	)
+
+	structured := func(v map[string]any) func() *service.Message {
+		return func() *service.Message {
+			m := service.NewMessage(nil)
+			m.SetStructuredMut(v)
+			return m
+		}
+	}
+	raw := func(s string) func() *service.Message {
+		return func() *service.Message { return service.NewMessage([]byte(s)) }
+	}
+
+	for _, test := range []struct {
+		name     string
+		schema   string
+		inputEnc string
+		msg      func() *service.Message
+		output   string
+		errStr   string
+	}{
+		{
+			// The case auto cannot serve: Avro JSON values that arrived
+			// structured because something parsed the payload.
+			name:     "avro_json reads a structured Avro JSON string as codepoints",
+			schema:   schemaDecimal,
+			inputEnc: avroInputEncAvroJSON,
+			msg:      structured(map[string]any{"dec": "!"}),
+			output:   wireAvroJSONReading,
+		},
+		{
+			// The same string under auto, which reads a structured message
+			// the plain way and rejects it.
+			name:     "auto rejects the same string",
+			schema:   schemaDecimal,
+			inputEnc: avroInputEncAuto,
+			msg:      structured(map[string]any{"dec": "!"}),
+			errStr:   "invalid decimal string",
+		},
+		{
+			// Hand-written decimal notation, which Avro JSON reads as four
+			// codepoint bytes and native reads as the number.
+			name:     "native reads a raw decimal string as decimal notation",
+			schema:   schemaDecimal,
+			inputEnc: avroInputEncNative,
+			msg:      raw(`{"dec":"3.33"}`),
+			output:   wireNativeReading,
+		},
+		{
+			name:     "auto reads the same raw payload as Avro JSON",
+			schema:   schemaDecimal,
+			inputEnc: avroInputEncAuto,
+			msg:      raw(`{"dec":"3.33"}`),
+			output:   "\x00\x00\x00\x00\x04\b3.33",
+		},
+		{
+			// Encode is the only reader that takes these, so native must keep
+			// reaching it.
+			name:     "native takes time.Time",
+			schema:   testSchemaTimestamp,
+			inputEnc: avroInputEncNative,
+			msg: structured(map[string]any{
+				"ts":   time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
+				"data": []byte("ok"),
+			}),
+			output: testWireTimestamp,
+		},
+		{
+			// A tree holding a []byte was never Avro JSON: serialising it
+			// writes base64 text that DecodeJSON would accept as the value.
+			// Refusing it is the point — the alternative is encoding bytes
+			// nobody supplied.
+			name:     "avro_json refuses a Go []byte rather than encoding its base64",
+			schema:   testSchemaRawBytes,
+			inputEnc: avroInputEncAvroJSON,
+			msg:      structured(map[string]any{"data": []byte{0xe9, 0x00, 0x7f, '!'}}),
+			errStr:   "Avro JSON cannot spell",
+		},
+		{
+			// A raw payload keeps its own bytes, so the same mode encodes the
+			// identical value without complaint.
+			name:     "avro_json takes the same bytes as a raw payload",
+			schema:   testSchemaRawBytes,
+			inputEnc: avroInputEncAvroJSON,
+			msg:      raw(`{"data":"é\u0000\u007f!"}`),
+			output:   testWireRawBytes,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			encoder := newTestAvroEncoderInputEnc(t, runAvroSchemaRegistry(t, test.schema), test.inputEnc)
+
+			outBatches, err := encoder.ProcessBatch(t.Context(), service.MessageBatch{test.msg()})
+			require.NoError(t, err)
+			require.Len(t, outBatches, 1)
+			require.Len(t, outBatches[0], 1)
+
+			if test.errStr != "" {
+				procErr := outBatches[0][0].GetError()
+				require.Error(t, procErr)
+				assert.Contains(t, procErr.Error(), test.errStr)
+
+				// A message that fails to encode must reach a dead-letter
+				// output unchanged, so pin the payload itself rather than
+				// merely the absence of a wire header — an emptied payload
+				// would satisfy that and lose the data.
+				b, err := outBatches[0][0].AsBytes()
+				require.NoError(t, err)
+				assert.NotEmpty(t, b, "a failed encode must not empty the message")
+				assert.False(t, strings.HasPrefix(string(b), "\x00"), "a failed encode must not emit an Avro payload")
+				return
+			}
+
+			require.NoError(t, outBatches[0][0].GetError())
+			b, err := outBatches[0][0].AsBytes()
+			require.NoError(t, err)
+			assert.Equal(t, test.output, string(b))
+		})
+	}
+}
+
+// TestSchemaRegistryEncodeAvroNativeKeepsLoudFailures pins that native does not
+// reinterpret what Encode rejects. Every string is a valid Avro JSON bytes
+// value, so a reader that retried these as Avro JSON would silently encode
+// their codepoints — "abc" as 0x616263 — instead of reporting the mistake.
+func TestSchemaRegistryEncodeAvroNativeKeepsLoudFailures(t *testing.T) {
+	const schemaDecimal = `{
+		"type": "record",
+		"name": "Decimal",
+		"fields": [{"name": "dec", "type": {"type": "bytes", "logicalType": "decimal", "precision": 16, "scale": 2}}]
+	}`
+	urlStr := runAvroSchemaRegistry(t, schemaDecimal)
+
+	// "1e5" is deliberately absent: Encode reads scientific notation as the
+	// number 100000, which is a value it accepts rather than one it rejects.
+	for _, value := range []string{"abc", "3.333", "99999999999999999.99"} {
+		t.Run(value, func(t *testing.T) {
+			for _, inputEnc := range []string{avroInputEncNative, avroInputEncAuto} {
+				t.Run(inputEnc, func(t *testing.T) {
+					encoder := newTestAvroEncoderInputEnc(t, urlStr, inputEnc)
+
+					msg := service.NewMessage(nil)
+					msg.SetStructuredMut(map[string]any{"dec": value})
+
+					outBatches, err := encoder.ProcessBatch(t.Context(), service.MessageBatch{msg})
+					require.NoError(t, err)
+					require.Error(t, outBatches[0][0].GetError(), "must not be reinterpreted as Avro JSON codepoints")
+				})
+			}
+		})
+	}
+}
+
+// TestSchemaRegistryEncodeAvroJSONIgnoresCachedBytes pins that avro_json reads
+// the structured tree rather than whatever the message happens to have cached.
+//
+// AsBytes serialises the structured form and keeps the result, so any component
+// that looks at the payload first — a log processor, an output interpolation,
+// this processor's own subject interpolation — leaves the message holding bytes
+// derived from the tree. For a []byte field those bytes are base64 text, and
+// every JSON string is a valid Avro JSON bytes value, so reading them back
+// would encode the characters of "6QB/IQ==" with no error raised. Trusting a
+// cached payload is indistinguishable from trusting an original one, so neither
+// is trusted.
+func TestSchemaRegistryEncodeAvroJSONIgnoresCachedBytes(t *testing.T) {
+	encoder := newTestAvroEncoderInputEnc(t, runAvroSchemaRegistry(t, testSchemaRawBytes), avroInputEncAvroJSON)
+
+	msg := service.NewMessage(nil)
+	msg.SetStructuredMut(map[string]any{"data": []byte{0xe9, 0x00, 0x7f, '!'}})
+
+	// Whatever the earlier component did.
+	cached, err := msg.AsBytes()
+	require.NoError(t, err)
+	require.Contains(t, string(cached), "6QB/IQ==", "AsBytes must have cached the base64 spelling")
+	require.True(t, msg.HasBytes(), "and left it on the message")
+
+	outBatches, err := encoder.ProcessBatch(t.Context(), service.MessageBatch{msg})
+	require.NoError(t, err)
+	require.Len(t, outBatches, 1)
+	require.Len(t, outBatches[0], 1)
+
+	procErr := outBatches[0][0].GetError()
+	require.Error(t, procErr, "a []byte tree must be refused, not encoded from its base64")
+	assert.Contains(t, procErr.Error(), "Avro JSON cannot spell")
+
+	b, err := outBatches[0][0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, string(cached), string(b), "a refused message must reach a dead-letter output untouched")
+}
+
+// TestSchemaRegistryEncodeAvroJSONUnserialisableTree pins what happens to a
+// value JSON cannot spell at all. NaN is admitted by the type check and refused
+// by the marshaller, and the message must survive that with its contents and a
+// diagnosis that names the real cause.
+func TestSchemaRegistryEncodeAvroJSONUnserialisableTree(t *testing.T) {
+	const schemaDouble = `{
+		"type": "record",
+		"name": "Double",
+		"fields": [{"name": "d", "type": "double"}]
+	}`
+	encoder := newTestAvroEncoderInputEnc(t, runAvroSchemaRegistry(t, schemaDouble), avroInputEncAvroJSON)
+
+	msg := service.NewMessage(nil)
+	msg.SetStructuredMut(map[string]any{"d": math.NaN()})
+
+	outBatches, err := encoder.ProcessBatch(t.Context(), service.MessageBatch{msg})
+	require.NoError(t, err)
+	require.Len(t, outBatches, 1)
+	require.Len(t, outBatches[0], 1)
+
+	procErr := outBatches[0][0].GetError()
+	require.Error(t, procErr)
+	assert.Contains(t, procErr.Error(), "serialising structured data", "the error must name the real cause")
+
+	// The structured form is what survives. Asking such a message for bytes
+	// yields nothing whatever the encoder does, because benthos serialises the
+	// tree to answer and JSON has no spelling for NaN, so the guarantee worth
+	// pinning is that the encoder left the contents alone.
+	native, err := outBatches[0][0].AsStructured()
+	require.NoError(t, err)
+	tree, ok := native.(map[string]any)
+	require.True(t, ok)
+	assert.True(t, math.IsNaN(tree["d"].(float64)), "the tree must reach a dead-letter output intact")
+}
+
+// TestSchemaRegistryEncodeAvroInputEncodingFromConfig pins that the field
+// reaches the encoder from YAML, and that a config which never mentions it gets
+// auto — the value that preserves the behaviour every existing pipeline has.
+func TestSchemaRegistryEncodeAvroInputEncodingFromConfig(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		conf   string
+		expect string
+	}{
+		{
+			name:   "absent avro block defaults to auto",
+			conf:   `subject: foo`,
+			expect: avroInputEncAuto,
+		},
+		{
+			name: "avro block without the field defaults to auto",
+			conf: `
+subject: foo
+avro:
+  raw_json: true`,
+			expect: avroInputEncAuto,
+		},
+		{
+			name: "explicit avro_json",
+			conf: `
+subject: foo
+avro:
+  input_encoding: avro_json`,
+			expect: avroInputEncAvroJSON,
+		},
+		{
+			name: "explicit native",
+			conf: `
+subject: foo
+avro:
+  input_encoding: native`,
+			expect: avroInputEncNative,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			urlStr := runSchemaRegistryServer(t, func(string) ([]byte, error) {
+				return nil, errors.New("nope")
+			})
+
+			conf, err := schemaRegistryEncoderConfig().ParseYAML("url: "+urlStr+"\n"+test.conf, nil)
+			require.NoError(t, err)
+
+			encoder, err := newSchemaRegistryEncoderFromConfig(conf, service.MockResources())
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = encoder.Close(context.Background()) })
+
+			assert.Equal(t, test.expect, encoder.avroInputEnc)
+		})
+	}
+
+	// A value outside the enum is caught by config linting rather than by
+	// parsing, so what matters here is that one reaching the encoder anyway
+	// cannot leave it in a mode it has no branch for: everything unrecognised
+	// reads as auto, which is the behaviour a pipeline had before this field
+	// existed.
+	t.Run("an unrecognised value reads as auto", func(t *testing.T) {
+		urlStr := runAvroSchemaRegistry(t, testSchemaRawBytes)
+		encoder := newTestAvroEncoderInputEnc(t, urlStr, "nope")
+
+		outBatches, err := encoder.ProcessBatch(t.Context(), service.MessageBatch{
+			service.NewMessage([]byte(`{"data":"é\u0000\u007f!"}`)),
+		})
+		require.NoError(t, err)
+		require.NoError(t, outBatches[0][0].GetError())
+
+		b, err := outBatches[0][0].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, testWireRawBytes, string(b), "must behave as auto")
+	})
 }
 
 func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
