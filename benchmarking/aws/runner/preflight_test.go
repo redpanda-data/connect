@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/smithy-go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -190,6 +191,54 @@ func TestPreflightCheck_ConflictInNonHomeRegionFailsAndNamesRegion(t *testing.T)
 	require.Contains(t, err.Error(), "i-other-region")
 	require.Contains(t, err.Error(), "bench-conflict")
 	require.Contains(t, err.Error(), otherRegion, "the error must name the region the conflict actually lives in")
+}
+
+// TestPreflightCheck_SCPDeniedRegionIsSkipped pins the one sanctioned
+// region skip: an org SCP that denies DescribeInstances in an enabled
+// non-home region also denies RunInstances there, so no bench session can
+// exist in it and the scan must move on rather than brick every run
+// (live-hit 2026-08-19: ap-northeast-3 is enabled but SCP-denied in the
+// bench account).
+func TestPreflightCheck_SCPDeniedRegionIsSkipped(t *testing.T) {
+	const homeRegion = "us-east-1"
+	const deniedRegion = "ap-northeast-3"
+	homeClient := &FakeEC2Client{
+		Output: &ec2.DescribeInstancesOutput{},
+		Regions: &ec2.DescribeRegionsOutput{
+			Regions: []ec2types.Region{
+				{RegionName: aws.String(homeRegion)},
+				{RegionName: aws.String(deniedRegion)},
+			},
+		},
+	}
+	deniedClient := &FakeEC2Client{
+		Err: &smithy.GenericAPIError{
+			Code:    "UnauthorizedOperation",
+			Message: "explicit deny in a service control policy",
+		},
+	}
+	factory := func(_ context.Context, region string) (EC2Client, error) {
+		require.Equal(t, deniedRegion, region)
+		return deniedClient, nil
+	}
+
+	require.NoError(t, preflightCheck(context.Background(), homeClient, homeRegion, factory))
+}
+
+// TestPreflightCheck_SCPDenyInHomeRegionStillFails pins that the skip
+// never applies to the home region: an apply is about to run there, so
+// not being able to see instances is a genuine failure, not a no-op.
+func TestPreflightCheck_SCPDenyInHomeRegionStillFails(t *testing.T) {
+	homeClient := &FakeEC2Client{
+		Err: &smithy.GenericAPIError{
+			Code:    "UnauthorizedOperation",
+			Message: "explicit deny in a service control policy",
+		},
+	}
+	err := preflightCheck(context.Background(), homeClient, fakeDefaultRegion, noFactory(t))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), fakeDefaultRegion)
+	require.Contains(t, err.Error(), "UnauthorizedOperation")
 }
 
 // TestPreflightCheck_FactoryErrorFailsLoudly pins the same "no silent

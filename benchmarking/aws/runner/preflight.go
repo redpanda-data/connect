@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/smithy-go"
 )
 
 // preflightProjectTag is the default_tags value every bench session's own
@@ -180,6 +182,18 @@ func preflightCheck(ctx context.Context, homeClient EC2Client, homeRegion string
 		}
 		regionSessions, err := preflightCheckRegion(ctx, client, region)
 		if err != nil {
+			// An enabled region can still be blocked by an org SCP (this
+			// account denies EC2 outside an allowlist). A policy that
+			// denies DescribeInstances in a region also denies
+			// RunInstances there, so no bench session can exist in it —
+			// skipping is safe, and failing instead would brick every run
+			// (live-hit 2026-08-19). The home region never gets the skip:
+			// if we cannot see instances where we are about to apply,
+			// something is genuinely wrong.
+			if region != homeRegion && isEC2AccessDenied(err) {
+				fmt.Printf("preflight: region %s: EC2 access denied by policy — skipping (no bench session can run there)\n", region)
+				continue
+			}
 			return fmt.Errorf("preflight: region %s: %w", region, err)
 		}
 		sessions = append(sessions, regionSessions...)
@@ -197,6 +211,15 @@ func preflightCheck(ctx context.Context, homeClient EC2Client, homeRegion string
 	return fmt.Errorf(
 		"preflight: %d concurrent bench session(s) already running — concurrent sessions destroy each other's infrastructure, refusing to proceed (use --preflight=off to override, at your own risk):\n%s",
 		len(sessions), formatRunningBenchSessions(sessions))
+}
+
+// isEC2AccessDenied reports whether err is EC2's authorization failure
+// (api error code "UnauthorizedOperation") — the shape an SCP explicit
+// deny produces. Narrow on the code so throttling, expired credentials,
+// and transport errors still fail preflight loudly.
+func isEC2AccessDenied(err error) bool {
+	var ae smithy.APIError
+	return errors.As(err, &ae) && ae.ErrorCode() == "UnauthorizedOperation"
 }
 
 // preflightCheckRegion is preflightCheck's single-region core: it queries
