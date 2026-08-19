@@ -18,14 +18,12 @@ import (
 	"context"
 	"path/filepath"
 
-	"github.com/colinmarc/hdfs"
+	"github.com/colinmarc/hdfs/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
-	iFieldHosts     = "hosts"
-	iFieldUser      = "user"
 	iFieldDirectory = "directory"
 )
 
@@ -45,12 +43,10 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
-			service.NewStringListField(iFieldHosts).
-				Description("A list of target host addresses to connect to.").
-				Example("localhost:9000"),
-			service.NewStringField(iFieldUser).
-				Description("A user ID to connect as.").
-				Default(""),
+			hdfsCommonFields()...,
+		).
+		Fields(hdfsInputAuthField()).
+		Fields(
 			service.NewStringField(iFieldDirectory).
 				Description("The directory to consume from."),
 		)
@@ -64,10 +60,7 @@ func init() {
 				log: mgr.Logger(),
 			}
 			out = rdr
-			if rdr.hosts, err = conf.FieldStringList(iFieldHosts); err != nil {
-				return
-			}
-			if rdr.user, err = conf.FieldString(iFieldUser); err != nil {
+			if rdr.hdfsConf, err = hdfsInputConfigFromParsed(conf); err != nil {
 				return
 			}
 			if rdr.directory, err = conf.FieldString(iFieldDirectory); err != nil {
@@ -78,8 +71,7 @@ func init() {
 }
 
 type hdfsReader struct {
-	hosts     []string
-	user      string
+	hdfsConf  hdfsConfig
 	directory string
 
 	targets []string
@@ -94,10 +86,11 @@ func (h *hdfsReader) Connect(context.Context) error {
 		return nil
 	}
 
-	client, err := hdfs.NewClient(hdfs.ClientOptions{
-		Addresses: h.hosts,
-		User:      h.user,
-	})
+	opts, err := h.hdfsConf.clientOptions()
+	if err != nil {
+		return err
+	}
+	client, err := hdfs.NewClient(opts)
 	if err != nil {
 		return err
 	}
