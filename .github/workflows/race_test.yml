@@ -1,0 +1,94 @@
+name: Race Detector Tests
+
+# Advisory-first race-detector job (CON-179 R3).
+#
+# Runs `go test -race` scoped to the internal/impl/<component> packages a PR
+# touches, mirroring the auto-scoping in integration_test.yml to keep the
+# 2-10x race-detector runtime cost bounded.
+#
+# Failures are advisory (a warning annotation, not a red check) unless the
+# failing package is listed in .github/race-blocking-packages.txt. Packages
+# are promoted to that list only after they hold a green -race baseline, so
+# this job can never fail a PR on a pre-existing race the PR didn't touch.
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: 'Package filter (e.g. sql kafka). Required for manual runs.'
+        required: true
+        type: string
+
+jobs:
+  race-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # The Go race detector requires cgo.
+      CGO_ENABLED: 1
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed packages
+        if: ${{ github.event_name == 'pull_request' }}
+        id: detect
+        run: |
+          FILTERS=$(
+            git diff --name-only "$(git merge-base HEAD origin/${{ github.base_ref }})"...HEAD \
+              | { grep '^internal/impl/' || true; } \
+              | cut -d/ -f3 \
+              | sort -u \
+              | tr '\n' ' '
+          )
+          echo "filters=${FILTERS}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Go
+        if: ${{ steps.detect.outputs.filters != '' || github.event.inputs.filter != '' }}
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Run race-detector tests
+        if: ${{ steps.detect.outputs.filters != '' || github.event.inputs.filter != '' }}
+        env:
+          FILTER: ${{ steps.detect.outputs.filters || github.event.inputs.filter }}
+        run: |
+          BLOCKING_FILE=.github/race-blocking-packages.txt
+          PASSED=()
+          ADVISORY_FAILED=()
+          BLOCKING_FAILED=()
+
+          for pkg in ${FILTER}; do
+            [ -d "internal/impl/${pkg}" ] || continue
+            echo "::group::go test -race ./internal/impl/${pkg}/..."
+            if go test -count=1 -race -timeout 10m -shuffle=on "./internal/impl/${pkg}/..."; then
+              PASSED+=("${pkg}")
+            elif grep -qxF "${pkg}" "${BLOCKING_FILE}" 2>/dev/null; then
+              BLOCKING_FAILED+=("${pkg}")
+            else
+              ADVISORY_FAILED+=("${pkg}")
+            fi
+            echo "::endgroup::"
+          done
+
+          {
+            echo "## Race detector results"
+            echo ""
+            echo "| Package | Result |"
+            echo "| --- | --- |"
+            for pkg in "${PASSED[@]}"; do echo "| \`${pkg}\` | ✅ pass |"; done
+            for pkg in "${ADVISORY_FAILED[@]}"; do echo "| \`${pkg}\` | ⚠️ fail (advisory) |"; done
+            for pkg in "${BLOCKING_FAILED[@]}"; do echo "| \`${pkg}\` | ❌ fail (blocking) |"; done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ ${#ADVISORY_FAILED[@]} -gt 0 ]; then
+            echo "::warning::Race detector failures (advisory, non-blocking): ${ADVISORY_FAILED[*]}. See the job log. Packages get promoted to blocking via .github/race-blocking-packages.txt once their -race baseline is green."
+          fi
+          if [ ${#BLOCKING_FAILED[@]} -gt 0 ]; then
+            echo "::error::Race detector failures in blocking packages: ${BLOCKING_FAILED[*]}. These packages have a green -race baseline; this failure was introduced by the PR."
+            exit 1
+          fi

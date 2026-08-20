@@ -462,8 +462,13 @@ func runMockBSRServer(t *testing.T, importPath string) string {
 	mux := http.NewServeMux()
 	fileDescriptorSetServer := &fileDescriptorSetServer{fileDescriptorSet: files}
 	mux.Handle(reflectv1beta1connect.NewFileDescriptorSetServiceHandler(fileDescriptorSetServer))
+	server := &http.Server{Handler: h2c.NewHandler(mux, &http2.Server{})} //nolint:gosec,staticcheck // test server, no timeouts needed; h2c matches the pre-existing usage
+	// Close (rather than Shutdown) so that all connections are torn down,
+	// otherwise the package-level goroutine leak check trips on lingering
+	// HTTP connection goroutines.
+	t.Cleanup(func() { _ = server.Close() })
 	go func() {
-		if err := http.Serve(listener, h2c.NewHandler(mux, &http2.Server{})); err != nil && !errors.Is(err, http.ErrServerClosed) { //nolint:staticcheck
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			require.NoError(t, err)
 		}
 	}()

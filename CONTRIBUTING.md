@@ -169,6 +169,7 @@ The rule throughout is **conformance to the existing fleet**: mirror the shape t
 ## 6. Before You Open a PR
 
 - Run `task fmt`, `task lint`, and `task test` locally — all green.
+- Run `task test:unit-race` on the packages you touched (e.g. `go test -race ./internal/impl/<component>/...`). CI runs an advisory race-detector job on changed connector packages; packages listed in `.github/race-blocking-packages.txt` treat race failures as blocking.
 - Run `task docs` and commit the result: the generated component pages **and** the `internal/plugins/info.csv` row. CI fails on stale docs.
 - Every new component has an `internal/plugins/info.csv` entry with the correct distribution and cloud classification.
 - A license header on **every** new `.go` file (including test and benchmark helpers), matching the component's distribution.
