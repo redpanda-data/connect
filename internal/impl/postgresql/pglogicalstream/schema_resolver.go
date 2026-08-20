@@ -256,6 +256,35 @@ func schemaMatchesExcludePattern(quotedSchemaName, excludePattern string) (bool,
 	return re.MatchString(strings.ToLower(schemaName)), nil
 }
 
+// diffSchemaSets reports which schemas are present in current but not
+// previous (added) and vice versa (removed), used to detect schema-set drift
+// between the schema_include resolution done on this connect and the one
+// done on the previous connect/reconnect. A nil previous (the very first
+// resolution in the process's lifetime) is not a meaningful "everything was
+// just added" drift, so callers should only act on the result when previous
+// is non-nil.
+func diffSchemaSets(previous, current []string) (added, removed []string) {
+	previousSet := make(map[string]struct{}, len(previous))
+	for _, schema := range previous {
+		previousSet[schema] = struct{}{}
+	}
+	currentSet := make(map[string]struct{}, len(current))
+	for _, schema := range current {
+		currentSet[schema] = struct{}{}
+	}
+	for _, schema := range current {
+		if _, ok := previousSet[schema]; !ok {
+			added = append(added, schema)
+		}
+	}
+	for _, schema := range previous {
+		if _, ok := currentSet[schema]; !ok {
+			removed = append(removed, schema)
+		}
+	}
+	return added, removed
+}
+
 // globToRegexp compiles an unquoted glob pattern (using '*' as a wildcard)
 // into an anchored regexp - the in-memory equivalent of globToLike for
 // callers matching against values already held in Go rather than via a SQL

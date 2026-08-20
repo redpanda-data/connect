@@ -141,9 +141,10 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			schemas = remaining
 		}
 
-		if len(inaccessibleSchemas) > 0 {
+		if len(inaccessibleSchemas) > 0 && !slices.Equal(inaccessibleSchemas, config.previouslyInaccessibleSchemas) {
 			config.Logger.Warnf("schema_include pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", config.DBSchemaInclude, inaccessibleSchemas)
 		}
+		config.previouslyInaccessibleSchemas = slices.Clone(inaccessibleSchemas)
 
 		if len(schemas) == 0 {
 			if len(matchedSchemas) > 0 {
@@ -152,6 +153,17 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			return nil, fmt.Errorf("no schemas found matching schema_include pattern %q", config.DBSchemaInclude)
 		}
 		config.Logger.Infof("schema_include pattern %q resolved to %d schema(s): %v", config.DBSchemaInclude, len(schemas), schemas)
+
+		if config.previouslyResolvedSchemas != nil {
+			added, removed := diffSchemaSets(config.previouslyResolvedSchemas, schemas)
+			if len(added) > 0 {
+				config.Logger.Warnf("schema_include pattern %q now also matches schema(s) %v that did not match on the previous connect; their tables are being added to the publication, but any rows already in them will NOT be snapshotted even if stream_snapshot is enabled - only changes made from now on will be captured", config.DBSchemaInclude, added)
+			}
+			if len(removed) > 0 {
+				config.Logger.Warnf("schema(s) %v no longer match schema_include pattern %q (dropped, renamed, or the role lost USAGE) since the previous connect; their tables are being removed from the publication and will stop replicating", removed, config.DBSchemaInclude)
+			}
+		}
+		config.previouslyResolvedSchemas = slices.Clone(schemas)
 
 		normalizedTables := make([]string, 0, len(config.DBTables))
 		for _, table := range config.DBTables {

@@ -63,4 +63,8 @@ type Config struct {
 	UnchangedToastValue any
 	// The interval to send logical messages
 	HeartbeatInterval time.Duration
+
+	// Used to track and report on resolved schemas between reconnects
+	previouslyResolvedSchemas     []string
+	previouslyInaccessibleSchemas []string
 }
