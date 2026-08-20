@@ -230,10 +230,8 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 				}
 			}
 		} else {
-			// No filter: read the whole table through a single unordered cursor so Oracle
-			// picks a full table scan (sequential multiblock reads) instead of the
-			// PK-index-driven, table-access-by-rowid random I/O that ORDER BY pk forces
-			// once the table no longer fits in buffer cache.
+			// No Filter: whole table scan through single unordered cursor is faster due to no
+			// random i/o that ORDER BY forces
 			if numRowsProcessed, err = s.snapshotTableFullScan(ctx, tx, table, maxBatchSize, tableName); err != nil {
 				return fmt.Errorf("processing snapshot table scan: %w", err)
 			}
@@ -297,10 +295,6 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 	return batchCount, nil
 }
 
-// publishRow maps a single scanned row's values into a MessageEvent and publishes
-// it. When lastSeenPksValues is non-nil, it's mutated in place with this row's
-// primary key values so the caller can resume PK-keyset pagination from it on the
-// next batch; pass nil when there's no keyset cursor to maintain (full table scan).
 func (s *Snapshot) publishRow(ctx context.Context, table UserTable, columns []string, types []*sql.ColumnType, values []any, mappers []func(any) (any, error), colMeta []ColumnMeta, lastSeenPksValues map[string]any) error {
 	row := map[string]any{}
 	for idx, value := range values {
@@ -337,11 +331,8 @@ func (s *Snapshot) publishRow(ctx context.Context, table UserTable, columns []st
 	return nil
 }
 
-// snapshotTableFullScan reads every row of table through a single, unordered
-// query so Oracle's optimizer picks a full table scan (sequential multiblock
-// reads) rather than the PK-index-driven, table-access-by-rowid random I/O that
-// ORDER BY pk forces once the table exceeds buffer cache. There's no query-level
-// batching here — maxBatchSize only paces how often cancellation is checked.
+// snapshotTableFullScan performs a single, full unordered scan so Oracle's optimizer
+// picks a full table scan (sequential multiblock reads) over random disk I/O when ordered.
 func (s *Snapshot) snapshotTableFullScan(ctx context.Context, tx *sql.Tx, table UserTable, maxBatchSize int, tableName string) (numRowsProcessed int, err error) {
 	q := fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name)
 	rows, err := tx.QueryContext(ctx, q)
