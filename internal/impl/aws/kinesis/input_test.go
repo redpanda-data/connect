@@ -165,3 +165,78 @@ func TestNewKinesisReaderFromConfigPollInterval(t *testing.T) {
 		})
 	}
 }
+
+func TestNextPullDelay(t *testing.T) {
+	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name         string
+		pollInterval time.Duration
+		lastPull     time.Time
+		backoff      time.Duration
+		expected     time.Duration
+	}{
+		{
+			name:         "zero poll interval zero backoff",
+			pollInterval: 0,
+			lastPull:     now,
+			backoff:      0,
+			expected:     0,
+		},
+		{
+			name:         "zero poll interval with backoff",
+			pollInterval: 0,
+			lastPull:     now,
+			backoff:      300 * time.Millisecond,
+			expected:     300 * time.Millisecond,
+		},
+		{
+			name:         "poll interval just started zero backoff",
+			pollInterval: time.Second,
+			lastPull:     now,
+			backoff:      0,
+			expected:     time.Second,
+		},
+		{
+			name:         "poll interval partially elapsed zero backoff",
+			pollInterval: time.Second,
+			lastPull:     now.Add(-400 * time.Millisecond),
+			backoff:      0,
+			expected:     600 * time.Millisecond,
+		},
+		{
+			name:         "poll interval fully elapsed zero backoff",
+			pollInterval: time.Second,
+			lastPull:     now.Add(-2 * time.Second),
+			backoff:      0,
+			expected:     0,
+		},
+		{
+			name:         "backoff dominates remaining interval",
+			pollInterval: time.Second,
+			lastPull:     now.Add(-900 * time.Millisecond),
+			backoff:      5 * time.Second,
+			expected:     5 * time.Second,
+		},
+		{
+			name:         "remaining interval dominates backoff",
+			pollInterval: 5 * time.Second,
+			lastPull:     now.Add(-time.Second),
+			backoff:      300 * time.Millisecond,
+			expected:     4 * time.Second,
+		},
+		{
+			name:         "never pulled before",
+			pollInterval: time.Second,
+			lastPull:     time.Time{},
+			backoff:      0,
+			expected:     0,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, nextPullDelay(test.pollInterval, test.lastPull, now, test.backoff))
+		})
+	}
+}

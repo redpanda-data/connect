@@ -491,6 +491,18 @@ const (
 	awsKinesisConsumerClosing
 )
 
+// nextPullDelay returns how long a shard consumer must wait before its next
+// GetRecords request, combining the retry backoff (zero when the previous
+// request yielded records) with the remaining portion of the configured poll
+// interval since the last request.
+func nextPullDelay(pollInterval time.Duration, lastPull, now time.Time, backoff time.Duration) time.Duration {
+	delay := backoff
+	if wait := pollInterval - now.Sub(lastPull); wait > delay {
+		delay = wait
+	}
+	return delay
+}
+
 func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID, startingSequence string) (initErr error) {
 	defer func() {
 		if initErr != nil {
@@ -578,7 +590,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 		// disturb.
 		unblockPullChan := func() {
 			if nextPullChan == blockedChan {
-				if wait := k.pollInterval - time.Since(lastPullTime); wait > 0 {
+				if wait := nextPullDelay(k.pollInterval, lastPullTime, time.Now(), 0); wait > 0 {
 					nextPullChan = time.After(wait)
 				} else {
 					nextPullChan = unblockedChan
@@ -592,7 +604,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 				lastPullTime = time.Now()
 				if pending, iter, err = k.getRecords(info, iter); err != nil {
 					if !awsErrIsTimeout(err) {
-						nextPullChan = time.After(max(boff.NextBackOff(), k.pollInterval-time.Since(lastPullTime)))
+						nextPullChan = time.After(nextPullDelay(k.pollInterval, lastPullTime, time.Now(), boff.NextBackOff()))
 
 						var aerr *types.ExpiredIteratorException
 						if errors.As(err, &aerr) {
@@ -608,7 +620,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 						}
 					}
 				} else if len(pending) == 0 {
-					nextPullChan = time.After(max(boff.NextBackOff(), k.pollInterval-time.Since(lastPullTime)))
+					nextPullChan = time.After(nextPullDelay(k.pollInterval, lastPullTime, time.Now(), boff.NextBackOff()))
 				} else {
 					boff.Reset()
 					nextPullChan = blockedChan
