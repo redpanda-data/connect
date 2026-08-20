@@ -142,7 +142,7 @@ Redo log retention must cover idle periods, not just outages: the SCN checkpoint
 		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
 		Default(1)).
 	Field(service.NewIntField(ociFieldSnapshotMaxBatchSize).
-		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot. This value does not apply to filtered snapshots when using `" + ociFieldSnapshotFilters + "`.").
+		Description("The maximum number of rows fetched per query when taking a snapshot of a table with a `" + ociFieldSnapshotFilters + "` entry configured. Tables without one are streamed through a single unordered cursor, where this value only paces how often a cancellation is checked.").
 		Default(1000),
 	).
 	// logminer config

@@ -341,7 +341,7 @@ func (s *Snapshot) publishRow(ctx context.Context, table UserTable, columns []st
 // query so Oracle's optimizer picks a full table scan (sequential multiblock
 // reads) rather than the PK-index-driven, table-access-by-rowid random I/O that
 // ORDER BY pk forces once the table exceeds buffer cache. There's no query-level
-// batching here — maxBatchSize only paces metric flushes and cancellation checks.
+// batching here — maxBatchSize only paces how often cancellation is checked.
 func (s *Snapshot) snapshotTableFullScan(ctx context.Context, tx *sql.Tx, table UserTable, maxBatchSize int, tableName string) (numRowsProcessed int, err error) {
 	q := fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name)
 	rows, err := tx.QueryContext(ctx, q)
@@ -368,7 +368,7 @@ func (s *Snapshot) snapshotTableFullScan(ctx context.Context, tx *sql.Tx, table 
 
 	colMeta := buildColumnMeta(types)
 
-	var sinceFlush int
+	var sinceCancelCheck int
 	for rows.Next() {
 		if err = rows.Scan(values...); err != nil {
 			return numRowsProcessed, err
@@ -379,17 +379,15 @@ func (s *Snapshot) snapshotTableFullScan(ctx context.Context, tx *sql.Tx, table 
 		}
 
 		numRowsProcessed++
-		sinceFlush++
-		if sinceFlush >= maxBatchSize {
-			s.snapshotRowsTotalMetric.Incr(int64(sinceFlush), tableName)
-			sinceFlush = 0
+		s.snapshotRowsTotalMetric.Incr(1, tableName)
+
+		sinceCancelCheck++
+		if sinceCancelCheck >= maxBatchSize {
+			sinceCancelCheck = 0
 			if err = ctx.Err(); err != nil {
 				return numRowsProcessed, err
 			}
 		}
-	}
-	if sinceFlush > 0 {
-		s.snapshotRowsTotalMetric.Incr(int64(sinceFlush), tableName)
 	}
 
 	if err = rows.Err(); err != nil {
