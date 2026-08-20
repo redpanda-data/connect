@@ -96,6 +96,7 @@ input:
     rebalance_period: 30s
     lease_period: 30s
     start_from_oldest: true
+    poll_interval: 0s
     region: "" # No default (optional)
     endpoint: "" # No default (optional)
     tcp:
@@ -426,6 +427,16 @@ Whether to consume from the oldest message when a sequence does not yet exist fo
 *Type*: `bool`
 
 *Default*: `true`
+
+=== `poll_interval`
+
+An optional period of time to wait between GetRecords requests made against each consumed shard. Kinesis enforces a limit of 5 GetRecords requests per second per shard, shared across all consumers of the stream, so when multiple consumers read from the same stream setting a poll interval prevents them from throttling each other, e.g. with four consumers of one stream a poll interval of `1s` keeps the collective request rate under the limit. Each request returns up to 10MiB of records, so moderate poll intervals do not generally limit throughput. A value of `0s` disables the wait entirely.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
+Requires version 4.107.0 or newer
 
 === `region`
 

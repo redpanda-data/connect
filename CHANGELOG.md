@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- aws_kinesis: Added a `poll_interval` field to the input, setting a minimum period between GetRecords requests per consumed shard. Kinesis shares a limit of 5 GetRecords requests per second per shard across all consumers of a stream, so this allows multiple readers of the same stream to avoid throttling each other. The default (`0s`) preserves the existing polling behavior. ([@prakhargarg105](https://github.com/prakhargarg105))
+
 ## 4.106.0 - 2026-08-20
 
 ### Added

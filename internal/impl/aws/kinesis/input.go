@@ -51,6 +51,7 @@ const (
 	kiFieldLeasePeriod      = "lease_period"
 	kiFieldRebalancePeriod  = "rebalance_period"
 	kiFieldStartFromOldest  = "start_from_oldest"
+	kiFieldPollInterval     = "poll_interval"
 	kiFieldBatching         = "batching"
 
 	// Kinesis metrics
@@ -67,6 +68,7 @@ type kiConfig struct {
 	LeasePeriod      string
 	RebalancePeriod  string
 	StartFromOldest  bool
+	PollInterval     string
 }
 
 func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, err error) {
@@ -94,6 +96,9 @@ func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, e
 		return
 	}
 	if conf.StartFromOldest, err = pConf.FieldBool(kiFieldStartFromOldest); err != nil {
+		return
+	}
+	if conf.PollInterval, err = pConf.FieldString(kiFieldPollInterval); err != nil {
 		return
 	}
 	return
@@ -177,6 +182,12 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 		service.NewBoolField(kiFieldStartFromOldest).
 			Description("Whether to consume from the oldest message when a sequence does not yet exist for the stream.").
 			Default(true),
+		service.NewDurationField(kiFieldPollInterval).
+			Description("An optional period of time to wait between GetRecords requests made against each consumed shard. Kinesis enforces a limit of 5 GetRecords requests per second per shard, shared across all consumers of the stream, so when multiple consumers read from the same stream setting a poll interval prevents them from throttling each other, e.g. with four consumers of one stream a poll interval of `1s` keeps the collective request rate under the limit. Each request returns up to 10MiB of records, so moderate poll intervals do not generally limit throughput. A value of `0s` disables the wait entirely.").
+			ShortDescription("An optional minimum period of time to wait between GetRecords requests made against each consumed shard.").
+			Default("0s").
+			Version("4.107.0").
+			Advanced(),
 	).
 		Fields(config.SessionFields()...).
 		Field(service.NewBatchPolicyField(kiFieldBatching))
@@ -230,6 +241,7 @@ type kinesisReader struct {
 	stealGracePeriod time.Duration
 	leasePeriod      time.Duration
 	rebalancePeriod  time.Duration
+	pollInterval     time.Duration
 
 	cMut    sync.Mutex
 	msgChan chan asyncMessage
@@ -373,6 +385,11 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	if k.rebalancePeriod, err = time.ParseDuration(k.conf.RebalancePeriod); err != nil {
 		return nil, fmt.Errorf("parsing rebalance period string: %v", err)
 	}
+	if k.conf.PollInterval != "" {
+		if k.pollInterval, err = time.ParseDuration(k.conf.PollInterval); err != nil {
+			return nil, fmt.Errorf("parsing poll interval string: %v", err)
+		}
+	}
 
 	// Initialize metrics
 	k.clientShardsMetric = mgr.Metrics().NewGauge(metricShardsPerClient)
@@ -496,6 +513,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 
 	// Stores consumed records that have yet to be added to the batcher.
 	var pending []types.Record
+	var lastPullTime time.Time
 	var iter string
 	if iter, initErr = k.getIter(info, shardID, startingSequence); initErr != nil {
 		return initErr
@@ -560,16 +578,21 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 		// disturb.
 		unblockPullChan := func() {
 			if nextPullChan == blockedChan {
-				nextPullChan = unblockedChan
+				if wait := k.pollInterval - time.Since(lastPullTime); wait > 0 {
+					nextPullChan = time.After(wait)
+				} else {
+					nextPullChan = unblockedChan
+				}
 			}
 		}
 
 		for {
 			var err error
 			if state == awsKinesisConsumerConsuming && len(pending) == 0 && nextPullChan == unblockedChan {
+				lastPullTime = time.Now()
 				if pending, iter, err = k.getRecords(info, iter); err != nil {
 					if !awsErrIsTimeout(err) {
-						nextPullChan = time.After(boff.NextBackOff())
+						nextPullChan = time.After(max(boff.NextBackOff(), k.pollInterval-time.Since(lastPullTime)))
 
 						var aerr *types.ExpiredIteratorException
 						if errors.As(err, &aerr) {
@@ -585,7 +608,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 						}
 					}
 				} else if len(pending) == 0 {
-					nextPullChan = time.After(boff.NextBackOff())
+					nextPullChan = time.After(max(boff.NextBackOff(), k.pollInterval-time.Since(lastPullTime)))
 				} else {
 					boff.Reset()
 					nextPullChan = blockedChan
