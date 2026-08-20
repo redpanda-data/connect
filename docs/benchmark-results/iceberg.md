@@ -215,6 +215,66 @@ To reproduce: the localhost benchmark configs live under [`internal/impl/iceberg
 
 ---
 
+## Shredder Allocations — 2026-08-20
+
+Record shredding (JSON `map[string]any` → columnar parquet values) built two maps per struct per record to support case-insensitive key matching. Case-sensitive matching is the default (`case_sensitive_columns: true`) and makes those maps redundant, so it now has a dedicated path that looks fields up directly and skips unknown-field scanning when every input key is accounted for.
+
+Driven by `BenchmarkShredWide` in [`internal/impl/iceberg/bench/`](../../internal/impl/iceberg/bench/) — a wide-schema shredder micro-benchmark that mirrors the profiling pipeline's record shape without standing up infrastructure.
+
+**Environment:** darwin/arm64, Apple M3 Pro, `GOMAXPROCS=1`, Go benchmark, `benchstat` over n=8
+
+**Changed since last run:** the case-sensitive shredding path ([#4712](https://github.com/redpanda-data/connect/pull/4712)). No configuration or behaviour change.
+
+| metric | before | after | delta |
+|-----------|---------|---------|-------------------|
+| sec/op | 4.369µs | 1.472µs | **-66.3%** (p=0.000) |
+| B/op | 4.312 KiB | 1.609 KiB | **-62.7%** (p=0.000) |
+| allocs/op | 71 | 41 | **-42.3%** (p=0.000) |
+
+Per sub-benchmark, sec/op: `declared_schema=false` 4.304µs → 1.394µs (-67.6%); `declared_schema=true` 4.435µs → 1.555µs (-64.9%).
+
+**Observations:**
+
+- **This is the shredder in isolation, not a sink-level number.** Earlier 1-vCPU profiling attributed ~27% of the sink's CPU to shredding, so the end-to-end effect should be appreciable but much smaller than 66%. **It has not been measured end to end** — no throughput figure above or elsewhere in this file has been re-run for this change.
+- The two `declared_schema` variants are within noise of each other both before and after, consistent with the earlier finding that the `schema_metadata` knob does not bypass decode, shredding or encode.
+
+To reproduce: `GOMAXPROCS=1 go test -bench BenchmarkShredWide -benchmem -run '^$' -count=8 ./internal/impl/iceberg/bench/`
+
+---
+
+## Commit Regime — Commit Latency vs `max_in_flight` (synthetic)
+
+How commit coalescing responds to catalog commit latency and the number of concurrent in-flight submissions, measured by the flag-gated `TestCommitRegimeSweep` in [`internal/impl/iceberg/commit_regime_bench_test.go`](../../internal/impl/iceberg/commit_regime_bench_test.go).
+
+**Environment:** darwin/arm64, Apple M3 Pro; in-memory catalog with a fixed injected per-commit delay; 6s window per point; 300 records per submission
+
+**Caveat — read the numbers as ratios, not throughput.** Nothing here writes parquet or touches object storage, and the injected delay is not a real catalog, so the absolute rec/sec are not sink throughput figures and are not comparable with the localhost or live-catalog sections above. What the harness measures is how many submissions a commit carries, and at what latency.
+
+| commit latency | `max_in_flight` | rec/sec | records/commit | submissions/commit |
+|---------------:|----------------:|--------:|---------------:|-------------------:|
+| 50ms | 1 | 5,238 | 300 | 1.00 |
+| 50ms | 4 | 10,437 | 600 | 2.00 |
+| 50ms | 16 | 41,790 | 2,400 | 8.00 |
+| 50ms | 64 | 166,306 | 9,600 | 32.00 |
+| 200ms | 1 | 1,449 | 300 | 1.00 |
+| 200ms | 4 | 2,896 | 600 | 2.00 |
+| 200ms | 16 | 11,563 | 2,400 | 8.00 |
+| 200ms | 64 | 46,230 | 9,600 | 32.00 |
+| 500ms | 1 | 591 | 300 | 1.00 |
+| 500ms | 4 | 1,187 | 600 | 2.00 |
+| 500ms | 16 | 4,416 | 2,238 | 7.46 |
+| 500ms | 64 | 20,354 | 10,338 | 34.46 |
+
+**Observations:**
+
+- **The commit batcher already coalesces concurrent submissions.** Submissions that arrive while a commit is in flight are merged into the next one, so records per commit scales with `max_in_flight` without any time-based batching involved.
+- **At `max_in_flight: 1` records per commit is pinned to a single submission**, giving `records-per-submission / commit-latency` — 591 rec/sec at 500ms, matching the "throughput trap" regime described under Tuning Recipes. This is structural: the sole submitter is blocked inside the commit it is waiting on, so no second submission can exist to batch with. A commit-side linger cannot improve this case, and would add latency to it.
+- Submissions per commit settles near `max_in_flight / 2` rather than `max_in_flight`, which suggests the batcher samples its queue before the just-released submitters have all re-queued. Whether closing that gap is worth anything is untested.
+
+To reproduce: `go test -run TestCommitRegimeSweep -iceberg.commit-regime -timeout 20m ./internal/impl/iceberg/` (add `-iceberg.commit-regime-realistic` for 320ms/5s/10s latencies).
+
+---
+
 ## Tuning Recipes
 
 The single most important factor for `iceberg` throughput is **records per commit**. Each catalog
