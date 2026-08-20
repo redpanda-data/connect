@@ -451,11 +451,33 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	return conf.WrapBatchInputExtractTracingSpanMapping("oracledb_cdc", batchInput)
 }
 
+// rebuildPublisherIfPoisoned returns the current publisher, replacing it
+// first when a failed send or a sealed flush queue poisoned it: the old
+// generation is closed (in-flight ack functions keep resolving into the
+// abandoned tracker, where cacheSCN's monotonic guard makes any stale
+// persist a no-op) and a fresh batcher and tracker take its place, so the
+// new session resumes from the last durable SCN.
+func (o *oracleDBCDCInput) rebuildPublisherIfPoisoned() (*batchPublisher, error) {
+	publisher := o.publisher.Load()
+	if !publisher.poisoned.Load() {
+		return publisher, nil
+	}
+	o.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	publisher.Close()
+	batcher, err := o.batching.NewBatcher(o.res)
+	if err != nil {
+		return nil, fmt.Errorf("rebuilding batcher: %w", err)
+	}
+	publisher = newBatchPublisher(batcher, checkpoint.NewCapped[replication.SCN](int64(o.checkpointLimit)), o.log)
+	publisher.cacheSCN = o.cacheSCN
+	o.publisher.Store(publisher)
+	return publisher, nil
+}
+
 func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	var (
 		userTables []replication.UserTable
 		cachedSCN  replication.SCN
-		err        error
 		isCDB      bool
 	)
 
@@ -465,17 +487,9 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	// durable SCN, which is necessarily before the orphaned rows, and the old
 	// session's late acks resolve into the abandoned tracker (cacheSCN's
 	// monotonic guard turns any stale write into a no-op).
-	publisher := o.publisher.Load()
-	if publisher.poisoned.Load() {
-		o.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
-		publisher.Close()
-		batcher, batcherErr := o.batching.NewBatcher(o.res)
-		if batcherErr != nil {
-			return fmt.Errorf("rebuilding batcher: %w", batcherErr)
-		}
-		publisher = newBatchPublisher(batcher, checkpoint.NewCapped[replication.SCN](int64(o.checkpointLimit)), o.log)
-		publisher.cacheSCN = o.cacheSCN
-		o.publisher.Store(publisher)
+	publisher, err := o.rebuildPublisherIfPoisoned()
+	if err != nil {
+		return err
 	}
 
 	if o.db != nil {
