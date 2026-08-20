@@ -10,6 +10,7 @@ package iceberg
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"sync"
@@ -126,15 +127,24 @@ func runRegime(tb testing.TB, p regimeParams) regimeResult {
 	deadline := time.Now().Add(p.window)
 	schemaID := c.currentSchemaID()
 
+	// Submitters cannot assert: require's FailNow is only valid on the test
+	// goroutine. Each records its first error for the test goroutine to check.
+	errs := make([]error, p.inFlight)
+
 	var wg sync.WaitGroup
 	start := time.Now()
-	for range p.inFlight {
+	for i := range p.inFlight {
 		wg.Go(func() {
 			for time.Now().Before(deadline) {
-				df := recordCountDataFile(tb, tbl.Spec(),
+				df, err := recordCountDataFile(tbl.Spec(),
 					fmt.Sprintf("%s/data/%s.parquet", tbl.Location(), uuid.New()),
 					int64(p.recordsPerSubmit))
+				if err != nil {
+					errs[i] = err
+					return
+				}
 				if err := c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: schemaID}); err != nil {
+					errs[i] = err
 					return
 				}
 				submissions.Add(1)
@@ -144,6 +154,9 @@ func runRegime(tb testing.TB, p regimeParams) regimeResult {
 	}
 	wg.Wait()
 	elapsed := time.Since(start)
+
+	// Assert before deriving any rate from a possibly half-completed run.
+	require.NoError(tb, errors.Join(errs...), "submitter(s) failed")
 
 	commits := cat.commits.Load()
 	res := regimeResult{
@@ -163,8 +176,12 @@ func runRegime(tb testing.TB, p regimeParams) regimeResult {
 
 // recordCountDataFile is synthDataFile with a caller-chosen record count, so a
 // submission can represent a realistic batch rather than a single row.
-func recordCountDataFile(tb testing.TB, spec iceberg.PartitionSpec, path string, records int64) iceberg.DataFile {
-	tb.Helper()
+//
+// It returns an error rather than asserting, because the submitters that call it
+// run on their own goroutines: require's FailNow is only valid on the goroutine
+// running the test, so a failure here has to be carried back and asserted after
+// the submitters have been waited on.
+func recordCountDataFile(spec iceberg.PartitionSpec, path string, records int64) (iceberg.DataFile, error) {
 	b, err := iceberg.NewDataFileBuilder(
 		spec,
 		iceberg.EntryContentData,
@@ -173,8 +190,10 @@ func recordCountDataFile(tb testing.TB, spec iceberg.PartitionSpec, path string,
 		nil, nil, nil,
 		records, records*64,
 	)
-	require.NoError(tb, err)
-	return b.Build()
+	if err != nil {
+		return nil, err
+	}
+	return b.Build(), nil
 }
 
 // TestCommitRegimeSweep characterises throughput across the commit regime.
@@ -244,18 +263,26 @@ func TestCommitCoalescesConcurrentSubmissions(t *testing.T) {
 
 	schemaID := c.currentSchemaID()
 
+	// Build the data files up front, on the test goroutine, so the submitters
+	// below only have to commit — and so nothing in them needs to assert.
+	files := make([]iceberg.DataFile, inFlight)
+	for i := range files {
+		df, err := recordCountDataFile(tbl.Spec(),
+			fmt.Sprintf("%s/data/coalesce-%d-%s.parquet", tbl.Location(), i, uuid.New()), 300)
+		require.NoError(t, err)
+		files[i] = df
+	}
+
 	// Occupy the committer so the rest of the submissions queue behind it.
+	errs := make([]error, inFlight)
 	var wg sync.WaitGroup
 	for i := range inFlight {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			df := recordCountDataFile(t, tbl.Spec(),
-				fmt.Sprintf("%s/data/coalesce-%d-%s.parquet", tbl.Location(), i, uuid.New()), 300)
-			require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: schemaID}))
-		}(i)
+		wg.Go(func() {
+			errs[i] = c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{files[i]}, SchemaID: schemaID})
+		})
 	}
 	wg.Wait()
+	require.NoError(t, errors.Join(errs...), "submitter(s) failed")
 
 	commits := cat.commits.Load()
 	require.Positive(t, commits, "expected at least one commit")

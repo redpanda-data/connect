@@ -24,8 +24,22 @@ import (
 // key matching is exact — which is the default (case_sensitive_columns: true)
 // and therefore the path almost all traffic takes. It is an optimisation, so it
 // must not change observable behaviour by even one emitted value, new-field
-// notification, or error. This test drives the same schema and record through
-// both implementations and demands identical output.
+// notification, or error.
+//
+// The comparison goes through the public Shred entry point with two shredders
+// rather than calling the two helpers directly, because shredStruct dispatches
+// on rs.caseSensitive on *every* recursion: a single case-sensitive shredder
+// routes nested structs to shredStructExact no matter which helper was called
+// at the top level, so calling the helpers directly would compare the exact
+// path against itself below the root and silently pass on any nested
+// divergence. Two shredders makes one run exact all the way down and the other
+// folded all the way down.
+//
+// That comparison is only legitimate for a case-unambiguous corpus, so every
+// schema field name and record key below is lower-case: folding then maps each
+// key to itself and the two modes are *required* to agree. Inputs that differ
+// in case are exactly where the modes are meant to diverge, and those belong in
+// the case-sensitivity tests instead.
 //
 // It covers the cases the optimisation actually reasons about: every key
 // matching (the allocation-free steady state), extra unknown keys (the fallback
@@ -43,11 +57,26 @@ func TestShredStructPathsAgree(t *testing.T) {
 		Required: false,
 	}
 
+	// deep carries a REQUIRED leaf two levels down, so nested required-field
+	// errors and nested unknown-field notifications are both reachable — the
+	// divergences the earlier version of this test could not have seen.
+	deep := iceberg.NestedField{
+		ID:   20,
+		Name: "deep",
+		Type: &iceberg.StructType{FieldList: []iceberg.NestedField{
+			{ID: 21, Name: "mid", Type: &iceberg.StructType{FieldList: []iceberg.NestedField{
+				{ID: 22, Name: "leaf", Type: iceberg.PrimitiveTypes.String, Required: true},
+			}}, Required: false},
+		}},
+		Required: false,
+	}
+
 	schema := iceberg.NewSchema(1,
 		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
 		iceberg.NestedField{ID: 2, Name: "name", Type: iceberg.PrimitiveTypes.String, Required: false},
 		iceberg.NestedField{ID: 3, Name: "flag", Type: iceberg.PrimitiveTypes.Bool, Required: false},
 		nested,
+		deep,
 	)
 
 	emptySchema := iceberg.NewSchema(2)
@@ -89,6 +118,30 @@ func TestShredStructPathsAgree(t *testing.T) {
 			},
 		},
 		{
+			name:   "unknown key in a doubly-nested struct",
+			schema: schema,
+			record: map[string]any{
+				"id":   int64(1),
+				"deep": map[string]any{"mid": map[string]any{"leaf": "ok", "extra": 1}},
+			},
+		},
+		{
+			name:   "required leaf missing two levels down (nested error path)",
+			schema: schema,
+			record: map[string]any{
+				"id":   int64(1),
+				"deep": map[string]any{"mid": map[string]any{}},
+			},
+		},
+		{
+			name:   "required leaf explicitly null two levels down",
+			schema: schema,
+			record: map[string]any{
+				"id":   int64(1),
+				"deep": map[string]any{"mid": map[string]any{"leaf": nil}},
+			},
+		},
+		{
 			name:   "missing optional fields",
 			schema: schema,
 			record: map[string]any{"id": int64(7)},
@@ -127,17 +180,11 @@ func TestShredStructPathsAgree(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Both shredders are case-sensitive: the folded path is exercised
-			// directly so the comparison isolates the implementations rather
-			// than the matching mode.
-			rs := NewRecordShredder(tc.schema, true)
-			fields := tc.schema.Fields()
-
 			exactSink := &testSink{}
-			exactErr := rs.shredStructExact(fields, tc.record, nil, 0, 0, 0, exactSink)
+			exactErr := NewRecordShredder(tc.schema, true).Shred(tc.record, exactSink)
 
 			foldedSink := &testSink{}
-			foldedErr := rs.shredStructFolded(fields, tc.record, nil, 0, 0, 0, foldedSink)
+			foldedErr := NewRecordShredder(tc.schema, false).Shred(tc.record, foldedSink)
 
 			if foldedErr != nil {
 				require.EqualError(t, exactErr, foldedErr.Error(),
