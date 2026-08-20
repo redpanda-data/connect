@@ -3,12 +3,27 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.106.0 - TBD
+## 4.106.0 - 2026-08-20
 
 ### Added
 
+- salesforce_cdc: Added decode-failure bounds and classification of schema-fetch errors (deterministic vs transient) to prevent infinite retry loops and livelocks, with terminal failures surfaced clearly to the health check. ([@squiidz](https://github.com/squiidz), [#4689](https://github.com/redpanda-data/connect/pull/4689))
 - mongodb, mongodb_cdc: Added AWS IAM authentication (`MONGODB-AWS`) for MongoDB Atlas to the `mongodb` input, output, processor and cache, and to the `mongodb_cdc` input, via a new `aws` configuration block supporting the ambient credential chain, static keys, and assume-role chaining. ([@squiidz](https://github.com/squiidz), [#4690](https://github.com/redpanda-data/connect/pull/4690))
 - mongodb_cdc: The input now checkpoints as soon as the initial snapshot completes and is fully acknowledged, so restarts resume the stream instead of re-running the snapshot; a stream position that can no longer be resumed from (for example one that has aged out of the oplog) is recovered by re-running the snapshot, bounded by a breaker that fails loudly instead of churning, with a new `on_unresumable_position` field controlling the lossy no-snapshot case (default `fail`) and a new `checkpoint_write_timeout` field bounding the detached checkpoint writes (the post-snapshot store and the recovery clear). ([@squiidz](https://github.com/squiidz), [#4690](https://github.com/redpanda-data/connect/pull/4690))
+
+### Fixed
+
+- aws_dynamodb_cdc: Fixed silent data loss in snapshot handling by gating checkpoint persistence on downstream acknowledgments, ensuring rejected batches are redelivered instead of skipped. ([@squiidz](https://github.com/squiidz), [#4687](https://github.com/redpanda-data/connect/pull/4687))
+- aws_dynamodb_cdc: Fixed stream rotation and restart scenarios where start_from: latest was incorrectly applied to child shards and checkpoint-less shards discovered after initial setup, causing silent loss of backlog. ([@squiidz](https://github.com/squiidz), [#4687](https://github.com/redpanda-data/connect/pull/4687))
+- cockroachdb_changefeed: Fixed unbounded silent data loss where transaction rows and backfill batches sharing timestamps could skip data on restart; now checkpoints only persist resolved timestamps to guarantee no loss. ([@squiidz](https://github.com/squiidz), [#4688](https://github.com/redpanda-data/connect/pull/4688))
+- salesforce_cdc: Fixed multiple silent-loss paths in Pub/Sub gRPC handling and ack functions: full buffer now applies backpressure instead of dropping events, schema/decode failures reconnect without losing batches, and nacks now pin checkpoints. ([@squiidz](https://github.com/squiidz), [#4689](https://github.com/redpanda-data/connect/pull/4689))
+- salesforce_cdc: Fixed off-by-one error in schema-retry budgeting and credential refresh in unanchored schema retries to prevent indefinite stalls under the default unlimited reconnect policy. ([@squiidz](https://github.com/squiidz), [#4689](https://github.com/redpanda-data/connect/pull/4689))
+
+### Changed
+
+- aws_dynamodb_cdc: Added auto_replay_nacks support to automatically retry transient downstream failures in-process, with nacks now advancing checkpoints when auto_replay_nacks is disabled. ([@squiidz](https://github.com/squiidz), [#4687](https://github.com/redpanda-data/connect/pull/4687))
+- cockroachdb_changefeed: Changed nack handling to advance cursors when auto_replay_nacks is disabled, treating it as an opt-in to drop rejected messages per the framework contract. ([@squiidz](https://github.com/squiidz), [#4688](https://github.com/redpanda-data/connect/pull/4688))
+- general: Updated CDC connector documentation across Microsoft SQL Server, MongoDB, and OracleDB with measured performance characteristics, scaling limitations, and configuration guidance based on real-world benchmarking. ([@prakhargarg105](https://github.com/prakhargarg105), [#4691](https://github.com/redpanda-data/connect/pull/4691))
 
 ## 4.105.0 - 2026-08-13
 
