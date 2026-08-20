@@ -9,6 +9,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -246,10 +247,10 @@ func (s *Scenario) applyDirectionDefault() {
 
 func (s *Scenario) Validate() error {
 	if s.Name == "" {
-		return fmt.Errorf("name is required")
+		return errors.New("name is required")
 	}
 	if s.Connector == "" {
-		return fmt.Errorf("connector is required")
+		return errors.New("connector is required")
 	}
 	switch s.Direction {
 	case DirectionSource, DirectionSink, "":
@@ -266,10 +267,10 @@ func (s *Scenario) Validate() error {
 		return err
 	}
 	if s.Stack == "" {
-		return fmt.Errorf("stack is required")
+		return errors.New("stack is required")
 	}
 	if len(s.Matrix.CPUPoints) == 0 {
-		return fmt.Errorf("matrix.cpu_points must contain at least one value")
+		return errors.New("matrix.cpu_points must contain at least one value")
 	}
 	if s.Matrix.CPUPoints[0] < 1 {
 		return fmt.Errorf("matrix.cpu_points must all be positive: %v", s.Matrix.CPUPoints)
@@ -311,7 +312,7 @@ func (s *Scenario) Validate() error {
 				}
 			}
 			if !allBinary {
-				return fmt.Errorf("soak scenarios must not set matrix.arms unless every arm sets a non-empty binary (a base-vs-PR build comparison): soak measures one configuration over time, not an A/B comparison")
+				return errors.New("soak scenarios must not set matrix.arms unless every arm sets a non-empty binary (a base-vs-PR build comparison): soak measures one configuration over time, not an A/B comparison")
 			}
 			if len(s.Matrix.Arms) < 2 {
 				return fmt.Errorf("soak scenarios using matrix.arms[].binary must set at least 2 arms (got %d): a build comparison needs two builds to compare", len(s.Matrix.Arms))
@@ -389,7 +390,7 @@ func (s *Scenario) Validate() error {
 	} else {
 		// Bounded-dataset scenario: require the size hint and verify wall-clock estimate.
 		if s.Dataset.ExpectedPeakMBSec == 0 {
-			return fmt.Errorf("bounded-dataset scenario must set dataset.expected_peak_mb_s")
+			return errors.New("bounded-dataset scenario must set dataset.expected_peak_mb_s")
 		}
 		totalBytes := s.Dataset.InitialRows * int64(s.Dataset.RowSizeBytes)
 		mbTotal := totalBytes / bytesPerMB

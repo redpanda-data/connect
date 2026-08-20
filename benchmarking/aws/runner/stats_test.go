@@ -63,7 +63,7 @@ func TestParseRollingStatsLine_GigabytesUnit(t *testing.T) {
 
 func TestSummarise_BasicPercentiles(t *testing.T) {
 	samples := make([]Sample, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		samples[i] = Sample{T: i, MBPerSec: float64(i + 1)} // 1..100
 	}
 	sum := Summarise(samples)

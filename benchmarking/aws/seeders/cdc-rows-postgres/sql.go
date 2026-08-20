@@ -54,7 +54,7 @@ func seed(ctx context.Context, tables []string, rows int64, rowSize int) error {
 
 func ensureTable(ctx context.Context, pool *pgxpool.Pool, table string, rowSize int) error {
 	stmts := []string{
-		fmt.Sprintf("DROP TABLE IF EXISTS %s", table),
+		"DROP TABLE IF EXISTS " + table,
 		fmt.Sprintf(`CREATE TABLE %s (
 			id          BIGSERIAL PRIMARY KEY,
 			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -83,7 +83,7 @@ func workerRowCounts(rows int64, workers int) []int64 {
 	}
 	base := rows / int64(workers)
 	remainder := rows % int64(workers)
-	for w := 0; w < workers; w++ {
+	for w := range workers {
 		counts[w] = base
 		if int64(w) < remainder {
 			counts[w]++
@@ -99,7 +99,7 @@ func bulkInsert(ctx context.Context, pgPool *pgxpool.Pool, table string, rows in
 	start := time.Now()
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers)
-	for w := 0; w < workers; w++ {
+	for w := range workers {
 		wg.Add(1)
 		workerRows := counts[w]
 		go func() {
@@ -181,7 +181,7 @@ func perWorkerRate(rate, workers int) []int {
 	}
 	base := rate / workers
 	remainder := rate % workers
-	for w := 0; w < workers; w++ {
+	for w := range workers {
 		rates[w] = base
 		if w < remainder {
 			rates[w]++
@@ -200,7 +200,7 @@ func tickCounts(ratePerWorker int) [ticksPerSecond]int {
 	var counts [ticksPerSecond]int
 	base := ratePerWorker / ticksPerSecond
 	remainder := ratePerWorker % ticksPerSecond
-	for t := 0; t < ticksPerSecond; t++ {
+	for t := range ticksPerSecond {
 		counts[t] = base
 		if t < remainder {
 			counts[t]++
@@ -232,7 +232,7 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 	deadline := time.Now().Add(dur)
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers)
-	for w := 0; w < workers; w++ {
+	for w := range workers {
 		wg.Add(1)
 		workerIdx := w
 		ratePerWorker := rates[w]
@@ -327,7 +327,7 @@ const payloadPoolSize = 4096
 // allows 65535 parameters per statement, so n=1000 is far inside the limit.
 func valuesList(n int) string {
 	var sb strings.Builder
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if i > 0 {
 			sb.WriteString(",")
 		}

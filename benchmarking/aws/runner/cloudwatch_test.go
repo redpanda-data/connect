@@ -270,8 +270,8 @@ func TestOffsetSampleT(t *testing.T) {
 
 func TestFakeEmitter_RecordsAndFlattensCalls(t *testing.T) {
 	f := &FakeEmitter{}
-	require.NoError(t, f.Emit(nil, []MetricDatum{{Name: "a", Value: 1}}))
-	require.NoError(t, f.Emit(nil, []MetricDatum{{Name: "b", Value: 2}, {Name: "c", Value: 3}}))
+	require.NoError(t, f.Emit(t.Context(), []MetricDatum{{Name: "a", Value: 1}}))
+	require.NoError(t, f.Emit(t.Context(), []MetricDatum{{Name: "b", Value: 2}, {Name: "c", Value: 3}}))
 	require.Len(t, f.Calls, 2)
 	require.Equal(t, []MetricDatum{{Name: "a", Value: 1}, {Name: "b", Value: 2}, {Name: "c", Value: 3}}, f.All())
 }
@@ -366,7 +366,7 @@ func TestRSSSlopeBytesPerMin_WindowLimitsToTrailing120Minutes(t *testing.T) {
 	var prom []PromPoint
 	// Minutes 0..29: a steep 10MB/min climb (outside the trailing window
 	// once the series passes 120 minutes).
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		prom = append(prom, PromPoint{T: i * secondsPerMinute, RSSBytes: uint64(i) * 10_000_000})
 	}
 	// Minutes 30..179 (150 more minutes): flat at the last climbed value.

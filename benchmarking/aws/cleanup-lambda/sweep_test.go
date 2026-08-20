@@ -83,7 +83,7 @@ type FakeAWS struct {
 	// SeenCtx records the last context.Context observed by GetResources, so
 	// tests can assert Sweep threads the caller's ctx through rather than
 	// substituting context.Background().
-	SeenCtx context.Context
+	SeenCtx context.Context //nolint:containedctx // test fake records the ctx it was invoked with
 }
 
 func (f *FakeAWS) failIfConfigured(call, id string) error {
@@ -149,7 +149,7 @@ func (f *FakeAWS) DeleteSecurityGroup(_ context.Context, in *ec2.DeleteSecurityG
 	return &ec2.DeleteSecurityGroupOutput{}, nil
 }
 
-func (f *FakeAWS) DescribeVpcs(_ context.Context, _ *ec2.DescribeVpcsInput) (*ec2.DescribeVpcsOutput, error) {
+func (*FakeAWS) DescribeVpcs(_ context.Context, _ *ec2.DescribeVpcsInput) (*ec2.DescribeVpcsOutput, error) {
 	return &ec2.DescribeVpcsOutput{}, nil
 }
 
@@ -163,7 +163,7 @@ func (f *FakeAWS) DeleteVpc(_ context.Context, in *ec2.DeleteVpcInput) (*ec2.Del
 	return &ec2.DeleteVpcOutput{}, nil
 }
 
-func (f *FakeAWS) DescribeSubnets(_ context.Context, _ *ec2.DescribeSubnetsInput) (*ec2.DescribeSubnetsOutput, error) {
+func (*FakeAWS) DescribeSubnets(_ context.Context, _ *ec2.DescribeSubnetsInput) (*ec2.DescribeSubnetsOutput, error) {
 	return &ec2.DescribeSubnetsOutput{}, nil
 }
 
@@ -249,7 +249,7 @@ func (f *FakeAWS) DeleteDBInstance(_ context.Context, in *rds.DeleteDBInstanceIn
 	return &rds.DeleteDBInstanceOutput{}, nil
 }
 
-func (f *FakeAWS) DescribeDBSubnetGroups(_ context.Context, _ *rds.DescribeDBSubnetGroupsInput) (*rds.DescribeDBSubnetGroupsOutput, error) {
+func (*FakeAWS) DescribeDBSubnetGroups(_ context.Context, _ *rds.DescribeDBSubnetGroupsInput) (*rds.DescribeDBSubnetGroupsOutput, error) {
 	return &rds.DescribeDBSubnetGroupsOutput{}, nil
 }
 
@@ -262,7 +262,7 @@ func (f *FakeAWS) DeleteDBSubnetGroup(_ context.Context, in *rds.DeleteDBSubnetG
 	return &rds.DeleteDBSubnetGroupOutput{}, nil
 }
 
-func (f *FakeAWS) DescribeDBParameterGroups(_ context.Context, _ *rds.DescribeDBParameterGroupsInput) (*rds.DescribeDBParameterGroupsOutput, error) {
+func (*FakeAWS) DescribeDBParameterGroups(_ context.Context, _ *rds.DescribeDBParameterGroupsInput) (*rds.DescribeDBParameterGroupsOutput, error) {
 	return &rds.DescribeDBParameterGroupsOutput{}, nil
 }
 
@@ -317,7 +317,7 @@ func (f *FakeAWS) ListObjectVersions(_ context.Context, in *s3.ListObjectVersion
 	return out, nil
 }
 
-func (f *FakeAWS) DeleteObjects(_ context.Context, _ *s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error) {
+func (*FakeAWS) DeleteObjects(_ context.Context, _ *s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error) {
 	return &s3.DeleteObjectsOutput{}, nil
 }
 
@@ -338,31 +338,31 @@ func (f *FakeAWS) GetRole(_ context.Context, in *iam.GetRoleInput) (*iam.GetRole
 	return &iam.GetRoleOutput{Role: &iamtypes.Role{RoleName: in.RoleName, CreateDate: &t}}, nil
 }
 
-func (f *FakeAWS) ListRolePolicies(_ context.Context, _ *iam.ListRolePoliciesInput) (*iam.ListRolePoliciesOutput, error) {
+func (*FakeAWS) ListRolePolicies(_ context.Context, _ *iam.ListRolePoliciesInput) (*iam.ListRolePoliciesOutput, error) {
 	return &iam.ListRolePoliciesOutput{}, nil
 }
 
-func (f *FakeAWS) DeleteRolePolicy(_ context.Context, _ *iam.DeleteRolePolicyInput) (*iam.DeleteRolePolicyOutput, error) {
+func (*FakeAWS) DeleteRolePolicy(_ context.Context, _ *iam.DeleteRolePolicyInput) (*iam.DeleteRolePolicyOutput, error) {
 	return &iam.DeleteRolePolicyOutput{}, nil
 }
 
-func (f *FakeAWS) ListAttachedRolePolicies(_ context.Context, _ *iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error) {
+func (*FakeAWS) ListAttachedRolePolicies(_ context.Context, _ *iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error) {
 	return &iam.ListAttachedRolePoliciesOutput{}, nil
 }
 
-func (f *FakeAWS) DetachRolePolicy(_ context.Context, _ *iam.DetachRolePolicyInput) (*iam.DetachRolePolicyOutput, error) {
+func (*FakeAWS) DetachRolePolicy(_ context.Context, _ *iam.DetachRolePolicyInput) (*iam.DetachRolePolicyOutput, error) {
 	return &iam.DetachRolePolicyOutput{}, nil
 }
 
-func (f *FakeAWS) ListInstanceProfilesForRole(_ context.Context, _ *iam.ListInstanceProfilesForRoleInput) (*iam.ListInstanceProfilesForRoleOutput, error) {
+func (*FakeAWS) ListInstanceProfilesForRole(_ context.Context, _ *iam.ListInstanceProfilesForRoleInput) (*iam.ListInstanceProfilesForRoleOutput, error) {
 	return &iam.ListInstanceProfilesForRoleOutput{}, nil
 }
 
-func (f *FakeAWS) RemoveRoleFromInstanceProfile(_ context.Context, _ *iam.RemoveRoleFromInstanceProfileInput) (*iam.RemoveRoleFromInstanceProfileOutput, error) {
+func (*FakeAWS) RemoveRoleFromInstanceProfile(_ context.Context, _ *iam.RemoveRoleFromInstanceProfileInput) (*iam.RemoveRoleFromInstanceProfileOutput, error) {
 	return &iam.RemoveRoleFromInstanceProfileOutput{}, nil
 }
 
-func (f *FakeAWS) DeleteInstanceProfile(_ context.Context, _ *iam.DeleteInstanceProfileInput) (*iam.DeleteInstanceProfileOutput, error) {
+func (*FakeAWS) DeleteInstanceProfile(_ context.Context, _ *iam.DeleteInstanceProfileInput) (*iam.DeleteInstanceProfileOutput, error) {
 	return &iam.DeleteInstanceProfileOutput{}, nil
 }
 

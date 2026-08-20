@@ -80,13 +80,13 @@ func buildSweepPlan(s *Scenario) []sweepPoint {
 
 // planMaxStreams is the largest stream count in the plan.
 func planMaxStreams(plan []sweepPoint) int {
-	max := 1
+	maxStreams := 1
 	for _, p := range plan {
-		if p.Streams > max {
-			max = p.Streams
+		if p.Streams > maxStreams {
+			maxStreams = p.Streams
 		}
 	}
-	return max
+	return maxStreams
 }
 
 // mergePipeline returns a deep copy of base with override's keys merged in

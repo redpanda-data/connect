@@ -294,13 +294,13 @@ func splitLabeledMetric(line string) (map[string]string, string, bool) {
 		valueStr = rest[:sp]
 	}
 	labels := map[string]string{}
-	for _, pair := range strings.Split(labelsRaw, ",") {
-		eq := strings.Index(pair, "=")
-		if eq < 0 {
+	for pair := range strings.SplitSeq(labelsRaw, ",") {
+		before, after, ok := strings.Cut(pair, "=")
+		if !ok {
 			continue
 		}
-		k := strings.TrimSpace(pair[:eq])
-		v := strings.TrimSpace(pair[eq+1:])
+		k := strings.TrimSpace(before)
+		v := strings.TrimSpace(after)
 		v = strings.Trim(v, `"`)
 		labels[k] = v
 	}

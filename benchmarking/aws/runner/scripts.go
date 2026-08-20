@@ -89,10 +89,8 @@ func combineReset(connector string, steps []ResetStep, outs map[string]string) (
 			// registry was trimmed to postgres_cdc only — no remaining
 			// engineSpec entry sets ResetHostOutputKey — and returns with
 			// mysql_cdc's own stack PR.
-			sb.WriteString(fmt.Sprintf(
-				`psql %q -v ON_ERROR_STOP=1 -c %q`+"\n",
-				outs[es.DSNOutputKey], st.SQL,
-			))
+			fmt.Fprintf(&sb, `psql %q -v ON_ERROR_STOP=1 -c %q`+"\n",
+				outs[es.DSNOutputKey], st.SQL)
 		}
 		if st.Bash != "" {
 			sb.WriteString(substitutePlaceholders(st.Bash, outs) + "\n")
@@ -115,10 +113,8 @@ func combineReset(connector string, steps []ResetStep, outs map[string]string) (
 		// the status table, which lands in the streamed reset log rather
 		// than being discarded. Session IDs and connector names are
 		// [A-Za-z0-9_-], so the anchored literal needs no regex escaping.
-		sb.WriteString(fmt.Sprintf(
-			`/usr/local/bin/rpk topic delete -r %q -X brokers=%q`+"\n",
-			"^"+connectTopic+"$", brokers,
-		))
+		fmt.Fprintf(&sb, `/usr/local/bin/rpk topic delete -r %q -X brokers=%q`+"\n",
+			"^"+connectTopic+"$", brokers)
 	}
 	return sb.String(), nil
 }

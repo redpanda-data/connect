@@ -25,7 +25,7 @@ func (sourceTopology) Validate(s *Scenario) error {
 	return nil
 }
 
-func (sourceTopology) Pipeline(s *Scenario, n BenchNames) (input, output map[string]any, err error) {
+func (sourceTopology) Pipeline(s *Scenario, _ BenchNames) (input, output map[string]any, err error) {
 	in, ok := s.Pipeline["input"].(map[string]any)
 	if !ok {
 		return nil, nil, fmt.Errorf("source scenario %q: pipeline.input must be a map", s.Connector)
@@ -46,15 +46,15 @@ func (sourceTopology) Pipeline(s *Scenario, n BenchNames) (input, output map[str
 	return in, out, nil
 }
 
-func (sourceTopology) SeedScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
+func (sourceTopology) SeedScript(s *Scenario, outs map[string]string, _ BenchNames) (string, error) {
 	return renderSeedScript(s, outs, "stage/"+s.Dataset.Seeder)
 }
 
-func (sourceTopology) WorkloadScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
+func (sourceTopology) WorkloadScript(s *Scenario, outs map[string]string, _ BenchNames) (string, error) {
 	return renderWorkloadScript(s, outs)
 }
 
-func (sourceTopology) ResetScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
+func (sourceTopology) ResetScript(s *Scenario, outs map[string]string, _ BenchNames) (string, error) {
 	return combineReset(s.Connector, s.Reset, outs)
 }
 

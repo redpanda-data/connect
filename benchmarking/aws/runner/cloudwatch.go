@@ -131,8 +131,8 @@ func NewCloudWatchEmitter(ctx context.Context, region, namespace, connector, sce
 
 func (c *awsCloudWatch) Emit(ctx context.Context, data []MetricDatum) error {
 	dims := []cwtypes.Dimension{
-		{Name: strPtr(dimensionConnector), Value: strPtr(c.connector)},
-		{Name: strPtr(dimensionScenario), Value: strPtr(c.scenario)},
+		{Name: new(dimensionConnector), Value: new(c.connector)},
+		{Name: new(dimensionScenario), Value: new(c.scenario)},
 	}
 	for start := 0; start < len(data); start += cloudWatchPutChunk {
 		end := min(start+cloudWatchPutChunk, len(data))
@@ -141,15 +141,15 @@ func (c *awsCloudWatch) Emit(ctx context.Context, data []MetricDatum) error {
 		for i, d := range chunk {
 			at := d.At
 			md[i] = cwtypes.MetricDatum{
-				MetricName: strPtr(d.Name),
-				Value:      floatPtr(d.Value),
+				MetricName: new(d.Name),
+				Value:      new(d.Value),
 				Unit:       cwtypes.StandardUnit(d.Unit),
 				Timestamp:  &at,
 				Dimensions: dims,
 			}
 		}
 		if _, err := c.client.PutMetricData(ctx, &cloudwatch.PutMetricDataInput{
-			Namespace:  strPtr(c.namespace),
+			Namespace:  new(c.namespace),
 			MetricData: md,
 		}); err != nil {
 			return fmt.Errorf("put metric data (namespace %s, %d data): %w", c.namespace, len(chunk), err)
@@ -157,10 +157,6 @@ func (c *awsCloudWatch) Emit(ctx context.Context, data []MetricDatum) error {
 	}
 	return nil
 }
-
-func strPtr(s string) *string { return &s }
-
-func floatPtr(f float64) *float64 { return &f }
 
 // FakeEmitter is a MetricsEmitter that records every Emit call instead of
 // touching AWS — for tests.

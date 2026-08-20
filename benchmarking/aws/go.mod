@@ -19,6 +19,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.73.6
 	github.com/aws/smithy-go v1.27.8
 	github.com/jackc/pgx/v5 v5.10.0
+	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	github.com/stretchr/testify v1.12.1
 	gopkg.in/yaml.v3 v3.0.1
 )

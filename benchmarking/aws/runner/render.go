@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -233,7 +234,7 @@ func AppendMarkdown(target string, r *Result, description string) error {
 }
 
 func formatThousands(n int64) string {
-	in := fmt.Sprintf("%d", n)
+	in := strconv.FormatInt(n, 10)
 	if len(in) <= 3 {
 		return in
 	}

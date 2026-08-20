@@ -259,8 +259,8 @@ func processS3Bucket(ctx context.Context, api cleanupAPI, bucket string, creatio
 }
 
 func processIAMRoleByARN(ctx context.Context, api cleanupAPI, id string, now time.Time, ttl time.Duration) (destroyed bool, err error) {
-	if strings.HasPrefix(id, "role/") {
-		return processIAMRole(ctx, api, strings.TrimPrefix(id, "role/"), now, ttl)
+	if after, ok := strings.CutPrefix(id, "role/"); ok {
+		return processIAMRole(ctx, api, after, now, ttl)
 	}
 	return false, nil
 }

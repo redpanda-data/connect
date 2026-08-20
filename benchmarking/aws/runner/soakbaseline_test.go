@@ -18,14 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func priorEntries(sessionIDs ...string) []soakIndexEntry {
-	entries := make([]soakIndexEntry, len(sessionIDs))
-	for i, id := range sessionIDs {
-		entries[i] = soakIndexEntry{SessionID: id}
-	}
-	return entries
-}
-
 func TestCompareSoakBaseline_ImmatureBaselineNeverRegresses(t *testing.T) {
 	current := soakIndexEntry{SessionID: "current", MedianMBps: 1, RSSMaxBytes: 999_999_999_999}
 	prior := []soakIndexEntry{

@@ -30,7 +30,7 @@ func TestDetectAnomalies_NoDips(t *testing.T) {
 func TestDetectAnomalies_BriefDipIgnored(t *testing.T) {
 	// 30s dip — below the 60s threshold, ignored.
 	vals := []float64{}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		vals = append(vals, 100)
 	}
 	for i := 100; i < 130; i++ {
@@ -45,13 +45,13 @@ func TestDetectAnomalies_BriefDipIgnored(t *testing.T) {
 func TestDetectAnomalies_LongDipReported(t *testing.T) {
 	// 73s dip at 0.6× median — should be detected.
 	vals := []float64{}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		vals = append(vals, 100)
 	}
-	for i := 0; i < 73; i++ {
+	for range 73 {
 		vals = append(vals, 60)
 	}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		vals = append(vals, 100)
 	}
 	anomalies := DetectAnomalies(mkSamples(vals...), 100)
@@ -64,19 +64,19 @@ func TestDetectAnomalies_LongDipReported(t *testing.T) {
 func TestDetectAnomalies_MultipleDips(t *testing.T) {
 	// two separate long dips
 	vals := []float64{}
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		vals = append(vals, 100)
 	}
-	for i := 0; i < 70; i++ {
+	for range 70 {
 		vals = append(vals, 50)
 	}
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		vals = append(vals, 100)
 	}
-	for i := 0; i < 65; i++ {
+	for range 65 {
 		vals = append(vals, 60)
 	}
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		vals = append(vals, 100)
 	}
 	anomalies := DetectAnomalies(mkSamples(vals...), 100)
@@ -86,7 +86,7 @@ func TestDetectAnomalies_MultipleDips(t *testing.T) {
 func TestDetectAnomaliesWithProm_AttachesContext(t *testing.T) {
 	// Throughput dip from T=60..130s; samples below threshold.
 	samples := []Sample{}
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		mb := 100.0
 		if i >= 60 && i < 130 {
 			mb = 50.0 // dip
@@ -116,7 +116,7 @@ func TestDetectAnomaliesWithProm_AttachesContext(t *testing.T) {
 
 func TestDetectAnomaliesWithProm_NoPromKeepsZeros(t *testing.T) {
 	samples := []Sample{}
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		mb := 100.0
 		if i >= 60 && i < 130 {
 			mb = 50.0

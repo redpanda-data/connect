@@ -42,16 +42,16 @@ func TestWorkerRowCounts(t *testing.T) {
 			// The spread must never exceed one row between the largest and
 			// smallest share, otherwise the remainder wasn't distributed
 			// evenly (e.g. it was dumped entirely on the first worker).
-			var min, max int64 = counts[0], counts[0]
+			lo, hi := counts[0], counts[0]
 			for _, c := range counts {
-				if c < min {
-					min = c
+				if c < lo {
+					lo = c
 				}
-				if c > max {
-					max = c
+				if c > hi {
+					hi = c
 				}
 			}
-			require.LessOrEqual(t, max-min, int64(1))
+			require.LessOrEqual(t, hi-lo, int64(1))
 		})
 	}
 }

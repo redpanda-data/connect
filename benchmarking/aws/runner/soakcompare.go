@@ -28,25 +28,25 @@ func findArmPoint(points []PointResult, arm string) (PointResult, bool) {
 // rssMaxBytes returns the largest RSSBytes sample in prom, 0 if prom is
 // empty.
 func rssMaxBytes(prom []PromPoint) uint64 {
-	var max uint64
+	var maxSeen uint64
 	for _, pp := range prom {
-		if pp.RSSBytes > max {
-			max = pp.RSSBytes
+		if pp.RSSBytes > maxSeen {
+			maxSeen = pp.RSSBytes
 		}
 	}
-	return max
+	return maxSeen
 }
 
 // backlogMaxSec returns the largest BacklogSec sample in backlog, 0 if
 // backlog is empty (e.g. the scenario set no expected write rate).
 func backlogMaxSec(backlog []BacklogPoint) float64 {
-	var max float64
+	var maxSeen float64
 	for _, b := range backlog {
-		if b.BacklogSec > max {
-			max = b.BacklogSec
+		if b.BacklogSec > maxSeen {
+			maxSeen = b.BacklogSec
 		}
 	}
-	return max
+	return maxSeen
 }
 
 // soakComparisonRow is one line of the base-vs-PR table.

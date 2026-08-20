@@ -194,11 +194,11 @@ func mean(values []float64) float64 {
 }
 
 func peak(values []float64) float64 {
-	max := values[0]
+	maxSeen := values[0]
 	for _, v := range values[1:] {
-		if v > max {
-			max = v
+		if v > maxSeen {
+			maxSeen = v
 		}
 	}
-	return max
+	return maxSeen
 }

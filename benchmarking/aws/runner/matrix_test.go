@@ -29,7 +29,7 @@ import (
 func makeBrokerFrames(topic string, startUnix, frames, intervalSec int, deltaBytes, deltaRecords int64) string {
 	var sb strings.Builder
 	var cumBytes, cumRecords int64
-	for i := 0; i < frames; i++ {
+	for i := range frames {
 		fmt.Fprintf(&sb, "###timestamp=%d\n", startUnix+i*intervalSec)
 		fmt.Fprintf(&sb, `redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",redpanda_topic="%s"} %d`+"\n", topic, cumBytes)
 		fmt.Fprintf(&sb, `redpanda_kafka_records_produced_total{redpanda_namespace="kafka",redpanda_topic="%s"} %d`+"\n", topic, cumRecords)
@@ -45,7 +45,7 @@ func makeLog(count int, mbPerSec float64) string {
 	var sb strings.Builder
 	sb.WriteString("INFO starting redpanda-connect\n")
 	sb.WriteString("INFO input connected\n")
-	for i := 0; i < count; i++ {
+	for range count {
 		fmt.Fprintf(&sb, "INFO rolling stats: 1000 msg/sec, %.0f MB/sec\n", mbPerSec)
 	}
 	sb.WriteString("INFO benchmark processor stopped\n")
@@ -535,7 +535,7 @@ go_memstats_heap_inuse_bytes 1.1e+08
 
 func TestMatrixRunner_MissingPromIsNonFatal(t *testing.T) {
 	const sessionID = "bench-test"
-	logFor := func(vcpu int) string { return makeLog(180, 50) }
+	logFor := func(_ int) string { return makeLog(180, 50) }
 	fetcher := &FakeLogFetcher{
 		Contents: map[string]string{
 			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): logFor(1),
@@ -1078,7 +1078,7 @@ func TestMatrixRunner_EmitAggregated_IncludesRSSSlopeOnceEnoughPromHistory(t *te
 
 	promFew := []PromPoint{{T: 0, RSSBytes: 100}, {T: 60, RSSBytes: 200}}
 	var promEnough []PromPoint
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		promEnough = append(promEnough, PromPoint{T: i * secondsPerMinute, RSSBytes: uint64(i) * 1_000_000})
 	}
 
@@ -1135,8 +1135,7 @@ func TestMatrixRunner_StartSoakEmitLoop_TicksAndStopsCleanly(t *testing.T) {
 		Emitter: emitter, CheckpointSec: 1, // 1s interval + 0 grace -> ticks almost immediately
 	}
 	hw := newSoakHighWater()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	stop := mr.startSoakEmitLoop(ctx, key, time.Now(), 60*time.Second, hw)
 
 	require.Eventually(t, func() bool {

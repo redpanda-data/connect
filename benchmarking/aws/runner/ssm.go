@@ -178,7 +178,7 @@ func (a *awsSSM) Run(ctx context.Context, instanceID, script string, onLine func
 		stdout := aws.ToString(inv.StandardOutputContent)
 		if len(stdout) > lastSeen && onLine != nil {
 			emit := stdout[lastSeen:]
-			for _, line := range strings.Split(strings.TrimRight(emit, "\n"), "\n") {
+			for line := range strings.SplitSeq(strings.TrimRight(emit, "\n"), "\n") {
 				if line != "" {
 					onLine(line)
 				}

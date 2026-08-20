@@ -411,7 +411,7 @@ func (m *MatrixRunner) binaryPathFor(pt sweepPoint) string {
 // fetchLog downloads the per-point Connect log uploaded by the bench script.
 func (m *MatrixRunner) fetchLog(ctx context.Context, key string) ([]byte, error) {
 	if m.LogFetcher == nil {
-		return nil, fmt.Errorf("LogFetcher not configured")
+		return nil, errors.New("LogFetcher not configured")
 	}
 	s3Key := fmt.Sprintf("runs/%s/sweep-%s.log", m.SessionID, key)
 	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, s3Key)
@@ -555,11 +555,9 @@ func (m *MatrixRunner) startSoakEmitLoop(ctx context.Context, key string, pointS
 	}
 	loopCtx, cancel := context.WithCancel(ctx)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		m.runSoakEmitLoop(loopCtx, key, pointStart, warmup, hw)
-	}()
+	})
 	return func() {
 		cancel()
 		wg.Wait()
@@ -642,6 +640,7 @@ type benchScriptArgs struct {
 	Bucket      string
 	SessionID   string
 	// RedpandaMetricsEndpoint is the legacy single-broker scrape target.
+	//
 	// Deprecated: prefer RedpandaMetricsEndpoints. Kept for back-compat with
 	// callers that haven't migrated to the multi-broker output yet.
 	RedpandaMetricsEndpoint string

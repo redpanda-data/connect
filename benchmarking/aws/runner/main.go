@@ -18,11 +18,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -148,7 +150,7 @@ func benchCmd(args []string) error {
 		return err
 	}
 	if *scenario == "" {
-		return fmt.Errorf("--scenario is required")
+		return errors.New("--scenario is required")
 	}
 
 	opts := benchOpts{
@@ -391,9 +393,7 @@ func runBench(opts benchOpts) (errOut error) {
 	if err != nil {
 		return fmt.Errorf("terraform output stack: %w", err)
 	}
-	for k, v := range stackOuts {
-		sharedOuts[k] = v
-	}
+	maps.Copy(sharedOuts, stackOuts)
 	// The runner-provided session ID is a Terraform input, not output — inject
 	// it here so per-engine renderers (renderPipelineConfig, combineReset) can
 	// read it via outs["bench_session_id"].
@@ -723,7 +723,7 @@ func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket,
 	entry := buildSoakIndexEntry(sessionID, s, result)
 	entry.BuildSHA = gitHeadSHA()
 	if archiveBucket == "" {
-		return entry, fmt.Errorf("no soak archive bucket configured (--soak-archive-bucket)")
+		return entry, errors.New("no soak archive bucket configured (--soak-archive-bucket)")
 	}
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 	if err != nil {
@@ -953,7 +953,7 @@ const (
 )
 
 func newSessionID() string {
-	return fmt.Sprintf("bench-%s", time.Now().UTC().Format("20060102-150405"))
+	return "bench-" + time.Now().UTC().Format("20060102-150405")
 }
 
 func validateCmd(args []string) error {
@@ -963,7 +963,7 @@ func validateCmd(args []string) error {
 		return err
 	}
 	if *scenario == "" {
-		return fmt.Errorf("--scenario is required")
+		return errors.New("--scenario is required")
 	}
 	s, err := LoadScenario(*scenario)
 	if err != nil {
@@ -983,7 +983,7 @@ func downCmd(args []string) error {
 		return err
 	}
 	if *scenario == "" {
-		return fmt.Errorf("--scenario is required")
+		return errors.New("--scenario is required")
 	}
 	s, err := LoadScenario(*scenario)
 	if err != nil {
@@ -1058,9 +1058,9 @@ func translateInfraSource(src map[string]any, region string) map[string]string {
 		case string:
 			out[k] = val
 		case int:
-			out[k] = fmt.Sprintf("%d", val)
+			out[k] = strconv.Itoa(val)
 		case int64:
-			out[k] = fmt.Sprintf("%d", val)
+			out[k] = strconv.FormatInt(val, 10)
 		case float64:
 			out[k] = fmt.Sprintf("%v", val)
 		case []any:
@@ -1428,7 +1428,7 @@ func buildBinaryStagePlan(binaries map[string]string, binPath, bucket string) (i
 	for _, name := range names {
 		items = append(items, upload{stageBinaryKey(name), binaries[name]})
 		dlLines = append(dlLines, fmt.Sprintf(`aws s3 cp s3://%s/%s %s`, bucket, stageBinaryKey(name), runnerBinaryPath(name)))
-		chmodLines = append(chmodLines, fmt.Sprintf(`chmod +x %s`, runnerBinaryPath(name)))
+		chmodLines = append(chmodLines, "chmod +x "+runnerBinaryPath(name))
 	}
 	return items, strings.Join(dlLines, "\n"), strings.Join(chmodLines, "\n")
 }
@@ -1443,7 +1443,7 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 	if err != nil {
 		return err
 	}
-	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
+	uploader := manager.NewUploader(s3.NewFromConfig(cfg)) //nolint:staticcheck // SA1019: transfermanager migration tracked separately; manager still works.
 	bucket := outs["results_bucket"]
 
 	binItems, binDownload, binChmod := buildBinaryStagePlan(opts.binaries, binPath, bucket)
@@ -1460,7 +1460,7 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 			// which arm/stream failed.
 			return fmt.Errorf("open %s for s3 key %s: %w", item.path, item.key, err)
 		}
-		_, err = uploader.Upload(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &item.key, Body: f})
+		_, err = uploader.Upload(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &item.key, Body: f}) //nolint:staticcheck // SA1019: see uploader above.
 		f.Close()
 		if err != nil {
 			return fmt.Errorf("upload %s to %s: %w", item.path, item.key, err)
@@ -1509,7 +1509,7 @@ func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string
 	if err != nil {
 		return err
 	}
-	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
+	uploader := manager.NewUploader(s3.NewFromConfig(cfg)) //nolint:staticcheck // SA1019: transfermanager migration tracked separately; manager still works.
 	bucket := outs["results_bucket"]
 	f, err := os.Open(binOut)
 	if err != nil {
@@ -1517,7 +1517,7 @@ func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string
 	}
 	defer f.Close()
 	key := "stage/" + s.Dataset.Seeder
-	if _, err := uploader.Upload(ctx, &s3.PutObjectInput{
+	if _, err := uploader.Upload(ctx, &s3.PutObjectInput{ //nolint:staticcheck // SA1019: see uploader above.
 		Bucket: &bucket, Key: &key, Body: f,
 	}); err != nil {
 		return err
