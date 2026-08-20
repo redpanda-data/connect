@@ -307,6 +307,29 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 	return conf.WrapBatchInputExtractTracingSpanMapping("microsoft_sql_server_cdc", batchInput)
 }
 
+// rebuildPublisherIfPoisoned returns the current publisher, replacing it
+// first when a failed send or a sealed flush queue poisoned it: the old
+// generation is closed (its flush loop stops; in-flight ack functions keep
+// resolving into the abandoned tracker, where cacheLSN's monotonic guard
+// makes any stale persist a no-op) and a fresh batcher and tracker take its
+// place, so the new session resumes from the last durable LSN.
+func (i *sqlServerCDCInput) rebuildPublisherIfPoisoned() (*batchPublisher, error) {
+	publisher := i.publisher.Load()
+	if !publisher.poisoned.Load() {
+		return publisher, nil
+	}
+	i.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	publisher.close()
+	batcher, err := i.batching.NewBatcher(i.res)
+	if err != nil {
+		return nil, fmt.Errorf("rebuilding batcher: %w", err)
+	}
+	publisher = newBatchPublisher(batcher, checkpoint.NewCapped[replication.LSN](int64(i.checkpointLimit)), i.log)
+	publisher.cacheLSN = i.cacheLSN
+	i.publisher.Store(publisher)
+	return publisher, nil
+}
+
 func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	i.connMu.Lock()
 	defer i.connMu.Unlock()
@@ -326,21 +349,12 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	// durable LSN, which is necessarily before the orphaned rows, and the old
 	// session's late acks resolve into the abandoned tracker (cacheLSN's
 	// monotonic guard turns any stale write into a no-op).
-	publisher := i.publisher.Load()
-	if publisher.poisoned.Load() {
-		i.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
-		publisher.close()
-		batcher, batcherErr := i.batching.NewBatcher(i.res)
-		if batcherErr != nil {
-			return fmt.Errorf("rebuilding batcher: %w", batcherErr)
-		}
-		publisher = newBatchPublisher(batcher, checkpoint.NewCapped[replication.LSN](int64(i.checkpointLimit)), i.log)
-		publisher.cacheLSN = i.cacheLSN
-		i.publisher.Store(publisher)
+	publisher, err := i.rebuildPublisherIfPoisoned()
+	if err != nil {
+		return err
 	}
 
 	var (
-		err        error
 		userTables []replication.UserDefinedTable
 		cachedLSN  replication.LSN
 	)
