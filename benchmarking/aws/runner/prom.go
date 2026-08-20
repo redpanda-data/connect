@@ -118,12 +118,24 @@ func parseSnapshots(r io.Reader) []promSnapshot {
 	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 	var snaps []promSnapshot
 	var current *promSnapshot
+	// The frame body is accumulated in a Builder rather than string
+	// concatenation: a broker frame is every broker's /public_metrics output
+	// concatenated (thousands of lines), and += copies the whole
+	// accumulated body per line — quadratic per frame, which a 24h soak's
+	// ~1440 frames turns into hours of memcpy.
+	var body strings.Builder
+	flush := func() {
+		if current == nil {
+			return
+		}
+		current.Body = body.String()
+		body.Reset()
+		snaps = append(snaps, *current)
+	}
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "###timestamp=") {
-			if current != nil {
-				snaps = append(snaps, *current)
-			}
+			flush()
 			ts, _ := strconv.ParseInt(strings.TrimPrefix(line, "###timestamp="), 10, 64)
 			current = &promSnapshot{UnixTime: ts}
 			continue
@@ -138,11 +150,10 @@ func parseSnapshots(r io.Reader) []promSnapshot {
 			current.Errored = true
 			continue
 		}
-		current.Body += line + "\n"
+		body.WriteString(line)
+		body.WriteByte('\n')
 	}
-	if current != nil {
-		snaps = append(snaps, *current)
-	}
+	flush()
 	return snaps
 }
 

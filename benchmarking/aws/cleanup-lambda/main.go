@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -191,12 +192,27 @@ func (a *awsCleanup) Publish(ctx context.Context, in *sns.PublishInput) (*sns.Pu
 	return a.sns.Publish(ctx, in)
 }
 
+// parseTTL converts the BENCH_ORPHAN_TTL_HOURS value into a duration.
+// Hard errors instead of a silent fallback: Terraform always sets the
+// variable (persistent/cleanup.tf, from orphan_ttl_hours), so a missing or
+// unparseable value means misconfiguration — and a reaper running at the
+// wrong TTL terminates live benches that the 4h contract in the docs says
+// are safe.
+func parseTTL(raw string) (time.Duration, error) {
+	if raw == "" {
+		return 0, errors.New("BENCH_ORPHAN_TTL_HOURS is required")
+	}
+	h, err := strconv.ParseFloat(raw, 64)
+	if err != nil || h <= 0 {
+		return 0, fmt.Errorf("BENCH_ORPHAN_TTL_HOURS must be a positive number of hours, got %q", raw)
+	}
+	return time.Duration(h * float64(time.Hour)), nil
+}
+
 func handleRequest(ctx context.Context, _ struct{}) (SweepReport, error) {
-	ttl := 3 * time.Hour
-	if raw := os.Getenv("BENCH_ORPHAN_TTL_HOURS"); raw != "" {
-		if h, err := strconv.ParseFloat(raw, 64); err == nil {
-			ttl = time.Duration(h * float64(time.Hour))
-		}
+	ttl, err := parseTTL(os.Getenv("BENCH_ORPHAN_TTL_HOURS"))
+	if err != nil {
+		return SweepReport{}, err
 	}
 	topicARN := os.Getenv("BENCH_ORPHAN_SNS_TOPIC_ARN")
 	if topicARN == "" {
