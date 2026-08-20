@@ -165,7 +165,9 @@ When ` + "`" + fieldSchemaInclude + "`" + ` is set, this list is resolved agains
 If left empty while ` + "`" + fieldSchemaInclude + "`" + ` is set, every base table in each matched (and un-excluded, see ` + "`" + fieldSchemaExclude + "`" + `) schema is auto-discovered and published explicitly, instead of listing tables by hand - this is the expected way to replicate "every table" in a multi-tenant, schema-per-tenant setup without also picking up unrelated schemas. Startup fails if no matched schema contains any table.
 
 If left empty while ` + "`" + fieldSchemaInclude + "`" + ` is NOT set, the underlying PostgreSQL publication is instead created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
-			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
+			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`}).
+			Optional().
+			Default([]string{})).
 		Field(service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			ShortDescription("The maximum number of messages that can be processed at a given time.").

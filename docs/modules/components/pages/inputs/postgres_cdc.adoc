@@ -46,7 +46,7 @@ input:
     schema: public
     schema_include: ""
     schema_exclude: []
-    tables: [] # No default (required)
+    tables: []
     checkpoint_limit: 1024
     temporary_slot: false
     slot_name: my_test_slot # No default (required)
@@ -78,7 +78,7 @@ input:
     schema: public
     schema_include: ""
     schema_exclude: []
-    tables: [] # No default (required)
+    tables: []
     checkpoint_limit: 1024
     temporary_slot: false
     slot_name: my_test_slot # No default (required)
@@ -260,6 +260,7 @@ If left empty while `schema_include` is NOT set, the underlying PostgreSQL publi
 
 *Type*: `array`
 
+*Default*: `[]`
 
 ```yml
 # Examples
