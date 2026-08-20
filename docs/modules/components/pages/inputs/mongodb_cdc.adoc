@@ -66,11 +66,23 @@ input:
     database: "" # No default (required)
     username: ""
     password: ""
+    aws:
+      enabled: false
+      region: "" # No default (optional)
+      session_duration: 1h
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
+      role: "" # No default (optional)
+      role_external_id: "" # No default (optional)
+      roles: [] # No default (optional)
     collections: [] # No default (required)
     checkpoint_key: mongodb_cdc_checkpoint
     checkpoint_cache: "" # No default (required)
     checkpoint_interval: 5s
     checkpoint_limit: 1000
+    checkpoint_write_timeout: 10s
+    on_unresumable_position: fail
     read_batch_size: 1000
     read_max_wait: 1s
     stream_snapshot: false
@@ -86,6 +98,10 @@ input:
 ======
 
 Read from a MongoDB replica set using https://www.mongodb.com/docs/manual/changeStreams/[^Change Streams]. It's only possible to watch for changes when using a sharded MongoDB or a MongoDB cluster running as a replica set.
+
+If a stored resume position can no longer be resumed (for example it has aged out of the oplog), the input clears its checkpoint and re-runs the snapshot rather than retrying a dead position. After 2 such recoveries in a row without the change stream ever advancing in between - which usually means the snapshot is taking longer than the oplog window - the next failure keeps the checkpoint and the input fails on every reconnect with an actionable error instead of re-snapshotting forever; after addressing the cause, restart the pipeline (or delete the checkpoint cache entry) to resume recovery.
+
+With `stream_snapshot` disabled there is no snapshot to re-run, so recovery would have to skip the changes between the lost position and now. The input refuses to do that silently: by default it fails with an error on every reconnect and preserves the checkpoint, and skipping the gap has to be opted into with `on_unresumable_position: reset`.
 
 By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
 
@@ -167,6 +183,112 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 *Default*: `""`
 
+=== `aws`
+
+AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against MongoDB Atlas. When enabled, IAM credentials are used instead of a static username and password. Role-derived session credentials are resolved when the component connects and are re-resolved whenever it reconnects. The `mongodb` processor and cache establish their client once at creation and cannot refresh expiring session credentials, so `role`, `roles` and session tokens are rejected for those components; use the ambient credential chain or long-lived access keys with them. For long-running pipelines, prefer the ambient credential chain (leave keys and roles unset), which the driver refreshes automatically.
+
+
+*Type*: `object`
+
+Requires version 4.106.0 or newer
+
+=== `aws.enabled`
+
+Enable AWS IAM authentication using the driver-native `MONGODB-AWS` mechanism. The MongoDB Atlas database user must be created with the AWS IAM authentication type, and connections require TLS. When no static credentials or roles are configured, the ambient AWS credential chain (environment variables, EC2 instance profile, EKS pod role) is used and expiring credentials are refreshed automatically.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `aws.region`
+
+The AWS region used when assuming roles (for STS calls). Only used when `role` or `roles` are configured; the ambient and static-key paths ignore it. If no region is specified then the environment default is used.
+
+
+*Type*: `string`
+
+
+=== `aws.session_duration`
+
+The duration of the STS session requested when assuming roles. AWS requires at least 15 minutes and caps sessions created through role chaining at one hour. Only used when `role` or `roles` are configured. When using `mongodb_cdc` with role assumption, credentials are freshly resolved after the initial snapshot completes, so the streaming phase starts with a full session. The snapshot itself must still complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. Once the snapshot completes and is fully acknowledged, its position is checkpointed, so later restarts resume the stream without re-running the snapshot. For very large snapshots prefer the ambient credential chain.
+
+
+*Type*: `string`
+
+*Default*: `"1h"`
+
+=== `aws.id`
+
+The ID of credentials to use.
+
+
+*Type*: `string`
+
+
+=== `aws.secret`
+
+The secret for the credentials being used.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `aws.token`
+
+The token for the credentials being used, required when using short term credentials.
+
+
+*Type*: `string`
+
+
+=== `aws.role`
+
+Optional AWS IAM role ARN to assume for authentication. Cannot be combined with `roles`; use the `roles` array instead when chaining multiple roles.
+
+
+*Type*: `string`
+
+
+=== `aws.role_external_id`
+
+Optional external ID for the role assumption. Only used with the `role` field, which cannot be combined with `roles`.
+
+
+*Type*: `string`
+
+
+=== `aws.roles`
+
+Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID. Cannot be combined with `role`.
+
+
+*Type*: `array`
+
+
+=== `aws.roles[].role`
+
+AWS IAM role ARN to assume.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `aws.roles[].role_external_id`
+
+Optional external ID for the role assumption.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
 === `collections`
 
 The collections to stream changes from.
@@ -209,6 +331,29 @@ The maximum number of messages that can be in flight at a given time. Increasing
 *Type*: `int`
 
 *Default*: `1000`
+
+=== `checkpoint_write_timeout`
+
+Bounds the checkpoint writes that run outside the normal read loop - storing the position a completed snapshot reached, and clearing a position that can no longer be resumed from - so that a shutdown racing either of them is not extended indefinitely by a slow cache. Raise this for slow remote caches (for example `redis` or `dynamodb`), where losing the post-snapshot write costs a full re-snapshot on the next start.
+
+
+*Type*: `string`
+
+*Default*: `"10s"`
+
+=== `on_unresumable_position`
+
+What to do when the stored stream position can no longer be resumed from (for example it has aged out of the oplog) and `stream_snapshot` is disabled, so there is no snapshot to recover with: `fail` stops the input with an error, preserving the checkpoint for inspection; `reset` clears the checkpoint and restarts streaming from the current oplog position, skipping the changes between the lost position and now. When `stream_snapshot` is enabled this field has no effect: recovery re-runs the snapshot, which loses nothing.
+
+
+*Type*: `string`
+
+*Default*: `"fail"`
+
+Options:
+`fail`
+, `reset`
+.
 
 === `read_batch_size`
 
