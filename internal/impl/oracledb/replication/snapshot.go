@@ -37,7 +37,7 @@ type Snapshot struct {
 	dbPool                  *sql.DB
 	tables                  []UserTable
 	filters                 map[string]string
-	publisher               ChangePublisher
+	publisher               SnapshotPublisher
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
 	snapshotRowsTotalMetric *service.MetricCounter
@@ -54,7 +54,7 @@ func NewSnapshot(ctx context.Context,
 	connectionString string,
 	tables []UserTable,
 	filters map[string]string,
-	publisher ChangePublisher,
+	publisher SnapshotPublisher,
 	lobEnabled bool,
 	pdbName string,
 	logger *service.Logger,
@@ -306,7 +306,7 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 			m.CommitTimestamp = s.commitTimestamp
 		}
 
-		if err = s.publisher.Publish(ctx, &m); err != nil {
+		if err = s.publisher.PublishSnapshot(ctx, &m); err != nil {
 			return 0, fmt.Errorf("handling snapshot table row: %w", err)
 		}
 	}

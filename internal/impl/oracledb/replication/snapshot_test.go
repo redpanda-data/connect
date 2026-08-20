@@ -161,14 +161,12 @@ type publisherStub struct {
 	mu       sync.Mutex
 }
 
-func (p *publisherStub) Publish(_ context.Context, msg *replication.MessageEvent) error {
+func (p *publisherStub) PublishSnapshot(_ context.Context, msg *replication.MessageEvent) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.messages = append(p.messages, msg)
 	return nil
 }
-
-func (*publisherStub) Close() {}
 
 func (p *publisherStub) count() int {
 	p.mu.Lock()

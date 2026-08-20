@@ -31,6 +31,15 @@ type ChangePublisher interface {
 	Close()
 }
 
+// SnapshotPublisher is responsible for handling and processing of a
+// replication.MessageEvent belonging to the initial table snapshot. It is
+// kept distinct from ChangePublisher so a publisher can route snapshot rows
+// through a separate SnapshotAsync ack barrier rather than the ordered SCN
+// checkpoint tracker used for streamed changes.
+type SnapshotPublisher interface {
+	PublishSnapshot(ctx context.Context, msg *MessageEvent) error
+}
+
 // UserTable represents a found user's OracleDB table (called a user-table).
 type UserTable struct {
 	Schema string
