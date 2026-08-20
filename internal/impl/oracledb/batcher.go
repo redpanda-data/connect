@@ -251,12 +251,20 @@ func (p *batchPublisher) loop() {
 					p.batcherMu.Unlock()
 					return nil
 				}
-				sendBatch, _ := p.batcher.Flush(hardStopCtx)
+				sendBatch, flushErr := p.batcher.Flush(hardStopCtx)
 				var ticket uint64
-				if len(sendBatch) > 0 {
+				if flushErr == nil && len(sendBatch) > 0 {
 					ticket = p.takeTicketLocked()
 				}
 				p.batcherMu.Unlock()
+				if flushErr != nil {
+					// The failed Flush drained rows that were never tracked:
+					// seal so nothing can be tracked (and persisted) past
+					// them, and surface the failure instead of discarding it.
+					p.sealQueue()
+					p.log.Errorf("Flushing timed batch failed; the publisher is marked for rebuild and its rows re-read from the last durable SCN on reconnect: %v", flushErr)
+					return flushErr
+				}
 				if len(sendBatch) == 0 {
 					return nil
 				}
@@ -375,6 +383,9 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	}
 	b.batcherMu.Unlock()
 	if err != nil {
+		// The failed Flush drained rows that were never tracked: seal so
+		// nothing can be tracked (and persisted) past them.
+		b.sealQueue()
 		return fmt.Errorf("flushing batch due to reaching count limit: %w", err)
 	}
 	if len(flushedBatch) == 0 {
