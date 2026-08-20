@@ -390,7 +390,14 @@ jobs:
                 if length > 0 and ((.[-1] + "\n" + $line) | length) <= limit
                 then .[0:-1] + [.[-1] + "\n" + $line]
                 else . + [$line]
-                end);
+                end)
+              # a single line longer than limit lands above as an oversized
+              # chunk; hard-split those so every emitted chunk is bounded
+              | map(. as $chunk | ($chunk | length) as $len |
+                  if $len <= limit then [$chunk]
+                  else [range(0; $len; limit) as $i | $chunk[$i:$i+limit]]
+                  end)
+              | add // [];
             {
               text: ("New Redpanda Connect release: " + $version),
               unfurl_links: false,
