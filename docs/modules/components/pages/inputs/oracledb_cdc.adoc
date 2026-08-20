@@ -221,7 +221,7 @@ Specifies a number of tables that will be processed in parallel during the snaps
 
 === `snapshot_max_batch_size`
 
-The maximum number of rows to be streamed in a single batch when taking a snapshot.
+The maximum number of rows to be streamed in a single batch when taking a snapshot. This value does not apply to filtered snapshots when using `snapshot_filters`.
 
 
 *Type*: `int`
