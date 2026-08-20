@@ -110,6 +110,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		if err != nil {
 			return nil, fmt.Errorf("resolving schema_include pattern %q: %w", config.DBSchemaInclude, err)
 		}
+		matchedSchemas := schemas
 
 		if len(config.DBSchemaExclude) > 0 {
 			// Filtering happens entirely against the schemas slice we already
@@ -143,7 +144,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		if len(inaccessibleSchemas) > 0 {
 			config.Logger.Warnf("schema_include pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", config.DBSchemaInclude, inaccessibleSchemas)
 		}
+
 		if len(schemas) == 0 {
+			if len(matchedSchemas) > 0 {
+				return nil, fmt.Errorf("schema_include pattern %q matched schema(s) %v, but schema_exclude %v excluded all of them", config.DBSchemaInclude, matchedSchemas, config.DBSchemaExclude)
+			}
 			return nil, fmt.Errorf("no schemas found matching schema_include pattern %q", config.DBSchemaInclude)
 		}
 		config.Logger.Infof("schema_include pattern %q resolved to %d schema(s): %v", config.DBSchemaInclude, len(schemas), schemas)

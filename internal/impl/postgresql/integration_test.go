@@ -1751,7 +1751,7 @@ postgres_cdc:
 // schema_include but also matches a schema_exclude entry contributes no
 // rows at all, neither during the initial snapshot nor from subsequent CDC
 // changes.
-func TestIntegrationSchemaExcludeCarvesOutTenant(t *testing.T) {
+func TestIntegrationMultiSchemaExcludeCarvesOutTenant(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -1898,7 +1898,7 @@ postgres_cdc:
 	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
 }
 
-func TestIntegrationSchemaIncludeMatchesHyphenatedUUIDSchema(t *testing.T) {
+func TestIntegrationMultiSchemaIncludeMatchesHyphenatedUUIDSchema(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -2148,12 +2148,14 @@ postgres_cdc:
 	assert.Equal(t, "events", collected[0].table)
 }
 
-func TestIntegrationNoSchemasMatchedReturnsError(t *testing.T) {
+func TestIntegrationMultiSchemaIncludeExcludeConfigValidation(t *testing.T) {
 	integration.CheckSkip(t)
-	databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
-	require.NoError(t, err)
 
-	tmpl := fmt.Sprintf(`
+	t.Run("schema_include matches nothing", func(t *testing.T) {
+		databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		tmpl := fmt.Sprintf(`
 dsn: %s
 slot_name: no_schema_match_slot
 schema_include: nonexistent_schema_zzz_*
@@ -2161,61 +2163,95 @@ tables:
   - events
 `, databaseURL)
 
-	conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
-	require.NoError(t, err)
+		conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
+		require.NoError(t, err)
 
-	mgr := service.MockResources()
-	license.InjectTestService(mgr)
+		mgr := service.MockResources()
+		license.InjectTestService(mgr)
 
-	input, err := newPgStreamInput(conf, mgr)
-	require.NoError(t, err)
+		input, err := newPgStreamInput(conf, mgr)
+		require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
 
-	// Bypass the benthos AsyncReader's infinite connect-retry loop by calling
-	// Connect directly: a schema-include-not-found error is permanent, but
-	// stream.Run has no path to surface it (it only returns once ctx is done),
-	// so going through StreamBuilder/Run here would just time out instead.
-	err = input.Connect(ctx)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no schemas found matching schema_include pattern")
-}
+		err = input.Connect(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no schemas found matching schema_include pattern")
+	})
 
-// TestIntegrationSchemaIncludeNonMatchingFailsEvenWithEmptyTables guards the
-// fixed behaviour: schema_include always scopes replication, even when
-// `tables` is left empty. A schema_include matching nothing in the database
-// must fail startup rather than silently falling back to a database-wide
-// FOR ALL TABLES publication (the old behaviour, which made schema_exclude
-// meaningless whenever tables was left unset).
-func TestIntegrationSchemaIncludeNonMatchingFailsEvenWithEmptyTables(t *testing.T) {
-	integration.CheckSkip(t)
-	databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
-	require.NoError(t, err)
+	t.Run("schema_include matches nothing with empty tables", func(t *testing.T) {
+		databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
 
-	tmpl := fmt.Sprintf(`
+		tmpl := fmt.Sprintf(`
 dsn: %s
 slot_name: no_schema_match_empty_tables_slot
 schema_include: nonexistent_schema_zzz_*
 `, databaseURL)
 
-	conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
-	require.NoError(t, err)
+		conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
+		require.NoError(t, err)
 
-	mgr := service.MockResources()
-	license.InjectTestService(mgr)
+		mgr := service.MockResources()
+		license.InjectTestService(mgr)
 
-	input, err := newPgStreamInput(conf, mgr)
-	require.NoError(t, err)
+		input, err := newPgStreamInput(conf, mgr)
+		require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
 
-	// Bypass the benthos AsyncReader's infinite connect-retry loop, same as
-	// TestIntegrationNoSchemasMatchedReturnsError.
-	err = input.Connect(ctx)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no schemas found matching schema_include pattern")
+		// Bypass the benthos AsyncReader's infinite connect-retry loop, same as
+		// the "schema_include matches nothing" case above.
+		err = input.Connect(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no schemas found matching schema_include pattern")
+	})
+
+	t.Run("schema_exclude excludes every matched schema", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		// Both schemas match tenant_*, but schema_exclude below excludes them all.
+		for _, schema := range []string{"tenant_a", "tenant_b"} {
+			_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA %s", schema))
+			require.NoError(t, err)
+			_, err = db.Exec(fmt.Sprintf(
+				"CREATE TABLE %s.events (id SERIAL PRIMARY KEY, name TEXT)", schema))
+			require.NoError(t, err)
+		}
+
+		tmpl := fmt.Sprintf(`
+dsn: %s
+slot_name: schema_exclude_all_matched_slot
+schema_include: tenant_*
+schema_exclude:
+  - tenant_*
+tables:
+  - events
+`, databaseURL)
+
+		conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
+		require.NoError(t, err)
+
+		mgr := service.MockResources()
+		license.InjectTestService(mgr)
+
+		input, err := newPgStreamInput(conf, mgr)
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+
+		// Bypass the benthos AsyncReader's infinite connect-retry loop, same as
+		// the "schema_include matches nothing" case above.
+		err = input.Connect(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "matched schema(s)")
+		assert.Contains(t, err.Error(), "excluded all of them")
+		assert.NotContains(t, err.Error(), "no schemas found matching schema_include pattern")
+	})
 }
 
 // TestIntegrationSchemaExcludeCarvesOutTenantAutoDiscover is
@@ -2224,7 +2260,7 @@ schema_include: nonexistent_schema_zzz_*
 // the "events" table in each matched schema instead of falling back to a
 // database-wide FOR ALL TABLES publication, so schema_exclude still carves
 // tenant_c out of both the snapshot and CDC.
-func TestIntegrationSchemaExcludeCarvesOutTenantAutoDiscover(t *testing.T) {
+func TestIntegrationMultiSchemaExcludeCarvesOutTenantAutoDiscover(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -2371,7 +2407,7 @@ postgres_cdc:
 	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
 }
 
-func TestIntegrationSchemaAndTableMatchingTest(t *testing.T) {
+func TestIntegrationMultiSchemaAndTableMatchingTest(t *testing.T) {
 	integration.CheckSkip(t)
 
 	t.Run("exact schema match with missing table fails", func(t *testing.T) {
@@ -2403,7 +2439,7 @@ tables:
 		defer cancel()
 
 		// Bypass the benthos AsyncReader's infinite connect-retry loop, same as
-		// TestIntegrationNoSchemasMatchedReturnsError.
+		// TestIntegrationSchemaIncludeExcludeConfigValidation.
 		err = input.Connect(ctx)
 		require.Error(t, err, "typo'd table %q should fail startup loudly instead of silently streaming only %q", "ordres", "orders")
 		assert.Contains(t, err.Error(), "ordres")
