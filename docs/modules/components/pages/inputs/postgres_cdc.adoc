@@ -198,7 +198,10 @@ When a pattern is used, all schemas whose names match the pattern are replicated
 
 Double-quoted identifiers are treated as exact names and do not support wildcards.
 
-Schema pattern matching runs once at pipeline startup. Schemas created after the pipeline starts will not be picked up until the pipeline is restarted.
+Schema pattern matching is re-evaluated every time the connector connects or reconnects - including the automatic reconnects that follow a transient replication failure - not just once at pipeline startup. This has two consequences that are easy to miss:
+
+- A schema created after the pipeline started that matches the pattern is picked up on the next reconnect and its tables are added to the publication. However, because the replication slot already exists by then, those tables are treated as already caught up, so with `stream_snapshot` enabled the rows that existed in that schema before it was picked up are never snapshotted and are silently missing from the output - only changes made after the schema is picked up are streamed.
+- A schema that is dropped, renamed, or loses its `USAGE` grant between reconnects stops matching and its tables are silently removed from the publication on the next reconnect. A warning is logged when a schema becomes inaccessible due to a lost `USAGE` grant, but that warning is about the schema being inaccessible - it is not logged for a dropped or renamed schema, and nothing is ever logged about the resulting publication drop itself.
 
 If this pattern matches no schema in the database, startup fails with an error - this holds whether or not `tables` is set. See `tables` below for what happens when it's left empty.
 
