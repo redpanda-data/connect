@@ -15,8 +15,11 @@ name: Nightly Soak
 # reaches the default branch.
 #
 # One-time setup (operator):
-#   1. task aws:persistent            (OIDC provider, provisioner role,
-#                                      archive bucket, dashboards, reaper)
+#   1. TF_VAR_soak_alert_email=<team-alias> task aws:persistent
+#                                     (OIDC provider, provisioner role,
+#                                      archive bucket, dashboards, reaper;
+#                                      the alert email has no default —
+#                                      use a monitored team alias)
 #   2. aws secretsmanager create-secret \
 #        --name redpanda-connect-bench/license \
 #        --secret-string file://rpcn.license --region us-east-2
@@ -134,8 +137,12 @@ jobs:
         # tee's exit code and a failed soak went green (2026-08-17, run
         # 32063533072 — terraform apply failed, job concluded success).
         shell: bash
+        env:
+          # Environment passing, not ${{ }} substitution into the script —
+          # same reasoning as the gate step above and soak_pr.yml.
+          SCENARIO: ${{ github.event.inputs.scenario || 'postgres/orders-soak' }}
         run: |
-          task aws:bench scenario="${{ github.event.inputs.scenario || 'postgres/orders-soak' }}" 2>&1 | tee "$RUNNER_TEMP/soak-run.log"
+          task aws:bench scenario="$SCENARIO" 2>&1 | tee "$RUNNER_TEMP/soak-run.log"
 
       - name: Verify teardown actually completed
         if: always() && steps.gate.outputs.run == 'true'

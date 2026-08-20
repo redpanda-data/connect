@@ -1489,8 +1489,16 @@ func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string
 	dist := filepath.Join(opts.repoRoot, "benchmarking/aws/seeders/dist")
 	_ = os.MkdirAll(dist, 0o755)
 	binOut := filepath.Join(dist, s.Dataset.Seeder)
-	cmd := exec.Command("go", "build", "-o", binOut, "./benchmarking/aws/seeders/"+s.Dataset.Seeder)
-	cmd.Dir = opts.repoRoot
+	// Built from within benchmarking/aws: the seeders live in this
+	// directory's standalone module, not the repo root's. -o must be
+	// absolute because go resolves it against cmd.Dir, while binOut is
+	// relative to the process cwd.
+	absBinOut, err := filepath.Abs(binOut)
+	if err != nil {
+		return fmt.Errorf("resolve seeder output path: %w", err)
+	}
+	cmd := exec.Command("go", "build", "-o", absBinOut, "./seeders/"+s.Dataset.Seeder)
+	cmd.Dir = filepath.Join(opts.repoRoot, "benchmarking/aws")
 	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

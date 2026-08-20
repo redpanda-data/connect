@@ -9,11 +9,20 @@ resource "aws_sns_topic" "soak_alerts" {
 }
 
 variable "soak_alert_email" {
-  # Endpoint for soak alarm notifications. SNS sends a confirmation email on
-  # first apply — the subscription is inactive until the link is clicked.
+  # Endpoint for soak alarm notifications — the pipeline's only acute
+  # channel, so it must be a monitored team alias, not an individual's
+  # mailbox (a personal default rots silently when that person moves on).
+  # No default on purpose: an unconfigured apply fails loudly instead of
+  # subscribing a stale address. Pass via TF_VAR_soak_alert_email at
+  # `task aws:persistent` time. SNS sends a confirmation email on first
+  # apply — the subscription is inactive until the link is clicked.
   # Swap for AWS Chatbot / Slack later without touching the alarms.
-  type    = string
-  default = "prakhar.garg@redpanda.com"
+  type = string
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+$", var.soak_alert_email))
+    error_message = "soak_alert_email must be a single email address (use a team alias, not a personal mailbox)."
+  }
 }
 
 resource "aws_sns_topic_subscription" "soak_alerts_email" {

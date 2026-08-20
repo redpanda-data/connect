@@ -30,8 +30,8 @@ files named below.
    `task aws:validate scenario=<engine>/<name>` must pass.
 3. **Register the dashboard + alarms**: add an entry to `soak_scenarios`
    in `terraform/persistent/variables.tf` (key → connector + scenario
-   name), then `task aws:persistent`. Alarms and the dashboard are
-   generated per entry.
+   name), then `TF_VAR_soak_alert_email=<team-alias> task aws:persistent`.
+   Alarms and the dashboard are generated per entry.
 4. **First runs**: dispatch the nightly workflow manually with the
    scenario input. The baseline comparator stays advisory until three
    soak-index entries exist.
@@ -53,8 +53,10 @@ files named below.
   the workflows — no relevant merge, no run. Fails open: a missing entry or
   unknown SHA runs the soak.
 - **One-time account setup** (already done in 605419575229, needed again
-  only for a new account): `make -C cleanup-lambda zip && task
-  aws:persistent`; create the license secret: `aws secretsmanager
+  only for a new account): `make -C cleanup-lambda zip &&
+  TF_VAR_soak_alert_email=<team-alias> task aws:persistent` (the alert
+  email is deliberately undefaulted — point it at a monitored team
+  alias, never an individual); create the license secret: `aws secretsmanager
   create-secret --name redpanda-connect-bench/license --secret-string
   file://<license> --region us-east-2`; confirm the SNS email
   subscription.

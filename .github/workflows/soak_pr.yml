@@ -66,7 +66,17 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           SCENARIO=$(echo "${COMMENT_BODY}" | sed 's|^/soak||' | xargs)
-          echo "scenario=${SCENARIO:-postgres/orders-soak-pr}" >> "$GITHUB_OUTPUT"
+          SCENARIO="${SCENARIO:-postgres/orders-soak-pr}"
+          # The comment body is attacker-adjacent input (any write-access user)
+          # and this value is later substituted into shell scripts — both by
+          # the expression evaluator and by Task's {{.scenario}} templating.
+          # Allowlist it to a plain scenario path so shell metacharacters,
+          # quotes, and path traversal never reach either layer.
+          if ! echo "${SCENARIO}" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9][A-Za-z0-9_-]*)*$'; then
+            echo "::error::Invalid scenario '${SCENARIO}' — expected a path of [A-Za-z0-9_-] segments, e.g. postgres/orders-soak-pr"
+            exit 1
+          fi
+          echo "scenario=${SCENARIO}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout PR merge ref
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -132,8 +142,14 @@ jobs:
       - name: Run A/B soak
         working-directory: benchmarking/aws
         shell: bash
+        env:
+          # Passed through the environment, not ${{ }}-interpolated into the
+          # script: expression substitution happens before bash parses the
+          # text, so a crafted comment would otherwise become shell syntax in
+          # a job that holds the provisioner role's credentials.
+          SCENARIO: ${{ steps.parse.outputs.scenario }}
         run: |
-          task aws:bench scenario="${{ steps.parse.outputs.scenario }}" \
+          task aws:bench scenario="$SCENARIO" \
             extra_flags="--binary base=$RUNNER_TEMP/rc-base --binary pr=$RUNNER_TEMP/rc-pr" \
             2>&1 | tee "$RUNNER_TEMP/soak-pr.log"
 
