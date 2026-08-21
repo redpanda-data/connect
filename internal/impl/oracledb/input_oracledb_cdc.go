@@ -842,6 +842,12 @@ func (o *oracleDBCDCInput) Close(ctx context.Context) error {
 	if o.stopSig == nil {
 		return nil // Never connected
 	}
+	// Mark the publisher as stopping BEFORE any cancellation propagates: the
+	// session's contexts unwind off stopSig, and sendTracked needs the flag
+	// already visible to log the graceful unwind at debug rather than warn.
+	if pub := o.publisher.Load(); pub != nil {
+		pub.stopping.Store(true)
+	}
 	o.stopSig.TriggerSoftStop()
 	select {
 	case <-ctx.Done():

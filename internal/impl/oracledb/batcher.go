@@ -56,6 +56,12 @@ type batchPublisher struct {
 	// batcher.Close races in-flight Publish calls otherwise, and the batcher
 	// is not goroutine-safe.
 	closed bool
+	// stopping is set by the input's Close BEFORE any cancellation
+	// propagates, so sendTracked can distinguish the expected
+	// graceful-shutdown unwind (debug) from a send that fails while the
+	// pipeline is meant to be live (warn) - the publisher's own shutSig is
+	// triggered too late on the streaming path to make that call.
+	stopping atomic.Bool
 	// poisoned is set when a tracked batch could not be handed to ReadBatch:
 	// its checkpoint slot can never resolve, so this publisher can never
 	// checkpoint past it. Connect rebuilds a poisoned publisher.
@@ -529,7 +535,7 @@ func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch)
 		// Resolving the slot here instead would be unsafe - another flusher
 		// may already have delivered a later-tracked batch, and its ack would
 		// then persist an SCN past these undelivered rows.
-		if b.shutSig.IsSoftStopSignalled() {
+		if b.stopping.Load() || b.shutSig.IsSoftStopSignalled() {
 			// Expected on a graceful stop: nothing drains msgChan once
 			// ReadBatch stops, and Close cancels this send. Not a fault.
 			b.log.Debugf("Batch of %d messages undelivered at shutdown; its rows re-read from the last durable SCN on the next run", len(tracked.msgs.msg))
