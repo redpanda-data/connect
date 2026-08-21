@@ -11,6 +11,7 @@ Last updated: 2026-03-16
 | **SQL Server CDC** | **154 MB/s** | 119,000 | Change data capture from SQL Server |
 | **Oracle CDC (snapshot)** | — | 140,000 | Initial table snapshot from Oracle DB |
 | **Oracle CDC (streaming)** | — | 50,000–90,000 | Real-time change streaming via LogMiner |
+| **SAP HANA** | — | ~49,000 (bulk), ~42,000 (incrementing) | Bulk and incremental reads from SAP HANA |
 
 ## What These Numbers Mean
 
@@ -21,6 +22,8 @@ Last updated: 2026-03-16
 **SQL Server CDC** reads change data from SQL Server at up to 154 MB/s. Throughput scales linearly with the number of tables being captured — each table uses its own database connection.
 
 **Oracle CDC** has two operating modes. Snapshot mode (bulk reading existing data) processes ~140,000 messages per second. Streaming mode (real-time changes via Oracle's LogMiner) processes 50,000–90,000 messages per second. The streaming throughput is limited by Oracle's LogMiner subsystem itself, not by Redpanda Connect — competing products (e.g. Debezium) show similar numbers on the same workload.
+
+**SAP HANA** reads table data at up to ~49,000 messages per second in bulk mode and ~42,000 messages per second in incrementing mode. The dominant tuning parameter is `fetch_size`: increasing it from 1,000 to 10,000 roughly doubles throughput by reducing HANA cursor round-trips. Core count has minimal impact because reads are single-connection bound. Query mode reaches ~95,000 messages per second with a large `fetch_size`, since it avoids server-side cursor iteration between fetches.
 
 ## Test Conditions
 
@@ -36,6 +39,7 @@ For full methodology, raw output, environment details, and bottleneck analysis, 
 - [SQL Server CDC](mssqlserver-cdc.md)
 - [Oracle CDC](oracledb-cdc.md)
 - [DynamoDB CDC](dynamodb-cdc.md)
+- [SAP HANA](sap-hana.md)
 
 ## How Benchmarks Are Run
 
