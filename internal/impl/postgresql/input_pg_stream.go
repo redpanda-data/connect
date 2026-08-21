@@ -90,6 +90,10 @@ This input adds the following metadata fields to each message:
 - schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
 - commit_ts_ms: The commit timestamp of the transaction as a Unix millisecond timestamp. Not set for snapshot reads.
 - before: The pre-change state of the row for update and delete operations, in benthos common schema format. For updates, availability depends on the table's REPLICA IDENTITY setting - with the default identity only key columns are present, with REPLICA IDENTITY FULL all columns are present.
+
+== Unserializable rows
+
+A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finite floating point values such as NaN or Infinity) is published with its error set and a plain-text rendering of the row as the payload, rather than stalling the stream or silently dropping the row. Such messages can be inspected with the ` + "`errored()`" + ` Bloblang function and routed with error-handling components (for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + `, or a dead-letter queue); if not handled they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
 		`).
 		Field(service.NewStringField(fieldDSN).
 			Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
@@ -599,7 +603,6 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			var (
 				flush bool
 				mb    []byte
-				err   error
 			)
 			for _, msg := range batch {
 				// noop if not configured
@@ -608,11 +611,24 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					p.logger.Errorf("failed to detect control signal in change event: %s", err)
 				}
 
-				if mb, err = json.Marshal(msg.Data); err != nil {
-					p.logger.Errorf("failure to marshal message: %s", err)
-					break
+				var marshalErr error
+				if mb, marshalErr = json.Marshal(msg.Data); marshalErr != nil {
+					// A marshal failure is deterministic (in practice
+					// non-finite floats), so neither skipping the row (silent
+					// loss) nor restarting (the same row fails on every
+					// reconnect, and the stalled slot blocks WAL retention on
+					// the server) can make progress. Publish the row with its
+					// error set instead: the stream keeps moving,
+					// at-least-once holds (the row IS delivered, flagged),
+					// and operators can inspect or route it with
+					// error-handling components.
+					p.logger.Warnf("Publishing unmarshalable row from table %s (LSN %v) with its error set for error-routing: %v", msg.Table, msg.LSN, marshalErr)
+					mb = fmt.Appendf(nil, "%+v", msg.Data)
 				}
 				batchMsg := service.NewMessage(mb)
+				if marshalErr != nil {
+					batchMsg.SetError(fmt.Errorf("marshalling WAL row from table %s: %w", msg.Table, marshalErr))
+				}
 				batchMsg.MetaSet("table", msg.Table)
 				batchMsg.MetaSet("operation", string(msg.Operation))
 				if msg.LSN != nil {
