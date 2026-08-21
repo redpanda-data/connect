@@ -120,21 +120,20 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			normalizedTables = append(normalizedTables, normalized)
 		}
 
-		// With no explicit table list, auto-discover every base table in each
-		// matched (and schema_exclude-filtered) schema and publish them
-		// explicitly. Without this, an empty tables list would fall through to
-		// CreatePublication's FOR ALL TABLES fallback below, which replicates
-		// every schema in the database and silently defeats both schema_include
-		// and schema_exclude.
+		// tables empty here would otherwise fall through to CreatePublication's
+		// FOR ALL TABLES fallback, replicating the whole database and defeating
+		// schema_include/schema_exclude - auto-discover per matched schema instead.
 		autoDiscoverTables := len(normalizedTables) == 0
+
+		existingTablesBySchema, err := resolveExistingTables(ctx, dbConn, schemas)
+		if err != nil {
+			return nil, fmt.Errorf("resolving tables in schema(s) %v: %w", schemas, err)
+		}
 
 		tables = make([]TableFQN, 0, len(schemas)*len(normalizedTables))
 		foundTables := make(map[string]bool, len(normalizedTables))
 		for _, schema := range schemas {
-			existingTables, err := resolveExistingTables(ctx, dbConn, schema)
-			if err != nil {
-				return nil, fmt.Errorf("resolving tables in schema %q: %w", schema, err)
-			}
+			existingTables := existingTablesBySchema[schema]
 			if autoDiscoverTables {
 				for table := range existingTables {
 					tables = append(tables, TableFQN{Schema: schema, Table: table})

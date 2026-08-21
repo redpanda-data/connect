@@ -176,32 +176,48 @@ func resolveIncludedSchemas(ctx context.Context, conn *pgconn.PgConn, cfg *Confi
 }
 
 // resolveExistingTables returns the quoted names of the publishable base
-// tables in the given (already quoted) schema. Restricted to table_type =
-// 'BASE TABLE' so a same-named view or foreign table is treated as missing
-// rather than breaking CreatePublication.
-func resolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchema string) (map[string]struct{}, error) {
-	schema, err := sanitize.UnquotePostgresIdentifier(quotedSchema)
-	if err != nil {
-		return nil, fmt.Errorf("unquoting schema identifier %q: %w", quotedSchema, err)
+// tables in each of the given (already quoted) schemas, keyed by quoted
+// schema name. A single query covering every schema, rather than one per
+// schema, keeps this to one round-trip regardless of tenant count - the
+// difference between one query and, say, one hundred on a multi-tenant,
+// schema-per-tenant database on every connect and reconnect. Restricted to
+// table_type = 'BASE TABLE' so a same-named view or foreign table is treated
+// as missing rather than breaking CreatePublication.
+func resolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchemas []string) (map[string]map[string]struct{}, error) {
+	rawToQuoted := make(map[string]string, len(quotedSchemas))
+	args := make([]any, len(quotedSchemas))
+	placeholders := make([]string, len(quotedSchemas))
+	for i, quotedSchema := range quotedSchemas {
+		schema, err := sanitize.UnquotePostgresIdentifier(quotedSchema)
+		if err != nil {
+			return nil, fmt.Errorf("unquoting schema identifier %q: %w", quotedSchema, err)
+		}
+		rawToQuoted[schema] = quotedSchema
+		args[i] = schema
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
 	}
 
 	q, err := sanitize.SQLQuery(
-		"SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE'",
-		schema,
+		fmt.Sprintf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema IN (%s) AND table_type = 'BASE TABLE'", strings.Join(placeholders, ", ")),
+		args...,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("building table resolution query for schema %q: %w", quotedSchema, err)
+		return nil, fmt.Errorf("building table resolution query for schema(s) %v: %w", quotedSchemas, err)
 	}
 
 	results, err := conn.Exec(ctx, q).ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("querying tables in schema %q: %w", quotedSchema, err)
+		return nil, fmt.Errorf("querying tables in schema(s) %v: %w", quotedSchemas, err)
 	}
 
-	existing := map[string]struct{}{}
+	existing := make(map[string]map[string]struct{}, len(quotedSchemas))
+	for _, quotedSchema := range quotedSchemas {
+		existing[quotedSchema] = map[string]struct{}{}
+	}
 	if len(results) > 0 {
 		for _, row := range results[0].Rows {
-			existing[sanitize.QuotePostgresIdentifier(string(row[0]))] = struct{}{}
+			quotedSchema := rawToQuoted[string(row[0])]
+			existing[quotedSchema][sanitize.QuotePostgresIdentifier(string(row[1]))] = struct{}{}
 		}
 	}
 	return existing, nil
