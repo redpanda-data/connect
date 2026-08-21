@@ -533,7 +533,13 @@ func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch)
 		// Resolving the slot here instead would be unsafe - another flusher
 		// may already have delivered a later-tracked batch, and its ack would
 		// then persist an LSN past these undelivered rows.
-		b.log.Warnf("Batch of %d messages could not be handed to the pipeline; the publisher is marked for rebuild and its rows re-read from the last durable LSN on reconnect", len(tracked.msgs.msg))
+		if b.shutSig.IsSoftStopSignalled() {
+			// Expected on a graceful stop: nothing drains msgChan once
+			// ReadBatch stops, and Close cancels this send. Not a fault.
+			b.log.Debugf("Batch of %d messages undelivered at shutdown; its rows re-read from the last durable LSN on the next run", len(tracked.msgs.msg))
+		} else {
+			b.log.Warnf("Batch of %d messages could not be handed to the pipeline; the publisher is marked for rebuild and its rows re-read from the last durable LSN on reconnect", len(tracked.msgs.msg))
+		}
 		b.poisoned.Store(true)
 		return ctx.Err()
 	}
