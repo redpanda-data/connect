@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -29,20 +29,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/replication"
 )
 
-// includeFilterFor builds a confx.RegexpFilter that matches only the given
-// fully-qualified table name (e.g. "dbo.mytable").
-func includeFilterFor(t *testing.T, fullTableName string) *confx.RegexpFilter {
-	t.Helper()
-	include, err := confx.ParseRegexpPatterns([]string{"^" + regexp.QuoteMeta(fullTableName) + "$"})
-	require.NoError(t, err)
-	return &confx.RegexpFilter{Include: include}
-}
-
-// TestIntegration_VerifyUserDefinedTables_CaptureInstanceResolution covers
-// resolving a user table's CDC change table via cdc.change_tables (keyed off
-// source_object_id) rather than assuming the default <schema>_<table> capture
-// instance naming convention.
-func TestIntegration_VerifyUserDefinedTables_CaptureInstanceResolution(t *testing.T) {
+func TestIntegrationVerifyUserDefinedTablesCaptureInstanceResolution(t *testing.T) {
 	integration.CheckSkip(t)
 
 	_, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -57,7 +44,7 @@ func TestIntegration_VerifyUserDefinedTables_CaptureInstanceResolution(t *testin
 		// Simulate CDC having already been enabled on this table by another
 		// tool (e.g. Oracle GoldenGate) under an arbitrarily named capture
 		// instance, rather than the SQL Server default <schema>_<table>.
-		db.MustEnableCDCWithCaptureInstance(t.Context(), fullTableName, captureInstance)
+		db.MustEnableCDC(t.Context(), fullTableName, captureInstance)
 
 		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), log)
 		require.NoError(t, err)
@@ -117,7 +104,7 @@ func TestIntegration_VerifyUserDefinedTables_CaptureInstanceResolution(t *testin
 	t.Run("DefaultNamedCaptureInstance", func(t *testing.T) {
 		const fullTableName = "dbo.default_capture_test"
 		db.MustExec(`CREATE TABLE dbo.default_capture_test (id INT NOT NULL PRIMARY KEY);`)
-		db.MustEnableCDC(t.Context(), fullTableName)
+		db.MustEnableCDC(t.Context(), fullTableName, mssqlservertest.DefaultCaptureInstance)
 
 		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), log)
 		require.NoError(t, err)
@@ -130,8 +117,8 @@ func TestIntegration_VerifyUserDefinedTables_CaptureInstanceResolution(t *testin
 		const fullTableName = "dbo.ambiguous_capture_test"
 		db.MustExec(`CREATE TABLE dbo.ambiguous_capture_test (id INT NOT NULL PRIMARY KEY);`)
 		// SQL Server allows up to two capture instances per source table.
-		db.MustEnableCDCWithCaptureInstance(t.Context(), fullTableName, "capture_alpha")
-		db.MustEnableCDCWithCaptureInstance(t.Context(), fullTableName, "capture_beta")
+		db.MustEnableCDC(t.Context(), fullTableName, "capture_alpha")
+		db.MustEnableCDC(t.Context(), fullTableName, "capture_beta")
 
 		_, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), log)
 		require.Error(t, err)
@@ -139,4 +126,11 @@ func TestIntegration_VerifyUserDefinedTables_CaptureInstanceResolution(t *testin
 		require.ErrorContains(t, err, "capture_beta")
 		require.ErrorContains(t, err, "multiple CDC capture instances")
 	})
+}
+
+func includeFilterFor(t *testing.T, fullTableName string) *confx.RegexpFilter {
+	t.Helper()
+	include, err := confx.ParseRegexpPatterns([]string{"^" + regexp.QuoteMeta(fullTableName) + "$"})
+	require.NoError(t, err)
+	return &confx.RegexpFilter{Include: include}
 }

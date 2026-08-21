@@ -510,10 +510,7 @@ func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx
 	}
 
 	for i, tbl := range userTables {
-		// Resolve the capture instance via source_object_id rather than assuming
-		// the default <schema>_<table> naming convention: CDC may already be
-		// enabled on this table by another tool (e.g. a GoldenGate feed) under an
-		// arbitrarily named capture instance.
+		// resolve cdc tables via capture instance
 		q := "SELECT capture_instance, start_lsn FROM cdc.change_tables WHERE source_object_id = OBJECT_ID(?)"
 		rows, err := db.QueryContext(ctx, q, tbl.FullName())
 		if err != nil {
