@@ -956,9 +956,15 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 			if err != nil {
 				return err
 			}
-			ackFn := func(ctx context.Context, err error) error {
-				if err != nil {
-					return err
+			// Nacks resolve like acks: they are replayed by auto_replay_nacks
+			// (the default), and disabling that is a documented opt-in to DROP
+			// rejected messages, so the checkpoint must advance past them
+			// rather than pin the shared tracker (which would block cp.Track
+			// at checkpoint_limit and stall the input permanently) - the same
+			// contract the snapshot ack path follows.
+			ackFn := func(ctx context.Context, ackErr error) error {
+				if ackErr != nil {
+					m.logger.Warnf("Advancing past a batch rejected downstream: auto_replay_nacks is disabled, so the rejected messages are dropped by contract: %v", ackErr)
 				}
 				resumeToken := resolve()
 				if resumeToken == nil || *resumeToken == nil {

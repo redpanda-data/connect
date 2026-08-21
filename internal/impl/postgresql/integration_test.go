@@ -275,13 +275,14 @@ pg_stream:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
-// TestIntegrationPostgresMarshalFailureStopsStream verifies that a row whose
-// value cannot be marshalled to JSON (float8 NaN: the decoder passes it
-// through as a float64, which encoding/json rejects) stops the stream instead
-// of being silently skipped. Before the fix the row and the remainder of its
-// WAL batch were dropped while the stream kept running and checkpointed past
-// them. See CON-504.
-func TestIntegrationPostgresMarshalFailureStopsStream(t *testing.T) {
+// TestIntegrationPostgresUnmarshalableRowRoutedWithError verifies that a row
+// whose value cannot be marshalled to JSON (float8 NaN: the decoder passes it
+// through as a float64, which encoding/json rejects) is published with its
+// error set - inspectable and routable by error-handling components - while
+// the stream keeps moving. The original bug silently dropped the row and
+// checkpointed past it; the interim fix stalled the stream (restart loop,
+// with the stalled slot blocking WAL retention). See CON-504.
+func TestIntegrationPostgresUnmarshalableRowRoutedWithError(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -299,9 +300,14 @@ pg_stream:
        - nan_floats
 `, databaseURL)
 
+	type receivedMsg struct {
+		body    string
+		errored bool
+		errText string
+	}
 	var (
 		receivedMu sync.Mutex
-		received   []string
+		received   []receivedMsg
 	)
 	builder := service.NewStreamBuilder()
 	require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
@@ -311,8 +317,13 @@ pg_stream:
 		if err != nil {
 			return err
 		}
+		rm := receivedMsg{body: string(b)}
+		if mErr := m.GetError(); mErr != nil {
+			rm.errored = true
+			rm.errText = mErr.Error()
+		}
 		receivedMu.Lock()
-		received = append(received, string(b))
+		received = append(received, rm)
 		receivedMu.Unlock()
 		return nil
 	}))
@@ -340,14 +351,25 @@ pg_stream:
 	_, err = db.Exec("INSERT INTO nan_floats (value) VALUES (2.5);")
 	require.NoError(t, err)
 
-	// The core guarantee: nothing may be delivered past the poison row. In the
-	// buggy version the NaN row was silently dropped and 2.5 arrived here.
-	time.Sleep(10 * time.Second)
+	// The core guarantee: every row is delivered in order - the unmarshalable
+	// one flagged with its error, the rows after it unaffected. (The original
+	// bug dropped the NaN row silently; the interim fix stalled the stream.)
+	require.Eventually(t, func() bool {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+		return len(received) == 3
+	}, 30*time.Second, 100*time.Millisecond, "all three rows must be delivered, the unmarshalable one included")
+
 	receivedMu.Lock()
-	got := append([]string(nil), received...)
+	got := append([]receivedMsg(nil), received...)
 	receivedMu.Unlock()
-	require.Len(t, got, 1, "no row may be delivered past an unmarshalable row; got: %v", got)
-	require.Contains(t, got[0], "1.5")
+	require.Contains(t, got[0].body, "1.5")
+	require.False(t, got[0].errored, "a normal row must not carry an error")
+	require.True(t, got[1].errored, "the unmarshalable row must be published with its error set")
+	require.Contains(t, got[1].errText, "nan_floats", "the error must name the table")
+	require.Contains(t, got[1].body, "NaN", "the fallback payload must render the row for inspection")
+	require.Contains(t, got[2].body, "2.5")
+	require.False(t, got[2].errored)
 
 	require.NoError(t, stream.StopWithin(30*time.Second))
 }
