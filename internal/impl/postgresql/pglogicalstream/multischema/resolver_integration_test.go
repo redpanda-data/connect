@@ -6,11 +6,12 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package pglogicalstream
+package multischema
 
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -19,15 +20,12 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
-// TestIntegrationResolveSchemasReportsInaccessibleSchemas verifies that a
-// schema pattern matching a schema the connecting role lacks USAGE on is
-// reported via inaccessibleSchemas rather than silently dropped, since
-// information_schema.schemata alone would make it indistinguishable from a
-// schema that simply doesn't exist.
 func TestIntegrationResolveSchemasReportsInaccessibleSchemas(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -79,8 +77,6 @@ func TestIntegrationResolveSchemasUUIDSuffixedSchemas(t *testing.T) {
 	require.NoError(t, err)
 	defer adminDB.Close()
 
-	// Quoting is mandatory here because of the UUID's hyphens, regardless of
-	// case - so both of these preserve their literal casing exactly as written.
 	const (
 		lowerCaseSchema = `"tenant_a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"`
 		mixedCaseSchema = `"Tenant_9c0b4ef8-bb6d-6bb9-bd38-0a11a0eebc99"`
@@ -100,14 +96,9 @@ func TestIntegrationResolveSchemasUUIDSuffixedSchemas(t *testing.T) {
 	visible, inaccessible, err := resolveSchemas(ctx, conn, "tenant_*")
 	require.NoError(t, err)
 
-	// Both schemas match the unquoted glob despite the case difference in
-	// their literal prefix - matching is case-insensitive independent of how
-	// the schema itself was created.
 	assert.ElementsMatch(t, []string{lowerCaseSchema, mixedCaseSchema}, visible)
 	assert.Empty(t, inaccessible)
 
-	// A quoted pattern is still exact and case-sensitive: it picks out only
-	// the schema whose case matches the pattern, with no wildcard expansion.
 	exactVisible, _, err := resolveSchemas(ctx, conn, mixedCaseSchema)
 	require.NoError(t, err)
 	assert.Equal(t, []string{mixedCaseSchema}, exactVisible)
@@ -135,27 +126,63 @@ func TestIntegrationResolveSchemasBareUUIDSchema(t *testing.T) {
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	// A bare wildcard has no literal characters to case-compare, so this is
-	// unaffected by hex-digit casing either way - included as a baseline.
 	visible, _, err := resolveSchemas(ctx, conn, "*")
 	require.NoError(t, err)
 	assert.Contains(t, visible, bareUUIDSchema)
 
-	// The interesting case: an unquoted pattern whose only literal portion is
-	// a lower-case chunk of the UUID itself (no prefix) must still match the
-	// upper-case schema case-insensitively.
 	visible, _, err = resolveSchemas(ctx, conn, "a0eebc99-*")
 	require.NoError(t, err)
 	assert.Equal(t, []string{bareUUIDSchema}, visible)
 
-	// Same, but the literal chunk sits in the middle rather than at the start.
 	visible, _, err = resolveSchemas(ctx, conn, "*-bb6d-*")
 	require.NoError(t, err)
 	assert.Equal(t, []string{bareUUIDSchema}, visible)
 
-	// A quoted pattern remains an exact, case-sensitive lookup: the
-	// differently-cased quoted form matches nothing.
 	visible, _, err = resolveSchemas(ctx, conn, `"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"`)
 	require.NoError(t, err)
 	assert.Empty(t, visible)
+}
+
+func closeConn(t testing.TB, conn *pgconn.PgConn) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, conn.Close(ctx))
+}
+
+func createDockerInstance(t *testing.T) (cleanup func(), dbURL string) {
+	ctr, err := testcontainers.Run(t.Context(), "postgres:16",
+		testcontainers.WithExposedPorts("5432/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"POSTGRES_PASSWORD": "secret",
+			"POSTGRES_USER":     "user_name",
+			"POSTGRES_DB":       "dbname",
+		}),
+		testcontainers.WithCmd("postgres", "-c", "wal_level=logical"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("5432/tcp").WithStartupTimeout(2*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+
+	host, err := ctr.Host(t.Context())
+	require.NoError(t, err)
+	mp, err := ctr.MappedPort(t.Context(), "5432/tcp")
+	require.NoError(t, err)
+
+	databaseURL := fmt.Sprintf("user=user_name password=secret dbname=dbname sslmode=disable host=%s port=%s replication=database", host, mp.Port())
+
+	var db *sql.DB
+	require.Eventually(t, func() bool {
+		if db, err = sql.Open("postgres", databaseURL); err != nil {
+			return false
+		}
+		return db.Ping() == nil
+	}, 2*time.Minute, time.Second)
+
+	cleanup = func() {
+		// Container cleanup is handled by testcontainers.CleanupContainer
+	}
+
+	return cleanup, databaseURL
 }

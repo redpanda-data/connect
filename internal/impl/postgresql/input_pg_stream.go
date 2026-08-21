@@ -27,6 +27,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/multischema"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -491,14 +492,18 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	snapshotMetrics := mgr.Metrics().NewGauge("postgres_snapshot_progress", "table")
 	replicationLag := mgr.Metrics().NewGauge("postgres_replication_lag_bytes")
 
+	var schemaResolver *multischema.Resolver
+	if schemaInclude != "" {
+		schemaResolver = multischema.NewResolver(schemaInclude, schemaExclude)
+	}
+
 	i := &pgStreamInput{
 		streamConfig: &pglogicalstream.Config{
 			DBConfig:         pgConnConfig,
 			TLSConfig:        pgConnConfig.TLSConfig,
 			DBRawDSN:         dsn,
 			DBSchema:         schema,
-			DBSchemaInclude:  schemaInclude,
-			DBSchemaExclude:  schemaExclude,
+			SchemaResolver:   schemaResolver,
 			DBTables:         tables,
 			RefreshAuthToken: iamAuthTokenBuilder,
 

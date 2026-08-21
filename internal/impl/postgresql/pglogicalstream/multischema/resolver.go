@@ -6,7 +6,10 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package pglogicalstream
+// Package multischema resolves a schema_include/schema_exclude
+// configuration (replicating from multiple PostgreSQL schemas matched by a
+// glob pattern) into the concrete set of schemas and tables to replicate.
+package multischema
 
 import (
 	"context"
@@ -17,14 +20,95 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
-// schemaPatternToLike converts a schema name or glob pattern into the LIKE
-// pattern used by resolveSchemas, plus whether it must be matched
-// case-sensitively. Quoted identifiers are matched exactly and
-// case-sensitively; unquoted patterns use '*' as a wildcard and match
-// case-insensitively, mirroring how PostgreSQL folds unquoted identifiers.
+type Resolver struct {
+	// Include is the schema_include glob pattern.
+	Include string
+	// Exclude is the schema_exclude list, evaluated against the schemas
+	// matched by Include.
+	Exclude []string
+
+	previouslyResolved     []string
+	previouslyInaccessible []string
+}
+
+// NewResolver returns a Resolver for the given schema_include/schema_exclude
+// configuration. Callers should only construct one when schema_include is
+// set.
+func NewResolver(include string, exclude []string) *Resolver {
+	return &Resolver{Include: include, Exclude: exclude}
+}
+
+// Resolve resolves r.Include against conn, applies r.Exclude filtering, and
+// warns about schema-set drift against the previously resolved set from an
+// earlier call to Resolve on this same Resolver.
+func (r *Resolver) Resolve(ctx context.Context, conn *pgconn.PgConn, logger *service.Logger) ([]string, error) {
+	schemas, inaccessibleSchemas, err := resolveSchemas(ctx, conn, r.Include)
+	if err != nil {
+		return nil, fmt.Errorf("resolving schema_include pattern %q: %w", r.Include, err)
+	}
+	matchedSchemas := schemas
+
+	if len(r.Exclude) > 0 {
+		// Filtering happens entirely against the schemas slice we already
+		// fetched above - no extra DB round-trips per exclude pattern.
+		var excluded []string
+		remaining := make([]string, 0, len(schemas))
+		for _, schema := range schemas {
+			var isExcluded bool
+			for _, pattern := range r.Exclude {
+				matched, err := schemaMatchesExcludePattern(schema, pattern)
+				if err != nil {
+					return nil, fmt.Errorf("evaluating schema_exclude pattern %q against schema %q: %w", pattern, schema, err)
+				}
+				if matched {
+					isExcluded = true
+					break
+				}
+			}
+			if isExcluded {
+				excluded = append(excluded, schema)
+				continue
+			}
+			remaining = append(remaining, schema)
+		}
+		if len(excluded) > 0 {
+			logger.Debugf("schema_exclude %v excluded %d schema(s) %v from schema_include pattern %q; %d schema(s) remain: %v", r.Exclude, len(excluded), excluded, r.Include, len(remaining), remaining)
+		}
+		schemas = remaining
+	}
+
+	if len(inaccessibleSchemas) > 0 && !slices.Equal(inaccessibleSchemas, r.previouslyInaccessible) {
+		logger.Warnf("schema_include pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", r.Include, inaccessibleSchemas)
+	}
+	r.previouslyInaccessible = slices.Clone(inaccessibleSchemas)
+
+	if len(schemas) == 0 {
+		if len(matchedSchemas) > 0 {
+			return nil, fmt.Errorf("schema_include pattern %q matched schema(s) %v, but schema_exclude %v excluded all of them", r.Include, matchedSchemas, r.Exclude)
+		}
+		return nil, fmt.Errorf("no schemas found matching schema_include pattern %q", r.Include)
+	}
+	logger.Debugf("schema_include pattern %q resolved to %d schema(s): %v", r.Include, len(schemas), schemas)
+
+	if r.previouslyResolved != nil {
+		added, removed := diffSchemaSets(r.previouslyResolved, schemas)
+		if len(added) > 0 {
+			logger.Warnf("schema_include pattern %q now also matches schema(s) %v that did not match on the previous connect; their tables are being added to the publication, but any rows already in them will NOT be snapshotted even if stream_snapshot is enabled - only changes made from now on will be captured", r.Include, added)
+		}
+		if len(removed) > 0 {
+			logger.Warnf("schema(s) %v no longer match schema_include pattern %q (dropped, renamed, or the role lost USAGE) since the previous connect; their tables are being removed from the publication and will stop replicating", removed, r.Include)
+		}
+	}
+	r.previouslyResolved = slices.Clone(schemas)
+
+	return schemas, nil
+}
+
 func schemaPatternToLike(pattern string) (likePattern string, caseSensitive bool, err error) {
 	if strings.HasPrefix(pattern, `"`) {
 		unquoted, err := sanitize.UnquotePostgresIdentifier(pattern)
@@ -36,13 +120,6 @@ func schemaPatternToLike(pattern string) (likePattern string, caseSensitive bool
 	return globToLike(strings.ToLower(pattern)), false, nil
 }
 
-// resolveSchemas returns the schemas matching pattern that the role can see
-// (visibleSchemas), plus schemas that also match but are hidden by missing
-// privileges (inaccessibleSchemas) - surfaced separately so callers can warn
-// instead of silently dropping them. System schemas (pg_* and
-// information_schema) are always excluded. Returned names are quoted
-// PostgreSQL identifiers. A nil visibleSchemas with a nil error means no
-// match - callers should treat that as an error.
 func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (visibleSchemas, inaccessibleSchemas []string, err error) {
 	likePattern, caseSensitive, err := schemaPatternToLike(pattern)
 	if err != nil {
@@ -109,73 +186,7 @@ func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (v
 	return schemas, hidden, nil
 }
 
-// resolveIncludedSchemas resolves cfg.DBSchemaInclude against conn, applies
-// cfg.DBSchemaExclude filtering, and warns about schema-set drift against
-// the previously resolved set cached on cfg.
-func resolveIncludedSchemas(ctx context.Context, conn *pgconn.PgConn, cfg *Config) ([]string, error) {
-	schemas, inaccessibleSchemas, err := resolveSchemas(ctx, conn, cfg.DBSchemaInclude)
-	if err != nil {
-		return nil, fmt.Errorf("resolving schema_include pattern %q: %w", cfg.DBSchemaInclude, err)
-	}
-	matchedSchemas := schemas
-
-	if len(cfg.DBSchemaExclude) > 0 {
-		// Filtering happens entirely against the schemas slice we already
-		// fetched above - no extra DB round-trips per exclude pattern.
-		var excluded []string
-		remaining := make([]string, 0, len(schemas))
-		for _, schema := range schemas {
-			var isExcluded bool
-			for _, pattern := range cfg.DBSchemaExclude {
-				matched, err := schemaMatchesExcludePattern(schema, pattern)
-				if err != nil {
-					return nil, fmt.Errorf("evaluating schema_exclude pattern %q against schema %q: %w", pattern, schema, err)
-				}
-				if matched {
-					isExcluded = true
-					break
-				}
-			}
-			if isExcluded {
-				excluded = append(excluded, schema)
-				continue
-			}
-			remaining = append(remaining, schema)
-		}
-		if len(excluded) > 0 {
-			cfg.Logger.Debugf("schema_exclude %v excluded %d schema(s) %v from schema_include pattern %q; %d schema(s) remain: %v", cfg.DBSchemaExclude, len(excluded), excluded, cfg.DBSchemaInclude, len(remaining), remaining)
-		}
-		schemas = remaining
-	}
-
-	if len(inaccessibleSchemas) > 0 && !slices.Equal(inaccessibleSchemas, cfg.previouslyInaccessibleSchemas) {
-		cfg.Logger.Warnf("schema_include pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", cfg.DBSchemaInclude, inaccessibleSchemas)
-	}
-	cfg.previouslyInaccessibleSchemas = slices.Clone(inaccessibleSchemas)
-
-	if len(schemas) == 0 {
-		if len(matchedSchemas) > 0 {
-			return nil, fmt.Errorf("schema_include pattern %q matched schema(s) %v, but schema_exclude %v excluded all of them", cfg.DBSchemaInclude, matchedSchemas, cfg.DBSchemaExclude)
-		}
-		return nil, fmt.Errorf("no schemas found matching schema_include pattern %q", cfg.DBSchemaInclude)
-	}
-	cfg.Logger.Debugf("schema_include pattern %q resolved to %d schema(s): %v", cfg.DBSchemaInclude, len(schemas), schemas)
-
-	if cfg.previouslyResolvedSchemas != nil {
-		added, removed := diffSchemaSets(cfg.previouslyResolvedSchemas, schemas)
-		if len(added) > 0 {
-			cfg.Logger.Warnf("schema_include pattern %q now also matches schema(s) %v that did not match on the previous connect; their tables are being added to the publication, but any rows already in them will NOT be snapshotted even if stream_snapshot is enabled - only changes made from now on will be captured", cfg.DBSchemaInclude, added)
-		}
-		if len(removed) > 0 {
-			cfg.Logger.Warnf("schema(s) %v no longer match schema_include pattern %q (dropped, renamed, or the role lost USAGE) since the previous connect; their tables are being removed from the publication and will stop replicating", removed, cfg.DBSchemaInclude)
-		}
-	}
-	cfg.previouslyResolvedSchemas = slices.Clone(schemas)
-
-	return schemas, nil
-}
-
-// resolveExistingTables returns the quoted names of the publishable base
+// ResolveExistingTables returns the quoted names of the publishable base
 // tables in each of the given (already quoted) schemas, keyed by quoted
 // schema name. A single query covering every schema, rather than one per
 // schema, keeps this to one round-trip regardless of tenant count - the
@@ -183,7 +194,7 @@ func resolveIncludedSchemas(ctx context.Context, conn *pgconn.PgConn, cfg *Confi
 // schema-per-tenant database on every connect and reconnect. Restricted to
 // table_type = 'BASE TABLE' so a same-named view or foreign table is treated
 // as missing rather than breaking CreatePublication.
-func resolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchemas []string) (map[string]map[string]struct{}, error) {
+func ResolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchemas []string) (map[string]map[string]struct{}, error) {
 	rawToQuoted := make(map[string]string, len(quotedSchemas))
 	args := make([]any, len(quotedSchemas))
 	placeholders := make([]string, len(quotedSchemas))

@@ -26,6 +26,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/multischema"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
@@ -102,11 +103,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		tables []TableFQN
 		schema string
 	)
-	if config.DBSchemaInclude != "" {
+	if config.SchemaResolver != nil {
 		if config.SignalTableName != "" {
 			return nil, errors.New("signal_table_name is not supported when schema_include is set")
 		}
-		schemas, err := resolveIncludedSchemas(ctx, dbConn, config)
+		schemas, err := config.SchemaResolver.Resolve(ctx, dbConn, config.Logger)
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +126,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		// schema_include/schema_exclude - auto-discover per matched schema instead.
 		autoDiscoverTables := len(normalizedTables) == 0
 
-		existingTablesBySchema, err := resolveExistingTables(ctx, dbConn, schemas)
+		existingTablesBySchema, err := multischema.ResolveExistingTables(ctx, dbConn, schemas)
 		if err != nil {
 			return nil, fmt.Errorf("resolving tables in schema(s) %v: %w", schemas, err)
 		}
@@ -142,7 +143,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			}
 			for _, table := range normalizedTables {
 				if _, ok := existingTables[table]; !ok {
-					config.Logger.Warnf("table %s.%s not found, skipping (schema %s matched schema_include pattern %q but does not contain this table)", schema, table, schema, config.DBSchemaInclude)
+					config.Logger.Warnf("table %s.%s not found, skipping (schema %s matched schema_include pattern %q but does not contain this table)", schema, table, schema, config.SchemaResolver.Include)
 					continue
 				}
 				tables = append(tables, TableFQN{Schema: schema, Table: table})
@@ -151,9 +152,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 		if autoDiscoverTables {
 			if len(tables) == 0 {
-				return nil, fmt.Errorf("no tables found in schema(s) %v matching schema_include pattern %q", schemas, config.DBSchemaInclude)
+				return nil, fmt.Errorf("no tables found in schema(s) %v matching schema_include pattern %q", schemas, config.SchemaResolver.Include)
 			}
-			config.Logger.Debugf("%q has no `tables` list configured: auto-discovered %d table(s) across %d schema(s)", config.DBSchemaInclude, len(tables), len(schemas))
+			config.Logger.Debugf("%q has no `tables` list configured: auto-discovered %d table(s) across %d schema(s)", config.SchemaResolver.Include, len(tables), len(schemas))
 		} else {
 			// A table must exist in at least one matched schema. Missing from some
 			// (but not all) matched schemas is tolerated above as a multi-tenant gap;
@@ -166,7 +167,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				}
 			}
 			if len(missingTables) > 0 {
-				return nil, fmt.Errorf("table(s) %v not found in any schema matching schema_include pattern %q", missingTables, config.DBSchemaInclude)
+				return nil, fmt.Errorf("table(s) %v not found in any schema matching schema_include pattern %q", missingTables, config.SchemaResolver.Include)
 			}
 		}
 	} else {
