@@ -312,10 +312,14 @@ func (p *batchPublisher) loop() {
 					ticket = p.takeTicketLocked()
 				}
 				if flushErr != nil {
-					// The failed Flush drained rows that were never tracked.
-					// Seal BEFORE releasing batcherMu: in the gap after the
-					// unlock another flusher could flush, take the next
-					// ticket, and be admitted past the dropped rows.
+					// Defensive: the current benthos Batcher.Flush never
+					// assigns its error return (processor failures surface as
+					// errored messages), so this branch is unreachable today -
+					// but the signature declares the error, and if a future
+					// version does fail here the drained rows were never
+					// tracked. Seal BEFORE releasing batcherMu: in the gap
+					// after the unlock another flusher could take the next
+					// ticket and be admitted past the dropped rows.
 					p.sealQueue()
 				}
 				p.batcherMu.Unlock()
