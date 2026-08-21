@@ -47,6 +47,36 @@ task bench:mif CORES=4 BATCH=10000 MIF=32 COUNT=1000000
 |-----------|---------|-------------|
 | `MIF`     | 4 | `max_in_flight` |
 
+### Profiling (per-record CPU)
+
+`profile_config.yaml` is a profiling variant of `benchmark_config.yaml`: a ~1.2 kB
+high-entropy JSON payload serialised to raw bytes in the pipeline, so the Iceberg
+output performs a real JSON parse per record and the profile attributes decode,
+shredding and encode separately. `profile_config_schema.yaml` is the same
+pipeline with a declared schema, for measuring what `schema_metadata` buys.
+
+```bash
+task bench:profile CORES=1 COUNT=500000          # schemaless
+task bench:profile:schema CORES=1 COUNT=500000   # declared schema
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `CORES`   | 1 | `GOMAXPROCS` — 1 isolates per-record CPU cost |
+| `BATCH`   | 5000 | `batching.count` |
+| `COUNT`   | 500000 | number of messages |
+
+### Shredder micro-benchmark
+
+Needs no infrastructure — it exercises the shredder directly:
+
+```bash
+task bench:shredder            # GOMAXPROCS=1, -count=8
+```
+
+Results are recorded in
+[`docs/benchmark-results/iceberg.md`](../../../../docs/benchmark-results/iceberg.md).
+
 ### Clean run
 
 ```bash
