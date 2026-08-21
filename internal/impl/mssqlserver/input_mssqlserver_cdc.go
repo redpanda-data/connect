@@ -9,12 +9,14 @@
 package mssqlserver
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"regexp"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -168,14 +170,29 @@ type sqlServerCDCInput struct {
 	cfg *config
 	db  *sql.DB
 
-	res       *service.Resources
-	publisher *batchPublisher
+	res *service.Resources
+	// publisher is rebuilt by Connect when poisoned, and read by ReadBatch
+	// and Close on other goroutines: atomic so those reads can never observe
+	// a torn or stale pointer and Close always stops the CURRENT publisher.
+	publisher atomic.Pointer[batchPublisher]
 	metrics   *service.Metrics
 
 	connMu  sync.Mutex
 	stopSig *shutdown.Signaller
 	log     *service.Logger
 	cpCache service.Cache
+
+	// batching and checkpointLimit are retained so Connect can rebuild a
+	// poisoned publisher (see batchPublisher.poisoned).
+	batching        service.BatchPolicy
+	checkpointLimit int
+
+	// lastPersistedMu serializes cacheLSN writes across publisher generations
+	// and lastPersistedLSN keeps them monotonic: after a rebuild a previous
+	// session's late acks may still arrive, and a stale write must never
+	// regress the durable resume position.
+	lastPersistedMu  sync.Mutex
+	lastPersistedLSN replication.LSN
 }
 
 func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
@@ -282,15 +299,18 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 				Exclude: tableExcludes,
 			},
 		},
-		res:       resources,
-		log:       logger,
-		metrics:   resources.Metrics(),
-		stopSig:   shutdown.NewSignaller(),
-		publisher: newBatchPublisher(batcher, cp, logger),
-		cpCache:   cpCache,
+		res:             resources,
+		log:             logger,
+		metrics:         resources.Metrics(),
+		stopSig:         shutdown.NewSignaller(),
+		cpCache:         cpCache,
+		batching:        policy,
+		checkpointLimit: checkpointLimit,
 	}
 
-	i.publisher.cacheLSN = i.cacheLSN
+	pub := newBatchPublisher(batcher, cp, logger)
+	pub.cacheLSN = i.cacheLSN
+	i.publisher.Store(pub)
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
 	i.stopSig.TriggerHasStopped()
@@ -301,6 +321,29 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 	}
 
 	return conf.WrapBatchInputExtractTracingSpanMapping("microsoft_sql_server_cdc", batchInput)
+}
+
+// rebuildPublisherIfPoisoned returns the current publisher, replacing it
+// first when a failed send or a sealed flush queue poisoned it: the old
+// generation is closed (its flush loop stops; in-flight ack functions keep
+// resolving into the abandoned tracker, where cacheLSN's monotonic guard
+// makes any stale persist a no-op) and a fresh batcher and tracker take its
+// place, so the new session resumes from the last durable LSN.
+func (i *sqlServerCDCInput) rebuildPublisherIfPoisoned() (*batchPublisher, error) {
+	publisher := i.publisher.Load()
+	if !publisher.poisoned.Load() {
+		return publisher, nil
+	}
+	i.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	publisher.close()
+	batcher, err := i.batching.NewBatcher(i.res)
+	if err != nil {
+		return nil, fmt.Errorf("rebuilding batcher: %w", err)
+	}
+	publisher = newBatchPublisher(batcher, checkpoint.NewCapped[replication.LSN](int64(i.checkpointLimit)), i.log)
+	publisher.cacheLSN = i.cacheLSN
+	i.publisher.Store(publisher)
+	return publisher, nil
 }
 
 func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
@@ -316,8 +359,18 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		return nil
 	}
 
+	// A failed batch send leaves an unresolvable slot in the ordered tracker
+	// (see sendTracked), so a poisoned publisher can never checkpoint again.
+	// Rebuild it with a fresh tracker: the new session resumes from the last
+	// durable LSN, which is necessarily before the orphaned rows, and the old
+	// session's late acks resolve into the abandoned tracker (cacheLSN's
+	// monotonic guard turns any stale write into a no-op).
+	publisher, err := i.rebuildPublisherIfPoisoned()
+	if err != nil {
+		return err
+	}
+
 	var (
-		err        error
 		userTables []replication.UserDefinedTable
 		cachedLSN  replication.LSN
 	)
@@ -352,14 +405,14 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	)
 	// no cached LSN means we're not recovering from a restart
 	if i.cfg.streamSnapshot && len(cachedLSN) == 0 {
-		if snapshotter, err = replication.NewSnapshot(i.cfg.connectionString, userTables, i.publisher, i.log, i.metrics); err != nil {
+		if snapshotter, err = replication.NewSnapshot(i.cfg.connectionString, userTables, publisher, i.log, i.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 	} else {
 		i.log.Infof("Snapshotting disabled, skipping...")
 	}
 
-	streaming = replication.NewChangeTableStream(userTables, i.publisher, i.cfg.streamBackoffInterval, i.log)
+	streaming = replication.NewChangeTableStream(userTables, publisher, i.cfg.streamBackoffInterval, i.log)
 
 	// Reset our stop signal
 	i.stopSig = shutdown.NewSignaller()
@@ -382,6 +435,32 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 				i.stopSig.TriggerHasStopped()
 				return
 			}
+
+			// Flush the partial snapshot batch still held by the batcher, then
+			// block until every snapshot batch is acknowledged downstream.
+			// Persisting the LSN any earlier would let a crash in this window
+			// skip un-acked snapshot rows on restart. Blocks until acks drain
+			// or soft-stop (no timeout, by design; see postgres_cdc's
+			// equivalent barrier).
+			if err = publisher.flushCurrent(softCtx); err != nil {
+				// A graceful stop lands here whenever shutdown hits the
+				// handoff window (nothing drains msgChan any more, so the
+				// blocked send exits via softCtx): normal operation, Info.
+				// Genuine flush failures keep the error level.
+				if errors.Is(err, context.Canceled) && !i.stopSig.IsHardStopSignalled() {
+					i.log.Infof("Interrupted while flushing remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				} else {
+					i.log.Errorf("Failed to flush remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				}
+				i.stopSig.TriggerHasStopped()
+				return
+			}
+			if err = publisher.waitSnapshotAcks(softCtx); err != nil {
+				i.log.Infof("Interrupted while waiting for snapshot acknowledgements. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				i.stopSig.TriggerHasStopped()
+				return
+			}
+
 			if err = i.cacheLSN(softCtx, maxLSN); err != nil {
 				if i.stopSig.IsHardStopSignalled() {
 					i.log.Errorf("Shutting down snapshotting process: %s", err)
@@ -445,6 +524,16 @@ func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn replication.LSN) e
 		return errors.New("LSN for caching is empty")
 	}
 
+	// Serialized and monotonic across publisher generations: a previous
+	// session's late acks must never land a stale LSN over a newer durable
+	// position. LSNs are fixed-width and byte-ordered, so skipping
+	// non-advancing writes is always safe.
+	i.lastPersistedMu.Lock()
+	defer i.lastPersistedMu.Unlock()
+	if len(i.lastPersistedLSN) != 0 && bytes.Compare(lsn, i.lastPersistedLSN) <= 0 {
+		return nil
+	}
+
 	var cErr error
 	if i.cpCache != nil {
 		cErr = i.cpCache.Set(ctx, i.cfg.lsnCacheKey, lsn, nil)
@@ -459,12 +548,13 @@ func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn replication.LSN) e
 	if cErr != nil {
 		return fmt.Errorf("unable persist checkpoint to cache: %w", cErr)
 	}
+	i.lastPersistedLSN = lsn
 	return nil
 }
 
 func (i *sqlServerCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	select {
-	case m := <-i.publisher.msgs():
+	case m := <-i.publisher.Load().msgs():
 		return m.msg, m.ackFn, nil
 	case <-i.stopSig.HasStoppedChan():
 		return nil, nil, service.ErrNotConnected
@@ -498,7 +588,24 @@ func (i *sqlServerCDCInput) Close(ctx context.Context) error {
 	if i.stopSig == nil {
 		return nil // Never connected
 	}
+	// Mark the publisher as stopping BEFORE any cancellation propagates: the
+	// session's contexts unwind off stopSig, and sendTracked needs the flag
+	// already visible to log the graceful unwind at debug rather than warn.
+	if pub := i.publisher.Load(); pub != nil {
+		pub.stopping.Store(true)
+	}
 	i.stopSig.TriggerSoftStop()
+	// Shut the publisher down alongside the session: its timed-flush loop
+	// runs under the publisher's OWN signaller, and a flush parked in
+	// sendTracked (nothing drains msgChan once ReadBatch stops) would
+	// otherwise hold its flush ticket forever - wedging every other flusher
+	// waiting in admit() and leaking the session goroutines past the
+	// timeout. Cancelling the loop's context releases its ticket, and the
+	// chain then drains: each later ticket holder's Track/send escapes via
+	// its stopSig-derived context.
+	if pub := i.publisher.Load(); pub != nil {
+		pub.shutSig.TriggerSoftStop()
+	}
 	select {
 	case <-ctx.Done():
 	case <-time.After(shutdownTimeout):
