@@ -889,3 +889,42 @@ the decisive input and is cheaper to ask for than to measure.
 
 
 Raw samples + Prometheus snapshots: [`results/iceberg/orders-7table-consolidation/2026-08-04T05-42-24Z.json`](results/iceberg/orders-7table-consolidation/2026-08-04T05-42-24Z.json)
+
+
+## AWS — orders-sink-output-tuning — 2026-08-21
+
+**Scenario:** Output-tuning A/B for the iceberg sink at a fixed 8-vCPU pin: find Connect's
+real ceiling on Glue by sweeping the two knobs the published Recipe A froze
+for KC-fairness — max_in_flight (16/32/64) and batch size/commit cadence
+(10k/10s baseline vs 50k/10s, 10k/5s, 50k/30s, plus the 50k x mif32 cross).
+Motivated by the local MinIO bench (docs/benchmark-results/iceberg.md), where
+mif32 at batch 10k was ~4x mif4 and the ceiling was MinIO, not the connector;
+nothing on AWS has ever run above mif16. Also directly answers the Garner POC
+tuning thread (2026-08-20): what should batching/max_in_flight be on Glue?
+
+a0-mif16 is the in-session baseline (published Recipe A verbatim) so arms
+compare against a same-session, same-SHA control rather than an old run.
+All arms share one seeded topic and reset to a fresh table + rewound group
+per arm. Connect-only (arms constraint). One window per arm, no repeats:
+treat sub-5% mean differences as noise.
+
+**Git SHA:** [`674ec9953`](https://github.com/redpanda-data/connect/commit/674ec9953d8eba496e0063bf9529996799e8b519)
+
+**Infra:** Runner `c8g.4xlarge`; source `` (0 GB) in `us-east-2`.
+
+**Dataset:** 200,000,000 rows × 1200 B = ~223 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 8    | 8          | a0-mif16       | connect       |          164 |      127.975 |       110,066 |          164 |          22 |          230 |       140,789 |                    |
+| 8    | 8          | mif32          | connect       |          105 |      139.058 |       119,598 |          105 |          16 |          267 |        90,681 |                    |
+| 8    | 8          | mif64          | connect       |           40 |      123.943 |       106,598 |           40 |          21 |          267 |        34,827 |                    |
+| 8    | 8          | b50k-10s       | connect       |           74 |      123.204 |       106,011 |           74 |          26 |          240 |        63,360 |                    |
+| 8    | 8          | b10k-5s        | connect       |          163 |      131.559 |       113,147 |          163 |          27 |          203 |       140,020 |                    |
+| 8    | 8          | b50k-30s       | connect       |           79 |      131.002 |       112,721 |           79 |          25 |          236 |        68,197 |                    |
+| 8    | 8          | b50k-mif32     | connect       |          127 |      139.526 |       120,055 |          127 |          26 |          241 |       108,989 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/iceberg/orders-sink-output-tuning/2026-08-21T21-05-19Z.json`](results/iceberg/orders-sink-output-tuning/2026-08-21T21-05-19Z.json)

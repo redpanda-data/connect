@@ -24,7 +24,13 @@ import (
 
 // seed produces `rows` flat JSON records (~rowSize bytes each) into `topic`.
 // Brokers come from REDPANDA_BROKERS (comma-separated host:port).
-func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int) error {
+//
+// keySpace > 0 caps the id space so ids cycle (id = i % keySpace), giving
+// keyed-upsert benches genuine key collisions; 0 keeps ids unique (the
+// historical behaviour). Non-key fields (ts, payload, amount) still vary per
+// record, so a recurring id carries a distinct row image each time — the
+// shape an upsert actually sees.
+func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int, keySpace int64) error {
 	brokers := os.Getenv("REDPANDA_BROKERS")
 	if brokers == "" {
 		return fmt.Errorf("REDPANDA_BROKERS env var is required")
@@ -114,8 +120,12 @@ func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int
 			off := rng.Intn(poolSize - padLen)
 			pad = string(pool[off : off+padLen])
 		}
+		id := i
+		if keySpace > 0 {
+			id = i % keySpace
+		}
 		rec := map[string]any{
-			"id":      i,
+			"id":      id,
 			"ts":      time.Now().UTC().Format(time.RFC3339Nano),
 			"region":  regions[i%int64(len(regions))],
 			"amount":  float64(i%100000) / 100.0,

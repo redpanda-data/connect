@@ -127,6 +127,12 @@ type DatasetSpec struct {
 	// own --partitions default (16) applies instead, unchanged. See
 	// partitionsPerTopic for the Topics > 1 default (4).
 	PartitionsPerTopic int `yaml:"partitions_per_topic,omitempty"`
+	// KeySpace caps the seeder's id space so record ids cycle (id = i %
+	// key_space), giving keyed-upsert benches genuine key collisions — e.g.
+	// initial_rows 96M with key_space 12M makes each id recur ~8 times. 0
+	// (absent) keeps ids unique and every existing scenario's seed script
+	// byte-identical. Only the json-orders seeder honours the flag.
+	KeySpace int64 `yaml:"key_space,omitempty"`
 }
 
 // partitionsPerTopic is the effective per-topic partition count to seed with
@@ -427,6 +433,14 @@ func (s *Scenario) Validate() error {
 				return fmt.Errorf("matrix.arms[%d].fan_in is mutually exclusive with streams > 1 (got streams: %d); fan-in is a single pipeline", i, a.Streams)
 			}
 		}
+	}
+
+	if s.Dataset.KeySpace < 0 {
+		return fmt.Errorf("dataset.key_space must be >= 0 (got %d)", s.Dataset.KeySpace)
+	}
+	if s.Dataset.KeySpace > 0 && s.Dataset.KeySpace >= s.Dataset.InitialRows {
+		return fmt.Errorf("dataset.key_space (%d) must be < dataset.initial_rows (%d): a key space at or above the row count never produces a key collision, which is the field's whole purpose — omit it for unique ids",
+			s.Dataset.KeySpace, s.Dataset.InitialRows)
 	}
 
 	if s.Dataset.Topics > 1 {

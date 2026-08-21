@@ -1,0 +1,85 @@
+name: iceberg-orders-upsert
+description: |
+  Insert vs upsert throughput for the iceberg sink at a fixed 4-vCPU pin —
+  the first non-append number for this output. Every published iceberg figure
+  is insert-only, but the CDC workloads customers actually run (Garner POC,
+  2026-08-20) are upsert-heavy, where the cost model changes twice over:
+  every batch containing a mutation commits as its own snapshot (never
+  coalesced, required for correctness), and merge_strategy decides whether a
+  mutation writes a cheap equality-delete (merge-on-read) or rewrites every
+  data file containing a touched key (copy-on-write, the mode Snowflake and
+  Unity Catalog readers force).
+
+  The dataset has genuine key collisions: key_space 12M over 96M rows means
+  each id recurs ~8 times with a distinct row image (the seeder varies
+  ts/amount/payload per record), and keys arrive scattered — the worst
+  realistic case for copy-on-write amplification.
+
+  METRIC CAVEAT (copy-on-write arm only): the Glue sidecar's total_records is
+  the table's NET row count, which plateaus at ~key_space once keys start
+  recurring, so the upsert-cow summary row UNDERSTATES real write throughput —
+  read that arm's rate from the raw prom dumps instead
+  (s3://<results_bucket>/runs/<session>/prom-4-upsert-cow.txt: output_sent
+  deltas), and expect its Glue msg/s to decay toward zero by design, not by
+  failure. a0-insert and upsert-mor are unaffected: appends and equality-
+  delete upserts both grow total_records by every row written.
+
+  Connect-only (arms constraint). One window per arm. The upsert-cow arm may
+  legitimately crawl — that IS the measurement (the K/M amplification model
+  from the local cow_amplification bench, end-to-end).
+
+direction: sink
+connector: iceberg
+stack: iceberg
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 96000000   # ~107 GiB at 1200 B/row: >= 15 min at the 4-vCPU
+                           # Recipe A insert rate (~112 MB/s), and the slower
+                           # upsert arms simply read less of the topic.
+  row_size_bytes: 1200
+  seeder: json-orders
+  key_space: 12000000      # ids cycle: ~8 versions per key, scattered arrival
+  expected_peak_mb_s: 120
+
+pipeline:
+  # Recipe A base. Batches feeding the committer are 10k rows / 10s — under
+  # upsert every one of them is its own snapshot, so the window produces
+  # ~90 snapshots/arm; commit.max_snapshot_age keeps metadata bounded.
+  buffer:
+    memory:
+      limit: 524288000
+      batch_policy:
+        count: 10000
+        period: 10s
+  output:
+    iceberg:
+      max_in_flight: 16
+      batching:
+        count: 10000
+        period: 10s
+      commit:
+        max_snapshot_age: 24h
+
+matrix:
+  cpu_points: [4]
+  arms:
+    - id: a0-insert          # baseline: append-only, comparable to orders-sink@4
+    - id: upsert-mor
+      pipeline:
+        output:
+          iceberg:
+            row_operation: upsert
+            identifier_fields: [id]
+            # merge-on-read is the default; explicit so the A/B reads clearly
+            merge_strategy: merge-on-read
+    - id: upsert-cow
+      pipeline:
+        output:
+          iceberg:
+            row_operation: upsert
+            identifier_fields: [id]
+            merge_strategy: copy-on-write

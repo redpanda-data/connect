@@ -72,9 +72,16 @@ func (sinkTopology) SeedScript(s *Scenario, outs map[string]string, n BenchNames
 		outs["results_bucket"], key, s.Dataset.Seeder, s.Dataset.Seeder)
 
 	brokers := outs["redpanda_broker_endpoints"]
+	// --key-space is appended only when set, keeping every existing
+	// scenario's seed script byte-identical (the framework's compatibility
+	// convention; see TestSinkTopology_SeedScript_SingleTopicUnchanged).
+	keySpaceFlag := ""
+	if s.Dataset.KeySpace > 0 {
+		keySpaceFlag = fmt.Sprintf(" --key-space=%d", s.Dataset.KeySpace)
+	}
 	if s.Dataset.Topics <= 1 {
-		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s seed \\\n  --topic=%s --rows=%d --row-size=%d\n",
-			brokers, s.Dataset.Seeder, n.SourceTopic(), s.Dataset.InitialRows, s.Dataset.RowSizeBytes)
+		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s seed \\\n  --topic=%s --rows=%d --row-size=%d%s\n",
+			brokers, s.Dataset.Seeder, n.SourceTopic(), s.Dataset.InitialRows, s.Dataset.RowSizeBytes, keySpaceFlag)
 		return sb.String(), nil
 	}
 
@@ -85,8 +92,8 @@ func (sinkTopology) SeedScript(s *Scenario, outs map[string]string, n BenchNames
 	partitions := s.Dataset.partitionsPerTopic()
 	scoped := n.WithTopics(s.Dataset.Topics)
 	for i := 0; i < s.Dataset.Topics; i++ {
-		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s seed \\\n  --topic=%s --rows=%d --row-size=%d --partitions=%d\n",
-			brokers, s.Dataset.Seeder, scoped.WithTopic(i).SourceTopic(), rowsPerTopic, s.Dataset.RowSizeBytes, partitions)
+		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s seed \\\n  --topic=%s --rows=%d --row-size=%d --partitions=%d%s\n",
+			brokers, s.Dataset.Seeder, scoped.WithTopic(i).SourceTopic(), rowsPerTopic, s.Dataset.RowSizeBytes, partitions, keySpaceFlag)
 	}
 	return sb.String(), nil
 }
