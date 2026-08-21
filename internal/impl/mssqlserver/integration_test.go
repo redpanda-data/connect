@@ -689,7 +689,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes(t *test
 		)
 	}
 
-	db.MustEnableCDC(t.Context(), "dbo.all_data_types")
+	db.MustEnableCDC(t.Context(), "dbo.all_data_types", mssqlservertest.DefaultCaptureInstance)
 
 	var (
 		outBatches   []string
@@ -855,7 +855,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SchemaMetadata(t *testing.T) {
 	// Disable CDC so the first row becomes a snapshot row, then re-enable CDC.
 	db.MustDisableCDC(t.Context(), "dbo.schema_meta_test")
 	db.MustExecContext(t.Context(), `INSERT INTO dbo.schema_meta_test VALUES (1, N'snapshot', 1, 3.14, SYSDATETIME())`)
-	db.MustEnableCDC(t.Context(), "dbo.schema_meta_test")
+	db.MustEnableCDC(t.Context(), "dbo.schema_meta_test", mssqlservertest.DefaultCaptureInstance)
 
 	type msgMeta struct {
 		schema any

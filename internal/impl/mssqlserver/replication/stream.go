@@ -510,41 +510,8 @@ func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx
 	}
 
 	for i, tbl := range userTables {
-		// Resolve the capture instance via source_object_id rather than assuming
-		// the default <schema>_<table> naming convention: CDC may already be
-		// enabled on this table by another tool (e.g. a GoldenGate feed) under an
-		// arbitrarily named capture instance.
-		q := "SELECT capture_instance, start_lsn FROM cdc.change_tables WHERE source_object_id = OBJECT_ID(?)"
-		rows, err := db.QueryContext(ctx, q, tbl.FullName())
-		if err != nil {
-			return nil, fmt.Errorf("fetching change tables for table '%s': %w", tbl.FullName(), err)
-		}
-
-		var captureInstances []string
-		for rows.Next() {
-			var captureInstance string
-			var startLSN LSN
-			if err := rows.Scan(&captureInstance, &startLSN); err != nil {
-				rows.Close()
-				return nil, fmt.Errorf("scanning cdc.change_tables row for table '%s': %w", tbl.FullName(), err)
-			}
-			captureInstances = append(captureInstances, captureInstance)
-			tbl.CaptureInstance = captureInstance
-			tbl.startLSN = startLSN
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("iterating cdc.change_tables rows for table '%s': %w", tbl.FullName(), err)
-		}
-		rows.Close()
-
-		switch len(captureInstances) {
-		case 0:
-			return nil, fmt.Errorf("no change table found for table '%s': is CDC enabled for this table?", tbl.FullName())
-		case 1:
-			// resolved unambiguously above.
-		default:
-			return nil, fmt.Errorf("table '%s' has multiple CDC capture instances (%s): unable to determine which one to stream from", tbl.FullName(), strings.Join(captureInstances, ", "))
+		if err := resolveCaptureInstance(ctx, db, &tbl); err != nil {
+			return nil, err
 		}
 		if len(tbl.startLSN) == 0 {
 			return nil, fmt.Errorf("field 'start_lsn' in change table '%s' expected to be set but was not", tbl.ToChangeTable())
@@ -557,4 +524,48 @@ func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx
 	}
 
 	return userTables, nil
+}
+
+func resolveCaptureInstance(ctx context.Context, db *sql.DB, tbl *UserDefinedTable) error {
+	conventionName := fmt.Sprintf("%s_%s", tbl.Schema, tbl.Name)
+	var startLSN LSN
+	err := db.QueryRowContext(ctx, "SELECT start_lsn FROM cdc.change_tables WHERE capture_instance = ?", conventionName).Scan(&startLSN)
+	switch {
+	case err == nil:
+		tbl.CaptureInstance = conventionName
+		tbl.startLSN = startLSN
+		return nil
+	case !errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("fetching change tables for table '%s': %w", tbl.FullName(), err)
+	}
+
+	q := "SELECT capture_instance, start_lsn FROM cdc.change_tables WHERE source_object_id = OBJECT_ID(?)"
+	rows, err := db.QueryContext(ctx, q, tbl.FullName())
+	if err != nil {
+		return fmt.Errorf("fetching change tables for table '%s': %w", tbl.FullName(), err)
+	}
+	defer rows.Close()
+
+	var captureInstances []string
+	for rows.Next() {
+		var captureInstance string
+		if err := rows.Scan(&captureInstance, &startLSN); err != nil {
+			return fmt.Errorf("scanning cdc.change_tables row for table '%s': %w", tbl.FullName(), err)
+		}
+		captureInstances = append(captureInstances, captureInstance)
+		tbl.CaptureInstance = captureInstance
+		tbl.startLSN = startLSN
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterating cdc.change_tables rows for table '%s': %w", tbl.FullName(), err)
+	}
+
+	switch len(captureInstances) {
+	case 0:
+		return fmt.Errorf("no change table found for table '%s': is CDC enabled for this table?", tbl.FullName())
+	case 1:
+		return nil
+	default:
+		return fmt.Errorf("table '%s' has multiple CDC capture instances (%s): unable to determine which one to stream from", tbl.FullName(), strings.Join(captureInstances, ", "))
+	}
 }
