@@ -21,19 +21,10 @@ import (
 )
 
 // schemaPatternToLike converts a schema name or glob pattern into the LIKE
-// pattern used by resolveSchemas, plus whether that pattern must be matched
-// case-sensitively. Extracted for unit testing.
-//
-// For quoted identifiers the inner name is exact-escaped (no wildcard
-// expansion) and matched case-sensitively, since a quoted identifier's case
-// is significant and PostgreSQL does not fold it. For unquoted patterns the
-// '*' wildcard is converted to '%' and matching is case-insensitive: this
-// mirrors PostgreSQL folding unquoted identifiers to lower-case at creation
-// time for the common case, but must hold even when a schema had to be
-// created with a quoted identifier for an unrelated reason (e.g. a
-// UUID-suffixed tenant schema, which requires quoting because hyphens are
-// invalid in unquoted identifiers) and so kept whatever case it was written
-// with — an unquoted glob like "tenant_*" is still expected to match it.
+// pattern used by resolveSchemas, plus whether it must be matched
+// case-sensitively. Quoted identifiers are matched exactly and
+// case-sensitively; unquoted patterns use '*' as a wildcard and match
+// case-insensitively, mirroring how PostgreSQL folds unquoted identifiers.
 func schemaPatternToLike(pattern string) (likePattern string, caseSensitive bool, err error) {
 	if strings.HasPrefix(pattern, `"`) {
 		unquoted, err := sanitize.UnquotePostgresIdentifier(pattern)
@@ -45,25 +36,13 @@ func schemaPatternToLike(pattern string) (likePattern string, caseSensitive bool
 	return globToLike(strings.ToLower(pattern)), false, nil
 }
 
-// resolveSchemas returns the schemas matching pattern that the connection's
-// role has access to (visibleSchemas), plus any schemas that also match
-// pattern but are hidden from information_schema.schemata by privileges
-// (inaccessibleSchemas). The latter is surfaced separately so callers can
-// warn the user instead of silently dropping schemas they expected to be
-// included, e.g. `"tenant_*"` matching a schema the configured role can't
-// see yet.
-//
-// For unquoted patterns (e.g. "tenant_*") the pattern is matched
-// case-insensitively via ILIKE, regardless of whether the matched schema was
-// itself created case-insensitively. For quoted identifiers (e.g.
-// `"MySchema"`) an exact case-sensitive lookup is performed via LIKE. System
-// schemas (pg_* and information_schema) are always excluded case-sensitively
-// so that wildcard patterns like "*" do not attempt to replicate catalog
-// tables.
-//
-// Returned schema names are quoted PostgreSQL identifiers. Returns an error
-// if either query fails; returns a nil visibleSchemas slice (with a nil err)
-// if no schemas match — callers should treat that as an error condition.
+// resolveSchemas returns the schemas matching pattern that the role can see
+// (visibleSchemas), plus schemas that also match but are hidden by missing
+// privileges (inaccessibleSchemas) - surfaced separately so callers can warn
+// instead of silently dropping them. System schemas (pg_* and
+// information_schema) are always excluded. Returned names are quoted
+// PostgreSQL identifiers. A nil visibleSchemas with a nil error means no
+// match - callers should treat that as an error.
 func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (visibleSchemas, inaccessibleSchemas []string, err error) {
 	likePattern, caseSensitive, err := schemaPatternToLike(pattern)
 	if err != nil {
@@ -102,9 +81,8 @@ func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (v
 		}
 	}
 
-	// pg_namespace is not privilege-filtered, so any pattern match here that's
-	// missing from information_schema.schemata means the role lacks USAGE (or
-	// similar) on that schema rather than the schema simply not existing.
+	// pg_namespace isn't privilege-filtered, so a match here missing from
+	// information_schema.schemata means the role lacks USAGE on that schema.
 	nsQ, err := sanitize.SQLQuery(
 		fmt.Sprintf("SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname %s $1 ESCAPE '!' AND nspname NOT LIKE 'pg!_%%' ESCAPE '!' AND nspname != 'information_schema'", op),
 		likePattern,
@@ -131,10 +109,9 @@ func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (v
 	return schemas, hidden, nil
 }
 
-// resolveIncludedSchemas resolves config.DBSchemaInclude against conn,
-// applies config.DBSchemaExclude filtering, and logs schema-set drift
-// against the previous resolution cached on config (see
-// Config.previouslyResolvedSchemas)
+// resolveIncludedSchemas resolves cfg.DBSchemaInclude against conn, applies
+// cfg.DBSchemaExclude filtering, and warns about schema-set drift against
+// the previously resolved set cached on cfg.
 func resolveIncludedSchemas(ctx context.Context, conn *pgconn.PgConn, cfg *Config) ([]string, error) {
 	schemas, inaccessibleSchemas, err := resolveSchemas(ctx, conn, cfg.DBSchemaInclude)
 	if err != nil {
@@ -199,17 +176,9 @@ func resolveIncludedSchemas(ctx context.Context, conn *pgconn.PgConn, cfg *Confi
 }
 
 // resolveExistingTables returns the quoted names of the publishable base
-// tables (including partitioned tables) that exist in the given (already
-// quoted) schema.
-//
-// Used to resolve a schema glob × table list combination per-schema, since a
-// matched schema may not contain a configured table (e.g. still being
-// provisioned) or may have a same-named view/foreign/temporary table
-// instead. table_type is restricted to 'BASE TABLE' so either case is
-// treated as missing and falls through to the caller's "not found, skipping"
-// warning - otherwise CreatePublication's FOR TABLE clause would reference
-// an unpublishable relation and fail setup for every matched schema, not
-// just the drifted one.
+// tables in the given (already quoted) schema. Restricted to table_type =
+// 'BASE TABLE' so a same-named view or foreign table is treated as missing
+// rather than breaking CreatePublication.
 func resolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchema string) (map[string]struct{}, error) {
 	schema, err := sanitize.UnquotePostgresIdentifier(quotedSchema)
 	if err != nil {
@@ -286,23 +255,11 @@ func escapeLike(s string) string {
 	return b.String()
 }
 
-// schemaMatchesExcludePattern reports whether quotedSchemaName - a schema
-// identifier in the same quoted form resolveSchemas returns - matches
-// excludePattern, a schema_exclude entry written in the same shape as a
-// schema_include value (an exact name, a '*' glob, or a double-quoted exact
-// identifier).
-//
-// Matching happens entirely in memory against a schema list we've already
-// resolved, unlike resolveSchemas which queries the database: schema_exclude
-// only ever narrows a candidate set that's already been fetched, so there's
-// no reason to pay for another round-trip per exclude pattern. Semantics
-// mirror schemaPatternToLike without going through SQL: a quoted pattern is
-// an exact, case-sensitive match on the unquoted name; an unquoted pattern is
-// matched case-insensitively with '*' as a wildcard.
-//
-// Returns an error only when a quoted operand fails to unquote. This should
-// only happen for a malformed excludePattern in practice, since
-// quotedSchemaName is always freshly quoted by resolveSchemas.
+// schemaMatchesExcludePattern reports whether quotedSchemaName matches
+// excludePattern, using the same pattern syntax as schema_include (exact
+// name, '*' glob, or quoted exact identifier). Matches in memory against an
+// already-resolved schema list, so no extra DB round-trip is needed. Returns
+// an error only if a quoted operand fails to unquote.
 func schemaMatchesExcludePattern(quotedSchemaName, excludePattern string) (bool, error) {
 	schemaName, err := sanitize.UnquotePostgresIdentifier(quotedSchemaName)
 	if err != nil {
@@ -324,13 +281,9 @@ func schemaMatchesExcludePattern(quotedSchemaName, excludePattern string) (bool,
 	return re.MatchString(strings.ToLower(schemaName)), nil
 }
 
-// diffSchemaSets reports which schemas are present in current but not
-// previous (added) and vice versa (removed), used to detect schema-set drift
-// between the schema_include resolution done on this connect and the one
-// done on the previous connect/reconnect. A nil previous (the very first
-// resolution in the process's lifetime) is not a meaningful "everything was
-// just added" drift, so callers should only act on the result when previous
-// is non-nil.
+// diffSchemaSets reports schemas present in current but not previous
+// (added) and vice versa (removed). Callers should ignore the result when
+// previous is nil - that's the first resolution, not real drift.
 func diffSchemaSets(previous, current []string) (added, removed []string) {
 	previousSet := make(map[string]struct{}, len(previous))
 	for _, schema := range previous {
@@ -353,10 +306,8 @@ func diffSchemaSets(previous, current []string) (added, removed []string) {
 	return added, removed
 }
 
-// globToRegexp compiles an unquoted glob pattern (using '*' as a wildcard)
-// into an anchored regexp - the in-memory equivalent of globToLike for
-// callers matching against values already held in Go rather than via a SQL
-// LIKE clause.
+// globToRegexp compiles an unquoted glob pattern ('*' as wildcard) into an
+// anchored regexp - the in-memory equivalent of globToLike.
 func globToRegexp(pattern string) (*regexp.Regexp, error) {
 	parts := strings.Split(pattern, "*")
 	for i, part := range parts {
