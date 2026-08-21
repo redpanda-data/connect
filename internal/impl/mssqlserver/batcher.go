@@ -638,13 +638,16 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 		b.sealQueue()
 	}
 	b.batcherMu.Unlock()
+	if err != nil {
+		// The seal is already applied under batcherMu; return the real flush
+		// error rather than letting admit's sealed refusal mask it (the
+		// operator needs the batching.processors failure, not the seal).
+		return err
+	}
 	if admitErr := b.admit(ctx, ticket, len(remaining) > 0); admitErr != nil {
 		return admitErr
 	}
 	defer b.release()
-	if err != nil {
-		return err
-	}
 	if len(remaining) == 0 {
 		return nil
 	}
