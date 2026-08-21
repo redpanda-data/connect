@@ -198,6 +198,17 @@ func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
 	return replication.SCN(currentPos), nil
 }
 
+func (lm *LogMiner) endExpiredIdleSession(ctx context.Context, conn *sql.Conn) {
+	if !lm.sessionMgr.IsExpired(lm.cfg.MaxSessionAge) {
+		return
+	}
+	lm.log.Debugf("LogMiner session has been open for %s, exceeding max_session_age of %s — ending idle session to release accumulated session memory",
+		lm.sessionMgr.Age(), lm.cfg.MaxSessionAge)
+	if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
+		lm.log.Errorf("Failed to end idle LogMiner session: %v", err)
+	}
+}
+
 func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
 	// Get database's current SCN to know our target
 	var dbCurrentSCN uint64
@@ -206,10 +217,12 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	}
 
 	if lm.currentSCN >= dbCurrentSCN {
+		lm.endExpiredIdleSession(ctx, conn)
 		return true, nil
 	}
 
 	if deferMiningCycle(lm.currentSCN, dbCurrentSCN, lm.cfg.MinSCNWindowSize) {
+		lm.endExpiredIdleSession(ctx, conn)
 		return true, nil
 	}
 
@@ -900,7 +913,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	}
 
 	// Use the pre-built query from initialization
-	lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d): %s", startSCN, endSCN, lm.windowSize, lm.logMinerQuery)
+	lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
 	queryStart := time.Now()
 	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
@@ -1121,8 +1134,18 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	}
 	lm.log.Debugf("Collected %d redo log file(s) for LogMiner: %v", len(logFiles), types)
 
-	if lm.sessionMgr.logFilesChanged(logFiles) {
-		// Log files have changed (first start or log switch) — full reload required.
+	// On databases where redo log switches are infrequent, a LogMiner session can stay
+	// open for hours, accumulating server-side PGA (notably around online catalog
+	// dictionary lookups) until Oracle kills it outright with ORA-04036.
+	sessionExpired := lm.sessionMgr.IsExpired(lm.cfg.MaxSessionAge)
+	if sessionExpired {
+		lm.log.Debugf("LogMiner session has been open for %s, exceeding max_session_age of %s — forcing restart to release accumulated session memory",
+			lm.sessionMgr.Age(), lm.cfg.MaxSessionAge)
+	}
+
+	if lm.sessionMgr.logFilesChanged(logFiles) || sessionExpired {
+		// Log files have changed (first start or log switch), or the session has exceeded
+		// its maximum age — full reload required.
 		if lm.sessionMgr.IsActive() {
 			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
 				lm.log.Errorf("Failed to end existing LogMiner session: %v", err)

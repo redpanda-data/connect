@@ -85,6 +85,19 @@ func newOpMetrics(m *service.Metrics) *opMetrics {
 	}
 }
 
+// NOTE: there is no importable seam here to assert emitted
+// counter *values* in a unit test. service.MockResources() backs its Metrics
+// with metrics.Noop() (which discards writes), and the only readable in-memory
+// implementation (metrics.NewLocal) lives in benthos-internal
+// internal/component/metrics, which a different module cannot import; nor is
+// there a public constructor for *service.Metrics that accepts a recording
+// MetricsExporter. Reading a value would therefore require either putting
+// opMetrics behind an interface (the refactor deliberately avoided) or standing
+// up a full stream + Prometheus scrape (disproportionate). Instead the row-count
+// values that feed rowOps are pinned by TestSplitByOperationCOWCountsFeedMetrics
+// on the writer side; the incr* label wiring is covered by the incr* methods'
+// own trivial mapping. Revisit if benthos exposes a public readable metrics mock.
+
 func (m *opMetrics) incrInserted(n int64) {
 	if m != nil && n > 0 {
 		m.rowOps.Incr(n, "insert")
@@ -161,6 +174,23 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		if maxInFlight, err := conf.FieldInt(ioFieldMaxInFlight); err == nil && maxInFlight > 1 {
 			mgr.Logger().Warnf("row_operation can produce upsert/delete operations but max_in_flight is %d; concurrent batches may commit out of order and corrupt the last-writer-wins result. Set max_in_flight: 1 for keyed (change-data-capture) workloads.", maxInFlight)
 		}
+	}
+
+	// Copy-on-write trades write amplification for engine-readable (delete-file-
+	// free) tables. Surface that characteristic and its mitigations once at
+	// startup so it is not a surprise in production. This is distinct from the
+	// max_in_flight ordering warning above (which is about correctness, not cost)
+	// and stays silent for merge-on-read and append-only configs.
+	if msg, ok := rowOpCfg.cowAmplificationWarning(); ok {
+		mgr.Logger().Infof("%s", msg)
+	}
+
+	// Cleanup of a failed commit's files is on by default; turning it off is an
+	// incident escape hatch that trades orphaned storage for never deleting
+	// anything. Say so once at startup so the resulting object growth is not a
+	// mystery later — the per-commit skips are logged at debug only.
+	if commitCfg.DisableCleanupOnFailure {
+		mgr.Logger().Infof("%s.%s is disabled: failed commits will leave their written files orphaned in storage on every write path. Run Iceberg table maintenance (snapshot expiry plus orphan-file removal) to reclaim them.", ioFieldCommit, ioFieldCleanupOnFailure)
 	}
 
 	// Parse parquet config
@@ -578,6 +608,19 @@ func parseRowOpConfig(conf *service.ParsedConfig) (RowOpConfig, error) {
 		return cfg, err
 	}
 
+	// merge_strategy carries Default(merge-on-read) and is a validated enum, so
+	// FieldString returns a known value without a Contains guard.
+	strategy, err := conf.FieldString(ioFieldMergeStrategy)
+	if err != nil {
+		return cfg, err
+	}
+	switch mergeStrategy(strategy) {
+	case mergeStrategyMOR, mergeStrategyCOW:
+		cfg.MergeStrategy = mergeStrategy(strategy)
+	default:
+		return cfg, fmt.Errorf("invalid %s %q: must be %q or %q", ioFieldMergeStrategy, strategy, mergeStrategyMOR, mergeStrategyCOW)
+	}
+
 	if static, ok := op.Static(); ok {
 		parsed, err := parseRowOperation(static)
 		if err != nil {
@@ -614,6 +657,14 @@ func parseCommitConfig(conf *service.ParsedConfig) (CommitConfig, error) {
 	if err != nil {
 		return cfg, err
 	}
+	// The config field is positively named (`cleanup_on_failure`, defaulting to
+	// true) while the Go field is the negation, so that a zero-value
+	// CommitConfig keeps cleanup enabled — see CommitConfig.
+	cleanupOnFailure, err := conf.FieldBool(ioFieldCommit, ioFieldCleanupOnFailure)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.DisableCleanupOnFailure = !cleanupOnFailure
 	return cfg, nil
 }
 

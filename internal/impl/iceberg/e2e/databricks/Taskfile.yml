@@ -1,0 +1,61 @@
+version: '3'
+
+# The bearer token is read by go test (and terraform) directly from the
+# DATABRICKS_TOKEN environment variable — it is never a taskfile var, test
+# flag, or terraform output, so it cannot leak into logs or state.
+
+vars:
+  GIT_ROOT:
+    sh: git rev-parse --show-toplevel
+  DBX_HOST:
+    sh: cd terraform && terraform output -raw workspace_host 2>/dev/null || echo ""
+  DBX_CATALOG:
+    sh: cd terraform && terraform output -raw catalog_name 2>/dev/null || echo ""
+  DBX_SCHEMA:
+    sh: cd terraform && terraform output -raw schema_name 2>/dev/null || echo ""
+  DBX_WAREHOUSE_ID:
+    sh: cd terraform && terraform output -raw warehouse_id 2>/dev/null || echo ""
+
+includes:
+  terraform:
+    taskfile: ./terraform/terraform.yml
+    dir: terraform
+
+tasks:
+  test:
+    desc: Run Databricks Unity Catalog copy-on-write e2e tests
+    dir: '{{.GIT_ROOT}}'
+    cmds:
+      - >-
+        go test -v -timeout 20m
+        -run TestDatabricksE2E
+        ./internal/impl/iceberg/e2e/databricks/...
+        -databricks.host={{.DBX_HOST}}
+        -databricks.catalog={{.DBX_CATALOG}}
+        -databricks.schema={{.DBX_SCHEMA}}
+        -databricks.warehouse-id={{.DBX_WAREHOUSE_ID}}
+
+  bench:
+    desc: Run the copy-on-write commit latency bench (tiny data, costs a little warehouse time)
+    dir: '{{.GIT_ROOT}}'
+    cmds:
+      - >-
+        go test -v -timeout 30m
+        -run TestDatabricksE2E_CommitLatencyBench
+        ./internal/impl/iceberg/e2e/databricks/...
+        -databricks.host={{.DBX_HOST}}
+        -databricks.catalog={{.DBX_CATALOG}}
+        -databricks.schema={{.DBX_SCHEMA}}
+        -databricks.warehouse-id={{.DBX_WAREHOUSE_ID}}
+        -databricks.bench
+
+  full:
+    desc: Provision, test, tear down. Destroy is deferred so it runs even when tests fail (needs task >= 3.15); if apply itself dies partway, run `task terraform:destroy` manually.
+    cmds:
+      - task: terraform:init
+      - task: terraform:apply
+      - defer:
+          task: terraform:destroy
+      # Spawned as a fresh `task` process (not a task: reference) so the
+      # DBX_* vars above are re-evaluated AFTER apply created the outputs.
+      - task test

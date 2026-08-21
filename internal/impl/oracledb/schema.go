@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -22,16 +23,44 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
-// oracleTypeToCommonType maps an Oracle DATA_TYPE string to a schema.CommonType.
+// typeNameSizeSuffix matches the parenthesised size qualifiers Oracle embeds
+// in catalog type names, e.g. the "(6)" in TIMESTAMP(6).
+var typeNameSizeSuffix = regexp.MustCompile(`\(\d+\)`)
+
+// normalizeOracleTypeName upper-cases a type name and strips any parenthesised
+// size qualifiers. ALL_TAB_COLUMNS.DATA_TYPE embeds fractional-seconds
+// precision in the type name itself — TIMESTAMP(6), TIMESTAMP(9) WITH TIME
+// ZONE, INTERVAL DAY(2) TO SECOND(6) — while the go-ora driver reports bare
+// names, so both must be normalised before matching or the two schema sources
+// disagree on the same column.
+func normalizeOracleTypeName(dataType string) string {
+	if strings.IndexByte(dataType, '(') >= 0 {
+		dataType = typeNameSizeSuffix.ReplaceAllString(dataType, "")
+	}
+	return strings.ToUpper(strings.TrimSpace(dataType))
+}
+
+// oracleTypeToCommonType maps an Oracle type name to a schema.CommonType. It
+// accepts both catalog names (ALL_TAB_COLUMNS.DATA_TYPE, precision qualifiers
+// and all) and go-ora driver names (sql.ColumnType.DatabaseTypeName()), since
+// the schema cache is populated from both sources and they must agree.
 // For NUMBER columns, callers should use replication.NumberToCommon which
 // considers precision and scale for a more specific mapping.
 func oracleTypeToCommonType(dataType string) schema.CommonType {
-	switch strings.ToUpper(dataType) {
+	// go-ora's TNSType stringer (v2.9.0) has no entry for the native JSON type
+	// (119), so DatabaseTypeName() renders it as "TNSType(119)". Alias it here,
+	// before normalisation strips the parenthesised id.
+	if dataType == "TNSType(119)" {
+		return schema.Any
+	}
+	switch normalizeOracleTypeName(dataType) {
 	case "BINARY_FLOAT", "IBFLOAT", "BFLOAT":
 		return schema.Float32
 	case "BINARY_DOUBLE", "IBDOUBLE", "BDOUBLE":
 		return schema.Float64
-	case "RAW", "LONG RAW", "BLOB":
+	case "RAW", "LONG RAW", "BLOB",
+		// go-ora driver names for the same binary types.
+		"VARRAW", "LONGRAW", "LONGVARRAW", "OCIBLOBLOCATOR":
 		return schema.ByteArray
 	case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE",
 		"TIMESTAMPTZ", "TIMESTAMPDTY", "TIMESTAMPTZ_DTY", "TIMESTAMPLTZ_DTY", "TIMESTAMPELTZ":
@@ -43,10 +72,47 @@ func oracleTypeToCommonType(dataType string) schema.CommonType {
 	}
 }
 
+// catalogNumberInfo converts ALL_TAB_COLUMNS numeric metadata into the
+// (precision, scale, hasDecimalInfo) triple NumberToCommon expects.
+// DATA_PRECISION is NULL for NUMBER(*,s) columns — including INTEGER, INT and
+// SMALLINT, which are NUMBER(*,0) — while the driver reports Oracle's maximum
+// NUMBER precision for the same columns (verified against real Oracle by the
+// restart leg of TestIntegrationOracleDBCDCDataTypeConsistency), so
+// substitute it to keep the two schema sources identical.
+// A NULL scale (bare NUMBER, FLOAT) stays hasDecimalInfo=false → BigDecimal,
+// matching the driver's undeclared-scale sentinel.
+func catalogNumberInfo(precision, scale sql.NullInt64) (p, s int64, hasDecimalInfo bool) {
+	if !precision.Valid && scale.Valid {
+		return replication.MaxOracleNumberPrecision, scale.Int64, true
+	}
+	return precision.Int64, scale.Int64, precision.Valid && scale.Valid
+}
+
+// columnToCommon maps one column's reported type metadata to its common schema
+// type. It is the single mapping point for BOTH schema sources — catalog
+// refreshes (fetchTableSchema, from ALL_TAB_COLUMNS) and snapshot seeding
+// (seedFromColumnMeta, from driver column metadata) — so the two cannot drift
+// through duplicated mapping logic. The sources still feed different type-name
+// spellings and numeric metadata, so every spelling must be enumerated in
+// oracleTypeToCommonType; that agreement is pinned by
+// TestOracleSchemaSourceParity and TestSnapshotScannerSchemaParity. Divergence
+// here is what caused snapshot and streaming messages to register conflicting
+// Schema Registry schemas.
+func columnToCommon(name, typeName string, precision, scale int64, hasDecimalInfo bool) schema.Common {
+	if isNumberType(typeName) {
+		return replication.NumberToCommon(name, precision, scale, hasDecimalInfo)
+	}
+	return schema.Common{
+		Name:     name,
+		Type:     oracleTypeToCommonType(typeName),
+		Optional: true,
+	}
+}
+
 // isNumberType reports whether dataType is one of Oracle's numeric type names
 // that should use precision/scale-aware mapping.
 func isNumberType(dataType string) bool {
-	switch strings.ToUpper(dataType) {
+	switch normalizeOracleTypeName(dataType) {
 	case "NUMBER", "INTEGER", "INT", "SMALLINT", "FLOAT":
 		return true
 	}
@@ -66,11 +132,12 @@ func isNumberType(dataType string) bool {
 // catalog query, then switches back. Avoids both CDB_* view privilege issues and
 // separate-connection login issues.
 type schemaCache struct {
-	mu      sync.Mutex
-	schemas map[string]*cachedSchema
-	db      *sql.DB
-	pdbName string // non-empty in CDB mode; triggers ALTER SESSION SET CONTAINER per refresh
-	log     *service.Logger
+	mu         sync.Mutex
+	schemas    map[string]*cachedSchema
+	seededMeta map[string][]replication.ColumnMeta // track the ColumnMeta slice for reuse
+	db         *sql.DB
+	pdbName    string // non-empty in CDB mode; triggers ALTER SESSION SET CONTAINER per refresh
+	log        *service.Logger
 }
 
 type cachedSchema struct {
@@ -84,10 +151,11 @@ type cachedSchema struct {
 // will switch the session to that PDB for each catalog query.
 func newSchemaCache(db *sql.DB, pdbName string, log *service.Logger) *schemaCache {
 	return &schemaCache{
-		schemas: make(map[string]*cachedSchema),
-		db:      db,
-		pdbName: pdbName,
-		log:     log,
+		schemas:    make(map[string]*cachedSchema),
+		seededMeta: make(map[string][]replication.ColumnMeta),
+		db:         db,
+		pdbName:    pdbName,
+		log:        log,
 	}
 }
 
@@ -124,16 +192,8 @@ ORDER BY COLUMN_ID`
 			return nil, fmt.Errorf("scanning column metadata: %w", err)
 		}
 
-		var common schema.Common
-		if isNumberType(dataType) {
-			common = replication.NumberToCommon(colName, precision.Int64, scale.Int64, precision.Valid && scale.Valid)
-		} else {
-			common = schema.Common{
-				Name:     colName,
-				Type:     oracleTypeToCommonType(dataType),
-				Optional: true,
-			}
-		}
+		p, s, hasInfo := catalogNumberInfo(precision, scale)
+		common := columnToCommon(colName, dataType, p, s, hasInfo)
 
 		children = append(children, common)
 		keySet[colName] = struct{}{}
@@ -234,28 +294,30 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 }
 
 // seedFromColumnMeta populates the cache from column metadata collected during
-// a snapshot transaction. The snapshot's READ ONLY transaction provides a
-// consistent view, so this overrides any pre-fetched entry.
+// a snapshot transaction, overriding any pre-fetched entry — unless meta is
+// the same slice (by identity) already used to seed this table, in which case
+// the rebuild is skipped and the cache is left untouched.
+//
+// The identity check is against the last slice this function was called
+// with, not against whatever is currently cached. If schemaForEvent's
+// catalog-refresh path replaces the cached schema in between, a later call
+// here with the same meta slice will not restore the snapshot-derived one.
 func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []replication.ColumnMeta) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
 	tableKey := table.Schema + "." + table.Name
 
+	if sameColumnMeta(sc.seededMeta[tableKey], meta) {
+		return
+	}
+	sc.seededMeta[tableKey] = meta
+
 	children := make([]schema.Common, 0, len(meta))
 	keySet := make(map[string]struct{}, len(meta))
 	colTypes := make(map[string]schema.Common, len(meta))
 	for _, m := range meta {
-		var common schema.Common
-		if isNumberType(m.TypeName) {
-			common = replication.NumberToCommon(m.Name, m.Precision, m.Scale, m.HasDecimalSize)
-		} else {
-			common = schema.Common{
-				Name:     m.Name,
-				Type:     oracleTypeToCommonType(m.TypeName),
-				Optional: true,
-			}
-		}
+		common := columnToCommon(m.Name, m.TypeName, m.Precision, m.Scale, m.HasDecimalSize)
 		children = append(children, common)
 		keySet[m.Name] = struct{}{}
 		colTypes[m.Name] = common
@@ -268,6 +330,17 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 		Children: children,
 	}
 	sc.schemas[tableKey] = &cachedSchema{schema: c.ToAny(), keys: keySet, colTypes: colTypes}
+}
+
+// sameColumnMeta checks whether a and b are the same underlying slice to enable reuse.
+func sameColumnMeta(a, b []replication.ColumnMeta) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	if len(a) == 0 {
+		return true
+	}
+	return &a[0] == &b[0]
 }
 
 // ---------------------------------------------------------------------------

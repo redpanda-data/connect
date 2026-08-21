@@ -1,6 +1,6 @@
 # Iceberg Benchmark Results
 
-Benchmarks for the `iceberg` output using a local REST catalog backed by MinIO (S3-compatible).
+Benchmarks for the `iceberg` output. Unless a section says otherwise, runs use a local REST catalog backed by MinIO (S3-compatible); the copy-on-write sections also include runs against a live Databricks Unity Catalog.
 
 See [`internal/impl/iceberg/bench/`](../../internal/impl/iceberg/bench/) for the benchmark configs and run instructions.
 
@@ -114,6 +114,104 @@ Both connectors use a 10s commit window and 16 Kafka partitions. The transformat
 - **Kafka Connect with transformation** requires a separate RPCN pre-processing step that writes to an intermediate Kafka topic (`bench-events-transformed`), then Kafka Connect reads from that topic and sinks to Iceberg. The two-stage I/O cuts throughput by more than half.
 - **Redpanda Connect** handles transformation and Iceberg writes in a single pipeline — no intermediate topic, no extra Kafka round-trip.
 - **End-to-end (the realistic scenario):** Redpanda Connect is ~1.3x faster than Kafka Connect (47k vs 37k msg/s).
+
+---
+
+## Copy-on-write — Write Amplification
+
+Measures how much of the table a copy-on-write (`merge_strategy: copy-on-write`) mutation rewrites, as a function of how many keys are touched (K) and how many data files the table holds (M). Real parquet files, 1,000 rows per data file, ~128 B payload per row. Driven by `TestCOWWriteAmplification` / `TestCOWWriteAmplificationScale` in [`internal/impl/iceberg/cow_amplification_bench_test.go`](../../internal/impl/iceberg/cow_amplification_bench_test.go).
+
+**Environment:** Apple M3 Pro, local filesystem (MinIO-class object storage behaviour), Iceberg REST catalog semantics via in-process harness
+
+**Dataset:** Synthetic (id, payload) rows, 1,000 rows per data file, ~128 B payload per row
+
+### Fraction of table rewritten
+
+| keys touched (K) | data files (M) | key placement    | table rewritten | per-row amplification |
+|------------------|----------------|------------------|-----------------|-----------------------|
+| 1                | 10             | single file      | 7.2%            | ~718x                 |
+| 10               | 10             | one per file     | 100%            |                       |
+| 100              | 200            | scattered        | ~49.9%          |                       |
+| 10               | 200            | scattered        | ~4.6%           |                       |
+| 100              | —              | all in one file  | one file        | ~7.3x                 |
+
+### Scale check (larger files)
+
+Repeating the sweep with 1 MB / 2 MB / 4 MB data files (M=4):
+
+- The K/M model holds at scale: copy-on-write rewrites every data file containing at least one touched key, so the fraction of the table rewritten is ≈ K/M for K keys scattered over M files.
+- A single-key touch rewrites the whole containing file, whatever its size.
+- Rewrite throughput was ~130 MB/sec with 1 MB files, rising to ~440 MB/sec with 4 MB files as per-commit overhead amortises.
+
+**Observations:**
+
+- **Write amplification is governed by key scatter, not key count:** 1 scattered key costs ~718x per-row amplification, while 100 keys clustered in a single file cost only ~7.3x. Workloads whose updates cluster by file (e.g. recent-data updates with time-ordered writes) amplify far less than uniformly random updates.
+- **Merge-on-read comparison:** the same mutations under `merge_strategy: merge-on-read` wrote only a ~2–4 KB equality-delete file regardless of K — copy-on-write trades that write cost for delete-file-free tables that engine-backed catalogs can read.
+
+---
+
+## Copy-on-write — Memory
+
+Measures the memory cost of materialising a keyed batch as a single Arrow record during a copy-on-write commit. Driven by `TestCOWRecordFactoryMemory` in [`internal/impl/iceberg/cow_amplification_bench_test.go`](../../internal/impl/iceberg/cow_amplification_bench_test.go).
+
+**Environment:** Apple M3 Pro, local filesystem, in-process harness
+
+**Dataset:** Synthetic rows, 256 B payload per row
+
+| metric                         | per row  | at 100k rows |
+|--------------------------------|----------|--------------|
+| retained during the commit     | ~700 B   | ~68 MB       |
+| transient allocation churn (GC-reclaimed) | ~4.25 kB | ~405 MB |
+
+**Observations:**
+
+- The keyed batch is materialised as one Arrow record for the duration of the commit. **Sizing guidance: budget the batch's materialised size (~700 B/row retained at this payload size) against process memory** when choosing `batching.count` for copy-on-write outputs; the transient churn is reclaimed by GC but adds CPU pressure at low core counts.
+
+---
+
+## Databricks Unity Catalog — Append Throughput vs Records per Commit
+
+Sustained append throughput of a single writer against a live Databricks Unity Catalog, varying records per commit. See [`internal/impl/iceberg/e2e/databricks/`](../../internal/impl/iceberg/e2e/databricks/) for the harness and run instructions.
+
+**Environment:** Databricks Unity Catalog, serverless workspace, Iceberg REST endpoint with customer-owned S3 storage (us-east-1); single writer
+
+**Dataset:** ~1.2 kB high-entropy JSON records
+
+**Count:** 3-minute wall-clock window per data point; zero commit errors across 112 commits total
+
+| records/commit | sustained rec/sec | commit p50 | commit p95 | commits/min |
+|----------------|-------------------|------------|------------|-------------|
+| 300            | 57                | 5.17s      | 5.97s      | 11.5        |
+| 5,000          | 846               | 5.94s      | 6.33s      | 10.2        |
+| 50,000         | 7,286             | 6.72s      | 7.44s      | 8.7         |
+| 200,000        | 20,595            | 9.65s      | 10.36s     | 6.2         |
+
+**Observations:**
+
+- **The pure-append commit floor on this catalog is ~5.2s p50** (compare ~320ms on AWS Glue), and it stays near-flat across a 667x batch-size range — so records per commit dominates throughput, exactly as the localhost benchmarks above predict.
+- **No throughput knee up to 200k records/commit:** throughput kept scaling with batch size across the whole sweep.
+
+---
+
+## Databricks Unity Catalog — Copy-on-write Commit Latency
+
+Copy-on-write upsert commit latency against the same live catalog, 3 commits per batch size. Driven by the flag-gated `TestDatabricksE2E_CommitLatencyBench` in [`internal/impl/iceberg/e2e/databricks/`](../../internal/impl/iceberg/e2e/databricks/).
+
+**Environment:** Databricks Unity Catalog, serverless workspace, Iceberg REST endpoint with customer-owned S3 storage (us-east-1); single writer
+
+**Dataset:** ~1.2 kB high-entropy JSON records
+
+| records/commit | commit wall time (3 runs) | throughput      |
+|----------------|---------------------------|-----------------|
+| 100            | 10.0s / 8.1s / 6.7s       | 10–15 rec/sec   |
+| 1,000          | 9.0s / 7.4s / 7.8s        | 111–135 rec/sec |
+| 5,000          | 9.7s / 6.9s / 6.7s        | 516–741 rec/sec |
+
+**Observations:**
+
+- **Wall time is dominated by the fixed per-commit cost** — a 50x larger batch commits in roughly the same time, so throughput scales ~linearly with batch size. As with appends, carry as many records per commit as memory allows (see the copy-on-write memory section above).
+
+To reproduce: the localhost benchmark configs live under [`internal/impl/iceberg/bench/`](../../internal/impl/iceberg/bench/), and the live-catalog harness under [`internal/impl/iceberg/e2e/databricks/`](../../internal/impl/iceberg/e2e/databricks/).
 
 ---
 

@@ -1,8 +1,8 @@
 module github.com/redpanda-data/connect/public/bundle/free/v4
 
-go 1.26.5
+go 1.26.6
 
-require github.com/redpanda-data/connect/v4 v4.103.1
+require github.com/redpanda-data/connect/v4 v4.106.0
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260209202127-80ab13bee0bf.1 // indirect
@@ -99,7 +99,7 @@ require (
 	github.com/go-faker/faker/v4 v4.7.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.0 // indirect
-	github.com/go-git/go-git/v5 v5.19.1 // indirect
+	github.com/go-git/go-git/v5 v5.19.2 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-mysql-org/go-mysql v1.14.0 // indirect
 	github.com/go-sql-driver/mysql v1.9.3 // indirect
@@ -170,7 +170,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
 	github.com/redis/go-redis/v9 v9.18.0 // indirect
-	github.com/redpanda-data/benthos/v4 v4.77.0 // indirect
+	github.com/redpanda-data/benthos/v4 v4.78.0 // indirect
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/sashabaranov/go-openai v1.41.2 // indirect
@@ -270,7 +270,7 @@ require (
 	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/apache/arrow/go/arrow v0.0.0-20211112161151-bc219186db40 // indirect
 	github.com/apache/arrow/go/v15 v15.0.2 // indirect
-	github.com/apache/thrift v0.23.0 // indirect
+	github.com/apache/thrift v0.24.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/ardielle/ardielle-go v1.5.2 // indirect
 	github.com/auth0/go-jwt-middleware/v2 v2.3.1 // indirect

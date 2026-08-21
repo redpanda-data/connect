@@ -26,6 +26,13 @@ const InvalidSCN SCN = 0
 // fit, so 18 is the safe upper bound.
 const MaxInt64DecimalPrecision = 18
 
+// MaxOracleNumberPrecision is Oracle's maximum declarable NUMBER precision.
+// It is also what the go-ora driver reports as the precision for NUMBER(*,s)
+// columns whose precision is undeclared, so the catalog side substitutes it
+// when ALL_TAB_COLUMNS reports a NULL DATA_PRECISION with a non-NULL scale —
+// see catalogNumberInfo.
+const MaxOracleNumberPrecision = 38
+
 // String formats the SCN to a string for logging.
 func (scn SCN) String() string {
 	return strconv.FormatUint(uint64(scn), 10)

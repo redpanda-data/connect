@@ -62,6 +62,7 @@ const (
 	ociFieldLOBEnabled           = "lob_enabled"
 	ociFieldTransactionCache     = "transaction_cache"
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
+	ociFieldMaxSessionAge        = "max_session_age"
 
 	//-- snapshot specific
 	ociFieldSnapshotFilters = "snapshot_filters"
@@ -94,6 +95,14 @@ This input adds the following metadata fields to each message:
 == Permissions
 
 When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
+
+== Performance
+
+Streaming throughput is bounded by the LogMiner session, not by CPU: each pipeline mines the redo stream through a single synchronous LogMiner reader, so adding cores to Redpanda Connect does not raise the capture rate. To capture more aggregate change volume from one database, run multiple pipelines that each ` + "`include`" + ` a disjoint set of tables — every pipeline gets its own LogMiner reader.
+
+Large transactions and driver fetch size: the Oracle driver fetches 25 rows per network round trip by default, which can make large committed transactions appear minutes late while the database, network and connector all look idle — each round trip costs a full network exchange, and a large transaction requires thousands of them. Raise the fetch size with the ` + "`PREFETCH_ROWS`" + ` query parameter on ` + "`" + ociFieldConnectionString + "`" + `, for example ` + "`?PREFETCH_ROWS=1000`" + `.
+
+Redo log retention must cover idle periods, not just outages: the SCN checkpoint only advances when messages are delivered, so a monitored table set that goes idle leaves the checkpoint stationary while the database ages out redo/archive logs. If the checkpointed SCN is no longer available when activity resumes or the pipeline restarts, the input cannot resume and repeatedly fails with ORA-01292. Ensure archive log retention exceeds the longest plausible idle period, and alert on a stagnant checkpoint SCN or repeated ORA errors.
 		`).
 	Field(service.NewStringField(ociFieldConnectionString).
 		Description("The connection string of the Oracle database to connect to. Additional connection options can be supplied as URL query parameters, for example: `oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true`.").
@@ -133,7 +142,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
 		Default(1)).
 	Field(service.NewIntField(ociFieldSnapshotMaxBatchSize).
-		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
+		Description("The maximum number of rows fetched per query when taking a snapshot of a table with a `" + ociFieldSnapshotFilters + "` entry configured. Tables without one are streamed through a single unordered cursor, where this value only paces how often a cancellation is checked.").
 		Default(1000),
 	).
 	// logminer config
@@ -181,6 +190,13 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 		service.NewStringField(ociFieldTransactionCacheKey).
 			Description("The key prefix used when storing transactions in `"+ociFieldTransactionCache+"`. An alternative prefix must be set if multiple `oracledb_cdc` inputs share the same cache resource, since Oracle transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance and would otherwise collide.").
 			Default(logminer.DefaultTransactionCacheKey).
+			Optional(),
+		service.NewDurationField(ociFieldMaxSessionAge).
+			Description("The maximum duration a single LogMiner session may stay open before being forcibly ended and restarted, even if the underlying redo log files haven't changed. By default, a LogMiner session is only restarted when a redo log switch is detected. On databases where switches are infrequent, a session can stay open for a long time, and LogMiner has been observed to accumulate server-side PGA memory (particularly around online catalog dictionary lookups) until Oracle terminates the session with ORA-04036. Setting this forces a periodic restart independent of log switches. Set to 0 (default) to disable and restart only on log switches.").
+			ShortDescription("Maximum duration before a LogMiner session is force-restarted, independent of redo log switches.").
+			Default(logminer.DefaultMaxSessionAge.String()).
+			Example("20m").
+			LintRule(`root = if this.parse_duration().catch(0) < 0 { [ "`+ociFieldMaxSessionAge+` must be 0 or greater" ] }`).
 			Optional(),
 	).Description("LogMiner configuration settings."),
 	).
@@ -834,6 +850,12 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.LOBEnabled, err = lmConf.FieldBool(ociFieldLOBEnabled); err != nil {
 			return nil, err
+		}
+		if cfg.MaxSessionAge, err = lmConf.FieldDuration(ociFieldMaxSessionAge); err != nil {
+			return nil, err
+		}
+		if cfg.MaxSessionAge < 0 {
+			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %s", ociFieldMaxSessionAge, cfg.MaxSessionAge)
 		}
 		// support cache_resources for buffering logminer transactions
 		if lmConf.Contains(ociFieldTransactionCache) {
