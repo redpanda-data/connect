@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
