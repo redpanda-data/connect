@@ -106,64 +106,10 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		if config.SignalTableName != "" {
 			return nil, errors.New("signal_table_name is not supported when schema_include is set")
 		}
-		schemas, inaccessibleSchemas, err := resolveSchemas(ctx, dbConn, config.DBSchemaInclude)
+		schemas, err := resolveIncludedSchemas(ctx, dbConn, config)
 		if err != nil {
-			return nil, fmt.Errorf("resolving schema_include pattern %q: %w", config.DBSchemaInclude, err)
+			return nil, err
 		}
-		matchedSchemas := schemas
-
-		if len(config.DBSchemaExclude) > 0 {
-			// Filtering happens entirely against the schemas slice we already
-			// fetched above - no extra DB round-trips per exclude pattern.
-			var excluded []string
-			remaining := make([]string, 0, len(schemas))
-			for _, schema := range schemas {
-				var isExcluded bool
-				for _, pattern := range config.DBSchemaExclude {
-					matched, err := schemaMatchesExcludePattern(schema, pattern)
-					if err != nil {
-						return nil, fmt.Errorf("evaluating schema_exclude pattern %q against schema %q: %w", pattern, schema, err)
-					}
-					if matched {
-						isExcluded = true
-						break
-					}
-				}
-				if isExcluded {
-					excluded = append(excluded, schema)
-					continue
-				}
-				remaining = append(remaining, schema)
-			}
-			if len(excluded) > 0 {
-				config.Logger.Infof("schema_exclude %v excluded %d schema(s) %v from schema_include pattern %q; %d schema(s) remain: %v", config.DBSchemaExclude, len(excluded), excluded, config.DBSchemaInclude, len(remaining), remaining)
-			}
-			schemas = remaining
-		}
-
-		if len(inaccessibleSchemas) > 0 && !slices.Equal(inaccessibleSchemas, config.previouslyInaccessibleSchemas) {
-			config.Logger.Warnf("schema_include pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", config.DBSchemaInclude, inaccessibleSchemas)
-		}
-		config.previouslyInaccessibleSchemas = slices.Clone(inaccessibleSchemas)
-
-		if len(schemas) == 0 {
-			if len(matchedSchemas) > 0 {
-				return nil, fmt.Errorf("schema_include pattern %q matched schema(s) %v, but schema_exclude %v excluded all of them", config.DBSchemaInclude, matchedSchemas, config.DBSchemaExclude)
-			}
-			return nil, fmt.Errorf("no schemas found matching schema_include pattern %q", config.DBSchemaInclude)
-		}
-		config.Logger.Infof("schema_include pattern %q resolved to %d schema(s): %v", config.DBSchemaInclude, len(schemas), schemas)
-
-		if config.previouslyResolvedSchemas != nil {
-			added, removed := diffSchemaSets(config.previouslyResolvedSchemas, schemas)
-			if len(added) > 0 {
-				config.Logger.Warnf("schema_include pattern %q now also matches schema(s) %v that did not match on the previous connect; their tables are being added to the publication, but any rows already in them will NOT be snapshotted even if stream_snapshot is enabled - only changes made from now on will be captured", config.DBSchemaInclude, added)
-			}
-			if len(removed) > 0 {
-				config.Logger.Warnf("schema(s) %v no longer match schema_include pattern %q (dropped, renamed, or the role lost USAGE) since the previous connect; their tables are being removed from the publication and will stop replicating", removed, config.DBSchemaInclude)
-			}
-		}
-		config.previouslyResolvedSchemas = slices.Clone(schemas)
 
 		normalizedTables := make([]string, 0, len(config.DBTables))
 		for _, table := range config.DBTables {

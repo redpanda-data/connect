@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -128,6 +129,73 @@ func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (v
 	}
 
 	return schemas, hidden, nil
+}
+
+// resolveIncludedSchemas resolves config.DBSchemaInclude against conn,
+// applies config.DBSchemaExclude filtering, and logs schema-set drift
+// against the previous resolution cached on config (see
+// Config.previouslyResolvedSchemas)
+func resolveIncludedSchemas(ctx context.Context, conn *pgconn.PgConn, cfg *Config) ([]string, error) {
+	schemas, inaccessibleSchemas, err := resolveSchemas(ctx, conn, cfg.DBSchemaInclude)
+	if err != nil {
+		return nil, fmt.Errorf("resolving schema_include pattern %q: %w", cfg.DBSchemaInclude, err)
+	}
+	matchedSchemas := schemas
+
+	if len(cfg.DBSchemaExclude) > 0 {
+		// Filtering happens entirely against the schemas slice we already
+		// fetched above - no extra DB round-trips per exclude pattern.
+		var excluded []string
+		remaining := make([]string, 0, len(schemas))
+		for _, schema := range schemas {
+			var isExcluded bool
+			for _, pattern := range cfg.DBSchemaExclude {
+				matched, err := schemaMatchesExcludePattern(schema, pattern)
+				if err != nil {
+					return nil, fmt.Errorf("evaluating schema_exclude pattern %q against schema %q: %w", pattern, schema, err)
+				}
+				if matched {
+					isExcluded = true
+					break
+				}
+			}
+			if isExcluded {
+				excluded = append(excluded, schema)
+				continue
+			}
+			remaining = append(remaining, schema)
+		}
+		if len(excluded) > 0 {
+			cfg.Logger.Infof("schema_exclude %v excluded %d schema(s) %v from schema_include pattern %q; %d schema(s) remain: %v", cfg.DBSchemaExclude, len(excluded), excluded, cfg.DBSchemaInclude, len(remaining), remaining)
+		}
+		schemas = remaining
+	}
+
+	if len(inaccessibleSchemas) > 0 && !slices.Equal(inaccessibleSchemas, cfg.previouslyInaccessibleSchemas) {
+		cfg.Logger.Warnf("schema_include pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", cfg.DBSchemaInclude, inaccessibleSchemas)
+	}
+	cfg.previouslyInaccessibleSchemas = slices.Clone(inaccessibleSchemas)
+
+	if len(schemas) == 0 {
+		if len(matchedSchemas) > 0 {
+			return nil, fmt.Errorf("schema_include pattern %q matched schema(s) %v, but schema_exclude %v excluded all of them", cfg.DBSchemaInclude, matchedSchemas, cfg.DBSchemaExclude)
+		}
+		return nil, fmt.Errorf("no schemas found matching schema_include pattern %q", cfg.DBSchemaInclude)
+	}
+	cfg.Logger.Infof("schema_include pattern %q resolved to %d schema(s): %v", cfg.DBSchemaInclude, len(schemas), schemas)
+
+	if cfg.previouslyResolvedSchemas != nil {
+		added, removed := diffSchemaSets(cfg.previouslyResolvedSchemas, schemas)
+		if len(added) > 0 {
+			cfg.Logger.Warnf("schema_include pattern %q now also matches schema(s) %v that did not match on the previous connect; their tables are being added to the publication, but any rows already in them will NOT be snapshotted even if stream_snapshot is enabled - only changes made from now on will be captured", cfg.DBSchemaInclude, added)
+		}
+		if len(removed) > 0 {
+			cfg.Logger.Warnf("schema(s) %v no longer match schema_include pattern %q (dropped, renamed, or the role lost USAGE) since the previous connect; their tables are being removed from the publication and will stop replicating", removed, cfg.DBSchemaInclude)
+		}
+	}
+	cfg.previouslyResolvedSchemas = slices.Clone(schemas)
+
+	return schemas, nil
 }
 
 // resolveExistingTables returns the quoted names of the publishable base
