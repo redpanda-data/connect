@@ -68,10 +68,17 @@ matrix:
   cpu_points: [4]
   arms:
     - id: a0-insert          # baseline: append-only, comparable to orders-sink@4
+    # Both upsert arms run max_in_flight: 1 — not a tuning choice but the
+    # output's own rule: it LINTS OUT upsert/delete with max_in_flight > 1
+    # (concurrent batches may commit out of order and corrupt the
+    # last-writer-wins result; verified the hard way 2026-08-21 when mif16
+    # upsert arms failed the lint at startup and ran as silent zeros). This
+    # also makes the arms the honest keyed-CDC configuration.
     - id: upsert-mor
       pipeline:
         output:
           iceberg:
+            max_in_flight: 1
             row_operation: upsert
             identifier_fields: [id]
             # merge-on-read is the default; explicit so the A/B reads clearly
@@ -80,6 +87,7 @@ matrix:
       pipeline:
         output:
           iceberg:
+            max_in_flight: 1
             row_operation: upsert
             identifier_fields: [id]
             merge_strategy: copy-on-write

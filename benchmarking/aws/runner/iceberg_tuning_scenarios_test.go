@@ -106,6 +106,13 @@ func TestUpsertScenario_ArmsRenderRowOperationAndMergeStrategy(t *testing.T) {
 	mor := icebergOutputOf(t, renderArm(t, path, "upsert-mor"))
 	require.Equal(t, "merge-on-read", mor["merge_strategy"])
 
+	// The output LINTS OUT upsert/delete with max_in_flight > 1 (out-of-order
+	// commits corrupt last-writer-wins); an arm violating this fails at
+	// startup and benches as silent zeros — hit live 2026-08-21.
+	for _, ice := range []map[string]any{cow, mor} {
+		require.Equal(t, 1, ice["max_in_flight"], "keyed arms must run max_in_flight: 1")
+	}
+
 	// The bench-managed fields must still be decorated on every arm.
 	for _, ice := range []map[string]any{insert, cow, mor} {
 		require.Equal(t, "bench_sess_x_iceberg_connect", ice["table"])
