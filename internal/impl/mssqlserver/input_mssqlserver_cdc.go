@@ -572,6 +572,12 @@ func (i *sqlServerCDCInput) Close(ctx context.Context) error {
 	if i.stopSig == nil {
 		return nil // Never connected
 	}
+	// Mark the publisher as stopping BEFORE any cancellation propagates: the
+	// session's contexts unwind off stopSig, and sendTracked needs the flag
+	// already visible to log the graceful unwind at debug rather than warn.
+	if pub := i.publisher.Load(); pub != nil {
+		pub.stopping.Store(true)
+	}
 	i.stopSig.TriggerSoftStop()
 	// Shut the publisher down alongside the session: its timed-flush loop
 	// runs under the publisher's OWN signaller, and a flush parked in

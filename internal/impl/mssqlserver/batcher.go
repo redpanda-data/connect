@@ -53,6 +53,12 @@ type batchPublisher struct {
 	// tracked - sealing guarantees nothing ever is, so no ack can persist an
 	// LSN past them before Connect rebuilds the poisoned publisher.
 	sealed bool
+	// stopping is set by the input's Close BEFORE any cancellation
+	// propagates, so sendTracked can distinguish the expected
+	// graceful-shutdown unwind (debug) from a send that fails while the
+	// pipeline is meant to be live (warn) - relying on the publisher's own
+	// shutSig alone is racy on the streaming path.
+	stopping atomic.Bool
 	// closed marks the batcher as torn down (guarded by batcherMu): the
 	// flush loop's deferred batcher.Close races in-flight Publish calls
 	// otherwise, and the batcher is not goroutine-safe.
@@ -533,7 +539,7 @@ func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch)
 		// Resolving the slot here instead would be unsafe - another flusher
 		// may already have delivered a later-tracked batch, and its ack would
 		// then persist an LSN past these undelivered rows.
-		if b.shutSig.IsSoftStopSignalled() {
+		if b.stopping.Load() || b.shutSig.IsSoftStopSignalled() {
 			// Expected on a graceful stop: nothing drains msgChan once
 			// ReadBatch stops, and Close cancels this send. Not a fault.
 			b.log.Debugf("Batch of %d messages undelivered at shutdown; its rows re-read from the last durable LSN on the next run", len(tracked.msgs.msg))
