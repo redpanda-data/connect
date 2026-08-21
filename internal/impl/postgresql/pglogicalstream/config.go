@@ -16,6 +16,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/multischema"
 )
 
 // Config is the configuration for the pglogicalstream plugin
@@ -27,11 +29,9 @@ type Config struct {
 	DBSchema  string
 	DBTables  []string
 
-	// Multi schema support
-	DBSchemaInclude               string
-	DBSchemaExclude               []string
-	previouslyResolvedSchemas     []string // track and report on resolved schemas between reconnects
-	previouslyInaccessibleSchemas []string
+	// SchemaResolver resolves schema_include/schema_exclude into the schemas
+	// to replicate. Non-nil only when schema_include is set.
+	SchemaResolver *multischema.Resolver
 
 	// Refreshes short lived IAM auth token that is treated as a password
 	RefreshAuthToken func(ctx context.Context) error

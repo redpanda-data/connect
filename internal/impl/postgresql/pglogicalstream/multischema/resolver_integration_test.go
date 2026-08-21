@@ -6,11 +6,12 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package pglogicalstream
+package multischema
 
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -19,9 +20,59 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
+
+// closeConn and createDockerInstance mirror the identically named helpers in
+// pglogicalstream/pglogrepl_test.go - duplicated here rather than shared,
+// since they're small, self-contained, and this package must not import the
+// pglogicalstream test package.
+func closeConn(t testing.TB, conn *pgconn.PgConn) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, conn.Close(ctx))
+}
+
+func createDockerInstance(t *testing.T) (cleanup func(), dbURL string) {
+	ctr, err := testcontainers.Run(t.Context(), "postgres:16",
+		testcontainers.WithExposedPorts("5432/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"POSTGRES_PASSWORD": "secret",
+			"POSTGRES_USER":     "user_name",
+			"POSTGRES_DB":       "dbname",
+		}),
+		testcontainers.WithCmd("postgres", "-c", "wal_level=logical"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("5432/tcp").WithStartupTimeout(2*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+
+	host, err := ctr.Host(t.Context())
+	require.NoError(t, err)
+	mp, err := ctr.MappedPort(t.Context(), "5432/tcp")
+	require.NoError(t, err)
+
+	databaseURL := fmt.Sprintf("user=user_name password=secret dbname=dbname sslmode=disable host=%s port=%s replication=database", host, mp.Port())
+
+	var db *sql.DB
+	require.Eventually(t, func() bool {
+		if db, err = sql.Open("postgres", databaseURL); err != nil {
+			return false
+		}
+		return db.Ping() == nil
+	}, 2*time.Minute, time.Second)
+
+	cleanup = func() {
+		// Container cleanup is handled by testcontainers.CleanupContainer
+	}
+
+	return cleanup, databaseURL
+}
 
 // TestIntegrationResolveSchemasReportsInaccessibleSchemas verifies that a
 // schema pattern matching a schema the connecting role lacks USAGE on is
