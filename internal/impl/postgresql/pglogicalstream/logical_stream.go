@@ -153,7 +153,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			if len(tables) == 0 {
 				return nil, fmt.Errorf("no tables found in schema(s) %v matching schema_include pattern %q", schemas, config.DBSchemaInclude)
 			}
-			config.Logger.Infof("%q has no `tables` list configured: auto-discovered %d table(s) across %d schema(s)", config.DBSchemaInclude, len(tables), len(schemas))
+			config.Logger.Debugf("%q has no `tables` list configured: auto-discovered %d table(s) across %d schema(s)", config.DBSchemaInclude, len(tables), len(schemas))
 		} else {
 			// A table must exist in at least one matched schema. Missing from some
 			// (but not all) matched schemas is tolerated above as a multi-tenant gap;

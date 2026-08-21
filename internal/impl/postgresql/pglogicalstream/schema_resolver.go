@@ -143,7 +143,7 @@ func resolveIncludedSchemas(ctx context.Context, conn *pgconn.PgConn, cfg *Confi
 			remaining = append(remaining, schema)
 		}
 		if len(excluded) > 0 {
-			cfg.Logger.Infof("schema_exclude %v excluded %d schema(s) %v from schema_include pattern %q; %d schema(s) remain: %v", cfg.DBSchemaExclude, len(excluded), excluded, cfg.DBSchemaInclude, len(remaining), remaining)
+			cfg.Logger.Debugf("schema_exclude %v excluded %d schema(s) %v from schema_include pattern %q; %d schema(s) remain: %v", cfg.DBSchemaExclude, len(excluded), excluded, cfg.DBSchemaInclude, len(remaining), remaining)
 		}
 		schemas = remaining
 	}
@@ -159,7 +159,7 @@ func resolveIncludedSchemas(ctx context.Context, conn *pgconn.PgConn, cfg *Confi
 		}
 		return nil, fmt.Errorf("no schemas found matching schema_include pattern %q", cfg.DBSchemaInclude)
 	}
-	cfg.Logger.Infof("schema_include pattern %q resolved to %d schema(s): %v", cfg.DBSchemaInclude, len(schemas), schemas)
+	cfg.Logger.Debugf("schema_include pattern %q resolved to %d schema(s): %v", cfg.DBSchemaInclude, len(schemas), schemas)
 
 	if cfg.previouslyResolvedSchemas != nil {
 		added, removed := diffSchemaSets(cfg.previouslyResolvedSchemas, schemas)
