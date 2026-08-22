@@ -1,0 +1,33 @@
+# Explicit project name: Compose defaults to the directory basename
+# ("streaming"), which could collide with any other same-named leaf dir.
+name: rpcns-snowflake-streaming
+
+services:
+  kafka-connect:
+    build:
+      context: ${SNOWFLAKE_BENCH_DIR:-../..}
+      dockerfile: Dockerfile.connect.snowflake
+      args:
+        SF_KC_VERSION: ${SF_KC_VERSION:-3.4.0}
+    container_name: rpcns-snowflake-streaming-connect
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:29092
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: rpcns-snowflake-streaming-connect-group
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: com.snowflake.kafka.connector.records.SnowflakeJsonConverter
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/kafka-connect-snowflake
+      CONNECT_REST_ADVERTISED_HOST_NAME: localhost
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8083/connectors || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30

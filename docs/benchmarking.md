@@ -310,12 +310,13 @@ Example from the SQL Server CDC benchmark PR:
 
 For a non-technical overview suitable for sales, marketing, and other non-engineering audiences, see the [Performance Summary](benchmark-results/SUMMARY.md).
 
-| Component | Bench Suite | Results | Throughput | Notes |
-|---|---|---|---|---|
-| Redpanda Migrator | [`internal/impl/redpanda/migrator/bench/`](../internal/impl/redpanda/migrator/bench/) | [results](benchmark-results/redpanda-migrator.md) | 1 GB/s+, 1M msg/sec | Cluster-to-cluster, 30GB transfer |
-| SQL Server CDC | [`internal/impl/mssqlserver/bench/`](../internal/impl/mssqlserver/bench/) | [results](benchmark-results/mssqlserver-cdc.md) | ~135 MB/sec, 100K msg/sec | Single connection bottleneck |
-| Oracle CDC | [`internal/impl/oracledb/bench/`](../internal/impl/oracledb/bench/) | [results](benchmark-results/oracledb-cdc.md) | ~50K msg/sec (streaming) | LogMiner single-threaded limitation |
-| DynamoDB CDC | [`internal/impl/aws/dynamodb/bench/`](../internal/impl/aws/dynamodb/bench/) | [results](benchmark-results/dynamodb-cdc.md) | ~200 MB/sec, 100K msg/sec | DynamoDB Local, 3 tables x 150K items |
+| Component         | Bench Suite                                                                           | Results                                           | Throughput                                                        | Notes                                                         |
+| ----------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| Redpanda Migrator | [`internal/impl/redpanda/migrator/bench/`](../internal/impl/redpanda/migrator/bench/) | [results](benchmark-results/redpanda-migrator.md) | 1 GB/s+, 1M msg/sec                                               | Cluster-to-cluster, 30GB transfer                             |
+| SQL Server CDC    | [`internal/impl/mssqlserver/bench/`](../internal/impl/mssqlserver/bench/)             | [results](benchmark-results/mssqlserver-cdc.md)   | ~135 MB/sec, 100K msg/sec                                         | Single connection bottleneck                                  |
+| Oracle CDC        | [`internal/impl/oracledb/bench/`](../internal/impl/oracledb/bench/)                   | [results](benchmark-results/oracledb-cdc.md)      | ~50K msg/sec (streaming)                                          | LogMiner single-threaded limitation                           |
+| DynamoDB CDC      | [`internal/impl/aws/dynamodb/bench/`](../internal/impl/aws/dynamodb/bench/)           | [results](benchmark-results/dynamodb-cdc.md)      | ~200 MB/sec, 100K msg/sec                                         | DynamoDB Local, 3 tables x 150K items                         |
+| Snowflake (write) | [`internal/impl/snowflake/bench/`](../internal/impl/snowflake/bench/)                 | [results](benchmark-results/snowflake.md)         | streaming ~40K msg/sec, 5.8 MB/sec; bulk ~36K msg/sec, 5.1 MB/sec | BATCH/MAX_IN_FLIGHT are the tunable knobs for both connectors |
 
 ## Keeping Results Up to Date
 
