@@ -1,0 +1,31 @@
+// Add this entry to kcConnectorSpecs in benchmarking/aws/runner/kcconnectors.go.
+//
+// Steps:
+//   1. Pick the KC plugin from references/kc-connector-mapping.md.
+//   2. If the plugin isn't already installed, add it to the runner's cloud-init
+//      (see references/kc-connector-mapping.md#adding-a-new-kc-plugin-cloud-init-step).
+//   3. Copy the postgres or mysql entry as a starting template and adjust.
+//   4. Set snapshot.mode according to whether your engine needs an offset.
+//   5. Set RequiredPlugins glob to match the installed plugin.
+
+"{{CONNECTOR}}": {
+    Class:     "<TODO: e.g. io.debezium.connector.sqlserver.SqlServerConnector>",
+    Direction: kcSource,  // or kcSink
+    PropsTemplate: `{
+  "connector.class": "<TODO same as Class>",
+  "tasks.max": "1",
+  "database.hostname": "{{.Host}}",
+  "database.port": "{{.Port}}",
+  "database.user": "{{.User}}",
+  "database.password": "{{.Password}}",
+  "database.dbname": "{{.Database}}",
+  "topic.prefix": "{{.TopicPrefix}}",
+  "table.include.list": "{{.SchemaTables}}",
+  "snapshot.mode": "<TODO: never | no_data | initial>",
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "false",
+  "value.converter.schemas.enable": "false"
+}`,
+    RequiredPlugins: []string{"<TODO: e.g. debezium-connector-sqlserver*>"},
+},

@@ -1,0 +1,96 @@
+name: iceberg-orders-7table-consolidation
+description: |
+  Can 7 one-core pipelines become one process? A customer runs 7 topics -> 7
+  Iceberg tables as 7 separate pipelines at 1 core each (7 cores total) and wants
+  to cut cores. This measures the two consolidation topologies at 2 and 4 cores:
+
+    streams7  one process, 7 streams; stream i reads topic i, writes table i.
+              Independent commit paths, but 7 consumer clients and 7 buffers.
+    fanin     one process, one pipeline subscribed to all 7 topics, one iceberg
+              output routing by interpolated table name. One client, one buffer.
+
+  Both arms write the SAME 7 topic-derived tables (fan-in gets there by
+  interpolating the table from ${! @kafka_topic }), so the metric sidecar sums an
+  identical table set for every arm and one reset serves both — without that the
+  arms would not be measuring the same thing.
+
+  Resources are held constant so this is a topology comparison, not a resource
+  one: streams7 divides the 500 MiB buffer and the 16 in-flight budget by 7.
+
+  fanin batches x7 deliberately. internal/impl/iceberg/router.go groups a batch
+  per table and writes each group SEQUENTIALLY, so a fan-in batch yields 7 writes
+  of 1/7 the size. Without scaling the batch up we would be measuring our own
+  misconfiguration rather than the topology.
+
+  Not measured here: the customer's actual 7x1-core baseline, which needs 7
+  concurrent processes. The published 1-vCPU numbers (15.9 MB/s Recipe A / 38.3
+  Recipe B) bracket it, and that 2.4x spread is exactly the range where the answer
+  flips between "one 4-core process replaces all 7 cores" and "one process cannot
+  reach their aggregate at any core count". Their real per-pipeline throughput is
+  the decisive input and is cheaper to ask for than to measure.
+
+direction: sink
+connector: iceberg
+stack: iceberg
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  # 119,000,000 = 7 x 17,000,000 exactly (Validate requires an exact split).
+  # 1200 B/row => ~143 GB total, ~20.4 GB per topic. Validate's bounded-dataset
+  # check is MiB/s: 136,185 MiB / 145 = 939 s, over the 900 s floor. 145 also sits
+  # above the ~122 MB/s single-process ceiling observed at 4-8 vCPU, so the topics
+  # cannot drain mid-window even if fan-in surprises us.
+  initial_rows: 119000000
+  row_size_bytes: 1200
+  topics: 7
+  partitions_per_topic: 4
+  seeder: json-orders
+  expected_peak_mb_s: 145
+
+pipeline:
+  # Recipe A shape, the base both arms inherit and override.
+  buffer:
+    memory:
+      limit: 524288000   # 500 MiB
+      batch_policy:
+        count: 10000
+        period: 10s
+  output:
+    iceberg:
+      max_in_flight: 16
+      batching:
+        count: 10000
+        period: 10s
+      commit:
+        max_snapshot_age: 24h
+
+matrix:
+  # 2 cpu_points x 2 arms = 4 points, within the 8-point guard.
+  # GOMAXPROCS is left unset so it defaults to the vCPU pin — oversubscription is
+  # a separate question, already answered by orders-sink-streams-ab.
+  cpu_points: [2, 4]
+  arms:
+    - id: streams7
+      streams: 7
+      pipeline:
+        buffer:
+          memory:
+            limit: 74898285   # 500 MiB / 7, so total buffered memory matches fanin
+        output:
+          iceberg:
+            max_in_flight: 2  # 2 x 7 = 14, closest even split of the 16 budget
+    - id: fanin
+      fan_in: true
+      streams: 1
+      pipeline:
+        buffer:
+          memory:
+            batch_policy:
+              count: 70000    # x7: each per-table group lands near the 10000 baseline
+        output:
+          iceberg:
+            batching:
+              count: 70000

@@ -248,6 +248,18 @@ task pprof:block
 
 For long-running profiling sessions, consider a streaming data generator that produces continuous load (see the migrator's `loader-streaming.yaml` which generates ~100MB/s indefinitely).
 
+## Running on AWS (production-shaped numbers)
+
+For the published per-connector throughput numbers in `docs/benchmark-results/`,
+benchmarks run on real AWS infrastructure via the framework under
+[`benchmarking/aws/`](../benchmarking/aws/). One command provisions infra,
+sweeps a `[1, 2, 4, 8]` vCPU matrix, renders results into
+`docs/benchmark-results/<connector>.md`, and tears down. See the
+[AWS framework README](../benchmarking/aws/README.md) for the operator workflow.
+
+Local Docker benchmarks under `internal/impl/<connector>/bench/` remain the
+developer-iteration path; AWS runs are for numbers we publish.
+
 ## Reporting Results
 
 Record benchmark results **in the PR description**. Include:

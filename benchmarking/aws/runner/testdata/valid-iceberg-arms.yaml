@@ -1,0 +1,53 @@
+name: iceberg-orders-sink-streams-ab
+description: arms fixture
+direction: sink
+connector: iceberg
+stack: iceberg
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  # 110M rows @ 1200B clears the 15-min bounded-dataset floor at 133 MB/s
+  # (100M rows would estimate ~860s, just under the 900s minimum).
+  initial_rows: 110000000
+  row_size_bytes: 1200
+  seeder: json-orders
+  expected_peak_mb_s: 133
+
+pipeline:
+  buffer:
+    memory:
+      limit: 524288000
+      batch_policy:
+        count: 10000
+        period: 10s
+  output:
+    iceberg:
+      max_in_flight: 16
+      batching:
+        count: 10000
+        period: 10s
+      commit:
+        max_snapshot_age: 24h
+
+matrix:
+  cpu_points: [2]
+  arms:
+    - id: a0-1pipe-gmp2
+      gomaxprocs: 2
+      streams: 1
+    - id: a1-1pipe-gmp4
+      gomaxprocs: 4
+      streams: 1
+    - id: b-2pipe-gmp4
+      gomaxprocs: 4
+      streams: 2
+      pipeline:
+        buffer:
+          memory:
+            limit: 262144000
+        output:
+          iceberg:
+            max_in_flight: 8

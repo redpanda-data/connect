@@ -1,0 +1,28 @@
+// Add this entry to engineSpecs in benchmarking/aws/runner/scenario.go.
+//
+// Pick ONE of two patterns:
+//
+// PATTERN A -- DSN-only (engine's CLI accepts a connection-string URL, e.g. psql):
+//
+//     "{{CONNECTOR}}": {
+//         DSNOutputKey: "{{ENGINE}}_dsn",
+//         DSNEnvVar:    "{{ENGINE}}_DSN",
+//     },
+//
+// PATTERN B -- discrete fields (engine's CLI wants -h/-P/-u/-p, e.g. mysql):
+//
+//     "{{CONNECTOR}}": {
+//         DSNOutputKey:       "{{ENGINE}}_dsn",
+//         DSNEnvVar:          "{{ENGINE}}_DSN",
+//         ResetHostOutputKey: "{{ENGINE}}_host",
+//         ResetPortOutputKey: "{{ENGINE}}_port",
+//         ResetUserOutputKey: "{{ENGINE}}_user",
+//         ResetPassOutputKey: "{{ENGINE}}_password",
+//         ResetDBOutputKey:   "{{ENGINE}}_db",
+//     },
+//
+// Decision rule: try the DSN form first; if the engine's CLI doesn't accept it,
+// use the discrete form. See references/exemplar-tour.md.
+//
+// NOTE: DSNEnvVar is typically the uppercase engine name + "_DSN", e.g. SQLSERVER_DSN.
+// Adjust if your engine name has special characters (hyphens -> underscores).

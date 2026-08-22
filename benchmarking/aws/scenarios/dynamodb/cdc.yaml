@@ -1,0 +1,88 @@
+name: dynamodb-cdc
+description: |
+  Stream changes from a DynamoDB table under sustained PutItem load so the
+  aws_dynamodb_cdc input — not the producer — is the bottleneck across the
+  CPU sweep. Drop + recreate the table between sweep points (TRUNCATE doesn't
+  exist on DDB) to reset the stream ARN and shard state.
+
+  Connect-only initially: no Debezium DynamoDB connector ships in the bench
+  cloud-init, so engines=[connect]. Head-to-head with a paid KC connector
+  is deferred.
+
+connector: aws_dynamodb_cdc
+stack: dynamodb
+
+infra:
+  source:
+    # Every key under infra.source is forwarded to `terraform apply` as a -var
+    # flag (see main.go::translateInfraSource), so the key names below must
+    # match variables declared in terraform/stacks/dynamodb/variables.tf.
+    # Billing mode is hardcoded PROVISIONED in the module (terraform/modules/
+    # dynamodb-bench/main.tf) and is not a TF variable — don't add it here.
+    #
+    # Sized to AWS's default per-table WCU quota of 40,000. 4KB items at
+    # 10K PutItems/sec = 40K WCU sustained, ~40 MB/s producer. Connect saw
+    # 5.7 MB/s at 1 vCPU in the earlier smoke; at 40 MB/s producer it should
+    # saturate around 4 vCPU (postgres/mysql benches plateau around 100 MB/s
+    # but on a higher ceiling). To probe the 100 MB/s ceiling, request a DDB
+    # WCU quota increase via AWS Service Quotas and bump this to 120000.
+    # NOTE: full sweep's reset bash recreates the table with WriteCapacityUnits
+    # hardcoded to 10000 — that's incorrect for this sizing. Fix before sweep.
+    read_capacity: 1000
+    write_capacity: 40000
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0          # Reset hook drops + recreates the table; no seed survives anyway.
+  row_size_bytes: 4096     # 4KB items consume 4 WCU each — fewer ops/sec for the same MB/s.
+  tables: [rpcn_bench_ddb_orders]
+  seeder: cdc-ddb
+
+workload:
+  # 9K PutItems/sec × 4 KB ≈ 36 MB/s producer, 36K WCU sustained. ~10% headroom
+  # under the 40K WCU table quota so the load-gen doesn't burn DDB's burst
+  # credits and hit ProvisionedThroughputExceededException late in long runs
+  # (observed in the 10K/sec smoke). To probe Connect past ~36 MB/s, request
+  # an AWS WCU quota increase or split across multiple tables.
+  write_rate_per_sec: 9000
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  input:
+    aws_dynamodb_cdc:
+      tables: [rpcn_bench_ddb_orders]
+      region: ${AWS_REGION}
+      # Default checkpoint_table name; the reset hook below drops it between
+      # sweep points so each point starts with no prior shard state.
+      checkpoint_table: redpanda_dynamodb_checkpoints
+      # snapshot_mode=none means CDC-only — no initial table scan.
+      snapshot_mode: none
+      # start_from: latest lets us begin reading immediately after table recreate
+      # without waiting for trim_horizon to materialize.
+      start_from: latest
+
+matrix:
+  cpu_points: [1, 2, 4, 8]
+
+reset:
+  # Between sweep points we only need to reset the CONNECTOR's position, not
+  # the source data. Connect's aws_dynamodb_cdc input reads DDB Streams (not
+  # table items) and resumes from its checkpoint table. Dropping the checkpoint
+  # table forces the next process to fall back to `start_from: latest` — the
+  # connector skips to the current stream tail and only reads records written
+  # during the upcoming sweep point's workload window.
+  #
+  # The source TABLE is left intact across sweep points. It grows ~9K items/sec
+  # × 17min × 4 points ≈ 37M items / 150GB by end-of-sweep, which is fine for
+  # the run (DDB storage is ~$0.001 per GB-hour). The final terraform destroy
+  # handles teardown with the 30m timeout override on the table resource.
+  #
+  # NOTE: this is intentionally different from the postgres/mysql benches.
+  # Their reset TRUNCATEs the source table because their connectors read FROM
+  # the table (via logical_replication / binlog), so leftover rows leak into
+  # the next sweep point's measurement. DDB Streams isolates source rows from
+  # the connector's view.
+  - bash: "aws dynamodb delete-table --table-name redpanda_dynamodb_checkpoints --region ${AWS_REGION} 2>/dev/null || true"
+  - bash: "aws dynamodb wait table-not-exists --table-name redpanda_dynamodb_checkpoints --region ${AWS_REGION} 2>/dev/null || true"

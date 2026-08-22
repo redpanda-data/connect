@@ -1,0 +1,81 @@
+name: iceberg-orders-sink-streams-ab
+description: |
+  A/B at a fixed 2-vCPU pin: does splitting one iceberg pipeline into two
+  streams-mode pipelines buy throughput when GOMAXPROCS oversubscribes the core
+  allocation? Connect counts licensed cores off the machine CPU rather than
+  GOMAXPROCS, so raising it is free; the iceberg output is commit-latency-bound
+  (Glue REST + S3), so blocked goroutines can otherwise leave the pinned cores
+  idle.
+
+  Three arms, all pinned to the same two cores, all Connect-only, all with the
+  same vCPU-derived GOMEMLIMIT:
+    a0-1pipe-gmp2  in-session baseline (GOMAXPROCS == cores, as every prior sweep)
+    a1-1pipe-gmp4  isolates the GOMAXPROCS oversubscription effect
+    b-2pipe-gmp4   adds the pipeline split on top
+
+  Arm B halves each stream's buffer and max_in_flight so total buffered memory
+  (500 MiB) and total in-flight budget (16) match arms A — a pure topology
+  comparison, not a resource-budget one. Both streams consume the same topic
+  under the same consumer group (16 partitions split 8/8) and each writes its
+  own Iceberg table; the arm's throughput is the summed committed-bytes growth.
+
+  Base config is Recipe A from docs/benchmark-results/iceberg-recipe-comparison.md,
+  which won at 2 vCPU (69.1 vs 64.1 MB/s).
+
+direction: sink
+connector: iceberg
+stack: iceberg
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  # 110M x 1200 B = ~132 GB = 125,885 MiB. The window is 15 min at 0 s warmup,
+  # so the topic must hold 900 s x peak. A drained topic silently deflates the
+  # arm's mean instead of failing, so size for the upside: 132 GB sustains
+  # ~140 MiB/s for the full window, and Scenario.Validate's bounded-dataset
+  # check (total MiB / expected_peak_mb_s >= 15 min) estimates 946 s. 80 GB or
+  # 96 GB would drain around 107 MiB/s — exactly the outcome under test.
+  initial_rows: 110000000
+  row_size_bytes: 1200
+  seeder: json-orders
+  expected_peak_mb_s: 133
+
+pipeline:
+  # Recipe A (order-preserving) + output batching, per-stream. Arm B's override
+  # halves the buffer limit and max_in_flight so the totals match arms A.
+  buffer:
+    memory:
+      limit: 524288000   # 500 MiB
+      batch_policy:
+        count: 10000
+        period: 10s
+  output:
+    iceberg:
+      max_in_flight: 16
+      batching:
+        count: 10000
+        period: 10s
+      commit:
+        max_snapshot_age: 24h
+
+matrix:
+  cpu_points: [2]
+  arms:
+    - id: a0-1pipe-gmp2
+      gomaxprocs: 2
+      streams: 1
+    - id: a1-1pipe-gmp4
+      gomaxprocs: 4
+      streams: 1
+    - id: b-2pipe-gmp4
+      gomaxprocs: 4
+      streams: 2
+      pipeline:
+        buffer:
+          memory:
+            limit: 262144000   # 250 MiB x 2 streams == 500 MiB total
+        output:
+          iceberg:
+            max_in_flight: 8   # 8 x 2 streams == 16 total

@@ -17,4 +17,17 @@ __pycache__
 *.test.exe
 compile_out.txt
 test_output.txt
+
+# Redpanda licenses — credentials, never commit
+*.license
+*.jwt
+rpcn_license
+rpcn.license
+
+# Local Claude Code harness state
+.claude/
+
+# Stray binaries that go-run sometimes drops at the repo root
+/runner
+
 benchmark_results.json
