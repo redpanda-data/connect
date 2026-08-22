@@ -25,7 +25,16 @@ type Config struct {
 	DBRawDSN  string
 	TLSConfig *tls.Config
 	DBSchema  string
-	DBTables  []string
+	// DBSchemaInclude is the glob pattern used to replicate from multiple
+	// schemas at once, using '*' as a wildcard (e.g. "tenant_*", "*"). When
+	// non-empty, it takes precedence over DBSchema and schemas are resolved
+	// dynamically at stream creation time.
+	DBSchemaInclude string
+	// DBSchemaExclude is a list of schema names or glob patterns (same syntax
+	// as DBSchemaInclude) excluded from the schemas resolved by
+	// DBSchemaInclude. Only meaningful when DBSchemaInclude is non-empty.
+	DBSchemaExclude []string
+	DBTables        []string
 	// Refreshes short lived IAM auth token that is treated as a password
 	RefreshAuthToken func(ctx context.Context) error
 	// ReplicationSlotName is the name of the replication slot to use

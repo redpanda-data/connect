@@ -98,18 +98,130 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return nil, err
 	}
 
-	schema, err := sanitize.NormalizePostgresIdentifier(config.DBSchema)
-	if err != nil {
-		return nil, fmt.Errorf("invalid schema name %q: %w", config.DBSchema, err)
-	}
-
-	tables := []TableFQN{}
-	for _, table := range config.DBTables {
-		normalized, err := sanitize.NormalizePostgresIdentifier(table)
-		if err != nil {
-			return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+	var (
+		tables []TableFQN
+		schema string
+	)
+	if config.DBSchemaInclude != "" {
+		if config.SignalTableName != "" {
+			return nil, errors.New("signal_table_name is not supported when schema_include is set")
 		}
-		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
+		schemas, inaccessibleSchemas, err := resolveSchemas(ctx, dbConn, config.DBSchemaInclude)
+		if err != nil {
+			return nil, fmt.Errorf("resolving schema_include pattern %q: %w", config.DBSchemaInclude, err)
+		}
+
+		if len(config.DBSchemaExclude) > 0 {
+			// Filtering happens entirely against the schemas slice we already
+			// fetched above - no extra DB round-trips per exclude pattern.
+			var excluded []string
+			remaining := make([]string, 0, len(schemas))
+			for _, schema := range schemas {
+				var isExcluded bool
+				for _, pattern := range config.DBSchemaExclude {
+					matched, err := schemaMatchesExcludePattern(schema, pattern)
+					if err != nil {
+						return nil, fmt.Errorf("evaluating schema_exclude pattern %q against schema %q: %w", pattern, schema, err)
+					}
+					if matched {
+						isExcluded = true
+						break
+					}
+				}
+				if isExcluded {
+					excluded = append(excluded, schema)
+					continue
+				}
+				remaining = append(remaining, schema)
+			}
+			if len(excluded) > 0 {
+				config.Logger.Infof("schema_exclude %v excluded %d schema(s) %v from schema_include pattern %q; %d schema(s) remain: %v", config.DBSchemaExclude, len(excluded), excluded, config.DBSchemaInclude, len(remaining), remaining)
+			}
+			schemas = remaining
+		}
+
+		if len(inaccessibleSchemas) > 0 {
+			config.Logger.Warnf("schema_include pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", config.DBSchemaInclude, inaccessibleSchemas)
+		}
+		if len(schemas) == 0 {
+			return nil, fmt.Errorf("no schemas found matching schema_include pattern %q", config.DBSchemaInclude)
+		}
+		config.Logger.Infof("schema_include pattern %q resolved to %d schema(s): %v", config.DBSchemaInclude, len(schemas), schemas)
+
+		normalizedTables := make([]string, 0, len(config.DBTables))
+		for _, table := range config.DBTables {
+			normalized, err := sanitize.NormalizePostgresIdentifier(table)
+			if err != nil {
+				return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+			}
+			normalizedTables = append(normalizedTables, normalized)
+		}
+
+		// With no explicit table list, auto-discover every base table in each
+		// matched (and schema_exclude-filtered) schema and publish them
+		// explicitly. Without this, an empty tables list would fall through to
+		// CreatePublication's FOR ALL TABLES fallback below, which replicates
+		// every schema in the database and silently defeats both schema_include
+		// and schema_exclude.
+		autoDiscoverTables := len(normalizedTables) == 0
+
+		tables = make([]TableFQN, 0, len(schemas)*len(normalizedTables))
+		foundTables := make(map[string]bool, len(normalizedTables))
+		for _, schema := range schemas {
+			existingTables, err := resolveExistingTables(ctx, dbConn, schema)
+			if err != nil {
+				return nil, fmt.Errorf("resolving tables in schema %q: %w", schema, err)
+			}
+			if autoDiscoverTables {
+				for table := range existingTables {
+					tables = append(tables, TableFQN{Schema: schema, Table: table})
+				}
+				continue
+			}
+			for _, table := range normalizedTables {
+				if _, ok := existingTables[table]; !ok {
+					config.Logger.Warnf("table %s.%s not found, skipping (schema %s matched schema_include pattern %q but does not contain this table)", schema, table, schema, config.DBSchemaInclude)
+					continue
+				}
+				tables = append(tables, TableFQN{Schema: schema, Table: table})
+				foundTables[table] = true
+			}
+		}
+		if autoDiscoverTables {
+			if len(tables) == 0 {
+				return nil, fmt.Errorf("no tables found in schema(s) %v matching schema_include pattern %q", schemas, config.DBSchemaInclude)
+			}
+			config.Logger.Infof("%q has no `tables` list configured: auto-discovered %d table(s) across %d schema(s)", config.DBSchemaInclude, len(tables), len(schemas))
+		} else {
+			// A table must exist in at least one matched schema. Missing from some
+			// (but not all) matched schemas is tolerated above as a multi-tenant gap;
+			// missing from every matched schema is indistinguishable from a typo and
+			// must fail loudly rather than silently drop the table.
+			var missingTables []string
+			for i, table := range normalizedTables {
+				if !foundTables[table] {
+					missingTables = append(missingTables, config.DBTables[i])
+				}
+			}
+			if len(missingTables) > 0 {
+				return nil, fmt.Errorf("table(s) %v not found in any schema matching schema_include pattern %q", missingTables, config.DBSchemaInclude)
+			}
+		}
+	} else {
+		var err error
+		schema, err = sanitize.NormalizePostgresIdentifier(config.DBSchema)
+		if err != nil {
+			return nil, fmt.Errorf("invalid schema name %q: %w", config.DBSchema, err)
+		}
+
+		tables = []TableFQN{}
+		for _, table := range config.DBTables {
+			normalized, err := sanitize.NormalizePostgresIdentifier(table)
+			if err != nil {
+				return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+			}
+			tables = append(tables, TableFQN{Schema: schema, Table: normalized})
+		}
 	}
 	batchSize := 1000
 	if config.BatchSize > 0 {
