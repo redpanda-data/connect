@@ -1,0 +1,32 @@
+# Converted from Kafka Connect connector "events-glue" (class=org.apache.iceberg.connect.IcebergSinkConnector). Review # TODO markers.
+input:
+  redpanda:
+    seed_brokers:
+      - localhost:9092 # TODO: set your Redpanda/Kafka broker(s)
+    topics:
+      - events
+    consumer_group: connect-events-glue # TODO: confirm consumer group
+pipeline:
+  processors:
+    - schema_registry_decode:
+        url: http://sr:8081
+output:
+  iceberg:
+    catalog:
+      url: https://glue.us-east-1.amazonaws.com/iceberg # TODO: AWS Glue via the Iceberg REST endpoint — verify the URL/region
+      warehouse: s3://my-bucket/warehouse
+      auth:
+        aws_sigv4:
+          region: us-east-1
+          service: glue
+    namespace: db
+    table: events
+    storage:
+      aws_s3:
+        bucket: my-bucket
+        region: us-east-1
+    schema_evolution:
+      enabled: true
+      table_location: s3://my-bucket/warehouse/ # TODO: AWS Glue does not assign table locations — verify this S3 prefix
+    batching:
+      period: 60000ms
