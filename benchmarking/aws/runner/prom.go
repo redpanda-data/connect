@@ -1,0 +1,179 @@
+// Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
+package main
+
+import (
+	"bufio"
+	"io"
+	"strconv"
+	"strings"
+)
+
+// PromPoint is one curated snapshot of Connect's runtime metrics, sampled at
+// time T (seconds since end-of-warmup, matching Sample.T).
+type PromPoint struct {
+	T              int     `json:"t"`
+	Goroutines     int     `json:"goroutines"`
+	HeapInUseMB    float64 `json:"heap_in_use_mb"`
+	BytesTotal     float64 `json:"bytes_total"` // benchmark_bytes_total
+	CPUSeconds     float64 `json:"cpu_seconds"`
+	GCPauseTotalNS uint64  `json:"gc_pause_total_ns"` // monotonic; per-interval delta = scrape[i] - scrape[i-1]
+	// RSSBytes is process_resident_memory_bytes: what the OOM killer sees,
+	// unlike HeapInUseMB. Go's heap-in-use metric misses the leak classes
+	// that actually OOMKill a pod — fragmentation, cgo allocations, goroutine
+	// stacks — none of which show up as "in-use heap" but all of which count
+	// against RSS. A soak run watches this to catch a slow leak that a short
+	// sweep point never runs long enough to show.
+	RSSBytes uint64 `json:"rss_bytes,omitempty"`
+}
+
+// promSnapshot is one /metrics dump bracketed by ###timestamp= markers.
+// The parser produces a slice of these before the curated extractor folds
+// them into []PromPoint.
+type promSnapshot struct {
+	UnixTime int64
+	Body     string
+	// Errored is true when the scraper logged a ###scrape_error marker
+	// inside the snapshot. The broker-metrics sidecar (topology_source.go)
+	// appends a per-endpoint suffix to the marker (###scrape_error_$EP,
+	// one per failed curl against a broker), so the marker text is a
+	// PREFIX match, not an exact one; the single-endpoint prom sidecar
+	// still emits the bare marker with no suffix.
+	Errored bool
+}
+
+// extractPromPoint pulls the curated metrics out of a single snapshot
+// body. Returns ok=false if the snapshot was an error frame.
+//
+// Hand-rolled rather than depending on prometheus/common/expfmt: the
+// curated subset is five unlabeled metrics, and avoiding the dependency
+// keeps the runner binary small and the build graph simple.
+func extractPromPoint(s promSnapshot) (PromPoint, bool) {
+	if s.Errored {
+		return PromPoint{}, false
+	}
+	pp := PromPoint{}
+	scanner := bufio.NewScanner(strings.NewReader(s.Body))
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, valueStr, ok := splitMetricLine(line)
+		if !ok {
+			continue
+		}
+		switch name {
+		case "go_goroutines":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.Goroutines = int(n)
+		case "go_memstats_heap_inuse_bytes":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.HeapInUseMB = n / 1_000_000 // base-10 to match the rest of the runner
+		case "go_memstats_gc_pause_total_ns":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.GCPauseTotalNS = uint64(n)
+		case "process_cpu_seconds_total":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.CPUSeconds = n
+		case "benchmark_bytes_total":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.BytesTotal = n
+		case "process_resident_memory_bytes":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.RSSBytes = uint64(n)
+		}
+	}
+	return pp, true
+}
+
+// splitMetricLine splits a line like `go_goroutines 312` or
+// `go_memstats_heap_inuse_bytes 1.04857e+08`. Labels (curly-brace forms)
+// are intentionally NOT supported — the curated subset uses unlabeled
+// metrics only.
+func splitMetricLine(line string) (name, value string, ok bool) {
+	// Skip lines with labels: `metric{label="x"} value`.
+	if strings.ContainsRune(line, '{') {
+		return "", "", false
+	}
+	i := strings.IndexRune(line, ' ')
+	if i <= 0 || i == len(line)-1 {
+		return "", "", false
+	}
+	return line[:i], strings.TrimSpace(line[i+1:]), true
+}
+
+// parseSnapshots splits a /tmp/prom-N.txt dump on ###timestamp= markers.
+// Anything before the first marker is ignored; an empty trailing frame
+// (scraper killed mid-write) is kept with Body == "".
+func parseSnapshots(r io.Reader) []promSnapshot {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+	var snaps []promSnapshot
+	var current *promSnapshot
+	// The frame body is accumulated in a Builder rather than string
+	// concatenation: a broker frame is every broker's /public_metrics output
+	// concatenated (thousands of lines), and += copies the whole
+	// accumulated body per line — quadratic per frame, which a 24h soak's
+	// ~1440 frames turns into hours of memcpy.
+	var body strings.Builder
+	flush := func() {
+		if current == nil {
+			return
+		}
+		current.Body = body.String()
+		body.Reset()
+		snaps = append(snaps, *current)
+	}
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "###timestamp=") {
+			flush()
+			ts, _ := strconv.ParseInt(strings.TrimPrefix(line, "###timestamp="), 10, 64)
+			current = &promSnapshot{UnixTime: ts}
+			continue
+		}
+		if current == nil {
+			continue // ignore noise before first marker
+		}
+		// Prefix match, not equality: the broker-metrics sidecar suffixes
+		// the marker with the failed endpoint (###scrape_error_$EP), one
+		// per curl that failed against a given broker.
+		if strings.HasPrefix(line, "###scrape_error") {
+			current.Errored = true
+			continue
+		}
+		body.WriteString(line)
+		body.WriteByte('\n')
+	}
+	flush()
+	return snaps
+}
+
+// ParsePromStream consumes a per-point prom dump and returns the curated
+// time series with T reindexed to seconds since the first successful
+// snapshot.
+func ParsePromStream(r io.Reader) ([]PromPoint, error) {
+	snaps := parseSnapshots(r)
+	var pts []PromPoint
+	var t0 int64
+	for _, s := range snaps {
+		pp, ok := extractPromPoint(s)
+		if !ok {
+			continue
+		}
+		if len(pts) == 0 {
+			t0 = s.UnixTime
+		}
+		pp.T = int(s.UnixTime - t0)
+		pts = append(pts, pp)
+	}
+	return pts, nil
+}

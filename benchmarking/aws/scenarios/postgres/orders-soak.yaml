@@ -1,0 +1,80 @@
+name: postgres-orders-soak
+description: |
+  Soak: hold Connect at a fixed, sustained-moderate load (10K writes/sec ≈
+  12 MB/s — roughly 10-15% of the ~100 MB/s ceiling orders-cdc's sweep
+  measures) for 90 minutes at a single vCPU point. This is not a ceiling
+  search; it exists to catch leaks, stalls, and log/metric-rotation bugs
+  that a short max-load sweep point never runs long enough to hit.
+
+  Password auth, deliberately. IAM auth was tried first and CANNOT work
+  here: RDS PostgreSQL rejects IAM tokens on replication-protocol
+  connections (live-confirmed 2026-08-12 on this exact stack — the same
+  token authenticates a normal connection but `replication=database` fails
+  with 28P01), and logical replication is the heart of postgres_cdc. The
+  IAM plumbing (TF iam_auth_enabled, ${POSTGRES_IAM_DSN}, reset grants) is
+  kept in git history for an Aurora-postgres follow-up; the ~15-min
+  credential-rotation soak lever moves to a future mysql_cdc soak, where
+  IAM auth rides normal-protocol connections (#4258 shows customers run
+  it).
+
+connector: postgres_cdc
+stack: postgres
+soak: true
+
+infra:
+  source:
+    instance_class: db.r6g.xlarge
+    # RDS gp3 for postgres: below 400 GB you get fixed baseline (3000 IOPS /
+    # 125 MiB/s) and may not set iops/storage_throughput at all; at >=400 GB
+    # the baseline is 12000 / 500 and those are the legal minimums. 400 GB at
+    # the free baseline is the cheapest shape that lets these fields exist
+    # (live-confirmed 2026-08-12: 200 GB + 6000 iops -> InvalidParameterCombination).
+    storage_gb: 400
+    iops: 12000
+    storage_throughput: 500
+    parameters:
+      rds.logical_replication: "1"
+      max_wal_senders: "20"
+  runner:
+    instance_type: c8g.xlarge   # 4 vCPU: reservedCores(2) + cpu_points[2] == 4
+
+dataset:
+  initial_rows: 0          # TRUNCATE keeps table size bounded; no seed needed
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-postgres
+
+workload:
+  write_rate_per_sec: 10000
+  duration: 90m
+  warmup: 5m
+
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      tls:
+        skip_cert_verify: true   # RDS-internal CA isn't in the runner image; postgres_cdc uses NewTLSField (no `enabled` toggle)
+      stream_snapshot: false
+      schema: public
+      tables: [orders]
+      slot_name: bench_slot
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [2]
+
+reset:
+  # The IAM-era role/publication setup lived here briefly — recover it
+  # from git history for an Aurora follow-up (see the description).
+  - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
+  - sql: "TRUNCATE TABLE orders"
+  # Drop the publication so the connector recreates it with its own table
+  # list. A stale publication that exists but no longer contains the table
+  # makes postgres_cdc stream SILENCE forever (live-hit 2026-08-12: empty
+  # pglog_stream_bench_slot left by an aborted run on reused infra -> 0
+  # msg/s, active slot, 18 GB WAL lag, zero errors). Named after the slot:
+  # publication name = pglog_stream_<slot_name>.
+  - sql: "DROP PUBLICATION IF EXISTS pglog_stream_bench_slot"
