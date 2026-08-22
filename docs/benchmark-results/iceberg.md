@@ -928,3 +928,51 @@ treat sub-5% mean differences as noise.
 
 
 Raw samples + Prometheus snapshots: [`results/iceberg/orders-sink-output-tuning/2026-08-21T21-05-19Z.json`](results/iceberg/orders-sink-output-tuning/2026-08-21T21-05-19Z.json)
+
+
+## AWS — orders-upsert — 2026-08-22
+
+**Scenario:** Insert vs upsert throughput for the iceberg sink at a fixed 4-vCPU pin —
+the first non-append number for this output. Every published iceberg figure
+is insert-only, but the CDC workloads customers actually run (Garner POC,
+2026-08-20) are upsert-heavy, where the cost model changes twice over:
+every batch containing a mutation commits as its own snapshot (never
+coalesced, required for correctness), and merge_strategy decides whether a
+mutation writes a cheap equality-delete (merge-on-read) or rewrites every
+data file containing a touched key (copy-on-write, the mode Snowflake and
+Unity Catalog readers force).
+
+The dataset has genuine key collisions: key_space 12M over 96M rows means
+each id recurs ~8 times with a distinct row image (the seeder varies
+ts/amount/payload per record), and keys arrive scattered — the worst
+realistic case for copy-on-write amplification.
+
+METRIC CAVEAT (copy-on-write arm only): the Glue sidecar's total_records is
+the table's NET row count, which plateaus at ~key_space once keys start
+recurring, so the upsert-cow summary row UNDERSTATES real write throughput —
+read that arm's rate from the raw prom dumps instead
+(s3://<results_bucket>/runs/<session>/prom-4-upsert-cow.txt: output_sent
+deltas), and expect its Glue msg/s to decay toward zero by design, not by
+failure. a0-insert and upsert-mor are unaffected: appends and equality-
+delete upserts both grow total_records by every row written.
+
+Connect-only (arms constraint). One window per arm. The upsert-cow arm may
+legitimately crawl — that IS the measurement (the K/M amplification model
+from the local cow_amplification bench, end-to-end).
+
+**Git SHA:** [`d964a2971`](https://github.com/redpanda-data/connect/commit/d964a297145047468b1d8c74b6aa272c2e140b23)
+
+**Infra:** Runner `c8g.4xlarge`; source `` (0 GB) in `us-east-2`.
+
+**Dataset:** 96,000,000 rows × 1200 B = ~107 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 4          | a0-insert      | connect       |           24 |       76.893 |        66,132 |           26 |           3 |          158 |        20,294 |                    |
+| 4    | 4          | upsert-mor     | connect       |           16 |       15.974 |        13,720 |           16 |          14 |           18 |        13,656 |                    |
+| 4    | 4          | upsert-cow     | connect       |            0 |        0.481 |           507 |            0 |           0 |            2 |             2 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/iceberg/orders-upsert/2026-08-22T03-53-38Z.json`](results/iceberg/orders-upsert/2026-08-22T03-53-38Z.json)
