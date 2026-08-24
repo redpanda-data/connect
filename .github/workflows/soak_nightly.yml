@@ -55,6 +55,20 @@ jobs:
     env:
       REDPANDA_LICENSE_SECRET: redpanda-connect-bench/license
     steps:
+      # Before anything credentialed: the dispatch input is available to
+      # the whole write-access population (same as soak_pr.yml's /soak
+      # comment), and Task splices {{.scenario}} raw into a shell command —
+      # so it gets the same allowlist soak_pr.yml applies, and an invalid
+      # value kills the job before the provisioner role is even assumed.
+      - name: Validate scenario input
+        env:
+          SCENARIO: ${{ github.event.inputs.scenario || 'postgres/orders-soak' }}
+        run: |
+          if ! echo "${SCENARIO}" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9][A-Za-z0-9_-]*)*$'; then
+            echo "::error::Invalid scenario '${SCENARIO}' — expected a path of [A-Za-z0-9_-] segments, e.g. postgres/orders-soak"
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
