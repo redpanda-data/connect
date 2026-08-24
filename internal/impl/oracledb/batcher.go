@@ -298,19 +298,7 @@ func (p *batchPublisher) loop() {
 					return nil
 				}
 
-				if err := p.admit(hardStopCtx, ticket, true); err != nil {
-					return err
-				}
-				defer p.release()
-				tracked, err := p.trackBatch(hardStopCtx, sendBatch)
-				if err != nil {
-					// The rows left the batcher but were never tracked, and
-					// the deferred release lets later tickets proceed: seal so
-					// nothing can be tracked (and persisted) past the gap.
-					p.sealQueue()
-					return err
-				}
-				return p.sendTracked(hardStopCtx, tracked)
+				return p.dispatch(hardStopCtx, ticket, sendBatch)
 			}(); err != nil {
 				return
 			}
@@ -422,22 +410,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		return nil
 	}
 
-	if err := b.admit(ctx, ticket, true); err != nil {
-		return err
-	}
-	defer b.release()
-	tracked, err := b.trackBatch(ctx, flushedBatch)
-	if err != nil {
-		// The rows left the batcher but were never tracked, and the deferred
-		// release lets later tickets proceed: seal so nothing can be tracked
-		// (and persisted) past the gap.
-		b.sealQueue()
-		return err
-	}
-	if err := b.sendTracked(ctx, tracked); err != nil {
-		return fmt.Errorf("publishing flushed batch: %w", err)
-	}
-	return nil
+	return b.dispatch(ctx, ticket, flushedBatch)
 }
 
 // trackedBatch pairs a ready-to-send asyncMessage with the bookkeeping needed
@@ -445,6 +418,31 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 type trackedBatch struct {
 	msgs       asyncMessage
 	isSnapshot bool
+}
+
+// dispatch admits the flush ticket, tracks the batch, and hands it to
+// ReadBatch, applying the shared failure actions: a cancelled rows-owning
+// admission seals inside admit itself, and a track failure seals here since
+// the rows already left the batcher while the deferred release lets later
+// tickets proceed. A ticket with no batch (flushCurrent's barrier) passes
+// through the empty skip after admission.
+func (b *batchPublisher) dispatch(ctx context.Context, ticket uint64, batch service.MessageBatch) error {
+	if err := b.admit(ctx, ticket, len(batch) > 0); err != nil {
+		return err
+	}
+	defer b.release()
+	if len(batch) == 0 {
+		return nil
+	}
+	tracked, err := b.trackBatch(ctx, batch)
+	if err != nil {
+		// The rows left the batcher but were never tracked, and the deferred
+		// release lets later tickets proceed: seal so nothing can be tracked
+		// (and persisted) past the gap.
+		b.sealQueue()
+		return err
+	}
+	return b.sendTracked(ctx, tracked)
 }
 
 // trackBatch registers the batch with the ordered checkpoint tracker and
@@ -620,20 +618,7 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 		// operator needs the batching.processors failure, not the seal).
 		return err
 	}
-	if admitErr := b.admit(ctx, ticket, len(remaining) > 0); admitErr != nil {
-		return admitErr
-	}
-	defer b.release()
-	if len(remaining) == 0 {
-		return nil
-	}
-	tracked, err := b.trackBatch(ctx, remaining)
-	if err != nil {
-		// Same gap as above: flushed but untracked.
-		b.sealQueue()
-		return err
-	}
-	return b.sendTracked(ctx, tracked)
+	return b.dispatch(ctx, ticket, remaining)
 }
 
 // FlushRemaining stops the loop goroutine and then flushes any partial batch
