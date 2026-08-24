@@ -2407,6 +2407,125 @@ postgres_cdc:
 	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
 }
 
+func TestIntegrationMultiSchemaIncludeAutoDiscoverExcludesPartitionedParent(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	_, err = db.Exec("CREATE SCHEMA tenant_a")
+	require.NoError(t, err)
+	_, err = db.Exec(`
+CREATE TABLE tenant_a.orders (
+	id INT NOT NULL,
+	created_at DATE NOT NULL,
+	PRIMARY KEY (id, created_at)
+) PARTITION BY RANGE (created_at)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`
+CREATE TABLE tenant_a.orders_2025 PARTITION OF tenant_a.orders
+	FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')`)
+	require.NoError(t, err)
+	_, err = db.Exec(`
+CREATE TABLE tenant_a.orders_2026 PARTITION OF tenant_a.orders
+	FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')`)
+	require.NoError(t, err)
+
+	// Insert through the parent, as real usage would, letting Postgres route
+	// each row to the correct leaf partition.
+	_, err = db.Exec("INSERT INTO tenant_a.orders (id, created_at) VALUES (1, '2025-06-01')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_a.orders (id, created_at) VALUES (2, '2026-06-01')")
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		dbSchema string
+		table    string
+		id       int64
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+	collectedLen := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected)
+	}
+
+	// No `tables` field: the partitioned "orders" table's leaf partitions must
+	// be auto-discovered without listing them by hand, and the partitioned
+	// parent itself must not be discovered.
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: partitioned_parent_excluded_slot
+    stream_snapshot: true
+    schema_include: tenant_*
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			structured, err := msg.AsStructured()
+			if err != nil {
+				return err
+			}
+			id, err := structured.(map[string]any)["id"].(json.Number).Int64()
+			if err != nil {
+				return err
+			}
+			m := msgMeta{id: id}
+			m.dbSchema, _ = msg.MetaGet("database_schema")
+			m.table, _ = msg.MetaGet("table")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	// Exactly the 2 rows inserted, not 4: if the partitioned parent were
+	// wrongly auto-discovered alongside its leaf partitions, every row would
+	// be emitted twice (once from scanning the parent, once from scanning the
+	// leaf it belongs to).
+	assert.Eventually(t, func() bool {
+		return collectedLen() >= 2
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot rows; the partitioned parent may have swallowed the leaf partitions' rows, or TABLESAMPLE against the parent may have failed outright")
+
+	// Give any erroneous duplicate emissions from the parent a chance to
+	// surface before asserting the final count.
+	assert.Never(t, func() bool {
+		return collectedLen() > 2
+	}, 3*time.Second, 200*time.Millisecond, "received more snapshot rows than were inserted; the partitioned parent was likely auto-discovered alongside its leaf partitions")
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	require.Len(t, collected, 2)
+
+	seenIDs := make(map[int64]int)
+	for _, m := range collected {
+		assert.Equal(t, "tenant_a", m.dbSchema)
+		assert.NotEqual(t, "orders", m.table, "the partitioned parent must not be auto-discovered as a table in its own right")
+		assert.Contains(t, []string{"orders_2025", "orders_2026"}, m.table, "expected only leaf partitions to be auto-discovered")
+		seenIDs[m.id]++
+	}
+	assert.Equal(t, map[int64]int{1: 1, 2: 1}, seenIDs, "each inserted row should be emitted exactly once")
+}
+
 func TestIntegrationMultiSchemaAndTableMatchingTest(t *testing.T) {
 	integration.CheckSkip(t)
 

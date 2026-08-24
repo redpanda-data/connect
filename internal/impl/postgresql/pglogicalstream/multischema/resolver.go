@@ -190,11 +190,11 @@ func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (v
 // ResolveExistingTables returns the quoted names of the publishable base
 // tables in each of the given (already quoted) schemas, keyed by quoted
 // schema name. A single query covering every schema, rather than one per
-// schema, keeps this to one round-trip regardless of tenant count - the
-// difference between one query and, say, one hundred on a multi-tenant,
-// schema-per-tenant database on every connect and reconnect. Restricted to
-// table_type = 'BASE TABLE' so a same-named view or foreign table is treated
-// as missing rather than breaking CreatePublication.
+// schema, keeps this to one round-trip regardless of tenant count.
+//
+// Queries pg_class/pg_namespace directly, filtered to relkind = 'r', so
+// discovery only returns ordinary tables (including leaf partitions) and
+// excludes partitioned parents, views, and foreign tables.
 func ResolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchemas []string) (map[string]map[string]struct{}, error) {
 	rawToQuoted := make(map[string]string, len(quotedSchemas))
 	args := make([]any, len(quotedSchemas))
@@ -210,7 +210,10 @@ func ResolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchem
 	}
 
 	q, err := sanitize.SQLQuery(
-		fmt.Sprintf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema IN (%s) AND table_type = 'BASE TABLE'", strings.Join(placeholders, ", ")),
+		fmt.Sprintf(`SELECT n.nspname AS table_schema, c.relname AS table_name
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname IN (%s) AND c.relkind = 'r'`, strings.Join(placeholders, ", ")),
 		args...,
 	)
 	if err != nil {
