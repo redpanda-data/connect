@@ -372,8 +372,20 @@ func runBench(opts benchOpts) (errOut error) {
 			return
 		}
 		fmt.Println("[7/7] terraform destroy")
-		_ = tfStack.Destroy(stackVars)
-		_ = tfShared.Destroy(sharedVars)
+		// Attempt both destroys regardless of individual failure — a dead
+		// stack destroy must not strand the shared stack too. But a failed
+		// destroy means paid infrastructure is still running, so it must
+		// surface as a non-zero exit for the laptop-driven runs that have no
+		// CI-side teardown verification: only the reaper's TTL stands between
+		// a swallowed error here and a multi-day strand (see SOAK.md).
+		stackErr := tfStack.Destroy(stackVars)
+		sharedErr := tfShared.Destroy(sharedVars)
+		if err := errors.Join(stackErr, sharedErr); err != nil {
+			fmt.Printf("[7/7] TEARDOWN FAILED — infrastructure may still be running; retry with `task aws:down scenario=<path>` or check the orphan reaper: %v\n", err)
+			if errOut == nil {
+				errOut = fmt.Errorf("terraform destroy: %w", err)
+			}
+		}
 	}()
 
 	if err := tfShared.Apply(sharedVars); err != nil {

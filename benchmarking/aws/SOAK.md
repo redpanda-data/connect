@@ -53,8 +53,8 @@ files named below.
   the workflows — no relevant merge, no run. Fails open: a missing entry or
   unknown SHA runs the soak.
 - **One-time account setup** (already done in 605419575229, needed again
-  only for a new account): `make -C cleanup-lambda zip &&
-  TF_VAR_soak_alert_email=<team-alias> task aws:persistent` (the alert
+  only for a new account): `TF_VAR_soak_alert_email=<team-alias> task
+  aws:persistent` (builds the reaper's `bootstrap.zip` itself; the alert
   email is deliberately undefaulted — point it at a monitored team
   alias, never an individual); create the license secret: `aws secretsmanager
   create-secret --name redpanda-connect-bench/license --secret-string

@@ -51,7 +51,7 @@ license from Secrets Manager.
 ```bash
 # one-time (per account): persistent stack (dashboards, alarms, reaper,
 # OIDC, archive bucket) + license secret — see SOAK.md
-cd benchmarking/aws && make -C cleanup-lambda zip && task aws:persistent
+cd benchmarking/aws && task aws:persistent   # builds cleanup-lambda/bootstrap.zip itself
 
 # validate a scenario (no AWS spend)
 task aws:validate scenario=postgres/orders-cdc

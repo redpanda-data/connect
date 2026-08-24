@@ -35,31 +35,72 @@ resource "aws_iam_role_policy_attachment" "orphan_cleanup_basic" {
 resource "aws_iam_role_policy" "orphan_cleanup" {
   name = "orphan-cleanup"
   role = aws_iam_role.orphan_cleanup.id
+  # The destructive grants are fenced to Project=redpanda-connect-bench via
+  # aws:ResourceTag wherever the action supports it, so IAM is a second line
+  # of defence behind the Lambda's own tag filter. That code-side filter has
+  # already failed once: the reaper deleted the persistent soak-archive
+  # bucket when the persistent stack briefly carried the reapable Project
+  # tag (fixed by retagging — exactly what this condition now enforces
+  # structurally).
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
+        # Discovery + read-only lookups genuinely need account scope.
+        Sid    = "Discover"
         Effect = "Allow"
         Action = [
           "tag:GetResources",
-          "ec2:DescribeInstances", "ec2:TerminateInstances",
-          "ec2:DescribeVpcs", "ec2:DeleteVpc",
-          "ec2:DescribeSubnets", "ec2:DeleteSubnet",
-          "ec2:DescribeSecurityGroups", "ec2:DeleteSecurityGroup",
-          "ec2:DescribeRouteTables", "ec2:DeleteRouteTable", "ec2:DisassociateRouteTable",
-          "ec2:DescribeInternetGateways", "ec2:DetachInternetGateway", "ec2:DeleteInternetGateway",
-          "rds:DescribeDBInstances", "rds:DeleteDBInstance",
-          "rds:DescribeDBSubnetGroups", "rds:DeleteDBSubnetGroup",
-          "rds:DescribeDBParameterGroups", "rds:DeleteDBParameterGroup",
-          "s3:ListAllMyBuckets", "s3:ListBucket", "s3:ListBucketVersions",
-          "s3:DeleteObject", "s3:DeleteObjectVersion", "s3:DeleteBucket",
-          "iam:GetRole", "iam:DeleteRole",
-          "iam:ListRolePolicies", "iam:DeleteRolePolicy",
-          "iam:ListAttachedRolePolicies", "iam:DetachRolePolicy",
-          "iam:ListInstanceProfilesForRole", "iam:RemoveRoleFromInstanceProfile", "iam:DeleteInstanceProfile",
-          "sns:Publish"
+          "ec2:DescribeInstances", "ec2:DescribeVpcs", "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups", "ec2:DescribeRouteTables", "ec2:DescribeInternetGateways",
+          "rds:DescribeDBInstances", "rds:DescribeDBSubnetGroups", "rds:DescribeDBParameterGroups",
+          "s3:ListAllMyBuckets",
+          "iam:GetRole", "iam:ListRolePolicies", "iam:ListAttachedRolePolicies",
+          "iam:ListInstanceProfilesForRole"
         ]
         Resource = "*"
+      },
+      {
+        # Destructive EC2/RDS calls and role deletion only reach resources
+        # carrying the bench Project tag — the persistent stack (distinct
+        # Project tag) is structurally out of reach even if the Lambda's
+        # own filter regresses.
+        Sid    = "DestroyTagged"
+        Effect = "Allow"
+        Action = [
+          "ec2:TerminateInstances",
+          "ec2:DeleteVpc", "ec2:DeleteSubnet", "ec2:DeleteSecurityGroup",
+          "ec2:DeleteRouteTable", "ec2:DisassociateRouteTable",
+          "ec2:DetachInternetGateway", "ec2:DeleteInternetGateway",
+          "rds:DeleteDBInstance", "rds:DeleteDBSubnetGroup", "rds:DeleteDBParameterGroup",
+          "iam:DeleteRole", "iam:DeleteRolePolicy", "iam:DetachRolePolicy"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = { "aws:ResourceTag/Project" = "redpanda-connect-bench" }
+        }
+      },
+      {
+        # S3 bucket/object deletes and the instance-profile unwind don't
+        # support aws:ResourceTag reliably, so they stay broad — but they
+        # are the low-blast-radius remainder: the archive bucket's real
+        # shield is its non-bench Project tag at the Lambda's discovery
+        # layer, and instance profiles are only reachable through an
+        # already-tag-fenced role deletion.
+        Sid    = "DestroyUnconditionable"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket", "s3:ListBucketVersions",
+          "s3:DeleteObject", "s3:DeleteObjectVersion", "s3:DeleteBucket",
+          "iam:RemoveRoleFromInstanceProfile", "iam:DeleteInstanceProfile"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid      = "Alert"
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
+        Resource = aws_sns_topic.orphan_cleanup.arn
       }
     ]
   })

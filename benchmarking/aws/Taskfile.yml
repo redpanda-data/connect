@@ -52,6 +52,10 @@ tasks:
   aws:persistent:
     desc: "Apply the persistent stack (soak dashboards; later alarms). Outside the per-run lifecycle — apply once and on change, never torn down by aws:down."
     cmds:
+      # cleanup.tf reads bootstrap.zip at plan time (filebase64sha256), and
+      # the zip is gitignored — build it here so a fresh checkout can apply
+      # without knowing about the Makefile.
+      - make -C cleanup-lambda zip
       - terraform -chdir=terraform/persistent init -input=false -backend-config=../backend.hcl -backend-config=key=persistent
       - terraform -chdir=terraform/persistent apply -input=false -auto-approve
 
