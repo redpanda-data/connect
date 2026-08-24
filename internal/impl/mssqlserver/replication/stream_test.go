@@ -138,7 +138,6 @@ func TestIntegrationVerifyUserDefinedTablesCaptureInstanceResolution(t *testing.
 		require.ErrorContains(t, err, "capture_beta")
 		require.ErrorContains(t, err, "multiple CDC capture instances")
 	})
-
 }
 
 func includeFilterFor(t *testing.T, fullTableName string) *confx.RegexpFilter {
