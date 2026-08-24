@@ -30,7 +30,14 @@ import (
 // historical behaviour). Non-key fields (ts, payload, amount) still vary per
 // record, so a recurring id carries a distinct row image each time — the
 // shape an upsert actually sees.
-func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int, keySpace int64) error {
+//
+// keyOrder controls how a bounded key space is walked. "sequential" is the
+// plain i % keySpace: ids arrive in contiguous runs, so a batch's keys
+// cluster into few data files (copy-on-write's best case). "scattered" walks
+// the space by a stride coprime to keySpace — still a permutation, so every
+// id is hit exactly once per cycle, but consecutive rows carry far-apart ids
+// and a batch's keys spray across all files (the realistic CDC worst case).
+func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int, keySpace int64, keyOrder string) error {
 	brokers := os.Getenv("REDPANDA_BROKERS")
 	if brokers == "" {
 		return fmt.Errorf("REDPANDA_BROKERS env var is required")
@@ -107,6 +114,19 @@ func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int
 	regions := []string{"us-east-1", "us-east-2", "us-west-2", "eu-west-1", "ap-south-1"}
 	statuses := []string{"NEW", "PAID", "SHIPPED", "CANCELLED", "REFUNDED"}
 
+	// Scattered order walks the key space by a stride coprime to keySpace:
+	// (pos * stride) % keySpace is then a permutation of [0, keySpace), so
+	// every id still recurs exactly once per cycle — only the arrival order
+	// changes. Start from a prime and bump until coprime so any keySpace
+	// works; deterministic so every cycle revisits the identical key set.
+	var stride int64
+	if keySpace > 0 && keyOrder == "scattered" {
+		stride = 1_000_003
+		for gcd(stride, keySpace) != 1 {
+			stride += 2
+		}
+	}
+
 	var produced, failed int64
 	var firstErr atomic.Value // stores error
 	for i := int64(0); i < rows; i++ {
@@ -123,6 +143,9 @@ func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int
 		id := i
 		if keySpace > 0 {
 			id = i % keySpace
+			if stride > 0 {
+				id = (id * stride) % keySpace
+			}
 		}
 		rec := map[string]any{
 			"id":      id,
@@ -156,4 +179,12 @@ func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int
 	}
 	fmt.Printf("json-orders: produced %d records to %s\n", atomic.LoadInt64(&produced), topic)
 	return nil
+}
+
+// gcd is Euclid's algorithm, used to pick a stride coprime to the key space.
+func gcd(a, b int64) int64 {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	return a
 }

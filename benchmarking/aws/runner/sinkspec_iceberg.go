@@ -55,10 +55,17 @@ func icebergDecorateOutput(_ *Scenario, n BenchNames, cfg map[string]any) {
 			"region": "${AWS_REGION}",
 		},
 	}
-	cfg["schema_evolution"] = map[string]any{
-		"enabled":        true,
-		"table_location": "${WAREHOUSE_S3_URI}/",
+	// Merge into any scenario/arm-provided schema_evolution block rather than
+	// replacing it: a wholesale replace silently discards arm-level fields
+	// like partition_spec (the bench-managed enabled/table_location still
+	// always win).
+	se, ok := cfg["schema_evolution"].(map[string]any)
+	if !ok {
+		se = map[string]any{}
 	}
+	se["enabled"] = true
+	se["table_location"] = "${WAREHOUSE_S3_URI}/"
+	cfg["schema_evolution"] = se
 }
 
 func icebergResetScript(s *Scenario, outs map[string]string, n BenchNames) string {
@@ -91,6 +98,17 @@ func icebergResetScript(s *Scenario, outs map[string]string, n BenchNames) strin
 			// Drop the table so total-files-size restarts at 0.
 			w(`aws glue delete-table --region %q --database-name %q --name %q 2>/dev/null || true`,
 				region, db, table)
+			// A scenario may opt Connect out of the tablegen pre-create so the
+			// output auto-creates the table itself and its schema_evolution
+			// settings (notably partition_spec, which only applies at table
+			// creation) take effect. Pre-creation exists for the KC Tabular
+			// sink, which cannot supply a table location on create; Connect
+			// sets table_location itself and auto-created fine before
+			// pre-creation existed (the sidecar tolerates the table appearing
+			// mid-window). KC keeps the pre-create unconditionally.
+			if eng == "connect" && s.SkipConnectTablePrecreate {
+				continue
+			}
 			// Pre-create with an explicit location: the Glue REST catalog
 			// requires one on create and the KC Tabular sink does not supply it.
 			//

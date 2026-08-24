@@ -159,3 +159,80 @@ func TestOutputTuningScenario_Validates(t *testing.T) {
 	require.Len(t, s.Matrix.Arms, 7)
 	require.Len(t, s.Matrix.CPUPoints, 1, "arms require a single cpu point")
 }
+
+func TestUpsertCowScenario_ArmsRenderStrategyAndPartitionSpec(t *testing.T) {
+	const path = "../scenarios/iceberg/orders-upsert-cow.yaml"
+
+	// Every keyed arm must carry the lint-mandated max_in_flight: 1.
+	for _, arm := range []string{"mor-50k", "cow-10k", "cow-50k", "cow-50k-bucket16"} {
+		ice := icebergOutputOf(t, renderArm(t, path, arm))
+		require.Equal(t, 1, ice["max_in_flight"], "arm %s", arm)
+		require.Equal(t, "upsert", ice["row_operation"], "arm %s", arm)
+	}
+
+	// The bucket arm's partition_spec must SURVIVE icebergDecorateOutput,
+	// which used to replace the schema_evolution block wholesale.
+	bucket := icebergOutputOf(t, renderArm(t, path, "cow-50k-bucket16"))
+	se, ok := bucket["schema_evolution"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, `"(bucket(16, id))"`, se["partition_spec"])
+	require.Equal(t, true, se["enabled"], "bench-managed fields must still be decorated")
+	require.Contains(t, se, "table_location")
+
+	// The 10k arm shrinks BOTH the buffer policy and the output batching —
+	// the buffer decides what the committer is fed.
+	cfg10 := renderArm(t, path, "cow-10k")
+	require.Equal(t, 10000, icebergOutputOf(t, cfg10)["batching"].(map[string]any)["count"])
+	buf := cfg10["buffer"].(map[string]any)["memory"].(map[string]any)
+	require.Equal(t, 10000, buf["batch_policy"].(map[string]any)["count"])
+
+	// Non-bucket arms keep the decorated schema_evolution without a spec.
+	plain := icebergOutputOf(t, renderArm(t, path, "cow-50k"))
+	seP, ok := plain["schema_evolution"].(map[string]any)
+	require.True(t, ok)
+	require.NotContains(t, seP, "partition_spec")
+}
+
+func TestUpsertCowScenario_SeedScriptCarriesKeyOrder(t *testing.T) {
+	s, err := LoadScenario("../scenarios/iceberg/orders-upsert-cow.yaml")
+	require.NoError(t, err)
+	got, err := (sinkTopology{}).SeedScript(s, map[string]string{
+		"results_bucket":            "bucket",
+		"redpanda_broker_endpoints": "b1:9092",
+	}, newBenchNames("sess-x", "iceberg"))
+	require.NoError(t, err)
+	require.Contains(t, got, " --key-space=250000 --key-order=scattered")
+}
+
+func TestUpsertCowScenario_SkipsConnectPrecreateOnly(t *testing.T) {
+	s, err := LoadScenario("../scenarios/iceberg/orders-upsert-cow.yaml")
+	require.NoError(t, err)
+	require.True(t, s.SkipConnectTablePrecreate)
+	names := newBenchNames("sess-x", "iceberg")
+	script := icebergResetScript(s, icebergOuts(), names)
+
+	// Connect: table still DROPPED (fresh start per arm) but NOT pre-created,
+	// so the output's own creation applies partition_spec.
+	require.Contains(t, script, names.IcebergTable("connect"))
+	require.NotContains(t, script, "--table="+names.IcebergTable("connect"),
+		"connect table must not be pre-created by iceberg-tablegen")
+	// KC keeps its pre-create unconditionally (cannot supply a location).
+	require.Contains(t, script, "--table="+names.IcebergTable("kafka_connect"))
+}
+
+func TestValidate_KeyOrderBounds(t *testing.T) {
+	load := func() *Scenario {
+		s, err := LoadScenario("../scenarios/iceberg/orders-upsert-cow.yaml")
+		require.NoError(t, err)
+		return s
+	}
+	require.NoError(t, load().Validate())
+
+	s := load()
+	s.Dataset.KeyOrder = "random"
+	require.ErrorContains(t, s.Validate(), `key_order must be "sequential" or "scattered"`)
+
+	s = load()
+	s.Dataset.KeySpace = 0
+	require.ErrorContains(t, s.Validate(), "key_order requires dataset.key_space")
+}

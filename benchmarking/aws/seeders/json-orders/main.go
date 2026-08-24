@@ -25,8 +25,13 @@ func main() {
 		rowSize := fs.Int("row-size", 1200, "approximate record size in bytes")
 		partitions := fs.Int("partitions", 16, "topic partition count")
 		keySpace := fs.Int64("key-space", 0, "cap the id space so ids repeat (id = i %% key-space) for keyed upsert benches; 0 keeps ids unique")
+		keyOrder := fs.String("key-order", "sequential", "arrival order of recurring ids when key-space is set: sequential (contiguous runs) or scattered (coprime-stride walk)")
 		_ = fs.Parse(os.Args[2:])
-		if err := seed(context.Background(), *topic, *rows, *rowSize, *partitions, *keySpace); err != nil {
+		if *keyOrder != "sequential" && *keyOrder != "scattered" {
+			fmt.Fprintf(os.Stderr, "seed: --key-order must be sequential or scattered (got %q)\n", *keyOrder)
+			os.Exit(2)
+		}
+		if err := seed(context.Background(), *topic, *rows, *rowSize, *partitions, *keySpace, *keyOrder); err != nil {
 			fmt.Fprintln(os.Stderr, "seed:", err)
 			os.Exit(1)
 		}

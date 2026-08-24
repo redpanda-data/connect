@@ -79,6 +79,9 @@ func (sinkTopology) SeedScript(s *Scenario, outs map[string]string, n BenchNames
 	if s.Dataset.KeySpace > 0 {
 		keySpaceFlag = fmt.Sprintf(" --key-space=%d", s.Dataset.KeySpace)
 	}
+	if s.Dataset.KeyOrder != "" {
+		keySpaceFlag += fmt.Sprintf(" --key-order=%s", s.Dataset.KeyOrder)
+	}
 	if s.Dataset.Topics <= 1 {
 		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s seed \\\n  --topic=%s --rows=%d --row-size=%d%s\n",
 			brokers, s.Dataset.Seeder, n.SourceTopic(), s.Dataset.InitialRows, s.Dataset.RowSizeBytes, keySpaceFlag)

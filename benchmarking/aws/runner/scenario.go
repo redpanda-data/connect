@@ -99,6 +99,13 @@ type Scenario struct {
 	// fields here are shallow-merged into the resulting KC connector config
 	// JSON. Use this to tune e.g. snapshot.mode without editing the registry.
 	KafkaConnect map[string]any `yaml:"kafka_connect,omitempty"`
+	// SkipConnectTablePrecreate opts the Connect engine out of the reset
+	// script's iceberg-tablegen pre-create, so the output auto-creates its
+	// table and the schema_evolution settings that only apply at creation
+	// time (partition_spec) take effect. The per-point table drop still runs,
+	// and the KC engine keeps its pre-create unconditionally (the KC Tabular
+	// sink cannot supply a table location on create). Iceberg sink only.
+	SkipConnectTablePrecreate bool `yaml:"skip_connect_table_precreate,omitempty"`
 }
 
 type InfraSpec struct {
@@ -133,6 +140,15 @@ type DatasetSpec struct {
 	// (absent) keeps ids unique and every existing scenario's seed script
 	// byte-identical. Only the json-orders seeder honours the flag.
 	KeySpace int64 `yaml:"key_space,omitempty"`
+	// KeyOrder controls how recurring ids arrive when KeySpace > 0.
+	// "sequential" (or absent) keeps the historical id = i % key_space —
+	// contiguous runs, the best case for copy-on-write since a batch's keys
+	// cluster into few data files. "scattered" walks the key space by a
+	// coprime stride so consecutive rows carry far-apart ids — every id is
+	// still hit exactly once per cycle, but a batch's keys spray across all
+	// files: the realistic worst case for keyed CDC. Only meaningful with
+	// key_space set; only the json-orders seeder honours it.
+	KeyOrder string `yaml:"key_order,omitempty"`
 }
 
 // partitionsPerTopic is the effective per-topic partition count to seed with
@@ -441,6 +457,14 @@ func (s *Scenario) Validate() error {
 	if s.Dataset.KeySpace > 0 && s.Dataset.KeySpace >= s.Dataset.InitialRows {
 		return fmt.Errorf("dataset.key_space (%d) must be < dataset.initial_rows (%d): a key space at or above the row count never produces a key collision, which is the field's whole purpose — omit it for unique ids",
 			s.Dataset.KeySpace, s.Dataset.InitialRows)
+	}
+	switch s.Dataset.KeyOrder {
+	case "", "sequential", "scattered":
+	default:
+		return fmt.Errorf("dataset.key_order must be \"sequential\" or \"scattered\" (got %q)", s.Dataset.KeyOrder)
+	}
+	if s.Dataset.KeyOrder != "" && s.Dataset.KeySpace == 0 {
+		return fmt.Errorf("dataset.key_order requires dataset.key_space: arrival order only exists for a bounded, recurring key space")
 	}
 
 	if s.Dataset.Topics > 1 {
