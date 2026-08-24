@@ -774,7 +774,10 @@ func TestSweep_GetResourcesPagination(t *testing.T) {
 // TestSweep_ErroredDeleteNotReportedDestroyed is a regression test for the
 // bug where Destroyed/DestroyedCount were derived purely from resource age,
 // so a resource whose delete call errored was still reported (and
-// SNS-alerted) as destroyed.
+// SNS-alerted) as destroyed. An errors-only sweep must still publish —
+// the stranded resource keeps accruing cost and CloudWatch Logs is the
+// only other trace, which nothing alarms on — but as a failure, never as
+// a destruction.
 func TestSweep_ErroredDeleteNotReportedDestroyed(t *testing.T) {
 	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
 	old := now.Add(-4 * time.Hour)
@@ -792,7 +795,11 @@ func TestSweep_ErroredDeleteNotReportedDestroyed(t *testing.T) {
 	require.Equal(t, 0, report.DestroyedCount)
 	require.Empty(t, report.Destroyed)
 	require.Equal(t, 1, report.Errors)
-	require.Empty(t, api.SNSMessages, "must not publish when nothing actually got destroyed")
+	require.Equal(t, []string{"ec2:i-old: boom"}, report.Failed)
+	require.Len(t, api.SNSMessages, 1, "a sweep that only fails must still alert")
+	require.Contains(t, api.SNSMessages[0], "destroyed 0 resources, 1 failed deletions")
+	require.Contains(t, api.SNSMessages[0], "ec2:i-old: boom")
+	require.NotContains(t, api.SNSMessages[0], "destroyed:", "must not list the errored resource as destroyed")
 }
 
 // TestSweep_ThreadsCallerContext is a regression test for lookupEC2/

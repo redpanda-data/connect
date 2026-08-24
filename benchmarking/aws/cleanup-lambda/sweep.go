@@ -455,21 +455,23 @@ func processRDSParameterGroup(ctx context.Context, api cleanupAPI, name string, 
 
 // SweepReport summarises one execution of the Lambda. Destroyed/
 // DestroyedCount reflect only resources the processing pass actually
-// deleted; a resource whose delete call errored is counted in Errors only,
-// never in Destroyed, regardless of its age.
+// deleted; a resource whose delete call errored is counted in Errors (and
+// listed in Failed), never in Destroyed, regardless of its age.
 type SweepReport struct {
 	DestroyedCount int
 	Errors         int
 	Destroyed      []string
+	Failed         []string
 }
 
 // record folds a single resource's processing outcome into the report:
 // success increments DestroyedCount/Destroyed, failure logs and increments
-// Errors, and a no-op (not old enough, or already gone) is silent.
+// Errors/Failed, and a no-op (not old enough, or already gone) is silent.
 func (r *SweepReport) record(kind, id string, destroyed bool, err error) {
 	if err != nil {
 		slog.Error("cleanup failed", "kind", kind, "id", id, "err", err)
 		r.Errors++
+		r.Failed = append(r.Failed, fmt.Sprintf("%s:%s: %v", kind, id, err))
 		return
 	}
 	if destroyed {
@@ -480,7 +482,9 @@ func (r *SweepReport) record(kind, id string, destroyed bool, err error) {
 
 // Sweep performs one cleanup pass. Resources are processed in dependency
 // order; per-resource failures are logged but do not abort the sweep.
-// SNS is only published when at least one resource was destroyed.
+// SNS is published when anything was destroyed OR any delete failed — a
+// sweep that only fails must page too, since the stranded resource keeps
+// accruing cost and CloudWatch Logs (the only other trace) has no alarm.
 func Sweep(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration, snsTopicARN string) (SweepReport, error) {
 	var mappings []rgtatypes.ResourceTagMapping
 	var pageToken *string
@@ -604,9 +608,15 @@ func Sweep(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration
 		report.record("vpc", id, destroyed, err)
 	}
 
-	if report.DestroyedCount > 0 {
-		msg := fmt.Sprintf("orphan-cleanup destroyed %d resources at %s:\n%s",
-			report.DestroyedCount, now.Format(time.RFC3339), strings.Join(report.Destroyed, "\n"))
+	if report.DestroyedCount > 0 || report.Errors > 0 {
+		msg := fmt.Sprintf("orphan-cleanup at %s: destroyed %d resources, %d failed deletions",
+			now.Format(time.RFC3339), report.DestroyedCount, report.Errors)
+		if len(report.Destroyed) > 0 {
+			msg += "\n\ndestroyed:\n" + strings.Join(report.Destroyed, "\n")
+		}
+		if len(report.Failed) > 0 {
+			msg += "\n\nfailed (still accruing cost; retried next sweep):\n" + strings.Join(report.Failed, "\n")
+		}
 		if _, err := api.Publish(ctx, &sns.PublishInput{
 			TopicArn: aws.String(snsTopicARN),
 			Subject:  aws.String("bench orphan-cleanup ran"),
