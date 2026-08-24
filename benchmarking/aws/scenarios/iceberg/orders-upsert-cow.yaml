@@ -69,13 +69,13 @@ pipeline:
   # 2026-08-24: every write failed and the arm benched as zeros). Friday's
   # run dodged this only because tablegen's pre-created table typed id as
   # long. Real CDC sources emit proper integers, so the coercion restores
-  # realism rather than bending the bench. Input-level processors ride the
-  # existing input_options merge.
-  input_options:
-    processors:
-      - mapping: |
-          root = this
-          root.id = this.id.int64()
+  # realism rather than bending the bench. Renders into the standard benthos
+  # pipeline.processors section (inside the input component map, benthos
+  # rejects the field — also found the hard way).
+  processors:
+    - mapping: |
+        root = this
+        root.id = this.id.int64()
   buffer:
     memory:
       limit: 524288000

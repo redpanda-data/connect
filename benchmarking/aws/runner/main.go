@@ -659,6 +659,14 @@ func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, na
 	if buf, ok := s.Pipeline["buffer"]; ok {
 		cfg["buffer"] = buf
 	}
+	// A scenario may declare pipeline-level processors (e.g. type coercion a
+	// real source would provide natively). They render into the standard
+	// benthos pipeline.processors section — NOT inside the input component
+	// map, where benthos rejects the field ("field processors not
+	// recognised", hit live 2026-08-24).
+	if procs, ok := s.Pipeline["processors"]; ok {
+		cfg["pipeline"] = map[string]any{"processors": procs}
+	}
 	return writeTempYAML(cfg, outs, "bench-config-*.yaml")
 }
 

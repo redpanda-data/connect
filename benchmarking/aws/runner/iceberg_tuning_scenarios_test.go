@@ -237,16 +237,22 @@ func TestValidate_KeyOrderBounds(t *testing.T) {
 	require.ErrorContains(t, s.Validate(), "key_order requires dataset.key_space")
 }
 
-func TestUpsertCowScenario_InputCoercesIDToInt(t *testing.T) {
+func TestUpsertCowScenario_PipelineCoercesIDToInt(t *testing.T) {
 	// JSON numbers decode as float64; with the tablegen pre-create skipped
 	// the output infers the table schema from the first record, and a double
 	// id is rejected as an identifier field. The scenario must therefore
-	// coerce id at the input, for every arm.
+	// coerce id before the output, for every arm — and the processors must
+	// land in the standard benthos pipeline.processors section, NOT inside
+	// the input component map, where benthos rejects the field ("field
+	// processors not recognised", hit live 2026-08-24).
 	cfg := renderArm(t, "../scenarios/iceberg/orders-upsert-cow.yaml", "mor-50k")
 	in, ok := cfg["input"].(map[string]any)["redpanda"].(map[string]any)
 	require.True(t, ok)
-	procs, ok := in["processors"].([]any)
-	require.True(t, ok, "input must carry the id-coercion processors")
+	require.NotContains(t, in, "processors", "processors inside the input component map fail the config lint")
+	pl, ok := cfg["pipeline"].(map[string]any)
+	require.True(t, ok, "config must carry a pipeline section")
+	procs, ok := pl["processors"].([]any)
+	require.True(t, ok, "pipeline must carry the id-coercion processors")
 	require.Len(t, procs, 1)
 	m, ok := procs[0].(map[string]any)["mapping"].(string)
 	require.True(t, ok)
