@@ -177,7 +177,12 @@ func TestIntegrationVerifyUserDefinedTablesCaptureInstanceResolution(t *testing.
 		assert.Equal(t, "the_only_instance", tables[0].CaptureInstance)
 	})
 
-	t.Run("ConventionNamePreferredOverOverride", func(t *testing.T) {
+	t.Run("OverridePreferredOverConventionName", func(t *testing.T) {
+		// An explicit capture_instance is how an operator selects the new
+		// instance during a mid-migration cutover, before the old
+		// (convention-named) instance is dropped - it must win even though
+		// the other instance is convention-named, or there'd be no way to
+		// cut over until the old instance is gone.
 		const fullTableName = "dbo.override_convention_precedence_test"
 		db.MustExec(`CREATE TABLE dbo.override_convention_precedence_test (id INT NOT NULL PRIMARY KEY);`)
 		db.MustEnableCDC(t.Context(), fullTableName, mssqlservertest.DefaultCaptureInstance)
@@ -186,7 +191,28 @@ func TestIntegrationVerifyUserDefinedTablesCaptureInstanceResolution(t *testing.
 		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), "other_instance", log)
 		require.NoError(t, err)
 		require.Len(t, tables, 1)
-		assert.Equal(t, "dbo_override_convention_precedence_test", tables[0].CaptureInstance)
+		assert.Equal(t, "other_instance", tables[0].CaptureInstance)
+	})
+
+	t.Run("DefaultNamedInstancePreferredWhenOverrideDoesNotMatch", func(t *testing.T) {
+		// If the configured override doesn't match either instance, resolution
+		// falls back to the convention-named one, and the warning must name
+		// the ignored override so the operator can see why it had no effect.
+		const fullTableName = "dbo.override_fallback_test"
+		db.MustExec(`CREATE TABLE dbo.override_fallback_test (id INT NOT NULL PRIMARY KEY);`)
+		db.MustEnableCDC(t.Context(), fullTableName, mssqlservertest.DefaultCaptureInstance)
+		db.MustEnableCDC(t.Context(), fullTableName, "fallback_other_instance")
+
+		logs := &mssqlservertest.SyncBuffer{}
+		warnLog := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(logs, nil)))
+
+		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), "typo_instance", warnLog)
+		require.NoError(t, err)
+		require.Len(t, tables, 1)
+		assert.Equal(t, "dbo_override_fallback_test", tables[0].CaptureInstance)
+
+		assert.Contains(t, logs.String(), "typo_instance")
+		assert.Contains(t, logs.String(), "does not match either")
 	})
 }
 

@@ -485,7 +485,9 @@ type captureInstance struct {
 
 // VerifyUserDefinedTables verifies underlying user defined tables based on
 // supplied include/exclude filters, resolving each one's CDC capture
-// instance(s) via cdc.change_tables. captureInstanceOverride optionally overrides this.
+// instance(s) via cdc.change_tables. capInstanceOverride optionally names a
+// literal capture instance to prefer for a table with two capture instances;
+// see resolveCaptureInstance for the full precedence.
 func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, capInstanceOverride string, log *service.Logger) ([]UserDefinedTable, error) {
 	q := `
 	SELECT s.name AS SchemaName, t.name AS TableName, ct.capture_instance, ct.start_lsn
@@ -569,19 +571,6 @@ func resolveCaptureInstance(tbl *UserDefinedTable, instances []captureInstance, 
 		names[i] = inst.name
 	}
 
-	conventionName := fmt.Sprintf("%s_%s", tbl.Schema, tbl.Name)
-	for _, inst := range instances {
-		if inst.name != conventionName {
-			continue
-		}
-		log.Warnf("Table '%s' has multiple CDC capture instances (%s); preferring the default-named instance '%s'. "+
-			"If this is a mid-migration cutover, drop the old instance once the migration completes.",
-			tbl.FullName(), strings.Join(names, ", "), conventionName)
-		tbl.CaptureInstance = inst.name
-		tbl.startLSN = inst.startLSN
-		return nil
-	}
-
 	if override != "" {
 		for _, inst := range instances {
 			if inst.name == override {
@@ -590,8 +579,29 @@ func resolveCaptureInstance(tbl *UserDefinedTable, instances []captureInstance, 
 				return nil
 			}
 		}
-		return fmt.Errorf("table '%s' has multiple CDC capture instances (%s) and configured capture_instance '%s' does not match either", tbl.FullName(), strings.Join(names, ", "), override)
 	}
 
+	conventionName := fmt.Sprintf("%s_%s", tbl.Schema, tbl.Name)
+	for _, inst := range instances {
+		if inst.name != conventionName {
+			continue
+		}
+		if override != "" {
+			log.Warnf("Table '%s' has multiple CDC capture instances (%s); configured capture_instance '%s' does not match either, falling back to the default-named instance '%s'. "+
+				"If this is a mid-migration cutover, check capture_instance matches the new instance's actual name.",
+				tbl.FullName(), strings.Join(names, ", "), override, conventionName)
+		} else {
+			log.Warnf("Table '%s' has multiple CDC capture instances (%s); preferring the default-named instance '%s'. "+
+				"If this is a mid-migration cutover, set capture_instance to the new instance's name, or drop the old one once the migration completes.",
+				tbl.FullName(), strings.Join(names, ", "), conventionName)
+		}
+		tbl.CaptureInstance = inst.name
+		tbl.startLSN = inst.startLSN
+		return nil
+	}
+
+	if override != "" {
+		return fmt.Errorf("table '%s' has multiple CDC capture instances (%s) and configured capture_instance '%s' does not match either", tbl.FullName(), strings.Join(names, ", "), override)
+	}
 	return fmt.Errorf("table '%s' has multiple CDC capture instances (%s): unable to determine which one to stream from", tbl.FullName(), strings.Join(names, ", "))
 }
