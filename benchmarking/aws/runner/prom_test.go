@@ -114,29 +114,43 @@ func TestExtractPromPoint_ErrorSnapshotSkipped(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestExtractPromPoint_PartialMetricsOK(t *testing.T) {
+// A frame missing process_resident_memory_bytes is the mid-write-truncation
+// signature (process_* trails go_* in the dump); it must be dropped, not
+// passed through as RSSBytes=0 which would corrupt the rss-slope fit.
+func TestExtractPromPoint_MissingRSSIsSkipped(t *testing.T) {
 	body := `go_goroutines 50
 go_memstats_heap_inuse_bytes 1.0485e+07
+`
+	_, ok := extractPromPoint(promSnapshot{UnixTime: 1, Body: body})
+	require.False(t, ok, "a frame with no process_resident_memory_bytes is truncated — skip it")
+}
+
+// Other curated metrics may still be absent as long as RSS is present.
+func TestExtractPromPoint_PartialButHasRSSOK(t *testing.T) {
+	body := `go_goroutines 50
+process_resident_memory_bytes 1.45e+08
 `
 	pp, ok := extractPromPoint(promSnapshot{UnixTime: 1, Body: body})
 	require.True(t, ok)
 	require.Equal(t, 50, pp.Goroutines)
-	require.InDelta(t, 10.485, pp.HeapInUseMB, 0.001) // 1.0485e+07 B / 1e6 = 10.485 MB
-	require.Equal(t, 0.0, pp.CPUSeconds)              // missing — zero is OK
+	require.Equal(t, uint64(145000000), pp.RSSBytes)
+	require.Equal(t, 0.0, pp.CPUSeconds) // missing — zero is OK
 	require.Equal(t, uint64(0), pp.GCPauseTotalNS)
-	require.Equal(t, uint64(0), pp.RSSBytes) // missing — zero is OK
 }
 
 func TestParsePromStream_EndToEnd(t *testing.T) {
 	raw := `noise
 ###timestamp=1000
 go_goroutines 10
+process_resident_memory_bytes 1e+08
 ###timestamp=1010
 go_goroutines 12
+process_resident_memory_bytes 1e+08
 ###timestamp=1020
 ###scrape_error
 ###timestamp=1030
 go_goroutines 14
+process_resident_memory_bytes 1e+08
 `
 	pts, err := ParsePromStream(strings.NewReader(raw))
 	require.NoError(t, err)

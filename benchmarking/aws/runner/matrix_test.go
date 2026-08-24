@@ -502,9 +502,11 @@ func TestMatrixRunner_FetchesPromAlongsideLog(t *testing.T) {
 	prom := `###timestamp=1000
 go_goroutines 10
 go_memstats_heap_inuse_bytes 1.0485e+08
+process_resident_memory_bytes 2e+08
 ###timestamp=1010
 go_goroutines 12
 go_memstats_heap_inuse_bytes 1.1e+08
+process_resident_memory_bytes 2.1e+08
 `
 	fetcher := &FakeLogFetcher{
 		Contents: map[string]string{

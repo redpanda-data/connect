@@ -51,7 +51,14 @@ type promSnapshot struct {
 }
 
 // extractPromPoint pulls the curated metrics out of a single snapshot
-// body. Returns ok=false if the snapshot was an error frame.
+// body. Returns ok=false if the snapshot was an error frame OR carries no
+// process_resident_memory_bytes. The RSS metric is the last of the curated
+// set in a /metrics dump (process_* trails go_*), so its absence is the
+// signature of a frame captured mid-write — parseSnapshots deliberately
+// keeps such frames. Passing one through as a PromPoint{RSSBytes:0} at the
+// newest T swings rssSlopeBytesPerMin's least-squares fit sharply negative
+// and masks the slow-leak signal the rss-slope alarm exists to catch, so a
+// truncated frame is dropped the same way an errored one is.
 //
 // Hand-rolled rather than depending on prometheus/common/expfmt: the
 // curated subset is five unlabeled metrics, and avoiding the dependency
@@ -61,6 +68,7 @@ func extractPromPoint(s promSnapshot) (PromPoint, bool) {
 		return PromPoint{}, false
 	}
 	pp := PromPoint{}
+	var sawRSS bool
 	scanner := bufio.NewScanner(strings.NewReader(s.Body))
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -91,9 +99,10 @@ func extractPromPoint(s promSnapshot) (PromPoint, bool) {
 		case "process_resident_memory_bytes":
 			n, _ := strconv.ParseFloat(valueStr, 64)
 			pp.RSSBytes = uint64(n)
+			sawRSS = true
 		}
 	}
-	return pp, true
+	return pp, sawRSS
 }
 
 // splitMetricLine splits a line like `go_goroutines 312` or
