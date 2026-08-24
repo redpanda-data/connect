@@ -236,3 +236,19 @@ func TestValidate_KeyOrderBounds(t *testing.T) {
 	s.Dataset.KeySpace = 0
 	require.ErrorContains(t, s.Validate(), "key_order requires dataset.key_space")
 }
+
+func TestUpsertCowScenario_InputCoercesIDToInt(t *testing.T) {
+	// JSON numbers decode as float64; with the tablegen pre-create skipped
+	// the output infers the table schema from the first record, and a double
+	// id is rejected as an identifier field. The scenario must therefore
+	// coerce id at the input, for every arm.
+	cfg := renderArm(t, "../scenarios/iceberg/orders-upsert-cow.yaml", "mor-50k")
+	in, ok := cfg["input"].(map[string]any)["redpanda"].(map[string]any)
+	require.True(t, ok)
+	procs, ok := in["processors"].([]any)
+	require.True(t, ok, "input must carry the id-coercion processors")
+	require.Len(t, procs, 1)
+	m, ok := procs[0].(map[string]any)["mapping"].(string)
+	require.True(t, ok)
+	require.Contains(t, m, "root.id = this.id.int64()")
+}

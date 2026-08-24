@@ -62,6 +62,20 @@ dataset:
 skip_connect_table_precreate: true
 
 pipeline:
+  # id must be an integer BEFORE the output sees it: JSON numbers decode as
+  # float64, and with the tablegen pre-create skipped the output infers the
+  # table schema from the first record — a double id is rejected outright as
+  # an identifier field ("cannot be an identifier field", found the hard way
+  # 2026-08-24: every write failed and the arm benched as zeros). Friday's
+  # run dodged this only because tablegen's pre-created table typed id as
+  # long. Real CDC sources emit proper integers, so the coercion restores
+  # realism rather than bending the bench. Input-level processors ride the
+  # existing input_options merge.
+  input_options:
+    processors:
+      - mapping: |
+          root = this
+          root.id = this.id.int64()
   buffer:
     memory:
       limit: 524288000
