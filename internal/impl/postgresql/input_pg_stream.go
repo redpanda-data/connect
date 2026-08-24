@@ -497,6 +497,12 @@ type pgStreamInput struct {
 	// time snapshotAckPending reaches zero, so the handoff can wait on it
 	// without spawning a helper goroutine around WaitGroup.Wait.
 	snapshotAckDrained chan struct{}
+	// snapshotAckFailed is a sticky flag set when any snapshot batch settles
+	// via a nack (as opposed to an ack). The counter drains the same way for
+	// acks and nacks, so this flag is what tells the handoff apart: a drain
+	// caused by a nack must never promote the slot, since the corresponding
+	// rows were never durably delivered downstream.
+	snapshotAckFailed atomic.Bool
 
 	// IAM authentication fields
 	iamAuthEnabled bool
@@ -520,6 +526,12 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	}
 	// Reset our stop signal
 	p.stopSig = shutdown.NewSignaller()
+	// A new connect starts a fresh snapshot attempt, so any nack recorded
+	// against the previous epoch is no longer relevant: the snapshot rows are
+	// about to be re-read and re-emitted from scratch. Note that a late,
+	// cross-epoch nack racing in after this reset would simply re-set the
+	// flag and force another conservative re-run, which is safe.
+	p.snapshotAckFailed.Store(false)
 	go p.processStream(pgStream, batcher)
 	return err
 }
@@ -570,12 +582,15 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 		case batch := <-pgStream.Messages():
 			if len(batch) == 1 && batch[0].Operation == pglogicalstream.SnapshotCompleteOpType {
 				// Snapshot fully emitted. Flush any buffered rows, then block
-				// until every snapshot batch is acknowledged downstream before
-				// signalling the stream to promote the replication slot. Blocks
-				// until acks drain or soft-stop (no timeout, by design). If
-				// soft-stop wins the race, the slot is left unpromoted since
-				// batches settling during teardown are nacks, not durable
-				// delivery, so the snapshot re-runs on restart.
+				// until every snapshot batch has settled downstream before
+				// deciding whether to promote the replication slot. Blocks
+				// until settlement drains or soft-stop (no timeout, by
+				// design). The counter alone can't tell an ack from a nack -
+				// it drains either way - so snapshotAckFailed is consulted
+				// once drained to distinguish "durably delivered" from
+				// "rejected downstream". If soft-stop wins the race instead,
+				// the slot is likewise left unpromoted: batches settling
+				// during teardown are nacks, not durable delivery.
 				nextTimedBatchChan = nil
 				flushedBatch, err := batcher.Flush(ctx)
 				if err != nil {
@@ -606,8 +621,19 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 						break drainWait
 					}
 				}
-				if drained {
+				switch {
+				case drained && !p.snapshotAckFailed.Load():
 					pgStream.MarkSnapshotAcknowledged()
+				case drained:
+					// The counter reached zero because every outstanding
+					// snapshot batch settled, but at least one of them was
+					// rejected downstream (a nack), not durably delivered.
+					// Promoting the slot here would let those rows be lost
+					// forever, so leave it unpromoted and restart the stream:
+					// the snapshot will re-read and re-emit every row on the
+					// next connect.
+					p.logger.Errorf("a snapshot batch was rejected downstream (nacked); leaving the replication slot unpromoted so the snapshot re-runs on restart")
+					p.stopSig.TriggerSoftStop()
 				}
 				break
 			}
@@ -700,8 +726,15 @@ func (p *pgStreamInput) flushBatch(
 	// in the read loop).
 	isSnapshot := lsn == nil
 
-	ackFn := func(ctx context.Context, _ error) error {
+	ackFn := func(ctx context.Context, ackErr error) error {
 		if isSnapshot {
+			// Record whether this batch settled via nack *before* the
+			// deferred snapshotAckDone runs, so the flag is guaranteed
+			// visible to the handoff by the time the drain signal (which
+			// snapshotAckDone sends) wakes it up.
+			if ackErr != nil {
+				p.snapshotAckFailed.Store(true)
+			}
 			defer p.snapshotAckDone()
 		}
 		maxOffset := resolveFn()
