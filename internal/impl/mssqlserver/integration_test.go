@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -514,6 +515,47 @@ microsoft_sql_server_cdc:
 		require.Contains(t, outBatches[len(outBatches)-1], fmt.Sprintf("%d", totalWant))
 		require.NoError(t, streamResume.StopWithin(time.Second*10))
 	}
+}
+
+func TestIntegration_MicrosoftSQLServerCDC_TwoNonDefaultCaptureInstances(t *testing.T) {
+	integration.CheckSkip(t)
+
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
+
+	db.MustExec(`CREATE SCHEMA rpcn;`)
+	db.MustExec(`CREATE TABLE dbo.migrating_table (id INT NOT NULL PRIMARY KEY);`)
+
+	db.MustEnableCDC(t.Context(), "dbo.migrating_table", "migrating_table_v1")
+	db.MustEnableCDC(t.Context(), "dbo.migrating_table", "migrating_table_v2")
+
+	cfg := `
+microsoft_sql_server_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  include: ["dbo.migrating_table"]`
+
+	logs := &mssqlservertest.SyncBuffer{}
+	streamBuilder := service.NewStreamBuilder()
+	streamBuilder.SetLogger(slog.New(slog.NewTextHandler(logs, nil)))
+	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	runCtx, cancel := context.WithCancel(t.Context())
+	go func() {
+		_ = stream.Run(runCtx)
+	}()
+
+	time.Sleep(5 * time.Second)
+	cancel()
+	require.NoError(t, stream.StopWithin(10*time.Second))
+
+	assert.NotContains(t, logs.String(), "multiple CDC capture instances",
+		"expected the input to start even though dbo.migrating_table has two non-default-named capture "+
+			"instances; there is currently no config field to disambiguate which one to stream from, so "+
+			"Connect fails repeatedly and the whole input never starts")
 }
 
 func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {

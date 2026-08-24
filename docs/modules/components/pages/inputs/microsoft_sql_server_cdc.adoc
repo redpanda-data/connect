@@ -118,6 +118,7 @@ Operational notes:
 - `TRUNCATE TABLE` is rejected on a CDC-enabled table. To clear one, disable CDC on the table, truncate, then re-enable.
 - On AWS RDS, enable CDC with `msdb.dbo.rds_cdc_enable_db` — `sys.sp_cdc_enable_db` requires sysadmin, which RDS does not grant.
 - Do not stop the CDC capture job (`cdc.<database>_capture`): while it is stopped nothing is published to the change tables, so this input reads nothing and reports no error.
+- Each table's CDC capture instance is discovered from `cdc.change_tables`, not assumed from the `<schema>_<table>` naming convention, so this works whether CDC was enabled by this input, by hand, or by another tool (e.g. an Oracle GoldenGate feed) under an arbitrary capture instance name. SQL Server allows at most two capture instances per table — its supported way to change a CDC-enabled table's schema without downtime is to run a second, temporarily-named instance alongside the original for the duration of the migration. If a table has two capture instances and one is named after the `<schema>_<table>` convention, that one is preferred and a warning is logged; if neither is, table discovery fails for that table since there is currently no way to specify which one to stream from — the only recourse is to drop one of the two instances on the server.
 		
 
 == Fields

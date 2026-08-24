@@ -477,46 +477,74 @@ func (t *UserDefinedTable) FullName() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Name)
 }
 
-// VerifyUserDefinedTables verifies underlying user defined tables based on supplied
-// include and exclude filters, validating the associated change table also exists.
+// captureInstance is one row of cdc.change_tables for a given source table.
+type captureInstance struct {
+	name     string
+	startLSN LSN
+}
+
+// VerifyUserDefinedTables verifies underlying user defined tables based on
+// supplied include/exclude filters, resolving each one's CDC capture
+// instance(s) via cdc.change_tables.
 func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserDefinedTable, error) {
 	q := `
-	SELECT s.name AS SchemaName, t.name AS TableName
+	SELECT s.name AS SchemaName, t.name AS TableName, ct.capture_instance, ct.start_lsn
 	FROM sys.tables t
 	INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+	LEFT JOIN cdc.change_tables ct ON ct.source_object_id = t.object_id
 	WHERE s.name != 'cdc'
-	ORDER BY s.name, t.name;`
+	ORDER BY s.name, t.name, ct.capture_instance;`
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
-		return nil, fmt.Errorf("fetching user defined tables from sys.tables for verification: %w", err)
+		return nil, fmt.Errorf("fetching user defined tables and capture instances for verification: %w", err)
 	}
+	defer rows.Close()
 
-	var userTables []UserDefinedTable
+	var (
+		order     []string
+		tables    = map[string]UserDefinedTable{}
+		instances = map[string][]captureInstance{}
+	)
 	for rows.Next() {
-		var ut UserDefinedTable
-		if err := rows.Scan(&ut.Schema, &ut.Name); err != nil {
+		var (
+			schema, name string
+			instanceName sql.NullString
+			startLSN     LSN
+		)
+		if err := rows.Scan(&schema, &name, &instanceName, &startLSN); err != nil {
 			return nil, fmt.Errorf("scanning sys.tables row for user defined tables: %w", err)
 		}
-		if tableFilter.Matches(fmt.Sprintf("%s.%s", ut.Schema, ut.Name)) {
-			userTables = append(userTables, ut)
+
+		fullName := fmt.Sprintf("%s.%s", schema, name)
+		if !tableFilter.Matches(fullName) {
+			continue
+		}
+		if _, ok := tables[fullName]; !ok {
+			tables[fullName] = UserDefinedTable{Schema: schema, Name: name}
+			order = append(order, fullName)
+		}
+		if instanceName.Valid {
+			instances[fullName] = append(instances[fullName], captureInstance{name: instanceName.String, startLSN: startLSN})
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating through sys.tables for user defined tables: %w", err)
 	}
 
-	if len(userTables) == 0 {
+	if len(order) == 0 {
 		return nil, errors.New("no user defined tables found for given include and exclude filters")
 	}
 
-	for i, tbl := range userTables {
-		if err := resolveCaptureInstance(ctx, db, &tbl); err != nil {
+	userTables := make([]UserDefinedTable, 0, len(order))
+	for _, fullName := range order {
+		tbl := tables[fullName]
+		if err := resolveCaptureInstance(&tbl, instances[fullName], log); err != nil {
 			return nil, err
 		}
 		if len(tbl.startLSN) == 0 {
 			return nil, fmt.Errorf("field 'start_lsn' in change table '%s' expected to be set but was not", tbl.ToChangeTable())
 		}
-		userTables[i] = tbl
+		userTables = append(userTables, tbl)
 	}
 
 	for _, t := range userTables {
@@ -526,46 +554,33 @@ func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx
 	return userTables, nil
 }
 
-func resolveCaptureInstance(ctx context.Context, db *sql.DB, tbl *UserDefinedTable) error {
-	conventionName := fmt.Sprintf("%s_%s", tbl.Schema, tbl.Name)
-	var startLSN LSN
-	err := db.QueryRowContext(ctx, "SELECT start_lsn FROM cdc.change_tables WHERE capture_instance = ?", conventionName).Scan(&startLSN)
-	switch {
-	case err == nil:
-		tbl.CaptureInstance = conventionName
-		tbl.startLSN = startLSN
-		return nil
-	case !errors.Is(err, sql.ErrNoRows):
-		return fmt.Errorf("fetching change tables for table '%s': %w", tbl.FullName(), err)
-	}
-
-	q := "SELECT capture_instance, start_lsn FROM cdc.change_tables WHERE source_object_id = OBJECT_ID(?)"
-	rows, err := db.QueryContext(ctx, q, tbl.FullName())
-	if err != nil {
-		return fmt.Errorf("fetching change tables for table '%s': %w", tbl.FullName(), err)
-	}
-	defer rows.Close()
-
-	var captureInstances []string
-	for rows.Next() {
-		var captureInstance string
-		if err := rows.Scan(&captureInstance, &startLSN); err != nil {
-			return fmt.Errorf("scanning cdc.change_tables row for table '%s': %w", tbl.FullName(), err)
-		}
-		captureInstances = append(captureInstances, captureInstance)
-		tbl.CaptureInstance = captureInstance
-		tbl.startLSN = startLSN
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterating cdc.change_tables rows for table '%s': %w", tbl.FullName(), err)
-	}
-
-	switch len(captureInstances) {
+func resolveCaptureInstance(tbl *UserDefinedTable, instances []captureInstance, log *service.Logger) error {
+	switch len(instances) {
 	case 0:
 		return fmt.Errorf("no change table found for table '%s': is CDC enabled for this table?", tbl.FullName())
 	case 1:
+		tbl.CaptureInstance = instances[0].name
+		tbl.startLSN = instances[0].startLSN
 		return nil
-	default:
-		return fmt.Errorf("table '%s' has multiple CDC capture instances (%s): unable to determine which one to stream from", tbl.FullName(), strings.Join(captureInstances, ", "))
 	}
+
+	names := make([]string, len(instances))
+	for i, inst := range instances {
+		names[i] = inst.name
+	}
+
+	conventionName := fmt.Sprintf("%s_%s", tbl.Schema, tbl.Name)
+	for _, inst := range instances {
+		if inst.name != conventionName {
+			continue
+		}
+		log.Warnf("Table '%s' has multiple CDC capture instances (%s); preferring the default-named instance '%s'. "+
+			"If this is a mid-migration cutover, drop the old instance once the migration completes.",
+			tbl.FullName(), strings.Join(names, ", "), conventionName)
+		tbl.CaptureInstance = inst.name
+		tbl.startLSN = inst.startLSN
+		return nil
+	}
+
+	return fmt.Errorf("table '%s' has multiple CDC capture instances (%s): unable to determine which one to stream from", tbl.FullName(), strings.Join(names, ", "))
 }

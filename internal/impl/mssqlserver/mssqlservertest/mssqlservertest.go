@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -379,4 +380,22 @@ func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) 
 		assert.NoError(t, db.Close())
 	})
 	return connectionString, db
+}
+
+// SyncBuffer is a concurrency safe io writer for capturing logs
+type SyncBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *SyncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *SyncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }

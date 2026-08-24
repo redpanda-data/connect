@@ -107,10 +107,17 @@ func TestIntegrationVerifyUserDefinedTablesCaptureInstanceResolution(t *testing.
 		db.MustEnableCDC(t.Context(), fullTableName, mssqlservertest.DefaultCaptureInstance)
 		db.MustEnableCDC(t.Context(), fullTableName, "migration_temp_instance")
 
-		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), log)
+		logs := &mssqlservertest.SyncBuffer{}
+		warnLog := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(logs, nil)))
+
+		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), warnLog)
 		require.NoError(t, err)
 		require.Len(t, tables, 1)
 		assert.Equal(t, "dbo_migration_capture_test", tables[0].CaptureInstance)
+
+		assert.Contains(t, logs.String(), "multiple CDC capture instances")
+		assert.Contains(t, logs.String(), "migration_temp_instance")
+		assert.Contains(t, logs.String(), "dbo_migration_capture_test")
 	})
 
 	t.Run("DefaultNamedCaptureInstance", func(t *testing.T) {
