@@ -15,7 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -435,6 +435,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		replicationLag:  replicationLag,
 		stopSig:         shutdown.NewSignaller(),
 
+		snapshotAckDrained: make(chan struct{}, 1),
+
 		iamAuthEnabled: iamAuthEnabled,
 	}
 
@@ -486,11 +488,15 @@ type pgStreamInput struct {
 	controlSig      *postgresSignaller
 	stopSig         *shutdown.Signaller
 
-	// snapshotAckWG tracks in-flight snapshot batches: incremented when a
+	// snapshotAckPending tracks in-flight snapshot batches: incremented when a
 	// snapshot batch (nil LSN) is enqueued and decremented when it is
 	// acknowledged. The snapshot->stream handoff blocks until it drains so the
 	// replication slot is not promoted before snapshot rows are durable.
-	snapshotAckWG sync.WaitGroup
+	snapshotAckPending atomic.Int64
+	// snapshotAckDrained is signalled (best-effort, buffered capacity 1) each
+	// time snapshotAckPending reaches zero, so the handoff can wait on it
+	// without spawning a helper goroutine around WaitGroup.Wait.
+	snapshotAckDrained chan struct{}
 
 	// IAM authentication fields
 	iamAuthEnabled bool
@@ -572,8 +578,9 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if err != nil {
 					p.logger.Debugf("error flushing snapshot completion batch: %s", err)
 					// The sentinel is a one-shot signal; if we bail here without
-					// acking, the barrier's snapshot goroutine blocks on
-					// snapshotAcked forever. Trigger a restart instead of stalling.
+					// acking, the drain wait below would block forever waiting for
+					// snapshotAckPending to reach zero. Trigger a restart instead
+					// of stalling.
 					p.stopSig.TriggerSoftStop()
 					break
 				}
@@ -582,17 +589,16 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					p.stopSig.TriggerSoftStop()
 					break
 				}
-				drained := make(chan struct{})
-				go func() {
-					// May outlive the select below if soft-stop fires while the
-					// downstream is stalled; bounded by process lifetime.
-					p.snapshotAckWG.Wait()
-					close(drained)
-				}()
-				select {
-				case <-drained:
+			drainWait:
+				for p.snapshotAckPending.Load() > 0 {
+					select {
+					case <-p.snapshotAckDrained:
+					case <-p.stopSig.SoftStopChan():
+						break drainWait
+					}
+				}
+				if p.snapshotAckPending.Load() == 0 {
 					pgStream.MarkSnapshotAcknowledged()
-				case <-p.stopSig.SoftStopChan():
 				}
 				break
 			}
@@ -687,7 +693,7 @@ func (p *pgStreamInput) flushBatch(
 
 	ackFn := func(ctx context.Context, _ error) error {
 		if isSnapshot {
-			defer p.snapshotAckWG.Done()
+			defer p.snapshotAckDone()
 		}
 		maxOffset := resolveFn()
 		if maxOffset == nil {
@@ -703,17 +709,28 @@ func (p *pgStreamInput) flushBatch(
 		return nil
 	}
 	if isSnapshot {
-		p.snapshotAckWG.Add(1)
+		p.snapshotAckPending.Add(1)
 	}
 	select {
 	case p.msgChan <- asyncMessage{msg: batch, ackFn: ackFn}:
 	case <-ctx.Done():
 		if isSnapshot {
-			p.snapshotAckWG.Done()
+			p.snapshotAckDone()
 		}
 		return ctx.Err()
 	}
 	return nil
+}
+
+// snapshotAckDone marks one in-flight snapshot batch as settled and signals
+// the drain channel when the count reaches zero.
+func (p *pgStreamInput) snapshotAckDone() {
+	if p.snapshotAckPending.Add(-1) == 0 {
+		select {
+		case p.snapshotAckDrained <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func (p *pgStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {

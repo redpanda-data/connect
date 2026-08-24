@@ -22,10 +22,5 @@ func TestMain(m *testing.M) {
 		// internal/license: InjectTestService starts an hourly expiry-metric
 		// loop whose cancel func is not reachable from tests.
 		goleak.IgnoreTopFunction("github.com/redpanda-data/connect/v4/internal/license.(*Service).updateExpiryMetricLoop"),
-		// input_pg_stream.go's snapshot ack barrier waits on snapshotAckWG in
-		// a goroutine that is documented to outlive a soft stop when snapshot
-		// batches are never acknowledged ("bounded by process lifetime").
-		// TestIntegrationPostgresSnapshotAckBarrier triggers this on purpose.
-		goleak.IgnoreAnyFunction("github.com/redpanda-data/connect/v4/internal/impl/postgresql.(*pgStreamInput).processStream.func3"),
 	)
 }

@@ -144,6 +144,7 @@ func newSchemaWatcher(ctx context.Context, bsrURL, bsrAPIKey, module, version st
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, watcherTimeout)
 	defer cancel()
 	if err = watcher.AwaitReady(ctxWithTimeout); err != nil {
+		watcher.Stop()
 		return nil, fmt.Errorf("schema watcher never became ready: %w", err)
 	}
 
