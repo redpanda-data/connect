@@ -61,7 +61,12 @@ jobs:
           # legitimate "no connector packages touched" case, so only this
           # command is allowed to fail non-fatally.
           MATCHED=$(printf '%s\n' "${CHANGED}" | { grep '^internal/impl/' || true; })
-          FILTERS=$(printf '%s\n' "${MATCHED}" | cut -d/ -f3 | sort -u | tr '\n' ' ')
+          # xargs (not tr) joins the package names: on empty/blank input it
+          # emits a genuinely empty string, whereas tr '\n' ' ' would emit a
+          # lone space that defeats the `filters != ''` step guards below and
+          # runs the job (checkout, Go install, empty summary table) on every
+          # PR that touches no connector packages.
+          FILTERS=$(printf '%s\n' "${MATCHED}" | cut -d/ -f3 | sort -u | xargs)
           echo "filters=${FILTERS}" >> "$GITHUB_OUTPUT"
 
       - name: Install Go
