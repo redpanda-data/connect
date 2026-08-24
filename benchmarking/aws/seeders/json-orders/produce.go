@@ -67,9 +67,14 @@ func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int
 	// 16 MiB batches 4x headroom.
 	maxMsgBytes := "67108864" // 64 MiB
 	topicConfigs := map[string]*string{"max.message.bytes": &maxMsgBytes}
+	// 90 x 5s = 7.5 min: the brokers' cloud-init takes several minutes after
+	// terraform apply, and a warm build cache can get the seed here ~90s
+	// after apply — the old 30-attempt (2.5 min) window then expires before
+	// the brokers listen (hit live 2026-08-24: "connection refused", run
+	// aborted at seed).
 	adm := kadm.NewClient(cl)
 	var lastErr error
-	for attempt := 1; attempt <= 30; attempt++ {
+	for attempt := 1; attempt <= 90; attempt++ {
 		resp, err := adm.CreateTopics(ctx, int32(partitions), int16(3), topicConfigs, topic)
 		if err == nil {
 			if t, ok := resp[topic]; ok && t.Err != nil && !errors.Is(t.Err, kerr.TopicAlreadyExists) {
