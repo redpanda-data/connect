@@ -83,8 +83,11 @@ func (r *Resolver) Resolve(ctx context.Context, conn *pgconn.PgConn, logger *ser
 		schemas = remaining
 	}
 
-	if len(inaccessibleSchemas) > 0 && !slices.Equal(inaccessibleSchemas, r.previouslyInaccessible) {
-		logger.Warnf("schema_include pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", r.Include, inaccessibleSchemas)
+	// Compared set-wise, not with slices.Equal: resolveSchemas' pg_namespace
+	// query has no ORDER BY, so an unchanged set of inaccessible schemas can
+	// still come back in a different order between reconnects.
+	if newlyInaccessible, _ := diffSchemaSets(r.previouslyInaccessible, inaccessibleSchemas); len(newlyInaccessible) > 0 {
+		logger.Warnf("schema_include pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", r.Include, newlyInaccessible)
 	}
 	r.previouslyInaccessible = slices.Clone(inaccessibleSchemas)
 
