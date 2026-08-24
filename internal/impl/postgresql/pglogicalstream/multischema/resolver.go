@@ -25,6 +25,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
+// Resolver is responsible for helping resolve DB schemas for multi-schema support.
 type Resolver struct {
 	// Include is the schema_include glob pattern.
 	Include string
