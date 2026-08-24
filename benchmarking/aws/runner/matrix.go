@@ -401,7 +401,10 @@ func (m *MatrixRunner) Run(
 					tail = rawLog[len(rawLog)-tailMax:]
 				}
 				fmt.Fprintf(stdout, "[bench] connect log tail (last %d bytes):\n%s\n", len(tail), tail)
-				return out, fmt.Errorf("first sweep point at %d vCPU captured 0 samples — see log tail above", n)
+				// Name the point that failed: with arms, "first sweep point"
+				// would blame the wrong arm (both arms share the vCPU count,
+				// so that doesn't disambiguate either).
+				return out, fmt.Errorf("sweep point %s at %d vCPU captured 0 samples — see log tail above", pt.Key(), n)
 			}
 		}
 	}
@@ -819,7 +822,9 @@ func renderBenchScript(a benchScriptArgs) string {
   while kill -0 "$PID" 2>/dev/null; do
     {
       echo "###timestamp=$(date +%%s)"
-      curl -s --max-time 5 http://localhost:4195/metrics || echo "###scrape_error"
+      # -f: a non-2xx error body would otherwise parse as an all-zero
+      # PromPoint (RSSBytes 0), feeding the CloudWatch series and slope fit.
+      curl -sf --max-time 5 http://localhost:4195/metrics || echo "###scrape_error"
     } >> "$PROM"
     sleep %d
   done

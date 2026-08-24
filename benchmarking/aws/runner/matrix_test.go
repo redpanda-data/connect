@@ -458,7 +458,8 @@ func TestMatrixRunner_EarlyAbortFiresForLaterArmToo(t *testing.T) {
 	}
 	points, err := mr.Run(context.Background(), plan, 1, 0, 5*time.Second, "", "")
 	require.Error(t, err, "arm b's empty sample set must abort the sweep, not just plan[0]'s arm")
-	require.Contains(t, err.Error(), "first sweep point at 2 vCPU captured 0 samples")
+	require.Contains(t, err.Error(), "sweep point 2-b at 2 vCPU captured 0 samples",
+		"the error must name the arm that failed — both arms share the vCPU count")
 	require.Len(t, points, 2, "both arms were recorded before the abort fired")
 	require.Equal(t, "a0", points[0].ArmID)
 	require.Equal(t, "b", points[1].ArmID)

@@ -95,7 +95,11 @@ ENDPOINTS=%q
       echo "###timestamp=$(date +%%s)"
       IFS=, read -ra EPS <<< "$ENDPOINTS"
       for EP in "${EPS[@]}"; do
-        curl -s --max-time 5 "http://$EP/public_metrics" || echo "###scrape_error_$EP"
+        # -f: a non-2xx must trip the scrape_error marker, not pass an error
+        # body off as a healthy frame missing this broker's counters — that
+        # would charge the broker's whole cumulative counter to one interval
+        # when it recovers.
+        curl -sf --max-time 5 "http://$EP/public_metrics" || echo "###scrape_error_$EP"
       done
     } >> "$RP"
     sleep %d
