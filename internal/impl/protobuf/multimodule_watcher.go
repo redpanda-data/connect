@@ -69,6 +69,16 @@ func newMultiModuleWatcher(bsrModules []*service.ParsedConfig) (*multiModuleWatc
 
 	// Initialise one client for each module
 	multiModuleWatcher.bsrClients = make(map[string]*prototransform.SchemaWatcher)
+
+	// Any error return below drops out of the loop before every module has a
+	// watcher, so guard against leaking the watchers that already started.
+	ok := false
+	defer func() {
+		if !ok {
+			multiModuleWatcher.close()
+		}
+	}()
+
 	for _, bsrModule := range bsrModules {
 		var bsrURL string
 		bsrURL, err := bsrModule.FieldString(fieldBSRUrl)
@@ -98,6 +108,7 @@ func newMultiModuleWatcher(bsrModules []*service.ParsedConfig) (*multiModuleWatc
 		multiModuleWatcher.bsrClients[module] = watcher
 	}
 
+	ok = true
 	return multiModuleWatcher, nil
 }
 

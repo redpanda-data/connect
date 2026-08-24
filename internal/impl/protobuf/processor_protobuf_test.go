@@ -480,3 +480,27 @@ func runMockBSRServer(t *testing.T, importPath string) string {
 
 	return listener.Addr().String()
 }
+
+// TestProtobufBSRConstructionFailureStopsWatchers ensures that a
+// construction-time failure after the BSR watchers have started (in this
+// case, an operator that references a message the loaded module doesn't
+// resolve) still stops those watchers rather than leaking their background
+// polling goroutines. newProtobuf returns nil on error so there's no
+// processor to Close here; the package's goleak TestMain is what proves the
+// watchers were actually stopped.
+func TestProtobufBSRConstructionFailureStopsWatchers(t *testing.T) {
+	mockBSRServerAddress := runMockBSRServer(t, "../../../config/test/protobuf/schema")
+
+	conf, err := protobufProcessorSpec().ParseYAML(fmt.Sprintf(`
+operator: from_json
+message: does.not.Exist
+bsr:
+  - module: "testing"
+    url: %s
+`, "http://"+mockBSRServerAddress), nil)
+	require.NoError(t, err)
+
+	proc, err := newProtobuf(conf, service.MockResources())
+	require.Error(t, err)
+	require.Nil(t, proc)
+}

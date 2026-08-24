@@ -534,6 +534,7 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 			return nil, fmt.Errorf("creating multiModuleWatcher: %w", err)
 		}
 		if p.operator, err = strToProtobufBSROperator(p.multiModuleWatcher, operatorStr, message, opts); err != nil {
+			p.multiModuleWatcher.close()
 			return nil, err
 		}
 	} else {
