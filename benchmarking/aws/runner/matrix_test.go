@@ -848,6 +848,69 @@ func TestMatrixRun_EngineInnerLoop_ConnectOnly(t *testing.T) {
 	}
 }
 
+// A soak point whose broker-metrics artifact fails to fetch must fail the
+// point, not archive it as median 0.00 MB/s — a zero soak-index entry both
+// fails the run as a false regression and poisons the rolling baseline for
+// the next soakBaselineMaxPriorEntries runs.
+func TestMatrixRunner_SoakMissingBrokerArtifactFailsPoint(t *testing.T) {
+	const sessionID = "soak-sess"
+	const connector = "pg_cdc"
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): makeLog(180, 42),
+			fmt.Sprintf("runs/%s/prom-1.txt", sessionID):  "###timestamp=2000\nprocess_resident_memory_bytes 100\n",
+		},
+		Errs: map[string]error{
+			fmt.Sprintf("runs/%s/redpanda-1-connect.txt", sessionID): fmt.Errorf("not found"),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM: ssm, LogFetcher: fetcher, RunnerInstance: "i-runner",
+		Bucket: "b", SessionID: sessionID,
+		Topology: sourceTopology{}, Names: newBenchNames(sessionID, connector),
+		ExpectedRecordsPerSec: 5000,
+	}
+	_, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
+	require.Error(t, err, "a soak point without broker metrics must fail, not archive a zero")
+	require.Contains(t, err.Error(), "broker metrics artifact")
+}
+
+// Same guard for the prom artifact: without it, RSSMaxBytes would enter the
+// soak index as 0 and sink the RSS baseline for future runs.
+func TestMatrixRunner_SoakMissingPromFailsPoint(t *testing.T) {
+	const sessionID = "soak-sess"
+	const connector = "pg_cdc"
+	topic := fmt.Sprintf("bench_%s_%s_connect", sessionID, connector)
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID):            makeLog(180, 42),
+			fmt.Sprintf("runs/%s/redpanda-1-connect.txt", sessionID): makeBrokerFrames(topic, 1000, 15, 10, 2_000_000, 20_000),
+		},
+		Errs: map[string]error{
+			fmt.Sprintf("runs/%s/prom-1.txt", sessionID): fmt.Errorf("not found"),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM: ssm, LogFetcher: fetcher, RunnerInstance: "i-runner",
+		Bucket: "b", SessionID: sessionID,
+		Topology: sourceTopology{}, Names: newBenchNames(sessionID, connector),
+		ExpectedRecordsPerSec: 5000,
+	}
+	_, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
+	require.Error(t, err, "a soak point without a prom dump must fail, not archive RSS max 0")
+	require.Contains(t, err.Error(), "prom artifact")
+}
+
 // TestMatrixRunner_SoakEndToEnd_EmitsContractMetricsFromFakeInfra walks a
 // full soak point through FakeSSM + FakeLogFetcher + FakeEmitter — the same
 // wiring a real `runner bench` soak invocation uses, minus AWS — and asserts

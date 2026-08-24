@@ -312,6 +312,28 @@ func (m *MatrixRunner) Run(
 		// window and uploads it to this point's artifact.
 		brokerSeries := m.fetchBrokerSeries(ctx, key)
 
+		// A soak (ExpectedRecordsPerSec > 0) must never record an
+		// unmeasured point as a measured zero: Summary below is
+		// broker-derived, so an empty brokerSeries would archive
+		// median 0.00 MB/s to the persistent soak index, fail the run as a
+		// false regression (0 < 0.85×baseline), and drag the rolling
+		// baseline down for the next soakBaselineMaxPriorEntries runs —
+		// the same failure class as the workload-crash guard above. An
+		// empty prom series is fatal for the same reason: RSSMaxBytes
+		// would enter the index as 0 and sink the RSS baseline. The S3
+		// client already retries transient errors, so an artifact still
+		// missing here means its upload really failed. Plain sweeps keep
+		// the non-fatal behavior: they archive nothing persistent, and a
+		// missing artifact only degrades the report.
+		if m.ExpectedRecordsPerSec > 0 {
+			if len(brokerSeries) == 0 {
+				return nil, fmt.Errorf("soak point at %d vCPU: broker metrics artifact missing or empty — refusing to record an unmeasured point as median 0.00 MB/s", n)
+			}
+			if len(promPts) == 0 {
+				return nil, fmt.Errorf("soak point at %d vCPU: prom artifact missing or empty — refusing to record an unmeasured point with RSS max 0", n)
+			}
+		}
+
 		// Summary is derived from the broker-side series — the canonical
 		// fairness instrument — not Connect's own rolling-stats log.
 		// Connect's log reports uncompressed logical bytes; the broker
