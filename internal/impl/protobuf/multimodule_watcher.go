@@ -53,7 +53,11 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-const watcherTimeout = 10 * time.Second
+// watcherTimeout bounds how long newSchemaWatcher waits for a freshly created
+// prototransform.SchemaWatcher to become ready. It is a variable (rather than
+// a const) so that tests can shorten it to make AwaitReady failures fast to
+// exercise.
+var watcherTimeout = 10 * time.Second
 
 type multiModuleWatcher struct {
 	bsrClients map[string]*prototransform.SchemaWatcher
