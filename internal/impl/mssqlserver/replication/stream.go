@@ -485,8 +485,8 @@ type captureInstance struct {
 
 // VerifyUserDefinedTables verifies underlying user defined tables based on
 // supplied include/exclude filters, resolving each one's CDC capture
-// instance(s) via cdc.change_tables, or the capture instance config override.
-func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, captureInstanceOverrides map[string]string, log *service.Logger) ([]UserDefinedTable, error) {
+// instance(s) via cdc.change_tables. captureInstanceOverride optionally overrides this.
+func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, capInstanceOverride string, log *service.Logger) ([]UserDefinedTable, error) {
 	q := `
 	SELECT s.name AS SchemaName, t.name AS TableName, ct.capture_instance, ct.start_lsn
 	FROM sys.tables t
@@ -538,7 +538,7 @@ func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx
 	userTables := make([]UserDefinedTable, 0, len(order))
 	for _, fullName := range order {
 		tbl := tables[fullName]
-		if err := resolveCaptureInstance(&tbl, instances[fullName], captureInstanceOverrides[fullName], log); err != nil {
+		if err := resolveCaptureInstance(&tbl, instances[fullName], capInstanceOverride, log); err != nil {
 			return nil, err
 		}
 		if len(tbl.startLSN) == 0 {
@@ -555,22 +555,6 @@ func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx
 }
 
 func resolveCaptureInstance(tbl *UserDefinedTable, instances []captureInstance, override string, log *service.Logger) error {
-	names := make([]string, len(instances))
-	for i, inst := range instances {
-		names[i] = inst.name
-	}
-
-	if override != "" {
-		for _, inst := range instances {
-			if inst.name == override {
-				tbl.CaptureInstance = inst.name
-				tbl.startLSN = inst.startLSN
-				return nil
-			}
-		}
-		return fmt.Errorf("configured capture instance '%s' for table '%s' does not match any existing CDC capture instance (found: %s)", override, tbl.FullName(), strings.Join(names, ", "))
-	}
-
 	switch len(instances) {
 	case 0:
 		return fmt.Errorf("no change table found for table '%s': is CDC enabled for this table?", tbl.FullName())
@@ -578,6 +562,11 @@ func resolveCaptureInstance(tbl *UserDefinedTable, instances []captureInstance, 
 		tbl.CaptureInstance = instances[0].name
 		tbl.startLSN = instances[0].startLSN
 		return nil
+	}
+
+	names := make([]string, len(instances))
+	for i, inst := range instances {
+		names[i] = inst.name
 	}
 
 	conventionName := fmt.Sprintf("%s_%s", tbl.Schema, tbl.Name)
@@ -591,6 +580,17 @@ func resolveCaptureInstance(tbl *UserDefinedTable, instances []captureInstance, 
 		tbl.CaptureInstance = inst.name
 		tbl.startLSN = inst.startLSN
 		return nil
+	}
+
+	if override != "" {
+		for _, inst := range instances {
+			if inst.name == override {
+				tbl.CaptureInstance = inst.name
+				tbl.startLSN = inst.startLSN
+				return nil
+			}
+		}
+		return fmt.Errorf("table '%s' has multiple CDC capture instances (%s) and configured capture_instance '%s' does not match either", tbl.FullName(), strings.Join(names, ", "), override)
 	}
 
 	return fmt.Errorf("table '%s' has multiple CDC capture instances (%s): unable to determine which one to stream from", tbl.FullName(), strings.Join(names, ", "))

@@ -35,7 +35,7 @@ const (
 	fieldStreamBackoffInterval           = "stream_backoff_interval"
 	fieldTablesExclude                   = "exclude"
 	fieldTablesInclude                   = "include"
-	fieldCaptureInstances                = "capture_instances"
+	fieldCaptureInstance                 = "capture_instance"
 	fieldCheckpointLimit                 = "checkpoint_limit"
 	fieldCheckpointCache                 = "checkpoint_cache"
 	fieldCheckpointCacheKey              = "checkpoint_cache_key"
@@ -80,7 +80,7 @@ Operational notes:
 - ` + "`TRUNCATE TABLE`" + ` is rejected on a CDC-enabled table. To clear one, disable CDC on the table, truncate, then re-enable.
 - On AWS RDS, enable CDC with ` + "`msdb.dbo.rds_cdc_enable_db`" + ` — ` + "`sys.sp_cdc_enable_db`" + ` requires sysadmin, which RDS does not grant.
 - Do not stop the CDC capture job (` + "`cdc.<database>_capture`" + `): while it is stopped nothing is published to the change tables, so this input reads nothing and reports no error.
-- Each table's CDC capture instance is discovered from ` + "`cdc.change_tables`" + `, not assumed from the ` + "`<schema>_<table>`" + ` naming convention, so this works whether CDC was enabled by this input, by hand, or by another tool (e.g. an Oracle GoldenGate feed) under an arbitrary capture instance name. SQL Server allows at most two capture instances per table — its supported way to change a CDC-enabled table's schema without downtime is to run a second, temporarily-named instance alongside the original for the duration of the migration. If a table has two capture instances and one is named after the ` + "`<schema>_<table>`" + ` convention, that one is preferred and a warning is logged; if neither is, table discovery fails for that table unless it's named in ` + "`" + fieldCaptureInstances + "`" + `.
+- Each table's CDC capture instance is discovered from ` + "`cdc.change_tables`" + `, not assumed from the ` + "`<schema>_<table>`" + ` naming convention, so this works whether CDC was enabled by this input, by hand, or by another tool (e.g. an Oracle GoldenGate feed) under an arbitrary capture instance name. SQL Server allows at most two capture instances per table — its supported way to change a CDC-enabled table's schema without downtime is to run a second, temporarily-named instance alongside the original for the duration of the migration. If a table has two capture instances and one is named after the ` + "`<schema>_<table>`" + ` convention, that one is preferred and a warning is logged; if neither is, table discovery fails for that table unless it matches ` + "`" + fieldCaptureInstance + "`" + ` (an override for exactly that ambiguous case).
 		`).
 	Field(service.NewStringField(fieldConnectionString).
 		Description("The connection string of the Microsoft SQL Server database to connect to.").
@@ -111,12 +111,13 @@ Operational notes:
 		Example("dbo.privatetable").
 		Optional(),
 	).
-	Field(service.NewStringMapField(fieldCaptureInstances).
-		Description("Optional per-table override of which CDC capture instance to stream from, keyed by fully qualified table name (`<schema>.<table>`). " +
-			"By default the capture instance is discovered automatically from `cdc.change_tables`, which works even when it isn't named after the `<schema>_<table>` convention — for example when CDC was already enabled on a table by another tool, such as an Oracle GoldenGate feed. " +
-			"This override is only needed when a table has two capture instances and neither is named after that convention, since SQL Server's supported way to change a CDC-enabled table's schema without downtime is to run a second, temporarily-named capture instance alongside the original — in that case table discovery cannot determine which one to stream from on its own.").
-		Example(map[string]any{"dbo.mytable": "OracleGG_914102297"}).
-		Default(map[string]any{}).
+	Field(service.NewStringField(fieldCaptureInstance).
+		Description("Capture instance to prefer when a table has two CDC capture instances and neither is named after the `<schema>_<table>` convention — for example a migration tool's temporary second instance during an online schema change. " +
+			"Only used as a tie-breaker in that case; tables with a single instance, or where one is convention-named, are unaffected, so it's safe to leave this set permanently. " +
+			"If a table is ambiguous and this doesn't match either of its instances, table discovery still fails for it.").
+		Example("migration_v2").
+		Default("").
+		Optional().
 		Advanced(),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
@@ -168,7 +169,7 @@ type config struct {
 	snapshotMaxBatchSize    int
 	snapshotMaxWorkers      int
 	tablesFilter            *confx.RegexpFilter
-	captureInstances        map[string]string
+	captureInstanceOverride string
 	lsnCache                string
 	lsnCacheKey             string
 	cpCacheTableName        string
@@ -233,8 +234,8 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 	} else if tableExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
 		return nil, err
 	}
-	var captureInstances map[string]string
-	if captureInstances, err = conf.FieldStringMap(fieldCaptureInstances); err != nil {
+	var captureInstanceOverride string
+	if captureInstanceOverride, err = conf.FieldString(fieldCaptureInstance); err != nil {
 		return nil, err
 	}
 	// cache
@@ -296,7 +297,7 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 				Include: tableIncludes,
 				Exclude: tableExcludes,
 			},
-			captureInstances: captureInstances,
+			captureInstanceOverride: captureInstanceOverride,
 		},
 		res:       resources,
 		log:       logger,
@@ -354,7 +355,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		i.cpCache = cache
 	}
 
-	if userTables, err = replication.VerifyUserDefinedTables(ctx, i.db, i.cfg.tablesFilter, i.cfg.captureInstances, i.log); err != nil {
+	if userTables, err = replication.VerifyUserDefinedTables(ctx, i.db, i.cfg.tablesFilter, i.cfg.captureInstanceOverride, i.log); err != nil {
 		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
 	if cachedLSN, err = i.getCachedLSN(ctx); err != nil {

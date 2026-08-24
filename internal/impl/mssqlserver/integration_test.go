@@ -518,18 +518,12 @@ microsoft_sql_server_cdc:
 	}
 }
 
-// TestIntegration_MicrosoftSQLServerCDC_TwoNonDefaultCaptureInstancesFailsToStart
-// confirms documented behaviour: SQL Server's supported online schema-change
-// workflow lets a table carry two capture instances at once (its hard-coded
-// maximum), and neither one has to be default-named. Without a
-// `capture_instances` override, table discovery cannot determine which of the
-// two to stream from, so it treats this as unresolvable ambiguity and the
-// whole input fails to start - even though every other included table is
-// healthy. This is a known, documented limitation (see the input's
-// "Operational notes"), not a bug under test here; see
-// TestIntegration_MicrosoftSQLServerCDC_CaptureInstanceOverrideResolvesAmbiguity
-// for the config field that resolves it.
 func TestIntegration_MicrosoftSQLServerCDC_TwoNonDefaultCaptureInstancesFailsToStart(t *testing.T) {
+	// Confirms documented behaviour: a table with two non-convention-named
+	// capture instances and no matching `capture_instance` override is
+	// unresolvably ambiguous, so the whole input fails to start. This is a
+	// known, documented limitation (see "Operational notes").
+
 	integration.CheckSkip(t)
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -564,14 +558,14 @@ microsoft_sql_server_cdc:
 		return strings.Contains(logs.String(), "multiple CDC capture instances")
 	}, 30*time.Second, 500*time.Millisecond,
 		"expected Connect to repeatedly fail with the ambiguous-capture-instance error, since dbo.migrating_table "+
-			"has two non-default-named capture instances and no capture_instances override was configured")
+			"has two non-default-named capture instances and no capture_instance override was configured")
 
 	cancel()
 	require.NoError(t, stream.StopWithin(10*time.Second))
 }
 
 // TestIntegration_MicrosoftSQLServerCDC_CaptureInstanceOverrideResolvesAmbiguity
-// confirms the capture_instances config field resolves the ambiguity
+// confirms the capture_instance config field resolves the ambiguity
 // documented in TestIntegration_MicrosoftSQLServerCDC_TwoNonDefaultCaptureInstancesFailsToStart:
 // given an explicit override naming one of the two capture instances, the
 // input starts successfully and streams from the specified instance.
@@ -591,8 +585,7 @@ microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
   include: ["dbo.migrating_table"]
-  capture_instances:
-    dbo.migrating_table: migrating_table_v2`
+  capture_instance: migrating_table_v2`
 
 	var (
 		outBatches   []string
