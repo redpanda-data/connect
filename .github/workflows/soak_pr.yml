@@ -85,6 +85,7 @@ jobs:
           fetch-depth: 0
 
       - name: Verify merge ref matches the authorized head
+        id: headpin
         shell: bash
         run: |
           ACTUAL=$(git rev-parse HEAD^2)
@@ -154,10 +155,12 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/soak-pr.log"
 
       - name: Post comparison comment
-        # Gated on the permission check: a bare always() would run even after
-        # the gate step failed, letting an unauthorized /soak overwrite a
-        # genuine earlier comparison with a spurious "failed" sticky comment.
-        if: always() && steps.gate.outcome == 'success'
+        # Gated on the permission check AND the head pin: a bare always()
+        # would run even after either failed, letting an unauthorized /soak —
+        # or an authorized one whose PR head moved after authorization —
+        # overwrite a genuine earlier comparison with a spurious "failed"
+        # sticky comment.
+        if: always() && steps.gate.outcome == 'success' && steps.headpin.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -189,7 +192,7 @@ jobs:
           fi
 
       - name: Verify teardown actually completed
-        if: always() && steps.gate.outcome == 'success'
+        if: always() && steps.gate.outcome == 'success' && steps.headpin.outcome == 'success'
         run: |
           LIVE=$(aws ec2 describe-instances --region us-east-2 \
             --filters Name=tag:Project,Values=redpanda-connect-bench Name=instance-state-name,Values=pending,running,stopping,stopped \
@@ -203,7 +206,7 @@ jobs:
           echo "account clean: no bench EC2, no RDS"
 
       - name: Upload run log
-        if: always() && steps.gate.outcome == 'success'
+        if: always() && steps.gate.outcome == 'success' && steps.headpin.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: soak-pr-log

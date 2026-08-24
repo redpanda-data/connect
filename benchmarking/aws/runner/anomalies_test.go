@@ -104,7 +104,7 @@ func TestDetectAnomaliesWithProm_AttachesContext(t *testing.T) {
 		{T: 60, Goroutines: 500, HeapInUseMB: 1400, GCPauseTotalNS: 1_000_000_000}, // spike at dip start
 		{T: 70, Goroutines: 510, HeapInUseMB: 1410, GCPauseTotalNS: 1_500_000_000},
 	}
-	anomalies := DetectAnomaliesWithProm(samples, 100.0, prom)
+	anomalies := DetectAnomaliesWithProm(samples, 100.0, prom, 0)
 	require.Len(t, anomalies, 1)
 	a := anomalies[0]
 	require.Equal(t, 60, a.StartT)
@@ -112,6 +112,35 @@ func TestDetectAnomaliesWithProm_AttachesContext(t *testing.T) {
 	require.InDelta(t, 1400.0, a.HeapInUseMBAtStart, 0.1)
 	// GCPauseDeltaNS = pause_at_T60 - pause_at_T50 = 1_000_000_000 - 150_000 = 999_850_000
 	require.Equal(t, uint64(999_850_000), a.GCPauseDeltaNS)
+}
+
+// The two series do not share a time base: Sample.T=0 is end-of-warmup, prom
+// T=0 is point launch. promOffsetSec must shift the prom lookup by the warmup
+// so the annotation describes the anomaly's moment, not a snapshot warmup
+// seconds earlier.
+func TestDetectAnomaliesWithProm_OffsetBridgesWarmup(t *testing.T) {
+	const warmupSec = 30
+	samples := []Sample{}
+	for i := range 200 {
+		mb := 100.0
+		if i >= 60 && i < 130 {
+			mb = 50.0 // dip starting at sample T=60 == prom T=90
+		}
+		samples = append(samples, Sample{T: i, MBPerSec: mb})
+	}
+	prom := []PromPoint{
+		{T: 60, Goroutines: 100, HeapInUseMB: 50, GCPauseTotalNS: 100_000},   // sample T=30
+		{T: 80, Goroutines: 100, HeapInUseMB: 51, GCPauseTotalNS: 150_000},   // sample T=50
+		{T: 90, Goroutines: 500, HeapInUseMB: 1400, GCPauseTotalNS: 900_000}, // sample T=60: the dip's actual moment
+	}
+	anomalies := DetectAnomaliesWithProm(samples, 100.0, prom, warmupSec)
+	require.Len(t, anomalies, 1)
+	a := anomalies[0]
+	require.Equal(t, 60, a.StartT, "anomaly T stays on the sample base for reports")
+	require.Equal(t, 500, a.GoroutinesAtStart, "annotation must come from prom T=90 (the dip), not T=60 (mid-warmup)")
+	require.InDelta(t, 1400.0, a.HeapInUseMBAtStart, 0.1)
+	// prev lookup: prom at-or-before 90-10=80 -> 150_000; delta = 750_000.
+	require.Equal(t, uint64(750_000), a.GCPauseDeltaNS)
 }
 
 func TestDetectAnomaliesWithProm_NoPromKeepsZeros(t *testing.T) {
@@ -123,7 +152,7 @@ func TestDetectAnomaliesWithProm_NoPromKeepsZeros(t *testing.T) {
 		}
 		samples = append(samples, Sample{T: i, MBPerSec: mb})
 	}
-	anomalies := DetectAnomaliesWithProm(samples, 100.0, nil)
+	anomalies := DetectAnomaliesWithProm(samples, 100.0, nil, 0)
 	require.Len(t, anomalies, 1)
 	require.Equal(t, 0, anomalies[0].GoroutinesAtStart)
 	require.Equal(t, uint64(0), anomalies[0].GCPauseDeltaNS)

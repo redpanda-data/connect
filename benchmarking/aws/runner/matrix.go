@@ -351,7 +351,10 @@ func (m *MatrixRunner) Run(
 		// a broker-derived median would compare two instruments and flag
 		// nearly every sample.
 		logMedian := Summarise(samples).MedianMBPerSec
-		anomalies := DetectAnomaliesWithProm(samples, logMedian, promPts)
+		// warmup bridges the time bases: Sample.T=0 is end-of-warmup, prom
+		// T=0 is point launch (see offsetSampleT) — without it the prom
+		// annotations describe a moment warmup seconds before the anomaly.
+		anomalies := DetectAnomaliesWithProm(samples, logMedian, promPts, int(warmup.Seconds()))
 		backlog := ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
 
 		// Final emit: whatever tail minutes the mid-run loop above never

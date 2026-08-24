@@ -281,6 +281,16 @@ func armTestScenario(cpuPoints []int, arms []Arm) *Scenario {
 	}
 }
 
+// matrix.overrides has no consumer — a config using it would silently run
+// the unmodified pipeline at every point, so Validate must reject it.
+func TestScenarioValidate_RejectsUnimplementedOverrides(t *testing.T) {
+	s := armTestScenario([]int{2}, nil)
+	s.Matrix.Overrides = map[int]map[string]any{2: {"input": map[string]any{}}}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "matrix.overrides is not implemented")
+}
+
 func TestScenarioValidate_RejectsBadArmID(t *testing.T) {
 	s := armTestScenario([]int{2}, []Arm{{ID: "Bad_ID", GOMAXPROCS: 4}})
 	err := s.Validate()

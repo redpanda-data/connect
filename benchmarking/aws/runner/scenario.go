@@ -118,9 +118,13 @@ type WorkloadSpec struct {
 }
 
 type MatrixSpec struct {
-	CPUPoints         []int                  `yaml:"cpu_points"`
-	GoMemLimitPerVCPU int                    `yaml:"go_mem_limit_per_vcpu,omitempty"`
-	Overrides         map[int]map[string]any `yaml:"overrides,omitempty"`
+	CPUPoints         []int `yaml:"cpu_points"`
+	GoMemLimitPerVCPU int   `yaml:"go_mem_limit_per_vcpu,omitempty"`
+	// Overrides has no consumer — the only per-point pipeline override path
+	// is Arm.Pipeline. The field stays in the schema solely so Validate can
+	// reject it loudly: scenario decoding is non-strict, so removing it
+	// would make an `overrides:` block silently ignored instead.
+	Overrides map[int]map[string]any `yaml:"overrides,omitempty"`
 	// Arms turns a single cpu_points entry into an A/B: each arm is measured
 	// at that same vCPU pin but with its own launch topology (GOMAXPROCS,
 	// stream count) and pipeline overrides, or with a different binary (see
@@ -279,6 +283,9 @@ func (s *Scenario) Validate() error {
 		if s.Matrix.CPUPoints[i] <= s.Matrix.CPUPoints[i-1] {
 			return fmt.Errorf("matrix.cpu_points must be strictly ascending: %v", s.Matrix.CPUPoints)
 		}
+	}
+	if len(s.Matrix.Overrides) > 0 {
+		return errors.New("matrix.overrides is not implemented — nothing reads it, so the run would silently use the unmodified pipeline at every point; use matrix.arms[].pipeline for per-point pipeline overrides")
 	}
 
 	// A soak scenario measures ONE configuration held steady over a long wall

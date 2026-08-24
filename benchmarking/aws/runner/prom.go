@@ -16,7 +16,9 @@ import (
 )
 
 // PromPoint is one curated snapshot of Connect's runtime metrics, sampled at
-// time T (seconds since end-of-warmup, matching Sample.T).
+// time T — seconds since the first successful snapshot, i.e. point launch.
+// NOTE: this is NOT Sample.T's base (which is end-of-warmup); bridge with
+// offsetSampleT / DetectAnomaliesWithProm's promOffsetSec.
 type PromPoint struct {
 	T              int     `json:"t"`
 	Goroutines     int     `json:"goroutines"`
