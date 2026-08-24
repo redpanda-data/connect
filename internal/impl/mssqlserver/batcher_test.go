@@ -788,6 +788,68 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an LSN that skips them")
 }
 
+// mssqlTestFilterAllRegistered registers a processor that drops every batch,
+// once per test binary: an empty successful Flush is a normal outcome when
+// batching.processors filter the whole batch.
+var mssqlTestFilterAllRegistered = func() error {
+	return service.RegisterBatchProcessor("mssql_test_filter_all", service.NewConfigSpec(),
+		func(*service.ParsedConfig, *service.Resources) (service.BatchProcessor, error) {
+			return filterAllProcessor{}, nil
+		})
+}()
+
+type filterAllProcessor struct{}
+
+func (filterAllProcessor) ProcessBatch(context.Context, service.MessageBatch) ([]service.MessageBatch, error) {
+	return nil, nil
+}
+func (filterAllProcessor) Close(context.Context) error { return nil }
+
+// TestBufferedResetsOnEmptyFlush locks in the review finding: a successful
+// Flush emptied by batching.processors must still reset the buffered counter,
+// otherwise every later CheckpointWindow wrongly defers its window LSN to a
+// flush that already happened and exact resume positions are silently lost
+// until the next non-empty flush.
+func TestBufferedResetsOnEmptyFlush(t *testing.T) {
+	require.NoError(t, mssqlTestFilterAllRegistered)
+	ctx := t.Context()
+
+	spec := service.NewConfigSpec().Field(service.NewBatchPolicyField("batching"))
+	conf, err := spec.ParseYAML("batching:\n  count: 2\n  processors:\n    - mssql_test_filter_all: {}\n", nil)
+	require.NoError(t, err)
+	policy, err := conf.FieldBatchPolicy("batching")
+	require.NoError(t, err)
+	batcher, err := policy.NewBatcher(service.MockResources())
+	require.NoError(t, err)
+
+	publisher := newBatchPublisher(batcher, checkpoint.NewCapped[replication.LSN](100), service.NewLoggerFromSlog(slog.Default()))
+	var (
+		mu        sync.Mutex
+		persisted []replication.LSN
+	)
+	publisher.cacheLSN = func(_ context.Context, lsn replication.LSN) error {
+		mu.Lock()
+		defer mu.Unlock()
+		persisted = append(persisted, lsn)
+		return nil
+	}
+	t.Cleanup(func() { publisher.shutSig.TriggerSoftStop() })
+
+	// Two rows trigger a flush whose batch the processor filters to nothing:
+	// buffered must reset even though nothing was sent.
+	require.NoError(t, publisher.Publish(ctx, streamingEvent("00000001", "00000001")))
+	require.NoError(t, publisher.Publish(ctx, streamingEvent("00000002", "00000002")))
+
+	// The drained window's checkpoint must take the marker path and persist,
+	// not defer to a flush that already happened.
+	require.NoError(t, publisher.CheckpointWindow(ctx, replication.LSN("00000003")))
+	mu.Lock()
+	got := append([]replication.LSN(nil), persisted...)
+	mu.Unlock()
+	require.Len(t, got, 1, "the window LSN must persist via the marker, not defer behind a stale buffered counter")
+	require.Equal(t, "00000003", string(got[0]))
+}
+
 // TestFailedSendPoisonsPublisher verifies that a tracked batch that cannot be
 // handed to ReadBatch marks the publisher poisoned: its checkpoint slot can
 // never resolve, so Connect must rebuild the publisher rather than reuse a

@@ -345,7 +345,12 @@ type txnBoundary struct {
 // recent transaction whose rows have all been observed — empty until the first
 // boundary is crossed.
 func (t *txnBoundary) Observe(lsn LSN) LSN {
-	if len(t.prev) != 0 && !bytes.Equal(lsn, t.prev) {
+	if bytes.Equal(lsn, t.prev) {
+		// Same transaction continuing: nothing changes, and skipping the
+		// copy avoids one allocation per row on large transactions.
+		return t.lastComplete
+	}
+	if len(t.prev) != 0 {
 		t.lastComplete = t.prev
 	}
 	// Copy: the iterator may reuse the underlying array on the next scan.
