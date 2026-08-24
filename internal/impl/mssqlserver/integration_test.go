@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -517,7 +518,18 @@ microsoft_sql_server_cdc:
 	}
 }
 
-func TestIntegration_MicrosoftSQLServerCDC_TwoNonDefaultCaptureInstances(t *testing.T) {
+// TestIntegration_MicrosoftSQLServerCDC_TwoNonDefaultCaptureInstancesFailsToStart
+// confirms documented behaviour: SQL Server's supported online schema-change
+// workflow lets a table carry two capture instances at once (its hard-coded
+// maximum), and neither one has to be default-named. Without a
+// `capture_instances` override, table discovery cannot determine which of the
+// two to stream from, so it treats this as unresolvable ambiguity and the
+// whole input fails to start - even though every other included table is
+// healthy. This is a known, documented limitation (see the input's
+// "Operational notes"), not a bug under test here; see
+// TestIntegration_MicrosoftSQLServerCDC_CaptureInstanceOverrideResolvesAmbiguity
+// for the config field that resolves it.
+func TestIntegration_MicrosoftSQLServerCDC_TwoNonDefaultCaptureInstancesFailsToStart(t *testing.T) {
 	integration.CheckSkip(t)
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -548,14 +560,74 @@ microsoft_sql_server_cdc:
 		_ = stream.Run(runCtx)
 	}()
 
-	time.Sleep(5 * time.Second)
+	assert.Eventually(t, func() bool {
+		return strings.Contains(logs.String(), "multiple CDC capture instances")
+	}, 30*time.Second, 500*time.Millisecond,
+		"expected Connect to repeatedly fail with the ambiguous-capture-instance error, since dbo.migrating_table "+
+			"has two non-default-named capture instances and no capture_instances override was configured")
+
 	cancel()
 	require.NoError(t, stream.StopWithin(10*time.Second))
+}
 
-	assert.NotContains(t, logs.String(), "multiple CDC capture instances",
-		"expected the input to start even though dbo.migrating_table has two non-default-named capture "+
-			"instances; there is currently no config field to disambiguate which one to stream from, so "+
-			"Connect fails repeatedly and the whole input never starts")
+// TestIntegration_MicrosoftSQLServerCDC_CaptureInstanceOverrideResolvesAmbiguity
+// confirms the capture_instances config field resolves the ambiguity
+// documented in TestIntegration_MicrosoftSQLServerCDC_TwoNonDefaultCaptureInstancesFailsToStart:
+// given an explicit override naming one of the two capture instances, the
+// input starts successfully and streams from the specified instance.
+func TestIntegration_MicrosoftSQLServerCDC_CaptureInstanceOverrideResolvesAmbiguity(t *testing.T) {
+	integration.CheckSkip(t)
+
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
+
+	db.MustExec(`CREATE SCHEMA rpcn;`)
+	db.MustExec(`CREATE TABLE dbo.migrating_table (id INT NOT NULL PRIMARY KEY);`)
+
+	db.MustEnableCDC(t.Context(), "dbo.migrating_table", "migrating_table_v1")
+	db.MustEnableCDC(t.Context(), "dbo.migrating_table", "migrating_table_v2")
+
+	cfg := `
+microsoft_sql_server_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  include: ["dbo.migrating_table"]
+  capture_instances:
+    dbo.migrating_table: migrating_table_v2`
+
+	var (
+		outBatches   []string
+		outBatchesMu sync.Mutex
+	)
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, err)
+		outBatchesMu.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchesMu.Unlock()
+		return nil
+	}))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	db.MustExec("INSERT INTO dbo.migrating_table (id) VALUES (1)")
+
+	assert.Eventually(t, func() bool {
+		outBatchesMu.Lock()
+		defer outBatchesMu.Unlock()
+		return len(outBatches) == 1
+	}, time.Minute*2, time.Millisecond*200, "expected the row to be streamed via the overridden capture instance")
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
 func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {

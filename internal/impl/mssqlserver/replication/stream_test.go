@@ -46,7 +46,7 @@ func TestIntegrationVerifyUserDefinedTablesCaptureInstanceResolution(t *testing.
 		// instance, rather than the SQL Server default <schema>_<table>.
 		db.MustEnableCDC(t.Context(), fullTableName, captureInstance)
 
-		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), log)
+		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), nil, log)
 		require.NoError(t, err)
 		require.Len(t, tables, 1)
 		assert.Equal(t, captureInstance, tables[0].CaptureInstance)
@@ -110,7 +110,7 @@ func TestIntegrationVerifyUserDefinedTablesCaptureInstanceResolution(t *testing.
 		logs := &mssqlservertest.SyncBuffer{}
 		warnLog := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(logs, nil)))
 
-		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), warnLog)
+		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), nil, warnLog)
 		require.NoError(t, err)
 		require.Len(t, tables, 1)
 		assert.Equal(t, "dbo_migration_capture_test", tables[0].CaptureInstance)
@@ -125,7 +125,7 @@ func TestIntegrationVerifyUserDefinedTablesCaptureInstanceResolution(t *testing.
 		db.MustExec(`CREATE TABLE dbo.default_capture_test (id INT NOT NULL PRIMARY KEY);`)
 		db.MustEnableCDC(t.Context(), fullTableName, mssqlservertest.DefaultCaptureInstance)
 
-		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), log)
+		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), nil, log)
 		require.NoError(t, err)
 		require.Len(t, tables, 1)
 		assert.Equal(t, "dbo_default_capture_test", tables[0].CaptureInstance)
@@ -139,11 +139,36 @@ func TestIntegrationVerifyUserDefinedTablesCaptureInstanceResolution(t *testing.
 		db.MustEnableCDC(t.Context(), fullTableName, "capture_alpha")
 		db.MustEnableCDC(t.Context(), fullTableName, "capture_beta")
 
-		_, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), log)
+		_, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), nil, log)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "capture_alpha")
 		require.ErrorContains(t, err, "capture_beta")
 		require.ErrorContains(t, err, "multiple CDC capture instances")
+	})
+
+	t.Run("AmbiguousMultipleCaptureInstancesResolvedByOverride", func(t *testing.T) {
+		const fullTableName = "dbo.ambiguous_override_test"
+		db.MustExec(`CREATE TABLE dbo.ambiguous_override_test (id INT NOT NULL PRIMARY KEY);`)
+		db.MustEnableCDC(t.Context(), fullTableName, "override_alpha")
+		db.MustEnableCDC(t.Context(), fullTableName, "override_beta")
+
+		overrides := map[string]string{fullTableName: "override_beta"}
+		tables, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), overrides, log)
+		require.NoError(t, err)
+		require.Len(t, tables, 1)
+		assert.Equal(t, "override_beta", tables[0].CaptureInstance)
+	})
+
+	t.Run("OverrideNotFoundErrors", func(t *testing.T) {
+		const fullTableName = "dbo.override_typo_test"
+		db.MustExec(`CREATE TABLE dbo.override_typo_test (id INT NOT NULL PRIMARY KEY);`)
+		db.MustEnableCDC(t.Context(), fullTableName, "the_real_instance")
+
+		overrides := map[string]string{fullTableName: "typo_instance"}
+		_, err := replication.VerifyUserDefinedTables(t.Context(), db.DB, includeFilterFor(t, fullTableName), overrides, log)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "typo_instance")
+		require.ErrorContains(t, err, "the_real_instance")
 	})
 }
 
