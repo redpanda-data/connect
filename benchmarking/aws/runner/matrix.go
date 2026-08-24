@@ -403,7 +403,15 @@ func (m *MatrixRunner) Run(
 				if len(rawLog) > tailMax {
 					tail = rawLog[len(rawLog)-tailMax:]
 				}
-				fmt.Fprintf(stdout, "[bench] connect log tail (last %d bytes):\n%s\n", len(tail), tail)
+				// Prefix every tail line: this is the PR binary's own log,
+				// and the /soak workflow extracts the A/B verdict from this
+				// same stdout stream between bare ^---SOAK-COMPARISON-*---$
+				// markers. An unprefixed tail line could forge that verdict;
+				// the prefix guarantees no tail line is ever a bare marker.
+				fmt.Fprintf(stdout, "[log] connect log tail (last %d bytes):\n", len(tail))
+				for line := range strings.SplitSeq(strings.TrimRight(string(tail), "\n"), "\n") {
+					fmt.Fprintf(stdout, "[log] %s\n", line)
+				}
 				// Name the point that failed: with arms, "first sweep point"
 				// would blame the wrong arm (both arms share the vCPU count,
 				// so that doesn't disambiguate either).

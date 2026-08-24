@@ -356,6 +356,26 @@ func TestRSSSlopeBytesPerMin(t *testing.T) {
 	}
 }
 
+// When the prom artifact goes stale, a run can hold >= rssSlopeMinSamples
+// points overall yet fewer than 2 inside the trailing window. That must
+// return not-ok (skip the datum → alarm goes INSUFFICIENT_DATA), never a
+// fabricated 0 slope that reads as a healthy flat trend during the blind
+// window a leak alarm most needs to fire in.
+func TestRSSSlopeBytesPerMin_FewerThanTwoInWindowIsNotOK(t *testing.T) {
+	var prom []PromPoint
+	// Nine samples clustered at the start...
+	for i := range 9 {
+		prom = append(prom, PromPoint{T: i * secondsPerMinute, RSSBytes: 500_000_000})
+	}
+	// ...and one far ahead, so the trailing 120-minute window from maxT
+	// (=200min) starts at 80min and captures only this last point.
+	prom = append(prom, PromPoint{T: 200 * secondsPerMinute, RSSBytes: 900_000_000})
+
+	got, ok := rssSlopeBytesPerMin(prom)
+	require.False(t, ok, "one windowed sample cannot fit a slope — must be not-ok, not a fabricated 0")
+	require.Zero(t, got)
+}
+
 // TestRSSSlopeBytesPerMin_WindowLimitsToTrailing120Minutes pins that a run
 // longer than rssSlopeMaxWindowMinutes fits its line against only the
 // trailing window, not the whole history — an early, unrepresentative

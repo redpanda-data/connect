@@ -164,8 +164,12 @@ jobs:
           LIVE=$(aws ec2 describe-instances --region us-east-2 \
             --filters Name=tag:Project,Values=redpanda-connect-bench Name=instance-state-name,Values=pending,running,stopping,stopped \
             --query "Reservations[].Instances[].InstanceId" --output text)
+          # Scope to bench instances (identifier prefix rpcn-bench) — RDS
+          # describe has no tag filter, and an account-wide match would fail
+          # every run the moment any unrelated DB exists, training operators
+          # to ignore the one step that catches real orphans.
           RDS=$(aws rds describe-db-instances --region us-east-2 \
-            --query "DBInstances[].DBInstanceIdentifier" --output text)
+            --query "DBInstances[?starts_with(DBInstanceIdentifier, 'rpcn-bench')].DBInstanceIdentifier" --output text)
           if [ -n "$LIVE$RDS" ]; then
             echo "::error::Teardown left resources behind (EC2: ${LIVE:-none}; RDS: ${RDS:-none}). The orphan reaper will sweep them within its TTL, but investigate the run log."
             exit 1

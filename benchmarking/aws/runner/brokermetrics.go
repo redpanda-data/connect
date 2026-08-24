@@ -183,20 +183,17 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 	prevBytes := map[string]float64{}
 	prevRecords := map[string]float64{}
 	out := map[string][]TopicPoint{}
-	// noGoodFrameYet is the lastGoodTime sentinel before any non-errored
-	// frame has been processed. Frame timestamps are unix seconds, always
-	// positive, so -1 can never collide with a real timestamp.
-	const noGoodFrameYet = int64(-1)
-	// lastGoodTime is the timestamp of the most recently processed
-	// NON-errored frame, not simply frames[i-1]. An errored frame is
-	// skipped above before prevBytes/prevRecords are touched, so the next
-	// good frame's delta still spans back to the last frame that actually
-	// contributed counter values; using frames[i-1] there would understate
-	// the interval and inflate the computed rate (see the regression this
-	// guards against: an errored frame sandwiched between two good ones
-	// used to compute a 10s interval for a delta that actually spanned
-	// 20s).
-	lastGoodTime := noGoodFrameYet
+	// lastTopicTime is the timestamp of the most recent frame in which each
+	// topic actually appeared — tracked PER TOPIC, not globally. Redpanda
+	// emits a topic's per-partition counters only on the broker leading that
+	// partition, so a topic can be absent from an otherwise-good frame (a
+	// leadership move, or a scrape that hit a non-leader). Dividing that
+	// topic's next delta by a single global interval would span two scrape
+	// gaps over one interval and inflate the rate ~2x; keying the interval
+	// on the topic's own last-seen frame keeps each rate honest. Errored
+	// frames are skipped entirely above, so a topic's time only advances on
+	// frames that actually contributed its counters.
+	lastTopicTime := map[string]int64{}
 	for i, f := range frames {
 		if f.Errored {
 			continue
@@ -216,7 +213,9 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 		}
 		for topic, cur := range bytesByTopic {
 			prev, hadPrev := prevBytes[topic]
+			prevTime := lastTopicTime[topic] // valid iff hadPrev
 			prevBytes[topic] = cur
+			lastTopicTime[topic] = f.UnixTime
 
 			curRecs, hasRecs := recordsByTopic[topic]
 			prevRecs, hadPrevRecs := prevRecords[topic]
@@ -224,16 +223,12 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 				prevRecords[topic] = curRecs
 			}
 
-			// !hadPrev covers a topic seen for the first time in this
-			// frame; lastGoodTime == noGoodFrameYet covers this being the
-			// first good frame overall (which implies !hadPrev too, but
-			// spelling it out keeps the "no prior good frame" case
-			// explicit rather than relying on the map's zero value).
-			if !hadPrev || lastGoodTime == noGoodFrameYet {
+			// First sight of this topic: no prior counters to delta against.
+			if !hadPrev {
 				continue
 			}
 			deltaBytes := cur - prev
-			interval := int(f.UnixTime - lastGoodTime)
+			interval := int(f.UnixTime - prevTime)
 			if interval <= 0 || deltaBytes < 0 {
 				continue // counter reset or out-of-order frame; skip
 			}
@@ -254,7 +249,6 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 				IntervalSec: interval,
 			})
 		}
-		lastGoodTime = f.UnixTime
 	}
 	return out, nil
 }

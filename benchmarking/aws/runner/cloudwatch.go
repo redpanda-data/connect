@@ -422,8 +422,9 @@ const rssSlopeMinSamples = 10
 // rssSlopeBytesPerMin fits an ordinary least-squares line to RSSBytes vs. T
 // (seconds) over the trailing rssSlopeMaxWindowMinutes minutes of prom (all
 // of it, if it spans less than that), and returns the fitted line's slope
-// in bytes per minute. ok is false when prom has fewer than
-// rssSlopeMinSamples points total.
+// in bytes per minute. ok is false when there is nothing to fit: fewer than
+// rssSlopeMinSamples points total, fewer than 2 within the trailing window,
+// or no time variance across the windowed points.
 func rssSlopeBytesPerMin(prom []PromPoint) (float64, bool) {
 	if len(prom) < rssSlopeMinSamples {
 		return 0, false
@@ -451,13 +452,18 @@ func rssSlopeBytesPerMin(prom []PromPoint) (float64, bool) {
 		sumXX += x * x
 	}
 	if n < 2 {
-		return 0, true
+		// Fewer than 2 samples survived the window filter: no slope to fit.
+		// Return not-ok so the caller skips the datum and the alarm goes
+		// INSUFFICIENT_DATA — publishing a fabricated 0 would read as a
+		// healthy flat trend during exactly the blind window a leak alarm
+		// must not miss.
+		return 0, false
 	}
 	denom := n*sumXX - sumX*sumX
 	if denom == 0 {
 		// Every windowed sample landed at the same T: no time variance to
-		// fit a line against.
-		return 0, true
+		// fit a line against — not-ok, same reasoning as n < 2.
+		return 0, false
 	}
 	slopePerSecond := (n*sumXY - sumX*sumY) / denom
 	return slopePerSecond * secondsPerMinute, true

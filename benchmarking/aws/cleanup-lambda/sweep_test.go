@@ -331,6 +331,9 @@ func (f *FakeAWS) DeleteBucket(_ context.Context, in *s3.DeleteBucketInput) (*s3
 }
 
 func (f *FakeAWS) GetRole(_ context.Context, in *iam.GetRoleInput) (*iam.GetRoleOutput, error) {
+	if err := f.failIfConfigured("GetRole", aws.ToString(in.RoleName)); err != nil {
+		return nil, err
+	}
 	t, ok := f.IAMRoles[aws.ToString(in.RoleName)]
 	if !ok {
 		return nil, &iamtypes.NoSuchEntityException{}
@@ -584,6 +587,30 @@ func TestProcessIAMRole_OldGetsDeleted(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, destroyed)
 	require.Equal(t, []string{"rpcn-bench-host-old"}, api.DeletedRoles)
+}
+
+// A non-NoSuchEntity GetRole error (throttling, permission change) must
+// propagate, not be swallowed as "role gone" — otherwise orphaned roles
+// accumulate with Errors=0 and no SNS alert.
+func TestProcessIAMRole_GetRoleErrorPropagates(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	api := &FakeAWS{
+		IAMRoles: map[string]time.Time{"rpcn-bench-host-x": now.Add(-4 * time.Hour)},
+		FailOn:   map[string]error{"GetRole:rpcn-bench-host-x": errAssertion("throttled")},
+	}
+	destroyed, err := processIAMRole(t.Context(), api, "rpcn-bench-host-x", now, 3*time.Hour)
+	require.Error(t, err)
+	require.False(t, destroyed)
+	require.Empty(t, api.DeletedRoles)
+}
+
+// A genuine NoSuchEntity is still a silent no-op (already gone).
+func TestProcessIAMRole_AbsentIsNoOp(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	api := &FakeAWS{}
+	destroyed, err := processIAMRole(t.Context(), api, "rpcn-bench-host-gone", now, 3*time.Hour)
+	require.NoError(t, err)
+	require.False(t, destroyed)
 }
 
 func TestProcessRouteTable_MainSkipped(t *testing.T) {

@@ -125,6 +125,39 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1
 	}
 }
 
+// A topic can vanish from an otherwise-good frame (Redpanda emits a topic's
+// counters only on its partition leader, so a leadership move drops it for a
+// scrape). Its next delta must be divided by the gap since the topic itself
+// was last seen, not the global inter-frame interval — else the rate inflates
+// ~2x. Here t1 is absent at t=1010 (t2 keeps the frame good) and returns at
+// t=1020: its delta spans the full 20s (1000→1020), giving 1 MB/s, not the
+// 2 MB/s a 10s divisor would produce.
+func TestBrokerMetrics_TopicSeries_PerTopicGapInterval(t *testing.T) {
+	const body = `###timestamp=1000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 0
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t2"} 0
+###timestamp=1010
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t2"} 5000000
+###timestamp=1020
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 20000000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t2"} 10000000
+`
+	series, err := ParseTopicSeries(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("ParseTopicSeries: %v", err)
+	}
+	t1 := series["t1"]
+	if len(t1) != 1 {
+		t.Fatalf("expected 1 t1 point (present at 1000 and 1020, absent at 1010); got %d", len(t1))
+	}
+	if want := 1.0; t1[0].MBPerSec < want-0.01 || t1[0].MBPerSec > want+0.01 {
+		t.Errorf("t1 MB/s = %f, want ~%f (20MB over the 20s the topic was absent, not 10s)", t1[0].MBPerSec, want)
+	}
+	if t1[0].IntervalSec != 20 {
+		t.Errorf("t1 interval = %ds, want 20 (gap since t1 was last seen)", t1[0].IntervalSec)
+	}
+}
+
 // TestBrokerMetrics_TopicSeries_SkipsPerEndpointScrapeError is the
 // regression test for the broker sidecar's per-endpoint error marker: the
 // sidecar (topology_source.go) curls every broker endpoint in a single

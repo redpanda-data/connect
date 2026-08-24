@@ -169,7 +169,17 @@ jobs:
           BODY_FILE="$RUNNER_TEMP/comment.md"
           {
             echo "$MARKER"
-            if COMPARISON=$(sed -n '/---SOAK-COMPARISON-BEGIN---/,/---SOAK-COMPARISON-END---/p' "$RUNNER_TEMP/soak-pr.log" 2>/dev/null | sed '1d;$d') && [ -n "$COMPARISON" ]; then
+            # Anchor the markers to line start (^...$). Only the trusted runner
+            # prints them bare at column 0; every line the PR binary produces
+            # is streamed with a "[bench]/[reset]/[load]" prefix or emitted as
+            # an indented log tail, so it can never forge a delimiter here. The
+            # grep guard requires BOTH anchored markers present, so a run that
+            # crashes between them posts the failure notice instead of a
+            # truncated, verdict-less table.
+            if grep -qx -- '---SOAK-COMPARISON-BEGIN---' "$RUNNER_TEMP/soak-pr.log" 2>/dev/null \
+               && grep -qx -- '---SOAK-COMPARISON-END---' "$RUNNER_TEMP/soak-pr.log" 2>/dev/null \
+               && COMPARISON=$(sed -n '/^---SOAK-COMPARISON-BEGIN---$/,/^---SOAK-COMPARISON-END---$/p' "$RUNNER_TEMP/soak-pr.log" 2>/dev/null | sed '1d;$d') \
+               && [ -n "$COMPARISON" ]; then
               echo "$COMPARISON"
             else
               echo "## Soak comparison failed"
@@ -184,7 +194,11 @@ jobs:
           # SIGPIPE (141), which pipefail turns into a step failure exactly
           # when the marker comment exists on a busy PR. Same fix as the
           # nightly change gate.
-          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" --paginate --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | awk 'NR==1')
+          # Filter on author too: without it, anyone can pre-plant a comment
+          # starting with the marker (GitHub returns oldest-first, awk NR==1
+          # picks it), capturing the sticky comparison into an attacker-owned
+          # comment they retain edit rights over.
+          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" --paginate --jq ".[] | select((.body | startswith(\"$MARKER\")) and .user.login == \"github-actions[bot]\") | .id" | awk 'NR==1')
           if [ -n "$EXISTING" ]; then
             gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$EXISTING" -F body=@"$BODY_FILE" >/dev/null
           else
@@ -197,8 +211,11 @@ jobs:
           LIVE=$(aws ec2 describe-instances --region us-east-2 \
             --filters Name=tag:Project,Values=redpanda-connect-bench Name=instance-state-name,Values=pending,running,stopping,stopped \
             --query "Reservations[].Instances[].InstanceId" --output text)
+          # Scope to bench instances (identifier prefix rpcn-bench) — RDS
+          # describe has no tag filter, and an account-wide match would fail
+          # every run the moment any unrelated DB exists.
           RDS=$(aws rds describe-db-instances --region us-east-2 \
-            --query "DBInstances[].DBInstanceIdentifier" --output text)
+            --query "DBInstances[?starts_with(DBInstanceIdentifier, 'rpcn-bench')].DBInstanceIdentifier" --output text)
           if [ -n "$LIVE$RDS" ]; then
             echo "::error::Teardown left resources behind (EC2: ${LIVE:-none}; RDS: ${RDS:-none})."
             exit 1

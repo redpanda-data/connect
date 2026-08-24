@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	rgtatypes "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi/types"
@@ -280,7 +282,16 @@ func processIAMRoleByARN(ctx context.Context, api cleanupAPI, id string, now tim
 func processIAMRole(ctx context.Context, api cleanupAPI, roleName string, now time.Time, ttl time.Duration) (destroyed bool, err error) {
 	out, err := api.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(roleName)})
 	if err != nil {
-		return false, nil // role gone already
+		// Only a genuine "not found" means already-gone (a no-op). Any other
+		// error — throttling, an SCP/permission change — must surface as an
+		// error so the sweep's SNS alert fires; swallowing it lets orphaned
+		// bench roles accumulate invisibly until the instance-profile quota
+		// blocks every future terraform apply.
+		var notFound *iamtypes.NoSuchEntityException
+		if errors.As(err, &notFound) {
+			return false, nil
+		}
+		return false, err
 	}
 	if out.Role.CreateDate == nil || !olderThanTTL(*out.Role.CreateDate, now, ttl) {
 		return false, nil
