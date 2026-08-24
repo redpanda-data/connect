@@ -445,6 +445,34 @@ func TestProcessEC2Instance_OldGetsTerminated(t *testing.T) {
 	require.Equal(t, []string{"i-old"}, api.Terminated)
 }
 
+// A terminated (or shutting-down) instance stays visible to DescribeInstances
+// for ~an hour with LaunchTime unchanged; re-terminating it would re-publish
+// a phantom "destroyed" alert on every sweep until it ages out.
+func TestProcessEC2Instance_AlreadyTerminatedIsNotReDestroyed(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-4 * time.Hour)
+	api := &FakeAWS{
+		EC2Instances: map[string]ec2types.Instance{
+			"i-gone": {
+				InstanceId: aws.String("i-gone"),
+				LaunchTime: &old,
+				State:      &ec2types.InstanceState{Name: ec2types.InstanceStateNameTerminated},
+			},
+			"i-dying": {
+				InstanceId: aws.String("i-dying"),
+				LaunchTime: &old,
+				State:      &ec2types.InstanceState{Name: ec2types.InstanceStateNameShuttingDown},
+			},
+		},
+	}
+	for _, id := range []string{"i-gone", "i-dying"} {
+		destroyed, err := processEC2Instance(t.Context(), api, id, now, 3*time.Hour)
+		require.NoError(t, err)
+		require.False(t, destroyed, "%s is already on its way out — not a fresh destroy", id)
+	}
+	require.Empty(t, api.Terminated, "TerminateInstances must not be re-issued")
+}
+
 func TestProcessEC2Instance_TerminateErrorNotDestroyed(t *testing.T) {
 	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
 	old := now.Add(-4 * time.Hour)

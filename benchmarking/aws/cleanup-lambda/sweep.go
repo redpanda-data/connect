@@ -17,6 +17,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
@@ -170,6 +171,17 @@ func processEC2Instance(ctx context.Context, api cleanupAPI, instanceID string, 
 	}
 	for _, r := range out.Reservations {
 		for _, inst := range r.Instances {
+			// DescribeInstances (and the tagging API) keep returning
+			// terminated instances for ~an hour with LaunchTime unchanged,
+			// so without this check every 15-minute sweep after a genuine
+			// reap re-terminates the same IDs and re-publishes a phantom
+			// "destroyed N resources" alert. Mirrors the state filter the
+			// runner's preflight guard applies.
+			if inst.State != nil &&
+				(inst.State.Name == ec2types.InstanceStateNameShuttingDown ||
+					inst.State.Name == ec2types.InstanceStateNameTerminated) {
+				return false, nil
+			}
 			if inst.LaunchTime == nil {
 				continue
 			}
