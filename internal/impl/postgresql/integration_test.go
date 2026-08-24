@@ -318,9 +318,13 @@ pg_stream:
 	license.InjectTestService(stream.Resources())
 	go func() { _ = stream.Run(t.Context()) }()
 
-	// Give the input time to create the replication slot: streaming-only mode
-	// only sees rows inserted after the slot exists.
-	time.Sleep(5 * time.Second)
+	// Streaming-only mode only sees rows inserted after the replication slot
+	// exists: poll for the slot instead of sleeping, which is flaky on loaded
+	// runners.
+	require.Eventually(t, func() bool {
+		var one int
+		return db.QueryRow("SELECT 1 FROM pg_replication_slots WHERE slot_name = 'test_slot_marshal_failure'").Scan(&one) == nil
+	}, 30*time.Second, 250*time.Millisecond, "replication slot was never created")
 
 	// Sentinel row proves the stream is live before the poison row arrives.
 	_, err = db.Exec("INSERT INTO nan_floats (value) VALUES (1.5);")

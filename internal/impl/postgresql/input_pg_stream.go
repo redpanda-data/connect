@@ -622,7 +622,11 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					// at-least-once holds (the row IS delivered, flagged),
 					// and operators can inspect or route it with
 					// error-handling components.
-					p.logger.Warnf("Publishing unmarshalable row from table %s (LSN %v) with its error set for error-routing: %v", msg.Table, msg.LSN, marshalErr)
+					rowLSN := "unknown"
+					if msg.LSN != nil {
+						rowLSN = *msg.LSN
+					}
+					p.logger.Warnf("Publishing unmarshalable row from table %s (LSN %s) with its error set for error-routing: %v", msg.Table, rowLSN, marshalErr)
 					mb = fmt.Appendf(nil, "%+v", msg.Data)
 				}
 				batchMsg := service.NewMessage(mb)
