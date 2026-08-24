@@ -208,3 +208,12 @@ func (w *multiModuleWatcher) FindEnumByName(enum protoreflect.FullName) (protore
 	}
 	return nil, fmt.Errorf("could not find %s in any loaded modules", enum)
 }
+
+// close stops every schema watcher owned by w, cancelling their background
+// polling goroutines. It is safe to call multiple times as Stop() is
+// idempotent.
+func (w *multiModuleWatcher) close() {
+	for _, schemaWatcher := range w.bsrClients {
+		schemaWatcher.Stop()
+	}
+}

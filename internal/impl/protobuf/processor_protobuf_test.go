@@ -133,6 +133,7 @@ discard_unknown: %t
 
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, proc.Close(context.Background())) })
 
 			msgs, res := proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			require.NoError(t, res)
@@ -163,6 +164,7 @@ discard_unknown: %t
 
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, proc.Close(context.Background())) })
 
 			msgs, res := proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			require.NoError(t, res)
@@ -278,6 +280,7 @@ use_enum_numbers: %t
 
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, proc.Close(context.Background())) })
 
 			msgs, res := proc.Process(t.Context(), service.NewMessage(test.input))
 			require.NoError(t, res)
@@ -306,6 +309,7 @@ use_enum_numbers: %t
 
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, proc.Close(context.Background())) })
 
 			msgs, res := proc.Process(t.Context(), service.NewMessage(test.input))
 			require.NoError(t, res)
@@ -368,6 +372,7 @@ import_paths: [ %v ]
 
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, proc.Close(context.Background())) })
 
 			_, err = proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			require.Error(t, err)

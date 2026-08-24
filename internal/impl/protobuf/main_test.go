@@ -25,15 +25,5 @@ import (
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m,
 		goleak.IgnoreCurrent(),
-		// github.com/bufbuild/prototransform leaves its SchemaWatcher poll
-		// loop running: protobufProc.Close is a no-op and MultiModuleWatcher
-		// exposes no stop hook, so watchers started by BSR-backed tests live
-		// for the remainder of the process.
-		goleak.IgnoreTopFunction("github.com/bufbuild/prototransform.(*SchemaWatcher).start.func1"),
-		// net/http keepalive connections owned by the HTTP client of the
-		// unstoppable SchemaWatcher above; they linger until the transport is
-		// garbage collected.
-		goleak.IgnoreAnyFunction("net/http.(*persistConn).readLoop"),
-		goleak.IgnoreAnyFunction("net/http.(*persistConn).writeLoop"),
 	)
 }

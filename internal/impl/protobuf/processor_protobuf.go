@@ -557,6 +557,9 @@ func (p *protobufProc) Process(_ context.Context, msg *service.Message) (service
 	return service.MessageBatch{msg}, nil
 }
 
-func (*protobufProc) Close(context.Context) error {
+func (p *protobufProc) Close(context.Context) error {
+	if p.multiModuleWatcher != nil {
+		p.multiModuleWatcher.close()
+	}
 	return nil
 }
