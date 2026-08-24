@@ -34,7 +34,7 @@ func TestResolveLicensePath_FileWinsWhenItOpens(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte("from-file"), 0o600))
 
 	opts := benchOpts{licenseFile: path, licenseSecret: "arn:aws:secretsmanager:us-east-2:123:secret:whatever"}
-	got, cleanup, err := resolveLicensePath(context.Background(), opts, failingFactory(t))
+	got, cleanup, err := resolveLicensePath(t.Context(), opts, failingFactory(t))
 	require.NoError(t, err)
 	defer cleanup()
 
@@ -50,7 +50,7 @@ func TestResolveLicensePath_FallsBackToSecretWhenFileMissing(t *testing.T) {
 		licenseFile:   filepath.Join(t.TempDir(), "does-not-exist.jwt"),
 		licenseSecret: "my-secret",
 	}
-	got, cleanup, err := resolveLicensePath(context.Background(), opts, func(context.Context, string) (SecretsManagerClient, error) {
+	got, cleanup, err := resolveLicensePath(t.Context(), opts, func(context.Context, string) (SecretsManagerClient, error) {
 		return fake, nil
 	})
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestResolveLicensePath_FallsBackToSecretWhenFileMissing(t *testing.T) {
 func TestResolveLicensePath_FallsBackToSecretWhenFileUnset(t *testing.T) {
 	fake := &FakeSecretsManagerClient{SecretString: "license-from-secret"}
 	opts := benchOpts{licenseSecret: "my-secret"}
-	got, cleanup, err := resolveLicensePath(context.Background(), opts, func(context.Context, string) (SecretsManagerClient, error) {
+	got, cleanup, err := resolveLicensePath(t.Context(), opts, func(context.Context, string) (SecretsManagerClient, error) {
 		return fake, nil
 	})
 	require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestResolveLicensePath_FallsBackToSecretWhenFileUnset(t *testing.T) {
 func TestResolveLicensePath_CleanupRemovesSecretTempFileOnly(t *testing.T) {
 	fake := &FakeSecretsManagerClient{SecretString: "license-from-secret"}
 	opts := benchOpts{licenseSecret: "my-secret"}
-	got, cleanup, err := resolveLicensePath(context.Background(), opts, func(context.Context, string) (SecretsManagerClient, error) {
+	got, cleanup, err := resolveLicensePath(t.Context(), opts, func(context.Context, string) (SecretsManagerClient, error) {
 		return fake, nil
 	})
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestResolveLicensePath_CleanupRemovesSecretTempFileOnly(t *testing.T) {
 
 func TestResolveLicensePath_ErrorNamesBothOptionsWhenNeitherWorks(t *testing.T) {
 	opts := benchOpts{licenseFile: "", licenseSecret: ""}
-	_, _, err := resolveLicensePath(context.Background(), opts, failingFactory(t))
+	_, _, err := resolveLicensePath(t.Context(), opts, failingFactory(t))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--license-file")
 	require.Contains(t, err.Error(), "--license-secret")
@@ -101,7 +101,7 @@ func TestResolveLicensePath_ErrorNamesBothOptionsWhenNeitherWorks(t *testing.T) 
 
 func TestResolveLicensePath_ErrorNamesBothOptionsWhenFileFailsAndSecretUnset(t *testing.T) {
 	opts := benchOpts{licenseFile: filepath.Join(t.TempDir(), "missing.jwt"), licenseSecret: ""}
-	_, _, err := resolveLicensePath(context.Background(), opts, failingFactory(t))
+	_, _, err := resolveLicensePath(t.Context(), opts, failingFactory(t))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--license-file")
 	require.Contains(t, err.Error(), "--license-secret")
@@ -110,7 +110,7 @@ func TestResolveLicensePath_ErrorNamesBothOptionsWhenFileFailsAndSecretUnset(t *
 func TestResolveLicensePath_ErrorWhenSecretFetchFails(t *testing.T) {
 	fake := &FakeSecretsManagerClient{Err: errors.New("access denied")}
 	opts := benchOpts{licenseSecret: "my-secret"}
-	_, _, err := resolveLicensePath(context.Background(), opts, func(context.Context, string) (SecretsManagerClient, error) {
+	_, _, err := resolveLicensePath(t.Context(), opts, func(context.Context, string) (SecretsManagerClient, error) {
 		return fake, nil
 	})
 	require.Error(t, err)
@@ -122,7 +122,7 @@ func TestResolveLicensePath_ErrorWhenSecretFetchFails(t *testing.T) {
 func TestResolveLicensePath_ErrorWhenSecretHasNoSecretString(t *testing.T) {
 	fake := &FakeSecretsManagerClient{NoSecretString: true}
 	opts := benchOpts{licenseSecret: "my-secret"}
-	_, _, err := resolveLicensePath(context.Background(), opts, func(context.Context, string) (SecretsManagerClient, error) {
+	_, _, err := resolveLicensePath(t.Context(), opts, func(context.Context, string) (SecretsManagerClient, error) {
 		return fake, nil
 	})
 	require.Error(t, err)

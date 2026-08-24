@@ -15,7 +15,7 @@ tasks:
     cmds:
       - |
         if [ -z "{{.scenario}}" ]; then
-          echo "usage: task aws:bench -- scenario=<path>"
+          echo "usage: task aws:bench scenario=<path>"
           exit 2
         fi
         {{.RUNNER_BUILD}}
@@ -29,7 +29,7 @@ tasks:
     cmds:
       - |
         if [ -z "{{.scenario}}" ]; then
-          echo "usage: task aws:validate -- scenario=<path>"
+          echo "usage: task aws:validate scenario=<path>"
           exit 2
         fi
         {{.RUNNER_BUILD}}
@@ -41,7 +41,7 @@ tasks:
     cmds:
       - |
         if [ -z "{{.scenario}}" ]; then
-          echo "usage: task aws:down -- scenario=<path>"
+          echo "usage: task aws:down scenario=<path>"
           exit 2
         fi
         {{.RUNNER_BUILD}}

@@ -9,7 +9,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -191,7 +190,7 @@ func TestListRecentSoakIndexEntries_TakesUpTo7MostRecentExcludingCurrent(t *test
 		fetcher.Contents[key] = string(raw)
 	}
 
-	entries, err := listRecentSoakIndexEntries(context.Background(), lister, fetcher, "archive-bucket", scenario, current)
+	entries, err := listRecentSoakIndexEntries(t.Context(), lister, fetcher, "archive-bucket", scenario, current)
 	require.NoError(t, err)
 	require.Len(t, entries, 7, "must cap at soakBaselineMaxPriorEntries and never include the current session")
 
@@ -211,7 +210,7 @@ func TestListRecentSoakIndexEntries_TakesUpTo7MostRecentExcludingCurrent(t *test
 func TestListRecentSoakIndexEntries_ListSentCorrectPrefix(t *testing.T) {
 	lister := &FakeSoakIndexLister{}
 	fetcher := &FakeLogFetcher{Contents: map[string]string{}}
-	_, err := listRecentSoakIndexEntries(context.Background(), lister, fetcher, "bucket", "my-scenario", "bench-current")
+	_, err := listRecentSoakIndexEntries(t.Context(), lister, fetcher, "bucket", "my-scenario", "bench-current")
 	require.NoError(t, err)
 	require.Len(t, lister.Requests, 1)
 	require.Equal(t, "soak-index/my-scenario/", *lister.Requests[0].Prefix)
@@ -228,7 +227,7 @@ func TestListRecentSoakIndexEntries_CorruptEntryIsSkippedNotFatal(t *testing.T) 
 		"soak-index/s/bench-a.json": "{not valid json",
 		"soak-index/s/bench-b.json": `{"session_id":"bench-b","median_mbps":42}`,
 	}}
-	entries, err := listRecentSoakIndexEntries(context.Background(), lister, fetcher, "bucket", scenario, "bench-current")
+	entries, err := listRecentSoakIndexEntries(t.Context(), lister, fetcher, "bucket", scenario, "bench-current")
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	require.Equal(t, "bench-b", entries[0].SessionID)
@@ -237,7 +236,7 @@ func TestListRecentSoakIndexEntries_CorruptEntryIsSkippedNotFatal(t *testing.T) 
 func TestListRecentSoakIndexEntries_ListErrorPropagates(t *testing.T) {
 	lister := &FakeSoakIndexLister{Err: errors.New("access denied")}
 	fetcher := &FakeLogFetcher{}
-	_, err := listRecentSoakIndexEntries(context.Background(), lister, fetcher, "bucket", "s", "bench-current")
+	_, err := listRecentSoakIndexEntries(t.Context(), lister, fetcher, "bucket", "s", "bench-current")
 	require.ErrorContains(t, err, "access denied")
 }
 
@@ -256,7 +255,7 @@ func TestCompareSoakRunToBaseline_NoRegressionReturnsNil(t *testing.T) {
 	}
 	current := soakIndexEntry{Scenario: "scn", SessionID: "bench-current", MedianMBps: 100, RSSMaxBytes: 100}
 
-	err := compareSoakRunToBaselineWithLister(context.Background(), lister, benchOpts{soakArchiveBucket: "bucket"}, &Scenario{Name: "scn"}, "bench-current", current, fetcher)
+	err := compareSoakRunToBaselineWithLister(t.Context(), lister, benchOpts{soakArchiveBucket: "bucket"}, &Scenario{Name: "scn"}, "bench-current", current, fetcher)
 	require.NoError(t, err)
 }
 
@@ -275,7 +274,7 @@ func TestCompareSoakRunToBaseline_RegressionReturnsError(t *testing.T) {
 	}
 	current := soakIndexEntry{Scenario: "scn", SessionID: "bench-current", MedianMBps: 1, RSSMaxBytes: 100}
 
-	err := compareSoakRunToBaselineWithLister(context.Background(), lister, benchOpts{soakArchiveBucket: "bucket"}, &Scenario{Name: "scn"}, "bench-current", current, fetcher)
+	err := compareSoakRunToBaselineWithLister(t.Context(), lister, benchOpts{soakArchiveBucket: "bucket"}, &Scenario{Name: "scn"}, "bench-current", current, fetcher)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "scn")
 	require.ErrorContains(t, err, "median_mbps")

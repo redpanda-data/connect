@@ -436,10 +436,10 @@ func TestProcessEC2Instance_OldGetsTerminated(t *testing.T) {
 			"i-young": {InstanceId: aws.String("i-young"), LaunchTime: &young},
 		},
 	}
-	destroyedOld, err := processEC2Instance(context.Background(), api, "i-old", now, 3*time.Hour)
+	destroyedOld, err := processEC2Instance(t.Context(), api, "i-old", now, 3*time.Hour)
 	require.NoError(t, err)
 	require.True(t, destroyedOld)
-	destroyedYoung, err := processEC2Instance(context.Background(), api, "i-young", now, 3*time.Hour)
+	destroyedYoung, err := processEC2Instance(t.Context(), api, "i-young", now, 3*time.Hour)
 	require.NoError(t, err)
 	require.False(t, destroyedYoung)
 	require.Equal(t, []string{"i-old"}, api.Terminated)
@@ -455,7 +455,7 @@ func TestProcessEC2Instance_TerminateErrorNotDestroyed(t *testing.T) {
 		},
 		FailOn: map[string]error{"TerminateInstances:i-old": boom},
 	}
-	destroyed, err := processEC2Instance(context.Background(), api, "i-old", now, 3*time.Hour)
+	destroyed, err := processEC2Instance(t.Context(), api, "i-old", now, 3*time.Hour)
 	require.ErrorIs(t, err, boom)
 	require.False(t, destroyed)
 }
@@ -470,10 +470,10 @@ func TestProcessRDSInstance_OldGetsDeleted(t *testing.T) {
 			"young-db": {DBInstanceIdentifier: aws.String("young-db"), InstanceCreateTime: &young},
 		},
 	}
-	destroyedOld, err := processRDSInstance(context.Background(), api, "old-db", now, 3*time.Hour)
+	destroyedOld, err := processRDSInstance(t.Context(), api, "old-db", now, 3*time.Hour)
 	require.NoError(t, err)
 	require.True(t, destroyedOld)
-	destroyedYoung, err := processRDSInstance(context.Background(), api, "young-db", now, 3*time.Hour)
+	destroyedYoung, err := processRDSInstance(t.Context(), api, "young-db", now, 3*time.Hour)
 	require.NoError(t, err)
 	require.False(t, destroyedYoung)
 	require.Equal(t, []string{"old-db"}, api.DeletedDBs)
@@ -486,7 +486,7 @@ func TestProcessS3Bucket_OldEmptyAndDeleted(t *testing.T) {
 	api := &FakeAWS{
 		S3Buckets: map[string]time.Time{"rpcn-bench-results-old": old},
 	}
-	destroyed, err := processS3Bucket(context.Background(), api, "rpcn-bench-results-old", old, now, 3*time.Hour)
+	destroyed, err := processS3Bucket(t.Context(), api, "rpcn-bench-results-old", old, now, 3*time.Hour)
 	require.NoError(t, err)
 	require.True(t, destroyed)
 	require.Equal(t, []string{"rpcn-bench-results-old"}, api.DeletedBuckets)
@@ -502,7 +502,7 @@ func TestProcessS3Bucket_YoungNotDeleted(t *testing.T) {
 	api := &FakeAWS{
 		S3Buckets: map[string]time.Time{"rpcn-bench-results-young": young},
 	}
-	destroyed, err := processS3Bucket(context.Background(), api, "rpcn-bench-results-young", young, now, 3*time.Hour)
+	destroyed, err := processS3Bucket(t.Context(), api, "rpcn-bench-results-young", young, now, 3*time.Hour)
 	require.NoError(t, err)
 	require.False(t, destroyed)
 	require.Empty(t, api.DeletedBuckets, "young bucket must NOT be deleted")
@@ -536,7 +536,7 @@ func TestProcessS3Bucket_VersionMarkerPagination(t *testing.T) {
 			},
 		},
 	}
-	destroyed, err := processS3Bucket(context.Background(), api, bucket, old, now, 3*time.Hour)
+	destroyed, err := processS3Bucket(t.Context(), api, bucket, old, now, 3*time.Hour)
 	require.NoError(t, err)
 	require.True(t, destroyed)
 	require.Len(t, api.ListObjectVersionsRequests, 2)
@@ -552,7 +552,7 @@ func TestProcessIAMRole_OldGetsDeleted(t *testing.T) {
 	api := &FakeAWS{
 		IAMRoles: map[string]time.Time{"rpcn-bench-host-old": old},
 	}
-	destroyed, err := processIAMRole(context.Background(), api, "rpcn-bench-host-old", now, 3*time.Hour)
+	destroyed, err := processIAMRole(t.Context(), api, "rpcn-bench-host-old", now, 3*time.Hour)
 	require.NoError(t, err)
 	require.True(t, destroyed)
 	require.Equal(t, []string{"rpcn-bench-host-old"}, api.DeletedRoles)
@@ -569,7 +569,7 @@ func TestProcessRouteTable_MainSkipped(t *testing.T) {
 			},
 		},
 	}
-	destroyed, err := processRouteTable(context.Background(), api, "rtb-main", old, now, 3*time.Hour)
+	destroyed, err := processRouteTable(t.Context(), api, "rtb-main", old, now, 3*time.Hour)
 	require.NoError(t, err)
 	require.False(t, destroyed)
 	require.Empty(t, api.DeletedRouteTables)
@@ -588,7 +588,7 @@ func TestProcessRouteTable_NonMainDisassociatedAndDeleted(t *testing.T) {
 			},
 		},
 	}
-	destroyed, err := processRouteTable(context.Background(), api, "rtb-1", old, now, 3*time.Hour)
+	destroyed, err := processRouteTable(t.Context(), api, "rtb-1", old, now, 3*time.Hour)
 	require.NoError(t, err)
 	require.True(t, destroyed)
 	require.Equal(t, []string{"rtbassoc-1"}, api.Disassociated)
@@ -606,7 +606,7 @@ func TestProcessInternetGateway_DetachedThenDeleted(t *testing.T) {
 			},
 		},
 	}
-	destroyed, err := processInternetGateway(context.Background(), api, "igw-1", old, now, 3*time.Hour)
+	destroyed, err := processInternetGateway(t.Context(), api, "igw-1", old, now, 3*time.Hour)
 	require.NoError(t, err)
 	require.True(t, destroyed)
 	require.Equal(t, []string{"igw-1/vpc-1"}, api.DetachedIGWs)
@@ -621,7 +621,7 @@ func TestProcessSecurityGroup_DefaultSkipped(t *testing.T) {
 			"sg-default": {GroupId: aws.String("sg-default"), GroupName: aws.String("default")},
 		},
 	}
-	destroyed, err := processSecurityGroup(context.Background(), api, "sg-default", old, now, 3*time.Hour)
+	destroyed, err := processSecurityGroup(t.Context(), api, "sg-default", old, now, 3*time.Hour)
 	require.NoError(t, err)
 	require.False(t, destroyed)
 	require.Empty(t, api.DeletedSGs)
@@ -635,7 +635,7 @@ func TestProcessSecurityGroup_NonDefaultDeleted(t *testing.T) {
 			"sg-1": {GroupId: aws.String("sg-1"), GroupName: aws.String("rpcn-bench-sg")},
 		},
 	}
-	destroyed, err := processSecurityGroup(context.Background(), api, "sg-1", old, now, 3*time.Hour)
+	destroyed, err := processSecurityGroup(t.Context(), api, "sg-1", old, now, 3*time.Hour)
 	require.NoError(t, err)
 	require.True(t, destroyed)
 	require.Equal(t, []string{"sg-1"}, api.DeletedSGs)
@@ -664,7 +664,7 @@ func TestSweep_MixedFreshAndStale(t *testing.T) {
 		IAMRoles:  map[string]time.Time{"rpcn-bench-host-old": old},
 	}
 
-	report, err := Sweep(context.Background(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
 	require.NoError(t, err)
 	require.Equal(t, []string{"i-old"}, api.Terminated)
 	require.Equal(t, []string{"old-db"}, api.DeletedDBs)
@@ -684,7 +684,7 @@ func TestSweep_NothingStaleNoPublish(t *testing.T) {
 		},
 		EC2Instances: map[string]ec2types.Instance{"i-young": {InstanceId: aws.String("i-young"), LaunchTime: &young}},
 	}
-	report, err := Sweep(context.Background(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
 	require.NoError(t, err)
 	require.Empty(t, api.Terminated)
 	require.Empty(t, api.SNSMessages, "no publish on no-op runs")
@@ -709,7 +709,7 @@ func TestSweep_GetResourcesPagination(t *testing.T) {
 			"page2-db": {DBInstanceIdentifier: aws.String("page2-db"), InstanceCreateTime: &old},
 		},
 	}
-	report, err := Sweep(context.Background(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
 	require.NoError(t, err)
 	require.Equal(t, []string{"i-page1"}, api.Terminated, "second page must be fetched via PaginationToken")
 	require.Equal(t, []string{"page2-db"}, api.DeletedDBs, "second page must be fetched via PaginationToken")
@@ -732,7 +732,7 @@ func TestSweep_ErroredDeleteNotReportedDestroyed(t *testing.T) {
 		},
 		FailOn: map[string]error{"TerminateInstances:i-old": errAssertion("boom")},
 	}
-	report, err := Sweep(context.Background(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
 	require.NoError(t, err)
 	require.Equal(t, 0, report.DestroyedCount)
 	require.Empty(t, report.Destroyed)
@@ -741,12 +741,12 @@ func TestSweep_ErroredDeleteNotReportedDestroyed(t *testing.T) {
 }
 
 // TestSweep_ThreadsCallerContext is a regression test for lookupEC2/
-// lookupRDS having used context.Background() instead of the caller's ctx.
+// lookupRDS having used t.Context() instead of the caller's ctx.
 func TestSweep_ThreadsCallerContext(t *testing.T) {
 	type ctxKey struct{}
 	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
 	api := &FakeAWS{}
-	ctx := context.WithValue(context.Background(), ctxKey{}, "marker")
+	ctx := context.WithValue(t.Context(), ctxKey{}, "marker")
 
 	_, err := Sweep(ctx, api, now, 3*time.Hour, "arn:sns:topic")
 	require.NoError(t, err)
@@ -798,7 +798,7 @@ func TestSweep_FullStrandedStack(t *testing.T) {
 		},
 	}
 
-	report, err := Sweep(context.Background(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
 	require.NoError(t, err)
 	require.Equal(t, 0, report.Errors)
 

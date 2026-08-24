@@ -35,12 +35,12 @@ func noFactory(t *testing.T) EC2ClientFactory {
 
 func TestPreflightCheck_NoInstancesPasses(t *testing.T) {
 	client := &FakeEC2Client{Output: &ec2.DescribeInstancesOutput{}}
-	require.NoError(t, preflightCheck(context.Background(), client, fakeDefaultRegion, noFactory(t)))
+	require.NoError(t, preflightCheck(t.Context(), client, fakeDefaultRegion, noFactory(t)))
 }
 
 func TestPreflightCheck_SendsExpectedFilters(t *testing.T) {
 	client := &FakeEC2Client{Output: &ec2.DescribeInstancesOutput{}}
-	require.NoError(t, preflightCheck(context.Background(), client, fakeDefaultRegion, noFactory(t)))
+	require.NoError(t, preflightCheck(t.Context(), client, fakeDefaultRegion, noFactory(t)))
 	require.Len(t, client.Requests, 1)
 
 	req := client.Requests[0]
@@ -70,7 +70,7 @@ func TestPreflightCheck_RunningInstanceFailsAndNamesIt(t *testing.T) {
 			},
 		},
 	}
-	err := preflightCheck(context.Background(), client, fakeDefaultRegion, noFactory(t))
+	err := preflightCheck(t.Context(), client, fakeDefaultRegion, noFactory(t))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "i-abc123")
 	require.Contains(t, err.Error(), "bench-20260817-103000")
@@ -103,7 +103,7 @@ func TestPreflightCheck_MultipleInstancesListsAll(t *testing.T) {
 			},
 		},
 	}
-	err := preflightCheck(context.Background(), client, fakeDefaultRegion, noFactory(t))
+	err := preflightCheck(t.Context(), client, fakeDefaultRegion, noFactory(t))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "2 concurrent bench session(s)")
 	require.Contains(t, err.Error(), "i-runner")
@@ -118,7 +118,7 @@ func TestPreflightCheck_UntaggedInstanceStillReported(t *testing.T) {
 			},
 		},
 	}
-	err := preflightCheck(context.Background(), client, fakeDefaultRegion, noFactory(t))
+	err := preflightCheck(t.Context(), client, fakeDefaultRegion, noFactory(t))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "i-mystery")
 	require.Contains(t, err.Error(), "<untagged>")
@@ -127,7 +127,7 @@ func TestPreflightCheck_UntaggedInstanceStillReported(t *testing.T) {
 
 func TestPreflightCheck_DescribeInstancesErrorPropagates(t *testing.T) {
 	client := &FakeEC2Client{Err: errors.New("access denied")}
-	err := preflightCheck(context.Background(), client, fakeDefaultRegion, noFactory(t))
+	err := preflightCheck(t.Context(), client, fakeDefaultRegion, noFactory(t))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "access denied")
 }
@@ -141,7 +141,7 @@ func TestPreflightCheck_DescribeInstancesErrorPropagates(t *testing.T) {
 // skipped).
 func TestPreflightCheck_DescribeRegionsErrorFailsLoudly(t *testing.T) {
 	client := &FakeEC2Client{RegionsErr: errors.New("access denied to ec2:DescribeRegions")}
-	err := preflightCheck(context.Background(), client, fakeDefaultRegion, noFactory(t))
+	err := preflightCheck(t.Context(), client, fakeDefaultRegion, noFactory(t))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "access denied to ec2:DescribeRegions")
 }
@@ -186,7 +186,7 @@ func TestPreflightCheck_ConflictInNonHomeRegionFailsAndNamesRegion(t *testing.T)
 		return otherClient, nil
 	}
 
-	err := preflightCheck(context.Background(), homeClient, homeRegion, factory)
+	err := preflightCheck(t.Context(), homeClient, homeRegion, factory)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "i-other-region")
 	require.Contains(t, err.Error(), "bench-conflict")
@@ -222,7 +222,7 @@ func TestPreflightCheck_SCPDeniedRegionIsSkipped(t *testing.T) {
 		return deniedClient, nil
 	}
 
-	require.NoError(t, preflightCheck(context.Background(), homeClient, homeRegion, factory))
+	require.NoError(t, preflightCheck(t.Context(), homeClient, homeRegion, factory))
 }
 
 // TestPreflightCheck_SCPDenyInHomeRegionStillFails pins that the skip
@@ -235,7 +235,7 @@ func TestPreflightCheck_SCPDenyInHomeRegionStillFails(t *testing.T) {
 			Message: "explicit deny in a service control policy",
 		},
 	}
-	err := preflightCheck(context.Background(), homeClient, fakeDefaultRegion, noFactory(t))
+	err := preflightCheck(t.Context(), homeClient, fakeDefaultRegion, noFactory(t))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), fakeDefaultRegion)
 	require.Contains(t, err.Error(), "UnauthorizedOperation")
@@ -259,7 +259,7 @@ func TestPreflightCheck_FactoryErrorFailsLoudly(t *testing.T) {
 	factory := func(_ context.Context, region string) (EC2Client, error) {
 		return nil, errors.New("could not load AWS config for region " + region)
 	}
-	err := preflightCheck(context.Background(), homeClient, homeRegion, factory)
+	err := preflightCheck(t.Context(), homeClient, homeRegion, factory)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), otherRegion)
 }

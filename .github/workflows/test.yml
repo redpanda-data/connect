@@ -86,13 +86,21 @@ jobs:
           git diff HEAD -- 'benchmarking/aws/go.*' 'benchmarking/aws/cleanup-lambda/go.*'
           git diff-index HEAD --exit-code -- 'benchmarking/aws/go.*' 'benchmarking/aws/cleanup-lambda/go.*'
 
+      # -race because the code under test is genuinely concurrent (workload
+      # goroutine, mid-run emit loop, mutex-guarded fakes). It needs cgo, so
+      # these two steps override the job-level CGO_ENABLED=0 (which the lint
+      # steps below still want).
       - name: Test benchmarking/aws
         working-directory: benchmarking/aws
-        run: go test -timeout 5m -shuffle=on ./...
+        env:
+          CGO_ENABLED: 1
+        run: go test -race -timeout 8m -shuffle=on ./...
 
       - name: Test cleanup-lambda
         working-directory: benchmarking/aws/cleanup-lambda
-        run: go test -timeout 5m -shuffle=on ./...
+        env:
+          CGO_ENABLED: 1
+        run: go test -race -timeout 8m -shuffle=on ./...
 
       - name: Set version env variables
         run: cat .versions >> $GITHUB_ENV

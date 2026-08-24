@@ -9,7 +9,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -279,7 +278,7 @@ func TestFakeEmitter_RecordsAndFlattensCalls(t *testing.T) {
 func TestFakeEmitter_ErrShortCircuitsWithoutRecording(t *testing.T) {
 	wantErr := fmt.Errorf("cloudwatch unavailable")
 	f := &FakeEmitter{Err: wantErr}
-	err := f.Emit(context.Background(), []MetricDatum{{Name: "a", Value: 1}})
+	err := f.Emit(t.Context(), []MetricDatum{{Name: "a", Value: 1}})
 	require.ErrorIs(t, err, wantErr)
 	require.Empty(t, f.Calls, "a failed Emit must not be recorded as if it succeeded")
 }

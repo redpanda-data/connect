@@ -90,7 +90,7 @@ func TestSummarise_AggregatesDailyTotals(t *testing.T) {
 		},
 	}
 
-	report, err := SummariseCosts(context.Background(), fake, "us-east-2", now)
+	report, err := SummariseCosts(t.Context(), fake, "us-east-2", now)
 	require.NoError(t, err)
 	require.InDelta(t, 1.25, report.Today, 1e-9)
 	require.InDelta(t, 8.00+1.25, report.Last7Days, 1e-9) // 2026-05-13 is exactly 7 days ago; 14..20 sum
@@ -118,7 +118,7 @@ func TestSummarise_Last7DaysCrossesMonthBoundary(t *testing.T) {
 			{}, // breakdown call: irrelevant here
 		},
 	}
-	report, err := SummariseCosts(context.Background(), fake, "us-east-2", now)
+	report, err := SummariseCosts(t.Context(), fake, "us-east-2", now)
 	require.NoError(t, err)
 	require.InDelta(t, 0.25, report.Today, 1e-9)
 	require.InDelta(t, 8.25, report.Last7Days, 1e-9, "the July soak runs must count toward last-7-days")
@@ -132,7 +132,7 @@ func TestSummarise_Last7DaysCrossesMonthBoundary(t *testing.T) {
 func TestSummarise_TotalsWindowStartsAtMonthStartMidMonth(t *testing.T) {
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
 	fake := &FakeCostExplorer{Responses: []*costexplorer.GetCostAndUsageOutput{{}, {}}}
-	_, err := SummariseCosts(context.Background(), fake, "us-east-2", now)
+	_, err := SummariseCosts(t.Context(), fake, "us-east-2", now)
 	require.NoError(t, err)
 	require.Len(t, fake.Inputs, 2)
 	require.Equal(t, "2026-05-01", aws.ToString(fake.Inputs[0].TimePeriod.Start))
@@ -143,7 +143,7 @@ func TestSummarise_EmptyResponseGivesZeros(t *testing.T) {
 	fake := &FakeCostExplorer{
 		Responses: []*costexplorer.GetCostAndUsageOutput{{}, {}},
 	}
-	report, err := SummariseCosts(context.Background(), fake, "us-east-2", now)
+	report, err := SummariseCosts(t.Context(), fake, "us-east-2", now)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, report.Today)
 	require.Equal(t, 0.0, report.Last7Days)
@@ -156,7 +156,7 @@ func TestSummarise_PropagatesError(t *testing.T) {
 	fake := &FakeCostExplorer{
 		Errs: []error{errBoom},
 	}
-	_, err := SummariseCosts(context.Background(), fake, "us-east-2", now)
+	_, err := SummariseCosts(t.Context(), fake, "us-east-2", now)
 	require.Error(t, err)
 }
 

@@ -79,7 +79,7 @@ func TestMatrixRunner_RunSweepsEveryArm(t *testing.T) {
 		{VCPU: 2, ArmID: "a0", GOMAXPROCS: 2, Streams: 1},
 		{VCPU: 2, ArmID: "b", GOMAXPROCS: 4, Streams: 2},
 	}
-	points, err := mr.Run(context.Background(), plan, 2, 0, 30*time.Second, "", "")
+	points, err := mr.Run(t.Context(), plan, 2, 0, 30*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 2)
 	require.Equal(t, "a0", points[0].ArmID)
@@ -141,7 +141,7 @@ func TestMatrixRunner_RunUsesPerArmBinaryPath(t *testing.T) {
 		{VCPU: 2, ArmID: "base", GOMAXPROCS: 2, Streams: 1, Binary: "base"},
 		{VCPU: 2, ArmID: "pr", GOMAXPROCS: 2, Streams: 1, Binary: "pr"},
 	}
-	points, err := mr.Run(context.Background(), plan, 2, 0, 30*time.Second, "", "")
+	points, err := mr.Run(t.Context(), plan, 2, 0, 30*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 2)
 	require.Equal(t, "base", points[0].Binary)
@@ -176,7 +176,7 @@ func TestMatrixRunner_RejectsPlanPointMissingFromConfigPaths(t *testing.T) {
 		{VCPU: 2, ArmID: "a0", GOMAXPROCS: 2, Streams: 1},
 		{VCPU: 2, ArmID: "b", GOMAXPROCS: 4, Streams: 2},
 	}
-	_, err := mr.Run(context.Background(), plan, 2, 0, 30*time.Second, "", "")
+	_, err := mr.Run(t.Context(), plan, 2, 0, 30*time.Second, "", "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `"2-b"`)
 	require.Empty(t, ssm.Scripts, "the sweep must reject before issuing any SSM command, not partway through")
@@ -201,7 +201,7 @@ func TestMatrixRunner_ArmlessPlanUsesLegacyConfigPath(t *testing.T) {
 		Bucket: "b", SessionID: sessionID,
 		ConfigPath: "/opt/bench/config.yaml",
 	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 2, 0, 30*time.Second, "", "")
+	points, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 2, 0, 30*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 1)
 	require.Empty(t, points[0].ArmID)
@@ -237,7 +237,7 @@ func TestMatrixRunner_WorkloadFailureFailsThePoint(t *testing.T) {
 		Bucket:          "b",
 		SessionID:       sessionID,
 	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "workload.sh")
+	points, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "workload.sh")
 	require.Error(t, err, "a real workload failure must fail the point, not just log it")
 	require.Contains(t, err.Error(), "workload script failed")
 	require.Contains(t, err.Error(), "load-gen crashed")
@@ -272,7 +272,7 @@ func TestMatrixRunner_WorkloadFailureCancelsInFlightBench(t *testing.T) {
 		Bucket:          "b",
 		SessionID:       sessionID,
 	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "workload.sh")
+	points, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "workload.sh")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "workload script failed",
 		"the workload error must be surfaced as the cause, not the bench cancellation it triggered")
@@ -311,7 +311,7 @@ func TestMatrixRunner_WorkloadCancellationOnSuccessIsNotAFailure(t *testing.T) {
 		Bucket:          "b",
 		SessionID:       sessionID,
 	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "workload.sh")
+	points, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "workload.sh")
 	require.NoError(t, err)
 	require.Len(t, points, 1)
 }
@@ -365,7 +365,7 @@ redpanda_kafka_records_produced_total{redpanda_namespace="kafka",redpanda_topic=
 		Topology:       sourceTopology{},
 		Names:          newBenchNames(sessionID, "pg_cdc"),
 	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 2)
 
@@ -415,7 +415,7 @@ func TestMatrixRunner_EarlyAbortOnZeroSamples(t *testing.T) {
 		Bucket:         "b",
 		SessionID:      sessionID,
 	}
-	_, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}}, 1, 1*time.Second, 5*time.Second, "", "")
+	_, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}}, 1, 1*time.Second, 5*time.Second, "", "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "0 samples")
 	// Log tail should have been dumped so the operator can see the error.
@@ -456,7 +456,7 @@ func TestMatrixRunner_EarlyAbortFiresForLaterArmToo(t *testing.T) {
 		{VCPU: 2, ArmID: "a0", GOMAXPROCS: 2, Streams: 1},
 		{VCPU: 2, ArmID: "b", GOMAXPROCS: 4, Streams: 1},
 	}
-	points, err := mr.Run(context.Background(), plan, 1, 0, 5*time.Second, "", "")
+	points, err := mr.Run(t.Context(), plan, 1, 0, 5*time.Second, "", "")
 	require.Error(t, err, "arm b's empty sample set must abort the sweep, not just plan[0]'s arm")
 	require.Contains(t, err.Error(), "sweep point 2-b at 2 vCPU captured 0 samples",
 		"the error must name the arm that failed — both arms share the vCPU count")
@@ -487,7 +487,7 @@ func TestMatrixRunner_WarmupTrimsAndReindexes(t *testing.T) {
 		Bucket:         "b",
 		SessionID:      sessionID,
 	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 2*time.Second, 3*time.Second, "", "")
+	points, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 2*time.Second, 3*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 1)
 	require.Len(t, points[0].Samples, 3)
@@ -525,7 +525,7 @@ go_memstats_heap_inuse_bytes 1.1e+08
 		Bucket:         bucket,
 		SessionID:      sessionID,
 	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 1)
 	require.Len(t, points[0].Prom, 2)
@@ -552,7 +552,7 @@ func TestMatrixRunner_MissingPromIsNonFatal(t *testing.T) {
 	defer func() { stdout = prev }()
 
 	mr := &MatrixRunner{SSM: ssm, LogFetcher: fetcher, RunnerInstance: "i-runner", Bucket: "b", SessionID: sessionID}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err, "missing prom dump must not fail the sweep point")
 	require.Len(t, points, 1)
 	require.Empty(t, points[0].Prom, "Prom stays nil/empty when fetch failed")
@@ -841,7 +841,7 @@ func TestMatrixRun_EngineInnerLoop_ConnectOnly(t *testing.T) {
 		Bucket:         "b",
 		SessionID:      sessionID,
 	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}, {VCPU: 4, GOMAXPROCS: 4, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}, {VCPU: 4, GOMAXPROCS: 4, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 3, "expected 3 sweep points (connect-only)")
 	for _, p := range points {
@@ -876,7 +876,7 @@ func TestMatrixRunner_SoakMissingBrokerArtifactFailsPoint(t *testing.T) {
 		Topology: sourceTopology{}, Names: newBenchNames(sessionID, connector),
 		ExpectedRecordsPerSec: 5000,
 	}
-	_, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
+	_, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.Error(t, err, "a soak point without broker metrics must fail, not archive a zero")
 	require.Contains(t, err.Error(), "broker metrics artifact")
 }
@@ -907,7 +907,7 @@ func TestMatrixRunner_SoakMissingPromFailsPoint(t *testing.T) {
 		Topology: sourceTopology{}, Names: newBenchNames(sessionID, connector),
 		ExpectedRecordsPerSec: 5000,
 	}
-	_, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
+	_, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.Error(t, err, "a soak point without a prom dump must fail, not archive RSS max 0")
 	require.Contains(t, err.Error(), "prom artifact")
 }
@@ -985,7 +985,7 @@ process_resident_memory_bytes 500
 		// accrues instead of staying pinned at 0.
 		ExpectedRecordsPerSec: 5000,
 	}
-	points, err := mr.Run(context.Background(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
+	points, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 1)
 
@@ -1090,7 +1090,7 @@ func TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints(t
 	// (Broker) families carry data.
 	wantNoPromOrBacklog := soakHighWaterMarks{Prom: -1, Backlog: -1}
 
-	mr.emitSoakCycle(context.Background(), key, pointStart, warmup, hw)
+	mr.emitSoakCycle(t.Context(), key, pointStart, warmup, hw)
 	got := hw.get()
 	require.Equal(t, 1, got.Samples)
 	require.Equal(t, 1, got.Broker)
@@ -1102,7 +1102,7 @@ func TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints(t
 	// bench script hasn't re-uploaded since the last cycle) must add
 	// NOTHING new — the high-water mark is what prevents a duplicate
 	// minute 0/1 emission.
-	mr.emitSoakCycle(context.Background(), key, pointStart, warmup, hw)
+	mr.emitSoakCycle(t.Context(), key, pointStart, warmup, hw)
 	got = hw.get()
 	require.Equal(t, 1, got.Samples, "the high-water mark must not move when there is nothing new to emit")
 	require.Equal(t, 1, got.Broker, "the high-water mark must not move when there is nothing new to emit")
@@ -1115,7 +1115,7 @@ func TestMatrixRunner_EmitSoakCycle_DedupesAndAdvancesAcrossGrowingCheckpoints(t
 	// Third checkpoint: the run has progressed — minute 2 now has enough
 	// data to be complete, and minute 3 is the new open minute.
 	setCheckpoint(240, 21)
-	mr.emitSoakCycle(context.Background(), key, pointStart, warmup, hw)
+	mr.emitSoakCycle(t.Context(), key, pointStart, warmup, hw)
 	got = hw.get()
 	require.Equal(t, 2, got.Samples, "the high-water mark must advance to the newly-completed minute 2")
 	require.Equal(t, 2, got.Broker, "the high-water mark must advance to the newly-completed minute 2")
@@ -1150,12 +1150,12 @@ func TestMatrixRunner_EmitAggregated_IncludesRSSSlopeOnceEnoughPromHistory(t *te
 	mr := &MatrixRunner{Emitter: emitter}
 	pointStart := time.Now()
 
-	mr.emitAggregated(context.Background(), nil, promFew, nil, nil, pointStart, 0, newSoakHighWater())
+	mr.emitAggregated(t.Context(), nil, promFew, nil, nil, pointStart, 0, newSoakHighWater())
 	for _, d := range emitter.LastCall() {
 		require.NotEqual(t, metricRSSSlopeBytesPerMin, d.Name, "too few prom samples must never publish the slope metric")
 	}
 
-	mr.emitAggregated(context.Background(), nil, promEnough, nil, nil, pointStart, 0, newSoakHighWater())
+	mr.emitAggregated(t.Context(), nil, promEnough, nil, nil, pointStart, 0, newSoakHighWater())
 	var found *MetricDatum
 	for i, d := range emitter.LastCall() {
 		if d.Name == metricRSSSlopeBytesPerMin {
