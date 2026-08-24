@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +24,10 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcmssql "github.com/testcontainers/testcontainers-go/modules/mssql"
 )
+
+// DefaultCaptureInstance resolves to conventional look up of <schema>_<table>
+// when empty.
+const DefaultCaptureInstance = ""
 
 // TestDB wraps sql.DB with testing utilities for Microsoft SQL Server integration tests.
 // It provides helper methods for table creation, CDC enablement, and assertions.
@@ -47,8 +52,8 @@ func (db *TestDB) MustExecContext(ctx context.Context, query string, args ...any
 // MustEnableCDC enables Change Data Capture on the specified table.
 // The fullTableName should be in format "schema.table" (e.g., "dbo.all_data_types").
 // If only a table name is provided, defaults to "dbo" schema.
-func (db *TestDB) MustEnableCDC(ctx context.Context, fullTableName string) {
-	db.T.Logf("Enabling Change Data Capture for table %q", fullTableName)
+func (db *TestDB) MustEnableCDC(ctx context.Context, fullTableName string, captureInstance string) {
+	db.T.Logf("Enabling Change Data Capture for table %q with capture instance %q", fullTableName, captureInstance)
 	table := strings.Split(fullTableName, ".")
 	if len(table) != 2 {
 		table = []string{"dbo", table[0]}
@@ -56,17 +61,36 @@ func (db *TestDB) MustEnableCDC(ctx context.Context, fullTableName string) {
 	schema := table[0]
 	tableName := table[1]
 
+	if captureInstance == DefaultCaptureInstance {
+		captureInstance = schema + "_" + tableName
+	}
 	query := fmt.Sprintf(`
 		EXEC sys.sp_cdc_enable_table
-		@source_schema = '%s',
-		@source_name   = '%s',
-		@role_name     = NULL;`, schema, tableName)
+		@source_schema    = '%s',
+		@source_name      = '%s',
+		@role_name        = NULL,
+		@capture_instance = '%s';`, schema, tableName, captureInstance)
 
-	_, err := db.ExecContext(ctx, query)
-	require.NoError(db.T, err)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		_, err := db.ExecContext(ctx, query)
+		if err == nil {
+			break
+		}
+		if !strings.Contains(err.Error(), "SQL Server Agent is starting") || time.Now().After(deadline) {
+			require.NoError(db.T, err)
+		}
+		select {
+		case <-ctx.Done():
+			require.NoError(db.T, ctx.Err())
+		case <-ticker.C:
+		}
+	}
 
 	// Wait for CDC table to be ready
-	captureInstance := schema + "_" + tableName
+	var err error
 	for {
 		var minLSN, maxLSN []byte
 		if err = db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_min_lsn(?)", captureInstance).Scan(&minLSN); err != nil {
@@ -88,7 +112,7 @@ func (db *TestDB) MustEnableCDC(ctx context.Context, fullTableName string) {
 
 end:
 	require.NoError(db.T, err)
-	db.T.Logf("Change Data Capture enabled for table %q", fullTableName)
+	db.T.Logf("Change Data Capture enabled for table %q with capture instance %q", fullTableName, captureInstance)
 }
 
 // WaitForCDCChanges waits until the CDC change table for each given source table
@@ -356,4 +380,22 @@ func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) 
 		assert.NoError(t, db.Close())
 	})
 	return connectionString, db
+}
+
+// SyncBuffer is a concurrency safe io writer for capturing logs
+type SyncBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *SyncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *SyncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }

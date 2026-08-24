@@ -13,6 +13,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -516,6 +518,111 @@ microsoft_sql_server_cdc:
 	}
 }
 
+func TestIntegration_MicrosoftSQLServerCDC_TwoNonDefaultCaptureInstancesFailsToStart(t *testing.T) {
+	// Confirms documented behaviour: a table with two non-convention-named
+	// capture instances and no matching `capture_instance` override is
+	// unresolvably ambiguous, so the whole input fails to start. This is a
+	// known, documented limitation (see "Operational notes").
+
+	integration.CheckSkip(t)
+
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
+
+	db.MustExec(`CREATE SCHEMA rpcn;`)
+	db.MustExec(`CREATE TABLE dbo.migrating_table (id INT NOT NULL PRIMARY KEY);`)
+
+	db.MustEnableCDC(t.Context(), "dbo.migrating_table", "migrating_table_v1")
+	db.MustEnableCDC(t.Context(), "dbo.migrating_table", "migrating_table_v2")
+
+	cfg := `
+microsoft_sql_server_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  include: ["dbo.migrating_table"]`
+
+	logs := &mssqlservertest.SyncBuffer{}
+	streamBuilder := service.NewStreamBuilder()
+	streamBuilder.SetLogger(slog.New(slog.NewTextHandler(logs, nil)))
+	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	runCtx, cancel := context.WithCancel(t.Context())
+	go func() {
+		_ = stream.Run(runCtx)
+	}()
+
+	assert.Eventually(t, func() bool {
+		return strings.Contains(logs.String(), "multiple CDC capture instances")
+	}, 30*time.Second, 500*time.Millisecond,
+		"expected Connect to repeatedly fail with the ambiguous-capture-instance error, since dbo.migrating_table "+
+			"has two non-default-named capture instances and no capture_instance override was configured")
+
+	cancel()
+	require.NoError(t, stream.StopWithin(10*time.Second))
+}
+
+// TestIntegration_MicrosoftSQLServerCDC_CaptureInstanceOverrideResolvesAmbiguity
+// confirms the capture_instance config field resolves the ambiguity
+// documented in TestIntegration_MicrosoftSQLServerCDC_TwoNonDefaultCaptureInstancesFailsToStart:
+// given an explicit override naming one of the two capture instances, the
+// input starts successfully and streams from the specified instance.
+func TestIntegration_MicrosoftSQLServerCDC_CaptureInstanceOverrideResolvesAmbiguity(t *testing.T) {
+	integration.CheckSkip(t)
+
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
+
+	db.MustExec(`CREATE SCHEMA rpcn;`)
+	db.MustExec(`CREATE TABLE dbo.migrating_table (id INT NOT NULL PRIMARY KEY);`)
+
+	db.MustEnableCDC(t.Context(), "dbo.migrating_table", "migrating_table_v1")
+	db.MustEnableCDC(t.Context(), "dbo.migrating_table", "migrating_table_v2")
+
+	cfg := `
+microsoft_sql_server_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  include: ["dbo.migrating_table"]
+  capture_instance: migrating_table_v2`
+
+	var (
+		outBatches   []string
+		outBatchesMu sync.Mutex
+	)
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, err)
+		outBatchesMu.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchesMu.Unlock()
+		return nil
+	}))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	db.MustExec("INSERT INTO dbo.migrating_table (id) VALUES (1)")
+
+	assert.Eventually(t, func() bool {
+		outBatchesMu.Lock()
+		defer outBatchesMu.Unlock()
+		return len(outBatches) == 1
+	}, time.Minute*2, time.Millisecond*200, "expected the row to be streamed via the overridden capture instance")
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
+}
+
 func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -689,7 +796,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes(t *test
 		)
 	}
 
-	db.MustEnableCDC(t.Context(), "dbo.all_data_types")
+	db.MustEnableCDC(t.Context(), "dbo.all_data_types", mssqlservertest.DefaultCaptureInstance)
 
 	var (
 		outBatches   []string
@@ -855,7 +962,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SchemaMetadata(t *testing.T) {
 	// Disable CDC so the first row becomes a snapshot row, then re-enable CDC.
 	db.MustDisableCDC(t.Context(), "dbo.schema_meta_test")
 	db.MustExecContext(t.Context(), `INSERT INTO dbo.schema_meta_test VALUES (1, N'snapshot', 1, 3.14, SYSDATETIME())`)
-	db.MustEnableCDC(t.Context(), "dbo.schema_meta_test")
+	db.MustEnableCDC(t.Context(), "dbo.schema_meta_test", mssqlservertest.DefaultCaptureInstance)
 
 	type msgMeta struct {
 		schema any

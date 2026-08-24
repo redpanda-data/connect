@@ -461,14 +461,15 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 
 // UserDefinedTable represents a found user's SQL Server table (called a user-defined table) in SQL.
 type UserDefinedTable struct {
-	Schema   string
-	Name     string
-	startLSN LSN
+	Schema          string
+	Name            string
+	CaptureInstance string
+	startLSN        LSN
 }
 
-// ToChangeTable returns a string in the SQL Server change table format of cdc.<schema>_<tablename>_CT.
+// ToChangeTable returns a string in the SQL Server change table format of cdc.<capture_instance>_CT.
 func (t *UserDefinedTable) ToChangeTable() string {
-	return fmt.Sprintf("cdc.%s_%s_CT", t.Schema, t.Name)
+	return fmt.Sprintf("cdc.%s_CT", t.CaptureInstance)
 }
 
 // FullName returns a string of the table name including the schema (ie dbo.<tablename>).
@@ -476,50 +477,76 @@ func (t *UserDefinedTable) FullName() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Name)
 }
 
-// VerifyUserDefinedTables verifies underlying user defined tables based on supplied
-// include and exclude filters, validating the associated change table also exists.
-func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserDefinedTable, error) {
+// captureInstance is one row of cdc.change_tables for a given source table.
+type captureInstance struct {
+	name     string
+	startLSN LSN
+}
+
+// VerifyUserDefinedTables verifies underlying user defined tables based on
+// supplied include/exclude filters, resolving each one's CDC capture
+// instance(s) via cdc.change_tables. capInstanceOverride optionally names a
+// literal capture instance to prefer for a table with two capture instances;
+// see resolveCaptureInstance for the full precedence.
+func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, capInstanceOverride string, log *service.Logger) ([]UserDefinedTable, error) {
 	q := `
-	SELECT s.name AS SchemaName, t.name AS TableName
+	SELECT s.name AS SchemaName, t.name AS TableName, ct.capture_instance, ct.start_lsn
 	FROM sys.tables t
 	INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+	LEFT JOIN cdc.change_tables ct ON ct.source_object_id = t.object_id
 	WHERE s.name != 'cdc'
-	ORDER BY s.name, t.name;`
+	ORDER BY s.name, t.name, ct.capture_instance;`
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
-		return nil, fmt.Errorf("fetching user defined tables from sys.tables for verification: %w", err)
+		return nil, fmt.Errorf("fetching user defined tables and capture instances for verification: %w", err)
 	}
+	defer rows.Close()
 
-	var userTables []UserDefinedTable
+	var (
+		order     []string
+		tables    = map[string]UserDefinedTable{}
+		instances = map[string][]captureInstance{}
+	)
 	for rows.Next() {
-		var ut UserDefinedTable
-		if err := rows.Scan(&ut.Schema, &ut.Name); err != nil {
+		var (
+			schema, name string
+			instanceName sql.NullString
+			startLSN     LSN
+		)
+		if err := rows.Scan(&schema, &name, &instanceName, &startLSN); err != nil {
 			return nil, fmt.Errorf("scanning sys.tables row for user defined tables: %w", err)
 		}
-		if tableFilter.Matches(fmt.Sprintf("%s.%s", ut.Schema, ut.Name)) {
-			userTables = append(userTables, ut)
+
+		fullName := fmt.Sprintf("%s.%s", schema, name)
+		if !tableFilter.Matches(fullName) {
+			continue
+		}
+		if _, ok := tables[fullName]; !ok {
+			tables[fullName] = UserDefinedTable{Schema: schema, Name: name}
+			order = append(order, fullName)
+		}
+		if instanceName.Valid {
+			instances[fullName] = append(instances[fullName], captureInstance{name: instanceName.String, startLSN: startLSN})
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating through sys.tables for user defined tables: %w", err)
 	}
 
-	if len(userTables) == 0 {
+	if len(order) == 0 {
 		return nil, errors.New("no user defined tables found for given include and exclude filters")
 	}
 
-	for i, tbl := range userTables {
-		q := "SELECT TOP 1 start_lsn FROM cdc.change_tables WHERE capture_instance = ?"
-		if err := db.QueryRowContext(ctx, q, fmt.Sprintf("%s_%s", tbl.Schema, tbl.Name)).Scan(&tbl.startLSN); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, fmt.Errorf("no change table found for table '%s'", tbl.FullName())
-			}
-			return nil, fmt.Errorf("fetching change tables: %w", err)
+	userTables := make([]UserDefinedTable, 0, len(order))
+	for _, fullName := range order {
+		tbl := tables[fullName]
+		if err := resolveCaptureInstance(&tbl, instances[fullName], capInstanceOverride, log); err != nil {
+			return nil, err
 		}
 		if len(tbl.startLSN) == 0 {
 			return nil, fmt.Errorf("field 'start_lsn' in change table '%s' expected to be set but was not", tbl.ToChangeTable())
 		}
-		userTables[i] = tbl
+		userTables = append(userTables, tbl)
 	}
 
 	for _, t := range userTables {
@@ -527,4 +554,54 @@ func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx
 	}
 
 	return userTables, nil
+}
+
+func resolveCaptureInstance(tbl *UserDefinedTable, instances []captureInstance, override string, log *service.Logger) error {
+	switch len(instances) {
+	case 0:
+		return fmt.Errorf("no change table found for table '%s': is CDC enabled for this table?", tbl.FullName())
+	case 1:
+		tbl.CaptureInstance = instances[0].name
+		tbl.startLSN = instances[0].startLSN
+		return nil
+	}
+
+	names := make([]string, len(instances))
+	for i, inst := range instances {
+		names[i] = inst.name
+	}
+
+	if override != "" {
+		for _, inst := range instances {
+			if inst.name == override {
+				tbl.CaptureInstance = inst.name
+				tbl.startLSN = inst.startLSN
+				return nil
+			}
+		}
+	}
+
+	conventionName := fmt.Sprintf("%s_%s", tbl.Schema, tbl.Name)
+	for _, inst := range instances {
+		if inst.name != conventionName {
+			continue
+		}
+		if override != "" {
+			log.Warnf("Table '%s' has multiple CDC capture instances (%s); configured capture_instance '%s' does not match either, falling back to the default-named instance '%s'. "+
+				"If this is a mid-migration cutover, check capture_instance matches the new instance's actual name.",
+				tbl.FullName(), strings.Join(names, ", "), override, conventionName)
+		} else {
+			log.Warnf("Table '%s' has multiple CDC capture instances (%s); preferring the default-named instance '%s'. "+
+				"If this is a mid-migration cutover, set capture_instance to the new instance's name, or drop the old one once the migration completes.",
+				tbl.FullName(), strings.Join(names, ", "), conventionName)
+		}
+		tbl.CaptureInstance = inst.name
+		tbl.startLSN = inst.startLSN
+		return nil
+	}
+
+	if override != "" {
+		return fmt.Errorf("table '%s' has multiple CDC capture instances (%s) and configured capture_instance '%s' does not match either", tbl.FullName(), strings.Join(names, ", "), override)
+	}
+	return fmt.Errorf("table '%s' has multiple CDC capture instances (%s): unable to determine which one to stream from", tbl.FullName(), strings.Join(names, ", "))
 }

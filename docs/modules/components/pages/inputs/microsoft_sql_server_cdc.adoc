@@ -75,6 +75,7 @@ input:
     snapshot_max_batch_size: 1000
     include: [] # No default (required)
     exclude: [] # No default (optional)
+    capture_instance: ""
     checkpoint_cache: "" # No default (optional)
     checkpoint_cache_table_name: rpcn.CdcCheckpointCache
     checkpoint_cache_connection_string: sqlserver://username:password@remotehost/instance?param1=value&param2=value # No default (optional)
@@ -118,6 +119,7 @@ Operational notes:
 - `TRUNCATE TABLE` is rejected on a CDC-enabled table. To clear one, disable CDC on the table, truncate, then re-enable.
 - On AWS RDS, enable CDC with `msdb.dbo.rds_cdc_enable_db` — `sys.sp_cdc_enable_db` requires sysadmin, which RDS does not grant.
 - Do not stop the CDC capture job (`cdc.<database>_capture`): while it is stopped nothing is published to the change tables, so this input reads nothing and reports no error.
+- Each table's CDC capture instance is discovered from `cdc.change_tables`, not assumed from the `<schema>_<table>` naming convention, so this works whether CDC was enabled by this input, by hand, or by another tool (e.g. an Oracle GoldenGate feed) under an arbitrary capture instance name. SQL Server allows at most two capture instances per table — its supported way to change a CDC-enabled table's schema without downtime is to run a second, temporarily-named instance alongside the original for the duration of the migration. If a table has two capture instances, `capture_instance` is preferred when it matches one of them; otherwise the instance named after the `<schema>_<table>` convention is preferred, with a warning logged; if neither applies, table discovery fails for that table.
 		
 
 == Fields
@@ -195,6 +197,21 @@ Regular expressions for tables to exclude.
 # Examples
 
 exclude: dbo.privatetable
+```
+
+=== `capture_instance`
+
+Capture instance to prefer when a table has two CDC capture instances, such as a migration tool's temporary second instance during an online schema change. Takes priority over the default `<schema>_<table>` naming convention, so it's how to select the new instance during a cutover before the old one is dropped. Tables with a single instance are unaffected, so it's safe to leave this set permanently. If it doesn't match either instance on an ambiguous table, resolution falls back to the convention-named instance where there is one, otherwise table discovery still fails for that table.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+capture_instance: migration_v2
 ```
 
 === `checkpoint_cache`

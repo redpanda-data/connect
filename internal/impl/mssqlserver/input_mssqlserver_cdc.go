@@ -35,6 +35,7 @@ const (
 	fieldStreamBackoffInterval           = "stream_backoff_interval"
 	fieldTablesExclude                   = "exclude"
 	fieldTablesInclude                   = "include"
+	fieldCaptureInstance                 = "capture_instance"
 	fieldCheckpointLimit                 = "checkpoint_limit"
 	fieldCheckpointCache                 = "checkpoint_cache"
 	fieldCheckpointCacheKey              = "checkpoint_cache_key"
@@ -79,6 +80,7 @@ Operational notes:
 - ` + "`TRUNCATE TABLE`" + ` is rejected on a CDC-enabled table. To clear one, disable CDC on the table, truncate, then re-enable.
 - On AWS RDS, enable CDC with ` + "`msdb.dbo.rds_cdc_enable_db`" + ` — ` + "`sys.sp_cdc_enable_db`" + ` requires sysadmin, which RDS does not grant.
 - Do not stop the CDC capture job (` + "`cdc.<database>_capture`" + `): while it is stopped nothing is published to the change tables, so this input reads nothing and reports no error.
+- Each table's CDC capture instance is discovered from ` + "`cdc.change_tables`" + `, not assumed from the ` + "`<schema>_<table>`" + ` naming convention, so this works whether CDC was enabled by this input, by hand, or by another tool (e.g. an Oracle GoldenGate feed) under an arbitrary capture instance name. SQL Server allows at most two capture instances per table — its supported way to change a CDC-enabled table's schema without downtime is to run a second, temporarily-named instance alongside the original for the duration of the migration. If a table has two capture instances, ` + "`" + fieldCaptureInstance + "`" + ` is preferred when it matches one of them; otherwise the instance named after the ` + "`<schema>_<table>`" + ` convention is preferred, with a warning logged; if neither applies, table discovery fails for that table.
 		`).
 	Field(service.NewStringField(fieldConnectionString).
 		Description("The connection string of the Microsoft SQL Server database to connect to.").
@@ -108,6 +110,16 @@ Operational notes:
 		Description("Regular expressions for tables to exclude.").
 		Example("dbo.privatetable").
 		Optional(),
+	).
+	Field(service.NewStringField(fieldCaptureInstance).
+		Description("Capture instance to prefer when a table has two CDC capture instances, such as a migration tool's temporary second instance during an online schema change. " +
+			"Takes priority over the default `<schema>_<table>` naming convention, so it's how to select the new instance during a cutover before the old one is dropped. " +
+			"Tables with a single instance are unaffected, so it's safe to leave this set permanently. " +
+			"If it doesn't match either instance on an ambiguous table, resolution falls back to the convention-named instance where there is one, otherwise table discovery still fails for that table.").
+		Example("migration_v2").
+		Default("").
+		Optional().
+		Advanced(),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
 		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table. If not set the default Microsoft SQL Server based cache will be used, see `" + fieldCheckpointCacheTableName + "` for more information.").
@@ -158,6 +170,7 @@ type config struct {
 	snapshotMaxBatchSize    int
 	snapshotMaxWorkers      int
 	tablesFilter            *confx.RegexpFilter
+	captureInstanceOverride string
 	lsnCache                string
 	lsnCacheKey             string
 	cpCacheTableName        string
@@ -222,6 +235,10 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 	} else if tableExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
 		return nil, err
 	}
+	var captureInstanceOverride string
+	if captureInstanceOverride, err = conf.FieldString(fieldCaptureInstance); err != nil {
+		return nil, err
+	}
 	// cache
 	// if no cache component is specified then we fallback to default sql based version
 	if conf.Contains(fieldCheckpointCache) {
@@ -281,6 +298,7 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 				Include: tableIncludes,
 				Exclude: tableExcludes,
 			},
+			captureInstanceOverride: captureInstanceOverride,
 		},
 		res:       resources,
 		log:       logger,
@@ -338,7 +356,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		i.cpCache = cache
 	}
 
-	if userTables, err = replication.VerifyUserDefinedTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
+	if userTables, err = replication.VerifyUserDefinedTables(ctx, i.db, i.cfg.tablesFilter, i.cfg.captureInstanceOverride, i.log); err != nil {
 		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
 	if cachedLSN, err = i.getCachedLSN(ctx); err != nil {
