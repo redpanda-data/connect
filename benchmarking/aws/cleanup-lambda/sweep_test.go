@@ -26,6 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
+	"github.com/aws/smithy-go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -113,6 +114,9 @@ func (f *FakeAWS) GetResources(ctx context.Context, in *resourcegroupstaggingapi
 func (f *FakeAWS) DescribeInstances(_ context.Context, in *ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error) {
 	out := &ec2.DescribeInstancesOutput{}
 	for _, id := range in.InstanceIds {
+		if err := f.failIfConfigured("DescribeInstances", id); err != nil {
+			return nil, err
+		}
 		if inst, ok := f.EC2Instances[id]; ok {
 			out.Reservations = append(out.Reservations, ec2types.Reservation{Instances: []ec2types.Instance{inst}})
 		}
@@ -234,6 +238,9 @@ func (f *FakeAWS) DeleteInternetGateway(_ context.Context, in *ec2.DeleteInterne
 func (f *FakeAWS) DescribeDBInstances(_ context.Context, in *rds.DescribeDBInstancesInput) (*rds.DescribeDBInstancesOutput, error) {
 	out := &rds.DescribeDBInstancesOutput{}
 	id := aws.ToString(in.DBInstanceIdentifier)
+	if err := f.failIfConfigured("DescribeDBInstances", id); err != nil {
+		return nil, err
+	}
 	if db, ok := f.DBInstances[id]; ok {
 		out.DBInstances = []rdstypes.DBInstance{db}
 	}
@@ -800,6 +807,33 @@ func TestSweep_ErroredDeleteNotReportedDestroyed(t *testing.T) {
 	require.Contains(t, api.SNSMessages[0], "destroyed 0 resources, 1 failed deletions")
 	require.Contains(t, api.SNSMessages[0], "ec2:i-old: boom")
 	require.NotContains(t, api.SNSMessages[0], "destroyed:", "must not list the errored resource as destroyed")
+}
+
+// TestSweep_StaleTagIndexEntryIsSilent: the tag index lags real deletions
+// by minutes to hours, so a sweep routinely describes resources that no
+// longer exist and gets a NotFound-style error back. That is a successful
+// no-op — it must count as neither an error nor a destruction, and above
+// all must not publish (with errors now alerting, a single stale entry
+// would otherwise page on-call every 15 minutes until the index catches
+// up).
+func TestSweep_StaleTagIndexEntryIsSilent(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	api := &FakeAWS{
+		TaggedResources: []rgtatypes.ResourceTagMapping{
+			{ResourceARN: aws.String("arn:aws:ec2:us-east-2:1:instance/i-vanished")},
+			{ResourceARN: aws.String("arn:aws:rds:us-east-2:1:db:vanished-db")},
+		},
+		FailOn: map[string]error{
+			"DescribeInstances:i-vanished":    &smithy.GenericAPIError{Code: "InvalidInstanceID.NotFound", Message: "does not exist"},
+			"DescribeDBInstances:vanished-db": &smithy.GenericAPIError{Code: "DBInstanceNotFound", Message: "not found"},
+		},
+	}
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	require.NoError(t, err)
+	require.Equal(t, 0, report.Errors)
+	require.Empty(t, report.Failed)
+	require.Equal(t, 0, report.DestroyedCount)
+	require.Empty(t, api.SNSMessages, "stale tag-index entries must not page")
 }
 
 // TestSweep_ThreadsCallerContext is a regression test for lookupEC2/

@@ -27,7 +27,27 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
+	"github.com/aws/smithy-go"
 )
+
+// isGone reports whether err is a not-found-style AWS error: the resource
+// vanished between the tag index (which lags real deletions by minutes to
+// hours) and our describe/delete call. Already-gone is a successful no-op,
+// not a failure — without this, every stale tag-index entry would count as
+// an error and page on-call once per sweep until the index catches up.
+func isGone(err error) bool {
+	var ae smithy.APIError
+	if !errors.As(err, &ae) {
+		return false
+	}
+	code := ae.ErrorCode()
+	return strings.HasSuffix(code, ".NotFound") || // EC2: InvalidInstanceID.NotFound, InvalidSubnetID.NotFound, ...
+		code == "NoSuchBucket" || // S3
+		code == "NoSuchEntity" || // IAM
+		strings.HasPrefix(code, "DBInstanceNotFound") || // RDS fault codes vary in
+		strings.HasPrefix(code, "DBSubnetGroupNotFound") || // the "Fault" suffix across
+		strings.HasPrefix(code, "DBParameterGroupNotFound") // SDK/API versions
+}
 
 // cleanupAPI is the narrow slice of AWS the Lambda needs. Tests fake this.
 type cleanupAPI interface {
@@ -466,9 +486,13 @@ type SweepReport struct {
 
 // record folds a single resource's processing outcome into the report:
 // success increments DestroyedCount/Destroyed, failure logs and increments
-// Errors/Failed, and a no-op (not old enough, or already gone) is silent.
+// Errors/Failed, and a no-op (not old enough, or already gone — including
+// a not-found error from a stale tag-index entry, see isGone) is silent.
 func (r *SweepReport) record(kind, id string, destroyed bool, err error) {
 	if err != nil {
+		if isGone(err) {
+			return
+		}
 		slog.Error("cleanup failed", "kind", kind, "id", id, "err", err)
 		r.Errors++
 		r.Failed = append(r.Failed, fmt.Sprintf("%s:%s: %v", kind, id, err))
