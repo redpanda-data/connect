@@ -572,7 +572,10 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				// Snapshot fully emitted. Flush any buffered rows, then block
 				// until every snapshot batch is acknowledged downstream before
 				// signalling the stream to promote the replication slot. Blocks
-				// until acks drain or soft-stop (no timeout, by design).
+				// until acks drain or soft-stop (no timeout, by design). If
+				// soft-stop wins the race, the slot is left unpromoted since
+				// batches settling during teardown are nacks, not durable
+				// delivery, so the snapshot re-runs on restart.
 				nextTimedBatchChan = nil
 				flushedBatch, err := batcher.Flush(ctx)
 				if err != nil {
@@ -589,15 +592,21 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					p.stopSig.TriggerSoftStop()
 					break
 				}
+				drained := p.snapshotAckPending.Load() == 0
 			drainWait:
-				for p.snapshotAckPending.Load() > 0 {
+				for !drained {
 					select {
 					case <-p.snapshotAckDrained:
+						drained = p.snapshotAckPending.Load() == 0
 					case <-p.stopSig.SoftStopChan():
+						// Abandon the handoff without promoting the slot:
+						// batches settling during teardown are nacks, not
+						// durable delivery, so the snapshot must re-run on
+						// restart.
 						break drainWait
 					}
 				}
-				if p.snapshotAckPending.Load() == 0 {
+				if drained {
 					pgStream.MarkSnapshotAcknowledged()
 				}
 				break
@@ -723,9 +732,16 @@ func (p *pgStreamInput) flushBatch(
 }
 
 // snapshotAckDone marks one in-flight snapshot batch as settled and signals
-// the drain channel when the count reaches zero.
+// the drain channel when the count reaches zero. A negative result means a
+// batch settled twice (e.g. both acked and nacked), which would otherwise
+// silently prevent the drain from ever completing, so we panic loudly
+// instead of promoting the slot on a corrupted counter.
 func (p *pgStreamInput) snapshotAckDone() {
-	if p.snapshotAckPending.Add(-1) == 0 {
+	n := p.snapshotAckPending.Add(-1)
+	if n < 0 {
+		panic("postgres cdc: snapshot ack counter went negative (batch settled twice)")
+	}
+	if n == 0 {
 		select {
 		case p.snapshotAckDrained <- struct{}{}:
 		default:

@@ -105,6 +105,13 @@ func newMultiModuleWatcher(bsrModules []*service.ParsedConfig) (*multiModuleWatc
 			return nil, err
 		}
 
+		if _, exists := multiModuleWatcher.bsrClients[module]; exists {
+			// Without this check the earlier watcher's map entry would be
+			// silently overwritten below, leaving its running poll
+			// goroutine unreachable by close().
+			return nil, fmt.Errorf("duplicate BSR module %q", module)
+		}
+
 		watcher, err := newSchemaWatcher(context.Background(), bsrURL, bsrAPIKey, module, version)
 		if err != nil {
 			return nil, err

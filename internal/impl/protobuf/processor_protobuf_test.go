@@ -535,6 +535,33 @@ bsr:
 	require.Nil(t, proc)
 }
 
+// TestProtobufBSRDuplicateModuleStopsWatchers ensures that when the `bsr`
+// config lists the same module twice, newMultiModuleWatcher rejects the
+// config instead of silently overwriting the first module's map entry with
+// the second, which would otherwise leave the first watcher's background
+// polling goroutine unreachable by close(). newProtobuf returns nil on error
+// so there's no processor to Close here; the package's goleak TestMain is
+// what proves the first watcher was actually stopped.
+func TestProtobufBSRDuplicateModuleStopsWatchers(t *testing.T) {
+	mockBSRServerAddress := runMockBSRServer(t, "../../../config/test/protobuf/schema")
+
+	conf, err := protobufProcessorSpec().ParseYAML(fmt.Sprintf(`
+operator: from_json
+message: testing.Person
+bsr:
+  - module: "testing"
+    url: %[1]s
+  - module: "testing"
+    url: %[1]s
+`, "http://"+mockBSRServerAddress), nil)
+	require.NoError(t, err)
+
+	proc, err := newProtobuf(conf, service.MockResources())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate BSR module")
+	require.Nil(t, proc)
+}
+
 // TestProtobufBSRAwaitReadyFailureStopsWatcher ensures that when a schema
 // watcher's AwaitReady call fails (e.g. because the BSR endpoint is
 // unreachable), newSchemaWatcher stops the watcher before returning an error
