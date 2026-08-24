@@ -976,3 +976,65 @@ from the local cow_amplification bench, end-to-end).
 
 
 Raw samples + Prometheus snapshots: [`results/iceberg/orders-upsert/2026-08-22T03-53-38Z.json`](results/iceberg/orders-upsert/2026-08-22T03-53-38Z.json)
+
+
+## AWS — orders-upsert-cow — 2026-08-24
+
+**Scenario:** Can copy-on-write be made to keep up? The 2026-08-22 orders-upsert run
+measured COW at ~508 rec/s, but with two caveats discovered after the fact:
+ids arrived sequentially (i % key_space = contiguous runs, COW's BEST case
+for file overlap) and the arm processed fewer rows (~460k) than the 12M key
+space, so no key ever recurred in-window — meaning ZERO actual rewrites
+happened and 508 rec/s is the pure upsert-path overhead floor (batch
+materialisation + overwrite planning + serialized commits), not a rewrite
+measurement.
+
+This run fixes both: a 250k key space guarantees recurrence within the
+window even at ~500 rec/s (450k rows = 1.8 cycles), and `key_order:
+scattered` walks the key space by a coprime stride so every batch's keys
+spray across all data files — the realistic CDC worst case. Four arms at a
+fixed 4-vCPU pin, all keyed arms at the lint-mandated max_in_flight: 1,
+batch 50k / 10s unless stated:
+
+* mor-50k — merge-on-read at 50k batches: the batch-size lever for the mode
+  that already works (13.7k rec/s at 10k batches; rows-per-commit is the
+  only keyed lever, so expect roughly linear until write time dominates).
+* cow-10k — Friday's exact COW config, now with real rewrites: quantifies
+  how much the 508 floor drops once rewriting actually happens.
+* cow-50k — batch amortisation alone: does 5x rows-per-commit survive the
+  5x-more-files-touched cost it also causes?
+* cow-50k-bucket16 — adds bucket(16, id) partitioning via
+  schema_evolution.partition_spec. Open question, not a foregone
+  conclusion: 50k scattered keys touch all 16 buckets every batch, so any
+  win comes from smaller per-partition files and partition-scoped planning,
+  not from untouched partitions.
+
+skip_connect_table_precreate is REQUIRED here: partition_spec only applies
+when the OUTPUT creates the table, and the default reset pre-creates an
+unpartitioned table via iceberg-tablegen (the bucket arm would silently
+bench unpartitioned). Connect auto-creates fine (it sets table_location);
+the sidecar tolerates the table appearing mid-window.
+
+METRIC NOTE: with a 250k key space the table plateaus at ~250k net rows, so
+the Glue total_records rate is only honest for each arm's FIRST cycle;
+after that, read rates from committed-bytes growth per snapshot and treat
+the summary line as a lower bound. The MOR arm is unaffected (appends
+always grow total_records).
+
+**Git SHA:** [`748833ffe`](https://github.com/redpanda-data/connect/commit/748833ffef2b40f8459464c42c8d74926d5e1a7f)
+
+**Infra:** Runner `c8g.4xlarge`; source `` (0 GB) in `us-east-2`.
+
+**Dataset:** 48,000,000 rows × 1200 B = ~53 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 4          | mor-50k        | connect       |           44 |       38.608 |        33,172 |           44 |           3 |           51 |        37,803 |                    |
+| 4    | 4          | cow-10k        | connect       |            0 |        0.318 |           315 |            0 |           0 |            2 |             2 |                    |
+| 4    | 4          | cow-50k        | connect       |            0 |        0.450 |           454 |            0 |           0 |            4 |             0 |                    |
+| 4    | 4          | cow-50k-bucket16 | connect       |            0 |        0.000 |             0 |            0 |           0 |            0 |             0 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/iceberg/orders-upsert-cow/2026-08-24T19-14-32Z.json`](results/iceberg/orders-upsert-cow/2026-08-24T19-14-32Z.json)
