@@ -549,14 +549,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 }
 
 // validateSchemaPattern validates a schema name or glob pattern.
-//
-// Unquoted patterns are matched via ILIKE against stored schema names (see
-// resolveSchemas), not parsed as an identifier, so any character or leading
-// character is accepted - including hyphens and leading digits - except a
-// literal '"'. This lets a glob like "a0eebc99-*" match a UUID-suffixed
-// schema that itself had to be created quoted.
-// Double-quoted identifiers (e.g. "MySchema") are accepted as exact names;
-// wildcards are not allowed inside quotes.
 func validateSchemaPattern(s string) error {
 	if s == "" {
 		return errors.New("schema cannot be empty")

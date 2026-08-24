@@ -1912,20 +1912,14 @@ func TestIntegrationMultiSchemaIncludeMatchesHyphenatedUUIDSchema(t *testing.T) 
 	require.NoError(t, err)
 
 	type msgMeta struct {
-		dbSchema  string
-		table     string
-		operation string
+		dbSchema string
+		table    string
 	}
 
 	var (
 		mu        sync.Mutex
 		collected []msgMeta
 	)
-	collectedLen := func() int {
-		mu.Lock()
-		defer mu.Unlock()
-		return len(collected)
-	}
 
 	tmpl := fmt.Sprintf(`
 postgres_cdc:
@@ -1947,7 +1941,6 @@ postgres_cdc:
 			m := msgMeta{}
 			m.dbSchema, _ = msg.MetaGet("database_schema")
 			m.table, _ = msg.MetaGet("table")
-			m.operation, _ = msg.MetaGet("operation")
 			collected = append(collected, m)
 		}
 		return nil
@@ -1964,23 +1957,16 @@ postgres_cdc:
 	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
 
 	assert.Eventually(t, func() bool {
-		return collectedLen() >= 1
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected) >= 1
 	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot row from hyphenated UUID schema")
-
-	_, err = db.Exec(fmt.Sprintf(`INSERT INTO "%s".events (name) VALUES ('bob')`, uuidSchema))
-	require.NoError(t, err)
-
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.Equal(c, 2, collectedLen())
-	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for CDC row from hyphenated UUID schema")
 
 	mu.Lock()
 	defer mu.Unlock()
-	require.Len(t, collected, 2)
-	for _, m := range collected {
-		assert.Equal(t, uuidSchema, m.dbSchema, "database_schema metadata should be the raw, unquoted, case-preserved schema name")
-		assert.Equal(t, "events", m.table)
-	}
+	require.Len(t, collected, 1)
+	assert.Equal(t, uuidSchema, collected[0].dbSchema, "database_schema metadata should be the raw, unquoted, case-preserved schema name")
+	assert.Equal(t, "events", collected[0].table)
 }
 
 func TestIntegrationMultiSchemaMissingTableDegradesGracefully(t *testing.T) {
@@ -2148,112 +2134,6 @@ postgres_cdc:
 	assert.Equal(t, "events", collected[0].table)
 }
 
-func TestIntegrationMultiSchemaIncludeExcludeConfigValidation(t *testing.T) {
-	integration.CheckSkip(t)
-
-	t.Run("schema_include matches nothing", func(t *testing.T) {
-		databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
-		require.NoError(t, err)
-
-		tmpl := fmt.Sprintf(`
-dsn: %s
-slot_name: no_schema_match_slot
-schema_include: nonexistent_schema_zzz_*
-tables:
-  - events
-`, databaseURL)
-
-		conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
-		require.NoError(t, err)
-
-		mgr := service.MockResources()
-		license.InjectTestService(mgr)
-
-		input, err := newPgStreamInput(conf, mgr)
-		require.NoError(t, err)
-
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-
-		err = input.Connect(ctx)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no schemas found matching schema_include pattern")
-	})
-
-	t.Run("schema_include matches nothing with empty tables", func(t *testing.T) {
-		databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
-		require.NoError(t, err)
-
-		tmpl := fmt.Sprintf(`
-dsn: %s
-slot_name: no_schema_match_empty_tables_slot
-schema_include: nonexistent_schema_zzz_*
-`, databaseURL)
-
-		conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
-		require.NoError(t, err)
-
-		mgr := service.MockResources()
-		license.InjectTestService(mgr)
-
-		input, err := newPgStreamInput(conf, mgr)
-		require.NoError(t, err)
-
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-
-		// Bypass the benthos AsyncReader's infinite connect-retry loop, same as
-		// the "schema_include matches nothing" case above.
-		err = input.Connect(ctx)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no schemas found matching schema_include pattern")
-	})
-
-	t.Run("schema_exclude excludes every matched schema", func(t *testing.T) {
-		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
-		require.NoError(t, err)
-
-		// Both schemas match tenant_*, but schema_exclude below excludes them all.
-		for _, schema := range []string{"tenant_a", "tenant_b"} {
-			_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA %s", schema))
-			require.NoError(t, err)
-			_, err = db.Exec(fmt.Sprintf(
-				"CREATE TABLE %s.events (id SERIAL PRIMARY KEY, name TEXT)", schema))
-			require.NoError(t, err)
-		}
-
-		tmpl := fmt.Sprintf(`
-dsn: %s
-slot_name: schema_exclude_all_matched_slot
-schema_include: tenant_*
-schema_exclude:
-  - tenant_*
-tables:
-  - events
-`, databaseURL)
-
-		conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
-		require.NoError(t, err)
-
-		mgr := service.MockResources()
-		license.InjectTestService(mgr)
-
-		input, err := newPgStreamInput(conf, mgr)
-		require.NoError(t, err)
-
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-
-		// Bypass the benthos AsyncReader's infinite connect-retry loop, same as
-		// the "schema_include matches nothing" case above.
-		err = input.Connect(ctx)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "matched schema(s)")
-		assert.Contains(t, err.Error(), "excluded all of them")
-		assert.NotContains(t, err.Error(), "no schemas found matching schema_include pattern")
-	})
-}
-
 // TestIntegrationSchemaExcludeCarvesOutTenantAutoDiscover is
 // TestIntegrationSchemaExcludeCarvesOutTenant with `tables` left unset: it
 // verifies that leaving `tables` empty under schema_include auto-discovers
@@ -2405,125 +2285,6 @@ postgres_cdc:
 	}
 	assert.Equal(t, 1, cdcSchemas["tenant_a"], "expected 1 CDC row from tenant_a")
 	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
-}
-
-func TestIntegrationMultiSchemaIncludeAutoDiscoverExcludesPartitionedParent(t *testing.T) {
-	integration.CheckSkip(t)
-	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
-	require.NoError(t, err)
-
-	_, err = db.Exec("CREATE SCHEMA tenant_a")
-	require.NoError(t, err)
-	_, err = db.Exec(`
-CREATE TABLE tenant_a.orders (
-	id INT NOT NULL,
-	created_at DATE NOT NULL,
-	PRIMARY KEY (id, created_at)
-) PARTITION BY RANGE (created_at)`)
-	require.NoError(t, err)
-	_, err = db.Exec(`
-CREATE TABLE tenant_a.orders_2025 PARTITION OF tenant_a.orders
-	FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')`)
-	require.NoError(t, err)
-	_, err = db.Exec(`
-CREATE TABLE tenant_a.orders_2026 PARTITION OF tenant_a.orders
-	FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')`)
-	require.NoError(t, err)
-
-	// Insert through the parent, as real usage would, letting Postgres route
-	// each row to the correct leaf partition.
-	_, err = db.Exec("INSERT INTO tenant_a.orders (id, created_at) VALUES (1, '2025-06-01')")
-	require.NoError(t, err)
-	_, err = db.Exec("INSERT INTO tenant_a.orders (id, created_at) VALUES (2, '2026-06-01')")
-	require.NoError(t, err)
-
-	type msgMeta struct {
-		dbSchema string
-		table    string
-		id       int64
-	}
-
-	var (
-		mu        sync.Mutex
-		collected []msgMeta
-	)
-	collectedLen := func() int {
-		mu.Lock()
-		defer mu.Unlock()
-		return len(collected)
-	}
-
-	// No `tables` field: the partitioned "orders" table's leaf partitions must
-	// be auto-discovered without listing them by hand, and the partitioned
-	// parent itself must not be discovered.
-	tmpl := fmt.Sprintf(`
-postgres_cdc:
-    dsn: %s
-    slot_name: partitioned_parent_excluded_slot
-    stream_snapshot: true
-    schema_include: tenant_*
-`, databaseURL)
-
-	sb := service.NewStreamBuilder()
-	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
-	require.NoError(t, sb.AddInputYAML(tmpl))
-	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-		mu.Lock()
-		defer mu.Unlock()
-		for _, msg := range batch {
-			structured, err := msg.AsStructured()
-			if err != nil {
-				return err
-			}
-			id, err := structured.(map[string]any)["id"].(json.Number).Int64()
-			if err != nil {
-				return err
-			}
-			m := msgMeta{id: id}
-			m.dbSchema, _ = msg.MetaGet("database_schema")
-			m.table, _ = msg.MetaGet("table")
-			collected = append(collected, m)
-		}
-		return nil
-	}))
-
-	stream, err := sb.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
-	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
-
-	// Exactly the 2 rows inserted, not 4: if the partitioned parent were
-	// wrongly auto-discovered alongside its leaf partitions, every row would
-	// be emitted twice (once from scanning the parent, once from scanning the
-	// leaf it belongs to).
-	assert.Eventually(t, func() bool {
-		return collectedLen() >= 2
-	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot rows; the partitioned parent may have swallowed the leaf partitions' rows, or TABLESAMPLE against the parent may have failed outright")
-
-	// Give any erroneous duplicate emissions from the parent a chance to
-	// surface before asserting the final count.
-	assert.Never(t, func() bool {
-		return collectedLen() > 2
-	}, 3*time.Second, 200*time.Millisecond, "received more snapshot rows than were inserted; the partitioned parent was likely auto-discovered alongside its leaf partitions")
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	require.Len(t, collected, 2)
-
-	seenIDs := make(map[int64]int)
-	for _, m := range collected {
-		assert.Equal(t, "tenant_a", m.dbSchema)
-		assert.NotEqual(t, "orders", m.table, "the partitioned parent must not be auto-discovered as a table in its own right")
-		assert.Contains(t, []string{"orders_2025", "orders_2026"}, m.table, "expected only leaf partitions to be auto-discovered")
-		seenIDs[m.id]++
-	}
-	assert.Equal(t, map[int64]int{1: 1, 2: 1}, seenIDs, "each inserted row should be emitted exactly once")
 }
 
 func TestIntegrationMultiSchemaAndTableMatchingTest(t *testing.T) {

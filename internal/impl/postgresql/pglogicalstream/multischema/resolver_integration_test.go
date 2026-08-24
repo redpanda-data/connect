@@ -23,6 +23,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
@@ -141,6 +142,90 @@ func TestIntegrationResolveSchemasBareUUIDSchema(t *testing.T) {
 	visible, _, err = resolveSchemas(ctx, conn, `"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"`)
 	require.NoError(t, err)
 	assert.Empty(t, visible)
+}
+
+func TestIntegrationResolveExistingTablesExcludesPartitionedParent(t *testing.T) {
+	integration.CheckSkip(t)
+
+	_, adminURL := createDockerInstance(t)
+
+	adminDB, err := sql.Open("postgres", adminURL)
+	require.NoError(t, err)
+	defer adminDB.Close()
+
+	_, err = adminDB.Exec("CREATE SCHEMA tenant_a")
+	require.NoError(t, err)
+	_, err = adminDB.Exec(`
+CREATE TABLE tenant_a.orders (
+	id INT NOT NULL,
+	created_at DATE NOT NULL,
+	PRIMARY KEY (id, created_at)
+) PARTITION BY RANGE (created_at)`)
+	require.NoError(t, err)
+	_, err = adminDB.Exec(`
+CREATE TABLE tenant_a.orders_2025 PARTITION OF tenant_a.orders
+	FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')`)
+	require.NoError(t, err)
+	_, err = adminDB.Exec(`
+CREATE TABLE tenant_a.orders_2026 PARTITION OF tenant_a.orders
+	FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')`)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, adminURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	existing, err := ResolveExistingTables(ctx, conn, []string{`"tenant_a"`})
+	require.NoError(t, err)
+
+	tables := existing[`"tenant_a"`]
+	assert.NotContains(t, tables, `"orders"`, "the partitioned parent must not be discovered as a table in its own right")
+	assert.Contains(t, tables, `"orders_2025"`)
+	assert.Contains(t, tables, `"orders_2026"`)
+	assert.Len(t, tables, 2, "only the leaf partitions should be discovered")
+}
+
+func TestIntegrationResolveSchemasConfigValidation(t *testing.T) {
+	integration.CheckSkip(t)
+
+	_, adminURL := createDockerInstance(t)
+
+	adminDB, err := sql.Open("postgres", adminURL)
+	require.NoError(t, err)
+	defer adminDB.Close()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, adminURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	logger := service.MockResources().Logger()
+
+	t.Run("schema_include matches nothing", func(t *testing.T) {
+		resolver := NewResolver("nonexistent_schema_zzz_*", nil)
+		_, err := resolver.Resolve(ctx, conn, logger)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no schemas found matching schema_include pattern")
+	})
+
+	t.Run("schema_exclude excludes every matched schema", func(t *testing.T) {
+		_, err = adminDB.Exec("CREATE SCHEMA tenant_a")
+		require.NoError(t, err)
+		_, err = adminDB.Exec("CREATE SCHEMA tenant_b")
+		require.NoError(t, err)
+
+		resolver := NewResolver("tenant_*", []string{"tenant_*"})
+		_, err := resolver.Resolve(ctx, conn, logger)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "matched schema(s)")
+		assert.Contains(t, err.Error(), "excluded all of them")
+		assert.NotContains(t, err.Error(), "no schemas found matching schema_include pattern")
+	})
 }
 
 func closeConn(t testing.TB, conn *pgconn.PgConn) {
