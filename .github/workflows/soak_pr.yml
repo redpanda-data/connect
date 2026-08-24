@@ -176,7 +176,12 @@ jobs:
             echo "_base: \`${{ steps.build.outputs.base_sha }}\` · pr: \`${{ steps.build.outputs.pr_sha }}\` · [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
           } > "$BODY_FILE"
           # Sticky: update the existing marker comment if present, else create.
-          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" --paginate --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | head -1)
+          # awk, not `head -1`: head closes the pipe after one line, and on a
+          # multi-page comment list gh is still writing when that happens —
+          # SIGPIPE (141), which pipefail turns into a step failure exactly
+          # when the marker comment exists on a busy PR. Same fix as the
+          # nightly change gate.
+          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" --paginate --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | awk 'NR==1')
           if [ -n "$EXISTING" ]; then
             gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$EXISTING" -F body=@"$BODY_FILE" >/dev/null
           else
