@@ -1017,13 +1017,17 @@ func downCmd(args []string) error {
 	}
 	_ = stack.Init()
 	_ = shared.Init()
-	if err := stack.Destroy(translateInfraSource(s.Infra.Source, *region)); err != nil {
-		return err
-	}
-	return shared.Destroy(map[string]string{
+	// Attempt both destroys regardless of individual failure, mirroring
+	// runBench's teardown defer: this is the documented recovery path after
+	// a failed run, so the stack destroy is the most likely one to fail
+	// again — and a stuck RDS delete must not strand the shared stack's
+	// five EC2 instances too.
+	stackErr := stack.Destroy(translateInfraSource(s.Infra.Source, *region))
+	sharedErr := shared.Destroy(map[string]string{
 		"region":               *region,
 		"runner_instance_type": s.Infra.Runner.InstanceType,
 	})
+	return errors.Join(stackErr, sharedErr)
 }
 
 func costCheckCmd(args []string) error {

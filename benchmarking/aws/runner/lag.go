@@ -37,11 +37,11 @@ type BacklogPoint struct {
 // for that inter-frame interval), not a cumulative count — ComputeBacklog
 // integrates it (MsgPerSec * IntervalSec, summed over every point up to and
 // including T) to reconstruct delivered(t). series is assumed to already be
-// summed across topics: every caller in this codebase (AttributeByEngine's
-// single-topic Connect case, mergeTopicSeries' per-table sum for KC) hands
-// ComputeBacklog a single already-merged series, so there is no additional
-// summing to do here — a caller holding several per-topic series must merge
-// them (see mergeTopicSeries) before calling this.
+// summed across topics: both callers (in matrix.go) hand ComputeBacklog
+// Connect's single-topic series from AttributeConnect, so there is no
+// additional summing to do here. A caller holding several per-topic series
+// (Kafka Connect's per-table fan-out, which returns with the kafka-connect
+// bench PR) must merge them point-wise before calling this.
 //
 // Returns nil when recordsPerSec <= 0 (no target to measure against, e.g.
 // every non-soak sweep) or series is empty (nothing to compute from).
