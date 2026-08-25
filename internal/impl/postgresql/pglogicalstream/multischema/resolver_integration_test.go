@@ -34,7 +34,7 @@ import (
 func TestIntegrationResolveSchemasReportsInaccessibleSchemas(t *testing.T) {
 	integration.CheckSkip(t)
 
-	_, adminURL := createDockerInstance(t)
+	adminURL := createDockerInstance(t)
 
 	adminDB, err := sql.Open("postgres", adminURL)
 	require.NoError(t, err)
@@ -76,7 +76,7 @@ func TestIntegrationResolveSchemasReportsInaccessibleSchemas(t *testing.T) {
 func TestIntegrationResolverExcludedInaccessibleSchemaDoesNotWarn(t *testing.T) {
 	integration.CheckSkip(t)
 
-	_, adminURL := createDockerInstance(t)
+	adminURL := createDockerInstance(t)
 
 	adminDB, err := sql.Open("postgres", adminURL)
 	require.NoError(t, err)
@@ -135,7 +135,7 @@ func TestIntegrationResolverExcludedInaccessibleSchemaDoesNotWarn(t *testing.T) 
 func TestIntegrationResolverWarnsOnSchemaSetDriftBetweenReconnects(t *testing.T) {
 	integration.CheckSkip(t)
 
-	_, adminURL := createDockerInstance(t)
+	adminURL := createDockerInstance(t)
 
 	adminDB, err := sql.Open("postgres", adminURL)
 	require.NoError(t, err)
@@ -222,7 +222,7 @@ func assertNoMessageContains(t *testing.T, messages []string, substrs ...string)
 func TestIntegrationResolveSchemasUUIDSuffixedSchemas(t *testing.T) {
 	integration.CheckSkip(t)
 
-	_, adminURL := createDockerInstance(t)
+	adminURL := createDockerInstance(t)
 
 	adminDB, err := sql.Open("postgres", adminURL)
 	require.NoError(t, err)
@@ -258,7 +258,7 @@ func TestIntegrationResolveSchemasUUIDSuffixedSchemas(t *testing.T) {
 func TestIntegrationResolveSchemasBareUUIDSchema(t *testing.T) {
 	integration.CheckSkip(t)
 
-	_, adminURL := createDockerInstance(t)
+	adminURL := createDockerInstance(t)
 
 	adminDB, err := sql.Open("postgres", adminURL)
 	require.NoError(t, err)
@@ -305,7 +305,7 @@ func TestIntegrationResolveSchemasBareUUIDSchema(t *testing.T) {
 func TestIntegrationResolveExistingTablesReportsRelKind(t *testing.T) {
 	integration.CheckSkip(t)
 
-	_, adminURL := createDockerInstance(t)
+	adminURL := createDockerInstance(t)
 
 	adminDB, err := sql.Open("postgres", adminURL)
 	require.NoError(t, err)
@@ -349,7 +349,7 @@ CREATE TABLE tenant_a.orders_2026 PARTITION OF tenant_a.orders
 func TestIntegrationResolveSchemasConfigValidation(t *testing.T) {
 	integration.CheckSkip(t)
 
-	_, adminURL := createDockerInstance(t)
+	adminURL := createDockerInstance(t)
 
 	adminDB, err := sql.Open("postgres", adminURL)
 	require.NoError(t, err)
@@ -392,7 +392,7 @@ func closeConn(t testing.TB, conn *pgconn.PgConn) {
 	require.NoError(t, conn.Close(ctx))
 }
 
-func createDockerInstance(t *testing.T) (cleanup func(), dbURL string) {
+func createDockerInstance(t *testing.T) (dbURL string) {
 	ctr, err := testcontainers.Run(t.Context(), "postgres:16",
 		testcontainers.WithExposedPorts("5432/tcp"),
 		testcontainers.WithEnv(map[string]string{
@@ -417,15 +417,15 @@ func createDockerInstance(t *testing.T) (cleanup func(), dbURL string) {
 
 	var db *sql.DB
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		if db, err = sql.Open("postgres", databaseURL); err != nil {
 			return false
 		}
 		return db.Ping() == nil
 	}, 2*time.Minute, time.Second)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
 
-	cleanup = func() {
-		// Container cleanup is handled by testcontainers.CleanupContainer
-	}
-
-	return cleanup, databaseURL
+	return databaseURL
 }
