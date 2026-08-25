@@ -144,7 +144,15 @@ func TestIntegrationResolveSchemasBareUUIDSchema(t *testing.T) {
 	assert.Empty(t, visible)
 }
 
-func TestIntegrationResolveExistingTablesExcludesPartitionedParent(t *testing.T) {
+// TestIntegrationResolveExistingTablesReportsRelKind verifies that
+// ResolveExistingTables reports a partitioned table's parent and its leaf
+// partitions with distinct relkinds, rather than excluding the parent
+// outright: callers need both, since a partitioned parent is a valid
+// publication member if explicitly listed by the user, but must not be
+// auto-discovered alongside its own leaf partitions (that filtering is the
+// auto-discovery caller's responsibility, not this function's - see
+// logical_stream.go's use of RelKindOrdinaryTable).
+func TestIntegrationResolveExistingTablesReportsRelKind(t *testing.T) {
 	integration.CheckSkip(t)
 
 	_, adminURL := createDockerInstance(t)
@@ -182,10 +190,10 @@ CREATE TABLE tenant_a.orders_2026 PARTITION OF tenant_a.orders
 	require.NoError(t, err)
 
 	tables := existing[`"tenant_a"`]
-	assert.NotContains(t, tables, `"orders"`, "the partitioned parent must not be discovered as a table in its own right")
-	assert.Contains(t, tables, `"orders_2025"`)
-	assert.Contains(t, tables, `"orders_2026"`)
-	assert.Len(t, tables, 2, "only the leaf partitions should be discovered")
+	require.Len(t, tables, 3, "the parent and both leaf partitions should all be reported")
+	assert.Equal(t, RelKindPartitionedTable, tables[`"orders"`], "the partitioned parent should be reported, not excluded")
+	assert.Equal(t, RelKindOrdinaryTable, tables[`"orders_2025"`])
+	assert.Equal(t, RelKindOrdinaryTable, tables[`"orders_2026"`])
 }
 
 func TestIntegrationResolveSchemasConfigValidation(t *testing.T) {

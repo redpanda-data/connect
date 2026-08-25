@@ -190,15 +190,25 @@ func resolveSchemas(ctx context.Context, conn *pgconn.PgConn, pattern string) (v
 	return schemas, hidden, nil
 }
 
-// ResolveExistingTables returns the quoted names of the publishable base
-// tables in each of the given (already quoted) schemas, keyed by quoted
-// schema name. A single query covering every schema, rather than one per
-// schema, keeps this to one round-trip regardless of tenant count.
+// RelKindOrdinaryTable and RelKindPartitionedTable are the pg_class.relkind
+// values ResolveExistingTables reports: an ordinary table or leaf partition,
+// and a partitioned table's parent. Both are valid ALTER PUBLICATION ... ADD
+// TABLE targets from PostgreSQL 13 onward.
+const (
+	RelKindOrdinaryTable    = byte('r')
+	RelKindPartitionedTable = byte('p')
+)
+
+// ResolveExistingTables returns the relkind of every publishable relation in
+// each of the given (already quoted) schemas, keyed by quoted schema name
+// and then quoted table name. One query covers every schema, keeping this to
+// a single round-trip regardless of tenant count.
 //
-// Queries pg_class/pg_namespace directly, filtered to relkind = 'r', so
-// discovery only returns ordinary tables (including leaf partitions) and
-// excludes partitioned parents, views, and foreign tables.
-func ResolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchemas []string) (map[string]map[string]struct{}, error) {
+// Existence checks for explicitly-listed tables should accept either
+// relkind. Auto-discovery should keep only RelKindOrdinaryTable - including
+// a partitioned parent would double-count rows already covered by its leaf
+// partitions, and TABLESAMPLE rejects partitioned parents outright.
+func ResolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchemas []string) (map[string]map[string]byte, error) {
 	rawToQuoted := make(map[string]string, len(quotedSchemas))
 	args := make([]any, len(quotedSchemas))
 	placeholders := make([]string, len(quotedSchemas))
@@ -213,10 +223,10 @@ func ResolveExistingTables(ctx context.Context, conn *pgconn.PgConn, quotedSchem
 	}
 
 	q, err := sanitize.SQLQuery(
-		fmt.Sprintf(`SELECT n.nspname AS table_schema, c.relname AS table_name
+		fmt.Sprintf(`SELECT n.nspname AS table_schema, c.relname AS table_name, c.relkind
 FROM pg_catalog.pg_class c
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname IN (%s) AND c.relkind = 'r'`, strings.Join(placeholders, ", ")),
+WHERE n.nspname IN (%s) AND c.relkind IN ('r', 'p')`, strings.Join(placeholders, ", ")),
 		args...,
 	)
 	if err != nil {
@@ -228,14 +238,14 @@ WHERE n.nspname IN (%s) AND c.relkind = 'r'`, strings.Join(placeholders, ", ")),
 		return nil, fmt.Errorf("querying tables in schema(s) %v: %w", quotedSchemas, err)
 	}
 
-	existing := make(map[string]map[string]struct{}, len(quotedSchemas))
+	existing := make(map[string]map[string]byte, len(quotedSchemas))
 	for _, quotedSchema := range quotedSchemas {
-		existing[quotedSchema] = map[string]struct{}{}
+		existing[quotedSchema] = map[string]byte{}
 	}
 	if len(results) > 0 {
 		for _, row := range results[0].Rows {
 			quotedSchema := rawToQuoted[string(row[0])]
-			existing[quotedSchema][sanitize.QuotePostgresIdentifier(string(row[1]))] = struct{}{}
+			existing[quotedSchema][sanitize.QuotePostgresIdentifier(string(row[1]))] = row[2][0]
 		}
 	}
 	return existing, nil

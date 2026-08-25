@@ -2134,12 +2134,6 @@ postgres_cdc:
 	assert.Equal(t, "events", collected[0].table)
 }
 
-// TestIntegrationSchemaExcludeCarvesOutTenantAutoDiscover is
-// TestIntegrationSchemaExcludeCarvesOutTenant with `tables` left unset: it
-// verifies that leaving `tables` empty under schema_include auto-discovers
-// the "events" table in each matched schema instead of falling back to a
-// database-wide FOR ALL TABLES publication, so schema_exclude still carves
-// tenant_c out of both the snapshot and CDC.
 func TestIntegrationMultiSchemaExcludeCarvesOutTenantAutoDiscover(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
@@ -2154,6 +2148,24 @@ func TestIntegrationMultiSchemaExcludeCarvesOutTenantAutoDiscover(t *testing.T) 
 		require.NoError(t, err)
 	}
 
+	// tenant_a additionally has a partitioned "orders" table, to verify
+	// auto-discovery excludes the parent while still picking up its leaves.
+	_, err = db.Exec(`
+CREATE TABLE tenant_a.orders (
+	id INT NOT NULL,
+	created_at DATE NOT NULL,
+	PRIMARY KEY (id, created_at)
+) PARTITION BY RANGE (created_at)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`
+CREATE TABLE tenant_a.orders_2025 PARTITION OF tenant_a.orders
+	FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')`)
+	require.NoError(t, err)
+	_, err = db.Exec(`
+CREATE TABLE tenant_a.orders_2026 PARTITION OF tenant_a.orders
+	FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')`)
+	require.NoError(t, err)
+
 	// Pre-load snapshot data, including a row in the excluded schema that must
 	// never surface.
 	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('alice'), ('bob')")
@@ -2161,6 +2173,13 @@ func TestIntegrationMultiSchemaExcludeCarvesOutTenantAutoDiscover(t *testing.T) 
 	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('carol')")
 	require.NoError(t, err)
 	_, err = db.Exec("INSERT INTO tenant_c.events (name) VALUES ('mallory')")
+	require.NoError(t, err)
+
+	// Insert through the parent, as real usage would, letting Postgres route
+	// each row to the correct leaf partition.
+	_, err = db.Exec("INSERT INTO tenant_a.orders (id, created_at) VALUES (1, '2025-06-01')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_a.orders (id, created_at) VALUES (2, '2026-06-01')")
 	require.NoError(t, err)
 
 	type msgMeta struct {
@@ -2219,11 +2238,18 @@ postgres_cdc:
 	}()
 	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
 
-	// Wait for the 3 snapshot rows from the two non-excluded schemas; tenant_c's
-	// row must never contribute to this count.
+	// Wait for the 5 snapshot rows from the two non-excluded schemas (3
+	// "events" rows plus 2 "orders" rows split across its leaf partitions);
+	// tenant_c's row must never contribute to this count.
 	assert.Eventually(t, func() bool {
-		return collectedLen() >= 3
+		return collectedLen() >= 5
 	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot rows")
+
+	// Give any erroneous duplicate emissions from the partitioned parent a
+	// chance to surface before moving on to the CDC phase.
+	assert.Never(t, func() bool {
+		return collectedLen() > 5
+	}, 3*time.Second, 200*time.Millisecond, "received more snapshot rows than were inserted; the partitioned parent was likely auto-discovered alongside its leaf partitions")
 
 	// Insert CDC rows into all three schemas, including the excluded one.
 	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('dave')")
@@ -2233,25 +2259,26 @@ postgres_cdc:
 	_, err = db.Exec("INSERT INTO tenant_c.events (name) VALUES ('trudy')")
 	require.NoError(t, err)
 
-	// Wait for the 2 CDC rows from the non-excluded schemas (total 5).
+	// Wait for the 2 CDC rows from the non-excluded schemas (total 7).
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.Equal(c, 5, collectedLen())
+		assert.Equal(c, 7, collectedLen())
 	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for CDC rows")
 
 	// tenant_c's CDC insert above raced the same replication stream as the
 	// tenant_a/tenant_b inserts already confirmed above, so if it were going
 	// to leak through it would have by now; assert the count never climbs
-	// past 5 to catch a delayed leak instead of just checking once.
+	// past 7 to catch a delayed leak instead of just checking once.
 	assert.Never(t, func() bool {
-		return collectedLen() > 5
+		return collectedLen() > 7
 	}, 3*time.Second, 200*time.Millisecond, "received unexpected message(s) from excluded schema tenant_c")
 
 	mu.Lock()
 	defer mu.Unlock()
 
-	require.Len(t, collected, 5)
+	require.Len(t, collected, 7)
 	for _, m := range collected {
 		assert.NotEqual(t, "tenant_c", m.dbSchema, "tenant_c is excluded and must never appear, got message: %+v", m)
+		assert.NotEqual(t, "orders", m.table, "the partitioned parent must not be auto-discovered as a table in its own right")
 	}
 
 	var snapshots, cdcMsgs []msgMeta
@@ -2264,15 +2291,24 @@ postgres_cdc:
 	}
 
 	// Snapshot assertions.
-	require.Len(t, snapshots, 3)
+	require.Len(t, snapshots, 5)
 	snapshotSchemas := make(map[string]int)
+	ordersLeaves := make(map[string]int)
 	for _, m := range snapshots {
-		assert.Equal(t, "events", m.table, "snapshot: table should be bare name without schema prefix")
 		assert.Empty(t, m.lsn, "snapshot rows have no LSN")
-		snapshotSchemas[m.dbSchema]++
+		switch m.table {
+		case "events":
+			snapshotSchemas[m.dbSchema]++
+		case "orders_2025", "orders_2026":
+			assert.Equal(t, "tenant_a", m.dbSchema, "orders and its partitions only exist in tenant_a")
+			ordersLeaves[m.table]++
+		default:
+			t.Errorf("unexpected table in snapshot: %+v", m)
+		}
 	}
-	assert.Equal(t, 2, snapshotSchemas["tenant_a"], "expected 2 snapshot rows from tenant_a")
-	assert.Equal(t, 1, snapshotSchemas["tenant_b"], "expected 1 snapshot row from tenant_b")
+	assert.Equal(t, 2, snapshotSchemas["tenant_a"], "expected 2 \"events\" snapshot rows from tenant_a")
+	assert.Equal(t, 1, snapshotSchemas["tenant_b"], "expected 1 \"events\" snapshot row from tenant_b")
+	assert.Equal(t, map[string]int{"orders_2025": 1, "orders_2026": 1}, ordersLeaves, "expected exactly one snapshot row from each leaf partition, and none from the partitioned parent")
 
 	// CDC assertions.
 	require.Len(t, cdcMsgs, 2)
@@ -2519,4 +2555,55 @@ postgres_cdc:
 		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_b", table: "orders"})
 		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_b", table: "ordres"})
 	})
+}
+
+func TestIntegrationMultiSchemaExplicitTablesAcceptsPartitionedTable(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	_, err = db.Exec(`
+		CREATE SCHEMA tenant_a;
+		CREATE SCHEMA tenant_b;
+
+		CREATE TABLE tenant_a.orders (
+			id INT NOT NULL,
+			created_at DATE NOT NULL,
+			PRIMARY KEY (id, created_at)
+		) PARTITION BY RANGE (created_at);
+		CREATE TABLE tenant_a.orders_2025 PARTITION OF tenant_a.orders
+			FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+
+		CREATE TABLE tenant_b.orders (
+			id INT NOT NULL,
+			created_at DATE NOT NULL,
+			PRIMARY KEY (id, created_at)
+		) PARTITION BY RANGE (created_at);
+		CREATE TABLE tenant_b.orders_2025 PARTITION OF tenant_b.orders
+			FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+	`)
+	require.NoError(t, err)
+
+	tmpl := fmt.Sprintf(`
+dsn: %s
+slot_name: partitioned_table_explicit_slot
+schema_include: tenant_*
+tables:
+  - orders
+`, databaseURL)
+
+	conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
+	require.NoError(t, err)
+
+	mgr := service.MockResources()
+	license.InjectTestService(mgr)
+
+	input, err := newPgStreamInput(conf, mgr)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	err = input.Connect(ctx)
+	require.NoError(t, err, "orders is a partitioned table that exists in every matched schema and should be accepted, not reported as missing")
 }

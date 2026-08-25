@@ -136,7 +136,13 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		for _, schema := range schemas {
 			existingTables := existingTablesBySchema[schema]
 			if autoDiscoverTables {
-				for table := range existingTables {
+				// Only ordinary tables: a partitioned parent must not be
+				// auto-discovered alongside its leaf partitions (which are
+				// themselves ordinary tables) - see ResolveExistingTables.
+				for table, relkind := range existingTables {
+					if relkind != multischema.RelKindOrdinaryTable {
+						continue
+					}
 					tables = append(tables, TableFQN{Schema: schema, Table: table})
 				}
 				continue
