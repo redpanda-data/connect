@@ -4,9 +4,9 @@
 DO $$
 DECLARE
     tbl text;
-    num_rows int := 5000;
+    num_rows int := 150000;
 BEGIN
-    FOREACH tbl IN ARRAY ARRAY['public.users', 'tenant_a.users', 'tenant_b.users', 'tenant_c.users']
+    FOREACH tbl IN ARRAY ARRAY['public.users', 'tenant_a.users', 'tenant_b.users']
     LOOP
         EXECUTE format($fmt$
             INSERT INTO %s (name, surname, about, email, date_of_birth, join_date, created_at, is_active, login_count, balance)
