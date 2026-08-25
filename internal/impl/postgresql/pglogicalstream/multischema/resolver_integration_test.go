@@ -12,6 +12,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +27,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pgtest"
 )
 
 func TestIntegrationResolveSchemasReportsInaccessibleSchemas(t *testing.T) {
@@ -67,6 +71,65 @@ func TestIntegrationResolveSchemasReportsInaccessibleSchemas(t *testing.T) {
 
 	assert.Equal(t, []string{`"visible_schema"`}, visible)
 	assert.Equal(t, []string{`"hidden_schema"`}, inaccessible)
+}
+
+func TestIntegrationResolverExcludedInaccessibleSchemaDoesNotWarn(t *testing.T) {
+	integration.CheckSkip(t)
+
+	_, adminURL := createDockerInstance(t)
+
+	adminDB, err := sql.Open("postgres", adminURL)
+	require.NoError(t, err)
+	defer adminDB.Close()
+
+	_, err = adminDB.Exec("CREATE SCHEMA tenant_visible")
+	require.NoError(t, err)
+	_, err = adminDB.Exec("CREATE SCHEMA tenant_hidden")
+	require.NoError(t, err)
+	_, err = adminDB.Exec("CREATE SCHEMA tenant_internal")
+	require.NoError(t, err)
+
+	_, err = adminDB.Exec("CREATE ROLE restricted_role2 LOGIN PASSWORD 'restricted_pw'")
+	require.NoError(t, err)
+	_, err = adminDB.Exec("GRANT CONNECT ON DATABASE dbname TO restricted_role2")
+	require.NoError(t, err)
+	_, err = adminDB.Exec("GRANT USAGE ON SCHEMA tenant_visible TO restricted_role2")
+	require.NoError(t, err)
+	// Deliberately no GRANT on tenant_hidden or tenant_internal.
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	restrictedConfig, err := pgconn.ParseConfig(adminURL)
+	require.NoError(t, err)
+	restrictedConfig.User = "restricted_role2"
+	restrictedConfig.Password = "restricted_pw"
+	delete(restrictedConfig.RuntimeParams, "replication")
+
+	restrictedConn, err := pgconn.ConnectConfig(ctx, restrictedConfig)
+	require.NoError(t, err)
+	defer closeConn(t, restrictedConn)
+
+	logs := pgtest.NewTestLogCapture()
+	logger := service.NewLoggerFromSlog(slog.New(logs))
+
+	resolver := NewResolver("tenant_*", []string{"tenant_internal"})
+	schemas, err := resolver.Resolve(ctx, restrictedConn, logger)
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{`"tenant_visible"`}, schemas)
+
+	var sawHidden, sawInternal bool
+	for _, m := range logs.Messages() {
+		if strings.Contains(m, "tenant_hidden") {
+			sawHidden = true
+		}
+		if strings.Contains(m, "tenant_internal") {
+			sawInternal = true
+		}
+	}
+	assert.True(t, sawHidden, "expected a warning naming the non-excluded inaccessible schema tenant_hidden, got: %v", logs.Messages())
+	assert.False(t, sawInternal, "must not warn about excluded schema tenant_internal, got: %v", logs.Messages())
 }
 
 func TestIntegrationResolveSchemasUUIDSuffixedSchemas(t *testing.T) {

@@ -55,37 +55,20 @@ func (r *Resolver) Resolve(ctx context.Context, conn *pgconn.PgConn, logger *ser
 	matchedSchemas := schemas
 
 	if len(r.Exclude) > 0 {
-		// Filtering happens entirely against the schemas slice we already
-		// fetched above - no extra DB round-trips per exclude pattern.
 		var excluded []string
-		remaining := make([]string, 0, len(schemas))
-		for _, schema := range schemas {
-			var isExcluded bool
-			for _, pattern := range r.Exclude {
-				matched, err := schemaMatchesExcludePattern(schema, pattern)
-				if err != nil {
-					return nil, fmt.Errorf("evaluating schema_exclude pattern %q against schema %q: %w", pattern, schema, err)
-				}
-				if matched {
-					isExcluded = true
-					break
-				}
-			}
-			if isExcluded {
-				excluded = append(excluded, schema)
-				continue
-			}
-			remaining = append(remaining, schema)
+		schemas, excluded, err = r.filterExcluded(schemas)
+		if err != nil {
+			return nil, err
 		}
 		if len(excluded) > 0 {
-			logger.Debugf("schema_exclude %v excluded %d schema(s) %v from schema_include pattern %q; %d schema(s) remain: %v", r.Exclude, len(excluded), excluded, r.Include, len(remaining), remaining)
+			logger.Debugf("schema_exclude %v excluded %d schema(s) %v from schema_include pattern %q; %d schema(s) remain: %v", r.Exclude, len(excluded), excluded, r.Include, len(schemas), schemas)
 		}
-		schemas = remaining
+
+		if inaccessibleSchemas, _, err = r.filterExcluded(inaccessibleSchemas); err != nil {
+			return nil, err
+		}
 	}
 
-	// Compared set-wise, not with slices.Equal: resolveSchemas' pg_namespace
-	// query has no ORDER BY, so an unchanged set of inaccessible schemas can
-	// still come back in a different order between reconnects.
 	if newlyInaccessible, _ := diffSchemaSets(r.previouslyInaccessible, inaccessibleSchemas); len(newlyInaccessible) > 0 {
 		logger.Warnf("schema_include pattern %q matches schema(s) %v that the configured role cannot see (missing USAGE privilege); they will be skipped", r.Include, newlyInaccessible)
 	}
@@ -111,6 +94,29 @@ func (r *Resolver) Resolve(ctx context.Context, conn *pgconn.PgConn, logger *ser
 	r.previouslyResolved = slices.Clone(schemas)
 
 	return schemas, nil
+}
+
+func (r *Resolver) filterExcluded(schemas []string) (remaining, excluded []string, err error) {
+	remaining = make([]string, 0, len(schemas))
+	for _, schema := range schemas {
+		var isExcluded bool
+		for _, pattern := range r.Exclude {
+			matched, err := schemaMatchesExcludePattern(schema, pattern)
+			if err != nil {
+				return nil, nil, fmt.Errorf("evaluating schema_exclude pattern %q against schema %q: %w", pattern, schema, err)
+			}
+			if matched {
+				isExcluded = true
+				break
+			}
+		}
+		if isExcluded {
+			excluded = append(excluded, schema)
+			continue
+		}
+		remaining = append(remaining, schema)
+	}
+	return remaining, excluded, nil
 }
 
 func schemaPatternToLike(pattern string) (likePattern string, caseSensitive bool, err error) {
