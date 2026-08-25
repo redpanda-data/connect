@@ -328,9 +328,11 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return fmt.Errorf("getting publication tables: %w", err)
 	}
 
-	// list of tables to publish is empty and publication is for all tables
-	// no update is needed
-	if forAllTables && len(pubTables) == 0 {
+	// No-op only if the caller still wants FOR ALL TABLES too. Checking
+	// pubTables instead of tables would always be true here (a FOR ALL
+	// TABLES publication has no pg_publication_rel rows), silently ignoring
+	// a caller that has since narrowed to an explicit table list.
+	if forAllTables && len(tables) == 0 {
 		return nil
 	}
 
