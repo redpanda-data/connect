@@ -210,8 +210,19 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		}
 	}
 
+	// Compression is deliberately optional: unset means "defer to the table's
+	// write.parquet.compression-codec property, else uncompressed", which is
+	// resolved per table when its writer is built (resolveParquetCompression).
+	var parquetCompression string
+	if conf.Contains(ioFieldParquet, ioFieldParquetCompression) {
+		if parquetCompression, err = conf.FieldString(ioFieldParquet, ioFieldParquetCompression); err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", ioFieldParquetCompression, err)
+		}
+	}
+
 	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, caseSensitive, schemaEvoCfg, commitCfg, rowOpCfg, writerOpts, mgr.Logger())
 	rtr.metrics = newOpMetrics(mgr.Metrics())
+	rtr.parquetCompression = parquetCompression
 	return &icebergOutput{
 		router: rtr,
 		logger: mgr.Logger(),

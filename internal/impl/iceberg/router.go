@@ -147,6 +147,13 @@ type Router struct {
 
 	entries sync.Map // tableKey -> *tableEntry
 
+	// parquetCompression is the configured `parquet.compression` value, or ""
+	// when unset. Set after construction by the output, like metrics below, so
+	// NewRouter's signature stays put. Empty means each table falls back to its
+	// own write.parquet.compression-codec property — see
+	// resolveParquetCompression.
+	parquetCompression string
+
 	// metrics is optional (nil in some tests); set after construction by the
 	// output. Writers and committers inherit it.
 	metrics *opMetrics
@@ -912,7 +919,15 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 		}
 	}
 
-	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
+	// Resolve compression per table, since the fallback reads that table's own
+	// property. slices.Concat rather than append: appending to r.writerOpts
+	// would share its backing array between tables, so two tables resolving to
+	// different codecs could overwrite each other's option.
+	writerOpts := slices.Concat(r.writerOpts, []parquet.WriterOption{
+		parquet.Compression(resolveParquetCompression(r.parquetCompression, writerTbl.Properties(), r.logger)),
+	})
+
+	w := NewWriter(writerTbl, comm, r.caseSensitive, writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
 	w.metrics = r.metrics
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
