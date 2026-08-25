@@ -258,3 +258,28 @@ func TestUpsertCowScenario_PipelineCoercesIDToInt(t *testing.T) {
 	require.True(t, ok)
 	require.Contains(t, m, "root.id = this.id.int64()")
 }
+
+func TestUpsertCowClusteredScenario_Validates(t *testing.T) {
+	const path = "../scenarios/iceberg/orders-upsert-cow-clustered.yaml"
+	s, err := LoadScenario(path)
+	require.NoError(t, err)
+	require.NoError(t, s.Validate())
+	require.Equal(t, "sequential", s.Dataset.KeyOrder)
+
+	got, err := (sinkTopology{}).SeedScript(s, map[string]string{
+		"results_bucket":            "bucket",
+		"redpanda_broker_endpoints": "b1:9092",
+	}, newBenchNames("sess-x", "iceberg"))
+	require.NoError(t, err)
+	require.Contains(t, got, " --key-space=250000 --key-order=sequential")
+
+	// Keyed arms carry mif 1 and the pipeline-level coercion, same as the
+	// scattered scenario.
+	cow := icebergOutputOf(t, renderArm(t, path, "cow-50k"))
+	require.Equal(t, 1, cow["max_in_flight"])
+	require.Equal(t, "copy-on-write", cow["merge_strategy"])
+	cfg := renderArm(t, path, "a0-mor-50k")
+	pl, ok := cfg["pipeline"].(map[string]any)
+	require.True(t, ok)
+	require.Len(t, pl["processors"], 1)
+}
