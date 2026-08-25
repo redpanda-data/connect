@@ -132,3 +132,68 @@ func TestSchemaMatchesExcludePattern(t *testing.T) {
 		})
 	}
 }
+
+func TestDiffSchemaSets(t *testing.T) {
+	tests := []struct {
+		name            string
+		previous        []string
+		current         []string
+		expectedAdded   []string
+		expectedRemoved []string
+	}{
+		// nil previous is the first resolution, not drift - Resolve's caller
+		// is responsible for ignoring this result in that case (see the
+		// doc comment on diffSchemaSets), but the function itself still
+		// reports every current schema as "added" since it has nothing to
+		// compare against.
+		{
+			name:          "nil previous, empty current",
+			previous:      nil,
+			current:       nil,
+			expectedAdded: nil, expectedRemoved: nil,
+		},
+		{
+			name:          "nil previous, non-empty current",
+			previous:      nil,
+			current:       []string{`"a"`, `"b"`},
+			expectedAdded: []string{`"a"`, `"b"`}, expectedRemoved: nil,
+		},
+		{
+			name:          "no change",
+			previous:      []string{`"a"`, `"b"`},
+			current:       []string{`"a"`, `"b"`},
+			expectedAdded: nil, expectedRemoved: nil,
+		},
+		{
+			name:          "added only",
+			previous:      []string{`"a"`},
+			current:       []string{`"a"`, `"b"`},
+			expectedAdded: []string{`"b"`}, expectedRemoved: nil,
+		},
+		{
+			name:          "removed only",
+			previous:      []string{`"a"`, `"b"`},
+			current:       []string{`"a"`},
+			expectedAdded: nil, expectedRemoved: []string{`"b"`},
+		},
+		{
+			name:          "added and removed",
+			previous:      []string{`"a"`, `"b"`},
+			current:       []string{`"b"`, `"c"`},
+			expectedAdded: []string{`"c"`}, expectedRemoved: []string{`"a"`},
+		},
+		{
+			name:          "everything replaced",
+			previous:      []string{`"a"`, `"b"`},
+			current:       []string{`"c"`, `"d"`},
+			expectedAdded: []string{`"c"`, `"d"`}, expectedRemoved: []string{`"a"`, `"b"`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			added, removed := diffSchemaSets(tt.previous, tt.current)
+			assert.Equal(t, tt.expectedAdded, added, "added")
+			assert.Equal(t, tt.expectedRemoved, removed, "removed")
+		})
+	}
+}

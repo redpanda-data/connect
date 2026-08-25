@@ -132,6 +132,93 @@ func TestIntegrationResolverExcludedInaccessibleSchemaDoesNotWarn(t *testing.T) 
 	assert.False(t, sawInternal, "must not warn about excluded schema tenant_internal, got: %v", logs.Messages())
 }
 
+func TestIntegrationResolverWarnsOnSchemaSetDriftBetweenReconnects(t *testing.T) {
+	integration.CheckSkip(t)
+
+	_, adminURL := createDockerInstance(t)
+
+	adminDB, err := sql.Open("postgres", adminURL)
+	require.NoError(t, err)
+	defer adminDB.Close()
+
+	_, err = adminDB.Exec("CREATE SCHEMA tenant_a")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, adminURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	logs := pgtest.NewTestLogCapture()
+	logger := service.NewLoggerFromSlog(slog.New(logs))
+	resolver := NewResolver("tenant_*", nil)
+
+	// First resolve: only tenant_a matches. previouslyResolved is nil going
+	// in, so this must not be treated as drift - no added/removed warning.
+	schemas, err := resolver.Resolve(ctx, conn, logger)
+	require.NoError(t, err)
+	assert.Equal(t, []string{`"tenant_a"`}, schemas)
+	assertNoMessageContains(t, logs.Messages(), "now also matches", "no longer match")
+
+	// Second resolve (simulating a reconnect): tenant_b now also matches.
+	// Must warn that it was added, and must not also claim anything was
+	// removed.
+	before := len(logs.Messages())
+	_, err = adminDB.Exec("CREATE SCHEMA tenant_b")
+	require.NoError(t, err)
+
+	schemas, err = resolver.Resolve(ctx, conn, logger)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{`"tenant_a"`, `"tenant_b"`}, schemas)
+
+	added := logs.Messages()[before:]
+	assertAnyMessageContains(t, added, "now also matches", "tenant_b")
+	assertNoMessageContains(t, added, "no longer match")
+
+	// Third resolve (another reconnect): tenant_a is dropped. Must warn that
+	// it was removed, and must not re-warn about tenant_b (it's no longer
+	// new - it was already part of the previously resolved set).
+	before = len(logs.Messages())
+	_, err = adminDB.Exec("DROP SCHEMA tenant_a")
+	require.NoError(t, err)
+
+	schemas, err = resolver.Resolve(ctx, conn, logger)
+	require.NoError(t, err)
+	assert.Equal(t, []string{`"tenant_b"`}, schemas)
+
+	removed := logs.Messages()[before:]
+	assertAnyMessageContains(t, removed, "no longer match", "tenant_a")
+	assertNoMessageContains(t, removed, "now also matches")
+}
+
+func assertAnyMessageContains(t *testing.T, messages []string, substrs ...string) {
+	t.Helper()
+	for _, m := range messages {
+		matchesAll := true
+		for _, s := range substrs {
+			if !strings.Contains(m, s) {
+				matchesAll = false
+				break
+			}
+		}
+		if matchesAll {
+			return
+		}
+	}
+	assert.Fail(t, "expected a log message containing all of the given substrings", "substrings: %v, got: %v", substrs, messages)
+}
+
+func assertNoMessageContains(t *testing.T, messages []string, substrs ...string) {
+	t.Helper()
+	for _, m := range messages {
+		for _, s := range substrs {
+			assert.NotContains(t, m, s, "unexpected log message: %v", m)
+		}
+	}
+}
+
 func TestIntegrationResolveSchemasUUIDSuffixedSchemas(t *testing.T) {
 	integration.CheckSkip(t)
 
