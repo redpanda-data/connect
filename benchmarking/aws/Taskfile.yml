@@ -1,0 +1,82 @@
+version: '3'
+
+vars:
+  # The runner lives in this directory's standalone Go module (see go.mod
+  # here — its AWS SDK deps must stay out of the published root module), so
+  # it can't be `go run` from the repo root. Build it here, run it there:
+  # the runner expects --repo-root and scenario paths relative to the root.
+  RUNNER_BUILD: 'RUNNER_BIN="$(mktemp -d)/bench-runner" && go build -o "$RUNNER_BIN" ./runner'
+  RUNNER: '"$RUNNER_BIN"'
+
+tasks:
+  aws:bench:
+    desc: "Run a scenario end-to-end (provision → sweep → render → teardown)"
+    dir: '.'
+    cmds:
+      - |
+        if [ -z "{{.scenario}}" ]; then
+          echo "usage: task aws:bench scenario=<path>"
+          exit 2
+        fi
+        {{.RUNNER_BUILD}}
+        cd ../.. && {{.RUNNER}} bench \
+          --scenario=benchmarking/aws/scenarios/{{.scenario}}.yaml \
+          --repo-root=. \
+          {{.extra_flags}}
+
+  aws:validate:
+    desc: "Validate a scenario YAML + terraform plan (no AWS spend)"
+    cmds:
+      - |
+        if [ -z "{{.scenario}}" ]; then
+          echo "usage: task aws:validate scenario=<path>"
+          exit 2
+        fi
+        {{.RUNNER_BUILD}}
+        cd ../.. && {{.RUNNER}} validate \
+          --scenario=benchmarking/aws/scenarios/{{.scenario}}.yaml
+
+  aws:down:
+    desc: "Tear down infra for a scenario (when bench was run with keep=true)"
+    cmds:
+      - |
+        if [ -z "{{.scenario}}" ]; then
+          echo "usage: task aws:down scenario=<path>"
+          exit 2
+        fi
+        {{.RUNNER_BUILD}}
+        cd ../.. && {{.RUNNER}} down \
+          --scenario=benchmarking/aws/scenarios/{{.scenario}}.yaml \
+          --repo-root=.
+
+  aws:persistent:
+    desc: "Apply the persistent stack (soak dashboards; later alarms). Outside the per-run lifecycle — apply once and on change, never torn down by aws:down."
+    cmds:
+      # cleanup.tf reads bootstrap.zip at plan time (filebase64sha256), and
+      # the zip is gitignored — build it here so a fresh checkout can apply
+      # without knowing about the Makefile.
+      - make -C cleanup-lambda zip
+      - terraform -chdir=terraform/persistent init -input=false -backend-config=../backend.hcl -backend-config=key=persistent
+      - terraform -chdir=terraform/persistent apply -input=false -auto-approve
+
+  aws:cost-check:
+    desc: "Show AWS Cost Explorer spend for the bench project (today/7d/MTD)"
+    cmds:
+      - '{{.RUNNER_BUILD}} && cd ../.. && {{.RUNNER}} cost-check'
+
+  aws:summary:
+    desc: "Regenerate the auto-managed AWS section in docs/benchmark-results/SUMMARY.md"
+    cmds:
+      - '{{.RUNNER_BUILD}} && cd ../.. && {{.RUNNER}} summary --repo-root=.'
+
+  aws:test:
+    desc: "Run the benchmarking module's unit tests (standalone module — not covered by the repo root's `task test`)"
+    cmds:
+      - go test -timeout 5m -shuffle=on ./...
+
+  aws:tf-clean:
+    desc: "Remove .terraform/ caches under benchmarking/aws/terraform/ (use when a backend or provider config change confuses init)"
+    cmds:
+      - find terraform -type d -name '.terraform' -exec rm -rf {} +
+      - find terraform -type f -name '.terraform.lock.hcl' -delete
+      - echo "terraform caches cleaned; next aws:bench will re-init"
