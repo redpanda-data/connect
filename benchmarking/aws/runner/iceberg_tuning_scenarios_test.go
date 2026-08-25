@@ -283,3 +283,53 @@ func TestUpsertCowClusteredScenario_Validates(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, pl["processors"], 1)
 }
+
+func TestParseIcebergSeries_PrefersWrittenCountersWhenPresent(t *testing.T) {
+	// A keyed copy-on-write sink at key-space saturation: net totals frozen
+	// (250k rows), written counters still climbing. The parser must report
+	// the written rate, not zero.
+	dump := `###timestamp=1000
+total_files_size_bytes 300000000
+total_records 250000
+written_files_size_bytes 600000000
+written_records 500000
+###timestamp=1010
+total_files_size_bytes 300000000
+total_records 250000
+written_files_size_bytes 660000000
+written_records 550000
+`
+	pts, err := ParseIcebergSeries(strings.NewReader(dump))
+	require.NoError(t, err)
+	require.Len(t, pts, 1)
+	require.InDelta(t, 5000.0, pts[0].MsgPerSec, 0.01, "rate must come from written_records")
+	require.InDelta(t, 6.0, pts[0].MBPerSec, 0.01, "rate must come from written_files_size_bytes")
+}
+
+func TestParseIcebergSeries_FallsBackToNetTotalsWithoutWrittenLines(t *testing.T) {
+	// Pre-written-counter dumps must parse exactly as before.
+	dump := `###timestamp=1000
+total_files_size_bytes 100000000
+total_records 100000
+###timestamp=1010
+total_files_size_bytes 200000000
+total_records 200000
+`
+	pts, err := ParseIcebergSeries(strings.NewReader(dump))
+	require.NoError(t, err)
+	require.Len(t, pts, 1)
+	require.InDelta(t, 10000.0, pts[0].MsgPerSec, 0.01)
+	require.InDelta(t, 10.0, pts[0].MBPerSec, 0.01)
+}
+
+func TestIcebergSidecar_EmitsWrittenCounters(t *testing.T) {
+	script := icebergSidecarSetup(MetricSidecarArgs{
+		Outs:   icebergOuts(),
+		Names:  newBenchNames("sess-x", "iceberg"),
+		Engine: "connect",
+	}, "iceberg-test.txt")
+	require.Contains(t, script, `"added-records"`)
+	require.Contains(t, script, `"added-files-size"`)
+	require.Contains(t, script, "written_records ")
+	require.Contains(t, script, "written_files_size_bytes ")
+}

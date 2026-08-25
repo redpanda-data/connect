@@ -35,11 +35,12 @@ description: |
   bench unpartitioned). Connect auto-creates fine (it sets table_location);
   the sidecar tolerates the table appearing mid-window.
 
-  METRIC NOTE: with a 250k key space the table plateaus at ~250k net rows, so
-  the Glue total_records rate is only honest for each arm's FIRST cycle;
-  after that, read rates from committed-bytes growth per snapshot and treat
-  the summary line as a lower bound. The MOR arm is unaffected (appends
-  always grow total_records).
+  METRICS: the sidecar reports written_records / written_files_size_bytes
+  (sum of snapshot added-records / added-files-size), which count write work
+  and never saturate — the headline rates are honest for every arm,
+  including copy-on-write past the first key-space lap. The 2026-08-24 run
+  predates these counters and only measured the insert-dominated first lap
+  for the COW arms.
 
 direction: sink
 connector: iceberg

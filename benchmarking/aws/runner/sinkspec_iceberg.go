@@ -173,6 +173,8 @@ func icebergSidecarSetup(args MetricSidecarArgs, artifact string) string {
       echo "###timestamp=$(date +%%s)"
       SIZE=0
       RECS=0
+      WSIZE=0
+      WRECS=0
       for T in %s; do
         META=$(aws glue get-table --region %q --database-name %q --name "$T" \
                 --query 'Table.Parameters.metadata_location' --output text 2>/dev/null || echo "")
@@ -180,8 +182,20 @@ func icebergSidecarSetup(args MetricSidecarArgs, artifact string) string {
           SNAP=$(aws s3 cp "$META" - 2>/dev/null || echo '{}')
           S=$(echo "$SNAP" | jq -r '[.snapshots[]?."summary"."total-files-size" // "0" | tonumber] | last // 0' 2>/dev/null || echo 0)
           R=$(echo "$SNAP" | jq -r '[.snapshots[]?."summary"."total-records" // "0" | tonumber] | last // 0' 2>/dev/null || echo 0)
+          # Written-work counters: SUM of added-records / added-files-size
+          # across every snapshot. Unlike the net totals above, these never
+          # saturate for keyed workloads — an upsert that replaces a row
+          # still counts as work written. This is the honest throughput axis
+          # for copy-on-write, whose net row count freezes once every key
+          # exists (found 2026-08-25: both COW layout runs went metric-blind
+          # at one key-space lap). For pure appends the written and net
+          # numbers coincide.
+          WR=$(echo "$SNAP" | jq -r '[.snapshots[]?."summary"."added-records" // "0" | tonumber] | add // 0' 2>/dev/null || echo 0)
+          WS=$(echo "$SNAP" | jq -r '[.snapshots[]?."summary"."added-files-size" // "0" | tonumber] | add // 0' 2>/dev/null || echo 0)
           SIZE=$((SIZE + ${S:-0}))
           RECS=$((RECS + ${R:-0}))
+          WSIZE=$((WSIZE + ${WS:-0}))
+          WRECS=$((WRECS + ${WR:-0}))
           # Per-table line, live evidence for the plan's own acceptance check
           # ("did BOTH of arm B's tables grow, or did the rebalance starve
           # one stream of partitions"). The summed total_files_size_bytes
@@ -198,6 +212,8 @@ func icebergSidecarSetup(args MetricSidecarArgs, artifact string) string {
       done
       echo "total_files_size_bytes ${SIZE:-0}"
       echo "total_records ${RECS:-0}"
+      echo "written_files_size_bytes ${WSIZE:-0}"
+      echo "written_records ${WRECS:-0}"
     } >> "$RP"
     sleep 10
   done

@@ -23,10 +23,11 @@ description: |
   * cow-10k — clustered arrival at the smaller batch, for the batch
     dimension under clustering.
 
-  Same metric caveat as orders-upsert-cow: Glue total_records is NET rows
-  and saturates at ~key_space, so each arm's honest rate is its first-cycle
-  series segment; read steady state from the per-interval series in the
-  result JSON, not the summary line.
+  METRICS: the sidecar reports written_records / written_files_size_bytes
+  (sum of snapshot added-records / added-files-size), which count write work
+  and never saturate — steady-state rewrite throughput after the first
+  key-space lap is now visible, which is exactly what the 2026-08-25 run
+  (pre-written-counters) could not see.
 
 direction: sink
 connector: iceberg

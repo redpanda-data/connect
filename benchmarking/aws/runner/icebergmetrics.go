@@ -31,6 +31,16 @@ func ParseIcebergSeries(r io.Reader) ([]TopicPoint, error) {
 		hasB    bool
 		records float64
 		hasR    bool
+		// Written-work counters (sum of snapshot added-records /
+		// added-files-size, emitted by newer sidecars). Preferred over the
+		// net totals when both frames carry them: net totals freeze for
+		// keyed workloads once every key exists in the table, so a
+		// copy-on-write sink that is rewriting flat out reads as zero.
+		// Dumps without these lines parse exactly as before.
+		wBytes   float64
+		hasWB    bool
+		wRecords float64
+		hasWR    bool
 	}
 	var frames []frame
 	scanner := bufio.NewScanner(r)
@@ -64,6 +74,26 @@ func ParseIcebergSeries(r io.Reader) ([]TopicPoint, error) {
 			}
 			frames[len(frames)-1].records = v
 			frames[len(frames)-1].hasR = true
+		case strings.HasPrefix(line, "written_files_size_bytes "):
+			if len(frames) == 0 {
+				continue
+			}
+			v, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line, "written_files_size_bytes ")), 64)
+			if err != nil {
+				return nil, fmt.Errorf("parse written bytes %q: %w", line, err)
+			}
+			frames[len(frames)-1].wBytes = v
+			frames[len(frames)-1].hasWB = true
+		case strings.HasPrefix(line, "written_records "):
+			if len(frames) == 0 {
+				continue
+			}
+			v, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line, "written_records ")), 64)
+			if err != nil {
+				return nil, fmt.Errorf("parse written records %q: %w", line, err)
+			}
+			frames[len(frames)-1].wRecords = v
+			frames[len(frames)-1].hasWR = true
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -80,19 +110,29 @@ func ParseIcebergSeries(r io.Reader) ([]TopicPoint, error) {
 			continue
 		}
 		interval := cur.t - prev.t
-		delta := cur.bytes - prev.bytes
-		if interval <= 0 || delta < 0 {
+		// Written-work counters take precedence per metric when both frames
+		// carry them (see the frame struct comment); the net totals remain
+		// the fallback so pre-written dumps parse unchanged.
+		bytesDelta := cur.bytes - prev.bytes
+		if prev.hasWB && cur.hasWB {
+			bytesDelta = cur.wBytes - prev.wBytes
+		}
+		if interval <= 0 || bytesDelta < 0 {
 			continue // out-of-order or counter reset
 		}
 		var msgPerSec float64
-		if prev.hasR && cur.hasR {
+		if prev.hasWR && cur.hasWR {
+			if rd := cur.wRecords - prev.wRecords; rd >= 0 {
+				msgPerSec = rd / float64(interval)
+			}
+		} else if prev.hasR && cur.hasR {
 			if rd := cur.records - prev.records; rd >= 0 {
 				msgPerSec = rd / float64(interval)
 			}
 		}
 		out = append(out, TopicPoint{
 			T:           int(cur.t - baseT),
-			MBPerSec:    delta / float64(interval) / bytesPerMB,
+			MBPerSec:    bytesDelta / float64(interval) / bytesPerMB,
 			MsgPerSec:   msgPerSec,
 			IntervalSec: int(interval),
 		})
