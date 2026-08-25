@@ -280,6 +280,7 @@ func TestIdentifierValidation(t *testing.T) {
 		`_Foobar`,
 		strings.Repeat("a", 63),
 		strings.Repeat("A", 63),
+		`münchen`,
 	}
 
 	for _, i := range unquoted {

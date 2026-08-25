@@ -216,24 +216,6 @@ tables:
 	require.NoError(t, err)
 }
 
-// TestSchemaAcceptsUnicodeIdentifier verifies that the schema field (single
-// exact-name path) still accepts unquoted unicode identifiers like
-// "münchen", matching sanitize.NormalizePostgresIdentifier which is the sole
-// validator on this path (see NewPgStream). schema no longer runs through
-// validateSchemaPattern, so this guards against that ASCII-only validator
-// regressing this path again in the future.
-func TestSchemaAcceptsUnicodeIdentifier(t *testing.T) {
-	yaml := `
-dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
-schema: münchen
-slot_name: test_slot
-tables:
-  - events
-`
-	_, err := parsePgStreamInput(t, yaml)
-	require.NoError(t, err)
-}
-
 func TestNewPgStreamInputSignalTableName(t *testing.T) {
 	env := service.NewEnvironment()
 	spec := newPostgresCDCConfig()
