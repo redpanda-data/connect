@@ -2607,4 +2607,9 @@ tables:
 
 	err = input.Connect(ctx)
 	require.NoError(t, err, "orders is a partitioned table that exists in every matched schema and should be accepted, not reported as missing")
+
+	require.NoError(t, input.Close(context.Background()))
+
+	err = input.Connect(ctx)
+	require.NoError(t, err, "reconnecting with the same explicitly-listed partitioned table must reconcile cleanly, not attempt to drop its leaf partitions from the publication")
 }

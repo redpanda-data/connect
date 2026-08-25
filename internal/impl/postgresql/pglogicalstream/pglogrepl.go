@@ -405,10 +405,13 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
-		tablename as table_name,
-		schemaname as schema_name
-		FROM pg_publication_tables
-		WHERE pubname = $1
+		c.relname AS table_name,
+		n.nspname AS schema_name
+		FROM pg_publication_rel pr
+		JOIN pg_publication p ON p.oid = pr.prpubid
+		JOIN pg_class c ON c.oid = pr.prrelid
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE p.pubname = $1
 		ORDER BY schema_name, table_name;
 	`, publicationName)
 	if err != nil {

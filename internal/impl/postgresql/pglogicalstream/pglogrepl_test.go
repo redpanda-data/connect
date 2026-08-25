@@ -255,7 +255,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{{schema, `"test_table"`}})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Len(t, tables, 1)

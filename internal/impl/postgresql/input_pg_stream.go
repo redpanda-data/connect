@@ -155,7 +155,6 @@ A schema that matches ` + "`" + fieldSchemaInclude + "`" + ` and also matches an
 
 This exclusion is applied before ` + "`" + fieldTables + "`" + ` is resolved, so it also takes effect when ` + "`" + fieldTables + "`" + ` is left empty and tables are auto-discovered.`).
 			Examples([]string{"tenant_internal", "tenant_test_*"}).
-			Optional().
 			Default([]string{}),
 		).
 		Field(service.NewStringListField(fieldTables).
