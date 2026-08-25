@@ -149,7 +149,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			}
 			for _, table := range normalizedTables {
 				if _, ok := existingTables[table]; !ok {
-					config.Logger.Warnf("table %s.%s not found, skipping (schema %s matched schema_include pattern %q but does not contain this table)", schema, table, schema, config.SchemaResolver.Include)
+					config.Logger.Warnf("Table %s.%s not found, skipping (schema %s matched schema_include pattern %q but does not contain this table)", schema, table, schema, config.SchemaResolver.Include)
 					continue
 				}
 				tables = append(tables, TableFQN{Schema: schema, Table: table})
@@ -753,7 +753,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 
 		if len(ranges) > 1 {
 			s.logger.Infof(
-				"created plan in %v to split %s into %d chunks of %d and process in parallel",
+				"Created plan in %v to split %s into %d chunks of %d and process in parallel",
 				time.Since(planStartTime),
 				table,
 				len(ranges),
@@ -761,7 +761,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 			)
 		} else {
 			s.logger.Infof(
-				"created plan in %v to scan %s sequentially",
+				"Created plan in %v to scan %s sequentially",
 				time.Since(planStartTime),
 				table,
 			)
