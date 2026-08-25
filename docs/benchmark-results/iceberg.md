@@ -1086,3 +1086,115 @@ result JSON, not the summary line.
 
 
 Raw samples + Prometheus snapshots: [`results/iceberg/orders-upsert-cow-clustered/2026-08-25T15-50-39Z.json`](results/iceberg/orders-upsert-cow-clustered/2026-08-25T15-50-39Z.json)
+
+
+## AWS — orders-upsert-cow-clustered — 2026-08-25
+
+**Scenario:** The clustered-key counterpart to orders-upsert-cow: can copy-on-write
+sustain a real rate when keys arrive in contiguous runs instead of
+scattered? The 2026-08-24 scattered run measured COW decaying to ~500
+rec/s at any batch size because every batch's keys spray across all data
+files. With `key_order: sequential` (id = i % key_space, contiguous runs),
+a batch's keys cluster into few files, so each commit should rewrite only
+the files covering its id range — the one favourable regime the docs'
+merge-strategy guidance predicts, never measured end-to-end. If clustered
+COW holds a usable rate, it justifies a "Recipe D: clustered-key COW" in
+the tuning guide with an explicit arrival-order prerequisite; if it also
+decays to hundreds of rows/s, COW is batch-only regardless of layout.
+
+Arms at a fixed 4-vCPU pin, keyed arms at the lint-mandated
+max_in_flight: 1:
+
+* a0-mor-50k — in-session control; measured 33k rec/s on 2026-08-24
+  (scattered — arrival order should not matter for MOR, which is itself
+  worth confirming).
+* cow-50k — clustered arrival at the Recipe-C batch size. The Recipe D
+  candidate.
+* cow-10k — clustered arrival at the smaller batch, for the batch
+  dimension under clustering.
+
+METRICS: the sidecar reports written_records / written_files_size_bytes
+(sum of snapshot added-records / added-files-size), which count write work
+and never saturate — steady-state rewrite throughput after the first
+key-space lap is now visible, which is exactly what the 2026-08-25 run
+(pre-written-counters) could not see.
+
+**Git SHA:** [`e367f7a1f`](https://github.com/redpanda-data/connect/commit/e367f7a1f6c8c907c6ee5d54f080cf207aa7f573)
+
+**Infra:** Runner `c8g.4xlarge`; source `` (0 GB) in `us-east-2`.
+
+**Dataset:** 48,000,000 rows × 1200 B = ~53 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 4          | a0-mor-50k     | connect       |           48 |       40.388 |        34,702 |           48 |          10 |           51 |        41,258 |                    |
+| 4    | 4          | cow-50k        | connect       |           21 |       19.925 |        21,927 |           21 |           0 |           41 |        22,727 |                    |
+| 4    | 4          | cow-10k        | connect       |           19 |       14.482 |        14,639 |           19 |           0 |           23 |        19,153 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/iceberg/orders-upsert-cow-clustered/2026-08-25T17-20-00Z.json`](results/iceberg/orders-upsert-cow-clustered/2026-08-25T17-20-00Z.json)
+
+
+## AWS — orders-upsert-cow — 2026-08-25
+
+**Scenario:** Can copy-on-write be made to keep up? The 2026-08-22 orders-upsert run
+measured COW at ~508 rec/s, but with two caveats discovered after the fact:
+ids arrived sequentially (i % key_space = contiguous runs, COW's BEST case
+for file overlap) and the arm processed fewer rows (~460k) than the 12M key
+space, so no key ever recurred in-window — meaning ZERO actual rewrites
+happened and 508 rec/s is the pure upsert-path overhead floor (batch
+materialisation + overwrite planning + serialized commits), not a rewrite
+measurement.
+
+This run fixes both: a 250k key space guarantees recurrence within the
+window even at ~500 rec/s (450k rows = 1.8 cycles), and `key_order:
+scattered` walks the key space by a coprime stride so every batch's keys
+spray across all data files — the realistic CDC worst case. Four arms at a
+fixed 4-vCPU pin, all keyed arms at the lint-mandated max_in_flight: 1,
+batch 50k / 10s unless stated:
+
+* mor-50k — merge-on-read at 50k batches: the batch-size lever for the mode
+  that already works (13.7k rec/s at 10k batches; rows-per-commit is the
+  only keyed lever, so expect roughly linear until write time dominates).
+* cow-10k — Friday's exact COW config, now with real rewrites: quantifies
+  how much the 508 floor drops once rewriting actually happens.
+* cow-50k — batch amortisation alone: does 5x rows-per-commit survive the
+  5x-more-files-touched cost it also causes?
+* cow-50k-bucket16 — adds bucket(16, id) partitioning via
+  schema_evolution.partition_spec. Open question, not a foregone
+  conclusion: 50k scattered keys touch all 16 buckets every batch, so any
+  win comes from smaller per-partition files and partition-scoped planning,
+  not from untouched partitions.
+
+skip_connect_table_precreate is REQUIRED here: partition_spec only applies
+when the OUTPUT creates the table, and the default reset pre-creates an
+unpartitioned table via iceberg-tablegen (the bucket arm would silently
+bench unpartitioned). Connect auto-creates fine (it sets table_location);
+the sidecar tolerates the table appearing mid-window.
+
+METRICS: the sidecar reports written_records / written_files_size_bytes
+(sum of snapshot added-records / added-files-size), which count write work
+and never saturate — the headline rates are honest for every arm,
+including copy-on-write past the first key-space lap. The 2026-08-24 run
+predates these counters and only measured the insert-dominated first lap
+for the COW arms.
+
+**Git SHA:** [`e367f7a1f`](https://github.com/redpanda-data/connect/commit/e367f7a1f6c8c907c6ee5d54f080cf207aa7f573)
+
+**Infra:** Runner `c8g.4xlarge`; source `` (0 GB) in `us-east-2`.
+
+**Dataset:** 48,000,000 rows × 1200 B = ~53 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 4          | mor-50k        | connect       |           46 |       40.836 |        35,086 |           46 |          15 |           51 |        39,258 |                    |
+| 4    | 4          | cow-10k        | connect       |           19 |       14.986 |        15,094 |           19 |           0 |           23 |        19,612 |                    |
+| 4    | 4          | cow-50k        | connect       |           21 |       19.321 |        21,257 |           21 |           0 |           36 |        22,727 |                    |
+| 4    | 4          | cow-50k-bucket16 | connect       |            0 |        0.000 |             0 |            0 |           0 |            0 |             0 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/iceberg/orders-upsert-cow/2026-08-25T18-29-25Z.json`](results/iceberg/orders-upsert-cow/2026-08-25T18-29-25Z.json)

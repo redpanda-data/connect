@@ -124,4 +124,9 @@ matrix:
           iceberg:
             merge_strategy: copy-on-write
             schema_evolution:
-              partition_spec: '"(bucket(16, id))"'
+              # Interpolated-string semantics: the value IS the spec — do not
+              # wrap it in bloblang quotes. The quoted form '"(...)"' makes the
+              # quotes part of the spec, which fails parsing on EVERY write and
+              # benches as a 100%-CPU retry loop with zero commits (the
+              # 2026-08-24/25 'pathological' bucket arms, 2,753 errors/window).
+              partition_spec: (bucket(16, id))

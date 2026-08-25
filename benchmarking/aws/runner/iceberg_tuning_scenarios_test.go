@@ -175,7 +175,8 @@ func TestUpsertCowScenario_ArmsRenderStrategyAndPartitionSpec(t *testing.T) {
 	bucket := icebergOutputOf(t, renderArm(t, path, "cow-50k-bucket16"))
 	se, ok := bucket["schema_evolution"].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, `"(bucket(16, id))"`, se["partition_spec"])
+	require.Equal(t, "(bucket(16, id))", se["partition_spec"],
+		"interpolated-string semantics: bloblang-style quoting becomes part of the spec and fails every write")
 	require.Equal(t, true, se["enabled"], "bench-managed fields must still be decorated")
 	require.Contains(t, se, "table_location")
 
