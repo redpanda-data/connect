@@ -1989,3 +1989,79 @@ mongodb_cdc:
 	assert.Equal(t, "age", schemas[1].Children[1].Name)
 	assert.Equal(t, "name", schemas[1].Children[2].Name)
 }
+
+// TestIntegrationMongoCDCNackedStreamBatchDropsByContract locks in the
+// streaming nack semantics: with auto_replay_nacks: false a rejected batch is
+// dropped by documented contract, so its checkpoint slot must resolve - the
+// input keeps reading past checkpoint_limit instead of wedging on a pinned
+// slot - and the committed resume token must advance past the dropped events
+// so a restart does not replay them.
+func TestIntegrationMongoCDCNackedStreamBatchDropsByContract(t *testing.T) {
+	stream, db, output := setup(t, `
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  stream_snapshot: false
+  checkpoint_cache: '$CACHE'
+  checkpoint_interval: 0s
+  checkpoint_limit: 2
+  auto_replay_nacks: false
+  collections:
+    - 'foo'
+`)
+	db.CreateCollection(t, "foo")
+
+	wait := stream.RunAsync(t)
+	time.Sleep(time.Second)
+
+	// Sentinel proves the stream is live.
+	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "keep-1"})
+	require.Eventually(t, func() bool {
+		msgs, err := output.messages()
+		return err == nil && len(msgs) == 1
+	}, 10*time.Second, 10*time.Millisecond, "sentinel was never streamed")
+
+	// Reject everything and push well past checkpoint_limit: with the old
+	// pin-on-nack behavior the first rejected slot wedged cp.Track after
+	// checkpoint_limit more events and nothing could ever be delivered again.
+	output.NackAll()
+	for i := 2; i <= 7; i++ {
+		db.InsertOne(t, "foo", bson.M{"_id": i, "data": "dropped"})
+	}
+	// Let every rejected delivery settle before accepting again, so none of
+	// the dropped documents race into the accepted window.
+	time.Sleep(3 * time.Second)
+
+	output.AckAll()
+	db.InsertOne(t, "foo", bson.M{"_id": 8, "data": "keep-8"})
+	require.Eventually(t, func() bool {
+		msgs, err := output.messages()
+		return err == nil && len(msgs) == 2
+	}, 10*time.Second, 10*time.Millisecond, "the input wedged: an event after the nacked batches was never delivered, so a rejected slot pinned the tracker past checkpoint_limit")
+
+	stream.StopWithin(t, 5*time.Second)
+	wait()
+
+	// Restart: the committed resume token must be past the dropped events, so
+	// only new activity is delivered - never a replay of documents 2..7.
+	wait = stream.RunAsync(t)
+	time.Sleep(time.Second)
+	db.InsertOne(t, "foo", bson.M{"_id": 9, "data": "keep-9"})
+	require.Eventually(t, func() bool {
+		msgs, err := output.messages()
+		return err == nil && len(msgs) == 3
+	}, 10*time.Second, 10*time.Millisecond, "the post-restart event was never delivered")
+	stream.StopWithin(t, 5*time.Second)
+	wait()
+
+	var data []string
+	for _, m := range output.Messages(t) {
+		doc, ok := m.(map[string]any)
+		require.True(t, ok)
+		val, ok := doc["data"].(string)
+		require.True(t, ok, "unexpected data field shape: %v", doc)
+		data = append(data, val)
+	}
+	require.ElementsMatch(t, []string{"keep-1", "keep-8", "keep-9"}, data,
+		"exactly the accepted documents may be delivered: the rejected ones are dropped by the auto_replay_nacks contract and must not replay after restart")
+}
