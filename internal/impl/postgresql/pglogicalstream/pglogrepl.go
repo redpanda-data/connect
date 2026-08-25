@@ -403,6 +403,24 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 // GetPublicationTables returns a list of tables currently in the publication
 // Arguments, in order: list of the tables, exist for all tables, error.
 func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
+	pubQuery, err := sanitize.SQLQuery(`
+		SELECT puballtables
+		FROM pg_publication
+		WHERE pubname = $1;
+	`, publicationName)
+	if err != nil {
+		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+	}
+
+	pubRows, err := conn.Exec(ctx, pubQuery).ReadAll()
+	if err != nil {
+		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+	}
+	if len(pubRows) == 0 || len(pubRows[0].Rows) == 0 {
+		return nil, false, fmt.Errorf("publication %q does not exist", publicationName)
+	}
+	forAllTables := string(pubRows[0].Rows[0][0]) == "t"
+
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
 		c.relname AS table_name,
@@ -427,7 +445,7 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 	}
 
 	if len(rows) == 0 || len(rows[0].Rows) == 0 {
-		return nil, true, nil // Publication exists and is for all tables
+		return nil, forAllTables, nil
 	}
 
 	tables := make([]TableFQN, 0, len(rows))
@@ -439,7 +457,7 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		tables = append(tables, TableFQN{Table: table, Schema: schema})
 	}
 
-	return tables, false, nil
+	return tables, forAllTables, nil
 }
 
 // StartReplicationOptions are the options for the START_REPLICATION command.
