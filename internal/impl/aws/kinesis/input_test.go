@@ -16,9 +16,13 @@ package kinesis
 
 import (
 	"testing"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestStreamIDParser(t *testing.T) {
@@ -76,4 +80,149 @@ func TestStreamIDParser(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestKinesisInputPollPeriodConfig(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+poll_period: 250ms
+`, nil)
+	require.NoError(t, err)
+
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.Equal(t, 250*time.Millisecond, conf.PollPeriod)
+}
+
+func TestKinesisInputPollPeriodDefault(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+`, nil)
+	require.NoError(t, err)
+
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.Equal(t, time.Duration(0), conf.PollPeriod)
+}
+
+func TestKinesisInputPollPeriodExceedsLeasePeriodFails(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+poll_period: 60s
+lease_period: 30s
+`, nil)
+	require.NoError(t, err)
+
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	require.NoError(t, err)
+
+	_, err = newKinesisReaderFromConfig(conf, service.BatchPolicy{}, aws.Config{}, aws.Config{}, service.MockResources())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "lease_period")
+}
+
+func TestKinesisInputPollPeriodBetweenCommitAndLeasePeriodSucceeds(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+poll_period: 10s
+commit_period: 5s
+lease_period: 30s
+`, nil)
+	require.NoError(t, err)
+
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	require.NoError(t, err)
+
+	_, err = newKinesisReaderFromConfig(conf, service.BatchPolicy{}, aws.Config{}, aws.Config{}, service.MockResources())
+	require.NoError(t, err)
+}
+
+func TestKinesisInputEFOConfig(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+enhanced_fan_out:
+  enabled: true
+  consumer_name: my-app
+`, nil)
+	require.NoError(t, err)
+
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.True(t, conf.EFOEnabled)
+	assert.Equal(t, "my-app", conf.EFOConsumerName)
+}
+
+func TestKinesisInputEFODisabledByDefault(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+`, nil)
+	require.NoError(t, err)
+
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.False(t, conf.EFOEnabled)
+}
+
+func TestKinesisInputEFOConsumerNameLintRule(t *testing.T) {
+	tests := []struct {
+		name        string
+		conf        string
+		lintPresent bool
+	}{
+		{
+			name: "efo disabled",
+			conf: `
+aws_kinesis:
+  streams: [ foo ]
+`,
+		},
+		{
+			name: "efo enabled with consumer name",
+			conf: `
+aws_kinesis:
+  streams: [ foo ]
+  enhanced_fan_out:
+    enabled: true
+    consumer_name: my-app
+`,
+		},
+		{
+			name: "efo enabled without consumer name",
+			conf: `
+aws_kinesis:
+  streams: [ foo ]
+  enhanced_fan_out:
+    enabled: true
+`,
+			lintPresent: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			linter := service.NewEnvironment().NewComponentConfigLinter()
+
+			lints, err := linter.LintInputYAML([]byte(test.conf))
+			require.NoError(t, err)
+			if test.lintPresent {
+				require.Len(t, lints, 1)
+				assert.Contains(t, lints[0].Error(), "consumer_name is required when enabled is true")
+			} else {
+				assert.Empty(t, lints)
+			}
+		})
+	}
+}
+
+func TestKinesisInputEFORequiresConsumerName(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+enhanced_fan_out:
+  enabled: true
+`, nil)
+	require.NoError(t, err)
+
+	_, err = kinesisInputConfigFromParsed(pConf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "consumer_name")
 }

@@ -51,7 +51,13 @@ const (
 	kiFieldLeasePeriod      = "lease_period"
 	kiFieldRebalancePeriod  = "rebalance_period"
 	kiFieldStartFromOldest  = "start_from_oldest"
+	kiFieldPollPeriod       = "poll_period"
+	kiFieldEnhancedFanOut   = "enhanced_fan_out"
 	kiFieldBatching         = "batching"
+
+	// Kinesis Enhanced Fan-Out Fields
+	kiefoFieldEnabled      = "enabled"
+	kiefoFieldConsumerName = "consumer_name"
 
 	// Kinesis metrics
 	metricShardsPerClient = "kinesis_client_shards"
@@ -67,6 +73,9 @@ type kiConfig struct {
 	LeasePeriod      string
 	RebalancePeriod  string
 	StartFromOldest  bool
+	PollPeriod       time.Duration
+	EFOEnabled       bool
+	EFOConsumerName  string
 }
 
 func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, err error) {
@@ -96,6 +105,22 @@ func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, e
 	if conf.StartFromOldest, err = pConf.FieldBool(kiFieldStartFromOldest); err != nil {
 		return
 	}
+	if conf.PollPeriod, err = pConf.FieldDuration(kiFieldPollPeriod); err != nil {
+		return
+	}
+	{
+		efoConf := pConf.Namespace(kiFieldEnhancedFanOut)
+		if conf.EFOEnabled, err = efoConf.FieldBool(kiefoFieldEnabled); err != nil {
+			return
+		}
+		if conf.EFOConsumerName, err = efoConf.FieldString(kiefoFieldConsumerName); err != nil {
+			return
+		}
+		if conf.EFOEnabled && conf.EFOConsumerName == "" {
+			err = fmt.Errorf("%v.%v is required when %v.%v is true", kiFieldEnhancedFanOut, kiefoFieldConsumerName, kiFieldEnhancedFanOut, kiefoFieldEnabled)
+			return
+		}
+	}
 	return
 }
 
@@ -113,6 +138,13 @@ Redpanda Connect will not store a consumed sequence unless it is acknowledged at
 == Ordering
 
 By default messages of a shard can be processed in parallel, up to a limit determined by the field `+"`checkpoint_limit`"+`. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
+
+== Enhanced fan-out
+
+Kinesis enforces a shared limit of 5 GetRecords calls per second per shard across all polling consumers of a stream. When multiple applications consume the same stream this budget is quickly exhausted and consumers receive ReadProvisionedThroughputExceeded errors. There are two remedies:
+
+- Set the `+"`poll_period`"+` field to bound how frequently this input polls each shard, leaving headroom for other consumers.
+- Enable `+"`enhanced_fan_out`"+`, which registers this pipeline as a dedicated stream consumer with its own 2MB/s per shard read throughput, delivered over HTTP/2 push rather than polling. Enhanced fan-out requires the IAM permissions `+"`kinesis:DescribeStreamConsumer`, `kinesis:RegisterStreamConsumer` and `kinesis:SubscribeToShard`"+`, and incurs additional AWS charges per consumer-shard-hour plus data retrieval. The named consumer is registered automatically on first use and is never deregistered.
 
 == Table schema
 
@@ -158,6 +190,26 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			Description("The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			ShortDescription("Maximum gap between the in-flight sequence and the latest acknowledged sequence.").
 			Default(1024),
+		service.NewDurationField(kiFieldPollPeriod).
+			Description("An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so setting this to e.g. `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. Values above `commit_period` delay checkpointing and shard-lease renewal, and values above `lease_period` are rejected.").
+			ShortDescription("Minimum period between record polls of a shard, for staying under the shared Kinesis read limit.").
+			Default("0s").
+			Version("4.107.0").
+			Advanced(),
+		service.NewObjectField(kiFieldEnhancedFanOut,
+			service.NewBoolField(kiefoFieldEnabled).
+				Description("Whether to consume the stream using enhanced fan-out.").
+				Default(false),
+			service.NewStringField(kiefoFieldConsumerName).
+				Description("The name of the enhanced fan-out consumer to register. Required when `enabled` is true. Each distinct pipeline (application) consuming a stream must use its own consumer name, as Kinesis permits only one active subscription per consumer per shard. Instances of the same pipeline sharing a DynamoDB checkpoint table should share this name.").
+				ShortDescription("The name of the enhanced fan-out consumer to register, unique per distinct pipeline.").
+				Default(""),
+		).
+			Description("Consume the stream using https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html[enhanced fan-out^], which provides this consumer dedicated read throughput of 2MB/s per shard via HTTP/2 push delivery, avoiding the 5 reads per second per shard limit that polling consumers share. The named consumer is registered on each stream automatically if it does not already exist (and is never deregistered). Requires the IAM permissions `kinesis:DescribeStreamConsumer`, `kinesis:RegisterStreamConsumer` and `kinesis:SubscribeToShard`. Note that AWS bills enhanced fan-out consumers per consumer-shard-hour plus data retrieval.").
+			ShortDescription("Consume the stream using enhanced fan-out for dedicated read throughput.").
+			Version("4.107.0").
+			Advanced().
+			LintRule(`root = if this.enabled && this.consumer_name == "" { [ "consumer_name is required when enabled is true" ] }`),
 		service.NewAutoRetryNacksToggleField(),
 		service.NewDurationField(kiFieldCommitPeriod).
 			Description("The period of time between each update to the checkpoint table.").
@@ -207,6 +259,7 @@ type streamInfo struct {
 	explicitShards []string
 	id             string // Either a name or arn, extracted from config and used for balancing shards
 	arn            string
+	consumerARN    string // Enhanced fan-out consumer ARN, set when EFO is enabled
 }
 
 type kinesisReader struct {
@@ -230,6 +283,7 @@ type kinesisReader struct {
 	stealGracePeriod time.Duration
 	leasePeriod      time.Duration
 	rebalancePeriod  time.Duration
+	pollPeriod       time.Duration
 
 	cMut    sync.Mutex
 	msgChan chan asyncMessage
@@ -373,6 +427,13 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	if k.rebalancePeriod, err = time.ParseDuration(k.conf.RebalancePeriod); err != nil {
 		return nil, fmt.Errorf("parsing rebalance period string: %v", err)
 	}
+	k.pollPeriod = conf.PollPeriod
+	if k.pollPeriod > k.leasePeriod {
+		return nil, fmt.Errorf("%v (%v) must not exceed %v (%v)", kiFieldPollPeriod, k.pollPeriod, kiFieldLeasePeriod, k.leasePeriod)
+	}
+	if k.pollPeriod > k.commitPeriod {
+		mgr.Logger().Warnf("%v (%v) exceeds %v (%v); this will delay checkpoint updates and shard-lease renewal", kiFieldPollPeriod, k.pollPeriod, kiFieldCommitPeriod, k.commitPeriod)
+	}
 
 	// Initialize metrics
 	k.clientShardsMetric = mgr.Metrics().NewGauge(metricShardsPerClient)
@@ -388,76 +449,6 @@ const (
 	// https://docs.aws.amazon.com/sdk-for-go/api/service/kinesis/#Kinesis.GetRecords
 	ErrCodeKMSThrottlingException = "KMSThrottlingException"
 )
-
-func (k *kinesisReader) getIter(info streamInfo, shardID, sequence string) (string, error) {
-	iterType := types.ShardIteratorTypeTrimHorizon
-	if !k.conf.StartFromOldest {
-		iterType = types.ShardIteratorTypeLatest
-	}
-	var startingSequence *string
-	if sequence != "" {
-		iterType = types.ShardIteratorTypeAfterSequenceNumber
-		startingSequence = &sequence
-	}
-
-	res, err := k.svc.GetShardIterator(k.ctx, &kinesis.GetShardIteratorInput{
-		StreamARN:              &info.arn,
-		ShardId:                &shardID,
-		StartingSequenceNumber: startingSequence,
-		ShardIteratorType:      iterType,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	var iter string
-	if res.ShardIterator != nil {
-		iter = *res.ShardIterator
-	}
-	if iter == "" {
-		// If we failed to obtain from a sequence we start from beginning
-		iterType = types.ShardIteratorTypeTrimHorizon
-
-		res, err := k.svc.GetShardIterator(k.ctx, &kinesis.GetShardIteratorInput{
-			StreamARN:         &info.arn,
-			ShardId:           &shardID,
-			ShardIteratorType: iterType,
-		})
-		if err != nil {
-			return "", err
-		}
-
-		if res.ShardIterator != nil {
-			iter = *res.ShardIterator
-		}
-	}
-	if iter == "" {
-		return "", errors.New("obtaining shard iterator")
-	}
-	return iter, nil
-}
-
-// IMPORTANT TO NOTE: The returned shard iterator (second return parameter) will
-// always be the input iterator when the error parameter is nil, therefore
-// replacing the current iterator with this return param should always be safe.
-//
-// Do NOT modify this method without preserving this behaviour.
-func (k *kinesisReader) getRecords(info streamInfo, shardIter string) ([]types.Record, string, error) {
-	res, err := k.svc.GetRecords(k.ctx, &kinesis.GetRecordsInput{
-		StreamARN:     &info.arn,
-		Limit:         &awsKinesisDefaultLimit,
-		ShardIterator: &shardIter,
-	})
-	if err != nil {
-		return nil, shardIter, err
-	}
-
-	nextIter := ""
-	if res.NextShardIterator != nil {
-		nextIter = *res.NextShardIterator
-	}
-	return res.Records, nextIter, nil
-}
 
 func awsErrIsTimeout(err error) bool {
 	return errors.Is(err, context.Canceled) ||
@@ -496,8 +487,8 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 
 	// Stores consumed records that have yet to be added to the batcher.
 	var pending []types.Record
-	var iter string
-	if iter, initErr = k.getIter(info, shardID, startingSequence); initErr != nil {
+	var source shardRecordSource
+	if source, initErr = k.newShardRecordSource(info, shardID, startingSequence, recordBatcher.GetSequence); initErr != nil {
 		return initErr
 	}
 
@@ -527,6 +518,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 		defer func() {
 			commitCtxClose()
 			recordBatcher.Close(context.Background(), state == awsKinesisConsumerFinished)
+			source.Close()
 			boff.Reset()
 			k.boffPool.Put(boff)
 
@@ -566,36 +558,33 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 
 		for {
 			var err error
-			if state == awsKinesisConsumerConsuming && len(pending) == 0 && nextPullChan == unblockedChan {
-				if pending, iter, err = k.getRecords(info, iter); err != nil {
+			if state == awsKinesisConsumerConsuming && len(pending) == 0 && nextPullChan == unblockedChan && pendingMsg.msg == nil {
+				var done bool
+				if pending, done, err = source.Fetch(k.ctx); err != nil {
 					if !awsErrIsTimeout(err) {
 						nextPullChan = time.After(boff.NextBackOff())
-
-						var aerr *types.ExpiredIteratorException
-						if errors.As(err, &aerr) {
-							k.log.Warn("Shard iterator expired, attempting to refresh")
-							newIter, err := k.getIter(info, shardID, recordBatcher.GetSequence())
-							if err != nil {
-								k.log.Errorf("Failed to refresh shard iterator: %v", err)
-							} else {
-								iter = newIter
-							}
-						} else {
-							k.log.Errorf("Failed to pull Kinesis records: %v\n", err)
-						}
+						k.log.Errorf("Failed to pull Kinesis records: %v\n", err)
 					}
 				} else if len(pending) == 0 {
-					nextPullChan = time.After(boff.NextBackOff())
+					// A blocking source waits for data internally, so an empty
+					// result must be retried immediately rather than backed off.
+					if !source.Blocking() {
+						nextPullChan = time.After(boff.NextBackOff())
+					}
 				} else {
 					boff.Reset()
 					nextPullChan = blockedChan
 				}
-				// The getRecords method ensures that it returns the input
-				// iterator whenever it errors out. Therefore, regardless of the
-				// outcome of the call if iter is now empty we have definitely
-				// reached the end of the shard.
-				if iter == "" {
+				if done {
 					state = awsKinesisConsumerFinished
+				}
+			} else if pendingMsg.msg != nil {
+				// Park pulls while a message awaits delivery so that a
+				// blocking Fetch cannot delay its flush, and so the
+				// always-ready unblocked channel cannot outcompete the
+				// flush case in the select below.
+				if nextPullChan == unblockedChan {
+					nextPullChan = blockedChan
 				}
 			} else {
 				unblockPullChan()
@@ -682,6 +671,21 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 		}
 	}()
 	return nil
+}
+
+// newShardRecordSource creates the record source for a single claimed shard.
+func (k *kinesisReader) newShardRecordSource(info streamInfo, shardID, startingSequence string, sequenceFn func() string) (shardRecordSource, error) {
+	// Bound how long a single Fetch may wait internally, whether that's the
+	// enhanced fan-out push wait or the poll_period gate, so the consumer loop
+	// keeps servicing its commit timer well within each commit period.
+	fetchTimeout := time.Second
+	if half := k.commitPeriod / 2; half < fetchTimeout {
+		fetchTimeout = half
+	}
+	if k.conf.EFOEnabled {
+		return newEFORecordSource(k.ctx, kinesisEFOSubscribeFn(k.svc, info.consumerARN, shardID), shardID, startingSequence, k.conf.StartFromOldest, fetchTimeout, k.log)
+	}
+	return newPollingRecordSource(k.ctx, k.svc, info.arn, shardID, startingSequence, k.conf.StartFromOldest, k.pollPeriod, fetchTimeout, sequenceFn, k.log)
 }
 
 //------------------------------------------------------------------------------
@@ -947,11 +951,49 @@ func (k *kinesisReader) Connect(ctx context.Context) error {
 
 	k.svc = svc
 	k.checkpointer = checkpointer
-	k.msgChan = make(chan asyncMessage)
 
 	if err = k.waitUntilStreamsExists(ctx); err != nil {
 		return err
 	}
+
+	if k.conf.EFOEnabled {
+		// Registering a consumer involves waiting for it to become ACTIVE, so
+		// resolve every stream concurrently rather than serialising a minute
+		// long wait per stream.
+		results := make(chan error, len(k.streams))
+		for _, s := range k.streams {
+			go func(info *streamInfo) {
+				// A previous Connect attempt may already have resolved this
+				// stream, in which case there is nothing left to do.
+				if info.consumerARN != "" {
+					results <- nil
+					return
+				}
+				arn, err := ensureEFOConsumer(ctx, svc, info.arn, k.conf.EFOConsumerName, k.log)
+				if err == nil {
+					info.consumerARN = arn
+				}
+				results <- err
+			}(s)
+		}
+
+		// Every goroutine is drained before returning so that no writer to
+		// info.consumerARN outlives this call and races a retried Connect.
+		var efoErr error
+		for range k.streams {
+			if err := <-results; err != nil && efoErr == nil {
+				efoErr = err
+			}
+		}
+		if efoErr != nil {
+			return efoErr
+		}
+	}
+
+	// Only mark the connection as established once every fallible step above
+	// has succeeded; otherwise a retried Connect would see a non-nil msgChan
+	// and return early without ever starting the shard runners.
+	k.msgChan = make(chan asyncMessage)
 
 	if len(k.streams[0].explicitShards) > 0 {
 		go k.runExplicitShards()
