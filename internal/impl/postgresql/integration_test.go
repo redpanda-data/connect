@@ -2600,6 +2600,7 @@ tables:
 
 	input, err := newPgStreamInput(conf, mgr)
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, input.Close(context.Background())) })
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
