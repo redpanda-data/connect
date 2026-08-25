@@ -32,8 +32,9 @@ import (
 
 // Overridable in tests.
 var (
-	efoConsumerActiveTimeout = time.Minute
-	efoConsumerPollInterval  = time.Second
+	// efoConsumerPollInterval is the internal poll cadence used while waiting
+	// for a registered consumer to become active.
+	efoConsumerPollInterval = time.Second
 	// efoResubscribeFloor is the minimum spacing enforced between successive
 	// SubscribeToShard calls for a given shard/consumer, matching the API's
 	// one-call-per-second limit. It also seeds the resubscribe backoff's
@@ -52,8 +53,8 @@ type efoConsumerAPI interface {
 // the given stream, registering it if it does not exist and waiting for it to
 // become ACTIVE. The consumer is intentionally never deregistered: multiple
 // instances of the same pipeline share it as a single logical application.
-func ensureEFOConsumer(ctx context.Context, api efoConsumerAPI, streamARN, name string, log *service.Logger) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, efoConsumerActiveTimeout)
+func ensureEFOConsumer(ctx context.Context, api efoConsumerAPI, streamARN, name string, activationTimeout time.Duration, log *service.Logger) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, activationTimeout)
 	defer cancel()
 
 	registered := false

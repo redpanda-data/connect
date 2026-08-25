@@ -46,10 +46,10 @@ func (m *mockConsumerAPI) RegisterStreamConsumer(ctx context.Context, in *kinesi
 
 func fastEFOWaits(t *testing.T) {
 	t.Helper()
-	oldTimeout, oldInterval := efoConsumerActiveTimeout, efoConsumerPollInterval
-	efoConsumerActiveTimeout, efoConsumerPollInterval = time.Second, time.Millisecond
+	oldInterval := efoConsumerPollInterval
+	efoConsumerPollInterval = time.Millisecond
 	t.Cleanup(func() {
-		efoConsumerActiveTimeout, efoConsumerPollInterval = oldTimeout, oldInterval
+		efoConsumerPollInterval = oldInterval
 	})
 }
 
@@ -72,7 +72,7 @@ func TestEnsureEFOConsumerExistingActive(t *testing.T) {
 		},
 	}
 
-	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", service.MockResources().Logger())
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	assert.Equal(t, "consumer-arn", arn)
 }
@@ -104,7 +104,7 @@ func TestEnsureEFOConsumerRegistersMissing(t *testing.T) {
 		},
 	}
 
-	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", service.MockResources().Logger())
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	assert.Equal(t, "new-arn", arn)
 	assert.True(t, registered)
@@ -129,7 +129,7 @@ func TestEnsureEFOConsumerWaitsForCreating(t *testing.T) {
 		},
 	}
 
-	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", service.MockResources().Logger())
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	assert.Equal(t, "consumer-arn", arn)
 	assert.GreaterOrEqual(t, describes, 3)
@@ -143,7 +143,7 @@ func TestEnsureEFOConsumerPermissionError(t *testing.T) {
 		},
 	}
 
-	_, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", service.MockResources().Logger())
+	_, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "kinesis:DescribeStreamConsumer")
 }
@@ -170,7 +170,7 @@ func TestEnsureEFOConsumerConcurrentRegistration(t *testing.T) {
 		},
 	}
 
-	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", service.MockResources().Logger())
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	assert.Equal(t, "consumer-arn", arn)
 }
@@ -188,7 +188,7 @@ func TestEnsureEFOConsumerDeletingFails(t *testing.T) {
 		},
 	}
 
-	_, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", service.MockResources().Logger())
+	_, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "deleted")
 }
@@ -215,7 +215,7 @@ func TestEnsureEFOConsumerNilDescription(t *testing.T) {
 		},
 	}
 
-	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", service.MockResources().Logger())
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	assert.Equal(t, "consumer-arn", arn)
 	assert.GreaterOrEqual(t, attempts, 2)
@@ -234,7 +234,7 @@ func TestEnsureEFOConsumerActiveWithNilARN(t *testing.T) {
 		},
 	}
 
-	_, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", service.MockResources().Logger())
+	_, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "nil ARN")
 }

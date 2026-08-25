@@ -56,8 +56,9 @@ const (
 	kiFieldBatching         = "batching"
 
 	// Kinesis Enhanced Fan-Out Fields
-	kiefoFieldEnabled      = "enabled"
-	kiefoFieldConsumerName = "consumer_name"
+	kiefoFieldEnabled           = "enabled"
+	kiefoFieldConsumerName      = "consumer_name"
+	kiefoFieldActivationTimeout = "consumer_activation_timeout"
 
 	// Kinesis metrics
 	metricShardsPerClient = "kinesis_client_shards"
@@ -65,17 +66,18 @@ const (
 )
 
 type kiConfig struct {
-	Streams          []string
-	DynamoDB         kiddbConfig
-	CheckpointLimit  int
-	CommitPeriod     string
-	StealGracePeriod string
-	LeasePeriod      string
-	RebalancePeriod  string
-	StartFromOldest  bool
-	PollPeriod       time.Duration
-	EFOEnabled       bool
-	EFOConsumerName  string
+	Streams              []string
+	DynamoDB             kiddbConfig
+	CheckpointLimit      int
+	CommitPeriod         string
+	StealGracePeriod     string
+	LeasePeriod          string
+	RebalancePeriod      string
+	StartFromOldest      bool
+	PollPeriod           time.Duration
+	EFOEnabled           bool
+	EFOConsumerName      string
+	EFOActivationTimeout time.Duration
 }
 
 func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, err error) {
@@ -118,6 +120,13 @@ func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, e
 		}
 		if conf.EFOEnabled && conf.EFOConsumerName == "" {
 			err = fmt.Errorf("%v.%v is required when %v.%v is true", kiFieldEnhancedFanOut, kiefoFieldConsumerName, kiFieldEnhancedFanOut, kiefoFieldEnabled)
+			return
+		}
+		if conf.EFOActivationTimeout, err = efoConf.FieldDuration(kiefoFieldActivationTimeout); err != nil {
+			return
+		}
+		if conf.EFOEnabled && conf.EFOActivationTimeout <= 0 {
+			err = fmt.Errorf("%v.%v must be greater than zero", kiFieldEnhancedFanOut, kiefoFieldActivationTimeout)
 			return
 		}
 	}
@@ -204,6 +213,10 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 				Description("The name of the enhanced fan-out consumer to register. Required when `enabled` is true. Each distinct pipeline (application) consuming a stream must use its own consumer name, as Kinesis permits only one active subscription per consumer per shard. Instances of the same pipeline sharing a DynamoDB checkpoint table should share this name.").
 				ShortDescription("The name of the enhanced fan-out consumer to register, unique per distinct pipeline.").
 				Default(""),
+			service.NewDurationField(kiefoFieldActivationTimeout).
+				Description("The maximum amount of time to wait on connect for the registered consumer to become active before failing. Newly registered consumers on streams with many shards can take tens of seconds to activate.").
+				Default("1m").
+				Advanced(),
 		).
 			Description("Consume the stream using https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html[enhanced fan-out^], which provides this consumer dedicated read throughput of 2MB/s per shard via HTTP/2 push delivery, avoiding the 5 reads per second per shard limit that polling consumers share. The named consumer is registered on each stream automatically if it does not already exist (and is never deregistered). Requires the IAM permissions `kinesis:DescribeStreamConsumer`, `kinesis:RegisterStreamConsumer` and `kinesis:SubscribeToShard`. Note that AWS bills enhanced fan-out consumers per consumer-shard-hour plus data retrieval.").
 			ShortDescription("Consume the stream using enhanced fan-out for dedicated read throughput.").
@@ -284,6 +297,7 @@ type kinesisReader struct {
 	leasePeriod      time.Duration
 	rebalancePeriod  time.Duration
 	pollPeriod       time.Duration
+	batchPeriod      time.Duration
 
 	cMut    sync.Mutex
 	msgChan chan asyncMessage
@@ -427,6 +441,15 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	if k.rebalancePeriod, err = time.ParseDuration(k.conf.RebalancePeriod); err != nil {
 		return nil, fmt.Errorf("parsing rebalance period string: %v", err)
 	}
+	// batcher.Period is an optional Go-duration string on service.BatchPolicy;
+	// an empty string means no timed flush is configured. A value that fails
+	// to parse is left at zero here: the batcher's own construction parses the
+	// same string and surfaces the error, and this field only feeds the
+	// fetch-wait bound below, so a conservative zero is harmless.
+	if batcher.Period != "" {
+		k.batchPeriod, _ = time.ParseDuration(batcher.Period)
+	}
+
 	k.pollPeriod = conf.PollPeriod
 	if k.pollPeriod > k.leasePeriod {
 		return nil, fmt.Errorf("%v (%v) must not exceed %v (%v)", kiFieldPollPeriod, k.pollPeriod, kiFieldLeasePeriod, k.leasePeriod)
@@ -673,15 +696,33 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 	return nil
 }
 
+// shardFetchWaitBound bounds how long a shard record source may internally
+// block per Fetch so that the consumer loop keeps servicing its commit timer
+// and timed batch flushes.
+func shardFetchWaitBound(commitPeriod, batchPeriod time.Duration) time.Duration {
+	bound := time.Second
+	if half := commitPeriod / 2; half < bound {
+		bound = half
+	}
+	if batchPeriod > 0 {
+		if half := batchPeriod / 2; half < bound {
+			bound = half
+		}
+	}
+	const minBound = 5 * time.Millisecond
+	if bound < minBound {
+		bound = minBound
+	}
+	return bound
+}
+
 // newShardRecordSource creates the record source for a single claimed shard.
 func (k *kinesisReader) newShardRecordSource(info streamInfo, shardID, startingSequence string, sequenceFn func() string) (shardRecordSource, error) {
 	// Bound how long a single Fetch may wait internally, whether that's the
 	// enhanced fan-out push wait or the poll_period gate, so the consumer loop
-	// keeps servicing its commit timer well within each commit period.
-	fetchTimeout := time.Second
-	if half := k.commitPeriod / 2; half < fetchTimeout {
-		fetchTimeout = half
-	}
+	// keeps servicing its commit timer and timed batch flushes well within
+	// each period.
+	fetchTimeout := shardFetchWaitBound(k.commitPeriod, k.batchPeriod)
 	if k.conf.EFOEnabled {
 		return newEFORecordSource(k.ctx, kinesisEFOSubscribeFn(k.svc, info.consumerARN, shardID), shardID, startingSequence, k.conf.StartFromOldest, fetchTimeout, k.log)
 	}
@@ -969,7 +1010,7 @@ func (k *kinesisReader) Connect(ctx context.Context) error {
 					results <- nil
 					return
 				}
-				arn, err := ensureEFOConsumer(ctx, svc, info.arn, k.conf.EFOConsumerName, k.log)
+				arn, err := ensureEFOConsumer(ctx, svc, info.arn, k.conf.EFOConsumerName, k.conf.EFOActivationTimeout, k.log)
 				if err == nil {
 					info.consumerARN = arn
 				}

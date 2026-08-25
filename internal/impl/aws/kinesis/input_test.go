@@ -163,6 +163,50 @@ streams: [ foo ]
 	assert.False(t, conf.EFOEnabled)
 }
 
+func TestKinesisInputEFOActivationTimeoutDefault(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+enhanced_fan_out:
+  enabled: true
+  consumer_name: my-app
+`, nil)
+	require.NoError(t, err)
+
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.Equal(t, time.Minute, conf.EFOActivationTimeout)
+}
+
+func TestKinesisInputEFOActivationTimeoutCustom(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+enhanced_fan_out:
+  enabled: true
+  consumer_name: my-app
+  consumer_activation_timeout: 90s
+`, nil)
+	require.NoError(t, err)
+
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.Equal(t, 90*time.Second, conf.EFOActivationTimeout)
+}
+
+func TestKinesisInputEFOActivationTimeoutZeroFails(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+enhanced_fan_out:
+  enabled: true
+  consumer_name: my-app
+  consumer_activation_timeout: 0s
+`, nil)
+	require.NoError(t, err)
+
+	_, err = kinesisInputConfigFromParsed(pConf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "consumer_activation_timeout")
+}
+
 func TestKinesisInputEFOConsumerNameLintRule(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -225,4 +269,48 @@ enhanced_fan_out:
 	_, err = kinesisInputConfigFromParsed(pConf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "consumer_name")
+}
+
+func TestShardFetchWaitBound(t *testing.T) {
+	tests := []struct {
+		name         string
+		commitPeriod time.Duration
+		batchPeriod  time.Duration
+		want         time.Duration
+	}{
+		{
+			name:         "default commit period no batch period",
+			commitPeriod: 5 * time.Second,
+			want:         time.Second,
+		},
+		{
+			name:         "short commit period halves the bound",
+			commitPeriod: time.Second,
+			want:         500 * time.Millisecond,
+		},
+		{
+			name:         "batch period tightens the bound",
+			commitPeriod: 5 * time.Second,
+			batchPeriod:  100 * time.Millisecond,
+			want:         50 * time.Millisecond,
+		},
+		{
+			name:         "batch period below the floor is clamped",
+			commitPeriod: 5 * time.Second,
+			batchPeriod:  time.Millisecond,
+			want:         5 * time.Millisecond,
+		},
+		{
+			name:         "zero batch period is ignored",
+			commitPeriod: 5 * time.Second,
+			batchPeriod:  0,
+			want:         time.Second,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, shardFetchWaitBound(test.commitPeriod, test.batchPeriod))
+		})
+	}
 }

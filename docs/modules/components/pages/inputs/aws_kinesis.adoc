@@ -94,6 +94,7 @@ input:
     enhanced_fan_out:
       enabled: false
       consumer_name: ""
+      consumer_activation_timeout: 1m
     auto_replay_nacks: true
     commit_period: 5s
     steal_grace_period: 2s
@@ -420,6 +421,15 @@ The name of the enhanced fan-out consumer to register. Required when `enabled` i
 *Type*: `string`
 
 *Default*: `""`
+
+=== `enhanced_fan_out.consumer_activation_timeout`
+
+The maximum amount of time to wait on connect for the registered consumer to become active before failing. Newly registered consumers on streams with many shards can take tens of seconds to activate.
+
+
+*Type*: `string`
+
+*Default*: `"1m"`
 
 === `auto_replay_nacks`
 
