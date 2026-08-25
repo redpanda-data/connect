@@ -269,7 +269,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 			service.NewDurationField(dciFieldSnapshotThrottle).
 				Description("Minimum time between scan requests per segment. Use this to limit RCU consumption during snapshot.").
 				Default("100ms").
-				LintRule(`root = if this <= 0 { ["snapshot_throttle must be greater than 0"] }`).
+				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_throttle must be greater than 0"] }`).
 				Advanced(),
 			service.NewBoolField(dciFieldSnapshotDedupe).
 				Description("Deduplicate records that appear in both snapshot and CDC stream. Requires buffering CDC events during snapshot. If buffer is exceeded, deduplication is disabled to prevent data loss.").
