@@ -1038,3 +1038,51 @@ always grow total_records).
 
 
 Raw samples + Prometheus snapshots: [`results/iceberg/orders-upsert-cow/2026-08-24T19-14-32Z.json`](results/iceberg/orders-upsert-cow/2026-08-24T19-14-32Z.json)
+
+
+## AWS — orders-upsert-cow-clustered — 2026-08-25
+
+**Scenario:** The clustered-key counterpart to orders-upsert-cow: can copy-on-write
+sustain a real rate when keys arrive in contiguous runs instead of
+scattered? The 2026-08-24 scattered run measured COW decaying to ~500
+rec/s at any batch size because every batch's keys spray across all data
+files. With `key_order: sequential` (id = i % key_space, contiguous runs),
+a batch's keys cluster into few files, so each commit should rewrite only
+the files covering its id range — the one favourable regime the docs'
+merge-strategy guidance predicts, never measured end-to-end. If clustered
+COW holds a usable rate, it justifies a "Recipe D: clustered-key COW" in
+the tuning guide with an explicit arrival-order prerequisite; if it also
+decays to hundreds of rows/s, COW is batch-only regardless of layout.
+
+Arms at a fixed 4-vCPU pin, keyed arms at the lint-mandated
+max_in_flight: 1:
+
+* a0-mor-50k — in-session control; measured 33k rec/s on 2026-08-24
+  (scattered — arrival order should not matter for MOR, which is itself
+  worth confirming).
+* cow-50k — clustered arrival at the Recipe-C batch size. The Recipe D
+  candidate.
+* cow-10k — clustered arrival at the smaller batch, for the batch
+  dimension under clustering.
+
+Same metric caveat as orders-upsert-cow: Glue total_records is NET rows
+and saturates at ~key_space, so each arm's honest rate is its first-cycle
+series segment; read steady state from the per-interval series in the
+result JSON, not the summary line.
+
+**Git SHA:** [`b01cc8b17`](https://github.com/redpanda-data/connect/commit/b01cc8b179ad4f3f40a5040fdfafb3e214ddb23c)
+
+**Infra:** Runner `c8g.4xlarge`; source `` (0 GB) in `us-east-2`.
+
+**Dataset:** 48,000,000 rows × 1200 B = ~53 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 4          | a0-mor-50k     | connect       |           48 |       39.728 |        34,135 |           48 |           3 |           50 |        41,202 |                    |
+| 4    | 4          | cow-50k        | connect       |            0 |        0.440 |           445 |            0 |           0 |            3 |             0 |                    |
+| 4    | 4          | cow-10k        | connect       |            0 |        0.314 |           304 |            0 |           0 |            1 |            41 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/iceberg/orders-upsert-cow-clustered/2026-08-25T15-50-39Z.json`](results/iceberg/orders-upsert-cow-clustered/2026-08-25T15-50-39Z.json)
