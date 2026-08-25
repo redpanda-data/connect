@@ -10,6 +10,8 @@ package pgstream
 
 import (
 	"fmt"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,19 +19,9 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pgtest"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
-
-func parsePgStreamInput(t *testing.T, yaml string) (service.BatchInput, error) {
-	t.Helper()
-	conf, err := newPostgresCDCConfig().ParseYAML(yaml, nil)
-	require.NoError(t, err)
-
-	mgr := service.MockResources()
-	license.InjectTestService(mgr)
-
-	return newPgStreamInput(conf, mgr)
-}
 
 // TestSchemaDefault verifies that the schema field defaults to "public" when
 // left unset, matching pre-multi-schema behaviour.
@@ -111,10 +103,7 @@ tables:
 	}
 }
 
-// TestSchemaAndSchemaIncludeMutuallyExclusive verifies that setting both
-// schema (to a non-default value) and schema_include is rejected at config
-// construction time.
-func TestSchemaAndSchemaIncludeMutuallyExclusive(t *testing.T) {
+func TestSchemaIgnoredWhenSchemaIncludeSet(t *testing.T) {
 	yaml := `
 dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
 schema: tenant_foo
@@ -123,14 +112,28 @@ slot_name: test_slot
 tables:
   - events
 `
-	_, err := parsePgStreamInput(t, yaml)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "schema and schema_include are mutually exclusive")
+	conf, err := newPostgresCDCConfig().ParseYAML(yaml, nil)
+	require.NoError(t, err)
+
+	logs := pgtest.NewTestLogCapture()
+	mgr := service.MockResources(service.MockResourcesOptUseLogger(service.NewLoggerFromSlog(slog.New(logs))))
+	license.InjectTestService(mgr)
+
+	_, err = newPgStreamInput(conf, mgr)
+	require.NoError(t, err)
+
+	var sawWarning bool
+	for _, m := range logs.Messages() {
+		if strings.Contains(m, fieldSchema) && strings.Contains(m, fieldSchemaInclude) {
+			sawWarning = true
+		}
+	}
+	assert.True(t, sawWarning, "expected a warning that %s is ignored in favor of %s, got: %v", fieldSchema, fieldSchemaInclude, logs.Messages())
 }
 
 // TestSchemaIncludeWithDefaultSchemaSucceeds verifies that setting
 // schema_include while leaving schema untouched (at its "public" default) is
-// allowed.
+// allowed and logs no warning about schema being ignored.
 func TestSchemaIncludeWithDefaultSchemaSucceeds(t *testing.T) {
 	yaml := `
 dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
@@ -139,8 +142,51 @@ slot_name: test_slot
 tables:
   - events
 `
-	_, err := parsePgStreamInput(t, yaml)
+	conf, err := newPostgresCDCConfig().ParseYAML(yaml, nil)
 	require.NoError(t, err)
+
+	logs := pgtest.NewTestLogCapture()
+	mgr := service.MockResources(service.MockResourcesOptUseLogger(service.NewLoggerFromSlog(slog.New(logs))))
+	license.InjectTestService(mgr)
+
+	_, err = newPgStreamInput(conf, mgr)
+	require.NoError(t, err)
+
+	for _, m := range logs.Messages() {
+		assert.NotContains(t, m, fieldSchema+" is set", "schema was left at its default, so no warning about it should be logged, got: %v", m)
+	}
+}
+
+// TestSchemaExplicitlySetToDefaultAlongsideSchemaIncludeDoesNotWarn documents
+// a known, accepted gap: since schema's value is compared against its own
+// default ("public") to decide whether to warn, a user who explicitly writes
+// schema: public alongside schema_include is indistinguishable from one who
+// left schema unset, so no warning is logged either way. This is considered
+// acceptable because "public" is inert here regardless of whether it came
+// from the user or the default - unlike any other value, which does warn
+// (see TestSchemaIgnoredWhenSchemaIncludeSet).
+func TestSchemaExplicitlySetToDefaultAlongsideSchemaIncludeDoesNotWarn(t *testing.T) {
+	yaml := `
+dsn: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
+schema: public
+schema_include: 'tenant_*'
+slot_name: test_slot
+tables:
+  - events
+`
+	conf, err := newPostgresCDCConfig().ParseYAML(yaml, nil)
+	require.NoError(t, err)
+
+	logs := pgtest.NewTestLogCapture()
+	mgr := service.MockResources(service.MockResourcesOptUseLogger(service.NewLoggerFromSlog(slog.New(logs))))
+	license.InjectTestService(mgr)
+
+	_, err = newPgStreamInput(conf, mgr)
+	require.NoError(t, err)
+
+	for _, m := range logs.Messages() {
+		assert.NotContains(t, m, fieldSchema+" is set", "explicit schema: public is indistinguishable from the default, so no warning is logged, got: %v", m)
+	}
 }
 
 // TestSchemaExcludeValidation verifies that each schema_exclude entry is
@@ -290,4 +336,15 @@ signal_table_name: rpcn_signal_table
 			}
 		})
 	}
+}
+
+func parsePgStreamInput(t *testing.T, yaml string) (service.BatchInput, error) {
+	t.Helper()
+	conf, err := newPostgresCDCConfig().ParseYAML(yaml, nil)
+	require.NoError(t, err)
+
+	mgr := service.MockResources()
+	license.InjectTestService(mgr)
+
+	return newPgStreamInput(conf, mgr)
 }

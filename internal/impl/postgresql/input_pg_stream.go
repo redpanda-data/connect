@@ -56,6 +56,8 @@ const (
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
 	shutdownTimeout        = 5 * time.Second
+
+	defaultSchema = "public"
 )
 
 func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *pgconn.Config, _ *service.Logger) (TokenBuilder, error) {
@@ -120,10 +122,10 @@ This input adds the following metadata fields to each message:
 			Example(10000).
 			Default(1000)).
 		Field(service.NewStringField(fieldSchema).
-			Description("The PostgreSQL schema from which to replicate data.").
+			Description("The PostgreSQL schema from which to replicate data. Ignored when `"+fieldSchemaInclude+"` is used instead.").
 			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`).
 			Optional().
-			Default("public"),
+			Default(defaultSchema),
 		).
 		Field(service.NewStringField(fieldSchemaInclude).
 			Description(`The PostgreSQL schema pattern to replicate data from. Accepts an exact schema name or a glob pattern using `+"`*`"+` as a wildcard to match multiple schemas.
@@ -141,7 +143,7 @@ If this pattern matches no schema in the database, startup fails with an error -
 
 This pattern can contain characters that wouldn't be allowed in an unquoted schema name, because it's only ever compared against the real name of each schema in the database - it doesn't have to be a valid name itself. For example, a schema literally named `+"`a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11`"+` (which must have been created using double quotes, since hyphens aren't allowed in an unquoted `+"`CREATE SCHEMA`"+` statement) can still be matched using the unquoted pattern `+"`a0eebc99-*`"+`.
 
-This field is mutually exclusive with `+"`"+fieldSchema+"`"+`; when set, it takes over schema resolution entirely and `+"`"+fieldSchema+"`"+` must be left at its default.`).
+When set, this field takes over schema resolution entirely; `+"`"+fieldSchema+"`"+` is ignored (with a warning logged if it was explicitly set) rather than combined with it.`).
 			Examples("tenant_*", "*", `"MyCaseSensitiveSchemaNeedingQuotes"`).
 			Optional().
 			Default(""),
@@ -361,8 +363,9 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 	if schemaInclude != "" {
-		if schema != "public" {
-			return nil, errors.New("schema and schema_include are mutually exclusive")
+		if schema != defaultSchema {
+			// log that we're ignoring schema if schema_include is set.
+			mgr.Logger().Warnf("Field '%s' configured, ignoring field '%s' configuration", fieldSchemaInclude, fieldSchema)
 		}
 		if err = validateSchemaPattern(schemaInclude); err != nil {
 			return nil, fmt.Errorf("invalid schema_include: %w", err)

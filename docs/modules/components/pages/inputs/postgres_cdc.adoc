@@ -175,7 +175,7 @@ snapshot_batch_size: 10000
 
 === `schema`
 
-The PostgreSQL schema from which to replicate data.
+The PostgreSQL schema from which to replicate data. Ignored when `schema_include` is used instead.
 
 
 *Type*: `string`
@@ -207,7 +207,7 @@ If this pattern matches no schema in the database, startup fails with an error -
 
 This pattern can contain characters that wouldn't be allowed in an unquoted schema name, because it's only ever compared against the real name of each schema in the database - it doesn't have to be a valid name itself. For example, a schema literally named `a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11` (which must have been created using double quotes, since hyphens aren't allowed in an unquoted `CREATE SCHEMA` statement) can still be matched using the unquoted pattern `a0eebc99-*`.
 
-This field is mutually exclusive with `schema`; when set, it takes over schema resolution entirely and `schema` must be left at its default.
+When set, this field takes over schema resolution entirely; `schema` is ignored (with a warning logged if it was explicitly set) rather than combined with it.
 
 
 *Type*: `string`
