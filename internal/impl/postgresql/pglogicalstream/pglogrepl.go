@@ -350,6 +350,29 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return nil
 	}
 
+	if len(tables) == 0 {
+		// Postgres also has no ALTER PUBLICATION form to convert a
+		// named-table publication to FOR ALL TABLES, so this needs the same
+		// drop and recreate. Unlike narrowing, CREATE PUBLICATION ... FOR
+		// ALL TABLES requires superuser, so this is more likely to fail -
+		// report that clearly rather than surfacing a bare Postgres error.
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s %s;", publicationName, publicationName, tablesClause))
+		if err != nil {
+			return fmt.Errorf("sanitizing publication recreation query: %w", err)
+		}
+		result = conn.Exec(ctx, sq)
+		if _, err := result.ReadAll(); err != nil {
+			var pgErr *pgconn.PgError
+			const insufficientPrivilege = "42501"
+			if errors.As(err, &pgErr) && pgErr.Code == insufficientPrivilege {
+				return fmt.Errorf("recreating publication %q as FOR ALL TABLES: %w (creating a FOR ALL TABLES publication requires superuser; either grant that, or drop and recreate the publication manually)", publicationName, err)
+			}
+			return fmt.Errorf("recreating publication %q as FOR ALL TABLES: %w", publicationName, err)
+		}
+
+		return nil
+	}
+
 	// assuming publication already exists
 	// get a list of tables in the publication
 	pubTables, forAllTables, err := GetPublicationTables(ctx, conn, publicationName)

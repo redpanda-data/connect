@@ -301,10 +301,10 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		assert.False(t, isForAllTables(), "narrowing an existing FOR ALL TABLES publication to an explicit table list should actually take effect, not silently leave it as FOR ALL TABLES")
 	})
 
-	t.Run("moving from a named-table publication to FOR ALL TABLES empties the publication instead (bug)", func(t *testing.T) {
+	t.Run("moving from a named-table publication to an empty table list converts it to FOR ALL TABLES", func(t *testing.T) {
 		const (
-			publicationName = "pub_named_to_all_bug"
-			schema          = `"sch_named_to_all_bug"`
+			publicationName = "pub_named_to_all"
+			schema          = `"sch_named_to_all"`
 		)
 		createSchema(t, schema)
 
@@ -326,11 +326,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		assert.False(t, forAllTables)
 
 		// Checked directly against pg_publication rather than via
-		// GetPublicationTables: once the publication is emptied out below,
-		// pg_publication_tables for it returns zero rows regardless of
-		// whether the publication is genuinely FOR ALL TABLES or is just a
-		// named-table publication left with no members, so
-		// GetPublicationTables can't distinguish the two outcomes here.
+		// GetPublicationTables as it's a better source of truth.
 		isForAllTables := func() bool {
 			rows, err := conn.Exec(t.Context(), fmt.Sprintf(
 				"SELECT puballtables FROM pg_publication WHERE pubname = '%s';", publicationName,
@@ -342,13 +338,13 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		require.False(t, isForAllTables())
 
 		// user changes config to publish everything (empty tables list) and
-		// restarts the connector - this should convert the publication to
-		// FOR ALL TABLES, but instead it silently drops every existing table
-		// from it, leaving a named-table publication with zero members:
-		// nothing at all gets replicated, with no error raised.
+		// restarts the connector - since Postgres has no ALTER PUBLICATION
+		// form to convert a named-table publication to FOR ALL TABLES
+		// either, this drops and recreates the publication as FOR ALL
+		// TABLES.
 		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
 		require.NoError(t, err)
-		assert.True(t, isForAllTables(), "moving an existing named-table publication to an empty table list should make it FOR ALL TABLES, not silently empty it out")
+		assert.True(t, isForAllTables(), "moving an existing named-table publication to an empty table list should make it FOR ALL TABLES")
 	})
 
 	t.Run("creates a named-table publication with one table", func(t *testing.T) {
