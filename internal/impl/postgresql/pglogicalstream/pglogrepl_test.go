@@ -301,6 +301,12 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"orders"`}})
 		require.NoError(t, err)
 		assert.False(t, isForAllTables(t, publicationName), "narrowing an existing FOR ALL TABLES publication to an explicit table list should actually take effect, not silently leave it as FOR ALL TABLES")
+
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+		require.NoError(t, err)
+		assert.Len(t, tables, 1)
+		assert.Contains(t, tables, TableFQN{schema, `"orders"`})
+		assert.False(t, forAllTables)
 	})
 
 	t.Run("moving from a named-table publication to an empty table list converts it to FOR ALL TABLES", func(t *testing.T) {
