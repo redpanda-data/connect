@@ -101,3 +101,5 @@ then: `/soak` on its PR → the sticky comment reads REGRESSION on RSS; a
 manual nightly dispatch of the same branch → the `rpcn-soak-*-rss-slope`
 alarm fires mid-run. Delete the leak run's `soak-index/` entry from the
 archive bucket afterward so it never pollutes the baseline.
+
+<!-- CON-179: one-time /soak A/B path validation PR; will be closed unmerged. -->
