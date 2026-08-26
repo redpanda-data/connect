@@ -348,6 +348,59 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		assert.True(t, isForAllTables(t, publicationName), "moving an existing named-table publication to an empty table list should make it FOR ALL TABLES")
 	})
 
+	t.Run("widening to FOR ALL TABLES without superuser returns a guidance error and leaves the publication intact", func(t *testing.T) {
+		const (
+			publicationName = "pub_no_superuser"
+			schema          = `"sch_no_superuser"`
+			roleName        = "no_superuser_role"
+		)
+		createSchema(t, schema)
+
+		multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.orders (id serial PRIMARY KEY, name text);", schema))
+		_, err := multiReader.ReadAll()
+		require.NoError(t, err)
+
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{{schema, `"orders"`}})
+		require.NoError(t, err)
+
+		_, err = conn.Exec(t.Context(), fmt.Sprintf("CREATE ROLE %s LOGIN REPLICATION PASSWORD 'x';", roleName)).ReadAll()
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_, _ = conn.Exec(cleanupCtx, fmt.Sprintf("DROP ROLE %s;", roleName)).ReadAll()
+		})
+
+		// Ownership is enough to let the role DROP the publication, but not
+		// enough to let it CREATE a new FOR ALL TABLES one - only superuser
+		// can do that - so this sets up exactly the failure this subtest
+		// targets.
+		_, err = conn.Exec(t.Context(), fmt.Sprintf("ALTER PUBLICATION %s OWNER TO %s;", publicationName, roleName)).ReadAll()
+		require.NoError(t, err)
+
+		roleConfig, err := pgconn.ParseConfig(dbURL)
+		require.NoError(t, err)
+		roleConfig.User = roleName
+		roleConfig.Password = "x"
+
+		roleConn, err := pgconn.ConnectConfig(t.Context(), roleConfig)
+		require.NoError(t, err)
+		defer closeConn(t, roleConn)
+
+		err = CreatePublication(t.Context(), roleConn, logger, publicationName, []TableFQN{})
+		require.ErrorContains(t, err, "requires superuser")
+
+		// The DROP and CREATE are sent as a single implicitly-transactional
+		// Exec call, so the failed CREATE should have rolled the DROP back
+		// too - the pre-existing publication must still exist, unchanged.
+		require.False(t, isForAllTables(t, publicationName))
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+		require.NoError(t, err)
+		assert.Len(t, tables, 1)
+		assert.Contains(t, tables, TableFQN{schema, `"orders"`})
+		assert.False(t, forAllTables)
+	})
+
 	t.Run("creates a named-table publication with one table", func(t *testing.T) {
 		const (
 			publicationName = "pub_single_table"
