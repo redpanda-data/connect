@@ -267,12 +267,16 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	})
 
 	t.Run("narrowing an existing FOR ALL TABLES publication to an explicit table list does nothing (bug)", func(t *testing.T) {
+		// Uses its own schema (dropped on cleanup) so that "narrow_bug_orders"
+		// is provably the only table this FOR ALL TABLES publication can
+		// see, regardless of what other subtests create or when they run.
 		const (
 			publicationName = "pub_narrow_bug"
-			schema          = `"public"`
+			schema          = `"sch_narrow_bug"`
 		)
+		createSchema(t, schema)
 
-		multiReader := conn.Exec(t.Context(), "CREATE TABLE narrow_bug_orders (id serial PRIMARY KEY, name text);")
+		multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.narrow_bug_orders (id serial PRIMARY KEY, name text);", schema))
 		_, err := multiReader.ReadAll()
 		require.NoError(t, err)
 
@@ -302,6 +306,56 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"narrow_bug_orders"`}})
 		require.NoError(t, err)
 		assert.False(t, isForAllTables(), "narrowing an existing FOR ALL TABLES publication to an explicit table list should actually take effect, not silently leave it as FOR ALL TABLES")
+	})
+
+	t.Run("moving from a named-table publication to FOR ALL TABLES empties the publication instead (bug)", func(t *testing.T) {
+		const (
+			publicationName = "pub_named_to_all_bug"
+			schema          = `"sch_named_to_all_bug"`
+		)
+		createSchema(t, schema)
+
+		for _, name := range []string{"widgets", "gadgets"} {
+			multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", schema, name))
+			_, err := multiReader.ReadAll()
+			require.NoError(t, err)
+		}
+
+		err := CreatePublication(t.Context(), conn, publicationName, []TableFQN{
+			{schema, `"widgets"`},
+			{schema, `"gadgets"`},
+		})
+		require.NoError(t, err)
+
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+		require.NoError(t, err)
+		assert.Len(t, tables, 2)
+		assert.False(t, forAllTables)
+
+		// Checked directly against pg_publication rather than via
+		// GetPublicationTables: once the publication is emptied out below,
+		// pg_publication_tables for it returns zero rows regardless of
+		// whether the publication is genuinely FOR ALL TABLES or is just a
+		// named-table publication left with no members, so
+		// GetPublicationTables can't distinguish the two outcomes here.
+		isForAllTables := func() bool {
+			rows, err := conn.Exec(t.Context(), fmt.Sprintf(
+				"SELECT puballtables FROM pg_publication WHERE pubname = '%s';", publicationName,
+			)).ReadAll()
+			require.NoError(t, err)
+			require.Len(t, rows[0].Rows, 1)
+			return string(rows[0].Rows[0][0]) == "t"
+		}
+		require.False(t, isForAllTables())
+
+		// user changes config to publish everything (empty tables list) and
+		// restarts the connector - this should convert the publication to
+		// FOR ALL TABLES, but instead it silently drops every existing table
+		// from it, leaving a named-table publication with zero members:
+		// nothing at all gets replicated, with no error raised.
+		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
+		require.NoError(t, err)
+		assert.True(t, isForAllTables(), "moving an existing named-table publication to an empty table list should make it FOR ALL TABLES, not silently empty it out")
 	})
 
 	t.Run("creates a named-table publication with one table", func(t *testing.T) {
