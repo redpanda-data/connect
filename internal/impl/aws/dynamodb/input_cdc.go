@@ -2239,6 +2239,22 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 
 				newIter, refreshErr := d.refreshExpiredIterator(ctx, ts.checkpointer, ts.streamArn, shardID, lastSeq)
 				if refreshErr != nil {
+					// The stream or shard no longer exists, so the refresh can
+					// never succeed — mark exhausted and signal the coordinator,
+					// mirroring the trimmed-data refresh-failure branch above.
+					if isStreamsResourceNotFoundError(refreshErr) {
+						d.log.Warnf("Shard %s (table %s) no longer exists, marking exhausted: %v", shardID, tableName, refreshErr)
+						ts.mu.Lock()
+						if reader, ok := ts.shardReaders[shardID]; ok {
+							reader.exhausted = true
+						}
+						ts.mu.Unlock()
+						select {
+						case ts.shardRefreshCh <- struct{}{}:
+						default:
+						}
+						return
+					}
 					// Refreshing can fail transiently (e.g. throttling or a
 					// network blip). Wait poll_interval and let the loop retry
 					// the refresh rather than spinning, until it succeeds or the
@@ -2661,6 +2677,22 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 
 				newIter, refreshErr := d.refreshExpiredIterator(ctx, d.checkpointer, aws.ToString(d.streamArn), shardID, lastSeq)
 				if refreshErr != nil {
+					// The stream or shard no longer exists, so the refresh can
+					// never succeed — mark exhausted and signal the coordinator,
+					// mirroring the trimmed-data refresh-failure branch above.
+					if isStreamsResourceNotFoundError(refreshErr) {
+						d.log.Warnf("Shard %s no longer exists, marking exhausted: %v", shardID, refreshErr)
+						d.mu.Lock()
+						if reader, ok := d.shardReaders[shardID]; ok {
+							reader.exhausted = true
+						}
+						d.mu.Unlock()
+						select {
+						case d.shardRefreshCh <- struct{}{}:
+						default:
+						}
+						return
+					}
 					// Refreshing can fail transiently (e.g. throttling or a
 					// network blip). Wait poll_interval and let the loop retry
 					// the refresh rather than spinning, until it succeeds or the
