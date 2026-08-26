@@ -266,6 +266,44 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		assert.True(t, forAllTables)
 	})
 
+	t.Run("narrowing an existing FOR ALL TABLES publication to an explicit table list does nothing (bug)", func(t *testing.T) {
+		const (
+			publicationName = "pub_narrow_bug"
+			schema          = `"public"`
+		)
+
+		multiReader := conn.Exec(t.Context(), "CREATE TABLE narrow_bug_orders (id serial PRIMARY KEY, name text);")
+		_, err := multiReader.ReadAll()
+		require.NoError(t, err)
+
+		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
+		require.NoError(t, err)
+
+		// Checked directly against pg_publication rather than via
+		// GetPublicationTables: that function's own correctness for a FOR
+		// ALL TABLES publication once a real table exists is exactly the
+		// bug this subtest is demonstrating, so it can't be trusted to
+		// verify the outcome here.
+		isForAllTables := func() bool {
+			rows, err := conn.Exec(t.Context(), fmt.Sprintf(
+				"SELECT puballtables FROM pg_publication WHERE pubname = '%s';", publicationName,
+			)).ReadAll()
+			require.NoError(t, err)
+			require.Len(t, rows[0].Rows, 1)
+			return string(rows[0].Rows[0][0]) == "t"
+		}
+		require.True(t, isForAllTables())
+
+		// user updates tables in config and restarts connector - this
+		// should narrow the publication to just "narrow_bug_orders", but it
+		// silently does nothing instead: no error, and the publication is
+		// still FOR ALL TABLES afterward (meaning all tables are published -
+		// but no data is lost).
+		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"narrow_bug_orders"`}})
+		require.NoError(t, err)
+		assert.False(t, isForAllTables(), "narrowing an existing FOR ALL TABLES publication to an explicit table list should actually take effect, not silently leave it as FOR ALL TABLES")
+	})
+
 	t.Run("creates a named-table publication with one table", func(t *testing.T) {
 		const (
 			publicationName = "pub_single_table"
