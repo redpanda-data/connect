@@ -213,9 +213,9 @@ func (rs *RecordShredder) shredStruct(
 
 	// The case-insensitive body stays inline here rather than in a sibling
 	// function: it runs once per struct per record, and extracting it measured
-	// ~5% slower on BenchmarkShredWideFolded for the extra call. Nothing needs
-	// it callable on its own — TestShredStructPathsAgree compares the two paths
-	// through the public Shred entry point, using a shredder of each kind.
+	// ~5% slower on BenchmarkShredCaseInsensitive for the extra call. Nothing
+	// needs it callable on its own — TestShredStructPathsAgree compares the two
+	// paths through the public Shred entry point, using a shredder of each kind.
 	//
 	// Build an index of input keys by their match-key (the original key in
 	// case-sensitive mode, or its lowercase form in case-insensitive mode).

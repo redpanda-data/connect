@@ -318,7 +318,7 @@ NOTE: A consequence of the above is that a table left entirely unconfigured alre
 
 *Codec support.* `snappy`, `gzip` and `zstd` are read by every engine this output targets. Parquet permits others that are not offered here: the original `lz4` codec was ambiguously specified and readers disagree on what it means, `lz4raw` is its unambiguous replacement but has younger and less universal reader support, and `brotli` and `lzo` are patchily supported. If the table property names one of those it is reported in the log and the files this output writes are uncompressed instead. That governs only those files — the Iceberg library does map those codecs, so if the intent is that nothing writes one, change the table property rather than relying on this.
 
-*Cost.* Compression trades CPU for bytes, and this output is per-record CPU bound at low core counts, so enabling it on a small deployment can cost throughput. Note also that parquet applies dictionary and run-length encoding before any codec, so repetitive columns are already compact and may gain little; high-entropy payloads gain the most.
+*Cost.* Compression trades CPU for bytes. Profiling this output at one vCPU attributes roughly a seventh of its CPU to parquet encoding and finds it CPU bound per record at low core counts, so expect some throughput cost there — though the size of that cost has not yet been measured per codec, so treat it as a reason to measure your own workload rather than as a number. Note also that parquet applies dictionary and run-length encoding before any codec, so repetitive columns are already compact and may gain little; high-entropy payloads gain the most.
 
 
 == Performance
@@ -1238,7 +1238,7 @@ Setting the table property rather than this field is usually the better choice, 
 
 Only codecs that every engine this output targets can read are offered. If the table property names something else (`lz4`, `lz4raw`, `brotli`, `lzo`), it is reported in the log and the data files this output writes are uncompressed instead.
 
-Compression trades CPU for size, and this output is per-record CPU bound at low core counts, so enabling it can cost throughput on a small deployment. See <<data-file-compression,Data file compression>> for the full resolution order and the copy-on-write caveat.
+Compression trades CPU for size, and this output is CPU bound per record at low core counts, so expect some throughput cost on a small deployment — the per-codec cost has not been measured, so measure your own workload rather than assuming. See <<data-file-compression,Data file compression>> for the full resolution order and the copy-on-write caveat.
 
 
 *Type*: `string`

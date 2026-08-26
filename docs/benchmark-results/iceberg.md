@@ -236,6 +236,7 @@ Per sub-benchmark, sec/op: `declared_schema=false` 4.304µs → 1.394µs (-67.6%
 **Observations:**
 
 - **This is the shredder in isolation, not a sink-level number.** Earlier 1-vCPU profiling attributed ~27% of the sink's CPU to shredding, so the end-to-end effect should be appreciable but much smaller than 66%. **It has not been measured end to end** — no throughput figure above or elsewhere in this file has been re-run for this change.
+- **Why not:** the localhost suite runs the `iceberg` output, which is an enterprise component, and the license available while this work was done had expired — the pipeline refuses to start, so no before/after throughput pair could be produced. The same applies to quantifying what the new `parquet.compression` codecs cost per record. Both are outstanding: re-run `task bench` (before/after, and once per codec at one and four cores) against a current license and append the sections here.
 - The two `declared_schema` variants are within noise of each other both before and after, consistent with the earlier finding that the `schema_metadata` knob does not bypass decode, shredding or encode.
 
 To reproduce: `GOMAXPROCS=1 go test -bench BenchmarkShredWide -benchmem -run '^$' -count=8 ./internal/impl/iceberg/bench/`
