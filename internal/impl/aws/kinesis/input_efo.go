@@ -33,7 +33,11 @@ import (
 // Overridable in tests.
 var (
 	// efoConsumerPollInterval is the internal poll cadence used while waiting
-	// for a registered consumer to become active.
+	// for a registered consumer to become active. It stays internal (rather
+	// than a config field) because it is bounded by the user-configurable
+	// consumer_activation_timeout: it only affects how promptly activation is
+	// noticed within that window, not the overall time budget, so exposing it
+	// for independent tuning would add a knob with no real effect on outcomes.
 	efoConsumerPollInterval = time.Second
 	// efoResubscribeFloor is the minimum spacing enforced between successive
 	// SubscribeToShard calls for a given shard/consumer, matching the API's
@@ -143,10 +147,11 @@ func kinesisEFOSubscribeFn(svc *kinesis.Client, consumerARN, shardID string) efo
 // from an unread channel simply pauses event consumption; flow control of
 // in-flight messages remains governed by checkpoint_limit.
 type efoRecordSource struct {
-	subscribe    efoSubscribeFn
-	shardID      string
-	fetchTimeout time.Duration
-	log          *service.Logger
+	subscribe              efoSubscribeFn
+	shardID                string
+	fetchTimeout           time.Duration
+	maxResubscribeInterval time.Duration
+	log                    *service.Logger
 
 	recordsChan chan []types.Record
 	finished    atomic.Bool
@@ -205,15 +210,16 @@ func efoStartingPosition(startingSequence string, startFromOldest bool) types.St
 //     background.
 //
 // Any other error still fails fast.
-func newEFORecordSource(ctx context.Context, subscribe efoSubscribeFn, shardID, startingSequence string, startFromOldest bool, fetchTimeout time.Duration, log *service.Logger) (*efoRecordSource, error) {
+func newEFORecordSource(ctx context.Context, subscribe efoSubscribeFn, shardID, startingSequence string, startFromOldest bool, fetchTimeout, maxResubscribeInterval time.Duration, log *service.Logger) (*efoRecordSource, error) {
 	pos := efoStartingPosition(startingSequence, startFromOldest)
 
 	e := &efoRecordSource{
-		subscribe:    subscribe,
-		shardID:      shardID,
-		fetchTimeout: fetchTimeout,
-		log:          log,
-		recordsChan:  make(chan []types.Record, 1),
+		subscribe:              subscribe,
+		shardID:                shardID,
+		fetchTimeout:           fetchTimeout,
+		maxResubscribeInterval: maxResubscribeInterval,
+		log:                    log,
+		recordsChan:            make(chan []types.Record, 1),
 	}
 	e.ctx, e.cancel = context.WithCancel(ctx)
 
@@ -271,7 +277,7 @@ func (e *efoRecordSource) run(sub efoSubscription, pos types.StartingPosition, l
 	// shard, so never retry faster than that. RandomizationFactor is zeroed
 	// so jitter never pulls a retry below that floor.
 	boff.InitialInterval = efoResubscribeFloor
-	boff.MaxInterval = time.Second * 30
+	boff.MaxInterval = e.maxResubscribeInterval
 	boff.MaxElapsedTime = 0
 	boff.RandomizationFactor = 0
 	boff.Reset()

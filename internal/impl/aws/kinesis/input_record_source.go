@@ -41,6 +41,12 @@ type shardRecordSource interface {
 	Close()
 }
 
+// errPollGateWaiting signals that a Fetch returned early because the
+// poll_period gate has not yet elapsed, rather than because the shard
+// had no records. The consumer loop retries immediately without arming
+// its failure backoff; the gate itself is the pacing mechanism.
+var errPollGateWaiting = errors.New("poll gate waiting")
+
 // kinesisPollAPI is the subset of the Kinesis API used by the polling source.
 type kinesisPollAPI interface {
 	GetShardIterator(ctx context.Context, params *kinesis.GetShardIteratorInput, optFns ...func(*kinesis.Options)) (*kinesis.GetShardIteratorOutput, error)
@@ -147,11 +153,13 @@ func (p *pollingRecordSource) getIter(ctx context.Context, sequence string) (str
 // retried with the retained iterator.
 //
 // When the poll_period gate has not yet elapsed, Fetch sleeps for at most
-// maxGateWait and then returns an empty result without polling, leaving
+// maxGateWait and then returns errPollGateWaiting without polling, leaving
 // lastPoll untouched. The gate therefore still enforces the full minimum
 // spacing between GetRecords calls (lastPoll only advances when GetRecords is
 // actually invoked), whilst the caller stays free to service its commit timer
-// and flush pending messages.
+// and flush pending messages. errPollGateWaiting tells the caller this is
+// gate pacing rather than an empty shard, so it retries immediately instead
+// of arming its failure backoff.
 func (p *pollingRecordSource) Fetch(ctx context.Context) ([]types.Record, bool, error) {
 	if p.pollPeriod > 0 {
 		if wait := p.pollPeriod - time.Since(p.lastPoll); wait > 0 {
@@ -165,7 +173,7 @@ func (p *pollingRecordSource) Fetch(ctx context.Context) ([]types.Record, bool, 
 				return nil, false, ctx.Err()
 			}
 			if capped {
-				return nil, false, nil
+				return nil, false, errPollGateWaiting
 			}
 		}
 	}

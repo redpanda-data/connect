@@ -306,7 +306,7 @@ func TestEFOSourceForwardsRecords(t *testing.T) {
 	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
 		assert.Equal(t, types.ShardIteratorTypeTrimHorizon, pos.Type)
 		return sub, nil
-	}, "shard-0", "", true, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 
@@ -323,7 +323,7 @@ func TestEFOSourceFetchTimesOutEmpty(t *testing.T) {
 	sub := newFakeSubscription()
 	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
 		return sub, nil
-	}, "shard-0", "", true, 20*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "", true, 20*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 
@@ -348,7 +348,7 @@ func TestEFOSourceResubscribesAtContinuation(t *testing.T) {
 		positions = append(positions, pos)
 		mu.Unlock()
 		return <-subs, nil
-	}, "shard-0", "start-seq", true, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "start-seq", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 
@@ -393,7 +393,7 @@ func TestEFOSourceStreamErrorResubscribes(t *testing.T) {
 		positions = append(positions, pos)
 		mu.Unlock()
 		return <-subs, nil
-	}, "shard-0", "", true, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 
@@ -429,7 +429,7 @@ func TestEFOSourceAnchorsTimestampWhenNotOldest(t *testing.T) {
 			assert.False(t, pos.Timestamp.Before(before))
 		}
 		return sub, nil
-	}, "shard-0", "", false, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "", false, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 }
@@ -438,7 +438,7 @@ func TestEFOSourceShardClosed(t *testing.T) {
 	sub := newFakeSubscription()
 	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
 		return sub, nil
-	}, "shard-0", "", true, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 
@@ -465,7 +465,7 @@ func TestEFOSourceShardClosed(t *testing.T) {
 func TestEFOSourceInitialSubscribeErrorFailsFast(t *testing.T) {
 	_, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
 		return nil, errors.New("AccessDeniedException")
-	}, "shard-0", "", true, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.Error(t, err)
 }
 
@@ -476,7 +476,7 @@ func TestEFOSourceInitialSubscribeNonResourceInUseFailsFastWithOneCall(t *testin
 	_, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
 		calls++
 		return nil, errors.New("AccessDenied")
-	}, "shard-0", "", true, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.Error(t, err)
 	assert.Equal(t, 1, calls)
 }
@@ -492,7 +492,7 @@ func TestEFOSourceInvalidSequenceFallsBackToConfiguredStart(t *testing.T) {
 			return nil, &types.InvalidArgumentException{}
 		}
 		return sub, nil
-	}, "shard-0", "stale-seq", true, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "stale-seq", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 
@@ -514,7 +514,7 @@ func TestEFOSourceInvalidSequenceFallsBackToTrimHorizonWhenNotOldest(t *testing.
 			return nil, &types.InvalidArgumentException{}
 		}
 		return sub, nil
-	}, "shard-0", "stale-seq", false, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "stale-seq", false, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 
@@ -550,7 +550,7 @@ func TestEFOSourcePumpFallsBackOnInvalidSequence(t *testing.T) {
 			return nil, &types.InvalidArgumentException{}
 		}
 		return sub, nil
-	}, "shard-0", "stale-seq", false, 20*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "stale-seq", false, 20*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 
@@ -579,7 +579,7 @@ func TestEFOSourceOtherErrorWithSequenceDoesNotFallBack(t *testing.T) {
 	_, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
 		calls++
 		return nil, errors.New("AccessDeniedException")
-	}, "shard-0", "stale-seq", true, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "stale-seq", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.Error(t, err)
 	assert.Equal(t, 1, calls)
 }
@@ -598,7 +598,7 @@ func TestEFOSourceInitialSubscribeResourceInUseDoesNotBlock(t *testing.T) {
 			return nil, &types.ResourceInUseException{}
 		}
 		return sub, nil
-	}, "shard-0", "", true, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 
@@ -623,7 +623,7 @@ func TestEFOSourceCloseStopsPump(t *testing.T) {
 	sub := newFakeSubscription()
 	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
 		return sub, nil
-	}, "shard-0", "", true, 100*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 
 	src.Close() // must not hang
@@ -673,7 +673,7 @@ func TestEFOSourceEscalatesBackoffWithoutEvents(t *testing.T) {
 			close(allDone)
 		}
 		return sub, nil
-	}, "shard-0", "", true, 20*time.Millisecond, service.MockResources().Logger())
+	}, "shard-0", "", true, 20*time.Millisecond, 30*time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 

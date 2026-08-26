@@ -264,24 +264,66 @@ func TestPollingSourcePollPeriodGateCapsFetchWait(t *testing.T) {
 
 	// A fetch immediately after a successful one must hand control back within
 	// roughly maxGateWait, without polling, rather than sleeping out the
-	// remaining poll period.
+	// remaining poll period. The capped wait is signalled via the
+	// errPollGateWaiting sentinel rather than a nil error, so the caller can
+	// tell this apart from a genuinely empty shard and skip arming its
+	// failure backoff.
 	start := time.Now()
 	recs, done, err := src.Fetch(t.Context())
-	require.NoError(t, err)
+	require.ErrorIs(t, err, errPollGateWaiting)
 	assert.False(t, done)
 	assert.Empty(t, recs)
 	assert.Len(t, callTimes, 1)
 	assert.Less(t, time.Since(start), period/2)
 
-	// Repeated fetches keep yielding empty until the full period has elapsed
-	// since the last GetRecords call.
+	// Repeated fetches keep yielding the sentinel until the full period has
+	// elapsed since the last GetRecords call.
 	deadline := time.Now().Add(5 * time.Second)
 	for len(callTimes) < 2 && time.Now().Before(deadline) {
 		_, _, err = src.Fetch(t.Context())
-		require.NoError(t, err)
+		if err != nil {
+			require.ErrorIs(t, err, errPollGateWaiting)
+		}
 	}
 	require.Len(t, callTimes, 2)
 	assert.GreaterOrEqual(t, callTimes[1].Sub(callTimes[0]), period)
+}
+
+// TestPollingSourcePollPeriodGateSpacingUnderCap simulates the consumer
+// loop's retry-immediately-on-sentinel behaviour (no backoff armed) by
+// calling Fetch in a tight loop, and checks that GetRecords calls still land
+// at roughly pollPeriod spacing rather than pollPeriod plus a failure
+// backoff, even though almost every Fetch is capped well below the period.
+func TestPollingSourcePollPeriodGateSpacingUnderCap(t *testing.T) {
+	api := staticIterAPI("iter-1")
+	var callTimes []time.Time
+	api.getRecords = func(_ context.Context, _ *kinesis.GetRecordsInput, _ ...func(*kinesis.Options)) (*kinesis.GetRecordsOutput, error) {
+		callTimes = append(callTimes, time.Now())
+		return &kinesis.GetRecordsOutput{NextShardIterator: aws.String("iter-2")}, nil
+	}
+
+	const (
+		period      = 100 * time.Millisecond
+		maxGateWait = 20 * time.Millisecond
+	)
+	src, err := newPollingRecordSource(t.Context(), api, "arn", "shard-0", "", true, period, maxGateWait, func() string { return "" }, service.MockResources().Logger())
+	require.NoError(t, err)
+
+	const wantCalls = 4
+	deadline := time.Now().Add(5 * time.Second)
+	for len(callTimes) < wantCalls && time.Now().Before(deadline) {
+		_, _, err = src.Fetch(t.Context())
+		if err != nil {
+			require.ErrorIs(t, err, errPollGateWaiting)
+		}
+	}
+	require.GreaterOrEqual(t, len(callTimes), wantCalls)
+
+	for i := 1; i < len(callTimes); i++ {
+		gap := callTimes[i].Sub(callTimes[i-1])
+		assert.GreaterOrEqual(t, gap, period)
+		assert.Less(t, gap, time.Duration(float64(period)*1.5))
+	}
 }
 
 func TestPollingSourcePollPeriodZeroNoDelay(t *testing.T) {

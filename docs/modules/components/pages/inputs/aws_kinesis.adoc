@@ -95,6 +95,7 @@ input:
       enabled: false
       consumer_name: ""
       consumer_activation_timeout: 1m
+      max_resubscribe_interval: 30s
     auto_replay_nacks: true
     commit_period: 5s
     steal_grace_period: 2s
@@ -387,7 +388,7 @@ The maximum gap between the in flight sequence versus the latest acknowledged se
 
 === `poll_period`
 
-An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so setting this to e.g. `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. Values above `commit_period` delay checkpointing and shard-lease renewal, and values above `lease_period` are rejected.
+An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so setting this to e.g. `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. A shard is polled at most once per period, so the committed sequence advances no faster than that; values above `lease_period` are rejected.
 
 
 *Type*: `string`
@@ -430,6 +431,15 @@ The maximum amount of time to wait on connect for the registered consumer to bec
 *Type*: `string`
 
 *Default*: `"1m"`
+
+=== `enhanced_fan_out.max_resubscribe_interval`
+
+The ceiling on the exponential backoff between SubscribeToShard attempts after a subscription ends without delivering any events. This bounds how long a shard may sit unsubscribed after repeated failures.
+
+
+*Type*: `string`
+
+*Default*: `"30s"`
 
 === `auto_replay_nacks`
 

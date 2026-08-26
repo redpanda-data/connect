@@ -207,6 +207,50 @@ enhanced_fan_out:
 	assert.Contains(t, err.Error(), "consumer_activation_timeout")
 }
 
+func TestKinesisInputEFOMaxResubscribeIntervalDefault(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+enhanced_fan_out:
+  enabled: true
+  consumer_name: my-app
+`, nil)
+	require.NoError(t, err)
+
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.Equal(t, 30*time.Second, conf.EFOMaxResubscribeInterval)
+}
+
+func TestKinesisInputEFOMaxResubscribeIntervalCustom(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+enhanced_fan_out:
+  enabled: true
+  consumer_name: my-app
+  max_resubscribe_interval: 90s
+`, nil)
+	require.NoError(t, err)
+
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.Equal(t, 90*time.Second, conf.EFOMaxResubscribeInterval)
+}
+
+func TestKinesisInputEFOMaxResubscribeIntervalTooLowFails(t *testing.T) {
+	pConf, err := kinesisInputSpec().ParseYAML(`
+streams: [ foo ]
+enhanced_fan_out:
+  enabled: true
+  consumer_name: my-app
+  max_resubscribe_interval: 500ms
+`, nil)
+	require.NoError(t, err)
+
+	_, err = kinesisInputConfigFromParsed(pConf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "max_resubscribe_interval")
+}
+
 func TestKinesisInputEFOConsumerNameLintRule(t *testing.T) {
 	tests := []struct {
 		name        string

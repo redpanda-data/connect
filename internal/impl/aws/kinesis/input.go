@@ -56,9 +56,10 @@ const (
 	kiFieldBatching         = "batching"
 
 	// Kinesis Enhanced Fan-Out Fields
-	kiefoFieldEnabled           = "enabled"
-	kiefoFieldConsumerName      = "consumer_name"
-	kiefoFieldActivationTimeout = "consumer_activation_timeout"
+	kiefoFieldEnabled                = "enabled"
+	kiefoFieldConsumerName           = "consumer_name"
+	kiefoFieldActivationTimeout      = "consumer_activation_timeout"
+	kiefoFieldMaxResubscribeInterval = "max_resubscribe_interval"
 
 	// Kinesis metrics
 	metricShardsPerClient = "kinesis_client_shards"
@@ -66,18 +67,19 @@ const (
 )
 
 type kiConfig struct {
-	Streams              []string
-	DynamoDB             kiddbConfig
-	CheckpointLimit      int
-	CommitPeriod         string
-	StealGracePeriod     string
-	LeasePeriod          string
-	RebalancePeriod      string
-	StartFromOldest      bool
-	PollPeriod           time.Duration
-	EFOEnabled           bool
-	EFOConsumerName      string
-	EFOActivationTimeout time.Duration
+	Streams                   []string
+	DynamoDB                  kiddbConfig
+	CheckpointLimit           int
+	CommitPeriod              string
+	StealGracePeriod          string
+	LeasePeriod               string
+	RebalancePeriod           string
+	StartFromOldest           bool
+	PollPeriod                time.Duration
+	EFOEnabled                bool
+	EFOConsumerName           string
+	EFOActivationTimeout      time.Duration
+	EFOMaxResubscribeInterval time.Duration
 }
 
 func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, err error) {
@@ -127,6 +129,13 @@ func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, e
 		}
 		if conf.EFOEnabled && conf.EFOActivationTimeout <= 0 {
 			err = fmt.Errorf("%v.%v must be greater than zero", kiFieldEnhancedFanOut, kiefoFieldActivationTimeout)
+			return
+		}
+		if conf.EFOMaxResubscribeInterval, err = efoConf.FieldDuration(kiefoFieldMaxResubscribeInterval); err != nil {
+			return
+		}
+		if conf.EFOEnabled && conf.EFOMaxResubscribeInterval < time.Second {
+			err = fmt.Errorf("%v.%v must be at least 1s", kiFieldEnhancedFanOut, kiefoFieldMaxResubscribeInterval)
 			return
 		}
 	}
@@ -200,7 +209,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			ShortDescription("Maximum gap between the in-flight sequence and the latest acknowledged sequence.").
 			Default(1024),
 		service.NewDurationField(kiFieldPollPeriod).
-			Description("An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so setting this to e.g. `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. Values above `commit_period` delay checkpointing and shard-lease renewal, and values above `lease_period` are rejected.").
+			Description("An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so setting this to e.g. `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. A shard is polled at most once per period, so the committed sequence advances no faster than that; values above `lease_period` are rejected.").
 			ShortDescription("Minimum period between record polls of a shard, for staying under the shared Kinesis read limit.").
 			Default("0s").
 			Version("4.107.0").
@@ -216,6 +225,10 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			service.NewDurationField(kiefoFieldActivationTimeout).
 				Description("The maximum amount of time to wait on connect for the registered consumer to become active before failing. Newly registered consumers on streams with many shards can take tens of seconds to activate.").
 				Default("1m").
+				Advanced(),
+			service.NewDurationField(kiefoFieldMaxResubscribeInterval).
+				Description("The ceiling on the exponential backoff between SubscribeToShard attempts after a subscription ends without delivering any events. This bounds how long a shard may sit unsubscribed after repeated failures.").
+				Default("30s").
 				Advanced(),
 		).
 			Description("Consume the stream using https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html[enhanced fan-out^], which provides this consumer dedicated read throughput of 2MB/s per shard via HTTP/2 push delivery, avoiding the 5 reads per second per shard limit that polling consumers share. The named consumer is registered on each stream automatically if it does not already exist (and is never deregistered). Requires the IAM permissions `kinesis:DescribeStreamConsumer`, `kinesis:RegisterStreamConsumer` and `kinesis:SubscribeToShard`. Note that AWS bills enhanced fan-out consumers per consumer-shard-hour plus data retrieval.").
@@ -454,9 +467,6 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	if k.pollPeriod > k.leasePeriod {
 		return nil, fmt.Errorf("%v (%v) must not exceed %v (%v)", kiFieldPollPeriod, k.pollPeriod, kiFieldLeasePeriod, k.leasePeriod)
 	}
-	if k.pollPeriod > k.commitPeriod {
-		mgr.Logger().Warnf("%v (%v) exceeds %v (%v); this will delay checkpoint updates and shard-lease renewal", kiFieldPollPeriod, k.pollPeriod, kiFieldCommitPeriod, k.commitPeriod)
-	}
 
 	// Initialize metrics
 	k.clientShardsMetric = mgr.Metrics().NewGauge(metricShardsPerClient)
@@ -584,7 +594,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 			if state == awsKinesisConsumerConsuming && len(pending) == 0 && nextPullChan == unblockedChan && pendingMsg.msg == nil {
 				var done bool
 				if pending, done, err = source.Fetch(k.ctx); err != nil {
-					if !awsErrIsTimeout(err) {
+					if !awsErrIsTimeout(err) && !errors.Is(err, errPollGateWaiting) {
 						nextPullChan = time.After(boff.NextBackOff())
 						k.log.Errorf("Failed to pull Kinesis records: %v\n", err)
 					}
@@ -696,11 +706,16 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 	return nil
 }
 
+// maxShardFetchWait is the initial (commit/batch-period-independent) bound on
+// how long a single Fetch may block, companion to the floor enforced by
+// minBound below.
+const maxShardFetchWait = time.Second
+
 // shardFetchWaitBound bounds how long a shard record source may internally
 // block per Fetch so that the consumer loop keeps servicing its commit timer
 // and timed batch flushes.
 func shardFetchWaitBound(commitPeriod, batchPeriod time.Duration) time.Duration {
-	bound := time.Second
+	bound := maxShardFetchWait
 	if half := commitPeriod / 2; half < bound {
 		bound = half
 	}
@@ -724,7 +739,7 @@ func (k *kinesisReader) newShardRecordSource(info streamInfo, shardID, startingS
 	// each period.
 	fetchTimeout := shardFetchWaitBound(k.commitPeriod, k.batchPeriod)
 	if k.conf.EFOEnabled {
-		return newEFORecordSource(k.ctx, kinesisEFOSubscribeFn(k.svc, info.consumerARN, shardID), shardID, startingSequence, k.conf.StartFromOldest, fetchTimeout, k.log)
+		return newEFORecordSource(k.ctx, kinesisEFOSubscribeFn(k.svc, info.consumerARN, shardID), shardID, startingSequence, k.conf.StartFromOldest, fetchTimeout, k.conf.EFOMaxResubscribeInterval, k.log)
 	}
 	return newPollingRecordSource(k.ctx, k.svc, info.arn, shardID, startingSequence, k.conf.StartFromOldest, k.pollPeriod, fetchTimeout, sequenceFn, k.log)
 }
