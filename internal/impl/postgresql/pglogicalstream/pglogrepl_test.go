@@ -266,17 +266,14 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		assert.True(t, forAllTables)
 	})
 
-	t.Run("narrowing an existing FOR ALL TABLES publication to an explicit table list does nothing (bug)", func(t *testing.T) {
-		// Uses its own schema (dropped on cleanup) so that "narrow_bug_orders"
-		// is provably the only table this FOR ALL TABLES publication can
-		// see, regardless of what other subtests create or when they run.
+	t.Run("narrowing an existing FOR ALL TABLES publication to an explicit table list narrows it", func(t *testing.T) {
 		const (
-			publicationName = "pub_narrow_bug"
-			schema          = `"sch_narrow_bug"`
+			publicationName = "pub_narrow"
+			schema          = `"sch_narrow"`
 		)
 		createSchema(t, schema)
 
-		multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.narrow_bug_orders (id serial PRIMARY KEY, name text);", schema))
+		multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.orders (id serial PRIMARY KEY, name text);", schema))
 		_, err := multiReader.ReadAll()
 		require.NoError(t, err)
 
@@ -284,10 +281,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		require.NoError(t, err)
 
 		// Checked directly against pg_publication rather than via
-		// GetPublicationTables: that function's own correctness for a FOR
-		// ALL TABLES publication once a real table exists is exactly the
-		// bug this subtest is demonstrating, so it can't be trusted to
-		// verify the outcome here.
+		// GetPublicationTables as it's a better source of truth.
 		isForAllTables := func() bool {
 			rows, err := conn.Exec(t.Context(), fmt.Sprintf(
 				"SELECT puballtables FROM pg_publication WHERE pubname = '%s';", publicationName,
@@ -298,12 +292,11 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		}
 		require.True(t, isForAllTables())
 
-		// user updates tables in config and restarts connector - this
-		// should narrow the publication to just "narrow_bug_orders", but it
-		// silently does nothing instead: no error, and the publication is
-		// still FOR ALL TABLES afterward (meaning all tables are published -
-		// but no data is lost).
-		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"narrow_bug_orders"`}})
+		// user updates tables in config and restarts connector - since
+		// Postgres can't ALTER a FOR ALL TABLES publication down to a
+		// named table list, this drops and recreates the publication as a
+		// named-table one containing just "orders".
+		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"orders"`}})
 		require.NoError(t, err)
 		assert.False(t, isForAllTables(), "narrowing an existing FOR ALL TABLES publication to an explicit table list should actually take effect, not silently leave it as FOR ALL TABLES")
 	})

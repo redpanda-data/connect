@@ -322,6 +322,34 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return nil
 	}
 
+	publicationIsForAllTables := string(rows[0].Rows[0][1]) == "t" //postgres outputs boolean true as "t"
+	if publicationIsForAllTables {
+		if len(tables) == 0 {
+			// already FOR ALL TABLES and that's what's wanted - no update needed
+			return nil
+		}
+
+		// ALTER PUBLICATION can't narrow a FOR ALL TABLES publication -
+		// Postgres rejects ADD/DROP TABLE against it outright - so drop and
+		// recreate instead. Sent as one Exec call so Postgres implicitly
+		// wraps it in a transaction: a failed CREATE rolls back the DROP too.
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s %s;", publicationName, publicationName, tablesClause))
+		if err != nil {
+			return fmt.Errorf("sanitizing publication recreation query: %w", err)
+		}
+		result = conn.Exec(ctx, sq)
+		if _, err := result.ReadAll(); err != nil {
+			var pgErr *pgconn.PgError
+			const insufficientPrivilege = "42501"
+			if errors.As(err, &pgErr) && pgErr.Code == insufficientPrivilege {
+				return fmt.Errorf("recreating publication %q to narrow FOR ALL TABLES to an explicit table list: %w (the connected role must own %q and have CREATE privilege on the database; either grant those, or drop and recreate the publication manually)", publicationName, err, publicationName)
+			}
+			return fmt.Errorf("recreating publication to narrow FOR ALL TABLES to an explicit table list: %w", err)
+		}
+
+		return nil
+	}
+
 	// assuming publication already exists
 	// get a list of tables in the publication
 	pubTables, forAllTables, err := GetPublicationTables(ctx, conn, publicationName)
