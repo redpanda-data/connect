@@ -372,17 +372,16 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, logger *service
 		return nil
 	}
 
-	// assuming publication already exists
-	// get a list of tables in the publication
-	pubTables, forAllTables, err := GetPublicationTables(ctx, conn, publicationName)
+	// assuming publication already exists as a named-table publication
+	// (currentIsForAllTables is false here) - get a list of tables
+	// currently in it. GetPublicationTables' own forAllTables inference is
+	// discarded: it infers FOR ALL TABLES purely from an empty result set,
+	// which would misreport this publication as FOR ALL TABLES if it
+	// currently has zero member tables, even though puballtables already
+	// told us it doesn't.
+	pubTables, _, err := GetPublicationTables(ctx, conn, publicationName)
 	if err != nil {
 		return fmt.Errorf("getting publication tables: %w", err)
-	}
-
-	// list of tables to publish is empty and publication is for all tables
-	// no update is needed
-	if forAllTables && len(pubTables) == 0 {
-		return nil
 	}
 
 	tablesToRemoveFromPublication := []TableFQN{}
@@ -429,6 +428,28 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, logger *service
 // GetPublicationTables returns a list of tables currently in the publication
 // Arguments, in order: list of the tables, exist for all tables, error.
 func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
+	allTablesQuery, err := sanitize.SQLQuery(`
+		SELECT puballtables
+		FROM pg_publication
+		WHERE pubname = $1;
+	`, publicationName)
+	if err != nil {
+		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+	}
+
+	allTablesRows, err := conn.Exec(ctx, allTablesQuery).ReadAll()
+	if err != nil {
+		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+	}
+
+	// A missing row means the publication doesn't exist. Kept consistent
+	// with the previous behaviour of reporting that as "exists and is for
+	// all tables" - callers are expected to already know the publication
+	// exists before calling this.
+	if len(allTablesRows) == 0 || len(allTablesRows[0].Rows) == 0 || string(allTablesRows[0].Rows[0][0]) == "t" {
+		return nil, true, nil
+	}
+
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
 		tablename as table_name,
@@ -441,16 +462,11 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		return nil, false, fmt.Errorf("getting publication tables: %w", err)
 	}
 
-	// Get specific tables in the publication
 	result := conn.Exec(ctx, query)
 
 	rows, err := result.ReadAll()
 	if err != nil {
 		return nil, false, fmt.Errorf("getting publication tables: %w", err)
-	}
-
-	if len(rows) == 0 || len(rows[0].Rows) == 0 {
-		return nil, true, nil // Publication exists and is for all tables
 	}
 
 	tables := make([]TableFQN, 0, len(rows))
