@@ -42,6 +42,11 @@ const (
 	PrimaryKeepaliveMessageByteID = 'k'
 	// StandbyStatusUpdateByteID is the byte ID for StandbyStatusUpdate messages.
 	StandbyStatusUpdateByteID = 'r'
+
+	// pgErrCodeInsufficientPrivilege is the Postgres SQLSTATE for a
+	// permission-denied error, e.g. "must be owner of publication ..." or
+	// "must be superuser to create FOR ALL TABLES publication".
+	pgErrCodeInsufficientPrivilege = "42501"
 )
 
 // LSN is a PostgreSQL Log Sequence Number. See https://www.postgresql.org/docs/current/datatype-pg-lsn.html.
@@ -322,17 +327,17 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return nil
 	}
 
-	publicationIsForAllTables := string(rows[0].Rows[0][1]) == "t" //postgres outputs boolean true as "t"
-	if publicationIsForAllTables {
-		if len(tables) == 0 {
-			// already FOR ALL TABLES and that's what's wanted - no update needed
-			return nil
-		}
+	currentIsForAllTables := string(rows[0].Rows[0][1]) == "t" // postgres outputs boolean true as "t"
+	desiredIsForAllTables := len(tables) == 0
 
-		// ALTER PUBLICATION can't narrow a FOR ALL TABLES publication -
-		// Postgres rejects ADD/DROP TABLE against it outright - so drop and
-		// recreate instead. Sent as one Exec call so Postgres implicitly
-		// wraps it in a transaction: a failed CREATE rolls back the DROP too.
+	if currentIsForAllTables != desiredIsForAllTables {
+		// Postgres has no ALTER PUBLICATION form that converts between FOR
+		// ALL TABLES and a named table list in either direction - it
+		// rejects ADD/DROP TABLE against a FOR ALL TABLES publication
+		// outright, and there's no ALTER syntax to set FOR ALL TABLES on an
+		// existing publication either. So this drops and recreates it
+		// instead. Sent as one Exec call so Postgres implicitly wraps it in
+		// a transaction: a failed CREATE rolls back the DROP too.
 		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s %s;", publicationName, publicationName, tablesClause))
 		if err != nil {
 			return fmt.Errorf("sanitizing publication recreation query: %w", err)
@@ -340,36 +345,20 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		result = conn.Exec(ctx, sq)
 		if _, err := result.ReadAll(); err != nil {
 			var pgErr *pgconn.PgError
-			const insufficientPrivilege = "42501"
-			if errors.As(err, &pgErr) && pgErr.Code == insufficientPrivilege {
+			if errors.As(err, &pgErr) && pgErr.Code == pgErrCodeInsufficientPrivilege {
+				if desiredIsForAllTables {
+					return fmt.Errorf("recreating publication %q as FOR ALL TABLES: %w (creating a FOR ALL TABLES publication requires superuser; either grant that, or drop and recreate the publication manually)", publicationName, err)
+				}
 				return fmt.Errorf("recreating publication %q to narrow FOR ALL TABLES to an explicit table list: %w (the connected role must own %q and have CREATE privilege on the database; either grant those, or drop and recreate the publication manually)", publicationName, err, publicationName)
 			}
-			return fmt.Errorf("recreating publication to narrow FOR ALL TABLES to an explicit table list: %w", err)
+			return fmt.Errorf("recreating publication %q: %w", publicationName, err)
 		}
 
 		return nil
 	}
 
-	if len(tables) == 0 {
-		// Postgres also has no ALTER PUBLICATION form to convert a
-		// named-table publication to FOR ALL TABLES, so this needs the same
-		// drop and recreate. Unlike narrowing, CREATE PUBLICATION ... FOR
-		// ALL TABLES requires superuser, so this is more likely to fail -
-		// report that clearly rather than surfacing a bare Postgres error.
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s %s;", publicationName, publicationName, tablesClause))
-		if err != nil {
-			return fmt.Errorf("sanitizing publication recreation query: %w", err)
-		}
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
-			var pgErr *pgconn.PgError
-			const insufficientPrivilege = "42501"
-			if errors.As(err, &pgErr) && pgErr.Code == insufficientPrivilege {
-				return fmt.Errorf("recreating publication %q as FOR ALL TABLES: %w (creating a FOR ALL TABLES publication requires superuser; either grant that, or drop and recreate the publication manually)", publicationName, err)
-			}
-			return fmt.Errorf("recreating publication %q as FOR ALL TABLES: %w", publicationName, err)
-		}
-
+	if currentIsForAllTables {
+		// already FOR ALL TABLES and that's what's wanted - no update needed
 		return nil
 	}
 

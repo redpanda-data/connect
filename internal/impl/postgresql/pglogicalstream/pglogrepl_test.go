@@ -248,6 +248,18 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		})
 	}
 
+	// isForAllTables checks directly against pg_publication rather than via
+	// GetPublicationTables, which is a better source of truth.
+	isForAllTables := func(t *testing.T, publicationName string) bool {
+		t.Helper()
+		rows, err := conn.Exec(t.Context(), fmt.Sprintf(
+			"SELECT puballtables FROM pg_publication WHERE pubname = '%s';", publicationName,
+		)).ReadAll()
+		require.NoError(t, err)
+		require.Len(t, rows[0].Rows, 1)
+		return string(rows[0].Rows[0][0]) == "t"
+	}
+
 	t.Run("creates a FOR ALL TABLES publication when tables is empty", func(t *testing.T) {
 		// FOR ALL TABLES publications are database-scoped, not
 		// schema-scoped, so assert.Empty below only holds while no other
@@ -280,17 +292,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
 		require.NoError(t, err)
 
-		// Checked directly against pg_publication rather than via
-		// GetPublicationTables as it's a better source of truth.
-		isForAllTables := func() bool {
-			rows, err := conn.Exec(t.Context(), fmt.Sprintf(
-				"SELECT puballtables FROM pg_publication WHERE pubname = '%s';", publicationName,
-			)).ReadAll()
-			require.NoError(t, err)
-			require.Len(t, rows[0].Rows, 1)
-			return string(rows[0].Rows[0][0]) == "t"
-		}
-		require.True(t, isForAllTables())
+		require.True(t, isForAllTables(t, publicationName))
 
 		// user updates tables in config and restarts connector - since
 		// Postgres can't ALTER a FOR ALL TABLES publication down to a
@@ -298,7 +300,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		// named-table one containing just "orders".
 		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"orders"`}})
 		require.NoError(t, err)
-		assert.False(t, isForAllTables(), "narrowing an existing FOR ALL TABLES publication to an explicit table list should actually take effect, not silently leave it as FOR ALL TABLES")
+		assert.False(t, isForAllTables(t, publicationName), "narrowing an existing FOR ALL TABLES publication to an explicit table list should actually take effect, not silently leave it as FOR ALL TABLES")
 	})
 
 	t.Run("moving from a named-table publication to an empty table list converts it to FOR ALL TABLES", func(t *testing.T) {
@@ -325,17 +327,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		assert.Len(t, tables, 2)
 		assert.False(t, forAllTables)
 
-		// Checked directly against pg_publication rather than via
-		// GetPublicationTables as it's a better source of truth.
-		isForAllTables := func() bool {
-			rows, err := conn.Exec(t.Context(), fmt.Sprintf(
-				"SELECT puballtables FROM pg_publication WHERE pubname = '%s';", publicationName,
-			)).ReadAll()
-			require.NoError(t, err)
-			require.Len(t, rows[0].Rows, 1)
-			return string(rows[0].Rows[0][0]) == "t"
-		}
-		require.False(t, isForAllTables())
+		require.False(t, isForAllTables(t, publicationName))
 
 		// user changes config to publish everything (empty tables list) and
 		// restarts the connector - since Postgres has no ALTER PUBLICATION
@@ -344,7 +336,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		// TABLES.
 		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
 		require.NoError(t, err)
-		assert.True(t, isForAllTables(), "moving an existing named-table publication to an empty table list should make it FOR ALL TABLES")
+		assert.True(t, isForAllTables(t, publicationName), "moving an existing named-table publication to an empty table list should make it FOR ALL TABLES")
 	})
 
 	t.Run("creates a named-table publication with one table", func(t *testing.T) {
