@@ -125,7 +125,9 @@ A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finit
 		Field(service.NewStringListField(fieldTables).
 			Description(`A list of table names to include in the logical replication. Each table should be specified as a separate item.
 
-If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
+If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.
+
+Changing this list between empty and non-empty on an existing publication drops and recreates it, since PostgreSQL has no way to alter a ` + "`FOR ALL TABLES`" + ` publication into a named table list or back again. Recreating it as ` + "`FOR ALL TABLES`" + ` (by clearing this field) requires the connecting role to be a superuser. Adding or removing tables while keeping the list non-empty only alters the existing publication in place, and needs no elevated privileges beyond table ownership.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
