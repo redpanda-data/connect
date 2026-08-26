@@ -74,8 +74,13 @@ func (c *latentCatalog) CommitTable(ctx context.Context, ident table.Identifier,
 			return nil, "", ctx.Err()
 		}
 	}
-	c.commits.Add(1)
-	return c.memCatalog.CommitTable(ctx, ident, reqs, updates)
+	meta, loc, err := c.memCatalog.CommitTable(ctx, ident, reqs, updates)
+	if err == nil {
+		// Counted after the fact so this is commits, not attempts: a retry would
+		// otherwise inflate the count and deflate the reported records/commit.
+		c.commits.Add(1)
+	}
+	return meta, loc, err
 }
 
 // regimeParams describes one point in the sweep.
@@ -135,6 +140,10 @@ func runRegime(tb testing.TB, p regimeParams) regimeResult {
 	start := time.Now()
 	for i := range p.inFlight {
 		wg.Go(func() {
+			// The deadline is checked before submitting, so elapsed includes the
+			// tail of each submitter's last in-flight commit and can overshoot
+			// the window by up to one commit latency. Records from that tail are
+			// counted too, so the derived rate stays representative.
 			for time.Now().Before(deadline) {
 				df, err := recordCountDataFile(tbl.Spec(),
 					fmt.Sprintf("%s/data/%s.parquet", tbl.Location(), uuid.New()),
@@ -225,7 +234,6 @@ func TestCommitRegimeSweep(t *testing.T) {
 				window:           window,
 			})
 			results = append(results, res)
-			t.Log(res.String())
 		}
 	}
 
@@ -286,9 +294,13 @@ func TestCommitCoalescesConcurrentSubmissions(t *testing.T) {
 
 	commits := cat.commits.Load()
 	require.Positive(t, commits, "expected at least one commit")
-	require.Less(t, commits, int64(inFlight),
-		"expected %d concurrent submissions to coalesce into fewer than %d commits, got %d",
-		inFlight, inFlight, commits)
+	// Tight on purpose: `< inFlight` would pass at 7-of-8, which is essentially
+	// no coalescing. The mechanism under test merges a queued cohort into one
+	// commit, so allow only a small margin for the cohort being split across two
+	// commits by scheduling.
+	require.LessOrEqual(t, commits, int64(2),
+		"expected %d concurrent submissions to coalesce into at most 2 commits, got %d",
+		inFlight, commits)
 	t.Logf("%d concurrent submissions coalesced into %d commits (%.2f submissions/commit)",
 		inFlight, commits, float64(inFlight)/float64(commits))
 }

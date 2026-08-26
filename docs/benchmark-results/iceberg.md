@@ -242,11 +242,13 @@ To reproduce: `GOMAXPROCS=1 go test -bench BenchmarkShredWide -benchmem -run '^$
 
 ---
 
-## Commit Regime — Commit Latency vs `max_in_flight` (synthetic)
+## Commit Regime — Commit Latency vs `max_in_flight` (synthetic) — 2026-08-18
 
 How commit coalescing responds to catalog commit latency and the number of concurrent in-flight submissions, measured by the flag-gated `TestCommitRegimeSweep` in [`internal/impl/iceberg/commit_regime_bench_test.go`](../../internal/impl/iceberg/commit_regime_bench_test.go).
 
 **Environment:** darwin/arm64, Apple M3 Pro; in-memory catalog with a fixed injected per-commit delay; 6s window per point; 300 records per submission
+
+**Changed since last run:** first run of this harness ([#4712](https://github.com/redpanda-data/connect/pull/4712)). No production change — the committer and its batcher are as on `main`. These numbers describe batcher coalescing behaviour, so re-run them if the commit batching path changes.
 
 **Caveat — read the numbers as ratios, not throughput.** Nothing here writes parquet or touches object storage, and the injected delay is not a real catalog, so the absolute rec/sec are not sink throughput figures and are not comparable with the localhost or live-catalog sections above. What the harness measures is how many submissions a commit carries, and at what latency.
 

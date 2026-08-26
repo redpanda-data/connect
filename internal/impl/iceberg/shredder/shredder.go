@@ -87,6 +87,14 @@ type RecordShredder struct {
 	// iceberg's recommended convention and with engines like Spark and Trino
 	// in their default configurations.
 	caseSensitive bool
+	// duplicateFieldNames records whether any struct in the schema repeats a
+	// field name. When it does, shredStructExact cannot use its matched-count
+	// shortcut: the count is per field, so two fields sharing a name inflate it
+	// and an unaccounted-for input key can be mistaken for a full match, which
+	// would silently drop an unknown-field notification and with it schema
+	// evolution of that column. Pinned by
+	// TestShredStructPathsAgreeWithDuplicateFieldNames.
+	duplicateFieldNames bool
 	// fieldCommons optionally maps an iceberg field ID to the upstream
 	// schema.Common describing the same field. When present, the leaf
 	// value-conversion step uses Logical params (timestamp unit,
@@ -115,10 +123,50 @@ type RecordShredder struct {
 // if false, matching is case-insensitive (and ambiguous case-only duplicates
 // in the input cause an error).
 func NewRecordShredder(schema *iceberg.Schema, caseSensitive bool) *RecordShredder {
+	rootFields := schema.Fields()
 	return &RecordShredder{
-		schema:        schema,
-		rootFields:    schema.Fields(),
-		caseSensitive: caseSensitive,
+		schema:              schema,
+		rootFields:          rootFields,
+		caseSensitive:       caseSensitive,
+		duplicateFieldNames: hasDuplicateFieldNames(rootFields),
+	}
+}
+
+// hasDuplicateFieldNames reports whether any struct in the schema tree repeats a
+// field name. Iceberg rejects duplicate field *IDs* but not duplicate names, and
+// nothing upstream of the shredder enforces name uniqueness in case-sensitive
+// mode — so this has to be treated as possible rather than assumed away.
+//
+// Computed once per shredder because it only gates an optimisation
+// (shredStructExact's unknown-field shortcut); the walk is over schema
+// structure, not data, so it costs nothing per record.
+func hasDuplicateFieldNames(fields []iceberg.NestedField) bool {
+	seen := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		if _, dup := seen[field.Name]; dup {
+			return true
+		}
+		seen[field.Name] = struct{}{}
+		if nestedHasDuplicateFieldNames(field.Type) {
+			return true
+		}
+	}
+	return false
+}
+
+// nestedHasDuplicateFieldNames recurses into whatever structs a type contains,
+// including through list element and map value types, since those reach
+// shredStruct too.
+func nestedHasDuplicateFieldNames(typ iceberg.Type) bool {
+	switch t := typ.(type) {
+	case *iceberg.StructType:
+		return hasDuplicateFieldNames(t.FieldList)
+	case *iceberg.ListType:
+		return nestedHasDuplicateFieldNames(t.Element)
+	case *iceberg.MapType:
+		return nestedHasDuplicateFieldNames(t.KeyType) || nestedHasDuplicateFieldNames(t.ValueType)
+	default:
+		return false
 	}
 }
 
@@ -163,23 +211,12 @@ func (rs *RecordShredder) shredStruct(
 		return rs.shredStructExact(fields, value, path, repLevel, defLevel, maxRepLevel, sink)
 	}
 
-	return rs.shredStructFolded(fields, value, path, repLevel, defLevel, maxRepLevel, sink)
-}
-
-// shredStructFolded is the case-insensitive path: input keys are matched against
-// schema field names by their folded (lowercased) form, which means several
-// distinct input keys can collide on one schema field and that collision has to
-// be reported rather than silently resolved.
-//
-// shredStructExact must stay behaviourally identical to this for input that
-// happens to match exactly; TestShredStructPathsAgree pins that.
-func (rs *RecordShredder) shredStructFolded(
-	fields []iceberg.NestedField,
-	value map[string]any,
-	path icebergx.Path,
-	repLevel, defLevel, maxRepLevel int,
-	sink Sink,
-) error {
+	// The case-insensitive body stays inline here rather than in a sibling
+	// function: it runs once per struct per record, and extracting it measured
+	// ~5% slower on BenchmarkShredWideFolded for the extra call. Nothing needs
+	// it callable on its own — TestShredStructPathsAgree compares the two paths
+	// through the public Shred entry point, using a shredder of each kind.
+	//
 	// Build an index of input keys by their match-key (the original key in
 	// case-sensitive mode, or its lowercase form in case-insensitive mode).
 	// In case-insensitive mode, multiple input keys may collide on the same
@@ -307,13 +344,19 @@ func (rs *RecordShredder) shredStructExact(
 		}
 	}
 
-	// Detect unknown fields in input. Field names are unique within a struct,
-	// so each matched field claimed exactly one distinct input key: when the
-	// counts agree, every key is accounted for and there is nothing to report.
-	// That is the steady state once a schema has stabilised, and it makes the
-	// common case allocation-free. (A count above len(value) is impossible for
-	// a well-formed schema, and would simply fall through to the scan.)
-	if matchedKeys == len(value) {
+	// Detect unknown fields in input. When field names are unique within a
+	// struct, each matched field claimed exactly one distinct input key, so
+	// agreeing counts mean every key is accounted for and there is nothing to
+	// report — the steady state once a schema has stabilised, and what makes the
+	// common case allocation-free. (A count above len(value) is harmless: it
+	// falls through to the scan.)
+	//
+	// Duplicate field names break that reasoning, because matchedKeys counts
+	// fields rather than distinct keys: fields [a, a] against {"a":1,"b":2}
+	// reaches 2 == 2 while "b" is genuinely unknown. Iceberg permits duplicate
+	// names, so the shortcut is disabled for such schemas rather than assumed
+	// away.
+	if !rs.duplicateFieldNames && matchedKeys == len(value) {
 		return nil
 	}
 

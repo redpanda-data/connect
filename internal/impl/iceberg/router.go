@@ -147,6 +147,10 @@ type Router struct {
 
 	entries sync.Map // tableKey -> *tableEntry
 
+	// warnedCompression de-duplicates compression warnings, keyed by warning
+	// text, so rebuilding a writer does not re-log one. See warnCompressionOnce.
+	warnedCompression sync.Map
+
 	// parquetCompression is the configured `parquet.compression` value, or ""
 	// when unset. Set after construction by the output, like metrics below, so
 	// NewRouter's signature stays put. Empty means each table falls back to its
@@ -776,6 +780,38 @@ func (*Router) closeWriter(entry *tableEntry) {
 	}
 }
 
+// writerOptsFor returns the parquet writer options for one table: the options
+// configured on the output, plus that table's resolved compression codec.
+//
+// Compression is resolved per table because the fallback reads the table's own
+// write.parquet.compression-codec property, so two tables under one output can
+// legitimately land on different codecs.
+//
+// slices.Concat, not append: appending to r.writerOpts would hand successive
+// tables the same backing array whenever it has spare capacity, and each would
+// overwrite the previous table's codec option. Pinned by
+// TestWriterOptsForIsolatesTables.
+func (r *Router) writerOptsFor(props iceberg.Properties) []parquet.WriterOption {
+	codec, warning := resolveParquetCompression(r.parquetCompression, props)
+	if warning != "" {
+		r.warnCompressionOnce(warning)
+	}
+	return slices.Concat(r.writerOpts, []parquet.WriterOption{parquet.Compression(codec)})
+}
+
+// warnCompressionOnce logs a compression warning the first time it is seen and
+// stays quiet afterwards. Writers are rebuilt whenever a write fails (see
+// closeWriter), so a retrying pipeline against a table whose property names an
+// unwritable codec would otherwise emit the same warning without bound.
+func (r *Router) warnCompressionOnce(warning string) {
+	if _, seen := r.warnedCompression.LoadOrStore(warning, struct{}{}); seen {
+		return
+	}
+	if r.logger != nil {
+		r.logger.Warn(warning)
+	}
+}
+
 // createWriter creates a new writer for a table.
 // Caller must hold entry.mu.Lock() and ensure entry.writer is nil.
 func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEntry) (*writer, error) {
@@ -919,15 +955,7 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 		}
 	}
 
-	// Resolve compression per table, since the fallback reads that table's own
-	// property. slices.Concat rather than append: appending to r.writerOpts
-	// would share its backing array between tables, so two tables resolving to
-	// different codecs could overwrite each other's option.
-	writerOpts := slices.Concat(r.writerOpts, []parquet.WriterOption{
-		parquet.Compression(resolveParquetCompression(r.parquetCompression, writerTbl.Properties(), r.logger)),
-	})
-
-	w := NewWriter(writerTbl, comm, r.caseSensitive, writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
+	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOptsFor(writerTbl.Properties()), r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
 	w.metrics = r.metrics
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
