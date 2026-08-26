@@ -337,8 +337,18 @@ func (e *efoRecordSource) run(sub efoSubscription, pos types.StartingPosition, l
 				SequenceNumber: &continuation,
 			}
 		}
-		if streamErr != nil {
-			e.log.Errorf("Enhanced fan-out subscription for shard '%v' failed: %v", e.shardID, streamErr)
+		// Escalate the backoff whenever the subscription ended without
+		// delivering any event, whether or not it ended with an error: an
+		// errorless, eventless close is exactly how the subscription
+		// ping-pong from a shard-steal ends, and without escalating here it
+		// would resubscribe at the one-second floor forever, saturating the
+		// SubscribeToShard limit rather than backing off.
+		if streamErr != nil || !sawEvent {
+			if streamErr != nil {
+				e.log.Errorf("Enhanced fan-out subscription for shard '%v' failed: %v", e.shardID, streamErr)
+			} else {
+				e.log.Debugf("Enhanced fan-out subscription for shard '%v' ended without delivering any event", e.shardID)
+			}
 			select {
 			case <-time.After(boff.NextBackOff()):
 			case <-e.ctx.Done():

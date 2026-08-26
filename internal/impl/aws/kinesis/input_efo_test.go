@@ -633,3 +633,70 @@ func TestEFOSourceCloseStopsPump(t *testing.T) {
 		t.Fatal("expected the subscription to be closed")
 	}
 }
+
+// TestEFOSourceEscalatesBackoffWithoutEvents covers the case where a
+// subscription's event stream closes without ever delivering an event and
+// without sub.Err() being set (exactly how the subscription ping-pong from a
+// shard steal ends). Prior to the fix, boff was neither reset (sawEvent is
+// false) nor advanced (the escalation was gated on a non-nil stream error),
+// so the pump would resubscribe forever at the bare efoResubscribeFloor
+// cadence instead of escalating.
+func TestEFOSourceEscalatesBackoffWithoutEvents(t *testing.T) {
+	// A larger-than-1ms floor is used (rather than the fastEFOResubscribe
+	// helper's 1ms) so that the escalating backoff dominates measured gaps
+	// over fixed scheduling/timer overhead, keeping the elapsed-time
+	// assertion below deterministic rather than a tight, flake-prone bound.
+	old := efoResubscribeFloor
+	efoResubscribeFloor = 5 * time.Millisecond
+	t.Cleanup(func() {
+		efoResubscribeFloor = old
+	})
+
+	const wantSubscribes = 10
+
+	var (
+		mu    sync.Mutex
+		times []time.Time
+	)
+	allDone := make(chan struct{})
+
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		sub := newFakeSubscription()
+		close(sub.events) // ends immediately: no events, no error
+
+		mu.Lock()
+		times = append(times, time.Now())
+		n := len(times)
+		mu.Unlock()
+
+		if n == wantSubscribes {
+			close(allDone)
+		}
+		return sub, nil
+	}, "shard-0", "", true, 20*time.Millisecond, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer src.Close()
+
+	select {
+	case <-allDone:
+	case <-time.After(3 * time.Second):
+	}
+
+	mu.Lock()
+	got := append([]time.Time{}, times...)
+	mu.Unlock()
+
+	require.GreaterOrEqual(t, len(got), wantSubscribes,
+		"expected %d subscribe cycles within the deadline, got %d", wantSubscribes, len(got))
+
+	// Without escalation, every resubscribe would be spaced by roughly
+	// efoResubscribeFloor alone, so the total elapsed time across all the
+	// cycles would sit close to (n-1)*efoResubscribeFloor. With escalation,
+	// the exponentially growing backoff wait dominates, so require the
+	// actual elapsed time to clear that floor-only baseline by a wide,
+	// noise-tolerant margin.
+	elapsed := got[len(got)-1].Sub(got[0])
+	floorOnlyBaseline := time.Duration(len(got)-1) * efoResubscribeFloor
+	assert.Greater(t, elapsed, floorOnlyBaseline*3,
+		"expected resubscribe backoff to escalate when no events are delivered: elapsed=%v floorOnlyBaseline=%v", elapsed, floorOnlyBaseline)
+}
