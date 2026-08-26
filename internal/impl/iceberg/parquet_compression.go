@@ -27,7 +27,7 @@ import (
 //   - lz4: the original LZ4 codec was ambiguously specified (Hadoop framing vs.
 //     raw blocks) and readers disagree on which one `LZ4` means. parquet-go
 //     cannot write it at all.
-//   - lz4raw: the unambiguous replacement, so the objection above does not
+//   - lz4_raw: the unambiguous replacement, so the objection above does not
 //     apply — but reader support for it is younger and less universal than
 //     snappy or zstd, which is reason enough not to write it by default.
 //   - brotli, lzo: read support across engines is patchy.
@@ -56,10 +56,16 @@ var parquetCompressionCodecs = map[string]compress.Codec{
 // values that are simply unrecognised, so the operator is told which of the two
 // happened.
 var declinedCompressionCodecs = map[string]struct{}{
-	"lz4":    {},
-	"lz4raw": {},
-	"brotli": {},
-	"lzo":    {},
+	"lz4": {},
+	// Both spellings: a table property follows the parquet codec names, where it
+	// is LZ4_RAW, but iceberg-go's own lookup spells it "lz4raw" — so either can
+	// turn up in a property depending on who set it. Getting both here is what
+	// makes the operator see "this output does not write it" rather than the
+	// misleading "not a codec this output recognises".
+	"lz4_raw": {},
+	"lz4raw":  {},
+	"brotli":  {},
+	"lzo":     {},
 }
 
 // normaliseCodecName folds a codec name for lookup. Codec names are ASCII, so

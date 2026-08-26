@@ -791,24 +791,30 @@ func (*Router) closeWriter(entry *tableEntry) {
 // tables the same backing array whenever it has spare capacity, and each would
 // overwrite the previous table's codec option. Pinned by
 // TestWriterOptsForIsolatesTables.
-func (r *Router) writerOptsFor(props iceberg.Properties) []parquet.WriterOption {
+func (r *Router) writerOptsFor(key tableKey, props iceberg.Properties) []parquet.WriterOption {
 	codec, warning := resolveParquetCompression(r.parquetCompression, props)
 	if warning != "" {
-		r.warnCompressionOnce(warning)
+		r.warnCompressionOnce(key, warning)
 	}
 	return slices.Concat(r.writerOpts, []parquet.WriterOption{parquet.Compression(codec)})
 }
 
-// warnCompressionOnce logs a compression warning the first time it is seen and
-// stays quiet afterwards. Writers are rebuilt whenever a write fails (see
+// warnCompressionOnce logs a compression warning once per table and stays quiet
+// for that table afterwards. Writers are rebuilt whenever a write fails (see
 // closeWriter), so a retrying pipeline against a table whose property names an
 // unwritable codec would otherwise emit the same warning without bound.
-func (r *Router) warnCompressionOnce(warning string) {
-	if _, seen := r.warnedCompression.LoadOrStore(warning, struct{}{}); seen {
+//
+// Keyed on the table as well as the message, because a router is inherently
+// multi-table — namespace and table are interpolated per message — so keying on
+// the message alone would report the first affected table and silently swallow
+// every other one. The message names the table for the same reason: otherwise
+// there is no way to tell whose data files went uncompressed.
+func (r *Router) warnCompressionOnce(key tableKey, warning string) {
+	if _, seen := r.warnedCompression.LoadOrStore(key.namespace+"\x00"+key.table+"\x00"+warning, struct{}{}); seen {
 		return
 	}
 	if r.logger != nil {
-		r.logger.Warn(warning)
+		r.logger.Warnf("Table %s.%s: %s", key.namespace, key.table, warning)
 	}
 }
 
@@ -955,7 +961,7 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 		}
 	}
 
-	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOptsFor(writerTbl.Properties()), r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
+	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOptsFor(key, writerTbl.Properties()), r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
 	w.metrics = r.metrics
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 

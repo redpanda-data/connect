@@ -9,6 +9,9 @@
 package iceberg
 
 import (
+	"bytes"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/apache/iceberg-go"
@@ -222,8 +225,10 @@ func TestWriterOptsForIsolatesTables(t *testing.T) {
 
 	r := &Router{writerOpts: base, logger: service.MockResources().Logger()}
 
-	zstdOpts := r.writerOptsFor(iceberg.Properties{table.ParquetCompressionKey: "zstd"})
-	snappyOpts := r.writerOptsFor(iceberg.Properties{table.ParquetCompressionKey: "snappy"})
+	zstdOpts := r.writerOptsFor(tableKey{namespace: "ns", table: "a"},
+		iceberg.Properties{table.ParquetCompressionKey: "zstd"})
+	snappyOpts := r.writerOptsFor(tableKey{namespace: "ns", table: "b"},
+		iceberg.Properties{table.ParquetCompressionKey: "snappy"})
 
 	// Both carry the base option plus their own codec.
 	require.Len(t, zstdOpts, 2)
@@ -322,4 +327,43 @@ func TestParquetCompressionConfigParsing(t *testing.T) {
 			require.Equal(t, wantCodec, codec.CompressionCodec())
 		})
 	}
+}
+
+// TestCompressionWarningIsPerTable pins two things about the warning that a
+// router-wide de-duplication could plausibly get wrong: it must name the table
+// it concerns, and it must not swallow a second affected table just because the
+// message text repeats.
+//
+// It must still suppress repeats for the SAME table, which is the reason the
+// de-duplication exists — writers are rebuilt on every write failure, so a
+// retrying pipeline would otherwise log without bound.
+func TestCompressionWarningIsPerTable(t *testing.T) {
+	var buf bytes.Buffer
+	logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelWarn,
+	})))
+	r := &Router{logger: logger}
+
+	badProps := iceberg.Properties{table.ParquetCompressionKey: "lz4"}
+	first := tableKey{namespace: "ns", table: "orders"}
+	second := tableKey{namespace: "ns", table: "payments"}
+
+	// Same table three times — as a retry loop rebuilding its writer would.
+	for range 3 {
+		r.writerOptsFor(first, badProps)
+	}
+	// A different table with the identical property value.
+	r.writerOptsFor(second, badProps)
+
+	logged := buf.String()
+	require.Equal(t, 1, strings.Count(logged, "ns.orders"),
+		"expected exactly one warning for the first table despite three writer builds")
+	require.Equal(t, 1, strings.Count(logged, "ns.payments"),
+		"the second affected table must still be reported, not swallowed by de-duplication")
+
+	// A table whose property is fine must stay silent.
+	buf.Reset()
+	r.writerOptsFor(tableKey{namespace: "ns", table: "fine"},
+		iceberg.Properties{table.ParquetCompressionKey: "zstd"})
+	require.Empty(t, buf.String(), "a supported codec must not warn")
 }
