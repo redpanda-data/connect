@@ -32,6 +32,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
@@ -43,9 +45,6 @@ const (
 	// StandbyStatusUpdateByteID is the byte ID for StandbyStatusUpdate messages.
 	StandbyStatusUpdateByteID = 'r'
 
-	// pgErrCodeInsufficientPrivilege is the Postgres SQLSTATE for a
-	// permission-denied error, e.g. "must be owner of publication ..." or
-	// "must be superuser to create FOR ALL TABLES publication".
 	pgErrCodeInsufficientPrivilege = "42501"
 )
 
@@ -281,7 +280,7 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 }
 
 // CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag.
-func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
+func CreatePublication(ctx context.Context, conn *pgconn.PgConn, logger *service.Logger, publicationName string, tables []TableFQN) error {
 	// Check if publication exists
 	pubQuery, err := sanitize.SQLQuery(`
 			SELECT pubname, puballtables
@@ -338,6 +337,17 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		// existing publication either. So this drops and recreates it
 		// instead. Sent as one Exec call so Postgres implicitly wraps it in
 		// a transaction: a failed CREATE rolls back the DROP too.
+		//
+		// This is destructive to state this connector doesn't necessarily
+		// own - the publication may have been pre-created by the operator,
+		// possibly with non-default options (e.g. WITH (publish = ...)) -
+		// so warn loudly rather than silently replacing it.
+		oldShape, newShape := "FOR ALL TABLES", fmt.Sprintf("an explicit list of %d table(s)", len(tables))
+		if desiredIsForAllTables {
+			oldShape, newShape = "a named table list", "FOR ALL TABLES"
+		}
+		logger.Warnf("Dropping and recreating publication %q to change it from %s to %s: PostgreSQL has no ALTER PUBLICATION form for this transition. Any options set on the existing publication (e.g. WITH (publish = ...)) will be reset to their defaults.", publicationName, oldShape, newShape)
+
 		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s %s;", publicationName, publicationName, tablesClause))
 		if err != nil {
 			return fmt.Errorf("sanitizing publication recreation query: %w", err)

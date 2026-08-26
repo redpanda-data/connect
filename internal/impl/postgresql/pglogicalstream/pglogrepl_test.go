@@ -29,6 +29,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
@@ -237,6 +238,8 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
+	logger := service.MockResources().Logger()
+
 	createSchema := func(t *testing.T, name string) {
 		t.Helper()
 		_, err := conn.Exec(t.Context(), fmt.Sprintf("CREATE SCHEMA %s;", name)).ReadAll()
@@ -269,7 +272,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		// schema on cleanup before returning.
 		const publicationName = "pub_all_tables_empty"
 
-		err := CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
+		err := CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{})
 		require.NoError(t, err)
 
 		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
@@ -289,7 +292,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		_, err := multiReader.ReadAll()
 		require.NoError(t, err)
 
-		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{})
 		require.NoError(t, err)
 
 		require.True(t, isForAllTables(t, publicationName))
@@ -298,7 +301,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		// Postgres can't ALTER a FOR ALL TABLES publication down to a
 		// named table list, this drops and recreates the publication as a
 		// named-table one containing just "orders".
-		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"orders"`}})
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{{schema, `"orders"`}})
 		require.NoError(t, err)
 		assert.False(t, isForAllTables(t, publicationName), "narrowing an existing FOR ALL TABLES publication to an explicit table list should actually take effect, not silently leave it as FOR ALL TABLES")
 
@@ -322,7 +325,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		err := CreatePublication(t.Context(), conn, publicationName, []TableFQN{
+		err := CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
 			{schema, `"widgets"`},
 			{schema, `"gadgets"`},
 		})
@@ -340,7 +343,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		// form to convert a named-table publication to FOR ALL TABLES
 		// either, this drops and recreates the publication as FOR ALL
 		// TABLES.
-		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{})
 		require.NoError(t, err)
 		assert.True(t, isForAllTables(t, publicationName), "moving an existing named-table publication to an empty table list should make it FOR ALL TABLES")
 	})
@@ -356,7 +359,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		_, err := multiReader.ReadAll()
 		require.NoError(t, err)
 
-		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"single_table"`}})
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{{schema, `"single_table"`}})
 		require.NoError(t, err)
 
 		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
@@ -380,10 +383,10 @@ func TestIntegrationCreatePublication(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		err := CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"add_table1"`}})
+		err := CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{{schema, `"add_table1"`}})
 		require.NoError(t, err)
 
-		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
 			{schema, `"add_table2"`},
 			{schema, `"add_table1"`},
 		})
@@ -411,13 +414,13 @@ func TestIntegrationCreatePublication(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		err := CreatePublication(t.Context(), conn, publicationName, []TableFQN{
+		err := CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
 			{schema, `"remove_table1"`},
 			{schema, `"remove_table2"`},
 		})
 		require.NoError(t, err)
 
-		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
 			{schema, `"remove_table1"`},
 		})
 		require.NoError(t, err)
@@ -443,12 +446,12 @@ func TestIntegrationCreatePublication(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		err := CreatePublication(t.Context(), conn, publicationName, []TableFQN{
+		err := CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
 			{schema, `"addremove_old"`},
 		})
 		require.NoError(t, err)
 
-		err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
 			{schema, `"addremove_new"`},
 		})
 		require.NoError(t, err)
@@ -478,14 +481,14 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		_, err = multiReader.ReadAll()
 		require.NoError(t, err)
 
-		err = CreatePublication(t.Context(), conn, publicationQuotedIdentifiers, []TableFQN{
+		err = CreatePublication(t.Context(), conn, logger, publicationQuotedIdentifiers, []TableFQN{
 			{caseSensitiveSchema, caseSensitiveTable},
 			{caseSensitiveSchema, caseSensitiveTable2},
 		})
 		require.NoError(t, err)
 
 		// Remove one table with a quoted identifier from the publication.
-		err = CreatePublication(t.Context(), conn, publicationQuotedIdentifiers, []TableFQN{
+		err = CreatePublication(t.Context(), conn, logger, publicationQuotedIdentifiers, []TableFQN{
 			{caseSensitiveSchema, caseSensitiveTable},
 		})
 		require.NoError(t, err)
@@ -514,9 +517,11 @@ func TestIntegrationStartReplication(t *testing.T) {
 	sysident, err := IdentifySystem(ctx, conn)
 	require.NoError(t, err)
 
+	logger := service.MockResources().Logger()
+
 	// create publication
 	publicationName := "test_publication"
-	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
+	err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{})
 	require.NoError(t, err)
 
 	_, _, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
