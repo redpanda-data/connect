@@ -191,7 +191,7 @@ A list of table names to include in the logical replication. Each table should b
 
 If left empty, the underlying PostgreSQL publication is created `FOR ALL TABLES`, which replicates every table in every schema of the database, ignoring `schema`. This also disables `stream_snapshot`, since the initial snapshot is only planned for tables listed here.
 
-Changing this list between empty and non-empty on an existing publication drops and recreates it, since PostgreSQL has no way to alter a `FOR ALL TABLES` publication into a named table list or back again. Recreating it as `FOR ALL TABLES` (by clearing this field) requires the connecting role to be a superuser. Adding or removing tables while keeping the list non-empty only alters the existing publication in place, and needs no elevated privileges beyond table ownership.
+Changing this list between empty and non-empty on an existing publication drops and recreates it, since PostgreSQL has no way to alter a `FOR ALL TABLES` publication into a named table list or back again. The recreated publication is created with default options, so any custom options set on it beforehand (for example `WITH (publish = 'insert')`) are lost; a warning is logged whenever this happens. Recreating it as `FOR ALL TABLES` (by clearing this field) requires the connecting role to be a superuser. Adding or removing tables while keeping the list non-empty only alters the existing publication in place, and needs no elevated privileges beyond table ownership.
 
 
 *Type*: `array`
