@@ -797,12 +797,28 @@ func (m *schemaRegistryMigrator) syncSubjectSchema(ctx context.Context, ss sr.Su
 	var info schemaInfo
 	t0 := time.Now()
 	if m.conf.TranslateIDs {
-		// If the schema already exists (and is identical), this returns
-		// the existing schema
-		dss, err := m.dst.CreateSchema(ctx, dstSubject, sch)
+		// Register with a registry-assigned ID. If the schema is already
+		// registered (and identical), this returns the existing ID without
+		// creating a new version.
+		//
+		// RegisterSchema is used instead of CreateSchema because CreateSchema
+		// additionally resolves the returned ID via SchemaUsagesByID, which
+		// fetches every subject-version sharing that ID using one unbounded
+		// goroutine per usage. Identical schema bodies deduplicate to a single
+		// ID, so syncing N such subjects costs O(N^2) destination requests,
+		// none of them bounded by MaxParallelHTTPRequests.
+		const autoAssign = -1
+		id, err := m.dst.RegisterSchema(ctx, dstSubject, sch, autoAssign, autoAssign)
 		if err != nil {
 			m.metrics.IncSchemaCreateErrors()
 			return schemaInfo{}, fmt.Errorf("create schema: %w", err)
+		}
+
+		// Single lookup to resolve the destination version for this subject.
+		dss, err := m.dst.LookupSchema(ctx, dstSubject, sch)
+		if err != nil {
+			m.metrics.IncSchemaCreateErrors()
+			return schemaInfo{}, fmt.Errorf("lookup created schema with id %d: %w", id, err)
 		}
 
 		info = schemaInfoFromSubjectSchema(dss)
