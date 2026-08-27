@@ -13,6 +13,10 @@ provider "aws" {
       Project            = "redpanda-connect-bench"
       "bench-session-id" = var.bench_session_id
       ManagedBy          = "terraform"
+      # A live bench crossing the org cloud-nuke's ~02:25 UTC sweep must
+      # not be terminated mid-run. OUR reaper still owns cleanup — it
+      # keys on Project, not this tag, so the 4h TTL is unaffected.
+      "cloud-nuke-excluded" = "true"
     }
   }
 }

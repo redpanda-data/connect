@@ -30,6 +30,10 @@ provider "aws" {
       Project   = "redpanda-connect-bench-persistent"
       Stack     = "persistent"
       ManagedBy = "terraform"
+      # Opts out of the org's nightly ci-cloud-nuke sweep (~02:25 UTC),
+      # which deleted the reaper's schedule rule every night 2026-08-18→27,
+      # two of the three soak alarms, and the old tfstate lock table 4x.
+      "cloud-nuke-excluded" = "true"
     }
   }
 }

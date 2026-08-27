@@ -86,10 +86,13 @@ files named below.
   2026-08-18 → 27): it deleted the tfstate lock table four times (why the
   backend now uses S3-native `use_lockfile` locking), disarmed the orphan
   reaper's schedule rule **every night**, and deleted the stall + backlog
-  alarms. Until the persistent stack gets a cloud-nuke exemption:
-  re-`task aws:persistent` after any gap to restore the rule/alarms, and do
-  NOT run a bench across 02:25 UTC (19:25 PT) — cloud-nuke terminates live
-  bench EC2 the same way. The exemption is the top operational follow-up.
+  alarms. The exemption is the `cloud-nuke-excluded = true` tag, applied via
+  `default_tags` in all three stacks — the persistent stack so the reaper
+  schedule and alarms survive, the session stacks so a live bench crossing
+  02:25 UTC isn't terminated mid-run. Our OWN reaper keys on `Project`, not
+  this tag, so bench cleanup at the 4h TTL is unaffected. Any new resource
+  created OUTSIDE these providers (e.g. the manually-bootstrapped tfstate
+  bucket) must carry the tag itself.
 
 - postgres_cdc IAM auth cannot work against vanilla RDS (replication-
   protocol connections reject IAM tokens — verified live 2026-08-12), so
