@@ -199,13 +199,14 @@ Tests migration of compatibility mode settings.
 
 ### `TestIntegrationSchemaRegistryMigratorSyncSharedSchemaFanout`
 
-Guards against O(N^2) destination-registry traffic when syncing subjects that share identical schema bodies with `translate_ids` enabled.
-- Creates source and destination clusters with Schema Registry
+Guards against O(N^2) destination-registry traffic when syncing subjects that share identical schema bodies, in both ID-translation modes.
+- Creates source and destination clusters with Schema Registry (per subtest: `translate_ids: true` with READWRITE destination, `translate_ids: false` with IMPORT destination)
 - Places a counting reverse proxy in front of the destination Schema Registry, recording request counts by endpoint and peak concurrent in-flight requests
 - Registers 40 source subjects sharing one identical schema body (which deduplicate to a single destination schema ID)
-- Syncs with `translate_ids: true` and `max_parallel_http_requests: 2`
+- Syncs with `max_parallel_http_requests: 2`
 - Validates:
-  - Destination subject-version reads stay O(N) (no per-registration fan-out to every subject sharing the destination schema ID)
+  - At least one destination registration per subject occurred (guards against a vacuous pass)
+  - Zero requests to the schema-usage endpoints (no per-registration fan-out to the subject-versions sharing the destination schema ID)
   - Peak destination request concurrency respects `max_parallel_http_requests`
 
 ## Topic Migration Tests (`migrator_topic_integration_test.go`)

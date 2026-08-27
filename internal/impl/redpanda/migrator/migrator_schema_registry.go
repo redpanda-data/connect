@@ -367,14 +367,6 @@ type schemaInfo struct {
 	ID      int
 }
 
-func schemaInfoFromSubjectSchema(ss sr.SubjectSchema) schemaInfo {
-	return schemaInfo{
-		Subject: ss.Subject,
-		Version: ss.Version,
-		ID:      ss.ID,
-	}
-}
-
 // schemaRegistryMigrator coordinates migration between a source and destination
 // Schema Registry.
 //
@@ -821,7 +813,11 @@ func (m *schemaRegistryMigrator) syncSubjectSchema(ctx context.Context, ss sr.Su
 		m.log.Infof("Schema migration: schema created with translated id: subject=%s version=%d id=%d => subject=%s id=%d",
 			ss.Subject, ss.Version, ss.ID, info.Subject, info.ID)
 	} else {
-		dss, err := m.dst.CreateSchemaWithIDAndVersion(ctx, dstSubject, sch, ss.ID, ss.Version)
+		// RegisterSchema instead of CreateSchemaWithIDAndVersion for the same
+		// reason as above: the latter resolves the registered ID through the
+		// unbounded SchemaUsagesByID fan-out, and the ID and version are
+		// already known here.
+		id, err := m.dst.RegisterSchema(ctx, dstSubject, sch, ss.ID, ss.Version)
 		if err != nil {
 			const conflictPattern = `Schema already registered with id \d+ instead of input id \d+`
 			if ok, _ := regexp.MatchString(conflictPattern, err.Error()); ok {
@@ -844,11 +840,10 @@ func (m *schemaRegistryMigrator) syncSubjectSchema(ctx context.Context, ss sr.Su
 			m.log.Warnf("Schema migration: schema subject=%s version=%d id=%d could not be created (server error: %s) - using existing schema with the same ID, if this is not the desired behavior, try enabling translate-ids",
 				ss.Subject, ss.Version, ss.ID, err.Error())
 
-			dss = ss
-			dss.Subject = dstSubject
+			id = ss.ID
 		}
 
-		info = schemaInfoFromSubjectSchema(dss)
+		info = schemaInfo{Subject: dstSubject, Version: ss.Version, ID: id}
 		m.log.Infof("Schema migration: schema created with fixed id: subject=%s version=%d id=%d",
 			info.Subject, info.Version, info.ID)
 	}
