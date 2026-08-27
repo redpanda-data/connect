@@ -9,23 +9,30 @@ resource "aws_sns_topic" "soak_alerts" {
 }
 
 variable "soak_alert_email" {
-  # Endpoint for soak alarm notifications — the pipeline's only acute
-  # channel, so it must be a monitored team alias, not an individual's
-  # mailbox (a personal default rots silently when that person moves on).
-  # No default on purpose: an unconfigured apply fails loudly instead of
-  # subscribing a stale address. Pass via TF_VAR_soak_alert_email at
-  # `task aws:persistent` time. SNS sends a confirmation email on first
-  # apply — the subscription is inactive until the link is clicked.
-  # Swap for AWS Chatbot / Slack later without touching the alarms.
-  type = string
+  # Email backup for soak alarm notifications. Slack (slack.tf) is the
+  # primary channel; when it's configured this may be empty. If used, it
+  # must be a monitored team alias, not an individual's mailbox (a personal
+  # default rots silently when that person moves on). SNS sends a
+  # confirmation email on first apply — the subscription is inactive until
+  # the link is clicked.
+  type    = string
+  default = ""
 
   validation {
-    condition     = can(regex("^[^@\\s]+@[^@\\s]+$", var.soak_alert_email))
-    error_message = "soak_alert_email must be a single email address (use a team alias, not a personal mailbox)."
+    condition     = var.soak_alert_email == "" || can(regex("^[^@\\s]+@[^@\\s]+$", var.soak_alert_email))
+    error_message = "soak_alert_email must be a single email address (use a team alias, not a personal mailbox), or empty when Slack delivery is configured."
+  }
+
+  validation {
+    # Alerts must never be silently unrouted: an apply with neither the
+    # Slack channel nor an email subscriber fails loudly here.
+    condition     = var.soak_alert_email != "" || (var.slack_workspace_id != "" && var.slack_channel_id != "")
+    error_message = "configure at least one alert channel: TF_VAR_soak_alert_email and/or TF_VAR_slack_workspace_id + TF_VAR_slack_channel_id."
   }
 }
 
 resource "aws_sns_topic_subscription" "soak_alerts_email" {
+  count     = var.soak_alert_email != "" ? 1 : 0
   topic_arn = aws_sns_topic.soak_alerts.arn
   protocol  = "email"
   endpoint  = var.soak_alert_email

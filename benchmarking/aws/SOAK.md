@@ -72,11 +72,17 @@ files named below.
   sweeping every 15 min. A bench legitimately running past 4h needs the
   rule disabled first (and re-enabled after — set a reminder). The
   persistent stack itself is exempt via its distinct Project tag.
-- **Alerts** land at the `redpanda-connect-bench-soak-alerts` SNS topic
-  (email today; swap the subscription for Chatbot/Slack without touching
-  alarms). Alarm emails during a run are the acute channel; a red nightly
-  workflow is the between-builds channel; the `/soak` comment is the
-  before-merge channel.
+- **Alerts** land at the `redpanda-connect-bench-soak-alerts` SNS topic and
+  deliver to Slack via AWS Chatbot (`terraform/persistent/slack.tf`) once
+  the one-time workspace OAuth is done in the Chatbot console and
+  `TF_VAR_slack_workspace_id` + `TF_VAR_slack_channel_id` are passed to
+  `task aws:persistent`. Alarm cards render natively; reaper notices arrive
+  via the custom-notification envelope in `cleanup-lambda/sweep.go` (plain
+  SNS text is silently dropped by Chatbot — keep that envelope). Email
+  (`TF_VAR_soak_alert_email`) is the optional backup subscriber; the apply
+  fails loudly if NEITHER channel is configured. Alarms during a run are
+  the acute channel; a red nightly workflow is the between-builds channel;
+  the `/soak` comment is the before-merge channel.
 
 ## Known limitations
 
