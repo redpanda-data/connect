@@ -1,9 +1,4 @@
 -- PostgreSQL Benchmark Setup Script
-CREATE TABLE IF NOT EXISTS public.rpcn_signal_table (
-    id SERIAL PRIMARY KEY,
-    type VARCHAR(32),
-    data TEXT
-);
 
 CREATE TABLE IF NOT EXISTS public.users (
     id            SERIAL PRIMARY KEY,
@@ -42,3 +37,54 @@ CREATE TABLE IF NOT EXISTS public.cart (
     info       TEXT          NOT NULL
 );
 ALTER TABLE public.cart REPLICA IDENTITY FULL;
+
+-- schema 1
+CREATE SCHEMA IF NOT EXISTS tenant_a;
+CREATE TABLE IF NOT EXISTS tenant_a.users (
+    id            SERIAL PRIMARY KEY,
+    name          VARCHAR(100)    NOT NULL,
+    surname       VARCHAR(100)    NOT NULL,
+    about         TEXT            NOT NULL,
+    email         VARCHAR(255)    NOT NULL,
+    date_of_birth DATE,
+    join_date     DATE,
+    created_at    TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    is_active     BOOLEAN         NOT NULL DEFAULT TRUE,
+    login_count   INT             NOT NULL DEFAULT 0,
+    balance       DECIMAL(10,2)   NOT NULL DEFAULT 0.00
+);
+ALTER TABLE tenant_a.users REPLICA IDENTITY FULL;
+
+-- schema 2
+CREATE SCHEMA IF NOT EXISTS tenant_b;
+CREATE TABLE IF NOT EXISTS tenant_b.users (
+    id            SERIAL PRIMARY KEY,
+    name          VARCHAR(100)    NOT NULL,
+    surname       VARCHAR(100)    NOT NULL,
+    about         TEXT            NOT NULL,
+    email         VARCHAR(255)    NOT NULL,
+    date_of_birth DATE,
+    join_date     DATE,
+    created_at    TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    is_active     BOOLEAN         NOT NULL DEFAULT TRUE,
+    login_count   INT             NOT NULL DEFAULT 0,
+    balance       DECIMAL(10,2)   NOT NULL DEFAULT 0.00
+);
+ALTER TABLE tenant_b.users REPLICA IDENTITY FULL;
+
+-- schema 3
+CREATE SCHEMA IF NOT EXISTS tenant_c;
+CREATE TABLE IF NOT EXISTS tenant_c.users (
+    id            SERIAL PRIMARY KEY,
+    name          VARCHAR(100)    NOT NULL,
+    surname       VARCHAR(100)    NOT NULL,
+    about         TEXT            NOT NULL,
+    email         VARCHAR(255)    NOT NULL,
+    date_of_birth DATE,
+    join_date     DATE,
+    created_at    TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    is_active     BOOLEAN         NOT NULL DEFAULT TRUE,
+    login_count   INT             NOT NULL DEFAULT 0,
+    balance       DECIMAL(10,2)   NOT NULL DEFAULT 0.00
+);
+ALTER TABLE tenant_c.users REPLICA IDENTITY FULL;

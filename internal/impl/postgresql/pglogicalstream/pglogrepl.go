@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -329,47 +328,74 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return fmt.Errorf("getting publication tables: %w", err)
 	}
 
-	// list of tables to publish is empty and publication is for all tables
-	// no update is needed
-	if forAllTables && len(pubTables) == 0 {
+	// No-op only if the caller still wants FOR ALL TABLES too. Checking
+	// pubTables instead of tables would always be true here (a FOR ALL
+	// TABLES publication has no pg_publication_rel rows), silently ignoring
+	// a caller that has since narrowed to an explicit table list.
+	if forAllTables && len(tables) == 0 {
 		return nil
 	}
 
-	tablesToRemoveFromPublication := []TableFQN{}
-	tablesToAddToPublication := []TableFQN{}
-	for _, table := range tables {
-		if !slices.Contains(pubTables, table) {
-			tablesToAddToPublication = append(tablesToAddToPublication, table)
+	// Build sets for O(1) lookup — avoids O(n²) slices.Contains when reconciling
+	// large publication table lists (e.g. 100 schemas × 5 tables = 500 entries).
+	wantSet := make(map[TableFQN]struct{}, len(tables))
+	for _, t := range tables {
+		wantSet[t] = struct{}{}
+	}
+	haveSet := make(map[TableFQN]struct{}, len(pubTables))
+	for _, t := range pubTables {
+		haveSet[t] = struct{}{}
+	}
+
+	var tablesToAdd, tablesToRemove []TableFQN
+	for _, t := range tables {
+		if _, ok := haveSet[t]; !ok {
+			tablesToAdd = append(tablesToAdd, t)
+		}
+	}
+	for _, t := range pubTables {
+		if _, ok := wantSet[t]; !ok {
+			tablesToRemove = append(tablesToRemove, t)
 		}
 	}
 
-	for _, table := range pubTables {
-		if !slices.Contains(tables, table) {
-			tablesToRemoveFromPublication = append(tablesToRemoveFromPublication, table)
+	// Batch DROP: single ALTER statement for all removed tables.
+	if len(tablesToRemove) > 0 {
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "ALTER PUBLICATION %s DROP TABLE ", publicationName)
+		for i, t := range tablesToRemove {
+			if i > 0 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(t.String())
 		}
-	}
-
-	// remove tables from publication
-	for _, dropTable := range tablesToRemoveFromPublication {
-		sq, err := sanitize.SQLQuery(fmt.Sprintf(`ALTER PUBLICATION %s DROP TABLE %s;`, publicationName, dropTable.String()))
+		sb.WriteByte(';')
+		sq, err := sanitize.SQLQuery(sb.String())
 		if err != nil {
-			return fmt.Errorf("sanitizing drop table query: %w", err)
+			return fmt.Errorf("sanitizing drop tables query: %w", err)
 		}
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
-			return fmt.Errorf("removing table from publication: %w", err)
+		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
+			return fmt.Errorf("removing tables from publication: %w", err)
 		}
 	}
 
-	// add tables to publication
-	for _, addTable := range tablesToAddToPublication {
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable.String()))
-		if err != nil {
-			return fmt.Errorf("sanitizing add table query: %w", err)
+	// Batch ADD: single ALTER statement for all new tables.
+	if len(tablesToAdd) > 0 {
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "ALTER PUBLICATION %s ADD TABLE ", publicationName)
+		for i, t := range tablesToAdd {
+			if i > 0 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(t.String())
 		}
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
-			return fmt.Errorf("adding table to publication: %w", err)
+		sb.WriteByte(';')
+		sq, err := sanitize.SQLQuery(sb.String())
+		if err != nil {
+			return fmt.Errorf("sanitizing add tables query: %w", err)
+		}
+		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
+			return fmt.Errorf("adding tables to publication: %w", err)
 		}
 	}
 
@@ -379,12 +405,33 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 // GetPublicationTables returns a list of tables currently in the publication
 // Arguments, in order: list of the tables, exist for all tables, error.
 func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
+	pubQuery, err := sanitize.SQLQuery(`
+		SELECT puballtables
+		FROM pg_publication
+		WHERE pubname = $1;
+	`, publicationName)
+	if err != nil {
+		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+	}
+
+	pubRows, err := conn.Exec(ctx, pubQuery).ReadAll()
+	if err != nil {
+		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+	}
+	if len(pubRows) == 0 || len(pubRows[0].Rows) == 0 {
+		return nil, false, fmt.Errorf("publication %q does not exist", publicationName)
+	}
+	forAllTables := string(pubRows[0].Rows[0][0]) == "t"
+
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
-		tablename as table_name,
-		schemaname as schema_name
-		FROM pg_publication_tables
-		WHERE pubname = $1
+		c.relname AS table_name,
+		n.nspname AS schema_name
+		FROM pg_publication_rel pr
+		JOIN pg_publication p ON p.oid = pr.prpubid
+		JOIN pg_class c ON c.oid = pr.prrelid
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE p.pubname = $1
 		ORDER BY schema_name, table_name;
 	`, publicationName)
 	if err != nil {
@@ -400,7 +447,7 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 	}
 
 	if len(rows) == 0 || len(rows[0].Rows) == 0 {
-		return nil, true, nil // Publication exists and is for all tables
+		return nil, forAllTables, nil
 	}
 
 	tables := make([]TableFQN, 0, len(rows))
@@ -412,7 +459,7 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		tables = append(tables, TableFQN{Table: table, Schema: schema})
 	}
 
-	return tables, false, nil
+	return tables, forAllTables, nil
 }
 
 // StartReplicationOptions are the options for the START_REPLICATION command.

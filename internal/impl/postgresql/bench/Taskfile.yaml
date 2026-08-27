@@ -57,7 +57,7 @@ tasks:
   psql:truncate:
     desc: Truncate all benchmark tables
     cmds:
-      - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
+      - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart, tenant_a.users, tenant_b.users, tenant_c.users;"
 
   psql:drop-slot:
     desc: Drop the bench_slot replication slot so benchmarks can be re-run

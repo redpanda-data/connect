@@ -26,6 +26,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/multischema"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
@@ -98,18 +99,98 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return nil, err
 	}
 
-	schema, err := sanitize.NormalizePostgresIdentifier(config.DBSchema)
-	if err != nil {
-		return nil, fmt.Errorf("invalid schema name %q: %w", config.DBSchema, err)
-	}
-
-	tables := []TableFQN{}
-	for _, table := range config.DBTables {
-		normalized, err := sanitize.NormalizePostgresIdentifier(table)
-		if err != nil {
-			return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+	var (
+		tables []TableFQN
+		schema string
+	)
+	if config.SchemaResolver != nil {
+		if config.SignalTableName != "" {
+			return nil, errors.New("signal_table_name is not supported when schema_include is set")
 		}
-		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
+		schemas, err := config.SchemaResolver.Resolve(ctx, dbConn, config.Logger)
+		if err != nil {
+			return nil, err
+		}
+
+		normalizedTables := make([]string, 0, len(config.DBTables))
+		for _, table := range config.DBTables {
+			normalized, err := sanitize.NormalizePostgresIdentifier(table)
+			if err != nil {
+				return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+			}
+			normalizedTables = append(normalizedTables, normalized)
+		}
+
+		// tables empty here would otherwise fall through to CreatePublication's
+		// FOR ALL TABLES fallback, replicating the whole database and defeating
+		// schema_include/schema_exclude - auto-discover per matched schema instead.
+		autoDiscoverTables := len(normalizedTables) == 0
+
+		existingTablesBySchema, err := multischema.ResolveExistingTables(ctx, dbConn, schemas)
+		if err != nil {
+			return nil, fmt.Errorf("resolving tables in schema(s) %v: %w", schemas, err)
+		}
+
+		tables = make([]TableFQN, 0, len(schemas)*len(normalizedTables))
+		foundTables := make(map[string]bool, len(normalizedTables))
+		for _, schema := range schemas {
+			existingTables := existingTablesBySchema[schema]
+			if autoDiscoverTables {
+				// Only ordinary tables: a partitioned parent must not be
+				// auto-discovered alongside its leaf partitions (which are
+				// themselves ordinary tables) - see ResolveExistingTables.
+				for table, relkind := range existingTables {
+					if relkind != multischema.RelKindOrdinaryTable {
+						continue
+					}
+					tables = append(tables, TableFQN{Schema: schema, Table: table})
+				}
+				continue
+			}
+			for _, table := range normalizedTables {
+				if _, ok := existingTables[table]; !ok {
+					config.Logger.Warnf("Table %s.%s not found, skipping (schema %s matched schema_include pattern %q but does not contain this table)", schema, table, schema, config.SchemaResolver.Include)
+					continue
+				}
+				tables = append(tables, TableFQN{Schema: schema, Table: table})
+				foundTables[table] = true
+			}
+		}
+		if autoDiscoverTables {
+			if len(tables) == 0 {
+				return nil, fmt.Errorf("no tables found in schema(s) %v matching schema_include pattern %q", schemas, config.SchemaResolver.Include)
+			}
+			config.Logger.Debugf("%q has no `tables` list configured: auto-discovered %d table(s) across %d schema(s)", config.SchemaResolver.Include, len(tables), len(schemas))
+		} else {
+			// A table must exist in at least one matched schema. Missing from some
+			// (but not all) matched schemas is tolerated above as a multi-tenant gap;
+			// missing from every matched schema is indistinguishable from a typo and
+			// must fail loudly rather than silently drop the table.
+			var missingTables []string
+			for i, table := range normalizedTables {
+				if !foundTables[table] {
+					missingTables = append(missingTables, config.DBTables[i])
+				}
+			}
+			if len(missingTables) > 0 {
+				return nil, fmt.Errorf("table(s) %v not found in any schema matching schema_include pattern %q", missingTables, config.SchemaResolver.Include)
+			}
+		}
+	} else {
+		var err error
+		schema, err = sanitize.NormalizePostgresIdentifier(config.DBSchema)
+		if err != nil {
+			return nil, fmt.Errorf("invalid schema name %q: %w", config.DBSchema, err)
+		}
+
+		tables = []TableFQN{}
+		for _, table := range config.DBTables {
+			normalized, err := sanitize.NormalizePostgresIdentifier(table)
+			if err != nil {
+				return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+			}
+			tables = append(tables, TableFQN{Schema: schema, Table: normalized})
+		}
 	}
 	batchSize := 1000
 	if config.BatchSize > 0 {
@@ -672,7 +753,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 
 		if len(ranges) > 1 {
 			s.logger.Infof(
-				"created plan in %v to split %s into %d chunks of %d and process in parallel",
+				"Created plan in %v to split %s into %d chunks of %d and process in parallel",
 				time.Since(planStartTime),
 				table,
 				len(ranges),
@@ -680,7 +761,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 			)
 		} else {
 			s.logger.Infof(
-				"created plan in %v to scan %s sequentially",
+				"Created plan in %v to scan %s sequentially",
 				time.Since(planStartTime),
 				table,
 			)

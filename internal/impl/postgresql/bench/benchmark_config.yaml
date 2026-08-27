@@ -6,6 +6,9 @@ input:
     dsn: ${PG_DSN:postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable}
     stream_snapshot: true
     schema: public
+    # schema_include: "*"
+    # schema_exclude:
+    #   - tenant_c
     tables:
       - users
       - products

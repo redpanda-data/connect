@@ -255,7 +255,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{{schema, `"test_table"`}})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Len(t, tables, 1)
@@ -342,6 +342,56 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{`"FooBar"`, `"Foo"`})
 	assert.False(t, forAllTables)
+}
+
+// TestIntegrationCreatePublicationNarrowingFromForAllTablesFailsLoudly
+// guards against a silent no-op when a pipeline that previously ran with an
+// empty table list (FOR ALL TABLES) reconnects with a narrowed, explicit
+// table list on the same slot/publication: CreatePublication must attempt
+// the reconcile - which Postgres rejects, since tables can't be added to or
+// dropped from a FOR ALL TABLES publication - rather than silently leaving
+// the publication as FOR ALL TABLES with no error and no warning.
+func TestIntegrationCreatePublicationNarrowingFromForAllTablesFailsLoudly(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	multiReader := conn.Exec(t.Context(), "CREATE TABLE orders (id serial PRIMARY KEY, name text);")
+	_, err = multiReader.ReadAll()
+	require.NoError(t, err)
+
+	publicationName := "narrowing_test_publication"
+	schema := `"public"`
+
+	// First connect: tables left empty, so the publication is created FOR
+	// ALL TABLES.
+	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
+	require.NoError(t, err)
+
+	tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+	require.NoError(t, err)
+	assert.Empty(t, tables)
+	assert.True(t, forAllTables)
+
+	// Reconnect: the config has since been narrowed to an explicit table
+	// list. This must fail loudly, not silently leave the publication
+	// unchanged.
+	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"orders"`}})
+	require.Error(t, err, "narrowing an existing FOR ALL TABLES publication to an explicit table list should fail, not silently no-op")
+
+	// The publication must still be untouched - still FOR ALL TABLES.
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
+	require.NoError(t, err)
+	assert.Empty(t, tables)
+	assert.True(t, forAllTables)
 }
 
 func TestIntegrationStartReplication(t *testing.T) {
