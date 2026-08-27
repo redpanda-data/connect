@@ -147,8 +147,10 @@ type Router struct {
 
 	entries sync.Map // tableKey -> *tableEntry
 
-	// warnedCompression de-duplicates compression warnings, keyed by warning
-	// text, so rebuilding a writer does not re-log one. See warnCompressionOnce.
+	// warnedCompression de-duplicates compression warnings, keyed by table and
+	// warning text together: rebuilding a writer does not re-log a warning for
+	// that table, but a second table hitting the same problem is still reported.
+	// See warnCompressionOnce.
 	warnedCompression sync.Map
 
 	// parquetCompression is the configured `parquet.compression` value, or ""
