@@ -80,6 +80,20 @@ files named below.
 
 ## Known limitations
 
+- **An org-run `ci-cloud-nuke` sweeps this account nightly (~02:25 UTC)** and
+  deletes at least: DynamoDB tables, EventBridge rules, CloudWatch alarms
+  (untouched ~7 days), and EC2/VPC chains. Confirmed impact (CloudTrail,
+  2026-08-18 → 27): it deleted the tfstate lock table four times (why the
+  backend now uses S3-native `use_lockfile` locking), disarmed the orphan
+  reaper's schedule rule **every night**, and deleted the stall + backlog
+  alarms. The exemption is the `cloud-nuke-excluded = true` tag, applied via
+  `default_tags` in all three stacks — the persistent stack so the reaper
+  schedule and alarms survive, the session stacks so a live bench crossing
+  02:25 UTC isn't terminated mid-run. Our OWN reaper keys on `Project`, not
+  this tag, so bench cleanup at the 4h TTL is unaffected. Any new resource
+  created OUTSIDE these providers (e.g. the manually-bootstrapped tfstate
+  bucket) must carry the tag itself.
+
 - postgres_cdc IAM auth cannot work against vanilla RDS (replication-
   protocol connections reject IAM tokens — verified live 2026-08-12), so
   the credential-rotation window is covered by a future mysql_cdc soak or

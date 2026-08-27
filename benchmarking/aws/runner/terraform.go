@@ -26,11 +26,18 @@ type Terraform struct {
 }
 
 // Init runs `terraform init` with the shared backend config.
+//
+// -reconfigure: the full backend config is passed explicitly on every init,
+// so the saved config in an existing .terraform/ carries no information —
+// but without the flag a backend.hcl change (e.g. the dynamodb_table →
+// use_lockfile migration) hard-fails every pre-existing working directory
+// with "Backend configuration changed" under -input=false.
 func (t *Terraform) Init() error {
 	args := []string{
 		"-chdir=" + t.Dir,
 		"init",
 		"-input=false",
+		"-reconfigure",
 		"-backend-config=" + t.BackendFile,
 		"-backend-config=key=" + t.StateKey + "/terraform.tfstate",
 	}
