@@ -264,12 +264,6 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	}
 
 	t.Run("creates a FOR ALL TABLES publication when tables is empty", func(t *testing.T) {
-		// FOR ALL TABLES publications are database-scoped, not
-		// schema-scoped, so assert.Empty below only holds while no other
-		// user table exists anywhere in the database. That's true here
-		// only because this subtest runs first, subtests run sequentially
-		// (none call t.Parallel()), and every later subtest drops its own
-		// schema on cleanup before returning.
 		const publicationName = "pub_all_tables_empty"
 
 		err := CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{})
