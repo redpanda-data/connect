@@ -289,6 +289,20 @@ func isExpiredIteratorError(err error) bool {
 	return ok
 }
 
+// isStreamsResourceNotFoundError returns true when a DynamoDB Streams call
+// fails because the requested stream or shard no longer exists. Unlike a
+// throttle or a network blip this is permanent: a deleted shard can never be
+// read again, so callers should mark it exhausted and move on rather than
+// retry. Deliberately matches only the Streams API type, not the DynamoDB
+// table API's ResourceNotFoundException (e.g. a missing checkpoint table).
+func isStreamsResourceNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	_, ok := errors.AsType[*streamstypes.ResourceNotFoundException](err)
+	return ok
+}
+
 // SnapshotCheckpoint holds the progress of a snapshot scan.
 type SnapshotCheckpoint struct {
 	Complete        bool
