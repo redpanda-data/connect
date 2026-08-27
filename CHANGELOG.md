@@ -3,6 +3,23 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.107.0 - 2026-08-27
+
+### Fixed
+
+- aws_dynamodb_cdc: Fixed snapshot_throttle lint rule that was comparing duration string to numeric literal, causing configuration validation to fail. ([@squiidz](https://github.com/squiidz), [#4723](https://github.com/redpanda-data/connect/pull/4723))
+- aws_dynamodb_cdc: Fixed infinite retry loop when a DynamoDB shard iterator expires after the shard has been deleted by properly classifying the error as permanent. ([@squiidz](https://github.com/squiidz), [#4727](https://github.com/redpanda-data/connect/pull/4727))
+- cdc: Fixed nack handling contract violations, marshal error recovery, and streaming checkpoint persistence across MongoDB and PostgreSQL CDC connectors. ([@squiidz](https://github.com/squiidz), [#4676](https://github.com/redpanda-data/connect/pull/4676))
+- gcp_spanner_cdc: Fixed out-of-order watermark persistence and partition batcher lifecycle issues that could skip records on restart. ([@squiidz](https://github.com/squiidz), [#4686](https://github.com/redpanda-data/connect/pull/4686))
+- mssqlserver_cdc: Fixed a series of critical issues in snapshot barrier behavior, batch ordering, and publisher lifecycle management to prevent data loss and infinite retries after failures. ([@squiidz](https://github.com/squiidz), [#4677](https://github.com/redpanda-data/connect/pull/4677))
+- mssqlserver_cdc: Fixed silent stall when the flush loop fails by detecting the failure and triggering reconnection to resume from the last durable checkpoint. ([@squiidz](https://github.com/squiidz), [#4729](https://github.com/redpanda-data/connect/pull/4729))
+- oracledb_cdc: Fixed a series of critical issues in snapshot barrier behavior, batch ordering, and publisher lifecycle management to prevent data loss and infinite retries after failures. ([@squiidz](https://github.com/squiidz), [#4675](https://github.com/redpanda-data/connect/pull/4675))
+- sftp: Fixed SFTP host key negotiation with modern OpenSSH servers by advertising rsa-sha2 algorithms for pinned RSA keys. ([@prakhargarg105](https://github.com/prakhargarg105), [#4725](https://github.com/redpanda-data/connect/pull/4725))
+
+### Changed
+
+- oracledb_cdc: Removed snapshot primary key ordering to boost snapshot performance. ([@josephwoodward](https://github.com/josephwoodward), [#4696](https://github.com/redpanda-data/connect/pull/4696))
+
 ## 4.106.0 - 2026-08-20
 
 ### Added
