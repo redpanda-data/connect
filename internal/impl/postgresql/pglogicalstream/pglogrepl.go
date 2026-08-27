@@ -321,7 +321,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, logger *service
 		if err != nil {
 			return fmt.Errorf("sanitizing publication creation query: %w", err)
 		}
-		logger.Infof("Creating publication %s for tables %s", publicationName, tablesClause)
+		logger.Infof("Creating publication %s %s", publicationName, tablesClause)
 		// Publication doesn't exist, create new one
 		result = conn.Exec(ctx, sq)
 		if _, err := result.ReadAll(); err != nil {
