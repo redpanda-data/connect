@@ -32,15 +32,13 @@ type DynamoItems = []map[string]dynamodbtypes.AttributeValue
 
 // SnapshotScannerConfig holds configuration for snapshot scanning.
 type SnapshotScannerConfig struct {
-	Client             *dynamodb.Client
-	Table              string
-	Segments           int
-	BatchSize          int
-	Throttle           time.Duration
-	MaxBackoff         time.Duration // Maximum backoff on throttling errors (0 = no limit).
-	Checkpointer       *Checkpointer
-	CheckpointInterval int // Checkpoint every N batches (default: 10).
-	Logger             *service.Logger
+	Client     *dynamodb.Client
+	Table      string
+	Segments   int
+	BatchSize  int
+	Throttle   time.Duration
+	MaxBackoff time.Duration // Maximum backoff on throttling errors (0 = no limit).
+	Logger     *service.Logger
 }
 
 // SnapshotScanner performs a parallel scan of a DynamoDB table using the
@@ -48,21 +46,21 @@ type SnapshotScannerConfig struct {
 // resumable checkpointing, adaptive backoff on throttling, and reports
 // progress through user-supplied callbacks.
 type SnapshotScanner struct {
-	client             *dynamodb.Client
-	table              string
-	segments           int
-	batchSize          int
-	throttle           time.Duration
-	maxBackoff         time.Duration
-	checkpointer       *Checkpointer
-	checkpointInterval int // Checkpoint every N batches (0 = every batch)
-	log                *service.Logger
+	client     *dynamodb.Client
+	table      string
+	segments   int
+	batchSize  int
+	throttle   time.Duration
+	maxBackoff time.Duration
+	log        *service.Logger
 
-	// Callbacks
-	onBatch            func(ctx context.Context, items DynamoItems, segment int) error
-	onProgress         func(segment, totalSegments int, recordsRead int64)
-	onCheckpointFailed func(segment int, err error)
-	onSegmentComplete  func(segment int, duration time.Duration, recordsRead int64)
+	// Callbacks. Progress persistence is NOT the scanner's job: batches carry
+	// their scan resume position (lastKey) to the batch callback, and the
+	// consumer persists positions only after downstream acknowledgement.
+	onBatch           func(ctx context.Context, items DynamoItems, segment int, lastKey map[string]dynamodbtypes.AttributeValue) error
+	onProgress        func(segment, totalSegments int, recordsRead int64)
+	onSegmentSealed   func(ctx context.Context, segment int) error
+	onSegmentComplete func(segment int, duration time.Duration, recordsRead int64)
 
 	// State tracking
 	activeSegments atomic.Int32
@@ -70,26 +68,21 @@ type SnapshotScanner struct {
 
 // NewSnapshotScanner creates a new snapshot scanner.
 func NewSnapshotScanner(conf SnapshotScannerConfig) *SnapshotScanner {
-	checkpointInterval := conf.CheckpointInterval
-	if checkpointInterval == 0 {
-		checkpointInterval = 10 // Default: checkpoint every 10 batches.
-	}
-
 	return &SnapshotScanner{
-		client:             conf.Client,
-		table:              conf.Table,
-		segments:           conf.Segments,
-		batchSize:          conf.BatchSize,
-		throttle:           conf.Throttle,
-		maxBackoff:         conf.MaxBackoff,
-		checkpointer:       conf.Checkpointer,
-		checkpointInterval: checkpointInterval,
-		log:                conf.Logger,
+		client:     conf.Client,
+		table:      conf.Table,
+		segments:   conf.Segments,
+		batchSize:  conf.BatchSize,
+		throttle:   conf.Throttle,
+		maxBackoff: conf.MaxBackoff,
+		log:        conf.Logger,
 	}
 }
 
-// SetBatchCallback sets the callback for processing batches of items.
-func (s *SnapshotScanner) SetBatchCallback(fn func(ctx context.Context, items DynamoItems, segment int) error) {
+// SetBatchCallback sets the callback for processing batches of items. lastKey
+// is the scan position after the batch (nil when the batch ends the segment);
+// it is the only position safe to persist once the batch is acknowledged.
+func (s *SnapshotScanner) SetBatchCallback(fn func(ctx context.Context, items DynamoItems, segment int, lastKey map[string]dynamodbtypes.AttributeValue) error) {
 	s.onBatch = fn
 }
 
@@ -98,9 +91,11 @@ func (s *SnapshotScanner) SetProgressCallback(fn func(segment, totalSegments int
 	s.onProgress = fn
 }
 
-// SetCheckpointFailedCallback sets the callback for checkpoint failures.
-func (s *SnapshotScanner) SetCheckpointFailedCallback(fn func(segment int, err error)) {
-	s.onCheckpointFailed = fn
+// SetSegmentSealedCallback sets the callback fired when a segment's scan has
+// emitted its last batch, so the consumer can register the segment-complete
+// marker behind all of the segment's in-flight batches.
+func (s *SnapshotScanner) SetSegmentSealedCallback(fn func(ctx context.Context, segment int) error) {
+	s.onSegmentSealed = fn
 }
 
 // SetSegmentCompleteCallback sets the callback for segment completion with duration tracking.
@@ -160,7 +155,6 @@ func (s *SnapshotScanner) scanSegment(ctx context.Context, segment int, startKey
 	var (
 		lastEvaluatedKey = startKey
 		recordsRead      int64
-		batchCount       int
 		throttleTicker   = time.NewTicker(s.throttle)
 		firstRequest     = true
 	)
@@ -215,27 +209,15 @@ func (s *SnapshotScanner) scanSegment(ctx context.Context, segment int, startKey
 		if len(result.Items) == 0 {
 			lastEvaluatedKey = result.LastEvaluatedKey
 			if lastEvaluatedKey == nil {
-				return s.completeSegment(segment, startTime, recordsRead)
+				return s.completeSegment(ctx, segment, startTime, recordsRead)
 			}
 			continue
 		}
 
-		if err := s.onBatch(ctx, result.Items, segment); err != nil {
+		if err := s.onBatch(ctx, result.Items, segment, result.LastEvaluatedKey); err != nil {
 			return fmt.Errorf("processing batch for segment %d: %w", segment, err)
 		}
 		recordsRead += int64(len(result.Items))
-		batchCount++
-
-		if s.shouldCheckpoint(batchCount, result.LastEvaluatedKey) {
-			if err := s.checkpointer.UpdateSnapshotProgress(ctx, segment, result.LastEvaluatedKey, recordsRead); err != nil {
-				s.log.Warnf("Failed to update checkpoint for segment %d: %v", segment, err)
-				if s.onCheckpointFailed != nil {
-					s.onCheckpointFailed(segment, err)
-				}
-			} else {
-				s.log.Debugf("Checkpointed segment %d at %d records (%d batches)", segment, recordsRead, batchCount)
-			}
-		}
 
 		if s.onProgress != nil {
 			s.onProgress(segment, s.segments, recordsRead)
@@ -243,21 +225,19 @@ func (s *SnapshotScanner) scanSegment(ctx context.Context, segment int, startKey
 
 		lastEvaluatedKey = result.LastEvaluatedKey
 		if lastEvaluatedKey == nil {
-			return s.completeSegment(segment, startTime, recordsRead)
+			return s.completeSegment(ctx, segment, startTime, recordsRead)
 		}
 	}
 }
 
-// shouldCheckpoint returns true when a checkpoint should be written.
-func (s *SnapshotScanner) shouldCheckpoint(batchCount int, lastKey map[string]dynamodbtypes.AttributeValue) bool {
-	if s.checkpointer == nil || batchCount == 0 {
-		return false
+// completeSegment seals the segment (registering its ack-gated completion
+// marker), logs completion, and fires the metrics callback.
+func (s *SnapshotScanner) completeSegment(ctx context.Context, segment int, startTime time.Time, recordsRead int64) error {
+	if s.onSegmentSealed != nil {
+		if err := s.onSegmentSealed(ctx, segment); err != nil {
+			return fmt.Errorf("sealing segment %d: %w", segment, err)
+		}
 	}
-	return batchCount%s.checkpointInterval == 0 || lastKey == nil
-}
-
-// completeSegment logs segment completion and fires the callback.
-func (s *SnapshotScanner) completeSegment(segment int, startTime time.Time, recordsRead int64) error {
 	duration := time.Since(startTime)
 	s.log.Infof("Segment %d completed: %d records read in %v", segment, recordsRead, duration)
 	if s.onSegmentComplete != nil {

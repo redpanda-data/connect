@@ -55,6 +55,7 @@ input:
     proxy_url: "" # No default (optional)
     open_message: "" # No default (optional)
     open_message_type: binary
+    max_message_size: 0
     auto_replay_nacks: true
     tls:
       enabled: false
@@ -138,6 +139,15 @@ An optional flag to indicate the data type of open_message.
 | Text data open_message. The text message payload is interpreted as UTF-8 encoded text data.
 
 |===
+
+=== `max_message_size`
+
+An optional maximum size in bytes for individual messages received from the server. When a message exceeding this limit is received the connection is closed with a 1009 (message too big) status and the input reconnects. A value of 0 disables the limit.
+
+
+*Type*: `int`
+
+*Default*: `0`
 
 === `auto_replay_nacks`
 

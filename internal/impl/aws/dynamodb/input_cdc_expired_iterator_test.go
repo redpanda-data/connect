@@ -29,7 +29,6 @@ func TestResolveResumeIterator(t *testing.T) {
 		name       string
 		lastSeq    string
 		checkpoint string
-		startFrom  string
 		wantType   types.ShardIteratorType
 		wantSeq    *string
 	}{
@@ -37,7 +36,6 @@ func TestResolveResumeIterator(t *testing.T) {
 			name:       "prefers last read sequence over checkpoint",
 			lastSeq:    "100",
 			checkpoint: "50",
-			startFrom:  "latest",
 			wantType:   types.ShardIteratorTypeAfterSequenceNumber,
 			wantSeq:    aws.String("100"),
 		},
@@ -45,35 +43,61 @@ func TestResolveResumeIterator(t *testing.T) {
 			name:       "falls back to checkpoint when nothing read",
 			lastSeq:    "",
 			checkpoint: "50",
-			startFrom:  "latest",
 			wantType:   types.ShardIteratorTypeAfterSequenceNumber,
 			wantSeq:    aws.String("50"),
 		},
 		{
-			name:      "falls back to latest when no sequence available",
-			lastSeq:   "",
-			startFrom: "latest",
-			wantType:  types.ShardIteratorTypeLatest,
-			wantSeq:   nil,
+			name:     "falls back to trim horizon when no sequence available",
+			lastSeq:  "",
+			wantType: types.ShardIteratorTypeTrimHorizon,
+			wantSeq:  nil,
 		},
 		{
-			name:      "falls back to trim horizon when no sequence available",
-			lastSeq:   "",
-			startFrom: "trim_horizon",
-			wantType:  types.ShardIteratorTypeTrimHorizon,
-			wantSeq:   nil,
+			// LATEST must never be re-acquired: the shard was already
+			// positioned when the expired iterator was obtained, so LATEST
+			// would silently skip everything published since.
+			name:       "never re-acquires latest",
+			lastSeq:    "",
+			checkpoint: "",
+			wantType:   types.ShardIteratorTypeTrimHorizon,
+			wantSeq:    nil,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotType, gotSeq := resolveResumeIterator(tc.lastSeq, tc.checkpoint, tc.startFrom)
+			gotType, gotSeq := resolveResumeIterator(tc.lastSeq, tc.checkpoint)
 			assert.Equal(t, tc.wantType, gotType)
 			if tc.wantSeq == nil {
 				assert.Nil(t, gotSeq)
 			} else {
 				assert.Equal(t, *tc.wantSeq, *gotSeq)
 			}
+		})
+	}
+}
+
+// TestInitialIteratorType locks in the start_from contract: latest applies
+// only to the first discovery of a genuinely fresh pipeline; every other
+// checkpoint-less shard (rotation children found on refresh cycles, or any
+// shard after a restart with existing state) starts at TRIM_HORIZON so its
+// backlog is never silently skipped.
+func TestInitialIteratorType(t *testing.T) {
+	cases := []struct {
+		name      string
+		startFrom string
+		honor     bool
+		want      types.ShardIteratorType
+	}{
+		{"fresh pipeline honors latest", "latest", true, types.ShardIteratorTypeLatest},
+		{"fresh pipeline honors trim_horizon", "trim_horizon", true, types.ShardIteratorTypeTrimHorizon},
+		{"rotation child ignores latest", "latest", false, types.ShardIteratorTypeTrimHorizon},
+		{"restart with state ignores latest", "latest", false, types.ShardIteratorTypeTrimHorizon},
+		{"trim_horizon unaffected by honor flag", "trim_horizon", false, types.ShardIteratorTypeTrimHorizon},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, initialIteratorType(tc.startFrom, tc.honor))
 		})
 	}
 }
