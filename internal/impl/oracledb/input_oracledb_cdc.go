@@ -804,16 +804,33 @@ func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 }
 
 func (o *oracleDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	select {
-	case m := <-o.publisher.Load().msgs():
-		return m.msg, m.ackFn, nil
-	case <-o.stopSig.HasStoppedChan():
-		if o.snapshotOnlyDone.Load() {
-			return nil, nil, service.ErrEndOfInput
+	pub := o.publisher.Load()
+	// Observed so a dead flush loop cannot silently stall the pipeline: with
+	// period-only batching that loop is the only flusher, and its error paths
+	// poison the publisher but cannot force a reconnect themselves.
+	pubStopped := pub.shutSig.HasStoppedChan()
+	for {
+		select {
+		case m := <-pub.msgs():
+			return m.msg, m.ackFn, nil
+		case <-pubStopped:
+			if pub.poisoned.Load() {
+				// Fatal flush-loop exit: reconnect so Connect rebuilds the
+				// poisoned publisher and resumes from the last durable SCN.
+				return nil, nil, service.ErrNotConnected
+			}
+			// Deliberate stop (FlushRemaining at the snapshot-only handoff):
+			// keep draining - the final flushed batch is still delivered on
+			// msgs() after the loop exits.
+			pubStopped = nil
+		case <-o.stopSig.HasStoppedChan():
+			if o.snapshotOnlyDone.Load() {
+				return nil, nil, service.ErrEndOfInput
+			}
+			return nil, nil, service.ErrNotConnected
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
 		}
-		return nil, nil, service.ErrNotConnected
-	case <-ctx.Done():
-		return nil, nil, ctx.Err()
 	}
 }
 

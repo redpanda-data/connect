@@ -132,3 +132,66 @@ func TestRebuildPublisherIfPoisoned(t *testing.T) {
 	require.NotEmpty(t, got)
 	require.Equal(t, replication.SCN(30).Bytes(), got[len(got)-1], "a late ack from the abandoned generation must not regress the cache")
 }
+
+// TestReadBatchReconnectsOnPoisonedLoopDeath encodes the silent-stall
+// finding: with period-only batching the timed-flush loop is the only
+// flusher, and when it dies after poisoning the publisher nothing else can
+// trigger the reconnect that rebuilds it - ReadBatch must observe the stop
+// and return ErrNotConnected. A DELIBERATE stop (FlushRemaining at the
+// snapshot-only handoff, publisher not poisoned) must instead keep draining
+// so the final flushed batch is still delivered.
+func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
+	t.Run("poisoned loop death reconnects", func(t *testing.T) {
+		o, _ := newTestInput(t)
+		pub := o.publisher.Load()
+		pub.poisoned.Store(true)
+		pub.shutSig.TriggerSoftStop()
+		require.Eventually(t, func() bool {
+			select {
+			case <-pub.shutSig.HasStoppedChan():
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, time.Millisecond)
+
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		_, _, err := o.ReadBatch(ctx)
+		require.ErrorIs(t, err, service.ErrNotConnected,
+			"a poisoned publisher whose flush loop died must force a reconnect, not stall silently")
+	})
+
+	t.Run("deliberate stop keeps draining the final batch", func(t *testing.T) {
+		o, _ := newTestInput(t)
+		pub := o.publisher.Load()
+		// FlushRemaining's shape: stop the loop (not poisoned), then flush the
+		// final batch, which blocks on msgs() until ReadBatch consumes it.
+		pub.shutSig.TriggerSoftStop()
+		require.Eventually(t, func() bool {
+			select {
+			case <-pub.shutSig.HasStoppedChan():
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, time.Millisecond)
+
+		flushed := make(chan error, 1)
+		go func() {
+			if err := pub.Publish(t.Context(), streamingEvent(10)); err != nil {
+				flushed <- err
+				return
+			}
+			flushed <- nil
+		}()
+
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		batch, ackFn, err := o.ReadBatch(ctx)
+		require.NoError(t, err, "a deliberately stopped loop must not force a reconnect while the final batch is undelivered")
+		require.Len(t, batch, 1)
+		require.NoError(t, ackFn(ctx, nil))
+		require.NoError(t, <-flushed)
+	})
+}
