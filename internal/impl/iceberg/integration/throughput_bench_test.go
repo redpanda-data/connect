@@ -52,7 +52,7 @@ var (
 	throughputBatch = flag.Int("iceberg.throughput.batch", 5000,
 		"records per Route call")
 	throughputCodec = flag.String("iceberg.throughput.codec", "",
-		"value for the table's write.parquet.compression-codec property; empty leaves it unset")
+		"value for the table's write.parquet.compression-codec property; empty leaves it unset, in which case the codec is whatever the table resolves to — note the Iceberg library materialises zstd at table creation, so unset does NOT mean uncompressed here")
 	throughputLabel = flag.String("iceberg.throughput.label", "run",
 		"label to print alongside the result, for telling A/B runs apart")
 	throughputColumns = flag.Int("iceberg.throughput.columns", 0,
@@ -104,11 +104,13 @@ func TestWriteThroughput(t *testing.T) {
 	_, err := client.CreateTable(ctx, tableName, sc, opts...)
 	require.NoError(t, err)
 
-	// Log what the table actually carries: whether a property was set here or
-	// materialised by the catalog decides which codec the resolver picks.
-	if created, err := client.LoadTable(ctx, tableName); err == nil {
-		t.Logf("TABLEPROPS %v", created.Properties())
-	}
+	// Capture what the table actually carries: whether a property was set here
+	// or materialised by the catalog decides which codec the writer resolves to,
+	// and the assertion below has to expect the same thing.
+	created, err := client.LoadTable(ctx, tableName)
+	require.NoError(t, err)
+	tableProps := created.Properties()
+	t.Logf("TABLEPROPS %v", tableProps)
 
 	router := infra.NewRouter(t, namespace, tableName)
 
@@ -142,12 +144,10 @@ func TestWriteThroughput(t *testing.T) {
 	// Assert the codec that was actually written, rather than assuming the
 	// property took effect. Without this a run that silently ignored the
 	// property would produce a plausible-looking size comparison.
-	wantCodec := "UNCOMPRESSED"
-	if *throughputCodec != "" {
-		wantCodec = strings.ToUpper(*throughputCodec)
-	}
+	wantCodec := expectedCodec(*throughputCodec, tableProps)
 	require.Equal(t, wantCodec, writtenCodec,
-		"data files were written with %s, not the requested %s", writtenCodec, wantCodec)
+		"data files were written with %s; expected %s from codec flag %q and table property %q",
+		writtenCodec, wantCodec, *throughputCodec, tableProps[parquetCompressionProperty])
 
 	// Refuse to report a rate for a run that did not actually land the data. A
 	// throughput number from a partial or failed write looks entirely plausible
@@ -184,6 +184,33 @@ func TestWriteThroughput(t *testing.T) {
 	t.Logf("RESULT label=%s payload=%s cols=%d codec=%q written=%s records=%d batch=%d files=%d elapsed=%s rec/s=%.0f bytes=%d bytes/rec=%.1f",
 		*throughputLabel, *throughputPayload, 5+*throughputColumns, *throughputCodec, writtenCodec, records, *throughputBatch, dataFiles,
 		elapsed.Round(time.Millisecond), rate, totalBytes, perRecord)
+}
+
+// parquetCompressionProperty is Iceberg's table property for the codec data
+// files are written with.
+const parquetCompressionProperty = "write.parquet.compression-codec"
+
+// expectedCodec restates the output's own resolution rule, so the assertion
+// checks behaviour against the documented contract rather than against a fixed
+// value: an explicit setting wins, otherwise the table's property applies,
+// otherwise uncompressed. Codecs the output declines to write, and values it
+// does not recognise, both fall back to uncompressed.
+//
+// Deliberately a restatement rather than a call into the resolver — that lives
+// in an unexported function in another package, and asserting an implementation
+// against itself would prove nothing.
+func expectedCodec(configured string, props iceberg.Properties) string {
+	name := strings.ToLower(strings.TrimSpace(configured))
+	if name == "" {
+		name = strings.ToLower(strings.TrimSpace(props[parquetCompressionProperty]))
+	}
+	switch name {
+	case "snappy", "gzip", "zstd":
+		return strings.ToUpper(name)
+	default:
+		// uncompressed, none, absent, declined (lz4/lz4_raw/brotli/lzo) or junk.
+		return "UNCOMPRESSED"
+	}
 }
 
 // sumDataFileBytes totals the on-disk size of every data file the table's
