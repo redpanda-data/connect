@@ -15,12 +15,13 @@ name: Nightly Soak
 # reaches the default branch.
 #
 # One-time setup (operator):
-#   1. task aws:persistent with at least one alert channel configured:
-#      TF_VAR_slack_workspace_id + TF_VAR_slack_channel_id (Slack via AWS
-#      Chatbot — needs the one-time workspace OAuth in the Chatbot console
-#      first) and/or TF_VAR_soak_alert_email=<team-alias> as email backup.
-#      (Also creates the OIDC provider, provisioner role, archive bucket,
-#      dashboards, and reaper. An apply with NO channel fails loudly.)
+#   1. task aws:persistent — creates the OIDC provider, provisioner role,
+#      archive bucket, dashboards, reaper, and Slack alert delivery (the
+#      workspace/channel IDs are committed defaults in
+#      terraform/persistent/slack.tf; a NEW account/workspace needs the
+#      one-time Chatbot console OAuth first). Optional email backup via
+#      TF_VAR_soak_alert_email=<team-alias>; disabling Slack without an
+#      email configured fails the apply loudly.
 #   2. aws secretsmanager create-secret \
 #        --name redpanda-connect-bench/license \
 #        --secret-string file://rpcn.license --region us-east-2

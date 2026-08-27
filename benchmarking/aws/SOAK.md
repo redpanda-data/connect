@@ -30,8 +30,10 @@ files named below.
    `task aws:validate scenario=<engine>/<name>` must pass.
 3. **Register the dashboard + alarms**: add an entry to `soak_scenarios`
    in `terraform/persistent/variables.tf` (key → connector + scenario
-   name), then `TF_VAR_soak_alert_email=<team-alias> task aws:persistent`.
-   Alarms and the dashboard are generated per entry.
+   name), then `task aws:persistent`. Alarms and the dashboard are
+   generated per entry; Slack delivery is on by default via the committed
+   workspace/channel IDs in `slack.tf` (add
+   `TF_VAR_soak_alert_email=<team-alias>` for an email backup).
 4. **First runs**: dispatch the nightly workflow manually with the
    scenario input. The baseline comparator stays advisory until three
    soak-index entries exist.
@@ -53,10 +55,13 @@ files named below.
   the workflows — no relevant merge, no run. Fails open: a missing entry or
   unknown SHA runs the soak.
 - **One-time account setup** (already done in 605419575229, needed again
-  only for a new account): `TF_VAR_soak_alert_email=<team-alias> task
-  aws:persistent` (builds the reaper's `bootstrap.zip` itself; the alert
-  email is deliberately undefaulted — point it at a monitored team
-  alias, never an individual); create the license secret: `aws secretsmanager
+  only for a new account): authorize the Slack workspace in the AWS
+  Chatbot console (OAuth — see `terraform/persistent/slack.tf`) and put
+  the resulting IDs in that file's defaults, then `task aws:persistent`
+  (builds the reaper's `bootstrap.zip` itself; add
+  `TF_VAR_soak_alert_email=<team-alias>` for an email backup — a
+  monitored team alias, never an individual); create the license secret:
+  `aws secretsmanager
   create-secret --name redpanda-connect-bench/license --secret-string
   file://<license> --region us-east-2`; confirm the SNS email
   subscription.
@@ -73,16 +78,17 @@ files named below.
   rule disabled first (and re-enabled after — set a reminder). The
   persistent stack itself is exempt via its distinct Project tag.
 - **Alerts** land at the `redpanda-connect-bench-soak-alerts` SNS topic and
-  deliver to Slack via AWS Chatbot (`terraform/persistent/slack.tf`) once
-  the one-time workspace OAuth is done in the Chatbot console and
-  `TF_VAR_slack_workspace_id` + `TF_VAR_slack_channel_id` are passed to
-  `task aws:persistent`. Alarm cards render natively; reaper notices arrive
-  via the custom-notification envelope in `cleanup-lambda/sweep.go` (plain
-  SNS text is silently dropped by Chatbot — keep that envelope). Email
-  (`TF_VAR_soak_alert_email`) is the optional backup subscriber; the apply
-  fails loudly if NEITHER channel is configured. Alarms during a run are
-  the acute channel; a red nightly workflow is the between-builds channel;
-  the `/soak` comment is the before-merge channel.
+  deliver to #soak-redpanda-connect via AWS Chatbot
+  (`terraform/persistent/slack.tf` — the workspace/channel IDs are
+  committed defaults, so plain `task aws:persistent` keeps Slack wired).
+  Alarm cards render natively; reaper notices arrive via the
+  custom-notification envelope in `cleanup-lambda/sweep.go` (plain SNS
+  text is silently dropped by Chatbot — keep that envelope). Email
+  (`TF_VAR_soak_alert_email`) is the optional backup subscriber; passing
+  the Slack vars as "" disables Slack, and the apply fails loudly if
+  NEITHER channel is configured. Alarms during a run are the acute
+  channel; a red nightly workflow is the between-builds channel; the
+  `/soak` comment is the before-merge channel.
 
 ## Known limitations
 

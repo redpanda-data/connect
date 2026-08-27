@@ -4,10 +4,10 @@
 # One-time manual prerequisite (cannot be Terraform'd): authorize the Slack
 # workspace in the AWS Chatbot console of this account (OAuth; may need a
 # Slack workspace admin to approve the AWS app). That yields the workspace
-# ID to pass as TF_VAR_slack_workspace_id, alongside the channel's ID
-# (TF_VAR_slack_channel_id, from the channel's "About" tab). Both empty =
-# Slack delivery off; alarms.tf's validation then requires the email
-# subscriber instead, so alerts can never be silently unrouted.
+# ID committed as the default below, alongside the channel's ID (from the
+# channel's "About" tab). Passing both as "" turns Slack delivery off;
+# alarms.tf's validation then requires the email subscriber instead, so
+# alerts can never be silently unrouted.
 #
 # CloudWatch alarm messages render natively as alarm cards. The reaper's
 # notices are published in Chatbot's custom-notification schema via SNS
@@ -15,20 +15,29 @@
 # drops plain-text SNS payloads, so without that the reaper channel would
 # look connected while delivering nothing.
 
+# The real IDs are committed as defaults (they are not secrets — both appear
+# in every Slack URL), mirroring backend.hcl's account-specific values:
+# change them in a private fork if you run this elsewhere. Committed
+# defaults, not env vars, because a count-gated resource driven by ambient
+# TF_VAR_* would be silently DESTROYED by any re-apply whose shell didn't
+# re-export them — the primary alert channel vanishing with no error.
+# Explicitly passing both as "" disables Slack delivery (the email
+# validation in alarms.tf then requires the backup subscriber instead).
+
 variable "slack_workspace_id" {
-  description = "Slack workspace (team) ID from the AWS Chatbot console after the one-time OAuth, e.g. T0123456789. Empty disables Slack delivery."
+  description = "Slack workspace (team) ID from the AWS Chatbot console OAuth. Set with slack_channel_id; both empty disables Slack delivery."
   type        = string
-  default     = ""
+  default     = "TPMVB7YMC" # Redpanda workspace (authorized 2026-08-27)
 }
 
 variable "slack_channel_id" {
-  description = "Slack channel ID to deliver soak alarms + reaper notices to, e.g. C0123456789. Empty disables Slack delivery."
+  description = "Slack channel ID for soak alarms + reaper notices. Set with slack_workspace_id; both empty disables Slack delivery."
   type        = string
-  default     = ""
+  default     = "C0BT00TTA11" # #soak-redpanda-connect
 
   validation {
     condition     = (var.slack_channel_id == "") == (var.slack_workspace_id == "")
-    error_message = "slack_workspace_id and slack_channel_id must be set together (or both left empty to disable Slack delivery)."
+    error_message = "slack_workspace_id and slack_channel_id must be set together (or both passed as empty to disable Slack delivery)."
   }
 }
 
