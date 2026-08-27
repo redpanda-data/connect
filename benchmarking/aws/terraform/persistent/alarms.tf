@@ -8,34 +8,29 @@ resource "aws_sns_topic" "soak_alerts" {
   name = "redpanda-connect-bench-soak-alerts"
 }
 
-variable "soak_alert_email" {
-  # Email backup for soak alarm notifications. Slack (slack.tf) is the
-  # primary channel; when it's configured this may be empty. If used, it
-  # must be a monitored team alias, not an individual's mailbox (a personal
-  # default rots silently when that person moves on). SNS sends a
-  # confirmation email on first apply — the subscription is inactive until
-  # the link is clicked.
-  type    = string
-  default = ""
+# Email backup subscriptions are deliberately NOT managed here. Terraform
+# manages exactly one alert channel — Slack (slack.tf, committed IDs) — and
+# email backups are manual, out-of-band subscriptions (see SOAK.md):
+#
+#   aws sns subscribe --topic-arn <soak-alerts|orphans topic> \
+#     --protocol email --notification-endpoint <team-alias>
+#
+# Why not a Terraform resource: an address can't be committed (no team
+# alias exists; a personal one doesn't belong in the repo), and a
+# subscription count-gated on an ambient TF_VAR_* is silently destroyed by
+# any re-apply whose shell didn't re-export it — worse than unmanaged,
+# because resurrecting an SNS email subscription needs a human to re-click
+# the confirmation link. Manual subscriptions survive every apply.
+#
+# The pre-existing email subscription in 605419575229 is preserved as
+# exactly such an unmanaged subscription by the removed block below (state
+# forget, not destroy).
+removed {
+  from = aws_sns_topic_subscription.soak_alerts_email
 
-  validation {
-    condition     = var.soak_alert_email == "" || can(regex("^[^@\\s]+@[^@\\s]+$", var.soak_alert_email))
-    error_message = "soak_alert_email must be a single email address (use a team alias, not a personal mailbox), or empty when Slack delivery is configured."
+  lifecycle {
+    destroy = false
   }
-
-  validation {
-    # Alerts must never be silently unrouted: an apply with neither the
-    # Slack channel nor an email subscriber fails loudly here.
-    condition     = var.soak_alert_email != "" || (var.slack_workspace_id != "" && var.slack_channel_id != "")
-    error_message = "configure at least one alert channel: TF_VAR_soak_alert_email and/or TF_VAR_slack_workspace_id + TF_VAR_slack_channel_id."
-  }
-}
-
-resource "aws_sns_topic_subscription" "soak_alerts_email" {
-  count     = var.soak_alert_email != "" ? 1 : 0
-  topic_arn = aws_sns_topic.soak_alerts.arn
-  protocol  = "email"
-  endpoint  = var.soak_alert_email
 }
 
 locals {

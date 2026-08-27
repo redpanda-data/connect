@@ -31,9 +31,8 @@ files named below.
 3. **Register the dashboard + alarms**: add an entry to `soak_scenarios`
    in `terraform/persistent/variables.tf` (key → connector + scenario
    name), then `task aws:persistent`. Alarms and the dashboard are
-   generated per entry; Slack delivery is on by default via the committed
-   workspace/channel IDs in `slack.tf` (add
-   `TF_VAR_soak_alert_email=<team-alias>` for an email backup).
+   generated per entry; Slack delivery is on by default via `slack.tf`'s
+   committed IDs — no extra vars needed.
 4. **First runs**: dispatch the nightly workflow manually with the
    scenario input. The baseline comparator stays advisory until three
    soak-index entries exist.
@@ -58,10 +57,12 @@ files named below.
   only for a new account): authorize the Slack workspace in the AWS
   Chatbot console (OAuth — see `terraform/persistent/slack.tf`) and put
   the resulting IDs in that file's defaults, then `task aws:persistent`
-  (builds the reaper's `bootstrap.zip` itself; add
-  `TF_VAR_soak_alert_email=<team-alias>` for an email backup — a
-  monitored team alias, never an individual); create the license secret:
-  `aws secretsmanager
+  (builds the reaper's `bootstrap.zip` itself); optionally add a manual
+  email backup — `aws sns subscribe --protocol email
+  --notification-endpoint <team-alias> --topic-arn <arn>` for BOTH the
+  soak-alerts and orphans topics, then click each confirmation link
+  (deliberately outside Terraform: no re-apply can unsubscribe it);
+  create the license secret: `aws secretsmanager
   create-secret --name redpanda-connect-bench/license --secret-string
   file://<license> --region us-east-2`; confirm the SNS email
   subscription.
@@ -83,10 +84,11 @@ files named below.
   committed defaults, so plain `task aws:persistent` keeps Slack wired).
   Alarm cards render natively; reaper notices arrive via the
   custom-notification envelope in `cleanup-lambda/sweep.go` (plain SNS
-  text is silently dropped by Chatbot — keep that envelope). Email
-  (`TF_VAR_soak_alert_email`) is the optional backup subscriber; passing
-  the Slack vars as "" disables Slack, and the apply fails loudly if
-  NEITHER channel is configured. Alarms during a run are the acute
+  text is silently dropped by Chatbot — keep that envelope). Email backup
+  is a manual SNS subscription to BOTH topics (see one-time setup below) —
+  deliberately unmanaged, so no re-apply can silently unsubscribe it.
+  Slack is the only Terraform-managed channel, so blanking its IDs fails
+  validation instead of leaving the topics unrouted. Alarms during a run are the acute
   channel; a red nightly workflow is the between-builds channel; the
   `/soak` comment is the before-merge channel.
 

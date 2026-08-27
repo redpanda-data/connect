@@ -5,9 +5,11 @@
 # workspace in the AWS Chatbot console of this account (OAuth; may need a
 # Slack workspace admin to approve the AWS app). That yields the workspace
 # ID committed as the default below, alongside the channel's ID (from the
-# channel's "About" tab). Passing both as "" turns Slack delivery off;
-# alarms.tf's validation then requires the email subscriber instead, so
-# alerts can never be silently unrouted.
+# channel's "About" tab). Slack is the ONLY Terraform-managed alert
+# channel — email backups are manual SNS subscriptions (see alarms.tf and
+# SOAK.md) precisely so no ambient variable can silently unsubscribe them —
+# so blanking these IDs fails validation rather than leaving both topics
+# unrouted.
 #
 # CloudWatch alarm messages render natively as alarm cards. The reaper's
 # notices are published in Chatbot's custom-notification schema via SNS
@@ -21,36 +23,51 @@
 # defaults, not env vars, because a count-gated resource driven by ambient
 # TF_VAR_* would be silently DESTROYED by any re-apply whose shell didn't
 # re-export them — the primary alert channel vanishing with no error.
-# Explicitly passing both as "" disables Slack delivery (the email
-# validation in alarms.tf then requires the backup subscriber instead).
 
 variable "slack_workspace_id" {
-  description = "Slack workspace (team) ID from the AWS Chatbot console OAuth. Set with slack_channel_id; both empty disables Slack delivery."
+  description = "Slack workspace (team) ID from the AWS Chatbot console OAuth."
   type        = string
   default     = "TPMVB7YMC" # Redpanda workspace (authorized 2026-08-27)
 }
 
 variable "slack_channel_id" {
-  description = "Slack channel ID for soak alarms + reaper notices. Set with slack_workspace_id; both empty disables Slack delivery."
+  description = "Slack channel ID for soak alarms + reaper notices."
   type        = string
   default     = "C0BT00TTA11" # #soak-redpanda-connect
 
   validation {
-    condition     = (var.slack_channel_id == "") == (var.slack_workspace_id == "")
-    error_message = "slack_workspace_id and slack_channel_id must be set together (or both passed as empty to disable Slack delivery)."
+    # Slack is the only Terraform-managed alert channel: blanking these
+    # would leave BOTH SNS topics with no managed subscriber, silently.
+    # A fork that truly wants Slack-free operation must set up the manual
+    # email subscriptions (SOAK.md) and adjust this check consciously.
+    condition     = var.slack_channel_id != "" && var.slack_workspace_id != ""
+    error_message = "slack_workspace_id and slack_channel_id are required — Slack is the only Terraform-managed alert channel (email backups are manual; see SOAK.md)."
   }
 }
 
-locals {
-  slack_enabled = var.slack_workspace_id != "" && var.slack_channel_id != ""
+# These three were originally created count-gated (state addresses [0]);
+# the moved blocks keep the live resources in place now that the gate is
+# gone.
+moved {
+  from = aws_iam_role.chatbot_channel[0]
+  to   = aws_iam_role.chatbot_channel
+}
+
+moved {
+  from = aws_iam_role_policy_attachment.chatbot_channel_cw_read[0]
+  to   = aws_iam_role_policy_attachment.chatbot_channel_cw_read
+}
+
+moved {
+  from = aws_chatbot_slack_channel_configuration.soak_alerts[0]
+  to   = aws_chatbot_slack_channel_configuration.soak_alerts
 }
 
 # Channel guardrail role: what Chatbot may do ON BEHALF OF channel members.
 # Read-only CloudWatch is all the alarm cards need (rendering the metric
 # graph); nothing in this channel should ever mutate the account.
 resource "aws_iam_role" "chatbot_channel" {
-  count = local.slack_enabled ? 1 : 0
-  name  = "rpcn-bench-chatbot-channel"
+  name = "rpcn-bench-chatbot-channel"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -62,15 +79,13 @@ resource "aws_iam_role" "chatbot_channel" {
 }
 
 resource "aws_iam_role_policy_attachment" "chatbot_channel_cw_read" {
-  count      = local.slack_enabled ? 1 : 0
-  role       = aws_iam_role.chatbot_channel[0].name
+  role       = aws_iam_role.chatbot_channel.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess"
 }
 
 resource "aws_chatbot_slack_channel_configuration" "soak_alerts" {
-  count              = local.slack_enabled ? 1 : 0
   configuration_name = "rpcn-bench-soak-alerts"
-  iam_role_arn       = aws_iam_role.chatbot_channel[0].arn
+  iam_role_arn       = aws_iam_role.chatbot_channel.arn
   slack_team_id      = var.slack_workspace_id
   slack_channel_id   = var.slack_channel_id
   # Guardrail caps every action in the channel regardless of the role above.
