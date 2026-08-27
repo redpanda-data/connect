@@ -815,8 +815,19 @@ func (o *oracleDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 			return m.msg, m.ackFn, nil
 		case <-pubStopped:
 			if pub.poisoned.Load() {
-				// Fatal flush-loop exit: reconnect so Connect rebuilds the
-				// poisoned publisher and resumes from the last durable SCN.
+				// Fatal flush-loop exit: tear the session down BEFORE handing
+				// control to Connect - the session goroutine may still be
+				// alive and holds o.db and o.stopSig, which Connect replaces.
+				// Every session path escapes on the soft stop (contexts
+				// cancel, sealed admissions refuse), and the constructor
+				// leaves HasStopped triggered, so this wait is bounded; ctx
+				// remains the escape hatch regardless.
+				o.stopSig.TriggerSoftStop()
+				select {
+				case <-o.stopSig.HasStoppedChan():
+				case <-ctx.Done():
+					return nil, nil, ctx.Err()
+				}
 				return nil, nil, service.ErrNotConnected
 			}
 			// Deliberate stop (FlushRemaining at the snapshot-only handoff):

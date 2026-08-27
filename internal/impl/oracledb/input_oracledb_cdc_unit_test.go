@@ -48,10 +48,12 @@ func newTestInput(t *testing.T) (*oracleDBCDCInput, *recordingCache) {
 	t.Helper()
 	cache := &recordingCache{}
 	o := &oracleDBCDCInput{
-		cfg:             Config{SCNCacheKey: "scn"},
-		res:             service.MockResources(),
-		log:             service.NewLoggerFromSlog(slog.Default()),
-		stopSig:         shutdown.NewSignaller(),
+		cfg:     Config{SCNCacheKey: "scn"},
+		res:     service.MockResources(),
+		log:     service.NewLoggerFromSlog(slog.Default()),
+		stopSig: shutdown.NewSignaller(),
+		// (triggered below to match the real constructor: HasStopped is the
+		// not-connected notification and starts closed)
 		cpCache:         cache,
 		batching:        service.BatchPolicy{Count: 1},
 		checkpointLimit: 8,
@@ -61,6 +63,7 @@ func newTestInput(t *testing.T) (*oracleDBCDCInput, *recordingCache) {
 	pub := newBatchPublisher(batcher, checkpoint.NewCapped[replication.SCN](8), o.log)
 	pub.cacheSCN = o.cacheSCN
 	o.publisher.Store(pub)
+	o.stopSig.TriggerHasStopped()
 	t.Cleanup(func() { o.publisher.Load().Close() })
 	return o, cache
 }
@@ -143,6 +146,13 @@ func TestRebuildPublisherIfPoisoned(t *testing.T) {
 func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
 	t.Run("poisoned loop death reconnects", func(t *testing.T) {
 		o, _ := newTestInput(t)
+		// Model the mid-session state: Connect has armed a fresh signaller
+		// and the session goroutine stops when soft-stopped, as in production.
+		o.stopSig = shutdown.NewSignaller()
+		go func() {
+			<-o.stopSig.SoftStopChan()
+			o.stopSig.TriggerHasStopped()
+		}()
 		pub := o.publisher.Load()
 		pub.poisoned.Store(true)
 		pub.shutSig.TriggerSoftStop()
@@ -164,6 +174,8 @@ func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
 
 	t.Run("deliberate stop keeps draining the final batch", func(t *testing.T) {
 		o, _ := newTestInput(t)
+		// Mid-session: the input's signaller is armed, not stopped.
+		o.stopSig = shutdown.NewSignaller()
 		pub := o.publisher.Load()
 		// FlushRemaining's shape: stop the loop (not poisoned), then flush the
 		// final batch, which blocks on msgs() until ReadBatch consumes it.
