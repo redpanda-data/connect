@@ -136,3 +136,74 @@ func TestRebuildPublisherIfPoisoned(t *testing.T) {
 		require.NotEqual(t, "00000010", string(v), "the stale LSN must never have been persisted after the newer one")
 	}
 }
+
+// TestReadBatchReconnectsOnPoisonedLoopDeath encodes the silent-stall
+// finding: with period-only batching the timed-flush loop is the only
+// flusher, and when it dies after poisoning the publisher nothing else can
+// trigger the reconnect that rebuilds it - ReadBatch must observe the stop
+// and return ErrNotConnected. A DELIBERATE stop (input Close, publisher not
+// poisoned) must instead keep draining any batch still undelivered.
+func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
+	t.Run("poisoned loop death reconnects", func(t *testing.T) {
+		i, _ := newTestInput(t)
+		// Model the mid-session state: Connect has armed the signaller and
+		// the session goroutine stops when soft-stopped, as in production.
+		go func() {
+			<-i.stopSig.SoftStopChan()
+			i.stopSig.TriggerHasStopped()
+		}()
+		pub := i.publisher.Load()
+		pub.poisoned.Store(true)
+		pub.shutSig.TriggerSoftStop()
+		require.Eventually(t, func() bool {
+			select {
+			case <-pub.shutSig.HasStoppedChan():
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, time.Millisecond)
+
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		_, _, err := i.ReadBatch(ctx)
+		require.ErrorIs(t, err, service.ErrNotConnected,
+			"a poisoned publisher whose flush loop died must force a reconnect, not stall silently")
+	})
+
+	t.Run("deliberate stop keeps draining a parked batch", func(t *testing.T) {
+		i, _ := newTestInput(t)
+		pub := i.publisher.Load()
+
+		// A flusher parks in its send BEFORE the stop (the batcher teardown
+		// sets the closed flag, so nothing can flush after it): the batch is
+		// tracked, undelivered, and its owner's context is live.
+		flushed := make(chan error, 1)
+		go func() { flushed <- pub.Publish(t.Context(), streamingEvent("00000010", "00000010")) }()
+		require.Eventually(t, func() bool {
+			pub.batcherMu.Lock()
+			defer pub.batcherMu.Unlock()
+			return pub.nextTicket == 1
+		}, 5*time.Second, time.Millisecond)
+
+		// Deliberate, non-poisoned stop (input Close): the loop exits.
+		pub.shutSig.TriggerSoftStop()
+		require.Eventually(t, func() bool {
+			select {
+			case <-pub.shutSig.HasStoppedChan():
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, time.Millisecond)
+
+		// ReadBatch must drain the parked batch rather than bail out.
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		batch, ackFn, err := i.ReadBatch(ctx)
+		require.NoError(t, err, "a deliberately stopped loop must not force a reconnect while a batch is undelivered")
+		require.Len(t, batch, 1)
+		require.NoError(t, ackFn(ctx, nil))
+		require.NoError(t, <-flushed)
+	})
+}

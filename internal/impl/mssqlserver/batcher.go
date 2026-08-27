@@ -346,6 +346,14 @@ func (p *batchPublisher) loop() {
 
 				return p.dispatch(closeAtLeisureCtx, ticket, sendBatch, checkpointLSN)
 			}(); err != nil {
+				// With period-only batching this loop is the ONLY flusher, so
+				// its death must be loud and recoverable: every live error
+				// path has already poisoned the publisher, and ReadBatch
+				// observes the stop below and returns ErrNotConnected so the
+				// framework reconnects and Connect rebuilds. Without that, a
+				// processor error here silently stalled the pipeline until
+				// SQL Server's CDC retention walked past the checkpoint LSN.
+				p.log.Errorf("Flush loop stopping after error; the session will reconnect and rebuild the publisher: %v", err)
 				return
 			}
 		case <-p.shutSig.SoftStopChan():
