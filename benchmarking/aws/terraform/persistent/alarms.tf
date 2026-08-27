@@ -52,7 +52,7 @@ locals {
 resource "aws_cloudwatch_metric_alarm" "soak_stall" {
   for_each            = local.soak_alarm_dims
   alarm_name          = "rpcn-soak-${each.key}-stall"
-  alarm_description   = "Soak throughput <= 0.5 MB/s for 10 minutes while the run is active — the silent-stall class (#4648/#4655)."
+  alarm_description   = "STALL: the soak connector stopped moving data (throughput ~0 for 10+ min during an active run). It usually still LOOKS healthy — process up, health checks green — so don't trust 'connected'. First: open the rpcn-bench-soak dashboard, confirm a run is actually in progress, then pull the run's log. Runbook: benchmarking/aws/SOAK.md. Past examples: github.com/redpanda-data/connect/issues/4648 (input silently stalls), /4655 (health endpoint lies)."
   namespace           = "RedpandaConnect/Bench"
   metric_name         = "ThroughputMBps"
   dimensions          = each.value
@@ -83,7 +83,7 @@ resource "aws_cloudwatch_metric_alarm" "soak_stall" {
 resource "aws_cloudwatch_metric_alarm" "soak_rss_slope" {
   for_each            = local.soak_alarm_dims
   alarm_name          = "rpcn-soak-${each.key}-rss-slope"
-  alarm_description   = "Soak RSS climbing >= 2 MB/min across consecutive 10-minute checkpoints — the slow-leak class (inc-2861/#4527/#4657)."
+  alarm_description   = "MEMORY LEAK: the soak connector's memory (RSS) is climbing >= 2 MB/min sustained across checkpoints. Sounds small but that's ~3 GB/day — in production this OOM-kills within days. First: open the Memory widget on the rpcn-bench-soak dashboard and look at the RSS slope shape. Runbook: benchmarking/aws/SOAK.md. Past examples: github.com/redpanda-data/connect/issues/4527 (protobuf profile leak), /4657 (growth under back-pressure)."
   namespace           = "RedpandaConnect/Bench"
   metric_name         = "RSSSlopeBytesPerMin"
   dimensions          = each.value
@@ -105,7 +105,7 @@ resource "aws_cloudwatch_metric_alarm" "soak_rss_slope" {
 resource "aws_cloudwatch_metric_alarm" "soak_backlog" {
   for_each            = local.soak_alarm_dims
   alarm_name          = "rpcn-soak-${each.key}-backlog"
-  alarm_description   = "Soak end-to-end backlog >= 600s for 10 minutes — the connector is falling behind its source."
+  alarm_description   = "BACKLOG: the soak connector has fallen 10+ minutes behind the database it replicates and stayed there. Data IS flowing and memory is fine — it's just slower than the source is writing, so the gap grows without bound (in production: a replica going hours stale). First: check BacklogSeconds vs Records/s on the rpcn-bench-soak dashboard — flat-but-high backlog means a one-time hiccup, climbing means it's losing the race. Runbook: benchmarking/aws/SOAK.md."
   namespace           = "RedpandaConnect/Bench"
   metric_name         = "BacklogSeconds"
   dimensions          = each.value
