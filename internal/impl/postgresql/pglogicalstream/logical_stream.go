@@ -210,7 +210,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	// Create/amend publication (for instances where tables config has been widened or narrowed)
 	pubName := "pglog_stream_" + config.ReplicationSlotName
-	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
 	if err = CreatePublication(ctx, stream.pgConn, stream.logger, pubName, tablesForPublication); err != nil {
 		return nil, err
 	}

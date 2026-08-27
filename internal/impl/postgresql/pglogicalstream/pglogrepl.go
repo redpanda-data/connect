@@ -279,7 +279,11 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 	return err
 }
 
-// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag.
+// CreatePublication ensures publicationName exists and covers exactly
+// tables (or FOR ALL TABLES if empty), creating it if needed. If it exists
+// and must switch between FOR ALL TABLES and a named list, it drops and
+// recreates it (no ALTER form exists for that), resetting any options the
+// operator set on it and requiring superuser for FOR ALL TABLES.
 func CreatePublication(ctx context.Context, conn *pgconn.PgConn, logger *service.Logger, publicationName string, tables []TableFQN) error {
 	// Check if publication exists
 	pubQuery, err := sanitize.SQLQuery(`
@@ -317,6 +321,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, logger *service
 		if err != nil {
 			return fmt.Errorf("sanitizing publication creation query: %w", err)
 		}
+		logger.Infof("Creating publication %s for tables %s", publicationName, tablesClause)
 		// Publication doesn't exist, create new one
 		result = conn.Exec(ctx, sq)
 		if _, err := result.ReadAll(); err != nil {
@@ -469,7 +474,11 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		return nil, false, fmt.Errorf("getting publication tables: %w", err)
 	}
 
-	tables := make([]TableFQN, 0, len(rows))
+	if len(rows) == 0 {
+		return nil, false, nil
+	}
+
+	tables := make([]TableFQN, 0, len(rows[0].Rows))
 	for _, row := range rows[0].Rows {
 		// These come from postgres so they are valid, but we have to quote them
 		// to prevent normalization
