@@ -23,9 +23,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- general: Updated bundle dependencies for v4.106.0 release. ([@app/github-actions](https://github.com/app/github-actions), [#4716](https://github.com/redpanda-data/connect/pull/4716))
-- general: Migrated Terraform state locking from DynamoDB to S3-native lockfile to prevent loss of state locks during automated infrastructure cleanup sweeps. ([@prakhargarg105](https://github.com/prakhargarg105), [#4730](https://github.com/redpanda-data/connect/pull/4730))
-- oracledb_cdc: Removed snapshot primary key ordering and improved test coverage. ([@josephwoodward](https://github.com/josephwoodward), [#4696](https://github.com/redpanda-data/connect/pull/4696))
+- oracledb_cdc: Removed snapshot primary key ordering to boost snapshot performance. ([@josephwoodward](https://github.com/josephwoodward), [#4696](https://github.com/redpanda-data/connect/pull/4696))
 
 ## 4.106.0 - 2026-08-20
 
