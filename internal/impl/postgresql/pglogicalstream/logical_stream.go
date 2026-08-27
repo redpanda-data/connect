@@ -190,15 +190,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 	}
 
-	pubName := "pglog_stream_" + config.ReplicationSlotName
-	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
-	if err = CreatePublication(ctx, stream.pgConn, stream.logger, pubName, tablesForPublication); err != nil {
-		return nil, err
-	}
-	cleanups = append(cleanups, func() {
-		// TODO: Drop publication if it was created (meaning it's not existing state we might want to keep).
-	})
-
 	query, err := sanitize.SQLQuery("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = $1", config.ReplicationSlotName)
 	if err != nil {
 		return nil, err
@@ -208,16 +199,30 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return nil, err
 	}
 
+	// Validate slot's output plugin before we perform anything destructive
+	if len(connExecResult) > 0 && len(connExecResult[0].Rows) > 0 {
+		outputPlugin := string(connExecResult[0].Rows[0][1])
+		// handling a case when replication slot already exists but with different output plugin created manually
+		if outputPlugin != decodingPlugin {
+			return nil, fmt.Errorf("replication slot %s already exists with different output plugin: %s", config.ReplicationSlotName, outputPlugin)
+		}
+	}
+
+	// Create/amend publication (for instances where tables config has been widened or narrowed)
+	pubName := "pglog_stream_" + config.ReplicationSlotName
+	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
+	if err = CreatePublication(ctx, stream.pgConn, stream.logger, pubName, tablesForPublication); err != nil {
+		return nil, err
+	}
+	cleanups = append(cleanups, func() {
+		// TODO: Drop publication if it was created (meaning it's not existing state we might want to keep).
+	})
+
 	if len(connExecResult) > 0 && len(connExecResult[0].Rows) > 0 {
 		slotCheckRow := connExecResult[0].Rows[0]
 		confirmedLSNFromDB, err := ParseLSN(string(slotCheckRow[0]))
 		if err != nil {
 			return nil, fmt.Errorf("unable to decode LSN from postgres: %w", err)
-		}
-		outputPlugin := string(slotCheckRow[1])
-		// handling a case when replication slot already exists but with different output plugin created manually
-		if outputPlugin != decodingPlugin {
-			return nil, fmt.Errorf("replication slot %s already exists with different output plugin: %s", config.ReplicationSlotName, outputPlugin)
 		}
 		if confirmedLSNFromDB > 0 {
 			stream.ackedLSNMu.Lock()
