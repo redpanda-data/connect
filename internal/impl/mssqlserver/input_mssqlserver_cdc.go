@@ -553,13 +553,40 @@ func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn replication.LSN) e
 }
 
 func (i *sqlServerCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	select {
-	case m := <-i.publisher.Load().msgs():
-		return m.msg, m.ackFn, nil
-	case <-i.stopSig.HasStoppedChan():
-		return nil, nil, service.ErrNotConnected
-	case <-ctx.Done():
-		return nil, nil, ctx.Err()
+	pub := i.publisher.Load()
+	// Observed so a dead flush loop cannot silently stall the pipeline: with
+	// period-only batching that loop is the only flusher, and its error paths
+	// poison the publisher but cannot force a reconnect themselves.
+	pubStopped := pub.shutSig.HasStoppedChan()
+	for {
+		select {
+		case m := <-pub.msgs():
+			return m.msg, m.ackFn, nil
+		case <-pubStopped:
+			if pub.poisoned.Load() {
+				// Fatal flush-loop exit: tear the session down BEFORE handing
+				// control to Connect - the session goroutine may still be
+				// alive (Connect's still-active guard would otherwise turn
+				// this into a busy reconnect loop), and every session path
+				// escapes on the soft stop. The constructor leaves HasStopped
+				// triggered, so the wait is bounded; ctx stays the escape
+				// hatch regardless.
+				i.stopSig.TriggerSoftStop()
+				select {
+				case <-i.stopSig.HasStoppedChan():
+				case <-ctx.Done():
+					return nil, nil, ctx.Err()
+				}
+				return nil, nil, service.ErrNotConnected
+			}
+			// Deliberate stop (input Close): keep draining any batch still
+			// undelivered on msgs().
+			pubStopped = nil
+		case <-i.stopSig.HasStoppedChan():
+			return nil, nil, service.ErrNotConnected
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		}
 	}
 }
 

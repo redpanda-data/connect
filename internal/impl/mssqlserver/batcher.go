@@ -337,8 +337,7 @@ func (p *batchPublisher) loop() {
 				}
 				p.batcherMu.Unlock()
 				if flushErr != nil {
-					p.log.Errorf("Flushing timed batch failed; the publisher is marked for rebuild and its rows re-read from the last durable LSN on reconnect: %v", flushErr)
-					return flushErr
+					return fmt.Errorf("flushing timed batch: %w", flushErr)
 				}
 				if len(sendBatch) == 0 {
 					return nil
@@ -346,6 +345,20 @@ func (p *batchPublisher) loop() {
 
 				return p.dispatch(closeAtLeisureCtx, ticket, sendBatch, checkpointLSN)
 			}(); err != nil {
+				if p.stopping.Load() || p.shutSig.IsSoftStopSignalled() {
+					// Expected when a shutdown cancels an in-flight flush:
+					// the session is being torn down for good, not rebuilt.
+					p.log.Debugf("Flush loop exiting during shutdown: %v", err)
+					return
+				}
+				// With period-only batching this loop is the ONLY flusher, so
+				// its death must be loud and recoverable: every live error
+				// path has already poisoned the publisher, and ReadBatch
+				// observes the stop below and returns ErrNotConnected so the
+				// framework reconnects and Connect rebuilds. Without that, a
+				// processor error here silently stalled the pipeline until
+				// SQL Server's CDC retention walked past the checkpoint LSN.
+				p.log.Errorf("Flush loop stopping after error; the session will reconnect, rebuild the publisher, and re-read from the last durable LSN: %v", err)
 				return
 			}
 		case <-p.shutSig.SoftStopChan():
