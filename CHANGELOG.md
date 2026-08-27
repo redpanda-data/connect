@@ -5,10 +5,6 @@ All notable changes to this project will be documented in this file.
 
 ## 4.107.0 - 2026-08-27
 
-### Added
-
-- general: Added comprehensive soak testing framework for sustained load testing including benchmarking infrastructure, monitoring, alerting, and automated regression detection. ([@prakhargarg105](https://github.com/prakhargarg105), [#4713](https://github.com/redpanda-data/connect/pull/4713))
-
 ### Fixed
 
 - aws_dynamodb_cdc: Fixed snapshot_throttle lint rule that was comparing duration string to numeric literal, causing configuration validation to fail. ([@squiidz](https://github.com/squiidz), [#4723](https://github.com/redpanda-data/connect/pull/4723))
