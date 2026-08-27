@@ -814,16 +814,12 @@ func (m *schemaRegistryMigrator) syncSubjectSchema(ctx context.Context, ss sr.Su
 			return schemaInfo{}, fmt.Errorf("create schema: %w", err)
 		}
 
-		// Single lookup to resolve the destination version for this subject.
-		dss, err := m.dst.LookupSchema(ctx, dstSubject, sch)
-		if err != nil {
-			m.metrics.IncSchemaCreateErrors()
-			return schemaInfo{}, fmt.Errorf("lookup created schema with id %d: %w", id, err)
-		}
-
-		info = schemaInfoFromSubjectSchema(dss)
-		m.log.Infof("Schema migration: schema created with translated id: subject=%s version=%d id=%d => subject=%s version=%d id=%d",
-			ss.Subject, ss.Version, ss.ID, info.Subject, info.Version, info.ID)
+		// The destination version is left unset: the registration response
+		// carries only the ID, which is also the only field of schemaInfo
+		// with a functional consumer.
+		info = schemaInfo{Subject: dstSubject, ID: id}
+		m.log.Infof("Schema migration: schema created with translated id: subject=%s version=%d id=%d => subject=%s id=%d",
+			ss.Subject, ss.Version, ss.ID, info.Subject, info.ID)
 	} else {
 		dss, err := m.dst.CreateSchemaWithIDAndVersion(ctx, dstSubject, sch, ss.ID, ss.Version)
 		if err != nil {

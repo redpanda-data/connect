@@ -195,6 +195,19 @@ Tests migration of compatibility mode settings.
 - Validates compatibility mode is preserved
 - Tests various compatibility levels (BACKWARD, FORWARD, FULL, etc.)
 
+## Schema Registry Fan-out Test (`migrator_schema_registry_fanout_integration_test.go`)
+
+### `TestIntegrationSchemaRegistryMigratorSyncSharedSchemaFanout`
+
+Guards against O(N^2) destination-registry traffic when syncing subjects that share identical schema bodies with `translate_ids` enabled.
+- Creates source and destination clusters with Schema Registry
+- Places a counting reverse proxy in front of the destination Schema Registry, recording request counts by endpoint and peak concurrent in-flight requests
+- Registers 40 source subjects sharing one identical schema body (which deduplicate to a single destination schema ID)
+- Syncs with `translate_ids: true` and `max_parallel_http_requests: 2`
+- Validates:
+  - Destination subject-version reads stay O(N) (no per-registration fan-out to every subject sharing the destination schema ID)
+  - Peak destination request concurrency respects `max_parallel_http_requests`
+
 ## Topic Migration Tests (`migrator_topic_integration_test.go`)
 
 ### `TestIntegrationTopicMigratorSyncConfig`
