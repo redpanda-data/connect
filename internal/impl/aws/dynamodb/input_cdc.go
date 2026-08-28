@@ -48,6 +48,13 @@ const (
 	defaultAPICallTimeout          = 30 * time.Second // Timeout for AWS API calls
 	shardRefreshInterval           = 30 * time.Second // Interval for refreshing shard list
 	shardCleanupInterval           = 5 * time.Minute  // Interval for cleaning up exhausted shards
+	// shardRefreshCycleBudget bounds one shard-discovery refresh cycle. Each
+	// AWS call inside the cycle carries its own defaultAPICallTimeout, so the
+	// cycle budget must be a multiple of it - otherwise a single hung call
+	// consumes the whole cycle and a large shard backlog converges one
+	// truncated pass at a time (INC-2974). Progress made inside an expired
+	// budget is still committed; the next tick continues where it stopped.
+	shardRefreshCycleBudget = 4 * defaultAPICallTimeout
 
 	// Metrics
 	metricShardsTracked           = "dynamodb_cdc_shards_tracked"
@@ -475,6 +482,22 @@ type dynamoDBCDCMetrics struct {
 	failoverSkipped         *service.MetricCounter // Counts records skipped during global-table failover replay
 }
 
+// newDynamoDBCDCMetrics builds the input's metric set (shared with tests so
+// the field list cannot drift and leave nil gauges behind).
+func newDynamoDBCDCMetrics(m *service.Metrics) dynamoDBCDCMetrics {
+	return dynamoDBCDCMetrics{
+		shardsTracked:           m.NewGauge(metricShardsTracked),
+		shardsActive:            m.NewGauge(metricShardsActive),
+		snapshotState:           m.NewGauge(metricSnapshotState),
+		snapshotRecordsRead:     m.NewCounter(metricSnapshotRecordsRead),
+		snapshotSegmentsActive:  m.NewGauge(metricSnapshotSegmentsActive),
+		snapshotBufferOverflow:  m.NewCounter(metricSnapshotBufferOverflow),
+		snapshotSegmentDuration: m.NewTimer(metricSnapshotSegmentDuration),
+		checkpointFailures:      m.NewCounter(metricCheckpointFailures),
+		failoverSkipped:         m.NewCounter(metricFailoverSkipped),
+	}
+}
+
 type dynamoDBShardReader struct {
 	shardID   string
 	iterator  *string
@@ -856,17 +879,7 @@ func newDynamoDBCDCInputFromConfig(pConf *service.ParsedConfig, mgr *service.Res
 		tableStreams: make(map[string]*tableStream),
 		shutSig:      shutdown.NewSignaller(),
 		log:          mgr.Logger(),
-		metrics: dynamoDBCDCMetrics{
-			shardsTracked:           mgr.Metrics().NewGauge(metricShardsTracked),
-			shardsActive:            mgr.Metrics().NewGauge(metricShardsActive),
-			snapshotState:           mgr.Metrics().NewGauge(metricSnapshotState),
-			snapshotRecordsRead:     mgr.Metrics().NewCounter(metricSnapshotRecordsRead),
-			snapshotSegmentsActive:  mgr.Metrics().NewGauge(metricSnapshotSegmentsActive),
-			snapshotBufferOverflow:  mgr.Metrics().NewCounter(metricSnapshotBufferOverflow),
-			snapshotSegmentDuration: mgr.Metrics().NewTimer(metricSnapshotSegmentDuration),
-			checkpointFailures:      mgr.Metrics().NewCounter(metricCheckpointFailures),
-			failoverSkipped:         mgr.Metrics().NewCounter(metricFailoverSkipped),
-		},
+		metrics:      newDynamoDBCDCMetrics(mgr.Metrics()),
 	}
 
 	// Always initialize snapshot state (needed for state tracking and metrics)
@@ -1330,6 +1343,17 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 			return fmt.Errorf("initializing shards: %w", err)
 		}
 
+		// The snapshot's data-loss guarantee depends on CDC readers running
+		// first, so committing zero shards must fail the connection attempt
+		// (per-shard preparation failures are non-fatal inside refreshShards)
+		// rather than silently snapshotting without CDC coverage.
+		d.mu.RLock()
+		activeCount := len(d.shardReaders)
+		d.mu.RUnlock()
+		if activeCount == 0 {
+			return errors.New("initializing shard readers: no active shards available")
+		}
+
 		// Start shard coordinator in background
 		coordinatorCtx, coordinatorCancel := d.shutSig.SoftStopCtx(context.Background())
 		d.backgroundWorkers.Add(1)
@@ -1624,76 +1648,117 @@ func cdcCheckpointProbeNeeded(mode resumeMode) bool {
 	return mode == resumeExact
 }
 
+// preparedShard is a discovered shard resolved to a start position with its
+// iterator acquired, ready to be committed as a shard reader.
+type preparedShard struct {
+	shardID  string
+	iterator *string
+	cutoff   time.Time
+}
+
+// prepareShardReader resolves where a shard should start (global-table
+// aware) and acquires its iterator. Each AWS call carries its own timeout so
+// one hung call cannot stall an entire discovery cycle. tableSuffix is
+// appended to log lines on the multi-table path (e.g. " (table foo)").
+func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpointer, streamArn *string, shardID, tableSuffix string, honorStartFrom bool) (preparedShard, error) {
+	resolveCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+	decision, err := cp.ResolveResume(resolveCtx, shardID)
+	cancel()
+	if err != nil {
+		return preparedShard{}, fmt.Errorf("resolving resume for shard %s: %w", shardID, err)
+	}
+
+	var (
+		iteratorType   types.ShardIteratorType
+		sequenceNumber *string
+		cutoff         time.Time
+	)
+	switch decision.Mode {
+	case resumeExact:
+		iteratorType = types.ShardIteratorTypeAfterSequenceNumber
+		seq := decision.SequenceNumber
+		sequenceNumber = &seq
+		d.log.Infof("Resuming shard %s%s from checkpoint: %s", shardID, tableSuffix, seq)
+	case resumeFailover:
+		iteratorType = types.ShardIteratorTypeTrimHorizon
+		cutoff = decision.Cutoff
+		d.log.Infof("Failover resume for shard %s%s from trim horizon, skipping records at/before %s", shardID, tableSuffix, cutoff.Format(time.RFC3339))
+	default:
+		iteratorType = initialIteratorType(d.conf.startFrom, honorStartFrom)
+		d.log.Infof("Starting shard %s%s from %s", shardID, tableSuffix, iteratorType)
+	}
+
+	iterCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+	iter, err := d.streamsClient.GetShardIterator(iterCtx, &dynamodbstreams.GetShardIteratorInput{
+		StreamArn:         streamArn,
+		ShardId:           &shardID,
+		ShardIteratorType: iteratorType,
+		SequenceNumber:    sequenceNumber,
+	})
+	cancel()
+	if err != nil {
+		return preparedShard{}, fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
+	}
+
+	return preparedShard{shardID: shardID, iterator: iter.ShardIterator, cutoff: cutoff}, nil
+}
+
+// prepareNewShards resolves and acquires iterators for every discovered shard
+// not already registered (per isRegistered). A shard that fails to prepare is
+// skipped, counted, and retried on a later cycle rather than aborting the
+// batch, and the loop stops early once ctx's budget is exhausted so the
+// shards prepared so far can still be committed by the caller: an
+// all-or-nothing cycle can never converge on a large shard backlog, because
+// a single error each pass discards every prepared shard and the next pass
+// starts over from zero (INC-2974). Truncation and per-shard failures are
+// logged here, not returned - the caller commits whatever came back.
+func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointer, streamArn *string, shards []types.Shard, isRegistered func(string) bool, tableSuffix string, honorStartFrom bool) []preparedShard {
+	var (
+		prepared     []preparedShard
+		failedShards int
+		firstErr     error
+	)
+	for _, shard := range shards {
+		if ctx.Err() != nil {
+			d.log.Infof("Shard discovery budget expired after preparing %d shards%s; the remaining shards will be discovered on the next refresh cycle", len(prepared), tableSuffix)
+			break
+		}
+		shardID := *shard.ShardId
+		if isRegistered(shardID) {
+			continue
+		}
+
+		p, err := d.prepareShardReader(ctx, cp, streamArn, shardID, tableSuffix, honorStartFrom)
+		if err != nil {
+			failedShards++
+			if firstErr == nil {
+				firstErr = err
+			}
+			d.log.Debugf("Failed to prepare shard %s%s, will retry on the next refresh cycle: %v", shardID, tableSuffix, err)
+			continue
+		}
+		prepared = append(prepared, p)
+	}
+
+	if failedShards > 0 {
+		d.log.Warnf("Failed to prepare %d of %d discovered shards this refresh cycle%s; they will be retried on the next cycle (first error: %v)",
+			failedShards, len(shards), tableSuffix, firstErr)
+	}
+	return prepared
+}
+
 func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 	shards, err := describeStreamAllShards(ctx, d.streamsClient, d.streamArn)
 	if err != nil {
 		return err
 	}
 
-	// Collect new shards to add without holding locks during I/O operations
-	type shardToAdd struct {
-		shardID  string
-		iterator *string
-		cutoff   time.Time
-	}
-	var newShards []shardToAdd
-
-	for _, shard := range shards {
-		shardID := *shard.ShardId
-
-		// Check if shard already exists (minimize lock hold time)
+	newShards := d.prepareNewShards(ctx, d.checkpointer, d.streamArn, shards, func(shardID string) bool {
 		d.mu.RLock()
+		defer d.mu.RUnlock()
 		_, exists := d.shardReaders[shardID]
-		d.mu.RUnlock()
-
-		if exists {
-			continue
-		}
-
-		// Decide how to resume this shard (global-table aware).
-		decision, err := d.checkpointer.ResolveResume(ctx, shardID)
-		if err != nil {
-			return fmt.Errorf("resolving resume for shard %s: %w", shardID, err)
-		}
-
-		var (
-			iteratorType   types.ShardIteratorType
-			sequenceNumber *string
-			cutoff         time.Time
-		)
-
-		switch decision.Mode {
-		case resumeExact:
-			iteratorType = types.ShardIteratorTypeAfterSequenceNumber
-			seq := decision.SequenceNumber
-			sequenceNumber = &seq
-			d.log.Infof("Resuming shard %s from checkpoint: %s", shardID, seq)
-		case resumeFailover:
-			iteratorType = types.ShardIteratorTypeTrimHorizon
-			cutoff = decision.Cutoff
-			d.log.Infof("Failover resume for shard %s from trim horizon, skipping records at/before %s", shardID, cutoff.Format(time.RFC3339))
-		default:
-			iteratorType = initialIteratorType(d.conf.startFrom, d.honorStartFrom.Load())
-			d.log.Infof("Starting shard %s from %s", shardID, iteratorType)
-		}
-
-		// Get shard iterator (I/O operation - do not hold lock)
-		iter, err := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
-			StreamArn:         d.streamArn,
-			ShardId:           shard.ShardId,
-			ShardIteratorType: iteratorType,
-			SequenceNumber:    sequenceNumber,
-		})
-		if err != nil {
-			return fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
-		}
-
-		newShards = append(newShards, shardToAdd{
-			shardID:  shardID,
-			iterator: iter.ShardIterator,
-			cutoff:   cutoff,
-		})
-	}
+		return exists
+	}, "", d.honorStartFrom.Load())
 
 	// Add all new shard readers in a single critical section
 	if len(newShards) > 0 {
@@ -1714,11 +1779,15 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 
 		d.log.Infof("Tracking %d shards", totalShards)
 		d.metrics.shardsTracked.Set(int64(totalShards))
-	}
 
-	// The first successful discovery has positioned the fresh pipeline's
-	// initial shards; anything discovered from here on is a rotation child.
-	d.honorStartFrom.Store(false)
+		// The first discovery to commit shards has positioned the fresh
+		// pipeline; anything discovered from here on (including retries of
+		// shards that failed to prepare above) starts at TRIM_HORIZON -
+		// at-least-once delivery takes precedence over start_from: latest. A
+		// cycle that committed nothing keeps the flag so start_from still
+		// applies once discovery first succeeds.
+		d.honorStartFrom.Store(false)
+	}
 
 	return nil
 }
@@ -1775,14 +1844,14 @@ func (d *dynamoDBCDCInput) startShardCoordinator(ctx context.Context) {
 			return
 		case <-d.shardRefreshCh:
 			// Immediate refresh triggered by a shard reader (e.g. TrimmedDataAccessException)
-			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+			refreshCtx, refreshCancel := context.WithTimeout(ctx, shardRefreshCycleBudget)
 			if err := d.refreshShards(refreshCtx); err != nil && !errors.Is(err, context.Canceled) {
 				d.log.Warnf("Failed to refresh shards: %v", err)
 			}
 			refreshCancel()
 		case <-refreshTicker.C:
 			// Refresh shards periodically to discover new shards
-			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+			refreshCtx, refreshCancel := context.WithTimeout(ctx, shardRefreshCycleBudget)
 			if err := d.refreshShards(refreshCtx); err != nil && !errors.Is(err, context.Canceled) {
 				d.log.Warnf("Failed to refresh shards: %v", err)
 			}
@@ -1906,14 +1975,14 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 			return
 		case <-ts.shardRefreshCh:
 			// Immediate refresh triggered by a shard reader (e.g. TrimmedDataAccessException)
-			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+			refreshCtx, refreshCancel := context.WithTimeout(ctx, shardRefreshCycleBudget)
 			if err := d.refreshTableShards(refreshCtx, tableName, ts); err != nil && !errors.Is(err, context.Canceled) {
 				d.log.Warnf("Failed to refresh shards for table %s: %v", tableName, err)
 			}
 			refreshCancel()
 		case <-refreshTicker.C:
 			// Refresh shards periodically to discover new shards
-			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+			refreshCtx, refreshCancel := context.WithTimeout(ctx, shardRefreshCycleBudget)
 			if err := d.refreshTableShards(refreshCtx, tableName, ts); err != nil && !errors.Is(err, context.Canceled) {
 				d.log.Warnf("Failed to refresh shards for table %s: %v", tableName, err)
 			}
@@ -1932,69 +2001,12 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		return err
 	}
 
-	// Collect new shards to add
-	type shardToAdd struct {
-		shardID  string
-		iterator *string
-		cutoff   time.Time
-	}
-	var newShards []shardToAdd
-
-	for _, shard := range shards {
-		shardID := *shard.ShardId
-
-		// Check if shard already exists
+	newShards := d.prepareNewShards(ctx, ts.checkpointer, &ts.streamArn, shards, func(shardID string) bool {
 		ts.mu.RLock()
+		defer ts.mu.RUnlock()
 		_, exists := ts.shardReaders[shardID]
-		ts.mu.RUnlock()
-		if exists {
-			continue
-		}
-
-		// Decide how to resume this shard (global-table aware).
-		decision, err := ts.checkpointer.ResolveResume(ctx, shardID)
-		if err != nil {
-			return fmt.Errorf("resolving resume for shard %s: %w", shardID, err)
-		}
-
-		var (
-			iteratorType   types.ShardIteratorType
-			sequenceNumber *string
-			cutoff         time.Time
-		)
-
-		switch decision.Mode {
-		case resumeExact:
-			iteratorType = types.ShardIteratorTypeAfterSequenceNumber
-			seq := decision.SequenceNumber
-			sequenceNumber = &seq
-			d.log.Infof("Resuming shard %s (table %s) from checkpoint: %s", shardID, tableName, seq)
-		case resumeFailover:
-			iteratorType = types.ShardIteratorTypeTrimHorizon
-			cutoff = decision.Cutoff
-			d.log.Infof("Failover resume for shard %s (table %s) from trim horizon, skipping records at/before %s", shardID, tableName, cutoff.Format(time.RFC3339))
-		default:
-			iteratorType = initialIteratorType(d.conf.startFrom, ts.honorStartFrom.Load())
-			d.log.Infof("Starting shard %s (table %s) from %s", shardID, tableName, iteratorType)
-		}
-
-		// Get shard iterator
-		iter, err := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
-			StreamArn:         &ts.streamArn,
-			ShardId:           shard.ShardId,
-			ShardIteratorType: iteratorType,
-			SequenceNumber:    sequenceNumber,
-		})
-		if err != nil {
-			return fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
-		}
-
-		newShards = append(newShards, shardToAdd{
-			shardID:  shardID,
-			iterator: iter.ShardIterator,
-			cutoff:   cutoff,
-		})
-	}
+		return exists
+	}, " (table "+tableName+")", ts.honorStartFrom.Load())
 
 	// Add all new shard readers
 	if len(newShards) > 0 {
@@ -2014,11 +2026,15 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 
 		d.log.Infof("Table %s: tracking %d shards", tableName, shardCount)
 		d.updateTotalShardsMetric()
-	}
 
-	// The first successful discovery has positioned the fresh pipeline's
-	// initial shards; anything discovered from here on is a rotation child.
-	ts.honorStartFrom.Store(false)
+		// The first discovery to commit shards has positioned the fresh
+		// pipeline; anything discovered from here on (including retries of
+		// shards that failed to prepare above) starts at TRIM_HORIZON -
+		// at-least-once delivery takes precedence over start_from: latest. A
+		// cycle that committed nothing keeps the flag so start_from still
+		// applies once discovery first succeeds.
+		ts.honorStartFrom.Store(false)
+	}
 
 	return nil
 }
