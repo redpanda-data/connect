@@ -170,7 +170,7 @@ func (s *stubStreamsTransport) Do(req *http.Request) (*http.Response, error) {
 // newStubStreamsClient builds a real *dynamodbstreams.Client whose transport
 // is entirely local (no network, no AWS account) so it deserializes responses
 // exactly the way the production client would.
-func newStubStreamsClient(t *stubStreamsTransport) *dynamodbstreams.Client {
+func newStubStreamsClient(t aws.HTTPClient) *dynamodbstreams.Client {
 	cfg := aws.Config{
 		Region:      "us-east-1",
 		Credentials: aws.AnonymousCredentials{},

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -474,4 +475,149 @@ func TestBatcherShouldThrottle(t *testing.T) {
 		batcher.AddMessages(batch, "shard-001")
 	}
 	assert.True(t, batcher.ShouldThrottle(), "Should still throttle above 90% capacity")
+}
+
+// blockingCheckpointer blocks Set calls for one designated shard until
+// released, signalling entry exactly once. Other shards persist normally.
+type blockingCheckpointer struct {
+	mockCheckpointer
+	blockShard  string
+	entered     chan struct{}
+	enteredOnce sync.Once
+	release     chan struct{}
+}
+
+func (b *blockingCheckpointer) Set(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error {
+	if shardID == b.blockShard {
+		b.enteredOnce.Do(func() { close(b.entered) })
+		<-b.release
+	}
+	return b.mockCheckpointer.Set(ctx, shardID, sequenceNumber, approxCreationTime)
+}
+
+// TestBatcherCheckpointWriteDoesNotBlockOtherShards: a slow or hung
+// checkpoint write for one shard must not stall the whole input. While one
+// shard's persist is in flight, ShouldThrottle (polled by every shard
+// reader), AddMessages, and other shards' acks must all proceed. This is the
+// silent global-freeze hazard behind INC-2974's prod pipeline: holding the
+// batcher mutex across the PutItem parks every shard reader with no logs.
+func TestBatcherCheckpointWriteDoesNotBlockOtherShards(t *testing.T) {
+	batcher := NewRecordBatcher(100, 1, service.MockResources().Logger())
+	cp := &blockingCheckpointer{
+		mockCheckpointer: mockCheckpointer{checkpointLimit: 1},
+		blockShard:       "shard-001",
+		entered:          make(chan struct{}),
+		release:          make(chan struct{}),
+	}
+
+	batch1 := createTestMessages(3, "shard-001", 1)
+	batcher.AddMessages(batch1, "shard-001")
+
+	ackErr := make(chan error, 1)
+	go func() { ackErr <- batcher.AckMessages(t.Context(), cp, batch1) }()
+
+	select {
+	case <-cp.entered:
+		// shard-001's checkpoint write is now in flight and blocked
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected the ack to reach the checkpoint write")
+	}
+
+	assertPrompt := func(name string, fn func()) {
+		t.Helper()
+		done := make(chan struct{})
+		go func() { fn(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s blocked behind an in-flight checkpoint write for another shard", name)
+		}
+	}
+
+	assertPrompt("ShouldThrottle", func() { batcher.ShouldThrottle() })
+	batch2 := createTestMessages(3, "shard-002", 1)
+	assertPrompt("AddMessages", func() { batcher.AddMessages(batch2, "shard-002") })
+	// Errors are captured and asserted from the test goroutine: require's
+	// FailNow inside assertPrompt's spawned goroutine would Goexit before
+	// close(done) and misreport the failure as a blocked call.
+	var otherShardErr error
+	assertPrompt("AckMessages(other shard)", func() {
+		otherShardErr = batcher.AckMessages(t.Context(), cp, batch2)
+	})
+	require.NoError(t, otherShardErr)
+	assert.Equal(t, "00003", cp.get("shard-002"),
+		"another shard's checkpoint must persist while shard-001's write is blocked")
+
+	// Even the SAME shard's acks settle without queueing behind the write:
+	// they skip the persist (single-flighted) and the in-flight writer's
+	// post-write re-check picks their progress up.
+	batch3 := createTestMessages(3, "shard-001", 4)
+	batcher.AddMessages(batch3, "shard-001")
+	var sameShardErr error
+	assertPrompt("AckMessages(same shard)", func() {
+		sameShardErr = batcher.AckMessages(t.Context(), cp, batch3)
+	})
+	require.NoError(t, sameShardErr)
+
+	close(cp.release)
+	require.NoError(t, <-ackErr)
+	assert.Equal(t, "00006", cp.get("shard-001"),
+		"the writer's post-write re-check must persist progress settled during the write")
+	assert.Equal(t, 0, batcher.TrackedMessageCount())
+}
+
+// TestBatcherAckOverShardCapStillDrainsTracker: the tracked-shards safety
+// guard must still settle the acked batch AND persist its checkpoint.
+// Returning the guard error without dropping the batch leaks tracked
+// messages forever (permanently pinning ShouldThrottle once enough acks have
+// been swallowed), and skipping the persist would silently freeze durable
+// checkpoints pipeline-wide for as long as the guard trips.
+func TestBatcherAckOverShardCapStillDrainsTracker(t *testing.T) {
+	batcher := NewRecordBatcher(1, 1, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1}
+
+	batch1 := createTestMessages(2, "shard-001", 1)
+	batcher.AddMessages(batch1, "shard-001")
+	batch2 := createTestMessages(2, "shard-002", 1)
+	batcher.AddMessages(batch2, "shard-002")
+
+	require.Error(t, batcher.AckMessages(t.Context(), cp, batch1),
+		"the shard-cap guard should still surface an error")
+	require.Error(t, batcher.AckMessages(t.Context(), cp, batch2))
+	assert.Equal(t, 0, batcher.TrackedMessageCount(),
+		"acked batches must drain the tracker even when the shard-cap guard trips")
+	assert.Equal(t, "00002", cp.get("shard-001"),
+		"checkpoints must keep persisting even when the shard-cap guard trips")
+	assert.Equal(t, "00002", cp.get("shard-002"))
+}
+
+// TestBatcherWarnsWhenThrottlePinned: a throttle that never releases is an
+// otherwise-silent stall, so ShouldThrottle must surface it once the tracker
+// has been pinned past the warn threshold, and dropping below the threshold
+// must reset the pin clock.
+func TestBatcherWarnsWhenThrottlePinned(t *testing.T) {
+	batcher := NewRecordBatcher(100, 100, service.MockResources().Logger())
+
+	batch := createTestMessages(950, "shard-001", 0)
+	batcher.AddMessages(batch, "shard-001") // 950/1000 >= 90%
+	require.True(t, batcher.ShouldThrottle())
+
+	// Backdate the pin start beyond the warn threshold.
+	batcher.mu.Lock()
+	batcher.throttledSince = time.Now().Add(-2 * throttlePinWarnAfter)
+	batcher.mu.Unlock()
+
+	require.True(t, batcher.ShouldThrottle())
+	batcher.mu.Lock()
+	warned := !batcher.lastPinWarn.IsZero()
+	batcher.mu.Unlock()
+	assert.True(t, warned, "a continuously pinned throttle must emit the stall warning")
+
+	// Draining below the threshold resets the pin clock.
+	batcher.RemoveMessages(batch)
+	require.False(t, batcher.ShouldThrottle())
+	batcher.mu.Lock()
+	reset := batcher.throttledSince.IsZero()
+	batcher.mu.Unlock()
+	assert.True(t, reset, "releasing the throttle must reset the pin clock")
 }
