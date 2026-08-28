@@ -54,6 +54,16 @@ type refreshStubTransport struct {
 	failShards         map[string]bool
 	iteratorCalls      []string
 	onGetShardIterator func(shardID string)
+	// missingDeadlines records operations whose request context carried no
+	// deadline: every AWS call in a discovery cycle must be individually
+	// bounded, or a single hung call consumes the whole cycle budget.
+	missingDeadlines []string
+}
+
+func (s *refreshStubTransport) deadlineViolations() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.missingDeadlines...)
 }
 
 func (s *refreshStubTransport) setFailShards(shards ...string) {
@@ -84,6 +94,11 @@ func jsonResponse(req *http.Request, status int, body string) *http.Response {
 
 func (s *refreshStubTransport) Do(req *http.Request) (*http.Response, error) {
 	target := req.Header.Get("X-Amz-Target")
+	if _, hasDeadline := req.Context().Deadline(); !hasDeadline {
+		s.mu.Lock()
+		s.missingDeadlines = append(s.missingDeadlines, target)
+		s.mu.Unlock()
+	}
 	switch {
 	case strings.HasSuffix(target, ".DescribeStream"):
 		s.mu.Lock()
@@ -182,6 +197,9 @@ func TestRefreshShards_SkipsFailedShardAndCommitsRest(t *testing.T) {
 	require.NoError(t, d.refreshShards(t.Context()))
 	assert.ElementsMatch(t, []string{"shard-001", "shard-002", "shard-003"}, registeredShards(d),
 		"a previously failed shard must be picked up by the next refresh cycle")
+
+	assert.Empty(t, transport.deadlineViolations(),
+		"every AWS call in a discovery cycle must carry its own deadline, or one hung call consumes the whole cycle budget")
 }
 
 // TestRefreshShards_ZeroCommitKeepsStartFrom: a discovery cycle that commits

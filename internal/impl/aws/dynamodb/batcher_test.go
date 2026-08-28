@@ -537,9 +537,14 @@ func TestBatcherCheckpointWriteDoesNotBlockOtherShards(t *testing.T) {
 	assertPrompt("ShouldThrottle", func() { batcher.ShouldThrottle() })
 	batch2 := createTestMessages(3, "shard-002", 1)
 	assertPrompt("AddMessages", func() { batcher.AddMessages(batch2, "shard-002") })
+	// Errors are captured and asserted from the test goroutine: require's
+	// FailNow inside assertPrompt's spawned goroutine would Goexit before
+	// close(done) and misreport the failure as a blocked call.
+	var otherShardErr error
 	assertPrompt("AckMessages(other shard)", func() {
-		require.NoError(t, batcher.AckMessages(t.Context(), cp, batch2))
+		otherShardErr = batcher.AckMessages(t.Context(), cp, batch2)
 	})
+	require.NoError(t, otherShardErr)
 	assert.Equal(t, "00003", cp.get("shard-002"),
 		"another shard's checkpoint must persist while shard-001's write is blocked")
 
@@ -548,9 +553,11 @@ func TestBatcherCheckpointWriteDoesNotBlockOtherShards(t *testing.T) {
 	// post-write re-check picks their progress up.
 	batch3 := createTestMessages(3, "shard-001", 4)
 	batcher.AddMessages(batch3, "shard-001")
+	var sameShardErr error
 	assertPrompt("AckMessages(same shard)", func() {
-		require.NoError(t, batcher.AckMessages(t.Context(), cp, batch3))
+		sameShardErr = batcher.AckMessages(t.Context(), cp, batch3)
 	})
+	require.NoError(t, sameShardErr)
 
 	close(cp.release)
 	require.NoError(t, <-ackErr)

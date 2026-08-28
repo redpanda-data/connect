@@ -1553,10 +1553,16 @@ func describeStreamAllShards(ctx context.Context, client describeStreamPager, st
 		startID *string
 	)
 	for page := range maxDescribeStreamPages {
-		out, err := client.DescribeStream(ctx, &dynamodbstreams.DescribeStreamInput{
+		// Bound each page like every other AWS call in a discovery cycle:
+		// the SDK's default HTTP client has no overall response timeout, and
+		// an unbounded hang here would otherwise consume the caller's whole
+		// cycle budget before a single shard could be prepared.
+		pageCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+		out, err := client.DescribeStream(pageCtx, &dynamodbstreams.DescribeStreamInput{
 			StreamArn:             streamArn,
 			ExclusiveStartShardId: startID,
 		})
+		cancel()
 		if err != nil {
 			return nil, err
 		}
