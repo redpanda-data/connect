@@ -10,12 +10,23 @@ package dynamodb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Jeffail/checkpoint"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+)
+
+// Throttle-pin visibility: a healthy backpressured input oscillates around
+// the throttle threshold as downstream acks drain the tracker. Staying
+// continuously at or above it means nothing is draining and every shard
+// reader is parked - a wedge that is otherwise completely silent.
+const (
+	throttlePinWarnAfter    = 5 * time.Minute
+	throttlePinWarnInterval = 5 * time.Minute
 )
 
 // RecordBatcher tracks in-flight message batches and persists shard
@@ -55,6 +66,11 @@ type RecordBatcher struct {
 	// trackedMessages counts messages across all in-flight batches, used for
 	// backpressure via ShouldThrottle.
 	trackedMessages int
+	// throttledSince is when trackedMessages last crossed the throttle
+	// threshold without dipping back below it; zero while not throttled.
+	// lastPinWarn rate-limits the pinned-throttle warning.
+	throttledSince time.Time
+	lastPinWarn    time.Time
 }
 
 type trackedBatch struct {
@@ -70,7 +86,14 @@ type trackedBatch struct {
 }
 
 type shardAckTracker struct {
-	tracker *checkpoint.Uncapped[string]
+	// persistMu single-flights checkpoint writes for one shard (see
+	// maybePersist): the holder computes each persist after its previous
+	// write finished, so the durable row only ever moves forward, and every
+	// other ack TryLocks past it - nothing queues behind a slow write, and
+	// b.mu is never held across the write itself, so a hung checkpoint
+	// PutItem cannot park ShouldThrottle/AddMessages and freeze the input.
+	persistMu sync.Mutex
+	tracker   *checkpoint.Uncapped[string]
 	// pending counts acked messages since the last persisted checkpoint.
 	pending int
 	// frontier is the highest contiguous acked sequence ("" until the first
@@ -203,40 +226,95 @@ func (b *RecordBatcher) AckMessages(
 	if b == nil || len(batch) == 0 {
 		return nil
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
 
+	// Settle under b.mu only, never waiting on another ack's in-flight
+	// checkpoint write: batch settlement (and with it ShouldThrottle and
+	// AddMessages) stays wait-free even when the checkpoint store is slow.
+	b.mu.Lock()
 	tb, ok := b.batches[batch[0]]
 	if !ok {
 		// Already removed (nacked or double-acked); nothing to do.
+		b.mu.Unlock()
 		return nil
 	}
-
-	if len(b.shards) > b.maxTrackedShards {
-		return fmt.Errorf("checkpoint map exceeded maximum size (%d shards) - possible memory leak", b.maxTrackedShards)
-	}
-
 	b.dropBatchLocked(tb)
-
 	st := b.shards[tb.shardID]
 	if frontier := tb.resolve(); frontier != nil {
 		st.advanceFrontier(*frontier)
 	}
 	st.pending += tb.size
+	shardsOverCap := len(b.shards) > b.maxTrackedShards
+	b.mu.Unlock()
 
-	// Persist once enough messages are acked AND the frontier has moved past
-	// the last persisted position. A pinned frontier (nacked batch ahead of
-	// us in stream order) accumulates pending acks without persisting.
-	if st.pending >= cp.CheckpointLimit() && st.frontier != "" && st.frontier != st.persisted {
-		if err := cp.Set(ctx, tb.shardID, st.frontier, st.frontierTime); err != nil {
+	persistErr := b.maybePersist(ctx, cp, st, tb.shardID)
+	if shardsOverCap {
+		// The batch is settled and the frontier persisted above regardless:
+		// swallowing the settle would leak tracked messages and permanently
+		// pin ShouldThrottle, and skipping persists would silently freeze
+		// durable checkpoints for as long as the guard trips.
+		return errors.Join(
+			fmt.Errorf("checkpoint map exceeded maximum size (%d shards) - possible memory leak", b.maxTrackedShards),
+			persistErr,
+		)
+	}
+	return persistErr
+}
+
+// maybePersist writes a shard's checkpoint once enough messages have been
+// acked since the last persisted position AND the contiguous frontier has
+// moved past it (a pinned frontier - nacked batch ahead in stream order -
+// accumulates pending acks without persisting).
+//
+// Writes are single-flighted per shard: whoever holds persistMu re-checks
+// after each successful write, so progress settled during the write is
+// picked up immediately, and every other ack skips past without blocking.
+// Anything left unpersisted when the writes stop is carried by the shard's
+// next ack or the shutdown flush (PendingCheckpoints/FlushCheckpoints).
+// b.mu is never held across the store write.
+func (b *RecordBatcher) maybePersist(ctx context.Context, cp checkpointer, st *shardAckTracker, shardID string) error {
+	if !st.persistMu.TryLock() {
+		return nil
+	}
+	defer st.persistMu.Unlock()
+
+	for {
+		b.mu.Lock()
+		due := st.pending >= cp.CheckpointLimit() && st.frontier != "" && st.frontier != st.persisted
+		persistSeq := st.frontier
+		persistTime := st.frontierTime
+		pendingAtCompute := st.pending
+		b.mu.Unlock()
+		if !due {
+			return nil
+		}
+
+		// Bound the write so a hung request surfaces as a retryable error
+		// (the ack context is typically deadline-free) instead of pinning
+		// the shard's persist slot indefinitely. An abandoned write can in
+		// principle still land server-side after a later one and step the
+		// durable row backwards (bounded redelivery after a crash inside
+		// that window, never loss). Stream sequence numbers are
+		// variable-length numeric strings, so a lexicographic
+		// ConditionExpression guarding forward-only movement could wrongly
+		// reject legitimate newer writes forever - a frozen checkpoint,
+		// strictly worse than the race it would close.
+		setCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+		err := cp.Set(setCtx, shardID, persistSeq, persistTime)
+		cancel()
+		if err != nil {
+			// Bookkeeping untouched: pending keeps accumulating and the next
+			// ack on this shard retries the write from the newest frontier.
 			return err
 		}
-		st.persisted = st.frontier
-		st.pending = 0
-		b.log.Debugf("Checkpointed shard %s at sequence %s", tb.shardID, st.frontier)
-	}
 
-	return nil
+		b.mu.Lock()
+		st.persisted = persistSeq
+		// Subtract only what this write covered; acks settled while it was
+		// in flight keep counting toward the next persist.
+		st.pending -= pendingAtCompute
+		b.mu.Unlock()
+		b.log.Debugf("Checkpointed shard %s at sequence %s", shardID, persistSeq)
+	}
 }
 
 // PendingCheckpoints returns, per shard, the highest contiguous acked
@@ -268,7 +346,23 @@ func (b *RecordBatcher) ShouldThrottle() bool {
 	defer b.mu.Unlock()
 
 	// Throttle at 90% capacity to leave some headroom
-	return b.trackedMessages >= (b.maxTrackedMessages * 9 / 10)
+	if b.trackedMessages < (b.maxTrackedMessages * 9 / 10) {
+		b.throttledSince = time.Time{}
+		return false
+	}
+
+	// Surface a continuously pinned throttle: every shard reader is parked
+	// on this check, so if the tracker never drains the input is stalled
+	// with no other signal.
+	now := time.Now()
+	if b.throttledSince.IsZero() {
+		b.throttledSince = now
+	} else if since := now.Sub(b.throttledSince); since >= throttlePinWarnAfter && now.Sub(b.lastPinWarn) >= throttlePinWarnInterval {
+		b.lastPinWarn = now
+		b.log.Warnf("Shard readers throttled for %v: %d/%d in-flight messages are still awaiting downstream acknowledgement; no records are being read while this persists",
+			since.Round(time.Second), b.trackedMessages, b.maxTrackedMessages)
+	}
+	return true
 }
 
 // PendingCount returns the count of acked-but-not-persisted messages for a
