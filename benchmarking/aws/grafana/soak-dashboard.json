@@ -1,0 +1,292 @@
+{
+  "__comment": "CDC soak dashboard for Grafana (import via Dashboards -> New -> Import). Reads the RedpandaConnect/Bench CloudWatch namespace published by the soak runner (see runner/cloudwatch.go for the emitter contract and SOAK.md for the pipeline). Data arrives in ~10-minute checkpoint batches with per-minute backfill, so live runs trail real time by up to one checkpoint. The datasource/connector/scenario dropdowns are template variables: new connectors joining the rotation appear automatically.",
+  "title": "RPCN CDC Soak",
+  "uid": "rpcn-cdc-soak",
+  "tags": ["redpanda-connect", "soak", "cdc"],
+  "timezone": "utc",
+  "editable": true,
+  "graphTooltip": 1,
+  "time": { "from": "now-3h", "to": "now" },
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "description": "Sustained-load soak metrics for Redpanda Connect CDC connectors (CON-179 R6). Metrics arrive in ~10-minute checkpoint batches - a flat right edge during a live run is lag, not a stall. Alarm thresholds are drawn as red lines.",
+  "annotations": {
+    "list": [
+      {
+        "name": "Soak alarms",
+        "enable": true,
+        "iconColor": "red",
+        "datasource": { "type": "cloudwatch", "uid": "${ds}" },
+        "queryMode": "Annotations",
+        "region": "us-east-2",
+        "namespace": "RedpandaConnect/Bench",
+        "prefixMatching": true,
+        "alarmNamePrefix": "rpcn-soak-",
+        "actionPrefix": "",
+        "matchExact": false,
+        "statistic": "Maximum"
+      }
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "ds",
+        "label": "CloudWatch data source",
+        "type": "datasource",
+        "query": "cloudwatch",
+        "current": {},
+        "refresh": 1
+      },
+      {
+        "name": "connector",
+        "label": "Connector",
+        "type": "query",
+        "datasource": { "type": "cloudwatch", "uid": "${ds}" },
+        "query": "dimension_values(us-east-2, RedpandaConnect/Bench, ThroughputMBps, Connector)",
+        "refresh": 2,
+        "sort": 1,
+        "current": {},
+        "includeAll": false
+      },
+      {
+        "name": "scenario",
+        "label": "Scenario",
+        "type": "query",
+        "datasource": { "type": "cloudwatch", "uid": "${ds}" },
+        "query": "dimension_values(us-east-2, RedpandaConnect/Bench, ThroughputMBps, Scenario, {\"Connector\":\"$connector\"})",
+        "refresh": 2,
+        "sort": 1,
+        "current": {},
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Throughput - broker vs Connect log",
+      "description": "Broker-side produce rate vs the rate reported in Connect's own log. Divergence means the log is lying or the brokers are seeing traffic Connect isn't reporting. Red line = stall alarm threshold (0.5 MB/s for 10 min pages).",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "MBs",
+          "min": 0,
+          "custom": { "thresholdsStyle": { "mode": "line" } },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.5 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "region": "us-east-2",
+          "namespace": "RedpandaConnect/Bench",
+          "metricName": "ThroughputMBps",
+          "dimensions": { "Connector": "$connector", "Scenario": "$scenario" },
+          "statistic": "Average",
+          "period": "60",
+          "matchExact": true,
+          "label": "broker MB/s"
+        },
+        {
+          "refId": "B",
+          "region": "us-east-2",
+          "namespace": "RedpandaConnect/Bench",
+          "metricName": "LogThroughputMBps",
+          "dimensions": { "Connector": "$connector", "Scenario": "$scenario" },
+          "statistic": "Average",
+          "period": "60",
+          "matchExact": true,
+          "label": "Connect log MB/s"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Memory (RSS is what the OOM killer sees)",
+      "description": "RSS climbing while heap stays flat points at native/off-heap growth. A steady upward RSS slope is the slow-leak class - see the RSS slope panel for the alarmed signal.",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${ds}" },
+      "fieldConfig": {
+        "defaults": { "unit": "bytes", "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "region": "us-east-2",
+          "namespace": "RedpandaConnect/Bench",
+          "metricName": "RSSBytes",
+          "dimensions": { "Connector": "$connector", "Scenario": "$scenario" },
+          "statistic": "Maximum",
+          "period": "60",
+          "matchExact": true,
+          "label": "RSS"
+        },
+        {
+          "refId": "B",
+          "region": "us-east-2",
+          "namespace": "RedpandaConnect/Bench",
+          "metricName": "HeapInUseBytes",
+          "dimensions": { "Connector": "$connector", "Scenario": "$scenario" },
+          "statistic": "Maximum",
+          "period": "60",
+          "matchExact": true,
+          "label": "Go heap in use"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "RSS slope (leak detector)",
+      "description": "Least-squares fit of RSS growth per minute over the trailing window, computed per checkpoint cycle (one point per ~10 min). Red line = leak alarm threshold (2 MiB/min sustained for 2 consecutive checkpoints pages; that rate is ~3 GB/day). Negative values = memory settling.",
+      "gridPos": { "x": 0, "y": 8, "w": 8, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "thresholdsStyle": { "mode": "line" }, "axisLabel": "bytes/min" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 2097152 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "region": "us-east-2",
+          "namespace": "RedpandaConnect/Bench",
+          "metricName": "RSSSlopeBytesPerMin",
+          "dimensions": { "Connector": "$connector", "Scenario": "$scenario" },
+          "statistic": "Maximum",
+          "period": "600",
+          "matchExact": true,
+          "label": "RSS slope"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "End-to-end backlog (seconds behind source)",
+      "description": "How far the connector is behind the database it replicates. A constant offset (~60s snapshot catch-up) is normal; a climbing line means it is losing the race with the source. Red line = backlog alarm threshold (600s for 10 min pages).",
+      "gridPos": { "x": 8, "y": 8, "w": 8, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": { "thresholdsStyle": { "mode": "line" } },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 600 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "region": "us-east-2",
+          "namespace": "RedpandaConnect/Bench",
+          "metricName": "BacklogSeconds",
+          "dimensions": { "Connector": "$connector", "Scenario": "$scenario" },
+          "statistic": "Maximum",
+          "period": "60",
+          "matchExact": true,
+          "label": "backlog"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Goroutines",
+      "description": "Goroutine count in the Connect process. Monotonic growth across the run is a goroutine leak even when memory looks fine.",
+      "gridPos": { "x": 16, "y": 8, "w": 8, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${ds}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "region": "us-east-2",
+          "namespace": "RedpandaConnect/Bench",
+          "metricName": "Goroutines",
+          "dimensions": { "Connector": "$connector", "Scenario": "$scenario" },
+          "statistic": "Maximum",
+          "period": "60",
+          "matchExact": true,
+          "label": "goroutines"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Records/s + run liveness",
+      "description": "Delivered records per second against the workload's declared rate, with RunActive (right axis, 0/1) marking when a soak window is actually open - gaps in every other panel outside RunActive=1 are absence of runs, not failures.",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${ds}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "run active" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "max", "value": 2 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [4, 4] } },
+              { "id": "custom.fillOpacity", "value": 15 }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "region": "us-east-2",
+          "namespace": "RedpandaConnect/Bench",
+          "metricName": "RecordsPerSec",
+          "dimensions": { "Connector": "$connector", "Scenario": "$scenario" },
+          "statistic": "Average",
+          "period": "60",
+          "matchExact": true,
+          "label": "records/s"
+        },
+        {
+          "refId": "B",
+          "region": "us-east-2",
+          "namespace": "RedpandaConnect/Bench",
+          "metricName": "RunActive",
+          "dimensions": { "Connector": "$connector", "Scenario": "$scenario" },
+          "statistic": "Maximum",
+          "period": "60",
+          "matchExact": true,
+          "label": "run active"
+        }
+      ]
+    }
+  ]
+}
