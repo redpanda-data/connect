@@ -358,3 +358,136 @@ func TestStartShardReader_ExpiredIteratorTransientRefreshFailure(t *testing.T) {
 	assert.False(t, exhausted, "a transient refresh failure must not mark the shard exhausted")
 	assert.Empty(t, d.shardRefreshCh, "a transient refresh failure must not signal the coordinator")
 }
+
+// recordsStubTransport serves GetRecords, standing in for a healthy shard:
+// the first page carries the configured records, every later page is empty
+// (with a live next iterator), so tests see exactly one tracked batch.
+type recordsStubTransport struct {
+	records string // JSON array body of the first page's Records field
+	pages   atomic.Int64
+}
+
+func (s *recordsStubTransport) Do(req *http.Request) (*http.Response, error) {
+	target := req.Header.Get("X-Amz-Target")
+	if !strings.HasSuffix(target, ".GetRecords") {
+		return nil, fmt.Errorf("recordsStubTransport: unexpected operation %q", target)
+	}
+	records := "[]"
+	if s.pages.Add(1) == 1 {
+		records = s.records
+	}
+	hdr := http.Header{}
+	hdr.Set("Content-Type", "application/x-amz-json-1.0")
+	body := fmt.Sprintf(`{"Records":%s,"NextShardIterator":"iter-next"}`, records)
+	return &http.Response{
+		StatusCode: 200,
+		Header:     hdr,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Request:    req,
+	}, nil
+}
+
+// TestStartShardReader_CancelledSendUntracksBatch: a reader cancelled while
+// blocked sending a batch to the message channel must untrack that batch.
+// Leaking it would permanently consume tracker budget: enough cancelled
+// readers (shard rotation over a slow downstream) pin the throttle with
+// messages that no longer exist anywhere.
+func TestStartShardReader_CancelledSendUntracksBatch(t *testing.T) {
+	transport := &recordsStubTransport{
+		records: `[{"eventID":"1","eventName":"INSERT","dynamodb":{"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}},
+		           {"eventID":"2","eventName":"INSERT","dynamodb":{"SequenceNumber":"00002","Keys":{"pk":{"S":"b"}},"NewImage":{"pk":{"S":"b"}}}},
+		           {"eventID":"3","eventName":"INSERT","dynamodb":{"SequenceNumber":"00003","Keys":{"pk":{"S":"c"}},"NewImage":{"pk":{"S":"c"}}}}]`,
+	}
+
+	d := &dynamoDBCDCInput{
+		conf: dynamoDBCDCConfig{
+			batchSize:       10,
+			pollInterval:    20 * time.Millisecond,
+			throttleBackoff: 20 * time.Millisecond,
+		},
+		log:           service.MockResources().Logger(),
+		streamsClient: newStubStreamsClient(transport),
+		streamArn:     aws.String(testStreamArn),
+		recordBatcher: NewRecordBatcher(100, 100, service.MockResources().Logger()),
+		shardReaders: map[string]*dynamoDBShardReader{
+			"shard-001": {shardID: "shard-001", iterator: aws.String("initial-iterator")},
+		},
+		msgChan: make(chan asyncMessage), // unbuffered and never read: the send blocks
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		d.startShardReader(ctx, "shard-001")
+		close(done)
+	}()
+
+	// Wait until the batch is tracked (the reader is now blocked on the send).
+	require.Eventually(t, func() bool {
+		return d.recordBatcher.TrackedMessageCount() == 3
+	}, 5*time.Second, 5*time.Millisecond, "expected the read batch to be tracked before dispatch")
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reader should exit promptly on cancellation")
+	}
+
+	assert.Equal(t, 0, d.recordBatcher.TrackedMessageCount(),
+		"a batch never dispatched must be untracked on reader cancellation")
+}
+
+// TestStartShardReader_AckDrainsAfterWrapperPointerReplacement is the
+// end-to-end regression test for the INC-2974 ack-path stall: benthos's
+// AutoRetryNacksBatched (auto_replay_nacks, default on) replaces every
+// element of the delivered batch slice with a new *Message before the
+// pipeline sees it. The dispatched ack function must still drain the
+// in-flight tracker afterwards - keying settlement off the batch's message
+// pointers silently no-ops instead, pinning every reader in backpressure.
+func TestStartShardReader_AckDrainsAfterWrapperPointerReplacement(t *testing.T) {
+	transport := &recordsStubTransport{
+		records: `[{"eventID":"1","eventName":"INSERT","dynamodb":{"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}},
+		           {"eventID":"2","eventName":"INSERT","dynamodb":{"SequenceNumber":"00002","Keys":{"pk":{"S":"b"}},"NewImage":{"pk":{"S":"b"}}}}]`,
+	}
+
+	batcher := NewRecordBatcher(100, 1, service.MockResources().Logger())
+	d := &dynamoDBCDCInput{
+		conf: dynamoDBCDCConfig{
+			batchSize:       10,
+			pollInterval:    20 * time.Millisecond,
+			throttleBackoff: 20 * time.Millisecond,
+		},
+		log:           service.MockResources().Logger(),
+		streamsClient: newStubStreamsClient(transport),
+		streamArn:     aws.String(testStreamArn),
+		recordBatcher: batcher,
+		shardReaders: map[string]*dynamoDBShardReader{
+			"shard-001": {shardID: "shard-001", iterator: aws.String("initial-iterator")},
+		},
+		msgChan: make(chan asyncMessage, 1),
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go d.startShardReader(ctx, "shard-001")
+
+	var am asyncMessage
+	select {
+	case am = <-d.msgChan:
+	case <-time.After(5 * time.Second):
+		t.Fatal("expected a dispatched batch")
+	}
+	require.Equal(t, 2, batcher.TrackedMessageCount())
+
+	// Simulate the wrapper's read hook: same slice, new message pointers.
+	for i := range am.msg {
+		am.msg[i] = am.msg[i].Copy()
+	}
+
+	require.NoError(t, am.ackFn(t.Context(), nil))
+	assert.Equal(t, 0, batcher.TrackedMessageCount(),
+		"the ack must drain the tracker even after the wrapper replaced the batch's message pointers")
+}
