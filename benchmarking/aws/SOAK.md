@@ -64,8 +64,7 @@ files named below.
   (deliberately outside Terraform: no re-apply can unsubscribe it);
   create the license secret: `aws secretsmanager
   create-secret --name redpanda-connect-bench/license --secret-string
-  file://<license> --region us-east-2`; confirm the SNS email
-  subscription.
+  file://<license> --region us-east-2`.
 - **Laptop runs**: always from a git worktree (never a checkout you might
   branch-switch mid-run), always with credentials that outlive the run —
   `aws-vault exec` static creds die at ~1h; prefer the scheduled workflow.
