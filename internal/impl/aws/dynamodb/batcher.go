@@ -213,16 +213,8 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	// global exhaustion would report a pin spanning the drained interval.
 	b.throttledSince = time.Time{}
 
-	// The shard-tracker entry may not exist yet - it is only materialised by
-	// AddMessages, so shards that never yield records don't count against
-	// maxTrackedShards - in which case the shard has nothing in flight.
-	st := b.shards[shardID]
-	inflight := 0
-	if st != nil {
-		inflight = st.inflight
-	}
-	resv := b.reservedByShard[shardID]
-	if inflight+resv > 0 && inflight+resv+n > b.perShardCap && b.otherShardActiveLocked(shardID) {
+	shardInFlight := b.shardInFlightLocked(shardID)
+	if shardInFlight > 0 && shardInFlight+n > b.perShardCap && b.otherShardActiveLocked(shardID) {
 		// The shard is pinned by its own unsettled messages; park it alone
 		// without touching the global throttle clock, but surface a
 		// continuous pin on the shard's own clock - in a topology with fewer
@@ -231,23 +223,23 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 		// shard always has tracked messages (its single reader never holds a
 		// reservation while reserving again), so st is non-nil here; the
 		// guard is belt and braces.
-		if st != nil {
+		if st := b.shards[shardID]; st != nil {
 			now := time.Now()
 			if st.throttledSince.IsZero() {
 				st.throttledSince = now
 			} else if since := now.Sub(st.throttledSince); since >= throttlePinWarnAfter && now.Sub(st.lastPinWarn) >= throttlePinWarnInterval {
 				st.lastPinWarn = now
 				b.log.Warnf("Shard %s reader throttled for %v: %d/%d in-flight messages on this shard are still awaiting downstream acknowledgement; no records are being read from it while this persists",
-					shardID, since.Round(time.Second), inflight+resv, b.perShardCap)
+					shardID, since.Round(time.Second), shardInFlight, b.perShardCap)
 			}
 		}
 		return false
 	}
 
-	if st != nil {
+	if st := b.shards[shardID]; st != nil {
 		st.throttledSince = time.Time{}
 	}
-	b.reservedByShard[shardID] = resv + n
+	b.reservedByShard[shardID] += n
 	b.reserved += n
 	return true
 }
@@ -591,6 +583,27 @@ func (b *RecordBatcher) InFlightCount() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.inFlightCountLocked()
+}
+
+// shardInFlightLocked returns the in-flight (tracked and reserved) message count
+// for a specific shard. Callers must hold b.mu.
+func (b *RecordBatcher) shardInFlightLocked(shardID string) int {
+	inflight := 0
+	if st := b.shards[shardID]; st != nil {
+		inflight = st.inflight
+	}
+	return inflight + b.reservedByShard[shardID]
+}
+
+// ShardInFlightCount returns the in-flight (tracked and reserved) message count
+// for a specific shard. Exported for testing and diagnostics.
+func (b *RecordBatcher) ShardInFlightCount(shardID string) int {
+	if b == nil {
+		return 0
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.shardInFlightLocked(shardID)
 }
 
 // TrackedMessageCount returns the number of tracked messages. Exported for testing.
