@@ -88,15 +88,15 @@ files named below.
   is a manual SNS subscription to BOTH topics (see one-time setup below) —
   deliberately unmanaged, so no re-apply can silently unsubscribe it.
   Slack is the only Terraform-managed channel, so blanking its IDs fails
-  validation instead of leaving the topics unrouted.
+  validation instead of leaving the topics unrouted. Alarms during a run
+  are the acute channel; a red nightly workflow is the between-builds
+  channel; the `/soak` comment is the before-merge channel.
 - **Grafana**: `grafana/soak-dashboard.json` is an importable dashboard
   over the same CloudWatch metrics (template dropdowns for
   connector/scenario, alarm thresholds drawn in, CloudWatch alarm
   annotations). It needs a CloudWatch data source for account
   605419575229 in the Grafana stack — read-only metrics access; the
-  dashboard binds to it via a data-source variable at import time. Alarms during a run are the acute
-  channel; a red nightly workflow is the between-builds channel; the
-  `/soak` comment is the before-merge channel.
+  dashboard binds to it via a data-source variable at import time.
 
 ## Known limitations
 
