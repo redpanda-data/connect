@@ -397,15 +397,27 @@ func (s *recordsStubTransport) Do(req *http.Request) (*http.Response, error) {
 type readerHarness struct {
 	batcher *RecordBatcher
 	d       *dynamoDBCDCInput
-	start   func(ctx context.Context)
+	// shardReaders is the reader-state map the harnessed entry point consults
+	// (d.shardReaders for single-table, ts.shardReaders for multi-table).
+	shardReaders map[string]*dynamoDBShardReader
+	start        func(ctx context.Context)
 }
 
-// readerHarnesses returns one fresh harness factory per reader entry point.
-// Each factory builds its own stub transport and batcher so subtests stay
-// independent.
+// readerHarnesses returns one fresh harness factory per reader entry point,
+// serving the given records page. Each factory builds its own stub transport
+// and batcher so subtests stay independent.
 func readerHarnesses(records string, checkpointLimit, msgChanCap int) map[string]func() *readerHarness {
+	return readerHarnessesWithTransport(func() aws.HTTPClient {
+		return &recordsStubTransport{records: records}
+	}, checkpointLimit, msgChanCap)
+}
+
+// readerHarnessesWithTransport is readerHarnesses with a caller-supplied
+// transport factory, for tests that need error pages or other non-record
+// responses.
+func readerHarnessesWithTransport(mkTransport func() aws.HTTPClient, checkpointLimit, msgChanCap int) map[string]func() *readerHarness {
 	build := func(multiTable bool) *readerHarness {
-		transport := &recordsStubTransport{records: records}
+		transport := mkTransport()
 		batcher := NewRecordBatcher(100, checkpointLimit, service.MockResources().Logger())
 		shardReaders := map[string]*dynamoDBShardReader{
 			"shard-001": {shardID: "shard-001", iterator: aws.String("initial-iterator")},
@@ -429,14 +441,14 @@ func readerHarnesses(records string, checkpointLimit, msgChanCap int) map[string
 				recordBatcher: batcher,
 				shardReaders:  shardReaders,
 			}
-			return &readerHarness{batcher: batcher, d: d, start: func(ctx context.Context) {
+			return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, start: func(ctx context.Context) {
 				d.startTableShardReader(ctx, "table-a", ts, "shard-001")
 			}}
 		}
 		d.streamArn = aws.String(testStreamArn)
 		d.recordBatcher = batcher
 		d.shardReaders = shardReaders
-		return &readerHarness{batcher: batcher, d: d, start: func(ctx context.Context) {
+		return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, start: func(ctx context.Context) {
 			d.startShardReader(ctx, "shard-001")
 		}}
 	}
@@ -561,6 +573,98 @@ func TestShardReader_RealAutoRetryNacksWrapper(t *testing.T) {
 			require.NoError(t, retryAckFn(ctx, nil))
 			assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
 				"the final ack must drain the tracker through the real wrapper (the INC-2974 wedge)")
+		})
+	}
+}
+
+// TestShardReader_ReleasesReservationOnUnproductiveReads: TryReserve claims
+// batch_size of budget before every GetRecords, and each reader hands it back
+// on five hand-placed paths. A missed Release permanently consumes budget
+// with messages that were never tracked - the same silent wedge shape as the
+// INC-2974 ack stall. Each scenario drives one unproductive-read path on both
+// reader entry points, then cancels the reader and asserts every reservation
+// (and all tracker state) was returned.
+func TestShardReader_ReleasesReservationOnUnproductiveReads(t *testing.T) {
+	// Records stamped with an ancient ApproximateCreationDateTime so a future
+	// failover cutoff filters the whole page out after a successful read.
+	const staleRecordsPage = `[{"eventID":"1","eventName":"INSERT","dynamodb":{"ApproximateCreationDateTime":1000,"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}}]`
+
+	scenarios := map[string]struct {
+		mkTransport func() aws.HTTPClient
+		cutoff      time.Time
+		wantPages   func(t aws.HTTPClient) bool // reader has looped past the release at least once
+	}{
+		"get-records error": {
+			mkTransport: func() aws.HTTPClient {
+				return &stubStreamsTransport{getRecordsErrorType: "InternalServerError"}
+			},
+			wantPages: func(tr aws.HTTPClient) bool {
+				return tr.(*stubStreamsTransport).getRecordsCalls.Load() >= 2
+			},
+		},
+		"empty page": {
+			mkTransport: func() aws.HTTPClient { return &recordsStubTransport{records: "[]"} },
+			wantPages: func(tr aws.HTTPClient) bool {
+				return tr.(*recordsStubTransport).pages.Load() >= 2
+			},
+		},
+		"fully filtered page": {
+			mkTransport: func() aws.HTTPClient { return &recordsStubTransport{records: staleRecordsPage} },
+			cutoff:      time.Unix(2000, 0),
+			wantPages: func(tr aws.HTTPClient) bool {
+				return tr.(*recordsStubTransport).pages.Load() >= 2
+			},
+		},
+	}
+
+	for scenarioName, sc := range scenarios {
+		t.Run(scenarioName, func(t *testing.T) {
+			var transport aws.HTTPClient
+			mk := func() aws.HTTPClient {
+				transport = sc.mkTransport()
+				return transport
+			}
+			for name, mkHarness := range readerHarnessesWithTransport(mk, 100, 1) {
+				t.Run(name, func(t *testing.T) {
+					h := mkHarness()
+					h.shardReaders["shard-001"].failoverCutoff = sc.cutoff
+
+					ctx, cancel := context.WithCancel(t.Context())
+					defer cancel()
+					done := make(chan struct{})
+					go func() {
+						h.start(ctx)
+						close(done)
+					}()
+
+					tr := transport
+					require.Eventually(t, func() bool { return sc.wantPages(tr) },
+						5*time.Second, 5*time.Millisecond,
+						"the reader should loop past the release path at least once")
+
+					cancel()
+					select {
+					case <-done:
+					case <-time.After(2 * time.Second):
+						t.Fatal("reader should exit promptly on cancellation")
+					}
+
+					assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+						"an unproductive read must not leave tracked messages behind")
+					b := h.batcher
+					b.mu.Lock()
+					reserved := b.reserved
+					reservedEntries := len(b.reservedByShard)
+					trackerEntries := len(b.shards)
+					b.mu.Unlock()
+					assert.Zero(t, reserved,
+						"every reservation must be returned on the unproductive-read paths")
+					assert.Zero(t, reservedEntries,
+						"released reservations must be pruned")
+					assert.Zero(t, trackerEntries,
+						"a shard that never yields a delivered record must not materialise tracker state")
+				})
+			}
 		})
 	}
 }
