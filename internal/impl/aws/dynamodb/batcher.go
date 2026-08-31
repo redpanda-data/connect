@@ -193,8 +193,8 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	// Why? Even though configuration validation normally ensures batch sizes are smaller
 	// than the budget, a batch that is larger than the limit must never cause the reader
 	// loop to hang forever waiting for space that can never clear.
-	inFlight := b.inFlightCountLocked()
-	if inFlight > 0 && inFlight+n > b.maxTrackedMessages {
+	globalInFlight := b.inFlightCountLocked()
+	if globalInFlight > 0 && globalInFlight+n > b.maxTrackedMessages {
 		// Surface a continuously pinned budget: every shard reader parks on
 		// this check, so if in-flight messages never settle the input is
 		// stalled with no other signal.
