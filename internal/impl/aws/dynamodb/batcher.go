@@ -187,11 +187,14 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// A completely empty batcher admits one batch even above the global
-	// budget (mirroring the per-shard cap's idle escape): config validation
-	// bounds batch_size below the budget's floor, but a reservation that
-	// could never fit must hang the read loop under no circumstances.
-	if b.trackedMessages+b.reserved > 0 && b.trackedMessages+b.reserved+n > b.maxTrackedMessages {
+	// If the batcher has zero messages in flight, always allow the first reservation
+	// to go through, even if it exceeds the maxium budget.
+	//
+	// Why? Even though configuration validation normally ensures batch sizes are smaller
+	// than the budget, a batch that is larger than the limit must never cause the reader
+	// loop to hang forever waiting for space that can never clear.
+	inFlight := b.inFlightCountLocked()
+	if inFlight > 0 && inFlight+n > b.maxTrackedMessages {
 		// Surface a continuously pinned budget: every shard reader parks on
 		// this check, so if in-flight messages never settle the input is
 		// stalled with no other signal.
@@ -561,6 +564,30 @@ func (b *RecordBatcher) PendingCount(shardID string) int {
 		return st.pending
 	}
 	return 0
+}
+
+// inFlightCountLocked returns the total message load across both stages of ingestion:
+//
+//  1. Reserved (b.reserved): Messages currently being fetched over the network (GetRecords in flight).
+//  2. Tracked (b.trackedMessages): Messages received into memory and awaiting downstream processing/acknowledgement.
+//
+// Counting pending reads as in-flight ensures concurrent shard readers cannot
+// flood the pipeline before the first batch of records even arrives.
+//
+// Callers must hold b.mu.
+func (b *RecordBatcher) inFlightCountLocked() int {
+	return b.trackedMessages + b.reserved
+}
+
+// InFlightCount returns the total number of in-flight (tracked and reserved)
+// messages. Exported for testing and diagnostics.
+func (b *RecordBatcher) InFlightCount() int {
+	if b == nil {
+		return 0
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.inFlightCountLocked()
 }
 
 // TrackedMessageCount returns the number of tracked messages. Exported for testing.
