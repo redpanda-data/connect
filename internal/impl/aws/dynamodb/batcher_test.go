@@ -708,6 +708,48 @@ func TestBatcherPerShardRefusalClearsGlobalClock(t *testing.T) {
 		"passing the global check must clear the global pin clock even when the per-shard cap refuses")
 }
 
+// TestBatcherEmptyTrackerAdmitsOversizedBatch: the global check must admit
+// one batch when nothing is tracked or reserved (the same idle escape the
+// per-shard cap has), or a reservation larger than the derived budget would
+// be refused forever on a completely empty batcher and the input would hang
+// from startup without ever issuing a read. Config validation bounds
+// batch_size to 1000 (the budget's floor), so this is defense in depth.
+func TestBatcherEmptyTrackerAdmitsOversizedBatch(t *testing.T) {
+	// checkpointLimit 25 -> maxTrackedMessages 1000
+	batcher := NewRecordBatcher(100, 25, service.MockResources().Logger())
+
+	require.True(t, batcher.TryReserve("shard-001", 2000),
+		"an empty batcher must admit one batch even above the global budget")
+	assert.False(t, batcher.TryReserve("shard-002", 100),
+		"the global budget binds again while the oversized batch is outstanding")
+	batcher.Release("shard-001", 2000)
+	assert.True(t, batcher.TryReserve("shard-002", 100))
+}
+
+// TestBatcherIdleReservationsDoNotMaterializeShardState: reserve/release
+// cycles from readers polling shards that never yield records must not
+// populate the shard-tracker map - entries there are never removed and count
+// against the maxTrackedShards guard, which poisons every ack once exceeded.
+// Only AddMessages (a shard actually producing records) may create state.
+func TestBatcherIdleReservationsDoNotMaterializeShardState(t *testing.T) {
+	batcher := NewRecordBatcher(100, 400, service.MockResources().Logger())
+
+	for i := range 200 {
+		shard := fmt.Sprintf("shard-%03d", i)
+		require.True(t, batcher.TryReserve(shard, 100))
+		batcher.Release(shard, 100)
+	}
+
+	batcher.mu.Lock()
+	tracked := len(batcher.shards)
+	reservedEntries := len(batcher.reservedByShard)
+	batcher.mu.Unlock()
+	assert.Zero(t, tracked,
+		"idle reserve/release cycles must not create shard-tracker entries")
+	assert.Zero(t, reservedEntries,
+		"fully released reservations must be pruned")
+}
+
 // --- Reservation-based admission control (INC-2974 ack-path stall) ---
 
 // TestBatcherReserveBoundsGlobalBudget: readers must reserve tracker budget

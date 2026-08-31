@@ -591,3 +591,28 @@ func TestCheckpointNamespaceValidation_RejectsDelimiter(t *testing.T) {
 	conf.checkpointNamespace = "dev-alice"
 	require.NoError(t, validateDynamoDBCDCConfig(conf))
 }
+
+// TestBatchSizeValidation: batch_size is documented as 1-1000 (the DynamoDB
+// Streams GetRecords Limit range) but was previously unenforced. A value
+// above the tracker budget would make every TryReserve refuse even on an
+// empty batcher, silently hanging the input from startup.
+func TestBatchSizeValidation(t *testing.T) {
+	conf := dynamoDBCDCConfig{
+		tables:          []string{"t"},
+		checkpointTable: "cps",
+		startFrom:       "trim_horizon",
+		batchSize:       100,
+		snapshot:        snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100},
+	}
+	require.NoError(t, validateDynamoDBCDCConfig(conf))
+
+	for _, bad := range []int{0, -1, 1001, 2000} {
+		conf.batchSize = bad
+		err := validateDynamoDBCDCConfig(conf)
+		require.Error(t, err, "batch_size %d must be rejected", bad)
+		require.Contains(t, err.Error(), "batch_size must be between 1 and 1000")
+	}
+
+	conf.batchSize = 1000
+	require.NoError(t, validateDynamoDBCDCConfig(conf))
+}

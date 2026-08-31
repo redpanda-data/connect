@@ -68,6 +68,12 @@ type RecordBatcher struct {
 	// bounded by maxTrackedMessages, so concurrent readers can never
 	// collectively overshoot the budget on their first read wave.
 	reserved int
+	// reservedByShard breaks reserved down per shard, for the per-shard cap
+	// and so Release/AddMessages can return or consume the right shard's
+	// budget. Kept outside shards and pruned at zero: shards entries are
+	// never removed and count against maxTrackedShards, so a reader polling
+	// a shard that never yields records must not materialise tracker state.
+	reservedByShard map[string]int
 	// perShardCap bounds one shard's in-flight (tracked + reserved) messages
 	// so a shard whose batches never settle downstream parks alone at its cap
 	// instead of pinning the global budget and every other reader. The cap
@@ -132,11 +138,10 @@ type shardAckTracker struct {
 	seqTimes map[string]string
 	// frontierTime is the ApproximateCreationDateTime of the current frontier.
 	frontierTime string
-	// inflight counts this shard's tracked (dispatched, unsettled) messages;
-	// reserved counts budget handed to this shard's reader ahead of a read.
-	// Together they are bounded by the batcher's perShardCap.
+	// inflight counts this shard's tracked (dispatched, unsettled) messages.
+	// Together with the shard's entry in the batcher's reservedByShard it is
+	// bounded by perShardCap.
 	inflight int
-	reserved int
 	// throttledSince is when reservations last started failing on this
 	// shard's in-flight cap without a successful reserve in between; zero
 	// while not throttled. A shard pinned at its cap never reaches the
@@ -161,9 +166,10 @@ func NewRecordBatcher(maxTrackedShards, checkpointLimit int, log *service.Logger
 		maxTrackedMessages: maxTrackedMessages,
 		// One never-settling shard may pin at most a quarter of the budget;
 		// the rest stays available to healthy shards (see perShardCap doc).
-		perShardCap: maxTrackedMessages / 4,
-		log:         log,
-		shards:      make(map[string]*shardAckTracker),
+		perShardCap:     maxTrackedMessages / 4,
+		log:             log,
+		shards:          make(map[string]*shardAckTracker),
+		reservedByShard: make(map[string]int),
 	}
 }
 
@@ -181,7 +187,11 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if b.trackedMessages+b.reserved+n > b.maxTrackedMessages {
+	// A completely empty batcher admits one batch even above the global
+	// budget (mirroring the per-shard cap's idle escape): config validation
+	// bounds batch_size below the budget's floor, but a reservation that
+	// could never fit must hang the read loop under no circumstances.
+	if b.trackedMessages+b.reserved > 0 && b.trackedMessages+b.reserved+n > b.maxTrackedMessages {
 		// Surface a continuously pinned budget: every shard reader parks on
 		// this check, so if in-flight messages never settle the input is
 		// stalled with no other signal.
@@ -200,30 +210,41 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	// global exhaustion would report a pin spanning the drained interval.
 	b.throttledSince = time.Time{}
 
-	st, ok := b.shards[shardID]
-	if ok && st.inflight+st.reserved > 0 && st.inflight+st.reserved+n > b.perShardCap && b.otherShardActiveLocked(shardID) {
+	// The shard-tracker entry may not exist yet - it is only materialised by
+	// AddMessages, so shards that never yield records don't count against
+	// maxTrackedShards - in which case the shard has nothing in flight.
+	st := b.shards[shardID]
+	inflight := 0
+	if st != nil {
+		inflight = st.inflight
+	}
+	resv := b.reservedByShard[shardID]
+	if inflight+resv > 0 && inflight+resv+n > b.perShardCap && b.otherShardActiveLocked(shardID) {
 		// The shard is pinned by its own unsettled messages; park it alone
 		// without touching the global throttle clock, but surface a
 		// continuous pin on the shard's own clock - in a topology with fewer
 		// than four pinned shards the global branch above never trips, so
-		// this is the only place a wedged shard can become visible.
-		now := time.Now()
-		if st.throttledSince.IsZero() {
-			st.throttledSince = now
-		} else if since := now.Sub(st.throttledSince); since >= throttlePinWarnAfter && now.Sub(st.lastPinWarn) >= throttlePinWarnInterval {
-			st.lastPinWarn = now
-			b.log.Warnf("Shard %s reader throttled for %v: %d/%d in-flight messages on this shard are still awaiting downstream acknowledgement; no records are being read from it while this persists",
-				shardID, since.Round(time.Second), st.inflight+st.reserved, b.perShardCap)
+		// this is the only place a wedged shard can become visible. A pinned
+		// shard always has tracked messages (its single reader never holds a
+		// reservation while reserving again), so st is non-nil here; the
+		// guard is belt and braces.
+		if st != nil {
+			now := time.Now()
+			if st.throttledSince.IsZero() {
+				st.throttledSince = now
+			} else if since := now.Sub(st.throttledSince); since >= throttlePinWarnAfter && now.Sub(st.lastPinWarn) >= throttlePinWarnInterval {
+				st.lastPinWarn = now
+				b.log.Warnf("Shard %s reader throttled for %v: %d/%d in-flight messages on this shard are still awaiting downstream acknowledgement; no records are being read from it while this persists",
+					shardID, since.Round(time.Second), inflight+resv, b.perShardCap)
+			}
 		}
 		return false
 	}
 
-	if !ok {
-		st = &shardAckTracker{tracker: checkpoint.NewUncapped[string](), seqTimes: map[string]string{}}
-		b.shards[shardID] = st
+	if st != nil {
+		st.throttledSince = time.Time{}
 	}
-	st.throttledSince = time.Time{}
-	st.reserved += n
+	b.reservedByShard[shardID] = resv + n
 	b.reserved += n
 	return true
 }
@@ -232,12 +253,34 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 // in-flight or reserved messages - the per-shard cap only binds while one
 // does (see perShardCap doc). Callers must hold b.mu.
 func (b *RecordBatcher) otherShardActiveLocked(shardID string) bool {
+	for id := range b.reservedByShard {
+		if id != shardID {
+			return true
+		}
+	}
 	for id, st := range b.shards {
-		if id != shardID && st.inflight+st.reserved > 0 {
+		if id != shardID && st.inflight > 0 {
 			return true
 		}
 	}
 	return false
+}
+
+// consumeReservationLocked removes up to n from a shard's outstanding
+// reservation, pruning the entry at zero, and returns how much was consumed.
+// Callers must hold b.mu.
+func (b *RecordBatcher) consumeReservationLocked(shardID string, n int) int {
+	consumed := min(n, b.reservedByShard[shardID])
+	if consumed == 0 {
+		return 0
+	}
+	if rem := b.reservedByShard[shardID] - consumed; rem > 0 {
+		b.reservedByShard[shardID] = rem
+	} else {
+		delete(b.reservedByShard, shardID)
+	}
+	b.reserved -= consumed
+	return consumed
 }
 
 // Release returns unused reservation for a shard (the read failed, returned
@@ -248,11 +291,7 @@ func (b *RecordBatcher) Release(shardID string, n int) {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if st, ok := b.shards[shardID]; ok {
-		released := min(n, st.reserved)
-		st.reserved -= released
-		b.reserved -= released
-	}
+	b.consumeReservationLocked(shardID, n)
 }
 
 // topInflightShardsLocked renders the k shards holding the most unsettled
@@ -309,9 +348,7 @@ func (b *RecordBatcher) AddMessages(batch service.MessageBatch, shardID string) 
 
 	// Convert the shard's outstanding reservation (if any) into tracked
 	// messages; readers reserve at least the batch size before reading.
-	consumed := min(st.reserved, len(batch))
-	st.reserved -= consumed
-	b.reserved -= consumed
+	b.consumeReservationLocked(shardID, len(batch))
 
 	last := batch[len(batch)-1]
 	seq, _ := last.MetaGet("dynamodb_sequence_number")

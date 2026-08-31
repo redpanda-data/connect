@@ -234,6 +234,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 			service.NewIntField(dciFieldBatchSize).
 				Description("Maximum number of records to read per shard in a single request. Valid range: 1-1000.").
 				Default(defaultDynamoDBBatchSize).
+				LintRule(`root = if this < 1 || this > 1000 { ["batch_size must be between 1 and 1000"] }`).
 				Advanced(),
 			service.NewDurationField(dciFieldPollInterval).
 				Description("Time to wait between polling attempts when no records are available.").
@@ -756,6 +757,12 @@ func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 
 	if strings.Contains(conf.checkpointNamespace, "#") {
 		return errors.New("checkpoint_namespace must not contain '#'")
+	}
+
+	// The GetRecords Limit range; also keeps batch_size at or below the
+	// tracker budget's floor so a reservation can always eventually fit.
+	if conf.batchSize < 1 || conf.batchSize > 1000 {
+		return errors.New("batch_size must be between 1 and 1000")
 	}
 
 	// Validate snapshot configuration
