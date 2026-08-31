@@ -1,0 +1,80 @@
+name: mysql-orders-soak-pr
+description: |
+  PR before/after soak: the same sustained-moderate mysql_cdc load as
+  mysql-orders-soak, run twice on the SAME infrastructure — once with the
+  PR's base build, once with the PR's build — so the only variable is the
+  binary. 30 minutes per arm keeps the whole /soak round under ~2.5h while
+  still long enough for leak slopes and stalls to separate from noise.
+
+  The scenario name deliberately differs from the nightly's: CloudWatch
+  metrics land in a separate series that no alarm matches, and the runner
+  skips both the rolling-baseline comparator and the soak-index entry for
+  binary-arm runs — a deliberate A/B is not a nightly baseline sample.
+
+connector: mysql_cdc
+stack: mysql
+soak: true
+
+infra:
+  source:
+    instance_class: db.r6g.xlarge
+    # 400 GB gp3 floor: below it RDS forbids iops/storage_throughput, and
+    # 12000/500 are the >=400 GB tier's free baseline (see orders-soak.yaml).
+    storage_gb: 400
+    iops: 12000
+    storage_throughput: 500
+    parameters:
+      binlog_format: "ROW"
+      binlog_row_image: "FULL"
+      binlog_checksum: "NONE"
+  runner:
+    instance_type: c8g.xlarge   # 4 vCPU: reservedCores(2) + cpu_points[2] == 4
+
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-mysql
+
+workload:
+  write_rate_per_sec: 10000
+  duration: 30m
+  warmup: 5m
+
+pipeline:
+  cache_resources:
+    - label: bench_checkpoint
+      memory: {}
+  input:
+    mysql_cdc:
+      flavor: mysql
+      dsn: ${MYSQL_DSN}
+      tls:
+        skip_cert_verify: true   # RDS-internal CA isn't in the runner image
+      stream_snapshot: false
+      tables: [orders]
+      checkpoint_cache: bench_checkpoint
+      checkpoint_key: mysql_bench
+      # >= batching.count, or the default (1024) caps the pipeline at one
+      # batch in flight — see orders-soak.yaml.
+      checkpoint_limit: 10000
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [2]
+  # Arms differ ONLY by binary — the runner enforces this for soak A/Bs.
+  # The workflow supplies the paths via --binary base=... --binary pr=...
+  arms:
+    - id: base
+      binary: base
+    - id: pr
+      binary: pr
+
+reset:
+  # Binlog retention first (RDS purges backed-up binlogs without it — see
+  # orders-soak.yaml), then a per-arm TRUNCATE so both arms start from the
+  # same bounded table; no slot/publication analogue exists for mysql.
+  - sql: "CALL mysql.rds_set_configuration('binlog retention hours', 24)"
+  - sql: "TRUNCATE TABLE orders"
