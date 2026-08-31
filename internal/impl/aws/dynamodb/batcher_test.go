@@ -750,6 +750,58 @@ func TestBatcherIdleReservationsDoNotMaterializeShardState(t *testing.T) {
 		"fully released reservations must be pruned")
 }
 
+// TestBatcherNilReceiverIsSafe: Close() nils the input's batcher reference
+// after shutdown timeouts that warn and proceed, so a straggler reader
+// returning from a slow GetRecords can call any batcher method on a nil
+// receiver. Every method must no-op instead of panicking (an unrecovered
+// panic in a reader goroutine kills the whole process).
+func TestBatcherNilReceiverIsSafe(t *testing.T) {
+	var b *RecordBatcher
+	require.True(t, b.TryReserve("shard-001", 100))
+	b.Release("shard-001", 100)
+	assert.Nil(t, b.AddMessages(createTestMessages(2, "shard-001", 1), "shard-001"),
+		"AddMessages on a nil batcher must return a nil handle, not panic")
+	b.RemoveBatch(nil)
+	require.NoError(t, b.AckBatch(t.Context(), nil, nil))
+	assert.False(t, b.ShouldThrottle())
+}
+
+// TestBatcherIdleReservationDoesNotEngageShardCap: "another shard is active"
+// must mean unsettled (in-flight) messages, not a transient read reservation.
+// Idle shards poll on every poll_interval and hold a reservation for the
+// GetRecords round trip; counting that as activity intermittently engages the
+// hot shard's cap and clamps a sole busy shard to a quarter of the budget the
+// sole-active-shard exemption promises it.
+func TestBatcherIdleReservationDoesNotEngageShardCap(t *testing.T) {
+	// checkpointLimit 400 -> maxTrackedMessages 4000 -> per-shard cap 1000
+	batcher := NewRecordBatcher(100, 400, service.MockResources().Logger())
+
+	// Hot shard at its cap with unsettled messages.
+	require.True(t, batcher.TryReserve("shard-hot", 1000))
+	batcher.AddMessages(createTestMessages(1000, "shard-hot", 1), "shard-hot")
+
+	// An idle shard holds only a read reservation (poll in flight, no records
+	// tracked yet).
+	require.True(t, batcher.TryReserve("shard-idle", 100))
+
+	assert.True(t, batcher.TryReserve("shard-hot", 1000),
+		"a transient reservation on an idle shard must not engage the hot shard's cap")
+}
+
+// TestInputBatcherBudgetHoldsBatchSizedReads: readers reserve the full
+// batch_size before every read, so a checkpoint_limit below batch_size must
+// not shrink the budget below what batch-sized reads need - otherwise the
+// whole input serializes to one batch in flight globally.
+func TestInputBatcherBudgetHoldsBatchSizedReads(t *testing.T) {
+	conf := dynamoDBCDCConfig{maxTrackedShards: 100, checkpointLimit: 100, batchSize: 1000}
+	batcher := newInputRecordBatcher(conf, service.MockResources().Logger())
+
+	require.True(t, batcher.TryReserve("shard-001", 1000))
+	batcher.AddMessages(createTestMessages(1000, "shard-001", 1), "shard-001")
+	assert.True(t, batcher.TryReserve("shard-002", 1000),
+		"a checkpoint_limit below batch_size must not serialize concurrent batch-sized reads")
+}
+
 // --- Reservation-based admission control (INC-2974 ack-path stall) ---
 
 // TestBatcherReserveBoundsGlobalBudget: readers must reserve tracker budget

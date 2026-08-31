@@ -250,14 +250,12 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 }
 
 // otherShardActiveLocked reports whether any shard other than shardID has
-// in-flight or reserved messages - the per-shard cap only binds while one
-// does (see perShardCap doc). Callers must hold b.mu.
+// unsettled (in-flight) messages - the per-shard cap only binds while one
+// does (see perShardCap doc). A transient read reservation is deliberately
+// not activity: idle shards hold one for every GetRecords round trip, and
+// counting those would intermittently engage the cap against a sole busy
+// shard. Callers must hold b.mu.
 func (b *RecordBatcher) otherShardActiveLocked(shardID string) bool {
-	for id := range b.reservedByShard {
-		if id != shardID {
-			return true
-		}
-	}
 	for id, st := range b.shards {
 		if id != shardID && st.inflight > 0 {
 			return true
@@ -326,7 +324,12 @@ func (b *RecordBatcher) topInflightShardsLocked(k int) string {
 // number is the batch's checkpoint payload. Must be called from the shard's
 // single reader goroutine so batches are tracked in dispatch order.
 func (b *RecordBatcher) AddMessages(batch service.MessageBatch, shardID string) *trackedBatch {
-	if len(batch) == 0 {
+	// The nil guard matters at shutdown: Close() nils the input's batcher
+	// reference after timeouts that warn and proceed, and a straggler reader
+	// returning from a slow GetRecords must no-op (all other methods already
+	// tolerate nil; every caller tolerates a nil handle), not panic and kill
+	// the process.
+	if b == nil || len(batch) == 0 {
 		return nil
 	}
 

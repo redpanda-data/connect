@@ -737,6 +737,16 @@ func parseTableTagFilter(filter string) (map[string][]string, error) {
 	return result, nil
 }
 
+// newInputRecordBatcher builds the input's record batcher. The budget scales
+// with the larger of checkpoint_limit and batch_size: readers reserve the
+// full batch_size before every read, so a checkpoint_limit below batch_size
+// must not shrink the budget below what batch-sized reads need - otherwise
+// TryReserve refuses whenever anything is in flight and the whole input
+// serializes to one batch in flight globally.
+func newInputRecordBatcher(conf dynamoDBCDCConfig, log *service.Logger) *RecordBatcher {
+	return NewRecordBatcher(conf.maxTrackedShards, max(conf.checkpointLimit, conf.batchSize), log)
+}
+
 // validateDynamoDBCDCConfig validates the configuration for consistency
 func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 	// Validate tag discovery mode requirements
@@ -1090,7 +1100,7 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 	}
 
 	// Initialize record batcher
-	d.recordBatcher = NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
+	d.recordBatcher = newInputRecordBatcher(d.conf, d.log)
 
 	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
 	// state already exists, shards without checkpoints are rotation children
@@ -1212,7 +1222,7 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 	}
 
 	// Initialize record batcher for this table
-	recordBatcher := NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
+	recordBatcher := newInputRecordBatcher(d.conf, d.log)
 
 	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
 	// state already exists for this table, shards without checkpoints are
