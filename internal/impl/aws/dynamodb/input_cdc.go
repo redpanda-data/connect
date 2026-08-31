@@ -234,6 +234,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 			service.NewIntField(dciFieldBatchSize).
 				Description("Maximum number of records to read per shard in a single request. Valid range: 1-1000.").
 				Default(defaultDynamoDBBatchSize).
+				LintRule(`root = if this < 1 || this > 1000 { ["batch_size must be between 1 and 1000"] }`).
 				Advanced(),
 			service.NewDurationField(dciFieldPollInterval).
 				Description("Time to wait between polling attempts when no records are available.").
@@ -736,6 +737,16 @@ func parseTableTagFilter(filter string) (map[string][]string, error) {
 	return result, nil
 }
 
+// newInputRecordBatcher builds the input's record batcher. The budget scales
+// with the larger of checkpoint_limit and batch_size: readers reserve the
+// full batch_size before every read, so a checkpoint_limit below batch_size
+// must not shrink the budget below what batch-sized reads need - otherwise
+// TryReserve refuses whenever anything is in flight and the whole input
+// serializes to one batch in flight globally.
+func newInputRecordBatcher(conf dynamoDBCDCConfig, log *service.Logger) *RecordBatcher {
+	return NewRecordBatcher(conf.maxTrackedShards, max(conf.checkpointLimit, conf.batchSize), log)
+}
+
 // validateDynamoDBCDCConfig validates the configuration for consistency
 func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 	// Validate tag discovery mode requirements
@@ -756,6 +767,12 @@ func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 
 	if strings.Contains(conf.checkpointNamespace, "#") {
 		return errors.New("checkpoint_namespace must not contain '#'")
+	}
+
+	// The GetRecords Limit range; also keeps batch_size at or below the
+	// tracker budget's floor so a reservation can always eventually fit.
+	if conf.batchSize < 1 || conf.batchSize > 1000 {
+		return errors.New("batch_size must be between 1 and 1000")
 	}
 
 	// Validate snapshot configuration
@@ -1083,7 +1100,7 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 	}
 
 	// Initialize record batcher
-	d.recordBatcher = NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
+	d.recordBatcher = newInputRecordBatcher(d.conf, d.log)
 
 	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
 	// state already exists, shards without checkpoints are rotation children
@@ -1205,7 +1222,7 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 	}
 
 	// Initialize record batcher for this table
-	recordBatcher := NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
+	recordBatcher := newInputRecordBatcher(d.conf, d.log)
 
 	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
 	// state already exists for this table, shards without checkpoints are
@@ -2191,8 +2208,12 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		default:
 		}
 
-		// Apply backpressure if too many messages are in flight
-		for ts.recordBatcher.ShouldThrottle() {
+		// Reserve tracker budget for this read BEFORE issuing it (see
+		// startShardReader): bounds the reader fleet to the global budget and
+		// parks a never-settling shard at its own cap without starving the
+		// rest.
+		reserve := d.conf.batchSize
+		for !ts.recordBatcher.TryReserve(shardID, reserve) {
 			d.log.Debugf("Throttling shard %s (table %s) due to too many in-flight messages", shardID, tableName)
 			throttleTimer.Reset(d.conf.throttleBackoff)
 			select {
@@ -2205,6 +2226,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		// Get current reader state
 		iterator := ts.getShardIterator(shardID)
 		if iterator == nil {
+			ts.recordBatcher.Release(shardID, reserve)
 			return
 		}
 
@@ -2214,6 +2236,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 			Limit:         aws.Int32(int32(d.conf.batchSize)),
 		})
 		if err != nil {
+			ts.recordBatcher.Release(shardID, reserve)
 			if isThrottlingError(err) {
 				wait := boff.NextBackOff()
 				d.log.Debugf("Throttled on shard %s (table %s), backing off for %v", shardID, tableName, wait)
@@ -2319,6 +2342,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 				reader.exhausted = true
 				d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
 				ts.mu.Unlock()
+				ts.recordBatcher.Release(shardID, reserve)
 				return
 			}
 			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
@@ -2329,6 +2353,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 
 		if len(getRecords.Records) == 0 {
 			// No records available: wait before polling again
+			ts.recordBatcher.Release(shardID, reserve)
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
 			case <-ctx.Done():
@@ -2345,52 +2370,68 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		}
 		batch := convertTableRecordsToBatch(getRecords.Records, tableName, shardID, dedupeBuffer, ts.getShardCutoff(shardID), d.metrics.failoverSkipped)
 		if len(batch) == 0 {
+			ts.recordBatcher.Release(shardID, reserve)
 			continue
 		}
 
-		// Track messages in batcher
-		batch = ts.recordBatcher.AddMessages(batch, shardID)
+		// Track messages in batcher (consumes len(batch) of the reservation;
+		// return the surplus from records filtered out during conversion).
+		// Settlement goes through the returned handle: wrappers between this
+		// input and the pipeline (auto_replay_nacks) rewrite the batch
+		// slice's message pointers, so the batch itself cannot identify the
+		// tracked state afterwards.
+		tb := ts.recordBatcher.AddMessages(batch, shardID)
+		ts.recordBatcher.Release(shardID, reserve-len(batch))
 
 		// Track pending ack
 		d.pendingAcks.Add(1)
 
-		// Create ack function
-		checkpointer := ts.checkpointer
+		// Create ack function. The checkpointer interface value is built
+		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
+		// must still run to settle the batch (draining the tracker) even
+		// when there is no checkpoint store to persist to.
+		var cp checkpointer
+		if ts.checkpointer != nil {
+			cp = ts.checkpointer
+		}
 		recordBatcher := ts.recordBatcher
+		batchLen := len(batch)
 		ackFunc := func(ackCtx context.Context, err error) error {
 			defer d.pendingAcks.Done()
 
 			if d.closed.Load() {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
-					recordBatcher.RemoveMessages(batch)
+					recordBatcher.RemoveBatch(tb)
 				}
 				return nil
 			}
 
 			if err != nil {
 				d.log.Warnf("Batch nacked from shard %s (table %s): %v", shardID, tableName, err)
-				recordBatcher.RemoveMessages(batch)
+				recordBatcher.RemoveBatch(tb)
 				return err
 			}
 
 			// Mark messages as acked and checkpoint if needed
-			if checkpointer != nil {
-				if ackErr := recordBatcher.AckMessages(ackCtx, checkpointer, batch); ackErr != nil {
-					d.log.Errorf("Failed to checkpoint shard %s (table %s) after ack: %v", shardID, tableName, ackErr)
-					return ackErr
-				}
-				d.log.Debugf("Successfully checkpointed %d messages from shard %s (table %s)", len(batch), shardID, tableName)
+			if ackErr := recordBatcher.AckBatch(ackCtx, cp, tb); ackErr != nil {
+				d.log.Errorf("Failed to checkpoint shard %s (table %s) after ack: %v", shardID, tableName, ackErr)
+				return ackErr
 			}
+			d.log.Debugf("Successfully checkpointed %d messages from shard %s (table %s)", batchLen, shardID, tableName)
 			return nil
 		}
 
 		// Send to channel
 		select {
 		case <-ctx.Done():
+			// The batch was never dispatched: untrack it (and its pending
+			// ack) or its messages would pin the tracker budget forever.
+			recordBatcher.RemoveBatch(tb)
+			d.pendingAcks.Done()
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
-			d.log.Debugf("Sent batch of %d records from shard %s (table %s)", len(batch), shardID, tableName)
+			d.log.Debugf("Sent batch of %d records from shard %s (table %s)", batchLen, shardID, tableName)
 		}
 	}
 }
@@ -2629,8 +2670,12 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		default:
 		}
 
-		// Apply backpressure if too many messages are in flight
-		for d.recordBatcher.ShouldThrottle() {
+		// Reserve tracker budget for this read BEFORE issuing it: reserving
+		// up front bounds the whole fleet of readers to the global budget
+		// (no first-wave overshoot), and the per-shard cap parks a shard
+		// whose batches never settle downstream without starving the rest.
+		reserve := d.conf.batchSize
+		for !d.recordBatcher.TryReserve(shardID, reserve) {
 			d.log.Debugf("Throttling shard %s due to too many in-flight messages", shardID)
 			throttleTimer.Reset(d.conf.throttleBackoff)
 			select {
@@ -2643,6 +2688,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		// Get current reader state
 		iterator := d.getShardIterator(shardID)
 		if iterator == nil {
+			d.recordBatcher.Release(shardID, reserve)
 			return
 		}
 
@@ -2652,6 +2698,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 			Limit:         aws.Int32(int32(d.conf.batchSize)),
 		})
 		if err != nil {
+			d.recordBatcher.Release(shardID, reserve)
 			if isThrottlingError(err) {
 				wait := boff.NextBackOff()
 				d.log.Debugf("Throttled on shard %s, backing off for %v", shardID, wait)
@@ -2757,6 +2804,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 				reader.exhausted = true
 				d.log.Infof("Shard %s exhausted", shardID)
 				d.mu.Unlock()
+				d.recordBatcher.Release(shardID, reserve)
 				return
 			}
 			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
@@ -2767,6 +2815,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 
 		if len(getRecords.Records) == 0 {
 			// No records available: wait before polling again
+			d.recordBatcher.Release(shardID, reserve)
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
 			case <-ctx.Done():
@@ -2779,18 +2828,32 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		// Convert records to messages
 		batch := d.convertRecordsToBatch(getRecords.Records, shardID, d.getShardCutoff(shardID))
 		if len(batch) == 0 {
+			d.recordBatcher.Release(shardID, reserve)
 			continue
 		}
 
-		// Track messages in batcher
-		batch = d.recordBatcher.AddMessages(batch, shardID)
+		// Track messages in batcher (consumes len(batch) of the reservation;
+		// return the surplus from records filtered out during conversion).
+		// Settlement goes through the returned handle: wrappers between this
+		// input and the pipeline (auto_replay_nacks) rewrite the batch
+		// slice's message pointers, so the batch itself cannot identify the
+		// tracked state afterwards.
+		tb := d.recordBatcher.AddMessages(batch, shardID)
+		d.recordBatcher.Release(shardID, reserve-len(batch))
 
 		// Track pending ack
 		d.pendingAcks.Add(1)
 
-		// Create ack function
-		checkpointer := d.checkpointer
+		// Create ack function. The checkpointer interface value is built
+		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
+		// must still run to settle the batch (draining the tracker) even
+		// when there is no checkpoint store to persist to.
+		var cp checkpointer
+		if d.checkpointer != nil {
+			cp = d.checkpointer
+		}
 		recordBatcher := d.recordBatcher
+		batchLen := len(batch)
 		ackFunc := func(ackCtx context.Context, err error) error {
 			defer d.pendingAcks.Done()
 
@@ -2798,34 +2861,36 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 			if d.closed.Load() {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
-					recordBatcher.RemoveMessages(batch)
+					recordBatcher.RemoveBatch(tb)
 				}
 				return nil
 			}
 
 			if err != nil {
 				d.log.Warnf("Batch nacked from shard %s: %v", shardID, err)
-				recordBatcher.RemoveMessages(batch)
+				recordBatcher.RemoveBatch(tb)
 				return err // Propagate nack error
 			}
 
 			// Mark messages as acked and checkpoint if needed
-			if checkpointer != nil {
-				if ackErr := recordBatcher.AckMessages(ackCtx, checkpointer, batch); ackErr != nil {
-					d.log.Errorf("Failed to checkpoint shard %s after ack: %v", shardID, ackErr)
-					return ackErr // Propagate checkpoint failure
-				}
-				d.log.Debugf("Successfully checkpointed %d messages from shard %s", len(batch), shardID)
+			if ackErr := recordBatcher.AckBatch(ackCtx, cp, tb); ackErr != nil {
+				d.log.Errorf("Failed to checkpoint shard %s after ack: %v", shardID, ackErr)
+				return ackErr // Propagate checkpoint failure
 			}
+			d.log.Debugf("Successfully checkpointed %d messages from shard %s", batchLen, shardID)
 			return nil
 		}
 
 		// Send to channel
 		select {
 		case <-ctx.Done():
+			// The batch was never dispatched: untrack it (and its pending
+			// ack) or its messages would pin the tracker budget forever.
+			recordBatcher.RemoveBatch(tb)
+			d.pendingAcks.Done()
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
-			d.log.Debugf("Sent batch of %d records from shard %s", len(batch), shardID)
+			d.log.Debugf("Sent batch of %d records from shard %s", batchLen, shardID)
 		}
 	}
 }

@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -357,4 +359,312 @@ func TestStartShardReader_ExpiredIteratorTransientRefreshFailure(t *testing.T) {
 	d.mu.RUnlock()
 	assert.False(t, exhausted, "a transient refresh failure must not mark the shard exhausted")
 	assert.Empty(t, d.shardRefreshCh, "a transient refresh failure must not signal the coordinator")
+}
+
+// recordsStubTransport serves GetRecords, standing in for a healthy shard:
+// the first page carries the configured records, every later page is empty
+// (with a live next iterator), so tests see exactly one tracked batch.
+type recordsStubTransport struct {
+	records string // JSON array body of the first page's Records field
+	pages   atomic.Int64
+}
+
+func (s *recordsStubTransport) Do(req *http.Request) (*http.Response, error) {
+	target := req.Header.Get("X-Amz-Target")
+	if !strings.HasSuffix(target, ".GetRecords") {
+		return nil, fmt.Errorf("recordsStubTransport: unexpected operation %q", target)
+	}
+	records := "[]"
+	if s.pages.Add(1) == 1 {
+		records = s.records
+	}
+	hdr := http.Header{}
+	hdr.Set("Content-Type", "application/x-amz-json-1.0")
+	body := fmt.Sprintf(`{"Records":%s,"NextShardIterator":"iter-next"}`, records)
+	return &http.Response{
+		StatusCode: 200,
+		Header:     hdr,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Request:    req,
+	}, nil
+}
+
+// readerHarness abstracts over the two hand-duplicated shard-reader entry
+// points (startShardReader for single-table, startTableShardReader for
+// multi-table) so every reader-level regression test runs against both:
+// the INC-2974 fixes were applied to each copy by hand, and a regression in
+// either one reproduces the wedge silently.
+type readerHarness struct {
+	batcher *RecordBatcher
+	d       *dynamoDBCDCInput
+	// shardReaders is the reader-state map the harnessed entry point consults
+	// (d.shardReaders for single-table, ts.shardReaders for multi-table).
+	shardReaders map[string]*dynamoDBShardReader
+	start        func(ctx context.Context)
+}
+
+// readerHarnesses returns one fresh harness factory per reader entry point,
+// serving the given records page. Each factory builds its own stub transport
+// and batcher so subtests stay independent.
+func readerHarnesses(records string, checkpointLimit, msgChanCap int) map[string]func() *readerHarness {
+	return readerHarnessesWithTransport(func() aws.HTTPClient {
+		return &recordsStubTransport{records: records}
+	}, checkpointLimit, msgChanCap)
+}
+
+// readerHarnessesWithTransport is readerHarnesses with a caller-supplied
+// transport factory, for tests that need error pages or other non-record
+// responses.
+func readerHarnessesWithTransport(mkTransport func() aws.HTTPClient, checkpointLimit, msgChanCap int) map[string]func() *readerHarness {
+	build := func(multiTable bool) *readerHarness {
+		transport := mkTransport()
+		batcher := NewRecordBatcher(100, checkpointLimit, service.MockResources().Logger())
+		shardReaders := map[string]*dynamoDBShardReader{
+			"shard-001": {shardID: "shard-001", iterator: aws.String("initial-iterator")},
+		}
+		d := &dynamoDBCDCInput{
+			conf: dynamoDBCDCConfig{
+				batchSize:       10,
+				pollInterval:    20 * time.Millisecond,
+				throttleBackoff: 20 * time.Millisecond,
+			},
+			log:           service.MockResources().Logger(),
+			streamsClient: newStubStreamsClient(transport),
+			metrics:       newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+			msgChan:       make(chan asyncMessage, msgChanCap),
+			shutSig:       shutdown.NewSignaller(),
+		}
+		if multiTable {
+			ts := &tableStream{
+				tableName:     "table-a",
+				streamArn:     testStreamArn,
+				recordBatcher: batcher,
+				shardReaders:  shardReaders,
+			}
+			return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, start: func(ctx context.Context) {
+				d.startTableShardReader(ctx, "table-a", ts, "shard-001")
+			}}
+		}
+		d.streamArn = aws.String(testStreamArn)
+		d.recordBatcher = batcher
+		d.shardReaders = shardReaders
+		return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, start: func(ctx context.Context) {
+			d.startShardReader(ctx, "shard-001")
+		}}
+	}
+	return map[string]func() *readerHarness{
+		"single-table": func() *readerHarness { return build(false) },
+		"multi-table":  func() *readerHarness { return build(true) },
+	}
+}
+
+const twoRecordsPage = `[{"eventID":"1","eventName":"INSERT","dynamodb":{"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}},
+                         {"eventID":"2","eventName":"INSERT","dynamodb":{"SequenceNumber":"00002","Keys":{"pk":{"S":"b"}},"NewImage":{"pk":{"S":"b"}}}}]`
+
+// TestShardReader_CancelledSendUntracksBatch: a reader cancelled while
+// blocked sending a batch to the message channel must untrack that batch.
+// Leaking it would permanently consume tracker budget: enough cancelled
+// readers (shard rotation over a slow downstream) pin the throttle with
+// messages that no longer exist anywhere.
+func TestShardReader_CancelledSendUntracksBatch(t *testing.T) {
+	for name, mk := range readerHarnesses(twoRecordsPage, 100, 0) { // unbuffered channel, never read: the send blocks
+		t.Run(name, func(t *testing.T) {
+			h := mk()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			done := make(chan struct{})
+			go func() {
+				h.start(ctx)
+				close(done)
+			}()
+
+			// Wait until the batch is tracked (the reader is now blocked on the send).
+			require.Eventually(t, func() bool {
+				return h.batcher.TrackedMessageCount() == 2
+			}, 5*time.Second, 5*time.Millisecond, "expected the read batch to be tracked before dispatch")
+
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatal("reader should exit promptly on cancellation")
+			}
+
+			assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+				"a batch never dispatched must be untracked on reader cancellation")
+		})
+	}
+}
+
+// TestShardReader_AckDrainsAfterWrapperPointerReplacement is the
+// end-to-end regression test for the INC-2974 ack-path stall: benthos's
+// AutoRetryNacksBatched (auto_replay_nacks, default on) replaces every
+// element of the delivered batch slice with a new *Message before the
+// pipeline sees it. The dispatched ack function must still drain the
+// in-flight tracker afterwards - keying settlement off the batch's message
+// pointers silently no-ops instead, pinning every reader in backpressure.
+func TestShardReader_AckDrainsAfterWrapperPointerReplacement(t *testing.T) {
+	for name, mk := range readerHarnesses(twoRecordsPage, 1, 1) {
+		t.Run(name, func(t *testing.T) {
+			h := mk()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			go h.start(ctx)
+
+			var am asyncMessage
+			select {
+			case am = <-h.d.msgChan:
+			case <-time.After(5 * time.Second):
+				t.Fatal("expected a dispatched batch")
+			}
+			require.Equal(t, 2, h.batcher.TrackedMessageCount())
+
+			// Simulate the wrapper's read hook: same slice, new message pointers.
+			for i := range am.msg {
+				am.msg[i] = am.msg[i].Copy()
+			}
+
+			require.NoError(t, am.ackFn(t.Context(), nil))
+			assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+				"the ack must drain the tracker even after the wrapper replaced the batch's message pointers")
+		})
+	}
+}
+
+// TestShardReader_RealAutoRetryNacksWrapper runs the INC-2974 wedge
+// scenario through the REAL benthos AutoRetryNacksBatched wrapper (what
+// auto_replay_nacks: true, the default, installs) rather than a simulation:
+// reader -> msgChan -> ReadBatch -> wrapper (which rewrites the batch slice's
+// message pointers in place AND hands the pipeline a copy) -> ack chain.
+//
+// It also locks in the wrapper's nack contract: a nack is swallowed by the
+// wrapper (redelivered internally, the input's ack fn is NOT called), so the
+// batch must stay tracked until the retry finally succeeds, at which point
+// the inner ack fires exactly once and the tracker drains. The wedge this PR
+// fixes was the final ack silently missing the tracker because settlement was
+// keyed by the rewritten message pointers.
+func TestShardReader_RealAutoRetryNacksWrapper(t *testing.T) {
+	for name, mk := range readerHarnesses(twoRecordsPage, 1, 1) {
+		t.Run(name, func(t *testing.T) {
+			h := mk()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			go h.start(ctx)
+
+			wrapped := service.AutoRetryNacksBatched(h.d)
+
+			batch, ackFn, err := wrapped.ReadBatch(ctx)
+			require.NoError(t, err)
+			require.Len(t, batch, 2)
+			require.Equal(t, 2, h.batcher.TrackedMessageCount())
+
+			// Nack through the wrapper: it owns the redelivery, the input's ack fn
+			// must not fire, and the batch must stay tracked (in flight).
+			require.NoError(t, ackFn(ctx, errors.New("downstream rejection")))
+			assert.Equal(t, 2, h.batcher.TrackedMessageCount(),
+				"a wrapper-owned nack must keep the batch tracked until the retry settles")
+
+			// The wrapper redelivers the batch; the final ack must reach the input's
+			// ack fn and drain the tracker despite the pointer rewrite.
+			retry, retryAckFn, err := wrapped.ReadBatch(ctx)
+			require.NoError(t, err)
+			require.Len(t, retry, 2)
+			require.NoError(t, retryAckFn(ctx, nil))
+			assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+				"the final ack must drain the tracker through the real wrapper (the INC-2974 wedge)")
+		})
+	}
+}
+
+// TestShardReader_ReleasesReservationOnUnproductiveReads: TryReserve claims
+// batch_size of budget before every GetRecords, and each reader hands it back
+// on five hand-placed paths. A missed Release permanently consumes budget
+// with messages that were never tracked - the same silent wedge shape as the
+// INC-2974 ack stall. Each scenario drives one unproductive-read path on both
+// reader entry points, then cancels the reader and asserts every reservation
+// (and all tracker state) was returned.
+func TestShardReader_ReleasesReservationOnUnproductiveReads(t *testing.T) {
+	// Records stamped with an ancient ApproximateCreationDateTime so a future
+	// failover cutoff filters the whole page out after a successful read.
+	const staleRecordsPage = `[{"eventID":"1","eventName":"INSERT","dynamodb":{"ApproximateCreationDateTime":1000,"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}}]`
+
+	scenarios := map[string]struct {
+		mkTransport func() aws.HTTPClient
+		cutoff      time.Time
+		wantPages   func(t aws.HTTPClient) bool // reader has looped past the release at least once
+	}{
+		"get-records error": {
+			mkTransport: func() aws.HTTPClient {
+				return &stubStreamsTransport{getRecordsErrorType: "InternalServerError"}
+			},
+			wantPages: func(tr aws.HTTPClient) bool {
+				return tr.(*stubStreamsTransport).getRecordsCalls.Load() >= 2
+			},
+		},
+		"empty page": {
+			mkTransport: func() aws.HTTPClient { return &recordsStubTransport{records: "[]"} },
+			wantPages: func(tr aws.HTTPClient) bool {
+				return tr.(*recordsStubTransport).pages.Load() >= 2
+			},
+		},
+		"fully filtered page": {
+			mkTransport: func() aws.HTTPClient { return &recordsStubTransport{records: staleRecordsPage} },
+			cutoff:      time.Unix(2000, 0),
+			wantPages: func(tr aws.HTTPClient) bool {
+				return tr.(*recordsStubTransport).pages.Load() >= 2
+			},
+		},
+	}
+
+	for scenarioName, sc := range scenarios {
+		t.Run(scenarioName, func(t *testing.T) {
+			var transport aws.HTTPClient
+			mk := func() aws.HTTPClient {
+				transport = sc.mkTransport()
+				return transport
+			}
+			for name, mkHarness := range readerHarnessesWithTransport(mk, 100, 1) {
+				t.Run(name, func(t *testing.T) {
+					h := mkHarness()
+					h.shardReaders["shard-001"].failoverCutoff = sc.cutoff
+
+					ctx, cancel := context.WithCancel(t.Context())
+					defer cancel()
+					done := make(chan struct{})
+					go func() {
+						h.start(ctx)
+						close(done)
+					}()
+
+					tr := transport
+					require.Eventually(t, func() bool { return sc.wantPages(tr) },
+						5*time.Second, 5*time.Millisecond,
+						"the reader should loop past the release path at least once")
+
+					cancel()
+					select {
+					case <-done:
+					case <-time.After(2 * time.Second):
+						t.Fatal("reader should exit promptly on cancellation")
+					}
+
+					assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+						"an unproductive read must not leave tracked messages behind")
+					b := h.batcher
+					b.mu.Lock()
+					reserved := b.reserved
+					reservedEntries := len(b.reservedByShard)
+					trackerEntries := len(b.shards)
+					b.mu.Unlock()
+					assert.Zero(t, reserved,
+						"every reservation must be returned on the unproductive-read paths")
+					assert.Zero(t, reservedEntries,
+						"released reservations must be pruned")
+					assert.Zero(t, trackerEntries,
+						"a shard that never yields a delivered record must not materialise tracker state")
+				})
+			}
+		})
+	}
 }
