@@ -407,6 +407,12 @@ func (st *shardAckTracker) advanceFrontier(frontier string) {
 	}
 }
 
+// hasUnpersistedFrontier reports whether the shard has a contiguous acked
+// sequence frontier that has not yet been persisted.
+func (st *shardAckTracker) hasUnpersistedFrontier() bool {
+	return st.frontier != "" && st.frontier != st.persisted
+}
+
 // AckBatch marks a tracked batch as acknowledged, advances the shard's
 // contiguous frontier, and persists a checkpoint once enough messages have
 // been acked since the last persisted position. Settlement goes through the
@@ -475,7 +481,7 @@ func (b *RecordBatcher) maybePersist(ctx context.Context, cp checkpointer, st *s
 
 	for {
 		b.mu.Lock()
-		due := st.pending >= cp.CheckpointLimit() && st.frontier != "" && st.frontier != st.persisted
+		due := st.pending >= cp.CheckpointLimit() && st.hasUnpersistedFrontier()
 		persistSeq := st.frontier
 		persistTime := st.frontierTime
 		pendingAtCompute := st.pending
@@ -522,7 +528,7 @@ func (b *RecordBatcher) PendingCheckpoints() map[string]CheckpointValue {
 
 	checkpoints := make(map[string]CheckpointValue, len(b.shards))
 	for shardID, st := range b.shards {
-		if st.frontier != "" && st.frontier != st.persisted {
+		if st.hasUnpersistedFrontier() {
 			checkpoints[shardID] = CheckpointValue{
 				SequenceNumber:     st.frontier,
 				ApproxCreationTime: st.frontierTime,
@@ -631,7 +637,7 @@ func (b *RecordBatcher) LastCheckpointsCount() int {
 	defer b.mu.Unlock()
 	n := 0
 	for _, st := range b.shards {
-		if st.frontier != "" && st.frontier != st.persisted {
+		if st.hasUnpersistedFrontier() {
 			n++
 		}
 	}
