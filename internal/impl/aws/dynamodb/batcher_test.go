@@ -1003,29 +1003,36 @@ func TestBatcherSettleIsIdempotent(t *testing.T) {
 func TestBatcherInFlightCount(t *testing.T) {
 	var nilBatcher *RecordBatcher
 	assert.Equal(t, 0, nilBatcher.InFlightCount())
+	assert.Equal(t, 0, nilBatcher.ShardInFlightCount("shard-001"))
 
 	batcher := NewRecordBatcher(100, 100, service.MockResources().Logger())
 	assert.Equal(t, 0, batcher.InFlightCount())
+	assert.Equal(t, 0, batcher.ShardInFlightCount("shard-001"))
 	assert.Equal(t, 0, batcher.TrackedMessageCount())
 
-	// Reserve 10 messages
+	// Reserve 10 messages on shard-001
 	require.True(t, batcher.TryReserve("shard-001", 10))
 	assert.Equal(t, 10, batcher.InFlightCount())
+	assert.Equal(t, 10, batcher.ShardInFlightCount("shard-001"))
+	assert.Equal(t, 0, batcher.ShardInFlightCount("shard-002"))
 	assert.Equal(t, 0, batcher.TrackedMessageCount())
 
 	// Add 6 messages (consumes 6 of the reservation)
 	batch := createTestMessages(6, "shard-001", 1)
 	tb := batcher.AddMessages(batch, "shard-001")
 	assert.Equal(t, 10, batcher.InFlightCount()) // 4 reserved + 6 tracked
+	assert.Equal(t, 10, batcher.ShardInFlightCount("shard-001"))
 	assert.Equal(t, 6, batcher.TrackedMessageCount())
 
 	// Release remaining 4 reserved messages
 	batcher.Release("shard-001", 4)
 	assert.Equal(t, 6, batcher.InFlightCount())
+	assert.Equal(t, 6, batcher.ShardInFlightCount("shard-001"))
 	assert.Equal(t, 6, batcher.TrackedMessageCount())
 
 	// Settle batch
 	batcher.RemoveBatch(tb)
 	assert.Equal(t, 0, batcher.InFlightCount())
+	assert.Equal(t, 0, batcher.ShardInFlightCount("shard-001"))
 	assert.Equal(t, 0, batcher.TrackedMessageCount())
 }
