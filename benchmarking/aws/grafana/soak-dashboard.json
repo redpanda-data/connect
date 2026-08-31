@@ -223,7 +223,7 @@
       "id": 3,
       "type": "timeseries",
       "title": "RSS slope (leak detector)",
-      "description": "Least-squares fit of RSS growth per minute over the trailing window, computed per checkpoint cycle (one point per ~10 min). Red line = leak alarm threshold (2 MiB/min sustained for 2 consecutive checkpoints pages; that rate is ~3 GB/day). Negative values = memory settling.",
+      "description": "Least-squares fit of RSS growth per minute over the trailing window, computed per checkpoint cycle (one point per ~10 min). Red line = leak alarm threshold (2 MB/min sustained for 2 consecutive checkpoints pages; that rate is ~3 GB/day). Negative values = memory settling.",
       "gridPos": {
         "x": 0,
         "y": 8,
@@ -253,7 +253,7 @@
               },
               {
                 "color": "red",
-                "value": 2097152
+                "value": 2000000
               }
             ]
           }
