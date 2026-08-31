@@ -566,10 +566,13 @@ func (b *RecordBatcher) PendingCount(shardID string) int {
 	return 0
 }
 
-// inFlightCountLocked returns the total message load across both stages of ingestion:
+// inFlightCountLocked returns the total message load across both stages of
+// ingestion:
 //
-//  1. Reserved (b.reserved): Messages currently being fetched over the network (GetRecords in flight).
-//  2. Tracked (b.trackedMessages): Messages received into memory and awaiting downstream processing/acknowledgement.
+//  1. Reserved (b.reserved): Messages currently being fetched over the
+//     network (GetRecords in flight).
+//  2. Tracked (b.trackedMessages): Messages received into memory and
+//     awaiting downstream processing/acknowledgement.
 //
 // Counting pending reads as in-flight ensures concurrent shard readers cannot
 // flood the pipeline before the first batch of records even arrives.
