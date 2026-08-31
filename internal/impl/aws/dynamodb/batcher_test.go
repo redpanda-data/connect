@@ -632,6 +632,44 @@ func TestBatcherWarnsWhenThrottlePinned(t *testing.T) {
 	assert.True(t, reset, "a successful reservation must reset the pin clock")
 }
 
+// TestBatcherWarnsWhenShardPinned: a shard parked at its per-shard cap never
+// reaches the global-budget branch (with fewer than four pinned shards the
+// global budget stays under 100%), so the per-shard refusal must drive its own
+// pin clock and warning or a single-shard wedge is completely silent.
+func TestBatcherWarnsWhenShardPinned(t *testing.T) {
+	// checkpointLimit 400 -> maxTrackedMessages 4000 -> per-shard cap 1000
+	batcher := NewRecordBatcher(100, 400, service.MockResources().Logger())
+
+	require.True(t, batcher.TryReserve("shard-001", 1000))
+	tb := batcher.AddMessages(createTestMessages(1000, "shard-001", 1), "shard-001")
+
+	require.False(t, batcher.TryReserve("shard-001", 100),
+		"the shard is at its in-flight cap")
+
+	// Backdate the shard's pin start beyond the warn threshold.
+	batcher.mu.Lock()
+	st := batcher.shards["shard-001"]
+	st.throttledSince = time.Now().Add(-2 * throttlePinWarnAfter)
+	batcher.mu.Unlock()
+
+	require.False(t, batcher.TryReserve("shard-001", 100))
+	batcher.mu.Lock()
+	warned := !st.lastPinWarn.IsZero()
+	globalUntouched := batcher.throttledSince.IsZero()
+	batcher.mu.Unlock()
+	assert.True(t, warned, "a continuously pinned shard must emit the stall warning")
+	assert.True(t, globalUntouched, "a per-shard refusal must not start the global pin clock")
+
+	// Settling the batch drains the shard; the next successful reservation
+	// resets its pin clock.
+	batcher.RemoveBatch(tb)
+	require.True(t, batcher.TryReserve("shard-001", 100))
+	batcher.mu.Lock()
+	reset := st.throttledSince.IsZero()
+	batcher.mu.Unlock()
+	assert.True(t, reset, "a successful reservation must reset the shard's pin clock")
+}
+
 // --- Reservation-based admission control (INC-2974 ack-path stall) ---
 
 // TestBatcherReserveBoundsGlobalBudget: readers must reserve tracker budget

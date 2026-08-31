@@ -131,6 +131,15 @@ type shardAckTracker struct {
 	// Together they are bounded by the batcher's perShardCap.
 	inflight int
 	reserved int
+	// throttledSince is when reservations last started failing on this
+	// shard's in-flight cap without a successful reserve in between; zero
+	// while not throttled. A shard pinned at its cap never reaches the
+	// global-budget branch (fewer than four pinned shards leave the global
+	// budget under 100%), so the per-shard refusal needs its own pin clock
+	// or a wedged shard parks in silence. lastPinWarn rate-limits the
+	// warning.
+	throttledSince time.Time
+	lastPinWarn    time.Time
 }
 
 // NewRecordBatcher creates a new [RecordBatcher] for DynamoDB CDC.
@@ -184,7 +193,18 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	st, ok := b.shards[shardID]
 	if ok && st.inflight+st.reserved > 0 && st.inflight+st.reserved+n > b.perShardCap {
 		// The shard is pinned by its own unsettled messages; park it alone
-		// without touching the global throttle clock.
+		// without touching the global throttle clock, but surface a
+		// continuous pin on the shard's own clock - in a topology with fewer
+		// than four pinned shards the global branch above never trips, so
+		// this is the only place a wedged shard can become visible.
+		now := time.Now()
+		if st.throttledSince.IsZero() {
+			st.throttledSince = now
+		} else if since := now.Sub(st.throttledSince); since >= throttlePinWarnAfter && now.Sub(st.lastPinWarn) >= throttlePinWarnInterval {
+			st.lastPinWarn = now
+			b.log.Warnf("Shard %s reader throttled for %v: %d/%d in-flight messages on this shard are still awaiting downstream acknowledgement; no records are being read from it while this persists",
+				shardID, since.Round(time.Second), st.inflight+st.reserved, b.perShardCap)
+		}
 		return false
 	}
 
@@ -193,6 +213,7 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 		st = &shardAckTracker{tracker: checkpoint.NewUncapped[string](), seqTimes: map[string]string{}}
 		b.shards[shardID] = st
 	}
+	st.throttledSince = time.Time{}
 	st.reserved += n
 	b.reserved += n
 	return true
