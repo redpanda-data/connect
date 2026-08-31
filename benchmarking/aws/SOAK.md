@@ -84,7 +84,7 @@ files named below.
   Alarm cards render natively; reaper notices arrive via the
   custom-notification envelope in `cleanup-lambda/sweep.go` (plain SNS
   text is silently dropped by Chatbot — keep that envelope). Email backup
-  is a manual SNS subscription to BOTH topics (see one-time setup below) —
+  is a manual SNS subscription to BOTH topics (see one-time setup above) —
   deliberately unmanaged, so no re-apply can silently unsubscribe it.
   Slack is the only Terraform-managed channel, so blanking its IDs fails
   validation instead of leaving the topics unrouted. Alarms during a run
