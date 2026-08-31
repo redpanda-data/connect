@@ -188,7 +188,7 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	defer b.mu.Unlock()
 
 	// If the batcher has zero messages in flight, always allow the first reservation
-	// to go through, even if it exceeds the maxium budget.
+	// to go through, even if it exceeds the maximum budget.
 	//
 	// Why? Even though configuration validation normally ensures batch sizes are smaller
 	// than the budget, a batch that is larger than the limit must never cause the reader
