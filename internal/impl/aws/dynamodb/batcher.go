@@ -70,13 +70,19 @@ type RecordBatcher struct {
 	reserved int
 	// perShardCap bounds one shard's in-flight (tracked + reserved) messages
 	// so a shard whose batches never settle downstream parks alone at its cap
-	// instead of pinning the global budget and every other reader. A shard
-	// with nothing in flight always admits one batch regardless, so progress
-	// is guaranteed for any cap/batch-size combination.
+	// instead of pinning the global budget and every other reader. The cap
+	// exists purely for that isolation, so it binds only while another shard
+	// is also active: a sole active shard may use the whole global budget (a
+	// one-partition table has a single active shard, and capping it would
+	// strand three quarters of the budget the pre-cap gate allowed it). A
+	// shard with nothing in flight always admits one batch regardless, so
+	// progress is guaranteed for any cap/batch-size combination.
 	perShardCap int
 	// throttledSince is when reservations last started failing on the global
-	// budget without a successful reserve in between; zero while not
-	// throttled. lastPinWarn rate-limits the pinned-throttle warning.
+	// budget without one passing the global check in between (a reservation
+	// the shard's own cap then refuses still proves the global budget has
+	// room); zero while not throttled. lastPinWarn rate-limits the
+	// pinned-throttle warning.
 	throttledSince time.Time
 	lastPinWarn    time.Time
 }
@@ -163,10 +169,10 @@ func NewRecordBatcher(maxTrackedShards, checkpointLimit int, log *service.Logger
 
 // TryReserve claims budget for a read of up to n messages on shardID. It
 // refuses when the global tracked+reserved budget or the shard's in-flight
-// cap has no room (the caller waits and retries), except that a shard with
-// nothing in flight always admits one batch so progress is never impossible.
-// Budget is consumed by AddMessages and any surplus must be returned via
-// Release.
+// cap has no room (the caller waits and retries). The per-shard cap binds
+// only while another shard is also active, and a shard with nothing in
+// flight always admits one batch, so progress is never impossible. Budget is
+// consumed by AddMessages and any surplus must be returned via Release.
 func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	if b == nil {
 		// No batcher, no backpressure (mirrors ShouldThrottle's nil case).
@@ -189,9 +195,13 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 		}
 		return false
 	}
+	// The global budget can admit this reservation, so it is not pinned:
+	// clear its clock even if the shard's own cap refuses below, or the next
+	// global exhaustion would report a pin spanning the drained interval.
+	b.throttledSince = time.Time{}
 
 	st, ok := b.shards[shardID]
-	if ok && st.inflight+st.reserved > 0 && st.inflight+st.reserved+n > b.perShardCap {
+	if ok && st.inflight+st.reserved > 0 && st.inflight+st.reserved+n > b.perShardCap && b.otherShardActiveLocked(shardID) {
 		// The shard is pinned by its own unsettled messages; park it alone
 		// without touching the global throttle clock, but surface a
 		// continuous pin on the shard's own clock - in a topology with fewer
@@ -208,7 +218,6 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 		return false
 	}
 
-	b.throttledSince = time.Time{}
 	if !ok {
 		st = &shardAckTracker{tracker: checkpoint.NewUncapped[string](), seqTimes: map[string]string{}}
 		b.shards[shardID] = st
@@ -217,6 +226,18 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	st.reserved += n
 	b.reserved += n
 	return true
+}
+
+// otherShardActiveLocked reports whether any shard other than shardID has
+// in-flight or reserved messages - the per-shard cap only binds while one
+// does (see perShardCap doc). Callers must hold b.mu.
+func (b *RecordBatcher) otherShardActiveLocked(shardID string) bool {
+	for id, st := range b.shards {
+		if id != shardID && st.inflight+st.reserved > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Release returns unused reservation for a shard (the read failed, returned

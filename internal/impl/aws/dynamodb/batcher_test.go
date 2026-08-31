@@ -643,6 +643,10 @@ func TestBatcherWarnsWhenShardPinned(t *testing.T) {
 	require.True(t, batcher.TryReserve("shard-001", 1000))
 	tb := batcher.AddMessages(createTestMessages(1000, "shard-001", 1), "shard-001")
 
+	// A second shard is active, so the isolation cap engages for shard-001.
+	require.True(t, batcher.TryReserve("shard-002", 100))
+	batcher.AddMessages(createTestMessages(100, "shard-002", 1), "shard-002")
+
 	require.False(t, batcher.TryReserve("shard-001", 100),
 		"the shard is at its in-flight cap")
 
@@ -668,6 +672,40 @@ func TestBatcherWarnsWhenShardPinned(t *testing.T) {
 	reset := st.throttledSince.IsZero()
 	batcher.mu.Unlock()
 	assert.True(t, reset, "a successful reservation must reset the shard's pin clock")
+}
+
+// TestBatcherPerShardRefusalClearsGlobalClock: a reservation that passes the
+// global check proves the global budget is NOT pinned, even when the shard's
+// own cap then refuses it. The per-shard refusal must clear the global pin
+// clock, or a later global exhaustion reports a pin duration spanning the
+// interval in which the budget had actually drained.
+func TestBatcherPerShardRefusalClearsGlobalClock(t *testing.T) {
+	// checkpointLimit 400 -> maxTrackedMessages 4000 -> per-shard cap 1000
+	batcher := NewRecordBatcher(100, 400, service.MockResources().Logger())
+
+	// Two capped shards plus two more batches exhaust the global budget.
+	tbs := make([]*trackedBatch, 0, 4)
+	for i, shard := range []string{"shard-001", "shard-002", "shard-003", "shard-004"} {
+		require.True(t, batcher.TryReserve(shard, 1000), "batch %d", i)
+		tbs = append(tbs, batcher.AddMessages(createTestMessages(1000, shard, 1), shard))
+	}
+	require.False(t, batcher.TryReserve("shard-005", 100),
+		"the global budget is exhausted")
+	batcher.mu.Lock()
+	pinned := !batcher.throttledSince.IsZero()
+	batcher.mu.Unlock()
+	require.True(t, pinned)
+
+	// Drain one batch: the global budget has room again, but shard-001 is
+	// still at its own cap, so its reservation exits via the per-shard branch.
+	batcher.RemoveBatch(tbs[3])
+	require.False(t, batcher.TryReserve("shard-001", 1000),
+		"shard-001 is still at its per-shard cap")
+	batcher.mu.Lock()
+	cleared := batcher.throttledSince.IsZero()
+	batcher.mu.Unlock()
+	assert.True(t, cleared,
+		"passing the global check must clear the global pin clock even when the per-shard cap refuses")
 }
 
 // --- Reservation-based admission control (INC-2974 ack-path stall) ---
@@ -717,6 +755,10 @@ func TestBatcherPerShardCapIsolatesPinnedShard(t *testing.T) {
 	poison := createTestMessages(1000, "shard-poison", 1)
 	tbPoison := batcher.AddMessages(poison, "shard-poison")
 
+	// A healthy shard is also active, so the isolation cap engages.
+	require.True(t, batcher.TryReserve("shard-healthy", 100))
+	batcher.AddMessages(createTestMessages(100, "shard-healthy", 1), "shard-healthy")
+
 	assert.False(t, batcher.TryReserve("shard-poison", 100),
 		"a shard at its in-flight cap must not reserve more")
 	assert.True(t, batcher.TryReserve("shard-healthy", 100),
@@ -727,6 +769,36 @@ func TestBatcherPerShardCapIsolatesPinnedShard(t *testing.T) {
 	assert.True(t, batcher.TryReserve("shard-poison", 100))
 }
 
+// TestBatcherSoleActiveShardUsesGlobalBudget: the per-shard cap exists purely
+// to isolate a never-settling shard from OTHER shards, so it must not bind
+// while no other shard is active - a one-partition table has a single active
+// shard, and capping it would strand three quarters of the configured budget
+// (the pre-cap gate allowed ~90% of it). The cap re-engages as soon as a
+// second shard becomes active.
+func TestBatcherSoleActiveShardUsesGlobalBudget(t *testing.T) {
+	// checkpointLimit 400 -> maxTrackedMessages 4000 -> per-shard cap 1000
+	batcher := NewRecordBatcher(100, 400, service.MockResources().Logger())
+
+	// A sole active shard may fill the whole global budget, well past its cap.
+	tbs := make([]*trackedBatch, 0, 4)
+	for range 4 {
+		require.True(t, batcher.TryReserve("shard-001", 1000),
+			"a sole active shard must not be bound by the per-shard cap")
+		tbs = append(tbs, batcher.AddMessages(createTestMessages(1000, "shard-001", 1), "shard-001"))
+	}
+	assert.False(t, batcher.TryReserve("shard-001", 1000),
+		"the global budget still binds a sole active shard")
+
+	// Drain below the global budget but keep the shard above its cap, then
+	// activate a second shard: the isolation cap must re-engage.
+	batcher.RemoveBatch(tbs[0])
+	batcher.RemoveBatch(tbs[1])
+	require.True(t, batcher.TryReserve("shard-002", 100))
+	batcher.AddMessages(createTestMessages(100, "shard-002", 1), "shard-002")
+	assert.False(t, batcher.TryReserve("shard-001", 1000),
+		"the per-shard cap must re-engage once another shard is active")
+}
+
 // TestBatcherReserveAlwaysAdmitsFirstBatch: when the derived per-shard cap is
 // smaller than a single read (small checkpoint_limit with the max batch
 // size), a shard with nothing in flight must still be allowed one batch, or
@@ -735,9 +807,14 @@ func TestBatcherReserveAlwaysAdmitsFirstBatch(t *testing.T) {
 	// checkpointLimit 25 -> maxTrackedMessages 1000 -> per-shard cap 250
 	batcher := NewRecordBatcher(100, 25, service.MockResources().Logger())
 
-	require.True(t, batcher.TryReserve("shard-001", 1000),
-		"an idle shard must always admit a single full batch")
-	batcher.AddMessages(createTestMessages(1000, "shard-001", 1), "shard-001")
+	require.True(t, batcher.TryReserve("shard-001", 500),
+		"an idle shard must always admit a single batch larger than its cap")
+	batcher.AddMessages(createTestMessages(500, "shard-001", 1), "shard-001")
+
+	// Activate a second shard so the isolation cap engages.
+	require.True(t, batcher.TryReserve("shard-002", 100))
+	batcher.AddMessages(createTestMessages(100, "shard-002", 1), "shard-002")
+
 	assert.False(t, batcher.TryReserve("shard-001", 1),
 		"beyond the first in-flight batch the cap applies")
 }
