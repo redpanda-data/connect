@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -490,4 +492,67 @@ func TestStartShardReader_AckDrainsAfterWrapperPointerReplacement(t *testing.T) 
 	require.NoError(t, am.ackFn(t.Context(), nil))
 	assert.Equal(t, 0, batcher.TrackedMessageCount(),
 		"the ack must drain the tracker even after the wrapper replaced the batch's message pointers")
+}
+
+// TestStartShardReader_RealAutoRetryNacksWrapper runs the INC-2974 wedge
+// scenario through the REAL benthos AutoRetryNacksBatched wrapper (what
+// auto_replay_nacks: true, the default, installs) rather than a simulation:
+// reader -> msgChan -> ReadBatch -> wrapper (which rewrites the batch slice's
+// message pointers in place AND hands the pipeline a copy) -> ack chain.
+//
+// It also locks in the wrapper's nack contract: a nack is swallowed by the
+// wrapper (redelivered internally, the input's ack fn is NOT called), so the
+// batch must stay tracked until the retry finally succeeds, at which point
+// the inner ack fires exactly once and the tracker drains. The wedge this PR
+// fixes was the final ack silently missing the tracker because settlement was
+// keyed by the rewritten message pointers.
+func TestStartShardReader_RealAutoRetryNacksWrapper(t *testing.T) {
+	transport := &recordsStubTransport{
+		records: `[{"eventID":"1","eventName":"INSERT","dynamodb":{"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}},
+		           {"eventID":"2","eventName":"INSERT","dynamodb":{"SequenceNumber":"00002","Keys":{"pk":{"S":"b"}},"NewImage":{"pk":{"S":"b"}}}}]`,
+	}
+
+	batcher := NewRecordBatcher(100, 1, service.MockResources().Logger())
+	d := &dynamoDBCDCInput{
+		conf: dynamoDBCDCConfig{
+			batchSize:       10,
+			pollInterval:    20 * time.Millisecond,
+			throttleBackoff: 20 * time.Millisecond,
+		},
+		log:           service.MockResources().Logger(),
+		streamsClient: newStubStreamsClient(transport),
+		streamArn:     aws.String(testStreamArn),
+		recordBatcher: batcher,
+		shardReaders: map[string]*dynamoDBShardReader{
+			"shard-001": {shardID: "shard-001", iterator: aws.String("initial-iterator")},
+		},
+		msgChan: make(chan asyncMessage, 1),
+		shutSig: shutdown.NewSignaller(),
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go d.startShardReader(ctx, "shard-001")
+
+	wrapped := service.AutoRetryNacksBatched(d)
+
+	batch, ackFn, err := wrapped.ReadBatch(ctx)
+	require.NoError(t, err)
+	require.Len(t, batch, 2)
+	require.Equal(t, 2, batcher.TrackedMessageCount())
+
+	// Nack through the wrapper: it owns the redelivery, the input's ack fn
+	// must not fire, and the batch must stay tracked (in flight).
+	require.NoError(t, ackFn(ctx, errors.New("downstream rejection")))
+	assert.Equal(t, 2, batcher.TrackedMessageCount(),
+		"a wrapper-owned nack must keep the batch tracked until the retry settles")
+
+	// The wrapper redelivers the batch; the final ack must reach the input's
+	// ack fn and drain the tracker despite the pointer rewrite.
+	retry, retryAckFn, err := wrapped.ReadBatch(ctx)
+	require.NoError(t, err)
+	require.Len(t, retry, 2)
+	require.NoError(t, retryAckFn(ctx, nil))
+	assert.Equal(t, 0, batcher.TrackedMessageCount(),
+		"the final ack must drain the tracker through the real wrapper (the INC-2974 wedge)")
 }
