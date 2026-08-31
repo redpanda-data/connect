@@ -172,6 +172,66 @@ func TestPrometheusMetrics(t *testing.T) {
 	assert.Contains(t, body, "\ngaugethree 10.452")
 }
 
+func TestPrometheusDeleteSeriesPartialMatch(t *testing.T) {
+	nm, handler := getTestProm(t)
+
+	ctr := nm.NewCounterCtor("input_received", "label", "stream")
+	ctr("in", "foo").Incr(3)
+	ctr("in", "bar").Incr(4)
+
+	gge := nm.NewGaugeCtor("input_connection_up", "stream")
+	gge("foo").Set(1)
+	gge("bar").Set(1)
+
+	tmr := nm.NewTimerCtor("input_latency_ns", "stream")
+	tmr("foo").Timing(100)
+	tmr("bar").Timing(200)
+
+	unlabelled := nm.NewCounterCtor("uptime")()
+	unlabelled.Incr(9)
+
+	body := getPage(t, handler)
+	require.Contains(t, body, "\ninput_received{label=\"in\",stream=\"foo\"} 3")
+	require.Contains(t, body, "\ninput_latency_ns_sum{stream=\"foo\"} 100")
+
+	purger, ok := any(nm).(interface {
+		DeleteSeriesPartialMatch(labels map[string]string)
+	})
+	require.True(t, ok, "prometheus exporter should support deleting series by label match")
+	purger.DeleteSeriesPartialMatch(map[string]string{"stream": "foo"})
+
+	body = getPage(t, handler)
+	assert.NotContains(t, body, "stream=\"foo\"")
+	assert.Contains(t, body, "\ninput_received{label=\"in\",stream=\"bar\"} 4")
+	assert.Contains(t, body, "\ninput_connection_up{stream=\"bar\"} 1")
+	assert.Contains(t, body, "\ninput_latency_ns_sum{stream=\"bar\"} 200")
+	assert.Contains(t, body, "\nuptime 9")
+}
+
+func TestPrometheusDeleteSeriesPartialMatchHistogram(t *testing.T) {
+	nm := promFromYAML(t, `
+use_histogram_timing: true
+`)
+
+	tmr := nm.NewTimerCtor("input_latency_ns", "stream")
+	tmr("foo").Timing(100)
+	tmr("bar").Timing(200)
+
+	handler := nm.HandlerFunc()
+	body := getPage(t, handler)
+	require.Contains(t, body, "stream=\"foo\"")
+
+	purger, ok := any(nm).(interface {
+		DeleteSeriesPartialMatch(labels map[string]string)
+	})
+	require.True(t, ok, "prometheus exporter should support deleting series by label match")
+	purger.DeleteSeriesPartialMatch(map[string]string{"stream": "foo"})
+
+	body = getPage(t, handler)
+	assert.NotContains(t, body, "stream=\"foo\"")
+	assert.Contains(t, body, "\ninput_latency_ns_count{stream=\"bar\"} 1")
+}
+
 func TestPrometheusHistMetrics(t *testing.T) {
 	nm := promFromYAML(t, `
 use_histogram_timing: true
