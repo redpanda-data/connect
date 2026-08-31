@@ -389,112 +389,138 @@ func (s *recordsStubTransport) Do(req *http.Request) (*http.Response, error) {
 	}, nil
 }
 
-// TestStartShardReader_CancelledSendUntracksBatch: a reader cancelled while
+// readerHarness abstracts over the two hand-duplicated shard-reader entry
+// points (startShardReader for single-table, startTableShardReader for
+// multi-table) so every reader-level regression test runs against both:
+// the INC-2974 fixes were applied to each copy by hand, and a regression in
+// either one reproduces the wedge silently.
+type readerHarness struct {
+	batcher *RecordBatcher
+	d       *dynamoDBCDCInput
+	start   func(ctx context.Context)
+}
+
+// readerHarnesses returns one fresh harness factory per reader entry point.
+// Each factory builds its own stub transport and batcher so subtests stay
+// independent.
+func readerHarnesses(records string, checkpointLimit, msgChanCap int) map[string]func() *readerHarness {
+	build := func(multiTable bool) *readerHarness {
+		transport := &recordsStubTransport{records: records}
+		batcher := NewRecordBatcher(100, checkpointLimit, service.MockResources().Logger())
+		shardReaders := map[string]*dynamoDBShardReader{
+			"shard-001": {shardID: "shard-001", iterator: aws.String("initial-iterator")},
+		}
+		d := &dynamoDBCDCInput{
+			conf: dynamoDBCDCConfig{
+				batchSize:       10,
+				pollInterval:    20 * time.Millisecond,
+				throttleBackoff: 20 * time.Millisecond,
+			},
+			log:           service.MockResources().Logger(),
+			streamsClient: newStubStreamsClient(transport),
+			metrics:       newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+			msgChan:       make(chan asyncMessage, msgChanCap),
+			shutSig:       shutdown.NewSignaller(),
+		}
+		if multiTable {
+			ts := &tableStream{
+				tableName:     "table-a",
+				streamArn:     testStreamArn,
+				recordBatcher: batcher,
+				shardReaders:  shardReaders,
+			}
+			return &readerHarness{batcher: batcher, d: d, start: func(ctx context.Context) {
+				d.startTableShardReader(ctx, "table-a", ts, "shard-001")
+			}}
+		}
+		d.streamArn = aws.String(testStreamArn)
+		d.recordBatcher = batcher
+		d.shardReaders = shardReaders
+		return &readerHarness{batcher: batcher, d: d, start: func(ctx context.Context) {
+			d.startShardReader(ctx, "shard-001")
+		}}
+	}
+	return map[string]func() *readerHarness{
+		"single-table": func() *readerHarness { return build(false) },
+		"multi-table":  func() *readerHarness { return build(true) },
+	}
+}
+
+const twoRecordsPage = `[{"eventID":"1","eventName":"INSERT","dynamodb":{"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}},
+                         {"eventID":"2","eventName":"INSERT","dynamodb":{"SequenceNumber":"00002","Keys":{"pk":{"S":"b"}},"NewImage":{"pk":{"S":"b"}}}}]`
+
+// TestShardReader_CancelledSendUntracksBatch: a reader cancelled while
 // blocked sending a batch to the message channel must untrack that batch.
 // Leaking it would permanently consume tracker budget: enough cancelled
 // readers (shard rotation over a slow downstream) pin the throttle with
 // messages that no longer exist anywhere.
-func TestStartShardReader_CancelledSendUntracksBatch(t *testing.T) {
-	transport := &recordsStubTransport{
-		records: `[{"eventID":"1","eventName":"INSERT","dynamodb":{"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}},
-		           {"eventID":"2","eventName":"INSERT","dynamodb":{"SequenceNumber":"00002","Keys":{"pk":{"S":"b"}},"NewImage":{"pk":{"S":"b"}}}},
-		           {"eventID":"3","eventName":"INSERT","dynamodb":{"SequenceNumber":"00003","Keys":{"pk":{"S":"c"}},"NewImage":{"pk":{"S":"c"}}}}]`,
+func TestShardReader_CancelledSendUntracksBatch(t *testing.T) {
+	for name, mk := range readerHarnesses(twoRecordsPage, 100, 0) { // unbuffered channel, never read: the send blocks
+		t.Run(name, func(t *testing.T) {
+			h := mk()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			done := make(chan struct{})
+			go func() {
+				h.start(ctx)
+				close(done)
+			}()
+
+			// Wait until the batch is tracked (the reader is now blocked on the send).
+			require.Eventually(t, func() bool {
+				return h.batcher.TrackedMessageCount() == 2
+			}, 5*time.Second, 5*time.Millisecond, "expected the read batch to be tracked before dispatch")
+
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatal("reader should exit promptly on cancellation")
+			}
+
+			assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+				"a batch never dispatched must be untracked on reader cancellation")
+		})
 	}
-
-	d := &dynamoDBCDCInput{
-		conf: dynamoDBCDCConfig{
-			batchSize:       10,
-			pollInterval:    20 * time.Millisecond,
-			throttleBackoff: 20 * time.Millisecond,
-		},
-		log:           service.MockResources().Logger(),
-		streamsClient: newStubStreamsClient(transport),
-		streamArn:     aws.String(testStreamArn),
-		recordBatcher: NewRecordBatcher(100, 100, service.MockResources().Logger()),
-		shardReaders: map[string]*dynamoDBShardReader{
-			"shard-001": {shardID: "shard-001", iterator: aws.String("initial-iterator")},
-		},
-		msgChan: make(chan asyncMessage), // unbuffered and never read: the send blocks
-	}
-
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		d.startShardReader(ctx, "shard-001")
-		close(done)
-	}()
-
-	// Wait until the batch is tracked (the reader is now blocked on the send).
-	require.Eventually(t, func() bool {
-		return d.recordBatcher.TrackedMessageCount() == 3
-	}, 5*time.Second, 5*time.Millisecond, "expected the read batch to be tracked before dispatch")
-
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("reader should exit promptly on cancellation")
-	}
-
-	assert.Equal(t, 0, d.recordBatcher.TrackedMessageCount(),
-		"a batch never dispatched must be untracked on reader cancellation")
 }
 
-// TestStartShardReader_AckDrainsAfterWrapperPointerReplacement is the
+// TestShardReader_AckDrainsAfterWrapperPointerReplacement is the
 // end-to-end regression test for the INC-2974 ack-path stall: benthos's
 // AutoRetryNacksBatched (auto_replay_nacks, default on) replaces every
 // element of the delivered batch slice with a new *Message before the
 // pipeline sees it. The dispatched ack function must still drain the
 // in-flight tracker afterwards - keying settlement off the batch's message
 // pointers silently no-ops instead, pinning every reader in backpressure.
-func TestStartShardReader_AckDrainsAfterWrapperPointerReplacement(t *testing.T) {
-	transport := &recordsStubTransport{
-		records: `[{"eventID":"1","eventName":"INSERT","dynamodb":{"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}},
-		           {"eventID":"2","eventName":"INSERT","dynamodb":{"SequenceNumber":"00002","Keys":{"pk":{"S":"b"}},"NewImage":{"pk":{"S":"b"}}}}]`,
+func TestShardReader_AckDrainsAfterWrapperPointerReplacement(t *testing.T) {
+	for name, mk := range readerHarnesses(twoRecordsPage, 1, 1) {
+		t.Run(name, func(t *testing.T) {
+			h := mk()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			go h.start(ctx)
+
+			var am asyncMessage
+			select {
+			case am = <-h.d.msgChan:
+			case <-time.After(5 * time.Second):
+				t.Fatal("expected a dispatched batch")
+			}
+			require.Equal(t, 2, h.batcher.TrackedMessageCount())
+
+			// Simulate the wrapper's read hook: same slice, new message pointers.
+			for i := range am.msg {
+				am.msg[i] = am.msg[i].Copy()
+			}
+
+			require.NoError(t, am.ackFn(t.Context(), nil))
+			assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+				"the ack must drain the tracker even after the wrapper replaced the batch's message pointers")
+		})
 	}
-
-	batcher := NewRecordBatcher(100, 1, service.MockResources().Logger())
-	d := &dynamoDBCDCInput{
-		conf: dynamoDBCDCConfig{
-			batchSize:       10,
-			pollInterval:    20 * time.Millisecond,
-			throttleBackoff: 20 * time.Millisecond,
-		},
-		log:           service.MockResources().Logger(),
-		streamsClient: newStubStreamsClient(transport),
-		streamArn:     aws.String(testStreamArn),
-		recordBatcher: batcher,
-		shardReaders: map[string]*dynamoDBShardReader{
-			"shard-001": {shardID: "shard-001", iterator: aws.String("initial-iterator")},
-		},
-		msgChan: make(chan asyncMessage, 1),
-	}
-
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	go d.startShardReader(ctx, "shard-001")
-
-	var am asyncMessage
-	select {
-	case am = <-d.msgChan:
-	case <-time.After(5 * time.Second):
-		t.Fatal("expected a dispatched batch")
-	}
-	require.Equal(t, 2, batcher.TrackedMessageCount())
-
-	// Simulate the wrapper's read hook: same slice, new message pointers.
-	for i := range am.msg {
-		am.msg[i] = am.msg[i].Copy()
-	}
-
-	require.NoError(t, am.ackFn(t.Context(), nil))
-	assert.Equal(t, 0, batcher.TrackedMessageCount(),
-		"the ack must drain the tracker even after the wrapper replaced the batch's message pointers")
 }
 
-// TestStartShardReader_RealAutoRetryNacksWrapper runs the INC-2974 wedge
+// TestShardReader_RealAutoRetryNacksWrapper runs the INC-2974 wedge
 // scenario through the REAL benthos AutoRetryNacksBatched wrapper (what
 // auto_replay_nacks: true, the default, installs) rather than a simulation:
 // reader -> msgChan -> ReadBatch -> wrapper (which rewrites the batch slice's
@@ -506,53 +532,35 @@ func TestStartShardReader_AckDrainsAfterWrapperPointerReplacement(t *testing.T) 
 // the inner ack fires exactly once and the tracker drains. The wedge this PR
 // fixes was the final ack silently missing the tracker because settlement was
 // keyed by the rewritten message pointers.
-func TestStartShardReader_RealAutoRetryNacksWrapper(t *testing.T) {
-	transport := &recordsStubTransport{
-		records: `[{"eventID":"1","eventName":"INSERT","dynamodb":{"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}},
-		           {"eventID":"2","eventName":"INSERT","dynamodb":{"SequenceNumber":"00002","Keys":{"pk":{"S":"b"}},"NewImage":{"pk":{"S":"b"}}}}]`,
+func TestShardReader_RealAutoRetryNacksWrapper(t *testing.T) {
+	for name, mk := range readerHarnesses(twoRecordsPage, 1, 1) {
+		t.Run(name, func(t *testing.T) {
+			h := mk()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			go h.start(ctx)
+
+			wrapped := service.AutoRetryNacksBatched(h.d)
+
+			batch, ackFn, err := wrapped.ReadBatch(ctx)
+			require.NoError(t, err)
+			require.Len(t, batch, 2)
+			require.Equal(t, 2, h.batcher.TrackedMessageCount())
+
+			// Nack through the wrapper: it owns the redelivery, the input's ack fn
+			// must not fire, and the batch must stay tracked (in flight).
+			require.NoError(t, ackFn(ctx, errors.New("downstream rejection")))
+			assert.Equal(t, 2, h.batcher.TrackedMessageCount(),
+				"a wrapper-owned nack must keep the batch tracked until the retry settles")
+
+			// The wrapper redelivers the batch; the final ack must reach the input's
+			// ack fn and drain the tracker despite the pointer rewrite.
+			retry, retryAckFn, err := wrapped.ReadBatch(ctx)
+			require.NoError(t, err)
+			require.Len(t, retry, 2)
+			require.NoError(t, retryAckFn(ctx, nil))
+			assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+				"the final ack must drain the tracker through the real wrapper (the INC-2974 wedge)")
+		})
 	}
-
-	batcher := NewRecordBatcher(100, 1, service.MockResources().Logger())
-	d := &dynamoDBCDCInput{
-		conf: dynamoDBCDCConfig{
-			batchSize:       10,
-			pollInterval:    20 * time.Millisecond,
-			throttleBackoff: 20 * time.Millisecond,
-		},
-		log:           service.MockResources().Logger(),
-		streamsClient: newStubStreamsClient(transport),
-		streamArn:     aws.String(testStreamArn),
-		recordBatcher: batcher,
-		shardReaders: map[string]*dynamoDBShardReader{
-			"shard-001": {shardID: "shard-001", iterator: aws.String("initial-iterator")},
-		},
-		msgChan: make(chan asyncMessage, 1),
-		shutSig: shutdown.NewSignaller(),
-	}
-
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	go d.startShardReader(ctx, "shard-001")
-
-	wrapped := service.AutoRetryNacksBatched(d)
-
-	batch, ackFn, err := wrapped.ReadBatch(ctx)
-	require.NoError(t, err)
-	require.Len(t, batch, 2)
-	require.Equal(t, 2, batcher.TrackedMessageCount())
-
-	// Nack through the wrapper: it owns the redelivery, the input's ack fn
-	// must not fire, and the batch must stay tracked (in flight).
-	require.NoError(t, ackFn(ctx, errors.New("downstream rejection")))
-	assert.Equal(t, 2, batcher.TrackedMessageCount(),
-		"a wrapper-owned nack must keep the batch tracked until the retry settles")
-
-	// The wrapper redelivers the batch; the final ack must reach the input's
-	// ack fn and drain the tracker despite the pointer rewrite.
-	retry, retryAckFn, err := wrapped.ReadBatch(ctx)
-	require.NoError(t, err)
-	require.Len(t, retry, 2)
-	require.NoError(t, retryAckFn(ctx, nil))
-	assert.Equal(t, 0, batcher.TrackedMessageCount(),
-		"the final ack must drain the tracker through the real wrapper (the INC-2974 wedge)")
 }
