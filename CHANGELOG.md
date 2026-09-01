@@ -3,12 +3,6 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
-
-### Fixed
-
-- prometheus: In streams mode, deleting a stream now purges its metric series (labeled `stream="<id>"`) from the `/metrics` endpoint instead of exposing them with frozen values until the process restarts. ([@squiidz](https://github.com/squiidz), [#4742](https://github.com/redpanda-data/connect/pull/4742))
-
 ## 4.107.0 - 2026-08-27
 
 ### Fixed

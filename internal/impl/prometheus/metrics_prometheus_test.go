@@ -190,6 +190,11 @@ func TestPrometheusDeleteSeriesPartialMatch(t *testing.T) {
 	unlabelled := nm.NewCounterCtor("uptime")()
 	unlabelled.Incr(9)
 
+	// A vec with labels that do not include the matched key must be untouched:
+	// client_golang treats an unknown label key as a non-match, not a wildcard.
+	otherLabels := nm.NewCounterCtor("batch_created", "mechanism")
+	otherLabels("count").Incr(5)
+
 	body := getPage(t, handler)
 	require.Contains(t, body, "\ninput_received{label=\"in\",stream=\"foo\"} 3")
 	require.Contains(t, body, "\ninput_latency_ns_sum{stream=\"foo\"} 100")
@@ -206,6 +211,7 @@ func TestPrometheusDeleteSeriesPartialMatch(t *testing.T) {
 	assert.Contains(t, body, "\ninput_connection_up{stream=\"bar\"} 1")
 	assert.Contains(t, body, "\ninput_latency_ns_sum{stream=\"bar\"} 200")
 	assert.Contains(t, body, "\nuptime 9")
+	assert.Contains(t, body, "\nbatch_created{mechanism=\"count\"} 5")
 }
 
 func TestPrometheusDeleteSeriesPartialMatchHistogram(t *testing.T) {
