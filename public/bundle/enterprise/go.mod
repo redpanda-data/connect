@@ -77,7 +77,7 @@ require (
 	github.com/clbanning/mxj/v2 v2.7.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
-	github.com/colinmarc/hdfs v1.1.3 // indirect
+	github.com/colinmarc/hdfs/v2 v2.4.0 // indirect
 	github.com/coreos/go-oidc/v3 v3.17.0 // indirect
 	github.com/couchbase/gocb/v2 v2.12.1 // indirect
 	github.com/cyborginc/cyborgdb-go v0.15.0 // indirect

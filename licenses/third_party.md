@@ -120,7 +120,7 @@
 | github.com/cncf/xds/go | Apache-2.0 |
 | github.com/cockroachdb/apd/v3 | Apache-2.0 |
 | github.com/cohere-ai/cohere-go/v2 | MIT |
-| github.com/colinmarc/hdfs | MIT |
+| github.com/colinmarc/hdfs/v2 | MIT |
 | github.com/couchbase/gocb/v2 | Apache-2.0 |
 | github.com/couchbase/gocbcore/v10 | Apache-2.0 |
 | github.com/couchbase/gocbcoreps | Apache-2.0 |
