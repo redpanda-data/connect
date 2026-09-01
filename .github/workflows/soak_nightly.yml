@@ -73,8 +73,16 @@ jobs:
             echo 'scenarios=["postgres/orders-soak", "mysql/orders-soak"]' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if ! echo "${SCENARIO}" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9][A-Za-z0-9_-]*)*$'; then
-            echo "::error::Invalid scenario '${SCENARIO}' — expected a path of [A-Za-z0-9_-] segments, e.g. postgres/orders-soak"
+          # bash [[ =~ ]], NOT `echo | grep`: grep matches per line, so a
+          # multi-line value (reachable via the REST dispatch API) would pass
+          # on its first line and then write attacker-controlled extra lines
+          # into the line-oriented $GITHUB_OUTPUT below — re-assigning
+          # `scenarios` and fanning one dispatch into N paid jobs. Bash's =~
+          # anchors $ to end-of-STRING and no class here admits a newline,
+          # so any embedded newline fails the match.
+          re='^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9][A-Za-z0-9_-]*)*$'
+          if ! [[ "${SCENARIO}" =~ $re ]]; then
+            echo "::error::Invalid scenario — expected a single path of [A-Za-z0-9_-] segments, e.g. postgres/orders-soak"
             exit 1
           fi
           echo "scenarios=[\"${SCENARIO}\"]" >> "$GITHUB_OUTPUT"
@@ -110,8 +118,11 @@ jobs:
         env:
           SCENARIO: ${{ matrix.scenario }}
         run: |
-          if ! echo "${SCENARIO}" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9][A-Za-z0-9_-]*)*$'; then
-            echo "::error::Invalid scenario '${SCENARIO}' — expected a path of [A-Za-z0-9_-] segments, e.g. postgres/orders-soak"
+          # Full-string match, same as the plan job (grep would pass a
+          # multi-line value on its first matching line).
+          re='^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9][A-Za-z0-9_-]*)*$'
+          if ! [[ "${SCENARIO}" =~ $re ]]; then
+            echo "::error::Invalid scenario — expected a single path of [A-Za-z0-9_-] segments, e.g. postgres/orders-soak"
             exit 1
           fi
 
