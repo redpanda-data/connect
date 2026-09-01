@@ -171,10 +171,10 @@ require (
 	github.com/tmc/langchaingo v0.1.14
 	github.com/trinodb/trino-go-client v0.333.0
 	github.com/twmb/avro v1.7.3-0.20260513193503-1e5c2a3fc070
-	github.com/twmb/franz-go v1.20.7
-	github.com/twmb/franz-go/pkg/kadm v1.17.2
-	github.com/twmb/franz-go/pkg/kmsg v1.12.0
-	github.com/twmb/franz-go/pkg/sr v1.7.0
+	github.com/twmb/franz-go v1.21.6
+	github.com/twmb/franz-go/pkg/kadm v1.18.0
+	github.com/twmb/franz-go/pkg/kmsg v1.13.1
+	github.com/twmb/franz-go/pkg/sr v1.8.0
 	github.com/twmb/go-cache v1.3.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/xdg-go/scram v1.2.0
