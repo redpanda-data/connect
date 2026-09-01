@@ -1,0 +1,119 @@
+name: slack
+type: input
+status: experimental
+categories: [Services, Social]
+summary: Consume Slack bot events
+
+fields:
+  - name: path
+    type: string
+    description: Path that will respond to Slack requests
+
+  - name: signing_secret
+    type: string
+    default: "none"
+    description: >-
+      Signing secret used to validate requests.
+      It is available under "App Credentials" in "Basic Information".
+      Reference: https://api.slack.com/authentication/verifying-requests-from-slack.
+
+mapping: |
+  #!blobl
+  root.http_server = {
+        "path": this.path,
+        "allowed_verbs": ["POST"],
+        "timeout": "5s",
+        "sync_response": {
+            "status": """${! meta("response_http_status") | "200"}""",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Slack-No-Retry": """${! meta("X-Slack-No-Retry") | ""}"""
+            }
+        }
+    }
+
+  root.processors = [
+    {
+      "log": {
+        "message": "incoming event",
+        "fields_mapping" : """
+            root.meta = meta()
+            root.body = content().string()
+            root.event = this.event.type
+            root.message = this.event.text
+        """
+      }
+    },
+    {
+      "switch": [
+        {
+          "check": this.signing_secret != "none",
+          "processors": [
+            {
+             "mapping": """
+                let timestamp = meta("X-Slack-Request-Timestamp") | "0"
+
+                let is_valid_timestamp = (now().ts_unix() - $timestamp.number()).abs() < 60 * 5
+                root = if $is_valid_timestamp { this } else { throw("invalid timestamp " + ((now().ts_unix() - $timestamp.number()).abs()).string()) }
+
+                let version = "v0"
+                let sig_basestring = $version + ":" + $timestamp + ":" + content().string()
+                let my_signature = $version + "=" + $sig_basestring.hash("hmac_sha256", """ + this.signing_secret.quote()  + """).encode("hex")
+
+                let is_valid_signature = $my_signature == meta("X-Slack-Signature") | ""
+                root = if $is_valid_signature { this } else { throw("invalid request signature") }
+              """
+            }
+          ]
+        }
+      ]
+    }
+  ]
+
+  root.processors."-".switch = [
+    {
+      "check": """ errored() """,
+      "processors": [
+        {
+          "mutation": """
+              meta response_http_status = "400"
+              root = {"error": error()}
+          """
+        },
+        {
+          "log": {
+            "level": "ERROR",
+            "message": "${! this.error }"
+          }
+        },
+        {
+          "sync_response": {}
+        },
+        {
+          "mutation": """
+              root = deleted()
+          """
+        }
+      ]
+    },
+    {
+      "check": """ this.type == "url_verification" """,
+      "processors": [
+        {
+          "log": {
+            "message": "url verification succeeded"
+          }
+        },
+        {
+          "mutation": """
+                root = {
+                  "challenge": this.challenge
+                }
+            """
+        },
+        {
+          "sync_response": {}
+        }
+      ]
+    }
+  ]

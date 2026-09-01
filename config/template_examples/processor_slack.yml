@@ -1,0 +1,132 @@
+name: slack
+type: processor
+status: experimental
+summary:
+
+fields:
+  - name: oauth_token
+    type: string
+    description: |-
+      Token generated when you installed the app to your team.
+      It is available under "OAuth & Permissions"
+
+  - name: channel
+    type: string
+    default: ""
+    description: |-
+      Channel, private group, or IM channel to send message to. Can be an encoded ID, or a name. See below for more details.
+
+  - name: text
+    type: string
+    default: ""
+    description: |-
+      The formatted text of the message to be published. If blocks are included, this will become the fallback text used in notifications.
+
+    #TODO Add support to attachments and blocks
+
+  - name: thread_ts
+    type: string
+    default: ""
+    description: |-
+      Provide another message's ts value to make this message a reply. Avoid using a reply's ts value; use its parent instead.
+
+  - name: timeout
+    type: string
+    default: "5s"
+    description: |-
+      A static timeout to apply to requests.
+
+  - name: rate_limit
+    type: string
+    description: |-
+      A rate limit resource that can be used to throttle requests to Slack API (generally 1 request/second)
+
+mapping: |-
+  #!blobl
+  map fix_close_brace {
+    let segment = this.value
+    let isFirst = this.index == 0
+    let closePos = match $segment.reverse().index_of("}") {
+      -1 => -1,
+      _ => $segment.length() - 1 - this
+    }
+    let suffix = if closePos != -1 { $segment.slice($closePos + 1) } else { "" }
+
+    root = match {
+      $closePos != -1 && !$isFirst => $segment.slice(0, $closePos).trim() + if $suffix.length() > 0 { " + " + $suffix.quote() } else { "" }
+      $segment == "" && $isFirst => deleted()
+      _ => $segment.quote()
+    }
+  }
+
+  map interpolation {
+    let segments = this.string().split("${!").enumerated()
+    root = if this.string() != "" { $segments.map_each(segment -> segment.apply("fix_close_brace")).join(" + ") } else { this.string().quote() }
+  }
+
+  let channel = this.channel.apply("interpolation")
+  let text = this.text.apply("interpolation")
+  let thread_ts = this.thread_ts.apply("interpolation")
+
+  root.branch.request_map = """
+    root = {
+      "channel": """ + $channel + """,
+      "text": this | """ + $text + """,
+      "thread_ts": """ + $thread_ts + """
+    }
+  """
+
+  root.branch.processors = [
+    {
+      "try": [
+        {
+          "log": {
+            "level": "DEBUG",
+            "message": "posting message",
+            "fields_mapping": """
+              root.http_request = content().string()
+            """
+          }
+        },
+        {
+          "label": "slack_post_message",
+          "http": {
+            "url": "https://slack.com/api/chat.postMessage",
+            "rate_limit": this.rate_limit,
+            timeout: this.timeout,
+            "headers": {
+              "Content-Type": "application/json; charset=utf-8",
+              "Authorization": "Bearer " + this.oauth_token
+            }
+          }
+        },
+        {
+          "log": {
+            "level": "DEBUG",
+            "message": "message posted",
+            "fields_mapping": """
+              root.http_response = content().string()
+              root.http_status_code = meta("http_status_code")
+            """
+          }
+        }
+      ]
+    },
+    {
+      "catch": [
+        {
+          "log": {
+            "level": "ERROR",
+            "message": "error posting ${!error()}",
+            "fields_mapping": "root = this"
+          }
+        },
+        {
+          "mapping": "root = deleted()"
+        }
+      ]
+    }
+  ]
+
+  root.branch.result_map = "root = this"
+
