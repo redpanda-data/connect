@@ -17,6 +17,7 @@ package kinesis
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -287,6 +288,123 @@ func (f *fakeSubscription) sendFinal(recs ...types.Record) {
 
 func rec(seq string) types.Record {
 	return types.Record{SequenceNumber: aws.String(seq), Data: []byte(seq)}
+}
+
+type capturedLogEntry struct {
+	level slog.Level
+	msg   string
+}
+
+type capturingLogHandler struct {
+	mu      sync.Mutex
+	entries []capturedLogEntry
+}
+
+func (*capturingLogHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *capturingLogHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.entries = append(h.entries, capturedLogEntry{level: r.Level, msg: r.Message})
+	return nil
+}
+
+func (h *capturingLogHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *capturingLogHandler) WithGroup(string) slog.Handler      { return h }
+
+func (h *capturingLogHandler) messagesAtLeast(level slog.Level) []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var out []string
+	for _, e := range h.entries {
+		if e.level >= level {
+			out = append(out, e.msg)
+		}
+	}
+	return out
+}
+
+// The losing side of a shard steal sees its live subscription terminated with
+// ResourceInUseException and its resubscribe attempts rejected with the same
+// error until the handoff completes. That contention is documented as expected
+// and self-healing, so it must not be logged at error level.
+func TestEFOSourceHandoffContentionLogsBelowError(t *testing.T) {
+	fastEFOResubscribe(t)
+
+	handler := &capturingLogHandler{}
+	logger := service.NewLoggerFromSlog(slog.New(handler))
+
+	inUse := &types.ResourceInUseException{Message: aws.String("subscription already active")}
+
+	terminated := newFakeSubscription()
+	terminated.err = inUse
+	close(terminated.events)
+
+	good := newFakeSubscription()
+	resubscribed := make(chan struct{})
+	var calls atomic.Int32
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		switch calls.Add(1) {
+		case 1:
+			return terminated, nil
+		case 2:
+			return nil, inUse
+		case 3:
+			close(resubscribed)
+			fallthrough
+		default:
+			return good, nil
+		}
+	}, "shard-0", "", true, 20*time.Millisecond, time.Second, logger)
+	require.NoError(t, err)
+	defer src.Close()
+
+	select {
+	case <-resubscribed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("source never resubscribed past the contention")
+	}
+
+	assert.Empty(t, handler.messagesAtLeast(slog.LevelError), "shard-handoff contention should not be logged at error level")
+}
+
+func TestEFOSourceGenuineSubscribeFailureLogsError(t *testing.T) {
+	fastEFOResubscribe(t)
+
+	handler := &capturingLogHandler{}
+	logger := service.NewLoggerFromSlog(slog.New(handler))
+
+	// First subscription ends immediately without an error or events so that
+	// the loop resubscribes; the retry then fails with a non-contention error.
+	dead := newFakeSubscription()
+	close(dead.events)
+
+	good := newFakeSubscription()
+	recovered := make(chan struct{})
+	var calls atomic.Int32
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		switch calls.Add(1) {
+		case 1:
+			return dead, nil
+		case 2:
+			return nil, errors.New("AccessDeniedException: not authorised")
+		case 3:
+			close(recovered)
+			fallthrough
+		default:
+			return good, nil
+		}
+	}, "shard-0", "", true, 20*time.Millisecond, time.Second, logger)
+	require.NoError(t, err)
+	defer src.Close()
+
+	select {
+	case <-recovered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("source never recovered past the failed subscribe")
+	}
+
+	assert.NotEmpty(t, handler.messagesAtLeast(slog.LevelError), "a non-contention subscribe failure should be logged at error level")
 }
 
 // fastEFOResubscribe shrinks the resubscribe floor (and therefore the

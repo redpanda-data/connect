@@ -293,7 +293,18 @@ func (e *efoRecordSource) run(sub efoSubscription, pos types.StartingPosition, l
 				if e.ctx.Err() != nil {
 					return
 				}
-				e.log.Errorf("Failed to subscribe to shard '%v': %v", e.shardID, err)
+				// ResourceInUseException is expected, self-healing contention:
+				// another consumer (usually the previous lease owner during a
+				// steal/handoff) still holds the shard's one allowed
+				// subscription, and the escalating resubscribe loop resolves
+				// it. Logging it at error level would page operators on every
+				// routine rebalance.
+				var inUse *types.ResourceInUseException
+				if errors.As(err, &inUse) {
+					e.log.Debugf("Shard '%v' is still subscribed by another consumer, waiting for the handoff to complete: %v", e.shardID, err)
+				} else {
+					e.log.Errorf("Failed to subscribe to shard '%v': %v", e.shardID, err)
+				}
 				// A sequence-derived position that AWS refuses can never
 				// succeed on a retry (it has aged out of the shard's retention
 				// window), so fall back to the oldest retained record rather
@@ -350,8 +361,16 @@ func (e *efoRecordSource) run(sub efoSubscription, pos types.StartingPosition, l
 		// would resubscribe at the one-second floor forever, saturating the
 		// SubscribeToShard limit rather than backing off.
 		if streamErr != nil || !sawEvent {
+			var inUse *types.ResourceInUseException
 			if streamErr != nil {
-				e.log.Errorf("Enhanced fan-out subscription for shard '%v' failed: %v", e.shardID, streamErr)
+				// A live subscription terminated with ResourceInUseException is
+				// how the losing side of a shard steal observes the takeover —
+				// expected contention, same as the resubscribe case above.
+				if errors.As(streamErr, &inUse) {
+					e.log.Debugf("Enhanced fan-out subscription for shard '%v' was taken over by another consumer: %v", e.shardID, streamErr)
+				} else {
+					e.log.Errorf("Enhanced fan-out subscription for shard '%v' failed: %v", e.shardID, streamErr)
+				}
 			} else {
 				e.log.Debugf("Enhanced fan-out subscription for shard '%v' ended without delivering any event", e.shardID)
 			}
