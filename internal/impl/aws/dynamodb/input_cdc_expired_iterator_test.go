@@ -9,12 +9,26 @@
 package dynamodb
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestIsExpiredIteratorError(t *testing.T) {
@@ -22,6 +36,18 @@ func TestIsExpiredIteratorError(t *testing.T) {
 	assert.False(t, isExpiredIteratorError(errors.New("boom")))
 	assert.False(t, isExpiredIteratorError(&types.TrimmedDataAccessException{}))
 	assert.True(t, isExpiredIteratorError(&types.ExpiredIteratorException{}))
+}
+
+func TestIsStreamsResourceNotFoundError(t *testing.T) {
+	assert.False(t, isStreamsResourceNotFoundError(nil))
+	assert.False(t, isStreamsResourceNotFoundError(errors.New("boom")))
+	assert.False(t, isStreamsResourceNotFoundError(&types.ExpiredIteratorException{}))
+	// The DynamoDB table API's ResourceNotFoundException is a different type
+	// (e.g. a missing checkpoint table) and must not be classified as a
+	// permanently gone shard.
+	assert.False(t, isStreamsResourceNotFoundError(&dynamodbtypes.ResourceNotFoundException{}))
+	assert.True(t, isStreamsResourceNotFoundError(&types.ResourceNotFoundException{}))
+	assert.True(t, isStreamsResourceNotFoundError(fmt.Errorf("refreshing: %w", &types.ResourceNotFoundException{})))
 }
 
 func TestResolveResumeIterator(t *testing.T) {
@@ -98,6 +124,547 @@ func TestInitialIteratorType(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, initialIteratorType(tc.startFrom, tc.honor))
+		})
+	}
+}
+
+// stubStreamsTransport is a minimal net/http fake standing in for the real
+// DynamoDB Streams endpoint, wired in via the AWS SDK's Options.HTTPClient
+// hook. It replies to every GetRecords/GetShardIterator call with a canned
+// AWS JSON-1.0 error, selected by the X-Amz-Target header the SDK's
+// serializer sets, and lets the SDK's own deserializer turn that into the
+// typed *types.XxxException the reader's classifier functions inspect.
+type stubStreamsTransport struct {
+	getRecordsErrorType       string
+	getShardIteratorErrorType string
+
+	getRecordsCalls       atomic.Int64
+	getShardIteratorCalls atomic.Int64
+}
+
+func (s *stubStreamsTransport) Do(req *http.Request) (*http.Response, error) {
+	target := req.Header.Get("X-Amz-Target")
+
+	var errType string
+	switch {
+	case strings.HasSuffix(target, ".GetRecords"):
+		s.getRecordsCalls.Add(1)
+		errType = s.getRecordsErrorType
+	case strings.HasSuffix(target, ".GetShardIterator"):
+		s.getShardIteratorCalls.Add(1)
+		errType = s.getShardIteratorErrorType
+	default:
+		return nil, fmt.Errorf("stubStreamsTransport: unexpected operation %q", target)
+	}
+
+	hdr := http.Header{}
+	hdr.Set("X-Amzn-ErrorType", errType)
+	hdr.Set("Content-Type", "application/x-amz-json-1.0")
+	body := fmt.Sprintf(`{"__type":%q,"message":"stubbed for test"}`, errType)
+	return &http.Response{
+		StatusCode: 400,
+		Header:     hdr,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Request:    req,
+	}, nil
+}
+
+// newStubStreamsClient builds a real *dynamodbstreams.Client whose transport
+// is entirely local (no network, no AWS account) so it deserializes responses
+// exactly the way the production client would.
+func newStubStreamsClient(t aws.HTTPClient) *dynamodbstreams.Client {
+	cfg := aws.Config{
+		Region:      "us-east-1",
+		Credentials: aws.AnonymousCredentials{},
+	}
+	return dynamodbstreams.NewFromConfig(cfg, func(o *dynamodbstreams.Options) {
+		o.HTTPClient = t
+		o.Retryer = aws.NopRetryer{} // deterministic call counts
+	})
+}
+
+const testStreamArn = "arn:aws:dynamodb:us-east-1:123456789012:table/test/stream/2024-01-01T00:00:00.000"
+
+// TestStartShardReader_ExpiredIteratorShardGone: when a shard's iterator
+// expires AND the shard has since been permanently deleted (GetShardIterator
+// during refresh fails with ResourceNotFoundException), the reader must mark
+// the shard exhausted, signal the coordinator, and return promptly instead of
+// retrying the refresh forever.
+func TestStartShardReader_ExpiredIteratorShardGone(t *testing.T) {
+	transport := &stubStreamsTransport{
+		getRecordsErrorType:       "ExpiredIteratorException",
+		getShardIteratorErrorType: "ResourceNotFoundException", // shard is gone for good
+	}
+
+	d := &dynamoDBCDCInput{
+		conf: dynamoDBCDCConfig{
+			batchSize:       10,
+			pollInterval:    20 * time.Millisecond,
+			throttleBackoff: 20 * time.Millisecond,
+		},
+		log:           service.MockResources().Logger(),
+		streamsClient: newStubStreamsClient(transport),
+		streamArn:     aws.String(testStreamArn),
+		checkpointer:  nil, // never touched: lastSequenceNumber is non-empty below
+		shardReaders: map[string]*dynamoDBShardReader{
+			"shard-001": {
+				shardID:            "shard-001",
+				iterator:           aws.String("initial-iterator"),
+				lastSequenceNumber: "100",
+			},
+		},
+		shardRefreshCh: make(chan struct{}, 1),
+	}
+
+	// Generous backstop only; a correct implementation returns well before this.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		d.startShardReader(ctx, "shard-001")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("startShardReader should give up promptly on a permanently gone shard")
+	}
+
+	d.mu.RLock()
+	exhausted := d.shardReaders["shard-001"].exhausted
+	d.mu.RUnlock()
+	require.True(t, exhausted,
+		"shard should be marked exhausted once refresh confirms it is permanently gone")
+
+	select {
+	case <-d.shardRefreshCh:
+		// expected: coordinator was signalled to move on
+	default:
+		t.Fatal("expected a signal on shardRefreshCh")
+	}
+}
+
+// TestStartTableShardReader_ExpiredIteratorShardGone covers the same
+// permanent-failure classification on the multi-table reader path.
+func TestStartTableShardReader_ExpiredIteratorShardGone(t *testing.T) {
+	transport := &stubStreamsTransport{
+		getRecordsErrorType:       "ExpiredIteratorException",
+		getShardIteratorErrorType: "ResourceNotFoundException", // shard is gone for good
+	}
+
+	d := &dynamoDBCDCInput{
+		conf: dynamoDBCDCConfig{
+			batchSize:       10,
+			pollInterval:    20 * time.Millisecond,
+			throttleBackoff: 20 * time.Millisecond,
+		},
+		log:           service.MockResources().Logger(),
+		streamsClient: newStubStreamsClient(transport),
+	}
+	ts := &tableStream{
+		tableName:    "test",
+		streamArn:    testStreamArn,
+		checkpointer: nil, // never touched: lastSequenceNumber is non-empty below
+		shardReaders: map[string]*dynamoDBShardReader{
+			"shard-001": {
+				shardID:            "shard-001",
+				iterator:           aws.String("initial-iterator"),
+				lastSequenceNumber: "100",
+			},
+		},
+		shardRefreshCh: make(chan struct{}, 1),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		d.startTableShardReader(ctx, "test", ts, "shard-001")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("startTableShardReader should give up promptly on a permanently gone shard")
+	}
+
+	ts.mu.RLock()
+	exhausted := ts.shardReaders["shard-001"].exhausted
+	ts.mu.RUnlock()
+	require.True(t, exhausted,
+		"shard should be marked exhausted once refresh confirms it is permanently gone")
+
+	select {
+	case <-ts.shardRefreshCh:
+		// expected: coordinator was signalled to move on
+	default:
+		t.Fatal("expected a signal on shardRefreshCh")
+	}
+}
+
+// TestStartShardReader_ExpiredIteratorTransientRefreshFailure locks in the
+// transient-failure contract: a refresh failure that is NOT a permanent
+// shard-gone signal (here LimitExceededException) must keep retrying at
+// poll_interval and must not mark the shard exhausted.
+func TestStartShardReader_ExpiredIteratorTransientRefreshFailure(t *testing.T) {
+	transport := &stubStreamsTransport{
+		getRecordsErrorType:       "ExpiredIteratorException",
+		getShardIteratorErrorType: "LimitExceededException", // transient
+	}
+
+	d := &dynamoDBCDCInput{
+		conf: dynamoDBCDCConfig{
+			batchSize:       10,
+			pollInterval:    20 * time.Millisecond,
+			throttleBackoff: 20 * time.Millisecond,
+		},
+		log:           service.MockResources().Logger(),
+		streamsClient: newStubStreamsClient(transport),
+		streamArn:     aws.String(testStreamArn),
+		shardReaders: map[string]*dynamoDBShardReader{
+			"shard-001": {
+				shardID:            "shard-001",
+				iterator:           aws.String("initial-iterator"),
+				lastSequenceNumber: "100",
+			},
+		},
+		shardRefreshCh: make(chan struct{}, 1),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		d.startShardReader(ctx, "shard-001")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// expected once ctx times out
+	case <-time.After(time.Second):
+		t.Fatal("startShardReader did not return after context timeout")
+	}
+
+	assert.Greater(t, transport.getShardIteratorCalls.Load(), int64(1),
+		"transient refresh failures should be retried at poll_interval")
+
+	d.mu.RLock()
+	exhausted := d.shardReaders["shard-001"].exhausted
+	d.mu.RUnlock()
+	assert.False(t, exhausted, "a transient refresh failure must not mark the shard exhausted")
+	assert.Empty(t, d.shardRefreshCh, "a transient refresh failure must not signal the coordinator")
+}
+
+// recordsStubTransport serves GetRecords, standing in for a healthy shard:
+// the first page carries the configured records, every later page is empty
+// (with a live next iterator), so tests see exactly one tracked batch.
+type recordsStubTransport struct {
+	records string // JSON array body of the first page's Records field
+	pages   atomic.Int64
+}
+
+func (s *recordsStubTransport) Do(req *http.Request) (*http.Response, error) {
+	target := req.Header.Get("X-Amz-Target")
+	if !strings.HasSuffix(target, ".GetRecords") {
+		return nil, fmt.Errorf("recordsStubTransport: unexpected operation %q", target)
+	}
+	records := "[]"
+	if s.pages.Add(1) == 1 {
+		records = s.records
+	}
+	hdr := http.Header{}
+	hdr.Set("Content-Type", "application/x-amz-json-1.0")
+	body := fmt.Sprintf(`{"Records":%s,"NextShardIterator":"iter-next"}`, records)
+	return &http.Response{
+		StatusCode: 200,
+		Header:     hdr,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Request:    req,
+	}, nil
+}
+
+// readerHarness abstracts over the two hand-duplicated shard-reader entry
+// points (startShardReader for single-table, startTableShardReader for
+// multi-table) so every reader-level regression test runs against both:
+// the INC-2974 fixes were applied to each copy by hand, and a regression in
+// either one reproduces the wedge silently.
+type readerHarness struct {
+	batcher *RecordBatcher
+	d       *dynamoDBCDCInput
+	// shardReaders is the reader-state map the harnessed entry point consults
+	// (d.shardReaders for single-table, ts.shardReaders for multi-table).
+	shardReaders map[string]*dynamoDBShardReader
+	start        func(ctx context.Context)
+}
+
+// readerHarnesses returns one fresh harness factory per reader entry point,
+// serving the given records page. Each factory builds its own stub transport
+// and batcher so subtests stay independent.
+func readerHarnesses(records string, checkpointLimit, msgChanCap int) map[string]func() *readerHarness {
+	return readerHarnessesWithTransport(func() aws.HTTPClient {
+		return &recordsStubTransport{records: records}
+	}, checkpointLimit, msgChanCap)
+}
+
+// readerHarnessesWithTransport is readerHarnesses with a caller-supplied
+// transport factory, for tests that need error pages or other non-record
+// responses.
+func readerHarnessesWithTransport(mkTransport func() aws.HTTPClient, checkpointLimit, msgChanCap int) map[string]func() *readerHarness {
+	build := func(multiTable bool) *readerHarness {
+		transport := mkTransport()
+		batcher := NewRecordBatcher(100, checkpointLimit, service.MockResources().Logger())
+		shardReaders := map[string]*dynamoDBShardReader{
+			"shard-001": {shardID: "shard-001", iterator: aws.String("initial-iterator")},
+		}
+		d := &dynamoDBCDCInput{
+			conf: dynamoDBCDCConfig{
+				batchSize:       10,
+				pollInterval:    20 * time.Millisecond,
+				throttleBackoff: 20 * time.Millisecond,
+			},
+			log:           service.MockResources().Logger(),
+			streamsClient: newStubStreamsClient(transport),
+			metrics:       newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+			msgChan:       make(chan asyncMessage, msgChanCap),
+			shutSig:       shutdown.NewSignaller(),
+		}
+		if multiTable {
+			ts := &tableStream{
+				tableName:     "table-a",
+				streamArn:     testStreamArn,
+				recordBatcher: batcher,
+				shardReaders:  shardReaders,
+			}
+			return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, start: func(ctx context.Context) {
+				d.startTableShardReader(ctx, "table-a", ts, "shard-001")
+			}}
+		}
+		d.streamArn = aws.String(testStreamArn)
+		d.recordBatcher = batcher
+		d.shardReaders = shardReaders
+		return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, start: func(ctx context.Context) {
+			d.startShardReader(ctx, "shard-001")
+		}}
+	}
+	return map[string]func() *readerHarness{
+		"single-table": func() *readerHarness { return build(false) },
+		"multi-table":  func() *readerHarness { return build(true) },
+	}
+}
+
+const twoRecordsPage = `[{"eventID":"1","eventName":"INSERT","dynamodb":{"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}},
+                         {"eventID":"2","eventName":"INSERT","dynamodb":{"SequenceNumber":"00002","Keys":{"pk":{"S":"b"}},"NewImage":{"pk":{"S":"b"}}}}]`
+
+// TestShardReader_CancelledSendUntracksBatch: a reader cancelled while
+// blocked sending a batch to the message channel must untrack that batch.
+// Leaking it would permanently consume tracker budget: enough cancelled
+// readers (shard rotation over a slow downstream) pin the throttle with
+// messages that no longer exist anywhere.
+func TestShardReader_CancelledSendUntracksBatch(t *testing.T) {
+	for name, mk := range readerHarnesses(twoRecordsPage, 100, 0) { // unbuffered channel, never read: the send blocks
+		t.Run(name, func(t *testing.T) {
+			h := mk()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			done := make(chan struct{})
+			go func() {
+				h.start(ctx)
+				close(done)
+			}()
+
+			// Wait until the batch is tracked (the reader is now blocked on the send).
+			require.Eventually(t, func() bool {
+				return h.batcher.TrackedMessageCount() == 2
+			}, 5*time.Second, 5*time.Millisecond, "expected the read batch to be tracked before dispatch")
+
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatal("reader should exit promptly on cancellation")
+			}
+
+			assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+				"a batch never dispatched must be untracked on reader cancellation")
+		})
+	}
+}
+
+// TestShardReader_AckDrainsAfterWrapperPointerReplacement is the
+// end-to-end regression test for the INC-2974 ack-path stall: benthos's
+// AutoRetryNacksBatched (auto_replay_nacks, default on) replaces every
+// element of the delivered batch slice with a new *Message before the
+// pipeline sees it. The dispatched ack function must still drain the
+// in-flight tracker afterwards - keying settlement off the batch's message
+// pointers silently no-ops instead, pinning every reader in backpressure.
+func TestShardReader_AckDrainsAfterWrapperPointerReplacement(t *testing.T) {
+	for name, mk := range readerHarnesses(twoRecordsPage, 1, 1) {
+		t.Run(name, func(t *testing.T) {
+			h := mk()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			go h.start(ctx)
+
+			var am asyncMessage
+			select {
+			case am = <-h.d.msgChan:
+			case <-time.After(5 * time.Second):
+				t.Fatal("expected a dispatched batch")
+			}
+			require.Equal(t, 2, h.batcher.TrackedMessageCount())
+
+			// Simulate the wrapper's read hook: same slice, new message pointers.
+			for i := range am.msg {
+				am.msg[i] = am.msg[i].Copy()
+			}
+
+			require.NoError(t, am.ackFn(t.Context(), nil))
+			assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+				"the ack must drain the tracker even after the wrapper replaced the batch's message pointers")
+		})
+	}
+}
+
+// TestShardReader_RealAutoRetryNacksWrapper runs the INC-2974 wedge
+// scenario through the REAL benthos AutoRetryNacksBatched wrapper (what
+// auto_replay_nacks: true, the default, installs) rather than a simulation:
+// reader -> msgChan -> ReadBatch -> wrapper (which rewrites the batch slice's
+// message pointers in place AND hands the pipeline a copy) -> ack chain.
+//
+// It also locks in the wrapper's nack contract: a nack is swallowed by the
+// wrapper (redelivered internally, the input's ack fn is NOT called), so the
+// batch must stay tracked until the retry finally succeeds, at which point
+// the inner ack fires exactly once and the tracker drains. The wedge this PR
+// fixes was the final ack silently missing the tracker because settlement was
+// keyed by the rewritten message pointers.
+func TestShardReader_RealAutoRetryNacksWrapper(t *testing.T) {
+	for name, mk := range readerHarnesses(twoRecordsPage, 1, 1) {
+		t.Run(name, func(t *testing.T) {
+			h := mk()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			go h.start(ctx)
+
+			wrapped := service.AutoRetryNacksBatched(h.d)
+
+			batch, ackFn, err := wrapped.ReadBatch(ctx)
+			require.NoError(t, err)
+			require.Len(t, batch, 2)
+			require.Equal(t, 2, h.batcher.TrackedMessageCount())
+
+			// Nack through the wrapper: it owns the redelivery, the input's ack fn
+			// must not fire, and the batch must stay tracked (in flight).
+			require.NoError(t, ackFn(ctx, errors.New("downstream rejection")))
+			assert.Equal(t, 2, h.batcher.TrackedMessageCount(),
+				"a wrapper-owned nack must keep the batch tracked until the retry settles")
+
+			// The wrapper redelivers the batch; the final ack must reach the input's
+			// ack fn and drain the tracker despite the pointer rewrite.
+			retry, retryAckFn, err := wrapped.ReadBatch(ctx)
+			require.NoError(t, err)
+			require.Len(t, retry, 2)
+			require.NoError(t, retryAckFn(ctx, nil))
+			assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+				"the final ack must drain the tracker through the real wrapper (the INC-2974 wedge)")
+		})
+	}
+}
+
+// TestShardReader_ReleasesReservationOnUnproductiveReads: TryReserve claims
+// batch_size of budget before every GetRecords, and each reader hands it back
+// on five hand-placed paths. A missed Release permanently consumes budget
+// with messages that were never tracked - the same silent wedge shape as the
+// INC-2974 ack stall. Each scenario drives one unproductive-read path on both
+// reader entry points, then cancels the reader and asserts every reservation
+// (and all tracker state) was returned.
+func TestShardReader_ReleasesReservationOnUnproductiveReads(t *testing.T) {
+	// Records stamped with an ancient ApproximateCreationDateTime so a future
+	// failover cutoff filters the whole page out after a successful read.
+	const staleRecordsPage = `[{"eventID":"1","eventName":"INSERT","dynamodb":{"ApproximateCreationDateTime":1000,"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}}]`
+
+	scenarios := map[string]struct {
+		mkTransport func() aws.HTTPClient
+		cutoff      time.Time
+		wantPages   func(t aws.HTTPClient) bool // reader has looped past the release at least once
+	}{
+		"get-records error": {
+			mkTransport: func() aws.HTTPClient {
+				return &stubStreamsTransport{getRecordsErrorType: "InternalServerError"}
+			},
+			wantPages: func(tr aws.HTTPClient) bool {
+				return tr.(*stubStreamsTransport).getRecordsCalls.Load() >= 2
+			},
+		},
+		"empty page": {
+			mkTransport: func() aws.HTTPClient { return &recordsStubTransport{records: "[]"} },
+			wantPages: func(tr aws.HTTPClient) bool {
+				return tr.(*recordsStubTransport).pages.Load() >= 2
+			},
+		},
+		"fully filtered page": {
+			mkTransport: func() aws.HTTPClient { return &recordsStubTransport{records: staleRecordsPage} },
+			cutoff:      time.Unix(2000, 0),
+			wantPages: func(tr aws.HTTPClient) bool {
+				return tr.(*recordsStubTransport).pages.Load() >= 2
+			},
+		},
+	}
+
+	for scenarioName, sc := range scenarios {
+		t.Run(scenarioName, func(t *testing.T) {
+			var transport aws.HTTPClient
+			mk := func() aws.HTTPClient {
+				transport = sc.mkTransport()
+				return transport
+			}
+			for name, mkHarness := range readerHarnessesWithTransport(mk, 100, 1) {
+				t.Run(name, func(t *testing.T) {
+					h := mkHarness()
+					h.shardReaders["shard-001"].failoverCutoff = sc.cutoff
+
+					ctx, cancel := context.WithCancel(t.Context())
+					defer cancel()
+					done := make(chan struct{})
+					go func() {
+						h.start(ctx)
+						close(done)
+					}()
+
+					tr := transport
+					require.Eventually(t, func() bool { return sc.wantPages(tr) },
+						5*time.Second, 5*time.Millisecond,
+						"the reader should loop past the release path at least once")
+
+					cancel()
+					select {
+					case <-done:
+					case <-time.After(2 * time.Second):
+						t.Fatal("reader should exit promptly on cancellation")
+					}
+
+					assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
+						"an unproductive read must not leave tracked messages behind")
+					b := h.batcher
+					b.mu.Lock()
+					reserved := b.reserved
+					reservedEntries := len(b.reservedByShard)
+					trackerEntries := len(b.shards)
+					b.mu.Unlock()
+					assert.Zero(t, reserved,
+						"every reservation must be returned on the unproductive-read paths")
+					assert.Zero(t, reservedEntries,
+						"released reservations must be pruned")
+					assert.Zero(t, trackerEntries,
+						"a shard that never yields a delivered record must not materialise tracker state")
+				})
+			}
 		})
 	}
 }

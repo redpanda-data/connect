@@ -39,16 +39,21 @@ const (
 	siFieldMinWatermarkCacheTTL = "min_watermark_cache_ttl"
 	siFieldAllowedModTypes      = "allowed_mod_types"
 	siFieldBatchPolicy          = "batching"
+	siFieldCheckpointLimit      = "checkpoint_limit"
 )
 
 // Default values
 const (
 	defaultMetadataTableFormat = "cdc_metadata_%s"
 	shutdownTimeout            = 5 * time.Second
+	defaultCheckpointLimit     = 1024
 )
 
 type spannerCDCInputConfig struct {
 	changestreams.Config
+	// CheckpointLimit caps in-flight (unacknowledged) messages per partition;
+	// the ordered watermark tracker blocks once reached, applying backpressure.
+	CheckpointLimit int
 }
 
 func parseRFC3339Nano(pConf *service.ParsedConfig, key string) (time.Time, error) {
@@ -116,6 +121,9 @@ func spannerCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf spannerC
 	if conf.MinWatermarkCacheTTL, err = pConf.FieldDuration(siFieldMinWatermarkCacheTTL); err != nil {
 		return
 	}
+	if conf.CheckpointLimit, err = pConf.FieldInt(siFieldCheckpointLimit); err != nil {
+		return
+	}
 
 	return
 }
@@ -155,6 +163,10 @@ https://cloud.google.com/spanner/docs/change-streams
 		Field(service.NewStringListField(siFieldAllowedModTypes).Advanced().Optional().Description("List of modification types to process. If not specified, all modification types are processed. Allowed values: INSERT, UPDATE, DELETE").
 			ShortDescription("Modification types to process: INSERT, UPDATE, DELETE. All are processed if unset.").Example([]string{"INSERT", "UPDATE", "DELETE"})).
 		Field(service.NewBatchPolicyField(siFieldBatchPolicy)).
+		Field(service.NewIntField(siFieldCheckpointLimit).
+			Description("The maximum number of messages that can be processed at a given time per partition. Increasing this limit enables parallel processing and batching at the output level. Any given partition watermark will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			ShortDescription("The maximum number of in-flight messages per partition.").
+			Default(defaultCheckpointLimit)).
 		Field(service.NewAutoRetryNacksToggleField())
 }
 
@@ -186,6 +198,10 @@ type spannerCDCReader struct {
 	resCh      chan asyncMessage
 	subscriber *changestreams.Subscriber
 	stopSig    *shutdown.Signaller
+
+	// updateWatermark persists a partition watermark; set to the subscriber's
+	// UpdatePartitionWatermark in Connect, overridable in tests.
+	updateWatermark func(ctx context.Context, partitionToken string, ts time.Time) error
 }
 
 var _ service.BatchInput = (*spannerCDCReader)(nil)
@@ -216,14 +232,25 @@ func newSpannerCDCReader(conf spannerCDCInputConfig, batching service.BatchPolic
 		log:      mgr.Logger(),
 		metrics:  changestreams.NewMetrics(mgr.Metrics(), conf.StreamID),
 		batching: batching,
-		batcher:  newSpannerPartitionBatcherFactory(batching, mgr),
+		batcher:  newSpannerPartitionBatcherFactory(batching, mgr, conf.CheckpointLimit),
 		resCh:    make(chan asyncMessage),
 		stopSig:  shutdown.NewSignaller(),
 	}
 }
 
+// resetPartitionBatchers discards all cached partition batchers. Called on
+// (re)connect: stale batchers hold rows and ack state from the previous
+// subscriber session, and the re-read from the persisted watermarks
+// re-delivers those rows anyway. The factory is reset in place (never
+// swapped) because straggler goroutines from the previous session may still
+// hold the pointer.
+func (r *spannerCDCReader) resetPartitionBatchers(ctx context.Context) {
+	r.batcher.Reset(ctx)
+}
+
 func (r *spannerCDCReader) emit(
 	ctx context.Context,
+	batcher *spannerPartitionBatcher,
 	partitionToken string,
 	msg service.MessageBatch,
 	commitTimestamp time.Time,
@@ -231,10 +258,31 @@ func (r *spannerCDCReader) emit(
 	if len(msg) == 0 {
 		return nil, nil
 	}
+	// A zero commitTimestamp means "mid-record, do not advance": substitute
+	// the last known-safe watermark so an out-of-order resolve can never
+	// regress or stall behind it. Per-partition callbacks are serialized, so
+	// this needs no locking.
+	if commitTimestamp.IsZero() {
+		commitTimestamp = batcher.lastWatermark
+	} else {
+		batcher.lastWatermark = commitTimestamp
+	}
+	resolveFn, err := batcher.cp.Track(ctx, commitTimestamp, int64(len(msg)))
+	if err != nil {
+		return nil, fmt.Errorf("tracking watermark checkpoint: %w", err)
+	}
 	ackOnce := ack.NewOnce(func(ctx context.Context) error {
+		// Only the resolved (contiguous-prefix) watermark is safe to persist:
+		// a batch acked out of order must not advance the watermark past
+		// still-unacked earlier batches, or a crash in that window would skip
+		// their records on restart.
+		resolved := resolveFn()
+		if resolved == nil || resolved.IsZero() {
+			return nil
+		}
 		// If we processed the message and failed to update the watermark, we
 		// would try to update it on the next message, no need to return an error here.
-		if err := r.subscriber.UpdatePartitionWatermark(ctx, partitionToken, commitTimestamp); err != nil {
+		if err := r.updateWatermark(ctx, partitionToken, *resolved); err != nil {
 			r.log.Errorf("%s: failed to update watermark: %v", partitionToken, err)
 		}
 		return nil
@@ -268,7 +316,7 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 		if err != nil {
 			return err
 		}
-		ack, err := r.emit(ctx, partitionToken, msg, ts)
+		ack, err := r.emit(ctx, batcher, partitionToken, msg, ts)
 		if err != nil {
 			return err
 		}
@@ -289,7 +337,7 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 		if err != nil {
 			return err
 		}
-		ack, err := r.emit(ctx, partitionToken, msg, ts)
+		ack, err := r.emit(ctx, batcher, partitionToken, msg, ts)
 		if err != nil {
 			return err
 		}
@@ -300,7 +348,7 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 
 	iter := batcher.MaybeFlushWith(dcr)
 	for mb, ts := range iter.Iter(ctx) {
-		ack, err := r.emit(ctx, partitionToken, mb, ts)
+		ack, err := r.emit(ctx, batcher, partitionToken, mb, ts)
 		if err != nil {
 			return err
 		}
@@ -318,20 +366,29 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 		r.conf.StreamID, r.conf.ProjectID, r.conf.InstanceID, r.conf.DatabaseID)
 
 	var cb changestreams.CallbackFunc = r.onDataChangeRecord
+	var flushersDone func()
 	if r.batching.Period != "" {
 		r.log.Infof("Periodic flushing enabled: %s", r.batching.Period)
-		p := periodicallyFlushingSpannerCDCReader{
+		p := &periodicallyFlushingSpannerCDCReader{
 			spannerCDCReader: r,
 			reqCh:            make(map[string]chan callbackRequest),
 		}
 		cb = p.onDataChangeRecord
+		flushersDone = p.wg.Wait
 	}
+
+	// Discard any partition batchers from a previous subscriber session:
+	// their buffered rows were never acked and will be re-read from the
+	// persisted watermarks; reusing them would duplicate rows into mixed
+	// batches and misalign the ack tracker.
+	r.resetPartitionBatchers(ctx)
 
 	var err error
 	r.subscriber, err = changestreams.NewSubscriber(ctx, r.conf.Config, cb, r.log, r.metrics)
 	if err != nil {
 		return fmt.Errorf("create Spanner change stream reader: %w", err)
 	}
+	r.updateWatermark = r.subscriber.UpdatePartitionWatermark
 
 	if err := r.subscriber.Setup(ctx); err != nil {
 		return fmt.Errorf("setup Spanner change stream reader: %w", err)
@@ -342,11 +399,18 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 	ctx, cancel := r.stopSig.SoftStopCtx(context.Background())
 
 	go func() {
-		defer cancel()
 		if err := r.subscriber.Run(ctx); err != nil {
 			r.log.Errorf("Spanner change stream reader error: %v", err)
 		}
 		r.subscriber.Close()
+		// Stop the per-partition flusher goroutines and wait for them to exit
+		// BEFORE signalling stopped: TriggerHasStopped is what lets the
+		// framework call Connect again, and a straggler flusher racing the
+		// next session's partition-batcher factory would corrupt its state.
+		cancel()
+		if flushersDone != nil {
+			flushersDone()
+		}
 		r.stopSig.TriggerHasStopped()
 	}()
 
@@ -401,6 +465,9 @@ type periodicallyFlushingSpannerCDCReader struct {
 	*spannerCDCReader
 	mu    sync.RWMutex
 	reqCh map[string]chan callbackRequest
+	// wg tracks the per-partition flusher goroutines so a reconnect can wait
+	// for the previous session's flushers to exit before starting.
+	wg sync.WaitGroup
 }
 
 func (r *periodicallyFlushingSpannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToken string, dcr *changestreams.DataChangeRecord) error {
@@ -416,7 +483,7 @@ func (r *periodicallyFlushingSpannerCDCReader) onDataChangeRecord(ctx context.Co
 		r.mu.Unlock()
 
 		softStopCh := r.stopSig.SoftStopChan()
-		go func() {
+		r.wg.Go(func() {
 			r.log.Debugf("%s: starting periodic flusher", partitionToken)
 			defer func() {
 				r.mu.Lock()
@@ -444,14 +511,23 @@ func (r *periodicallyFlushingSpannerCDCReader) onDataChangeRecord(ctx context.Co
 					cr.errCh <- r.spannerCDCReader.onDataChangeRecord(ctx, partitionToken, cr.dcr)
 				}
 			}
-		}()
+		})
 	}
 
 	r.mu.RLock()
 	ch := r.reqCh[partitionToken]
 	r.mu.RUnlock()
+	if ch == nil {
+		// The flusher has already exited (shutdown/reconnect in progress).
+		return fmt.Errorf("no active flusher for partition %s", partitionToken)
+	}
 
-	errCh := make(chan error)
+	// Buffered so the flusher's reply can never block: the requester abandons
+	// errCh when the errgroup context is cancelled mid-wait, and an
+	// unbuffered send would wedge the flusher forever - Run then blocks in
+	// flushersDone() before TriggerHasStopped, so the input would never
+	// reconnect.
+	errCh := make(chan error, 1)
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

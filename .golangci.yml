@@ -44,7 +44,10 @@ linters:
       settings:
         ruleguard:
           failOn: dsl
-          rules: .golangci/rules.go
+          # ${base-path} (this config file's directory, i.e. the repo root)
+          # rather than a cwd-relative path, so the nested benchmarking
+          # modules can run this config from their own directories.
+          rules: ${base-path}/.golangci/rules.go
     govet:
       disable:
         - fieldalignment

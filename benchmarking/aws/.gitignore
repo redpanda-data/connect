@@ -1,0 +1,19 @@
+# Local results — raw JSON is uploaded to S3 anyway. .gitkeep is the marker.
+results/*.json
+results/**/*.json
+
+# Terraform local state — never commit
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.*
+
+# Built binaries staged for upload
+runner/dist/
+seeders/dist/
+
+# Stray local builds (e.g. accidental `go build` without -o)
+runner/runner
+cleanup-lambda/bootstrap
+cleanup-lambda/bootstrap.zip
+cleanup-lambda/cleanup-lambda

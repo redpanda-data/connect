@@ -101,6 +101,26 @@ func getKey(pConf *service.ParsedConfig, mgr *service.Resources, keyField, keyFi
 	return key, nil
 }
 
+// hostKeyAlgorithmsForKeyFormat maps a pinned host key's format (as reported
+// by ssh.PublicKey.Type()) to the set of signature algorithms that should be
+// advertised via ssh.ClientConfig.HostKeyAlgorithms. HostKeyAlgorithms takes
+// signature algorithms, not key formats, and RSA keys correspond to three
+// signature algorithms (the modern SHA-2 variants plus the legacy SHA-1
+// "ssh-rsa"). Modern OpenSSH servers (8.8+) disable the SHA-1 variant, so all
+// three must be advertised for the handshake to succeed. Since the host key
+// itself is pinned via ssh.FixedHostKey, advertising the legacy algorithm
+// alongside the SHA-2 ones does not weaken verification.
+func hostKeyAlgorithmsForKeyFormat(keyFormat string) []string {
+	switch keyFormat {
+	case ssh.KeyAlgoRSA:
+		return []string{ssh.KeyAlgoRSASHA256, ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSA}
+	case ssh.CertAlgoRSAv01:
+		return []string{ssh.CertAlgoRSASHA256v01, ssh.CertAlgoRSASHA512v01, ssh.CertAlgoRSAv01}
+	default:
+		return []string{keyFormat}
+	}
+}
+
 func sshAuthConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*ssh.ClientConfig, error) {
 	var err error
 
@@ -164,7 +184,7 @@ func sshAuthConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources
 		if err != nil {
 			return nil, fmt.Errorf("error parsing host public key: %s", err)
 		}
-		hostKeyAlgorithms = []string{hostKey.Type()}
+		hostKeyAlgorithms = hostKeyAlgorithmsForKeyFormat(hostKey.Type())
 		keyCallback = ssh.FixedHostKey(hostKey)
 	} else {
 		var u *user.User

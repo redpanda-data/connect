@@ -48,6 +48,13 @@ const (
 	defaultAPICallTimeout          = 30 * time.Second // Timeout for AWS API calls
 	shardRefreshInterval           = 30 * time.Second // Interval for refreshing shard list
 	shardCleanupInterval           = 5 * time.Minute  // Interval for cleaning up exhausted shards
+	// shardRefreshCycleBudget bounds one shard-discovery refresh cycle. Each
+	// AWS call inside the cycle carries its own defaultAPICallTimeout, so the
+	// cycle budget must be a multiple of it - otherwise a single hung call
+	// consumes the whole cycle and a large shard backlog converges one
+	// truncated pass at a time (INC-2974). Progress made inside an expired
+	// budget is still committed; the next tick continues where it stopped.
+	shardRefreshCycleBudget = 4 * defaultAPICallTimeout
 
 	// Metrics
 	metricShardsTracked           = "dynamodb_cdc_shards_tracked"
@@ -227,6 +234,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 			service.NewIntField(dciFieldBatchSize).
 				Description("Maximum number of records to read per shard in a single request. Valid range: 1-1000.").
 				Default(defaultDynamoDBBatchSize).
+				LintRule(`root = if this < 1 || this > 1000 { ["batch_size must be between 1 and 1000"] }`).
 				Advanced(),
 			service.NewDurationField(dciFieldPollInterval).
 				Description("Time to wait between polling attempts when no records are available.").
@@ -269,7 +277,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 			service.NewDurationField(dciFieldSnapshotThrottle).
 				Description("Minimum time between scan requests per segment. Use this to limit RCU consumption during snapshot.").
 				Default("100ms").
-				LintRule(`root = if this <= 0 { ["snapshot_throttle must be greater than 0"] }`).
+				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_throttle must be greater than 0"] }`).
 				Advanced(),
 			service.NewBoolField(dciFieldSnapshotDedupe).
 				Description("Deduplicate records that appear in both snapshot and CDC stream. Requires buffering CDC events during snapshot. If buffer is exceeded, deduplication is disabled to prevent data loss.").
@@ -473,6 +481,22 @@ type dynamoDBCDCMetrics struct {
 	snapshotSegmentDuration *service.MetricTimer   // Tracks segment scan duration
 	checkpointFailures      *service.MetricCounter // Counts checkpoint write failures
 	failoverSkipped         *service.MetricCounter // Counts records skipped during global-table failover replay
+}
+
+// newDynamoDBCDCMetrics builds the input's metric set (shared with tests so
+// the field list cannot drift and leave nil gauges behind).
+func newDynamoDBCDCMetrics(m *service.Metrics) dynamoDBCDCMetrics {
+	return dynamoDBCDCMetrics{
+		shardsTracked:           m.NewGauge(metricShardsTracked),
+		shardsActive:            m.NewGauge(metricShardsActive),
+		snapshotState:           m.NewGauge(metricSnapshotState),
+		snapshotRecordsRead:     m.NewCounter(metricSnapshotRecordsRead),
+		snapshotSegmentsActive:  m.NewGauge(metricSnapshotSegmentsActive),
+		snapshotBufferOverflow:  m.NewCounter(metricSnapshotBufferOverflow),
+		snapshotSegmentDuration: m.NewTimer(metricSnapshotSegmentDuration),
+		checkpointFailures:      m.NewCounter(metricCheckpointFailures),
+		failoverSkipped:         m.NewCounter(metricFailoverSkipped),
+	}
 }
 
 type dynamoDBShardReader struct {
@@ -713,6 +737,16 @@ func parseTableTagFilter(filter string) (map[string][]string, error) {
 	return result, nil
 }
 
+// newInputRecordBatcher builds the input's record batcher. The budget scales
+// with the larger of checkpoint_limit and batch_size: readers reserve the
+// full batch_size before every read, so a checkpoint_limit below batch_size
+// must not shrink the budget below what batch-sized reads need - otherwise
+// TryReserve refuses whenever anything is in flight and the whole input
+// serializes to one batch in flight globally.
+func newInputRecordBatcher(conf dynamoDBCDCConfig, log *service.Logger) *RecordBatcher {
+	return NewRecordBatcher(conf.maxTrackedShards, max(conf.checkpointLimit, conf.batchSize), log)
+}
+
 // validateDynamoDBCDCConfig validates the configuration for consistency
 func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 	// Validate tag discovery mode requirements
@@ -733,6 +767,12 @@ func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 
 	if strings.Contains(conf.checkpointNamespace, "#") {
 		return errors.New("checkpoint_namespace must not contain '#'")
+	}
+
+	// The GetRecords Limit range; also keeps batch_size at or below the
+	// tracker budget's floor so a reservation can always eventually fit.
+	if conf.batchSize < 1 || conf.batchSize > 1000 {
+		return errors.New("batch_size must be between 1 and 1000")
 	}
 
 	// Validate snapshot configuration
@@ -856,17 +896,7 @@ func newDynamoDBCDCInputFromConfig(pConf *service.ParsedConfig, mgr *service.Res
 		tableStreams: make(map[string]*tableStream),
 		shutSig:      shutdown.NewSignaller(),
 		log:          mgr.Logger(),
-		metrics: dynamoDBCDCMetrics{
-			shardsTracked:           mgr.Metrics().NewGauge(metricShardsTracked),
-			shardsActive:            mgr.Metrics().NewGauge(metricShardsActive),
-			snapshotState:           mgr.Metrics().NewGauge(metricSnapshotState),
-			snapshotRecordsRead:     mgr.Metrics().NewCounter(metricSnapshotRecordsRead),
-			snapshotSegmentsActive:  mgr.Metrics().NewGauge(metricSnapshotSegmentsActive),
-			snapshotBufferOverflow:  mgr.Metrics().NewCounter(metricSnapshotBufferOverflow),
-			snapshotSegmentDuration: mgr.Metrics().NewTimer(metricSnapshotSegmentDuration),
-			checkpointFailures:      mgr.Metrics().NewCounter(metricCheckpointFailures),
-			failoverSkipped:         mgr.Metrics().NewCounter(metricFailoverSkipped),
-		},
+		metrics:      newDynamoDBCDCMetrics(mgr.Metrics()),
 	}
 
 	// Always initialize snapshot state (needed for state tracking and metrics)
@@ -1070,7 +1100,7 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 	}
 
 	// Initialize record batcher
-	d.recordBatcher = NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
+	d.recordBatcher = newInputRecordBatcher(d.conf, d.log)
 
 	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
 	// state already exists, shards without checkpoints are rotation children
@@ -1192,7 +1222,7 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 	}
 
 	// Initialize record batcher for this table
-	recordBatcher := NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
+	recordBatcher := newInputRecordBatcher(d.conf, d.log)
 
 	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
 	// state already exists for this table, shards without checkpoints are
@@ -1328,6 +1358,17 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 		// Initialize shards
 		if err := d.refreshShards(ctx); err != nil {
 			return fmt.Errorf("initializing shards: %w", err)
+		}
+
+		// The snapshot's data-loss guarantee depends on CDC readers running
+		// first, so committing zero shards must fail the connection attempt
+		// (per-shard preparation failures are non-fatal inside refreshShards)
+		// rather than silently snapshotting without CDC coverage.
+		d.mu.RLock()
+		activeCount := len(d.shardReaders)
+		d.mu.RUnlock()
+		if activeCount == 0 {
+			return errors.New("initializing shard readers: no active shards available")
 		}
 
 		// Start shard coordinator in background
@@ -1529,10 +1570,16 @@ func describeStreamAllShards(ctx context.Context, client describeStreamPager, st
 		startID *string
 	)
 	for page := range maxDescribeStreamPages {
-		out, err := client.DescribeStream(ctx, &dynamodbstreams.DescribeStreamInput{
+		// Bound each page like every other AWS call in a discovery cycle:
+		// the SDK's default HTTP client has no overall response timeout, and
+		// an unbounded hang here would otherwise consume the caller's whole
+		// cycle budget before a single shard could be prepared.
+		pageCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+		out, err := client.DescribeStream(pageCtx, &dynamodbstreams.DescribeStreamInput{
 			StreamArn:             streamArn,
 			ExclusiveStartShardId: startID,
 		})
+		cancel()
 		if err != nil {
 			return nil, err
 		}
@@ -1624,76 +1671,117 @@ func cdcCheckpointProbeNeeded(mode resumeMode) bool {
 	return mode == resumeExact
 }
 
+// preparedShard is a discovered shard resolved to a start position with its
+// iterator acquired, ready to be committed as a shard reader.
+type preparedShard struct {
+	shardID  string
+	iterator *string
+	cutoff   time.Time
+}
+
+// prepareShardReader resolves where a shard should start (global-table
+// aware) and acquires its iterator. Each AWS call carries its own timeout so
+// one hung call cannot stall an entire discovery cycle. tableSuffix is
+// appended to log lines on the multi-table path (e.g. " (table foo)").
+func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpointer, streamArn *string, shardID, tableSuffix string, honorStartFrom bool) (preparedShard, error) {
+	resolveCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+	decision, err := cp.ResolveResume(resolveCtx, shardID)
+	cancel()
+	if err != nil {
+		return preparedShard{}, fmt.Errorf("resolving resume for shard %s: %w", shardID, err)
+	}
+
+	var (
+		iteratorType   types.ShardIteratorType
+		sequenceNumber *string
+		cutoff         time.Time
+	)
+	switch decision.Mode {
+	case resumeExact:
+		iteratorType = types.ShardIteratorTypeAfterSequenceNumber
+		seq := decision.SequenceNumber
+		sequenceNumber = &seq
+		d.log.Infof("Resuming shard %s%s from checkpoint: %s", shardID, tableSuffix, seq)
+	case resumeFailover:
+		iteratorType = types.ShardIteratorTypeTrimHorizon
+		cutoff = decision.Cutoff
+		d.log.Infof("Failover resume for shard %s%s from trim horizon, skipping records at/before %s", shardID, tableSuffix, cutoff.Format(time.RFC3339))
+	default:
+		iteratorType = initialIteratorType(d.conf.startFrom, honorStartFrom)
+		d.log.Infof("Starting shard %s%s from %s", shardID, tableSuffix, iteratorType)
+	}
+
+	iterCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+	iter, err := d.streamsClient.GetShardIterator(iterCtx, &dynamodbstreams.GetShardIteratorInput{
+		StreamArn:         streamArn,
+		ShardId:           &shardID,
+		ShardIteratorType: iteratorType,
+		SequenceNumber:    sequenceNumber,
+	})
+	cancel()
+	if err != nil {
+		return preparedShard{}, fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
+	}
+
+	return preparedShard{shardID: shardID, iterator: iter.ShardIterator, cutoff: cutoff}, nil
+}
+
+// prepareNewShards resolves and acquires iterators for every discovered shard
+// not already registered (per isRegistered). A shard that fails to prepare is
+// skipped, counted, and retried on a later cycle rather than aborting the
+// batch, and the loop stops early once ctx's budget is exhausted so the
+// shards prepared so far can still be committed by the caller: an
+// all-or-nothing cycle can never converge on a large shard backlog, because
+// a single error each pass discards every prepared shard and the next pass
+// starts over from zero (INC-2974). Truncation and per-shard failures are
+// logged here, not returned - the caller commits whatever came back.
+func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointer, streamArn *string, shards []types.Shard, isRegistered func(string) bool, tableSuffix string, honorStartFrom bool) []preparedShard {
+	var (
+		prepared     []preparedShard
+		failedShards int
+		firstErr     error
+	)
+	for _, shard := range shards {
+		if ctx.Err() != nil {
+			d.log.Infof("Shard discovery budget expired after preparing %d shards%s; the remaining shards will be discovered on the next refresh cycle", len(prepared), tableSuffix)
+			break
+		}
+		shardID := *shard.ShardId
+		if isRegistered(shardID) {
+			continue
+		}
+
+		p, err := d.prepareShardReader(ctx, cp, streamArn, shardID, tableSuffix, honorStartFrom)
+		if err != nil {
+			failedShards++
+			if firstErr == nil {
+				firstErr = err
+			}
+			d.log.Debugf("Failed to prepare shard %s%s, will retry on the next refresh cycle: %v", shardID, tableSuffix, err)
+			continue
+		}
+		prepared = append(prepared, p)
+	}
+
+	if failedShards > 0 {
+		d.log.Warnf("Failed to prepare %d of %d discovered shards this refresh cycle%s; they will be retried on the next cycle (first error: %v)",
+			failedShards, len(shards), tableSuffix, firstErr)
+	}
+	return prepared
+}
+
 func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 	shards, err := describeStreamAllShards(ctx, d.streamsClient, d.streamArn)
 	if err != nil {
 		return err
 	}
 
-	// Collect new shards to add without holding locks during I/O operations
-	type shardToAdd struct {
-		shardID  string
-		iterator *string
-		cutoff   time.Time
-	}
-	var newShards []shardToAdd
-
-	for _, shard := range shards {
-		shardID := *shard.ShardId
-
-		// Check if shard already exists (minimize lock hold time)
+	newShards := d.prepareNewShards(ctx, d.checkpointer, d.streamArn, shards, func(shardID string) bool {
 		d.mu.RLock()
+		defer d.mu.RUnlock()
 		_, exists := d.shardReaders[shardID]
-		d.mu.RUnlock()
-
-		if exists {
-			continue
-		}
-
-		// Decide how to resume this shard (global-table aware).
-		decision, err := d.checkpointer.ResolveResume(ctx, shardID)
-		if err != nil {
-			return fmt.Errorf("resolving resume for shard %s: %w", shardID, err)
-		}
-
-		var (
-			iteratorType   types.ShardIteratorType
-			sequenceNumber *string
-			cutoff         time.Time
-		)
-
-		switch decision.Mode {
-		case resumeExact:
-			iteratorType = types.ShardIteratorTypeAfterSequenceNumber
-			seq := decision.SequenceNumber
-			sequenceNumber = &seq
-			d.log.Infof("Resuming shard %s from checkpoint: %s", shardID, seq)
-		case resumeFailover:
-			iteratorType = types.ShardIteratorTypeTrimHorizon
-			cutoff = decision.Cutoff
-			d.log.Infof("Failover resume for shard %s from trim horizon, skipping records at/before %s", shardID, cutoff.Format(time.RFC3339))
-		default:
-			iteratorType = initialIteratorType(d.conf.startFrom, d.honorStartFrom.Load())
-			d.log.Infof("Starting shard %s from %s", shardID, iteratorType)
-		}
-
-		// Get shard iterator (I/O operation - do not hold lock)
-		iter, err := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
-			StreamArn:         d.streamArn,
-			ShardId:           shard.ShardId,
-			ShardIteratorType: iteratorType,
-			SequenceNumber:    sequenceNumber,
-		})
-		if err != nil {
-			return fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
-		}
-
-		newShards = append(newShards, shardToAdd{
-			shardID:  shardID,
-			iterator: iter.ShardIterator,
-			cutoff:   cutoff,
-		})
-	}
+		return exists
+	}, "", d.honorStartFrom.Load())
 
 	// Add all new shard readers in a single critical section
 	if len(newShards) > 0 {
@@ -1714,11 +1802,15 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 
 		d.log.Infof("Tracking %d shards", totalShards)
 		d.metrics.shardsTracked.Set(int64(totalShards))
-	}
 
-	// The first successful discovery has positioned the fresh pipeline's
-	// initial shards; anything discovered from here on is a rotation child.
-	d.honorStartFrom.Store(false)
+		// The first discovery to commit shards has positioned the fresh
+		// pipeline; anything discovered from here on (including retries of
+		// shards that failed to prepare above) starts at TRIM_HORIZON -
+		// at-least-once delivery takes precedence over start_from: latest. A
+		// cycle that committed nothing keeps the flag so start_from still
+		// applies once discovery first succeeds.
+		d.honorStartFrom.Store(false)
+	}
 
 	return nil
 }
@@ -1775,14 +1867,14 @@ func (d *dynamoDBCDCInput) startShardCoordinator(ctx context.Context) {
 			return
 		case <-d.shardRefreshCh:
 			// Immediate refresh triggered by a shard reader (e.g. TrimmedDataAccessException)
-			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+			refreshCtx, refreshCancel := context.WithTimeout(ctx, shardRefreshCycleBudget)
 			if err := d.refreshShards(refreshCtx); err != nil && !errors.Is(err, context.Canceled) {
 				d.log.Warnf("Failed to refresh shards: %v", err)
 			}
 			refreshCancel()
 		case <-refreshTicker.C:
 			// Refresh shards periodically to discover new shards
-			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+			refreshCtx, refreshCancel := context.WithTimeout(ctx, shardRefreshCycleBudget)
 			if err := d.refreshShards(refreshCtx); err != nil && !errors.Is(err, context.Canceled) {
 				d.log.Warnf("Failed to refresh shards: %v", err)
 			}
@@ -1906,14 +1998,14 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 			return
 		case <-ts.shardRefreshCh:
 			// Immediate refresh triggered by a shard reader (e.g. TrimmedDataAccessException)
-			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+			refreshCtx, refreshCancel := context.WithTimeout(ctx, shardRefreshCycleBudget)
 			if err := d.refreshTableShards(refreshCtx, tableName, ts); err != nil && !errors.Is(err, context.Canceled) {
 				d.log.Warnf("Failed to refresh shards for table %s: %v", tableName, err)
 			}
 			refreshCancel()
 		case <-refreshTicker.C:
 			// Refresh shards periodically to discover new shards
-			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+			refreshCtx, refreshCancel := context.WithTimeout(ctx, shardRefreshCycleBudget)
 			if err := d.refreshTableShards(refreshCtx, tableName, ts); err != nil && !errors.Is(err, context.Canceled) {
 				d.log.Warnf("Failed to refresh shards for table %s: %v", tableName, err)
 			}
@@ -1932,69 +2024,12 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		return err
 	}
 
-	// Collect new shards to add
-	type shardToAdd struct {
-		shardID  string
-		iterator *string
-		cutoff   time.Time
-	}
-	var newShards []shardToAdd
-
-	for _, shard := range shards {
-		shardID := *shard.ShardId
-
-		// Check if shard already exists
+	newShards := d.prepareNewShards(ctx, ts.checkpointer, &ts.streamArn, shards, func(shardID string) bool {
 		ts.mu.RLock()
+		defer ts.mu.RUnlock()
 		_, exists := ts.shardReaders[shardID]
-		ts.mu.RUnlock()
-		if exists {
-			continue
-		}
-
-		// Decide how to resume this shard (global-table aware).
-		decision, err := ts.checkpointer.ResolveResume(ctx, shardID)
-		if err != nil {
-			return fmt.Errorf("resolving resume for shard %s: %w", shardID, err)
-		}
-
-		var (
-			iteratorType   types.ShardIteratorType
-			sequenceNumber *string
-			cutoff         time.Time
-		)
-
-		switch decision.Mode {
-		case resumeExact:
-			iteratorType = types.ShardIteratorTypeAfterSequenceNumber
-			seq := decision.SequenceNumber
-			sequenceNumber = &seq
-			d.log.Infof("Resuming shard %s (table %s) from checkpoint: %s", shardID, tableName, seq)
-		case resumeFailover:
-			iteratorType = types.ShardIteratorTypeTrimHorizon
-			cutoff = decision.Cutoff
-			d.log.Infof("Failover resume for shard %s (table %s) from trim horizon, skipping records at/before %s", shardID, tableName, cutoff.Format(time.RFC3339))
-		default:
-			iteratorType = initialIteratorType(d.conf.startFrom, ts.honorStartFrom.Load())
-			d.log.Infof("Starting shard %s (table %s) from %s", shardID, tableName, iteratorType)
-		}
-
-		// Get shard iterator
-		iter, err := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
-			StreamArn:         &ts.streamArn,
-			ShardId:           shard.ShardId,
-			ShardIteratorType: iteratorType,
-			SequenceNumber:    sequenceNumber,
-		})
-		if err != nil {
-			return fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
-		}
-
-		newShards = append(newShards, shardToAdd{
-			shardID:  shardID,
-			iterator: iter.ShardIterator,
-			cutoff:   cutoff,
-		})
-	}
+		return exists
+	}, " (table "+tableName+")", ts.honorStartFrom.Load())
 
 	// Add all new shard readers
 	if len(newShards) > 0 {
@@ -2014,11 +2049,15 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 
 		d.log.Infof("Table %s: tracking %d shards", tableName, shardCount)
 		d.updateTotalShardsMetric()
-	}
 
-	// The first successful discovery has positioned the fresh pipeline's
-	// initial shards; anything discovered from here on is a rotation child.
-	ts.honorStartFrom.Store(false)
+		// The first discovery to commit shards has positioned the fresh
+		// pipeline; anything discovered from here on (including retries of
+		// shards that failed to prepare above) starts at TRIM_HORIZON -
+		// at-least-once delivery takes precedence over start_from: latest. A
+		// cycle that committed nothing keeps the flag so start_from still
+		// applies once discovery first succeeds.
+		ts.honorStartFrom.Store(false)
+	}
 
 	return nil
 }
@@ -2169,8 +2208,12 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		default:
 		}
 
-		// Apply backpressure if too many messages are in flight
-		for ts.recordBatcher.ShouldThrottle() {
+		// Reserve tracker budget for this read BEFORE issuing it (see
+		// startShardReader): bounds the reader fleet to the global budget and
+		// parks a never-settling shard at its own cap without starving the
+		// rest.
+		reserve := d.conf.batchSize
+		for !ts.recordBatcher.TryReserve(shardID, reserve) {
 			d.log.Debugf("Throttling shard %s (table %s) due to too many in-flight messages", shardID, tableName)
 			throttleTimer.Reset(d.conf.throttleBackoff)
 			select {
@@ -2183,6 +2226,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		// Get current reader state
 		iterator := ts.getShardIterator(shardID)
 		if iterator == nil {
+			ts.recordBatcher.Release(shardID, reserve)
 			return
 		}
 
@@ -2192,6 +2236,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 			Limit:         aws.Int32(int32(d.conf.batchSize)),
 		})
 		if err != nil {
+			ts.recordBatcher.Release(shardID, reserve)
 			if isThrottlingError(err) {
 				wait := boff.NextBackOff()
 				d.log.Debugf("Throttled on shard %s (table %s), backing off for %v", shardID, tableName, wait)
@@ -2239,6 +2284,22 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 
 				newIter, refreshErr := d.refreshExpiredIterator(ctx, ts.checkpointer, ts.streamArn, shardID, lastSeq)
 				if refreshErr != nil {
+					// The stream or shard no longer exists, so the refresh can
+					// never succeed — mark exhausted and signal the coordinator,
+					// mirroring the trimmed-data refresh-failure branch above.
+					if isStreamsResourceNotFoundError(refreshErr) {
+						d.log.Warnf("Shard %s (table %s) no longer exists, marking exhausted: %v", shardID, tableName, refreshErr)
+						ts.mu.Lock()
+						if reader, ok := ts.shardReaders[shardID]; ok {
+							reader.exhausted = true
+						}
+						ts.mu.Unlock()
+						select {
+						case ts.shardRefreshCh <- struct{}{}:
+						default:
+						}
+						return
+					}
 					// Refreshing can fail transiently (e.g. throttling or a
 					// network blip). Wait poll_interval and let the loop retry
 					// the refresh rather than spinning, until it succeeds or the
@@ -2281,6 +2342,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 				reader.exhausted = true
 				d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
 				ts.mu.Unlock()
+				ts.recordBatcher.Release(shardID, reserve)
 				return
 			}
 			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
@@ -2291,6 +2353,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 
 		if len(getRecords.Records) == 0 {
 			// No records available: wait before polling again
+			ts.recordBatcher.Release(shardID, reserve)
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
 			case <-ctx.Done():
@@ -2307,52 +2370,68 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		}
 		batch := convertTableRecordsToBatch(getRecords.Records, tableName, shardID, dedupeBuffer, ts.getShardCutoff(shardID), d.metrics.failoverSkipped)
 		if len(batch) == 0 {
+			ts.recordBatcher.Release(shardID, reserve)
 			continue
 		}
 
-		// Track messages in batcher
-		batch = ts.recordBatcher.AddMessages(batch, shardID)
+		// Track messages in batcher (consumes len(batch) of the reservation;
+		// return the surplus from records filtered out during conversion).
+		// Settlement goes through the returned handle: wrappers between this
+		// input and the pipeline (auto_replay_nacks) rewrite the batch
+		// slice's message pointers, so the batch itself cannot identify the
+		// tracked state afterwards.
+		tb := ts.recordBatcher.AddMessages(batch, shardID)
+		ts.recordBatcher.Release(shardID, reserve-len(batch))
 
 		// Track pending ack
 		d.pendingAcks.Add(1)
 
-		// Create ack function
-		checkpointer := ts.checkpointer
+		// Create ack function. The checkpointer interface value is built
+		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
+		// must still run to settle the batch (draining the tracker) even
+		// when there is no checkpoint store to persist to.
+		var cp checkpointer
+		if ts.checkpointer != nil {
+			cp = ts.checkpointer
+		}
 		recordBatcher := ts.recordBatcher
+		batchLen := len(batch)
 		ackFunc := func(ackCtx context.Context, err error) error {
 			defer d.pendingAcks.Done()
 
 			if d.closed.Load() {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
-					recordBatcher.RemoveMessages(batch)
+					recordBatcher.RemoveBatch(tb)
 				}
 				return nil
 			}
 
 			if err != nil {
 				d.log.Warnf("Batch nacked from shard %s (table %s): %v", shardID, tableName, err)
-				recordBatcher.RemoveMessages(batch)
+				recordBatcher.RemoveBatch(tb)
 				return err
 			}
 
 			// Mark messages as acked and checkpoint if needed
-			if checkpointer != nil {
-				if ackErr := recordBatcher.AckMessages(ackCtx, checkpointer, batch); ackErr != nil {
-					d.log.Errorf("Failed to checkpoint shard %s (table %s) after ack: %v", shardID, tableName, ackErr)
-					return ackErr
-				}
-				d.log.Debugf("Successfully checkpointed %d messages from shard %s (table %s)", len(batch), shardID, tableName)
+			if ackErr := recordBatcher.AckBatch(ackCtx, cp, tb); ackErr != nil {
+				d.log.Errorf("Failed to checkpoint shard %s (table %s) after ack: %v", shardID, tableName, ackErr)
+				return ackErr
 			}
+			d.log.Debugf("Successfully checkpointed %d messages from shard %s (table %s)", batchLen, shardID, tableName)
 			return nil
 		}
 
 		// Send to channel
 		select {
 		case <-ctx.Done():
+			// The batch was never dispatched: untrack it (and its pending
+			// ack) or its messages would pin the tracker budget forever.
+			recordBatcher.RemoveBatch(tb)
+			d.pendingAcks.Done()
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
-			d.log.Debugf("Sent batch of %d records from shard %s (table %s)", len(batch), shardID, tableName)
+			d.log.Debugf("Sent batch of %d records from shard %s (table %s)", batchLen, shardID, tableName)
 		}
 	}
 }
@@ -2591,8 +2670,12 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		default:
 		}
 
-		// Apply backpressure if too many messages are in flight
-		for d.recordBatcher.ShouldThrottle() {
+		// Reserve tracker budget for this read BEFORE issuing it: reserving
+		// up front bounds the whole fleet of readers to the global budget
+		// (no first-wave overshoot), and the per-shard cap parks a shard
+		// whose batches never settle downstream without starving the rest.
+		reserve := d.conf.batchSize
+		for !d.recordBatcher.TryReserve(shardID, reserve) {
 			d.log.Debugf("Throttling shard %s due to too many in-flight messages", shardID)
 			throttleTimer.Reset(d.conf.throttleBackoff)
 			select {
@@ -2605,6 +2688,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		// Get current reader state
 		iterator := d.getShardIterator(shardID)
 		if iterator == nil {
+			d.recordBatcher.Release(shardID, reserve)
 			return
 		}
 
@@ -2614,6 +2698,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 			Limit:         aws.Int32(int32(d.conf.batchSize)),
 		})
 		if err != nil {
+			d.recordBatcher.Release(shardID, reserve)
 			if isThrottlingError(err) {
 				wait := boff.NextBackOff()
 				d.log.Debugf("Throttled on shard %s, backing off for %v", shardID, wait)
@@ -2661,6 +2746,22 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 
 				newIter, refreshErr := d.refreshExpiredIterator(ctx, d.checkpointer, aws.ToString(d.streamArn), shardID, lastSeq)
 				if refreshErr != nil {
+					// The stream or shard no longer exists, so the refresh can
+					// never succeed — mark exhausted and signal the coordinator,
+					// mirroring the trimmed-data refresh-failure branch above.
+					if isStreamsResourceNotFoundError(refreshErr) {
+						d.log.Warnf("Shard %s no longer exists, marking exhausted: %v", shardID, refreshErr)
+						d.mu.Lock()
+						if reader, ok := d.shardReaders[shardID]; ok {
+							reader.exhausted = true
+						}
+						d.mu.Unlock()
+						select {
+						case d.shardRefreshCh <- struct{}{}:
+						default:
+						}
+						return
+					}
 					// Refreshing can fail transiently (e.g. throttling or a
 					// network blip). Wait poll_interval and let the loop retry
 					// the refresh rather than spinning, until it succeeds or the
@@ -2703,6 +2804,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 				reader.exhausted = true
 				d.log.Infof("Shard %s exhausted", shardID)
 				d.mu.Unlock()
+				d.recordBatcher.Release(shardID, reserve)
 				return
 			}
 			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
@@ -2713,6 +2815,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 
 		if len(getRecords.Records) == 0 {
 			// No records available: wait before polling again
+			d.recordBatcher.Release(shardID, reserve)
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
 			case <-ctx.Done():
@@ -2725,18 +2828,32 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		// Convert records to messages
 		batch := d.convertRecordsToBatch(getRecords.Records, shardID, d.getShardCutoff(shardID))
 		if len(batch) == 0 {
+			d.recordBatcher.Release(shardID, reserve)
 			continue
 		}
 
-		// Track messages in batcher
-		batch = d.recordBatcher.AddMessages(batch, shardID)
+		// Track messages in batcher (consumes len(batch) of the reservation;
+		// return the surplus from records filtered out during conversion).
+		// Settlement goes through the returned handle: wrappers between this
+		// input and the pipeline (auto_replay_nacks) rewrite the batch
+		// slice's message pointers, so the batch itself cannot identify the
+		// tracked state afterwards.
+		tb := d.recordBatcher.AddMessages(batch, shardID)
+		d.recordBatcher.Release(shardID, reserve-len(batch))
 
 		// Track pending ack
 		d.pendingAcks.Add(1)
 
-		// Create ack function
-		checkpointer := d.checkpointer
+		// Create ack function. The checkpointer interface value is built
+		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
+		// must still run to settle the batch (draining the tracker) even
+		// when there is no checkpoint store to persist to.
+		var cp checkpointer
+		if d.checkpointer != nil {
+			cp = d.checkpointer
+		}
 		recordBatcher := d.recordBatcher
+		batchLen := len(batch)
 		ackFunc := func(ackCtx context.Context, err error) error {
 			defer d.pendingAcks.Done()
 
@@ -2744,34 +2861,36 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 			if d.closed.Load() {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
-					recordBatcher.RemoveMessages(batch)
+					recordBatcher.RemoveBatch(tb)
 				}
 				return nil
 			}
 
 			if err != nil {
 				d.log.Warnf("Batch nacked from shard %s: %v", shardID, err)
-				recordBatcher.RemoveMessages(batch)
+				recordBatcher.RemoveBatch(tb)
 				return err // Propagate nack error
 			}
 
 			// Mark messages as acked and checkpoint if needed
-			if checkpointer != nil {
-				if ackErr := recordBatcher.AckMessages(ackCtx, checkpointer, batch); ackErr != nil {
-					d.log.Errorf("Failed to checkpoint shard %s after ack: %v", shardID, ackErr)
-					return ackErr // Propagate checkpoint failure
-				}
-				d.log.Debugf("Successfully checkpointed %d messages from shard %s", len(batch), shardID)
+			if ackErr := recordBatcher.AckBatch(ackCtx, cp, tb); ackErr != nil {
+				d.log.Errorf("Failed to checkpoint shard %s after ack: %v", shardID, ackErr)
+				return ackErr // Propagate checkpoint failure
 			}
+			d.log.Debugf("Successfully checkpointed %d messages from shard %s", batchLen, shardID)
 			return nil
 		}
 
 		// Send to channel
 		select {
 		case <-ctx.Done():
+			// The batch was never dispatched: untrack it (and its pending
+			// ack) or its messages would pin the tracker budget forever.
+			recordBatcher.RemoveBatch(tb)
+			d.pendingAcks.Done()
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
-			d.log.Debugf("Sent batch of %d records from shard %s", len(batch), shardID)
+			d.log.Debugf("Sent batch of %d records from shard %s", batchLen, shardID)
 		}
 	}
 }
