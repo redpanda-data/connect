@@ -394,7 +394,7 @@ An optional minimum period between GetRecords calls made against each shard. Kin
 *Type*: `string`
 
 *Default*: `"0s"`
-Requires version 4.107.0 or newer
+Requires version 4.108.0 or newer
 
 === `enhanced_fan_out`
 
@@ -403,7 +403,7 @@ Consume the stream using https://docs.aws.amazon.com/streams/latest/dev/enhanced
 
 *Type*: `object`
 
-Requires version 4.107.0 or newer
+Requires version 4.108.0 or newer
 
 === `enhanced_fan_out.enabled`
 
