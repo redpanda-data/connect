@@ -140,7 +140,9 @@ func init() {
 //------------------------------------------------------------------------------
 
 type promGauge struct {
-	ctr prometheus.Gauge
+	ctr         prometheus.Gauge
+	vec         *prometheus.GaugeVec
+	labelValues []string
 }
 
 func (p *promGauge) Incr(count int64) {
@@ -167,8 +169,14 @@ func (p *promGauge) SetFloat64(value float64) {
 	p.ctr.Set(value)
 }
 
+func (p *promGauge) Delete() {
+	p.vec.DeleteLabelValues(p.labelValues...)
+}
+
 type promCounter struct {
-	ctr prometheus.Counter
+	ctr         prometheus.Counter
+	vec         *prometheus.CounterVec
+	labelValues []string
 }
 
 func (p *promCounter) Incr(count int64) {
@@ -179,9 +187,14 @@ func (p *promCounter) IncrFloat64(count float64) {
 	p.ctr.Add(count)
 }
 
+func (p *promCounter) Delete() {
+	p.vec.DeleteLabelValues(p.labelValues...)
+}
+
 type promTiming struct {
 	sum       prometheus.Observer
 	asSeconds bool
+	delete    func()
 }
 
 func (p *promTiming) Timing(val int64) {
@@ -190,6 +203,10 @@ func (p *promTiming) Timing(val int64) {
 		vFloat /= 1_000_000_000
 	}
 	p.sum.Observe(vFloat)
+}
+
+func (p *promTiming) Delete() {
+	p.delete()
 }
 
 //------------------------------------------------------------------------------
@@ -201,7 +218,9 @@ type promCounterVec struct {
 
 func (p *promCounterVec) With(labelValues ...string) service.MetricsExporterCounter {
 	return &promCounter{
-		ctr: p.ctr.WithLabelValues(labelValues...),
+		ctr:         p.ctr.WithLabelValues(labelValues...),
+		vec:         p.ctr,
+		labelValues: append([]string(nil), labelValues...),
 	}
 }
 
@@ -211,8 +230,12 @@ type promTimingVec struct {
 }
 
 func (p *promTimingVec) With(labelValues ...string) service.MetricsExporterTimer {
+	values := append([]string(nil), labelValues...)
 	return &promTiming{
-		sum: p.sum.WithLabelValues(labelValues...),
+		sum: p.sum.WithLabelValues(values...),
+		delete: func() {
+			p.sum.DeleteLabelValues(values...)
+		},
 	}
 }
 
@@ -222,9 +245,13 @@ type promTimingHistVec struct {
 }
 
 func (p *promTimingHistVec) With(labelValues ...string) service.MetricsExporterTimer {
+	values := append([]string(nil), labelValues...)
 	return &promTiming{
 		asSeconds: true,
-		sum:       p.sum.WithLabelValues(labelValues...),
+		sum:       p.sum.WithLabelValues(values...),
+		delete: func() {
+			p.sum.DeleteLabelValues(values...)
+		},
 	}
 }
 
@@ -235,7 +262,9 @@ type promGaugeVec struct {
 
 func (p *promGaugeVec) With(labelValues ...string) service.MetricsExporterGauge {
 	return &promGauge{
-		ctr: p.ctr.WithLabelValues(labelValues...),
+		ctr:         p.ctr.WithLabelValues(labelValues...),
+		vec:         p.ctr,
+		labelValues: append([]string(nil), labelValues...),
 	}
 }
 

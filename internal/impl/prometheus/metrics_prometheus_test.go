@@ -172,6 +172,44 @@ func TestPrometheusMetrics(t *testing.T) {
 	assert.Contains(t, body, "\ngaugethree 10.452")
 }
 
+func TestPrometheusMetricDelete(t *testing.T) {
+	nm, handler := getTestProm(t)
+
+	counter := nm.NewCounterCtor("counter", "stream")("deleted")
+	counter.Incr(1)
+	gauge := nm.NewGaugeCtor("gauge", "stream")("deleted")
+	gauge.Set(1)
+	timer := nm.NewTimerCtor("timer", "stream")("deleted")
+	timer.Timing(1)
+
+	body := getPage(t, handler)
+	assert.Contains(t, body, `counter{stream="deleted"}`)
+	assert.Contains(t, body, `gauge{stream="deleted"}`)
+	assert.Contains(t, body, `timer_sum{stream="deleted"}`)
+
+	counter.(interface{ Delete() }).Delete()
+	gauge.(interface{ Delete() }).Delete()
+	timer.(interface{ Delete() }).Delete()
+
+	body = getPage(t, handler)
+	assert.NotContains(t, body, `stream="deleted"`)
+}
+
+func TestPrometheusHistogramMetricDelete(t *testing.T) {
+	nm := promFromYAML(t, `
+use_histogram_timing: true
+`)
+	timer := nm.NewTimerCtor("timer", "stream")("deleted")
+	timer.Timing(1)
+
+	handler := nm.HandlerFunc()
+	assert.Contains(t, getPage(t, handler), `timer_sum{stream="deleted"}`)
+
+	timer.(interface{ Delete() }).Delete()
+
+	assert.NotContains(t, getPage(t, handler), `stream="deleted"`)
+}
+
 func TestPrometheusHistMetrics(t *testing.T) {
 	nm := promFromYAML(t, `
 use_histogram_timing: true
