@@ -143,7 +143,7 @@ By default messages of a shard can be processed in parallel, up to a limit deter
 Kinesis enforces a shared limit of 5 GetRecords calls per second per shard across all polling consumers of a stream. When multiple applications consume the same stream this budget is quickly exhausted and consumers receive ReadProvisionedThroughputExceeded errors. There are two remedies:
 
 - Set the `poll_period` field to bound how frequently this input polls each shard, leaving headroom for other consumers.
-- Enable `enhanced_fan_out`, which registers this pipeline as a dedicated stream consumer with its own 2MB/s per shard read throughput, delivered over HTTP/2 push rather than polling. Enhanced fan-out requires the IAM permissions `kinesis:DescribeStreamConsumer`, `kinesis:RegisterStreamConsumer` and `kinesis:SubscribeToShard`, and incurs additional AWS charges per consumer-shard-hour plus data retrieval. The named consumer is registered automatically on first use and is never deregistered.
+- Enable `enhanced_fan_out`, which registers this pipeline as a dedicated stream consumer with its own 2MB/s per shard read throughput, delivered over HTTP/2 push rather than polling. Enhanced fan-out requires the IAM permissions `kinesis:DescribeStreamConsumer` and `kinesis:SubscribeToShard`, and incurs additional AWS charges per consumer-shard-hour plus data retrieval. The named consumer is registered automatically on first use and is never deregistered; that registration additionally requires `kinesis:RegisterStreamConsumer`, which may be omitted when a consumer with the configured name already exists on every stream (for example one provisioned through infrastructure-as-code).
 
 == Table schema
 
@@ -398,7 +398,7 @@ Requires version 4.107.0 or newer
 
 === `enhanced_fan_out`
 
-Consume the stream using https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html[enhanced fan-out^], which provides this consumer dedicated read throughput of 2MB/s per shard via HTTP/2 push delivery, avoiding the 5 reads per second per shard limit that polling consumers share. The named consumer is registered on each stream automatically if it does not already exist (and is never deregistered). Requires the IAM permissions `kinesis:DescribeStreamConsumer`, `kinesis:RegisterStreamConsumer` and `kinesis:SubscribeToShard`. Note that AWS bills enhanced fan-out consumers per consumer-shard-hour plus data retrieval.
+Consume the stream using https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html[enhanced fan-out^], which provides this consumer dedicated read throughput of 2MB/s per shard via HTTP/2 push delivery, avoiding the 5 reads per second per shard limit that polling consumers share. The named consumer is registered on each stream automatically if it does not already exist (and is never deregistered). Requires the IAM permissions `kinesis:DescribeStreamConsumer` and `kinesis:SubscribeToShard`, plus `kinesis:RegisterStreamConsumer` unless a consumer with the configured name already exists on every stream (for example one provisioned through infrastructure-as-code). Note that AWS bills enhanced fan-out consumers per consumer-shard-hour plus data retrieval.
 
 
 *Type*: `object`
