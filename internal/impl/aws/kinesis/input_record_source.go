@@ -73,10 +73,7 @@ type pollingRecordSource struct {
 	iter     string
 	lastPoll time.Time
 	// lastReadSeq is the sequence number of the last record read from the
-	// shard, which may be ahead of the last acknowledged sequence. Refreshing
-	// an expired iterator resumes after it so that a shard with in-flight but
-	// unacknowledged records neither re-reads them nor, when nothing was ever
-	// acknowledged, falls back to LATEST and skips the backlog.
+	// shard, which may be ahead of the last acknowledged sequence.
 	lastReadSeq string
 }
 
@@ -182,6 +179,18 @@ func (p *pollingRecordSource) waitPollGate(ctx context.Context) error {
 	return nil
 }
 
+// resumeSequence returns the sequence number to resume from when refreshing
+// an expired iterator. It prioritises the last read (possibly in-flight)
+// sequence over the last acknowledged one so that a shard with in-flight but
+// unacknowledged records neither re-reads them nor, when nothing was ever
+// acknowledged, falls back to LATEST and skips the backlog.
+func (p *pollingRecordSource) resumeSequence() string {
+	if p.lastReadSeq != "" {
+		return p.lastReadSeq
+	}
+	return p.sequenceFn()
+}
+
 // Fetch pulls the next batch via GetRecords, pacing calls through
 // waitPollGate. The shard iterator is only replaced on success or an internal
 // refresh, so a failed call can always be retried with the retained iterator.
@@ -199,11 +208,7 @@ func (p *pollingRecordSource) Fetch(ctx context.Context) ([]types.Record, bool, 
 		var aerr *types.ExpiredIteratorException
 		if errors.As(err, &aerr) {
 			p.log.Warn("Shard iterator expired, attempting to refresh")
-			seq := p.lastReadSeq
-			if seq == "" {
-				seq = p.sequenceFn()
-			}
-			newIter, ierr := p.getIter(ctx, seq)
+			newIter, ierr := p.getIter(ctx, p.resumeSequence())
 			if ierr != nil {
 				p.log.Errorf("Failed to refresh shard iterator: %v", ierr)
 			} else {
