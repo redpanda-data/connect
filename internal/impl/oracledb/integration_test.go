@@ -571,11 +571,6 @@ oracledb_cdc:
 // stale prior-incarnation log could take LogMiner's NEW slot and get the current
 // incarnation's online redo file rejected with ORA-01287.
 //
-// Fix: filter V$ARCHIVED_LOG by RESETLOGS_CHANGE#/RESETLOGS_TIME so only the current
-// incarnation's logs are selected. This prevents ORA-01287, but a pre-incident checkpoint
-// is usually behind the new RESETLOGS_CHANGE#, and nothing covers that gap — so LogMiner
-// fails with ORA-01291 instead (a structural limitation Debezium shares; out of scope).
-//
 // Asserts the resumed pipeline never hits ORA-01287, but does hit ORA-01291 with the new
 // guidance text.
 func TestIntegrationOracleDBCDCResetlogsSurfacesGuidedError(t *testing.T) {
