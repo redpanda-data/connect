@@ -176,6 +176,47 @@ func TestEnsureEFOConsumerConcurrentRegistration(t *testing.T) {
 	assert.Equal(t, "consumer-arn", arn)
 }
 
+// Describe (20 TPS per stream) and Register (5 TPS) throttling must be retried
+// within the activation window rather than failing Connect with an IAM hint
+// pointing the wrong way.
+func TestEnsureEFOConsumerToleratesThrottling(t *testing.T) {
+	fastEFOWaits(t)
+	describes, registers := 0, 0
+	api := &mockConsumerAPI{
+		describe: func(_ context.Context, _ *kinesis.DescribeStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error) {
+			describes++
+			switch {
+			case describes == 1:
+				return nil, &types.LimitExceededException{}
+			case registers < 2:
+				return nil, &types.ResourceNotFoundException{}
+			default:
+				return &kinesis.DescribeStreamConsumerOutput{
+					ConsumerDescription: &types.ConsumerDescription{
+						ConsumerARN:    aws.String("consumer-arn"),
+						ConsumerStatus: types.ConsumerStatusActive,
+					},
+				}, nil
+			}
+		},
+		register: func(_ context.Context, _ *kinesis.RegisterStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.RegisterStreamConsumerOutput, error) {
+			registers++
+			if registers == 1 {
+				return nil, &types.LimitExceededException{}
+			}
+			return &kinesis.RegisterStreamConsumerOutput{Consumer: &types.Consumer{
+				ConsumerARN:    aws.String("consumer-arn"),
+				ConsumerStatus: types.ConsumerStatusCreating,
+			}}, nil
+		},
+	}
+
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	assert.Equal(t, "consumer-arn", arn)
+	assert.Equal(t, 2, registers, "throttled registration must be retried")
+}
+
 func TestEnsureEFOConsumerDeletingFails(t *testing.T) {
 	fastEFOWaits(t)
 	api := &mockConsumerAPI{
@@ -599,22 +640,172 @@ func TestEFOSourceInitialSubscribeNonResourceInUseFailsFastWithOneCall(t *testin
 	assert.Equal(t, 1, calls)
 }
 
-func TestEFOSourceInvalidSequenceFallsBackToConfiguredStart(t *testing.T) {
+// The stale-sequence fallback must respect the one-call-per-second
+// SubscribeToShard floor enforced everywhere else: the follow-up subscribe
+// after an InvalidArgumentException rejection belongs to the pump, spaced by
+// the floor, not fired immediately by the constructor.
+func TestEFOSourceStaleSequenceFallbackRespectsResubscribeFloor(t *testing.T) {
+	old := efoResubscribeFloor
+	efoResubscribeFloor = 60 * time.Millisecond
+	t.Cleanup(func() { efoResubscribeFloor = old })
+
 	sub := newFakeSubscription()
-	var positions []types.StartingPosition
-	calls := 0
-	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
-		positions = append(positions, pos)
-		calls++
-		if calls == 1 {
+	var mu sync.Mutex
+	var callTimes []time.Time
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		mu.Lock()
+		callTimes = append(callTimes, time.Now())
+		n := len(callTimes)
+		mu.Unlock()
+		if n == 1 {
 			return nil, &types.InvalidArgumentException{}
 		}
 		return sub, nil
-	}, "shard-0", "stale-seq", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	}, "shard-0", "stale-seq", true, 20*time.Millisecond, time.Second, service.MockResources().Logger())
+	require.NoError(t, err, "a stale sequence must not fail the shard claim")
+	defer src.Close()
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(callTimes) >= 2
+	}, 5*time.Second, time.Millisecond, "fallback subscribe never happened")
+
+	mu.Lock()
+	gap := callTimes[1].Sub(callTimes[0])
+	mu.Unlock()
+	assert.GreaterOrEqual(t, gap, 50*time.Millisecond, "fallback subscribe must wait out the resubscribe floor")
+}
+
+// A half-open subscription (socket up, no events flowing) must be detected
+// and abandoned: Kinesis heartbeats every live subscription with an event
+// every few seconds even on an idle shard, so a prolonged silence means the
+// subscription is dead. Without a deadline the pump would block on the event
+// channel forever while the consumer loop keeps renewing the shard lease,
+// stalling the shard silently.
+func TestEFOSourceIdleSubscriptionResubscribes(t *testing.T) {
+	fastEFOResubscribe(t)
+	oldIdle := efoIdleSubscriptionTimeout
+	efoIdleSubscriptionTimeout = 30 * time.Millisecond
+	t.Cleanup(func() { efoIdleSubscriptionTimeout = oldIdle })
+
+	halfOpen := newFakeSubscription() // one heartbeat, then silence, never closed
+	second := newFakeSubscription()
+	var mu sync.Mutex
+	var positions []types.StartingPosition
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		positions = append(positions, pos)
+		if len(positions) == 1 {
+			return halfOpen, nil
+		}
+		return second, nil
+	}, "shard-0", "", true, 20*time.Millisecond, time.Second, service.MockResources().Logger())
 	require.NoError(t, err)
 	defer src.Close()
 
-	require.Len(t, positions, 2)
+	halfOpen.send("cont-1") // heartbeat event with no records
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(positions) >= 2
+	}, 5*time.Second, time.Millisecond, "half-open subscription was never abandoned")
+
+	mu.Lock()
+	secondPos := positions[1]
+	mu.Unlock()
+	require.Equal(t, types.ShardIteratorTypeAtSequenceNumber, secondPos.Type, "resubscribe must resume at the last continuation")
+	require.NotNil(t, secondPos.SequenceNumber)
+	assert.Equal(t, "cont-1", *secondPos.SequenceNumber)
+}
+
+// A subscribe attempt rejected with ResourceInUseException means another
+// consumer actively holds the shard, and the rejection costs that holder
+// nothing. Retries must therefore stay at the one-second floor rather than
+// escalate, so the legitimate lease holder reacquires promptly once a handoff
+// completes, and contention that outlasts the backoff ceiling must surface as
+// a warning rather than stay at debug forever.
+func TestEFOSourceContentionRetriesAtFloorAndWarnsWhenPersistent(t *testing.T) {
+	old := efoResubscribeFloor
+	efoResubscribeFloor = 20 * time.Millisecond
+	t.Cleanup(func() { efoResubscribeFloor = old })
+
+	handler := &capturingLogHandler{}
+	logger := service.NewLoggerFromSlog(slog.New(handler))
+
+	inUse := &types.ResourceInUseException{Message: aws.String("held elsewhere")}
+	good := newFakeSubscription()
+	var mu sync.Mutex
+	var callTimes []time.Time
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		callTimes = append(callTimes, time.Now())
+		if len(callTimes) <= 9 {
+			return nil, inUse
+		}
+		return good, nil
+	}, "shard-0", "", true, 20*time.Millisecond, 100*time.Millisecond, logger)
+	require.NoError(t, err)
+	defer src.Close()
+
+	start := time.Now()
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(callTimes) >= 10
+	}, 5*time.Second, time.Millisecond, "source never resubscribed past the contention")
+	elapsed := time.Since(start)
+
+	// Eight floor-spaced retries after the constructor's attempt: roughly
+	// 8 * 20ms. The escalating backoff would put this near a second.
+	assert.Less(t, elapsed, 600*time.Millisecond, "contention retries must stay at the floor, not escalate")
+
+	// Contention outlasting max_resubscribe_interval (100ms here) must have
+	// been surfaced at warn level, and never at error level.
+	assert.NotEmpty(t, handler.messagesAtLeast(slog.LevelWarn), "persistent contention should be logged at warn level")
+	assert.Empty(t, handler.messagesAtLeast(slog.LevelError))
+}
+
+// staleSequenceFallbackPositions drives a source whose first subscribe is
+// rejected with InvalidArgumentException and returns the first two positions
+// attempted (the constructor's stale-sequence attempt and the pump's fallback).
+func staleSequenceFallbackPositions(t *testing.T, startFromOldest bool) []types.StartingPosition {
+	t.Helper()
+	fastEFOResubscribe(t)
+
+	sub := newFakeSubscription()
+	var mu sync.Mutex
+	var positions []types.StartingPosition
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
+		mu.Lock()
+		positions = append(positions, pos)
+		n := len(positions)
+		mu.Unlock()
+		if n == 1 {
+			return nil, &types.InvalidArgumentException{}
+		}
+		return sub, nil
+	}, "shard-0", "stale-seq", startFromOldest, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	t.Cleanup(src.Close)
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(positions) >= 2
+	}, 5*time.Second, time.Millisecond, "fallback subscribe never happened")
+
+	mu.Lock()
+	defer mu.Unlock()
+	return append([]types.StartingPosition(nil), positions[:2]...)
+}
+
+func TestEFOSourceInvalidSequenceFallsBackToConfiguredStart(t *testing.T) {
+	positions := staleSequenceFallbackPositions(t, true)
+
 	assert.Equal(t, types.ShardIteratorTypeAfterSequenceNumber, positions[0].Type)
 	require.NotNil(t, positions[0].SequenceNumber)
 	assert.Equal(t, "stale-seq", *positions[0].SequenceNumber)
@@ -622,21 +813,8 @@ func TestEFOSourceInvalidSequenceFallsBackToConfiguredStart(t *testing.T) {
 }
 
 func TestEFOSourceInvalidSequenceFallsBackToTrimHorizonWhenNotOldest(t *testing.T) {
-	sub := newFakeSubscription()
-	var positions []types.StartingPosition
-	calls := 0
-	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
-		positions = append(positions, pos)
-		calls++
-		if calls == 1 {
-			return nil, &types.InvalidArgumentException{}
-		}
-		return sub, nil
-	}, "shard-0", "stale-seq", false, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
-	require.NoError(t, err)
-	defer src.Close()
+	positions := staleSequenceFallbackPositions(t, false)
 
-	require.Len(t, positions, 2)
 	assert.Equal(t, types.ShardIteratorTypeAfterSequenceNumber, positions[0].Type)
 	// This shard demonstrably had a committed position, so resuming at "now"
 	// would silently skip every record still retained ahead of the expired

@@ -44,6 +44,14 @@ var (
 	// one-call-per-second limit. It also seeds the resubscribe backoff's
 	// initial interval.
 	efoResubscribeFloor = time.Second
+	// efoIdleSubscriptionTimeout bounds how long a live subscription may go
+	// without delivering any event before it is treated as dead and replaced.
+	// Kinesis heartbeats every active subscription with a SubscribeToShardEvent
+	// every few seconds even when the shard is idle, so a prolonged silence
+	// means a half-open connection rather than an empty shard; the KCL uses
+	// the same ~35s threshold. It stays internal because it encodes service
+	// behaviour (the heartbeat cadence), not a tuning choice.
+	efoIdleSubscriptionTimeout = 35 * time.Second
 )
 
 // efoConsumerAPI is the subset of the Kinesis API used to resolve and
@@ -69,23 +77,37 @@ func ensureEFOConsumer(ctx context.Context, api efoConsumerAPI, streamARN, name 
 		})
 		if err != nil {
 			var nf *types.ResourceNotFoundException
-			if !errors.As(err, &nf) {
+			var limited *types.LimitExceededException
+			switch {
+			case errors.As(err, &limited):
+				// DescribeStreamConsumer is limited to 20 TPS per stream;
+				// throttling is transient so keep polling within the
+				// activation window rather than failing Connect.
+				log.Debugf("Describing enhanced fan-out consumer '%v' on stream '%v' was throttled, retrying", name, streamARN)
+			case !errors.As(err, &nf):
 				return "", fmt.Errorf("describing enhanced fan-out consumer '%v' on stream '%v' (requires kinesis:DescribeStreamConsumer): %w", name, streamARN, err)
-			}
-			if !registered {
+			case !registered:
 				if _, err := api.RegisterStreamConsumer(ctx, &kinesis.RegisterStreamConsumerInput{
 					StreamARN:    &streamARN,
 					ConsumerName: &name,
 				}); err != nil {
 					var inUse *types.ResourceInUseException
-					if !errors.As(err, &inUse) {
+					switch {
+					case errors.As(err, &limited):
+						// RegisterStreamConsumer is limited to 5 TPS per
+						// stream; leave registered unset so the next loop
+						// iteration retries the registration.
+						log.Debugf("Registering enhanced fan-out consumer '%v' on stream '%v' was throttled, retrying", name, streamARN)
+					case !errors.As(err, &inUse):
 						return "", fmt.Errorf("registering enhanced fan-out consumer '%v' on stream '%v' (requires kinesis:RegisterStreamConsumer): %w", name, streamARN, err)
+					default:
+						// Another instance registered it concurrently; poll for it.
+						registered = true
 					}
-					// Another instance registered it concurrently; poll for it.
 				} else {
 					log.Infof("Registered Kinesis enhanced fan-out consumer '%v' on stream '%v'", name, streamARN)
+					registered = true
 				}
-				registered = true
 			}
 		} else {
 			// Guard against quirky API responses with nil ConsumerDescription.
@@ -195,12 +217,15 @@ func efoStartingPosition(startingSequence string, startFromOldest bool) types.St
 //   - InvalidArgumentException while starting from a checkpointed sequence
 //     number: the stored sequence can no longer be resolved (e.g. it fell
 //     behind the shard's retention window). This mirrors the polling
-//     source's TRIM_HORIZON fallback: we log a warning and retry once from
-//     TRIM_HORIZON rather than failing the claim forever. The fallback is
-//     unconditionally TRIM_HORIZON (never the timestamp anchor above) because
-//     this shard demonstrably had a committed position: resuming at "now"
-//     would silently skip every record still retained ahead of the expired
-//     sequence, breaking at-least-once delivery.
+//     source's TRIM_HORIZON fallback: we log a warning, correct the position
+//     and start the pump with no live subscription, so its resubscribe loop
+//     makes the fallback attempt after the one-call-per-second floor rather
+//     than failing the claim forever or violating the floor with a second
+//     synchronous call. The fallback is unconditionally TRIM_HORIZON (never
+//     the timestamp anchor above) because this shard demonstrably had a
+//     committed position: resuming at "now" would silently skip every record
+//     still retained ahead of the expired sequence, breaking at-least-once
+//     delivery.
 //   - ResourceInUseException: the shard's previous owner likely still holds
 //     the one allowed subscription during a steal/handoff. Rather than
 //     blocking the caller (and therefore the sequential claim/steal loop in
@@ -225,24 +250,26 @@ func newEFORecordSource(ctx context.Context, subscribe efoSubscribeFn, shardID, 
 
 	subscribedAt := time.Now()
 	sub, err := e.subscribe(e.ctx, pos)
-
-	if err != nil && pos.Type == types.ShardIteratorTypeAfterSequenceNumber {
+	if err != nil {
 		var invalidArg *types.InvalidArgumentException
-		if errors.As(err, &invalidArg) {
+		var inUse *types.ResourceInUseException
+		switch {
+		case errors.As(err, &invalidArg) && pos.Type == types.ShardIteratorTypeAfterSequenceNumber:
+			// The stored position has aged out of the shard's retention
+			// window; fall back to the oldest retained record. The actual
+			// resubscribe is left to the pump so that the follow-up call
+			// respects the one-call-per-second floor, which a second
+			// synchronous call here would violate and, if throttled for it,
+			// needlessly fail the shard claim.
 			log.Warnf("Stored position for shard '%v' was rejected, falling back to the oldest retained record", shardID)
 			pos = types.StartingPosition{Type: types.ShardIteratorTypeTrimHorizon}
-			subscribedAt = time.Now()
-			sub, err = e.subscribe(e.ctx, pos)
-		}
-	}
-
-	if err != nil {
-		var inUse *types.ResourceInUseException
-		if !errors.As(err, &inUse) {
+			sub = nil
+		case errors.As(err, &inUse):
+			sub = nil
+		default:
 			e.cancel()
 			return nil, fmt.Errorf("subscribing to shard '%v' (requires kinesis:SubscribeToShard): %w", shardID, err)
 		}
-		sub = nil
 	}
 
 	e.wg.Add(1)
@@ -282,6 +309,9 @@ func (e *efoRecordSource) run(sub efoSubscription, pos types.StartingPosition, l
 	boff.RandomizationFactor = 0
 	boff.Reset()
 
+	var contentionSince time.Time
+	contentionWarned := false
+
 	for {
 		if sub == nil {
 			if !e.waitForResubscribeFloor(lastSubscribeAt) {
@@ -296,15 +326,30 @@ func (e *efoRecordSource) run(sub efoSubscription, pos types.StartingPosition, l
 				// ResourceInUseException is expected, self-healing contention:
 				// another consumer (usually the previous lease owner during a
 				// steal/handoff) still holds the shard's one allowed
-				// subscription, and the escalating resubscribe loop resolves
-				// it. Logging it at error level would page operators on every
-				// routine rebalance.
+				// subscription. A rejected attempt costs that holder nothing
+				// and the floor already respects the API limit, so retry at
+				// the floor rather than escalating: the lease holder then
+				// reacquires within about a second of the handoff completing,
+				// and if we are the one who lost the lease the consumer loop
+				// notices at its next ownership check and closes this source.
+				// Contention that outlasts the backoff ceiling is no longer
+				// routine handoff (e.g. two pipelines sharing a consumer name,
+				// or a client that cannot renew its lease) and is surfaced at
+				// warn level once per episode.
 				var inUse *types.ResourceInUseException
 				if errors.As(err, &inUse) {
-					e.log.Debugf("Shard '%v' is still subscribed by another consumer, waiting for the handoff to complete: %v", e.shardID, err)
-				} else {
-					e.log.Errorf("Failed to subscribe to shard '%v': %v", e.shardID, err)
+					if contentionSince.IsZero() {
+						contentionSince = time.Now()
+					}
+					if !contentionWarned && time.Since(contentionSince) >= e.maxResubscribeInterval {
+						contentionWarned = true
+						e.log.Warnf("Shard '%v' has been held by another consumer for over %v; check for another pipeline sharing this consumer name or a client that cannot renew its lease", e.shardID, e.maxResubscribeInterval)
+					} else {
+						e.log.Debugf("Shard '%v' is still subscribed by another consumer, waiting for the handoff to complete: %v", e.shardID, err)
+					}
+					continue
 				}
+				e.log.Errorf("Failed to subscribe to shard '%v': %v", e.shardID, err)
 				// A sequence-derived position that AWS refuses can never
 				// succeed on a retry (it has aged out of the shard's retention
 				// window), so fall back to the oldest retained record rather
@@ -324,6 +369,8 @@ func (e *efoRecordSource) run(sub efoSubscription, pos types.StartingPosition, l
 				}
 				continue
 			}
+			// A successful subscribe ends any contention episode.
+			contentionSince, contentionWarned = time.Time{}, false
 		}
 
 		finished, continuation, sawEvent := e.consume(sub)
@@ -388,7 +435,17 @@ func (e *efoRecordSource) run(sub efoSubscription, pos types.StartingPosition, l
 // sawEvent reports whether the subscription delivered at least one shard event
 // (with or without records), which the caller uses to decide whether the
 // subscription made any progress before it ended.
+//
+// A subscription that delivers nothing for efoIdleSubscriptionTimeout is
+// abandoned: Kinesis heartbeats every live subscription with an event every
+// few seconds even when the shard is idle, so a prolonged silence means a
+// half-open connection (nothing in the SDK's event-stream reader enforces a
+// read deadline). Blocking on it indefinitely would stall the shard silently
+// while the consumer loop keeps renewing the lease, preventing any other
+// client from taking the shard over.
 func (e *efoRecordSource) consume(sub efoSubscription) (finished bool, continuation string, sawEvent bool) {
+	idle := time.NewTimer(efoIdleSubscriptionTimeout)
+	defer idle.Stop()
 	for {
 		select {
 		case ev, ok := <-sub.Events():
@@ -412,6 +469,19 @@ func (e *efoRecordSource) consume(sub efoSubscription) (finished bool, continuat
 				return true, "", sawEvent
 			}
 			continuation = *sev.Value.ContinuationSequenceNumber
+			// Reset the idle deadline only after the event is fully handled:
+			// time spent blocked in forward is backpressure, not subscription
+			// death, and must not count against the deadline.
+			if !idle.Stop() {
+				select {
+				case <-idle.C:
+				default:
+				}
+			}
+			idle.Reset(efoIdleSubscriptionTimeout)
+		case <-idle.C:
+			e.log.Warnf("Enhanced fan-out subscription for shard '%v' delivered no events for %v, replacing it", e.shardID, efoIdleSubscriptionTimeout)
+			return false, continuation, sawEvent
 		case <-e.ctx.Done():
 			return false, continuation, sawEvent
 		}
