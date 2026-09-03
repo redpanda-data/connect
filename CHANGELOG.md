@@ -7,28 +7,18 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- avro: Fixed schema_registry_encode rejecting valid Avro JSON decimal values by properly parsing decoder output instead of reading it as UTF-8 text. ([@twmb](https://github.com/twmb), [#4704](https://github.com/redpanda-data/connect/pull/4704))
-- aws_dynamodb_cdc: Fixed shard discovery aborting on transient failures by allowing partial success and retrying failed shards on the next cycle, enabling convergence with large shard backlogs. ([@squiidz](https://github.com/squiidz), [#4737](https://github.com/redpanda-data/connect/pull/4737))
-- aws_dynamodb_cdc: Fixed checkpoint writes blocking all shard readers by removing mutex holding during I/O and using single-flighting per shard instead. ([@squiidz](https://github.com/squiidz), [#4737](https://github.com/redpanda-data/connect/pull/4737))
-- aws_dynamodb_cdc: Fixed DescribeStream calls lacking per-call timeouts by bounding each page with defaultAPICallTimeout instead of consuming the entire cycle budget. ([@squiidz](https://github.com/squiidz), [#4737](https://github.com/redpanda-data/connect/pull/4737))
-- aws_dynamodb_cdc: Fixed silent ack stalls that wedged pipelines by switching from pointer-keyed to handle-based message settlement, making the input compatible with benthos's auto-retry wrapper. ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
-- aws_dynamodb_cdc: Added per-shard in-flight caps to prevent a never-settling shard from freezing other shards while maintaining progress on single-shard topologies. ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
-- aws_dynamodb_cdc: Fixed input hanging from startup by enforcing documented batch_size range and allowing one batch on empty batcher. ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
-- aws_dynamodb_cdc: Fixed budget serialization that limited single-partition tables to a quarter of capacity by scaling tracker budget with batch_size. ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
-- aws_dynamodb_cdc: Fixed shutdown panic by guarding AddMessages against nil receiver after timeout-induced closure. ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
-- docker: Updated Docker README and compose example to point to the actively maintained image on docker.redpanda.com instead of stale GHCR image. ([@PrzemekZglinicki](https://github.com/PrzemekZglinicki), [#4764](https://github.com/redpanda-data/connect/pull/4764))
-- general: Fixed five dead documentation links in component descriptions that were broken due to URL changes and reorganizations. ([@JakeSCahill](https://github.com/JakeSCahill), [#4759](https://github.com/redpanda-data/connect/pull/4759))
+- aws_dynamodb_cdc: Settle acks by handle and isolate per-shard backpressure ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
 - prometheus: Fixed prometheus exporter accumulating frozen metric series for deleted streams by purging their labels when streams are deleted. ([@squiidz](https://github.com/squiidz), [#4742](https://github.com/redpanda-data/connect/pull/4742))
+- aws_dynamodb_cdc: Fixed shard discovery aborting on transient failures by allowing partial success and retrying failed shards on the next cycle, enabling convergence with large shard backlogs. ([@squiidz](https://github.com/squiidz), [#4737](https://github.com/redpanda-data/connect/pull/4737))
+- oracledb_cdc: Fix handling of flashback / redo log resets ([@josephwoodward](https://github.com/josephwoodward), [#4760](https://github.com/redpanda-data/connect/pull/4760))
+- websocket input/output: Connection attempts (dial and upgrade handshake) and input reads now honor context
+  cancellation, preventing graceful shutdown from hanging on unresponsive servers or idle connections. ([@Leward](https://github.com/Leward), [#490](https://github.com/redpanda-data/benthos/pull/490))
+- websocket output: A failed write now closes the connection instead of leaking it before the reconnect. ([@Leward](https://github.com/Leward), [#492](https://github.com/redpanda-data/benthos/pull/492))
 
 ### Changed
 
+- websocket input: The default value of `max_message_size` has changed from `0` (unlimited) to `33554432` (32 MiB). An unlimited read allows the websocket server to make the process allocate an unbounded amount of memory with a single streamed message. Pipelines that receive larger messages must now set `max_message_size` explicitly; a value of `0` restores the previous unlimited behaviour. ([@Leward](https://github.com/Leward), [#491](https://github.com/redpanda-data/benthos/pull/491))
 - avro: Added avro.input_encoding config to explicitly declare whether messages should be read as Avro JSON or native Go values, replacing automatic inference that could misinterpret bytes fields. ([@twmb](https://github.com/twmb), [#4704](https://github.com/redpanda-data/connect/pull/4704))
-
-## Unreleased
-
-### Fixed
-
-- prometheus: In streams mode, deleting a stream now purges its metric series (labeled `stream="<id>"`) from the `/metrics` endpoint instead of exposing them with frozen values until the process restarts. ([@squiidz](https://github.com/squiidz), [#4742](https://github.com/redpanda-data/connect/pull/4742))
 
 ## 4.107.0 - 2026-08-27
 
