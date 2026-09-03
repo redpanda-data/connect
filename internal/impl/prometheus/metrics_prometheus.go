@@ -520,6 +520,36 @@ func (p *metrics) NewGaugeCtor(path string, labelNames ...string) service.Metric
 	}
 }
 
+// The stream manager discovers series deletion through an optional-interface
+// upcast, so bind the exporter to the named interface at compile time: if the
+// signature drifts on a benthos bump the purge would otherwise stop firing
+// silently.
+var _ service.MetricsExporterSeriesDeleter = (*metrics)(nil)
+
+// DeleteSeriesPartialMatch deletes all metric series containing labels
+// matching all of the provided label key/value pairs, e.g. all series of a
+// stream deleted in streams mode. Implements the optional
+// service.MetricsExporterSeriesDeleter interface.
+func (p *metrics) DeleteSeriesPartialMatch(labels map[string]string) {
+	promLabels := prometheus.Labels(labels)
+
+	p.mut.Lock()
+	defer p.mut.Unlock()
+
+	for _, pv := range p.counters {
+		pv.ctr.DeletePartialMatch(promLabels)
+	}
+	for _, pv := range p.gauges {
+		pv.ctr.DeletePartialMatch(promLabels)
+	}
+	for _, pv := range p.timers {
+		pv.sum.DeletePartialMatch(promLabels)
+	}
+	for _, pv := range p.timersHist {
+		pv.sum.DeletePartialMatch(promLabels)
+	}
+}
+
 func (p *metrics) Close(context.Context) error {
 	if atomic.CompareAndSwapInt32(&p.running, 1, 0) {
 		close(p.closedChan)
