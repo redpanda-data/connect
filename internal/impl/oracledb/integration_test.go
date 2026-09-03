@@ -26,6 +26,8 @@ import (
 	_ "github.com/sijms/go-ora/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	tcexec "github.com/testcontainers/testcontainers-go/exec"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
@@ -561,6 +563,213 @@ oracledb_cdc:
 		}, time.Minute*2, time.Millisecond*500)
 
 		require.NoError(t, streamResume.StopWithin(time.Second*10))
+	}
+}
+
+// TestIntegrationOracleDBCDCResetlogsSurfacesGuidedError regression-tests a flashback +
+// OPEN RESETLOGS bug: GetLogsBySCNRange matched V$ARCHIVED_LOG by SCN overlap alone, so a
+// stale prior-incarnation log could take LogMiner's NEW slot and get the current
+// incarnation's online redo file rejected with ORA-01287.
+//
+// Fix: filter V$ARCHIVED_LOG by RESETLOGS_CHANGE#/RESETLOGS_TIME so only the current
+// incarnation's logs are selected. This prevents ORA-01287, but a pre-incident checkpoint
+// is usually behind the new RESETLOGS_CHANGE#, and nothing covers that gap — so LogMiner
+// fails with ORA-01291 instead (a structural limitation Debezium shares; out of scope).
+//
+// Asserts the resumed pipeline never hits ORA-01287, but does hit ORA-01291 with the new
+// guidance text.
+func TestIntegrationOracleDBCDCResetlogsSurfacesGuidedError(t *testing.T) {
+	integration.CheckSkip(t)
+
+	mustExecInContainer := func(t *testing.T, ctx context.Context, ctr testcontainers.Container, script string, opts ...tcexec.ProcessOption) string {
+		t.Helper()
+
+		opts = append(opts, tcexec.Multiplexed())
+		code, reader, err := ctr.Exec(ctx, []string{"bash", "-c", script}, opts...)
+		require.NoError(t, err)
+
+		outBytes, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		out := string(outBytes)
+
+		t.Logf("container exec %q exited with code %d, output:\n%s", script, code, out)
+		require.Zero(t, code, "container exec failed (%q): %s", script, out)
+		return out
+	}
+
+	ctx := t.Context()
+	connStr, db, ctr := oracledbtest.SetupTestWithOracleDBVersionAndContainer(t)
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, "testdb.resetlogs_probe",
+		"CREATE TABLE testdb.resetlogs_probe (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, note VARCHAR2(64))"))
+
+	cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  snapshot_mode: none
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["TESTDB.RESETLOGS_PROBE"]
+  batching:
+    count: 10
+    period: 500ms`
+
+	var (
+		outMu sync.Mutex
+		notes []string
+	)
+	consume := func(_ context.Context, mb service.MessageBatch) error {
+		outMu.Lock()
+		defer outMu.Unlock()
+		for _, msg := range mb {
+			b, err := msg.AsBytes()
+			if err != nil {
+				continue
+			}
+			var row map[string]any
+			if err := json.Unmarshal(b, &row); err != nil {
+				continue
+			}
+			if note, ok := row["NOTE"].(string); ok {
+				notes = append(notes, note)
+			}
+		}
+		return nil
+	}
+	countNotes := func(note string) int {
+		outMu.Lock()
+		defer outMu.Unlock()
+		n := 0
+		for _, v := range notes {
+			if v == note {
+				n++
+			}
+		}
+		return n
+	}
+
+	const phase1Rows = 20
+
+	t.Log("Launching component to stream pre-incident data...")
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(cfg))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(consume))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	// Wait for component to start.
+	time.Sleep(5 * time.Second)
+
+	for range phase1Rows {
+		db.MustExec("INSERT INTO testdb.resetlogs_probe (note) VALUES ('phase1')")
+	}
+	db.MustExec("COMMIT")
+
+	require.Eventually(t, func() bool {
+		got := countNotes("phase1")
+		t.Logf("captured %d/%d phase1 rows...", got, phase1Rows)
+		return got == phase1Rows
+	}, time.Minute*2, time.Millisecond*500, "pipeline did not capture all phase1 rows before the incident")
+
+	// Keep the pipeline running through the flashback/restore-point/throwaway steps below
+	// so its checkpoint stays close to "now" right up to the incident - the condition that
+	// makes the pre-reset archived log stale rather than simply out of retention.
+	t.Log("Enabling Flashback Database and the Fast Recovery Area...")
+	mustExecInContainer(t, ctx, ctr, "mkdir -p /opt/oracle/oradata/fra && chown -R oracle:oinstall /opt/oracle/oradata/fra")
+	db.MustExec("ALTER SYSTEM SET db_recovery_file_dest_size=5G SCOPE=BOTH")
+	db.MustExec("ALTER SYSTEM SET db_recovery_file_dest='/opt/oracle/oradata/fra' SCOPE=BOTH")
+	db.MustExec("ALTER DATABASE FLASHBACK ON")
+
+	t.Log("Creating a guaranteed restore point and generating changes to be flashed back away...")
+	// Requires SYSDBA (ORA-01031 over the "system" connection), so this goes through
+	// the SYSDBA SQL*Plus session rather than db.MustExec.
+	restorePointOut := mustExecInContainer(t, ctx, ctr,
+		`echo -e "CREATE RESTORE POINT before_reset GUARANTEE FLASHBACK DATABASE;\nexit;" | sqlplus -S / as sysdba`,
+		tcexec.WithUser("oracle"))
+	require.NotContains(t, restorePointOut, "ORA-", "unexpected Oracle error creating restore point")
+	for range 5 {
+		db.MustExec("INSERT INTO testdb.resetlogs_probe (note) VALUES ('throwaway')")
+	}
+	db.MustExec("COMMIT")
+	// Generate a stale prior-incarnation archived log before the reset.
+	db.MustExec("ALTER SYSTEM SWITCH LOGFILE")
+	db.MustExec("ALTER SYSTEM SWITCH LOGFILE")
+
+	// Stop cleanly so the near-current checkpoint SCN is durably persisted for the
+	// resumed pipeline below.
+	require.NoError(t, stream.StopWithin(time.Second*10))
+
+	t.Log("Performing FLASHBACK DATABASE + OPEN RESETLOGS via a SYSDBA SQL*Plus session...")
+	// SHUTDOWN/STARTUP/FLASHBACK/OPEN RESETLOGS can't go over a plain SQL connection -
+	// they need an OS-authenticated SYSDBA session; SQL*Plus reconnects automatically
+	// across the shutdown/startup within one piped script.
+	resetlogsScript := `echo -e "SHUTDOWN IMMEDIATE;\nSTARTUP MOUNT;\nFLASHBACK DATABASE TO RESTORE POINT before_reset;\nALTER DATABASE OPEN RESETLOGS;\nexit;" | sqlplus -S / as sysdba`
+	out := mustExecInContainer(t, ctx, ctr, resetlogsScript, tcexec.WithUser("oracle"))
+	require.NotContains(t, out, "ORA-", "unexpected Oracle error during flashback/resetlogs")
+
+	t.Log("Waiting for the database to become reachable again after OPEN RESETLOGS...")
+	reachable := assert.Eventually(t, func() bool {
+		pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		return db.PingContext(pingCtx) == nil
+	}, time.Minute*5, time.Second*3)
+	require.True(t, reachable, "database did not become reachable again after OPEN RESETLOGS")
+
+	// Trigger a mining cycle on the relaunched pipeline below; not asserted on delivery,
+	// since seamless recovery isn't what this test expects (see doc comment above).
+	db.MustExec("INSERT INTO testdb.resetlogs_probe (note) VALUES ('phase2')")
+	db.MustExec("COMMIT")
+
+	t.Log("Relaunching component after RESETLOGS to verify it surfaces a guided ORA-01291 error rather than ORA-01287...")
+
+	// stream.Run won't return the error itself: oracledb_cdc's ReadBatch returns
+	// service.ErrNotConnected once mining dies, which makes the framework retry Connect()
+	// forever rather than propagate. So capture the logged error via a buffered logger
+	// instead, then stop the pipeline and confirm stream.Run unblocks cleanly.
+	var logBuf oracledbtest.SyncBuffer
+
+	streamBuilder2 := service.NewStreamBuilder()
+	streamBuilder2.SetLogger(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logBuf), &slog.HandlerOptions{Level: slog.LevelInfo})))
+	require.NoError(t, streamBuilder2.AddInputYAML(cfg))
+	require.NoError(t, streamBuilder2.AddBatchConsumerFunc(consume))
+
+	stream, err = streamBuilder2.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- stream.Run(t.Context())
+	}()
+
+	assert.Eventually(t, func() bool {
+		return strings.Contains(logBuf.String(), "ORA-01291")
+	}, time.Minute*3, time.Millisecond*500, "expected the resumed pipeline to hit ORA-01291 (missing log file) since its checkpoint predates the new incarnation's RESETLOGS_CHANGE#")
+
+	logOutput := logBuf.String()
+	assert.NotContains(t, logOutput, "ORA-01287",
+		"the GetLogsBySCNRange incarnation fix should prevent ORA-01287 (wrong-incarnation file selection) even though ORA-01291 is still expected")
+	assert.Contains(t, logOutput, "flashback and OPEN RESETLOGS",
+		"expected the ORA-01291 error to include the clarifying guidance for the resetlogs-checkpoint-gap scenario")
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
+
+	select {
+	case runErr := <-runErrCh:
+		assert.Truef(t, runErr == nil || errors.Is(runErr, context.Canceled),
+			"expected stream.Run to unblock cleanly after StopWithin, got: %v", runErr)
+	case <-time.After(time.Second * 15):
+		t.Fatal("stream.Run did not return after StopWithin")
 	}
 }
 
