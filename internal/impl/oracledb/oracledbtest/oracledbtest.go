@@ -184,6 +184,19 @@ func (db *TestDB) CreateTableWithSupplementalLoggingIfNotExists(ctx context.Cont
 // logging for CDC, and returns the connection string and TestDB wrapper.
 // The container is automatically cleaned up when the test completes.
 func SetupTestWithOracleDBVersion(t *testing.T) (string, *TestDB) {
+	connStr, db, _ := setupTestWithOracleDBVersion(t)
+	return connStr, db
+}
+
+// SetupTestWithOracleDBVersionAndContainer is SetupTestWithOracleDBVersion, but also
+// returns the container handle so tests can Exec admin commands (e.g. SQL*Plus
+// SHUTDOWN/STARTUP MOUNT/FLASHBACK DATABASE/OPEN RESETLOGS) that a plain SQL connection
+// can't issue.
+func SetupTestWithOracleDBVersionAndContainer(t *testing.T) (string, *TestDB, testcontainers.Container) {
+	return setupTestWithOracleDBVersion(t)
+}
+
+func setupTestWithOracleDBVersion(t *testing.T) (string, *TestDB, testcontainers.Container) {
 	ctx := t.Context()
 	cfg := startContainer(t, ctx)
 
@@ -228,7 +241,7 @@ func SetupTestWithOracleDBVersion(t *testing.T) (string, *TestDB) {
 	_, err = cfg.dbConn.ExecContext(t.Context(), sql)
 	assert.NoError(t, err, "Creating 'testdb2' schema for testing across multiple schemas")
 
-	return cfg.connStr, &TestDB{cfg.dbConn, t}
+	return cfg.connStr, &TestDB{cfg.dbConn, t}, cfg.container
 }
 
 // ---------------------------------------------------------------------------
@@ -385,10 +398,11 @@ func (db *TestDB) CreatePDBTableWithSupplementalLoggingIfNotExists(ctx context.C
 }
 
 type containerCfg struct {
-	dbConn  *sql.DB
-	host    string
-	connStr string
-	port    network.Port
+	container testcontainers.Container
+	dbConn    *sql.DB
+	host      string
+	connStr   string
+	port      network.Port
 }
 
 func startContainer(t *testing.T, ctx context.Context) containerCfg {
@@ -425,10 +439,11 @@ func startContainer(t *testing.T, ctx context.Context) containerCfg {
 	})
 
 	return containerCfg{
-		dbConn:  dbConn,
-		host:    host,
-		connStr: connStr,
-		port:    port,
+		container: container,
+		dbConn:    dbConn,
+		host:      host,
+		connStr:   connStr,
+		port:      port,
 	}
 }
 

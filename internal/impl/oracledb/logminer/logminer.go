@@ -244,6 +244,10 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 			return false, fmt.Errorf("preparing logs and starting session at position %d: %w\n\n"+
 				"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
 				"This typically happens when processing takes longer than Oracle's log retention period.\n\n"+
+				"This can also happen after a flashback and OPEN RESETLOGS on the source database: if this\n"+
+				"connector's last checkpoint predates the new incarnation's RESETLOGS_CHANGE#, no log file —\n"+
+				"old or new incarnation — covers that gap. This is not a retention issue, and increasing\n"+
+				"retention (below) will not help; only option 3 applies in that case.\n\n"+
 				"To fix this issue:\n"+
 				"1. Increase Oracle's archived log retention using RMAN:\n"+
 				"   CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;\n\n"+
@@ -1054,12 +1058,14 @@ func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, 
 				A.SEQUENCE# AS SEQ,
 				'ARCHIVED' AS TYPE,
 				A.THREAD# AS THREAD
-			FROM V$ARCHIVED_LOG A
+			FROM V$ARCHIVED_LOG A, V$DATABASE D
 			WHERE A.NAME IS NOT NULL
 			AND A.ARCHIVED = 'YES'
 			AND A.STATUS = 'A'
 			AND A.NEXT_CHANGE# >= :1
 			AND A.FIRST_CHANGE# <= :2
+			AND A.RESETLOGS_CHANGE# = D.RESETLOGS_CHANGE#
+			AND A.RESETLOGS_TIME = D.RESETLOGS_TIME
 			AND A.DEST_ID IN (
 				SELECT DEST_ID
 				FROM V$ARCHIVE_DEST_STATUS
