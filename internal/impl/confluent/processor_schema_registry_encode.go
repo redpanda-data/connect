@@ -42,6 +42,7 @@ const (
 	sreFieldNormalize      = "normalize"
 	sreFieldAvro           = "avro"
 	sreFieldAvroRawJSON    = "raw_json"
+	sreFieldAvroInputEnc   = "input_encoding"
 	sreFieldAvroRecordName = "record_name"
 	sreFieldAvroNamespace  = "namespace"
 )
@@ -118,6 +119,18 @@ We will be considering alternative approaches in future so please https://redpan
 				Description("Whether messages encoded in Avro format should be parsed as normal JSON rather than Avro JSON. Overrides the deprecated top-level `avro_raw_json` when set.").
 				ShortDescription("Parse Avro-encoded messages as plain JSON rather than Avro JSON.").
 				Optional(),
+			service.NewStringEnumField(sreFieldAvroInputEnc, avroInputEncAuto, avroInputEncAvroJSON, avroInputEncNative).
+				Description(`How the values in each message should be read.
+
+Avro JSON and plain JSON disagree about strings, and neither reading is a superset of the other. Avro JSON spells a `+"`bytes`"+` or `+"`fixed`"+` value as one codepoint per byte, so the unscaled decimal `+"`0x21`"+` is the string `+"`\"!\"`"+`; the plain reading takes a string for a decimal as decimal notation, so `+"`\"3.33\"`"+` means 3.33. The same JSON string is therefore a different value under each, and only the pipeline knows which was meant.
+
+- `+"`auto`"+` (the default) picks the reader from the form each message arrives in: a raw payload is read as Avro JSON, a structured message as Go values. This is right for `+"`schema_registry_decode`"+` feeding this processor directly, and for CDC sources, but a processor in between — a `+"`mapping`"+`, a `+"`branch`"+` — parses the payload and leaves the message structured, at which point its Avro JSON values are read the plain way and a bytes-backed decimal fails to encode.
+- `+"`avro_json`"+` reads every message as Avro JSON. Set this when the data came from `+"`schema_registry_decode`"+`, including when something between the two processors has parsed it. A message that carries Go values Avro JSON has no spelling for — a `+"`[]byte`"+` from `+"`content()`"+` or `+"`decode(\"base64\")`"+`, or the `+"`[]byte`"+` and `+"`time.Time`"+` values that `+"`preserve_logical_types`"+` produces for bytes, fixed and timestamp fields — is rejected rather than encoded as the wrong value, so a pipeline that mixes those with Avro JSON values has no mode that reads both: map such fields to their Avro JSON spelling first, or split the encode.
+- `+"`native`"+` reads every message as Go and plain JSON values. Set this for hand-written JSON and for sources that spell decimals in decimal notation.
+
+This is independent of `+"`raw_json`"+`, which does not affect how values are read.`).
+				ShortDescription("How to read each message's values: by message form, always as Avro JSON, or always as Go and plain JSON values.").
+				Advanced().Default(avroInputEncAuto),
 			service.NewStringField(sreFieldAvroRecordName).
 				Description("The name to use for the root Avro record type when encoding from a common schema (schema_metadata mode). If empty, derived from the subject.").
 				ShortDescription("Name for the root Avro record type when encoding from a common schema. Derived from the subject if empty.").
@@ -145,10 +158,23 @@ func init() {
 
 //------------------------------------------------------------------------------
 
+// How the values in an incoming message are to be read when encoding Avro. The
+// two readers disagree about strings and neither is a superset of the other, so
+// where the message itself does not settle which one applies, this does.
+const (
+	// avroInputEncAuto picks the reader from the form the message arrives in.
+	avroInputEncAuto = "auto"
+	// avroInputEncAvroJSON reads every message as Avro JSON.
+	avroInputEncAvroJSON = "avro_json"
+	// avroInputEncNative reads every message as Go and plain JSON values.
+	avroInputEncNative = "native"
+)
+
 type schemaRegistryEncoder struct {
 	client             *sr.Client
 	subject            *service.InterpolatedString
 	avroRawJSON        bool
+	avroInputEnc       string
 	schemaRefreshAfter time.Duration
 
 	// Registry-pull mode cache.
@@ -191,6 +217,10 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, mgr *service
 		if err != nil {
 			return nil, err
 		}
+	}
+	avroInputEnc, err := conf.FieldString(sreFieldAvro, sreFieldAvroInputEnc)
+	if err != nil {
+		return nil, err
 	}
 	refreshPeriodStr, err := conf.FieldString("refresh_period")
 	if err != nil {
@@ -257,6 +287,7 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if err != nil {
 		return nil, err
 	}
+	s.avroInputEnc = avroInputEnc
 	s.schemaMeta = schemaMeta
 	s.format = format
 	s.normalize = normalize
@@ -295,6 +326,7 @@ func newSchemaRegistryEncoder(
 	s := &schemaRegistryEncoder{
 		subject:            subject,
 		avroRawJSON:        avroRawJSON,
+		avroInputEnc:       avroInputEncAuto,
 		schemaRefreshAfter: schemaRefreshAfter,
 		schemas:            map[string]cachedSchemaEncoder{},
 		shutSig:            shutdown.NewSignaller(),
