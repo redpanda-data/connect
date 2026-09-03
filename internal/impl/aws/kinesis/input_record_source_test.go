@@ -153,6 +153,87 @@ func TestPollingSourceExpiredIteratorRefreshes(t *testing.T) {
 	assert.Equal(t, "acked-seq", *iterRequests[1].StartingSequenceNumber)
 }
 
+// A refreshed iterator must be usable immediately: iterators expire after five
+// minutes, so making the fresh one wait out a full poll_period (which can
+// exceed that) would let it expire again and wedge the shard permanently.
+func TestPollingSourceExpiredIteratorResetsPollGate(t *testing.T) {
+	api := staticIterAPI("fresh-iter")
+	calls := 0
+	api.getRecords = func(_ context.Context, _ *kinesis.GetRecordsInput, _ ...func(*kinesis.Options)) (*kinesis.GetRecordsOutput, error) {
+		calls++
+		if calls == 1 {
+			return nil, &types.ExpiredIteratorException{}
+		}
+		return &kinesis.GetRecordsOutput{
+			Records:           []types.Record{{SequenceNumber: aws.String("1")}},
+			NextShardIterator: aws.String("iter-2"),
+		}, nil
+	}
+
+	src, err := newPollingRecordSource(t.Context(), api, "arn", "shard-0", "", true, time.Hour, 20*time.Millisecond, func() string { return "" }, service.MockResources().Logger())
+	require.NoError(t, err)
+
+	// First fetch polls immediately (gate starts open) and hits the expired
+	// iterator, refreshing it internally.
+	recs, _, err := src.Fetch(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, recs)
+
+	// The very next fetch must use the fresh iterator now rather than gate-wait
+	// out the hour-long poll_period.
+	start := time.Now()
+	for time.Since(start) < time.Second {
+		if recs, _, err = src.Fetch(t.Context()); !errors.Is(err, errPollGateWaiting) {
+			break
+		}
+	}
+	require.NoError(t, err)
+	require.Len(t, recs, 1, "fresh iterator should be used without waiting out poll_period")
+	assert.Equal(t, 2, calls)
+}
+
+// When the iterator expires on a shard that has read records but never had one
+// acknowledged, the refresh must resume after the last record read rather than
+// falling back to LATEST, which would silently skip the backlog between the
+// two positions.
+func TestPollingSourceExpiredIteratorRefreshUsesLastReadSequence(t *testing.T) {
+	var iterRequests []*kinesis.GetShardIteratorInput
+	api := &mockPollAPI{}
+	api.getShardIterator = func(_ context.Context, in *kinesis.GetShardIteratorInput, _ ...func(*kinesis.Options)) (*kinesis.GetShardIteratorOutput, error) {
+		iterRequests = append(iterRequests, in)
+		return &kinesis.GetShardIteratorOutput{ShardIterator: aws.String("iter")}, nil
+	}
+	calls := 0
+	api.getRecords = func(_ context.Context, _ *kinesis.GetRecordsInput, _ ...func(*kinesis.Options)) (*kinesis.GetRecordsOutput, error) {
+		calls++
+		if calls == 1 {
+			return &kinesis.GetRecordsOutput{
+				Records:           []types.Record{{SequenceNumber: aws.String("4")}, {SequenceNumber: aws.String("5")}},
+				NextShardIterator: aws.String("iter-2"),
+			}, nil
+		}
+		return nil, &types.ExpiredIteratorException{}
+	}
+
+	// start_from_oldest: false and nothing acked yet: the naive refresh
+	// position would be LATEST.
+	src, err := newPollingRecordSource(t.Context(), api, "arn", "shard-0", "", false, 0, time.Second, func() string { return "" }, service.MockResources().Logger())
+	require.NoError(t, err)
+
+	recs, _, err := src.Fetch(t.Context())
+	require.NoError(t, err)
+	require.Len(t, recs, 2)
+
+	_, _, err = src.Fetch(t.Context())
+	require.NoError(t, err)
+
+	require.Len(t, iterRequests, 2)
+	assert.Equal(t, types.ShardIteratorTypeAfterSequenceNumber, iterRequests[1].ShardIteratorType, "refresh must resume after the last read record, not LATEST")
+	if assert.NotNil(t, iterRequests[1].StartingSequenceNumber) {
+		assert.Equal(t, "5", *iterRequests[1].StartingSequenceNumber)
+	}
+}
+
 func TestPollingSourceIterFallbackToTrimHorizon(t *testing.T) {
 	var iterTypes []types.ShardIteratorType
 	api := &mockPollAPI{}

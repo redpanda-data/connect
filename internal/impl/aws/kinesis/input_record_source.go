@@ -72,6 +72,12 @@ type pollingRecordSource struct {
 
 	iter     string
 	lastPoll time.Time
+	// lastReadSeq is the sequence number of the last record read from the
+	// shard, which may be ahead of the last acknowledged sequence. Refreshing
+	// an expired iterator resumes after it so that a shard with in-flight but
+	// unacknowledged records neither re-reads them nor, when nothing was ever
+	// acknowledged, falls back to LATEST and skips the backlog.
+	lastReadSeq string
 }
 
 func newPollingRecordSource(ctx context.Context, api kinesisPollAPI, streamARN, shardID, startingSequence string, startFromOldest bool, pollPeriod, maxGateWait time.Duration, sequenceFn func() string, log *service.Logger) (*pollingRecordSource, error) {
@@ -193,17 +199,32 @@ func (p *pollingRecordSource) Fetch(ctx context.Context) ([]types.Record, bool, 
 		var aerr *types.ExpiredIteratorException
 		if errors.As(err, &aerr) {
 			p.log.Warn("Shard iterator expired, attempting to refresh")
-			newIter, ierr := p.getIter(ctx, p.sequenceFn())
+			seq := p.lastReadSeq
+			if seq == "" {
+				seq = p.sequenceFn()
+			}
+			newIter, ierr := p.getIter(ctx, seq)
 			if ierr != nil {
 				p.log.Errorf("Failed to refresh shard iterator: %v", ierr)
 			} else {
 				p.iter = newIter
+				// Re-open the poll gate so the fresh iterator is used on the
+				// next fetch: iterators expire after five minutes, so making
+				// it wait out a poll_period that can exceed that would let it
+				// expire again and wedge the shard permanently.
+				p.lastPoll = time.Time{}
 			}
 			// Treated as an empty result so the caller applies its usual
 			// empty-result pacing, matching the pre-refactor behaviour.
 			return nil, false, nil
 		}
 		return nil, false, err
+	}
+
+	if len(res.Records) > 0 {
+		if last := res.Records[len(res.Records)-1].SequenceNumber; last != nil {
+			p.lastReadSeq = *last
+		}
 	}
 
 	nextIter := ""
