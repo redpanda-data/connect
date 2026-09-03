@@ -1,0 +1,132 @@
+name: iceberg-orders-upsert-cow
+description: |
+  Can copy-on-write be made to keep up? The 2026-08-22 orders-upsert run
+  measured COW at ~508 rec/s, but with two caveats discovered after the fact:
+  ids arrived sequentially (i % key_space = contiguous runs, COW's BEST case
+  for file overlap) and the arm processed fewer rows (~460k) than the 12M key
+  space, so no key ever recurred in-window — meaning ZERO actual rewrites
+  happened and 508 rec/s is the pure upsert-path overhead floor (batch
+  materialisation + overwrite planning + serialized commits), not a rewrite
+  measurement.
+
+  This run fixes both: a 250k key space guarantees recurrence within the
+  window even at ~500 rec/s (450k rows = 1.8 cycles), and `key_order:
+  scattered` walks the key space by a coprime stride so every batch's keys
+  spray across all data files — the realistic CDC worst case. Four arms at a
+  fixed 4-vCPU pin, all keyed arms at the lint-mandated max_in_flight: 1,
+  batch 50k / 10s unless stated:
+
+  * mor-50k — merge-on-read at 50k batches: the batch-size lever for the mode
+    that already works (13.7k rec/s at 10k batches; rows-per-commit is the
+    only keyed lever, so expect roughly linear until write time dominates).
+  * cow-10k — Friday's exact COW config, now with real rewrites: quantifies
+    how much the 508 floor drops once rewriting actually happens.
+  * cow-50k — batch amortisation alone: does 5x rows-per-commit survive the
+    5x-more-files-touched cost it also causes?
+  * cow-50k-bucket16 — adds bucket(16, id) partitioning via
+    schema_evolution.partition_spec. Open question, not a foregone
+    conclusion: 50k scattered keys touch all 16 buckets every batch, so any
+    win comes from smaller per-partition files and partition-scoped planning,
+    not from untouched partitions.
+
+  skip_connect_table_precreate is REQUIRED here: partition_spec only applies
+  when the OUTPUT creates the table, and the default reset pre-creates an
+  unpartitioned table via iceberg-tablegen (the bucket arm would silently
+  bench unpartitioned). Connect auto-creates fine (it sets table_location);
+  the sidecar tolerates the table appearing mid-window.
+
+  METRICS: the sidecar reports written_records / written_files_size_bytes
+  (sum of snapshot added-records / added-files-size), which count write work
+  and never saturate — the headline rates are honest for every arm,
+  including copy-on-write past the first key-space lap. The 2026-08-24 run
+  predates these counters and only measured the insert-dominated first lap
+  for the COW arms.
+
+direction: sink
+connector: iceberg
+stack: iceberg
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 48000000   # ~54 GiB at 1200 B/row: >= 15 min if mor-50k
+                           # reaches ~60 MB/s; slower arms just read less.
+  row_size_bytes: 1200
+  seeder: json-orders
+  key_space: 250000        # small enough that even ~500 rec/s laps the key
+                           # space within the window (real rewrites)
+  key_order: scattered     # coprime-stride walk: batch keys spray across files
+  expected_peak_mb_s: 60
+
+skip_connect_table_precreate: true
+
+pipeline:
+  # id must be an integer BEFORE the output sees it: JSON numbers decode as
+  # float64, and with the tablegen pre-create skipped the output infers the
+  # table schema from the first record — a double id is rejected outright as
+  # an identifier field ("cannot be an identifier field", found the hard way
+  # 2026-08-24: every write failed and the arm benched as zeros). Friday's
+  # run dodged this only because tablegen's pre-created table typed id as
+  # long. Real CDC sources emit proper integers, so the coercion restores
+  # realism rather than bending the bench. Renders into the standard benthos
+  # pipeline.processors section (inside the input component map, benthos
+  # rejects the field — also found the hard way).
+  processors:
+    - mapping: |
+        root = this
+        root.id = this.id.int64()
+  buffer:
+    memory:
+      limit: 524288000
+      batch_policy:
+        count: 50000
+        period: 10s
+  output:
+    iceberg:
+      max_in_flight: 1     # mandatory for keyed writes (the output lints it)
+      row_operation: upsert
+      identifier_fields: [id]
+      batching:
+        count: 50000
+        period: 10s
+      commit:
+        max_snapshot_age: 24h
+
+matrix:
+  cpu_points: [4]
+  arms:
+    - id: mor-50k
+      pipeline:
+        output:
+          iceberg:
+            merge_strategy: merge-on-read
+    - id: cow-10k
+      pipeline:
+        buffer:
+          memory:
+            batch_policy:
+              count: 10000
+        output:
+          iceberg:
+            merge_strategy: copy-on-write
+            batching:
+              count: 10000
+    - id: cow-50k
+      pipeline:
+        output:
+          iceberg:
+            merge_strategy: copy-on-write
+    - id: cow-50k-bucket16
+      pipeline:
+        output:
+          iceberg:
+            merge_strategy: copy-on-write
+            schema_evolution:
+              # Interpolated-string semantics: the value IS the spec — do not
+              # wrap it in bloblang quotes. The quoted form '"(...)"' makes the
+              # quotes part of the spec, which fails parsing on EVERY write and
+              # benches as a 100%-CPU retry loop with zero commits (the
+              # 2026-08-24/25 'pathological' bucket arms, 2,753 errors/window).
+              partition_spec: (bucket(16, id))

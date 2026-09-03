@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.10" # S3-native state locking (use_lockfile in backend.hcl)
+  required_version = ">= 1.6"
   required_providers {
     aws = { source = "hashicorp/aws", version = "~> 5.70" }
   }

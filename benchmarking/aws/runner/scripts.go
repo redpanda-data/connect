@@ -1,10 +1,7 @@
-// Copyright 2026 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
 
 package main
 
@@ -84,37 +81,65 @@ func combineReset(connector string, steps []ResetStep, outs map[string]string) (
 	sb.WriteString("set -euo pipefail\n")
 	for _, st := range steps {
 		if st.SQL != "" {
-			// DSN form (postgres). The discrete host/port/user/pass/db-flags
-			// form (mysql's `mysql -h ... -P ... -e ...`) was dead once the
-			// registry was trimmed to postgres_cdc only — no remaining
-			// engineSpec entry sets ResetHostOutputKey — and returns with
-			// mysql_cdc's own stack PR.
-			fmt.Fprintf(&sb, `psql %q -v ON_ERROR_STOP=1 -c %q`+"\n",
-				outs[es.DSNOutputKey], st.SQL)
+			if es.ResetHostOutputKey != "" {
+				// Discrete-flags form (mysql).
+				sb.WriteString(fmt.Sprintf(
+					`mysql -h %q -P %q -u %q -p%q %q -e %q`+"\n",
+					outs[es.ResetHostOutputKey],
+					outs[es.ResetPortOutputKey],
+					outs[es.ResetUserOutputKey],
+					outs[es.ResetPassOutputKey],
+					outs[es.ResetDBOutputKey],
+					st.SQL,
+				))
+			} else {
+				// DSN form (postgres).
+				sb.WriteString(fmt.Sprintf(
+					`psql %q -v ON_ERROR_STOP=1 -c %q`+"\n",
+					outs[es.DSNOutputKey], st.SQL,
+				))
+			}
 		}
 		if st.Bash != "" {
 			sb.WriteString(substitutePlaceholders(st.Bash, outs) + "\n")
 		}
 	}
-	// Between sweep points, Connect's per-session output topic must be torn
-	// down so the next point starts from a clean baseline. Gated on
-	// session+brokers because pre-Plan-2 callers (and unit tests) may not
-	// populate them.
+	// Engine-aware cleanup: between sweep points each engine's per-session
+	// output topic and the KC REST connector must be torn down so the next
+	// point starts from a clean baseline. Gated on session+brokers because
+	// pre-Plan-2 callers (and unit tests) may not populate them.
 	sessionID := outs["bench_session_id"]
 	brokers := outs["redpanda_broker_endpoints"]
 	if sessionID != "" && brokers != "" {
+		// Idempotent KC connector delete (404 is fine; the worker may not
+		// have a connector currently, or this may be the very first sweep
+		// point).
+		sb.WriteString(fmt.Sprintf(
+			`curl -fsS -X DELETE "http://localhost:8083/connectors/bench_%s" || true`+"\n",
+			connector,
+		))
+		// Delete both engines' output topics. Errors are non-fatal — topics
+		// may not exist yet on the first sweep point. Naming is asymmetric:
+		//
+		//  - Connect writes to a single topic named bench_<sess>_<conn>_connect
+		//    (output.redpanda.topic in the rendered pipeline config).
+		//  - KC's Debezium writes to a topic-per-table named
+		//    <topic.prefix>.<schema>.<table> where topic.prefix is
+		//    bench_<sess>_<conn>_kc — so we have to enumerate matching topics
+		//    against the broker rather than delete a single fixed name.
 		connectTopic := fmt.Sprintf("bench_%s_%s_connect", sessionID, connector)
-		// rpk is installed on the runner host by runner-user-data.tftpl
-		// (Kafka's CLI is only present when install_kc is set). Regex mode
-		// (-r) makes the first point — before Connect's first write
-		// auto-creates the topic — a clean no-op. A broker-connectivity
-		// failure exits non-zero and aborts the reset under `set -euo
-		// pipefail`; a per-topic delete error exits 0 but rpk prints it in
-		// the status table, which lands in the streamed reset log rather
-		// than being discarded. Session IDs and connector names are
-		// [A-Za-z0-9_-], so the anchored literal needs no regex escaping.
-		fmt.Fprintf(&sb, `/usr/local/bin/rpk topic delete -r %q -X brokers=%q`+"\n",
-			"^"+connectTopic+"$", brokers)
+		sb.WriteString(fmt.Sprintf(
+			`/opt/kafka/bin/kafka-topics.sh --bootstrap-server %q --delete --topic %q 2>/dev/null || true`+"\n",
+			brokers, connectTopic,
+		))
+		kcPrefix := fmt.Sprintf("bench_%s_%s_kc", sessionID, connector)
+		sb.WriteString(fmt.Sprintf(
+			`/opt/kafka/bin/kafka-topics.sh --bootstrap-server %q --list 2>/dev/null `+
+				`| grep -E '^%s([.]|$)' `+
+				`| xargs -r -I {} /opt/kafka/bin/kafka-topics.sh --bootstrap-server %q --delete --topic {} 2>/dev/null `+
+				`|| true`+"\n",
+			brokers, kcPrefix, brokers,
+		))
 	}
 	return sb.String(), nil
 }

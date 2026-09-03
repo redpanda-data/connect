@@ -1,10 +1,7 @@
-// Copyright 2026 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
 
 package main
 
@@ -12,6 +9,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -183,17 +181,6 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 	prevBytes := map[string]float64{}
 	prevRecords := map[string]float64{}
 	out := map[string][]TopicPoint{}
-	// lastTopicTime is the timestamp of the most recent frame in which each
-	// topic actually appeared — tracked PER TOPIC, not globally. Redpanda
-	// emits a topic's per-partition counters only on the broker leading that
-	// partition, so a topic can be absent from an otherwise-good frame (a
-	// leadership move, or a scrape that hit a non-leader). Dividing that
-	// topic's next delta by a single global interval would span two scrape
-	// gaps over one interval and inflate the rate ~2x; keying the interval
-	// on the topic's own last-seen frame keeps each rate honest. Errored
-	// frames are skipped entirely above, so a topic's time only advances on
-	// frames that actually contributed its counters.
-	lastTopicTime := map[string]int64{}
 	for i, f := range frames {
 		if f.Errored {
 			continue
@@ -213,9 +200,7 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 		}
 		for topic, cur := range bytesByTopic {
 			prev, hadPrev := prevBytes[topic]
-			prevTime := lastTopicTime[topic] // valid iff hadPrev
 			prevBytes[topic] = cur
-			lastTopicTime[topic] = f.UnixTime
 
 			curRecs, hasRecs := recordsByTopic[topic]
 			prevRecs, hadPrevRecs := prevRecords[topic]
@@ -223,12 +208,11 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 				prevRecords[topic] = curRecs
 			}
 
-			// First sight of this topic: no prior counters to delta against.
-			if !hadPrev {
+			if !hadPrev || i == 0 {
 				continue
 			}
 			deltaBytes := cur - prev
-			interval := int(f.UnixTime - prevTime)
+			interval := int(f.UnixTime - frames[i-1].UnixTime)
 			if interval <= 0 || deltaBytes < 0 {
 				continue // counter reset or out-of-order frame; skip
 			}
@@ -253,18 +237,64 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 	return out, nil
 }
 
-// AttributeConnect picks Connect's series out of a full per-topic series map
-// for a given bench session. Connect writes to exactly one topic:
-// bench_<session>_<connector>_connect.
+// AttributeByEngine groups per-topic series into per-engine series for a
+// given bench session. The mapping rules mirror the topic-naming
+// conventions baked into Plan 2:
 //
-// This used to fan out into a per-engine map (AttributeByEngine) that also
-// merged Kafka Connect's topic-per-table series (Debezium prepends
-// topic.prefix to a per-table topic, so KC's throughput was the point-wise
-// sum across all of them). That merge — and the KC half of the attribution
-// — returns with the kafka-connect bench PR.
-func AttributeConnect(series map[string][]TopicPoint, sessionID, connector string) []TopicPoint {
+//	Connect → exactly one topic:  bench_<session>_<connector>_connect
+//	KC      → many topics:        bench_<session>_<connector>_kc.<schema>.<table>
+//	                              (Debezium prepends topic.prefix to a
+//	                              per-table topic)
+//
+// KC's per-table series are summed point-wise on matching T values; if
+// the per-topic series have ragged T values, missing values count as
+// zero. (In practice all Plan 2 KC topics scrape at the same cadence,
+// so the merge is straightforward.)
+func AttributeByEngine(series map[string][]TopicPoint, sessionID, connector string) (map[string][]TopicPoint, error) {
 	connectTopic := fmt.Sprintf("bench_%s_%s_connect", sessionID, connector)
-	return series[connectTopic]
+	kcPrefix := fmt.Sprintf("bench_%s_%s_kc", sessionID, connector)
+	out := map[string][]TopicPoint{
+		"connect":       nil,
+		"kafka_connect": nil,
+	}
+	if pts := series[connectTopic]; pts != nil {
+		out["connect"] = pts
+	}
+	var kcTopics []string
+	for t := range series {
+		if t == kcPrefix || strings.HasPrefix(t, kcPrefix+".") {
+			kcTopics = append(kcTopics, t)
+		}
+	}
+	if len(kcTopics) > 0 {
+		out["kafka_connect"] = mergeTopicSeries(series, kcTopics)
+	}
+	return out, nil
+}
+
+func mergeTopicSeries(series map[string][]TopicPoint, topics []string) []TopicPoint {
+	byT := map[int]float64{}
+	// Records must be merged alongside bytes. This is the KC path specifically
+	// (Debezium writes a topic per table, so its series always come through
+	// here), and dropping MsgPerSec here would zero out the compression-
+	// independent metric for exactly the engine it is needed to compare.
+	msgByT := map[int]float64{}
+	for _, t := range topics {
+		for _, p := range series[t] {
+			byT[p.T] += p.MBPerSec
+			msgByT[p.T] += p.MsgPerSec
+		}
+	}
+	ts := make([]int, 0, len(byT))
+	for t := range byT {
+		ts = append(ts, t)
+	}
+	sort.Ints(ts)
+	out := make([]TopicPoint, len(ts))
+	for i, t := range ts {
+		out[i] = TopicPoint{T: t, MBPerSec: byT[t], MsgPerSec: msgByT[t]}
+	}
+	return out
 }
 
 // splitLabeledMetric parses a single metric line of the form
@@ -288,13 +318,13 @@ func splitLabeledMetric(line string) (map[string]string, string, bool) {
 		valueStr = rest[:sp]
 	}
 	labels := map[string]string{}
-	for pair := range strings.SplitSeq(labelsRaw, ",") {
-		before, after, ok := strings.Cut(pair, "=")
-		if !ok {
+	for _, pair := range strings.Split(labelsRaw, ",") {
+		eq := strings.Index(pair, "=")
+		if eq < 0 {
 			continue
 		}
-		k := strings.TrimSpace(before)
-		v := strings.TrimSpace(after)
+		k := strings.TrimSpace(pair[:eq])
+		v := strings.TrimSpace(pair[eq+1:])
 		v = strings.Trim(v, `"`)
 		labels[k] = v
 	}

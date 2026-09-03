@@ -1,0 +1,114 @@
+name: iceberg-orders-sink-output-tuning
+description: |
+  Output-tuning A/B for the iceberg sink at a fixed 8-vCPU pin: find Connect's
+  real ceiling on Glue by sweeping the two knobs the published Recipe A froze
+  for KC-fairness — max_in_flight (16/32/64) and batch size/commit cadence
+  (10k/10s baseline vs 50k/10s, 10k/5s, 50k/30s, plus the 50k x mif32 cross).
+  Motivated by the local MinIO bench (docs/benchmark-results/iceberg.md), where
+  mif32 at batch 10k was ~4x mif4 and the ceiling was MinIO, not the connector;
+  nothing on AWS has ever run above mif16. Also directly answers the Garner POC
+  tuning thread (2026-08-20): what should batching/max_in_flight be on Glue?
+
+  a0-mif16 is the in-session baseline (published Recipe A verbatim) so arms
+  compare against a same-session, same-SHA control rather than an old run.
+  All arms share one seeded topic and reset to a fresh table + rewound group
+  per arm. Connect-only (arms constraint). One window per arm, no repeats:
+  treat sub-5% mean differences as noise.
+
+direction: sink
+connector: iceberg
+stack: iceberg
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 200000000  # ~224 GiB at 1200 B/row; sized so the fastest arm
+                           # (mif64, if it ~2x's the 8-vCPU Recipe A ~120 MB/s)
+                           # still cannot drain the topic inside the window.
+  row_size_bytes: 1200
+  seeder: json-orders
+  expected_peak_mb_s: 250
+
+pipeline:
+  # Recipe A (order-preserving), byte-for-byte the published orders-sink.yaml
+  # config. Arms override only what they measure.
+  buffer:
+    memory:
+      limit: 524288000   # 500 MiB; size to throughput x commit interval
+      batch_policy:
+        count: 10000
+        period: 10s
+  output:
+    iceberg:
+      max_in_flight: 16
+      batching:
+        count: 10000
+        period: 10s
+      commit:
+        max_snapshot_age: 24h
+
+matrix:
+  cpu_points: [8]
+  arms:
+    - id: a0-mif16          # baseline: Recipe A unchanged
+    - id: mif32
+      pipeline:
+        output:
+          iceberg:
+            max_in_flight: 32
+    - id: mif64
+      pipeline:
+        output:
+          iceberg:
+            max_in_flight: 64
+    # Batch-size/cadence arms override the buffer's batch_policy AND the
+    # output batching together, so the batches the committer sees actually
+    # change size (output batching can expand input batches but the buffer's
+    # policy decides what it is fed).
+    - id: b50k-10s
+      pipeline:
+        buffer:
+          memory:
+            batch_policy:
+              count: 50000
+        output:
+          iceberg:
+            batching:
+              count: 50000
+    - id: b10k-5s
+      pipeline:
+        buffer:
+          memory:
+            batch_policy:
+              period: 5s
+        output:
+          iceberg:
+            batching:
+              period: 5s
+    - id: b50k-30s
+      pipeline:
+        buffer:
+          memory:
+            batch_policy:
+              count: 50000
+              period: 30s
+        output:
+          iceberg:
+            batching:
+              count: 50000
+              period: 30s
+    # The crossing the local bench predicts is the sweet spot: bigger batches
+    # AND more concurrent commits.
+    - id: b50k-mif32
+      pipeline:
+        buffer:
+          memory:
+            batch_policy:
+              count: 50000
+        output:
+          iceberg:
+            max_in_flight: 32
+            batching:
+              count: 50000

@@ -1,30 +1,22 @@
-// Copyright 2026 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
 
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"maps"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -32,20 +24,10 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"gopkg.in/yaml.v3"
 )
 
 func main() {
-	// Operators run the bench as `runner bench ... | tee run.log`. Ctrl-C
-	// SIGINTs the whole foreground process group, so tee dies alongside us —
-	// and without this, Go's default SIGPIPE disposition kills the process on
-	// its next stdout write, ABORTING the deferred terraform destroy and
-	// stranding paid infrastructure (observed live 2026-08-12, twice).
-	// Ignoring SIGPIPE turns those writes into silently-dropped EPIPE errors
-	// so teardown completes even with nowhere to print.
-	signal.Ignore(syscall.SIGPIPE)
-
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)
@@ -90,31 +72,8 @@ type benchOpts struct {
 	region       string
 	repoRoot     string
 	licenseFile  string
-	// licenseSecret is the AWS Secrets Manager secret name or ARN to fall
-	// back to when licenseFile is unset or doesn't open — see
-	// resolveLicensePath. Scheduled runs (GitHub Actions) have no license
-	// file on disk, so this is how they get one.
-	licenseSecret string
-	// soakArchiveBucket is the persistent S3 bucket a soak run's result and
-	// raw artifacts are copied to — see uploadSoakResult. Unlike the
-	// session results bucket, this one is NOT force_destroy'd at teardown.
-	soakArchiveBucket string
-	// preflightOn gates the concurrent-bench-session guard (see
-	// preflightCheck). Defaults to true; --preflight=off is the emergency
-	// escape hatch for an operator who is certain no other session is live.
-	preflightOn bool
-	// binaries maps a logical binary name (matrix.arms[].binary) to a local
-	// path a PR-triggered workflow already built (e.g. "base"/"pr" for a
-	// merge-base vs. PR-head soak comparison — see CON-179 R6 increment 5).
-	// nil/empty is the default single-binary path: runBench builds
-	// redpanda-connect itself, unchanged from before this field existed.
-	binaries map[string]string
+	engines      []string
 }
-
-// defaultSoakArchiveBucket is the persistent soak archive bucket's name,
-// created by the persistent terraform stack (`task aws:persistent`) — not
-// by any bench session's own apply, and not force_destroy'd alongside it.
-const defaultSoakArchiveBucket = "redpanda-connect-bench-soak-archive"
 
 func benchCmd(args []string) error {
 	fs := flag.NewFlagSet("bench", flag.ExitOnError)
@@ -125,107 +84,31 @@ func benchCmd(args []string) error {
 	repoRoot := fs.String("repo-root", ".", "path to the connect repo root")
 	licenseFile := fs.String("license-file", os.Getenv("REDPANDA_LICENSE_FILEPATH"),
 		"path to a Redpanda Enterprise license file (defaults to $REDPANDA_LICENSE_FILEPATH). "+
-			"Required for enterprise connectors like postgres_cdc, unless --license-secret is set.")
-	licenseSecret := fs.String("license-secret", os.Getenv("REDPANDA_LICENSE_SECRET"),
-		"name or ARN of an AWS Secrets Manager secret whose SecretString is a Redpanda Enterprise "+
-			"license (defaults to $REDPANDA_LICENSE_SECRET). Used when --license-file is unset or "+
-			"doesn't open — the case for scheduled runs with no license file on disk.")
-	soakArchiveBucket := fs.String("soak-archive-bucket", defaultSoakArchiveBucket,
-		"S3 bucket a soak run's result.json + raw artifacts are archived to, since the session results "+
-			"bucket is force_destroy'd at teardown. Created by the persistent terraform stack "+
-			"(`task aws:persistent`).")
-	preflight := &preflightFlag{on: true}
-	fs.Var(preflight, "preflight",
-		`"on" (default) or "off": guard against a concurrent bench session already holding the shared `+
-			`Terraform stack. "off" is an emergency escape hatch only — concurrent sessions destroy `+
-			`each other's infrastructure.`)
-	binaries := &binaryFlag{}
-	fs.Var(binaries, "binary",
-		`Repeatable "name=path" mapping a logical binary (matrix.arms[].binary, e.g. "base" or "pr") to a `+
-			`pre-built redpanda-connect binary on disk. Used by a PR-triggered soak comparison, which builds `+
-			`the merge-base and PR-head binaries itself and passes both in rather than letting the runner `+
-			`build one. Every name a scenario's arms reference must be mapped, and every mapping must be `+
-			`referenced — an unreferenced mapping is very likely a typo.`)
+			"Required for enterprise connectors like postgres_cdc.")
+	engines := fs.String("engines", "connect,kafka_connect",
+		"Comma-separated engines to sweep at each vCPU point. Default runs both Connect and Kafka Connect side-by-side.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *scenario == "" {
-		return errors.New("--scenario is required")
+		return fmt.Errorf("--scenario is required")
+	}
+
+	engineList := strings.Split(*engines, ",")
+	for i, e := range engineList {
+		engineList[i] = strings.TrimSpace(e)
 	}
 
 	opts := benchOpts{
-		scenarioPath:      *scenario,
-		keep:              *keep,
-		keepOnFail:        *keepOnFail,
-		region:            *region,
-		repoRoot:          *repoRoot,
-		licenseFile:       *licenseFile,
-		licenseSecret:     *licenseSecret,
-		soakArchiveBucket: *soakArchiveBucket,
-		preflightOn:       preflight.on,
-		binaries:          binaries.m,
+		scenarioPath: *scenario,
+		keep:         *keep,
+		keepOnFail:   *keepOnFail,
+		region:       *region,
+		repoRoot:     *repoRoot,
+		licenseFile:  *licenseFile,
+		engines:      engineList,
 	}
 	return runBench(opts)
-}
-
-// preflightFlag is a flag.Value accepting "on"/"off" rather than Go's
-// default bool string parsing, so --preflight=off reads as the deliberate
-// emergency escape hatch it is instead of an easily-fat-fingered
-// --preflight=false.
-type preflightFlag struct {
-	on bool
-}
-
-func (f *preflightFlag) String() string {
-	if f.on {
-		return "on"
-	}
-	return "off"
-}
-
-func (f *preflightFlag) Set(s string) error {
-	switch strings.ToLower(s) {
-	case "on":
-		f.on = true
-	case "off":
-		f.on = false
-	default:
-		return fmt.Errorf(`invalid --preflight value %q: must be "on" or "off"`, s)
-	}
-	return nil
-}
-
-// binaryFlag is a flag.Value that accumulates repeated `--binary name=path`
-// flags into a map, since flag.FlagSet has no built-in repeatable-flag type.
-type binaryFlag struct {
-	m map[string]string
-}
-
-func (f *binaryFlag) String() string {
-	if len(f.m) == 0 {
-		return ""
-	}
-	parts := make([]string, 0, len(f.m))
-	for name, path := range f.m {
-		parts = append(parts, name+"="+path)
-	}
-	sort.Strings(parts)
-	return strings.Join(parts, ",")
-}
-
-func (f *binaryFlag) Set(s string) error {
-	name, path, ok := strings.Cut(s, "=")
-	if !ok || name == "" || path == "" {
-		return fmt.Errorf(`invalid --binary value %q: must be "name=path"`, s)
-	}
-	if f.m == nil {
-		f.m = map[string]string{}
-	}
-	if _, exists := f.m[name]; exists {
-		return fmt.Errorf("--binary %q specified more than once", name)
-	}
-	f.m[name] = path
-	return nil
 }
 
 func runBench(opts benchOpts) (errOut error) {
@@ -233,84 +116,44 @@ func runBench(opts benchOpts) (errOut error) {
 	if err != nil {
 		return err
 	}
+	if opts.licenseFile == "" {
+		return fmt.Errorf("--license-file is required (or set REDPANDA_LICENSE_FILEPATH); enterprise connectors won't start without one")
+	}
+	// Actually open the file (not just stat) so macOS TCC / sandbox / permissions
+	// failures surface before we provision any AWS infrastructure.
+	if f, err := os.Open(opts.licenseFile); err != nil {
+		return fmt.Errorf("license file %q: %w", opts.licenseFile, err)
+	} else {
+		f.Close()
+	}
 	fmt.Printf("[1/7] loaded scenario %s\n", s.Name)
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
-	// Every bench session applies and later DESTROYS the same shared
-	// Terraform stack, so two concurrent sessions destroy each other's
-	// infrastructure mid-run (observed live 2026-08-17: a laptop bench and
-	// the scheduled soak collided). Checked before any AWS call this run
-	// makes — including license resolution just below — so the conflict is
-	// caught before this session touches anything.
-	if opts.preflightOn {
-		ec2Client, err := NewEC2Client(ctx, opts.region)
-		if err != nil {
-			return fmt.Errorf("build EC2 client for preflight check: %w", err)
+	// matrix.arms compares Connect launch topologies (one iceberg pipeline vs.
+	// N streams-mode pipelines), not engines — Kafka Connect has no notion of
+	// streams, so arms require the sweep to be Connect-only. Checked here,
+	// before any infra apply / build / render / seed, so an invalid
+	// combination fails immediately instead of after minutes of wall-clock
+	// and real AWS spend.
+	if len(s.Matrix.Arms) > 0 {
+		if len(opts.engines) != 1 || opts.engines[0] != "connect" {
+			return fmt.Errorf("matrix.arms requires --engines=connect (got %v): arms compare Connect launch topologies, not engines", opts.engines)
 		}
-		if err := preflightCheck(ctx, ec2Client, opts.region, NewEC2Client); err != nil {
-			return err
-		}
-		fmt.Println("preflight: no concurrent bench session detected in any enabled region")
-	} else {
-		fmt.Println("⚠ preflight check DISABLED (--preflight=off): a concurrent bench session will destroy this one's infrastructure (or vice versa) with no warning")
 	}
-
-	// Resolve the license BEFORE any AWS infrastructure is provisioned, same
-	// reasoning as the old file-open check this replaces: surface a bad
-	// license source immediately rather than minutes into a paid run.
-	// resolveLicensePath tries --license-file first (unchanged local-operator
-	// workflow) and falls back to --license-secret (scheduled runs, which
-	// have no license file on disk).
-	licensePath, cleanupLicense, err := resolveLicensePath(ctx, opts, NewSecretsManagerClient)
-	if err != nil {
+	// Same fail-fast rationale for Connect-only sinks: KCConfig's late ok=false
+	// check otherwise fires only after apply + seed (~15 min of wall-clock and
+	// real AWS spend for a flag error — the 2026-08-18 snowflake smoke did
+	// exactly that on the default engine list).
+	if err := validateEngines(s, opts.engines); err != nil {
 		return err
-	}
-	defer cleanupLicense()
-	opts.licenseFile = licensePath
-
-	// --binary mappings must cover exactly the logical binaries the
-	// scenario's arms reference — no more, no less — before any AWS spend,
-	// same reasoning as the checks above.
-	if err := validateBinaryFlags(s, opts.binaries); err != nil {
-		return err
-	}
-
-	warmup, duration := sweepWarmupDuration(s)
-	// execTimeout bounds every script this session's SSM executor runs — the
-	// staging/seed commands as well as the sweep itself — at the AWS-
-	// RunShellScript document level (see NewSSMExecutor). Sized off the
-	// sweep's own warmup+duration plus slack rather than a scenario-specific
-	// value, since the same executor instance serves every command in the
-	// run and a generous cap is harmless for the short ones.
-	execTimeout := warmup + duration + execTimeoutSlack
-
-	// A soak point runs far longer than a sweep point, so the fixed cadences
-	// a short run tolerates would otherwise silently corrupt the run: the
-	// per-minute heartbeat would overflow SSM's ~24KB stdout cap over many
-	// hours, the 10s Prometheus scrape would accumulate gigabytes on disk and
-	// in S3, and a mid-run crash would lose the entire window's data. See
-	// matrix.go's benchScriptArgs for how these three feed the rendered
-	// script.
-	var heartbeatSec, promScrapeSec, checkpointSec int
-	var expectedRecordsPerSec float64
-	if s.Soak {
-		totalSec := int((warmup + duration).Seconds())
-		heartbeatSec = max(soakDefaultHeartbeatSec, totalSec/soakMaxHeartbeats)
-		promScrapeSec = soakPromScrapeSec
-		checkpointSec = soakCheckpointSec
-		if s.Workload != nil {
-			expectedRecordsPerSec = float64(s.Workload.WriteRatePerSec)
-		}
-		fmt.Printf("soak profile: window %s, heartbeat every %ds, prom scrape every %ds, checkpoint upload every %ds\n",
-			warmup+duration, heartbeatSec, promScrapeSec, checkpointSec)
 	}
 
 	topo, err := topologyFor(s.Direction)
 	if err != nil {
 		return err
 	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 
 	// BackendFile must be absolute: `terraform -chdir=<stack>` changes the
 	// working directory before resolving the -backend-config path.
@@ -343,22 +186,6 @@ func runBench(opts benchOpts) (errOut error) {
 		"bench_session_id":     sessionID,
 	}
 	stackVars := translateInfraSource(s.Infra.Source, opts.region)
-	// The per-connector stack (e.g. the postgres stack's RDS instance,
-	// subnet/parameter groups, and SGs) stamps this onto its resources via
-	// default_tags on the terraform side — it's the cleanup lambda's ONLY
-	// age signal for resource types that carry no creation-time attribute
-	// of their own.
-	stackVars["bench_session_id"] = sessionID
-
-	// soakRegressionOnly is set just before runBench's final return, when the
-	// only reason errOut is non-nil is the rolling-baseline comparator (see
-	// compareSoakRunToBaseline) — never for any earlier, genuine failure.
-	// The teardown defer below reads it to distinguish the two: a
-	// regression is a verdict about a run that itself SUCCEEDED (its full
-	// result is already archived in S3 by the time the comparator even
-	// runs), so unlike every other error it must never be treated as a
-	// reason to honor --keep-on-fail and strand infrastructure.
-	var soakRegressionOnly bool
 
 	// Register destroy BEFORE any apply, so a partial apply still gets torn
 	// down. terraform destroy is idempotent against a no-op state.
@@ -367,25 +194,13 @@ func runBench(opts benchOpts) (errOut error) {
 			fmt.Println("[7/7] keep=true: skipping teardown")
 			return
 		}
-		if errOut != nil && opts.keepOnFail && !soakRegressionOnly {
+		if errOut != nil && opts.keepOnFail {
 			fmt.Println("[7/7] keep-on-fail=true and run errored: skipping teardown")
 			return
 		}
 		fmt.Println("[7/7] terraform destroy")
-		// Attempt both destroys regardless of individual failure — a dead
-		// stack destroy must not strand the shared stack too. But a failed
-		// destroy means paid infrastructure is still running, so it must
-		// surface as a non-zero exit for the laptop-driven runs that have no
-		// CI-side teardown verification: only the reaper's TTL stands between
-		// a swallowed error here and a multi-day strand (see SOAK.md).
-		stackErr := tfStack.Destroy(stackVars)
-		sharedErr := tfShared.Destroy(sharedVars)
-		if err := errors.Join(stackErr, sharedErr); err != nil {
-			fmt.Printf("[7/7] TEARDOWN FAILED — infrastructure may still be running; retry with `task aws:down scenario=<path>` or check the orphan reaper: %v\n", err)
-			if errOut == nil {
-				errOut = fmt.Errorf("terraform destroy: %w", err)
-			}
-		}
+		_ = tfStack.Destroy(stackVars)
+		_ = tfShared.Destroy(sharedVars)
 	}()
 
 	if err := tfShared.Apply(sharedVars); err != nil {
@@ -405,28 +220,22 @@ func runBench(opts benchOpts) (errOut error) {
 	if err != nil {
 		return fmt.Errorf("terraform output stack: %w", err)
 	}
-	maps.Copy(sharedOuts, stackOuts)
+	for k, v := range stackOuts {
+		sharedOuts[k] = v
+	}
 	// The runner-provided session ID is a Terraform input, not output — inject
-	// it here so per-engine renderers (renderPipelineConfig, combineReset) can
-	// read it via outs["bench_session_id"].
+	// it here so per-engine renderers (renderPipelineConfig, buildKCRenderInputs,
+	// combineReset) can read it via outs["bench_session_id"].
 	sharedOuts["bench_session_id"] = sessionID
-	// aws_region is data the runner already holds (not a TF output).
+	// aws_region is data the runner already holds (not a TF output). Sink Glue
+	// calls (catalog region, glue CLI --region) read it from outs["aws_region"].
 	sharedOuts["aws_region"] = opts.region
 
-	// --binary mappings supply pre-built binaries (a PR-triggered soak
-	// comparison builds merge-base and PR-head itself), so there is no
-	// default binary to build in that case — validateBinaryFlags already
-	// confirmed every arm that needs one has a mapping.
-	var binPath string
-	if len(opts.binaries) == 0 {
-		binPath, err = buildConnect(opts.repoRoot)
-		if err != nil {
-			return fmt.Errorf("build connect: %w", err)
-		}
-		fmt.Println("[3/7] built redpanda-connect")
-	} else {
-		fmt.Printf("[3/7] skipping default build: staging provided --binary mappings %v\n", sortedBinaryNames(opts.binaries))
+	binPath, err := buildConnect(opts.repoRoot)
+	if err != nil {
+		return fmt.Errorf("build connect: %w", err)
 	}
+	fmt.Println("[3/7] built redpanda-connect")
 
 	plan := buildSweepPlan(s)
 	// legacy scenarios (no matrix.arms) share one config across every point,
@@ -449,23 +258,49 @@ func runBench(opts benchOpts) (errOut error) {
 			sets = append(sets, set)
 		}
 	}
-	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy, execTimeout); err != nil {
+	// Upload the connector's table helper binary (sink scenarios only) BEFORE
+	// stageArtefacts, whose SSM script downloads it onto the runner — otherwise
+	// the object isn't in S3 yet and the best-effort download no-ops.
+	if err := stageTableGenForSink(ctx, opts, s, sharedOuts); err != nil {
+		return fmt.Errorf("stage sink table helper: %w", err)
+	}
+	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy); err != nil {
 		return fmt.Errorf("stage artefacts: %w", err)
 	}
 	fmt.Println("[4/7] staged binary + config on runner")
 
-	if err := runSeeder(ctx, opts, s, sharedOuts, topo, names, execTimeout); err != nil {
+	if err := runSeeder(ctx, opts, s, sharedOuts, topo, names); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
 	fmt.Println("[5/7] seed complete")
 
-	ssmExec, err := NewSSMExecutor(ctx, opts.region, execTimeout)
+	ssmExec, err := NewSSMExecutor(ctx, opts.region)
 	if err != nil {
 		return err
 	}
 	logFetcher, err := NewS3LogFetcher(ctx, opts.region)
 	if err != nil {
 		return err
+	}
+
+	var kcConnectorName, kcConfigJSON string
+	needsKC := false
+	for _, e := range opts.engines {
+		if e == "kafka_connect" {
+			needsKC = true
+			break
+		}
+	}
+	if needsKC {
+		res, ok, err := topo.KCConfig(s, sharedOuts, names)
+		if err != nil {
+			return fmt.Errorf("KC config: %w", err)
+		}
+		if !ok {
+			return fmt.Errorf("engine list includes kafka_connect but direction %q has no KC counterpart", s.Direction)
+		}
+		kcConnectorName = res.ConnectorName
+		kcConfigJSON = res.ConfigJSON
 	}
 
 	mr := &MatrixRunner{
@@ -485,29 +320,14 @@ func runBench(opts benchOpts) (errOut error) {
 		SessionID:                sessionID,
 		RedpandaMetricsEndpoint:  sharedOuts["redpanda_metrics_endpoint"],
 		RedpandaMetricsEndpoints: sharedOuts["redpanda_metrics_endpoints"],
+		Engines:                  opts.engines,
+		KCConnectorName:          kcConnectorName,
+		KCConnectorConfigJSON:    kcConfigJSON,
 		Topology:                 topo,
 		Names:                    names,
+		Topics:                   s.Dataset.Topics,
 		Outs:                     sharedOuts,
-		HeartbeatSec:             heartbeatSec,
-		PromScrapeSec:            promScrapeSec,
-		CheckpointSec:            checkpointSec,
-		ExpectedRecordsPerSec:    expectedRecordsPerSec,
-	}
-	// A soak run publishes per-minute CloudWatch metrics as it goes, so an
-	// operator (or an alarm) can watch a run that may still have 23 hours
-	// left, instead of only finding out something went wrong when the
-	// result JSON lands at the end. Deliberately orchestrator-side (see
-	// MatrixRunner.Emitter): the runner EC2 instance role is never given
-	// cloudwatch:PutMetricData, so a future PR-mode binary running under
-	// that role cannot spoof the metrics that judge it.
-	if s.Soak {
-		emitter, err := NewCloudWatchEmitter(ctx, opts.region, CloudWatchNamespace, s.Connector, s.Name)
-		if err != nil {
-			return fmt.Errorf("build CloudWatch emitter: %w", err)
-		}
-		mr.Emitter = emitter
-		fmt.Printf("soak profile: publishing metrics to CloudWatch namespace %q, dimensions Connector=%q Scenario=%q\n",
-			CloudWatchNamespace, s.Connector, s.Name)
+		Direction:                s.Direction,
 	}
 	// Reset must cover the union of every arm's tables (planMaxStreams), not
 	// just this scenario's own Streams, so one precomputed reset script serves
@@ -519,6 +339,14 @@ func runBench(opts benchOpts) (errOut error) {
 	workload, err := topo.WorkloadScript(s, sharedOuts, names)
 	if err != nil {
 		return err
+	}
+	warmup := time.Duration(0)
+	duration := time.Duration(0)
+	if s.Workload != nil {
+		warmup = s.Workload.Warmup
+		duration = s.Workload.Duration
+	} else {
+		duration = minDuration
 	}
 	points, err := mr.Run(ctx, plan, s.Matrix.GoMemLimitPerVCPU, warmup, duration, reset, workload)
 	if err != nil {
@@ -554,12 +382,20 @@ func runBench(opts benchOpts) (errOut error) {
 			Prom:         p.Prom,
 			BrokerSeries: p.BrokerSeries,
 			Arm:          p.ArmID,
-			Binary:       p.Binary,
 			GOMAXPROCS:   p.GOMAXPROCS,
 			Streams:      p.Streams,
-			Backlog:      p.Backlog,
 		})
 	}
+	var connectPts, kcPts []PointResult
+	for _, p := range result.Points {
+		switch p.Engine {
+		case "connect":
+			connectPts = append(connectPts, p)
+		case "kafka_connect":
+			kcPts = append(kcPts, p)
+		}
+	}
+	result.CrossEngineAnomalies = DetectCrossEngineAnomalies(connectPts, kcPts, 2.0)
 	resultsDir := filepath.Join(opts.repoRoot, "benchmarking/aws/results")
 	jsonPath, err := WriteResultJSON(resultsDir, result)
 	if err != nil {
@@ -575,333 +411,8 @@ func runBench(opts benchOpts) (errOut error) {
 		// because the project-level summary couldn't be rewritten.
 		fmt.Fprintf(os.Stderr, "warning: refresh SUMMARY.md: %v\n", err)
 	}
-	// A soak run's result also lands in the PERSISTENT soak archive bucket:
-	// the full JSON at a session-scoped key (so it's fetchable without a
-	// checkout of this repo), a small index line under soak-index/<scenario>/
-	// that the rolling-baseline comparator just below lists without
-	// downloading every run's full JSON, and copies of the raw per-point
-	// artifacts (sweep log, Prometheus dump, broker scrape) the bench script
-	// already wrote to the session results bucket — which is
-	// force_destroy'd by the teardown defer just below, minutes from now.
-	// The upload itself is non-fatal — a bench run that produced a valid
-	// local result must not fail because of an S3 hiccup on the archive
-	// upload — but a REGRESSION the comparator finds against a mature
-	// baseline, after a successful upload, is not: see soakRegressionErr
-	// below.
-	//
-	// A binary-arm soak (base vs. PR, see IsBinaryArmScenario) is a
-	// deliberate one-off A/B, not a nightly baseline sample: uploadSoakResult
-	// skips its soak-index entry so it never pollutes the rolling baseline's
-	// median, and the rolling-baseline comparator itself is skipped in favor
-	// of the two-run comparison markdown below.
-	var soakRegressionErr error
-	if s.Soak {
-		entry, err := uploadSoakResult(ctx, opts.region, sharedOuts["results_bucket"], opts.soakArchiveBucket, sessionID, s, result, jsonPath, topo, logFetcher)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: archive soak result to S3: %v\n", err)
-		} else if !s.IsBinaryArmScenario() {
-			soakRegressionErr = compareSoakRunToBaseline(ctx, opts, s, sessionID, entry, logFetcher)
-		}
-		if s.IsBinaryArmScenario() {
-			if err := reportSoakComparison(ctx, opts, s, sessionID, result); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: soak comparison (non-fatal): %v\n", err)
-			}
-		}
-	}
 	fmt.Printf("\n✓ done — JSON: %s\n           md: %s\n           summary: %s\n", jsonPath, mdPath, summaryPath)
-	// soakRegressionErr is returned LAST, only after every step above
-	// (including the archive upload) has already run. soakRegressionOnly is
-	// set here, immediately before the return the deferred teardown above
-	// observes — see its own comment for why a regression must never be
-	// treated like an ordinary failure for --keep-on-fail purposes.
-	if soakRegressionErr != nil {
-		soakRegressionOnly = true
-	}
-	return soakRegressionErr
-}
-
-// soakIndexEntry is the small per-run record a rolling-baseline comparator
-// (a later increment) can list under soak-index/<scenario>/ without having
-// to download every run's full result JSON first.
-type soakIndexEntry struct {
-	Scenario      string    `json:"scenario"`
-	Connector     string    `json:"connector"`
-	SessionID     string    `json:"session_id"`
-	StartedAt     time.Time `json:"started_at"`
-	MedianMBps    float64   `json:"median_mbps"`
-	P5MBps        float64   `json:"p5"`
-	P95MBps       float64   `json:"p95"`
-	RSSMaxBytes   uint64    `json:"rss_max_bytes"`
-	BacklogMaxSec float64   `json:"backlog_max_sec"`
-	// BuildSHA is the git commit the soaked binary was built from. The
-	// nightly workflow's change gate diffs HEAD against the last soaked SHA
-	// to skip runs when nothing relevant merged. Empty when git metadata is
-	// unavailable (gate then runs the soak — fail open, toward coverage).
-	BuildSHA string `json:"build_sha,omitempty"`
-}
-
-// soakArchivePlan is the set of S3 keys one soak run's archive upload
-// writes (ResultKey, IndexKey) and copies (RawKeys) — computed without
-// touching AWS so the destination layout can be unit-tested (see
-// TestBuildSoakArchivePlan) independently of any S3 call. RawKeys use the
-// IDENTICAL key in both the session results bucket (source — the bench
-// script wrote them there) and the archive bucket (destination), so the
-// raw evidence lands at exactly the path its S3 key already implies.
-type soakArchivePlan struct {
-	ResultKey string
-	IndexKey  string
-	RawKeys   []string
-}
-
-// soakRawArtifactKeys returns the raw per-point artifact keys (sweep log,
-// Prometheus dump, and — when a Topology supplied one — the broker scrape)
-// for ONE measured point, under runs/<sessionID>/. Split out of
-// buildSoakArchivePlan so uploadSoakResult can call it once per point of a
-// binary-arm soak's multiple measured points (one per arm), not just the
-// single key buildSoakArchivePlan itself was designed around.
-func soakRawArtifactKeys(sessionID, key, brokerArtifact string) []string {
-	if key == "" {
-		return nil
-	}
-	keys := []string{
-		fmt.Sprintf("runs/%s/sweep-%s.log", sessionID, key),
-		fmt.Sprintf("runs/%s/prom-%s.txt", sessionID, key),
-	}
-	if brokerArtifact != "" {
-		keys = append(keys, fmt.Sprintf("runs/%s/%s", sessionID, brokerArtifact))
-	}
-	return keys
-}
-
-// buildSoakArchivePlan computes soakArchivePlan for one soak run. key is the
-// sweepPoint key (see sweepPoint.Key) of the run's single measured point;
-// brokerArtifact is Topology.MetricArtifact(key), or "" when no Topology was
-// available to compute it (that raw file is then simply skipped, same as
-// key == "").
-func buildSoakArchivePlan(sessionID, scenarioName, key, brokerArtifact string) soakArchivePlan {
-	return soakArchivePlan{
-		ResultKey: fmt.Sprintf("runs/%s/result.json", sessionID),
-		IndexKey:  fmt.Sprintf("soak-index/%s/%s.json", scenarioName, sessionID),
-		RawKeys:   soakRawArtifactKeys(sessionID, key, brokerArtifact),
-	}
-}
-
-// buildSoakArchivePlanForPoints extends buildSoakArchivePlan to a soak run's
-// FULL result.Points rather than just its single measured point: EVERY
-// point contributes its own raw artifact keys, not just the first. A
-// binary-arm soak (see Scenario.IsBinaryArmScenario) measures multiple
-// points in one session — one per arm — and each arm's raw evidence (sweep
-// log, Prometheus dump, broker scrape) must be archived, or the PR arm's
-// half of the comparison would be silently missing from the archive.
-func buildSoakArchivePlanForPoints(sessionID, scenarioName string, points []PointResult, topo Topology) soakArchivePlan {
-	plan := soakArchivePlan{
-		ResultKey: fmt.Sprintf("runs/%s/result.json", sessionID),
-		IndexKey:  fmt.Sprintf("soak-index/%s/%s.json", scenarioName, sessionID),
-	}
-	for _, p := range points {
-		key := sweepPoint{VCPU: p.VCPU, ArmID: p.Arm}.Key()
-		var brokerArtifact string
-		if topo != nil {
-			brokerArtifact = topo.MetricArtifact(key)
-		}
-		plan.RawKeys = append(plan.RawKeys, soakRawArtifactKeys(sessionID, key, brokerArtifact)...)
-	}
-	return plan
-}
-
-// uploadSoakResult archives a soak run's full result JSON, a soakIndexEntry
-// summary, and its raw per-point artifacts (sweep log, Prometheus dump,
-// broker scrape) to archiveBucket — the PERSISTENT bucket the terraform
-// persistent stack creates (`task aws:persistent`), not the session results
-// bucket (sessionBucket), which is force_destroy'd at teardown minutes
-// after this returns. sessionBucket + logFetcher are read-only here: they
-// are where the bench script already wrote the raw artifacts this function
-// copies onward.
-//
-// The soakIndexEntry is returned even on error (see buildSoakIndexEntry) so
-// a caller that only needs the entry for comparison, not the upload
-// itself, isn't forced to rebuild it after a failure. The raw-artifact copy
-// is non-fatal per file: a missing or unfetchable artifact is logged and
-// skipped, so one gap never costs the run its result.json / soak-index
-// entry.
-//
-// A binary-arm soak (see Scenario.IsBinaryArmScenario) measures MULTIPLE
-// points in one session — one per arm — unlike the single-point soak this
-// function was originally built for: every point's raw artifacts are
-// archived (not just the first), and the soak-index entry is skipped
-// entirely, since a one-off base-vs-PR A/B must never be mixed into the
-// rolling baseline's median (see compareSoakBaseline).
-func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket, sessionID string, s *Scenario, result *Result, jsonPath string, topo Topology, logFetcher LogFetcher) (soakIndexEntry, error) {
-	entry := buildSoakIndexEntry(sessionID, s, result)
-	entry.BuildSHA = gitHeadSHA()
-	if archiveBucket == "" {
-		return entry, errors.New("no soak archive bucket configured (--soak-archive-bucket)")
-	}
-	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
-	if err != nil {
-		return entry, err
-	}
-	client := s3.NewFromConfig(cfg)
-
-	plan := buildSoakArchivePlanForPoints(sessionID, s.Name, result.Points, topo)
-
-	raw, err := os.ReadFile(jsonPath)
-	if err != nil {
-		return entry, fmt.Errorf("read local result JSON %s: %w", jsonPath, err)
-	}
-	if err := putSoakArchiveObject(ctx, client, archiveBucket, plan.ResultKey, raw); err != nil {
-		return entry, err
-	}
-
-	// A binary-arm soak's entry must never land in soak-index/ — see the
-	// doc comment above.
-	if !s.IsBinaryArmScenario() {
-		indexRaw, err := json.Marshal(entry)
-		if err != nil {
-			return entry, fmt.Errorf("marshal soak index entry: %w", err)
-		}
-		if err := putSoakArchiveObject(ctx, client, archiveBucket, plan.IndexKey, indexRaw); err != nil {
-			return entry, err
-		}
-	}
-
-	if sessionBucket == "" || logFetcher == nil {
-		return entry, nil
-	}
-	for _, rawKey := range plan.RawKeys {
-		if err := copySoakArtifact(ctx, logFetcher, client, sessionBucket, archiveBucket, rawKey); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: archive raw soak artifact %s (non-fatal): %v\n", rawKey, err)
-		}
-	}
-	return entry, nil
-}
-
-// gitHeadSHA returns the working tree's HEAD commit, or "" when git is
-// unavailable — the change gate treats "" as "always run".
-func gitHeadSHA() string {
-	out, err := exec.Command("git", "rev-parse", "HEAD").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
-// buildSoakIndexEntry computes the small per-run record uploadSoakResult
-// archives under soak-index/<scenario>/ from sessionID, the scenario, and
-// its Result — pure, so both uploadSoakResult and the rolling-baseline
-// comparator's caller (see runBench) can build the SAME entry without a
-// round trip through S3.
-//
-// A soak scenario is validated (see Scenario.Validate) to have exactly one
-// cpu_points entry and engines=connect, so result.Points has exactly one
-// element in the success path — but this degrades to zero values rather
-// than panicking if that ever changes.
-func buildSoakIndexEntry(sessionID string, s *Scenario, result *Result) soakIndexEntry {
-	entry := soakIndexEntry{
-		Scenario:  s.Name,
-		Connector: s.Connector,
-		SessionID: sessionID,
-		StartedAt: result.StartedAt,
-	}
-	if len(result.Points) == 0 {
-		return entry
-	}
-	p := result.Points[0]
-	entry.MedianMBps = p.Summary.MedianMBPerSec
-	entry.P5MBps = p.Summary.P5MBPerSec
-	entry.P95MBps = p.Summary.P95MBPerSec
-	for _, pp := range p.Prom {
-		if pp.RSSBytes > entry.RSSMaxBytes {
-			entry.RSSMaxBytes = pp.RSSBytes
-		}
-	}
-	for _, b := range p.Backlog {
-		if b.BacklogSec > entry.BacklogMaxSec {
-			entry.BacklogMaxSec = b.BacklogSec
-		}
-	}
-	return entry
-}
-
-// putSoakArchiveObject uploads body to key in the soak archive bucket,
-// rewriting a missing-bucket error into an actionable one via
-// wrapSoakArchiveUploadErr.
-func putSoakArchiveObject(ctx context.Context, client *s3.Client, bucket, key string, body []byte) error {
-	if _, err := client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: &bucket, Key: &key, Body: bytes.NewReader(body),
-	}); err != nil {
-		return wrapSoakArchiveUploadErr(key, bucket, err)
-	}
 	return nil
-}
-
-// wrapSoakArchiveUploadErr adds an actionable hint to a soak-archive upload
-// error when it's specifically a missing bucket: that bucket is created by
-// the persistent terraform stack, not by any bench session's own apply, so
-// a fresh account (or one where the persistent stack hasn't been applied
-// yet) hits this on its very first soak run, and "NoSuchBucket" alone gives
-// no clue what to do about it. Split out from putSoakArchiveObject so the
-// message can be pinned in a test without a real S3 client (see
-// TestWrapSoakArchiveUploadErr_NoSuchBucket).
-func wrapSoakArchiveUploadErr(key, bucket string, err error) error {
-	var nsb *s3types.NoSuchBucket
-	if errors.As(err, &nsb) {
-		return fmt.Errorf("upload %s to soak archive bucket %q: bucket does not exist — run `task aws:persistent` to create it: %w", key, bucket, err)
-	}
-	return fmt.Errorf("upload %s to soak archive bucket %q: %w", key, bucket, err)
-}
-
-// copySoakArtifact streams one raw per-point artifact from the session
-// results bucket (where the bench script wrote it) into the archive
-// bucket, under the identical key.
-func copySoakArtifact(ctx context.Context, fetcher LogFetcher, client *s3.Client, sessionBucket, archiveBucket, key string) error {
-	body, err := fetcher.Fetch(ctx, sessionBucket, key)
-	if err != nil {
-		return fmt.Errorf("fetch from session bucket %q: %w", sessionBucket, err)
-	}
-	defer body.Close()
-	raw, err := io.ReadAll(body)
-	if err != nil {
-		return fmt.Errorf("read: %w", err)
-	}
-	return putSoakArchiveObject(ctx, client, archiveBucket, key, raw)
-}
-
-// soakComparisonBaseArm and soakComparisonPRArm are the fixed logical arm
-// ids reportSoakComparison compares. A PR-triggered soak workflow always
-// supplies exactly these two --binary mappings (see the binary-arm shape
-// Scenario.Validate enforces); a scenario using different arm ids simply
-// has no base/pr pair to compare, so BuildSoakComparisonMarkdown's own
-// "arm not found" error becomes a skip below rather than a failure.
-const (
-	soakComparisonBaseArm = "base"
-	soakComparisonPRArm   = "pr"
-)
-
-// reportSoakComparison builds the base-vs-PR markdown for a binary-arm soak
-// (see Scenario.IsBinaryArmScenario), prints it to stdout between fixed
-// delimiters a calling GitHub Actions workflow greps between to post it as
-// a PR comment, and uploads it alongside the run's other soak archive
-// artifacts. Non-fatal by design at the call site (runBench): a soak run
-// that measured successfully must not fail because this reporting step
-// couldn't reach S3.
-func reportSoakComparison(ctx context.Context, opts benchOpts, s *Scenario, sessionID string, result *Result) error {
-	md, err := BuildSoakComparisonMarkdown(s.Name, result.Points, soakComparisonBaseArm, soakComparisonPRArm)
-	if err != nil {
-		fmt.Printf("soak comparison: %v (skipping)\n", err)
-		return nil
-	}
-	fmt.Println("---SOAK-COMPARISON-BEGIN---")
-	fmt.Println(md)
-	fmt.Println("---SOAK-COMPARISON-END---")
-
-	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
-	if err != nil {
-		return fmt.Errorf("load AWS config for soak comparison upload: %w", err)
-	}
-	client := s3.NewFromConfig(cfg)
-	key := fmt.Sprintf("runs/%s/comparison.md", sessionID)
-	return putSoakArchiveObject(ctx, client, opts.soakArchiveBucket, key, []byte(md))
 }
 
 func hashScenario(s *Scenario) string {
@@ -919,53 +430,14 @@ func gitSHA(repoRoot string) string {
 }
 
 func totalDuration(s *Scenario, points int) time.Duration {
-	warmup, duration := sweepWarmupDuration(s)
-	return time.Duration(points) * (warmup + duration)
-}
-
-// sweepWarmupDuration returns the scenario's per-point warmup and duration,
-// applying the workload-less bounded-dataset default (0 warmup, minDuration —
-// see Scenario.Validate) so every caller sizing a wall-clock estimate
-// (execTimeout, totalDuration) uses the same fallback.
-func sweepWarmupDuration(s *Scenario) (warmup, duration time.Duration) {
 	if s.Workload == nil {
-		return 0, minDuration
+		return time.Duration(points) * minDuration
 	}
-	return s.Workload.Warmup, s.Workload.Duration
+	return time.Duration(points) * (s.Workload.Warmup + s.Workload.Duration)
 }
-
-const (
-	// execTimeoutSlack is added atop the sweep's warmup+duration when sizing
-	// the session's shared SSM execution timeout (see NewSSMExecutor), so
-	// scheduling jitter — terraform output propagation, workload startup,
-	// the staging/seed commands that run before the sweep on the SAME
-	// executor — never trips the SSM agent's executionTimeout right at the
-	// wall-clock the sweep itself is expected to take.
-	execTimeoutSlack = 30 * time.Minute
-
-	// soakDefaultHeartbeatSec is the sweep's own heartbeat cadence (60s),
-	// used as a floor: a soak run's heartbeat only widens past this, it
-	// never narrows below the short-sweep behavior.
-	soakDefaultHeartbeatSec = 60
-	// soakMaxHeartbeats bounds how many heartbeat lines a soak run emits
-	// through SSM stdout (~24KB cap). totalSec/soakMaxHeartbeats gives a
-	// cadence that keeps a 24h run to ~60 heartbeat lines regardless of
-	// window length.
-	soakMaxHeartbeats = 60
-	// soakPromScrapeSec is the Connect /metrics scrape cadence for a soak
-	// run. Widened from the sweep's 10s default so a 24h run's snapshot
-	// file stays in the tens-of-MB range instead of the ~4GB a 10s cadence
-	// would accumulate.
-	soakPromScrapeSec = 60
-	// soakCheckpointSec is how often a soak run uploads its in-progress log
-	// and Prometheus snapshot to their FINAL S3 keys, overwriting each time.
-	// This is what makes a 24h run's data survive a mid-run crash instead of
-	// losing the entire window.
-	soakCheckpointSec = 600
-)
 
 func newSessionID() string {
-	return "bench-" + time.Now().UTC().Format("20060102-150405")
+	return fmt.Sprintf("bench-%s", time.Now().UTC().Format("20060102-150405"))
 }
 
 func validateCmd(args []string) error {
@@ -975,7 +447,7 @@ func validateCmd(args []string) error {
 		return err
 	}
 	if *scenario == "" {
-		return errors.New("--scenario is required")
+		return fmt.Errorf("--scenario is required")
 	}
 	s, err := LoadScenario(*scenario)
 	if err != nil {
@@ -995,7 +467,7 @@ func downCmd(args []string) error {
 		return err
 	}
 	if *scenario == "" {
-		return errors.New("--scenario is required")
+		return fmt.Errorf("--scenario is required")
 	}
 	s, err := LoadScenario(*scenario)
 	if err != nil {
@@ -1017,17 +489,13 @@ func downCmd(args []string) error {
 	}
 	_ = stack.Init()
 	_ = shared.Init()
-	// Attempt both destroys regardless of individual failure, mirroring
-	// runBench's teardown defer: this is the documented recovery path after
-	// a failed run, so the stack destroy is the most likely one to fail
-	// again — and a stuck RDS delete must not strand the shared stack's
-	// five EC2 instances too.
-	stackErr := stack.Destroy(translateInfraSource(s.Infra.Source, *region))
-	sharedErr := shared.Destroy(map[string]string{
+	if err := stack.Destroy(translateInfraSource(s.Infra.Source, *region)); err != nil {
+		return err
+	}
+	return shared.Destroy(map[string]string{
 		"region":               *region,
 		"runner_instance_type": s.Infra.Runner.InstanceType,
 	})
-	return errors.Join(stackErr, sharedErr)
 }
 
 func costCheckCmd(args []string) error {
@@ -1074,9 +542,9 @@ func translateInfraSource(src map[string]any, region string) map[string]string {
 		case string:
 			out[k] = val
 		case int:
-			out[k] = strconv.Itoa(val)
+			out[k] = fmt.Sprintf("%d", val)
 		case int64:
-			out[k] = strconv.FormatInt(val, 10)
+			out[k] = fmt.Sprintf("%d", val)
 		case float64:
 			out[k] = fmt.Sprintf("%v", val)
 		case []any:
@@ -1191,14 +659,96 @@ func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, na
 	if buf, ok := s.Pipeline["buffer"]; ok {
 		cfg["buffer"] = buf
 	}
+	// A scenario may declare pipeline-level processors (e.g. type coercion a
+	// real source would provide natively). They render into the standard
+	// benthos pipeline.processors section — NOT inside the input component
+	// map, where benthos rejects the field ("field processors not
+	// recognised", hit live 2026-08-24).
+	if procs, ok := s.Pipeline["processors"]; ok {
+		cfg["pipeline"] = map[string]any{"processors": procs}
+	}
+	return writeTempYAML(cfg, outs, "bench-config-*.yaml")
+}
+
+// fanInTableExpr routes a fan-in arm's iceberg output table by the record's
+// source topic, so fan-in writes the exact same N tables that streams mode
+// writes for a multi-topic scenario (see BenchNames.IcebergTablesForTopics
+// and TestFanInTableExpr_MatchesTopicDerivedTableNames, which asserts the
+// equivalence element-for-element). kafka_topic metadata is set by the
+// redpanda input for every consumed record (internal/impl/kafka/
+// franz_reader.go). Glue table identifiers cannot contain '-', hence the
+// dash->underscore replacement (mirrors BenchNames.icebergTableBase); the
+// second replace maps a topic's _src_t<i> suffix to the table's _connect_t<i>
+// suffix, matching IcebergTable's Topics > 1 naming rule.
+const fanInTableExpr = `${! @kafka_topic.replace_all("-","_").replace_all("_src_t","_connect_t") }`
+
+// renderFanInConfig renders the single config for a fan-in arm: one pipeline
+// whose redpanda input subscribes to all of dataset.topics' N source topics
+// under the unsuffixed consumer group (one group, N subscriptions), and whose
+// output's table is fanInTableExpr rather than the literal name
+// topo.Pipeline would otherwise set — that literal is for exactly ONE topic's
+// table and would misroute every other topic's records if left in place.
+// This mutates a fresh copy of topo.Pipeline's result rather than changing
+// sinkTopology.Pipeline's behaviour for other callers.
+func renderFanInConfig(s *Scenario, outs map[string]string, topo Topology, names BenchNames) (string, error) {
+	n := s.Dataset.Topics
+	if n <= 1 {
+		return "", fmt.Errorf("fan-in requires dataset.topics > 1 (got %d)", n)
+	}
+	scoped := names.WithTopics(n)
+
+	// topo.Pipeline needs SOME topic-scoped BenchNames to build the
+	// redpanda-input/iceberg-output skeleton; topic 0 is as good as any
+	// since its topics list and table are both overwritten below.
+	input, output, err := topo.Pipeline(s, scoped.WithTopic(0))
+	if err != nil {
+		return "", fmt.Errorf("render fan-in pipeline: %w", err)
+	}
+
+	redpandaIn, ok := input["redpanda"].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("fan-in: expected a redpanda input, got %T", input["redpanda"])
+	}
+	topics := make([]any, n)
+	for i := 0; i < n; i++ {
+		topics[i] = scoped.WithTopic(i).SourceTopic()
+	}
+	redpandaIn["topics"] = topics
+	// The unsuffixed group: names is not topic-scoped (Topics <= 1), so
+	// ConsumerGroup reproduces today's exact single-topic name — one group,
+	// N subscriptions, per the design's fan-in wiring.
+	redpandaIn["consumer_group"] = names.ConsumerGroup("connect")
+
+	// output has exactly one entry (the sink's output component, e.g.
+	// "iceberg") — topo.Pipeline's contract. Overwrite its table with the
+	// interpolated expression instead of the single literal table name
+	// topo.Pipeline set for topic 0.
+	for _, v := range output {
+		icfg, ok := v.(map[string]any)
+		if !ok {
+			return "", fmt.Errorf("fan-in: expected output component to be a map, got %T", v)
+		}
+		icfg["table"] = fanInTableExpr
+	}
+
+	cfg := rootSections(s)
+	cfg["input"] = input
+	cfg["output"] = output
+	if buf, ok := s.Pipeline["buffer"]; ok {
+		cfg["buffer"] = buf
+	}
 	return writeTempYAML(cfg, outs, "bench-config-*.yaml")
 }
 
 // renderPointConfigs renders the launch config(s) for one sweep point. A
-// point with Streams <= 1 gets a single config identical in shape to the
-// pre-arms renderer. A multi-stream point gets a root config (observability
-// only) plus one stream config per pipeline, each stream distinguished only
-// by BenchNames (WithStreams/WithStream, _s<i>).
+// fan-in point gets one config (renderFanInConfig). A point with Streams <= 1
+// gets a single config identical in shape to the pre-arms renderer. A
+// multi-stream point gets a root config (observability only) plus one stream
+// config per pipeline. For a single-topic scenario each stream shares the
+// source topic and consumer group, distinguished only by table (_s<i>); for
+// a multi-topic scenario (dataset.topics > 1) each stream instead reads its
+// OWN topic (_t<i>) under its own group and table, and Streams must equal
+// dataset.topics or every extra topic would sit unconsumed.
 func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, names BenchNames, p sweepPoint) (renderedPointConfigs, error) {
 	out := renderedPointConfigs{Key: p.Key()}
 
@@ -1206,6 +756,15 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 	armScenario := *s
 	if p.Pipeline != nil {
 		armScenario.Pipeline = p.Pipeline
+	}
+
+	if p.FanIn {
+		path, err := renderFanInConfig(&armScenario, outs, topo, names)
+		if err != nil {
+			return renderedPointConfigs{}, fmt.Errorf("render fan-in config for %s: %w", out.Key, err)
+		}
+		out.Single = path
+		return out, nil
 	}
 
 	if p.Streams <= 1 {
@@ -1217,22 +776,43 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 		return out, nil
 	}
 
+	if s.Dataset.Topics > 1 && p.Streams != s.Dataset.Topics {
+		return renderedPointConfigs{}, fmt.Errorf(
+			"point %s: streams (%d) must equal dataset.topics (%d) for a multi-topic scenario in streams mode; a mismatch would silently leave topics unconsumed, which looks like low throughput rather than a misconfiguration",
+			out.Key, p.Streams, s.Dataset.Topics)
+	}
+
 	rootPath, err := writeTempYAML(rootSections(&armScenario), outs, "bench-root-*.yaml")
 	if err != nil {
 		return renderedPointConfigs{}, fmt.Errorf("render root config for %s: %w", out.Key, err)
 	}
 	out.Root = rootPath
 
-	// topo.Pipeline mutates and returns a map that ALIASES
-	// armScenario.Pipeline["output"][<component>] in place — it does not
-	// copy it. Each stream's output map must therefore be marshalled to disk
-	// (writeTempYAML, below) BEFORE the next iteration calls topo.Pipeline
-	// again and re-mutates that same shared map for the next stream. That
-	// ordering holds today because the loop is sequential. Do NOT
-	// parallelize this loop: two goroutines mutating the same aliased map
-	// concurrently would race.
+	// topo.Pipeline (e.g. sinkTopology.Pipeline) mutates and returns a map
+	// that ALIASES armScenario.Pipeline["output"][<component>] in place — it
+	// does not copy it. Each stream's output map must therefore be marshalled
+	// to disk (writeTempYAML, below) BEFORE the next iteration calls
+	// topo.Pipeline again and re-mutates that same shared map for the next
+	// stream's table name. That ordering holds today because the loop is
+	// sequential. Do NOT parallelize this loop: two goroutines mutating the
+	// same aliased map concurrently would race, and the most likely visible
+	// symptom is two streams silently marshalling the SAME table name and
+	// committing to one Iceberg table instead of two — exactly the class of
+	// silent-corruption failure this whole review exists to catch, and not
+	// something a test would reliably catch either.
 	for i := 0; i < p.Streams; i++ {
+		// Single-topic (or arm-less) scenarios: streams share the topic and
+		// group, distinguished only by table (WithStreams/WithStream, _s<i>).
+		// Multi-topic scenarios: each stream is scoped to its OWN topic
+		// instead (WithTopics/WithTopic, _t<i>), so it reads only that topic
+		// under its own group and writes only that topic's table — the
+		// mapping the "Design decision that keeps the comparison honest"
+		// section requires so streams7 writes the identical tables fanin
+		// does.
 		streamNames := names.WithStreams(p.Streams).WithStream(i)
+		if s.Dataset.Topics > 1 {
+			streamNames = names.WithTopics(s.Dataset.Topics).WithTopic(i)
+		}
 		input, output, err := topo.Pipeline(&armScenario, streamNames)
 		if err != nil {
 			return renderedPointConfigs{}, fmt.Errorf("render stream %d of %s: %w", i, out.Key, err)
@@ -1270,80 +850,6 @@ func stageCfgPrefix(key string) string {
 	return "stage/cfg/" + key
 }
 
-// runnerBinaryPath is the on-host path a named --binary mapping is staged to
-// and launched from. Mirrors hostCfgDir's reasoning: this is the single
-// source of truth so stageArtefacts' download/chmod commands and
-// MatrixRunner.binaryPathFor's launch path (matrix.go) can never drift
-// apart — a drift there would mean the engine launches a path that was
-// never downloaded.
-func runnerBinaryPath(name string) string {
-	return "/opt/bench/redpanda-connect-" + name
-}
-
-// stageBinaryKey is the S3 key prefix (under the results bucket) a named
-// --binary mapping is uploaded to. Mirrors runnerBinaryPath on the S3 side.
-func stageBinaryKey(name string) string {
-	return "stage/redpanda-connect-" + name
-}
-
-// sortedBinaryNames returns m's keys sorted, for deterministic logging and
-// script rendering — Go's map iteration order is randomized.
-func sortedBinaryNames(m map[string]string) []string {
-	names := make([]string, 0, len(m))
-	for name := range m {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
-}
-
-// binaryNamesReferenced returns the set of distinct non-empty Arm.Binary
-// values s's matrix.arms reference.
-func binaryNamesReferenced(s *Scenario) map[string]bool {
-	out := map[string]bool{}
-	for _, a := range s.Matrix.Arms {
-		if a.Binary != "" {
-			out[a.Binary] = true
-		}
-	}
-	return out
-}
-
-// validateBinaryFlags checks --binary mappings against the scenario's
-// referenced logical binary names BEFORE any AWS spend: every name an arm
-// references must have a mapping, and every mapping must be referenced by
-// some arm. The second half is a typo guard — e.g. --binary bas=/tmp/x
-// against a scenario whose arm says "base" would otherwise silently stage a
-// binary nothing launches, while the arm that actually needed "base" fails
-// the first check anyway; catching both in one pass gives a single clear
-// error instead of two confusing ones.
-func validateBinaryFlags(s *Scenario, binaries map[string]string) error {
-	referenced := binaryNamesReferenced(s)
-
-	var missing []string
-	for name := range referenced {
-		if _, ok := binaries[name]; !ok {
-			missing = append(missing, name)
-		}
-	}
-	sort.Strings(missing)
-	if len(missing) > 0 {
-		return fmt.Errorf("scenario %s's matrix.arms reference binaries %v with no matching --binary mapping", s.Name, missing)
-	}
-
-	var unreferenced []string
-	for name := range binaries {
-		if !referenced[name] {
-			unreferenced = append(unreferenced, name)
-		}
-	}
-	sort.Strings(unreferenced)
-	if len(unreferenced) > 0 {
-		return fmt.Errorf("--binary mapping(s) %v are not referenced by any matrix.arms[].binary in scenario %s (likely a typo)", unreferenced, s.Name)
-	}
-	return nil
-}
-
 // runnerConfigPaths maps each point key to where its configs land on the runner
 // host after staging.
 func runnerConfigPaths(sets []renderedPointConfigs) map[string]pointConfigPaths {
@@ -1360,6 +866,125 @@ func runnerConfigPaths(sets []renderedPointConfigs) map[string]pointConfigPaths 
 		out[set.Key] = p
 	}
 	return out
+}
+
+// buildKCRenderInputs gathers the values needed to render a Kafka Connect
+// connector config from a scenario and the terraform outputs. Postgres engines
+// expose a DSN URL output; MySQL exposes discrete host/port/user/pass/db
+// outputs — we handle both via engineSpec metadata.
+func buildKCRenderInputs(s *Scenario, es engineSpec, outs map[string]string, sessionID string) (kcRenderInputs, error) {
+	in := kcRenderInputs{
+		TopicPrefix:      fmt.Sprintf("bench_%s_%s_kc", sessionID, s.Connector),
+		BootstrapServers: outs["redpanda_broker_endpoints"],
+	}
+	// Tables come from the scenario's pipeline.input map.
+	if inputMap, ok := s.Pipeline["input"].(map[string]any); ok {
+		for _, v := range inputMap {
+			if connMap, ok := v.(map[string]any); ok {
+				if tbls, ok := connMap["tables"].([]any); ok {
+					for _, t := range tbls {
+						if ts, ok := t.(string); ok {
+							in.Tables = append(in.Tables, ts)
+						}
+					}
+				}
+			}
+		}
+	}
+	// Fallback: connectors that select tables via a non-"tables" field (e.g.
+	// oracledb_cdc uses `include`) leave in.Tables empty above. The canonical
+	// table list lives on the scenario dataset, so use that.
+	if len(in.Tables) == 0 {
+		in.Tables = append(in.Tables, s.Dataset.Tables...)
+	}
+
+	// Connection parts.
+	if es.ResetHostOutputKey != "" {
+		// MySQL-style: discrete TF outputs.
+		in.Host = outs[es.ResetHostOutputKey]
+		in.Port = outs[es.ResetPortOutputKey]
+		in.User = outs[es.ResetUserOutputKey]
+		in.Password = outs[es.ResetPassOutputKey]
+		in.Database = outs[es.ResetDBOutputKey]
+	} else {
+		// Postgres-style: parse DSN URL.
+		dsn := outs[es.DSNOutputKey]
+		u, err := url.Parse(dsn)
+		if err != nil {
+			return in, fmt.Errorf("parse DSN %q: %w", dsn, err)
+		}
+		in.Host = u.Hostname()
+		in.Port = u.Port()
+		if in.Port == "" {
+			in.Port = "5432"
+		}
+		if u.User != nil {
+			in.User = u.User.Username()
+			pw, _ := u.User.Password()
+			in.Password = pw
+		}
+		in.Database = strings.TrimPrefix(u.Path, "/")
+	}
+
+	// SchemaTables formatting depends on engine. Must come AFTER in.Database is
+	// populated, since the mysql_cdc branch uses it as the schema prefix.
+	switch s.Connector {
+	case "postgres_cdc":
+		schema := "public"
+		if inputMap, ok := s.Pipeline["input"].(map[string]any); ok {
+			if pgMap, ok := inputMap["postgres_cdc"].(map[string]any); ok {
+				if sc, ok := pgMap["schema"].(string); ok {
+					schema = sc
+				}
+			}
+		}
+		var sb strings.Builder
+		for i, t := range in.Tables {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			sb.WriteString(schema + "." + t)
+		}
+		in.SchemaTables = sb.String()
+	case "mysql_cdc":
+		var sb strings.Builder
+		for i, t := range in.Tables {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			sb.WriteString(in.Database + "." + t)
+		}
+		in.SchemaTables = sb.String()
+	case "oracledb_cdc":
+		// Debezium Oracle table.include.list is SCHEMA.TABLE, both upper-cased.
+		// The owning schema is the connecting user (RDS master, e.g. BENCH).
+		schema := strings.ToUpper(in.User)
+		parts := make([]string, 0, len(in.Tables))
+		for _, t := range in.Tables {
+			parts = append(parts, schema+"."+strings.ToUpper(t))
+		}
+		in.SchemaTables = strings.Join(parts, ",")
+	case "microsoft_sql_server_cdc":
+		// Debezium SQL Server table.include.list is <schema>.<table> — NOT
+		// database-qualified, even though the topic names are (the database comes
+		// from database.names instead). dbo matches the schema the
+		// cdc-rows-mssql seeder creates the table in.
+		parts := make([]string, 0, len(in.Tables))
+		for _, t := range in.Tables {
+			parts = append(parts, "dbo."+t)
+		}
+		in.SchemaTables = strings.Join(parts, ",")
+	case "mongodb_cdc":
+		// Debezium MongoDB collection.include.list is <db>.<collection>. The db is
+		// the connecting database (in.Database, from the mongodb_db output).
+		parts := make([]string, 0, len(in.Tables))
+		for _, t := range in.Tables {
+			parts = append(parts, in.Database+"."+t)
+		}
+		in.SchemaTables = strings.Join(parts, ",")
+	}
+
+	return in, nil
 }
 
 func substitutePlaceholders(in string, outs map[string]string) string {
@@ -1419,52 +1044,21 @@ func buildStagePlan(sets []renderedPointConfigs, bucket string, legacy bool) (it
 	return items, dl
 }
 
-// buildBinaryStagePlan computes the S3 upload items and the runner-host
-// download+chmod commands for the launch binary (or binaries), without
-// touching AWS — mirrors buildStagePlan's split for the config-staging
-// case, so the staged key and the download/launch path can be
-// unit-tested for agreement independently of any S3 call.
-//
-// When binaries is empty, this reproduces the historical single-binary
-// shape byte-for-byte: binPath is staged at stage/redpanda-connect and
-// downloaded to /opt/bench/redpanda-connect. When --binary mappings are
-// present, binPath is ignored (runBench skips building it) and each named
-// binary is staged/downloaded under its own stageBinaryKey/runnerBinaryPath
-// instead, sorted by name for a deterministic script across runs.
-func buildBinaryStagePlan(binaries map[string]string, binPath, bucket string) (items []upload, download, chmod string) {
-	if len(binaries) == 0 {
-		return []upload{{"stage/redpanda-connect", binPath}},
-			fmt.Sprintf(`aws s3 cp s3://%s/stage/redpanda-connect /opt/bench/redpanda-connect`, bucket),
-			`chmod +x /opt/bench/redpanda-connect`
-	}
-	names := sortedBinaryNames(binaries)
-	items = make([]upload, 0, len(names))
-	dlLines := make([]string, 0, len(names))
-	chmodLines := make([]string, 0, len(names))
-	for _, name := range names {
-		items = append(items, upload{stageBinaryKey(name), binaries[name]})
-		dlLines = append(dlLines, fmt.Sprintf(`aws s3 cp s3://%s/%s %s`, bucket, stageBinaryKey(name), runnerBinaryPath(name)))
-		chmodLines = append(chmodLines, "chmod +x "+runnerBinaryPath(name))
-	}
-	return items, strings.Join(dlLines, "\n"), strings.Join(chmodLines, "\n")
-}
-
-// stageArtefacts uploads the binary (or binaries), license, and per-point
-// config(s) to S3 and downloads them onto the runner host over SSM. See
-// buildStagePlan for the legacy vs. arms config path-building logic and
-// buildBinaryStagePlan for the single vs. named-binaries path-building
-// logic.
-func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string, binPath string, sets []renderedPointConfigs, legacy bool, execTimeout time.Duration) error {
+// stageArtefacts uploads the binary, license, and per-point config(s) to S3 and
+// downloads them onto the runner host over SSM. See buildStagePlan for the
+// legacy vs. arms path-building logic.
+func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string, binPath string, sets []renderedPointConfigs, legacy bool) error {
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
 	if err != nil {
 		return err
 	}
-	uploader := manager.NewUploader(s3.NewFromConfig(cfg)) //nolint:staticcheck // SA1019: transfermanager migration tracked separately; manager still works.
+	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
 	bucket := outs["results_bucket"]
 
-	binItems, binDownload, binChmod := buildBinaryStagePlan(opts.binaries, binPath, bucket)
-	items := append([]upload{}, binItems...)
-	items = append(items, upload{"stage/license.jwt", opts.licenseFile})
+	items := []upload{
+		{"stage/redpanda-connect", binPath},
+		{"stage/license.jwt", opts.licenseFile},
+	}
 	planItems, dl := buildStagePlan(sets, bucket, legacy)
 	items = append(items, planItems...)
 
@@ -1476,45 +1070,85 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 			// which arm/stream failed.
 			return fmt.Errorf("open %s for s3 key %s: %w", item.path, item.key, err)
 		}
-		_, err = uploader.Upload(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &item.key, Body: f}) //nolint:staticcheck // SA1019: see uploader above.
+		_, err = uploader.Upload(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &item.key, Body: f})
 		f.Close()
 		if err != nil {
 			return fmt.Errorf("upload %s to %s: %w", item.path, item.key, err)
 		}
 	}
 
-	ssmExec, err := NewSSMExecutor(ctx, opts.region, execTimeout)
+	ssmExec, err := NewSSMExecutor(ctx, opts.region)
 	if err != nil {
 		return err
 	}
+	// Sink helper binaries download best-effort: only the connector-under-test's
+	// helper exists in S3 (see stageTableGenForSink), the rest no-op.
+	var helperDl []string
+	for _, name := range sinkHelperBinaries() {
+		helperDl = append(helperDl, fmt.Sprintf(
+			"aws s3 cp s3://%s/stage/%s /opt/bench/%s 2>/dev/null && chmod +x /opt/bench/%s || true",
+			bucket, name, name, name))
+	}
 	script := fmt.Sprintf(`
 set -euo pipefail
-%s
+aws s3 cp s3://%s/stage/redpanda-connect /opt/bench/redpanda-connect
 aws s3 cp s3://%s/stage/license.jwt /opt/bench/license.jwt
 %s
-%s
+chmod +x /opt/bench/redpanda-connect
 chmod 0600 /opt/bench/license.jwt
-`, binDownload, bucket, strings.Join(dl, "\n"), binChmod)
+%s
+`, bucket, bucket, strings.Join(dl, "\n"), strings.Join(helperDl, "\n"))
 	return ssmExec.Run(ctx, outs["runner_instance_id"], script, streamingOnLine(os.Stdout, "stage"))
 }
 
-func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string, topo Topology, names BenchNames, execTimeout time.Duration) error {
+// stageTableGenForSink builds the connector's table helper binary (see
+// sinkSpec.HelperBinary) and uploads it to s3://<bucket>/stage/<name> for
+// sink scenarios. The runner downloads it in stageArtefacts; the connector's
+// ResetScript and SidecarSetup hooks invoke it.
+func stageTableGenForSink(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string) error {
+	if s.Direction != DirectionSink {
+		return nil
+	}
+	sp, ok := sinkSpecFor(s.Connector)
+	if !ok || sp.HelperBinary == "" {
+		return nil
+	}
+	dist := filepath.Join(opts.repoRoot, "benchmarking/aws/seeders/dist")
+	_ = os.MkdirAll(dist, 0o755)
+	binOut := filepath.Join(dist, sp.HelperBinary)
+	cmd := exec.Command("go", "build", "-o", binOut, "./benchmarking/aws/seeders/"+sp.HelperBinary)
+	cmd.Dir = opts.repoRoot
+	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("build %s: %w", sp.HelperBinary, err)
+	}
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
+	if err != nil {
+		return err
+	}
+	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
+	bucket := outs["results_bucket"]
+	f, err := os.Open(binOut)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	key := "stage/" + sp.HelperBinary
+	_, err = uploader.Upload(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &key, Body: f})
+	return err
+}
+
+func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string, topo Topology, names BenchNames) error {
 	if s.Dataset.Seeder == "" {
 		return nil
 	}
 	dist := filepath.Join(opts.repoRoot, "benchmarking/aws/seeders/dist")
 	_ = os.MkdirAll(dist, 0o755)
 	binOut := filepath.Join(dist, s.Dataset.Seeder)
-	// Built from within benchmarking/aws: the seeders live in this
-	// directory's standalone module, not the repo root's. -o must be
-	// absolute because go resolves it against cmd.Dir, while binOut is
-	// relative to the process cwd.
-	absBinOut, err := filepath.Abs(binOut)
-	if err != nil {
-		return fmt.Errorf("resolve seeder output path: %w", err)
-	}
-	cmd := exec.Command("go", "build", "-o", absBinOut, "./seeders/"+s.Dataset.Seeder)
-	cmd.Dir = filepath.Join(opts.repoRoot, "benchmarking/aws")
+	cmd := exec.Command("go", "build", "-o", binOut, "./benchmarking/aws/seeders/"+s.Dataset.Seeder)
+	cmd.Dir = opts.repoRoot
 	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -1525,7 +1159,7 @@ func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string
 	if err != nil {
 		return err
 	}
-	uploader := manager.NewUploader(s3.NewFromConfig(cfg)) //nolint:staticcheck // SA1019: transfermanager migration tracked separately; manager still works.
+	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
 	bucket := outs["results_bucket"]
 	f, err := os.Open(binOut)
 	if err != nil {
@@ -1533,12 +1167,12 @@ func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string
 	}
 	defer f.Close()
 	key := "stage/" + s.Dataset.Seeder
-	if _, err := uploader.Upload(ctx, &s3.PutObjectInput{ //nolint:staticcheck // SA1019: see uploader above.
+	if _, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: &bucket, Key: &key, Body: f,
 	}); err != nil {
 		return err
 	}
-	ssmExec, err := NewSSMExecutor(ctx, opts.region, execTimeout)
+	ssmExec, err := NewSSMExecutor(ctx, opts.region)
 	if err != nil {
 		return err
 	}

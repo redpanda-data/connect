@@ -1,10 +1,7 @@
-// Copyright 2026 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
 
 package main
 
@@ -16,9 +13,7 @@ import (
 )
 
 // PromPoint is one curated snapshot of Connect's runtime metrics, sampled at
-// time T — seconds since the first successful snapshot, i.e. point launch.
-// NOTE: this is NOT Sample.T's base (which is end-of-warmup); bridge with
-// offsetSampleT / DetectAnomaliesWithProm's promOffsetSec.
+// time T (seconds since end-of-warmup, matching Sample.T).
 type PromPoint struct {
 	T              int     `json:"t"`
 	Goroutines     int     `json:"goroutines"`
@@ -26,13 +21,6 @@ type PromPoint struct {
 	BytesTotal     float64 `json:"bytes_total"` // benchmark_bytes_total
 	CPUSeconds     float64 `json:"cpu_seconds"`
 	GCPauseTotalNS uint64  `json:"gc_pause_total_ns"` // monotonic; per-interval delta = scrape[i] - scrape[i-1]
-	// RSSBytes is process_resident_memory_bytes: what the OOM killer sees,
-	// unlike HeapInUseMB. Go's heap-in-use metric misses the leak classes
-	// that actually OOMKill a pod — fragmentation, cgo allocations, goroutine
-	// stacks — none of which show up as "in-use heap" but all of which count
-	// against RSS. A soak run watches this to catch a slow leak that a short
-	// sweep point never runs long enough to show.
-	RSSBytes uint64 `json:"rss_bytes,omitempty"`
 }
 
 // promSnapshot is one /metrics dump bracketed by ###timestamp= markers.
@@ -41,24 +29,11 @@ type PromPoint struct {
 type promSnapshot struct {
 	UnixTime int64
 	Body     string
-	// Errored is true when the scraper logged a ###scrape_error marker
-	// inside the snapshot. The broker-metrics sidecar (topology_source.go)
-	// appends a per-endpoint suffix to the marker (###scrape_error_$EP,
-	// one per failed curl against a broker), so the marker text is a
-	// PREFIX match, not an exact one; the single-endpoint prom sidecar
-	// still emits the bare marker with no suffix.
-	Errored bool
+	Errored  bool // true when the scraper logged ###scrape_error inside the snapshot
 }
 
 // extractPromPoint pulls the curated metrics out of a single snapshot
-// body. Returns ok=false if the snapshot was an error frame OR carries no
-// process_resident_memory_bytes. The RSS metric is the last of the curated
-// set in a /metrics dump (process_* trails go_*), so its absence is the
-// signature of a frame captured mid-write — parseSnapshots deliberately
-// keeps such frames. Passing one through as a PromPoint{RSSBytes:0} at the
-// newest T swings rssSlopeBytesPerMin's least-squares fit sharply negative
-// and masks the slow-leak signal the rss-slope alarm exists to catch, so a
-// truncated frame is dropped the same way an errored one is.
+// body. Returns ok=false if the snapshot was an error frame.
 //
 // Hand-rolled rather than depending on prometheus/common/expfmt: the
 // curated subset is five unlabeled metrics, and avoiding the dependency
@@ -68,7 +43,6 @@ func extractPromPoint(s promSnapshot) (PromPoint, bool) {
 		return PromPoint{}, false
 	}
 	pp := PromPoint{}
-	var sawRSS bool
 	scanner := bufio.NewScanner(strings.NewReader(s.Body))
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -96,13 +70,9 @@ func extractPromPoint(s promSnapshot) (PromPoint, bool) {
 		case "benchmark_bytes_total":
 			n, _ := strconv.ParseFloat(valueStr, 64)
 			pp.BytesTotal = n
-		case "process_resident_memory_bytes":
-			n, _ := strconv.ParseFloat(valueStr, 64)
-			pp.RSSBytes = uint64(n)
-			sawRSS = true
 		}
 	}
-	return pp, sawRSS
+	return pp, true
 }
 
 // splitMetricLine splits a line like `go_goroutines 312` or
@@ -129,24 +99,12 @@ func parseSnapshots(r io.Reader) []promSnapshot {
 	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 	var snaps []promSnapshot
 	var current *promSnapshot
-	// The frame body is accumulated in a Builder rather than string
-	// concatenation: a broker frame is every broker's /public_metrics output
-	// concatenated (thousands of lines), and += copies the whole
-	// accumulated body per line — quadratic per frame, which a 24h soak's
-	// ~1440 frames turns into hours of memcpy.
-	var body strings.Builder
-	flush := func() {
-		if current == nil {
-			return
-		}
-		current.Body = body.String()
-		body.Reset()
-		snaps = append(snaps, *current)
-	}
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "###timestamp=") {
-			flush()
+			if current != nil {
+				snaps = append(snaps, *current)
+			}
 			ts, _ := strconv.ParseInt(strings.TrimPrefix(line, "###timestamp="), 10, 64)
 			current = &promSnapshot{UnixTime: ts}
 			continue
@@ -154,17 +112,15 @@ func parseSnapshots(r io.Reader) []promSnapshot {
 		if current == nil {
 			continue // ignore noise before first marker
 		}
-		// Prefix match, not equality: the broker-metrics sidecar suffixes
-		// the marker with the failed endpoint (###scrape_error_$EP), one
-		// per curl that failed against a given broker.
-		if strings.HasPrefix(line, "###scrape_error") {
+		if line == "###scrape_error" {
 			current.Errored = true
 			continue
 		}
-		body.WriteString(line)
-		body.WriteByte('\n')
+		current.Body += line + "\n"
 	}
-	flush()
+	if current != nil {
+		snaps = append(snaps, *current)
+	}
 	return snaps
 }
 

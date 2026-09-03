@@ -1,0 +1,88 @@
+# MySQL SNAPSHOT CPU sweep — is the ~21 MB/s ceiling CPU-quantity-sensitive?
+#
+# Follow-up to orders-snapshot (2026-08-17): both batch-size arms pinned at
+# ~21 MB/s (~17.5-18K rows/s) at 4 vCPU with the DB at 1.4% CPU and disk at
+# ~7% of provisioned IOPS — the suspect is Connect's single-threaded per-row
+# snapshot path. If that's right, the rate should be FLAT from 2-8 vCPU (one
+# goroutine can't use more cores). The 1-vCPU point tells us the minimum: at
+# 1 vCPU the scan goroutine shares its only core with the batcher, serializer
+# and producer, so a drop there measures how much of the pipeline outside the
+# scan loop still needs its own core.
+#
+# Deployed-default config (snapshot_max_batch_size unset = 1000): the A/B
+# proved batch size moves the rate +3%, so the default is representative.
+# GOMAXPROCS is left at the runner default (= vCPU pin), matching every
+# published streaming sweep; note the earlier A/B ran GOMAXPROCS 8 @ 4 vCPU
+# and got the same ~21 MB/s, so oversubscription is already known not to help.
+#
+# Same rig + pinned 16 GiB buffer pool as orders-snapshot so numbers compare:
+# each point re-snapshots the same 30M rows from scratch (in-memory checkpoint
+# cache dies with each point's process) and runs mostly cold (pool << data).
+#
+# Analysis: neither the A/B arms nor (expected) these points complete the
+# 36 GB inside the 15m window at ~21 MB/s, so run-summary medians are honest.
+# If a point DOES complete in-window (e.g. 8 vCPU surprises us), compute the
+# rate from per-second samples up to the drop-to-idle transition instead.
+
+name: mysql-orders-snapshot-sweep
+description: |
+  CPU sweep (1/2/4/8 vCPU) of mysql_cdc stream_snapshot over a pre-seeded
+  30M-row (36 GB) InnoDB orders table at the deployed default config, buffer
+  pool pinned to 16 GiB. Tests whether the ~21 MB/s snapshot ceiling from the
+  batch-size A/B scales with cores (expected: flat 2-8, possible dip at 1).
+
+connector: mysql_cdc
+stack: mysql
+
+infra:
+  source:
+    instance_class: db.r6g.4xlarge
+    storage_gb: 800
+    iops: 24000
+    parameters:
+      # This map REPLACES the stack default — the three binlog params below
+      # are required by mysql_cdc and must be restated.
+      binlog_format: "ROW"
+      binlog_row_image: "FULL"
+      binlog_checksum: "NONE"
+      # 16 GiB, bytes: dataset must exceed the pool or the scan never hits
+      # disk (4xlarge default pool is ~96 GiB). Same pin as orders-snapshot.
+      innodb_buffer_pool_size: "17179869184"
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 30000000
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-mysql
+  expected_peak_mb_s: 35
+
+# No workload: — bounded-dataset mode (warmup 0, fixed 15m window per point).
+# The seeder seeds once before the sweep (~6 min measured).
+
+pipeline:
+  cache_resources:
+    - label: bench_checkpoint
+      memory: {}
+  input:
+    mysql_cdc:
+      flavor: mysql
+      dsn: ${MYSQL_DSN}
+      tls:
+        skip_cert_verify: true   # RDS-internal CA isn't in the runner image;
+                                  # mysql_cdc uses NewTLSField (no `enabled`).
+      stream_snapshot: true
+      tables: [orders]
+      checkpoint_cache: bench_checkpoint
+      checkpoint_key: mysql_snap_sweep
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [1, 2, 4, 8]
+
+# No reset: the table must stay seeded (every point snapshots the same 30M
+# rows), there is no replication slot, and the in-memory checkpoint cache
+# dies with each point's process.

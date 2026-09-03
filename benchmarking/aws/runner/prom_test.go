@@ -1,10 +1,7 @@
-// Copyright 2026 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
 
 package main
 
@@ -86,7 +83,6 @@ func TestExtractPromPoint_FromRealFixture(t *testing.T) {
 	require.GreaterOrEqual(t, pp.BytesTotal, 0.0)
 	require.GreaterOrEqual(t, pp.CPUSeconds, 0.0)
 	require.GreaterOrEqual(t, pp.GCPauseTotalNS, uint64(0))
-	require.Greater(t, pp.RSSBytes, uint64(0), "process_resident_memory_bytes must be extracted — RSS is what the OOM killer sees, heap_in_use is not")
 }
 
 func TestExtractPromPoint_SyntheticAllMetrics(t *testing.T) {
@@ -97,7 +93,6 @@ go_memstats_heap_inuse_bytes 1.04857e+08
 go_memstats_gc_pause_total_ns 4.2e+07
 process_cpu_seconds_total 87.4
 benchmark_bytes_total 4.12e+09
-process_resident_memory_bytes 1.45e+08
 `
 	pp, ok := extractPromPoint(promSnapshot{UnixTime: 100, Body: body})
 	require.True(t, ok)
@@ -106,7 +101,6 @@ process_resident_memory_bytes 1.45e+08
 	require.InDelta(t, 4.12e+09, pp.BytesTotal, 1.0)
 	require.InDelta(t, 87.4, pp.CPUSeconds, 0.01)
 	require.Equal(t, uint64(42000000), pp.GCPauseTotalNS)
-	require.Equal(t, uint64(145000000), pp.RSSBytes)
 }
 
 func TestExtractPromPoint_ErrorSnapshotSkipped(t *testing.T) {
@@ -114,27 +108,15 @@ func TestExtractPromPoint_ErrorSnapshotSkipped(t *testing.T) {
 	require.False(t, ok)
 }
 
-// A frame missing process_resident_memory_bytes is the mid-write-truncation
-// signature (process_* trails go_* in the dump); it must be dropped, not
-// passed through as RSSBytes=0 which would corrupt the rss-slope fit.
-func TestExtractPromPoint_MissingRSSIsSkipped(t *testing.T) {
+func TestExtractPromPoint_PartialMetricsOK(t *testing.T) {
 	body := `go_goroutines 50
 go_memstats_heap_inuse_bytes 1.0485e+07
-`
-	_, ok := extractPromPoint(promSnapshot{UnixTime: 1, Body: body})
-	require.False(t, ok, "a frame with no process_resident_memory_bytes is truncated — skip it")
-}
-
-// Other curated metrics may still be absent as long as RSS is present.
-func TestExtractPromPoint_PartialButHasRSSOK(t *testing.T) {
-	body := `go_goroutines 50
-process_resident_memory_bytes 1.45e+08
 `
 	pp, ok := extractPromPoint(promSnapshot{UnixTime: 1, Body: body})
 	require.True(t, ok)
 	require.Equal(t, 50, pp.Goroutines)
-	require.Equal(t, uint64(145000000), pp.RSSBytes)
-	require.Equal(t, 0.0, pp.CPUSeconds) // missing — zero is OK
+	require.InDelta(t, 10.485, pp.HeapInUseMB, 0.001) // 1.0485e+07 B / 1e6 = 10.485 MB
+	require.Equal(t, 0.0, pp.CPUSeconds)              // missing — zero is OK
 	require.Equal(t, uint64(0), pp.GCPauseTotalNS)
 }
 
@@ -142,15 +124,12 @@ func TestParsePromStream_EndToEnd(t *testing.T) {
 	raw := `noise
 ###timestamp=1000
 go_goroutines 10
-process_resident_memory_bytes 1e+08
 ###timestamp=1010
 go_goroutines 12
-process_resident_memory_bytes 1e+08
 ###timestamp=1020
 ###scrape_error
 ###timestamp=1030
 go_goroutines 14
-process_resident_memory_bytes 1e+08
 `
 	pts, err := ParsePromStream(strings.NewReader(raw))
 	require.NoError(t, err)

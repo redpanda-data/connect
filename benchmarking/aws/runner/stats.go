@@ -1,10 +1,7 @@
-// Copyright 2026 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
 
 package main
 
@@ -194,11 +191,11 @@ func mean(values []float64) float64 {
 }
 
 func peak(values []float64) float64 {
-	maxSeen := values[0]
+	max := values[0]
 	for _, v := range values[1:] {
-		if v > maxSeen {
-			maxSeen = v
+		if v > max {
+			max = v
 		}
 	}
-	return maxSeen
+	return max
 }

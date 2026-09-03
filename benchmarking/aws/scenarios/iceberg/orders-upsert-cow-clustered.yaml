@@ -1,0 +1,97 @@
+name: iceberg-orders-upsert-cow-clustered
+description: |
+  The clustered-key counterpart to orders-upsert-cow: can copy-on-write
+  sustain a real rate when keys arrive in contiguous runs instead of
+  scattered? The 2026-08-24 scattered run measured COW decaying to ~500
+  rec/s at any batch size because every batch's keys spray across all data
+  files. With `key_order: sequential` (id = i % key_space, contiguous runs),
+  a batch's keys cluster into few files, so each commit should rewrite only
+  the files covering its id range — the one favourable regime the docs'
+  merge-strategy guidance predicts, never measured end-to-end. If clustered
+  COW holds a usable rate, it justifies a "Recipe D: clustered-key COW" in
+  the tuning guide with an explicit arrival-order prerequisite; if it also
+  decays to hundreds of rows/s, COW is batch-only regardless of layout.
+
+  Arms at a fixed 4-vCPU pin, keyed arms at the lint-mandated
+  max_in_flight: 1:
+
+  * a0-mor-50k — in-session control; measured 33k rec/s on 2026-08-24
+    (scattered — arrival order should not matter for MOR, which is itself
+    worth confirming).
+  * cow-50k — clustered arrival at the Recipe-C batch size. The Recipe D
+    candidate.
+  * cow-10k — clustered arrival at the smaller batch, for the batch
+    dimension under clustering.
+
+  METRICS: the sidecar reports written_records / written_files_size_bytes
+  (sum of snapshot added-records / added-files-size), which count write work
+  and never saturate — steady-state rewrite throughput after the first
+  key-space lap is now visible, which is exactly what the 2026-08-25 run
+  (pre-written-counters) could not see.
+
+direction: sink
+connector: iceberg
+stack: iceberg
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 48000000
+  row_size_bytes: 1200
+  seeder: json-orders
+  key_space: 250000
+  key_order: sequential    # contiguous id runs: COW's favourable case
+  expected_peak_mb_s: 60
+
+skip_connect_table_precreate: true
+
+pipeline:
+  # Same id coercion as orders-upsert-cow: JSON numbers decode as float64,
+  # and the output creates the table from the first record.
+  processors:
+    - mapping: |
+        root = this
+        root.id = this.id.int64()
+  buffer:
+    memory:
+      limit: 524288000
+      batch_policy:
+        count: 50000
+        period: 10s
+  output:
+    iceberg:
+      max_in_flight: 1
+      row_operation: upsert
+      identifier_fields: [id]
+      batching:
+        count: 50000
+        period: 10s
+      commit:
+        max_snapshot_age: 24h
+
+matrix:
+  cpu_points: [4]
+  arms:
+    - id: a0-mor-50k
+      pipeline:
+        output:
+          iceberg:
+            merge_strategy: merge-on-read
+    - id: cow-50k
+      pipeline:
+        output:
+          iceberg:
+            merge_strategy: copy-on-write
+    - id: cow-10k
+      pipeline:
+        buffer:
+          memory:
+            batch_policy:
+              count: 10000
+        output:
+          iceberg:
+            merge_strategy: copy-on-write
+            batching:
+              count: 10000

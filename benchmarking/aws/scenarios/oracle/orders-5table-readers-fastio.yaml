@@ -1,0 +1,193 @@
+name: oracle-orders-5table-readers-fastio
+description: |
+  WHY DOES THE 5-READER PLATEAU HAPPEN? Repeat of orders-5table-readers with the
+  storage throughput ceiling removed.
+
+  orders-5table-readers found 1/2/5 concurrent readers delivering 19.0 / 25.9 /
+  30.7 MB/s against a 35 MB/s offered load — sub-linear, plateauing at 79%
+  capture. Neither side was exhausted: database CPU 72% of 8 vCPU, Connect 0.99
+  of 4 cores. CloudWatch I/O metrics from that run explain it:
+
+    total IOPS       11,149 -> 10,726 -> 13,313   (55% of 24,000 provisioned)
+    total throughput    340 ->    320 ->    452 MiB/s
+    DiskQueueDepth     26.4 ->   26.5 ->   34.2
+
+  ~452 MiB/s is 90% of RDS's ~500 MiB/s gp3 DEFAULT throughput (never raised,
+  because `storage_throughput` was set nowhere in the Terraform) and 76% of a
+  db.r5.2xlarge's ~594 MiB/s EBS bandwidth. The clincher: WriteIOPS FELL as
+  readers were added (8,405 -> 7,212 -> 7,158) while total I/O stayed pinned —
+  the readers were taking I/O away from the writers. Classic saturation.
+
+  This scenario raises both ceilings and re-runs the identical 1/2/5 reader arms.
+  Reading the result:
+    5 readers well above 30.7 MB/s -> the plateau was the test rig's storage, and
+        the ~31 MB/s "per-database ceiling" in
+        docs/benchmark-results/oracle-logminer-split-test.md is a property of
+        db.r5.2xlarge on default gp3 throughput, NOT of LogMiner. Guidance must
+        then be restated against provisioned I/O.
+    5 readers near 30.7 again -> storage was NOT the cause despite the saturation
+        signature, and the plateau is something else (redo latch contention, or a
+        serialised component inside LogMiner).
+
+  Everything except `infra.source` is identical to orders-5table-readers, so the
+  two runs are directly comparable.
+
+connector: oracledb_cdc
+stack: oracle
+
+infra:
+  source:
+    # CHANGED vs orders-5table-readers, and the only difference: storage I/O
+    # headroom. That run's plateau was a throughput wall, not CPU or IOPS.
+    #
+    # db.r5.4xlarge: ~1,187 MiB/s EBS bandwidth (vs ~594 on the 2xlarge) and a
+    # 37,500 IOPS instance cap (vs 18,750). NOTE this also doubles vCPU 8 -> 16,
+    # so this arm set changes TWO things; it is a remove-the-constraint test, not
+    # a single-variable one. Database CPU was only 72% of 8 vCPU at the plateau,
+    # so CPU is not the expected cause of any improvement — but report both.
+    instance_class: db.r5.4xlarge
+    storage_gb: 800
+    # 32,000 <= the 4xlarge's 37,500 instance IOPS cap, and >= 4x the throughput
+    # below (an AWS gp3 constraint).
+    iops: 32000
+    # THE POINT OF THIS SCENARIO. Never set before, so every previous Oracle run
+    # silently used RDS's ~500 MiB/s gp3 default — and the 5-reader sweep moved
+    # ~452 MiB/s, 90% of it. 1,000 sits under the 4xlarge's ~1,187 MiB/s EBS
+    # bandwidth, so the volume stops being the binding limit.
+    storage_throughput: 1000
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  tables: [orders_t1, orders_t2, orders_t3, orders_t4, orders_t5]
+  seeder: cdc-rows-oracle
+
+workload:
+  # TOTAL rows/sec across tables for this seeder (it divides evenly and gives
+  # each table its own workers). 30580 = 5 x 6116 rows/sec; 6116 x 1200B =
+  # 7.0 MB/s per table, ~35 MB/s total. Same as orders-5table-split.
+  write_rate_per_sec: 30580
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  cache_resources:
+    - label: bench_checkpoint
+      memory: {}
+  input:
+    # Base = the 5-reader shape. Every arm declares its own `broker.inputs`
+    # list explicitly: mergePipeline replaces sequences wholesale and only
+    # recurses into maps, so an arm's list fully replaces this one and the
+    # `broker` key stays the only input key (two sibling input keys would be
+    # an invalid config).
+    broker:
+      inputs:
+        - oracledb_cdc: &reader_defaults
+            connection_string: ${ORACLE_DSN}
+            include: ["BENCH.ORDERS_T1"]
+            stream_snapshot: true
+            checkpoint_cache: bench_checkpoint
+            checkpoint_cache_key: oracle_reader_1
+            batching:
+              count: 5000
+              period: 1s
+        - oracledb_cdc:
+            <<: *reader_defaults
+            include: ["BENCH.ORDERS_T2"]
+            checkpoint_cache_key: oracle_reader_2
+        - oracledb_cdc:
+            <<: *reader_defaults
+            include: ["BENCH.ORDERS_T3"]
+            checkpoint_cache_key: oracle_reader_3
+        - oracledb_cdc:
+            <<: *reader_defaults
+            include: ["BENCH.ORDERS_T4"]
+            checkpoint_cache_key: oracle_reader_4
+        - oracledb_cdc:
+            <<: *reader_defaults
+            include: ["BENCH.ORDERS_T5"]
+            checkpoint_cache_key: oracle_reader_5
+
+matrix:
+  cpu_points: [4]
+  arms:
+    # r1 — one reader for all five tables. Reproduces orders-5table-split's
+    # b-5tables arm through the broker wrapper, which both re-validates that
+    # result and gives this sweep its own in-run baseline.
+    - id: r1-one-reader
+      gomaxprocs: 8
+      streams: 1
+      pipeline:
+        input:
+          broker:
+            inputs:
+              - oracledb_cdc:
+                  connection_string: ${ORACLE_DSN}
+                  include:
+                    - "BENCH.ORDERS_T1"
+                    - "BENCH.ORDERS_T2"
+                    - "BENCH.ORDERS_T3"
+                    - "BENCH.ORDERS_T4"
+                    - "BENCH.ORDERS_T5"
+                  stream_snapshot: true
+                  checkpoint_cache: bench_checkpoint
+                  checkpoint_cache_key: oracle_reader_all
+                  batching:
+                    count: 5000
+                    period: 1s
+
+    # r2 — two readers, 3 tables + 2 tables. The midpoint that turns a
+    # two-point comparison into a shape: linear, plateauing, or flat.
+    - id: r2-two-readers
+      gomaxprocs: 8
+      streams: 1
+      pipeline:
+        input:
+          broker:
+            inputs:
+              - oracledb_cdc:
+                  connection_string: ${ORACLE_DSN}
+                  include:
+                    - "BENCH.ORDERS_T1"
+                    - "BENCH.ORDERS_T2"
+                    - "BENCH.ORDERS_T3"
+                  stream_snapshot: true
+                  checkpoint_cache: bench_checkpoint
+                  checkpoint_cache_key: oracle_reader_a
+                  batching:
+                    count: 5000
+                    period: 1s
+              - oracledb_cdc:
+                  connection_string: ${ORACLE_DSN}
+                  include:
+                    - "BENCH.ORDERS_T4"
+                    - "BENCH.ORDERS_T5"
+                  stream_snapshot: true
+                  checkpoint_cache: bench_checkpoint
+                  checkpoint_cache_key: oracle_reader_b
+                  batching:
+                    count: 5000
+                    period: 1s
+
+    # r5 — five readers, one table each: the shape actually proposed to the
+    # customer. Inherits the base broker block above.
+    - id: r5-five-readers
+      gomaxprocs: 8
+      streams: 1
+
+reset:
+  # LogMiner is slotless and per-table supplemental logging survives TRUNCATE,
+  # so reset is just the truncates. Oracle has no psql/mysql-style CLI on the
+  # runner, so these go through the seeder's `exec` subcommand (go-ora).
+  #
+  # Reset runs on the RUNNER host, but the seeder is only staged at /opt/bench/
+  # on the LOAD-GEN host during seeding — so self-stage it from the same S3 key
+  # the seed phase uploaded to. The binary is arm64 and the runner is Graviton.
+  - bash: |
+      aws s3 cp s3://${RESULTS_BUCKET}/stage/cdc-rows-oracle /opt/bench/cdc-rows-oracle
+      chmod +x /opt/bench/cdc-rows-oracle
+      for t in ORDERS_T1 ORDERS_T2 ORDERS_T3 ORDERS_T4 ORDERS_T5; do
+        /opt/bench/cdc-rows-oracle exec --dsn "${ORACLE_DSN}" --sql "TRUNCATE TABLE BENCH.$t"
+      done

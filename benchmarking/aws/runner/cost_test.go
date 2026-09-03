@@ -1,10 +1,7 @@
-// Copyright 2026 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
 
 package main
 
@@ -26,12 +23,10 @@ import (
 type FakeCostExplorer struct {
 	Responses []*costexplorer.GetCostAndUsageOutput
 	Errs      []error
-	Inputs    []*costexplorer.GetCostAndUsageInput // records each call's input, in order
 	calls     int
 }
 
-func (f *FakeCostExplorer) GetCostAndUsage(_ context.Context, in *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
-	f.Inputs = append(f.Inputs, in)
+func (f *FakeCostExplorer) GetCostAndUsage(_ context.Context, _ *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
 	i := f.calls
 	f.calls++
 	if i < len(f.Errs) && f.Errs[i] != nil {
@@ -90,7 +85,7 @@ func TestSummarise_AggregatesDailyTotals(t *testing.T) {
 		},
 	}
 
-	report, err := SummariseCosts(t.Context(), fake, "us-east-2", now)
+	report, err := SummariseCosts(context.Background(), fake, "us-east-2", now)
 	require.NoError(t, err)
 	require.InDelta(t, 1.25, report.Today, 1e-9)
 	require.InDelta(t, 8.00+1.25, report.Last7Days, 1e-9) // 2026-05-13 is exactly 7 days ago; 14..20 sum
@@ -100,50 +95,12 @@ func TestSummarise_AggregatesDailyTotals(t *testing.T) {
 	require.Len(t, report.ByUsageType, 2)
 }
 
-// Early in a month, "last 7 days" crosses the month boundary: the totals
-// query must start at the earlier of monthStart and 6 days back, Last7Days
-// must include the prior-month rows, and MonthToDate must exclude them.
-func TestSummarise_Last7DaysCrossesMonthBoundary(t *testing.T) {
-	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
-	fake := &FakeCostExplorer{
-		Responses: []*costexplorer.GetCostAndUsageOutput{
-			{ // totals call: window now reaches back into July
-				ResultsByTime: []cetypes.ResultByTime{
-					dailyResult("2026-07-28", "2.00"),
-					dailyResult("2026-07-30", "5.00"),
-					dailyResult("2026-08-01", "1.00"),
-					dailyResult("2026-08-03", "0.25"), // today
-				},
-			},
-			{}, // breakdown call: irrelevant here
-		},
-	}
-	report, err := SummariseCosts(t.Context(), fake, "us-east-2", now)
-	require.NoError(t, err)
-	require.InDelta(t, 0.25, report.Today, 1e-9)
-	require.InDelta(t, 8.25, report.Last7Days, 1e-9, "the July soak runs must count toward last-7-days")
-	require.InDelta(t, 1.25, report.MonthToDate, 1e-9, "prior-month rows must not leak into month-to-date")
-	require.Len(t, fake.Inputs, 2)
-	require.Equal(t, "2026-07-28", aws.ToString(fake.Inputs[0].TimePeriod.Start),
-		"totals query must start 6 days back when that is earlier than month start")
-}
-
-// Mid-month, the totals window starts at the month boundary as before.
-func TestSummarise_TotalsWindowStartsAtMonthStartMidMonth(t *testing.T) {
-	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
-	fake := &FakeCostExplorer{Responses: []*costexplorer.GetCostAndUsageOutput{{}, {}}}
-	_, err := SummariseCosts(t.Context(), fake, "us-east-2", now)
-	require.NoError(t, err)
-	require.Len(t, fake.Inputs, 2)
-	require.Equal(t, "2026-05-01", aws.ToString(fake.Inputs[0].TimePeriod.Start))
-}
-
 func TestSummarise_EmptyResponseGivesZeros(t *testing.T) {
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
 	fake := &FakeCostExplorer{
 		Responses: []*costexplorer.GetCostAndUsageOutput{{}, {}},
 	}
-	report, err := SummariseCosts(t.Context(), fake, "us-east-2", now)
+	report, err := SummariseCosts(context.Background(), fake, "us-east-2", now)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, report.Today)
 	require.Equal(t, 0.0, report.Last7Days)
@@ -156,7 +113,7 @@ func TestSummarise_PropagatesError(t *testing.T) {
 	fake := &FakeCostExplorer{
 		Errs: []error{errBoom},
 	}
-	_, err := SummariseCosts(t.Context(), fake, "us-east-2", now)
+	_, err := SummariseCosts(context.Background(), fake, "us-east-2", now)
 	require.Error(t, err)
 }
 

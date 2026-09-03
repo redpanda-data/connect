@@ -1,0 +1,1602 @@
+<title>Redpanda Connect — Compute Sizing</title>
+<script type="module">
+// <sizing-core>
+// Sizing core. Every figure below comes from one blessed benchmark run; see
+// docs/superpowers/specs/2026-08-06-sales-compute-sizing-tool-design.md for why
+// each run was chosen and which runs were deliberately excluded.
+//
+// UNITS — read before touching any curve.
+//
+// The harness stores throughput in a field named `mb_per_sec`, but which unit that
+// field holds depended on how the point was summarised (matrix.go:288):
+//
+//   source scenario, Connect arm  → Connect's own `rolling stats:` log, which is
+//                                   SI decimal (humanize.Bytes) → MB/s (1e6)
+//   sink scenario, or any KC arm  → broker/Iceberg byte counters, which divided by
+//                                   (1 << 20) → MiB/s
+//
+// The harness has since been fixed to divide by 1e6 everywhere (see bytesPerMB in
+// runner/stats.go), but result files written BEFORE that fix keep their original
+// unit — and five of the six blessed runs here predate it. So each connector
+// carries the unit of the run it came from, and the target is converted to match
+// that connector rather than to one global unit. This keeps every curve value
+// byte-identical to its run file, which is what the provenance claim rests on.
+//
+// When a connector is re-benchmarked on the fixed harness, flip its curveUnit to
+// 'MB' and update the snapshot test.
+
+export const MIB = 1024 * 1024
+export const MB = 1_000_000
+
+// Bytes per unit, keyed by the curveUnit tag each connector carries.
+export const UNIT_DIVISOR = { MB, MiB: MIB }
+export const VCPU_POINTS = [1, 2, 4, 8]
+
+export const EVENT_BYTES_MIN = 512
+export const EVENT_BYTES_MAX = 5120
+
+export const TAX = {
+  passthrough: { label: 'Passthrough — no mapping', short: 'passthrough', multiplier: 1.0, measured: true },
+  light: { label: 'Light mapping — renames, filters, JSON in/out', short: 'light mapping', multiplier: 1.2, measured: false },
+  heavy: { label: 'Heavy mapping + schema registry — Avro/Protobuf codec', short: 'heavy mapping + schema registry', multiplier: 2.0, measured: false },
+}
+
+// Copy for the "curve keeps climbing but we only ever ran one instance" case. Split by
+// source kind because the honest caveat differs: a CDC source's second instance needs
+// its own slot/reader, so scale-out is not a given even in principle.
+export const SCALE_OUT_UNMEASURED = {
+  cdc:
+    'Only one Connect instance was benchmarked, and scaling out across instances was not measured. ' +
+    'For a CDC source a second instance is not a straightforward doubling either: it needs its own ' +
+    'replication slot or log reader, and can duplicate the stream rather than divide it. Nothing here ' +
+    'proves scale-out is impossible — it simply has not been measured, and the source itself may be the ' +
+    'constraint. Ask the perf team before quoting.',
+  sink:
+    'Only one Connect instance was benchmarked, and scaling out across instances was not measured. ' +
+    'Nothing here proves it will not work — it simply has not been measured, and the destination system ' +
+    'may become the constraint before Connect does. Ask the perf team before quoting.',
+}
+
+// Oracle is the one connector whose throughput moves with something other than vCPU. A
+// LogMiner reader is an `oracledb_cdc` input with its own disjoint table list, so readers
+// partition TABLES — which is why more of them help, and why a single hot table cannot be
+// split no matter how many you configure.
+//
+// Measured on scenarios/oracle/orders-5table-readers: the same 5-table, 36.7 MB/s workload
+// redistributed across 1, 2 and 5 readers at a fixed 4 vCPU. Two independent runs on
+// different source instances (db.r5.2xlarge and db.r5.4xlarge) agreed to within 1 MB/s,
+// which is what rules out source I/O as the constraint. The conservative figure is used
+// where they differ.
+export const ORACLE_READER_SCALING = {
+  vcpu: 4,
+  tables: 5,
+  offeredMBs: 36.7,
+  unit: 'MB',
+  // readers → measured median. Do NOT interpolate or extrapolate: 3 and 4 readers were
+  // never run, and nothing past 5 was either.
+  points: [
+    { readers: 1, rate: 19 },
+    { readers: 2, rate: 25 },
+    { readers: 5, rate: 29 },
+  ],
+  run: { path: 'oracle/orders-5table-readers/2026-08-06T15-02-03Z.json', date: '2026-08-06', sha: 'f1ccf5289' },
+  corroboration: { path: 'oracle/orders-5table-readers-fastio/2026-08-06T22-17-54Z.json', date: '2026-08-06', sha: '3e8bf51d4' },
+  notes: [
+    'Readers partition tables — each is an oracledb_cdc input with its own table list. A single hot table cannot be split, so if the write load sits in one table no reader count and no core count helps; the most a single-table reader was measured sustaining while keeping up is ~7.7 MB/s, and its saturated maximum was never measured.',
+    'The 19 MB/s single-reader figure is a reader DRAINING BACKLOG at full tilt. A reader that must keep up in real time sustains 7-12 MB/s — plan capacity on that, and treat 19 as catch-up speed after an outage.',
+    'Scaling is sublinear and does not reach the offered load: 5x the readers bought 1.55x the throughput, and 29-30 MB/s was the most ever seen against a 36.7 MB/s write rate. A per-database ceiling somewhere near 31 MB/s is the most likely explanation, so treat ~30 MB/s as the practical Oracle ceiling until something above it is measured.',
+    'Both runs held vCPU at 4. Cores were never the constraint on this connector, so the core count below is what the measurement used, not a figure that scales.',
+  ],
+}
+
+// The page sizes PIPELINES: an input and an output, chosen separately. Most benches
+// measured one half against a Redpanda topic (a CDC source producing to it, or a sink
+// draining it); one pair so far — Oracle → SQL Server — was measured end to end. A pair
+// with no entry in CONNECTORS renders a refusal that names whichever halves WERE
+// measured, because composing halves is not a measurement.
+export const INPUTS = {
+  postgres_cdc: 'PostgreSQL CDC (postgres_cdc)',
+  mysql_cdc: 'MySQL CDC (mysql_cdc)',
+  mongodb_cdc: 'MongoDB CDC (mongodb_cdc)',
+  dynamodb_cdc: 'DynamoDB CDC (aws_dynamodb_cdc)',
+  oracledb_cdc: 'Oracle CDC (oracle_cdc)',
+  sqlserver_cdc: 'SQL Server CDC (microsoft_sql_server_cdc)',
+  redpanda: 'Redpanda topic',
+}
+
+export const OUTPUTS = {
+  redpanda: 'Redpanda topic',
+  iceberg: 'Apache Iceberg (iceberg)',
+  snowflake: 'Snowflake (snowflake_streaming)',
+  sqlserver_insert: 'SQL Server (sql_insert)',
+}
+
+// Connect median throughput at 1/2/4/8 vCPU, all measured on a c8g.4xlarge runner.
+// Each curve is in the unit its own run stored — see curveUnit and the UNITS note above.
+// Each entry names the input/output pair it measured; pipelineFor resolves a pair to
+// its entry, or to nothing.
+export const CONNECTORS = {
+  postgres_cdc: {
+    input: 'postgres_cdc', output: 'redpanda',
+    label: 'PostgreSQL CDC (postgres_cdc)',
+    curve: { 1: 51, 2: 83, 4: 102, 8: 102 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 118,
+    run: { path: 'postgres/orders-cdc/2026-06-01T20-55-50Z.json', date: '2026-06-01', sha: '25057d693' },
+    curveUnit: 'MB',
+    ceiling: null,
+    sourceKind: 'cdc',
+    confidence: 'high',
+  },
+  mysql_cdc: {
+    input: 'mysql_cdc', output: 'redpanda',
+    label: 'MySQL CDC (mysql_cdc)',
+    curve: { 1: 70, 2: 102, 4: 108, 8: 111 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 378,
+    run: { path: 'mysql/orders-cdc/2026-06-02T14-13-52Z.json', date: '2026-06-02', sha: '25057d693' },
+    curveUnit: 'MB',
+    ceiling: null,
+    sourceKind: 'cdc',
+    confidence: 'high',
+  },
+  mongodb_cdc: {
+    input: 'mongodb_cdc', output: 'redpanda',
+    label: 'MongoDB CDC (mongodb_cdc)',
+    curve: { 1: 26, 2: 33, 4: 33, 8: 33 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 157,
+    run: { path: 'mongodb/orders-cdc/2026-07-17T17-11-10Z.json', date: '2026-07-17', sha: '156a11081' },
+    curveUnit: 'MB',
+    ceiling: {
+      reason: 'a single change-stream cursor, which one replica set gives you regardless of vCPU',
+      fix: 'Shard the collection — each shard adds a cursor. More cores will not move this number.',
+    },
+    sourceKind: 'cdc',
+    confidence: 'high',
+  },
+  dynamodb_cdc: {
+    input: 'dynamodb_cdc', output: 'redpanda',
+    label: 'DynamoDB CDC (aws_dynamodb_cdc)',
+    curve: { 1: 40, 2: 72, 4: 81, 8: 82 },
+    benchedEventBytes: 4096,
+    peakHeapMB: 936,
+    run: { path: 'dynamodb/cdc/2026-06-15T17-44-43Z.json', date: '2026-06-15', sha: 'd9d2b3c98' },
+    curveUnit: 'MB',
+    ceiling: {
+      reason: 'the source, not Connect — the run hit the test account\'s write-capacity limit past 4 vCPU',
+      fix: 'Spread the load across more tables or streams. The 8 vCPU figure is a floor, not a Connect limit.',
+    },
+    sourceKind: 'cdc',
+    confidence: 'high',
+  },
+  oracledb_cdc: {
+    input: 'oracledb_cdc', output: 'redpanda',
+    label: 'Oracle CDC (oracle_cdc)',
+    // Saturated single-reader rate from the reader run. The old 13-flat curve came from
+    // a pre-2026-08-05 run whose load generator was later found to be self-throttling
+    // (a Ticker gating a blocking insert), which voids everything it measured.
+    curve: { 1: 19, 2: 19, 4: 19, 8: 19 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 190,
+    run: { path: 'oracle/orders-5table-readers/2026-08-06T15-02-03Z.json', date: '2026-08-06', sha: 'f1ccf5289' },
+    curveUnit: 'MB',
+    ceiling: {
+      reason: 'one LogMiner reader — the ceiling is per reader, and vCPU count is irrelevant to it',
+      fix: 'Split the tables across more readers. See the reader curve below.',
+    },
+    sourceKind: 'cdc',
+    confidence: 'high',
+    readerScaling: ORACLE_READER_SCALING,
+    pipelineNote:
+      'This curve was measured at 4 vCPU only and is drawn flat because cores were measured ' +
+      'irrelevant: Connect never used more than ~1 core in any configuration, and the ' +
+      'Oracle-to-SQL-Server end-to-end run measured flat throughput at 1, 2, 4 and 8 vCPU. ' +
+      '19 MB/s is a reader draining backlog; a reader keeping up in real time sustains 7-12 MB/s.',
+  },
+  sqlserver_cdc: {
+    input: 'sqlserver_cdc', output: 'redpanda',
+    label: 'SQL Server CDC (microsoft_sql_server_cdc)',
+    // Window MEANS, not medians: this capture alternates burst and idle (duty cycle
+    // 44-86%), so the median reads ~0 between bursts and is unusable. Values are the
+    // collated 4-point sweep's mean rec/s x 1200 B, which the doc carries as mean MB/s.
+    curve: { 1: 12.3, 2: 19.8, 4: 20.7, 8: 12.7 },
+    benchedEventBytes: 1200,
+    peakHeapMB: null,
+    run: { path: 'docs/benchmark-results/sqlserver.md — collated 4-point sweep', date: '2026-08-11', sha: '8964f2755' },
+    curveUnit: 'MB',
+    ceiling: {
+      reason: "the source, not Connect — the capture job's burst/idle duty cycle plus the RDS volume's storage throughput. Provisioning storage_throughput at 1000 MiB/s lifted the same 2 vCPU point by 41%.",
+      fix: 'Provision source storage throughput before adding Connect cores. 2 vCPU is the sweet spot; past it the curve is flat-to-noisy.',
+    },
+    sourceKind: 'cdc',
+    confidence: 'medium',
+    confidenceNote:
+      'Medium confidence: these are window means of a bursty capture (duty cycle 44-86%) — ' +
+      'medians read near zero between bursts and are unusable on this connector. The 8 vCPU ' +
+      'dip is an artifact window, not a scaling effect; 2 vCPU is the sweet spot.',
+  },
+  iceberg_sink: {
+    input: 'redpanda', output: 'iceberg',
+    label: 'Iceberg sink (iceberg output)',
+    curve: { 1: 34, 2: 65, 4: 97, 8: 128 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 2681,
+    run: { path: 'iceberg/orders-sink-recipe-b/2026-07-09T15-57-38Z.json', date: '2026-07-09', sha: '62f50196b' },
+    curveUnit: 'MiB',
+    ceiling: null,
+    sourceKind: 'sink',
+    confidence: 'medium',
+    confidenceNote: 'Medium confidence: a sibling Iceberg scenario produced 241, 78, 49 and 128 MiB/s at 8 vCPU across four runs. This blessed run is the well-behaved one; treat the 8 vCPU point as indicative.',
+  },
+  snowflake_sink: {
+    input: 'redpanda', output: 'snowflake',
+    label: 'Snowflake sink (snowflake_streaming)',
+    curve: { 1: 20.2, 2: 65.6, 4: 60.8, 8: 70.9 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 4710,
+    run: { path: 'snowflake/orders-sink/2026-08-18T20-32-57Z.json', date: '2026-08-18', sha: 'c7709c869' },
+    curveUnit: 'MB',
+    ceiling: {
+      reason: 'the Snowpipe commit path, not compute — the process never used more than ~2 cores at any vCPU point, so the plateau from 2 vCPU up is the commit round-trip on max_in_flight: 4 channels into one table',
+      fix: 'More cores will not move it. The untested levers are raising max_in_flight (more channels per table) and splitting streams across tables.',
+    },
+    sourceKind: 'sink',
+    confidence: 'high',
+    pipelineNote:
+      'These figures require the benchmarked recipe: a memory buffer between the Redpanda ' +
+      'input and the output. Without it the input acks chain to Snowpipe commit latency and ' +
+      'throughput collapses to 0.04 MB/s — measured on the same rig, not hypothetical.',
+  },
+  oracle_to_sqlserver: {
+    input: 'oracledb_cdc', output: 'sqlserver_insert',
+    label: 'Oracle CDC → SQL Server (oracledb_cdc → sql_insert)',
+    // The only pair measured END TO END: no Redpanda in the middle, one process doing
+    // LogMiner capture and batched inserts. Flat ~6.4 MB/s (~5,300 rows/s of 1.2 KB rows,
+    // ~23 GB/h) at every core count; Connect used ~0.12 cores at every point.
+    curve: { 1: 6.3, 2: 6.4, 4: 3.5, 8: 6.4 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 222,
+    run: { path: 'oracle-mssql/oracle-orders-to-sqlserver/2026-08-18T04-25-31Z.json', date: '2026-08-18', sha: '0ccd97ae3' },
+    curveUnit: 'MB',
+    ceiling: {
+      reason: 'one LogMiner reader feeding one insert path — Connect used ~0.12 cores at every point, wholly I/O-bound on the capture and insert round-trips',
+      fix: 'Cores will not move it; run this on the smallest box. Raising it means more readers on the capture side (measured to ~31 MB/s source-side) plus a faster insert path — that combination is unmeasured end to end.',
+    },
+    sourceKind: 'cdc',
+    confidence: 'medium',
+    confidenceNote:
+      'Medium confidence: the 4 vCPU point (3.5 MB/s) is a source-side outlier window that ' +
+      'fully recovered at 8 vCPU — not a scaling effect. Treat the pipeline as flat ~6.4 MB/s ' +
+      'at any core count.',
+  },
+}
+
+// Ways a rep can state volume. Everything funnels through bytes/sec — the one
+// representation with no unit ambiguity — and is only then expressed in a given
+// connector's own curve unit. Customers most often quote GB or TB per day.
+export const INPUT_UNITS = {
+  'MB/s': { label: 'MB/s — decimal, 10⁶', bytesPerSec: (v) => v * MB },
+  'MiB/s': { label: 'MiB/s — binary, 2²⁰', bytesPerSec: (v) => v * MIB },
+  'GB/day': { label: 'GB/day', bytesPerSec: (v) => (v * 1_000_000_000) / 86_400 },
+  'TB/day': { label: 'TB/day', bytesPerSec: (v) => (v * 1_000_000_000_000) / 86_400 },
+}
+
+export function bytesPerSecFromEvents(eventsPerSec, eventBytes) {
+  return eventsPerSec * eventBytes
+}
+
+export function bytesPerSecFromThroughput(value, unit) {
+  const u = INPUT_UNITS[unit]
+  return u ? u.bytesPerSec(value) : NaN
+}
+
+// A rate and a throughput are two views of the same quantity, with the average event size
+// as the anchor between them. These two conversions keep the page's fields in sync, so a
+// rep can type into whichever one the customer gave them.
+export function throughputFromEvents(eventsPerSec, eventBytes, unit) {
+  const divisor = INPUT_UNITS[unit] ? bytesPerSecFromThroughput(1, unit) : NaN
+  return bytesPerSecFromEvents(eventsPerSec, eventBytes) / divisor
+}
+
+export function eventsPerSecFromThroughput(value, unit, eventBytes) {
+  if (!(eventBytes > 0)) return NaN
+  return bytesPerSecFromThroughput(value, unit) / eventBytes
+}
+
+// Express bytes/sec in the unit a connector's stored curve uses, so a target and a
+// curve are always in the same unit before they are compared. This is the single
+// place unit conversion happens.
+export function inCurveUnit(bytesPerSec, curveUnit) {
+  return bytesPerSec / UNIT_DIVISOR[curveUnit]
+}
+
+// How far the requested event size may drift from the size a connector's own curve was
+// measured at before the curve stops meaning anything. 2x either way.
+export const EVENT_BYTES_DEVIATION_FACTOR = 2
+
+function ratioWord(eventBytes, benched) {
+  const round1 = (n) => Math.round(n * 10) / 10
+  return eventBytes < benched
+    ? `${round1(benched / eventBytes)}x smaller than`
+    : `${round1(eventBytes / benched)}x larger than`
+}
+
+export function warningsFor(c, eventBytes) {
+  const out = []
+  const unit = c.curveUnit
+  const nearBench =
+    eventBytes >= c.benchedEventBytes / EVENT_BYTES_DEVIATION_FACTOR &&
+    eventBytes <= c.benchedEventBytes * EVENT_BYTES_DEVIATION_FACTOR
+  const inBand = eventBytes >= EVENT_BYTES_MIN && eventBytes <= EVENT_BYTES_MAX
+
+  // The per-connector check is the more specific of the two, so it wins when both fire —
+  // one caveat, not two near-identical ones.
+  if (!nearBench) {
+    const drop = eventBytes < c.benchedEventBytes
+      ? `Smaller events shift the cost to per-message overhead, so achievable ${unit}/s drops below this curve.`
+      : 'Larger events change batching and per-message behaviour, so this curve may not hold.'
+    out.push(
+      `Extrapolated. This connector's curve was measured with ${c.benchedEventBytes} B events, and ` +
+      `${eventBytes} B is ${ratioWord(eventBytes, c.benchedEventBytes)} that. ${drop} ` +
+      `Treat the core count as indicative and confirm in a POC.`
+    )
+  } else if (!inBand) {
+    out.push(
+      `Extrapolated. This curve was measured at ${c.benchedEventBytes} B events; outside ` +
+      `${EVENT_BYTES_MIN}–${EVENT_BYTES_MAX} B no measurement backs it. Smaller events shift the ` +
+      `cost to per-message overhead, so achievable ${unit}/s drops.`
+    )
+  }
+
+  // A pipeline-level fact the number is conditional on (a required recipe, a
+  // measurement basis) renders with every result, not only on refusals.
+  if (c.pipelineNote) out.push(c.pipelineNote)
+  if (c.confidence !== 'high' && c.confidenceNote) out.push(c.confidenceNote)
+  return out
+}
+
+// Resolve an input/output pair to the entry that measured it, or null. Keys are the
+// INPUTS/OUTPUTS keys; the entry keys in CONNECTORS stay the sizeFor identifiers.
+export function pipelineFor(input, output) {
+  const hit = Object.entries(CONNECTORS).find(([, c]) => c.input === input && c.output === output)
+  return hit ? { key: hit[0], entry: hit[1] } : null
+}
+
+// For an unmeasured pair, the halves that WERE measured — the input against a Redpanda
+// topic and a Redpanda topic into the output — so the refusal can name what exists
+// without composing it into a number nobody ran.
+export function halvesFor(input, output) {
+  return {
+    source: input === 'redpanda' ? null : pipelineFor(input, 'redpanda'),
+    sink: output === 'redpanda' ? null : pipelineFor('redpanda', output),
+  }
+}
+
+// The endpoints measured together with `key` on the given side: the tested outputs for
+// an input, or the tested inputs for an output. The UI filters the OPPOSITE dropdown to
+// this list whenever one changes, so an untested pair can never even be displayed —
+// while the dropdown just touched keeps the full list, which is what keeps every
+// measured pair reachable (a symmetric filter would deadlock: postgres→redpanda could
+// never step to redpanda→snowflake, because each list would hide the stepping stone).
+export function partnersFor(side, key) {
+  const entries = Object.values(CONNECTORS)
+  if (side === 'input') {
+    return [...new Set(entries.filter((c) => c.input === key).map((c) => c.output))]
+  }
+  return [...new Set(entries.filter((c) => c.output === key).map((c) => c.input))]
+}
+
+// A blank or nonsensical input must not produce a confident "1 core" — the guard lives
+// here, not in the UI, so it is testable.
+export function hasSizeableInput(bytesPerSec) {
+  return Number.isFinite(bytesPerSec) && bytesPerSec > 0
+}
+
+// For a connector with a reader curve, throughput is set by reader count rather than vCPU.
+// Only measured reader counts are answerable; anything else returns null so the caller
+// refuses rather than interpolating a number nobody ran.
+export function readerRate(c, readers) {
+  const rs = c.readerScaling
+  if (!rs) return null
+  const hit = rs.points.find((p) => p.readers === readers)
+  return hit ? hit.rate : null
+}
+
+export function measuredReaderCounts(c) {
+  return c.readerScaling ? c.readerScaling.points.map((p) => p.readers) : []
+}
+
+// The smallest measured reader count whose rate clears `required`, or null if none does.
+// Used to turn a refusal into "N readers would have cleared this" where the data supports it.
+export function readersNeededFor(c, required, taxMultiplier = 1) {
+  if (!c.readerScaling) return null
+  const hit = c.readerScaling.points.find((p) => p.rate / taxMultiplier >= required)
+  return hit ? hit.readers : null
+}
+
+// Sizing always works from a rate and an average event size. The page lets a rep type a
+// throughput instead, but converts it to a rate via the size before calling this, so the
+// event-size check is never skipped.
+export function sizeFor({
+  connector,
+  eventsPerSec, eventBytes,
+  readers = 1,
+  tax = 'passthrough', headroomPct = 30,
+}) {
+  const c = CONNECTORS[connector]
+  if (!c) return { status: 'unbenchmarked', connector }
+
+  const bytesPerSec = bytesPerSecFromEvents(eventsPerSec, eventBytes)
+
+  // BOTH fields must be positive — a positive rate times a blank size is still zero bytes,
+  // and must not size as though it were valid.
+  const fieldsOk =
+    Number.isFinite(eventsPerSec) && Number.isFinite(eventBytes) &&
+    eventsPerSec > 0 && eventBytes > 0
+  if (!fieldsOk || !hasSizeableInput(bytesPerSec)) return { status: 'no-input', connector }
+
+  const unit = c.curveUnit
+  const multiplier = TAX[tax].multiplier
+  const target = inCurveUnit(bytesPerSec, unit)
+  const required = target * (1 + headroomPct / 100)
+  const warnings = warningsFor(c, eventBytes)
+
+  // --- reader-scaled connectors (Oracle): reader count is the dimension, not vCPU ---
+  if (c.readerScaling) {
+    const rs = c.readerScaling
+    const base = { connector, unit, bytesPerSec, target, required, headroomPct,
+                   taxMultiplier: multiplier, taxMeasured: TAX[tax].measured,
+                   taxShort: TAX[tax].short, readers, readerScaling: rs,
+                   run: rs.run, confidence: c.confidence, warnings }
+
+    const measured = readerRate(c, readers)
+    if (measured === null) {
+      // Never interpolate a reader count nobody ran.
+      return { ...base, status: 'unmeasured-readers', measuredReaderCounts: measuredReaderCounts(c) }
+    }
+
+    const available = measured / multiplier
+    if (available >= required) {
+      return { ...base, status: 'ok', cores: rs.vcpu, measuredRate: measured, effectiveRate: available,
+               peakHeapMB: c.peakHeapMB }
+    }
+
+    // Refusal. If a larger MEASURED reader count would have cleared it, say which.
+    const hint = readersNeededFor(c, required, multiplier)
+    const top = rs.points[rs.points.length - 1]
+    return {
+      ...base,
+      status: 'ceiling',
+      measuredCeilingRate: measured,
+      ceilingRate: available,
+      readerHint: hint && hint !== readers ? hint : null,
+      topMeasured: { readers: top.readers, rate: top.rate, effective: top.rate / multiplier },
+      ceiling: c.ceiling,
+      scaleOutNote: null,
+    }
+  }
+
+  const effective = VCPU_POINTS.map((vcpu) => ({ vcpu, rate: c.curve[vcpu] / multiplier }))
+  const fit = effective.find((p) => p.rate >= required)
+
+  if (!fit) {
+    // Best point on the curve, preferring the highest vCPU on a tie so the figure quoted
+    // matches the last row of the table on the page.
+    const best = effective.reduce((a, b) => (b.rate >= a.rate ? b : a))
+    return {
+      status: 'ceiling',
+      connector, unit, bytesPerSec, target, required, headroomPct,
+      // measuredCeilingRate is a real benchmark reading. ceilingRate is that reading
+      // divided by the processing multiplier — derived, and only equal to it at 1.0x.
+      measuredCeilingRate: c.curve[best.vcpu],
+      measuredCeilingVcpu: best.vcpu,
+      ceilingRate: best.rate,
+      taxMultiplier: multiplier,
+      taxMeasured: TAX[tax].measured,
+      taxShort: TAX[tax].short,
+      ceiling: c.ceiling,
+      scaleOutNote: c.ceiling ? null : SCALE_OUT_UNMEASURED[c.sourceKind],
+      run: c.run,
+      confidence: c.confidence,
+      warnings,
+    }
+  }
+
+  return {
+    status: 'ok',
+    connector, unit, bytesPerSec,
+    cores: fit.vcpu,
+    target, required, headroomPct,
+    measuredRate: c.curve[fit.vcpu],
+    effectiveRate: fit.rate,
+    peakHeapMB: c.peakHeapMB,
+    run: c.run,
+    confidence: c.confidence,
+    taxMeasured: TAX[tax].measured,
+    warnings,
+  }
+}
+// </sizing-core>
+
+// Bridge for the UI script below: the fence above must stay a side-effect-free
+// ES module (see sizing.test.mjs), so this line lives outside the sentinels.
+// Keep this list in sync with the core's exports — sizing.test.mjs asserts it, because a
+// stale name here throws before window.__sizingCore is ever assigned, which silently
+// blanks the entire page while the unit tests (which import the fence directly) stay green.
+window.__sizingCore = {
+  MIB, MB, UNIT_DIVISOR, VCPU_POINTS, EVENT_BYTES_MIN, EVENT_BYTES_MAX,
+  EVENT_BYTES_DEVIATION_FACTOR, INPUT_UNITS, TAX, SCALE_OUT_UNMEASURED, CONNECTORS,
+  INPUTS, OUTPUTS, pipelineFor, halvesFor, partnersFor,
+  bytesPerSecFromEvents, bytesPerSecFromThroughput, inCurveUnit,
+  throughputFromEvents, eventsPerSecFromThroughput,
+  ORACLE_READER_SCALING, readerRate, measuredReaderCounts, readersNeededFor,
+  warningsFor, hasSizeableInput, sizeFor,
+}
+</script>
+
+<style>
+  :root {
+    --bg: #f5f7f6;
+    --surface: #ffffff;
+    --surface-2: #eef2f0;
+    --border: #d7ddda;
+    --border-strong: #b9c2be;
+    --text: #12181a;
+    --text-muted: #57635f;
+    --accent: #0d6d78;
+    --accent-soft: #dcedee;
+    --accent-strong: #094e56;
+    --danger: #9c2f24;
+    --danger-soft: #f5e1dd;
+    --warning: #8a5a12;
+    --warning-soft: #f2e6cd;
+    --neutral-badge: #4a5652;
+    --focus-ring: #0d6d78;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", "Roboto Mono", Menlo, monospace;
+    --shadow: 0 1px 2px rgba(20, 30, 28, 0.06), 0 1px 12px rgba(20, 30, 28, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1413;
+      --surface: #161f1d;
+      --surface-2: #1c2725;
+      --border: #2a3634;
+      --border-strong: #3c4b48;
+      --text: #e7ece9;
+      --text-muted: #9aa8a2;
+      --accent: #55c2cd;
+      --accent-soft: #17383c;
+      --accent-strong: #8fdbe3;
+      --danger: #e2776c;
+      --danger-soft: #3a1f1c;
+      --warning: #d9a94c;
+      --warning-soft: #362a15;
+      --neutral-badge: #9aa8a2;
+      --focus-ring: #55c2cd;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 14px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0e1413;
+    --surface: #161f1d;
+    --surface-2: #1c2725;
+    --border: #2a3634;
+    --border-strong: #3c4b48;
+    --text: #e7ece9;
+    --text-muted: #9aa8a2;
+    --accent: #55c2cd;
+    --accent-soft: #17383c;
+    --accent-strong: #8fdbe3;
+    --danger: #e2776c;
+    --danger-soft: #3a1f1c;
+    --warning: #d9a94c;
+    --warning-soft: #362a15;
+    --neutral-badge: #9aa8a2;
+    --focus-ring: #55c2cd;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 14px rgba(0, 0, 0, 0.3);
+  }
+
+  :root[data-theme="light"] {
+    --bg: #f5f7f6;
+    --surface: #ffffff;
+    --surface-2: #eef2f0;
+    --border: #d7ddda;
+    --border-strong: #b9c2be;
+    --text: #12181a;
+    --text-muted: #57635f;
+    --accent: #0d6d78;
+    --accent-soft: #dcedee;
+    --accent-strong: #094e56;
+    --danger: #9c2f24;
+    --danger-soft: #f5e1dd;
+    --warning: #8a5a12;
+    --warning-soft: #f2e6cd;
+    --neutral-badge: #4a5652;
+    --focus-ring: #0d6d78;
+    --shadow: 0 1px 2px rgba(20, 30, 28, 0.06), 0 1px 12px rgba(20, 30, 28, 0.05);
+  }
+
+  * { box-sizing: border-box; }
+
+  /* The hidden attribute must always win: the UA's [hidden]{display:none} is
+     user-agent origin, so any author display (like .field's flex) silently
+     overrides it — which kept the LogMiner readers field visible on
+     non-Oracle selections. */
+  [hidden] { display: none !important; }
+
+  html, body {
+    margin: 0;
+    overflow-x: hidden;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .result-card { transition: border-color 120ms ease; }
+  }
+
+  a { color: var(--accent); }
+
+  .page {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .masthead h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+
+  .masthead p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    max-width: 38rem;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 1.25rem 1.375rem;
+  }
+
+  .panel-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin: 0 0 0.85rem;
+  }
+
+  .input-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 1rem 1.25rem;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .field.field-wide {
+    grid-column: 1 / -1;
+  }
+
+  .field label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .field select,
+  .field input[type="number"] {
+    font: inherit;
+    font-family: var(--mono);
+    font-size: 0.92rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    width: 100%;
+  }
+
+  .field select {
+    font-family: var(--sans);
+  }
+
+  .field select:focus-visible,
+  .field input:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+  }
+
+  .field .helper {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  .label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .clear-btn {
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    cursor: pointer;
+  }
+
+  .clear-btn:hover {
+    text-decoration: underline;
+    color: var(--accent-strong);
+  }
+
+  .clear-btn:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  .range-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .range-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+
+  .range-row .range-val {
+    font-family: var(--mono);
+    font-size: 0.92rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 3ch;
+    text-align: right;
+    color: var(--accent-strong);
+    font-weight: 600;
+  }
+
+  .result-card {
+    border-left: 4px solid var(--border-strong);
+  }
+
+  .result-card.state-ok { border-left-color: var(--accent); }
+  .result-card.state-ceiling { border-left-color: var(--danger); }
+  .result-card.state-unbenchmarked { border-left-color: var(--border-strong); }
+  .result-card.state-empty { border-left-color: var(--border-strong); }
+
+  .headline-ok {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .core-count {
+    font-family: var(--mono);
+    font-size: clamp(2.6rem, 9vw, 3.6rem);
+    font-weight: 700;
+    color: var(--accent-strong);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .core-unit {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+
+  .headline-refuse {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--danger);
+    text-wrap: balance;
+    margin: 0 0 0.15rem;
+  }
+
+  .headline-unbenched {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 0;
+  }
+
+  .support-line {
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    color: var(--text);
+    margin: 0.75rem 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .support-line + .support-line { margin-top: 0.45rem; }
+
+  .body-text {
+    font-size: 0.92rem;
+    color: var(--text);
+    margin: 0.75rem 0 0;
+  }
+
+  .body-text + .body-text { margin-top: 0.45rem; }
+
+  .memory-note {
+    font-size: 0.86rem;
+    color: var(--warning);
+    margin: 0.6rem 0 0;
+    font-weight: 600;
+  }
+
+  .provenance {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin: 0.9rem 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .gomax-note {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin: 0.6rem 0 0;
+    padding-top: 0.6rem;
+    border-top: 1px dashed var(--border);
+  }
+
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.9rem 0 0;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    line-height: 1.4;
+  }
+
+  .badge-measured {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    border: 1px solid var(--accent);
+  }
+
+  .badge-estimate {
+    background: transparent;
+    color: var(--warning);
+    border: 1px dashed var(--warning);
+  }
+
+  .estimate-note {
+    font-size: 0.86rem;
+    color: var(--warning);
+    margin: 0.5rem 0 0;
+  }
+
+  .caveats {
+    list-style: none;
+    margin: 0.9rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .caveat {
+    border-left: 3px solid var(--warning);
+    background: var(--warning-soft);
+    padding: 0.45rem 0.7rem;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.84rem;
+    color: var(--text);
+  }
+
+  .caveat .eyebrow {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--warning);
+    margin-bottom: 0.15rem;
+  }
+
+  .ceiling-box {
+    margin-top: 0.85rem;
+    padding: 0.75rem 0.85rem;
+    background: var(--danger-soft);
+    border-radius: 6px;
+    border: 1px solid var(--danger);
+  }
+
+  .ceiling-box p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text);
+  }
+
+  .ceiling-box p + p { margin-top: 0.4rem; }
+
+  .curve-wrap {
+    overflow-x: auto;
+  }
+
+  table.curve-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 0.86rem;
+    min-width: 26rem;
+  }
+
+  table.curve-table caption {
+    text-align: left;
+    font-family: var(--sans);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin-bottom: 0.7rem;
+  }
+
+  table.curve-table th,
+  table.curve-table td {
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+
+  table.curve-table th {
+    font-family: var(--sans);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  table.curve-table tr.selected-row {
+    background: var(--accent-soft);
+  }
+
+  table.curve-table tr.selected-row td {
+    color: var(--accent-strong);
+    font-weight: 700;
+  }
+
+  table.curve-table tr.ceiling-row {
+    background: var(--danger-soft);
+  }
+
+  table.curve-table tr.ceiling-row td {
+    color: var(--danger);
+    font-weight: 700;
+  }
+
+  .row-tag {
+    display: inline-block;
+    margin-left: 0.5rem;
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .bar-cell {
+    width: 40%;
+  }
+
+  .bar-track {
+    background: var(--surface-2);
+    border-radius: 3px;
+    height: 0.55rem;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    background: var(--border-strong);
+    border-radius: 3px;
+  }
+
+  tr.selected-row .bar-fill { background: var(--accent); }
+  tr.ceiling-row .bar-fill { background: var(--danger); }
+
+  .empty-curve-note {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 30rem) {
+    .panel { padding: 1rem; }
+    .core-count { font-size: clamp(2.2rem, 14vw, 2.8rem); }
+  }
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <h1>Redpanda Connect — Compute Sizing</h1>
+    <p>
+      Self-serve core sizing from blessed benchmark runs. Pick an input and an output;
+      the tool answers only for pairs with measured data — everything else is a refusal,
+      on purpose.
+    </p>
+  </header>
+
+  <section class="panel" aria-label="Sizing inputs">
+    <p class="panel-label">Inputs</p>
+    <div class="input-grid">
+      <div class="field">
+        <div class="label-row">
+          <label for="inputSel">Input</label>
+          <button id="clearFilters" type="button" class="clear-btn">Clear</button>
+        </div>
+        <select id="inputSel"></select>
+        <span class="helper">Changing this filters Output to tested pairs</span>
+      </div>
+
+      <div class="field">
+        <label for="outputSel">Output</label>
+        <select id="outputSel"></select>
+        <span class="helper">Changing this filters Input to tested pairs</span>
+      </div>
+
+      <div class="field">
+        <label for="eventBytes">Average event size (bytes)</label>
+        <input id="eventBytes" type="number" min="1" value="1200">
+        <span class="helper">Benchmarks used 1200 B (4096 B for DynamoDB)</span>
+      </div>
+
+      <div class="field">
+        <label for="eventsPerSec">Events / sec</label>
+        <input id="eventsPerSec" type="number" min="1" step="1000" value="40000">
+        <span class="helper">Linked to throughput — edit either one</span>
+      </div>
+
+      <div class="field">
+        <label for="throughput">Throughput</label>
+        <div class="range-row">
+          <input id="throughput" type="number" min="0" step="10" value="48">
+          <select id="throughputUnit" aria-label="Throughput unit"></select>
+        </div>
+        <span class="helper">Same volume, stated the other way</span>
+      </div>
+
+      <div class="field" id="readersField" hidden>
+        <label for="readers">LogMiner readers</label>
+        <select id="readers"></select>
+        <span class="helper">Readers split tables between them</span>
+      </div>
+
+      <div class="field">
+        <label for="tax">Processing</label>
+        <select id="tax"></select>
+      </div>
+
+      <div class="field field-wide">
+        <label for="headroom">Headroom</label>
+        <div class="range-row">
+          <input id="headroom" type="range" min="0" max="100" step="5" value="30">
+          <span class="range-val" id="headroomVal">30%</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel result-card" id="resultCard" aria-live="polite">
+    <p class="panel-label">Result</p>
+    <div id="result"></div>
+  </section>
+
+  <section class="panel" id="curveSection">
+    <p class="panel-label">Measured curve</p>
+    <div id="curveHost"></div>
+  </section>
+
+  <section class="panel" id="readerSection" hidden>
+    <p class="panel-label">How Oracle scales</p>
+    <div id="readerHost"></div>
+  </section>
+</div>
+
+<script type="module">
+  const { CONNECTORS, TAX, VCPU_POINTS, INPUT_UNITS, INPUTS, OUTPUTS,
+          pipelineFor, halvesFor, partnersFor, sizeFor,
+          throughputFromEvents, eventsPerSecFromThroughput,
+          measuredReaderCounts } = window.__sizingCore
+
+  const inputSelect = document.getElementById('inputSel')
+  const outputSelect = document.getElementById('outputSel')
+  const eventsInput = document.getElementById('eventsPerSec')
+  const bytesInput = document.getElementById('eventBytes')
+  const throughputInput = document.getElementById('throughput')
+  const throughputUnitSelect = document.getElementById('throughputUnit')
+  const readersSelect = document.getElementById('readers')
+  const readersField = document.getElementById('readersField')
+  const readerSection = document.getElementById('readerSection')
+  const readerHost = document.getElementById('readerHost')
+  const taxSelect = document.getElementById('tax')
+  const headroomInput = document.getElementById('headroom')
+  const headroomVal = document.getElementById('headroomVal')
+  const resultCard = document.getElementById('resultCard')
+  const resultHost = document.getElementById('result')
+  const curveHost = document.getElementById('curveHost')
+
+  // --- endpoint selects: rebuilt on every change, never populated just once ---
+  // allowed === null means the full registry; otherwise only keys in the set (plus the
+  // "Something else…" escape hatch, which must never be filtered away). The previous
+  // value survives the rebuild when still allowed; otherwise the first option wins.
+  // withPlaceholder prepends a disabled "Select component…" row — the post-Clear state,
+  // which only survives until the first real pick (disabled, so never re-selectable).
+  function rebuildEndpointSelect(select, registry, allowed, keepValue, withPlaceholder = false) {
+    select.innerHTML = ''
+    if (withPlaceholder) {
+      const ph = document.createElement('option')
+      ph.value = '__none'
+      ph.textContent = 'Select component…'
+      ph.disabled = true
+      select.appendChild(ph)
+    }
+    for (const [key, label] of Object.entries(registry)) {
+      if (allowed && !allowed.has(key)) continue
+      const opt = document.createElement('option')
+      opt.value = key
+      opt.textContent = label
+      select.appendChild(opt)
+    }
+    const other = document.createElement('option')
+    other.value = '__other'
+    other.textContent = 'Something else…'
+    select.appendChild(other)
+    select.value = [...select.options].some((o) => o.value === keepValue)
+      ? keepValue
+      : select.options[0].value
+  }
+
+  // The dropdown just touched keeps the full list; the OTHER one shows only endpoints
+  // measured with the touched side's value (see partnersFor in the core for why the
+  // filter cannot be symmetric). "Something else…" on the touched side unfilters the
+  // partner list — there is nothing measured to filter by.
+  function syncPartnerOptions(changed) {
+    const touched = changed === 'input' ? inputSelect : outputSelect
+    const partner = changed === 'input' ? outputSelect : inputSelect
+    const touchedRegistry = changed === 'input' ? INPUTS : OUTPUTS
+    const partnerRegistry = changed === 'input' ? OUTPUTS : INPUTS
+    rebuildEndpointSelect(touched, touchedRegistry, null, touched.value)
+    const allowed = touched.value === '__other' || touched.value === '__none'
+      ? null
+      : new Set(partnersFor(changed, touched.value))
+    rebuildEndpointSelect(partner, partnerRegistry, allowed, partner.value)
+  }
+
+  // The escape from any filtered state: both lists back to the full registries, both
+  // set to the "Select component…" placeholder. The first real pick drops the
+  // placeholder on that side and snaps the other side to a tested partner through the
+  // normal handlers.
+  document.getElementById('clearFilters').addEventListener('click', () => {
+    rebuildEndpointSelect(inputSelect, INPUTS, null, '__none', true)
+    rebuildEndpointSelect(outputSelect, OUTPUTS, null, '__none', true)
+    render()
+  })
+
+  rebuildEndpointSelect(inputSelect, INPUTS, null, 'postgres_cdc')
+  rebuildEndpointSelect(outputSelect, OUTPUTS, null, 'redpanda')
+  syncPartnerOptions('input')
+
+  for (const [key, t] of Object.entries(TAX)) {
+    const opt = document.createElement('option')
+    opt.value = key
+    opt.textContent = t.label + (t.measured === false ? ' (estimate)' : '')
+    taxSelect.appendChild(opt)
+  }
+  taxSelect.value = 'passthrough'
+
+  for (const [key, u] of Object.entries(INPUT_UNITS)) {
+    const opt = document.createElement('option')
+    opt.value = key
+    opt.textContent = u.label
+    throughputUnitSelect.appendChild(opt)
+  }
+  throughputUnitSelect.value = 'MB/s'
+
+  // Options are the measured reader counts and nothing else — 3 and 4 readers were never
+  // run, so offering them would invite a number no benchmark supports.
+  function syncReaderOptions(connectorKey) {
+    const counts = measuredReaderCounts(CONNECTORS[connectorKey] || {})
+    readersField.hidden = counts.length === 0
+    readerSection.hidden = counts.length === 0
+    if (!counts.length) return
+    const keep = readersSelect.value
+    if (readersSelect.dataset.for !== connectorKey) {
+      readersSelect.innerHTML = counts.map((n) =>
+        `<option value="${n}">${n} reader${n === 1 ? '' : 's'}</option>`).join('')
+      readersSelect.dataset.for = connectorKey
+      readersSelect.value = counts.includes(Number(keep)) ? keep : String(counts[0])
+    }
+  }
+
+  // --- formatting helpers ---
+  const r1 = (n) => (Math.round(n * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 })
+  const int = (n) => Math.round(n).toLocaleString('en-US')
+
+  function badgeHtml(result) {
+    if (result.taxMeasured === false) {
+      return `
+        <div class="badge-row">
+          <span class="badge badge-estimate">Estimate</span>
+        </div>
+        <p class="estimate-note">Includes an unmeasured processing multiplier — confirm in a POC.</p>
+      `
+    }
+    return `
+      <div class="badge-row">
+        <span class="badge badge-measured">Measured</span>
+      </div>
+    `
+  }
+
+  function caveatsHtml(warnings) {
+    if (!warnings || warnings.length === 0) return ''
+    return `
+      <ul class="caveats">
+        ${warnings.map((w) => `<li class="caveat"><span class="eyebrow">Caveat</span>${w}</li>`).join('')}
+      </ul>
+    `
+  }
+
+  function provenanceHtml(run) {
+    return `<p class="provenance">Measured ${run.date} · run ${run.path} · ${run.sha}</p>`
+  }
+
+  const GOMAXPROCS_NOTE = "Cores are counted off the instance's CPU, not GOMAXPROCS. Raising GOMAXPROCS for I/O-bound work does not change this number."
+
+  function renderOk(r) {
+    resultCard.className = 'panel result-card state-ok'
+    const memNote = r.peakHeapMB > 1024
+      ? `<p class="memory-note">Peak heap on this run exceeded 1024 MB — memory, not cores, may end up driving the instance choice here.</p>`
+      : ''
+    const heapLine = r.peakHeapMB
+      ? `<p class="support-line">Peak heap: ${int(r.peakHeapMB)} MB</p>`
+      : `<p class="support-line">Peak heap: not recorded for this run</p>`
+    resultHost.innerHTML = `
+      <div class="headline-ok">
+        <span class="core-count">${r.cores}</span>
+        <span class="core-unit">licensable cores</span>
+      </div>
+      <p class="support-line">Needs ${r1(r.required)} ${r.unit}/s (target ${r1(r.target)} ${r.unit}/s + ${r.headroomPct}% headroom). Measured ${r1(r.measuredRate)} ${r.unit}/s at ${r.cores} vCPU${r.readerScaling ? ` with ${r.readers} reader${r.readers === 1 ? '' : 's'}` : ''}.</p>
+      ${r.readerScaling ? `<p class="support-line">Throughput here comes from reader count, not cores — ${r.cores} vCPU is what the reader runs used, and adding cores did not move this connector.</p>` : ''}
+      ${heapLine}
+      ${memNote}
+      ${provenanceHtml(r.run)}
+      ${badgeHtml(r)}
+      <p class="gomax-note">${GOMAXPROCS_NOTE}</p>
+      ${caveatsHtml(r.warnings)}
+    `
+  }
+
+  function renderCeiling(r) {
+    resultCard.className = 'panel result-card state-ceiling'
+    const limitHtml = r.ceiling
+      ? `<div class="ceiling-box">
+          <p>The limit is ${r.ceiling.reason}</p>
+          <p>${r.ceiling.fix}</p>
+        </div>`
+      : `<div class="ceiling-box">
+          <p>${r.scaleOutNote}</p>
+        </div>`
+    // Never call a tax-derated figure "measured". At 1.0x the two numbers are the same
+    // reading; above 1.0x the derated figure is arithmetic and is labelled as such.
+    const derated = (measured, effective) => r.taxMultiplier === 1
+      ? ''
+      : ` Derated by the estimated ${r.taxMultiplier}x cost of ${r.taxShort} that is about ${r1(effective)} ${r.unit}/s, which is calculated, not measured — no benchmark produced it.`
+
+    let ceilingLine
+    if (r.readerScaling) {
+      // Reader-scaled: quote the reader count in play, then whether more readers would help.
+      const rs = r.readerScaling
+      const more = r.readerHint
+        ? `${r.readerHint} readers would clear it — that point was measured at ${r1(rs.points.find((p) => p.readers === r.readerHint).rate)} ${r.unit}/s. Split the tables that way.`
+        : `Nothing measured clears it. The most ever seen is ${r1(r.topMeasured.rate)} ${r.unit}/s at ${r.topMeasured.readers} readers, against a ${rs.offeredMBs} ${r.unit}/s write rate the run never caught up with — so roughly ${r1(r.topMeasured.rate)} ${r.unit}/s is the practical Oracle ceiling until something above it is measured.`
+      ceilingLine = `
+        <p class="support-line">With ${r.readers} reader${r.readers === 1 ? '' : 's'} the measured throughput is ${r1(r.measuredCeilingRate)} ${r.unit}/s.${derated(r.measuredCeilingRate, r.ceilingRate)}</p>
+        <p class="support-line">${more}</p>`
+    } else {
+      ceilingLine = `<p class="support-line">The most that was ever measured is ${r1(r.measuredCeilingRate)} ${r.unit}/s at ${r.measuredCeilingVcpu} vCPU${r.taxMultiplier === 1 ? '' : ' with no mapping'} — the last row of the table below. No point on the curve reaches the requirement.${derated(r.measuredCeilingRate, r.ceilingRate)}</p>`
+    }
+
+    const headline = r.readerScaling
+      ? 'No core count — more cores will not get you there.'
+      : 'No core count — this exceeds what was measured.'
+
+    resultHost.innerHTML = `
+      <p class="headline-refuse">${headline}</p>
+      <p class="support-line">Needs ${r1(r.required)} ${r.unit}/s (target ${r1(r.target)} ${r.unit}/s + ${r.headroomPct}% headroom).</p>
+      ${ceilingLine}
+      ${limitHtml}
+      ${provenanceHtml(r.run)}
+      ${badgeHtml(r)}
+      ${caveatsHtml(r.warnings)}
+    `
+  }
+
+  function renderUnmeasuredReaders(r) {
+    resultCard.className = 'panel result-card state-ceiling'
+    resultHost.innerHTML = `
+      <p class="headline-refuse">No number — that reader count was never run.</p>
+      <p class="support-line">Measured reader counts: ${r.measuredReaderCounts.join(', ')}. Interpolating between them would invent a figure, so the tool declines.</p>
+      ${provenanceHtml(r.run)}
+    `
+  }
+
+  function renderUnbenchmarked() {
+    resultCard.className = 'panel result-card state-unbenchmarked'
+    resultHost.innerHTML = `
+      <p class="headline-unbenched">Not benchmarked. This tool only answers for input/output pairs with a blessed benchmark run. Ask the perf team rather than extrapolating.</p>
+    `
+  }
+
+  // The pair itself was never run, but one or both halves may have been — name them,
+  // with their top measured figures, and refuse to compose them into a pipeline number.
+  function renderUnmeasuredPair(inputKey, outputKey) {
+    resultCard.className = 'panel result-card state-unbenchmarked'
+    const { source, sink } = halvesFor(inputKey, outputKey)
+    const half = (p, direction) => {
+      if (!p) return null
+      const top = Math.max(...VCPU_POINTS.map((v) => p.entry.curve[v]))
+      return `${p.entry.label} was measured ${direction} a Redpanda topic — up to ${r1(top)} ${p.entry.curveUnit}/s.`
+    }
+    const halves = [half(source, 'into'), half(sink, 'out of')].filter(Boolean)
+    const halvesText = halves.length
+      ? `<p class="body-text">${halves.join(' ')}</p>
+         <p class="body-text">Chaining those halves through a topic is a real deployment shape, but the combination was never measured, and composing two curves is not a measurement — the tool declines to invent the number. Ask the perf team.</p>`
+      : `<p class="body-text">Neither side of this pair has a blessed run. Ask the perf team rather than extrapolating.</p>`
+    resultHost.innerHTML = `
+      <p class="headline-unbenched">This input/output pair was never benchmarked end to end.</p>
+      ${halvesText}
+    `
+  }
+
+  function renderNoInput() {
+    resultCard.className = 'panel result-card state-empty'
+    resultHost.innerHTML = `<p class="headline-unbenched">Enter a volume and an average event size to size this connector. Both need to be greater than zero.</p>`
+  }
+
+  function renderCurve(connectorKey, selectedCores, markCeiling = false) {
+    const c = CONNECTORS[connectorKey]
+    if (!c) {
+      curveHost.innerHTML = `<p class="empty-curve-note">No measured curve — this connector was not benchmarked.</p>`
+      return
+    }
+    const max = Math.max(...VCPU_POINTS.map((v) => c.curve[v]))
+    const rows = VCPU_POINTS.map((v) => {
+      const rate = c.curve[v]
+      const isSelected = v === selectedCores
+      const isCeilingRow = markCeiling && !selectedCores && v === VCPU_POINTS[VCPU_POINTS.length - 1]
+      const rowClass = isSelected ? 'selected-row' : (isCeilingRow ? 'ceiling-row' : '')
+      const tag = isSelected ? '<span class="row-tag">selected</span>' : (isCeilingRow ? '<span class="row-tag">ceiling</span>' : '')
+      const pct = Math.max(4, Math.round((rate / max) * 100))
+      return `
+        <tr class="${rowClass}">
+          <td>${v}${tag}</td>
+          <td>${r1(rate)} ${c.curveUnit}/s</td>
+          <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+        </tr>
+      `
+    }).join('')
+    curveHost.innerHTML = `
+      <div class="curve-wrap">
+        <table class="curve-table">
+          <caption>${c.label} — measured ${c.curveUnit}/s by vCPU (c8g.4xlarge)${c.readerScaling ? `, one saturated reader on ${c.readerScaling.tables} tables. Measured at 4 vCPU and drawn flat: cores were measured irrelevant on this connector.` : ''}</caption>
+          <thead>
+            <tr><th scope="col">vCPU</th><th scope="col">Measured ${c.curveUnit}/s</th><th scope="col">Relative</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `
+  }
+
+  // Always-on explanation for a reader-scaled connector: the measured reader curve, its
+  // provenance and corroborating run, and the caveats that make the shape make sense.
+  function renderReaderPanel(connectorKey, activeReaders) {
+    const c = CONNECTORS[connectorKey]
+    if (!c || !c.readerScaling) { readerSection.hidden = true; return }
+    readerSection.hidden = false
+    const rs = c.readerScaling
+    const max = Math.max(...rs.points.map((p) => p.rate))
+    const rows = rs.points.map((p) => {
+      const isActive = p.readers === activeReaders
+      const pct = Math.max(4, Math.round((p.rate / max) * 100))
+      const gain = (p.rate / rs.points[0].rate).toFixed(2)
+      return `
+        <tr class="${isActive ? 'selected-row' : ''}">
+          <td>${p.readers}${isActive ? '<span class="row-tag">selected</span>' : ''}</td>
+          <td>${r1(p.rate)} ${rs.unit}/s</td>
+          <td>${gain}x</td>
+          <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+        </tr>`
+    }).join('')
+    readerHost.innerHTML = `
+      <div class="curve-wrap">
+        <table class="curve-table">
+          <caption>${rs.tables} tables split across N LogMiner readers, at a fixed ${rs.vcpu} vCPU — offered load ${rs.offeredMBs} ${rs.unit}/s</caption>
+          <thead>
+            <tr><th scope="col">Readers</th><th scope="col">Measured ${rs.unit}/s</th><th scope="col">vs 1 reader</th><th scope="col">Relative</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <ul class="caveats">
+        ${rs.notes.map((n) => `<li class="caveat"><span class="eyebrow">Read this before quoting</span>${n}</li>`).join('')}
+      </ul>
+      <p class="provenance">Measured ${rs.run.date} · run ${rs.run.path} · ${rs.run.sha}</p>
+      <p class="provenance">Corroborated on a larger source instance · run ${rs.corroboration.path} · ${rs.corroboration.sha}</p>
+    `
+  }
+
+  function render() {
+    const headroomPct = Number(headroomInput.value)
+    headroomVal.textContent = headroomPct + '%'
+
+    const inputKey = inputSelect.value
+    const outputKey = outputSelect.value
+    if (inputKey === '__none' || outputKey === '__none') {
+      resultCard.className = 'panel result-card state-empty'
+      resultHost.innerHTML = `<p class="headline-unbenched">Select an input and an output component to size a pipeline.</p>`
+      curveHost.innerHTML = ''
+      readerSection.hidden = true
+      readersField.hidden = true
+      return
+    }
+    if (inputKey === '__other' || outputKey === '__other') {
+      renderUnbenchmarked()
+      curveHost.innerHTML = ''
+      readerSection.hidden = true
+      readersField.hidden = true
+      return
+    }
+    const pipeline = pipelineFor(inputKey, outputKey)
+    if (!pipeline) {
+      renderUnmeasuredPair(inputKey, outputKey)
+      curveHost.innerHTML = `<p class="empty-curve-note">No measured curve — this pair was not benchmarked end to end.</p>`
+      readerSection.hidden = true
+      readersField.hidden = true
+      return
+    }
+    const connector = pipeline.key
+
+    syncReaderOptions(connector)
+    const readers = readersField.hidden ? 1 : Number(readersSelect.value)
+
+    const result = sizeFor({
+      connector,
+      eventsPerSec: Number(eventsInput.value),
+      eventBytes: Number(bytesInput.value),
+      readers,
+      tax: taxSelect.value,
+      headroomPct,
+    })
+
+    renderReaderPanel(connector, readers)
+
+    if (result.status === 'ok') {
+      renderOk(result)
+      renderCurve(connector, result.cores)
+    } else if (result.status === 'ceiling') {
+      renderCeiling(result)
+      renderCurve(connector, null, true)
+    } else if (result.status === 'unmeasured-readers') {
+      renderUnmeasuredReaders(result)
+      renderCurve(connector, null)
+    } else if (result.status === 'no-input') {
+      renderNoInput()
+      renderCurve(connector, null)
+    } else {
+      renderUnbenchmarked()
+      curveHost.innerHTML = ''
+    }
+  }
+
+  // Events/sec and throughput are two views of one volume, anchored by the event size.
+  // Editing either one rewrites the other, so a rep can type in whichever the customer
+  // gave them. `syncing` stops the programmatic write from re-entering this handler.
+  let syncing = false
+
+  // Scale the displayed precision to the magnitude: 200 rather than 199.999 for MB/s (the
+  // rate is a whole number of events, so exact round-trips are not always possible), while
+  // still leaving TB/day figures like 0.041472 legible.
+  function tidy(n) {
+    const dp = n >= 100 ? 1 : n >= 1 ? 3 : 6
+    const f = 10 ** dp
+    return Math.round(n * f) / f
+  }
+
+  function showThroughputFromEvents() {
+    const t = throughputFromEvents(Number(eventsInput.value), Number(bytesInput.value), throughputUnitSelect.value)
+    throughputInput.value = Number.isFinite(t) && t > 0 ? tidy(t) : ''
+  }
+
+  function showEventsFromThroughput() {
+    // A cleared throughput box clears the rate too, rather than writing a misleading 0.
+    const entered = Number(throughputInput.value)
+    if (throughputInput.value === '' || !(entered > 0)) { eventsInput.value = ''; return }
+    const e = eventsPerSecFromThroughput(entered, throughputUnitSelect.value, Number(bytesInput.value))
+    eventsInput.value = Number.isFinite(e) && e > 0 ? Math.round(e) : ''
+  }
+
+  function linked(fn) {
+    return () => {
+      if (syncing) return
+      syncing = true
+      fn()
+      syncing = false
+      render()
+    }
+  }
+
+  // Editing the rate, or the size, restates the throughput. Editing the throughput, or
+  // switching its unit, restates the rate — the size is the anchor and is never rewritten.
+  for (const ev of ['input', 'change']) {
+    eventsInput.addEventListener(ev, linked(showThroughputFromEvents))
+    bytesInput.addEventListener(ev, linked(showThroughputFromEvents))
+    throughputInput.addEventListener(ev, linked(showEventsFromThroughput))
+    throughputUnitSelect.addEventListener(ev, linked(showThroughputFromEvents))
+    inputSelect.addEventListener(ev, () => { syncPartnerOptions('input'); render() })
+    outputSelect.addEventListener(ev, () => { syncPartnerOptions('output'); render() })
+    readersSelect.addEventListener(ev, render)
+    taxSelect.addEventListener(ev, render)
+    headroomInput.addEventListener(ev, render)
+  }
+
+  showThroughputFromEvents()
+  render()
+</script>

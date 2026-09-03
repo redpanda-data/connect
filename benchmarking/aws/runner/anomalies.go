@@ -1,10 +1,7 @@
-// Copyright 2026 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
 
 package main
 
@@ -66,25 +63,19 @@ func DetectAnomalies(samples []Sample, reference float64) []Anomaly {
 // with the prom-curated context at the anomaly's start, plus the GC pause
 // delta over the 10s window preceding the start. When prom is empty, the
 // returned anomalies match DetectAnomalies exactly.
-// promOffsetSec bridges the two series' time bases: Sample.T=0 means "end of
-// warmup" (parseAndTrim reindexes) while PromPoint.T=0 means "point launch"
-// (the scraper starts before the warmup sleep) — so a Sample's moment on the
-// prom axis is StartT + warmup seconds. Passing 0 asserts the two series
-// already share a base. See offsetSampleT, which does the same bridging for
-// the CloudWatch emit path.
-func DetectAnomaliesWithProm(samples []Sample, reference float64, prom []PromPoint, promOffsetSec int) []Anomaly {
+func DetectAnomaliesWithProm(samples []Sample, reference float64, prom []PromPoint) []Anomaly {
 	base := DetectAnomalies(samples, reference)
 	if len(prom) == 0 {
 		return base
 	}
 	for i := range base {
-		atStart, ok := promNearestAtOrBefore(prom, base[i].StartT+promOffsetSec)
+		atStart, ok := promNearestAtOrBefore(prom, base[i].StartT)
 		if !ok {
 			continue
 		}
 		base[i].GoroutinesAtStart = atStart.Goroutines
 		base[i].HeapInUseMBAtStart = atStart.HeapInUseMB
-		prev, hadPrev := promNearestAtOrBefore(prom, base[i].StartT+promOffsetSec-10)
+		prev, hadPrev := promNearestAtOrBefore(prom, base[i].StartT-10)
 		if hadPrev && atStart.GCPauseTotalNS >= prev.GCPauseTotalNS {
 			base[i].GCPauseDeltaNS = atStart.GCPauseTotalNS - prev.GCPauseTotalNS
 		}

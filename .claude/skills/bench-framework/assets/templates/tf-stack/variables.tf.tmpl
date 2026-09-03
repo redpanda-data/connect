@@ -1,0 +1,21 @@
+variable "region" {
+  type    = string
+  default = "us-east-2"
+}
+
+variable "instance_class" { type = string }
+variable "storage_gb"     { type = number }
+variable "iops"           { type = number }
+
+variable "parameters" {
+  type = map(string)
+  # Fill in engine-specific required parameters. Examples:
+  # Postgres: { "rds.logical_replication" = "1", max_wal_senders = "20" }
+  # MySQL:    { binlog_format = "ROW", binlog_row_image = "FULL", binlog_checksum = "NONE" }
+  # SQL Server: {} (CDC is enabled via SQL commands in the reset block, not RDS parameters)
+  # See references/rds-quirks.md for each engine's requirements.
+  default = {}
+}
+# NOTE: Do NOT add runner_instance_type or bench_session_id variables here.
+# The runner injects bench_session_id after apply (not a TF input for stacks).
+# runner_instance_type is an input only to the shared stack, not to engine stacks.

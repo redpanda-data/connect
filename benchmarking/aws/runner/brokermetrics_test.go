@@ -1,10 +1,7 @@
-// Copyright 2026 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
 
 package main
 
@@ -125,114 +122,6 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1
 	}
 }
 
-// A topic can vanish from an otherwise-good frame (Redpanda emits a topic's
-// counters only on its partition leader, so a leadership move drops it for a
-// scrape). Its next delta must be divided by the gap since the topic itself
-// was last seen, not the global inter-frame interval — else the rate inflates
-// ~2x. Here t1 is absent at t=1010 (t2 keeps the frame good) and returns at
-// t=1020: its delta spans the full 20s (1000→1020), giving 1 MB/s, not the
-// 2 MB/s a 10s divisor would produce.
-func TestBrokerMetrics_TopicSeries_PerTopicGapInterval(t *testing.T) {
-	const body = `###timestamp=1000
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 0
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t2"} 0
-###timestamp=1010
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t2"} 5000000
-###timestamp=1020
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 20000000
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t2"} 10000000
-`
-	series, err := ParseTopicSeries(strings.NewReader(body))
-	if err != nil {
-		t.Fatalf("ParseTopicSeries: %v", err)
-	}
-	t1 := series["t1"]
-	if len(t1) != 1 {
-		t.Fatalf("expected 1 t1 point (present at 1000 and 1020, absent at 1010); got %d", len(t1))
-	}
-	if want := 1.0; t1[0].MBPerSec < want-0.01 || t1[0].MBPerSec > want+0.01 {
-		t.Errorf("t1 MB/s = %f, want ~%f (20MB over the 20s the topic was absent, not 10s)", t1[0].MBPerSec, want)
-	}
-	if t1[0].IntervalSec != 20 {
-		t.Errorf("t1 interval = %ds, want 20 (gap since t1 was last seen)", t1[0].IntervalSec)
-	}
-}
-
-// TestBrokerMetrics_TopicSeries_SkipsPerEndpointScrapeError is the
-// regression test for the broker sidecar's per-endpoint error marker: the
-// sidecar (topology_source.go) curls every broker endpoint in a single
-// frame and appends "_$EP" to the marker for each failed curl
-// (###scrape_error_10.0.0.5:9644), unlike the single-endpoint prom
-// sidecar which emits the bare marker. Before this fix, parseSnapshots
-// only matched the marker by exact equality, so a suffixed marker was
-// never recognized: the frame parsed as good (partial) data, corrupting
-// prevBytes and inflating the next delta's rate.
-func TestBrokerMetrics_TopicSeries_SkipsPerEndpointScrapeError(t *testing.T) {
-	const body = `###timestamp=1000
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 0
-###timestamp=1010
-###scrape_error_10.0.0.5:9644
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 5000000
-###timestamp=1020
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 20000000
-`
-	frames, err := parseBrokerFrames(strings.NewReader(body))
-	if err != nil {
-		t.Fatalf("parseBrokerFrames: %v", err)
-	}
-	if len(frames) != 3 {
-		t.Fatalf("want 3 frames, got %d", len(frames))
-	}
-	if !frames[1].Errored {
-		t.Errorf("frame with suffixed ###scrape_error_$EP marker must be Errored=true")
-	}
-
-	series, err := ParseTopicSeries(strings.NewReader(body))
-	if err != nil {
-		t.Fatalf("ParseTopicSeries: %v", err)
-	}
-	t1 := series["t1"]
-	// The errored middle frame must be skipped entirely rather than
-	// contributing a corrupted delta: frame 0 (t=1000, 0 bytes) to frame 2
-	// (t=1020, 20MB) over 20s = 1 MB/s, not the ~5x inflated spike that
-	// treating frame 1's partial 5MB as real data would produce.
-	if len(t1) != 1 {
-		t.Fatalf("expected exactly 1 point (errored frame skipped); got %d: %+v", len(t1), t1)
-	}
-	if want := 1.0; t1[0].MBPerSec < want-0.01 || t1[0].MBPerSec > want+0.01 {
-		t.Errorf("MB/s = %f, want ~%f (over the full 20s span, not the corrupted 10s)", t1[0].MBPerSec, want)
-	}
-}
-
-// TestBrokerMetrics_TopicSeries_IntervalSkipsErroredFrame is the table-test
-// version of the regression above, pinning the exact interval computed:
-// frames at t=0,10,20 with the middle frame errored must produce ONE point
-// spanning the full 20s gap between the two good frames, not the 10s gap
-// to the immediately preceding (errored) frame.
-func TestBrokerMetrics_TopicSeries_IntervalSkipsErroredFrame(t *testing.T) {
-	const body = `###timestamp=0
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 0
-###timestamp=10
-###scrape_error
-###timestamp=20
-redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 2000000
-`
-	series, err := ParseTopicSeries(strings.NewReader(body))
-	if err != nil {
-		t.Fatalf("ParseTopicSeries: %v", err)
-	}
-	t1 := series["t1"]
-	if len(t1) != 1 {
-		t.Fatalf("want exactly 1 point (errored middle frame produces none), got %d: %+v", len(t1), t1)
-	}
-	if t1[0].IntervalSec != 20 {
-		t.Errorf("IntervalSec = %d, want 20 (span between the two good frames, not 10 to the errored one)", t1[0].IntervalSec)
-	}
-	if want := 0.1; t1[0].MBPerSec < want-0.001 || t1[0].MBPerSec > want+0.001 {
-		t.Errorf("MBPerSec = %f, want ~%f (2MB over 20s)", t1[0].MBPerSec, want)
-	}
-}
-
 func TestBrokerMetrics_TopicSeries_HandlesCounterReset(t *testing.T) {
 	// If a counter goes BACKWARDS between frames (broker restart) the
 	// delta is non-meaningful — skip rather than report a negative rate.
@@ -250,31 +139,54 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1
 	}
 }
 
-func TestAttributeConnect_Postgres(t *testing.T) {
+func TestBrokerMetrics_AttributeByEngine_Postgres(t *testing.T) {
 	series := map[string][]TopicPoint{
 		"bench_sess1_postgres_cdc_connect": {
 			{T: 10, MBPerSec: 50}, {T: 20, MBPerSec: 52},
+		},
+		"bench_sess1_postgres_cdc_kc.public.orders": {
+			{T: 10, MBPerSec: 30}, {T: 20, MBPerSec: 31},
+		},
+		"bench_sess1_postgres_cdc_kc.public.shipments": {
+			{T: 10, MBPerSec: 7}, {T: 20, MBPerSec: 8},
 		},
 		"some_unrelated_topic": {
 			{T: 10, MBPerSec: 999},
 		},
 	}
-	got := AttributeConnect(series, "sess1", "postgres_cdc")
-	if len(got) != 2 {
-		t.Errorf("connect should have 2 points; got %d", len(got))
+	got, err := AttributeByEngine(series, "sess1", "postgres_cdc")
+	if err != nil {
+		t.Fatalf("AttributeByEngine: %v", err)
 	}
-	if got[0].MBPerSec != 50 {
-		t.Errorf("connect t=10 = %f, want 50", got[0].MBPerSec)
+	if len(got["connect"]) != 2 {
+		t.Errorf("connect should have 2 points; got %d", len(got["connect"]))
+	}
+	if got["connect"][0].MBPerSec != 50 {
+		t.Errorf("connect t=10 = %f, want 50", got["connect"][0].MBPerSec)
+	}
+	// KC has TWO topics (orders + shipments). At T=10 the engine total
+	// is 30 + 7 = 37. At T=20 it's 31 + 8 = 39.
+	if len(got["kafka_connect"]) != 2 {
+		t.Errorf("kafka_connect should have 2 points; got %d", len(got["kafka_connect"]))
+	}
+	if got["kafka_connect"][0].MBPerSec != 37 {
+		t.Errorf("kc T=10 sum = %f, want 37", got["kafka_connect"][0].MBPerSec)
+	}
+	if got["kafka_connect"][1].MBPerSec != 39 {
+		t.Errorf("kc T=20 sum = %f, want 39", got["kafka_connect"][1].MBPerSec)
 	}
 }
 
-func TestAttributeConnect_UnrelatedTopicsIgnored(t *testing.T) {
+func TestBrokerMetrics_AttributeByEngine_UnrelatedTopicsIgnored(t *testing.T) {
 	series := map[string][]TopicPoint{
 		"unrelated":                   {{T: 10, MBPerSec: 999}},
 		"bench_other_session_connect": {{T: 10, MBPerSec: 100}},
 	}
-	got := AttributeConnect(series, "sess1", "postgres_cdc")
-	if len(got) != 0 {
+	got, err := AttributeByEngine(series, "sess1", "postgres_cdc")
+	if err != nil {
+		t.Fatalf("AttributeByEngine: %v", err)
+	}
+	if len(got["connect"]) != 0 || len(got["kafka_connect"]) != 0 {
 		t.Errorf("unrelated topics leaked into attribution; got %+v", got)
 	}
 }
@@ -343,5 +255,30 @@ redpanda_kafka_records_produced_total{redpanda_namespace="kafka",redpanda_topic=
 	// 10 MB over 10s = 1 MB/s (decimal), proving bytes still work alongside records.
 	if pts[0].MBPerSec != 1 {
 		t.Errorf("MBPerSec = %v, want 1", pts[0].MBPerSec)
+	}
+}
+
+// TestAttributeByEngine_MergesRecordsAcrossKCTopics covers the KC-specific
+// path: Debezium writes one topic per table, so KC's series are always merged.
+// Summing bytes but not records there would zero out the compression-
+// independent metric for the very engine it exists to compare.
+func TestAttributeByEngine_MergesRecordsAcrossKCTopics(t *testing.T) {
+	series := map[string][]TopicPoint{
+		"bench_sess1_mysql_cdc_kc.benchdb.orders":   {{T: 10, MBPerSec: 2, MsgPerSec: 1000}},
+		"bench_sess1_mysql_cdc_kc.benchdb.payments": {{T: 10, MBPerSec: 3, MsgPerSec: 1500}},
+	}
+	out, err := AttributeByEngine(series, "sess1", "mysql_cdc")
+	if err != nil {
+		t.Fatalf("AttributeByEngine: %v", err)
+	}
+	kc := out["kafka_connect"]
+	if len(kc) != 1 {
+		t.Fatalf("want 1 merged point, got %d", len(kc))
+	}
+	if kc[0].MBPerSec != 5 {
+		t.Errorf("merged MBPerSec = %v, want 5", kc[0].MBPerSec)
+	}
+	if kc[0].MsgPerSec != 2500 {
+		t.Errorf("merged MsgPerSec = %v, want 2500 (records must merge, not just bytes)", kc[0].MsgPerSec)
 	}
 }

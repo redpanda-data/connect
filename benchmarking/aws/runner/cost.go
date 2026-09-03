@@ -1,10 +1,7 @@
-// Copyright 2026 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
 
 package main
 
@@ -70,21 +67,10 @@ func SummariseCosts(ctx context.Context, ce CostExplorer, region string, now tim
 		},
 	}
 
-	// 1. Daily totals through today, starting at whichever is earlier: the
-	// month start (for MTD) or 6 days back (for the 7-day window). Starting
-	// at monthStart alone truncated Last7Days at every month boundary — on
-	// any day before the 8th the query had no prior-month rows, so "last
-	// 7 days" silently reported month-to-date and disagreed with the
-	// breakdown query below, which does cross the boundary. ISO dates
-	// compare lexicographically, so string min is date min.
-	monthStartStr := monthStart(now)
-	totalsStart := monthStartStr
-	if s := daysAgo(now, 6); s < totalsStart {
-		totalsStart = s
-	}
+	// 1. Daily totals from month start through today.
 	totals, err := ce.GetCostAndUsage(ctx, &costexplorer.GetCostAndUsageInput{
 		TimePeriod: &cetypes.DateInterval{
-			Start: aws.String(totalsStart),
+			Start: aws.String(monthStart(now)),
 			End:   aws.String(daysAgo(now, -1)), // CE end is exclusive; +1 day captures today
 		},
 		Granularity: cetypes.GranularityDaily,
@@ -100,12 +86,8 @@ func SummariseCosts(ctx context.Context, ce CostExplorer, region string, now tim
 	sevenDaysAgo := daysAgo(now, 7)
 	for _, r := range totals.ResultsByTime {
 		amt, _ := strconv.ParseFloat(aws.ToString(r.Total["UnblendedCost"].Amount), 64)
+		report.MonthToDate += amt
 		date := aws.ToString(r.TimePeriod.Start)
-		// The window now extends before the month boundary, so MTD must
-		// filter rather than take every row.
-		if date >= monthStartStr {
-			report.MonthToDate += amt
-		}
 		if date > sevenDaysAgo {
 			report.Last7Days += amt
 		}

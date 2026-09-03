@@ -1,0 +1,133 @@
+# MySQL SNAPSHOT throughput — does the Oracle PK-ordering find reproduce here?
+#
+# Oracle context (orders-snapshot.yaml + oracle-logminer-split-test.md): keyset
+# pagination in PK order over a PK-scattered heap caused ~12x physical read
+# amplification cold (9 MB/s), and removing the ORDER BY fixed it. mysql_cdc
+# uses the SAME query shape (snapshot.go::querySnapshotTable — WHERE (pk) >
+# (last) ORDER BY pk LIMIT n), BUT InnoDB tables are clustered on the PK, so
+# PK order IS physical order and the scatter pathology should not reproduce —
+# even cold, the scan should be near-sequential with ~1x amplification. This
+# scenario tests that claim and produces the first quotable mysql snapshot rate.
+#
+# innodb_buffer_pool_size is pinned to 16 GiB (dataset is 2.25x the pool) so
+# the scan actually hits disk. The 4xlarge default pool (~96 GiB) would fully
+# cache the 36 GB dataset and make the cold question untestable. Pinning also
+# removes the arm-order warm-cache dependence the oracle run suffered: neither
+# arm can hold more than ~44% of the table in memory. The verdict metric is
+# CloudWatch ReadThroughput vs delivered MB/s (physical-reads amplification),
+# not throughput alone.
+#
+# The A/B lever: MySQL has no PREFETCH_ROWS analog (the driver streams each
+# result set continuously), but every snapshot batch is a fresh keyset query —
+# 30M rows at the default snapshot_max_batch_size=1000 is 30,000 query round
+# trips + B-tree re-seeks. s1 cuts that 50x. On a clustered PK each re-seek is
+# cheap, so a small delta here further confirms the ordering is free on InnoDB.
+#
+# Analysis note (same as oracle): the run-summary median is NOT the snapshot
+# rate when the snapshot completes inside the window (trailing ~0 samples drag
+# it down). Compute rate from the per-second samples: bytes delivered / seconds
+# until the drop-to-idle transition. Pull RDS CloudWatch (ReadThroughput,
+# ReadIOPS, 5-min avg, per-arm windows) after the run.
+
+name: mysql-orders-snapshot
+description: |
+  Snapshot a pre-seeded 30M-row (36 GB logical) InnoDB orders table via
+  mysql_cdc stream_snapshot, A/B-ing the default snapshot_max_batch_size=1000
+  against 50000. Buffer pool pinned to 16 GiB so the scan is disk-bound and
+  the oracle cold-amplification comparison is honest. Bounded-dataset mode:
+  no workload, warmup 0, snapshot visible from t=0.
+
+connector: mysql_cdc
+stack: mysql
+
+infra:
+  source:
+    # Same rig as scenarios/mysql/orders-cdc.yaml so the docs compose.
+    instance_class: db.r6g.4xlarge
+    storage_gb: 800
+    iops: 24000
+    parameters:
+      # This map REPLACES the stack default — the three binlog params below
+      # are required by mysql_cdc and must be restated.
+      binlog_format: "ROW"
+      binlog_row_image: "FULL"
+      binlog_checksum: "NONE"
+      # 16 GiB, bytes. See header: dataset must exceed the pool or the cold
+      # path never runs. Multiple of the 128 MiB chunk size.
+      innodb_buffer_pool_size: "17179869184"
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  # 30M x 1200 B = 36,000 MB logical — same dataset as the oracle snapshot so
+  # the amplification ratios are directly comparable. At the 35 MB/s validation
+  # estimate that is ~17 min; a faster arm still completes inside the 15m
+  # window with the rate measurable from t=0 in the per-second samples.
+  initial_rows: 30000000
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-mysql
+  expected_peak_mb_s: 35
+
+# No workload: — bounded-dataset mode. The seeder's bulkInsert seeds once
+# before the sweep. The seeder's PK is BIGINT AUTO_INCREMENT: representative
+# InnoDB (densely packed, built in PK order) — note this when comparing to
+# oracle, whose heap was deliberately scatter-seeded.
+
+pipeline:
+  cache_resources:
+    - label: bench_checkpoint
+      memory: {}
+  # No input here: arms declare their own. mergePipeline can only add or
+  # replace keys, never remove them, so a base input would leak into arms.
+
+matrix:
+  cpu_points: [4]
+  arms:
+    # s0 — deployed default: snapshot_max_batch_size=1000 (left unset so this
+    # arm is exactly what every mysql_cdc user gets today). 30,000 keyset
+    # queries for the full table.
+    - id: s0-batch-default
+      gomaxprocs: 8
+      streams: 1
+      pipeline:
+        input:
+          mysql_cdc:
+            flavor: mysql
+            dsn: ${MYSQL_DSN}
+            tls:
+              skip_cert_verify: true   # RDS-internal CA isn't in the runner
+                                        # image; mysql_cdc uses NewTLSField.
+            stream_snapshot: true
+            tables: [orders]
+            checkpoint_cache: bench_checkpoint
+            checkpoint_key: mysql_snap_default
+            batching:
+              count: 5000
+              period: 1s
+
+    # s1 — snapshot_max_batch_size=50000: 50x fewer round trips and B-tree
+    # re-seeks. The checkpoint cache is in-memory and dies with the process,
+    # so each arm re-snapshots the same 30M rows from scratch.
+    - id: s1-batch-50000
+      gomaxprocs: 8
+      streams: 1
+      pipeline:
+        input:
+          mysql_cdc:
+            flavor: mysql
+            dsn: ${MYSQL_DSN}
+            tls:
+              skip_cert_verify: true
+            stream_snapshot: true
+            snapshot_max_batch_size: 50000
+            tables: [orders]
+            checkpoint_cache: bench_checkpoint
+            checkpoint_key: mysql_snap_batch50k
+            batching:
+              count: 5000
+              period: 1s
+
+# No reset: the table must stay seeded (both arms snapshot the same 30M rows),
+# there is no replication slot, and the in-memory checkpoint cache dies with
+# each arm's process.

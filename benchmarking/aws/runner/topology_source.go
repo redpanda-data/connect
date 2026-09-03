@@ -1,14 +1,12 @@
-// Copyright 2026 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
 
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 )
 
@@ -25,7 +23,7 @@ func (sourceTopology) Validate(s *Scenario) error {
 	return nil
 }
 
-func (sourceTopology) Pipeline(s *Scenario, _ BenchNames) (input, output map[string]any, err error) {
+func (sourceTopology) Pipeline(s *Scenario, n BenchNames) (input, output map[string]any, err error) {
 	in, ok := s.Pipeline["input"].(map[string]any)
 	if !ok {
 		return nil, nil, fmt.Errorf("source scenario %q: pipeline.input must be a map", s.Connector)
@@ -46,36 +44,63 @@ func (sourceTopology) Pipeline(s *Scenario, _ BenchNames) (input, output map[str
 	return in, out, nil
 }
 
-func (sourceTopology) SeedScript(s *Scenario, outs map[string]string, _ BenchNames) (string, error) {
+func (sourceTopology) SeedScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
 	return renderSeedScript(s, outs, "stage/"+s.Dataset.Seeder)
 }
 
-func (sourceTopology) WorkloadScript(s *Scenario, outs map[string]string, _ BenchNames) (string, error) {
+func (sourceTopology) WorkloadScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
 	return renderWorkloadScript(s, outs)
 }
 
-func (sourceTopology) ResetScript(s *Scenario, outs map[string]string, _ BenchNames) (string, error) {
+func (sourceTopology) ResetScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
 	return combineReset(s.Connector, s.Reset, outs)
 }
 
-// EngineSeries turns a Redpanda /public_metrics dump into Connect's
-// attributed throughput series. Connect-only: the per-engine attribution
-// this used to fan out to (Kafka Connect's topic-per-table series) returns
-// with the kafka-connect bench PR.
-func (sourceTopology) EngineSeries(in MetricInputs) ([]TopicPoint, error) {
+func (sourceTopology) EngineSeries(in MetricInputs, engine string) ([]TopicPoint, error) {
 	series, err := ParseTopicSeries(in.Body)
 	if err != nil {
 		return nil, err
 	}
-	return AttributeConnect(series, in.Names.SessionID, in.Names.Connector), nil
+	byEngine, err := AttributeByEngine(series, in.Names.SessionID, in.Names.Connector)
+	if err != nil {
+		return nil, err
+	}
+	return byEngine[engine], nil
 }
 
-func (sourceTopology) MetricArtifact(key string) string {
-	return fmt.Sprintf("redpanda-%s-connect.txt", key)
+func (sourceTopology) MetricArtifact(_, engine, key string) string {
+	suffix := engine
+	if engine == "kafka_connect" {
+		suffix = "kc"
+	}
+	return fmt.Sprintf("redpanda-%s-%s.txt", key, suffix)
+}
+
+func (sourceTopology) KCConfig(s *Scenario, outs map[string]string, n BenchNames) (KCRenderResult, bool, error) {
+	es, ok := engineSpecFor(s.Connector)
+	if !ok {
+		return KCRenderResult{}, false, fmt.Errorf("no engineSpec for %q", s.Connector)
+	}
+	in, err := buildKCRenderInputs(s, es, outs, n.SessionID)
+	if err != nil {
+		return KCRenderResult{}, false, fmt.Errorf("build KC render inputs: %w", err)
+	}
+	cfg, err := renderKCConfig(s, in)
+	if err != nil {
+		return KCRenderResult{}, false, fmt.Errorf("render KC config: %w", err)
+	}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return KCRenderResult{}, false, err
+	}
+	return KCRenderResult{
+		ConnectorName: fmt.Sprintf("bench_%s", s.Connector),
+		ConfigJSON:    string(raw),
+	}, true, nil
 }
 
 func (t sourceTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
-	artifact := t.MetricArtifact(args.ArtifactKey())
+	artifact := t.MetricArtifact(args.Names.Connector, args.Engine, args.ArtifactKey())
 	endpoints := args.Outs["redpanda_metrics_endpoints"]
 	if endpoints == "" {
 		endpoints = args.Outs["redpanda_metrics_endpoint"]
@@ -85,7 +110,6 @@ func (t sourceTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
 		// when no broker endpoints were configured.
 		return MetricSidecar{}
 	}
-	checkpointSetup, checkpointUploadPrefix := renderSidecarCheckpoint(args.CheckpointSec, args.Bucket, args.SessionID, artifact)
 	setup := fmt.Sprintf(`RP=/tmp/%s
 : > "$RP"
 ENDPOINTS=%q
@@ -95,18 +119,14 @@ ENDPOINTS=%q
       echo "###timestamp=$(date +%%s)"
       IFS=, read -ra EPS <<< "$ENDPOINTS"
       for EP in "${EPS[@]}"; do
-        # -f: a non-2xx must trip the scrape_error marker, not pass an error
-        # body off as a healthy frame missing this broker's counters — that
-        # would charge the broker's whole cumulative counter to one interval
-        # when it recovers.
-        curl -sf --max-time 5 "http://$EP/public_metrics" || echo "###scrape_error_$EP"
+        curl -s --max-time 5 "http://$EP/public_metrics" || echo "###scrape_error_$EP"
       done
     } >> "$RP"
-    sleep %d
+    sleep 10
   done
 ) &
-RP_SCRAPER=$!%s`, artifact, endpoints, args.scrapeIntervalSec(), checkpointSetup)
-	upload := fmt.Sprintf(`%saws s3 cp "$RP" "s3://%s/runs/%s/%s" >/dev/null`,
-		checkpointUploadPrefix, args.Bucket, args.SessionID, artifact)
+RP_SCRAPER=$!`, artifact, endpoints)
+	upload := fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/%s" >/dev/null`,
+		args.Bucket, args.SessionID, artifact)
 	return MetricSidecar{Setup: setup, Upload: upload}
 }
