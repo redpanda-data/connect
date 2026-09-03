@@ -231,7 +231,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 				Default("30s").
 				Advanced(),
 		).
-			Description("Consume the stream using https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html[enhanced fan-out^], which provides this consumer dedicated read throughput of 2MB/s per shard via HTTP/2 push delivery, avoiding the 5 reads per second per shard limit that polling consumers share. The named consumer is registered on each stream automatically if it does not already exist (and is never deregistered). Requires the IAM permissions `kinesis:DescribeStreamConsumer` and `kinesis:SubscribeToShard`, plus `kinesis:RegisterStreamConsumer` unless a consumer with the configured name already exists on every stream (for example one provisioned through infrastructure-as-code). Note that AWS bills enhanced fan-out consumers per consumer-shard-hour plus data retrieval.").
+			Description("Consume the stream using https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html[enhanced fan-out^], which provides this consumer dedicated read throughput of 2MB/s per shard via HTTP/2 push delivery, avoiding the 5 reads per second per shard limit that polling consumers share. The named consumer is registered on each stream automatically if it does not already exist (and is never deregistered). Requires the IAM permissions `kinesis:DescribeStreamConsumer` and `kinesis:SubscribeToShard`, plus `kinesis:RegisterStreamConsumer` unless a consumer with the configured name already exists on every stream (for example one provisioned through infrastructure-as-code). Note that AWS bills enhanced fan-out consumers per consumer-shard-hour plus data retrieval. When a shard has no stored checkpoint and `start_from_oldest` is `false`, consumption starts from a timestamp anchored to this host's clock at claim time (rather than the server-side `LATEST` used by polling, which cannot be pinned across resubscribes without risking skipped records), so a clock running ahead can omit its offset's worth of records after a fresh claim.").
 			ShortDescription("Consume the stream using enhanced fan-out for dedicated read throughput.").
 			Version("4.108.0").
 			Advanced().
@@ -302,6 +302,10 @@ type kinesisReader struct {
 
 	svc          *kinesis.Client
 	checkpointer *awsKinesisCheckpointer
+	// newSource constructs the record source for a claimed shard. It defaults
+	// to newShardRecordSource and exists as a field so tests can drive the
+	// consumer loop with a stub source.
+	newSource func(info streamInfo, shardID, startingSequence string, sequenceFn func() string) (shardRecordSource, error)
 
 	streams []*streamInfo
 
@@ -388,6 +392,7 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 		closedChan: make(chan struct{}),
 	}
 	k.ctx, k.done = context.WithCancel(context.Background())
+	k.newSource = k.newShardRecordSource
 
 	u4, err := uuid.NewV4()
 	if err != nil {
@@ -521,7 +526,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 	// Stores consumed records that have yet to be added to the batcher.
 	var pending []types.Record
 	var source shardRecordSource
-	if source, initErr = k.newShardRecordSource(info, shardID, startingSequence, recordBatcher.GetSequence); initErr != nil {
+	if source, initErr = k.newSource(info, shardID, startingSequence, recordBatcher.GetSequence); initErr != nil {
 		return initErr
 	}
 
@@ -589,9 +594,62 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 			}
 		}
 
+		// serviceCommit handles an expired commit tick; exit reports that the
+		// consumer must stop, either because the parent context closed or
+		// because the shard lease was lost.
+		serviceCommit := func() (exit bool) {
+			if k.ctx.Err() != nil {
+				// It could've been our parent context that closed, in which
+				// case we exit.
+				state = awsKinesisConsumerClosing
+				return true
+			}
+
+			commitCtxClose()
+			commitCtx, commitCtxClose = context.WithTimeout(k.ctx, k.commitPeriod)
+
+			stillOwned, err := k.checkpointer.Checkpoint(k.ctx, info.id, shardID, recordBatcher.GetSequence(), false)
+			if err != nil {
+				k.log.Errorf("Failed to store checkpoint for Kinesis stream '%v' shard '%v': %v", info.id, shardID, err)
+			} else if !stillOwned {
+				state = awsKinesisConsumerYielding
+				return true
+			}
+			return false
+		}
+
+		// serviceTimedBatch handles an elapsed batch period.
+		serviceTimedBatch := func() {
+			nextTimedBatchChan = nil
+			if pendingMsg.msg == nil {
+				var err error
+				if pendingMsg, err = recordBatcher.FlushMessage(k.ctx); err != nil {
+					k.log.Errorf("Failed to dispatch message due to checkpoint error: %v\n", err)
+				}
+			}
+		}
+
 		for {
 			var err error
 			if state == awsKinesisConsumerConsuming && len(pending) == 0 && nextPullChan == unblockedChan && pendingMsg.msg == nil {
+				// Service an overdue commit or timed flush before entering
+				// another waited fetch: after an empty waited fetch the pull
+				// channel is always ready, so in the select at the bottom of
+				// this loop it would race an expired commit timer and win half
+				// the time, with each loss costing a further fetch wait. That
+				// geometric lateness is enough to overrun steal_grace_period
+				// at default settings, letting another client steal the shard
+				// on a stale sequence.
+				select {
+				case <-commitCtx.Done():
+					if serviceCommit() {
+						return
+					}
+				case <-nextTimedBatchChan:
+					serviceTimedBatch()
+				default:
+				}
+
 				var done bool
 				if pending, done, err = source.Fetch(k.ctx); err != nil {
 					if !awsErrIsTimeout(err) && !errors.Is(err, errPollGateWaiting) {
@@ -669,30 +727,11 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 
 			select {
 			case <-commitCtx.Done():
-				if k.ctx.Err() != nil {
-					// It could've been our parent context that closed, in which
-					// case we exit.
-					state = awsKinesisConsumerClosing
-					return
-				}
-
-				commitCtxClose()
-				commitCtx, commitCtxClose = context.WithTimeout(k.ctx, k.commitPeriod)
-
-				stillOwned, err := k.checkpointer.Checkpoint(k.ctx, info.id, shardID, recordBatcher.GetSequence(), false)
-				if err != nil {
-					k.log.Errorf("Failed to store checkpoint for Kinesis stream '%v' shard '%v': %v", info.id, shardID, err)
-				} else if !stillOwned {
-					state = awsKinesisConsumerYielding
+				if serviceCommit() {
 					return
 				}
 			case <-nextTimedBatchChan:
-				nextTimedBatchChan = nil
-				if pendingMsg.msg == nil {
-					if pendingMsg, err = recordBatcher.FlushMessage(k.ctx); err != nil {
-						k.log.Errorf("Failed to dispatch message due to checkpoint error: %v\n", err)
-					}
-				}
+				serviceTimedBatch()
 			case nextFlushChan <- pendingMsg:
 				pendingMsg = asyncMessage{}
 			case <-nextPullChan:
@@ -1084,6 +1123,19 @@ func (k *kinesisReader) ReadBatch(ctx context.Context) (service.MessageBatch, se
 // CloseAsync shuts down the Kinesis input and stops processing requests.
 func (k *kinesisReader) Close(ctx context.Context) error {
 	k.done()
+
+	// If Connect never succeeded there are no shard runners to close
+	// closedChan, so waiting on it would hang until the caller's shutdown
+	// timeout. Connect holds cMut for its entire body, so observing a nil
+	// msgChan here means the runners were not and will not be started.
+	k.cMut.Lock()
+	if k.msgChan == nil {
+		k.closeOnce.Do(func() {
+			close(k.closedChan)
+		})
+	}
+	k.cMut.Unlock()
+
 	select {
 	case <-k.closedChan:
 	case <-ctx.Done():
