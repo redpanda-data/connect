@@ -45,7 +45,7 @@ Avro, Protobuf and Json schemas are supported, all are capable of expanding from
 
 == Avro JSON format
 
-This processor creates documents formatted as https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^] when decoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:
+This processor creates documents formatted as https://avro.apache.org/docs/current/specification/#json-encoding[Avro JSON^] when decoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:
 
 - if its type is ` + "`null`, then it is encoded as a JSON `null`" + `;
 - otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
@@ -69,13 +69,13 @@ This processor also adds the following metadata to each outgoing message:
 schema_id: the ID of the schema in the schema registry that was associated with the message.
 `).
 		Field(service.NewBoolField("avro_raw_json").
-			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. When true, union values are unwrapped (bare values instead of {\"type\": value} wrappers).").
+			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than https://avro.apache.org/docs/current/specification/#json-encoding[Avro JSON^]. When true, union values are unwrapped (bare values instead of {\"type\": value} wrappers).").
 			ShortDescription("Decode Avro messages into plain JSON rather than Avro JSON, unwrapping union values.").
 			Advanced().Default(false).Deprecated()).
 		Fields(
 			service.NewObjectField(
 				"avro",
-				service.NewBoolField("raw_unions").Description(`Whether avro messages should be decoded into normal JSON ("json that meets the expectations of regular internet json") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[JSON as specified in the Avro Spec^].
+				service.NewBoolField("raw_unions").Description(`Whether avro messages should be decoded into normal JSON ("json that meets the expectations of regular internet json") rather than https://avro.apache.org/docs/current/specification/#json-encoding[JSON as specified in the Avro Spec^].
 
 For example, if there is a union schema `+"`"+`["null", "string", "Foo"]`+"`"+` where `+"`Foo`"+` is a record name, with raw_unions as false (the default) you get:
 - `+"`null` as `null`"+`;
