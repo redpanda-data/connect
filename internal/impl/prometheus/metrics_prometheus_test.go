@@ -199,11 +199,10 @@ func TestPrometheusDeleteSeriesPartialMatch(t *testing.T) {
 	require.Contains(t, body, "\ninput_received{label=\"in\",stream=\"foo\"} 3")
 	require.Contains(t, body, "\ninput_latency_ns_sum{stream=\"foo\"} 100")
 
-	purger, ok := any(nm).(interface {
-		DeleteSeriesPartialMatch(labels map[string]string)
-	})
-	require.True(t, ok, "prometheus exporter should support deleting series by label match")
-	purger.DeleteSeriesPartialMatch(map[string]string{"stream": "foo"})
+	// The exporter is bound to service.MetricsExporterSeriesDeleter by a
+	// compile-time assertion in metrics_prometheus.go, so the method can be
+	// exercised directly here.
+	nm.DeleteSeriesPartialMatch(map[string]string{"stream": "foo"})
 
 	body = getPage(t, handler)
 	assert.NotContains(t, body, "stream=\"foo\"")
@@ -227,11 +226,7 @@ use_histogram_timing: true
 	body := getPage(t, handler)
 	require.Contains(t, body, "stream=\"foo\"")
 
-	purger, ok := any(nm).(interface {
-		DeleteSeriesPartialMatch(labels map[string]string)
-	})
-	require.True(t, ok, "prometheus exporter should support deleting series by label match")
-	purger.DeleteSeriesPartialMatch(map[string]string{"stream": "foo"})
+	nm.DeleteSeriesPartialMatch(map[string]string{"stream": "foo"})
 
 	body = getPage(t, handler)
 	assert.NotContains(t, body, "stream=\"foo\"")

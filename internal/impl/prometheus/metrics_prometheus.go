@@ -520,6 +520,12 @@ func (p *metrics) NewGaugeCtor(path string, labelNames ...string) service.Metric
 	}
 }
 
+// The stream manager discovers series deletion through an optional-interface
+// upcast, so bind the exporter to the named interface at compile time: if the
+// signature drifts on a benthos bump the purge would otherwise stop firing
+// silently.
+var _ service.MetricsExporterSeriesDeleter = (*metrics)(nil)
+
 // DeleteSeriesPartialMatch deletes all metric series containing labels
 // matching all of the provided label key/value pairs, e.g. all series of a
 // stream deleted in streams mode. Implements the optional
