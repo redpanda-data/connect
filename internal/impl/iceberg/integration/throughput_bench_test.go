@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 // Sink write-path throughput against the containerised MinIO + Iceberg REST
@@ -65,6 +66,7 @@ var (
 // the bytes they occupy, so a change to the write path can be measured
 // before/after and so the cost of a compression codec can be quantified.
 func TestWriteThroughput(t *testing.T) {
+	integration.CheckSkip(t)
 	if !*throughputRun {
 		t.Skip("set -iceberg.throughput to run the write-path throughput measurement")
 	}
