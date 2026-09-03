@@ -30,8 +30,9 @@ files named below.
    `task aws:validate scenario=<engine>/<name>` must pass.
 3. **Register the dashboard + alarms**: add an entry to `soak_scenarios`
    in `terraform/persistent/variables.tf` (key → connector + scenario
-   name), then `TF_VAR_soak_alert_email=<team-alias> task aws:persistent`.
-   Alarms and the dashboard are generated per entry.
+   name), then `task aws:persistent`. Alarms and the dashboard are
+   generated per entry; Slack delivery is on by default via `slack.tf`'s
+   committed IDs — no extra vars needed.
 4. **First runs**: dispatch the nightly workflow manually with the
    scenario input. The baseline comparator stays advisory until three
    soak-index entries exist.
@@ -53,13 +54,17 @@ files named below.
   the workflows — no relevant merge, no run. Fails open: a missing entry or
   unknown SHA runs the soak.
 - **One-time account setup** (already done in 605419575229, needed again
-  only for a new account): `TF_VAR_soak_alert_email=<team-alias> task
-  aws:persistent` (builds the reaper's `bootstrap.zip` itself; the alert
-  email is deliberately undefaulted — point it at a monitored team
-  alias, never an individual); create the license secret: `aws secretsmanager
+  only for a new account): authorize the Slack workspace in the AWS
+  Chatbot console (OAuth — see `terraform/persistent/slack.tf`) and put
+  the resulting IDs in that file's defaults, then `task aws:persistent`
+  (builds the reaper's `bootstrap.zip` itself); optionally add a manual
+  email backup — `aws sns subscribe --protocol email
+  --notification-endpoint <team-alias> --topic-arn <arn>` for BOTH the
+  soak-alerts and orphans topics, then click each confirmation link
+  (deliberately outside Terraform: no re-apply can unsubscribe it);
+  create the license secret: `aws secretsmanager
   create-secret --name redpanda-connect-bench/license --secret-string
-  file://<license> --region us-east-2`; confirm the SNS email
-  subscription.
+  file://<license> --region us-east-2`.
 - **Laptop runs**: always from a git worktree (never a checkout you might
   branch-switch mid-run), always with credentials that outlive the run —
   `aws-vault exec` static creds die at ~1h; prefer the scheduled workflow.
@@ -72,13 +77,41 @@ files named below.
   sweeping every 15 min. A bench legitimately running past 4h needs the
   rule disabled first (and re-enabled after — set a reminder). The
   persistent stack itself is exempt via its distinct Project tag.
-- **Alerts** land at the `redpanda-connect-bench-soak-alerts` SNS topic
-  (email today; swap the subscription for Chatbot/Slack without touching
-  alarms). Alarm emails during a run are the acute channel; a red nightly
-  workflow is the between-builds channel; the `/soak` comment is the
-  before-merge channel.
+- **Alerts** land at the `redpanda-connect-bench-soak-alerts` SNS topic and
+  deliver to #soak-redpanda-connect via AWS Chatbot
+  (`terraform/persistent/slack.tf` — the workspace/channel IDs are
+  committed defaults, so plain `task aws:persistent` keeps Slack wired).
+  Alarm cards render natively; reaper notices arrive via the
+  custom-notification envelope in `cleanup-lambda/sweep.go` (plain SNS
+  text is silently dropped by Chatbot — keep that envelope). Email backup
+  is a manual SNS subscription to BOTH topics (see one-time setup above) —
+  deliberately unmanaged, so no re-apply can silently unsubscribe it.
+  Slack is the only Terraform-managed channel, so blanking its IDs fails
+  validation instead of leaving the topics unrouted. Alarms during a run
+  are the acute channel; a red nightly workflow is the between-builds
+  channel; the `/soak` comment is the before-merge channel.
+- **Grafana**: `grafana/soak-dashboard.json` is an importable dashboard
+  over the same CloudWatch metrics (template dropdowns for
+  connector/scenario, alarm thresholds drawn in, CloudWatch alarm
+  annotations). It needs a CloudWatch data source for account
+  605419575229 in the Grafana stack — read-only metrics access; the
+  dashboard binds to it via a data-source variable at import time.
 
 ## Known limitations
+
+- **An org-run `ci-cloud-nuke` sweeps this account nightly (~02:25 UTC)** and
+  deletes at least: DynamoDB tables, EventBridge rules, CloudWatch alarms
+  (untouched ~7 days), and EC2/VPC chains. Confirmed impact (CloudTrail,
+  2026-08-18 → 27): it deleted the tfstate lock table four times (why the
+  backend now uses S3-native `use_lockfile` locking), disarmed the orphan
+  reaper's schedule rule **every night**, and deleted the stall + backlog
+  alarms. The exemption is the `cloud-nuke-excluded = true` tag, applied via
+  `default_tags` in all three stacks — the persistent stack so the reaper
+  schedule and alarms survive, the session stacks so a live bench crossing
+  02:25 UTC isn't terminated mid-run. Our OWN reaper keys on `Project`, not
+  this tag, so bench cleanup at the 4h TTL is unaffected. Any new resource
+  created OUTSIDE these providers (e.g. the manually-bootstrapped tfstate
+  bucket) must carry the tag itself.
 
 - postgres_cdc IAM auth cannot work against vanilla RDS (replication-
   protocol connections reject IAM tokens — verified live 2026-08-12), so

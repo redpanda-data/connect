@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.10" # S3-native state locking (use_lockfile in backend.hcl)
   required_providers {
     aws    = { source = "hashicorp/aws", version = "~> 5.70" }
     random = { source = "hashicorp/random", version = "~> 3.6" }
@@ -21,6 +21,9 @@ provider "aws" {
       # leaves this stack's groups unsweepable forever, and the surviving
       # security group blocks the shared VPC's deletion on every sweep.
       "bench-session-id" = var.bench_session_id
+      # See shared/main.tf: exempt from the org cloud-nuke sweep; our own
+      # reaper (keyed on Project) still reaps this stack at the 4h TTL.
+      "cloud-nuke-excluded" = "true"
     }
   }
 }

@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"testing"
 	"time"
@@ -74,6 +75,7 @@ type FakeAWS struct {
 	DeletedRDSSubnetGroups []string
 	DeletedRDSParamGroups  []string
 	SNSMessages            []string
+	SNSStructures          []string
 	// CallLog records "<Method>:<id>" for every mutating call, in call
 	// order, so tests can assert cross-resource dependency ordering.
 	CallLog []string
@@ -387,6 +389,7 @@ func (f *FakeAWS) DeleteRole(_ context.Context, in *iam.DeleteRoleInput) (*iam.D
 
 func (f *FakeAWS) Publish(_ context.Context, in *sns.PublishInput) (*sns.PublishOutput, error) {
 	f.SNSMessages = append(f.SNSMessages, aws.ToString(in.Message))
+	f.SNSStructures = append(f.SNSStructures, aws.ToString(in.MessageStructure))
 	return &sns.PublishOutput{}, nil
 }
 
@@ -807,6 +810,48 @@ func TestSweep_ErroredDeleteNotReportedDestroyed(t *testing.T) {
 	require.Contains(t, api.SNSMessages[0], "destroyed 0 resources, 1 failed deletions")
 	require.Contains(t, api.SNSMessages[0], "ec2:i-old: boom")
 	require.NotContains(t, api.SNSMessages[0], "destroyed:", "must not list the errored resource as destroyed")
+}
+
+// TestSweep_PublishUsesPerProtocolEnvelope pins the SNS message contract:
+// MessageStructure=json, with "email" carrying the plain-text summary and
+// "default" carrying AWS Chatbot's custom-notification schema. Chatbot
+// (the Slack delivery path) silently drops any other shape, so a break
+// here means a Slack channel that looks wired up but never shows a reaper
+// notice.
+func TestSweep_PublishUsesPerProtocolEnvelope(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-4 * time.Hour)
+	api := &FakeAWS{
+		TaggedResources: []rgtatypes.ResourceTagMapping{
+			{ResourceARN: aws.String("arn:aws:ec2:us-east-2:1:instance/i-old")},
+		},
+		EC2Instances: map[string]ec2types.Instance{
+			"i-old": {InstanceId: aws.String("i-old"), LaunchTime: &old},
+		},
+	}
+	_, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	require.NoError(t, err)
+	require.Len(t, api.SNSMessages, 1)
+	require.Equal(t, []string{"json"}, api.SNSStructures)
+
+	var envelope map[string]string
+	require.NoError(t, json.Unmarshal([]byte(api.SNSMessages[0]), &envelope))
+	require.Contains(t, envelope["email"], "destroyed 1 resources")
+	require.Contains(t, envelope["email"], "ec2:i-old")
+
+	var chatbot struct {
+		Version string `json:"version"`
+		Source  string `json:"source"`
+		Content struct {
+			TextType    string `json:"textType"`
+			Description string `json:"description"`
+		} `json:"content"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(envelope["default"]), &chatbot))
+	require.Equal(t, "1.0", chatbot.Version)
+	require.Equal(t, "custom", chatbot.Source)
+	require.Equal(t, "client-markdown", chatbot.Content.TextType)
+	require.Equal(t, envelope["email"], chatbot.Content.Description)
 }
 
 // TestSweep_StaleTagIndexEntryIsSilent: the tag index lags real deletions

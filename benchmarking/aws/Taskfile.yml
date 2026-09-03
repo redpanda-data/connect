@@ -56,7 +56,10 @@ tasks:
       # the zip is gitignored — build it here so a fresh checkout can apply
       # without knowing about the Makefile.
       - make -C cleanup-lambda zip
-      - terraform -chdir=terraform/persistent init -input=false -backend-config=../backend.hcl -backend-config=key=persistent
+      # -reconfigure: same reasoning as runner/terraform.go Init — the full
+      # backend config is on the command line, and without the flag a
+      # backend.hcl change strands every existing .terraform/ working dir.
+      - terraform -chdir=terraform/persistent init -input=false -reconfigure -backend-config=../backend.hcl -backend-config=key=persistent
       - terraform -chdir=terraform/persistent apply -input=false -auto-approve
 
   aws:cost-check:

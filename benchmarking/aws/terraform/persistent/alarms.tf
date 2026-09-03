@@ -8,27 +8,29 @@ resource "aws_sns_topic" "soak_alerts" {
   name = "redpanda-connect-bench-soak-alerts"
 }
 
-variable "soak_alert_email" {
-  # Endpoint for soak alarm notifications — the pipeline's only acute
-  # channel, so it must be a monitored team alias, not an individual's
-  # mailbox (a personal default rots silently when that person moves on).
-  # No default on purpose: an unconfigured apply fails loudly instead of
-  # subscribing a stale address. Pass via TF_VAR_soak_alert_email at
-  # `task aws:persistent` time. SNS sends a confirmation email on first
-  # apply — the subscription is inactive until the link is clicked.
-  # Swap for AWS Chatbot / Slack later without touching the alarms.
-  type = string
+# Email backup subscriptions are deliberately NOT managed here. Terraform
+# manages exactly one alert channel — Slack (slack.tf, committed IDs) — and
+# email backups are manual, out-of-band subscriptions (see SOAK.md):
+#
+#   aws sns subscribe --topic-arn <soak-alerts|orphans topic> \
+#     --protocol email --notification-endpoint <team-alias>
+#
+# Why not a Terraform resource: an address can't be committed (no team
+# alias exists; a personal one doesn't belong in the repo), and a
+# subscription count-gated on an ambient TF_VAR_* is silently destroyed by
+# any re-apply whose shell didn't re-export it — worse than unmanaged,
+# because resurrecting an SNS email subscription needs a human to re-click
+# the confirmation link. Manual subscriptions survive every apply.
+#
+# The pre-existing email subscription in 605419575229 is preserved as
+# exactly such an unmanaged subscription by the removed block below (state
+# forget, not destroy).
+removed {
+  from = aws_sns_topic_subscription.soak_alerts_email
 
-  validation {
-    condition     = can(regex("^[^@\\s]+@[^@\\s]+$", var.soak_alert_email))
-    error_message = "soak_alert_email must be a single email address (use a team alias, not a personal mailbox)."
+  lifecycle {
+    destroy = false
   }
-}
-
-resource "aws_sns_topic_subscription" "soak_alerts_email" {
-  topic_arn = aws_sns_topic.soak_alerts.arn
-  protocol  = "email"
-  endpoint  = var.soak_alert_email
 }
 
 locals {
@@ -45,7 +47,7 @@ locals {
 resource "aws_cloudwatch_metric_alarm" "soak_stall" {
   for_each            = local.soak_alarm_dims
   alarm_name          = "rpcn-soak-${each.key}-stall"
-  alarm_description   = "Soak throughput <= 0.5 MB/s for 10 minutes while the run is active — the silent-stall class (#4648/#4655)."
+  alarm_description   = "STALL: the soak connector stopped moving data (throughput ~0 for 10+ min during an active run). It usually still LOOKS healthy — process up, health checks green — so don't trust 'connected'. First: open the rpcn-bench-soak dashboard, confirm a run is actually in progress, then pull the run's log. Runbook: benchmarking/aws/SOAK.md. Past examples: github.com/redpanda-data/connect/issues/4648 (input silently stalls), /4655 (health endpoint lies)."
   namespace           = "RedpandaConnect/Bench"
   metric_name         = "ThroughputMBps"
   dimensions          = each.value
@@ -76,7 +78,7 @@ resource "aws_cloudwatch_metric_alarm" "soak_stall" {
 resource "aws_cloudwatch_metric_alarm" "soak_rss_slope" {
   for_each            = local.soak_alarm_dims
   alarm_name          = "rpcn-soak-${each.key}-rss-slope"
-  alarm_description   = "Soak RSS climbing >= 2 MB/min across consecutive 10-minute checkpoints — the slow-leak class (inc-2861/#4527/#4657)."
+  alarm_description   = "MEMORY LEAK: the soak connector's memory (RSS) is climbing >= 2 MB/min sustained across checkpoints. Sounds small but that's ~3 GB/day — in production this OOM-kills within days. First: open the Memory widget on the rpcn-bench-soak dashboard and look at the RSS slope shape. Runbook: benchmarking/aws/SOAK.md. Past examples: github.com/redpanda-data/connect/issues/4527 (protobuf profile leak), /4657 (growth under back-pressure)."
   namespace           = "RedpandaConnect/Bench"
   metric_name         = "RSSSlopeBytesPerMin"
   dimensions          = each.value
@@ -98,7 +100,7 @@ resource "aws_cloudwatch_metric_alarm" "soak_rss_slope" {
 resource "aws_cloudwatch_metric_alarm" "soak_backlog" {
   for_each            = local.soak_alarm_dims
   alarm_name          = "rpcn-soak-${each.key}-backlog"
-  alarm_description   = "Soak end-to-end backlog >= 600s for 10 minutes — the connector is falling behind its source."
+  alarm_description   = "BACKLOG: the soak connector has fallen 10+ minutes behind the database it replicates and stayed there. Data IS flowing and memory is fine — it's just slower than the source is writing, so the gap grows without bound (in production: a replica going hours stale). First: check BacklogSeconds vs Records/s on the rpcn-bench-soak dashboard — flat-but-high backlog means a one-time hiccup, climbing means it's losing the race. Runbook: benchmarking/aws/SOAK.md."
   namespace           = "RedpandaConnect/Bench"
   metric_name         = "BacklogSeconds"
   dimensions          = each.value

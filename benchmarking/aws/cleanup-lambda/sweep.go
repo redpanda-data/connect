@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -29,6 +30,40 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/aws/smithy-go"
 )
+
+// perProtocolMessage wraps the human-readable sweep summary in an SNS
+// per-protocol envelope: email subscribers get the plain text, while every
+// other protocol — which is how AWS Chatbot's Slack delivery subscribes —
+// gets Chatbot's custom-notification schema. Chatbot silently DROPS plain
+// SNS text (it only forwards formats it recognises), so without this the
+// Slack channel would look wired up while never showing a reaper notice.
+//
+// A non-nil error means the caller must publish msg as plain text WITHOUT
+// MessageStructure=json — SNS rejects a structure-json Publish whose body
+// isn't a JSON object with a "default" key, so returning raw text here
+// would lose the notice entirely instead of degrading to email-only.
+func perProtocolMessage(msg string) (string, error) {
+	chatbot, err := json.Marshal(map[string]any{
+		"version": "1.0",
+		"source":  "custom",
+		"content": map[string]string{
+			"textType":    "client-markdown",
+			"title":       "bench orphan-cleanup ran",
+			"description": msg,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	envelope, err := json.Marshal(map[string]string{
+		"default": string(chatbot),
+		"email":   msg,
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(envelope), nil
+}
 
 // isGone reports whether err is a not-found-style AWS error: the resource
 // vanished between the tag index (which lags real deletions by minutes to
@@ -641,11 +676,20 @@ func Sweep(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration
 		if len(report.Failed) > 0 {
 			msg += "\n\nfailed (still accruing cost; retried next sweep):\n" + strings.Join(report.Failed, "\n")
 		}
-		if _, err := api.Publish(ctx, &sns.PublishInput{
+		in := &sns.PublishInput{
 			TopicArn: aws.String(snsTopicARN),
 			Subject:  aws.String("bench orphan-cleanup ran"),
-			Message:  aws.String(msg),
-		}); err != nil {
+		}
+		if envelope, err := perProtocolMessage(msg); err != nil {
+			// Unreachable for maps of strings, but if it ever fires,
+			// plain text (email-only delivery) beats a rejected publish.
+			slog.Error("per-protocol envelope failed; publishing plain text", "err", err)
+			in.Message = aws.String(msg)
+		} else {
+			in.Message = aws.String(envelope)
+			in.MessageStructure = aws.String("json")
+		}
+		if _, err := api.Publish(ctx, in); err != nil {
 			slog.Error("sns publish failed", "err", err)
 		}
 	}

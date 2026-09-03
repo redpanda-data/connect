@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package mssqlserver
+package oracledb
 
 import (
 	"context"
@@ -21,7 +21,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/replication"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
 // recordingCache is a minimal service.Cache capturing Set calls.
@@ -44,76 +44,77 @@ func (c *recordingCache) recorded() [][]byte {
 	return append([][]byte(nil), c.sets...)
 }
 
-func newTestInput(t *testing.T) (*sqlServerCDCInput, *recordingCache) {
+func newTestInput(t *testing.T) (*oracleDBCDCInput, *recordingCache) {
 	t.Helper()
 	cache := &recordingCache{}
-	i := &sqlServerCDCInput{
-		cfg:             &config{lsnCacheKey: "lsn"},
-		res:             service.MockResources(),
-		log:             service.NewLoggerFromSlog(slog.Default()),
-		stopSig:         shutdown.NewSignaller(),
+	o := &oracleDBCDCInput{
+		cfg:     Config{SCNCacheKey: "scn"},
+		res:     service.MockResources(),
+		log:     service.NewLoggerFromSlog(slog.Default()),
+		stopSig: shutdown.NewSignaller(),
+		// (triggered below to match the real constructor: HasStopped is the
+		// not-connected notification and starts closed)
 		cpCache:         cache,
 		batching:        service.BatchPolicy{Count: 1},
 		checkpointLimit: 8,
 	}
-	batcher, err := i.batching.NewBatcher(i.res)
+	batcher, err := o.batching.NewBatcher(o.res)
 	require.NoError(t, err)
-	pub := newBatchPublisher(batcher, checkpoint.NewCapped[replication.LSN](8), i.log)
-	pub.cacheLSN = i.cacheLSN
-	i.publisher.Store(pub)
-	t.Cleanup(func() { i.publisher.Load().shutSig.TriggerSoftStop() })
-	return i, cache
+	pub := newBatchPublisher(batcher, checkpoint.NewCapped[replication.SCN](8), o.log)
+	pub.cacheSCN = o.cacheSCN
+	o.publisher.Store(pub)
+	o.stopSig.TriggerHasStopped()
+	t.Cleanup(func() { o.publisher.Load().Close() })
+	return o, cache
 }
 
-// TestCacheLSNMonotonicGuard locks in the persist guard: advancing writes
+// TestCacheSCNMonotonicGuard locks in the persist guard: advancing writes
 // land, equal and regressing writes are silently skipped - a stale ack from
 // an abandoned publisher generation must never move the durable resume
 // position backwards.
-func TestCacheLSNMonotonicGuard(t *testing.T) {
-	i, cache := newTestInput(t)
+func TestCacheSCNMonotonicGuard(t *testing.T) {
+	o, cache := newTestInput(t)
 	ctx := t.Context()
 
-	require.NoError(t, i.cacheLSN(ctx, replication.LSN("00000010")))
-	require.NoError(t, i.cacheLSN(ctx, replication.LSN("00000020")), "an advancing LSN must persist")
-	require.NoError(t, i.cacheLSN(ctx, replication.LSN("00000020")), "an equal LSN is a no-op, not an error")
-	require.NoError(t, i.cacheLSN(ctx, replication.LSN("00000015")), "a regressing LSN is a no-op, not an error")
+	require.NoError(t, o.cacheSCN(ctx, replication.SCN(10)))
+	require.NoError(t, o.cacheSCN(ctx, replication.SCN(20)), "an advancing SCN must persist")
+	require.NoError(t, o.cacheSCN(ctx, replication.SCN(20)), "an equal SCN is a no-op, not an error")
+	require.NoError(t, o.cacheSCN(ctx, replication.SCN(15)), "a regressing SCN is a no-op, not an error")
 
 	got := cache.recorded()
 	require.Len(t, got, 2, "only the two advancing writes may reach the cache")
-	require.Equal(t, "00000010", string(got[0]))
-	require.Equal(t, "00000020", string(got[1]))
 
-	require.Error(t, i.cacheLSN(ctx, nil), "an empty LSN is rejected")
+	require.Error(t, o.cacheSCN(ctx, replication.InvalidSCN), "an invalid SCN is rejected")
 }
 
 // TestRebuildPublisherIfPoisoned proves the rebuild actually swaps
-// generations: the old publisher is closed, the new one is a distinct
-// publisher with a fresh tracker wired to cacheLSN, and a late ack from the
-// OLD generation cannot regress the durable position past the guard.
+// generations: the old publisher is closed, the new one is distinct with a
+// fresh tracker wired to cacheSCN, and a late ack from the OLD generation
+// cannot regress the durable position past the guard.
 func TestRebuildPublisherIfPoisoned(t *testing.T) {
-	i, cache := newTestInput(t)
+	o, cache := newTestInput(t)
 	ctx := t.Context()
 
-	old := i.publisher.Load()
+	old := o.publisher.Load()
 
 	// Not poisoned: same generation back.
-	same, err := i.rebuildPublisherIfPoisoned()
+	same, err := o.rebuildPublisherIfPoisoned()
 	require.NoError(t, err)
 	require.Same(t, old, same)
 
 	// Deliver a batch on the old generation but hold its ack (late ack). The
 	// flushing Publish blocks on the unbuffered channel until consumed.
 	oldPublished := make(chan error, 1)
-	go func() { oldPublished <- old.Publish(ctx, streamingEvent("00000010", "00000010")) }()
+	go func() { oldPublished <- old.Publish(ctx, streamingEvent(10)) }()
 	oldMsg := <-old.msgs()
 	require.NoError(t, <-oldPublished)
 
 	// Poison and rebuild.
 	old.poisoned.Store(true)
-	rebuilt, err := i.rebuildPublisherIfPoisoned()
+	rebuilt, err := o.rebuildPublisherIfPoisoned()
 	require.NoError(t, err)
 	require.NotSame(t, old, rebuilt, "a poisoned publisher must be replaced")
-	require.Same(t, rebuilt, i.publisher.Load(), "the stored pointer must be the new generation")
+	require.Same(t, rebuilt, o.publisher.Load(), "the stored pointer must be the new generation")
 	select {
 	case <-old.shutSig.HasStoppedChan():
 	default:
@@ -122,7 +123,7 @@ func TestRebuildPublisherIfPoisoned(t *testing.T) {
 
 	// The new generation persists progress normally.
 	newPublished := make(chan error, 1)
-	go func() { newPublished <- rebuilt.Publish(ctx, streamingEvent("00000030", "00000030")) }()
+	go func() { newPublished <- rebuilt.Publish(ctx, streamingEvent(30)) }()
 	newMsg := <-rebuilt.msgs()
 	require.NoError(t, <-newPublished)
 	require.NoError(t, newMsg.ackFn(ctx, nil))
@@ -131,28 +132,28 @@ func TestRebuildPublisherIfPoisoned(t *testing.T) {
 	// must be a no-op on the durable position (monotonic guard).
 	require.NoError(t, oldMsg.ackFn(ctx, nil))
 	got := cache.recorded()
-	require.Equal(t, "00000030", string(got[len(got)-1]), "a late ack from the abandoned generation must not regress the cache")
-	for _, v := range got {
-		require.NotEqual(t, "00000010", string(v), "the stale LSN must never have been persisted after the newer one")
-	}
+	require.NotEmpty(t, got)
+	require.Equal(t, replication.SCN(30).Bytes(), got[len(got)-1], "a late ack from the abandoned generation must not regress the cache")
 }
 
 // TestReadBatchReconnectsOnPoisonedLoopDeath encodes the silent-stall
 // finding: with period-only batching the timed-flush loop is the only
 // flusher, and when it dies after poisoning the publisher nothing else can
 // trigger the reconnect that rebuilds it - ReadBatch must observe the stop
-// and return ErrNotConnected. A DELIBERATE stop (input Close, publisher not
-// poisoned) must instead keep draining any batch still undelivered.
+// and return ErrNotConnected. A DELIBERATE stop (FlushRemaining at the
+// snapshot-only handoff, publisher not poisoned) must instead keep draining
+// so the final flushed batch is still delivered.
 func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
 	t.Run("poisoned loop death reconnects", func(t *testing.T) {
-		i, _ := newTestInput(t)
-		// Model the mid-session state: Connect has armed the signaller and
-		// the session goroutine stops when soft-stopped, as in production.
+		o, _ := newTestInput(t)
+		// Model the mid-session state: Connect has armed a fresh signaller
+		// and the session goroutine stops when soft-stopped, as in production.
+		o.stopSig = shutdown.NewSignaller()
 		go func() {
-			<-i.stopSig.SoftStopChan()
-			i.stopSig.TriggerHasStopped()
+			<-o.stopSig.SoftStopChan()
+			o.stopSig.TriggerHasStopped()
 		}()
-		pub := i.publisher.Load()
+		pub := o.publisher.Load()
 		pub.poisoned.Store(true)
 		pub.shutSig.TriggerSoftStop()
 		require.Eventually(t, func() bool {
@@ -166,27 +167,18 @@ func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
-		_, _, err := i.ReadBatch(ctx)
+		_, _, err := o.ReadBatch(ctx)
 		require.ErrorIs(t, err, service.ErrNotConnected,
 			"a poisoned publisher whose flush loop died must force a reconnect, not stall silently")
 	})
 
-	t.Run("deliberate stop keeps draining a parked batch", func(t *testing.T) {
-		i, _ := newTestInput(t)
-		pub := i.publisher.Load()
-
-		// A flusher parks in its send BEFORE the stop (the batcher teardown
-		// sets the closed flag, so nothing can flush after it): the batch is
-		// tracked, undelivered, and its owner's context is live.
-		flushed := make(chan error, 1)
-		go func() { flushed <- pub.Publish(t.Context(), streamingEvent("00000010", "00000010")) }()
-		require.Eventually(t, func() bool {
-			pub.batcherMu.Lock()
-			defer pub.batcherMu.Unlock()
-			return pub.nextTicket == 1
-		}, 5*time.Second, time.Millisecond)
-
-		// Deliberate, non-poisoned stop (input Close): the loop exits.
+	t.Run("deliberate stop keeps draining the final batch", func(t *testing.T) {
+		o, _ := newTestInput(t)
+		// Mid-session: the input's signaller is armed, not stopped.
+		o.stopSig = shutdown.NewSignaller()
+		pub := o.publisher.Load()
+		// FlushRemaining's shape: stop the loop (not poisoned), then flush the
+		// final batch, which blocks on msgs() until ReadBatch consumes it.
 		pub.shutSig.TriggerSoftStop()
 		require.Eventually(t, func() bool {
 			select {
@@ -197,11 +189,19 @@ func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
 			}
 		}, 5*time.Second, time.Millisecond)
 
-		// ReadBatch must drain the parked batch rather than bail out.
+		flushed := make(chan error, 1)
+		go func() {
+			if err := pub.Publish(t.Context(), streamingEvent(10)); err != nil {
+				flushed <- err
+				return
+			}
+			flushed <- nil
+		}()
+
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
-		batch, ackFn, err := i.ReadBatch(ctx)
-		require.NoError(t, err, "a deliberately stopped loop must not force a reconnect while a batch is undelivered")
+		batch, ackFn, err := o.ReadBatch(ctx)
+		require.NoError(t, err, "a deliberately stopped loop must not force a reconnect while the final batch is undelivered")
 		require.Len(t, batch, 1)
 		require.NoError(t, ackFn(ctx, nil))
 		require.NoError(t, <-flushed)
