@@ -3,6 +3,27 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.108.0 - 2026-09-03
+
+### Fixed
+
+- aws_dynamodb_cdc: Fixed CDC shard discovery all-or-nothing failure where one failed shard aborted the entire refresh cycle, preventing any reader startup when large shard backlogs existed. ([@squiidz](https://github.com/squiidz), [#4737](https://github.com/redpanda-data/connect/pull/4737))
+- aws_dynamodb_cdc: Fixed deadlock where checkpoint writes held the batcher mutex, freezing all shard readers during slow or hung DynamoDB requests. ([@squiidz](https://github.com/squiidz), [#4737](https://github.com/redpanda-data/connect/pull/4737))
+- aws_dynamodb_cdc: Fixed critical ack-path stall where pointer-keyed settlement failed under benthos's AutoRetryNacksBatched wrapper, causing trackedMessages to never drain and all shard readers to wedge forever. ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
+- aws_dynamodb_cdc: Added per-shard backpressure cap to prevent a never-settling shard from starving other shards, with defense-in-depth against batch budget leaks and stall visibility via warnings. ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
+- aws_dynamodb_cdc: Fixed startup hang by enforcing batch_size within documented 1-1000 range and removing idle shard reservations that inflated tracker state unnecessarily. ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
+- aws_dynamodb_cdc: Fixed shutdown panic when stragglers called AddMessages after Close() and corrected tracker budget calculation to prevent serialization at low checkpoint_limit values. ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
+- confluent: Fixed schema_registry_encode rejecting valid Avro JSON decoder output by properly parsing decoded values instead of treating codepoint sequences as numeric text. ([@twmb](https://github.com/twmb), [#4704](https://github.com/redpanda-data/connect/pull/4704))
+- general: Updated five broken documentation links in component descriptions to point to current documentation URLs. ([@JakeSCahill](https://github.com/JakeSCahill), [#4759](https://github.com/redpanda-data/connect/pull/4759))
+- iceberg: Updated Iceberg integration to handle REST endpoint negotiation changes in iceberg-go v0.6, supporting servers that omit the endpoints field in config responses. ([@twmb](https://github.com/twmb), [#4704](https://github.com/redpanda-data/connect/pull/4704))
+- prometheus: Fixed metric series accumulation in streams mode by implementing DeleteSeriesPartialMatch to purge deleted stream labels from the Prometheus exporter. ([@squiidz](https://github.com/squiidz), [#4742](https://github.com/redpanda-data/connect/pull/4742))
+
+### Changed
+
+- aws_dynamodb_cdc: Improved shard discovery with per-call timeouts and graceful partial commits, allowing convergence even when some shard preparation fails or the refresh budget expires mid-cycle. ([@squiidz](https://github.com/squiidz), [#4737](https://github.com/redpanda-data/connect/pull/4737))
+- confluent: Added avro.input_encoding config to explicitly declare whether messages are read as Avro JSON or native Go values, with auto-detection as the default. ([@twmb](https://github.com/twmb), [#4704](https://github.com/redpanda-data/connect/pull/4704))
+- docker: Updated Docker README and compose examples to pull from docker.redpanda.com instead of the unmaintained GHCR registry, ensuring users get current releases instead of 2-year-old images. ([@PrzemekZglinicki](https://github.com/PrzemekZglinicki), [#4764](https://github.com/redpanda-data/connect/pull/4764))
+
 ## Unreleased
 
 ### Fixed
