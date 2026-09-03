@@ -1,0 +1,127 @@
+# Oracle STREAMING (LogMiner) prefetch A/B — the arm flagged as the top
+# candidate for the per-reader ceiling in orders-5table-split / readers, never
+# run. See docs/benchmark-results/oracle-logminer-split-test.md "NEW TOP
+# CANDIDATE" note: go-ora defaults to PrefetchRows=25 (25 rows per network
+# round trip) and oracledb_cdc sets it nowhere, so every prior LogMiner
+# streaming number (7-12 MB/s sustained per reader, ~19 MB/s saturated mean)
+# may be a round-trip ceiling rather than a fetch/parse ceiling. The snapshot
+# path already confirmed prefetch matters a lot (8 -> 66-70 MB/s warm); this
+# is the same PREFETCH_ROWS=1000 knob applied to LogMiner streaming instead.
+#
+# Load shape is orders-5table-split's b-5tables arm verbatim (one reader
+# mining all 5 tables, ~35 MB/s offered) — that arm is the one with a
+# previously measured saturated ceiling (~19.0 MB/s mean, 49% capture) to
+# compare against.
+#
+# Reading the result:
+#   p1 ~= p0            -> round trips are not the bottleneck; parse/fetch
+#                          cost per row dominates. Prefetch is not the lever.
+#   p1 >> p0, p1 ~= 35   -> round trips WERE the ceiling; the per-reader
+#                          streaming figure in oracle-logminer-split-test.md
+#                          understates the connector by a similar factor to
+#                          the snapshot path, and PREFETCH_ROWS=1000 should
+#                          become a standing recommendation for streaming too.
+#   p1 >> p0, p1 << 35   -> round trips were A ceiling, but a lower one
+#                          (parse/fetch, or Oracle-side LogMiner cost) is now
+#                          exposed underneath it.
+
+name: oracle-orders-streaming-prefetch
+description: |
+  LogMiner streaming prefetch A/B: go-ora's default PrefetchRows=25 vs
+  PREFETCH_ROWS=1000, both mining all 5 loaded tables against the same
+  ~35 MB/s offered load as orders-5table-split's b-5tables arm.
+
+connector: oracledb_cdc
+stack: oracle
+
+infra:
+  source:
+    # Same rig as orders-5table-split / orders-snapshot so all three compose.
+    instance_class: db.r5.2xlarge
+    storage_gb: 800
+    iops: 24000
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0          # TRUNCATE-before-every-point; seeder still runs
+                           # once to CREATE all 5 tables + supplemental log.
+  row_size_bytes: 1200     # matches orders-5table-split for comparability
+  tables: [orders_t1, orders_t2, orders_t3, orders_t4, orders_t5]
+  seeder: cdc-rows-oracle
+
+workload:
+  # Identical to orders-5table-split: 30580 = 5 x 6116 rows/sec,
+  # 6116 x 1200B = 7.0 MB/s per table, ~35 MB/s total.
+  write_rate_per_sec: 30580
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  cache_resources:
+    - label: bench_checkpoint
+      memory: {}
+  # No input here: arms declare their own, since connection_string differs
+  # between them and mergePipeline only recurses into maps (a base input
+  # would otherwise leak the wrong connection_string into an arm that didn't
+  # override it).
+
+matrix:
+  cpu_points: [4]
+  arms:
+    # p0 — go-ora default prefetch (25 rows/round-trip). Reproduces
+    # orders-5table-split's b-5tables arm through this scenario's own
+    # plumbing, so it doubles as an in-run baseline for p1.
+    - id: p0-prefetch-default
+      gomaxprocs: 8
+      streams: 1
+      pipeline:
+        input:
+          oracledb_cdc:
+            connection_string: ${ORACLE_DSN}
+            include:
+              - "BENCH.ORDERS_T1"
+              - "BENCH.ORDERS_T2"
+              - "BENCH.ORDERS_T3"
+              - "BENCH.ORDERS_T4"
+              - "BENCH.ORDERS_T5"
+            stream_snapshot: true
+            checkpoint_cache: bench_checkpoint
+            checkpoint_cache_key: oracle_stream_default
+            batching:
+              count: 5000
+              period: 1s
+
+    # p1 — PREFETCH_ROWS=1000 on the same connection, same load, same table
+    # set. Only the query param differs.
+    - id: p1-prefetch-1000
+      gomaxprocs: 8
+      streams: 1
+      pipeline:
+        input:
+          oracledb_cdc:
+            connection_string: ${ORACLE_DSN}?PREFETCH_ROWS=1000
+            include:
+              - "BENCH.ORDERS_T1"
+              - "BENCH.ORDERS_T2"
+              - "BENCH.ORDERS_T3"
+              - "BENCH.ORDERS_T4"
+              - "BENCH.ORDERS_T5"
+            stream_snapshot: true
+            checkpoint_cache: bench_checkpoint
+            checkpoint_cache_key: oracle_stream_prefetch
+            batching:
+              count: 5000
+              period: 1s
+
+reset:
+  # No replication slot (LogMiner is slotless) and supplemental logging
+  # survives TRUNCATE, so reset is just the truncates, run through the
+  # seeder's `exec` subcommand (go-ora) since Oracle has no CLI on the
+  # runner. Self-stage the seeder from the S3 key the seed phase uploaded to.
+  - bash: |
+      aws s3 cp s3://${RESULTS_BUCKET}/stage/cdc-rows-oracle /opt/bench/cdc-rows-oracle
+      chmod +x /opt/bench/cdc-rows-oracle
+      for t in ORDERS_T1 ORDERS_T2 ORDERS_T3 ORDERS_T4 ORDERS_T5; do
+        /opt/bench/cdc-rows-oracle exec --dsn "${ORACLE_DSN}" --sql "TRUNCATE TABLE BENCH.$t"
+      done
