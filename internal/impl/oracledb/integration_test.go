@@ -1198,6 +1198,21 @@ file:
 func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 	integration.CheckSkip(t)
 
+	findMsgByID := func(t *testing.T, msgs []string, id string) string {
+		t.Helper()
+		for _, m := range msgs {
+			var parsed struct {
+				ID string `json:"ID"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(m), &parsed))
+			if parsed.ID == id {
+				return m
+			}
+		}
+		require.Failf(t, "message not found", "no message with ID %q in batch of %d", id, len(msgs))
+		return ""
+	}
+
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
 	sql := `CREATE TABLE testdb.lobdisabled (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
@@ -1270,7 +1285,7 @@ oracledb_cdc:
 		"VARCHARCOL": "snapshot",
 		"INLINELOB": null,
 		"OUTOFLINELOB": null
-		}`, batch.Clone()[0], "Failed to assert snapshot LOB columns")
+		}`, findMsgByID(t, batch.Clone(), "1"), "Failed to assert snapshot LOB columns")
 		}
 
 		batch.Reset()
@@ -1361,7 +1376,7 @@ oracledb_cdc:
 		"VARCHARCOL": "snapshot",
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
-		}`, batch.Clone()[0], "Failed to snapshot LOB columns")
+		}`, findMsgByID(t, batch.Clone(), "1"), "Failed to snapshot LOB columns")
 		}
 
 		batch.Reset()
@@ -1466,7 +1481,7 @@ oracledb_cdc:
 			return got >= lobStreamRows
 		}, time.Minute*5, time.Second*1)
 		require.Truef(t, (got == lobStreamRows), "Wanted %d snapshot messages but got %d", lobStreamRows, got)
-		require.JSONEq(t, wantRow, batch.Clone()[0], "Failed to assert snapshot LOB columns under lob fetch=stream")
+		require.JSONEq(t, wantRow, findMsgByID(t, batch.Clone(), "1"), "Failed to assert snapshot LOB columns under lob fetch=stream")
 	}
 
 	t.Run("lob_enabled=false lob-fetch=stream", func(t *testing.T) {
