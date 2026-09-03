@@ -72,7 +72,7 @@ func TestPollingSourceFetchAdvancesIterator(t *testing.T) {
 	_, _, err = src.Fetch(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"iter-1", "iter-2"}, gotIters)
-	assert.False(t, src.Blocking())
+	assert.False(t, src.WaitsForData())
 }
 
 func TestPollingSourceEndOfShard(t *testing.T) {

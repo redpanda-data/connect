@@ -601,7 +601,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 				} else if len(pending) == 0 {
 					// A blocking source waits for data internally, so an empty
 					// result must be retried immediately rather than backed off.
-					if !source.Blocking() {
+					if !source.WaitsForData() {
 						nextPullChan = time.After(boff.NextBackOff())
 					}
 				} else {

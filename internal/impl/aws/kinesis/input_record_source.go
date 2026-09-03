@@ -30,13 +30,14 @@ import (
 // (SubscribeToShard) consumption models.
 type shardRecordSource interface {
 	// Fetch returns the next batch of records. done is true once the shard is
-	// closed and fully consumed. A blocking source waits internally (bounded)
-	// for data; a non-blocking source returns immediately and relies on the
-	// caller to pace retries.
+	// closed and fully consumed. A source that waits for data does so
+	// internally (bounded); one that does not returns immediately and relies
+	// on the caller to pace retries.
 	Fetch(ctx context.Context) (recs []types.Record, done bool, err error)
-	// Blocking reports whether Fetch waits for data internally, in which case
-	// the caller must not add its own backoff to empty results.
-	Blocking() bool
+	// WaitsForData reports whether Fetch waits for data internally, in which
+	// case an empty result is a timeout and the caller must not add its own
+	// backoff to it.
+	WaitsForData() bool
 	// Close releases any underlying resources.
 	Close()
 }
@@ -148,19 +149,13 @@ func (p *pollingRecordSource) getIter(ctx context.Context, sequence string) (str
 	return iter, nil
 }
 
-// Fetch pulls the next batch via GetRecords. The shard iterator is only
-// replaced on success or an internal refresh, so a failed call can always be
-// retried with the retained iterator.
-//
-// When the poll_period gate has not yet elapsed, Fetch sleeps for at most
-// maxGateWait and then returns errPollGateWaiting without polling, leaving
-// lastPoll untouched. The gate therefore still enforces the full minimum
-// spacing between GetRecords calls (lastPoll only advances when GetRecords is
-// actually invoked), whilst the caller stays free to service its commit timer
-// and flush pending messages. errPollGateWaiting tells the caller this is
-// gate pacing rather than an empty shard, so it retries immediately instead
-// of arming its failure backoff.
-func (p *pollingRecordSource) Fetch(ctx context.Context) ([]types.Record, bool, error) {
+// waitPollGate enforces the poll_period spacing between GetRecords calls. It
+// returns nil when the caller may poll now, errPollGateWaiting when it slept
+// for maxGateWait and the period has still not elapsed, or the context error.
+// lastPoll only advances on a nil return, so a capped wait never shortens the
+// spacing between real polls, whilst the caller stays free to service its
+// commit timer and flush pending messages between capped waits.
+func (p *pollingRecordSource) waitPollGate(ctx context.Context) error {
 	if p.pollPeriod > 0 {
 		if wait := p.pollPeriod - time.Since(p.lastPoll); wait > 0 {
 			sleep, capped := wait, false
@@ -170,14 +165,24 @@ func (p *pollingRecordSource) Fetch(ctx context.Context) ([]types.Record, bool, 
 			select {
 			case <-time.After(sleep):
 			case <-ctx.Done():
-				return nil, false, ctx.Err()
+				return ctx.Err()
 			}
 			if capped {
-				return nil, false, errPollGateWaiting
+				return errPollGateWaiting
 			}
 		}
 	}
 	p.lastPoll = time.Now()
+	return nil
+}
+
+// Fetch pulls the next batch via GetRecords, pacing calls through
+// waitPollGate. The shard iterator is only replaced on success or an internal
+// refresh, so a failed call can always be retried with the retained iterator.
+func (p *pollingRecordSource) Fetch(ctx context.Context) ([]types.Record, bool, error) {
+	if err := p.waitPollGate(ctx); err != nil {
+		return nil, false, err
+	}
 
 	res, err := p.api.GetRecords(ctx, &kinesis.GetRecordsInput{
 		StreamARN:     &p.streamARN,
@@ -209,6 +214,6 @@ func (p *pollingRecordSource) Fetch(ctx context.Context) ([]types.Record, bool, 
 	return res.Records, nextIter == "", nil
 }
 
-func (*pollingRecordSource) Blocking() bool { return false }
+func (*pollingRecordSource) WaitsForData() bool { return false }
 
 func (*pollingRecordSource) Close() {}

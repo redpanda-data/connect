@@ -445,7 +445,7 @@ func (e *efoRecordSource) Fetch(ctx context.Context) ([]types.Record, bool, erro
 	}
 }
 
-func (*efoRecordSource) Blocking() bool { return true }
+func (*efoRecordSource) WaitsForData() bool { return true }
 
 func (e *efoRecordSource) Close() {
 	e.cancel()

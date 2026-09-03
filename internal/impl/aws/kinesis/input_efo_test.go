@@ -434,7 +434,7 @@ func TestEFOSourceForwardsRecords(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, done)
 	require.Len(t, recs, 2)
-	assert.True(t, src.Blocking())
+	assert.True(t, src.WaitsForData())
 }
 
 func TestEFOSourceFetchTimesOutEmpty(t *testing.T) {
