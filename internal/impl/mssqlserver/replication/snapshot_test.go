@@ -158,6 +158,10 @@ func (m *publisherStub) Publish(_ context.Context, msg replication.MessageEvent)
 	return nil
 }
 
+func (*publisherStub) CheckpointWindow(context.Context, replication.LSN) error {
+	return nil
+}
+
 func (m *publisherStub) count() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

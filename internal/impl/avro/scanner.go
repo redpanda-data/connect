@@ -38,7 +38,7 @@ func avroScannerSpec() *service.ConfigSpec {
 		Description(`
 == Avro JSON format
 
-This scanner yields documents formatted as https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^] when decoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:
+This scanner yields documents formatted as https://avro.apache.org/docs/current/specification/#json-encoding[Avro JSON^] when decoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:
 
 - if its type is ` + "`null`, then it is encoded as a JSON `null`" + `;
 - otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
@@ -55,7 +55,7 @@ This scanner also emits the canonical Avro schema as ` + "`@avro_schema`" + ` me
 `).
 		Fields(
 			service.NewBoolField(sFieldRawJSON).
-				Description("Whether messages should be decoded into normal JSON rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. When true, union values are unwrapped (bare values instead of {\"type\": value} wrappers).").
+				Description("Whether messages should be decoded into normal JSON rather than https://avro.apache.org/docs/current/specification/#json-encoding[Avro JSON^]. When true, union values are unwrapped (bare values instead of {\"type\": value} wrappers).").
 				Advanced().
 				Default(false),
 		)

@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/checkpoint"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/ack"
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams"
@@ -109,6 +111,15 @@ type spannerPartitionBatcher struct {
 	period  *time.Timer
 	acks    []*ack.Once
 	rm      func()
+
+	// cp orders in-flight batches so the partition watermark only ever
+	// advances to a commit timestamp once every batch at or below it has been
+	// acked (see spannerCDCReader.emit).
+	cp *checkpoint.Capped[time.Time]
+	// lastWatermark is the most recent non-zero watermark emitted for this
+	// partition; mid-record (zero watermark) batches carry it forward. Only
+	// accessed from the partition's serialized callback.
+	lastWatermark time.Time
 }
 
 func (s *spannerPartitionBatcher) MaybeFlushWith(dcr *changestreams.DataChangeRecord) *spannerPartitionBatchIter {
@@ -173,6 +184,9 @@ func (s *spannerPartitionBatcher) Close(ctx context.Context) error {
 type spannerPartitionBatcherFactory struct {
 	batching service.BatchPolicy
 	res      *service.Resources
+	// checkpointLimit caps in-flight (unacknowledged) messages tracked per
+	// partition; Track blocks once reached, applying backpressure.
+	checkpointLimit int
 
 	mu         sync.RWMutex
 	partitions map[string]*spannerPartitionBatcher
@@ -181,11 +195,34 @@ type spannerPartitionBatcherFactory struct {
 func newSpannerPartitionBatcherFactory(
 	batching service.BatchPolicy,
 	res *service.Resources,
+	checkpointLimit int,
 ) *spannerPartitionBatcherFactory {
+	if checkpointLimit <= 0 {
+		checkpointLimit = defaultCheckpointLimit
+	}
 	return &spannerPartitionBatcherFactory{
-		batching:   batching,
-		res:        res,
-		partitions: make(map[string]*spannerPartitionBatcher),
+		batching:        batching,
+		res:             res,
+		checkpointLimit: checkpointLimit,
+		partitions:      make(map[string]*spannerPartitionBatcher),
+	}
+}
+
+// Reset discards every cached partition batcher, closing each one (stopping
+// its period timer and closing its service.Batcher). Used on reconnect so no
+// stale rows or ack state leak into the new session; the factory pointer is
+// never swapped because straggler goroutines from the previous session may
+// still hold it.
+func (f *spannerPartitionBatcherFactory) Reset(ctx context.Context) {
+	f.mu.Lock()
+	old := f.partitions
+	f.partitions = make(map[string]*spannerPartitionBatcher)
+	f.mu.Unlock()
+
+	for token, spb := range old {
+		if err := spb.Close(ctx); err != nil {
+			f.res.Logger().Debugf("%s: closing discarded partition batcher: %v", token, err)
+		}
 	}
 }
 
@@ -200,14 +237,21 @@ func (f *spannerPartitionBatcherFactory) forPartition(partitionToken string) (*s
 			return nil, false, err
 		}
 
-		spb = &spannerPartitionBatcher{
+		newSpb := &spannerPartitionBatcher{
 			batcher: b,
-			rm: func() {
-				f.mu.Lock()
-				delete(f.partitions, partitionToken)
-				f.mu.Unlock()
-			},
+			cp:      checkpoint.NewCapped[time.Time](int64(f.checkpointLimit)),
 		}
+		// rm removes only this exact instance: after a Reset, a new session's
+		// batcher may occupy the same token and must not be evicted by the
+		// discarded one's Close.
+		newSpb.rm = func() {
+			f.mu.Lock()
+			if f.partitions[partitionToken] == newSpb {
+				delete(f.partitions, partitionToken)
+			}
+			f.mu.Unlock()
+		}
+		spb = newSpb
 		if d, ok := spb.batcher.UntilNext(); ok {
 			spb.period = time.NewTimer(d)
 		}

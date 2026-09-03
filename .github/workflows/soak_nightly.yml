@@ -1,0 +1,187 @@
+name: Nightly Soak
+
+# Scheduled soak runs for flagship CDC connectors (CON-179 R6, increment 3).
+#
+# Credentials: the job assumes rpcn-bench-gha-provisioner in the dedicated
+# bench account via GitHub OIDC (no stored keys), with a 4h session so
+# credentials outlive the ~2h20m run — the failure mode that killed two
+# laptop-driven soaks. The enterprise license comes from Secrets Manager
+# (REDPANDA_LICENSE_SECRET), never from the repo or workflow secrets.
+#
+# NOTE on the cron: GitHub only evaluates schedules from the repository's
+# DEFAULT branch. While this workflow lives on a feature branch it can only
+# be run via workflow_dispatch (Actions tab -> Nightly Soak -> Run workflow,
+# selecting the branch); the schedule arms automatically once the file
+# reaches the default branch.
+#
+# One-time setup (operator):
+#   1. task aws:persistent — creates the OIDC provider, provisioner role,
+#      archive bucket, dashboards, reaper, and Slack alert delivery (the
+#      workspace/channel IDs are committed defaults in
+#      terraform/persistent/slack.tf; a NEW account/workspace needs the
+#      one-time Chatbot console OAuth first; the IDs are required by
+#      validation). Optional email backups are manual SNS subscriptions
+#      to both topics — see SOAK.md.
+#   2. aws secretsmanager create-secret \
+#        --name redpanda-connect-bench/license \
+#        --secret-string file://rpcn.license --region us-east-2
+
+on:
+  schedule:
+    # 08:10 UTC nightly (avoid the top-of-hour scheduler crunch).
+    - cron: '10 8 * * *'
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Soak scenario (path under benchmarking/aws/scenarios, no .yaml)'
+        required: false
+        default: 'postgres/orders-soak'
+        type: string
+
+# Never two soaks at once: they would fight over the shared Terraform state
+# and the fixed-name session resources.
+concurrency:
+  group: bench-soak
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    # Provisioning (~15m) + 95m window + teardown (~15m) + slack. Must stay
+    # under the 4h credential session below.
+    timeout-minutes: 220
+    env:
+      REDPANDA_LICENSE_SECRET: redpanda-connect-bench/license
+    steps:
+      # Before anything credentialed: the dispatch input is available to
+      # the whole write-access population (same as soak_pr.yml's /soak
+      # comment), and Task splices {{.scenario}} raw into a shell command —
+      # so it gets the same allowlist soak_pr.yml applies, and an invalid
+      # value kills the job before the provisioner role is even assumed.
+      - name: Validate scenario input
+        env:
+          SCENARIO: ${{ github.event.inputs.scenario || 'postgres/orders-soak' }}
+        run: |
+          if ! echo "${SCENARIO}" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9][A-Za-z0-9_-]*)*$'; then
+            echo "::error::Invalid scenario '${SCENARIO}' — expected a path of [A-Za-z0-9_-] segments, e.g. postgres/orders-soak"
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
+          aws-region: us-east-2
+          role-duration-seconds: 14400
+
+      # Change gate (schedule only; manual dispatch always runs): skip the
+      # soak when nothing that could affect it merged since the last soaked
+      # commit. Fails open — no prior entry, no build_sha, or an unknown SHA
+      # all mean "run".
+      - name: Change gate
+        id: gate
+        shell: bash
+        env:
+          SCENARIO: ${{ github.event.inputs.scenario || 'postgres/orders-soak' }}
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "manual dispatch — gate bypassed"
+            exit 0
+          fi
+          NAME=$(grep -m1 '^name:' "benchmarking/aws/scenarios/${SCENARIO}.yaml" | awk '{print $2}')
+          # `shell: bash` above means `-eo pipefail`, so every probe that is
+          # ALLOWED to come up empty needs `|| true`: `aws s3 ls` exits 1 on
+          # an empty prefix (the first soak of a scenario), and pipefail
+          # would otherwise turn each of these fail-open paths into a step
+          # failure.
+          LAST=$(aws s3 ls "s3://redpanda-connect-bench-soak-archive/soak-index/${NAME}/" 2>/dev/null | awk '{print $4}' | sort | tail -1 || true)
+          if [ -z "$LAST" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "no prior soak — running"; exit 0
+          fi
+          SHA=$(aws s3 cp "s3://redpanda-connect-bench-soak-archive/soak-index/${NAME}/${LAST}" - 2>/dev/null | jq -r '.build_sha // empty' || true)
+          if [ -z "$SHA" ] || ! git cat-file -e "$SHA" 2>/dev/null; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "last soaked SHA unavailable — running"; exit 0
+          fi
+          # awk, not `head -20`: head closing the pipe early would kill git
+          # with SIGPIPE (141), which pipefail turns into a step failure on
+          # exactly the busy weeks that most need soaking. `public` is in the
+          # pathspec because cmd/redpanda-connect imports public/schema and
+          # public/components — changes there alter the shipped binary.
+          if ! CHANGED=$(git diff --name-only "$SHA"..HEAD -- internal cmd public go.mod go.sum benchmarking .github/workflows | awk 'NR<=20'); then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "git diff against ${SHA:0:9} failed — running"; exit 0
+          fi
+          if [ -n "$CHANGED" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "relevant changes since ${SHA:0:9}:"; echo "$CHANGED"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "## Soak skipped" >> "$GITHUB_STEP_SUMMARY"
+            echo "No relevant changes since last soaked commit \`${SHA:0:9}\` — nothing new to soak." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Install Go
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install Terraform
+        if: steps.gate.outputs.run == 'true'
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Install Task
+        if: steps.gate.outputs.run == 'true'
+        uses: ./.github/actions/setup-task
+
+      - name: Run soak
+        if: steps.gate.outputs.run == 'true'
+        working-directory: benchmarking/aws
+        # Explicit `shell: bash` turns on pipefail. GitHub's DEFAULT run shell
+        # is `bash -e {0}` WITHOUT pipefail, so `task ... | tee` reported
+        # tee's exit code and a failed soak went green (2026-08-17, run
+        # 32063533072 — terraform apply failed, job concluded success).
+        shell: bash
+        env:
+          # Environment passing, not ${{ }} substitution into the script —
+          # same reasoning as the gate step above and soak_pr.yml.
+          SCENARIO: ${{ github.event.inputs.scenario || 'postgres/orders-soak' }}
+        run: |
+          task aws:bench scenario="$SCENARIO" 2>&1 | tee "$RUNNER_TEMP/soak-run.log"
+
+      - name: Verify teardown actually completed
+        if: always() && steps.gate.outputs.run == 'true'
+        run: |
+          LIVE=$(aws ec2 describe-instances --region us-east-2 \
+            --filters Name=tag:Project,Values=redpanda-connect-bench Name=instance-state-name,Values=pending,running,stopping,stopped \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+          # Scope to bench instances (identifier prefix rpcn-bench) — RDS
+          # describe has no tag filter, and an account-wide match would fail
+          # every run the moment any unrelated DB exists, training operators
+          # to ignore the one step that catches real orphans.
+          RDS=$(aws rds describe-db-instances --region us-east-2 \
+            --query "DBInstances[?starts_with(DBInstanceIdentifier, 'rpcn-bench')].DBInstanceIdentifier" --output text)
+          if [ -n "$LIVE$RDS" ]; then
+            echo "::error::Teardown left resources behind (EC2: ${LIVE:-none}; RDS: ${RDS:-none}). The orphan reaper will sweep them within its TTL, but investigate the run log."
+            exit 1
+          fi
+          echo "account clean: no bench EC2, no RDS"
+
+      - name: Upload run log
+        if: always() && steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: soak-run-log
+          path: ${{ runner.temp }}/soak-run.log
+          retention-days: 30

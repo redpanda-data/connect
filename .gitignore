@@ -31,3 +31,5 @@ rpcn.license
 /runner
 
 benchmark_results.json
+# Enterprise license files must never reach the (public) repo.
+*.license

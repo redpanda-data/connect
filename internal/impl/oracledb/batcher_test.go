@@ -10,9 +10,11 @@ package oracledb
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/stretchr/testify/require"
@@ -26,8 +28,8 @@ func TestPublishBatch(t *testing.T) {
 		ctx := t.Context()
 		publisher, cachedSCNs := newTestBatchPublisher(t)
 
-		msg := publishAndReceive(t, ctx, publisher, service.MessageBatch{newSnapshotMessage("100")})
-		msg1 := publishAndReceive(t, ctx, publisher, service.MessageBatch{newSnapshotMessage("100")})
+		msg := publishAndReceive(t, ctx, publisher, snapshotEvent(100))
+		msg1 := publishAndReceive(t, ctx, publisher, snapshotEvent(100))
 
 		require.NoError(t, msg.ackFn(ctx, nil))
 		require.Empty(t, cachedSCNs(), "cacheSCN must not be called after acking only the first snapshot batch")
@@ -40,8 +42,7 @@ func TestPublishBatch(t *testing.T) {
 		ctx := t.Context()
 		publisher, cachedSCNs := newTestBatchPublisher(t)
 
-		batch := service.MessageBatch{newStreamingMessage("200")}
-		msg := publishAndReceive(t, ctx, publisher, batch)
+		msg := publishAndReceive(t, ctx, publisher, streamingEvent(200))
 		require.NoError(t, msg.ackFn(ctx, nil))
 
 		scns := cachedSCNs()
@@ -51,13 +52,21 @@ func TestPublishBatch(t *testing.T) {
 
 	t.Run("mixed snapshot and streaming batch persists", func(t *testing.T) {
 		ctx := t.Context()
-		publisher, cachedSCNs := newTestBatchPublisher(t)
+		// Count=2 groups the snapshot and streaming events into one batch.
+		publisher, cachedSCNs := newTestBatchPublisherWithCount(t, 2)
 
-		batch := service.MessageBatch{
-			newSnapshotMessage("100"),
-			newStreamingMessage("300"),
+		got := make(chan asyncMessage, 1)
+		go func() { got <- <-publisher.msgs() }()
+		require.NoError(t, publisher.Publish(ctx, snapshotEvent(100)))
+		require.NoError(t, publisher.Publish(ctx, streamingEvent(300)))
+
+		var msg asyncMessage
+		select {
+		case msg = <-got:
+			require.Len(t, msg.msg, 2)
+		case <-time.After(5 * time.Second):
+			t.Fatal("mixed batch was never published")
 		}
-		msg := publishAndReceive(t, ctx, publisher, batch)
 		require.NoError(t, msg.ackFn(ctx, nil))
 
 		scns := cachedSCNs()
@@ -69,8 +78,8 @@ func TestPublishBatch(t *testing.T) {
 		ctx := t.Context()
 		publisher, cachedSCNs := newTestBatchPublisher(t)
 
-		snapshotMsg := publishAndReceive(t, ctx, publisher, service.MessageBatch{newSnapshotMessage("100")})
-		streamingMsg := publishAndReceive(t, ctx, publisher, service.MessageBatch{newStreamingMessage("200")})
+		snapshotMsg := publishAndReceive(t, ctx, publisher, snapshotEvent(100))
+		streamingMsg := publishAndReceive(t, ctx, publisher, streamingEvent(200))
 
 		require.NoError(t, streamingMsg.ackFn(ctx, nil))
 		require.Empty(t, cachedSCNs(), "cacheSCN must not be called while the snapshot batch is still the unresolved head")
@@ -80,15 +89,568 @@ func TestPublishBatch(t *testing.T) {
 		require.Len(t, scns, 1, "expected cacheSCN to be called exactly once when the snapshot batch resolves the streaming SCN")
 		require.Equal(t, replication.SCN(200), scns[0], "expected the streaming batch's SCN to survive the out-of-order snapshot ack")
 	})
+
+	t.Run("a nack resolves too: auto_replay_nacks off is an opt-in drop", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisher(t)
+
+		b1 := publishAndReceive(t, ctx, publisher, streamingEvent(200))
+		b2 := publishAndReceive(t, ctx, publisher, streamingEvent(300))
+
+		// A nacked batch is deleted per the auto_replay_nacks contract: its
+		// slot resolves so the stream continues past it instead of pinning
+		// the tracker and back-pressuring forever.
+		require.NoError(t, b1.ackFn(ctx, errors.New("downstream failure")))
+		require.NoError(t, b2.ackFn(ctx, nil))
+
+		scns := cachedSCNs()
+		require.NotEmpty(t, scns, "the checkpoint must continue advancing past a dropped batch")
+		require.Equal(t, replication.SCN(300), scns[len(scns)-1])
+	})
 }
 
+func TestSnapshotAckGate(t *testing.T) {
+	t.Run("blocks until the snapshot batch is acked", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, _ := newTestBatchPublisher(t)
+
+		msg := publishAndReceive(t, ctx, publisher, snapshotEvent(100))
+
+		done := make(chan error, 1)
+		go func() { done <- publisher.waitSnapshotAcks(ctx) }()
+
+		select {
+		case err := <-done:
+			t.Fatalf("waitSnapshotAcks returned before the snapshot batch was acked: %v", err)
+		case <-time.After(100 * time.Millisecond):
+		}
+
+		require.NoError(t, msg.ackFn(ctx, nil))
+		select {
+		case err := <-done:
+			require.NoError(t, err)
+		case <-time.After(5 * time.Second):
+			t.Fatal("waitSnapshotAcks did not return after the snapshot batch was acked")
+		}
+	})
+
+	t.Run("a nack also releases the gate", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, _ := newTestBatchPublisher(t)
+
+		msg := publishAndReceive(t, ctx, publisher, snapshotEvent(100))
+		// Nacks count as settled: replay is owned by auto_replay_nacks, and
+		// disabling it is a documented opt-in to drop rejections.
+		require.NoError(t, msg.ackFn(ctx, errors.New("downstream failure")))
+		require.NoError(t, publisher.waitSnapshotAcks(ctx))
+	})
+
+	t.Run("streaming batches do not hold the gate", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, _ := newTestBatchPublisher(t)
+
+		// Published but never acked: must not block the gate.
+		publishAndReceive(t, ctx, publisher, streamingEvent(200))
+
+		require.NoError(t, publisher.waitSnapshotAcks(ctx))
+	})
+
+	t.Run("context cancellation escapes the gate", func(t *testing.T) {
+		publisher, _ := newTestBatchPublisher(t)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		publishAndReceive(t, ctx, publisher, snapshotEvent(100))
+
+		done := make(chan error, 1)
+		go func() { done <- publisher.waitSnapshotAcks(ctx) }()
+		cancel()
+
+		select {
+		case err := <-done:
+			require.ErrorIs(t, err, context.Canceled)
+		case <-time.After(5 * time.Second):
+			t.Fatal("waitSnapshotAcks did not return after context cancellation")
+		}
+	})
+}
+
+func TestFlushCurrent(t *testing.T) {
+	ctx := t.Context()
+	// Count=100 keeps published events buffered in the batcher until flushed.
+	publisher, _ := newTestBatchPublisherWithCount(t, 100)
+
+	publishEvent := func(v int) {
+		t.Helper()
+		e := snapshotEvent(100)
+		e.Data = map[string]any{"a": v}
+		require.NoError(t, publisher.Publish(ctx, e))
+	}
+	receive := func(failMsg string) {
+		t.Helper()
+		got := make(chan asyncMessage, 1)
+		go func() { got <- <-publisher.msgs() }()
+		require.NoError(t, publisher.flushCurrent(ctx))
+		select {
+		case m := <-got:
+			require.Len(t, m.msg, 1)
+		case <-time.After(5 * time.Second):
+			t.Fatal(failMsg)
+		}
+	}
+
+	publishEvent(1)
+	receive("flushCurrent did not publish the buffered partial batch")
+
+	// The loop must still be alive after flushCurrent (unlike FlushRemaining):
+	// a second publish+flush must work identically.
+	publishEvent(2)
+	receive("publisher loop no longer functional after flushCurrent")
+}
+
+// TestTrackOrderUnderConcurrentFlush stresses the two concurrent flushers (the
+// count-triggered flush in Publish and the timed-flush loop) and asserts the
+// persisted checkpoint never regresses when batches are acked in delivery
+// order. Before Track was moved under the batcher mutex, the two flushers
+// could interleave between flush and Track, registering batches with the
+// ordered tracker in the wrong order and persisting a regressing SCN. Run with
+// -race to also catch the underlying data race structurally.
+func TestTrackOrderUnderConcurrentFlush(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cp := checkpoint.NewCapped[replication.SCN](1000)
+
+	// Count 2 + a tiny period keeps both flush paths active concurrently.
+	batcher, err := (service.BatchPolicy{Count: 2, Period: "1ms"}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+
+	publisher := newBatchPublisher(batcher, cp, logger)
+	t.Cleanup(publisher.Close)
+
+	var (
+		mu        sync.Mutex
+		persisted []replication.SCN
+	)
+	publisher.cacheSCN = func(_ context.Context, scn replication.SCN) error {
+		mu.Lock()
+		defer mu.Unlock()
+		persisted = append(persisted, scn)
+		return nil
+	}
+
+	// Consumer: ack every batch immediately, in delivery order.
+	consumerDone := make(chan struct{})
+	consumerCtx, stopConsumer := context.WithCancel(ctx)
+	go func() {
+		defer close(consumerDone)
+		for {
+			select {
+			case m := <-publisher.msgs():
+				_ = m.ackFn(ctx, nil)
+			case <-consumerCtx.Done():
+				return
+			}
+		}
+	}()
+
+	const events = 500
+	for i := range events {
+		require.NoError(t, publisher.Publish(ctx, &replication.MessageEvent{
+			Schema:        "S",
+			Table:         "T",
+			Operation:     replication.MessageOperationInsert,
+			CheckpointSCN: replication.SCN(i + 1),
+			Data:          map[string]any{"i": i},
+		}))
+	}
+	require.NoError(t, publisher.flushCurrent(ctx))
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(persisted) > 0 && persisted[len(persisted)-1] == replication.SCN(events)
+	}, 10*time.Second, 10*time.Millisecond, "final SCN was never persisted")
+	stopConsumer()
+	<-consumerDone
+
+	mu.Lock()
+	defer mu.Unlock()
+	for i := 1; i < len(persisted); i++ {
+		require.GreaterOrEqual(t, persisted[i], persisted[i-1],
+			"persisted checkpoint regressed at index %d: %v", i, persisted)
+	}
+}
+
+// TestPublishBuffersWhileTrackBlocked verifies that a flusher blocked in
+// checkpoint.Track (checkpoint_limit reached, nothing acked) waits only in
+// the ticket queue: other Publish calls must still be able to buffer rows
+// instead of freezing on batcherMu behind the blocked Track.
+func TestPublishBuffersWhileTrackBlocked(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	// Capacity for exactly one 2-row batch: the second flush blocks in Track.
+	cp := checkpoint.NewCapped[replication.SCN](2)
+
+	batcher, err := (service.BatchPolicy{Count: 2}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher.cacheSCN = func(context.Context, replication.SCN) error { return nil }
+	t.Cleanup(publisher.Close)
+
+	// Batch 1 fills the tracker to capacity; consume it but do not ack. The
+	// flushing Publish blocks on the unbuffered channel send until the batch
+	// is consumed, so it runs on its own goroutine.
+	require.NoError(t, publisher.Publish(ctx, streamingEvent(100)))
+	firstPublished := make(chan error, 1)
+	go func() { firstPublished <- publisher.Publish(ctx, streamingEvent(101)) }()
+	first := <-publisher.msgs()
+	require.NoError(t, <-firstPublished)
+
+	// Batch 2 flushes and blocks in Track (capacity exhausted).
+	blocked := make(chan error, 1)
+	go func() {
+		blocked <- func() error {
+			if err := publisher.Publish(ctx, streamingEvent(200)); err != nil {
+				return err
+			}
+			return publisher.Publish(ctx, streamingEvent(201))
+		}()
+	}()
+
+	// Give the flusher time to reach Track and park there.
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case err := <-blocked:
+		t.Fatalf("expected the second batch's flusher to block in Track, but it returned: %v", err)
+	default:
+	}
+
+	// The key assertion: a concurrent Publish that only buffers (no flush due)
+	// completes promptly even though a flusher is parked in Track.
+	buffered := make(chan error, 1)
+	go func() { buffered <- publisher.Publish(ctx, streamingEvent(300)) }()
+	select {
+	case err := <-buffered:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("a buffering Publish froze behind a Track blocked on checkpoint_limit")
+	}
+
+	// Ack batch 1 to release the blocked flusher and drain.
+	require.NoError(t, first.ackFn(ctx, nil))
+	go func() {
+		for m := range publisher.msgs() {
+			_ = m.ackFn(ctx, nil)
+		}
+	}()
+	select {
+	case err := <-blocked:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("blocked flusher never released after the ack freed tracker capacity")
+	}
+}
+
+// TestFlushCurrentBarriersParkedFlusher encodes the snapshot-handoff crash
+// window: the timed-flush loop can hold the final snapshot rows while parked
+// in checkpoint.Track (before counting them on the snapshot ack gate). The
+// handoff's flushCurrent must not return - and waitSnapshotAcks must not
+// release - until that parked flusher has registered and delivered its batch,
+// otherwise the post-snapshot SCN persists ahead of undelivered rows.
+func TestFlushCurrentBarriersParkedFlusher(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	// Capacity for exactly one 2-row batch: the second flush parks in Track.
+	cp := checkpoint.NewCapped[replication.SCN](2)
+
+	batcher, err := (service.BatchPolicy{Count: 2}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher.cacheSCN = func(context.Context, replication.SCN) error { return nil }
+	t.Cleanup(publisher.Close)
+
+	// Snapshot batch 1 fills the tracker; consume it but do not ack (WG=1).
+	require.NoError(t, publisher.Publish(ctx, snapshotEvent(100)))
+	firstPublished := make(chan error, 1)
+	go func() { firstPublished <- publisher.Publish(ctx, snapshotEvent(100)) }()
+	first := <-publisher.msgs()
+	require.NoError(t, <-firstPublished)
+
+	// Snapshot batch 2 flushes, takes its ticket, and parks in Track - the
+	// exact state the timed-flush loop can be in at the handoff.
+	parked := make(chan error, 1)
+	go func() {
+		parked <- func() error {
+			if err := publisher.Publish(ctx, snapshotEvent(100)); err != nil {
+				return err
+			}
+			return publisher.Publish(ctx, snapshotEvent(100))
+		}()
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	// The handoff: flushCurrent sees an empty batcher but must still barrier
+	// behind the parked flusher's ticket.
+	flushed := make(chan error, 1)
+	go func() { flushed <- publisher.flushCurrent(ctx) }()
+	select {
+	case err := <-flushed:
+		t.Fatalf("flushCurrent returned (%v) while a flusher holding snapshot rows was still parked in Track: the ack gate does not yet count those rows", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	// Ack batch 1: the parked flusher tracks, counts, and delivers batch 2.
+	require.NoError(t, first.ackFn(ctx, nil))
+	second := <-publisher.msgs()
+	require.NoError(t, <-parked)
+	require.NoError(t, <-flushed)
+
+	// The gate must now hold for batch 2: it is published but un-acked.
+	gate := make(chan error, 1)
+	go func() { gate <- publisher.waitSnapshotAcks(ctx) }()
+	select {
+	case err := <-gate:
+		t.Fatalf("waitSnapshotAcks returned (%v) with a published snapshot batch still un-acked", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	require.NoError(t, second.ackFn(ctx, nil))
+	select {
+	case err := <-gate:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("gate never released after the final ack")
+	}
+}
+
+// TestAdmitEscapesOnContextCancel verifies admission is cancellable: a
+// flusher queued in admit behind a ticket whose holder is parked under a
+// DIFFERENT, still-live context (the timed loop uses hardStopCtx by design)
+// must unwind via its own context - the abandoned ticket is skipped when its
+// turn comes, and the sequence stays intact for later flushers.
+func TestAdmitEscapesOnContextCancel(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cp := checkpoint.NewCapped[replication.SCN](100)
+
+	batcher, err := (service.BatchPolicy{Count: 2}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher.cacheSCN = func(context.Context, replication.SCN) error { return nil }
+	t.Cleanup(publisher.Close)
+
+	// Ticket 0's holder parks in sendTracked under a live context (nobody
+	// consumes msgs()).
+	holderDone := make(chan error, 1)
+	go func() {
+		holderDone <- func() error {
+			if err := publisher.Publish(ctx, streamingEvent(100)); err != nil {
+				return err
+			}
+			return publisher.Publish(ctx, streamingEvent(101))
+		}()
+	}()
+	require.Eventually(t, func() bool {
+		publisher.batcherMu.Lock()
+		defer publisher.batcherMu.Unlock()
+		return publisher.nextTicket == 1
+	}, 5*time.Second, time.Millisecond)
+
+	// The handoff's flushCurrent queues behind it with a cancellable context
+	// - the exact soft-stop-during-handoff scenario.
+	flusherCtx, cancelFlusher := context.WithCancel(ctx)
+	queued := make(chan error, 1)
+	go func() { queued <- publisher.flushCurrent(flusherCtx) }()
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case err := <-queued:
+		t.Fatalf("expected flushCurrent to queue in admit, but it returned: %v", err)
+	default:
+	}
+
+	// Cancelling ONLY the flusher's context must unwind it promptly - the
+	// parked holder's hardStopCtx is untouched.
+	cancelFlusher()
+	select {
+	case err := <-queued:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(2 * time.Second):
+		t.Fatal("admit did not escape on context cancellation: a soft stop during the handoff would burn the shutdown timeouts")
+	}
+
+	// The sequence stays intact: drain the parked holder and prove a later
+	// flusher is still admitted (the abandoned ticket is skipped).
+	first := <-publisher.msgs()
+	require.NoError(t, first.ackFn(ctx, nil))
+	require.NoError(t, <-holderDone)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- func() error {
+			if err := publisher.Publish(ctx, streamingEvent(200)); err != nil {
+				return err
+			}
+			return publisher.Publish(ctx, streamingEvent(201))
+		}()
+	}()
+	select {
+	case m := <-publisher.msgs():
+		require.NoError(t, m.ackFn(ctx, nil))
+	case <-time.After(5 * time.Second):
+		t.Fatal("a later flusher was never admitted: the abandoned ticket wedged the sequence")
+	}
+	require.NoError(t, <-done)
+}
+
+// TestAbandonedBatchSealsQueue encodes the abandonment loss window: a flusher
+// whose rows are already out of the batcher abandons its ticket on
+// cancellation. Nothing pins the tracker for those rows, so if any LATER
+// batch could still be tracked and acked, its resolve would persist an SCN
+// past the dropped rows - silent loss on restart. The abandon must therefore
+// seal the queue (no later admission can ever track) and poison the
+// publisher so Connect rebuilds and re-reads from the last durable SCN.
+func TestAbandonedBatchSealsQueue(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cp := checkpoint.NewCapped[replication.SCN](100)
+
+	batcher, err := (service.BatchPolicy{Count: 2}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher.cacheSCN = func(context.Context, replication.SCN) error { return nil }
+	t.Cleanup(publisher.Close)
+
+	// Ticket 0's holder parks in sendTracked under a live context.
+	holderDone := make(chan error, 1)
+	go func() {
+		holderDone <- func() error {
+			if err := publisher.Publish(ctx, streamingEvent(100)); err != nil {
+				return err
+			}
+			return publisher.Publish(ctx, streamingEvent(101))
+		}()
+	}()
+	require.Eventually(t, func() bool {
+		publisher.batcherMu.Lock()
+		defer publisher.batcherMu.Unlock()
+		return publisher.nextTicket == 1
+	}, 5*time.Second, time.Millisecond)
+
+	// A flusher with ROWS (ticket 1) queues behind it and is cancelled: its
+	// batch left the batcher but was never tracked.
+	abandonCtx, cancelAbandon := context.WithCancel(ctx)
+	abandoned := make(chan error, 1)
+	go func() {
+		abandoned <- func() error {
+			if err := publisher.Publish(abandonCtx, streamingEvent(200)); err != nil {
+				return err
+			}
+			return publisher.Publish(abandonCtx, streamingEvent(201))
+		}()
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancelAbandon()
+	require.ErrorIs(t, <-abandoned, context.Canceled)
+
+	// The abandon dropped SCN 200-201 rows: the queue must be sealed and the
+	// publisher poisoned so nothing can ever be tracked (and persisted) past
+	// them from this generation.
+	require.True(t, publisher.poisoned.Load(),
+		"abandoning a flushed-but-untracked batch must poison the publisher")
+	laterErr := func() error {
+		if err := publisher.Publish(ctx, streamingEvent(300)); err != nil {
+			return err
+		}
+		return publisher.Publish(ctx, streamingEvent(301))
+	}()
+	require.ErrorIs(t, laterErr, errQueueSealed,
+		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
+}
+
+// TestTrackFailureSealsQueue is TestAbandonedBatchSealsQueue's sibling: an
+// ADMITTED flusher parked in checkpoint.Track (capacity exhausted) whose
+// context cancels returns with its rows flushed but untracked, while the
+// deferred release advances the queue - the same unpinned gap. The failure
+// must seal and poison so no later ticket can persist past the dropped rows.
+func TestTrackFailureSealsQueue(t *testing.T) {
+	ctx := t.Context()
+	logger := service.NewLoggerFromSlog(slog.Default())
+	// Capacity for exactly one 2-row batch: the next Track parks.
+	cp := checkpoint.NewCapped[replication.SCN](2)
+
+	batcher, err := (service.BatchPolicy{Count: 2}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	publisher := newBatchPublisher(batcher, cp, logger)
+	publisher.cacheSCN = func(context.Context, replication.SCN) error { return nil }
+	t.Cleanup(publisher.Close)
+
+	// Batch 1 fills the tracker; consume it but do not ack.
+	require.NoError(t, publisher.Publish(ctx, streamingEvent(100)))
+	firstPublished := make(chan error, 1)
+	go func() { firstPublished <- publisher.Publish(ctx, streamingEvent(101)) }()
+	<-publisher.msgs()
+	require.NoError(t, <-firstPublished)
+
+	// Batch 2 is admitted and parks in Track; cancelling its context fails
+	// the Track with the rows already out of the batcher.
+	trackCtx, cancelTrack := context.WithCancel(ctx)
+	parked := make(chan error, 1)
+	go func() {
+		parked <- func() error {
+			if err := publisher.Publish(trackCtx, streamingEvent(200)); err != nil {
+				return err
+			}
+			return publisher.Publish(trackCtx, streamingEvent(201))
+		}()
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancelTrack()
+	require.Error(t, <-parked)
+
+	require.True(t, publisher.poisoned.Load(),
+		"a failed Track stranded flushed-but-untracked rows; the publisher must be marked for rebuild")
+	laterErr := func() error {
+		if err := publisher.Publish(ctx, streamingEvent(300)); err != nil {
+			return err
+		}
+		return publisher.Publish(ctx, streamingEvent(301))
+	}()
+	require.ErrorIs(t, laterErr, errQueueSealed,
+		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
+}
+
+// TestFailedSendPoisonsPublisher verifies that a tracked batch that cannot be
+// handed to ReadBatch marks the publisher poisoned: its checkpoint slot can
+// never resolve, so Connect must rebuild the publisher rather than reuse a
+// permanently pinned tracker.
+func TestFailedSendPoisonsPublisher(t *testing.T) {
+	publisher, _ := newTestBatchPublisher(t)
+
+	sendCtx, cancel := context.WithCancel(t.Context())
+	cancel() // nobody consumes msgs(): the send can only fail
+
+	err := publisher.Publish(sendCtx, streamingEvent(100))
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, publisher.poisoned.Load(),
+		"a failed send orphans its tracker slot; the publisher must be marked for rebuild")
+}
+
+// newTestBatchPublisher builds a publisher whose batcher flushes on every
+// published event (count=1), so tests drive the production
+// Publish->trackBatch->sendTracked path directly.
 func newTestBatchPublisher(t *testing.T) (*batchPublisher, func() []replication.SCN) {
+	t.Helper()
+	return newTestBatchPublisherWithCount(t, 1)
+}
+
+func newTestBatchPublisherWithCount(t *testing.T, count int) (*batchPublisher, func() []replication.SCN) {
 	t.Helper()
 
 	logger := service.NewLoggerFromSlog(slog.Default())
 	cp := checkpoint.NewCapped[replication.SCN](100)
 
-	publisher := newBatchPublisher(nil, cp, logger)
+	batcher, err := (service.BatchPolicy{Count: count}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+
+	publisher := newBatchPublisher(batcher, cp, logger)
 	t.Cleanup(publisher.Close)
 
 	var (
@@ -111,24 +673,33 @@ func newTestBatchPublisher(t *testing.T) (*batchPublisher, func() []replication.
 	return publisher, cachedSCNsFn
 }
 
-func newSnapshotMessage(scn string) *service.Message {
-	msg := service.NewMessage([]byte("{}"))
-	msg.MetaSet("operation", replication.MessageOperationRead.String())
-	msg.MetaSet("scn", scn)
-	return msg
+func snapshotEvent(scn replication.SCN) *replication.MessageEvent {
+	return &replication.MessageEvent{
+		Schema:    "S",
+		Table:     "T",
+		Operation: replication.MessageOperationRead,
+		SCN:       scn,
+		Data:      map[string]any{"a": 1},
+	}
 }
 
-func newStreamingMessage(checkpointSCN string) *service.Message {
-	msg := service.NewMessage([]byte("{}"))
-	msg.MetaSet("operation", replication.MessageOperationInsert.String())
-	msg.MetaSet("checkpoint_scn", checkpointSCN)
-	return msg
+func streamingEvent(checkpointSCN replication.SCN) *replication.MessageEvent {
+	return &replication.MessageEvent{
+		Schema:        "S",
+		Table:         "T",
+		Operation:     replication.MessageOperationInsert,
+		CheckpointSCN: checkpointSCN,
+		Data:          map[string]any{"a": 1},
+	}
 }
 
-func publishAndReceive(t *testing.T, ctx context.Context, publisher *batchPublisher, batch service.MessageBatch) asyncMessage {
+// publishAndReceive publishes a single event through the production Publish
+// path (count=1 batcher: every event flushes, tracks, and sends immediately)
+// and returns the delivered asyncMessage.
+func publishAndReceive(t *testing.T, ctx context.Context, publisher *batchPublisher, event *replication.MessageEvent) asyncMessage {
 	t.Helper()
 	go func() {
-		_ = publisher.publishBatch(ctx, batch)
+		_ = publisher.Publish(ctx, event)
 	}()
 	return <-publisher.msgs()
 }
