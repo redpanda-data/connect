@@ -17,7 +17,10 @@ package gcp
 import (
 	"context"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub/v2"
+	"cloud.google.com/go/pubsub/v2/apiv1/pubsubpb"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var _ pubsubClient = (*airGappedPubsubClient)(nil)
@@ -47,28 +50,36 @@ func (ac *airGappedPubsubClient) Close() error {
 }
 
 func (ac *airGappedPubsubClient) Topic(id string, settings *pubsub.PublishSettings) pubsubTopic {
-	t := ac.c.Topic(id)
-	t.PublishSettings = *settings
+	p := ac.c.Publisher(id)
+	p.PublishSettings = *settings
 
-	return &airGappedTopic{t: t}
+	return &airGappedTopic{publisher: p, client: ac.c}
 }
 
 type airGappedTopic struct {
-	t *pubsub.Topic
+	publisher *pubsub.Publisher
+	client    *pubsub.Client
 }
 
 func (at *airGappedTopic) Exists(ctx context.Context) (bool, error) {
-	return at.t.Exists(ctx)
+	_, err := at.client.TopicAdminClient.GetTopic(ctx, &pubsubpb.GetTopicRequest{Topic: at.publisher.String()})
+	if status.Code(err) == codes.NotFound {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (at *airGappedTopic) Publish(ctx context.Context, msg *pubsub.Message) publishResult {
-	return at.t.Publish(ctx, msg)
+	return at.publisher.Publish(ctx, msg)
 }
 
 func (at *airGappedTopic) EnableOrdering() {
-	at.t.EnableMessageOrdering = true
+	at.publisher.EnableMessageOrdering = true
 }
 
 func (at *airGappedTopic) Stop() {
-	at.t.Stop()
+	at.publisher.Stop()
 }
