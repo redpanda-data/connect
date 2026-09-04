@@ -205,15 +205,29 @@ func TestScannerDecompressedSizeGuard(t *testing.T) {
 	}
 }
 
+// TestScannerMaxDecompressedBlockBytesZero pins that max_decompressed_block_bytes: 0
+// is equivalent to omitting the field — both resolve to this scanner's own
+// defaultMaxDecompressedBlockBytes (16 MiB) — rather than forwarding 0 to
+// ocf.WithMaxDecompressedBlockBytes, whose own <= 0 fallback is a DIFFERENT,
+// larger 64 MiB default. Without effectiveMaxDecompressedBlockBytes's
+// interception, an explicit 0 would silently raise the effective cap to 4x
+// this field's documented default. A block between the two sizes (40 MiB)
+// is rejected under an explicit 0, proving the field's own (smaller) default
+// applies, not the library's.
+func TestScannerMaxDecompressedBlockBytesZero(t *testing.T) {
+	codec := ocf.DeflateCodec(flate.BestCompression)
+
+	require.Error(t, scanOCF(t, capConf(0), buildOCF(t, codec, 40<<20)),
+		"max_decompressed_block_bytes: 0 must use this field's own 16 MiB default, not the underlying library's larger 64 MiB fallback")
+}
+
 // TestScannerMaxDecompressedBlockBytesLint pins the config-lint boundary for
 // max_decompressed_block_bytes. A negative value is meaningless as a byte
-// count and, left unvalidated, is silently coerced by the underlying library
-// to its own 64 MiB default (see ocf.WithMaxDecompressedBlockBytes) rather
-// than surfaced as a config error — exactly the kind of typo (e.g. a stray
-// -1 copied from another connector's "unlimited" convention) that
+// count and, left unvalidated, is silently coerced to a default rather than
+// surfaced as a config error — exactly the kind of typo (e.g. a stray -1
+// copied from another connector's "unlimited" convention) that
 // CONTRIBUTING.md's config-validation guidance calls out. Zero is a
-// documented, valid sentinel ("use the underlying library default") and must
-// not be flagged.
+// documented, valid sentinel ("use the default") and must not be flagged.
 func TestScannerMaxDecompressedBlockBytesLint(t *testing.T) {
 	linter := service.GlobalEnvironment().NewComponentConfigLinter()
 

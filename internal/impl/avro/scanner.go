@@ -34,11 +34,35 @@ const (
 
 // defaultMaxDecompressedBlockBytes bounds the decompressed size of a single
 // Avro OCF block. It defends against decompression-amplification ("deflate
-// bomb") inputs, where a tiny compressed block expands into a huge allocation.
-// Legitimate OCF blocks are typically tens of KB to a few MB, so this leaves
-// ample headroom while capping worst-case memory: a rejected block never
-// reaches the subsequent (further-expanding) Avro->JSON encoding step.
+// bomb") inputs, where a tiny compressed block expands into a huge
+// allocation. Legitimate OCF blocks are typically tens of KB to a few MB, so
+// this leaves ample headroom while capping worst-case memory: a rejected
+// block never reaches the subsequent Avro->JSON encoding step, which itself
+// further expands an accepted block (observed ~6x on the researcher's PoC
+// datum, largely from decimal/bytes fields spelling out as JSON). Worst-case
+// resident size for one accepted block is therefore on the order of
+// defaultMaxDecompressedBlockBytes * 6 (~100 MB at the default), not the
+// 16 MiB cap alone — accepted as proportionate headroom over real OCF block
+// sizes when this default was chosen.
 const defaultMaxDecompressedBlockBytes = 16 << 20 // 16 MiB
+
+// effectiveMaxDecompressedBlockBytes resolves the byte cap this scanner
+// passes to ocf.WithMaxDecompressedBlockBytes for a given configured field
+// value. It intercepts <= 0 itself (LintRule already rejects < 0, so in
+// practice this only ever normalizes 0) rather than forwarding it, because
+// the underlying twmb/avro reader has its own, DIFFERENT fallback for <= 0
+// — its own built-in 64 MiB default (ocf.go: "The default is 64 MiB"),
+// which is *larger* than this field's 16 MiB default. Forwarding 0 verbatim
+// would make the field's documented "use the default" sentinel silently
+// raise the effective cap to 4x its stated value instead of leaving it at
+// this field's own default — do not remove this interception without
+// re-checking that upstream behaviour.
+func effectiveMaxDecompressedBlockBytes(configured int) int {
+	if configured <= 0 {
+		return defaultMaxDecompressedBlockBytes
+	}
+	return configured
+}
 
 func avroScannerSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
@@ -68,7 +92,7 @@ This scanner also emits the canonical Avro schema as `+"`@avro_schema`"+` metada
 				Advanced().
 				Default(false),
 			service.NewIntField(sFieldMaxDecompressedBlockBytes).
-				Description("The maximum size, in bytes, that a single compressed Avro OCF block is allowed to expand to when decompressed. This guards against decompression-amplification (\"deflate bomb\") inputs, where a tiny compressed block would otherwise expand into a very large allocation. A block that exceeds this limit causes the scan to fail rather than be materialized. Set to `0` to use the underlying library default.").
+				Description("The maximum size, in bytes, that a single compressed Avro OCF block is allowed to expand to when decompressed. This guards against decompression-amplification (\"deflate bomb\") inputs, where a tiny compressed block would otherwise expand into a very large allocation. A block that exceeds this limit causes the scan to fail rather than be materialized. There is deliberately no way to disable this cap: pipelines with legitimately larger blocks should set an explicit higher value. Set to `0` to use the default (equivalent to omitting the field).").
 				Advanced().
 				Default(defaultMaxDecompressedBlockBytes).
 				LintRule(`root = if this < 0 { [ "`+sFieldMaxDecompressedBlockBytes+` must be >= 0" ] }`),
@@ -100,7 +124,7 @@ type avroScannerCreator struct {
 
 func (c *avroScannerCreator) Create(rdr io.ReadCloser, aFn service.AckFunc, _ *service.ScannerSourceDetails) (service.BatchScanner, error) {
 	reader, err := ocf.NewReader(rdr,
-		ocf.WithMaxDecompressedBlockBytes(int64(c.maxDecompressedBlockBytes)),
+		ocf.WithMaxDecompressedBlockBytes(int64(effectiveMaxDecompressedBlockBytes(c.maxDecompressedBlockBytes))),
 	)
 	if err != nil {
 		return nil, err
