@@ -496,9 +496,25 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 				startLSN = lastLSN
 			} else {
 				r.log.Debug("No more changes across all change tables, backing off...")
-				time.Sleep(r.backoffInterval)
+				if err := sleepInterruptible(ctx, r.backoffInterval); err != nil {
+					return err
+				}
 			}
 		}
+	}
+}
+
+// sleepInterruptible pauses for d unless ctx is cancelled first, so a
+// shutdown or a poisoned-publisher teardown never has to wait out the
+// change-table backoff.
+func sleepInterruptible(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

@@ -176,12 +176,30 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 					lm.log.Debugf("Caught up with redo logs, backing off for %s...", lm.cfg.MiningBackoffInterval)
 					lm.caughtUpLogged = true
 				}
-				time.Sleep(lm.cfg.MiningBackoffInterval)
+				if err := sleepInterruptible(ctx, lm.cfg.MiningBackoffInterval); err != nil {
+					return err
+				}
 			} else {
 				lm.caughtUpLogged = false
-				time.Sleep(lm.cfg.MiningInterval)
+				if err := sleepInterruptible(ctx, lm.cfg.MiningInterval); err != nil {
+					return err
+				}
 			}
 		}
+	}
+}
+
+// sleepInterruptible pauses for d unless ctx is cancelled first, so a
+// shutdown or a poisoned-publisher teardown never has to wait out a
+// mining backoff.
+func sleepInterruptible(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
