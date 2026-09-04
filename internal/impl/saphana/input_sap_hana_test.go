@@ -273,13 +273,43 @@ func TestNormalizeHANAValue(t *testing.T) {
 			numericMapping: shNumericMappingNone,
 			want:           "1234567890123456789.123456789",
 		},
-		// ── DECIMAL with best_fit mapping → no change in behaviour vs none ─
+		// ── DECIMAL with best_fit mapping ──────────────────────────────────
 		{
-			name:           "decimal with best_fit mapping and Decimal schema",
+			// The schema layer never emits Decimal for p<=15 under best_fit,
+			// but a stale/mismatched schema must still canonicalise safely.
+			name:           "decimal with best_fit mapping and Decimal schema stays canonical",
 			input:          decVal("99.99"),
 			colType:        decimalColType(t, 10, 2),
 			numericMapping: shNumericMappingBestFit,
 			want:           "99.99",
+		},
+		{
+			name:           "decimal with best_fit mapping and Float64 schema emits float",
+			input:          decVal("99.99"),
+			colType:        &schema.Common{Name: "col", Type: schema.Float64},
+			numericMapping: shNumericMappingBestFit,
+			want:           99.99,
+		},
+		{
+			name:           "decimal best_fit no schema fits float64",
+			input:          decVal("99.99"),
+			colType:        nil,
+			numericMapping: shNumericMappingBestFit,
+			want:           99.99,
+		},
+		{
+			name:           "decimal best_fit no schema integer emits int64",
+			input:          decVal("42"),
+			colType:        nil,
+			numericMapping: shNumericMappingBestFit,
+			want:           int64(42),
+		},
+		{
+			name:           "decimal best_fit no schema too many digits stays canonical",
+			input:          decVal("1234567890123456789.123456789"),
+			colType:        nil,
+			numericMapping: shNumericMappingBestFit,
+			want:           "1234567890123456789.123456789",
 		},
 	}
 

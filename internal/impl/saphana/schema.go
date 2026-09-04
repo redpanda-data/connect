@@ -55,16 +55,24 @@ func isDecimalType(dataType string) bool {
 	return dataType == "DECIMAL" || dataType == "NUMERIC"
 }
 
+// float64MaxSafeDigits is the number of significant decimal digits a float64
+// can round-trip without loss.
+const float64MaxSafeDigits = 15
+
 // hanaDecimalToCommon builds a schema.Common entry for a DECIMAL/NUMERIC column.
 // Mapping rules:
 //   - scale == 0 && 0 < precision <= 18: Int64
+//   - numericMapping == best_fit && 0 < precision <= 15: Float64
 //   - known precision and scale: Decimal(precision, scale)
 //   - otherwise: BigDecimal (undeclared or out-of-bounds)
-func hanaDecimalToCommon(name string, precision, scale sql.NullInt64, optional bool) schema.Common {
+func hanaDecimalToCommon(name string, precision, scale sql.NullInt64, optional bool, numericMapping string) schema.Common {
 	if precision.Valid && scale.Valid {
 		p, s := precision.Int64, scale.Int64
 		if s == 0 && p > 0 && p <= 18 {
 			return schema.Common{Name: name, Type: schema.Int64, Optional: optional}
+		}
+		if numericMapping == shNumericMappingBestFit && p > 0 && p <= float64MaxSafeDigits {
+			return schema.Common{Name: name, Type: schema.Float64, Optional: optional}
 		}
 		if s < 0 {
 			s = 0
@@ -98,17 +106,19 @@ type cachedSchema struct {
 // SYS.TABLE_COLUMNS. When an event references a column not present in the
 // cached schema, the cache is refreshed (addition-only drift detection).
 type schemaCache struct {
-	mu      sync.Mutex
-	entries map[string]*cachedSchema
-	db      *sql.DB
-	log     *service.Logger
+	mu             sync.Mutex
+	entries        map[string]*cachedSchema
+	db             *sql.DB
+	log            *service.Logger
+	numericMapping string
 }
 
-func newSchemaCache(db *sql.DB, log *service.Logger) *schemaCache {
+func newSchemaCache(db *sql.DB, log *service.Logger, numericMapping string) *schemaCache {
 	return &schemaCache{
-		entries: make(map[string]*cachedSchema),
-		db:      db,
-		log:     log,
+		entries:        make(map[string]*cachedSchema),
+		db:             db,
+		log:            log,
+		numericMapping: numericMapping,
 	}
 }
 
@@ -126,7 +136,7 @@ JOIN SYS.INDEXES i
 WHERE i.SCHEMA_NAME = ? AND i.TABLE_NAME = ? AND i.CONSTRAINT = 'PRIMARY KEY'
 ORDER BY ic.POSITION`
 
-func fetchHANASchema(ctx context.Context, db *sql.DB, schemaName, tableName string) (*cachedSchema, error) {
+func fetchHANASchema(ctx context.Context, db *sql.DB, schemaName, tableName, numericMapping string) (*cachedSchema, error) {
 	rows, err := db.QueryContext(ctx, hanaColumnQuery, schemaName, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("querying SYS.TABLE_COLUMNS for %s.%s: %w", schemaName, tableName, err)
@@ -155,7 +165,7 @@ func fetchHANASchema(ctx context.Context, db *sql.DB, schemaName, tableName stri
 
 		var common schema.Common
 		if isDecimalType(dataType) {
-			common = hanaDecimalToCommon(colName, length, scale, optional)
+			common = hanaDecimalToCommon(colName, length, scale, optional, numericMapping)
 		} else {
 			common = schema.Common{
 				Name:     colName,
@@ -240,7 +250,7 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, schemaName, tableName
 		sc.log.Debugf("Schema drift detected for %s — refreshing from SYS.TABLE_COLUMNS", tableKey)
 	}
 
-	fresh, err := fetchHANASchema(ctx, sc.db, schemaName, tableName)
+	fresh, err := fetchHANASchema(ctx, sc.db, schemaName, tableName, sc.numericMapping)
 	if err != nil {
 		if existing, exists := sc.entries[tableKey]; exists {
 			sc.log.Warnf("Failed to refresh schema for %s, using cached version: %v", tableKey, err)
