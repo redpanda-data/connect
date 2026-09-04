@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- rpc plugins: Fixed `Ack` on an RPC (dynamic) input plugin closing the whole component instead of routing to the acked batch, which tore down any ack-dependent plugin input on its first ack. ([@Sirz3chs](https://github.com/Sirz3chs), [#TODO-fill-in-PR-number](https://github.com/redpanda-data/connect/pull/TODO))
+- rpc plugins: Fixed `Ack` on an RPC (dynamic) input plugin closing the whole component instead of routing to the acked batch, which tore down any ack-dependent plugin input on its first ack. ([@Sirz3chs](https://github.com/Sirz3chs), [#4772](https://github.com/redpanda-data/connect/pull/4772))
 
 ## 4.108.0 - 2026-09-03
 
