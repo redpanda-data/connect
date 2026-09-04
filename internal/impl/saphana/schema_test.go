@@ -88,8 +88,37 @@ func TestHanaDecimalToCommon(t *testing.T) {
 		name      string
 		precision sql.NullInt64
 		scale     sql.NullInt64
+		mapping   string
 		wantType  schema.CommonType
 	}{
+		{
+			name:      "best_fit scale=2 precision=10 -> Float64",
+			precision: validInt(10),
+			scale:     validInt(2),
+			mapping:   shNumericMappingBestFit,
+			wantType:  schema.Float64,
+		},
+		{
+			name:      "best_fit scale=2 precision=15 -> Float64 (float64 digit limit)",
+			precision: validInt(15),
+			scale:     validInt(2),
+			mapping:   shNumericMappingBestFit,
+			wantType:  schema.Float64,
+		},
+		{
+			name:      "best_fit scale=2 precision=16 -> Decimal (too wide for float64)",
+			precision: validInt(16),
+			scale:     validInt(2),
+			mapping:   shNumericMappingBestFit,
+			wantType:  schema.Decimal,
+		},
+		{
+			name:      "best_fit scale=0 precision=10 -> Int64 (same as none)",
+			precision: validInt(10),
+			scale:     validInt(0),
+			mapping:   shNumericMappingBestFit,
+			wantType:  schema.Int64,
+		},
 		{
 			name:      "scale=0 precision=10 -> Int64",
 			precision: validInt(10),
@@ -142,7 +171,11 @@ func TestHanaDecimalToCommon(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := hanaDecimalToCommon("col", tc.precision, tc.scale, true)
+			mapping := tc.mapping
+			if mapping == "" {
+				mapping = shNumericMappingNone
+			}
+			got := hanaDecimalToCommon("col", tc.precision, tc.scale, true, mapping)
 			assert.Equal(t, tc.wantType, got.Type)
 			assert.Equal(t, "col", got.Name)
 		})
@@ -151,7 +184,7 @@ func TestHanaDecimalToCommon(t *testing.T) {
 
 func TestSchemaCacheEmptySchemaName(t *testing.T) {
 	// nil db: any query would panic; early return on empty schemaName must prevent that.
-	cache := newSchemaCache(nil, service.MockResources().Logger())
+	cache := newSchemaCache(nil, service.MockResources().Logger(), shNumericMappingNone)
 	got, err := cache.schemaForEvent(context.Background(), "", "TABLE", []string{"ID"})
 	require.NoError(t, err)
 	assert.Nil(t, got)
@@ -177,7 +210,7 @@ func TestQuoteIdentifier(t *testing.T) {
 
 func TestSchemaCacheCachesResults(t *testing.T) {
 	// Seed the cache directly; a nil DB would panic on a real query.
-	cache := newSchemaCache(nil, service.MockResources().Logger())
+	cache := newSchemaCache(nil, service.MockResources().Logger(), shNumericMappingNone)
 
 	schemaVal := map[string]any{"type": "record", "name": "MY_TABLE"}
 	seeded := &cachedSchema{

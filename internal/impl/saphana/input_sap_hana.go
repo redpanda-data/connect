@@ -50,6 +50,7 @@ const (
 
 	shFieldNumericMapping   = "numeric_mapping"
 	shFieldMaxRetries       = "max_retries"
+	shFieldRetryBackoff     = "retry_backoff"
 	shNumericMappingNone    = "none"
 	shNumericMappingBestFit = "best_fit"
 
@@ -74,11 +75,12 @@ var sapHANAInputConfigSpec = service.NewConfigSpec().
 
 == Metadata
 
-Every message produced by this input carries the following metadata fields:
+Messages produced in ` + "`bulk`, `incrementing`, `timestamp`, and `timestamp+incrementing`" + ` modes carry the following metadata fields (` + "`query`" + ` mode attaches none):
 
-- ` + "`sap_hana_schema`" + `: The HANA schema name.
-- ` + "`sap_hana_table`" + `: The HANA table name.
+- ` + "`table_name`" + `: The HANA table name.
+- ` + "`database_schema`" + `: The configured ` + "`schema_name`" + `. Only present when ` + "`schema_name`" + ` is set.
 - ` + "`schema`" + `: Avro-compatible schema derived from ` + "`SYS.TABLE_COLUMNS`" + `, suitable for use with ` + "`schema_registry_encode`" + `. Column additions are detected automatically without a pipeline restart. Only present when ` + "`schema_name`" + ` is configured.
+- ` + "`primary_key_columns`" + `: JSON array of the table's primary-key column names in key order. Only present when ` + "`schema_name`" + ` is configured and the table has a primary key.
 `).
 	Field(service.NewStringField(shFieldDSN).
 		Description("SAP HANA connection DSN in `hdb://user:password@host:port` form.").
@@ -135,12 +137,17 @@ Every message produced by this input carries the following metadata fields:
 		Example("30s"),
 	).
 	Field(service.NewStringEnumField(shFieldNumericMapping, shNumericMappingNone, shNumericMappingBestFit).
-		Description("Controls how DECIMAL/NUMERIC columns are emitted:\n\n- `none`: always emit as a canonical decimal string, preserving full precision.\n- `best_fit`: emit as `int64` when scale is 0 and the value fits; otherwise emit as a canonical decimal string.").
+		Description("Controls how DECIMAL/NUMERIC columns are emitted:\n\n- `none`: emit as a canonical decimal string preserving full precision, except integer-typed columns (`DECIMAL(p,0)` with precision <= 18) which are emitted as integers.\n- `best_fit`: additionally emit columns whose precision fits a double (precision <= 15) as floating-point numbers; wider values fall back to canonical decimal strings.").
 		Default(shNumericMappingNone),
 	).
 	Field(service.NewIntField(shFieldMaxRetries).
 		Description("Maximum number of times to retry a failed query before returning an error. Set to `0` to disable retries.").
 		Default(3).
+		Advanced(),
+	).
+	Field(service.NewDurationField(shFieldRetryBackoff).
+		Description("Base delay between query retries. The delay grows linearly with the attempt number (attempt N waits N times this value).").
+		Default("1s").
 		Advanced(),
 	).
 	Field(service.NewStringField(shFieldCheckpointCache).
@@ -154,7 +161,7 @@ Every message produced by this input carries the following metadata fields:
 		Advanced(),
 	).
 	Field(service.NewIntField(shFieldCheckpointLimit).
-		Description("The maximum number of messages that can be in flight (read but not yet acknowledged) at a given time. The high-water mark is only checkpointed once every message before it has been acknowledged, preserving at-least-once delivery even when batches are acknowledged out of order.").
+		Description("The maximum number of messages that can be in flight (read but not yet acknowledged) at a given time. The high-water mark is only checkpointed once every message before it has been acknowledged, preserving at-least-once delivery even when batches are acknowledged out of order. When `fetch_size` exceeds this limit, batches are delivered one at a time (each waits for the previous batch's acknowledgement), so raise this alongside large `fetch_size` values to keep batches flowing concurrently.").
 		Default(1024).
 		Advanced(),
 	).
@@ -191,6 +198,7 @@ type sapHANAInput struct {
 
 	numericMapping     string
 	maxRetries         int
+	retryBackoff       time.Duration
 	checkpointCache    string
 	checkpointCacheKey string
 	checkpointLimit    int
@@ -213,6 +221,9 @@ type sapHANAInput struct {
 	stopOnce sync.Once
 
 	bulkExhausted bool
+	// polledOnce gates the poll_interval wait so the first query of a polling
+	// mode runs immediately on startup.
+	polledOnce bool
 
 	rowColNames       []string
 	rowValues         []any
@@ -297,6 +308,9 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	if s.maxRetries, err = conf.FieldInt(shFieldMaxRetries); err != nil {
 		return nil, err
 	}
+	if s.retryBackoff, err = conf.FieldDuration(shFieldRetryBackoff); err != nil {
+		return nil, err
+	}
 	if conf.Contains(shFieldCheckpointCache) {
 		if s.checkpointCache, err = conf.FieldString(shFieldCheckpointCache); err != nil {
 			return nil, err
@@ -310,6 +324,10 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	}
 	if s.checkpointLimit < 1 {
 		return nil, fmt.Errorf("field %q must be at least 1", shFieldCheckpointLimit)
+	}
+	if s.fetchSize > s.checkpointLimit {
+		s.log.Warnf("%s (%d) exceeds %s (%d): batches will be delivered one at a time, each waiting for the previous batch's acknowledgement. Raise %s to allow concurrent batches.",
+			shFieldFetchSize, s.fetchSize, shFieldCheckpointLimit, s.checkpointLimit, shFieldCheckpointLimit)
 	}
 	s.cpTracker = checkpoint.NewCapped[*sapHANACheckpointState](int64(s.checkpointLimit))
 
@@ -356,7 +374,7 @@ func (s *sapHANAInput) Connect(ctx context.Context) error {
 	}
 
 	s.db = db
-	s.schemas = newSchemaCache(db, s.log)
+	s.schemas = newSchemaCache(db, s.log, s.numericMapping)
 
 	if err := s.loadCheckpoint(ctx); err != nil {
 		_ = db.Close()
@@ -451,7 +469,7 @@ func (s *sapHANAInput) openRowsWithRetry(ctx context.Context) (*sql.Rows, error)
 			case <-s.stopChan:
 				s.dbMut.Lock()
 				return nil, service.ErrEndOfInput
-			case <-time.After(time.Duration(attempt) * time.Second):
+			case <-time.After(time.Duration(attempt) * s.retryBackoff):
 			}
 			s.dbMut.Lock()
 			if s.db == nil {
@@ -521,21 +539,27 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 				s.resetCursorCache()
 
 			case shModeIncrementing, shModeTimestamp, shModeTimestampIncrementing:
-				// Release the lock while waiting so Close() can proceed.
-				s.dbMut.Unlock()
-				select {
-				case <-ctx.Done():
+				// The wait applies between polls, not before the first one: a
+				// fresh pipeline should emit waiting rows immediately instead
+				// of sitting silent for a full poll_interval.
+				if s.polledOnce {
+					// Release the lock while waiting so Close() can proceed.
+					s.dbMut.Unlock()
+					select {
+					case <-ctx.Done():
+						s.dbMut.Lock()
+						return nil, nil, ctx.Err()
+					case <-s.stopChan:
+						s.dbMut.Lock()
+						return nil, nil, service.ErrEndOfInput
+					case <-time.After(s.pollInterval):
+					}
 					s.dbMut.Lock()
-					return nil, nil, ctx.Err()
-				case <-s.stopChan:
-					s.dbMut.Lock()
-					return nil, nil, service.ErrEndOfInput
-				case <-time.After(s.pollInterval):
+					if s.db == nil {
+						return nil, nil, service.ErrNotConnected
+					}
 				}
-				s.dbMut.Lock()
-				if s.db == nil {
-					return nil, nil, service.ErrNotConnected
-				}
+				s.polledOnce = true
 				// Pre-warm schema cache before opening rows (same reason as bulk mode).
 				if s.schemaName != "" {
 					_, _ = s.schemas.schemaForEvent(ctx, s.schemaName, s.tableName, nil)
@@ -688,10 +712,9 @@ func normalizeHANAValue(v any, colType *schema.Common, numericMapping string) an
 	return v
 }
 
-// normalizeDecimal converts a big.Rat decimal to a canonical representation.
-// The numeric mapping mode is accepted for signature symmetry but both `none`
-// and `best_fit` currently share the canonical-string behaviour.
-func normalizeDecimal(r *big.Rat, colType *schema.Common, _ string) any {
+// normalizeDecimal converts a big.Rat decimal to the representation selected
+// by numericMapping, guided by the column's schema type when available.
+func normalizeDecimal(r *big.Rat, colType *schema.Common, numericMapping string) any {
 	// Determine the canonical form from schema type when available.
 	if colType != nil {
 		switch colType.Type {
@@ -700,6 +723,10 @@ func normalizeDecimal(r *big.Rat, colType *schema.Common, _ string) any {
 			if r.IsInt() && r.Num().IsInt64() {
 				return r.Num().Int64()
 			}
+		case schema.Float64:
+			// best_fit mapped this column to a double at the schema layer.
+			f, _ := r.Float64()
+			return f
 		case schema.Decimal:
 			if colType.Logical != nil && colType.Logical.Decimal != nil {
 				p := colType.Logical.Decimal.Precision
@@ -712,6 +739,19 @@ func normalizeDecimal(r *big.Rat, colType *schema.Common, _ string) any {
 		}
 	}
 
+	// Without schema guidance best_fit still maps values that fit: integers
+	// to int64, values within float64's safe digit range to float64.
+	if numericMapping == shNumericMappingBestFit {
+		if r.IsInt() && r.Num().IsInt64() {
+			return r.Num().Int64()
+		}
+		if text := ratToNaturalDecimalString(r); decimalFitsFloat64(text) {
+			if f, err := strconv.ParseFloat(text, 64); err == nil {
+				return f
+			}
+		}
+	}
+
 	// BigDecimal fallback: recover the natural scale from the denominator
 	// (HANA DECIMAL denominators are always powers of 10) then canonicalise.
 	if out, err := sqlutil.CanonicaliseBigDecimal(ratToNaturalDecimalString(r)); err == nil {
@@ -719,6 +759,24 @@ func normalizeDecimal(r *big.Rat, colType *schema.Common, _ string) any {
 	}
 	f, _ := r.Float64()
 	return f
+}
+
+// decimalFitsFloat64 reports whether a decimal string's significant digits fit
+// within float64's lossless range.
+func decimalFitsFloat64(text string) bool {
+	digits := 0
+	seenNonZero := false
+	for _, c := range text {
+		if c < '0' || c > '9' {
+			continue
+		}
+		if c == '0' && !seenNonZero {
+			continue
+		}
+		seenNonZero = true
+		digits++
+	}
+	return digits <= float64MaxSafeDigits
 }
 
 // ratToNaturalDecimalString converts a *big.Rat to a decimal string using the
@@ -800,7 +858,9 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 				msg.MetaSetMut("primary_key_columns", string(pkJSON))
 			}
 		}
-		msg.MetaSetMut("database_schema", s.schemaName)
+		if s.schemaName != "" {
+			msg.MetaSetMut("database_schema", s.schemaName)
+		}
 		msg.MetaSetMut("table_name", s.tableName)
 	}
 

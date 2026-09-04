@@ -9,7 +9,6 @@ Benchmarks SAP HANA throughput using the `sap_hana` connector (Redpanda Connect)
 | `saphana-read/bulk/` | `bulk` | Read all rows once → Kafka |
 | `saphana-read/incrementing/` | `incrementing` | Poll for net-new rows using HWM column → Kafka |
 | `saphana-read/query/` | `query` | Execute user-supplied SQL → Kafka |
-| `saphana-write/` | `sql_insert` | Kafka → SAP HANA table |
 
 Each folder has two bench flavors:
 - **`bench:*` tasks** — Redpanda Connect (`sap_hana` connector)
@@ -32,7 +31,6 @@ The JDBC connector needs the SAP HANA JDBC driver. Place it at `bench/ngdbc.jar`
 bench/
   ngdbc.jar        ← place here
   saphana-read/
-  saphana-write/
 ```
 
 **Where to get `ngdbc.jar`:**
@@ -93,8 +91,6 @@ KC uses the same Kafka container (`rpcns-hana-kafka`) as the Redpanda Connect be
 | Kafka produce batch | `batching.count` | `batch.max.rows` |
 | Poll interval (inc.) | `poll_interval` | `poll.interval.ms` |
 | HANA parallelism | `GOMAXPROCS` (cores) | n/a (single-task per query) |
-| Write batch (write) | `max_in_flight` | `batch.size` |
-| Write parallelism | `GOMAXPROCS` | `tasks.max` |
 
 ---
 
@@ -141,19 +137,7 @@ task bench:kc:matrix TOTAL=2000000 OUT=kc_query.txt
 
 ### Write
 
-| Flavor | Parameters swept | Runs |
-|---|---|---|
-| rpcn | `max_in_flight` × `cores` (4×4) | 16 |
-| KC | `batch_size` × `tasks` (4×4) | 16 |
-
-```bash
-# in saphana-write/
-task bench:load COUNT=1000000    # fill Kafka topic once; reused by both flavors
-task bench:matrix OUT=rpcn_write.txt
-task bench:kc:matrix OUT=kc_write.txt
-```
-
-> KC write note: messages are plain JSON (no Schema Registry). KC auto-creates `BENCH_WRITES_KC` with inferred types (`ts` stored as `NVARCHAR(30)` rather than `TIMESTAMP`). Throughput comparison is still valid.
+The write harness ships with the write-path PR (`sql_insert` with `driver: hana`).
 
 ---
 

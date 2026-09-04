@@ -54,6 +54,7 @@
   {"path":"./internal/impl/redpanda","skip":true,"skip_reason":"Chaos tests restart and SIGKILL brokers; flaky on shared CI runners and need hardening before enabling."},
   {"path":"./internal/impl/redpanda/migrator"},
   {"path":"./internal/impl/salesforce"},
+  {"path":"./internal/impl/saphana"},
   {"path":"./internal/impl/sftp"},
   {"path":"./internal/impl/snowflake"},
   {"path":"./internal/impl/snowflake/streaming","timeout":"20m"},
