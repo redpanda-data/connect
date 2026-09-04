@@ -212,7 +212,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			Description("An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so setting this to e.g. `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. A shard is polled at most once per period, so the committed sequence advances no faster than that; values above `lease_period` are rejected.").
 			ShortDescription("Minimum period between record polls of a shard, for staying under the shared Kinesis read limit.").
 			Default("0s").
-			Version("4.108.0").
+			Version("4.109.0").
 			Advanced(),
 		service.NewObjectField(kiFieldEnhancedFanOut,
 			service.NewBoolField(kiefoFieldEnabled).
@@ -233,7 +233,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 		).
 			Description("Consume the stream using https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html[enhanced fan-out^], which provides this consumer dedicated read throughput of 2MB/s per shard via HTTP/2 push delivery, avoiding the 5 reads per second per shard limit that polling consumers share. The named consumer is registered on each stream automatically if it does not already exist (and is never deregistered). Requires the IAM permissions `kinesis:DescribeStreamConsumer` and `kinesis:SubscribeToShard`, plus `kinesis:RegisterStreamConsumer` unless a consumer with the configured name already exists on every stream (for example one provisioned through infrastructure-as-code). Note that AWS bills enhanced fan-out consumers per consumer-shard-hour plus data retrieval. When a shard has no stored checkpoint and `start_from_oldest` is `false`, consumption starts from a timestamp anchored to this host's clock at claim time (rather than the server-side `LATEST` used by polling, which cannot be pinned across resubscribes without risking skipped records), so a clock running ahead can omit its offset's worth of records after a fresh claim.").
 			ShortDescription("Consume the stream using enhanced fan-out for dedicated read throughput.").
-			Version("4.108.0").
+			Version("4.109.0").
 			Advanced().
 			LintRule(`root = if this.enabled && this.consumer_name == "" { [ "consumer_name is required when enabled is true" ] }`),
 		service.NewAutoRetryNacksToggleField(),
