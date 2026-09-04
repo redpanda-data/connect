@@ -259,11 +259,19 @@ func (i *input) Close(ctx context.Context, _ *runtimepb.BatchInputCloseRequest) 
 }
 
 // Ack implements runtimepb.BatchInputServiceServer.
-func (i *input) Ack(ctx context.Context, _ *runtimepb.BatchInputAckRequest) (*runtimepb.BatchInputAckResponse, error) {
+func (i *input) Ack(ctx context.Context, req *runtimepb.BatchInputAckRequest) (*runtimepb.BatchInputAckResponse, error) {
 	if i.component == nil {
 		return &runtimepb.BatchInputAckResponse{Error: runtimepb.ErrorToProto(service.ErrNotConnected)}, nil
 	}
-	err := i.component.Close(ctx)
+	ackAny, ok := i.acks.LoadAndDelete(req.BatchId)
+	if !ok {
+		return &runtimepb.BatchInputAckResponse{Error: runtimepb.ErrorToProto(fmt.Errorf("unknown batch id: %d", req.BatchId))}, nil
+	}
+	ack, _ := ackAny.(service.AckFunc)
+	if ack == nil {
+		return &runtimepb.BatchInputAckResponse{Error: runtimepb.ErrorToProto(fmt.Errorf("batch id %d has no ack function", req.BatchId))}, nil
+	}
+	err := ack(ctx, runtimepb.ProtoToError(req.Error))
 	return &runtimepb.BatchInputAckResponse{Error: runtimepb.ErrorToProto(err)}, nil
 }
 
@@ -276,12 +284,18 @@ func (i *input) ReadBatch(ctx context.Context, _ *runtimepb.BatchInputReadReques
 	if err != nil {
 		return &runtimepb.BatchInputReadResponse{Error: runtimepb.ErrorToProto(err)}, nil
 	}
-	myID := i.batchIDGenerator.Add(1)
-	i.acks.Store(myID, ack)
 	proto, err := runtimepb.MessageBatchToProto(batch)
 	if err != nil {
+		// The batch can never reach the host from here, so settle it now
+		// instead of storing it under a BatchId the host will never
+		// receive and can therefore never ack.
+		if ack != nil {
+			_ = ack(ctx, err)
+		}
 		return &runtimepb.BatchInputReadResponse{Error: runtimepb.ErrorToProto(err)}, nil
 	}
+	myID := i.batchIDGenerator.Add(1)
+	i.acks.Store(myID, ack)
 	return &runtimepb.BatchInputReadResponse{BatchId: myID, Batch: proto}, nil
 }
 
