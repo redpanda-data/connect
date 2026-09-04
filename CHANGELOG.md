@@ -13,6 +13,23 @@ All notable changes to this project will be documented in this file.
 
 - aws_kinesis: The input now falls back to the oldest retained record when a stored sequence has aged out of the stream's retention window, instead of retrying the stale position indefinitely. ([@squiidz](https://github.com/squiidz), [#4724](https://github.com/redpanda-data/connect/pull/4724))
 
+## 4.108.0 - 2026-09-03
+
+### Fixed
+
+- aws_dynamodb_cdc: Settle acks by handle and isolate per-shard backpressure ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
+- prometheus: Fixed prometheus exporter accumulating frozen metric series for deleted streams by purging their labels when streams are deleted. ([@squiidz](https://github.com/squiidz), [#4742](https://github.com/redpanda-data/connect/pull/4742))
+- aws_dynamodb_cdc: Fixed shard discovery aborting on transient failures by allowing partial success and retrying failed shards on the next cycle, enabling convergence with large shard backlogs. ([@squiidz](https://github.com/squiidz), [#4737](https://github.com/redpanda-data/connect/pull/4737))
+- oracledb_cdc: Fix handling of flashback / redo log resets ([@josephwoodward](https://github.com/josephwoodward), [#4760](https://github.com/redpanda-data/connect/pull/4760))
+- websocket input/output: Connection attempts (dial and upgrade handshake) and input reads now honor context
+  cancellation, preventing graceful shutdown from hanging on unresponsive servers or idle connections. ([@Leward](https://github.com/Leward), [#490](https://github.com/redpanda-data/benthos/pull/490))
+- websocket output: A failed write now closes the connection instead of leaking it before the reconnect. ([@Leward](https://github.com/Leward), [#492](https://github.com/redpanda-data/benthos/pull/492))
+
+### Changed
+
+- websocket input: The default value of `max_message_size` has changed from `0` (unlimited) to `33554432` (32 MiB). An unlimited read allows the websocket server to make the process allocate an unbounded amount of memory with a single streamed message. Pipelines that receive larger messages must now set `max_message_size` explicitly; a value of `0` restores the previous unlimited behaviour. ([@Leward](https://github.com/Leward), [#491](https://github.com/redpanda-data/benthos/pull/491))
+- avro: Added avro.input_encoding config to explicitly declare whether messages should be read as Avro JSON or native Go values, replacing automatic inference that could misinterpret bytes fields. ([@twmb](https://github.com/twmb), [#4704](https://github.com/redpanda-data/connect/pull/4704))
+
 ## 4.107.0 - 2026-08-27
 
 ### Fixed
