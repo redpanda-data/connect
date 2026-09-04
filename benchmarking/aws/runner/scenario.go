@@ -207,13 +207,26 @@ type engineSpec struct {
 }
 
 // engineSpecs is the registry mechanism a connector's stack PR extends —
-// see the type doc above. mysql_cdc, oracledb_cdc, microsoft_sql_server_cdc,
+// see the type doc above. oracledb_cdc, microsoft_sql_server_cdc,
 // mongodb_cdc, and aws_dynamodb_cdc were trimmed out of this scope-reduced
 // tree (postgres_cdc soak testing only); each returns with its own stack PR.
 var engineSpecs = map[string]engineSpec{
 	"postgres_cdc": {
 		DSNOutputKey: "postgres_dsn",
 		DSNEnvVar:    "POSTGRES_DSN",
+	},
+	// mysql_cdc connects via a go-sql-driver DSN, but the mariadb CLI the
+	// reset runs through takes discrete -h/-P/-u/-p flags rather than a DSN
+	// URL, so the Reset*OutputKey fields point at the mysql stack's
+	// split-out outputs.
+	"mysql_cdc": {
+		DSNOutputKey:       "mysql_dsn",
+		DSNEnvVar:          "MYSQL_DSN",
+		ResetHostOutputKey: "mysql_host",
+		ResetPortOutputKey: "mysql_port",
+		ResetUserOutputKey: "mysql_user",
+		ResetPassOutputKey: "mysql_password",
+		ResetDBOutputKey:   "mysql_db",
 	},
 }
 

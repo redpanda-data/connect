@@ -34,6 +34,24 @@ func TestRenderSeedScript_Postgres(t *testing.T) {
 	}
 }
 
+func TestRenderSeedScript_MySQL(t *testing.T) {
+	s := &Scenario{
+		Connector: "mysql_cdc",
+		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 1200, Seeder: "cdc-rows-mysql", InitialRows: 0},
+	}
+	outs := map[string]string{"mysql_dsn": "u:p@tcp(host:3306)/db", "results_bucket": "bucket"}
+	script, err := renderSeedScript(s, outs, "stage/cdc-rows-mysql")
+	if err != nil {
+		t.Fatalf("renderSeedScript: %v", err)
+	}
+	if !strings.Contains(script, `MYSQL_DSN="u:p@tcp(host:3306)/db"`) {
+		t.Errorf("mysql seed script must set MYSQL_DSN; got:\n%s", script)
+	}
+	if !strings.Contains(script, "/opt/bench/cdc-rows-mysql seed") {
+		t.Errorf("mysql seed script must invoke /opt/bench/cdc-rows-mysql seed; got:\n%s", script)
+	}
+}
+
 func TestRenderSeedScript_NoDSN_WithExtraEnvVars(t *testing.T) {
 	// Register a test-only NoDSN engine and clean up after.
 	engineSpecs["aws_dynamodb_cdc_test"] = engineSpec{
@@ -89,6 +107,80 @@ func TestCombineReset_Postgres_DSNForm(t *testing.T) {
 	}
 	if !strings.Contains(got, "SELECT 1") {
 		t.Errorf("reset must include SQL; got:\n%s", got)
+	}
+}
+
+func TestCombineReset_MySQL_DiscreteFlagsForm(t *testing.T) {
+	steps := []ResetStep{{SQL: "TRUNCATE TABLE orders"}}
+	outs := map[string]string{
+		"mysql_dsn":      "u:p@tcp(host:3306)/db",
+		"mysql_host":     "host",
+		"mysql_port":     "3306",
+		"mysql_user":     "bench",
+		"mysql_password": "pw",
+		"mysql_db":       "benchdb",
+	}
+	got, err := combineReset("mysql_cdc", steps, outs)
+	if err != nil {
+		t.Fatalf("combineReset: %v", err)
+	}
+	// The mariadb CLI has no DSN-URL mode: every connection part must be a
+	// discrete flag, and psql must not appear. (`mariadb`, not the
+	// deprecated `mysql` compat symlink — see combineReset.)
+	if !strings.Contains(got, `mariadb -h "host" -P "3306" -u "bench" -p"pw" "benchdb" -e "TRUNCATE TABLE orders"`) {
+		t.Errorf("mysql reset must use discrete -h/-P/-u/-p flags; got:\n%s", got)
+	}
+	if strings.Contains(got, "psql") {
+		t.Errorf("mysql reset must not fall back to psql; got:\n%s", got)
+	}
+}
+
+func TestCombineReset_MySQL_RejectsMissingOutput(t *testing.T) {
+	outs := map[string]string{
+		"mysql_host": "host",
+		"mysql_port": "3306",
+		"mysql_user": "bench",
+		// mysql_password deliberately absent: bash would collapse -p"" to a
+		// bare -p prompt an hour into a paid session.
+		"mysql_db": "benchdb",
+	}
+	_, err := combineReset("mysql_cdc", []ResetStep{{SQL: "SELECT 1"}}, outs)
+	if err == nil || !strings.Contains(err.Error(), "mysql_password") {
+		t.Fatalf("expected a missing-output error naming mysql_password, got %v", err)
+	}
+}
+
+func TestCombineReset_RejectsMultilineSQL(t *testing.T) {
+	outs := map[string]string{"postgres_dsn": "postgres://u:p@host:5432/db"}
+	_, err := combineReset("postgres_cdc", []ResetStep{{SQL: "SELECT 1;\nSELECT 2"}}, outs)
+	if err == nil || !strings.Contains(err.Error(), "single-line") {
+		t.Fatalf("expected a multiline-SQL rejection, got %v", err)
+	}
+}
+
+func TestCombineReset_Postgres_RejectsMissingDSN(t *testing.T) {
+	_, err := combineReset("postgres_cdc", []ResetStep{{SQL: "SELECT 1"}}, map[string]string{})
+	if err == nil || !strings.Contains(err.Error(), "postgres_dsn") {
+		t.Fatalf("expected a missing-output error naming postgres_dsn, got %v", err)
+	}
+}
+
+func TestCombineReset_AppendsTopicCleanup_MySQL(t *testing.T) {
+	outs := map[string]string{
+		"mysql_host":                "host",
+		"mysql_port":                "3306",
+		"mysql_user":                "bench",
+		"mysql_password":            "pw",
+		"mysql_db":                  "benchdb",
+		"bench_session_id":          "sess-abc",
+		"redpanda_broker_endpoints": "10.42.10.10:9092",
+	}
+	got, err := combineReset("mysql_cdc", []ResetStep{{SQL: "TRUNCATE TABLE orders"}}, outs)
+	if err != nil {
+		t.Fatalf("combineReset: %v", err)
+	}
+	if !strings.Contains(got, `"^bench_sess-abc_mysql_cdc_connect$"`) {
+		t.Errorf("expected anchored Connect topic regex for mysql_cdc; got:\n%s", got)
 	}
 }
 
