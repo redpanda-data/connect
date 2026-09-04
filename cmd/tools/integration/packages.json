@@ -54,7 +54,7 @@
   {"path":"./internal/impl/redpanda","skip":true,"skip_reason":"Chaos tests restart and SIGKILL brokers; flaky on shared CI runners and need hardening before enabling."},
   {"path":"./internal/impl/redpanda/migrator"},
   {"path":"./internal/impl/salesforce"},
-  {"path":"./internal/impl/saphana"},
+  {"path":"./internal/impl/saphana","skip":true,"skip_reason":"SAP HANA Express is an amd64-only ~4GB image needing ~8GB RAM, relaxed seccomp, and a multi-minute cold start per container; too heavy for standard CI runners. The testcontainers harness also needs rework (license flag and passwords must be container args/files, one shared container) before it can run anywhere."},
   {"path":"./internal/impl/sftp"},
   {"path":"./internal/impl/snowflake"},
   {"path":"./internal/impl/snowflake/streaming","timeout":"20m"},
