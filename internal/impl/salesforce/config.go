@@ -78,11 +78,11 @@ func authFieldSpecs() []*service.ConfigField {
 			Description("Consumer Key of the Salesforce Connected App authorized for the OAuth Client Credentials flow. Create the Connected App under Setup → App Manager → New Connected App, enable OAuth settings, enable the Client Credentials Flow under `Flow Enablement`, then copy the Consumer Key from `Manage Consumer Details`.").
 			ShortDescription("Consumer Key of the Salesforce Connected App authorised for the OAuth Client Credentials flow."),
 		service.NewStringField(sfFieldClientSecret).
-			Description("Consumer Secret of the Salesforce Connected App, paired with `client_id`. Sensitive — prefer environment variable interpolation (`${SALESFORCE_CLIENT_SECRET}`) over inlining.").
+			Description("Consumer Secret of the Salesforce Connected App, paired with `client_id`. Sensitive; prefer environment variable interpolation (`${SALESFORCE_CLIENT_SECRET}`) over inlining.").
 			ShortDescription("Consumer Secret of the Salesforce Connected App, paired with client_id.").
 			Secret(),
 		service.NewStringField(sfFieldAPIVersion).
-			Description("Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/{api_version}/...`) and available fields/objects. Must be supported by your org — check Setup → Company Information. Older versions may lack recent fields.").
+			Description("Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/{api_version}/...`) and available fields/objects. Must be supported by your org; check Setup → Company Information. Older versions may lack recent fields.").
 			ShortDescription("Salesforce REST API version to target, prefixed with v.").
 			Default("v65.0").
 			Example("v65.0").

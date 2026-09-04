@@ -203,7 +203,7 @@ Write streaming data to Apache Iceberg tables using the REST catalog API. This o
 
 This output is designed to work with REST catalog implementations like Apache Polaris, AWS Glue Data Catalog, and the Databricks Unity Catalog.
 
-Tables are written using version 2 of the Iceberg specification. A pre-existing version 1 table is upgraded to version 2 automatically on first write — irreversibly — unless `+"`merge_strategy`"+` is `+"`copy-on-write`"+`, which only ever writes plain data files and therefore works on version 1 or version 2 tables without forcing the upgrade (see <<merge-strategies,Merge strategies>>).
+Tables are written using version 2 of the Iceberg specification. A pre-existing version 1 table is upgraded to version 2 automatically on first write, irreversibly, unless `+"`merge_strategy`"+` is `+"`copy-on-write`"+`, which only ever writes plain data files and therefore works on version 1 or version 2 tables without forcing the upgrade (see <<merge-strategies,Merge strategies>>).
 
 == Catalog integration
 
@@ -211,7 +211,7 @@ Tables are written using version 2 of the Iceberg specification. A pre-existing 
 
 To use with https://polaris.apache.org[Apache Polaris^]:
 
-* Set `+"`catalog.url`"+` to the Polaris REST endpoint (e.g., `+"`http://localhost:8181/api/catalog`"+`).
+* Set `+"`catalog.url`"+` to the Polaris REST endpoint (for example, `+"`http://localhost:8181/api/catalog`"+`).
 * Set `+"`catalog.warehouse`"+` to the catalog name configured in Polaris.
 * Configure `+"`catalog.auth.oauth2`"+` with client credentials granted access to the catalog.
 
@@ -221,7 +221,7 @@ To use with AWS Glue Data Catalog:
 
 * Set `+"`catalog.url`"+` to `+"`https://glue.<region>.amazonaws.com/iceberg`"+` (the REST client appends the API version automatically).
 * Set `+"`catalog.warehouse`"+` to your AWS account ID (the Glue catalog identifier).
-* Set `+"`schema_evolution.table_location`"+` to an S3 prefix (e.g., `+"`s3://my-bucket/`"+` — a trailing slash is optional) since Glue does not automatically assign table locations.
+* Set `+"`schema_evolution.table_location`"+` to an S3 prefix (for example, `+"`s3://my-bucket/`"+`; a trailing slash is optional) since Glue does not automatically assign table locations.
 * Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
 * Configure `+"`storage.aws_s3`"+` with the same bucket and region.
 
@@ -334,7 +334,7 @@ array:list
 				Advanced(),
 
 			service.NewStringEnumField(ioFieldMergeStrategy, string(mergeStrategyMOR), string(mergeStrategyCOW)).
-				Description("How `upsert` and `delete` are materialised on disk.\n\n* `merge-on-read` (the default) writes Iceberg v2 equality-delete files. Deletes are applied at read time, so writes stay cheap and streaming-friendly, but only catalog-native / Flink-world engines can read the result — engine-backed catalogs such as Snowflake and the Databricks Unity Catalog cannot read equality deletes.\n* `copy-on-write` rewrites whole data files so the table only ever contains plain data files (no delete files), which every engine can read — including Snowflake and Databricks Unity Catalog. It works on version-1 or version-2 tables and never forces the irreversible v1->v2 upgrade. The trade-off is heavy write amplification: each mutating batch rewrites every data file that contains a touched key, so it is a batch / moderate-throughput mode. Sort the table by the identifier key and use large batches so each rewrite touches as few files as possible.\n\nSee the <<merge-strategies,Merge strategies>> section above for the full decision guide, copy-on-write support matrix (column and merge-key types, partitioning, table format), and maintenance guidance.").
+				Description("How `upsert` and `delete` are materialised on disk.\n\n* `merge-on-read` (the default) writes Iceberg v2 equality-delete files. Deletes are applied at read time, so writes stay cheap and streaming-friendly, but only catalog-native / Flink-world engines can read the result, engine-backed catalogs such as Snowflake and the Databricks Unity Catalog cannot read equality deletes.\n* `copy-on-write` rewrites whole data files so the table only ever contains plain data files (no delete files), which every engine can read, including Snowflake and Databricks Unity Catalog. It works on version-1 or version-2 tables and never forces the irreversible v1->v2 upgrade. The trade-off is heavy write amplification: each mutating batch rewrites every data file that contains a touched key, so it is a batch / moderate-throughput mode. Sort the table by the identifier key and use large batches so each rewrite touches as few files as possible.\n\nSee the <<merge-strategies,Merge strategies>> section above for the full decision guide, copy-on-write support matrix (column and merge-key types, partitioning, table format), and maintenance guidance.").
 				ShortDescription("How upsert and delete are materialised: merge-on-read (equality deletes) or copy-on-write (plain data files every engine can read).").
 				Default(string(mergeStrategyMOR)).
 				Advanced(),

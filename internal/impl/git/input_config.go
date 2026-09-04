@@ -65,13 +65,13 @@ You can access these metadata fields using function interpolation.`
 				Default("10s").
 				Example("10s"),
 			service.NewStringListField("include_patterns").
-				Description("A list of file patterns to include (e.g., '**/*.md', 'configs/*.yaml'). If empty, all files will be included. "+
+				Description("A list of file patterns to include (for example, '**/*.md', 'configs/*.yaml'). If empty, all files will be included. "+
 					"Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.").
 				ShortDescription("Glob patterns for files to include. All files are included if empty.").
 				Default([]any{}).
 				Optional(),
 			service.NewStringListField("exclude_patterns").
-				Description("A list of file patterns to exclude (e.g., '.git/**', '**/*.png'). These patterns take precedence over include_patterns. "+
+				Description("A list of file patterns to exclude (for example, '.git/**', '**/*.png'). These patterns take precedence over include_patterns. "+
 					"Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.").
 				ShortDescription("Glob patterns for files to exclude. These take precedence over include_patterns.").
 				Default([]any{}).

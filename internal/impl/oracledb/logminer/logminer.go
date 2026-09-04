@@ -245,8 +245,8 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
 				"This typically happens when processing takes longer than Oracle's log retention period.\n\n"+
 				"This can also happen after a flashback and OPEN RESETLOGS on the source database: if this\n"+
-				"connector's last checkpoint predates the new incarnation's RESETLOGS_CHANGE#, no log file —\n"+
-				"old or new incarnation — covers that gap. This is not a retention issue, and increasing\n"+
+				"connector's last checkpoint predates the new incarnation's RESETLOGS_CHANGE#, no log file : \n"+
+				"old or new incarnation: covers that gap. This is not a retention issue, and increasing\n"+
 				"retention (below) will not help; only option 3 applies in that case.\n\n"+
 				"To fix this issue:\n"+
 				"1. Increase Oracle's archived log retention using RMAN:\n"+
@@ -255,14 +255,14 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"   - Reduce logminer.scn_window_size (current: %d SCN units) to process smaller windows per cycle\n"+
 				"   - Decrease logminer.backoff_interval (current: %v)\n"+
 				"   - Increase input batching.count for better throughput\n"+
-				"   - Use faster output (e.g., drop: {} for benchmarking)\n\n"+
+				"   - Use faster output (for example, drop: {} for benchmarking)\n\n"+
 				"3. Restart the connector from the current database SCN to skip missing logs:\n"+
 				"   - Delete the checkpoint cache entry at checkpoint_cache_key and restart. A flashback rolls\n"+
 				"     this row back rather than clearing it (with the default Oracle-based cache), so it will\n"+
 				"     still be present and must be deleted explicitly, or the connector resumes from the same\n"+
 				"     stale SCN and hits this error again.\n"+
 				"   - This loses events between the last checkpoint and the restart. To avoid that, delete the\n"+
-				"     checkpoint and set snapshot_mode to snapshot_and_stream at the same time — snapshot_mode\n"+
+				"     checkpoint and set snapshot_mode to snapshot_and_stream at the same time: snapshot_mode\n"+
 				"     alone has no effect, since a checkpoint that is still present skips snapshotting entirely.",
 				lm.currentSCN, err, lm.cfg.SCNWindowSize, lm.cfg.MiningBackoffInterval)
 		}

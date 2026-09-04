@@ -134,7 +134,7 @@ This input adds the following metadata fields to each message:
 				Description("The AWS region where the MySQL instance is located. If no region is specified then the environment default will be used.").
 				Optional(),
 			service.NewStringField("endpoint").
-				Description("The MySQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
+				Description("The MySQL endpoint hostname (for example, mydb.abc123.us-east-1.rds.amazonaws.com)."),
 			service.NewStringField("id").
 				Description("The ID of credentials to use.").
 				Optional().Advanced(),

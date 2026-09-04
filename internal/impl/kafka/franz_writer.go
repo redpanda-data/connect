@@ -140,8 +140,8 @@ func FranzProducerFields() []*service.ConfigField {
 					"This requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. " +
 					"If your cluster does not grant this permission or uses ACLs restrictively, disable this option. " +
 					"Note: Idempotent writes are strictly a win for data integrity but may be unavailable in restricted environments " +
-					"(e.g., some managed Kafka services, Redpanda with strict ACLs). " +
-					"Disabling this option is safe and only affects retry behavior—duplicates may occur on producer retries, but the pipeline will continue to function normally.").
+					"(for example, some managed Kafka services, Redpanda with strict ACLs). " +
+					"Disabling this option is safe and only affects retry behavior: duplicates may occur on producer retries, but the pipeline will continue to function normally.").
 				ShortDescription("Enable the idempotent write producer option for exactly-once semantics per partition. Requires the IDEMPOTENT_WRITE permission on CLUSTER.").
 				Default(true).
 				Advanced(),
