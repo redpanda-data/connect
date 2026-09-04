@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Jeffail/checkpoint"
 	gohdb "github.com/SAP/go-hdb/driver"
@@ -695,7 +696,20 @@ func parseIncrHWMString(s string) any {
 func normalizeHANAValue(v any, colType *schema.Common, numericMapping string) any {
 	switch val := v.(type) {
 	case []byte:
-		return string(val)
+		// go-hdb returns text columns as []byte; convert those to string.
+		// Binary columns must stay []byte so JSON base64-encodes them
+		// losslessly — an invalid-UTF-8 string would be mangled into U+FFFD
+		// replacement characters by encoding/json.
+		if colType != nil {
+			if colType.Type == schema.ByteArray {
+				return val
+			}
+			return string(val)
+		}
+		if utf8.Valid(val) {
+			return string(val)
+		}
+		return val
 	case gohdb.Decimal:
 		return normalizeDecimal((*big.Rat)(&val), colType, numericMapping)
 	case *gohdb.Decimal:

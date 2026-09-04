@@ -176,9 +176,23 @@ func TestNormalizeHANAValue(t *testing.T) {
 			want:  "héllo wörld 日本語",
 		},
 		{
-			name:  "blob bytes to string",
+			// JSON marshalling would mangle invalid UTF-8 in a string into
+			// U+FFFD; binary stays []byte so it base64-encodes losslessly.
+			name:    "varbinary bytes stay bytes with ByteArray schema",
+			input:   []byte{0xDE, 0xAD, 0xBE, 0xEF},
+			colType: &schema.Common{Name: "col", Type: schema.ByteArray},
+			want:    []byte{0xDE, 0xAD, 0xBE, 0xEF},
+		},
+		{
+			name:  "invalid UTF-8 bytes stay bytes without schema",
 			input: []byte{0xDE, 0xAD, 0xBE, 0xEF},
-			want:  "\xde\xad\xbe\xef",
+			want:  []byte{0xDE, 0xAD, 0xBE, 0xEF},
+		},
+		{
+			name:    "text bytes to string with String schema",
+			input:   []byte("plain text"),
+			colType: &schema.Common{Name: "col", Type: schema.String},
+			want:    "plain text",
 		},
 		// ── integer passthrough ────────────────────────────────────────────
 		{
