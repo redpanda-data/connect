@@ -91,7 +91,7 @@ In order to set the `+"`table_name`"+`,  `+"`partition_key`"+` and `+"`row_key`"
 
 If the `+"`properties`"+` are not set in the config, all the `+"`json`"+` fields are marshalled and stored in the table, which will be created if it does not exist.
 
-The `+"`object`"+` and `+"`array`"+` fields are marshaled as strings. for example, 
+The `+"`object`"+` and `+"`array`"+` fields are marshaled as strings. For example:
 
 The JSON message:
 
