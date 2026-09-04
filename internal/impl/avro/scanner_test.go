@@ -204,3 +204,24 @@ func TestScannerDecompressedSizeGuard(t *testing.T) {
 		})
 	}
 }
+
+// TestScannerMaxDecompressedBlockBytesLint pins the config-lint boundary for
+// max_decompressed_block_bytes. A negative value is meaningless as a byte
+// count and, left unvalidated, is silently coerced by the underlying library
+// to its own 64 MiB default (see ocf.WithMaxDecompressedBlockBytes) rather
+// than surfaced as a config error — exactly the kind of typo (e.g. a stray
+// -1 copied from another connector's "unlimited" convention) that
+// CONTRIBUTING.md's config-validation guidance calls out. Zero is a
+// documented, valid sentinel ("use the underlying library default") and must
+// not be flagged.
+func TestScannerMaxDecompressedBlockBytesLint(t *testing.T) {
+	linter := service.GlobalEnvironment().NewComponentConfigLinter()
+
+	lints, err := linter.LintScannerYAML(fmt.Appendf(nil, "avro:\n  %s: -1\n", sFieldMaxDecompressedBlockBytes))
+	require.NoError(t, err)
+	assert.NotEmptyf(t, lints, "%s: -1 should be rejected by config lint", sFieldMaxDecompressedBlockBytes)
+
+	lints, err = linter.LintScannerYAML(fmt.Appendf(nil, "avro:\n  %s: 0\n", sFieldMaxDecompressedBlockBytes))
+	require.NoError(t, err)
+	assert.Emptyf(t, lints, "%s: 0 is the documented library-default sentinel and must not lint", sFieldMaxDecompressedBlockBytes)
+}

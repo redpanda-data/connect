@@ -70,7 +70,8 @@ This scanner also emits the canonical Avro schema as `+"`@avro_schema`"+` metada
 			service.NewIntField(sFieldMaxDecompressedBlockBytes).
 				Description("The maximum size, in bytes, that a single compressed Avro OCF block is allowed to expand to when decompressed. This guards against decompression-amplification (\"deflate bomb\") inputs, where a tiny compressed block would otherwise expand into a very large allocation. A block that exceeds this limit causes the scan to fail rather than be materialized. Set to `0` to use the underlying library default.").
 				Advanced().
-				Default(defaultMaxDecompressedBlockBytes),
+				Default(defaultMaxDecompressedBlockBytes).
+				LintRule(`root = if this < 0 { [ "`+sFieldMaxDecompressedBlockBytes+` must be >= 0" ] }`),
 		)
 }
 
