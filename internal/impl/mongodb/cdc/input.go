@@ -152,6 +152,13 @@ var errOpeningChangeStream = errors.New("error opening change stream")
 // rejection of the aggregate that opens the stream (a mongo.CommandError, which
 // implements ServerError) and a mid-stream stream.Err(). errors.As and errors.Is
 // walk wrapped errors, so callers may classify before or after adding context.
+// awsSessionDurationSnapshotNote extends the shared MongoDB `session_duration`
+// description with the part that only applies to this input: the snapshot has
+// no checkpoint, so a credential expiry part-way through costs the whole
+// snapshot. The other MongoDB components have no snapshot phase, which is why
+// this is passed in rather than living on the shared field.
+const awsSessionDurationSnapshotNote = "When using role assumption with this input, credentials are freshly resolved after the initial snapshot completes, so the streaming phase starts with a full session. The snapshot itself must still complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. Once the snapshot completes and is fully acknowledged, its position is checkpointed, so later restarts resume the stream without re-running the snapshot. For very large snapshots prefer the ambient credential chain."
+
 func isUnresumableTokenError(err error) bool {
 	var se mongo.ServerError
 	if !errors.As(err, &se) {
@@ -190,7 +197,7 @@ By default MongoDB does not propagate changes in all cases. In order to capture 
 
 == Scaling
 
-All configured collections are consumed through a single database-level change stream: the collection list is a server-side filter on that one stream, not a set of independent streams. Because a change stream is one totally-ordered cursor over the replica set's oplog, throughput does not increase with additional collections, and CPU beyond roughly two cores is not used. This is a property of MongoDB change streams rather than of this input. To scale beyond the single-stream ceiling, shard the cluster — a change stream against a sharded cluster merges parallel per-shard cursors on the server side.
+All configured collections are consumed through a single database-level change stream: the collection list is a server-side filter on that one stream, not a set of independent streams. Because a change stream is one totally-ordered cursor over the replica set's oplog, throughput does not increase with additional collections, and CPU beyond roughly two cores is not used. This is a property of MongoDB change streams rather than of this input. To scale beyond the single-stream ceiling, shard the cluster: a change stream against a sharded cluster merges parallel per-shard cursors on the server side.
 
 Size the oplog for consumer lag: a change stream resumes from a position in the oplog, so if this input falls behind, or is stopped, for longer than the oplog retains data, the resume position is lost and the stream is invalidated. Ensure the oplog window comfortably exceeds the longest expected lag or downtime under peak write load.
 
@@ -201,7 +208,7 @@ Each message emitted by this plugin has the following metadata:
 - operation: either "insert", "replace", "delete" or "update" for changes streamed. Documents from the initial snapshot have the operation set to "read".
 - collection: the collection the document was written to.
 - operation_time: the oplog time for when this operation occurred.
-- schema: the collection schema in benthos common schema format (set as immutable metadata). Extracted from the collection's `+"`$jsonSchema`"+` validator if available, otherwise inferred from the first document seen. Not present on messages where no schema could be determined (e.g. deletes without pre-images when no prior schema is cached).
+- schema: the collection schema in benthos common schema format (set as immutable metadata). Extracted from the collection's `+"`$jsonSchema`"+` validator if available, otherwise inferred from the first document seen. Not present on messages where no schema could be determined (for example, deletes without pre-images when no prior schema is cached).
 
 == Schema Detection
 
@@ -214,7 +221,7 @@ Schema metadata is discovered using a two-tier strategy:
 
 *Limitations:* type changes within existing fields and structural changes inside nested subdocuments are not detected automatically. Restart the input to force a full schema refresh.
 
-*Fields with null values, unknown BSON types, or mixed-type arrays* are mapped to the `+"`Any`"+` schema type. The `+"`parquet_encode`"+` processor does not support `+"`Any`"+` and will error if it encounters one. Add an upstream processor (e.g. `+"`mapping`"+`) to convert or remove these fields before `+"`parquet_encode`"+`.
+*Fields with null values, unknown BSON types, or mixed-type arrays* are mapped to the `+"`Any`"+` schema type. The `+"`parquet_encode`"+` processor does not support `+"`Any`"+` and will error if it encounters one. Add an upstream processor (for example, `+"`mapping`"+`) to convert or remove these fields before `+"`parquet_encode`"+`.
 
 *Schema stability:* MongoDB collections may contain documents with varying field sets. When this occurs, the schema updates on each structural change, which can cause frequent schema version bumps in schema registries with compatibility modes. For schema registry targets, configuring a `+"`$jsonSchema`"+` validator on the collection is strongly recommended.
     `).
@@ -231,7 +238,7 @@ Schema metadata is discovered using a two-tier strategy:
 				Description("The password to connect to the database.").
 				Default("").
 				Secret(),
-			mongodb.AWSIAMAuthField(),
+			mongodb.AWSIAMAuthField(awsSessionDurationSnapshotNote),
 			service.NewStringListField(fieldCollections).
 				Description("The collections to stream changes from."),
 			service.NewStringField(fieldCheckpointKey).
