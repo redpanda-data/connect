@@ -37,6 +37,13 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
+// awsSessionDurationSnapshotNote extends the shared MongoDB `session_duration`
+// description with the part that only applies to this input: the snapshot has
+// no checkpoint, so a credential expiry part-way through costs the whole
+// snapshot. The other MongoDB components have no snapshot phase, which is why
+// this is passed in rather than living on the shared field.
+const awsSessionDurationSnapshotNote = "When using role assumption with this input, credentials are freshly resolved after the initial snapshot completes, so the streaming phase starts with a full session. The snapshot itself must still complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. Once the snapshot completes and is fully acknowledged, its position is checkpointed, so later restarts resume the stream without re-running the snapshot. For very large snapshots prefer the ambient credential chain."
+
 const (
 	fieldClientURL              = "url"
 	fieldClientDatabase         = "database"
@@ -152,13 +159,6 @@ var errOpeningChangeStream = errors.New("error opening change stream")
 // rejection of the aggregate that opens the stream (a mongo.CommandError, which
 // implements ServerError) and a mid-stream stream.Err(). errors.As and errors.Is
 // walk wrapped errors, so callers may classify before or after adding context.
-// awsSessionDurationSnapshotNote extends the shared MongoDB `session_duration`
-// description with the part that only applies to this input: the snapshot has
-// no checkpoint, so a credential expiry part-way through costs the whole
-// snapshot. The other MongoDB components have no snapshot phase, which is why
-// this is passed in rather than living on the shared field.
-const awsSessionDurationSnapshotNote = "When using role assumption with this input, credentials are freshly resolved after the initial snapshot completes, so the streaming phase starts with a full session. The snapshot itself must still complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. Once the snapshot completes and is fully acknowledged, its position is checkpointed, so later restarts resume the stream without re-running the snapshot. For very large snapshots prefer the ambient credential chain."
-
 func isUnresumableTokenError(err error) bool {
 	var se mongo.ServerError
 	if !errors.As(err, &se) {

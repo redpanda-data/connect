@@ -216,10 +216,10 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Optional()).
 		Field(service.NewStringField(fieldSignalTableName).
 			Description(`The name of the table used to send control signals to the connector, excluding the schema. The table must
-exist in the schema configured via the ` + "`schema`" + ` field, and must not also appear in ` + "`" + fieldTables + "`" + `
-:  the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
-it in both places is rejected at startup. It must have at least these columns: startup validation checks
-column names only, not types, so a wrong column type (for example, ` + "`data JSONB`" + ` instead of ` + "`TEXT`" + `)
+exist in the schema configured via the ` + "`schema`" + ` field, and must not also appear in ` + "`" + fieldTables + "`" + `,
+since the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
+it in both places is rejected at startup. It must have at least these columns; startup validation checks
+column names only, not types, so a wrong column type (for example ` + "`data JSONB`" + ` instead of ` + "`TEXT`" + `)
 is only caught at runtime, on the first signal row read:
 
 - **id**: any type representable as a string (for example ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
