@@ -22,8 +22,9 @@ import (
 )
 
 const (
-	pFieldOperator = "operator"
-	pFieldCast     = "cast"
+	pFieldOperator          = "operator"
+	pFieldCast              = "cast"
+	pFieldPreserveNamespace = "preserve_namespaces"
 )
 
 func xmlProcSpec() *service.ConfigSpec {
@@ -91,6 +92,43 @@ With cast set to true, the resulting JSON structure would look like this:
     ]
   }
 }
+`+"```"+`
+
+== Preserving XML namespaces
+
+By default namespace prefixes on elements and attributes are dropped during conversion (e.g. `+"`<dc:title>`"+` becomes the key `+"`title`"+`), which makes the original XML impossible to reconstruct from the resulting JSON. Set `+"`preserve_namespaces`"+` to `+"`true`"+` to retain prefixes on element and attribute keys and to keep `+"`xmlns:*`"+` declarations as attributes.
+
+For example, given the following XML:
+
+`+"```xml"+`
+<root xmlns:dc="http://my.namespace/dc" xmlns:ot="http://my.namespace/ot">
+  <dc:title>This is a title</dc:title>
+  <dc:description tone="boring">This is a description</dc:description>
+  <ot:elements id="1">foo1</ot:elements>
+  <ot:elements id="2">foo2</ot:elements>
+  <ot:elements>foo3</ot:elements>
+</root>
+`+"```"+`
+
+With `+"`preserve_namespaces: true`"+` the resulting JSON structure would look like this:
+
+`+"```json"+`
+{
+  "root":{
+    "-xmlns:dc":"http://my.namespace/dc",
+    "-xmlns:ot":"http://my.namespace/ot",
+    "dc:title":"This is a title",
+    "dc:description":{
+      "#text":"This is a description",
+      "-tone":"boring"
+    },
+    "ot:elements":[
+      {"#text":"foo1","-id":"1"},
+      {"#text":"foo2","-id":"2"},
+      "foo3"
+    ]
+  }
+}
 `+"```").
 		Fields(
 			service.NewStringEnumField(pFieldOperator, "to_json").
@@ -98,6 +136,9 @@ With cast set to true, the resulting JSON structure would look like this:
 				Default(""),
 			service.NewBoolField(pFieldCast).
 				Description("Whether to try to cast values that are numbers and booleans to the right type. Default: all values are strings.").
+				Default(false),
+			service.NewBoolField(pFieldPreserveNamespace).
+				Description("Whether to preserve XML namespace prefixes on element and attribute keys, and retain xmlns declarations as attributes. When disabled, namespace prefixes are stripped.").
 				Default(false),
 		)
 }
@@ -111,8 +152,9 @@ func init() {
 }
 
 type xmlProc struct {
-	log  *service.Logger
-	cast bool
+	log              *service.Logger
+	cast             bool
+	preserveNSPrefix bool
 }
 
 func xmlProcFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*xmlProc, error) {
@@ -129,9 +171,15 @@ func xmlProcFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*xm
 		return nil, err
 	}
 
+	preserveNS, err := pConf.FieldBool(pFieldPreserveNamespace)
+	if err != nil {
+		return nil, err
+	}
+
 	j := &xmlProc{
-		log:  mgr.Logger(),
-		cast: cast,
+		log:              mgr.Logger(),
+		cast:             cast,
+		preserveNSPrefix: preserveNS,
 	}
 	return j, nil
 }
@@ -142,7 +190,12 @@ func (p *xmlProc) Process(_ context.Context, msg *service.Message) (service.Mess
 		return nil, err
 	}
 
-	root, err := ToMap(mBytes, p.cast)
+	var root map[string]any
+	if p.preserveNSPrefix {
+		root, err = ToMapPreserveNS(mBytes, p.cast)
+	} else {
+		root, err = ToMap(mBytes, p.cast)
+	}
 	if err != nil {
 		p.log.Debugf("Failed to parse part as XML: %v", err)
 		return nil, err
