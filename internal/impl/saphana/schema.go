@@ -136,7 +136,7 @@ JOIN SYS.INDEXES i
 WHERE i.SCHEMA_NAME = ? AND i.TABLE_NAME = ? AND i.CONSTRAINT = 'PRIMARY KEY'
 ORDER BY ic.POSITION`
 
-func fetchHANASchema(ctx context.Context, db *sql.DB, schemaName, tableName, numericMapping string) (*cachedSchema, error) {
+func fetchHANASchema(ctx context.Context, db *sql.DB, log *service.Logger, schemaName, tableName, numericMapping string) (*cachedSchema, error) {
 	rows, err := db.QueryContext(ctx, hanaColumnQuery, schemaName, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("querying SYS.TABLE_COLUMNS for %s.%s: %w", schemaName, tableName, err)
@@ -187,7 +187,10 @@ func fetchHANASchema(ctx context.Context, db *sql.DB, schemaName, tableName, num
 
 	pkCols, err := fetchHANAPKCols(ctx, db, schemaName, tableName)
 	if err != nil {
-		// Non-fatal: emit schema without PK info rather than failing.
+		// Non-fatal: emit schema without PK info rather than failing, but say
+		// so — the schema is cached, so primary_key_columns stays absent for
+		// the lifetime of the pipeline with no other trace of why.
+		log.Warnf("Failed to fetch primary key columns for %s.%s — primary_key_columns metadata will be omitted: %v", schemaName, tableName, err)
 		pkCols = nil
 	}
 
@@ -250,7 +253,7 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, schemaName, tableName
 		sc.log.Debugf("Schema drift detected for %s — refreshing from SYS.TABLE_COLUMNS", tableKey)
 	}
 
-	fresh, err := fetchHANASchema(ctx, sc.db, schemaName, tableName, sc.numericMapping)
+	fresh, err := fetchHANASchema(ctx, sc.db, sc.log, schemaName, tableName, sc.numericMapping)
 	if err != nil {
 		if existing, exists := sc.entries[tableKey]; exists {
 			sc.log.Warnf("Failed to refresh schema for %s, using cached version: %v", tableKey, err)
