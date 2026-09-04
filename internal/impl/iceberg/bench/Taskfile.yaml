@@ -85,6 +85,52 @@ tasks:
           --set output.iceberg.storage.aws_s3.credentials.secret={{.MINIO_PASSWORD}} \
           ./benchmark_config.yaml
 
+  # Profiling run — same pipeline as `bench` but with the ~1.2kB high-entropy
+  # payload from profile_config.yaml, parsed per record so the sink does real
+  # JSON decode + shredding + encode work. Writes pprof profiles for attributing
+  # per-record CPU.
+  # Usage: task bench:profile CORES=1 BATCH=5000 COUNT=500000
+  bench:profile:
+    desc: "Run the profiling pipeline and write CPU/heap profiles (e.g. task bench:profile CORES=1 COUNT=500000)"
+    vars:
+      CORES: '{{.CORES | default "1"}}'
+      BATCH: '{{.BATCH | default "5000"}}'
+      COUNT: '{{.COUNT | default "500000"}}'
+      CONFIG: '{{.CONFIG | default "./profile_config.yaml"}}'
+    cmds:
+      - |
+        AWS_EC2_METADATA_DISABLED=true \
+        AWS_ACCESS_KEY_ID={{.MINIO_USER}} \
+        AWS_SECRET_ACCESS_KEY={{.MINIO_PASSWORD}} \
+        AWS_REGION={{.MINIO_REGION}} \
+        GOMAXPROCS={{.CORES}} go run ../../../../cmd/redpanda-connect/main.go run \
+          --set input.generate.count={{.COUNT}} \
+          --set output.iceberg.batching.count={{.BATCH}} \
+          --set output.iceberg.catalog.url={{.CATALOG_URL}} \
+          --set output.iceberg.storage.aws_s3.endpoint={{.MINIO_ENDPOINT}} \
+          --set output.iceberg.storage.aws_s3.bucket={{.MINIO_BUCKET}} \
+          --set output.iceberg.storage.aws_s3.credentials.id={{.MINIO_USER}} \
+          --set output.iceberg.storage.aws_s3.credentials.secret={{.MINIO_PASSWORD}} \
+          {{.CONFIG}}
+
+  # Same pipeline with a declared schema, to measure what schema_metadata buys.
+  # Usage: task bench:profile:schema CORES=1 COUNT=500000
+  bench:profile:schema:
+    desc: "Run the declared-schema profiling pipeline (e.g. task bench:profile:schema CORES=1 COUNT=500000)"
+    cmds:
+      - task: bench:profile
+        vars:
+          CONFIG: ./profile_config_schema.yaml
+          CORES: '{{.CORES | default "1"}}'
+          BATCH: '{{.BATCH | default "5000"}}'
+          COUNT: '{{.COUNT | default "500000"}}'
+
+  # Shredder micro-benchmark — no infrastructure required.
+  bench:shredder:
+    desc: Run the wide-schema shredder micro-benchmark (no infra needed)
+    cmds:
+      - GOMAXPROCS={{.CORES | default "1"}} go test -bench BenchmarkShredWide -benchmem -run '^$' -count={{.COUNT | default "8"}} .
+
   bench:lag:
     desc: Show current consumer lag for the Redpanda Connect Iceberg sink group
     cmds:

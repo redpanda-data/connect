@@ -215,6 +215,126 @@ To reproduce: the localhost benchmark configs live under [`internal/impl/iceberg
 
 ---
 
+## Shredder Allocations — 2026-08-20
+
+Record shredding (JSON `map[string]any` → columnar parquet values) built two maps per struct per record to support case-insensitive key matching. Case-sensitive matching is the default (`case_sensitive_columns: true`) and makes those maps redundant, so it now has a dedicated path that looks fields up directly and skips unknown-field scanning when every input key is accounted for.
+
+Driven by `BenchmarkShredWide` in [`internal/impl/iceberg/bench/`](../../internal/impl/iceberg/bench/) — a wide-schema shredder micro-benchmark that mirrors the profiling pipeline's record shape without standing up infrastructure.
+
+**Environment:** darwin/arm64, Apple M3 Pro, `GOMAXPROCS=1`, Go benchmark, `benchstat` over n=8
+
+**Changed since last run:** the case-sensitive shredding path ([#4712](https://github.com/redpanda-data/connect/pull/4712)). No configuration or behaviour change.
+
+| metric | before | after | delta |
+|-----------|---------|---------|-------------------|
+| sec/op | 4.369µs | 1.472µs | **-66.3%** (p=0.000) |
+| B/op | 4.312 KiB | 1.609 KiB | **-62.7%** (p=0.000) |
+| allocs/op | 71 | 41 | **-42.3%** (p=0.000) |
+
+Per sub-benchmark, sec/op: `declared_schema=false` 4.304µs → 1.394µs (-67.6%); `declared_schema=true` 4.435µs → 1.555µs (-64.9%).
+
+**Observations:**
+
+- **This is the shredder in isolation, not a sink-level number.** Earlier 1-vCPU profiling attributed ~27% of the sink's CPU to shredding, so the end-to-end effect should be appreciable but much smaller than 66%. **It has not been measured end to end** — no throughput figure above or elsewhere in this file has been re-run for this change.
+- **Since measured at the write path** — see "Write-path Throughput" below, which drives the Router directly and so does not need the licence the full pipeline suite does. It found no measurable end-to-end gain from this change on the shapes tested. The full-pipeline figures under "Write Throughput" above are still not re-run: that suite runs the assembled enterprise output and needs a valid licence.
+- The two `declared_schema` variants are within noise of each other both before and after, consistent with the earlier finding that the `schema_metadata` knob does not bypass decode, shredding or encode.
+
+To reproduce: `GOMAXPROCS=1 go test -bench BenchmarkShredWide -benchmem -run '^$' -count=8 ./internal/impl/iceberg/bench/`
+
+---
+
+## Commit Regime — Commit Latency vs `max_in_flight` (synthetic) — 2026-08-18
+
+How commit coalescing responds to catalog commit latency and the number of concurrent in-flight submissions, measured by the flag-gated `TestCommitRegimeSweep` in [`internal/impl/iceberg/commit_regime_bench_test.go`](../../internal/impl/iceberg/commit_regime_bench_test.go).
+
+**Environment:** darwin/arm64, Apple M3 Pro; in-memory catalog with a fixed injected per-commit delay; 6s window per point; 300 records per submission
+
+**Changed since last run:** first run of this harness ([#4712](https://github.com/redpanda-data/connect/pull/4712)). No production change — the committer and its batcher are as on `main`. These numbers describe batcher coalescing behaviour, so re-run them if the commit batching path changes.
+
+**Caveat — read the numbers as ratios, not throughput.** Nothing here writes parquet or touches object storage, and the injected delay is not a real catalog, so the absolute rec/sec are not sink throughput figures and are not comparable with the localhost or live-catalog sections above. What the harness measures is how many submissions a commit carries, and at what latency.
+
+| commit latency | `max_in_flight` | rec/sec | records/commit | submissions/commit |
+|---------------:|----------------:|--------:|---------------:|-------------------:|
+| 50ms | 1 | 5,238 | 300 | 1.00 |
+| 50ms | 4 | 10,437 | 600 | 2.00 |
+| 50ms | 16 | 41,790 | 2,400 | 8.00 |
+| 50ms | 64 | 166,306 | 9,600 | 32.00 |
+| 200ms | 1 | 1,449 | 300 | 1.00 |
+| 200ms | 4 | 2,896 | 600 | 2.00 |
+| 200ms | 16 | 11,563 | 2,400 | 8.00 |
+| 200ms | 64 | 46,230 | 9,600 | 32.00 |
+| 500ms | 1 | 591 | 300 | 1.00 |
+| 500ms | 4 | 1,187 | 600 | 2.00 |
+| 500ms | 16 | 4,416 | 2,238 | 7.46 |
+| 500ms | 64 | 20,354 | 10,338 | 34.46 |
+
+**Observations:**
+
+- **The commit batcher already coalesces concurrent submissions.** Submissions that arrive while a commit is in flight are merged into the next one, so records per commit scales with `max_in_flight` without any time-based batching involved.
+- **At `max_in_flight: 1` records per commit is pinned to a single submission**, giving `records-per-submission / commit-latency` — 591 rec/sec at 500ms, matching the "throughput trap" regime described under Tuning Recipes. This is structural: the sole submitter is blocked inside the commit it is waiting on, so no second submission can exist to batch with. A commit-side linger cannot improve this case, and would add latency to it.
+- Submissions per commit settles near `max_in_flight / 2` rather than `max_in_flight`, which suggests the batcher samples its queue before the just-released submitters have all re-queued. Whether closing that gap is worth anything is untested.
+
+To reproduce: `go test -run TestCommitRegimeSweep -iceberg.commit-regime -timeout 20m ./internal/impl/iceberg/` (add `-iceberg.commit-regime-realistic` for 320ms/5s/10s latencies).
+
+---
+
+## Write-path Throughput — Shredder Change, End to End — 2026-08-27
+
+The sink write path driven directly against containerised MinIO + Iceberg REST, by the flag-gated `TestWriteThroughput` in [`internal/impl/iceberg/integration/`](../../internal/impl/iceberg/integration/). Measures JSON decode, shredding, parquet encode, upload and catalog commit. Compression held at `uncompressed` so only the shredder differs.
+
+**Environment:** darwin/arm64, Apple M3 Pro; MinIO + `apache/iceberg-rest-fixture` in containers on the same machine; batches of 5,000 records; n=1 per point
+
+**Changed since last run:** the case-sensitive shredding path ([#4712](https://github.com/redpanda-data/connect/pull/4712)), measured against the same code with that change reverted.
+
+| schema | cores | records | before (rec/s) | after (rec/s) |
+|---|---:|---:|---:|---:|
+| 5 columns | 1 | 200,000 | 123,599 | 120,185 |
+| 5 columns | 4 | 200,000 | 133,732 | 133,621 |
+| 50 columns | 1 | 100,000 | 38,132 / 36,182 | 37,314 / 36,508 |
+
+**Observations:**
+
+- **No measurable end-to-end gain, at either schema width or core count.** The isolated shredder benchmark for this change is a 66% reduction (see the section above), and none of it shows up here. The 50-column runs were repeated twice per side precisely because the difference is inside run-to-run variance.
+- **The most likely reading is that this harness is not shredder-bound.** Even at 50 columns, per-record time here is dominated by parquet encode, upload and commit, and the earlier profile that motivated the change (46% JSON decode, 27% shredding) came from a full pipeline run under the actual binary, not from this seam.
+- **Treat `GOMAXPROCS=1` here as "one core for the writer", not as a 1-vCPU deployment.** MinIO and the catalog run in containers with their own cores on the same machine, and there is no benthos input or pipeline in the loop, so the CPU mix differs from a constrained container running the whole thing.
+- Consequence for the shredder change: the isolated win is solid and measured, and its end-to-end value on these workloads is **not demonstrated**. It reduces per-record allocations and CPU in a component that profiling says accounts for about a quarter of sink CPU; whether that is visible at the sink depends on what else the workload is spending time on, and on these two record shapes it is not.
+
+To reproduce: `TESTCONTAINERS_RYUK_DISABLED=true go test ./internal/impl/iceberg/integration/ -run TestWriteThroughput -timeout 25m -iceberg.throughput -iceberg.throughput.records=200000 -iceberg.throughput.codec=uncompressed` (add `-iceberg.throughput.columns=45` for the wide schema).
+
+---
+
+## Write-path Throughput — Compression Codecs — 2026-08-27
+
+Same harness, varying the table's `write.parquet.compression-codec` property. 100,000 records per point, n=1. The harness reads the codec back out of a written file's footer and fails the run if it is not the one requested, so each row is a measurement of the codec named.
+
+**Environment:** as above
+
+**Changed since last run:** first measurement of the `parquet.compression` field's codecs ([#4712](https://github.com/redpanda-data/connect/pull/4712)).
+
+Record shape matters more than anything else here, so both are given. "regular" is ~90 B with sequential ids and an `info` string sharing a 21-character prefix; "high-entropy" fills `info` with 1,100 freshly random characters per record.
+
+| payload | codec | rec/s (4 cores) | rec/s (1 core) | bytes/record |
+|---|---|---:|---:|---:|
+| regular | uncompressed | 120,693 | 116,524 | 57.2 |
+| regular | snappy | 128,934 | 114,261 | 14.7 |
+| regular | zstd | 129,081 | 119,433 | 3.9 |
+| high-entropy | uncompressed | 46,396 | 42,994 | 1,151.4 |
+| high-entropy | snappy | 46,089 | — | 1,130.8 |
+| high-entropy | zstd | 45,152 | 43,209 | 1,124.4 |
+
+**Observations:**
+
+- **Compression showed no throughput cost worth reporting, including at one core.** Every codec is within a few percent of uncompressed on both payloads and both core counts, in both directions — zstd was nominally the *fastest* row twice. Any earlier expectation that compression would visibly cost throughput at low core counts is not supported by these numbers.
+- **The size effect is entirely about the data.** On the compressible shape zstd is **14.7x smaller** than uncompressed (57.2 → 3.9 bytes/record) and snappy 3.9x. On genuinely random content both save about 2%, because there is nothing to compress. Parquet's dictionary and byte-array encodings run before any codec, so a repetitive column is already compact and the codec adds little; the gain lives in high-entropy columns *that are not random*, which neither of these shapes represents.
+- **Local object storage understates the case for compression.** Uploads here are to a container on the same machine, so the bytes saved buy less time than they would against a remote endpoint. The direction of the trade-off would not reverse.
+- Caveat on all of the above: n=1 per point, one machine, no repetition — read these as order-of-magnitude and direction, not as precise figures.
+
+**Note on defaults, worth knowing before reading the table:** a table created through the Iceberg Go library — which includes tables this output creates itself — comes back carrying `write.parquet.compression-codec: zstd` in its properties, materialised at creation. Since an unset `parquet.compression` defers to the table property, such tables get **zstd**, not the uncompressed default that applies only to a table whose property is absent. The uncompressed rows above required setting the property explicitly.
+
+To reproduce: as above, with `-iceberg.throughput.codec=zstd|snappy|uncompressed` and `-iceberg.throughput.payload=regular|high-entropy`.
+
+---
+
 ## Tuning Recipes
 
 The single most important factor for `iceberg` throughput is **records per commit**. Each catalog

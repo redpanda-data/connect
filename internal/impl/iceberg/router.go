@@ -147,6 +147,19 @@ type Router struct {
 
 	entries sync.Map // tableKey -> *tableEntry
 
+	// warnedCompression de-duplicates compression warnings, keyed by table and
+	// warning text together: rebuilding a writer does not re-log a warning for
+	// that table, but a second table hitting the same problem is still reported.
+	// See warnCompressionOnce.
+	warnedCompression sync.Map
+
+	// parquetCompression is the configured `parquet.compression` value, or ""
+	// when unset. Set after construction by the output, like metrics below, so
+	// NewRouter's signature stays put. Empty means each table falls back to its
+	// own write.parquet.compression-codec property — see
+	// resolveParquetCompression.
+	parquetCompression string
+
 	// metrics is optional (nil in some tests); set after construction by the
 	// output. Writers and committers inherit it.
 	metrics *opMetrics
@@ -769,6 +782,44 @@ func (*Router) closeWriter(entry *tableEntry) {
 	}
 }
 
+// writerOptsFor returns the parquet writer options for one table: the options
+// configured on the output, plus that table's resolved compression codec.
+//
+// Compression is resolved per table because the fallback reads the table's own
+// write.parquet.compression-codec property, so two tables under one output can
+// legitimately land on different codecs.
+//
+// slices.Concat, not append: appending to r.writerOpts would hand successive
+// tables the same backing array whenever it has spare capacity, and each would
+// overwrite the previous table's codec option. Pinned by
+// TestWriterOptsForIsolatesTables.
+func (r *Router) writerOptsFor(key tableKey, props iceberg.Properties) []parquet.WriterOption {
+	codec, warning := resolveParquetCompression(r.parquetCompression, props)
+	if warning != "" {
+		r.warnCompressionOnce(key, warning)
+	}
+	return slices.Concat(r.writerOpts, []parquet.WriterOption{parquet.Compression(codec)})
+}
+
+// warnCompressionOnce logs a compression warning once per table and stays quiet
+// for that table afterwards. Writers are rebuilt whenever a write fails (see
+// closeWriter), so a retrying pipeline against a table whose property names an
+// unwritable codec would otherwise emit the same warning without bound.
+//
+// Keyed on the table as well as the message, because a router is inherently
+// multi-table — namespace and table are interpolated per message — so keying on
+// the message alone would report the first affected table and silently swallow
+// every other one. The message names the table for the same reason: otherwise
+// there is no way to tell whose data files went uncompressed.
+func (r *Router) warnCompressionOnce(key tableKey, warning string) {
+	if _, seen := r.warnedCompression.LoadOrStore(key.namespace+"\x00"+key.table+"\x00"+warning, struct{}{}); seen {
+		return
+	}
+	if r.logger != nil {
+		r.logger.Warnf("Table %s.%s: %s", key.namespace, key.table, warning)
+	}
+}
+
 // createWriter creates a new writer for a table.
 // Caller must hold entry.mu.Lock() and ensure entry.writer is nil.
 func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEntry) (*writer, error) {
@@ -912,7 +963,7 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 		}
 	}
 
-	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
+	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOptsFor(key, writerTbl.Properties()), r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
 	w.metrics = r.metrics
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 

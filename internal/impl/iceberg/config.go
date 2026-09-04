@@ -99,7 +99,34 @@ const (
 	// Parquet writer fields
 	ioFieldParquet               = "parquet"
 	ioFieldParquetStringEncoding = "string_encoding"
+	ioFieldParquetCompression    = "compression"
 )
+
+// compressionDocs is the long-form documentation for data-file compression. It
+// lives in the component description rather than only in the `compression`
+// field because the interesting part is a three-way precedence rule plus an
+// asymmetry between this output's two write paths, which reads poorly in a
+// field table cell.
+const compressionDocs = "\n" +
+	"== Data file compression\n" +
+	"\n" +
+	"Compression of the parquet data files this output writes is resolved per table, in this order:\n" +
+	"\n" +
+	"1. `parquet.compression`, if you set it.\n" +
+	"2. otherwise the table's own `write.parquet.compression-codec` property, if the table has one.\n" +
+	"3. otherwise uncompressed.\n" +
+	"\n" +
+	"`parquet.compression` is optional rather than defaulted precisely so that step 2 is reachable: an unset field means \"whatever the table says\", which is not the same as explicitly choosing `uncompressed`.\n" +
+	"\n" +
+	"*Prefer the table property where you can.* Several kinds of file are written by the Iceberg library rather than by this output's own writer, and `parquet.compression` cannot reach those: the whole-file rewrites performed by `merge_strategy: copy-on-write`, and the equality-delete files written by `merge-on-read`. The table property does reach them, because the library reads the same property (and defaults it to `zstd` when absent). So the property is the lever that gets every file in the table on the same codec, whereas the field governs only the data files this output writes itself — appends and merge-on-read data files. Reach for the field when the property is not available to you, notably on catalogs that reject client-set table properties, such as the Databricks Unity Catalog.\n" +
+	"\n" +
+	"NOTE: Use a lower-case codec name in the property. This output accepts any casing, but the Iceberg library's own lookup is lower-case only and silently falls back to uncompressed for anything else — so a property of `ZSTD` would give you compressed appends and uncompressed rewrites.\n" +
+	"\n" +
+	"NOTE: The uncompressed default applies only to a table whose property is genuinely absent. A table created through the Iceberg library — which includes tables this output creates itself — comes back carrying `write.parquet.compression-codec: zstd`, set at creation, so an otherwise unconfigured pipeline writing to such a table produces `zstd` throughout rather than anything uncompressed. Either way a table may end up holding a mixture of codecs, which is legal and transparent: parquet records its codec per column chunk, readers handle mixed files, and changing compression never requires rewriting existing data.\n" +
+	"\n" +
+	"*Codec support.* `snappy`, `gzip` and `zstd` are read by every engine this output targets. Parquet permits others that are not offered here: the original `lz4` codec was ambiguously specified and readers disagree on what it means, `lz4_raw` is its unambiguous replacement but has younger and less universal reader support, and `brotli` and `lzo` are patchily supported. If the table property names one of those it is reported in the log and the files this output writes are uncompressed instead. That governs only those files — the Iceberg library does map those codecs, so if the intent is that nothing writes one, change the table property rather than relying on this.\n" +
+	"\n" +
+	"*Cost.* Less than you might expect. Measuring the write path against local object storage found every codec within a few percent of uncompressed, in both directions, at one core as well as four — so there is no throughput penalty worth planning around. What varies enormously is the size benefit, and that depends on the data: on a repetitive record shape `zstd` was ~15x smaller than uncompressed, while on genuinely random content it saved ~2%, because parquet's dictionary and byte-array encodings have already compacted what they can before any codec runs. See the benchmark results for the numbers and their caveats.\n"
 
 // rowOperationDocs is the long-form documentation for the row-level operation
 // feature. It lives in the component description rather than inline in the
@@ -243,7 +270,7 @@ object:struct
 array:list
 |===
 
-`+rowOperationDocs+service.OutputPerformanceDocs(true, true)).
+`+rowOperationDocs+compressionDocs+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			// Catalog configuration
 			service.NewObjectField(ioFieldCatalog,
@@ -497,6 +524,11 @@ array:list
 					Description("The encoding to use for string and binary columns. Use `plain` for compatibility with readers that do not support `DELTA_LENGTH_BYTE_ARRAY` encoding, such as AWS Redshift Spectrum.").
 					ShortDescription("Encoding for string and binary columns. Use plain for readers lacking DELTA_LENGTH_BYTE_ARRAY.").
 					Default("delta_length_byte_array"),
+				service.NewStringEnumField(ioFieldParquetCompression,
+					"uncompressed", "snappy", "gzip", "zstd").
+					Description("The compression codec for data files this output writes. **Optional on purpose**: when it is not set, the codec is taken from the table's own `write.parquet.compression-codec` property, and when that is absent too, data files are written uncompressed.\n\nSetting the table property rather than this field is usually the better choice, because the property is also honoured by the copy-on-write rewrite path (which writes its files inside the Iceberg library, out of reach of this field) — so the property is what gets every file in the table onto one codec, whereas this field governs only the data files this output writes itself — appends and merge-on-read data files, not copy-on-write rewrites or equality-delete files. Use this field when the property cannot be set, for example on catalogs that reject client-set table properties.\n\nOnly codecs that every engine this output targets can read are offered. If the table property names something else (`lz4`, `lz4_raw`, `brotli`, `lzo`), it is reported in the log and the data files this output writes are uncompressed instead.\n\nMeasurement found no throughput penalty worth planning around, at one core or four; the size benefit though is entirely data-dependent, ranging from ~15x smaller on a repetitive record shape to ~2% on random content. Note also that the uncompressed fallback applies only when the table property is absent, and tables created through the Iceberg library carry a `zstd` property by default. See <<data-file-compression,Data file compression>> for the resolution order, the copy-on-write caveat and the measured numbers.").
+					ShortDescription("Compression codec for written data files. Defaults to the table's write.parquet.compression-codec property, else uncompressed.").
+					Optional(),
 			).Description("Parquet writer configuration.").
 				Advanced().
 				Optional(),
