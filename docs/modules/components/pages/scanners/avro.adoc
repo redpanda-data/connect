@@ -45,6 +45,7 @@ Advanced::
 # All config fields, showing default values
 avro:
   raw_json: false
+  max_decompressed_block_bytes: 16777216
 ```
 
 --
@@ -78,5 +79,14 @@ Whether messages should be decoded into normal JSON rather than https://avro.apa
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `max_decompressed_block_bytes`
+
+The maximum size, in bytes, that a single compressed Avro OCF block is allowed to expand to when decompressed. This guards against decompression-amplification ("deflate bomb") inputs, where a tiny compressed block would otherwise expand into a very large allocation. A block that exceeds this limit causes the scan to fail rather than be materialized. Set to `0` to use the underlying library default.
+
+
+*Type*: `int`
+
+*Default*: `16777216`
 
 

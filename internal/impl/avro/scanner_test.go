@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package avro
 
 import (
 	"bytes"
+	"compress/flate"
 	"context"
 	"fmt"
 	"io"
@@ -24,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/twmb/avro"
+	"github.com/twmb/avro/ocf"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -94,6 +97,110 @@ test:
 
 			require.NoError(t, strm.Close(t.Context()))
 			assert.True(t, acked)
+		})
+	}
+}
+
+// buildOCF writes a single `bytes`-schema datum of datumLen bytes into an OCF
+// stream using the given upstream codec. Fixtures built with the stock writer
+// codecs ensure the scanner is exercised against standard OCF framing a real
+// producer would emit.
+func buildOCF(t *testing.T, codec ocf.Codec, datumLen int) []byte {
+	t.Helper()
+	schema := avro.MustParse(`"bytes"`)
+	var buf bytes.Buffer
+	w, err := ocf.NewWriter(&buf, schema, ocf.WithCodec(codec))
+	require.NoError(t, err)
+	datum := make([]byte, datumLen)
+	require.NoError(t, w.Encode(&datum))
+	require.NoError(t, w.Close())
+	return buf.Bytes()
+}
+
+// scanOCF runs an OCF byte stream through the `avro` scanner configured with
+// the given YAML and returns the error from the first NextBatch.
+func scanOCF(t *testing.T, confYAML string, ocfBytes []byte) error {
+	t.Helper()
+	confSpec := service.NewConfigSpec().Field(service.NewScannerField("test"))
+	pConf, err := confSpec.ParseYAML(confYAML, nil)
+	require.NoError(t, err)
+	rdr, err := pConf.FieldScanner("test")
+	require.NoError(t, err)
+
+	strm, err := rdr.Create(
+		io.NopCloser(bytes.NewReader(ocfBytes)),
+		func(context.Context, error) error { return nil },
+		service.NewScannerSourceDetails(),
+	)
+	require.NoError(t, err)
+	defer strm.Close(t.Context())
+	_, _, err = strm.NextBatch(t.Context())
+	return err
+}
+
+// capConf returns scanner config YAML setting an explicit decompressed-block cap.
+func capConf(n int) string {
+	return fmt.Sprintf("test:\n  avro:\n    max_decompressed_block_bytes: %d\n", n)
+}
+
+// TestScannerDecompressedSizeGuard is the regression test for the Avro OCF
+// deflate-bomb (decompression-amplification DoS). With the scanner's
+// decompressed-block cap (default 16 MiB, or a configured value) a small block
+// that expands past the cap is rejected before the expanded datum — and its
+// even-larger JSON encoding — is materialized, while legitimate blocks under
+// the cap still decode. Covered for every built-in compressed codec.
+//
+// The assertions are deliberately behavioural rather than message-matching: the
+// upstream wording differs per codec (deflate and snappy report "exceeds limit
+// of N bytes", while zstandard surfaces klauspost/compress's own error, itself
+// varying with which bound trips), and upstream exports no error sentinel to
+// match on. Rejection is instead pinned down by showing the *same fixture*
+// decodes once the cap is raised above it — which proves the cap is what
+// rejected the block, not a malformed fixture.
+func TestScannerDecompressedSizeGuard(t *testing.T) {
+	const defaultConf = "test:\n  avro: {}\n"
+
+	codecs := []struct {
+		name  string
+		codec ocf.Codec
+	}{
+		{"deflate", ocf.DeflateCodec(flate.BestCompression)},
+		{"snappy", ocf.SnappyCodec()},
+		{"zstandard", ocf.MustZstdCodec(nil, nil)},
+	}
+
+	for _, c := range codecs {
+		t.Run(c.name, func(t *testing.T) {
+			t.Run("legit block under default cap decodes", func(t *testing.T) {
+				// 8 MiB < 16 MiB default — must not be rejected.
+				require.NoError(t, scanOCF(t, defaultConf, buildOCF(t, c.codec, 8<<20)))
+			})
+
+			t.Run("bomb over default cap rejected", func(t *testing.T) {
+				// 24 MiB (the researcher's PoC size) > 16 MiB default.
+				ocfBytes := buildOCF(t, c.codec, 24<<20)
+				require.Less(t, len(ocfBytes), 4<<20,
+					"fixture should stay small on the wire (%d bytes) — that's the amplification", len(ocfBytes))
+				require.Error(t, scanOCF(t, defaultConf, ocfBytes),
+					"scanner accepted a decompression bomb")
+			})
+
+			t.Run("cap is what rejects, not the fixture", func(t *testing.T) {
+				// One fixture, two caps: rejected under a cap below its
+				// decompressed size, decoded under one above it. Kept small so
+				// the accepted case doesn't materialize a large JSON message.
+				ocfBytes := buildOCF(t, c.codec, 2<<20)
+				require.Error(t, scanOCF(t, capConf(1<<20), ocfBytes))
+				require.NoError(t, scanOCF(t, capConf(4<<20), ocfBytes))
+			})
+
+			t.Run("configured cap is honored", func(t *testing.T) {
+				// A 4 MiB explicit cap rejects an 8 MiB block that the default
+				// would accept — proving the config field is wired through.
+				require.Error(t, scanOCF(t, capConf(4<<20), buildOCF(t, c.codec, 8<<20)))
+				// ...and a block under that explicit cap still decodes.
+				require.NoError(t, scanOCF(t, capConf(4<<20), buildOCF(t, c.codec, 1<<20)))
+			})
 		})
 	}
 }
