@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -62,7 +63,7 @@ The Push Gateway is useful for when Redpanda Connect instances are short lived. 
 If the Push Gateway requires HTTP Basic Authentication it can be configured with `+"`push_basic_auth`.").
 		Fields(
 			service.NewBoolField(pmFieldUseHistogramTiming).
-				Description("Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").
+				Description("Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions, and a `_ns` metric name suffix is rewritten to `_seconds` to reflect the unit (for example `processor_latency_ns` becomes `processor_latency_seconds`). This also keeps the histogram series distinct from the summary series emitted when this field is `false`, which avoids Prometheus remote-write conflicts when a fleet mixes the setting. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").
 				Version("3.63.0").
 				Advanced().
 				Default(false),
@@ -450,7 +451,23 @@ func (p *metrics) NewTimerCtor(path string, labelNames ...string) service.Metric
 	}
 }
 
+// histogramTimerName adjusts a timing metric name for histogram mode. Histogram
+// timings are recorded in seconds (see promTimingHistVec), so a `_ns` suffix is
+// rewritten to `_seconds` to reflect the actual unit. This also gives the
+// histogram a distinct series name from the summary variant (`_ns`) emitted by
+// nodes with use_histogram_timing disabled, which prevents remote-write targets
+// (e.g. Vector/Mimir) from rejecting a batch with "multiple metric kinds given"
+// when a fleet mixes the setting. See INC-1095.
+func histogramTimerName(path string) string {
+	if base, ok := strings.CutSuffix(path, "_ns"); ok {
+		return base + "_seconds"
+	}
+	return path
+}
+
 func (p *metrics) getTimerHistVec(path string, labelNames ...string) service.MetricsExporterTimerCtor {
+	path = histogramTimerName(path)
+
 	var pv *promTimingHistVec
 
 	p.mut.Lock()
