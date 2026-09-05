@@ -83,6 +83,7 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 		}))),
 		knownSubjects: make(map[schemaSubjectVersion]struct{}),
 		knownSchemas:  make(map[int]schemaInfo),
+		inFlight:      make(map[schemaSubjectVersion]chan struct{}),
 	}
 }
 

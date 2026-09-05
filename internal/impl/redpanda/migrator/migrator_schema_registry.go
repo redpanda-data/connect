@@ -394,8 +394,9 @@ type schemaRegistryMigrator struct {
 	log     *service.Logger
 
 	mu            sync.RWMutex
-	knownSubjects map[schemaSubjectVersion]struct{} // source schema subject and version marked as known
-	knownSchemas  map[int]schemaInfo                // source schema ID -> destination schema info
+	knownSubjects map[schemaSubjectVersion]struct{}      // source schema subject and version marked as known
+	knownSchemas  map[int]schemaInfo                     // source schema ID -> destination schema info
+	inFlight      map[schemaSubjectVersion]chan struct{} // subject/version currently being synced by a Sync worker
 }
 
 // ListSubjectSchemas returns a list of all source subject schemas Filtered by
@@ -605,6 +606,55 @@ func (m *schemaRegistryMigrator) SyncLoop(ctx context.Context) {
 	}
 }
 
+// claimOrWait attempts to claim exclusive ownership of subject/version for
+// the calling goroutine so that Sync's concurrent workers never sync the same
+// subject twice - which otherwise happens when a subject is reachable both
+// as a top-level root and as a reference/previous-version of a different
+// subject being traversed by another worker at the same time.
+//
+// It returns true if the caller now owns the key and must sync it, calling
+// releaseClaim exactly once when done (success or failure). It returns false
+// if the key is already known-synced, or if another goroutine owns it - in
+// the latter case this call blocks until that goroutine releases it (or ctx
+// is done), at which point the key is treated as synced and the caller
+// should skip it.
+func (m *schemaRegistryMigrator) claimOrWait(ctx context.Context, key schemaSubjectVersion) bool {
+	for {
+		m.mu.Lock()
+		if _, ok := m.knownSubjects[key]; ok {
+			m.mu.Unlock()
+			return false
+		}
+		ch, inFlight := m.inFlight[key]
+		if !inFlight {
+			ch = make(chan struct{})
+			m.inFlight[key] = ch
+			m.mu.Unlock()
+			return true
+		}
+		m.mu.Unlock()
+
+		select {
+		case <-ch:
+			// Owner finished (or failed); loop around to re-check knownSubjects.
+		case <-ctx.Done():
+			return false
+		}
+	}
+}
+
+// releaseClaim releases a claim previously acquired via claimOrWait, waking
+// up any goroutines blocked waiting for it.
+func (m *schemaRegistryMigrator) releaseClaim(key schemaSubjectVersion) {
+	m.mu.Lock()
+	ch, ok := m.inFlight[key]
+	delete(m.inFlight, key)
+	m.mu.Unlock()
+	if ok {
+		close(ch)
+	}
+}
+
 // Sync syncs the source schema registry with the destination schema registry.
 // It lists all subject schemas in the source schema registry, filters them by
 // the migrator configuration, and then syncs each subject schema and its
@@ -629,7 +679,7 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		return errors.New("max_parallel_http_requests must be at least 1")
 	}
 
-	filter := func(subject string, version int) bool {
+	isKnown := func(subject string, version int) bool {
 		m.mu.RLock()
 		_, ok := m.knownSubjects[schemaSubjectVersion{
 			Subject: subject,
@@ -639,7 +689,7 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		return ok
 	}
 	loggingFilter := func(subject string, version int) bool {
-		ok := filter(subject, version)
+		ok := isKnown(subject, version)
 		if ok {
 			m.log.Debugf("Schema migration: schema already synced, skipping: subject=%s version=%d", subject, version)
 		}
@@ -654,6 +704,17 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 
 	workCh := make(chan sr.SubjectSchema, m.conf.MaxParallelHTTPRequests)
 	g, ctx := errgroup.WithContext(ctx)
+
+	// claimFilter is passed to dfsSubjectSchemasFunc as the exclusion
+	// predicate. Beyond the usual "already synced" check, it also claims
+	// exclusive ownership of a subject/version for the calling goroutine so
+	// that a subject reachable both as a top-level root and as a reference
+	// of another subject (via two different DFS traversals running
+	// concurrently across workers) is only ever synced once. If another
+	// goroutine already owns it, this blocks until that goroutine finishes.
+	claimFilter := func(subject string, version int) bool {
+		return !m.claimOrWait(ctx, schemaSubjectVersion{Subject: subject, Version: version})
+	}
 
 	// Producer: send root subjects to channel
 	g.Go(func() error {
@@ -676,7 +737,23 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 	for range m.conf.MaxParallelHTTPRequests {
 		g.Go(func() error {
 			for ss := range workCh {
-				err := m.dfsSubjectSchemasFunc(ctx, m.src, ss, filter, func(s sr.SubjectSchema) error {
+				// Claim the root itself: enqueue() inside dfsSubjectSchemasFunc
+				// only claims dependencies discovered via references/previous
+				// versions, never the root it was called with.
+				rootKey := schemaSubjectVersionFromSubjectSchema(ss)
+				if !m.claimOrWait(ctx, rootKey) {
+					continue // already synced, or being synced by another worker
+				}
+
+				err := m.dfsSubjectSchemasFunc(ctx, m.src, ss, claimFilter, func(s sr.SubjectSchema) error {
+					key := schemaSubjectVersionFromSubjectSchema(s)
+					// Every subject reaching this callback was claimed by this
+					// goroutine, either above (the root) or via claimFilter
+					// (a reference/previous version) - always release so that
+					// any goroutine blocked in claimOrWait for this key is
+					// woken up, even if syncing below fails.
+					defer m.releaseClaim(key)
+
 					m.log.Debugf("Schema migration: syncing subject=%s version=%d id=%d", s.Subject, s.Version, s.ID)
 
 					if err := modeMgr.TrySetImportMode(ctx, s); err != nil {
@@ -694,7 +771,7 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 					}
 
 					m.mu.Lock()
-					m.knownSubjects[schemaSubjectVersionFromSubjectSchema(s)] = struct{}{}
+					m.knownSubjects[key] = struct{}{}
 					m.knownSchemas[s.ID] = info
 					m.mu.Unlock()
 
@@ -863,21 +940,29 @@ func schemaEquals(a, b sr.Schema) bool {
 // newlines and leading/trailing spaces in the schemas.
 //
 // For JSON and Avro schemas, the function parses the schemas as JSON and
-// compares the resulting maps. For Protobuf schemas, the function removes
+// compares the resulting values. For Protobuf schemas, the function removes
 // newlines and leading/trailing spaces from the schemas and compares the
 // resulting strings.
 func schemaStringEquals(a, b string, st sr.SchemaType) bool {
 	switch st {
 	case sr.TypeAvro, sr.TypeJSON:
-		// Parse the schemas as JSON
-		var as, bs map[string]any
-		if err := json.Unmarshal([]byte(a), &as); err != nil {
+		// Parse the schemas as JSON. Values, not just objects, since Avro
+		// allows primitive types to be declared as either a bare string
+		// (e.g. "int") or an object (e.g. {"type": "int"}) - both forms are
+		// semantically identical and schema registries may canonicalize
+		// between them.
+		var av, bv any
+		if err := json.Unmarshal([]byte(a), &av); err != nil {
 			return false
 		}
-		if err := json.Unmarshal([]byte(b), &bs); err != nil {
+		if err := json.Unmarshal([]byte(b), &bv); err != nil {
 			return false
 		}
-		if !cmp.Equal(as, bs) {
+		if st == sr.TypeAvro {
+			av = normalizeAvroPrimitiveType(av)
+			bv = normalizeAvroPrimitiveType(bv)
+		}
+		if !cmp.Equal(av, bv) {
 			return false
 		}
 	case sr.TypeProtobuf:
@@ -892,6 +977,18 @@ func schemaStringEquals(a, b string, st sr.SchemaType) bool {
 	}
 
 	return true
+}
+
+// normalizeAvroPrimitiveType rewrites a bare Avro primitive type name (e.g.
+// "int") into its equivalent object form (e.g. map[string]any{"type": "int"})
+// so that both representations compare equal. Non-string values are returned
+// unchanged.
+func normalizeAvroPrimitiveType(v any) any {
+	s, ok := v.(string)
+	if !ok {
+		return v
+	}
+	return map[string]any{"type": s}
 }
 
 func (m *schemaRegistryMigrator) syncSubjectCompatibility(ctx context.Context, subject string) error {
