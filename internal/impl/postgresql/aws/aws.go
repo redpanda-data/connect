@@ -16,7 +16,11 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
+	"strconv"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -30,6 +34,8 @@ import (
 
 	pgstream "github.com/redpanda-data/connect/v4/internal/impl/postgresql"
 )
+
+const defaultPostgresPort = "5432"
 
 type roleConfig struct {
 	arn        string
@@ -55,6 +61,9 @@ func awsIAMAuth(ctx context.Context, awsConf *service.ParsedConfig, dbConf *pgco
 		opts []func(*awsconfig.LoadOptions) error
 	)
 	if endpoint, err = awsConf.FieldString("endpoint"); err != nil {
+		return nil, err
+	}
+	if endpoint, err = normalizeIAMEndpoint(endpoint, dbConf.Host, dbConf.Port); err != nil {
 		return nil, err
 	}
 	if region, _ = awsConf.FieldString("region"); region != "" {
@@ -147,6 +156,33 @@ func assumeRoleChain(ctx context.Context, awsCfg aws.Config, roles []roleConfig,
 	}
 
 	return currentConfig, nil
+}
+
+// normalizeIAMEndpoint returns a `host:port` value suitable for
+// auth.BuildAuthToken. The AWS SDK rejects an endpoint without a port, so this
+// helper fills one in from the parsed connection config: if `endpoint` is
+// empty the DSN host/port pair is used; if `endpoint` is a bare hostname the
+// DSN's port is appended, with the well-known PostgreSQL port as a final
+// fallback.
+func normalizeIAMEndpoint(endpoint, dsnHost string, dsnPort uint16) (string, error) {
+	if endpoint == "" {
+		if dsnHost == "" {
+			return "", errors.New("aws IAM authentication requires an endpoint and the DSN does not contain a host")
+		}
+		port := defaultPostgresPort
+		if dsnPort != 0 {
+			port = strconv.Itoa(int(dsnPort))
+		}
+		return net.JoinHostPort(dsnHost, port), nil
+	}
+	if strings.Contains(endpoint, ":") {
+		return endpoint, nil
+	}
+	port := defaultPostgresPort
+	if dsnPort != 0 {
+		port = strconv.Itoa(int(dsnPort))
+	}
+	return net.JoinHostPort(endpoint, port), nil
 }
 
 func parseRoleConfig(awsConf *service.ParsedConfig) ([]roleConfig, error) {
