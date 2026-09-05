@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: pgtest-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: testdb
+    # Enable logical replication — required for postgres_cdc
+    command: postgres -c wal_level=logical -c max_replication_slots=10 -c max_wal_senders=10
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  # One-shot setup container: creates schemas, tables, and seed data, then exits.
+  setup:
+    image: postgres:16
+    container_name: pgtest-setup
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: postgres
+    volumes:
+      - ./setup.sql:/setup.sql:ro
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        psql -h postgres -U postgres -d testdb -f /setup.sql
+        echo "setup complete"
+    restart: "no"

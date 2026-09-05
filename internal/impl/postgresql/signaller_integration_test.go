@@ -449,6 +449,7 @@ func startSignallingStream(t *testing.T, inputYAML string) (*pgtest.ReceivedMess
 			}
 			delete(m, "schema")
 			delete(m, "commit_ts_ms")
+			delete(m, "database_schema")
 			received.Add(m)
 		}
 		return nil
