@@ -567,10 +567,10 @@ Optional external ID for the role assumption.
 === `signal_table_name`
 
 The name of the table used to send control signals to the connector, excluding the schema. The table must
-exist in the schema configured via the `schema` field, and must not also appear in `tables`
-:  the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
-it in both places is rejected at startup. It must have at least these columns: startup validation checks
-column names only, not types, so a wrong column type (for example, `data JSONB` instead of `TEXT`)
+exist in the schema configured via the `schema` field, and must not also appear in `tables`,
+since the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
+it in both places is rejected at startup. It must have at least these columns; startup validation checks
+column names only, not types, so a wrong column type (for example `data JSONB` instead of `TEXT`)
 is only caught at runtime, on the first signal row read:
 
 - **id**: any type representable as a string (for example `SERIAL`, `BIGSERIAL`, `UUID`, `VARCHAR`)
