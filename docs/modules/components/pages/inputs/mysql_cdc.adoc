@@ -413,7 +413,7 @@ The AWS region where the MySQL instance is located. If no region is specified th
 
 === `aws.endpoint`
 
-The MySQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com).
+The MySQL endpoint hostname (for example, mydb.abc123.us-east-1.rds.amazonaws.com).
 
 
 *Type*: `string`

@@ -136,9 +136,9 @@ func FranzConsumerFields() []*service.ConfigField {
 			Description(`
 A list of topics to consume from. Multiple comma separated topics can be listed in a single element. When a ` + "`consumer_group`" + ` is specified partitions are automatically distributed across consumers of a topic, otherwise all partitions are consumed.
 
-Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. ` + "`foo:0`" + ` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. ` + "`foo:0-10`" + ` would consume partitions 0 through to 10 inclusive.
+Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name. For example ` + "`foo:0`" + ` would consume the partition 0 of the topic foo. This syntax supports ranges. For example ` + "`foo:0-10`" + ` would consume partitions 0 through to 10 inclusive.
 
-Finally, it's also possible to specify an explicit offset to consume from by adding another colon after the partition, e.g. ` + "`foo:0:10`" + ` would consume the partition 0 of the topic foo starting from the offset 10. If the offset is not present (or remains unspecified) then the field ` + "`start_from_oldest`" + ` determines which offset to start from.`).
+Finally, it's also possible to specify an explicit offset to consume from by adding another colon after the partition. For example ` + "`foo:0:10`" + ` would consume the partition 0 of the topic foo starting from the offset 10. If the offset is not present (or remains unspecified) then the field ` + "`start_from_oldest`" + ` determines which offset to start from.`).
 			ShortDescription("A list of topics to consume from. Multiple comma-separated topics may share one element.").
 			Example([]string{"foo", "bar"}).
 			Example([]string{"things.*"}).
