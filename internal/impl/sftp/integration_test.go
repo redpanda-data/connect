@@ -350,18 +350,34 @@ watcher:
 	return reader
 }
 
-// readOneFile reads one batch and fails the test if the input reports a lost
-// connection. A file boundary is not a lost connection.
-func readOneFile(t *testing.T, ctx context.Context, reader *sftpReader) string {
-	t.Helper()
+// readOneFile reads one batch of exactly one message and acks it.
+// It has no testing.T, so it is safe to be called from the application code/goroutine.
+// Assert on the result from the test goroutine, or use mustReadOneFile.
+func readOneFile(ctx context.Context, reader *sftpReader) (string, error) {
 	batch, ackFn, err := reader.ReadBatch(ctx)
-	require.NotErrorIs(t, err, service.ErrNotConnected, "file boundary must not be reported as a lost connection")
-	require.NoError(t, err)
-	require.Len(t, batch, 1)
+	if err != nil {
+		return "", err
+	}
+	if len(batch) != 1 {
+		return "", fmt.Errorf("expected a batch of 1 message, got %d", len(batch))
+	}
 	content, err := batch[0].AsBytes()
-	require.NoError(t, err)
-	require.NoError(t, ackFn(ctx, nil))
-	return string(content)
+	if err != nil {
+		return "", err
+	}
+	if err := ackFn(ctx, nil); err != nil {
+		return "", err
+	}
+	return string(content), nil
+}
+
+// mustReadOneFile reads one file on the test goroutine and fails the test on
+// any error.
+func mustReadOneFile(t *testing.T, ctx context.Context, reader *sftpReader) string {
+	t.Helper()
+	content, err := readOneFile(ctx, reader)
+	require.NoError(t, err, "file boundary must not be reported as a lost connection")
+	return content
 }
 
 func TestIntegrationSFTPReadBatchRotatesFiles(t *testing.T) {
@@ -388,7 +404,7 @@ func TestIntegrationSFTPReadBatchRotatesFiles(t *testing.T) {
 
 		var contents []string
 		for range 3 {
-			contents = append(contents, readOneFile(t, ctx, reader))
+			contents = append(contents, mustReadOneFile(t, ctx, reader))
 		}
 		// The SFTP server does not sort glob results, so only the set is checked.
 		assert.ElementsMatch(t, []string{"data-1", "data-2", "data-3"}, contents)
@@ -476,23 +492,31 @@ func TestIntegrationSFTPReadBatchRotatesFiles(t *testing.T) {
 
 		var contents []string
 		for range 2 {
-			contents = append(contents, readOneFile(t, ctx, reader))
+			contents = append(contents, mustReadOneFile(t, ctx, reader))
 		}
 		assert.ElementsMatch(t, []string{"data-1", "data-2"}, contents)
 
 		// The watcher waits for a new file. It must not end the input.
-		results := make(chan string, 1)
-		go func() { results <- readOneFile(t, ctx, reader) }()
+		type readResult struct {
+			content string
+			err     error
+		}
+		results := make(chan readResult, 1)
+		go func() {
+			content, err := readOneFile(ctx, reader)
+			results <- readResult{content: content, err: err}
+		}()
 		select {
-		case content := <-results:
-			t.Fatalf("watcher returned %q before a new file was written", content)
+		case res := <-results:
+			t.Fatalf("watcher returned (%q, %v) before a new file was written", res.content, res.err)
 		case <-time.After(500 * time.Millisecond):
 		}
 
 		writeSFTPFile(t, emu.client, dir+"/3.txt", "data-3")
 		select {
-		case content := <-results:
-			assert.Equal(t, "data-3", content)
+		case res := <-results:
+			require.NoError(t, res.err, "file boundary must not be reported as a lost connection")
+			assert.Equal(t, "data-3", res.content)
 		case <-time.After(5 * time.Second):
 			t.Fatal("watcher did not pick up the new file")
 		}
