@@ -32,6 +32,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
@@ -42,6 +44,8 @@ const (
 	PrimaryKeepaliveMessageByteID = 'k'
 	// StandbyStatusUpdateByteID is the byte ID for StandbyStatusUpdate messages.
 	StandbyStatusUpdateByteID = 'r'
+
+	pgErrCodeInsufficientPrivilege = "42501"
 )
 
 // LSN is a PostgreSQL Log Sequence Number. See https://www.postgresql.org/docs/current/datatype-pg-lsn.html.
@@ -275,8 +279,12 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 	return err
 }
 
-// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag.
-func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
+// CreatePublication ensures publicationName exists and covers exactly
+// tables (or FOR ALL TABLES if empty), creating it if needed. If it exists
+// and must switch between FOR ALL TABLES and a named list, it drops and
+// recreates it (no ALTER form exists for that), resetting any options the
+// operator set on it and requiring superuser for FOR ALL TABLES.
+func CreatePublication(ctx context.Context, conn *pgconn.PgConn, logger *service.Logger, publicationName string, tables []TableFQN) error {
 	// Check if publication exists
 	pubQuery, err := sanitize.SQLQuery(`
 			SELECT pubname, puballtables
@@ -313,6 +321,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		if err != nil {
 			return fmt.Errorf("sanitizing publication creation query: %w", err)
 		}
+		logger.Infof("Creating publication %s %s", publicationName, tablesClause)
 		// Publication doesn't exist, create new one
 		result = conn.Exec(ctx, sq)
 		if _, err := result.ReadAll(); err != nil {
@@ -322,17 +331,62 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return nil
 	}
 
-	// assuming publication already exists
-	// get a list of tables in the publication
-	pubTables, forAllTables, err := GetPublicationTables(ctx, conn, publicationName)
-	if err != nil {
-		return fmt.Errorf("getting publication tables: %w", err)
+	currentIsForAllTables := string(rows[0].Rows[0][1]) == "t" // postgres outputs boolean true as "t"
+	desiredIsForAllTables := len(tables) == 0
+
+	if currentIsForAllTables != desiredIsForAllTables {
+		// Postgres has no ALTER PUBLICATION form that converts between FOR
+		// ALL TABLES and a named table list in either direction - it
+		// rejects ADD/DROP TABLE against a FOR ALL TABLES publication
+		// outright, and there's no ALTER syntax to set FOR ALL TABLES on an
+		// existing publication either. So this drops and recreates it
+		// instead. Sent as one Exec call so Postgres implicitly wraps it in
+		// a transaction: a failed CREATE rolls back the DROP too.
+		//
+		// This is destructive to state this connector doesn't necessarily
+		// own - the publication may have been pre-created by the operator,
+		// possibly with non-default options (e.g. WITH (publish = ...)) -
+		// so warn loudly rather than silently replacing it.
+		oldShape, newShape := "FOR ALL TABLES", fmt.Sprintf("an explicit list of %d table(s)", len(tables))
+		if desiredIsForAllTables {
+			oldShape, newShape = "a named table list", "FOR ALL TABLES"
+		}
+		logger.Warnf("Dropping and recreating publication %q to change it from %s to %s: PostgreSQL has no ALTER PUBLICATION form for this transition. Any options set on the existing publication (e.g. WITH (publish = ...)) will be reset to their defaults.", publicationName, oldShape, newShape)
+
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s %s;", publicationName, publicationName, tablesClause))
+		if err != nil {
+			return fmt.Errorf("sanitizing publication recreation query: %w", err)
+		}
+		result = conn.Exec(ctx, sq)
+		if _, err := result.ReadAll(); err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == pgErrCodeInsufficientPrivilege {
+				if desiredIsForAllTables {
+					return fmt.Errorf("recreating publication %q as FOR ALL TABLES: %w (creating a FOR ALL TABLES publication requires superuser; either grant that, or drop and recreate the publication manually)", publicationName, err)
+				}
+				return fmt.Errorf("recreating publication %q to narrow FOR ALL TABLES to an explicit table list: %w (the connected role must own %q and have CREATE privilege on the database; either grant those, or drop and recreate the publication manually)", publicationName, err, publicationName)
+			}
+			return fmt.Errorf("recreating publication %q: %w", publicationName, err)
+		}
+
+		return nil
 	}
 
-	// list of tables to publish is empty and publication is for all tables
-	// no update is needed
-	if forAllTables && len(pubTables) == 0 {
+	if currentIsForAllTables {
+		// already FOR ALL TABLES and that's what's wanted - no update needed
 		return nil
+	}
+
+	// assuming publication already exists as a named-table publication
+	// (currentIsForAllTables is false here) - get a list of tables
+	// currently in it. GetPublicationTables' own forAllTables inference is
+	// discarded: it infers FOR ALL TABLES purely from an empty result set,
+	// which would misreport this publication as FOR ALL TABLES if it
+	// currently has zero member tables, even though puballtables already
+	// told us it doesn't.
+	pubTables, _, err := GetPublicationTables(ctx, conn, publicationName)
+	if err != nil {
+		return fmt.Errorf("getting publication tables: %w", err)
 	}
 
 	tablesToRemoveFromPublication := []TableFQN{}
@@ -379,6 +433,28 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 // GetPublicationTables returns a list of tables currently in the publication
 // Arguments, in order: list of the tables, exist for all tables, error.
 func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
+	allTablesQuery, err := sanitize.SQLQuery(`
+		SELECT puballtables
+		FROM pg_publication
+		WHERE pubname = $1;
+	`, publicationName)
+	if err != nil {
+		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+	}
+
+	allTablesRows, err := conn.Exec(ctx, allTablesQuery).ReadAll()
+	if err != nil {
+		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+	}
+
+	// A missing row means the publication doesn't exist. Kept consistent
+	// with the previous behaviour of reporting that as "exists and is for
+	// all tables" - callers are expected to already know the publication
+	// exists before calling this.
+	if len(allTablesRows) == 0 || len(allTablesRows[0].Rows) == 0 || string(allTablesRows[0].Rows[0][0]) == "t" {
+		return nil, true, nil
+	}
+
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
 		tablename as table_name,
@@ -391,7 +467,6 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		return nil, false, fmt.Errorf("getting publication tables: %w", err)
 	}
 
-	// Get specific tables in the publication
 	result := conn.Exec(ctx, query)
 
 	rows, err := result.ReadAll()
@@ -399,11 +474,11 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		return nil, false, fmt.Errorf("getting publication tables: %w", err)
 	}
 
-	if len(rows) == 0 || len(rows[0].Rows) == 0 {
-		return nil, true, nil // Publication exists and is for all tables
+	if len(rows) == 0 {
+		return nil, false, nil
 	}
 
-	tables := make([]TableFQN, 0, len(rows))
+	tables := make([]TableFQN, 0, len(rows[0].Rows))
 	for _, row := range rows[0].Rows {
 		// These come from postgres so they are valid, but we have to quote them
 		// to prevent normalization
