@@ -39,9 +39,7 @@ func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Description(`Post a new message to a Slack channel using https://api.slack.com/methods/chat.postMessage[^chat.postMessage]`).
 		Fields(
-			service.NewStringField(oFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
-        root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
-      `),
+			service.NewStringField(oFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(tokenLintRule("xoxb-")),
 			service.NewInterpolatedStringField(oFieldChannelID).Description("The channel ID to post messages to."),
 			service.NewInterpolatedStringField(oFieldThreadTS).Description("Optional thread timestamp to post messages to.").Default(slack.DEFAULT_MESSAGE_THREAD_TIMESTAMP),
 			service.NewInterpolatedStringField(oFieldText).Description("The text content of the message. Mutually exclusive with `blocks`.").

@@ -33,9 +33,7 @@ func reactionSpec() *service.ConfigSpec {
 		Fields(
 			service.NewStringField(oFieldBotToken).
 				Description("The Slack Bot User OAuth token to use.").
-				LintRule(`
-        root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
-      `),
+				LintRule(tokenLintRule("xoxb-")),
 			service.NewInterpolatedStringField(oFieldChannelID).
 				Description("The channel ID containing the message to react to."),
 			service.NewInterpolatedStringField(orFieldTimestamp).
