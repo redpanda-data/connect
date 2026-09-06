@@ -56,12 +56,12 @@ type Config struct {
 	// The interval to send logical messages
 	HeartbeatInterval time.Duration
 
-	// IncrementalSnapshot configures incremental snapshotting.
+	// IncrementalSnapshot holds the incremental snapshot configuration.
 	IncrementalSnapshot *incrementalsnapshot.Cfg
 }
 
-// IncrementalSnapshotCfg returns the incremental snapshot config, or nil
-// when incremental snapshotting is disabled.
+// IncrementalSnapshotCfg returns the incremental snapshot configuration. It
+// returns nil when the snapshot is disabled.
 func (c *Config) IncrementalSnapshotCfg() *incrementalsnapshot.Cfg {
 	if c != nil && c.IncrementalSnapshot != nil {
 		return c.IncrementalSnapshot

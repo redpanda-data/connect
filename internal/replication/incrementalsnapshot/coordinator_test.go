@@ -34,8 +34,8 @@ func (w testWatermark) Quiesced() bool           { return w.Xmin == w.Xmax }
 // construction site.
 type testConfig = CoordinatorConfig[uint64, testWatermark]
 
-// collect adapts the old one-chunk-per-OnCommit assertions to the EmitFunc
-// API, gathering whatever a call releases.
+// collect keeps the rows that one call releases. It lets the older tests
+// use the EmitFunc parameter.
 func collect(rows *[][]Row) EmitFunc {
 	return func(r []Row) error {
 		*rows = append(*rows, r)
@@ -43,8 +43,8 @@ func collect(rows *[][]Row) EmitFunc {
 	}
 }
 
-// onCommit calls OnCommit and flattens the released chunks, so tests that
-// predate the drain loop keep reading as one chunk per commit.
+// onCommit calls OnCommit and joins the released chunks. The tests that are
+// older than the drain then still read one chunk for each commit.
 func onCommit[W Watermark[uint64]](t *testing.T, c *Coordinator[uint64, W], pos uint64) (emitted []Row, changed bool, err error) {
 	t.Helper()
 	var chunks [][]Row
@@ -109,9 +109,9 @@ func TestCoordinatorFullScenario(t *testing.T) {
 	assert.False(t, changed)
 	assert.Nil(t, emitted)
 
-	// A position below low.Xmin stays a no-op however low it goes -- the
-	// coordinator no longer special-cases a zero position, it just asks the
-	// watermark (callers filter unknown positions out; see OnCommit).
+	// A position that is smaller than low.Xmin does nothing, at any value.
+	// The coordinator has no special test for a zero position and asks the
+	// watermark. The caller removes unknown positions. Refer to OnCommit.
 	emitted, changed, err = onCommit(t, coord, 0)
 	require.NoError(t, err)
 	assert.False(t, changed)
@@ -137,8 +137,9 @@ func TestCoordinatorFullScenario(t *testing.T) {
 	assert.Equal(t, PrimaryKey{1}, emitted[0].PK)
 	assert.Equal(t, PrimaryKey{3}, emitted[1].PK)
 
-	// B's chunk was short, so B is flagged exhausted -- but current stays B
-	// until the next plan, so its buffered rows remain dedupable.
+	// The chunk of table B was not full, so table B is complete. current
+	// stays at table B until the next plan, and OnStreamedRow can therefore
+	// still remove the buffered rows.
 	assert.True(t, coord.currentExhausted)
 	require.NotNil(t, coord.current)
 	assert.Equal(t, tableB, *coord.current)
@@ -575,12 +576,14 @@ func sortedRowsAfter(rows []Row, lower PrimaryKey, limit int) []Row {
 	return rows[start:min(start+limit, len(rows))]
 }
 
-// TestCoordinatorDedupsBufferedFinalChunk covers the final, partial chunk of
-// a table: those rows sit in the window like any others, so a concurrent
-// change streaming in before the window closes must still evict them.
-// Regression test -- the coordinator used to clear current as soon as a
-// short chunk was buffered, which made OnStreamedRow a no-op and let the
-// stale snapshot row be emitted after the newer streamed change.
+// TestCoordinatorDedupsBufferedFinalChunk tests the last chunk of a table.
+// That chunk is not full, but its rows are in the buffer like all other
+// rows. Therefore a change that streams in before the window closes must
+// remove its row from the buffer.
+//
+// This test is a regression test. The coordinator set current to nil as soon
+// as it buffered a chunk that was not full. OnStreamedRow then did nothing,
+// and the stream emitted the old snapshot row after the new change.
 func TestCoordinatorDedupsBufferedFinalChunk(t *testing.T) {
 	table := TableID{Schema: "public", Table: "a"}
 
@@ -606,18 +609,19 @@ func TestCoordinatorDedupsBufferedFinalChunk(t *testing.T) {
 
 	require.Equal(t, 2, coord.window.Len())
 
-	// A live UPDATE for PK=1 commits while the short chunk is still buffered
-	// and has already been forwarded downstream. It must evict the stale
-	// buffered row rather than being overwritten by it on flush.
+	// An update of row 1 commits while the chunk is still in the buffer.
+	// The pipeline has already sent that update. The update must remove the
+	// old row from the buffer. The old row must not replace the update at
+	// the flush.
 	require.True(t, coord.OnStreamedRow(table, PrimaryKey{1}))
 	assert.Equal(t, 1, coord.window.Len())
 
-	// A row from another table still must not touch the window.
+	// A row of another table must not change the buffer.
 	other := TableID{Schema: "public", Table: "other"}
 	assert.False(t, coord.OnStreamedRow(other, PrimaryKey{1}))
 
-	// Window closes: only the un-superseded row is emitted, and with no
-	// tables left the coordinator is done.
+	// The window closes. The coordinator emits the other row only. No table
+	// remains, so the snapshot is complete.
 	emitted, changed, err := onCommit(t, coord, 106)
 	require.NoError(t, err)
 	require.True(t, changed)
@@ -626,9 +630,9 @@ func TestCoordinatorDedupsBufferedFinalChunk(t *testing.T) {
 	assert.True(t, coord.Done())
 }
 
-// newDrainCoordinator builds a coordinator over a single table of six rows in
-// three equal chunks, with every watermark identical and quiesced -- i.e. a
-// database sitting completely still.
+// newDrainCoordinator makes a coordinator for one table of six rows in three
+// equal chunks. Each watermark is the same and is quiesced. The test
+// database is therefore completely quiet.
 func newDrainCoordinator(t *testing.T, maxDrain int) (*Coordinator[uint64, testWatermark], TableID) {
 	t.Helper()
 	table := TableID{Schema: "public", Table: "a"}
@@ -642,8 +646,8 @@ func newDrainCoordinator(t *testing.T, maxDrain int) (*Coordinator[uint64, testW
 	mock := newScriptedMockDeps(map[string]*mockTable{
 		table.String(): {pkCols: []string{"id"}, rows: rows, maxPK: PrimaryKey{6}},
 	}, chunkSize)
-	// One watermark is enough: the mock repeats its last, so every chunk is
-	// bracketed by an identical quiesced pair.
+	// One watermark is enough. The test double repeats its last watermark,
+	// so each chunk gets the same quiesced pair.
 	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100})
 
 	coord, err := NewCoordinator(testConfig{
@@ -658,10 +662,11 @@ func newDrainCoordinator(t *testing.T, maxDrain int) (*Coordinator[uint64, testW
 }
 
 func TestCoordinatorDrainsQuietDatabaseInOneCommit(t *testing.T) {
-	// The point of the drain: a chunk read while nothing was in flight needs
-	// no deduplication, so holding it would mean waiting for a commit that on
-	// a quiet table only arrives on the next heartbeat. All three chunks must
-	// come out on this single commit.
+	// A chunk that the coordinator reads while no transaction is in flight
+	// needs no row removal. If the coordinator keeps that chunk, it must
+	// wait for the next commit. On a quiet table that commit comes only with
+	// the next heartbeat. Therefore all three chunks must come out on this
+	// one commit.
 	coord, _ := newDrainCoordinator(t, DefaultMaxDrainChunks)
 
 	var chunks [][]Row
@@ -677,8 +682,9 @@ func TestCoordinatorDrainsQuietDatabaseInOneCommit(t *testing.T) {
 }
 
 func TestCoordinatorDrainRespectsMaxDrainChunks(t *testing.T) {
-	// Emitting runs on the caller's replication loop, so the drain has to
-	// hand control back periodically rather than run the table to completion.
+	// The coordinator emits on the replication loop of the caller.
+	// Therefore the drain must return control and must not read the full
+	// table.
 	coord, _ := newDrainCoordinator(t, 1)
 
 	var chunks [][]Row
@@ -686,7 +692,7 @@ func TestCoordinatorDrainRespectsMaxDrainChunks(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, changed)
 
-	// The window's own chunk, plus exactly one drained.
+	// The chunk of the window, and one more chunk from the drain.
 	require.Len(t, chunks, 2)
 	assert.False(t, coord.Done(), "a chunk stays buffered for the next commit")
 }
@@ -702,9 +708,9 @@ func TestCoordinatorDrainStopsOnConcurrentActivity(t *testing.T) {
 			maxPK:  PrimaryKey{4},
 		},
 	}, chunkSize)
-	// Chunk 1 is bracketed by an identical pair, chunk 2 by a differing one --
-	// a transaction was assigned while it was being read, so its rows may yet
-	// be superseded and must not be released early.
+	// Chunk 1 gets two equal watermarks. Chunk 2 gets two different
+	// watermarks, because a transaction started during that read. A later
+	// row can replace a row of chunk 2, so the coordinator must keep it.
 	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100}) // low, chunk 1
 	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100}) // high, chunk 1
 	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100}) // low, chunk 2
@@ -729,8 +735,8 @@ func TestCoordinatorDrainStopsOnConcurrentActivity(t *testing.T) {
 }
 
 func TestCoordinatorDrainPropagatesEmitError(t *testing.T) {
-	// emit is a channel send at the call site, so its error is how a
-	// cancelled stream aborts a drain in progress.
+	// At the call site, emit sends to a channel. Its error is therefore how
+	// a stopped stream ends a drain.
 	coord, _ := newDrainCoordinator(t, DefaultMaxDrainChunks)
 
 	wantErr := errors.New("downstream gone")
@@ -747,8 +753,9 @@ func TestCoordinatorDrainPropagatesEmitError(t *testing.T) {
 }
 
 func TestCoordinatorForcesFreshTransactionOnceOnly(t *testing.T) {
-	// Forcing per watermark burns two ids a chunk and, worse, guarantees the
-	// pair bracketing every read differs -- which would disable the drain.
+	// A call for each watermark uses two transaction ids for each chunk. It
+	// also makes the two watermarks of each read different, and this stops
+	// the drain.
 	coord, _ := newDrainCoordinator(t, DefaultMaxDrainChunks)
 
 	_, err := coord.OnCommit(context.Background(), 101, func([]Row) error { return nil })

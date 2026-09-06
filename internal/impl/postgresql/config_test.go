@@ -27,9 +27,9 @@ tables:
   - events
 `
 
-	// An omitted incremental_snapshot block short-circuits before parsing, so
-	// it must still produce what the field defaults would have: no config and
-	// the default checkpoint key.
+	// A configuration with no incremental_snapshot block returns before the
+	// parse. It must still give the default values, which are no
+	// configuration and the default checkpoint key.
 	tests := []struct {
 		name string
 		conf string

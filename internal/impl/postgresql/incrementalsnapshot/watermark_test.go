@@ -77,8 +77,8 @@ func TestParseSnapshotMalformed(t *testing.T) {
 }
 
 func TestWatermarkOpensAt(t *testing.T) {
-	// Xmin is the oldest transaction still in flight, so anything at or
-	// above it began late enough to prove the window has opened.
+	// Xmin is the oldest transaction that is in flight. Each value that is
+	// equal to xmin or larger started late enough to open the window.
 	wm := Watermark{Xmin: 100, Xmax: 105}
 
 	assert.False(t, wm.OpensAt(99))
@@ -87,8 +87,8 @@ func TestWatermarkOpensAt(t *testing.T) {
 }
 
 func TestWatermarkClosesAt(t *testing.T) {
-	// Xmax is the first id not yet assigned, so only ids strictly above it
-	// are known to have started after the watermark was taken.
+	// Xmax is the first id that Postgres had not given out. Only a larger
+	// id started after the watermark.
 	wm := Watermark{Xmin: 100, Xmax: 105}
 
 	assert.False(t, wm.ClosesAt(104))
@@ -97,8 +97,8 @@ func TestWatermarkClosesAt(t *testing.T) {
 }
 
 func TestWatermarkZeroValueDoesNotClose(t *testing.T) {
-	// The coordinator holds a zero Watermark until its first chunk is
-	// planned. It must not report a window as closed before then.
+	// The coordinator holds a zero Watermark until it plans the first chunk.
+	// Until then it must not report a closed window.
 	var wm Watermark
 
 	assert.False(t, wm.ClosesAt(0))
@@ -121,8 +121,8 @@ func TestNormalizeXID(t *testing.T) {
 			want: 100,
 		},
 		{
-			// The case the whole function exists for: a watermark in epoch 1
-			// against a raw xid that carries no epoch of its own.
+			// This case is the reason for the function. The watermark is in
+			// epoch 1, and the xid has no epoch.
 			name: "lifted into ref's epoch",
 			xid:  100,
 			ref:  epoch + 120,
@@ -135,31 +135,33 @@ func TestNormalizeXID(t *testing.T) {
 			want: epoch + 100,
 		},
 		{
-			// xid is just past ref, the ordinary case for a commit arriving
-			// moments after the watermark was taken.
+			// The xid is a little larger than ref. This case is usual for
+			// a commit that arrives a short time after the watermark.
 			name: "just ahead of ref",
 			xid:  121,
 			ref:  epoch + 120,
 			want: epoch + 121,
 		},
 		{
-			// ref sits just after a wrap, xid just before it: splicing ref's
-			// epoch on would place xid a whole epoch in the future.
+			// ref is a little after a return to zero, and xid is a little
+			// before it. The epoch of ref would put xid one full epoch too
+			// late.
 			name: "xid before a wrap that ref is after",
 			xid:  math.MaxUint32 - 10,
 			ref:  epoch + 5,
 			want: epoch - 11,
 		},
 		{
-			// The mirror: ref just before a wrap, xid just after.
+			// This case is the opposite. ref is before a return to zero and
+			// xid is after it.
 			name: "xid after a wrap that ref is before",
 			xid:  5,
 			ref:  epoch - 11,
 			want: epoch + 5,
 		},
 		{
-			// Epoch 0 has no predecessor, so a far-ahead xid must not
-			// underflow into a huge uint64.
+			// Epoch 0 has no earlier epoch. A much larger xid must not
+			// cause an underflow to a very large uint64.
 			name: "no underflow below epoch 0",
 			xid:  math.MaxUint32 - 10,
 			ref:  5,
@@ -175,10 +177,10 @@ func TestNormalizeXID(t *testing.T) {
 }
 
 func TestWatermarkComparisonsSurviveEpochWraparound(t *testing.T) {
-	// Regression test: the bounds are epoch-extended 64-bit, the streamed xid
-	// is a raw 32-bit value. Comparing them directly makes every bound in
-	// epoch >= 1 exceed every possible xid, so the window never opens and the
-	// backfill stalls silently.
+	// Regression test. The bounds are 64-bit values that include an epoch,
+	// and the streamed xid is a 32-bit value. A direct comparison makes each
+	// bound in epoch 1 or later larger than each possible xid. The window
+	// then never opens and the snapshot stops without a message.
 	const epoch = uint64(1) << 32
 	wm := Watermark{Xmin: epoch + 100, Xmax: epoch + 105}
 

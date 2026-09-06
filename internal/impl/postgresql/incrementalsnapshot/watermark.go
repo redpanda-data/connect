@@ -15,39 +15,41 @@ import (
 	"strings"
 )
 
-// Watermark is a simplified view of a Postgres txid_current_snapshot()
-// result, keeping only the xmin/xmax bounds needed to reconcile the
-// incremental snapshot window against the concurrently streamed
-// transactions.
+// Watermark holds the xmin and xmax bounds of a Postgres snapshot. The
+// coordinator uses these bounds to compare the snapshot window with the
+// streamed transactions.
 //
-// It satisfies the shared package's Watermark[uint32] constraint (checked
-// where CoordinatorConfig is instantiated), the position type being a raw
-// transaction id as pgoutput reports it on a BEGIN message.
-// The bounds here are epoch-extended 64-bit values, so every comparison
-// goes through normalizeXID -- see the note there.
+// Watermark satisfies the Watermark[uint32] constraint of the shared
+// package. The compiler makes this check where the code declares
+// CoordinatorConfig. The position type is a transaction id as pgoutput
+// reports it in a BEGIN message.
+//
+// The bounds are 64-bit values that include an epoch. Therefore each
+// comparison calls normalizeXID. Refer to that function.
 type Watermark struct {
 	Xmin uint64
 	Xmax uint64
 }
 
-// OpensAt reports whether xid started at or after this watermark was taken.
-// Xmin is the oldest transaction still in flight at that point, so any xid
-// at or above it began late enough that the stream is now past everything
-// this watermark could not see.
+// OpensAt tells if xid started at the same time as this watermark or after
+// it. Xmin is the oldest transaction that was in flight. An xid that is
+// equal to xmin or larger started late enough. The stream has then passed
+// all transactions that this watermark could not see.
 func (w Watermark) OpensAt(xid uint32) bool {
 	return normalizeXID(xid, w.Xmin) >= w.Xmin
 }
 
-// ClosesAt reports whether xid began after every transaction that was in
-// flight when this watermark was taken. Xmax is the first id not yet
-// assigned at that point, so anything strictly above it started later.
+// ClosesAt tells if xid started after all transactions that were in flight
+// at this watermark. Xmax is the first id that Postgres had not given out.
+// Therefore each larger xid started later.
 func (w Watermark) ClosesAt(xid uint32) bool {
 	return normalizeXID(xid, w.Xmax) > w.Xmax
 }
 
-// Quiesced reports whether no transaction was in flight when this watermark
-// was taken. Xmin is the oldest still running and Xmax the first not yet
-// assigned, so their being equal means nothing was running at all.
+// Quiesced tells if no transaction was in flight at this watermark. Xmin is
+// the oldest transaction that was still running. Xmax is the first id that
+// Postgres had not given out. Equal values therefore show that no
+// transaction was running.
 func (w Watermark) Quiesced() bool {
 	return w.Xmin == w.Xmax
 }
@@ -57,44 +59,50 @@ const (
 	xidHalfEpoch = 1 << 31
 )
 
-// normalizeXID lifts a raw 32-bit WAL xid into ref's epoch so the two are
-// comparable.
+// normalizeXID adds the epoch of ref to a 32-bit WAL xid. The two values are
+// then comparable.
 //
-// txid_current_snapshot() reports xmin/xmax epoch-extended to 64 bits, but
-// pgoutput's BEGIN message carries only the low 32 bits, which wrap roughly
-// every 4.3 billion transactions. Comparing the two directly means that on
-// any cluster past its first wrap every watermark bound exceeds every
-// possible xid, so the snapshot window never opens and the backfill stalls
-// silently.
+// A Postgres snapshot gives xmin and xmax as 64-bit values that include an
+// epoch. A pgoutput BEGIN message gives only the low 32 bits. These 32 bits
+// return to zero after approximately 4.3 billion transactions.
 //
-// A watermark is read either side of a chunk fetch and compared against
-// commits arriving moments later, so the true xid is always far nearer to
-// ref than half an epoch. Splicing ref's epoch onto xid therefore lands
-// within one epoch of correct, and whichever neighbouring epoch puts the
-// result inside that half-epoch window is the right one.
+// A direct comparison of the two values fails after the first return to
+// zero. Each watermark bound is then larger than each possible xid. The
+// window never opens and the snapshot stops without a message.
+//
+// The coordinator reads a watermark before and after each chunk read. It
+// compares the watermarks with commits that arrive a short time later.
+// Therefore the true xid is always nearer to ref than half an epoch. This
+// function adds the epoch of ref to xid. It then selects the epoch that puts
+// the result within half an epoch of ref.
 func normalizeXID(xid uint32, ref uint64) uint64 {
 	full := (ref & ^uint64(math.MaxUint32)) | uint64(xid)
 	switch {
 	case full > ref && full-ref > xidHalfEpoch && full >= xidEpoch:
-		// xid wrapped ahead of ref: it belongs to the preceding epoch.
-		// Guarded against underflow, since epoch 0 has no predecessor.
+		// xid returned to zero after ref, so xid is in the epoch before
+		// ref. The last test prevents underflow, because epoch 0 has no
+		// earlier epoch.
 		return full - xidEpoch
 	case ref > full && ref-full > xidHalfEpoch:
-		// ref wrapped ahead of xid: xid belongs to the following epoch.
+		// ref returned to zero after xid, so xid is in the epoch after
+		// ref.
 		return full + xidEpoch
 	default:
 		return full
 	}
 }
 
-// ParseSnapshot parses a Postgres snapshot's text form, e.g.
-// "100:104:101,103" (xmin:xmax:xip_list; xip_list may be empty). Both
-// pg_current_snapshot() (pg_snapshot, PG 13+) and the deprecated
-// txid_current_snapshot() (txid_snapshot) render identically and carry
-// epoch-extended 64-bit ids, so this handles either.
+// ParseSnapshot reads the text form of a Postgres snapshot, for example
+// "100:104:101,103". The parts are xmin, xmax and the xip list, and the xip
+// list can be empty.
 //
-// The xip list is validated but not retained: window open/close
-// reconciliation only needs the xmin/xmax bounds.
+// pg_current_snapshot on PostgreSQL 13 and later and the obsolete
+// txid_current_snapshot both use this same form. Both give 64-bit ids that
+// include an epoch. Therefore this function reads the result of either
+// function.
+//
+// The function checks the xip list but does not keep it. The window
+// comparisons need the xmin and xmax bounds only.
 func ParseSnapshot(raw string) (Watermark, error) {
 	parts := strings.Split(raw, ":")
 	const expectedParts = 3

@@ -14,73 +14,81 @@ import (
 	"fmt"
 )
 
-// Deps is implemented by each database-specific component to supply every
-// side-effecting operation an incremental snapshot coordinator needs,
-// keeping the coordinator itself free of any concrete database driver
-// dependency.
+// Deps supplies all operations that have side effects to the coordinator.
+// A component for one database implements it. Therefore the coordinator
+// needs no database driver.
 //
-// The coordinator decides which table and which primary key range to read
-// next; how that range becomes a query is entirely the implementation's
-// business. Keyset pagination over a composite primary key is not portable
-// (Postgres and MySQL compare row constructors, Oracle cannot), so no SQL is
-// built here.
+// The coordinator selects the next table and the next primary key range.
+// The implementation then makes its own query for that range. This package
+// builds no SQL, because key range pagination is not the same on all
+// databases. Postgres and MySQL compare row constructors, but Oracle cannot
+// do this.
 //
-// W is the concrete watermark type, which must satisfy Watermark[P] for the
-// coordinator's position type. Methods are called from the coordinator's
-// single goroutine and may block on I/O.
+// W is the watermark type. It must satisfy Watermark[P] for the position
+// type of the coordinator. The coordinator calls all methods from one
+// goroutine. A method can block on I/O.
 type Deps[W any] interface {
-	// ResolvePrimaryKey returns the primary key columns (unquoted) for the
-	// given table. The coordinator caches the result per table.
+	// ResolvePrimaryKey returns the primary key columns of the table. The
+	// names are not quoted. The coordinator keeps the result for each table
+	// in a cache.
 	ResolvePrimaryKey(ctx context.Context, table TableID) (columns []string, err error)
 
-	// ResolveMaxKey returns the table's current maximum primary key, which
-	// fixes the upper bound of the backfill so rows inserted after the
-	// snapshot starts are left to the replication stream. A nil PrimaryKey
-	// with a nil error means the table currently has no rows -- there is
-	// nothing to backfill, as opposed to a real error.
+	// ResolveMaxKey returns the largest primary key in the table now. This
+	// key is the upper bound of the snapshot. The replication stream then
+	// delivers all rows that come after the snapshot starts.
+	//
+	// A nil PrimaryKey with a nil error shows that the table has no rows.
+	// This result is not an error.
 	ResolveMaxKey(ctx context.Context, table TableID, pkColumnsUnquoted []string) (PrimaryKey, error)
 
-	// ResolveWatermark returns a fresh watermark.
+	// ResolveWatermark reads a new watermark.
 	ResolveWatermark(ctx context.Context) (W, error)
 
-	// ForceFreshTransaction assigns the connection a real transaction id
-	// (e.g. by starting and committing a trivial transaction), giving the
-	// replication stream a known position to reconcile the first watermark
-	// against. Called once from Start, never per chunk: doing it per
-	// watermark burns two ids per chunk and, worse, guarantees the pair
-	// bracketing every read differs, which defeats the drain entirely.
+	// ForceFreshTransaction gives the connection a real transaction id. For
+	// example, it can start a small transaction and commit it. The
+	// replication stream then has a known position for the first watermark.
+	//
+	// Start calls this method one time only. Do not call it for each chunk.
+	// A call for each watermark uses two ids for each chunk. It also makes
+	// the two watermarks of each read different, and this stops the drain.
 	ForceFreshTransaction(ctx context.Context) error
 
-	// FetchChunk returns up to limit rows of table ordered by primary key,
-	// covering the keys after lower up to and including upper. A nil lower
-	// means unbounded below (the table's first chunk); upper is never nil.
-	// Returning fewer than limit rows tells the coordinator the table is
-	// exhausted.
+	// FetchChunk returns a maximum of limit rows from the table, in primary
+	// key order. The rows have a key that is larger than lower and smaller
+	// than upper or equal to it. A nil lower means that the chunk is the
+	// first chunk of the table and has no lower bound. Upper is never nil.
+	//
+	// Fewer rows than limit tell the coordinator that the table has no more
+	// rows.
 	FetchChunk(ctx context.Context, table TableID, pkColumnsUnquoted []string, lower, upper PrimaryKey, limit int) ([]Row, error)
 }
 
-// CoordinatorConfig configures an incremental snapshot coordinator. P is the
-// database's transaction position type and W its concrete watermark type;
-// see Watermark.
+// CoordinatorConfig holds the configuration of a coordinator. P is the
+// transaction position type of the database. W is its watermark type. Refer
+// to Watermark.
 type CoordinatorConfig[P any, W Watermark[P]] struct {
 	Tables    []TableID
 	ChunkSize int
 	Deps      Deps[W]
-	// MaxDrainChunks caps how many chunks one OnCommit may release when the
-	// database is still enough to need no deduplication. Emitting happens on
-	// the caller's replication loop, so this bounds how long that loop can
-	// be held -- keeping it free for standby keepalives and the like.
-	// Defaults to DefaultMaxDrainChunks when zero; a negative value disables
-	// draining, limiting the backfill to one chunk per streamed commit.
+	// MaxDrainChunks is the maximum number of chunks that one OnCommit can
+	// release. OnCommit releases more than one chunk only when the database
+	// is quiet and needs no row removal.
+	//
+	// The coordinator emits on the replication loop of the caller. This
+	// limit controls how long it holds that loop. The loop is then free for
+	// other work, such as standby keepalive messages.
+	//
+	// A zero value selects DefaultMaxDrainChunks. A negative value stops the
+	// drain, and the snapshot then releases one chunk for each commit.
 	MaxDrainChunks int
 }
 
-// DefaultMaxDrainChunks is the drain cap applied when
+// DefaultMaxDrainChunks is the drain limit that the coordinator uses when
 // CoordinatorConfig.MaxDrainChunks is zero.
 const DefaultMaxDrainChunks = 32
 
-// Validate checks that the config is usable, returning a clear error rather
-// than failing confusingly deep inside the algorithm.
+// Validate makes sure that the configuration is usable. It returns a clear
+// error here instead of an unclear failure later in the algorithm.
 func (c CoordinatorConfig[P, W]) Validate() error {
 	if c.ChunkSize <= 0 {
 		return fmt.Errorf("chunk size must be > 0, got %d", c.ChunkSize)

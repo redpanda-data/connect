@@ -67,8 +67,8 @@ type Stream struct {
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
 
-	// pgVersion is the major server version, retained because the
-	// incremental snapshot's watermark query is version-dependent.
+	// pgVersion is the major version of the server. The watermark query of
+	// the incremental snapshot depends on this version.
 	pgVersion int
 
 	// incremental snapshot
@@ -76,17 +76,19 @@ type Stream struct {
 	incSnapshotConn        *sql.DB
 	incSnapshotPKCache     map[string][]string
 	incSnapshotTables      map[incrementalsnapshot.TableID]struct{}
-	// willEmitBlockingSnapshot is true only when this session will run the
-	// one-shot stream_snapshot backfill (and emit a SnapshotCompleteOpType
-	// sentinel) -- false whenever the slot already existed at startup, since
-	// that backfill only ever runs against a fresh slot.
+	// willEmitBlockingSnapshot is true only when this session runs the
+	// single stream_snapshot backfill. That backfill then also sends a
+	// SnapshotCompleteOpType message. The field is false when the slot
+	// already existed at startup, because the backfill runs on a new slot
+	// only.
 	willEmitBlockingSnapshot bool
 }
 
-// WillEmitBlockingSnapshot reports whether this session will run the one-shot
-// stream_snapshot backfill (and emit a SnapshotCompleteOpType sentinel).
-// Callers use it to distinguish those nil-LSN batches from incremental
-// snapshotting's, which never emits that sentinel.
+// WillEmitBlockingSnapshot tells if this session runs the single
+// stream_snapshot backfill. That backfill also sends a
+// SnapshotCompleteOpType message. The caller uses the result to separate
+// those batches from the incremental snapshot batches. Both kinds of batch
+// have no LSN, but the incremental snapshot never sends that message.
 func (s *Stream) WillEmitBlockingSnapshot() bool {
 	return s.willEmitBlockingSnapshot
 }
@@ -616,19 +618,21 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 		*currentTxnCommitTime = begin.CommitTime
 		*currentTxnXid = begin.Xid
 	} else if _, ok := logicalMsg.(*CommitMessage); ok {
-		// The incremental snapshot must advance (and anything it emits be
-		// sent) before this commit is forwarded, so a consumer never
-		// observes progress past effects that aren't yet visible.
+		// The incremental snapshot must move forward, and the stream must
+		// send its rows, before this commit goes to the consumer. The
+		// consumer then never sees progress past changes that it cannot
+		// read.
 		//
-		// A zero xid means no BEGIN carried one, so we don't know where this
-		// commit sits in transaction order. OnCommit requires a real
-		// position -- passing 0 would compare as older than every watermark
-		// and could open or close the window spuriously.
+		// A zero xid shows that no BEGIN message gave a transaction id, so
+		// the position of this commit is unknown. OnCommit needs a real
+		// position. A zero value is older than each watermark and can open
+		// or close the window at the wrong time.
 		if s.incSnapshotCoordinator != nil && *currentTxnXid != 0 {
-			// The coordinator may release several chunks per commit when the
-			// database is quiet enough to need no deduplication, so this is
-			// called once per chunk rather than once per commit. Blocking on
-			// s.messages is what paces the drain.
+			// The coordinator can release more than one chunk for each
+			// commit. This happens when the database is quiet and needs no
+			// row removal. Therefore this function runs one time for each
+			// chunk and not one time for each commit. The send to
+			// s.messages controls the speed of the drain.
 			emit := func(rows []incrementalsnapshot.Row) error {
 				if len(rows) > 0 {
 					s.logger.Debugf("Incremental snapshot: flushed %d row(s) for table %s", len(rows), rows[0].Table)

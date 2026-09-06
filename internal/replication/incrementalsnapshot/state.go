@@ -13,14 +13,15 @@ import (
 	"encoding/json"
 )
 
-// CurrentStateVersion is bumped manually whenever the State shape changes in
-// a way that requires migration handling by callers.
+// CurrentStateVersion increases when the fields of State change and the
+// caller must migrate old data. Change it by hand.
 const CurrentStateVersion = 1
 
-// State is the resumable, persistable state of an incremental snapshot
-// coordinator, serialized (e.g. to JSON) as a checkpoint. Watermarks are
-// deliberately excluded: they must always be re-derived fresh on resume,
-// never reused, since a persisted one could be arbitrarily stale.
+// State is the state of a coordinator that a later run can resume from. The
+// caller stores it as a checkpoint, for example in JSON.
+//
+// State holds no watermark. A stored watermark can be very old, so the
+// coordinator must always read a new watermark after a resume.
 type State struct {
 	Version         int        `json:"version"`
 	Done            bool       `json:"done"`
@@ -30,22 +31,24 @@ type State struct {
 	RemainingTables []TableID  `json:"remaining_tables,omitempty"`
 }
 
-// UnmarshalJSON decodes a checkpoint, preserving integer primary keys
-// exactly.
+// UnmarshalJSON decodes a checkpoint. It keeps integer primary keys exact.
 //
-// PrimaryKey is []any, so the stock decoder turns every JSON number into a
-// float64 and silently rounds anything above 2^53 -- which is the ordinary
-// case for a bigint key (snowflake ids and the like). Encoding is exact, so
-// the damage only appears on resume: a MaxPK that rounds down excludes every
-// row between the rounded and true maximum from `pk <= max` for good, and
-// they are never backfilled. A rounded LastSentPK re-delivers rows instead.
+// PrimaryKey is a slice of any. The standard decoder therefore makes a
+// float64 from each JSON number, and a float64 rounds all values above 2^53.
+// Many bigint keys are larger than this value.
 //
-// Decoding with UseNumber and converting back to int64 keeps integer keys
-// bit-exact. Keys that don't fit an int64 (a wide NUMERIC, say) still fall
-// back to float64 and remain lossy; storing a typed encoding would be the
-// fix if such a key ever needs supporting.
+// The encoder writes exact values, so the error occurs only after a resume.
+// A MaxPK that rounds down is too small. The query `pk <= max` then excludes
+// all rows between the rounded value and the true maximum, and the snapshot
+// never reads them. A LastSentPK that rounds down delivers rows again.
+//
+// This method decodes with UseNumber and then makes an int64 from each
+// number. Integer keys are then exact. A key that is too large for an int64,
+// such as a wide NUMERIC key, is still a float64 and is not exact. A typed
+// format is necessary to support such a key.
 func (s *State) UnmarshalJSON(data []byte) error {
-	// Shadow type without this method, to avoid recursing.
+	// This type has no UnmarshalJSON method, so the decoder does not call
+	// this method again.
 	type stateJSON State
 
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -62,8 +65,8 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// narrowPrimaryKey converts the json.Number elements UseNumber leaves behind
-// into the Go types the write path produced, in place.
+// narrowPrimaryKey changes each json.Number element to the Go type that the
+// encoder wrote. It changes the elements in place.
 func narrowPrimaryKey(pk PrimaryKey) {
 	for i, v := range pk {
 		num, ok := v.(json.Number)
@@ -78,16 +81,16 @@ func narrowPrimaryKey(pk PrimaryKey) {
 			pk[i] = floatVal
 			continue
 		}
-		// Neither representation fits. Keep the digits rather than drop the
-		// element, so a bad checkpoint surfaces as a query error instead of a
-		// silently shifted bound.
+		// The value fits no number type. Keep the digits as text and do not
+		// remove the element. A bad checkpoint then causes a query error
+		// and does not move the bound without a message.
 		pk[i] = num.String()
 	}
 }
 
-// Clone returns a deep-enough copy for safe internal use: new
-// slices/pointers, but PrimaryKey elements are copied by value since they're
-// expected to be JSON scalars.
+// Clone returns a copy that is safe for use in this package. It makes new
+// slices and pointers. It copies each PrimaryKey element by value, because
+// each element is a simple JSON value.
 func (s *State) Clone() *State {
 	if s == nil {
 		return nil

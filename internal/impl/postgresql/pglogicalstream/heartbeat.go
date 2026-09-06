@@ -22,10 +22,10 @@ type heartbeat struct {
 	task          *asyncroutine.Periodic
 	logger        *service.Logger
 	prefix, value string
-	// transactional controls whether the heartbeat is emitted
-	// transactionally. Must be true during an incremental snapshot: OnCommit
-	// only sees a txid for transactional messages, and heartbeats may be the
-	// only write traffic on otherwise-quiet tables.
+	// transactional selects a transactional heartbeat message. It must be
+	// true during an incremental snapshot. OnCommit gets a transaction id
+	// from a transactional message only. On a quiet table the heartbeat can
+	// also be the only write.
 	transactional bool
 }
 

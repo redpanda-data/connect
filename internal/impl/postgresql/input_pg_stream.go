@@ -63,11 +63,10 @@ const (
 	fieldIncSnapshotCheckpointCache    = "checkpoint_cache"
 	fieldIncSnapshotCheckpointCacheKey = "checkpoint_cache_key"
 
-	// incSnapshotSlowHeartbeatThreshold is the heartbeat_interval above
-	// which incremental snapshotting warns about backfill throughput. Chosen
-	// so the 1h default warns: a quiet table advances one chunk per
-	// heartbeat, which at that interval is days of backfill for a table of
-	// any size.
+	// incSnapshotSlowHeartbeatThreshold is the heartbeat_interval that
+	// starts a warning about the speed of the incremental snapshot. The
+	// value makes the input warn at the default interval of one hour,
+	// because a large table then needs many days.
 	incSnapshotSlowHeartbeatThreshold = time.Minute
 )
 
@@ -553,14 +552,16 @@ type pgStreamInput struct {
 	incSnapshotCheckpointCache    string
 	incSnapshotCheckpointCacheKey string
 
-	// incStateMu guards lastPersistedIncSnapshotState, which commitCheckpoint
-	// may read/write concurrently across multiple in-flight batches' acks.
+	// incStateMu protects lastPersistedIncSnapshotState. commitCheckpoint
+	// can read and write that field from the acknowledgements of more than
+	// one batch at the same time.
 	incStateMu sync.Mutex
-	// lastPersistedIncSnapshotState avoids redundant cache writes: once
-	// checkpointTracker has merged a real state advance forward, every later
-	// checkpoint (even ones that didn't themselves advance it) carries the
-	// same state (see checkpointTracker.Track), so commitCheckpoint would
-	// otherwise re-persist an unchanged value on every single ack.
+	// lastPersistedIncSnapshotState prevents cache writes that are not
+	// necessary. After checkpointTracker moves a new state forward, each
+	// later checkpoint holds that same state. This includes each checkpoint
+	// that did not move the state. Refer to checkpointTracker.Track.
+	// Without this field, commitCheckpoint writes the same value for each
+	// acknowledgement.
 	lastPersistedIncSnapshotState []byte
 }
 
@@ -635,21 +636,22 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	// nil-LSN batches. See WillEmitBlockingSnapshot.
 	blockingSnapshotComplete := !pgStream.WillEmitBlockingSnapshot()
 
-	// pendingIncrementalState carries the most recent checkpoint state until
-	// it rides along with the next downstream flush, like a message's own
-	// "lsn" metadata does.
+	// pendingIncrementalState holds the newest checkpoint state until the
+	// next flush sends it. The "lsn" metadata of a message moves in the same
+	// way.
 	var pendingIncrementalState []byte
 
-	// batcherBuffered counts messages sitting in batcher that haven't been
-	// handed to checkpointTracker yet. Those rows are invisible to the
-	// tracker's ordering, so a row-less checkpoint must never resolve while
-	// this is non-zero -- see the IncrementalSnapshotCheckpointOpType case.
+	// batcherBuffered is the number of messages in the batcher that the
+	// input has not given to checkpointTracker. The tracker cannot order
+	// those rows. Therefore a checkpoint with no rows must not resolve while
+	// this number is not zero. Refer to the
+	// IncrementalSnapshotCheckpointOpType case.
 	batcherBuffered := 0
 
-	// flushAndTrack drains batcher into the checkpoint tracker, attaching
-	// pendingIncrementalState to the resulting batch. The state is only
-	// cleared once it has actually been tracked: an empty flush tracks
-	// nothing, so dropping it there would lose the checkpoint entirely.
+	// flushAndTrack moves the batcher content to the checkpoint tracker. It
+	// adds pendingIncrementalState to that batch. It clears the state only
+	// after the tracker has the batch. An empty flush tracks nothing, and a
+	// clear at that point loses the checkpoint.
 	flushAndTrack := func() error {
 		flushedBatch, err := batcher.Flush(ctx)
 		if err != nil {
@@ -703,20 +705,22 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				break
 			}
 			if len(batch) == 1 && batch[0].Operation == pglogicalstream.IncrementalSnapshotCheckpointOpType {
-				// State advanced with no rows emitted (e.g. every buffered row
-				// was deduplicated), so there's no message to ride along with.
+				// The state moved forward but the coordinator emitted no
+				// rows. For example, the stream had already delivered each
+				// buffered row. Therefore no message can carry the state.
 				if batcherBuffered > 0 {
-					// Earlier snapshot rows are still in the batcher and so
-					// aren't tracked yet: resolving now would persist a
-					// checkpoint that already covers them, and a crash before
-					// they flush would lose them for good (they'd never be
-					// re-fetched). Stash the state instead so it rides out
-					// behind them on the next flush.
+					// The batcher still holds earlier snapshot rows, and
+					// the tracker does not have them. A checkpoint now
+					// would include those rows. A failure before the flush
+					// would then lose them, because the snapshot never
+					// reads them again. Keep the state and send it after
+					// those rows on the next flush.
 					pendingIncrementalState = batch[0].IncrementalSnapshotState
 					break
 				}
-				// Nothing untracked is buffered, so tracking and resolving now
-				// is still ordered behind any earlier unresolved batch.
+				// The tracker has all buffered rows. Therefore this
+				// checkpoint still comes after each earlier batch that the
+				// tracker has not resolved.
 				if err := p.commitIncrementalSnapshotCheckpoint(ctx, pgStream, cp, batch[0].IncrementalSnapshotState); err != nil {
 					p.logger.Debugf("failed to commit incremental snapshot checkpoint: %s", err)
 				}
@@ -805,14 +809,15 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	}
 }
 
-// checkpointTracker tracks CheckpointOffset values and resolves
-// out-of-order acks in order. Each offset is merged onto the last one
-// before tracking, so a resolution with a nil LSN or nil IncSnapshotState
-// never regresses whichever field it didn't carry.
+// checkpointTracker tracks CheckpointOffset values. It resolves
+// acknowledgements in order, also when they arrive out of order. It merges
+// each offset with the last offset before it tracks the offset. A
+// resolution with a nil LSN or a nil IncSnapshotState therefore does not
+// remove the value of the field that it does not hold.
 //
-// Track must only ever be called from the single processStream goroutine;
-// the resolver functions it returns are safe to call concurrently from
-// other goroutines (as ackFns do).
+// Call Track only from the processStream goroutine. The functions that Track
+// returns are safe to call from other goroutines at the same time. The
+// acknowledgement functions do this.
 type checkpointTracker struct {
 	cp   *checkpoint.Capped[incsnapshot.CheckpointOffset]
 	last incsnapshot.CheckpointOffset
@@ -827,19 +832,19 @@ func (t *checkpointTracker) Track(ctx context.Context, offset incsnapshot.Checkp
 	return t.cp.Track(ctx, t.last, batchSize)
 }
 
-// commitCheckpoint applies a resolved checkpointOffset. IncSnapshotState is
-// persisted regardless of whether acking the LSN succeeds or fails: a
-// transient AckLSN error must never prevent already-ready snapshot progress
-// from being saved. The reverse ordering (ack first, then persist) might
-// look like it protects against acknowledged-but-unpersisted progress, but
-// actually causes exactly that - a crash between the two steps would leave
-// the LSN acked with the state still unsaved.
+// commitCheckpoint applies a resolved CheckpointOffset. It writes
+// IncSnapshotState even when the LSN acknowledgement fails. A temporary
+// AckLSN error must not stop the input from saving snapshot progress.
+//
+// The opposite order is worse. If the input acknowledges the LSN first and
+// then writes the state, a failure between the two steps leaves an
+// acknowledged LSN with no state.
 func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, offset incsnapshot.CheckpointOffset) error {
 	var errs []error
 	if offset.IncSnapshotState != nil {
-		// checkpointTracker merges the last-known state forward onto every
-		// checkpoint, so most resolutions see an unchanged state here; skip
-		// the redundant cache write when nothing has actually advanced.
+		// checkpointTracker copies the last state onto each checkpoint.
+		// Therefore most resolutions have the same state here. Do not write
+		// to the cache when the state did not change.
 		p.incStateMu.Lock()
 		alreadyPersisted := bytes.Equal(offset.IncSnapshotState, p.lastPersistedIncSnapshotState)
 		p.incStateMu.Unlock()
@@ -861,15 +866,15 @@ func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogica
 	return errors.Join(errs...)
 }
 
-// commitIncrementalSnapshotCheckpoint tracks and immediately resolves a
-// row-less checkpoint. Tracking it (rather than persisting directly) still
-// gates it behind every earlier tracked batch, so it can't surface ahead of
-// unacknowledged rows earlier in the stream.
+// commitIncrementalSnapshotCheckpoint tracks a checkpoint that has no rows
+// and then resolves it. It tracks the checkpoint and does not write it
+// directly. The checkpoint then still comes after each earlier tracked
+// batch and cannot pass rows that the pipeline has not acknowledged.
 //
-// Callers must only reach here with nothing untracked buffered in the
-// batcher. Tracking only gates against batches already handed to
-// checkpointTracker, so rows still sitting in the batcher are invisible to
-// that ordering and this would resolve straight past them.
+// Call this function only when the batcher holds no rows that the tracker
+// does not have. The tracker orders only the batches that it has. It cannot
+// see rows in the batcher, and this function would then resolve past those
+// rows.
 func (p *pgStreamInput) commitIncrementalSnapshotCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, checkpointer *checkpointTracker, state []byte) error {
 	resolveFn, err := checkpointer.Track(ctx, incsnapshot.CheckpointOffset{IncSnapshotState: state}, 0)
 	if err != nil {
@@ -894,10 +899,10 @@ func (p *pgStreamInput) flushBatch(
 		return nil
 	}
 
-	// Incremental snapshot backfill rows (no LSN) share this batcher with real
-	// DML messages (with LSN), so a batch may end on a backfill row - scan
-	// backwards to find the last message that actually carries an LSN,
-	// rather than assuming it's the batch's last message.
+	// Snapshot rows have no LSN, and they share this batcher with change
+	// rows that have an LSN. Therefore a batch can end with a snapshot row.
+	// Search backwards for the last message that has an LSN. Do not use the
+	// last message of the batch.
 	var lsn *string
 	for i := len(batch) - 1; i >= 0; i-- {
 		if lsnStr, ok := batch[i].MetaGet("lsn"); ok {
@@ -911,11 +916,13 @@ func (p *pgStreamInput) flushBatch(
 		return fmt.Errorf("unable to checkpoint: %w", err)
 	}
 
-	// The one-shot stream_snapshot phase also carries no LSN; track those
-	// batches so the snapshot->stream handoff can block on their ack (see the
-	// sentinel handling in the read loop). Incremental snapshot batches are
-	// also nil-LSN but run continuously, so blockingSnapshotComplete excludes
-	// them from that one-shot barrier once the upfront phase has completed.
+	// The single stream_snapshot phase also has no LSN. Track those batches,
+	// and the change from snapshot to stream can then wait for their
+	// acknowledgement. Refer to the message handling in the read loop.
+	//
+	// Incremental snapshot batches also have no LSN, but they continue for
+	// the life of the stream. Therefore blockingSnapshotComplete removes
+	// them from that wait after the first phase is complete.
 	isSnapshot := lsn == nil && !blockingSnapshotComplete
 
 	ackFn := func(ctx context.Context, _ error) error {
@@ -942,9 +949,9 @@ func (p *pgStreamInput) flushBatch(
 	return nil
 }
 
-// loadCachedIncSnapshotState reads the persisted incremental snapshot
-// checkpoint from checkpointCache, if any. A missing key means there's no
-// checkpoint yet (fresh start), not an error.
+// loadCachedIncSnapshotState reads the incremental snapshot checkpoint from
+// the cache. A key that does not exist shows that there is no checkpoint and
+// that the snapshot starts new. This result is not an error.
 func (p *pgStreamInput) loadCachedIncSnapshotState(ctx context.Context) (*incrementalsnapshot.State, error) {
 	var (
 		cacheVal []byte
@@ -969,8 +976,8 @@ func (p *pgStreamInput) loadCachedIncSnapshotState(ctx context.Context) (*increm
 	return state, nil
 }
 
-// saveIncrementalSnapshotState persists an already-serialized incremental
-// snapshot checkpoint to checkpointCache.
+// saveIncrementalSnapshotState writes an incremental snapshot checkpoint to
+// the cache. The caller supplies the checkpoint as bytes.
 func (p *pgStreamInput) saveIncrementalSnapshotState(ctx context.Context, state []byte) error {
 	var cErr error
 	if err := p.mgr.AccessCache(ctx, p.incSnapshotCheckpointCache, func(c service.Cache) {

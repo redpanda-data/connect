@@ -106,10 +106,10 @@ tables:
   - events
 `
 
-	// ParseYAML has no way to register a cache resource, and the
-	// checkpoint_cache checks run after the heartbeat ones, so the
-	// non-rejected cases assert on the cache error that follows: reaching it
-	// proves validation got past the heartbeat check.
+	// ParseYAML cannot add a cache resource. The checkpoint_cache tests also
+	// run after the heartbeat tests. Therefore the cases that pass look for
+	// the cache error. That error shows that the checks passed the heartbeat
+	// test.
 	const pastHeartbeatCheck = "checkpoint_cache is required"
 
 	tests := []struct {
@@ -118,8 +118,8 @@ tables:
 		errContains string
 	}{
 		{
-			// Incremental snapshot only advances on a streamed commit, so
-			// disabling heartbeats leaves a quiet table stalled forever.
+			// The incremental snapshot moves forward only on a streamed
+			// commit. Without a heartbeat a quiet table stops for ever.
 			name: "incremental snapshot enabled with heartbeats disabled",
 			conf: base + `
 heartbeat_interval: 0s
@@ -138,8 +138,8 @@ incremental_snapshot:
 			errContains: pastHeartbeatCheck,
 		},
 		{
-			// A long interval only throttles the backfill, so it warns
-			// rather than failing.
+			// A long interval makes the snapshot slow but does not stop
+			// it. Therefore the input warns and does not fail.
 			name: "incremental snapshot enabled at the default heartbeat interval",
 			conf: base + `
 incremental_snapshot:
@@ -148,7 +148,7 @@ incremental_snapshot:
 			errContains: pastHeartbeatCheck,
 		},
 		{
-			// The dependency is only real while the snapshot is running.
+			// This condition applies only while the snapshot runs.
 			name: "heartbeats disabled with incremental snapshot disabled",
 			conf: base + `
 heartbeat_interval: 0s

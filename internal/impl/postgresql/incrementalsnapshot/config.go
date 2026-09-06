@@ -23,13 +23,14 @@ var (
 	DefaultIncSnapshotCheckpointKey = "postgres_cdc_incremental_snapshot"
 )
 
-// DefaultMaxDrainChunks re-exports the coordinator's drain cap: the most
-// chunks one streamed commit can release when the database is still enough
-// to need no deduplication. Re-exported so callers configuring the input
-// don't need to import the shared replication package.
+// DefaultMaxDrainChunks is the drain limit of the coordinator. It is the
+// maximum number of chunks that one streamed commit can release when the
+// database is quiet and needs no row removal. This package makes the value
+// available here, so the input configuration does not import the shared
+// replication package.
 const DefaultMaxDrainChunks = incrementalsnapshot.DefaultMaxDrainChunks
 
-// Cfg configures incremental snapshotting.
+// Cfg holds the incremental snapshot configuration.
 type Cfg struct {
 	Enabled     bool
 	Tables      []string
@@ -37,25 +38,25 @@ type Cfg struct {
 	ResumeState *incrementalsnapshot.State
 }
 
-// IsEnabled reports whether incremental snapshot is enabled.
+// IsEnabled tells if the incremental snapshot is enabled.
 func (c *Cfg) IsEnabled() bool {
 	return c != nil && c.Enabled
 }
 
-// CheckpointOffset is the per-batch payload tracked by the LSN
-// checkpointer. IncSnapshotState is non-nil when the batch carries a
-// checkpoint, giving it the same ack-ordering as LSN.
+// CheckpointOffset is the data that the LSN checkpointer tracks for each
+// batch. IncSnapshotState is not nil when the batch holds a checkpoint. The
+// checkpoint then gets the same acknowledgement order as the LSN.
 type CheckpointOffset struct {
 	LSN              *string
 	IncSnapshotState []byte
 }
 
-// Merge overlays any non-nil field of other onto a copy of o.
+// Merge copies each field of other that is not nil onto a copy of o.
 //
-// Resolving an out-of-order node assigns its whole payload onto its
-// unresolved predecessor, so a nil field would wipe out whatever the
-// predecessor already carried. Callers must merge against the last-tracked
-// payload before calling Track to keep that assignment lossless.
+// Track can resolve a node out of order. It then copies the full data of
+// that node onto the earlier node, and a nil field would remove the value
+// that the earlier node holds. Therefore the caller must merge each set of
+// data with the last tracked set before it calls Track.
 func (o CheckpointOffset) Merge(other CheckpointOffset) CheckpointOffset {
 	merged := o
 	if other.LSN != nil {

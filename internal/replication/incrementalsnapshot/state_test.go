@@ -17,10 +17,11 @@ import (
 )
 
 func TestStateRoundTripsBigintPrimaryKeysExactly(t *testing.T) {
-	// Regression test: PrimaryKey is []any, so the stock decoder turns JSON
-	// numbers into float64 and rounds anything above 2^53. Encoding is exact,
-	// so a bigint key survives the write and comes back shifted -- a MaxPK
-	// that rounds down excludes rows from `pk <= max` permanently.
+	// Regression test. PrimaryKey is a slice of any, so the standard decoder
+	// makes a float64 from each JSON number and rounds all values above
+	// 2^53. The encoder is exact, so a bigint key is correct in the file and
+	// wrong after the read. A MaxPK that rounds down removes rows from the
+	// query `pk <= max` for ever.
 	const (
 		snowflake = int64(1234567890123456789)
 		justOver  = int64(1)<<53 + 1
@@ -50,8 +51,9 @@ func TestStateUnmarshalPrimaryKeyElementTypes(t *testing.T) {
 		want any
 	}{
 		{
-			// The common case: pgx decodes int8/int4 to int64/int32, and both
-			// must come back as an integer, not a float.
+			// This case is the usual one. pgx makes an int64 or an int32
+			// from a Postgres integer. Both must return as an integer and
+			// not as a float.
 			name: "small integer stays integral",
 			raw:  `42`,
 			want: int64(42),
@@ -67,8 +69,8 @@ func TestStateUnmarshalPrimaryKeyElementTypes(t *testing.T) {
 			want: int64(9223372036854775807),
 		},
 		{
-			// A composite key can include text or a UUID; those were never
-			// affected and must pass through untouched.
+			// A composite key can hold text or a UUID. This defect never
+			// changed such a value, and the value must not change now.
 			name: "string passes through",
 			raw:  `"a7b3e6e4-0000-4000-8000-000000000000"`,
 			want: "a7b3e6e4-0000-4000-8000-000000000000",
@@ -79,9 +81,9 @@ func TestStateUnmarshalPrimaryKeyElementTypes(t *testing.T) {
 			want: 1.5,
 		},
 		{
-			// Beyond int64 there is no exact Go integer, so this stays lossy
-			// by design -- asserted so the fallback is deliberate, not a
-			// surprise.
+			// Go has no exact integer type for a value above int64.
+			// Therefore this value is not exact. This test shows that the
+			// result is intentional.
 			name: "beyond int64 falls back to float64",
 			raw:  `18446744073709551615`,
 			want: float64(18446744073709551615),
@@ -115,7 +117,8 @@ func TestStateUnmarshalRejectsMalformedJSON(t *testing.T) {
 }
 
 func TestStateUnmarshalDoneCheckpoint(t *testing.T) {
-	// What State() emits once every table is backfilled.
+	// State returns this value after the snapshot of each table is
+	// complete.
 	var got State
 	require.NoError(t, json.Unmarshal([]byte(`{"version":1,"done":true}`), &got))
 

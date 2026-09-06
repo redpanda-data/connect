@@ -6,20 +6,23 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-// Package incrementalsnapshot implements database-agnostic incremental
-// snapshotting: backfilling tables in ordered, primary-key-bounded chunks
-// while a replication stream flows concurrently, deduplicating buffered rows
-// against anything the stream already delivered.
+// Package incrementalsnapshot does incremental snapshots of database tables.
+// It reads each table in chunks. The chunks are in primary key order and
+// each chunk has a lower and an upper key bound. A replication stream runs
+// at the same time. The package removes each buffered row that the stream
+// has already delivered.
 //
-// Coordinator is the algorithm. Everything database-specific is injected:
-// side effects through Deps, and window open/close reconciliation through
-// Watermark, so this package has no database driver dependency. Alongside
-// those it provides table/PK identifiers, the dedup window buffer, and the
-// resumable checkpoint State.
+// The package works with any database. Coordinator holds the algorithm. The
+// caller supplies all database-specific parts. Deps supplies the operations
+// that have side effects. Watermark supplies the comparisons that open and
+// close the window. Therefore this package needs no database driver. The
+// package also supplies table and primary key identifiers, the window
+// buffer and the State checkpoint.
 //
-// A per-database component supplies Deps and a Watermark implementation, and
-// typically aliases Coordinator to its own position and watermark types so
-// call sites don't repeat the type arguments.
+// A component for one database supplies a Deps and a Watermark. The
+// component usually also declares aliases for Coordinator with its own
+// position and watermark types. The aliases keep the type arguments out of
+// the call sites.
 package incrementalsnapshot
 
 import "fmt"
@@ -35,18 +38,17 @@ func (t TableID) String() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Table)
 }
 
-// PrimaryKey represents a (possibly composite) primary key value, with one
-// element per primary key column, in column order.
+// PrimaryKey is one primary key value. It has one element for each primary
+// key column, in column order. A composite key has more than one element.
 type PrimaryKey []any
 
-// Row is a single row read from a table during the snapshot phase, along
-// with enough metadata for the caller to turn it into a synthetic change
-// event.
+// Row is one row that the snapshot read from a table. It also holds the
+// metadata that the caller needs to make a change event from the row.
 type Row struct {
 	Table TableID
 	PK    PrimaryKey
 	Data  map[string]any
-	// ColumnSchema is opaque to this package. Callers may attach whatever
-	// schema/type metadata they need to decode Data downstream.
+	// ColumnSchema has no meaning in this package. The caller can put any
+	// schema metadata here that it needs later to decode Data.
 	ColumnSchema any
 }

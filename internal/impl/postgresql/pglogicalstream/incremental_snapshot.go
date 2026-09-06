@@ -20,9 +20,9 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
-// setupIncrementalSnapshot wires a snapshot.Coordinator into the stream when
-// Config.IncrementalSnapshot is enabled. It is a no-op (leaving both
-// s.snapshotCoordinator and s.incrementalDB nil) otherwise.
+// setupIncrementalSnapshot adds a Coordinator to the stream when
+// Config.IncrementalSnapshot is enabled. If the snapshot is disabled, the
+// function does nothing and leaves the coordinator and the connection nil.
 func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) error {
 	incSnapshotCfg := config.IncrementalSnapshotCfg()
 	if !incSnapshotCfg.IsEnabled() {
@@ -76,9 +76,11 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 	return nil
 }
 
-// normalizeTableID applies the same normalization NewPgStream uses for
-// DBSchema/DBTables, then unquotes: incrementalsnapshot.TableID must hold
-// unquoted names to match what postgres reports on replication messages.
+// normalizeTableID makes a TableID from a schema name and a table name. It
+// uses the same rules as NewPgStream for DBSchema and DBTables and then
+// removes the quotation marks. A TableID must hold names without quotation
+// marks, because Postgres reports the names in this form in replication
+// messages.
 func normalizeTableID(schemaRaw, tableRaw string) (incrementalsnapshot.TableID, error) {
 	schemaNorm, err := sanitize.NormalizePostgresIdentifier(schemaRaw)
 	if err != nil {
@@ -99,9 +101,10 @@ func normalizeTableID(schemaRaw, tableRaw string) (incrementalsnapshot.TableID, 
 	return incrementalsnapshot.TableID{Schema: schema, Table: table}, nil
 }
 
-// incrementalPKColumns resolves and caches table's unquoted PK columns.
-// Backs both ResolvePrimaryKey and incrementalStreamedRowPK, which needs the
-// same columns to build a PrimaryKey for OnStreamedRow.
+// incrementalPKColumns reads the primary key columns of the table and keeps
+// them in a cache. The names have no quotation marks. This function supports
+// ResolvePrimaryKey and incrementalStreamedRowPK. Both need the same columns
+// to make a PrimaryKey for OnStreamedRow.
 func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnapshot.TableID) ([]string, error) {
 	key := table.String()
 	if cols, exists := s.incSnapshotPKCache[key]; exists {
@@ -129,13 +132,16 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 	return cols, nil
 }
 
-// resolveIncrementalPKColumns resolves table's primary key columns over
-// s.incrementalDB rather than s.pgConn. incrementalPKColumns (the sole
-// caller) may run at any point during live streaming -- from
-// planNextChunk's Deps.ResolvePrimaryKey, or from incrementalStreamedRowPK on
-// a live INSERT/UPDATE/DELETE -- so it must never touch s.pgConn, which is
-// dedicated to the replication protocol (COPY BOTH) once streaming starts;
-// issuing a plain query on it concurrently deadlocks/corrupts the stream.
+// resolveIncrementalPKColumns reads the primary key columns of the table. It
+// uses s.incSnapshotConn and must never use s.pgConn.
+//
+// incrementalPKColumns is the only caller, and it can run at any time during
+// the stream. It runs from Deps.ResolvePrimaryKey in planNextChunk, and also
+// from incrementalStreamedRowPK for an insert, an update or a delete.
+//
+// After the stream starts, s.pgConn is only for the replication protocol,
+// which uses COPY BOTH. A normal query on that connection at the same time
+// stops or damages the stream.
 func (s *Stream) resolveIncrementalPKColumns(ctx context.Context, table TableFQN) ([]string, error) {
 	q, err := primaryKeyColumnsQuery(table.String())
 	if err != nil {
@@ -154,7 +160,8 @@ func (s *Stream) resolveIncrementalPKColumns(ctx context.Context, table TableFQN
 		if err := rows.Scan(&col); err != nil {
 			return nil, fmt.Errorf("scanning primary key column for table %s: %w", table, err)
 		}
-		// Postgres gives us back normalized identifiers here - we need to quote them.
+		// Postgres returns the names in normal form here, so add quotation
+		// marks.
 		pkColumns = append(pkColumns, sanitize.QuotePostgresIdentifier(col))
 	}
 	if err := rows.Err(); err != nil {
@@ -168,8 +175,8 @@ func (s *Stream) resolveIncrementalPKColumns(ctx context.Context, table TableFQN
 	return pkColumns, nil
 }
 
-// incrementalSnapshotDeps adapts *Stream to satisfy incrementalsnapshot.Deps,
-// keeping these generic-sounding method names off Stream's own API.
+// incrementalSnapshotDeps makes *Stream satisfy incrementalsnapshot.Deps. It
+// keeps these general method names out of the API of Stream.
 type incrementalSnapshotDeps struct {
 	stream *Stream
 }
@@ -204,13 +211,13 @@ func (d incrementalSnapshotDeps) FetchChunk(ctx context.Context, table increment
 	return d.stream.fetchIncrementalChunk(ctx, table, pkColumnsUnquoted, query, args)
 }
 
-// resolveIncrementalPK backs incrementalSnapshotDeps.ResolvePrimaryKey.
+// resolveIncrementalPK supports incrementalSnapshotDeps.ResolvePrimaryKey.
 func (s *Stream) resolveIncrementalPK(ctx context.Context, table incrementalsnapshot.TableID) ([]string, error) {
 	return s.incrementalPKColumns(ctx, table)
 }
 
-// incrementalStreamedRowPK builds a PrimaryKey for a streamed DML row, since
-// OnStreamedRow only accepts already-extracted values.
+// incrementalStreamedRowPK makes a PrimaryKey from a streamed row, because
+// OnStreamedRow accepts key values only.
 func (s *Stream) incrementalStreamedRowPK(ctx context.Context, table incrementalsnapshot.TableID, data any) (incrementalsnapshot.PrimaryKey, error) {
 	pkCols, err := s.incrementalPKColumns(ctx, table)
 	if err != nil {
@@ -225,16 +232,16 @@ func (s *Stream) incrementalStreamedRowPK(ctx context.Context, table incremental
 	return pk, nil
 }
 
-// canonicalizePKValue normalizes a decoded primary key value into a stable
-// representation, so the dedup window's key (built by simply formatting each
-// PrimaryKey element, see incrementalsnapshot.newWindowKey) is identical for
-// the same underlying value regardless of which decode path produced it.
-// This matters because the live streaming path (decodeTextColumnData) and
-// the incrementalDB backfill path (prepareScannersAndGetters) don't always
-// decode a given Postgres type to the same Go representation -- e.g. a raw
-// [16]byte UUID vs. its canonical hyphenated string -- which would otherwise
-// silently defeat dedup between a snapshotted row and its streamed
-// counterpart.
+// canonicalizePKValue changes a decoded primary key value to one stable
+// form. The buffer makes its key from the text form of each PrimaryKey
+// element. Refer to newWindowKey in the shared package. The key must be the
+// same for the same value from each decode path.
+//
+// This function is necessary because the two decode paths can give different
+// Go types for one Postgres type. The stream path uses decodeTextColumnData
+// and the snapshot path uses prepareScannersAndGetters. For example, one
+// path can give a UUID as 16 bytes and the other as text. The buffer would
+// then keep both rows and remove no row.
 func canonicalizePKValue(v any) any {
 	switch val := v.(type) {
 	case [16]byte:
@@ -246,7 +253,7 @@ func canonicalizePKValue(v any) any {
 	}
 }
 
-// resolveIncrementalMaxKey backs incrementalSnapshotDeps.ResolveMaxKey.
+// resolveIncrementalMaxKey supports incrementalSnapshotDeps.ResolveMaxKey.
 func (s *Stream) resolveIncrementalMaxKey(ctx context.Context, table incrementalsnapshot.TableID, pkCols []string, query string) (incrementalsnapshot.PrimaryKey, error) {
 	rows, err := s.incSnapshotConn.QueryContext(ctx, query)
 	if err != nil {
@@ -264,9 +271,9 @@ func (s *Stream) resolveIncrementalMaxKey(ctx context.Context, table incremental
 		if err := rows.Err(); err != nil {
 			return nil, fmt.Errorf("resolving max key for table %s: %w", table, err)
 		}
-		// An empty table has nothing to backfill; report it as such (nil, nil)
-		// rather than erroring, so the coordinator moves on to the next table
-		// instead of aborting replication for every table.
+		// An empty table has no rows to read. Return nil and no error. The
+		// coordinator then moves to the next table and does not stop the
+		// replication of all tables.
 		s.logger.Debugf("Incremental snapshot: table %s is empty, skipping", table)
 		return nil, nil
 	}
@@ -288,14 +295,16 @@ func (s *Stream) resolveIncrementalMaxKey(ctx context.Context, table incremental
 }
 
 func currentSnapshotQuery(pgVersion int) string {
-	// pg_current_snapshot() supersedes deprecated txid_current_snapshot() in PG 13+
+	// pg_current_snapshot replaces the obsolete txid_current_snapshot in
+	// PostgreSQL 13 and later. Both give the same text form.
 	if pgVersion >= 13 {
 		return "SELECT pg_current_snapshot()"
 	}
 	return "SELECT txid_current_snapshot()"
 }
 
-// resolveIncrementalWatermark backs incrementalSnapshotDeps.ResolveWatermark.
+// resolveIncrementalWatermark supports
+// incrementalSnapshotDeps.ResolveWatermark.
 func (s *Stream) resolveIncrementalWatermark(ctx context.Context) (incsnapshot.Watermark, error) {
 	query := currentSnapshotQuery(s.pgVersion)
 	var raw string
@@ -309,7 +318,8 @@ func (s *Stream) resolveIncrementalWatermark(ctx context.Context) (incsnapshot.W
 	return wm, nil
 }
 
-// forceFreshIncrementalTransaction backs incrementalSnapshotDeps.ForceFreshTransaction.
+// forceFreshIncrementalTransaction supports
+// incrementalSnapshotDeps.ForceFreshTransaction.
 func (s *Stream) forceFreshIncrementalTransaction(ctx context.Context) error {
 	var txid uint64
 	if err := s.incSnapshotConn.QueryRowContext(ctx, "SELECT txid_current()").Scan(&txid); err != nil {
@@ -318,7 +328,7 @@ func (s *Stream) forceFreshIncrementalTransaction(ctx context.Context) error {
 	return nil
 }
 
-// fetchIncrementalChunk backs incrementalSnapshotDeps.FetchChunk.
+// fetchIncrementalChunk supports incrementalSnapshotDeps.FetchChunk.
 func (s *Stream) fetchIncrementalChunk(ctx context.Context, table incrementalsnapshot.TableID, pkCols []string, query string, args []any) ([]incrementalsnapshot.Row, error) {
 	rows, err := s.incSnapshotConn.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -384,10 +394,10 @@ func (s *Stream) fetchIncrementalChunk(ctx context.Context, table incrementalsna
 	return result, nil
 }
 
-// buildIncrementalSnapshotMessages converts emitted rows into StreamMessages.
-// If emitted is empty, a single sentinel checkpoint message carries just the
-// state, since state can advance with nothing flushed (e.g. every buffered
-// row was deduplicated).
+// buildIncrementalSnapshotMessages makes StreamMessage values from the rows.
+// If there are no rows, it makes one message that holds the state only. This
+// case occurs because the state can move forward with no rows, for example
+// when the stream has already delivered each buffered row.
 func buildIncrementalSnapshotMessages(emitted []incrementalsnapshot.Row, state []byte) []StreamMessage {
 	if len(emitted) == 0 {
 		return []StreamMessage{{

@@ -54,11 +54,10 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resour
 			return nil, fmt.Errorf("%s.%s must be > 0, got %d", fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, cfg.ChunkSize)
 		}
 
-		// The snapshot only advances on a streamed commit, so on tables with no
-		// live write traffic the heartbeat is the sole source of progress.
-		// Without one the backfill fetches its first chunk and then stalls
-		// indefinitely, with nothing to report -- reject that outright rather
-		// than looking healthy while doing nothing.
+		// The snapshot moves forward only on a streamed commit. On a table
+		// with no writes the heartbeat makes the only such commit. Without a
+		// heartbeat the snapshot reads the first chunk and then stops for
+		// ever, and it reports no error. Refuse this configuration.
 		if cfg.Enabled && heartbeatInterval <= 0 {
 			return nil, fmt.Errorf(
 				"%s.%s is true but %s is disabled: incremental snapshot progress is paced by streamed commits, so a quiet table would never advance. Set %s to a non-zero interval",
@@ -66,11 +65,12 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resour
 			)
 		}
 		if cfg.Enabled && heartbeatInterval > incSnapshotSlowHeartbeatThreshold {
-			// Same dependency, far less severe now the coordinator drains: a
-			// commit arriving against a still database releases up to
-			// DefaultMaxDrainChunks chunks rather than one, so a long interval
-			// costs round trips, not throughput per row. Still worth saying,
-			// since it does bound how fast a quiet table completes.
+			// The snapshot depends on the heartbeat here also, but the
+			// result is less severe. A commit that arrives while the
+			// database is quiet releases a maximum of DefaultMaxDrainChunks
+			// chunks. A long interval therefore adds delay but does not
+			// reduce the number of rows for each commit. Report it, because
+			// the interval still controls how fast a quiet table completes.
 			rowsPerBeat := int64(cfg.ChunkSize) * int64(incrementalsnapshot.DefaultMaxDrainChunks)
 			mgr.Logger().Warnf(
 				"Incremental snapshot progress is paced by streamed commits, and %s is %s. On tables with little write traffic each heartbeat backfills up to %d rows (%s.%s=%d x %d chunks drained per commit); lower %s if the initial backfill needs to finish sooner.",
