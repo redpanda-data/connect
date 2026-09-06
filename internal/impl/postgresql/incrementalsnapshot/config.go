@@ -23,16 +23,11 @@ var (
 	DefaultIncSnapshotCheckpointKey = "postgres_cdc_incremental_snapshot"
 )
 
-// IncrementalSnapshotCfg configures incremental snapshotting, which runs
-// automatically alongside logical replication once enabled -- no signal
-// table or trigger required.
+// IncrementalSnapshotCfg configures incremental snapshotting.
 type IncrementalSnapshotCfg struct {
-	Enabled bool
-	// Tables to snapshot (unqualified, same schema as DBSchema). Falls
-	// back to DBTables if empty.
-	Tables    []string
-	ChunkSize int
-	// ResumeState resumes a previously persisted snapshot if non-nil.
+	Enabled     bool
+	Tables      []string
+	ChunkSize   int
 	ResumeState *incrementalsnapshot.State
 }
 
@@ -51,12 +46,10 @@ type CheckpointOffset struct {
 
 // Merge overlays any non-nil field of other onto a copy of o.
 //
-// The checkpoint queue (github.com/Jeffail/checkpoint's Uncapped.Track)
-// resolves an out-of-order node by assigning its entire payload onto its
-// unresolved predecessor, which would wipe out a field the predecessor
-// already carried if this payload's version of it is nil. Callers must
-// merge each payload against the last-tracked one before calling Track
-// so that assignment is a no-op for whichever field didn't advance.
+// Resolving an out-of-order node assigns its whole payload onto its
+// unresolved predecessor, so a nil field would wipe out whatever the
+// predecessor already carried. Callers must merge against the last-tracked
+// payload before calling Track to keep that assignment lossless.
 func (o CheckpointOffset) Merge(other CheckpointOffset) CheckpointOffset {
 	merged := o
 	if other.LSN != nil {

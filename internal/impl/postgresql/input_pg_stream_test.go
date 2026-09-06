@@ -93,3 +93,78 @@ signal_table_name: rpcn_signal_table
 		})
 	}
 }
+
+func TestNewPgStreamInputIncSnapshotHeartbeat(t *testing.T) {
+	env := service.NewEnvironment()
+	spec := newPostgresCDCConfig()
+
+	const base = `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+tables:
+  - events
+`
+
+	tests := []struct {
+		name        string
+		conf        string
+		errContains string
+	}{
+		{
+			// Incremental snapshot only advances on a streamed commit, so
+			// disabling heartbeats leaves a quiet table stalled forever.
+			name: "incremental snapshot enabled with heartbeats disabled",
+			conf: base + `
+heartbeat_interval: 0s
+incremental_snapshot:
+  enabled: true
+  checkpoint_cache: snapshot_cache
+`,
+			errContains: "heartbeat_interval is disabled",
+		},
+		{
+			name: "incremental snapshot enabled with a heartbeat interval",
+			conf: base + `
+heartbeat_interval: 5s
+incremental_snapshot:
+  enabled: true
+  checkpoint_cache: snapshot_cache
+`,
+		},
+		{
+			// A long interval only throttles the backfill, so it warns
+			// rather than failing.
+			name: "incremental snapshot enabled at the default heartbeat interval",
+			conf: base + `
+incremental_snapshot:
+  enabled: true
+  checkpoint_cache: snapshot_cache
+`,
+		},
+		{
+			// The dependency is only real when the snapshot is running.
+			name: "heartbeats disabled with incremental snapshot disabled",
+			conf: base + `
+heartbeat_interval: 0s
+`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pConf, err := spec.ParseYAML(test.conf, env)
+			require.NoError(t, err)
+
+			mgr := service.MockResources(service.MockResourcesOptAddCache("snapshot_cache"))
+			license.InjectTestService(mgr)
+
+			_, err = newPgStreamInput(pConf, mgr)
+			if test.errContains != "" {
+				require.ErrorContains(t, err, test.errContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

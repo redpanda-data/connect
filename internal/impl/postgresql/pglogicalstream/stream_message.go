@@ -58,12 +58,8 @@ type StreamMessage struct {
 	Data any `json:"data"`
 	// ColumnSchema contains the table's column schema in benthos common schema format.
 	// It is set as message metadata and excluded from JSON serialization.
-	ColumnSchema any       `json:"-"`
-	CommitTime   time.Time `json:"-"`
-	BeforeData   any       `json:"-"`
-	// IncrementalSnapshotState carries the JSON-serialized resumable state
-	// (snapshot.State) after a transaction advances the incremental
-	// snapshot. Excluded from JSON serialization: it's input-layer plumbing,
-	// never payload.
-	IncrementalSnapshotState []byte `json:"-"`
+	ColumnSchema             any       `json:"-"`
+	CommitTime               time.Time `json:"-"`
+	BeforeData               any       `json:"-"`
+	IncrementalSnapshotState []byte    `json:"-"`
 }

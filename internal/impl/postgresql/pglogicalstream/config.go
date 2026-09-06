@@ -68,11 +68,3 @@ func (c *Config) IncrementalSnapshotCfg() *incrementalsnapshot.IncrementalSnapsh
 	}
 	return nil
 }
-
-// IncrementalSnapshotIsEnabled determins if incremental snapshot is enabled or not.
-func (c *Config) IncrementalSnapshotIsEnabled() bool {
-	if c != nil && c.IncrementalSnapshot != nil {
-		return true
-	}
-	return false
-}
