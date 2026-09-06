@@ -323,12 +323,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		iamAuthEnabled            bool
 		iamAuthTokenBuilder       TokenBuilder
 		signalTableName           string
-
-		incSnapshotEnabled            bool
-		incSnapshotTables             []string
-		incSnapshotChunkSize          int
-		incSnapshotCheckpointCache    string
-		incSnapshotCheckpointCacheKey string
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -426,58 +420,9 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
-	// validate incremental snapshot
-	incSnapshotConf := conf.Namespace(fieldIncSnapshot)
-	if incSnapshotEnabled, err = incSnapshotConf.FieldBool(fieldIncSnapshotEnabled); err != nil {
+	incSnapshot, err := parseIncrementalSnapshotCfg(conf, mgr, heartbeatInterval)
+	if err != nil {
 		return nil, err
-	}
-	if incSnapshotConf.Contains(fieldIncrementalSnapshotTables) {
-		if incSnapshotTables, err = incSnapshotConf.FieldStringList(fieldIncrementalSnapshotTables); err != nil {
-			return nil, err
-		}
-	}
-	if incSnapshotChunkSize, err = incSnapshotConf.FieldInt(fieldIncrementalSnapshotChunkSize); err != nil {
-		return nil, err
-	} else if incSnapshotChunkSize <= 0 {
-		return nil, fmt.Errorf("%s.%s must be > 0, got %d", fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, incSnapshotChunkSize)
-	}
-
-	// The snapshot only advances on a streamed commit, so on tables with no
-	// live write traffic the heartbeat is the sole source of progress.
-	// Without one the backfill fetches its first chunk and then stalls
-	// indefinitely, with nothing to report -- reject that outright rather
-	// than looking healthy while doing nothing.
-	if incSnapshotEnabled && heartbeatInterval <= 0 {
-		return nil, fmt.Errorf(
-			"%s.%s is true but %s is disabled: incremental snapshot progress is paced by streamed commits, so a quiet table would never advance. Set %s to a non-zero interval",
-			fieldIncSnapshot, fieldIncSnapshotEnabled, fieldHeartbeatInterval, fieldHeartbeatInterval,
-		)
-	}
-	if incSnapshotEnabled && heartbeatInterval > incSnapshotSlowHeartbeatThreshold {
-		// Same dependency, less severe: it progresses, just slowly. Quantify
-		// it rather than leaving operators to discover the rate themselves.
-		mgr.Logger().Warnf(
-			"Incremental snapshot advances at most one chunk (%s.%s=%d rows) per streamed commit, and %s is %s. On tables with little write traffic that caps the backfill at roughly %d rows/hour; lower %s to speed it up.",
-			fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, incSnapshotChunkSize,
-			fieldHeartbeatInterval, heartbeatInterval,
-			int64(float64(incSnapshotChunkSize)*time.Hour.Seconds()/heartbeatInterval.Seconds()),
-			fieldHeartbeatInterval,
-		)
-	}
-
-	if incSnapshotConf.Contains(fieldIncSnapshotCheckpointCache) {
-		if incSnapshotCheckpointCache, err = incSnapshotConf.FieldString(fieldIncSnapshotCheckpointCache); err != nil {
-			return nil, err
-		}
-	}
-	if incSnapshotCheckpointCacheKey, err = incSnapshotConf.FieldString(fieldIncSnapshotCheckpointCacheKey); err != nil {
-		return nil, err
-	}
-	if incSnapshotEnabled && incSnapshotCheckpointCache == "" {
-		return nil, fmt.Errorf("%s.%s is required when %s.%s is true", fieldIncSnapshot, fieldIncSnapshotCheckpointCache, fieldIncSnapshot, fieldIncSnapshotEnabled)
-	}
-	if incSnapshotEnabled && !conf.Resources().HasCache(incSnapshotCheckpointCache) {
-		return nil, fmt.Errorf("unknown cache resource: %s", incSnapshotCheckpointCache)
 	}
 
 	pgConnConfig, err := pgconn.ParseConfigWithOptions(dsn, pgconn.ParseConfigOptions{
@@ -508,15 +453,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	snapshotMetrics := mgr.Metrics().NewGauge("postgres_snapshot_progress", "table")
 	replicationLag := mgr.Metrics().NewGauge("postgres_replication_lag_bytes")
 
-	var incSnapshotCfg *incsnapshot.IncrementalSnapshotCfg
-	if incSnapshotEnabled {
-		incSnapshotCfg = &incsnapshot.IncrementalSnapshotCfg{
-			Enabled:   true,
-			Tables:    incSnapshotTables,
-			ChunkSize: incSnapshotChunkSize,
-		}
-	}
-
 	i := &pgStreamInput{
 		streamConfig: &pglogicalstream.Config{
 			DBConfig:         pgConnConfig,
@@ -538,7 +474,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
 			SignalTableName:          signalTableName,
-			IncrementalSnapshot:      incSnapshotCfg,
+			IncrementalSnapshot:      incSnapshot.cfg,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,
@@ -552,8 +488,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 		iamAuthEnabled: iamAuthEnabled,
 
-		incSnapshotCheckpointCache:    incSnapshotCheckpointCache,
-		incSnapshotCheckpointCacheKey: incSnapshotCheckpointCacheKey,
+		incSnapshotCheckpointCache:    incSnapshot.cache,
+		incSnapshotCheckpointCacheKey: incSnapshot.cacheKey,
 	}
 
 	if i.controlSig, err = newControlSignaller(schema, signalTableName, logger); err != nil {

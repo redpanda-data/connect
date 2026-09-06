@@ -106,6 +106,12 @@ tables:
   - events
 `
 
+	// ParseYAML has no way to register a cache resource, and the
+	// checkpoint_cache checks run after the heartbeat ones, so the
+	// non-rejected cases assert on the cache error that follows: reaching it
+	// proves validation got past the heartbeat check.
+	const pastHeartbeatCheck = "checkpoint_cache is required"
+
 	tests := []struct {
 		name        string
 		conf        string
@@ -119,7 +125,6 @@ tables:
 heartbeat_interval: 0s
 incremental_snapshot:
   enabled: true
-  checkpoint_cache: snapshot_cache
 `,
 			errContains: "heartbeat_interval is disabled",
 		},
@@ -129,8 +134,8 @@ incremental_snapshot:
 heartbeat_interval: 5s
 incremental_snapshot:
   enabled: true
-  checkpoint_cache: snapshot_cache
 `,
+			errContains: pastHeartbeatCheck,
 		},
 		{
 			// A long interval only throttles the backfill, so it warns
@@ -139,11 +144,11 @@ incremental_snapshot:
 			conf: base + `
 incremental_snapshot:
   enabled: true
-  checkpoint_cache: snapshot_cache
 `,
+			errContains: pastHeartbeatCheck,
 		},
 		{
-			// The dependency is only real when the snapshot is running.
+			// The dependency is only real while the snapshot is running.
 			name: "heartbeats disabled with incremental snapshot disabled",
 			conf: base + `
 heartbeat_interval: 0s
@@ -156,7 +161,7 @@ heartbeat_interval: 0s
 			pConf, err := spec.ParseYAML(test.conf, env)
 			require.NoError(t, err)
 
-			mgr := service.MockResources(service.MockResourcesOptAddCache("snapshot_cache"))
+			mgr := service.MockResources()
 			license.InjectTestService(mgr)
 
 			_, err = newPgStreamInput(pConf, mgr)
