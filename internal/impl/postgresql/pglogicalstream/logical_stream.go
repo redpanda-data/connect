@@ -67,6 +67,10 @@ type Stream struct {
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
 
+	// pgVersion is the major server version, retained because the
+	// incremental snapshot's watermark query is version-dependent.
+	pgVersion int
+
 	// incremental snapshot
 	incSnapshotCoordinator *incsnapshot.Coordinator
 	incSnapshotConn        *sql.DB
@@ -196,6 +200,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if version > 14 {
 		pluginArguments = append(pluginArguments, "messages 'true'")
 	}
+	stream.pgVersion = version
 
 	stream.decodingPluginArguments = pluginArguments
 
@@ -484,7 +489,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		lastEmittedLSN       = currentLSN
 		lastEmittedCommitLSN = currentLSN
 		currentTxnCommitTime time.Time
-		currentTxnXid        uint64
+		currentTxnXid        uint32
 	)
 
 	commitLSN := func(force bool) (committed bool, err error) {
@@ -593,7 +598,7 @@ const (
 )
 
 // Handle handles the pgoutput output.
-func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time, currentTxnXid *uint64) (processChangeResult, error) {
+func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time, currentTxnXid *uint32) (processChangeResult, error) {
 	logicalMsg, err := Parse(xld.WALData)
 	if err != nil {
 		return changeResultNoMessage, err
@@ -609,7 +614,7 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	// capture transaction commit time and xid for insert, update and delete events
 	if begin, ok := logicalMsg.(*BeginMessage); ok {
 		*currentTxnCommitTime = begin.CommitTime
-		*currentTxnXid = uint64(begin.Xid)
+		*currentTxnXid = begin.Xid
 	} else if _, ok := logicalMsg.(*CommitMessage); ok {
 		// The incremental snapshot must advance (and anything it emits be
 		// sent) before this commit is forwarded, so a consumer never

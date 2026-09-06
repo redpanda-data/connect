@@ -10,6 +10,7 @@ package incrementalsnapshot
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -21,34 +22,75 @@ import (
 // incremental snapshot window against the concurrently streamed
 // transactions.
 //
-// It implements incrementalsnapshot.Watermark[uint64], the position type
-// being a transaction id.
+// It implements incrementalsnapshot.Watermark[uint32], the position type
+// being a raw transaction id as pgoutput reports it on a BEGIN message.
+// The bounds here are epoch-extended 64-bit values, so every comparison
+// goes through normalizeXID -- see the note there.
 type Watermark struct {
 	Xmin uint64
 	Xmax uint64
 }
 
-var _ incrementalsnapshot.Watermark[uint64] = Watermark{}
+var _ incrementalsnapshot.Watermark[uint32] = Watermark{}
 
 // OpensAt reports whether xid started at or after this watermark was taken.
 // Xmin is the oldest transaction still in flight at that point, so any xid
 // at or above it began late enough that the stream is now past everything
 // this watermark could not see.
-func (w Watermark) OpensAt(xid uint64) bool {
-	return xid >= w.Xmin
+func (w Watermark) OpensAt(xid uint32) bool {
+	return normalizeXID(xid, w.Xmin) >= w.Xmin
 }
 
 // ClosesAt reports whether xid began after every transaction that was in
 // flight when this watermark was taken. Xmax is the first id not yet
 // assigned at that point, so anything strictly above it started later.
-func (w Watermark) ClosesAt(xid uint64) bool {
-	return xid > w.Xmax
+func (w Watermark) ClosesAt(xid uint32) bool {
+	return normalizeXID(xid, w.Xmax) > w.Xmax
 }
 
-// ParseSnapshot parses Postgres's txid_current_snapshot() text, e.g.
-// "100:104:101,103" (xmin:xmax:xip_list; xip_list may be empty). The xip
-// list is validated but not retained: window open/close reconciliation only
-// needs the xmin/xmax bounds.
+const (
+	xidEpoch     = 1 << 32
+	xidHalfEpoch = 1 << 31
+)
+
+// normalizeXID lifts a raw 32-bit WAL xid into ref's epoch so the two are
+// comparable.
+//
+// txid_current_snapshot() reports xmin/xmax epoch-extended to 64 bits, but
+// pgoutput's BEGIN message carries only the low 32 bits, which wrap roughly
+// every 4.3 billion transactions. Comparing the two directly means that on
+// any cluster past its first wrap every watermark bound exceeds every
+// possible xid, so the snapshot window never opens and the backfill stalls
+// silently.
+//
+// A watermark is read either side of a chunk fetch and compared against
+// commits arriving moments later, so the true xid is always far nearer to
+// ref than half an epoch. Splicing ref's epoch onto xid therefore lands
+// within one epoch of correct, and whichever neighbouring epoch puts the
+// result inside that half-epoch window is the right one.
+func normalizeXID(xid uint32, ref uint64) uint64 {
+	full := (ref & ^uint64(math.MaxUint32)) | uint64(xid)
+	switch {
+	case full > ref && full-ref > xidHalfEpoch && full >= xidEpoch:
+		// xid wrapped ahead of ref: it belongs to the preceding epoch.
+		// Guarded against underflow, since epoch 0 has no predecessor.
+		return full - xidEpoch
+	case ref > full && ref-full > xidHalfEpoch:
+		// ref wrapped ahead of xid: xid belongs to the following epoch.
+		return full + xidEpoch
+	default:
+		return full
+	}
+}
+
+// ParseSnapshot parses a Postgres snapshot's text form, e.g.
+// "100:104:101,103" (xmin:xmax:xip_list; xip_list may be empty). Both
+// pg_current_snapshot() (pg_snapshot, PG 13+) and the deprecated
+// txid_current_snapshot() (txid_snapshot) render identically and carry
+// epoch-extended 64-bit ids, so this handles either.
+//
+// The xip list is validated but not retained: window open/close
+// reconciliation only needs the xmin/xmax bounds.
 func ParseSnapshot(raw string) (Watermark, error) {
 	parts := strings.Split(raw, ":")
 	const expectedParts = 3

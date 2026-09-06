@@ -9,6 +9,7 @@
 package incrementalsnapshot
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -102,4 +103,89 @@ func TestWatermarkZeroValueDoesNotClose(t *testing.T) {
 
 	assert.False(t, wm.ClosesAt(0))
 	assert.True(t, wm.OpensAt(0))
+}
+
+func TestNormalizeXID(t *testing.T) {
+	const epoch = uint64(1) << 32
+
+	tests := []struct {
+		name string
+		xid  uint32
+		ref  uint64
+		want uint64
+	}{
+		{
+			name: "epoch 0 passes through",
+			xid:  100,
+			ref:  120,
+			want: 100,
+		},
+		{
+			// The case the whole function exists for: a watermark in epoch 1
+			// against a raw xid that carries no epoch of its own.
+			name: "lifted into ref's epoch",
+			xid:  100,
+			ref:  epoch + 120,
+			want: epoch + 100,
+		},
+		{
+			name: "equal to ref within an epoch",
+			xid:  100,
+			ref:  epoch + 100,
+			want: epoch + 100,
+		},
+		{
+			// xid is just past ref, the ordinary case for a commit arriving
+			// moments after the watermark was taken.
+			name: "just ahead of ref",
+			xid:  121,
+			ref:  epoch + 120,
+			want: epoch + 121,
+		},
+		{
+			// ref sits just after a wrap, xid just before it: splicing ref's
+			// epoch on would place xid a whole epoch in the future.
+			name: "xid before a wrap that ref is after",
+			xid:  math.MaxUint32 - 10,
+			ref:  epoch + 5,
+			want: epoch - 11,
+		},
+		{
+			// The mirror: ref just before a wrap, xid just after.
+			name: "xid after a wrap that ref is before",
+			xid:  5,
+			ref:  epoch - 11,
+			want: epoch + 5,
+		},
+		{
+			// Epoch 0 has no predecessor, so a far-ahead xid must not
+			// underflow into a huge uint64.
+			name: "no underflow below epoch 0",
+			xid:  math.MaxUint32 - 10,
+			ref:  5,
+			want: uint64(math.MaxUint32) - 10,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, normalizeXID(test.xid, test.ref))
+		})
+	}
+}
+
+func TestWatermarkComparisonsSurviveEpochWraparound(t *testing.T) {
+	// Regression test: the bounds are epoch-extended 64-bit, the streamed xid
+	// is a raw 32-bit value. Comparing them directly makes every bound in
+	// epoch >= 1 exceed every possible xid, so the window never opens and the
+	// backfill stalls silently.
+	const epoch = uint64(1) << 32
+	wm := Watermark{Xmin: epoch + 100, Xmax: epoch + 105}
+
+	assert.False(t, wm.OpensAt(99))
+	assert.True(t, wm.OpensAt(100), "xmin itself must open the window")
+	assert.True(t, wm.OpensAt(101))
+
+	assert.False(t, wm.ClosesAt(105), "xmax itself must not close the window")
+	assert.True(t, wm.ClosesAt(106))
 }

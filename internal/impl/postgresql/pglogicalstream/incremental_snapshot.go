@@ -287,16 +287,24 @@ func (s *Stream) resolveIncrementalMaxKey(ctx context.Context, table incremental
 	return pk, nil
 }
 
-// resolveIncrementalWatermark is the concrete Postgres implementation
-// wrapped by setupIncrementalSnapshot to satisfy Deps' opaque any signature.
+func currentSnapshotQuery(pgVersion int) string {
+	// pg_current_snapshot() supersedes deprecated txid_current_snapshot() in PG 13+
+	if pgVersion >= 13 {
+		return "SELECT pg_current_snapshot()"
+	}
+	return "SELECT txid_current_snapshot()"
+}
+
+// resolveIncrementalWatermark backs incrementalSnapshotDeps.ResolveWatermark.
 func (s *Stream) resolveIncrementalWatermark(ctx context.Context) (incsnapshot.Watermark, error) {
+	query := currentSnapshotQuery(s.pgVersion)
 	var raw string
-	if err := s.incSnapshotConn.QueryRowContext(ctx, "SELECT txid_current_snapshot()").Scan(&raw); err != nil {
-		return incsnapshot.Watermark{}, fmt.Errorf("querying txid_current_snapshot: %w", err)
+	if err := s.incSnapshotConn.QueryRowContext(ctx, query).Scan(&raw); err != nil {
+		return incsnapshot.Watermark{}, fmt.Errorf("querying current snapshot with %q: %w", query, err)
 	}
 	wm, err := incsnapshot.ParseSnapshot(raw)
 	if err != nil {
-		return incsnapshot.Watermark{}, fmt.Errorf("parsing txid_current_snapshot result %q: %w", raw, err)
+		return incsnapshot.Watermark{}, fmt.Errorf("parsing current snapshot result %q: %w", raw, err)
 	}
 	return wm, nil
 }
