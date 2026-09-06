@@ -34,14 +34,8 @@ func newHeartbeat(config *Config, prefix, value string) (*heartbeat, error) {
 	if err != nil {
 		return nil, err
 	}
-	h := &heartbeat{
-		db:            dbConn,
-		task:          nil,
-		logger:        config.Logger,
-		prefix:        prefix,
-		value:         value,
-		transactional: config.IncrementalSnapshotCfg().IsEnabled(),
-	}
+	enabled := config.IncrementalSnapshotCfg().IsEnabled()
+	h := &heartbeat{db: dbConn, task: nil, logger: config.Logger, prefix: prefix, value: value, transactional: enabled}
 	h.task = asyncroutine.NewPeriodicWithContext(config.HeartbeatInterval, h.run)
 	return h, nil
 }
@@ -51,13 +45,12 @@ func (h *heartbeat) Start() {
 }
 
 func (h *heartbeat) run(ctx context.Context) {
-	// Unchanged (literal inline, not a placeholder) when incremental
-	// snapshotting is disabled -- a strict no-op for existing users.
-	query := "SELECT pg_logical_emit_message(false, $1, $2)"
+	var err error
 	if h.transactional {
-		query = "SELECT pg_logical_emit_message(true, $1, $2)"
+		_, err = h.db.ExecContext(ctx, "SELECT pg_logical_emit_message(true, $1, $2)", h.prefix, h.value)
+	} else {
+		_, err = h.db.ExecContext(ctx, "SELECT pg_logical_emit_message(false, $1, $2)", h.prefix, h.value)
 	}
-	_, err := h.db.ExecContext(ctx, query, h.prefix, h.value)
 	if err != nil {
 		h.logger.Warnf("unable to write heartbeat message: %v", err)
 	}
