@@ -25,6 +25,8 @@ type (
 	CoordinatorConfig = incrementalsnapshot.CoordinatorConfig[uint32, Watermark]
 	// Deps supplies the side-effecting operations a Postgres Coordinator needs.
 	Deps = incrementalsnapshot.Deps[Watermark]
+	// EmitFunc receives each chunk of rows the Coordinator releases.
+	EmitFunc = incrementalsnapshot.EmitFunc
 )
 
 // NewCoordinator constructs a Postgres incremental snapshot Coordinator. If

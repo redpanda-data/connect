@@ -23,6 +23,12 @@ var (
 	DefaultIncSnapshotCheckpointKey = "postgres_cdc_incremental_snapshot"
 )
 
+// DefaultMaxDrainChunks re-exports the coordinator's drain cap: the most
+// chunks one streamed commit can release when the database is still enough
+// to need no deduplication. Re-exported so callers configuring the input
+// don't need to import the shared replication package.
+const DefaultMaxDrainChunks = incrementalsnapshot.DefaultMaxDrainChunks
+
 // Cfg configures incremental snapshotting.
 type Cfg struct {
 	Enabled     bool

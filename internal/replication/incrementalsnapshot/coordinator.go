@@ -67,6 +67,9 @@ func NewCoordinator[P any, W Watermark[P]](cfg CoordinatorConfig[P, W], resume *
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	if cfg.MaxDrainChunks == 0 {
+		cfg.MaxDrainChunks = DefaultMaxDrainChunks
+	}
 
 	return &Coordinator[P, W]{
 		cfg:    cfg,
@@ -76,8 +79,22 @@ func NewCoordinator[P any, W Watermark[P]](cfg CoordinatorConfig[P, W], resume *
 	}, nil
 }
 
+// EmitFunc receives one chunk's worth of rows as the coordinator releases
+// them. It is called after the coordinator's committed state has advanced to
+// cover those rows, so State may be read from inside it to obtain the
+// checkpoint they make durable.
+//
+// It is the drain loop's backpressure: the coordinator releases the next
+// chunk only once EmitFunc returns, so a slow consumer bounds memory to a
+// single buffered chunk. Returning an error aborts the operation.
+type EmitFunc func(rows []Row) error
+
 // Start must be called once before any other method. See the Coordinator
 // doc comment and the package-level algorithm description for behavior.
+//
+// Start never emits: it buffers the first chunk and returns, leaving
+// everything to be released by OnCommit. Callers may therefore start the
+// coordinator before their downstream is consuming.
 func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 	resume := c.resume
 	c.resume = nil
@@ -98,6 +115,13 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 
 	// Baseline: nothing fetched yet. planNextChunk advances past it.
 	c.commitLiveState()
+
+	// Give the connection a real transaction id once, so the stream has a
+	// known position to reconcile the first watermark against. Deliberately
+	// not repeated per watermark -- see Deps.ForceFreshTransaction.
+	if err := c.cfg.Deps.ForceFreshTransaction(ctx); err != nil {
+		return fmt.Errorf("forcing fresh transaction: %w", err)
+	}
 
 	// State never captures an unflushed chunk, so resuming always means
 	// planning the next one. Watermarks are always re-derived, never
@@ -141,9 +165,9 @@ func (c *Coordinator[P, W]) OnStreamedRow(table TableID, pk PrimaryKey) (removed
 // synthetic or unknown position (a zero value standing in for "no BEGIN
 // seen", say) can open or close the window spuriously and must be filtered
 // out before calling.
-func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P) (emitted []Row, changed bool, err error) {
+func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P, emit EmitFunc) (changed bool, err error) {
 	if c.done {
-		return nil, false, nil
+		return false, nil
 	}
 
 	if !c.windowOpened && c.low.OpensAt(pos) {
@@ -153,20 +177,59 @@ func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P) (emitted []Row,
 	// Both watermarks must be clear of pos: the pair brackets the chunk
 	// read, so the later of the two is what actually bounds it.
 	if !c.windowOpened || !c.low.ClosesAt(pos) || !c.high.ClosesAt(pos) {
-		return nil, false, nil
+		return false, nil
 	}
 
-	emitted = c.window.Flush()
+	if err := c.releaseWindow(emit); err != nil {
+		return false, err
+	}
+	return true, c.planAndDrain(ctx, emit)
+}
+
+// releaseWindow hands the buffered chunk to emit, having first advanced the
+// committed state to cover it so State reports the right checkpoint from
+// inside emit.
+func (c *Coordinator[P, W]) releaseWindow(emit EmitFunc) error {
+	rows := c.window.Flush()
 	c.windowOpened = false
-
-	// Flushed, so it's now safe to commit before fetching the next chunk.
 	c.commitLiveState()
+	return emit(rows)
+}
 
-	if err := c.planNextChunk(ctx); err != nil {
-		return nil, false, err
+// planAndDrain buffers the next chunk, then keeps releasing and replanning
+// for as long as the chunk it planned was read undisturbed.
+//
+// A chunk bracketed by two identical, quiesced watermarks was read while the
+// database was completely still: nothing could have modified it during the
+// read, so no streamed row can supersede it and there is nothing to wait
+// for. Holding it would mean waiting for a commit that, on a quiet table,
+// only arrives on the next heartbeat -- which is what otherwise limits the
+// backfill to one chunk per heartbeat interval.
+//
+// The drain is capped at cfg.MaxDrainChunks per call. Emitting runs on the
+// caller's replication loop, which is usually also responsible for standby
+// keepalives, so an unbounded drain risks the server timing the connection
+// out. Progress resumes on the next commit.
+func (c *Coordinator[P, W]) planAndDrain(ctx context.Context, emit EmitFunc) error {
+	for range c.cfg.MaxDrainChunks {
+		if err := c.planNextChunk(ctx); err != nil {
+			return err
+		}
+		if c.done || !c.readUndisturbed() {
+			return nil
+		}
+		if err := c.releaseWindow(emit); err != nil {
+			return err
+		}
 	}
+	return c.planNextChunk(ctx)
+}
 
-	return emitted, true, nil
+// readUndisturbed reports whether the watermarks bracketing the buffered
+// chunk prove it was read against a still database: no transaction in
+// flight at either end, and none assigned in between.
+func (c *Coordinator[P, W]) readUndisturbed() bool {
+	return c.low == c.high && c.low.Quiesced()
 }
 
 // State returns the coordinator's resumable state; safe to call anytime
@@ -225,7 +288,7 @@ func (c *Coordinator[P, W]) planNextChunk(ctx context.Context) error {
 			continue
 		}
 
-		low, err := c.resolveFreshWatermark(ctx)
+		low, err := c.resolveWatermark(ctx)
 		if err != nil {
 			return err
 		}
@@ -235,7 +298,7 @@ func (c *Coordinator[P, W]) planNextChunk(ctx context.Context) error {
 			return fmt.Errorf("fetching chunk for table %s: %w", table, err)
 		}
 
-		high, err := c.resolveFreshWatermark(ctx)
+		high, err := c.resolveWatermark(ctx)
 		if err != nil {
 			return err
 		}
@@ -299,13 +362,13 @@ func (c *Coordinator[P, W]) resolveMaxPK(ctx context.Context, table TableID, pkC
 	return nil
 }
 
-// resolveFreshWatermark forces a fresh transaction first, since a long-lived
-// connection could otherwise see a stale snapshot.
-func (c *Coordinator[P, W]) resolveFreshWatermark(ctx context.Context) (W, error) {
+// resolveWatermark reads a watermark. It deliberately does not force a fresh
+// transaction first: each read runs as its own statement and so already sees
+// a current snapshot, and assigning an id here would make the pair
+// bracketing every chunk differ, which readUndisturbed relies on not
+// happening.
+func (c *Coordinator[P, W]) resolveWatermark(ctx context.Context) (W, error) {
 	var zero W
-	if err := c.cfg.Deps.ForceFreshTransaction(ctx); err != nil {
-		return zero, fmt.Errorf("forcing fresh transaction: %w", err)
-	}
 	wm, err := c.cfg.Deps.ResolveWatermark(ctx)
 	if err != nil {
 		return zero, fmt.Errorf("resolving watermark: %w", err)

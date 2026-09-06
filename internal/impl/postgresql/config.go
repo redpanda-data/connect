@@ -66,13 +66,18 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resour
 			)
 		}
 		if cfg.Enabled && heartbeatInterval > incSnapshotSlowHeartbeatThreshold {
-			// Same dependency, less severe: it progresses, just slowly. Quantify
-			// it rather than leaving operators to discover the rate themselves.
+			// Same dependency, far less severe now the coordinator drains: a
+			// commit arriving against a still database releases up to
+			// DefaultMaxDrainChunks chunks rather than one, so a long interval
+			// costs round trips, not throughput per row. Still worth saying,
+			// since it does bound how fast a quiet table completes.
+			rowsPerBeat := int64(cfg.ChunkSize) * int64(incrementalsnapshot.DefaultMaxDrainChunks)
 			mgr.Logger().Warnf(
-				"Incremental snapshot advances at most one chunk (%s.%s=%d rows) per streamed commit, and %s is %s. On tables with little write traffic that caps the backfill at roughly %d rows/hour; lower %s to speed it up.",
-				fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, cfg.ChunkSize,
+				"Incremental snapshot progress is paced by streamed commits, and %s is %s. On tables with little write traffic each heartbeat backfills up to %d rows (%s.%s=%d x %d chunks drained per commit); lower %s if the initial backfill needs to finish sooner.",
 				fieldHeartbeatInterval, heartbeatInterval,
-				int64(float64(cfg.ChunkSize)*time.Hour.Seconds()/heartbeatInterval.Seconds()),
+				rowsPerBeat,
+				fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, cfg.ChunkSize,
+				incrementalsnapshot.DefaultMaxDrainChunks,
 				fieldHeartbeatInterval,
 			)
 		}

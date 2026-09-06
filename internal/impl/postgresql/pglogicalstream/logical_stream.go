@@ -625,28 +625,33 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 		// position -- passing 0 would compare as older than every watermark
 		// and could open or close the window spuriously.
 		if s.incSnapshotCoordinator != nil && *currentTxnXid != 0 {
-			emitted, changed, err := s.incSnapshotCoordinator.OnCommit(ctx, *currentTxnXid)
-			if err != nil {
-				return changeResultNoMessage, fmt.Errorf("advancing incremental snapshot: %w", err)
-			}
-			if changed {
-				if len(emitted) > 0 {
-					s.logger.Debugf("Incremental snapshot: flushed %d row(s) for table %s", len(emitted), emitted[0].Table)
+			// The coordinator may release several chunks per commit when the
+			// database is quiet enough to need no deduplication, so this is
+			// called once per chunk rather than once per commit. Blocking on
+			// s.messages is what paces the drain.
+			emit := func(rows []incrementalsnapshot.Row) error {
+				if len(rows) > 0 {
+					s.logger.Debugf("Incremental snapshot: flushed %d row(s) for table %s", len(rows), rows[0].Table)
 				} else {
 					s.logger.Debugf("Incremental snapshot: checkpoint advanced with no rows to flush (fully deduplicated)")
 				}
-				if s.incSnapshotCoordinator.Done() {
-					s.logger.Debugf("Incremental snapshot: complete")
-				}
 				state, err := json.Marshal(s.incSnapshotCoordinator.State())
 				if err != nil {
-					return changeResultNoMessage, fmt.Errorf("serializing incremental snapshot state: %w", err)
+					return fmt.Errorf("serializing incremental snapshot state: %w", err)
 				}
 				select {
-				case s.messages <- buildIncrementalSnapshotMessages(emitted, state):
+				case s.messages <- buildIncrementalSnapshotMessages(rows, state):
+					return nil
 				case <-ctx.Done():
-					return changeResultNoMessage, ctx.Err()
+					return ctx.Err()
 				}
+			}
+			changed, err := s.incSnapshotCoordinator.OnCommit(ctx, *currentTxnXid, emit)
+			if err != nil {
+				return changeResultNoMessage, fmt.Errorf("advancing incremental snapshot: %w", err)
+			}
+			if changed && s.incSnapshotCoordinator.Done() {
+				s.logger.Debugf("Incremental snapshot: complete")
 			}
 		}
 		*currentTxnCommitTime = time.Time{}

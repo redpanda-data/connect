@@ -10,6 +10,7 @@ package incrementalsnapshot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -27,10 +28,32 @@ type testWatermark struct {
 
 func (w testWatermark) OpensAt(pos uint64) bool  { return pos >= w.Xmin }
 func (w testWatermark) ClosesAt(pos uint64) bool { return pos > w.Xmax }
+func (w testWatermark) Quiesced() bool           { return w.Xmin == w.Xmax }
 
 // testConfig saves repeating the coordinator's type arguments at every
 // construction site.
 type testConfig = CoordinatorConfig[uint64, testWatermark]
+
+// collect adapts the old one-chunk-per-OnCommit assertions to the EmitFunc
+// API, gathering whatever a call releases.
+func collect(rows *[][]Row) EmitFunc {
+	return func(r []Row) error {
+		*rows = append(*rows, r)
+		return nil
+	}
+}
+
+// onCommit calls OnCommit and flattens the released chunks, so tests that
+// predate the drain loop keep reading as one chunk per commit.
+func onCommit[W Watermark[uint64]](t *testing.T, c *Coordinator[uint64, W], pos uint64) (emitted []Row, changed bool, err error) {
+	t.Helper()
+	var chunks [][]Row
+	changed, err = c.OnCommit(context.Background(), pos, collect(&chunks))
+	for _, chunk := range chunks {
+		emitted = append(emitted, chunk...)
+	}
+	return emitted, changed, err
+}
 
 func TestCoordinatorFullScenario(t *testing.T) {
 	tableA := TableID{Schema: "public", Table: "a"}
@@ -81,7 +104,7 @@ func TestCoordinatorFullScenario(t *testing.T) {
 	assert.False(t, removedOther)
 
 	// txid below low.Xmin: window must not open yet.
-	emitted, changed, err := coord.OnCommit(context.Background(), 50)
+	emitted, changed, err := onCommit(t, coord, 50)
 	require.NoError(t, err)
 	assert.False(t, changed)
 	assert.Nil(t, emitted)
@@ -89,25 +112,25 @@ func TestCoordinatorFullScenario(t *testing.T) {
 	// A position below low.Xmin stays a no-op however low it goes -- the
 	// coordinator no longer special-cases a zero position, it just asks the
 	// watermark (callers filter unknown positions out; see OnCommit).
-	emitted, changed, err = coord.OnCommit(context.Background(), 0)
+	emitted, changed, err = onCommit(t, coord, 0)
 	require.NoError(t, err)
 	assert.False(t, changed)
 	assert.Nil(t, emitted)
 
 	// txid==low.Xmin: opens, but doesn't close (threshold=105).
-	emitted, changed, err = coord.OnCommit(context.Background(), 100)
+	emitted, changed, err = onCommit(t, coord, 100)
 	require.NoError(t, err)
 	assert.False(t, changed)
 	assert.Nil(t, emitted)
 
 	// txid at the threshold exactly: still not closed (<=).
-	emitted, changed, err = coord.OnCommit(context.Background(), 105)
+	emitted, changed, err = onCommit(t, coord, 105)
 	require.NoError(t, err)
 	assert.False(t, changed)
 	assert.Nil(t, emitted)
 
 	// txid > threshold: closes, flushes, advances to B via A's empty follow-up.
-	emitted, changed, err = coord.OnCommit(context.Background(), 106)
+	emitted, changed, err = onCommit(t, coord, 106)
 	require.NoError(t, err)
 	assert.True(t, changed)
 	require.Len(t, emitted, 2)
@@ -123,15 +146,15 @@ func TestCoordinatorFullScenario(t *testing.T) {
 	assert.Equal(t, 2, coord.window.Len())
 
 	// B's open/close cycle (low=120, high=125).
-	_, changed, err = coord.OnCommit(context.Background(), 119)
+	_, changed, err = onCommit(t, coord, 119)
 	require.NoError(t, err)
 	assert.False(t, changed)
 
-	_, changed, err = coord.OnCommit(context.Background(), 120)
+	_, changed, err = onCommit(t, coord, 120)
 	require.NoError(t, err)
 	assert.False(t, changed)
 
-	emitted, changed, err = coord.OnCommit(context.Background(), 126)
+	emitted, changed, err = onCommit(t, coord, 126)
 	require.NoError(t, err)
 	assert.True(t, changed)
 	require.Len(t, emitted, 2)
@@ -182,11 +205,11 @@ func TestCoordinatorZeroRowAdvanceBetweenTables(t *testing.T) {
 	assert.Equal(t, 2, coord.window.Len())
 
 	// Closes A's window; triggers A's zero-row fetch, advancing to B.
-	_, changed, err := coord.OnCommit(context.Background(), 10)
+	_, changed, err := onCommit(t, coord, 10)
 	require.NoError(t, err)
 	assert.False(t, changed) // window opened, not yet closed
 
-	emitted, changed, err := coord.OnCommit(context.Background(), 12)
+	emitted, changed, err := onCommit(t, coord, 12)
 	require.NoError(t, err)
 	assert.True(t, changed)
 	assert.Len(t, emitted, 2)
@@ -196,11 +219,11 @@ func TestCoordinatorZeroRowAdvanceBetweenTables(t *testing.T) {
 	assert.Equal(t, 2, coord.window.Len())
 
 	// Closes B's window; B's zero-row follow-up exhausts the queue.
-	_, changed, err = coord.OnCommit(context.Background(), 14)
+	_, changed, err = onCommit(t, coord, 14)
 	require.NoError(t, err)
 	assert.False(t, changed)
 
-	emitted, changed, err = coord.OnCommit(context.Background(), 16)
+	emitted, changed, err = onCommit(t, coord, 16)
 	require.NoError(t, err)
 	assert.True(t, changed)
 	assert.Len(t, emitted, 2)
@@ -220,7 +243,7 @@ func TestCoordinatorOnCommitNoopsWhenDone(t *testing.T) {
 	require.NoError(t, coord.Start(context.Background()))
 	require.True(t, coord.Done())
 
-	emitted, changed, err := coord.OnCommit(context.Background(), 100)
+	emitted, changed, err := onCommit(t, coord, 100)
 	require.NoError(t, err)
 	assert.False(t, changed)
 	assert.Nil(t, emitted)
@@ -262,7 +285,7 @@ func TestCoordinatorSkipsEmptyTable(t *testing.T) {
 	assert.Equal(t, tableB, *coord.current)
 	assert.Equal(t, 2, coord.window.Len())
 
-	emitted, changed, err := coord.OnCommit(context.Background(), 3)
+	emitted, changed, err := onCommit(t, coord, 3)
 	require.NoError(t, err)
 	assert.True(t, changed)
 	assert.Len(t, emitted, 2)
@@ -365,11 +388,11 @@ func TestCoordinatorResumeRefetchesUnflushedChunk(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, coord.Start(context.Background())) // fetches chunk 1 ([1,2])
 
-	_, changed, err := coord.OnCommit(context.Background(), 1) // opens, doesn't close (1 <= closeThreshold 2)
+	_, changed, err := onCommit(t, coord, 1) // opens, doesn't close (1 <= closeThreshold 2)
 	require.NoError(t, err)
 	assert.False(t, changed)
 
-	emitted, changed, err := coord.OnCommit(context.Background(), 3) // closes: flushes chunk 1, fetches chunk 2
+	emitted, changed, err := onCommit(t, coord, 3) // closes: flushes chunk 1, fetches chunk 2
 	require.NoError(t, err)
 	require.True(t, changed)
 	require.Len(t, emitted, 2)
@@ -391,7 +414,7 @@ func TestCoordinatorResumeRefetchesUnflushedChunk(t *testing.T) {
 	require.Len(t, deps.fetchLog, 3)
 	assert.Equal(t, deps.fetchLog[1], deps.fetchLog[2], "resumed coordinator must request the same lower bound as the original chunk 2 fetch")
 
-	emitted, changed, err = resumed.OnCommit(context.Background(), 5) // opens and closes in one call (5 > closeThreshold 4)
+	emitted, changed, err = onCommit(t, resumed, 5) // opens and closes in one call (5 > closeThreshold 4)
 	require.NoError(t, err)
 	require.True(t, changed)
 	require.Len(t, emitted, 2, "chunk 2's rows must still be emitted exactly once, on the resumed coordinator")
@@ -595,10 +618,142 @@ func TestCoordinatorDedupsBufferedFinalChunk(t *testing.T) {
 
 	// Window closes: only the un-superseded row is emitted, and with no
 	// tables left the coordinator is done.
-	emitted, changed, err := coord.OnCommit(context.Background(), 106)
+	emitted, changed, err := onCommit(t, coord, 106)
 	require.NoError(t, err)
 	require.True(t, changed)
 	require.Len(t, emitted, 1)
 	assert.Equal(t, PrimaryKey{2}, emitted[0].PK)
 	assert.True(t, coord.Done())
+}
+
+// newDrainCoordinator builds a coordinator over a single table of six rows in
+// three equal chunks, with every watermark identical and quiesced -- i.e. a
+// database sitting completely still.
+func newDrainCoordinator(t *testing.T, maxDrain int) (*Coordinator[uint64, testWatermark], TableID) {
+	t.Helper()
+	table := TableID{Schema: "public", Table: "a"}
+
+	const chunkSize = 2
+	rows := []Row{
+		rowFor(table, 1), rowFor(table, 2),
+		rowFor(table, 3), rowFor(table, 4),
+		rowFor(table, 5), rowFor(table, 6),
+	}
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		table.String(): {pkCols: []string{"id"}, rows: rows, maxPK: PrimaryKey{6}},
+	}, chunkSize)
+	// One watermark is enough: the mock repeats its last, so every chunk is
+	// bracketed by an identical quiesced pair.
+	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100})
+
+	coord, err := NewCoordinator(testConfig{
+		Tables:         []TableID{table},
+		ChunkSize:      chunkSize,
+		Deps:           mock,
+		MaxDrainChunks: maxDrain,
+	}, nil)
+	require.NoError(t, err)
+	require.NoError(t, coord.Start(context.Background()))
+	return coord, table
+}
+
+func TestCoordinatorDrainsQuietDatabaseInOneCommit(t *testing.T) {
+	// The point of the drain: a chunk read while nothing was in flight needs
+	// no deduplication, so holding it would mean waiting for a commit that on
+	// a quiet table only arrives on the next heartbeat. All three chunks must
+	// come out on this single commit.
+	coord, _ := newDrainCoordinator(t, DefaultMaxDrainChunks)
+
+	var chunks [][]Row
+	changed, err := coord.OnCommit(context.Background(), 101, collect(&chunks))
+	require.NoError(t, err)
+	require.True(t, changed)
+
+	require.Len(t, chunks, 3, "every chunk should drain on one commit")
+	assert.Equal(t, PrimaryKey{1}, chunks[0][0].PK)
+	assert.Equal(t, PrimaryKey{3}, chunks[1][0].PK)
+	assert.Equal(t, PrimaryKey{5}, chunks[2][0].PK)
+	assert.True(t, coord.Done())
+}
+
+func TestCoordinatorDrainRespectsMaxDrainChunks(t *testing.T) {
+	// Emitting runs on the caller's replication loop, so the drain has to
+	// hand control back periodically rather than run the table to completion.
+	coord, _ := newDrainCoordinator(t, 1)
+
+	var chunks [][]Row
+	changed, err := coord.OnCommit(context.Background(), 101, collect(&chunks))
+	require.NoError(t, err)
+	require.True(t, changed)
+
+	// The window's own chunk, plus exactly one drained.
+	require.Len(t, chunks, 2)
+	assert.False(t, coord.Done(), "a chunk stays buffered for the next commit")
+}
+
+func TestCoordinatorDrainStopsOnConcurrentActivity(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+
+	const chunkSize = 2
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		table.String(): {
+			pkCols: []string{"id"},
+			rows:   []Row{rowFor(table, 1), rowFor(table, 2), rowFor(table, 3), rowFor(table, 4)},
+			maxPK:  PrimaryKey{4},
+		},
+	}, chunkSize)
+	// Chunk 1 is bracketed by an identical pair, chunk 2 by a differing one --
+	// a transaction was assigned while it was being read, so its rows may yet
+	// be superseded and must not be released early.
+	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100}) // low, chunk 1
+	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100}) // high, chunk 1
+	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100}) // low, chunk 2
+	mock.pushWatermark(testWatermark{Xmin: 102, Xmax: 102}) // high, chunk 2
+
+	coord, err := NewCoordinator(testConfig{
+		Tables:    []TableID{table},
+		ChunkSize: chunkSize,
+		Deps:      mock,
+	}, nil)
+	require.NoError(t, err)
+	require.NoError(t, coord.Start(context.Background()))
+
+	var chunks [][]Row
+	changed, err := coord.OnCommit(context.Background(), 101, collect(&chunks))
+	require.NoError(t, err)
+	require.True(t, changed)
+
+	require.Len(t, chunks, 1, "the disturbed chunk must stay buffered for dedup")
+	assert.Equal(t, PrimaryKey{1}, chunks[0][0].PK)
+	assert.Equal(t, 2, coord.window.Len())
+}
+
+func TestCoordinatorDrainPropagatesEmitError(t *testing.T) {
+	// emit is a channel send at the call site, so its error is how a
+	// cancelled stream aborts a drain in progress.
+	coord, _ := newDrainCoordinator(t, DefaultMaxDrainChunks)
+
+	wantErr := errors.New("downstream gone")
+	calls := 0
+	_, err := coord.OnCommit(context.Background(), 101, func([]Row) error {
+		calls++
+		if calls == 2 {
+			return wantErr
+		}
+		return nil
+	})
+	require.ErrorIs(t, err, wantErr)
+	assert.Equal(t, 2, calls, "the drain must stop at the failing emit")
+}
+
+func TestCoordinatorForcesFreshTransactionOnceOnly(t *testing.T) {
+	// Forcing per watermark burns two ids a chunk and, worse, guarantees the
+	// pair bracketing every read differs -- which would disable the drain.
+	coord, _ := newDrainCoordinator(t, DefaultMaxDrainChunks)
+
+	_, err := coord.OnCommit(context.Background(), 101, func([]Row) error { return nil })
+	require.NoError(t, err)
+
+	deps := coord.cfg.Deps.(*scriptedMockDeps)
+	assert.Equal(t, 1, deps.forceFreshCalls, "only Start should force a transaction id")
 }

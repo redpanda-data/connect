@@ -13,8 +13,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-
-	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 // Watermark is a simplified view of a Postgres txid_current_snapshot()
@@ -22,16 +20,15 @@ import (
 // incremental snapshot window against the concurrently streamed
 // transactions.
 //
-// It implements incrementalsnapshot.Watermark[uint32], the position type
-// being a raw transaction id as pgoutput reports it on a BEGIN message.
+// It satisfies the shared package's Watermark[uint32] constraint (checked
+// where CoordinatorConfig is instantiated), the position type being a raw
+// transaction id as pgoutput reports it on a BEGIN message.
 // The bounds here are epoch-extended 64-bit values, so every comparison
 // goes through normalizeXID -- see the note there.
 type Watermark struct {
 	Xmin uint64
 	Xmax uint64
 }
-
-var _ incrementalsnapshot.Watermark[uint32] = Watermark{}
 
 // OpensAt reports whether xid started at or after this watermark was taken.
 // Xmin is the oldest transaction still in flight at that point, so any xid
@@ -46,6 +43,13 @@ func (w Watermark) OpensAt(xid uint32) bool {
 // assigned at that point, so anything strictly above it started later.
 func (w Watermark) ClosesAt(xid uint32) bool {
 	return normalizeXID(xid, w.Xmax) > w.Xmax
+}
+
+// Quiesced reports whether no transaction was in flight when this watermark
+// was taken. Xmin is the oldest still running and Xmax the first not yet
+// assigned, so their being equal means nothing was running at all.
+func (w Watermark) Quiesced() bool {
+	return w.Xmin == w.Xmax
 }
 
 const (

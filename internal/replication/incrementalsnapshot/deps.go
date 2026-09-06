@@ -43,9 +43,12 @@ type Deps[W any] interface {
 	// ResolveWatermark returns a fresh watermark.
 	ResolveWatermark(ctx context.Context) (W, error)
 
-	// ForceFreshTransaction ensures the next watermark resolution observes
-	// a fresh transaction snapshot (e.g. by starting and committing a
-	// trivial transaction).
+	// ForceFreshTransaction assigns the connection a real transaction id
+	// (e.g. by starting and committing a trivial transaction), giving the
+	// replication stream a known position to reconcile the first watermark
+	// against. Called once from Start, never per chunk: doing it per
+	// watermark burns two ids per chunk and, worse, guarantees the pair
+	// bracketing every read differs, which defeats the drain entirely.
 	ForceFreshTransaction(ctx context.Context) error
 
 	// FetchChunk returns up to limit rows of table ordered by primary key,
@@ -63,7 +66,18 @@ type CoordinatorConfig[P any, W Watermark[P]] struct {
 	Tables    []TableID
 	ChunkSize int
 	Deps      Deps[W]
+	// MaxDrainChunks caps how many chunks one OnCommit may release when the
+	// database is still enough to need no deduplication. Emitting happens on
+	// the caller's replication loop, so this bounds how long that loop can
+	// be held -- keeping it free for standby keepalives and the like.
+	// Defaults to DefaultMaxDrainChunks when zero; a negative value disables
+	// draining, limiting the backfill to one chunk per streamed commit.
+	MaxDrainChunks int
 }
+
+// DefaultMaxDrainChunks is the drain cap applied when
+// CoordinatorConfig.MaxDrainChunks is zero.
+const DefaultMaxDrainChunks = 32
 
 // Validate checks that the config is usable, returning a clear error rather
 // than failing confusingly deep inside the algorithm.

@@ -14,10 +14,15 @@ package incrementalsnapshot
 // buffered chunk is safe to emit.
 //
 // P is the database's position type -- whatever identifies and orders a
-// committed transaction (a Postgres xid, a MySQL GTID, an Oracle SCN). Both
-// methods run once per streamed commit, so must be pure and cheap, and
-// neither may panic on the zero value.
+// committed transaction (a Postgres xid, a MySQL GTID, an Oracle SCN). Every
+// method runs once per streamed commit, so must be pure and cheap, and none
+// may panic on the zero value.
+//
+// Implementations must be comparable: the coordinator compares the pair
+// bracketing a chunk read for equality to detect an undisturbed read.
 type Watermark[P any] interface {
+	comparable
+
 	// OpensAt reports whether pos started at or after this watermark was
 	// taken, meaning everything the watermark couldn't see has had a chance
 	// to stream.
@@ -27,4 +32,10 @@ type Watermark[P any] interface {
 	// flight when this watermark was taken. The coordinator requires it of
 	// both watermarks before emitting a chunk.
 	ClosesAt(pos P) bool
+
+	// Quiesced reports whether no transaction at all was in flight when this
+	// watermark was taken. Together with an equal pair of watermarks either
+	// side of a chunk read, it proves nothing could have modified the chunk
+	// while it was being read -- see Coordinator's drain behaviour.
+	Quiesced() bool
 }
