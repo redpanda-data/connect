@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 )
 
@@ -22,32 +23,35 @@ type incSnapshotCfg struct {
 	cacheKey string
 }
 
-func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resources, heartbeatInterval time.Duration) (*incSnapshotCfg, error) {
-	var (
-		cfg *incSnapshotCfg
-		err error
-	)
-	if conf.Contains(fieldIncSnapshot) {
-		out := &incSnapshotCfg{
-			cfg: &incrementalsnapshot.IncrementalSnapshotCfg{},
-		}
+func newDefaultIncSnapshotCfg() *incSnapshotCfg {
+	return &incSnapshotCfg{
+		cacheKey: incrementalsnapshot.DefaultIncSnapshotCheckpointKey,
+	}
+}
 
-		snapConf := conf.Namespace(fieldIncSnapshot)
-		if out.cfg.Enabled, err = snapConf.FieldBool(fieldIncSnapshotEnabled); err != nil {
+func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resources, heartbeatInterval time.Duration) (*incSnapshotCfg, error) {
+	out := newDefaultIncSnapshotCfg()
+	if conf.Contains(fieldIncSnapshot) {
+		var (
+			snapConf = conf.Namespace(fieldIncSnapshot)
+			cfg      = &incrementalsnapshot.IncrementalSnapshotCfg{}
+			err      error
+		)
+
+		if cfg.Enabled, err = snapConf.FieldBool(fieldIncSnapshotEnabled); err != nil {
 			return nil, err
 		}
 		if snapConf.Contains(fieldIncrementalSnapshotTables) {
-			if out.cfg.Tables, err = snapConf.FieldStringList(fieldIncrementalSnapshotTables); err != nil {
+			if cfg.Tables, err = snapConf.FieldStringList(fieldIncrementalSnapshotTables); err != nil {
 				return nil, err
 			}
 		}
 
-		chunkSize, err := snapConf.FieldInt(fieldIncrementalSnapshotChunkSize)
-		if err != nil {
+		if cfg.ChunkSize, err = snapConf.FieldInt(fieldIncrementalSnapshotChunkSize); err != nil {
 			return nil, err
 		}
-		if chunkSize <= 0 {
-			return nil, fmt.Errorf("%s.%s must be > 0, got %d", fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, chunkSize)
+		if cfg.ChunkSize <= 0 {
+			return nil, fmt.Errorf("%s.%s must be > 0, got %d", fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, cfg.ChunkSize)
 		}
 
 		// The snapshot only advances on a streamed commit, so on tables with no
@@ -55,20 +59,20 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resour
 		// Without one the backfill fetches its first chunk and then stalls
 		// indefinitely, with nothing to report -- reject that outright rather
 		// than looking healthy while doing nothing.
-		if out.cfg.Enabled && heartbeatInterval <= 0 {
+		if cfg.Enabled && heartbeatInterval <= 0 {
 			return nil, fmt.Errorf(
 				"%s.%s is true but %s is disabled: incremental snapshot progress is paced by streamed commits, so a quiet table would never advance. Set %s to a non-zero interval",
 				fieldIncSnapshot, fieldIncSnapshotEnabled, fieldHeartbeatInterval, fieldHeartbeatInterval,
 			)
 		}
-		if out.cfg.Enabled && heartbeatInterval > incSnapshotSlowHeartbeatThreshold {
+		if cfg.Enabled && heartbeatInterval > incSnapshotSlowHeartbeatThreshold {
 			// Same dependency, less severe: it progresses, just slowly. Quantify
 			// it rather than leaving operators to discover the rate themselves.
 			mgr.Logger().Warnf(
 				"Incremental snapshot advances at most one chunk (%s.%s=%d rows) per streamed commit, and %s is %s. On tables with little write traffic that caps the backfill at roughly %d rows/hour; lower %s to speed it up.",
-				fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, chunkSize,
+				fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, cfg.ChunkSize,
 				fieldHeartbeatInterval, heartbeatInterval,
-				int64(float64(chunkSize)*time.Hour.Seconds()/heartbeatInterval.Seconds()),
+				int64(float64(cfg.ChunkSize)*time.Hour.Seconds()/heartbeatInterval.Seconds()),
 				fieldHeartbeatInterval,
 			)
 		}
@@ -81,12 +85,16 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resour
 		if out.cacheKey, err = snapConf.FieldString(fieldIncSnapshotCheckpointCacheKey); err != nil {
 			return nil, err
 		}
-		if out.cfg.Enabled && out.cache == "" {
+		if cfg.Enabled && out.cache == "" {
 			return nil, fmt.Errorf("%s.%s is required when %s.%s is true", fieldIncSnapshot, fieldIncSnapshotCheckpointCache, fieldIncSnapshot, fieldIncSnapshotEnabled)
 		}
-		if out.cfg.Enabled && !conf.Resources().HasCache(out.cache) {
+		if cfg.Enabled && !conf.Resources().HasCache(out.cache) {
 			return nil, fmt.Errorf("unknown cache resource: %s", out.cache)
 		}
+		if cfg.Enabled {
+			out.cfg = cfg
+		}
 	}
-	return cfg, nil
+
+	return out, nil
 }
