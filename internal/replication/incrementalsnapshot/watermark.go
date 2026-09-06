@@ -10,28 +10,21 @@ package incrementalsnapshot
 
 // Watermark is a point-in-time view of which transactions a database
 // considered in flight. The coordinator takes one either side of every chunk
-// read and reconciles the pair against the positions of transactions the
-// replication stream reports, deciding when the buffered chunk is safe to
-// emit.
+// read and reconciles the pair against streamed commits to decide when the
+// buffered chunk is safe to emit.
 //
 // P is the database's position type -- whatever identifies and orders a
 // committed transaction (a Postgres xid, a MySQL GTID, an Oracle SCN). Both
-// methods must be pure and cheap: they run once per streamed commit.
-//
-// Implementations are typically small value types, so the coordinator's zero
-// value for W must behave sanely: it is only consulted after the first chunk
-// is planned, but must not panic before then.
+// methods run once per streamed commit, so must be pure and cheap, and
+// neither may panic on the zero value.
 type Watermark[P any] interface {
-	// OpensAt reports whether a transaction committing at pos proves the
-	// window has opened -- that is, pos started at or after this watermark
-	// was taken, so every transaction this watermark could not see has now
-	// had a chance to stream.
+	// OpensAt reports whether pos started at or after this watermark was
+	// taken, meaning everything the watermark couldn't see has had a chance
+	// to stream.
 	OpensAt(pos P) bool
 
-	// ClosesAt reports whether pos is strictly after every transaction that
-	// could have been in flight when this watermark was taken. The
-	// coordinator only closes a window once this holds for both the low and
-	// the high watermark, so a chunk is never emitted while a transaction
-	// that might have modified it is still unaccounted for.
+	// ClosesAt reports whether pos is strictly after every transaction in
+	// flight when this watermark was taken. The coordinator requires it of
+	// both watermarks before emitting a chunk.
 	ClosesAt(pos P) bool
 }
