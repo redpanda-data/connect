@@ -67,20 +67,11 @@ type Stream struct {
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
 
-	// incSnapshotCoordinator drives incremental snapshotting concurrently with
-	// replication streaming; nil unless enabled via Config.IncrementalSnapshot.
-	// Only touched from the streamMessages goroutine.
+	// incremental snapshot
 	incSnapshotCoordinator *incsnapshot.Coordinator
-	// incSnapshotConn is a dedicated connection for incremental snapshot
-	// queries; pgConn is occupied by the replication protocol once
-	// streaming starts.
-	incSnapshotConn *sql.DB
-	// incSnapshotPKCache caches unquoted primary key columns per table
-	// (keyed by TableID.String()), resolved lazily on first use.
-	incSnapshotPKCache map[string][]string
-	// incSnapshotTables is the set of tables under incremental
-	// snapshot, so DML on other tables skips PK resolution.
-	incSnapshotTables map[incrementalsnapshot.TableID]struct{}
+	incSnapshotConn        *sql.DB
+	incSnapshotPKCache     map[string][]string
+	incSnapshotTables      map[incrementalsnapshot.TableID]struct{}
 	// willEmitBlockingSnapshot is true only when this session will run the
 	// one-shot stream_snapshot backfill (and emit a SnapshotCompleteOpType
 	// sentinel) -- false whenever the slot already existed at startup, since
