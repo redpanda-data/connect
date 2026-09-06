@@ -23,8 +23,8 @@ var (
 	DefaultIncSnapshotCheckpointKey = "postgres_cdc_incremental_snapshot"
 )
 
-// IncrementalSnapshotCfg configures incremental snapshotting.
-type IncrementalSnapshotCfg struct {
+// Cfg configures incremental snapshotting.
+type Cfg struct {
 	Enabled     bool
 	Tables      []string
 	ChunkSize   int
@@ -32,7 +32,7 @@ type IncrementalSnapshotCfg struct {
 }
 
 // IsEnabled reports whether incremental snapshot is enabled.
-func (c *IncrementalSnapshotCfg) IsEnabled() bool {
+func (c *Cfg) IsEnabled() bool {
 	return c != nil && c.Enabled
 }
 

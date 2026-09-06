@@ -18,7 +18,7 @@ import (
 )
 
 type incSnapshotCfg struct {
-	cfg      *incrementalsnapshot.IncrementalSnapshotCfg
+	cfg      *incrementalsnapshot.Cfg
 	cache    string
 	cacheKey string
 }
@@ -34,7 +34,7 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resour
 	if conf.Contains(fieldIncSnapshot) {
 		var (
 			snapConf = conf.Namespace(fieldIncSnapshot)
-			cfg      = &incrementalsnapshot.IncrementalSnapshotCfg{}
+			cfg      = &incrementalsnapshot.Cfg{}
 			err      error
 		)
 
