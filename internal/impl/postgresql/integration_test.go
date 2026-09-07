@@ -1848,11 +1848,161 @@ memory: {}`))
 		}
 	})
 
-	// On a quiet table only the heartbeat produces the COMMIT that advances
-	// the snapshot, and pgoutput decodes the heartbeat message on PostgreSQL
-	// 15 and later only. Run on each version, because a change to the plugin
-	// options or to the heartbeat can stop the snapshot without an error.
+	t.Run("Concurrent Updates", func(t *testing.T) {
+		// Whichever order the two occur in, the consumer must end on the updated
+		// value: an update committing before its chunk is read is already in the
+		// snapshot's result, and one committing after must evict the buffered
+		// row.
+
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		// Not a multiple of chunk_size, so the last chunk is a partial one.
+		const numPreExisting = 605 // 12 full chunks of 50, then 5
+		for range numPreExisting {
+			_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('orig', NOW())`)
+			require.NoError(t, err)
+		}
+
+		var minID, maxID int64
+		require.NoError(t, db.QueryRow(`SELECT MIN(id), MAX(id) FROM flights`).Scan(&minID, &maxID))
+
+		template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_incremental_collision
+    schema: public
+    heartbeat_interval: 500ms
+    tables:
+      - flights
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 50
+        checkpoint_cache: snap_cache
+`, databaseURL)
+
+		builder := service.NewStreamBuilder()
+		require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, builder.AddInputYAML(template))
+		require.NoError(t, builder.AddCacheYAML(`
+label: snap_cache
+memory: {}`))
+
+		// Keep the last operation and value seen per id, plus the arrival
+		// order, so a stale read landing after an update is detectable.
+		type observation struct {
+			operation string
+			name      string
+		}
+		var (
+			mu      sync.Mutex
+			latest  = map[int64]observation{}
+			updates int
+			reads   int
+		)
+		require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range batch {
+				data, err := msg.AsStructured()
+				if err != nil {
+					return err
+				}
+				fields, ok := data.(map[string]any)
+				if !ok {
+					return fmt.Errorf("unexpected payload shape %T", data)
+				}
+				id, err := fields["id"].(json.Number).Int64()
+				if err != nil {
+					return err
+				}
+				name, _ := fields["name"].(string)
+				op, _ := msg.MetaGet("operation")
+				switch op {
+				case "read":
+					reads++
+				case "update":
+					updates++
+				}
+				latest[id] = observation{operation: op, name: name}
+			}
+			return nil
+		}))
+
+		stream, err := builder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		streamStopped := make(chan struct{})
+		go func() {
+			defer close(streamStopped)
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		// Wait for the backfill to start, so the max-key bound is frozen and
+		// the updates below genuinely race chunk reads.
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return reads >= 1
+		}, 30*time.Second, 50*time.Millisecond, "did not observe any backfill rows before updating")
+
+		// Update every row repeatedly while the backfill is mid-flight. Each
+		// pass walks the key range, so updates land on chunks already read,
+		// currently buffered, and not yet reached. Several passes widen the
+		// window in which an update can collide with a buffered chunk.
+		const updatePasses = 3
+		for pass := range updatePasses {
+			name := fmt.Sprintf("updated-%d", pass)
+			for id := minID; id <= maxID; id++ {
+				_, err := db.Exec(`UPDATE flights SET name = $1 WHERE id = $2`, name, id)
+				require.NoError(t, err)
+			}
+		}
+		finalName := fmt.Sprintf("updated-%d", updatePasses-1)
+
+		var totalRows int64
+		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM flights`).Scan(&totalRows))
+		require.EqualValues(t, numPreExisting, totalRows)
+
+		// Every row must be accounted for, and settle on the updated value.
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			if int64(len(latest)) < totalRows {
+				return false
+			}
+			for _, obs := range latest {
+				if obs.name != finalName {
+					return false
+				}
+			}
+			return true
+		}, 90*time.Second, 100*time.Millisecond,
+			"a row never settled on its updated value, so a stale snapshot read overwrote a streamed change")
+
+		mu.Lock()
+		defer mu.Unlock()
+		require.Len(t, latest, int(totalRows))
+		// Sanity check on the race itself: if every update had been folded
+		// into the snapshot reads, no update would have streamed and the
+		// assertion above would pass without exercising dedup at all.
+		require.NotZero(t, updates, "no updates streamed as change events; the test did not exercise deduplication")
+		for id, obs := range latest {
+			assert.Equal(t, finalName, obs.name, "row %d settled on %q via %q", id, obs.name, obs.operation)
+		}
+
+		require.NoError(t, stream.StopWithin(10*time.Second))
+		<-streamStopped
+	})
+
 	for _, version := range []string{"17", "16", "15", "14", "13"} {
+		// On a quiet table only the heartbeat produces the COMMIT that advances
+		// the snapshot, and pgoutput decodes the heartbeat message on PostgreSQL
+		// 15 and later only. Run on each version, because a change to the plugin
+		// options or to the heartbeat can stop the snapshot without an error.
 		t.Run("QuietTable/PG"+version, func(t *testing.T) {
 			t.Parallel()
 
