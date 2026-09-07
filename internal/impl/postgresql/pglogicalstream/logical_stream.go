@@ -606,6 +606,49 @@ const (
 	changeResultEmittedMessage          processChangeResult = 2
 )
 
+// advanceIncrementalSnapshot reports a committed transaction to the snapshot,
+// sending whatever it releases before the commit reaches the consumer, so the
+// consumer never sees progress past changes it cannot yet read.
+//
+// A no-op when the snapshot is disabled or xid is zero. Zero means no BEGIN
+// supplied one, and it sorts below every watermark, so it would open or close
+// the window spuriously.
+func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) error {
+	if s.incSnapshotCoordinator == nil || xid == 0 {
+		return nil
+	}
+
+	// The coordinator may release several chunks for one commit, when the
+	// database is quiet enough to need no deduplication. So emit runs once per
+	// chunk, and its send to s.messages paces the drain.
+	emit := func(rows []incrementalsnapshot.Row) error {
+		if len(rows) > 0 {
+			s.logger.Debugf("Incremental snapshot: flushed %d row(s) for table %s", len(rows), rows[0].Table)
+		} else {
+			s.logger.Debugf("Incremental snapshot: checkpoint advanced with no rows to flush (fully deduplicated)")
+		}
+		state, err := json.Marshal(s.incSnapshotCoordinator.State())
+		if err != nil {
+			return fmt.Errorf("serializing incremental snapshot state: %w", err)
+		}
+		select {
+		case s.messages <- buildIncrementalSnapshotMessages(rows, state):
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	changed, err := s.incSnapshotCoordinator.OnCommit(ctx, xid, emit)
+	if err != nil {
+		return fmt.Errorf("advancing incremental snapshot: %w", err)
+	}
+	if changed && s.incSnapshotCoordinator.Done() {
+		s.logger.Debugf("Incremental snapshot: complete")
+	}
+	return nil
+}
+
 // Handle handles the pgoutput output.
 func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time, currentTxnXid *uint32) (processChangeResult, error) {
 	logicalMsg, err := Parse(xld.WALData)
@@ -625,45 +668,8 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 		*currentTxnCommitTime = begin.CommitTime
 		*currentTxnXid = begin.Xid
 	} else if _, ok := logicalMsg.(*CommitMessage); ok {
-		// The incremental snapshot must move forward, and the stream must
-		// send its rows, before this commit goes to the consumer. The
-		// consumer then never sees progress past changes that it cannot
-		// read.
-		//
-		// A zero xid shows that no BEGIN message gave a transaction id, so
-		// the position of this commit is unknown. OnCommit needs a real
-		// position. A zero value is older than each watermark and can open
-		// or close the window at the wrong time.
-		if s.incSnapshotCoordinator != nil && *currentTxnXid != 0 {
-			// The coordinator can release more than one chunk for each
-			// commit. This happens when the database is quiet and needs no
-			// row removal. Therefore this function runs one time for each
-			// chunk and not one time for each commit. The send to
-			// s.messages controls the speed of the drain.
-			emit := func(rows []incrementalsnapshot.Row) error {
-				if len(rows) > 0 {
-					s.logger.Debugf("Incremental snapshot: flushed %d row(s) for table %s", len(rows), rows[0].Table)
-				} else {
-					s.logger.Debugf("Incremental snapshot: checkpoint advanced with no rows to flush (fully deduplicated)")
-				}
-				state, err := json.Marshal(s.incSnapshotCoordinator.State())
-				if err != nil {
-					return fmt.Errorf("serializing incremental snapshot state: %w", err)
-				}
-				select {
-				case s.messages <- buildIncrementalSnapshotMessages(rows, state):
-					return nil
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-			changed, err := s.incSnapshotCoordinator.OnCommit(ctx, *currentTxnXid, emit)
-			if err != nil {
-				return changeResultNoMessage, fmt.Errorf("advancing incremental snapshot: %w", err)
-			}
-			if changed && s.incSnapshotCoordinator.Done() {
-				s.logger.Debugf("Incremental snapshot: complete")
-			}
+		if err := s.advanceIncrementalSnapshot(ctx, *currentTxnXid); err != nil {
+			return changeResultNoMessage, err
 		}
 		*currentTxnCommitTime = time.Time{}
 		*currentTxnXid = 0
