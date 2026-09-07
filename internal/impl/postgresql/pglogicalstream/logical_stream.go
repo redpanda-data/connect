@@ -76,21 +76,12 @@ type Stream struct {
 	incSnapshotConn        *sql.DB
 	incSnapshotPKCache     map[string][]string
 	incSnapshotTables      map[incrementalsnapshot.TableID]struct{}
-	// willEmitBlockingSnapshot is true only when this session runs the
-	// single stream_snapshot backfill. That backfill then also sends a
-	// SnapshotCompleteOpType message. The field is false when the slot
-	// already existed at startup, because the backfill runs on a new slot
-	// only.
-	willEmitBlockingSnapshot bool
-}
 
-// WillEmitBlockingSnapshot tells if this session runs the single
-// stream_snapshot backfill. That backfill also sends a
-// SnapshotCompleteOpType message. The caller uses the result to separate
-// those batches from the incremental snapshot batches. Both kinds of batch
-// have no LSN, but the incremental snapshot never sends that message.
-func (s *Stream) WillEmitBlockingSnapshot() bool {
-	return s.willEmitBlockingSnapshot
+	// BlockingSnapshot is true only when this session runs the one-shot
+	// stream_snapshot backfill, which also emits a SnapshotCompleteOpType
+	// sentinel. False when the slot already existed, since that backfill only
+	// runs against a fresh slot.
+	BlockingSnapshot bool
 }
 
 // NewPgStream creates a new instance of the Stream struct.
@@ -301,7 +292,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	var snapshotter *snapshotter
 	if config.StreamOldData {
-		stream.willEmitBlockingSnapshot = true
+		stream.BlockingSnapshot = true
 		// A crash between snapshot completion and slot promotion leaves <slot>_tmp
 		// behind, owned by the dead session. We only get here when no permanent
 		// slot exists, so any leftover _tmp slot is necessarily stale - drop it

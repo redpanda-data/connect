@@ -633,7 +633,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	// blockingSnapshotComplete gates the isSnapshot/snapshotAckWG barrier to
 	// the one-shot stream_snapshot phase, never to incremental snapshot's
 	// nil-LSN batches. See WillEmitBlockingSnapshot.
-	blockingSnapshotComplete := !pgStream.WillEmitBlockingSnapshot()
+	blockingSnapshotComplete := !pgStream.BlockingSnapshot
 
 	// pendingIncrementalState holds the newest checkpoint state until the
 	// next flush sends it. The "lsn" metadata of a message moves in the same
