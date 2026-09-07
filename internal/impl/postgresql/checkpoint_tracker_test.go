@@ -143,8 +143,8 @@ func (p *pgStreamInput) loadCachedIncSnapshotStateBytes(ctx context.Context) ([]
 	return val, cErr
 }
 
-// TestTrackAssignsIncreasingSeq checks that each tracked offset gets the next
-// number, and that a merge keeps the larger number.
+// TestTrackAssignsIncreasingSeq checks that each tracked offset gets the
+// next Seq.
 func TestTrackAssignsIncreasingSeq(t *testing.T) {
 	lsnA := "1/AAAA"
 	lsnB := "1/BBBB"
@@ -164,17 +164,10 @@ func TestTrackAssignsIncreasingSeq(t *testing.T) {
 	assert.Equal(t, uint64(2), offsetB.Seq)
 }
 
-// TestCommitCheckpointRejectsOlderState reproduces the race between two
-// concurrent acknowledgements.
-//
-// The pipeline can acknowledge two in-flight batches at the same time. Their
-// commits then write to the cache in any order. If the older write is last,
-// the cache holds an older checkpoint, and a restart reads chunks that the
-// pipeline already delivered and acknowledged.
-//
-// A lock alone does not correct this, because the two calls can take the lock
-// in either order. IncSnapshotState is opaque and does not show which state
-// is newer, so the writer must compare Seq.
+// TestCommitCheckpointRejectsOlderState covers the race between concurrent
+// acknowledgements: their writes can land in either order, and an older one
+// landing last makes a restart re-deliver chunks. A lock alone does not fix
+// this, because the calls can take it in either order.
 func TestCommitCheckpointRejectsOlderState(t *testing.T) {
 	const cacheName = "inc_snapshot_cache"
 	mgr := service.MockResources(service.MockResourcesOptAddCache(cacheName))
@@ -189,10 +182,10 @@ func TestCommitCheckpointRejectsOlderState(t *testing.T) {
 	older := []byte("state-1")
 	newer := []byte("state-2")
 
-	// The newer acknowledgement reaches the cache first.
+	// Newer acknowledgement lands first.
 	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: newer, Seq: 2}))
 
-	// The older acknowledgement then arrives. It must not write.
+	// Older one arrives after, and must not write.
 	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: older, Seq: 1}))
 
 	got, err := p.loadCachedIncSnapshotStateBytes(ctx)
@@ -201,8 +194,7 @@ func TestCommitCheckpointRejectsOlderState(t *testing.T) {
 }
 
 // TestCommitCheckpointConcurrentAcksNeverRegress runs many acknowledgements
-// at the same time, in a random order. The cache must hold the newest state
-// at the end. Run with -race.
+// concurrently. The cache must end on the newest state. Run with -race.
 func TestCommitCheckpointConcurrentAcksNeverRegress(t *testing.T) {
 	const (
 		cacheName = "inc_snapshot_cache"

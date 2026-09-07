@@ -552,20 +552,15 @@ type pgStreamInput struct {
 	incSnapshotCheckpointCache    string
 	incSnapshotCheckpointCacheKey string
 
-	// incStateMu protects lastPersistedIncSnapshotState. commitCheckpoint
-	// can read and write that field from the acknowledgements of more than
-	// one batch at the same time.
+	// incStateMu protects the lastPersisted fields below, which
+	// commitCheckpoint touches from concurrent acknowledgements.
 	incStateMu sync.Mutex
-	// lastPersistedIncSnapshotState prevents cache writes that are not
-	// necessary. After checkpointTracker moves a new state forward, each
-	// later checkpoint holds that same state. This includes each checkpoint
-	// that did not move the state. Refer to checkpointTracker.Track.
-	// Without this field, commitCheckpoint writes the same value for each
-	// acknowledgement.
+	// lastPersistedIncSnapshotState avoids needless cache writes.
+	// checkpointTracker copies the last state onto every later checkpoint,
+	// so most acknowledgements carry an unchanged value.
 	lastPersistedIncSnapshotState []byte
-	// lastPersistedIncSnapshotSeq is the CheckpointOffset.Seq of the state
-	// in the cache. persistIncSnapshotState compares it to reject a state
-	// that is older than the state it already wrote.
+	// lastPersistedIncSnapshotSeq is the Seq of the state in the cache.
+	// persistIncSnapshotState uses it to reject an older state.
 	lastPersistedIncSnapshotSeq uint64
 }
 
@@ -851,9 +846,8 @@ func newCheckpointTracker(limit int64) *checkpointTracker {
 }
 
 func (t *checkpointTracker) Track(ctx context.Context, offset incsnapshot.CheckpointOffset, batchSize int64) (func() *incsnapshot.CheckpointOffset, error) {
-	// Track runs on the processStream goroutine only, so this counter needs
-	// no lock. It gives commitCheckpoint an order for the offsets, because
-	// the acknowledgements can arrive at the same time.
+	// Track runs on the processStream goroutine only, so this needs no lock.
+	// It orders the offsets for commitCheckpoint.
 	t.seq++
 	offset.Seq = t.seq
 	t.last = t.last.Merge(offset)
@@ -882,19 +876,12 @@ func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogica
 	return errors.Join(errs...)
 }
 
-// persistIncSnapshotState writes the incremental snapshot state of offset to
-// the cache.
+// persistIncSnapshotState writes offset's snapshot state to the cache.
 //
-// The pipeline can acknowledge more than one batch at the same time, so two
-// calls can run together with different states. It holds incStateMu for the
-// full test and write. Without the lock, the two cache writes can occur in
-// any order, and an older state can then be the last write.
-//
-// The lock alone is not sufficient. The two calls can also take the lock in
-// any order, and IncSnapshotState does not show which state is newer.
-// Therefore the function also compares CheckpointOffset.Seq and writes a
-// newer state only. A restart then never reads a checkpoint that is older
-// than one the input already wrote.
+// Acknowledgements run concurrently, so it holds incStateMu across the test
+// and the write to keep the pair atomic. The lock alone is not enough: the
+// calls can take it in either order, so it also rejects any offset that is
+// not newer than the one already written.
 func (p *pgStreamInput) persistIncSnapshotState(ctx context.Context, offset incsnapshot.CheckpointOffset) error {
 	p.incStateMu.Lock()
 	defer p.incStateMu.Unlock()
@@ -904,9 +891,7 @@ func (p *pgStreamInput) persistIncSnapshotState(ctx context.Context, offset incs
 		return nil
 	}
 
-	// checkpointTracker copies the last state onto each checkpoint.
-	// Therefore most resolutions have the same state here. Record the new
-	// number, but do not write the same value to the cache again.
+	// Unchanged state: record the new Seq but skip the write.
 	if bytes.Equal(offset.IncSnapshotState, p.lastPersistedIncSnapshotState) {
 		p.lastPersistedIncSnapshotSeq = offset.Seq
 		return nil
