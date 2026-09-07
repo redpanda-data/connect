@@ -640,7 +640,13 @@ When set to true, the connector performs an incremental (chunked) snapshot of th
 
 Progress is driven by the replication stream: each streamed transaction releases the buffered chunk, and where it arrives against an otherwise idle database several further chunks are read straight away, since a chunk read while nothing was in flight needs no deduplication. On tables with little write traffic the backfill therefore advances in bursts on each heartbeat, and `heartbeat_interval` must be non-zero for it to advance at all.
 
-Correctness (no duplicate rows) is only guaranteed for tables whose primary key is monotonically increasing for new rows (for example a serial/identity column, or a UUIDv7-style key) during the snapshot. Rows inserted with a primary key that reuses or fills a gap below the table's current maximum key while the snapshot is in progress may be delivered twice: once from replication, once from the backfill. Consumers should treat incoming rows as idempotent upserts keyed by primary key, as is standard CDC practice.
+A row may be delivered twice, once from replication and once from the backfill, in two cases.
+
+The first is a primary key that reuses or fills a gap below the table's current maximum key while the snapshot is in progress. Tables whose primary key increases monotonically for new rows (a serial/identity column, or a UUIDv7-style key) cannot hit this.
+
+The second applies to every table, whatever its key. Each table's upper bound is the maximum key at the moment the snapshot reaches that table, not when the connector starts. Tables are backfilled one at a time, so for the second and later tables that moment can be well after replication began, and any row inserted in between is both streamed and backfilled. The window is as long as the snapshots of all preceding tables, so with several large tables it can be substantial.
+
+Consumers should therefore treat incoming rows as idempotent upserts keyed by primary key, as is standard CDC practice.
 
 
 *Type*: `bool`
