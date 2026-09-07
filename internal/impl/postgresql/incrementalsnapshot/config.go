@@ -49,6 +49,15 @@ func (c *Cfg) IsEnabled() bool {
 type CheckpointOffset struct {
 	LSN              *string
 	IncSnapshotState []byte
+	// Seq puts the checkpoints in order. The tracker gives each tracked
+	// offset the next number from one goroutine.
+	//
+	// The pipeline can acknowledge two batches at the same time, and their
+	// two commits can then write to the cache in any order. IncSnapshotState
+	// is opaque and does not show which state is newer. Therefore the writer
+	// compares this number and does not write an older state over a newer
+	// one.
+	Seq uint64
 }
 
 // Merge copies each field of other that is not nil onto a copy of o.
@@ -64,6 +73,9 @@ func (o CheckpointOffset) Merge(other CheckpointOffset) CheckpointOffset {
 	}
 	if other.IncSnapshotState != nil {
 		merged.IncSnapshotState = other.IncSnapshotState
+	}
+	if other.Seq > merged.Seq {
+		merged.Seq = other.Seq
 	}
 	return merged
 }

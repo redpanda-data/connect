@@ -10,6 +10,8 @@ package pgstream
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -97,7 +99,7 @@ func TestCommitCheckpointSkipsRedundantStatePersist(t *testing.T) {
 
 	// offset.LSN is nil throughout this test, so commitCheckpoint never
 	// touches pgStream - passing nil is safe.
-	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: stateA}))
+	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: stateA, Seq: 1}))
 
 	got, err := p.loadCachedIncSnapshotStateBytes(ctx)
 	require.NoError(t, err)
@@ -113,13 +115,13 @@ func TestCommitCheckpointSkipsRedundantStatePersist(t *testing.T) {
 	// would carry stateA forward onto every later checkpoint even when
 	// nothing new happened, so commitCheckpoint must recognise it's
 	// unchanged and skip the redundant cache write.
-	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: stateA}))
+	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: stateA, Seq: 2}))
 	_, err = p.loadCachedIncSnapshotStateBytes(ctx)
 	require.ErrorIs(t, err, service.ErrKeyNotFound, "unchanged state must not be re-persisted")
 
 	// A genuinely new state must still be persisted.
 	stateB := []byte("state-b")
-	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: stateB}))
+	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: stateB, Seq: 3}))
 	got, err = p.loadCachedIncSnapshotStateBytes(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, stateB, got)
@@ -139,4 +141,97 @@ func (p *pgStreamInput) loadCachedIncSnapshotStateBytes(ctx context.Context) ([]
 		return nil, err
 	}
 	return val, cErr
+}
+
+// TestTrackAssignsIncreasingSeq checks that each tracked offset gets the next
+// number, and that a merge keeps the larger number.
+func TestTrackAssignsIncreasingSeq(t *testing.T) {
+	lsnA := "1/AAAA"
+	lsnB := "1/BBBB"
+
+	tracker := newCheckpointTracker(10)
+
+	resolveA, err := tracker.Track(context.Background(), incrementalsnapshot.CheckpointOffset{LSN: &lsnA}, 1)
+	require.NoError(t, err)
+	offsetA := resolveA()
+	require.NotNil(t, offsetA)
+	assert.Equal(t, uint64(1), offsetA.Seq)
+
+	resolveB, err := tracker.Track(context.Background(), incrementalsnapshot.CheckpointOffset{LSN: &lsnB}, 1)
+	require.NoError(t, err)
+	offsetB := resolveB()
+	require.NotNil(t, offsetB)
+	assert.Equal(t, uint64(2), offsetB.Seq)
+}
+
+// TestCommitCheckpointRejectsOlderState reproduces the race between two
+// concurrent acknowledgements.
+//
+// The pipeline can acknowledge two in-flight batches at the same time. Their
+// commits then write to the cache in any order. If the older write is last,
+// the cache holds an older checkpoint, and a restart reads chunks that the
+// pipeline already delivered and acknowledged.
+//
+// A lock alone does not correct this, because the two calls can take the lock
+// in either order. IncSnapshotState is opaque and does not show which state
+// is newer, so the writer must compare Seq.
+func TestCommitCheckpointRejectsOlderState(t *testing.T) {
+	const cacheName = "inc_snapshot_cache"
+	mgr := service.MockResources(service.MockResourcesOptAddCache(cacheName))
+
+	p := &pgStreamInput{
+		mgr:                           mgr,
+		incSnapshotCheckpointCache:    cacheName,
+		incSnapshotCheckpointCacheKey: "key",
+	}
+
+	ctx := context.Background()
+	older := []byte("state-1")
+	newer := []byte("state-2")
+
+	// The newer acknowledgement reaches the cache first.
+	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: newer, Seq: 2}))
+
+	// The older acknowledgement then arrives. It must not write.
+	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: older, Seq: 1}))
+
+	got, err := p.loadCachedIncSnapshotStateBytes(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, newer, got, "an older checkpoint must not replace a newer one")
+}
+
+// TestCommitCheckpointConcurrentAcksNeverRegress runs many acknowledgements
+// at the same time, in a random order. The cache must hold the newest state
+// at the end. Run with -race.
+func TestCommitCheckpointConcurrentAcksNeverRegress(t *testing.T) {
+	const (
+		cacheName = "inc_snapshot_cache"
+		acks      = 64
+	)
+	mgr := service.MockResources(service.MockResourcesOptAddCache(cacheName))
+
+	p := &pgStreamInput{
+		mgr:                           mgr,
+		incSnapshotCheckpointCache:    cacheName,
+		incSnapshotCheckpointCacheKey: "key",
+	}
+
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	for i := 1; i <= acks; i++ {
+		wg.Add(1)
+		go func(seq uint64) {
+			defer wg.Done()
+			state := fmt.Appendf(nil, "state-%03d", seq)
+			assert.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{
+				IncSnapshotState: state,
+				Seq:              seq,
+			}))
+		}(uint64(i))
+	}
+	wg.Wait()
+
+	got, err := p.loadCachedIncSnapshotStateBytes(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, fmt.Appendf(nil, "state-%03d", acks), got)
 }

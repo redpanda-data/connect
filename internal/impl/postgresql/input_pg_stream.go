@@ -563,6 +563,10 @@ type pgStreamInput struct {
 	// Without this field, commitCheckpoint writes the same value for each
 	// acknowledgement.
 	lastPersistedIncSnapshotState []byte
+	// lastPersistedIncSnapshotSeq is the CheckpointOffset.Seq of the state
+	// in the cache. persistIncSnapshotState compares it to reject a state
+	// that is older than the state it already wrote.
+	lastPersistedIncSnapshotSeq uint64
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -839,6 +843,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 type checkpointTracker struct {
 	cp   *checkpoint.Capped[incsnapshot.CheckpointOffset]
 	last incsnapshot.CheckpointOffset
+	seq  uint64
 }
 
 func newCheckpointTracker(limit int64) *checkpointTracker {
@@ -846,6 +851,11 @@ func newCheckpointTracker(limit int64) *checkpointTracker {
 }
 
 func (t *checkpointTracker) Track(ctx context.Context, offset incsnapshot.CheckpointOffset, batchSize int64) (func() *incsnapshot.CheckpointOffset, error) {
+	// Track runs on the processStream goroutine only, so this counter needs
+	// no lock. It gives commitCheckpoint an order for the offsets, because
+	// the acknowledgements can arrive at the same time.
+	t.seq++
+	offset.Seq = t.seq
 	t.last = t.last.Merge(offset)
 	return t.cp.Track(ctx, t.last, batchSize)
 }
@@ -860,20 +870,8 @@ func (t *checkpointTracker) Track(ctx context.Context, offset incsnapshot.Checkp
 func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, offset incsnapshot.CheckpointOffset) error {
 	var errs []error
 	if offset.IncSnapshotState != nil {
-		// checkpointTracker copies the last state onto each checkpoint.
-		// Therefore most resolutions have the same state here. Do not write
-		// to the cache when the state did not change.
-		p.incStateMu.Lock()
-		alreadyPersisted := bytes.Equal(offset.IncSnapshotState, p.lastPersistedIncSnapshotState)
-		p.incStateMu.Unlock()
-		if !alreadyPersisted {
-			if err := p.saveIncrementalSnapshotState(ctx, offset.IncSnapshotState); err != nil {
-				errs = append(errs, fmt.Errorf("unable to persist incremental snapshot checkpoint: %w", err))
-			} else {
-				p.incStateMu.Lock()
-				p.lastPersistedIncSnapshotState = offset.IncSnapshotState
-				p.incStateMu.Unlock()
-			}
+		if err := p.persistIncSnapshotState(ctx, offset); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	if offset.LSN != nil {
@@ -882,6 +880,44 @@ func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogica
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// persistIncSnapshotState writes the incremental snapshot state of offset to
+// the cache.
+//
+// The pipeline can acknowledge more than one batch at the same time, so two
+// calls can run together with different states. It holds incStateMu for the
+// full test and write. Without the lock, the two cache writes can occur in
+// any order, and an older state can then be the last write.
+//
+// The lock alone is not sufficient. The two calls can also take the lock in
+// any order, and IncSnapshotState does not show which state is newer.
+// Therefore the function also compares CheckpointOffset.Seq and writes a
+// newer state only. A restart then never reads a checkpoint that is older
+// than one the input already wrote.
+func (p *pgStreamInput) persistIncSnapshotState(ctx context.Context, offset incsnapshot.CheckpointOffset) error {
+	p.incStateMu.Lock()
+	defer p.incStateMu.Unlock()
+
+	if offset.Seq <= p.lastPersistedIncSnapshotSeq {
+		// A newer state is already in the cache.
+		return nil
+	}
+
+	// checkpointTracker copies the last state onto each checkpoint.
+	// Therefore most resolutions have the same state here. Record the new
+	// number, but do not write the same value to the cache again.
+	if bytes.Equal(offset.IncSnapshotState, p.lastPersistedIncSnapshotState) {
+		p.lastPersistedIncSnapshotSeq = offset.Seq
+		return nil
+	}
+
+	if err := p.saveIncrementalSnapshotState(ctx, offset.IncSnapshotState); err != nil {
+		return fmt.Errorf("unable to persist incremental snapshot checkpoint: %w", err)
+	}
+	p.lastPersistedIncSnapshotState = offset.IncSnapshotState
+	p.lastPersistedIncSnapshotSeq = offset.Seq
+	return nil
 }
 
 // commitIncrementalSnapshotCheckpoint tracks a checkpoint that has no rows
