@@ -648,31 +648,24 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	// IncrementalSnapshotCheckpointOpType case.
 	batcherBuffered := 0
 
-	// flushAndTrack moves the batcher content to the checkpoint tracker. It
-	// adds pendingIncrementalState to that batch. It clears the state only
-	// after the tracker has the batch. An empty flush tracks nothing, and a
-	// clear at that point loses the checkpoint.
-	flushAndTrack := func() error {
-		flushedBatch, err := batcher.Flush(ctx)
-		if err != nil {
-			return err
-		}
-		batcherBuffered = 0
-		if err := p.flushBatch(ctx, pgStream, cp, flushedBatch, pendingIncrementalState, blockingSnapshotComplete); err != nil {
-			return err
-		}
-		if len(flushedBatch) > 0 {
-			pendingIncrementalState = nil
-		}
-		return nil
-	}
-
 	for !p.stopSig.IsSoftStopSignalled() {
 		select {
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
-			if err := flushAndTrack(); err != nil {
+			flushedBatch, err := batcher.Flush(ctx)
+			if err != nil {
 				p.logger.Debugf("timed flush batch error: %s", err)
+				break
+			}
+			batcherBuffered = 0
+			if err := p.flushBatch(ctx, pgStream, cp, flushedBatch, pendingIncrementalState, blockingSnapshotComplete); err != nil {
+				p.logger.Debugf("failed to flush batch: %s", err)
+				break
+			}
+			// Clear the state only when flushBatch tracked a batch. An empty
+			// flush tracks nothing, and a clear here loses the checkpoint.
+			if len(flushedBatch) > 0 {
+				pendingIncrementalState = nil
 			}
 		case batch := <-pgStream.Messages():
 			if len(batch) == 1 && batch[0].Operation == pglogicalstream.SnapshotCompleteOpType {
@@ -681,13 +674,26 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				// signalling the stream to promote the replication slot. Blocks
 				// until acks drain or soft-stop (no timeout, by design).
 				nextTimedBatchChan = nil
-				if err := flushAndTrack(); err != nil {
+				flushedBatch, err := batcher.Flush(ctx)
+				if err != nil {
 					p.logger.Debugf("error flushing snapshot completion batch: %s", err)
 					// The sentinel is a one-shot signal; if we bail here without
 					// acking, the barrier's snapshot goroutine blocks on
 					// snapshotAcked forever. Trigger a restart instead of stalling.
 					p.stopSig.TriggerSoftStop()
 					break
+				}
+				batcherBuffered = 0
+				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch, pendingIncrementalState, blockingSnapshotComplete); err != nil {
+					p.logger.Debugf("failed to flush snapshot completion batch: %s", err)
+					p.stopSig.TriggerSoftStop()
+					break
+				}
+				// Clear the state only when flushBatch tracked a batch. An
+				// empty flush tracks nothing, and a clear here loses the
+				// checkpoint.
+				if len(flushedBatch) > 0 {
+					pendingIncrementalState = nil
 				}
 				drained := make(chan struct{})
 				go func() {
@@ -789,9 +795,21 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			}
 			if flush {
 				nextTimedBatchChan = nil
-				if err := flushAndTrack(); err != nil {
+				flushedBatch, err := batcher.Flush(ctx)
+				if err != nil {
 					p.logger.Debugf("error flushing batch: %s", err)
 					break
+				}
+				batcherBuffered = 0
+				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch, pendingIncrementalState, blockingSnapshotComplete); err != nil {
+					p.logger.Debugf("failed to flush batch: %s", err)
+					break
+				}
+				// Clear the state only when flushBatch tracked a batch. An
+				// empty flush tracks nothing, and a clear here loses the
+				// checkpoint.
+				if len(flushedBatch) > 0 {
+					pendingIncrementalState = nil
 				}
 			} else {
 				d, ok := batcher.UntilNext()
