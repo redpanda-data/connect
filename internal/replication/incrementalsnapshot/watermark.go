@@ -8,37 +8,31 @@
 
 package incrementalsnapshot
 
-// Watermark shows which transactions the database had in flight at one point
-// in time. The coordinator reads one watermark before a chunk read and one
-// after it. It then compares the pair with each streamed commit. The
-// comparison tells the coordinator when it can emit the chunk.
+// Watermark shows which transactions were in flight at one instant. The
+// coordinator reads one either side of a chunk read and compares the pair
+// with each streamed commit to decide when the chunk can be emitted.
 //
-// P is the position type of the database. A position identifies a committed
-// transaction and puts it in order. Postgres uses a transaction id, MySQL
-// uses a GTID and Oracle uses an SCN.
+// P is the database's position type: whatever identifies and orders a
+// committed transaction, such as a Postgres xid, a MySQL GTID or an Oracle
+// SCN.
 //
-// The coordinator calls each method one time for each streamed commit.
-// Therefore each method must be fast and must not change any state. No
-// method must panic on the zero value.
-//
-// A Watermark must be comparable. The coordinator compares the two
-// watermarks of a chunk read for equality.
+// Every method runs once per streamed commit, so each must be fast, must not
+// change state, and must not panic on the zero value. Implementations must be
+// comparable, because the coordinator compares a chunk's two watermarks for
+// equality.
 type Watermark[P any] interface {
 	comparable
 
-	// OpensAt tells if pos started at the same time as this watermark or
-	// after it. If it did, all transactions that the watermark could not see
-	// have had time to stream.
+	// OpensAt reports whether pos started at or after this watermark, meaning
+	// everything the watermark could not see has had time to stream.
 	OpensAt(pos P) bool
 
-	// ClosesAt tells if pos comes after all transactions that were in flight
-	// at this watermark. The coordinator must get true from both watermarks
-	// before it emits a chunk.
+	// ClosesAt reports whether pos follows every transaction in flight at
+	// this watermark. Both watermarks must agree before a chunk is emitted.
 	ClosesAt(pos P) bool
 
-	// Quiesced tells if the database had no transaction in flight at this
-	// watermark. If both watermarks of a chunk read are quiesced and equal,
-	// no transaction could change the chunk during the read. The coordinator
-	// uses this result to drain chunks. Refer to Coordinator.
+	// Quiesced reports whether nothing at all was in flight. An equal,
+	// quiesced pair proves no transaction could have touched the chunk during
+	// the read, which is what lets Coordinator drain it immediately.
 	Quiesced() bool
 }

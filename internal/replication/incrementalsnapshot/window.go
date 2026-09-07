@@ -13,9 +13,9 @@ import (
 	"strings"
 )
 
-// windowKey identifies a buffered row by table and primary key. It joins
-// the text form of each part with a separator. The primary key values in
-// this package are simple values, so the separator does not occur in them.
+// windowKey identifies a buffered row by table and key, joining their text
+// forms with a separator that will not occur in the scalar key values this
+// package targets.
 type windowKey string
 
 const windowKeySeparator = "\x1f"
@@ -30,16 +30,15 @@ func newWindowKey(table TableID, pk PrimaryKey) windowKey {
 	return windowKey(b.String())
 }
 
-// WindowBuffer holds Row values in a buffer. Each row has a key of table and
-// primary key, and the buffer holds one row for each key. The buffer keeps
-// the rows in the order that the caller added them. Remove takes one row
-// out of the buffer and does not change the order of the other rows.
+// WindowBuffer is an ordered, deduplicated buffer of Rows keyed by (table,
+// key). Remove excises a row from the middle without disturbing the order of
+// the rest.
 type WindowBuffer struct {
 	rows    []Row
 	indexOf map[windowKey]int
 }
 
-// NewWindowBuffer makes an empty WindowBuffer.
+// NewWindowBuffer returns an empty WindowBuffer.
 func NewWindowBuffer() *WindowBuffer {
 	return &WindowBuffer{
 		indexOf: make(map[windowKey]int),
@@ -53,8 +52,7 @@ func (w *WindowBuffer) Add(row Row) {
 	w.rows = append(w.rows, row)
 }
 
-// Remove takes the row for table and pk out of the buffer. It returns true
-// if the buffer held that row.
+// Remove excises the row for table and pk, reporting whether it was there.
 func (w *WindowBuffer) Remove(table TableID, pk PrimaryKey) bool {
 	key := newWindowKey(table, pk)
 	idx, exists := w.indexOf[key]
@@ -65,7 +63,7 @@ func (w *WindowBuffer) Remove(table TableID, pk PrimaryKey) bool {
 	delete(w.indexOf, key)
 	w.rows = append(w.rows[:idx], w.rows[idx+1:]...)
 
-	// Decrease the index of each later row by one.
+	// Shift every later row's index down to match.
 	for k, i := range w.indexOf {
 		if i > idx {
 			w.indexOf[k] = i - 1
@@ -74,8 +72,7 @@ func (w *WindowBuffer) Remove(table TableID, pk PrimaryKey) bool {
 	return true
 }
 
-// Flush returns the rows in the order that the caller added them. It then
-// empties the buffer.
+// Flush returns the buffered rows in insertion order and empties the buffer.
 func (w *WindowBuffer) Flush() []Row {
 	rows := w.rows
 	w.rows = nil
