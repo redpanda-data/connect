@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -551,10 +552,11 @@ type pgStreamInput struct {
 	// only applies to incremental snapshot when enabled
 	incSnapshotCheckpointCache    string
 	incSnapshotCheckpointCacheKey string
+	incSnapshotSeq                atomic.Uint64
 
-	// incStateMu protects the lastPersisted fields below, which
+	// lastPersistedMu protects the lastPersisted fields below, which
 	// commitCheckpoint touches from concurrent acknowledgements.
-	incStateMu sync.Mutex
+	lastPersistedMu sync.Mutex
 	// lastPersistedIncSnapshotState avoids needless cache writes.
 	// checkpointTracker copies the last state onto every later checkpoint,
 	// so most acknowledgements carry an unchanged value.
@@ -628,7 +630,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	var nextTimedBatchChan <-chan time.Time
 
 	// offsets are nilable since we don't provide offset tracking during the snapshot phase
-	cp := newCheckpointTracker(int64(p.checkpointLimit))
+	cp := newCheckpointTracker(int64(p.checkpointLimit), &p.incSnapshotSeq)
 
 	// blockingSnapshotComplete gates the isSnapshot/snapshotAckWG barrier to
 	// the one-shot stream_snapshot phase, never to incremental snapshot's
@@ -838,18 +840,22 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 type checkpointTracker struct {
 	cp   *checkpoint.Capped[incsnapshot.CheckpointOffset]
 	last incsnapshot.CheckpointOffset
-	seq  uint64
+	// seq is owned by the input, not this tracker, so it survives a
+	// reconnect. See pgStreamInput.incSnapshotSeq.
+	seq *atomic.Uint64
 }
 
-func newCheckpointTracker(limit int64) *checkpointTracker {
-	return &checkpointTracker{cp: checkpoint.NewCapped[incsnapshot.CheckpointOffset](limit)}
+func newCheckpointTracker(limit int64, seq *atomic.Uint64) *checkpointTracker {
+	return &checkpointTracker{
+		cp:  checkpoint.NewCapped[incsnapshot.CheckpointOffset](limit),
+		seq: seq,
+	}
 }
 
 func (t *checkpointTracker) Track(ctx context.Context, offset incsnapshot.CheckpointOffset, batchSize int64) (func() *incsnapshot.CheckpointOffset, error) {
-	// Track runs on the processStream goroutine only, so this needs no lock.
-	// It orders the offsets for commitCheckpoint.
-	t.seq++
-	offset.Seq = t.seq
+	// Orders the offsets for commitCheckpoint. Monotonic for the life of the
+	// input, across any number of trackers.
+	offset.Seq = t.seq.Add(1)
 	t.last = t.last.Merge(offset)
 	return t.cp.Track(ctx, t.last, batchSize)
 }
@@ -883,8 +889,8 @@ func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogica
 // calls can take it in either order, so it also rejects any offset that is
 // not newer than the one already written.
 func (p *pgStreamInput) persistIncSnapshotState(ctx context.Context, offset incsnapshot.CheckpointOffset) error {
-	p.incStateMu.Lock()
-	defer p.incStateMu.Unlock()
+	p.lastPersistedMu.Lock()
+	defer p.lastPersistedMu.Unlock()
 
 	if offset.Seq <= p.lastPersistedIncSnapshotSeq {
 		// A newer state is already in the cache.

@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,7 +33,7 @@ func TestCheckpointTrackerPreventsClobberFromRowlessSentinel(t *testing.T) {
 	lsn := "1/AAAA"
 	state := []byte("snapshot-state")
 
-	tracker := newCheckpointTracker(10)
+	tracker := newCheckpointTracker(10, new(atomic.Uint64))
 
 	resolveBatch, err := tracker.Track(context.Background(), incrementalsnapshot.CheckpointOffset{LSN: &lsn}, 1)
 	require.NoError(t, err)
@@ -62,7 +63,7 @@ func TestCheckpointTrackerPreservesPendingStateAcrossLaterBatch(t *testing.T) {
 	lsnB := "1/BBBB"
 	stateA := []byte("state-a")
 
-	tracker := newCheckpointTracker(10)
+	tracker := newCheckpointTracker(10, new(atomic.Uint64))
 
 	resolveA, err := tracker.Track(context.Background(), incrementalsnapshot.CheckpointOffset{LSN: &lsnA, IncSnapshotState: stateA}, 1)
 	require.NoError(t, err)
@@ -149,7 +150,7 @@ func TestTrackAssignsIncreasingSeq(t *testing.T) {
 	lsnA := "1/AAAA"
 	lsnB := "1/BBBB"
 
-	tracker := newCheckpointTracker(10)
+	tracker := newCheckpointTracker(10, new(atomic.Uint64))
 
 	resolveA, err := tracker.Track(context.Background(), incrementalsnapshot.CheckpointOffset{LSN: &lsnA}, 1)
 	require.NoError(t, err)
@@ -226,4 +227,53 @@ func TestCommitCheckpointConcurrentAcksNeverRegress(t *testing.T) {
 	got, err := p.loadCachedIncSnapshotStateBytes(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, fmt.Appendf(nil, "state-%03d", acks), got)
+}
+
+// TestCheckpointsPersistAcrossTrackerReplacement covers the reconnect path.
+// Connect builds a fresh checkpointTracker each time, but the
+// lastPersisted fields live on the input. A Seq counter owned by the tracker
+// would restart at 0, fail the "not newer" guard against the pre-reconnect
+// high-water mark, and silently stop persisting for the life of the process.
+func TestCheckpointsPersistAcrossTrackerReplacement(t *testing.T) {
+	const cacheName = "inc_snapshot_cache"
+	mgr := service.MockResources(service.MockResourcesOptAddCache(cacheName))
+
+	p := &pgStreamInput{
+		mgr:                           mgr,
+		incSnapshotCheckpointCache:    cacheName,
+		incSnapshotCheckpointCacheKey: "key",
+	}
+
+	// offset.LSN stays nil throughout, so commitCheckpoint never touches
+	// pgStream and passing nil for it is safe.
+	ctx := context.Background()
+
+	// First connection: track and commit a few checkpoints.
+	first := newCheckpointTracker(10, &p.incSnapshotSeq)
+	for i := range 5 {
+		state := fmt.Appendf(nil, "state-a-%d", i)
+		resolve, err := first.Track(ctx, incrementalsnapshot.CheckpointOffset{IncSnapshotState: state}, 1)
+		require.NoError(t, err)
+		offset := resolve()
+		require.NotNil(t, offset)
+		require.NoError(t, p.commitCheckpoint(ctx, nil, *offset))
+	}
+
+	got, err := p.loadCachedIncSnapshotStateBytes(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []byte("state-a-4"), got)
+
+	// Reconnect: a new tracker, the same input.
+	second := newCheckpointTracker(10, &p.incSnapshotSeq)
+	state := []byte("state-b-0")
+	resolve, err := second.Track(ctx, incrementalsnapshot.CheckpointOffset{IncSnapshotState: state}, 1)
+	require.NoError(t, err)
+	offset := resolve()
+	require.NotNil(t, offset)
+	assert.Greater(t, offset.Seq, uint64(5), "Seq must continue past the first connection")
+	require.NoError(t, p.commitCheckpoint(ctx, nil, *offset))
+
+	got, err = p.loadCachedIncSnapshotStateBytes(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, state, got, "checkpoints must keep persisting after a reconnect")
 }
