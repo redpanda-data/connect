@@ -199,6 +199,13 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		fmt.Sprintf("publication_names 'pglog_stream_%s'", config.ReplicationSlotName),
 	}
 
+	// Do not change this number. The incremental snapshot advances only on a
+	// decoded COMMIT, which on a quiet table only the heartbeat produces.
+	// PostgreSQL 13 has no "messages" option and refuses the slot. From
+	// PostgreSQL 15 an empty transaction is dropped, so without the decoded
+	// message no BEGIN or COMMIT arrives. Earlier versions still send the
+	// empty transaction, and its BEGIN carries a real xid. Refer to the
+	// QuietTable subtests of TestIntegrationIncrementalSnapshot.
 	if version > 14 {
 		pluginArguments = append(pluginArguments, "messages 'true'")
 	}

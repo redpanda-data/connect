@@ -1848,6 +1848,94 @@ memory: {}`))
 		}
 	})
 
+	// On a quiet table only the heartbeat produces the COMMIT that advances
+	// the snapshot, and pgoutput decodes the heartbeat message on PostgreSQL
+	// 15 and later only. Run on each version, because a change to the plugin
+	// options or to the heartbeat can stop the snapshot without an error.
+	for _, version := range []string{"17", "16", "15", "14", "13"} {
+		t.Run("QuietTable/PG"+version, func(t *testing.T) {
+			t.Parallel()
+
+			databaseURL, db, err := ResourceWithPostgreSQLVersion(t, version)
+			require.NoError(t, err)
+
+			// Inserted before the slot exists, so only the snapshot can
+			// deliver them.
+			const numPreExisting = 200
+			for range numPreExisting {
+				_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('quiet', NOW())`)
+				require.NoError(t, err)
+			}
+
+			template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_inc_quiet_pg%s
+    schema: public
+    heartbeat_interval: 200ms
+    tables:
+      - flights
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 20
+        checkpoint_cache: snap_cache
+`, databaseURL, version)
+
+			builder := service.NewStreamBuilder()
+			require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
+			require.NoError(t, builder.AddInputYAML(template))
+			require.NoError(t, builder.AddCacheYAML(`
+label: snap_cache
+memory: {}`))
+
+			var (
+				mu   sync.Mutex
+				rows []incrementalSnapshotRow
+			)
+			require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					id, err := data.(map[string]any)["id"].(json.Number).Int64()
+					if err != nil {
+						return err
+					}
+					op, _ := msg.MetaGet("operation")
+					rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
+				}
+				return nil
+			}))
+
+			stream, err := builder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			streamStopped := make(chan struct{})
+			go func() {
+				defer close(streamStopped)
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+
+			// No writes from here, so only the heartbeat advances the
+			// snapshot.
+			require.Eventually(t, func() bool {
+				mu.Lock()
+				defer mu.Unlock()
+				return len(rows) >= numPreExisting
+			}, 90*time.Second, 100*time.Millisecond,
+				"the snapshot did not deliver each row of a quiet table on PostgreSQL "+version)
+
+			require.NoError(t, stream.StopWithin(10*time.Second))
+			<-streamStopped
+		})
+	}
+
 	t.Run("Resume", func(t *testing.T) {
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)
