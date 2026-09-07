@@ -19,9 +19,9 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
-// rowTuple writes a PrimaryKey as a Postgres ROW constructor, for example
-// "ROW(?, ?)". A query can then compare two rows, for example
-// ROW(pk1, pk2) > ROW(?, ?). This form supports composite primary keys.
+// rowTuple renders a PrimaryKey as a Postgres ROW constructor, e.g.
+// "ROW(?, ?)", enabling row-wise comparisons such as
+// ROW(pk1, pk2) > ROW(?, ?) for composite keys.
 type rowTuple struct {
 	values []any
 }
@@ -42,9 +42,8 @@ func quotedColumns(colsUnquoted []string) []string {
 	return quoted
 }
 
-// quotedRowExpr writes the primary key columns as a Postgres ROW
-// constructor, for example ROW("id", "tenant_id"). A query uses this form on
-// the left side of a row comparison.
+// quotedRowExpr renders the key columns as a ROW constructor, e.g.
+// ROW("id", "tenant_id"), for the left side of a row-wise comparison.
 func quotedRowExpr(pkColsUnquoted []string) string {
 	return "ROW(" + strings.Join(quotedColumns(pkColsUnquoted), ", ") + ")"
 }
@@ -53,15 +52,11 @@ func quotedTableName(table incrementalsnapshot.TableID) string {
 	return sanitize.QuotePostgresIdentifier(table.Schema) + "." + sanitize.QuotePostgresIdentifier(table.Table)
 }
 
-// BuildChunkQuery makes the SELECT statement for one chunk. It supports
-// incrementalsnapshot.Deps.FetchChunk.
-//
-// lower can be nil for the first chunk of a table, and the query then has no
-// lower bound. upper is the largest primary key of the table and must not be
-// nil.
-//
-// The query selects all columns, because this package does not know the
-// column names. The caller decodes the result.
+// BuildChunkQuery builds the paginated chunk SELECT behind
+// incrementalsnapshot.Deps.FetchChunk. A nil lower omits the lower bound, for
+// a table's first chunk; upper is the table's fixed max-key bound and must
+// not be nil. Selects "*" since the column list is unknown here -- callers
+// decode whatever comes back.
 func BuildChunkQuery(table incrementalsnapshot.TableID, pkColsUnquoted []string, lower, upper incrementalsnapshot.PrimaryKey, limit int) (query string, args []any, err error) {
 	if len(pkColsUnquoted) == 0 {
 		return "", nil, errors.New("BuildChunkQuery: no primary key columns provided")
@@ -96,8 +91,9 @@ func BuildChunkQuery(table incrementalsnapshot.TableID, pkColsUnquoted []string,
 	return query, args, nil
 }
 
-// BuildMaxKeyQuery makes the statement that reads the largest primary key of
-// the table. It supports incrementalsnapshot.Deps.ResolveMaxKey.
+// BuildMaxKeyQuery builds the query behind
+// incrementalsnapshot.Deps.ResolveMaxKey, reading the table's current largest
+// key.
 func BuildMaxKeyQuery(table incrementalsnapshot.TableID, pkColsUnquoted []string) (query string, err error) {
 	if len(pkColsUnquoted) == 0 {
 		return "", errors.New("BuildMaxKeyQuery: no primary key columns provided")

@@ -11,23 +11,19 @@ package incrementalsnapshot
 import "github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 
 var (
-	// DefaultIncSnapshotEnabled is the default for whether incremental
-	// snapshotting is enabled.
+	// DefaultIncSnapshotEnabled is the default for enabling the snapshot.
 	DefaultIncSnapshotEnabled = false
 
 	// DefaultIncSnapshotChunkSize is the default row count per chunk.
 	DefaultIncSnapshotChunkSize = 1024
 
-	// DefaultIncSnapshotCheckpointKey is the default cache key used to
-	// persist incremental snapshot checkpoints.
+	// DefaultIncSnapshotCheckpointKey is the default checkpoint cache key.
 	DefaultIncSnapshotCheckpointKey = "postgres_cdc_incremental_snapshot"
 )
 
-// DefaultMaxDrainChunks is the drain limit of the coordinator. It is the
-// maximum number of chunks that one streamed commit can release when the
-// database is quiet and needs no row removal. This package makes the value
-// available here, so the input configuration does not import the shared
-// replication package.
+// DefaultMaxDrainChunks is the coordinator's drain limit: the most chunks one
+// commit may release while the database is quiet. Re-exported so the input
+// config need not import the shared package.
 const DefaultMaxDrainChunks = incrementalsnapshot.DefaultMaxDrainChunks
 
 // Cfg holds the incremental snapshot configuration.
@@ -38,29 +34,29 @@ type Cfg struct {
 	ResumeState *incrementalsnapshot.State
 }
 
-// IsEnabled tells if the incremental snapshot is enabled.
+// IsEnabled reports whether the snapshot is enabled.
 func (c *Cfg) IsEnabled() bool {
 	return c != nil && c.Enabled
 }
 
-// CheckpointOffset is the data that the LSN checkpointer tracks for each
-// batch. IncSnapshotState is not nil when the batch holds a checkpoint. The
-// checkpoint then gets the same acknowledgement order as the LSN.
+// CheckpointOffset is the per-batch payload the LSN checkpointer tracks.
+// IncSnapshotState is non-nil when the batch carries a checkpoint, giving it
+// the same ack ordering as the LSN.
 type CheckpointOffset struct {
 	LSN              *string
 	IncSnapshotState []byte
-	// Seq orders the checkpoints. The tracker assigns it. Acknowledgements
-	// can run concurrently and IncSnapshotState does not show which state is
+	// Seq orders the checkpoints; the tracker assigns it. Acknowledgements
+	// run concurrently and IncSnapshotState does not reveal which state is
 	// newer, so the writer compares this instead.
 	Seq uint64
 }
 
-// Merge copies each field of other that is not nil onto a copy of o.
+// Merge overlays each non-nil field of other onto a copy of o.
 //
-// Track can resolve a node out of order. It then copies the full data of
-// that node onto the earlier node, and a nil field would remove the value
-// that the earlier node holds. Therefore the caller must merge each set of
-// data with the last tracked set before it calls Track.
+// Resolving a node out of order assigns its whole payload onto its unresolved
+// predecessor, so a nil field would wipe whatever the predecessor held.
+// Callers must therefore merge against the last tracked payload before
+// calling Track.
 func (o CheckpointOffset) Merge(other CheckpointOffset) CheckpointOffset {
 	merged := o
 	if other.LSN != nil {

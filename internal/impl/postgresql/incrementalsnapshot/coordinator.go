@@ -10,28 +10,26 @@ package incrementalsnapshot
 
 import "github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 
-// The coordinator works with any database and is in
-// internal/replication/incrementalsnapshot. These aliases select the
-// Postgres position type and watermark. The call sites then do not repeat
-// the type arguments.
+// The coordinator itself is database-agnostic and lives in
+// internal/replication/incrementalsnapshot. These aliases pin it to Postgres'
+// position type and watermark, keeping the type arguments out of call sites.
 //
-// The position type is uint32, because pgoutput reports a 32-bit xid in a
-// BEGIN message. This type prevents a 64-bit id that includes an epoch.
-// Watermark makes the 32-bit value larger when it compares values.
+// The position is a uint32 because pgoutput reports a raw 32-bit xid on
+// BEGIN; naming that in the type stops an epoch-extended id being passed by
+// mistake. Watermark handles the widening.
 type (
 	// Coordinator is the incremental snapshot coordinator for Postgres.
 	Coordinator = incrementalsnapshot.Coordinator[uint32, Watermark]
 	// CoordinatorConfig configures a Postgres incremental snapshot Coordinator.
 	CoordinatorConfig = incrementalsnapshot.CoordinatorConfig[uint32, Watermark]
-	// Deps supplies the operations that have side effects.
+	// Deps supplies the side-effecting operations.
 	Deps = incrementalsnapshot.Deps[Watermark]
-	// EmitFunc gets each chunk of rows that the Coordinator releases.
+	// EmitFunc receives each chunk of rows the Coordinator releases.
 	EmitFunc = incrementalsnapshot.EmitFunc
 )
 
-// NewCoordinator makes a Coordinator for Postgres. If resume is not nil,
-// Start continues the snapshot from that state. If resume is nil, Start
-// begins a new snapshot of cfg.Tables.
+// NewCoordinator builds a Postgres Coordinator. A non-nil resume makes Start
+// continue from that state; otherwise it starts fresh from cfg.Tables.
 func NewCoordinator(cfg CoordinatorConfig, resume *incrementalsnapshot.State) (*Coordinator, error) {
 	return incrementalsnapshot.NewCoordinator(cfg, resume)
 }
