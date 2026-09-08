@@ -23,6 +23,17 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: false
+
+      - name: Cache Go build/module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-build-test-cgo1-x_benthos_extra-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-build-test-cgo1-x_benthos_extra-${{ runner.os }}-
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
@@ -50,6 +61,17 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: false
+
+      - name: Cache Go build/module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-build-lint-cgo0-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-build-lint-cgo0-${{ runner.os }}-
 
       - name: Set version env variables
         run: cat .versions >> $GITHUB_ENV
