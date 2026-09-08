@@ -17,6 +17,7 @@ package nats
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -34,7 +35,12 @@ func natsKVCacheConfig() *service.ConfigSpec {
 		Version("4.27.0").
 		Summary("Cache key/values in a NATS key-value bucket.").
 		Description(connectionNameDescription() + authDescription()).
-		Fields(kvDocs()...)
+		Fields(Docs("KV",
+			service.NewBoolField("create_bucket").
+				Description("Whether to automatically create the bucket if it doesn't exist.").
+				Advanced().
+				Default(false),
+		)...)
 }
 
 func init() {
@@ -47,8 +53,9 @@ func init() {
 }
 
 type kvCache struct {
-	connDetails connectionDetails
-	bucket      string
+	connDetails  connectionDetails
+	bucket       string
+	createBucket bool
 
 	log *service.Logger
 
@@ -56,6 +63,7 @@ type kvCache struct {
 
 	connMut  sync.RWMutex
 	natsConn *nats.Conn
+	js       jetstream.JetStream
 	kv       jetstream.KeyValue
 }
 
@@ -74,6 +82,10 @@ func newKVCache(conf *service.ParsedConfig, mgr *service.Resources) (*kvCache, e
 		return nil, err
 	}
 
+	if p.createBucket, err = conf.FieldBool("create_bucket"); err != nil {
+		return nil, err
+	}
+
 	err = p.connect(context.Background())
 	return p, err
 }
@@ -86,6 +98,7 @@ func (p *kvCache) disconnect() {
 		p.natsConn.Close()
 		p.natsConn = nil
 	}
+	p.js = nil
 	p.kv = nil
 }
 
@@ -109,13 +122,23 @@ func (p *kvCache) connect(ctx context.Context) error {
 		}
 	}()
 
-	var js jetstream.JetStream
-	if js, err = jetstream.New(p.natsConn); err != nil {
+	if p.js, err = jetstream.New(p.natsConn); err != nil {
 		return err
 	}
 
-	if p.kv, err = js.KeyValue(ctx, p.bucket); err != nil {
-		return err
+	// Check if bucket exists first, create only if config allows
+	p.kv, err = p.js.KeyValue(ctx, p.bucket)
+	if err != nil {
+		if p.createBucket {
+			if p.kv, err = p.js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
+				Bucket: p.bucket,
+			}); err != nil {
+				return fmt.Errorf("failed to create bucket %s: %w", p.bucket, err)
+			}
+			p.log.Infof("Created bucket %s", p.bucket)
+		} else {
+			return fmt.Errorf("bucket %s does not exist and create_bucket is false", p.bucket)
+		}
 	}
 	return nil
 }
