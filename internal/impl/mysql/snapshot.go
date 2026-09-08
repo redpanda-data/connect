@@ -84,7 +84,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string, maxWork
 	// START TRANSACTION WITH CONSISTENT SNAPSHOT is executed on it, which
 	// implicitly replaces the transaction with a consistent-snapshot one.
 	// The go-sql-driver/mysql driver does not expose this directly via TxOptions.
-	numWorkers := min(maxWorkers, len(tables))
+	numWorkers := maxWorkers
 	s.workerConns = make([]*sql.Conn, 0, numWorkers)
 	s.workerTxs = make([]*sql.Tx, 0, numWorkers)
 	for range numWorkers {
@@ -176,36 +176,45 @@ ORDER BY ORDINAL_POSITION
 	return pks, nil
 }
 
-func (s *Snapshot) querySnapshotTable(ctx context.Context, tx *sql.Tx, table string, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
-	snapshotQueryParts := []string{
-		"SELECT * FROM " + table,
-	}
+func (s *Snapshot) querySnapshotTable(ctx context.Context, tx *sql.Tx, table string, pk []string, bounds *chunkBounds, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
+	var whereParts []string
+	var args []any
 
-	if lastSeenPkVal == nil {
-		snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
-		snapshotQueryParts = append(snapshotQueryParts, "LIMIT ?")
-		q := strings.Join(snapshotQueryParts, " ")
-		s.logger.Debugf("Querying snapshot: %s", q)
-		return tx.QueryContext(ctx, q, limit)
-	}
-
-	var lastSeenPkVals []any
-	var placeholders []string
-	for _, pkCol := range pk {
-		val, ok := (*lastSeenPkVal)[pkCol]
-		if !ok {
-			return nil, fmt.Errorf("primary key column '%s' not found in last seen values", pkCol)
+	// Apply chunk predicate first (only meaningful for single-column numeric PKs).
+	if len(pk) == 1 {
+		if pred, predArgs := buildChunkPredicate(pk[0], bounds); pred != "" {
+			whereParts = append(whereParts, pred)
+			args = append(args, predArgs...)
 		}
-		lastSeenPkVals = append(lastSeenPkVals, val)
-		placeholders = append(placeholders, "?")
 	}
 
-	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("WHERE (%s) > (%s)", strings.Join(quoteIdentifiers(pk), ", "), strings.Join(placeholders, ", ")))
-	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
-	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("LIMIT %d", limit))
-	q := strings.Join(snapshotQueryParts, " ")
+	// Apply keyset pagination predicate.
+	if lastSeenPkVal != nil {
+		var lastSeenPkVals []any
+		var placeholders []string
+		for _, pkCol := range pk {
+			val, ok := (*lastSeenPkVal)[pkCol]
+			if !ok {
+				return nil, fmt.Errorf("primary key column '%s' not found in last seen values", pkCol)
+			}
+			lastSeenPkVals = append(lastSeenPkVals, val)
+			placeholders = append(placeholders, "?")
+		}
+		whereParts = append(whereParts, fmt.Sprintf("(%s) > (%s)", strings.Join(quoteIdentifiers(pk), ", "), strings.Join(placeholders, ", ")))
+		args = append(args, lastSeenPkVals...)
+	}
+
+	parts := []string{"SELECT * FROM `" + strings.ReplaceAll(table, "`", "``") + "`"}
+	if len(whereParts) > 0 {
+		parts = append(parts, "WHERE "+strings.Join(whereParts, " AND "))
+	}
+	parts = append(parts, buildOrderByClause(pk))
+	args = append(args, limit)
+	parts = append(parts, "LIMIT ?")
+
+	q := strings.Join(parts, " ")
 	s.logger.Debugf("Querying snapshot: %s", q)
-	return tx.QueryContext(ctx, q, lastSeenPkVals...)
+	return tx.QueryContext(ctx, q, args...)
 }
 
 func buildOrderByClause(pk []string) string {
