@@ -282,7 +282,7 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 				ShortDescription("Automatically and continuously snapshot the configured tables in chunks, concurrently with replication streaming.").
 				Default(incsnapshot.DefaultIncSnapshotEnabled),
 			service.NewStringListField(fieldIncrementalSnapshotTables).
-				Description("The tables to incrementally snapshot. If omitted, the tables configured in `"+fieldTables+"` are used instead.").
+				Description("The tables to incrementally snapshot. If omitted, the tables configured in `"+fieldTables+"` are used instead.\n\nThis list is only read when a snapshot starts from scratch. Once a checkpoint exists in `"+fieldIncSnapshotCheckpointCache+"`, the table set comes from that checkpoint, and editing this field has no effect: tables added here are not backfilled, and tables removed here are still backfilled if the checkpoint has not reached them yet. Neither case is reported. To pick up an edited list, backfill the new tables under a different `"+fieldIncSnapshotCheckpointCacheKey+"`, or clear the existing key to restart the whole snapshot.").
 				Optional(),
 			service.NewIntField(fieldIncrementalSnapshotChunkSize).
 				Description("The number of rows to read per chunk while incrementally snapshotting a table.").
@@ -292,7 +292,7 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
 				Optional(),
 			service.NewStringField(fieldIncSnapshotCheckpointCacheKey).
-				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. An alternative key can be provided if multiple incremental snapshots share the same cache.").
+				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. An alternative key can be provided if multiple incremental snapshots share the same cache.\n\nChanging this key, or clearing it from the cache, starts a fresh snapshot of the configured tables. That is currently the only way to re-run a backfill, including after editing `"+fieldIncrementalSnapshotTables+"`.").
 				Default(incsnapshot.DefaultIncSnapshotCheckpointKey),
 		).
 			Description("Configures incremental snapshotting of one or more tables, which runs automatically and concurrently with logical replication streaming once enabled.").
