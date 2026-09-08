@@ -1807,15 +1807,23 @@ memory: {}`))
 		// reads against live inserts on the same table.
 		const numConcurrent = 1000
 		writerDone := make(chan struct{})
+		// require calls FailNow, which is invalid off the test goroutine: it
+		// would stop the writer early and surface as a missing-rows failure
+		// instead of the insert error. Carry the error out and assert it
+		// here, where closing writerDone orders the write before this read.
+		var writerErr error
 		go func() {
 			defer close(writerDone)
 			for range numConcurrent {
-				_, err := db.Exec(`INSERT INTO flights (name, created_at) VALUES ('concurrent', NOW())`)
-				require.NoError(t, err)
+				if _, err := db.Exec(`INSERT INTO flights (name, created_at) VALUES ('concurrent', NOW())`); err != nil {
+					writerErr = err
+					return
+				}
 				time.Sleep(10 * time.Millisecond)
 			}
 		}()
 		<-writerDone
+		require.NoError(t, writerErr, "concurrent writer failed")
 
 		var totalRows int64
 		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM flights`).Scan(&totalRows))

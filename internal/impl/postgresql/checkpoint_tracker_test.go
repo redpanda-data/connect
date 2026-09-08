@@ -35,10 +35,10 @@ func TestCheckpointTrackerPreventsClobberFromRowlessSentinel(t *testing.T) {
 
 	tracker := newCheckpointTracker(10, new(atomic.Uint64))
 
-	resolveBatch, err := tracker.Track(context.Background(), incrementalsnapshot.CheckpointOffset{LSN: &lsn}, 1)
+	resolveBatch, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{LSN: &lsn}, 1)
 	require.NoError(t, err)
 
-	resolveSentinel, err := tracker.Track(context.Background(), incrementalsnapshot.CheckpointOffset{IncSnapshotState: state}, 0)
+	resolveSentinel, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{IncSnapshotState: state}, 0)
 	require.NoError(t, err)
 
 	// The sentinel resolves immediately, ahead of the still-pending batch;
@@ -65,10 +65,10 @@ func TestCheckpointTrackerPreservesPendingStateAcrossLaterBatch(t *testing.T) {
 
 	tracker := newCheckpointTracker(10, new(atomic.Uint64))
 
-	resolveA, err := tracker.Track(context.Background(), incrementalsnapshot.CheckpointOffset{LSN: &lsnA, IncSnapshotState: stateA}, 1)
+	resolveA, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{LSN: &lsnA, IncSnapshotState: stateA}, 1)
 	require.NoError(t, err)
 
-	resolveB, err := tracker.Track(context.Background(), incrementalsnapshot.CheckpointOffset{LSN: &lsnB}, 1)
+	resolveB, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{LSN: &lsnB}, 1)
 	require.NoError(t, err)
 
 	// B resolves first, while A is still pending; nothing visible yet.
@@ -95,7 +95,7 @@ func TestCommitCheckpointSkipsRedundantStatePersist(t *testing.T) {
 		incSnapshotCheckpointCacheKey: "key",
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	stateA := []byte("state-a")
 
 	// offset.LSN is nil throughout this test, so commitCheckpoint never
@@ -152,13 +152,13 @@ func TestTrackAssignsIncreasingSeq(t *testing.T) {
 
 	tracker := newCheckpointTracker(10, new(atomic.Uint64))
 
-	resolveA, err := tracker.Track(context.Background(), incrementalsnapshot.CheckpointOffset{LSN: &lsnA}, 1)
+	resolveA, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{LSN: &lsnA}, 1)
 	require.NoError(t, err)
 	offsetA := resolveA()
 	require.NotNil(t, offsetA)
 	assert.Equal(t, uint64(1), offsetA.Seq)
 
-	resolveB, err := tracker.Track(context.Background(), incrementalsnapshot.CheckpointOffset{LSN: &lsnB}, 1)
+	resolveB, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{LSN: &lsnB}, 1)
 	require.NoError(t, err)
 	offsetB := resolveB()
 	require.NotNil(t, offsetB)
@@ -179,7 +179,7 @@ func TestCommitCheckpointRejectsOlderState(t *testing.T) {
 		incSnapshotCheckpointCacheKey: "key",
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	older := []byte("state-1")
 	newer := []byte("state-2")
 
@@ -209,7 +209,7 @@ func TestCommitCheckpointConcurrentAcksNeverRegress(t *testing.T) {
 		incSnapshotCheckpointCacheKey: "key",
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	var wg sync.WaitGroup
 	for i := 1; i <= acks; i++ {
 		wg.Add(1)
@@ -246,7 +246,7 @@ func TestCheckpointsPersistAcrossTrackerReplacement(t *testing.T) {
 
 	// offset.LSN stays nil throughout, so commitCheckpoint never touches
 	// pgStream and passing nil for it is safe.
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// First connection: track and commit a few checkpoints.
 	first := newCheckpointTracker(10, &p.incSnapshotSeq)

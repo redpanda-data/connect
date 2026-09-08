@@ -48,7 +48,7 @@ func collect(rows *[][]Row) EmitFunc {
 func onCommit[W Watermark[uint64]](t *testing.T, c *Coordinator[uint64, W], pos uint64) (emitted []Row, changed bool, err error) {
 	t.Helper()
 	var chunks [][]Row
-	changed, err = c.OnCommit(context.Background(), pos, collect(&chunks))
+	changed, err = c.OnCommit(t.Context(), pos, collect(&chunks))
 	for _, chunk := range chunks {
 		emitted = append(emitted, chunk...)
 	}
@@ -87,7 +87,7 @@ func TestCoordinatorFullScenario(t *testing.T) {
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
-	require.NoError(t, coord.Start(context.Background()))
+	require.NoError(t, coord.Start(t.Context()))
 
 	require.False(t, coord.Done())
 	require.NotNil(t, coord.current)
@@ -199,7 +199,7 @@ func TestCoordinatorZeroRowAdvanceBetweenTables(t *testing.T) {
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
-	require.NoError(t, coord.Start(context.Background()))
+	require.NoError(t, coord.Start(t.Context()))
 
 	require.NotNil(t, coord.current)
 	assert.Equal(t, tableA, *coord.current)
@@ -241,7 +241,7 @@ func TestCoordinatorOnCommitNoopsWhenDone(t *testing.T) {
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
-	require.NoError(t, coord.Start(context.Background()))
+	require.NoError(t, coord.Start(t.Context()))
 	require.True(t, coord.Done())
 
 	emitted, changed, err := onCommit(t, coord, 100)
@@ -277,7 +277,7 @@ func TestCoordinatorSkipsEmptyTable(t *testing.T) {
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
-	require.NoError(t, coord.Start(context.Background()))
+	require.NoError(t, coord.Start(t.Context()))
 
 	// The empty table must be skipped entirely, straight on to table B,
 	// without erroring or wasting a watermark/fetch round trip on it.
@@ -313,7 +313,7 @@ func TestCoordinatorAllTablesEmpty(t *testing.T) {
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
-	require.NoError(t, coord.Start(context.Background()))
+	require.NoError(t, coord.Start(t.Context()))
 	assert.True(t, coord.Done())
 }
 
@@ -341,7 +341,7 @@ func TestCoordinatorResumeAlwaysDerivesFreshWatermark(t *testing.T) {
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
-	require.NoError(t, coord.Start(context.Background()))
+	require.NoError(t, coord.Start(t.Context()))
 
 	callsBeforeResume := mock.watermarkCalls
 	require.Positive(t, callsBeforeResume)
@@ -359,7 +359,7 @@ func TestCoordinatorResumeAlwaysDerivesFreshWatermark(t *testing.T) {
 
 	resumed, err := NewCoordinator(cfg, state)
 	require.NoError(t, err)
-	require.NoError(t, resumed.Start(context.Background()))
+	require.NoError(t, resumed.Start(t.Context()))
 
 	// Call count must increase: watermarks are never persisted, only re-derived.
 	assert.Greater(t, mock.watermarkCalls, callsBeforeResume)
@@ -387,7 +387,7 @@ func TestCoordinatorResumeRefetchesUnflushedChunk(t *testing.T) {
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
-	require.NoError(t, coord.Start(context.Background())) // fetches chunk 1 ([1,2])
+	require.NoError(t, coord.Start(t.Context())) // fetches chunk 1 ([1,2])
 
 	_, changed, err := onCommit(t, coord, 1) // opens, doesn't close (1 <= closeThreshold 2)
 	require.NoError(t, err)
@@ -410,7 +410,7 @@ func TestCoordinatorResumeRefetchesUnflushedChunk(t *testing.T) {
 
 	resumed, err := NewCoordinator(cfg, state)
 	require.NoError(t, err)
-	require.NoError(t, resumed.Start(context.Background())) // must refetch chunk 2, not skip it
+	require.NoError(t, resumed.Start(t.Context())) // must refetch chunk 2, not skip it
 
 	require.Len(t, deps.fetchLog, 3)
 	assert.Equal(t, deps.fetchLog[1], deps.fetchLog[2], "resumed coordinator must request the same lower bound as the original chunk 2 fetch")
@@ -605,7 +605,7 @@ func TestCoordinatorDedupsBufferedFinalChunk(t *testing.T) {
 		Deps:      mock,
 	}, nil)
 	require.NoError(t, err)
-	require.NoError(t, coord.Start(context.Background()))
+	require.NoError(t, coord.Start(t.Context()))
 
 	require.Equal(t, 2, coord.window.Len())
 
@@ -657,7 +657,7 @@ func newDrainCoordinator(t *testing.T, maxDrain int) (*Coordinator[uint64, testW
 		MaxDrainChunks: maxDrain,
 	}, nil)
 	require.NoError(t, err)
-	require.NoError(t, coord.Start(context.Background()))
+	require.NoError(t, coord.Start(t.Context()))
 	return coord, table
 }
 
@@ -670,7 +670,7 @@ func TestCoordinatorDrainsQuietDatabaseInOneCommit(t *testing.T) {
 	coord, _ := newDrainCoordinator(t, DefaultMaxDrainChunks)
 
 	var chunks [][]Row
-	changed, err := coord.OnCommit(context.Background(), 101, collect(&chunks))
+	changed, err := coord.OnCommit(t.Context(), 101, collect(&chunks))
 	require.NoError(t, err)
 	require.True(t, changed)
 
@@ -688,7 +688,7 @@ func TestCoordinatorDrainRespectsMaxDrainChunks(t *testing.T) {
 	coord, _ := newDrainCoordinator(t, 1)
 
 	var chunks [][]Row
-	changed, err := coord.OnCommit(context.Background(), 101, collect(&chunks))
+	changed, err := coord.OnCommit(t.Context(), 101, collect(&chunks))
 	require.NoError(t, err)
 	require.True(t, changed)
 
@@ -722,10 +722,10 @@ func TestCoordinatorDrainStopsOnConcurrentActivity(t *testing.T) {
 		Deps:      mock,
 	}, nil)
 	require.NoError(t, err)
-	require.NoError(t, coord.Start(context.Background()))
+	require.NoError(t, coord.Start(t.Context()))
 
 	var chunks [][]Row
-	changed, err := coord.OnCommit(context.Background(), 101, collect(&chunks))
+	changed, err := coord.OnCommit(t.Context(), 101, collect(&chunks))
 	require.NoError(t, err)
 	require.True(t, changed)
 
@@ -741,7 +741,7 @@ func TestCoordinatorDrainPropagatesEmitError(t *testing.T) {
 
 	wantErr := errors.New("downstream gone")
 	calls := 0
-	_, err := coord.OnCommit(context.Background(), 101, func([]Row) error {
+	_, err := coord.OnCommit(t.Context(), 101, func([]Row) error {
 		calls++
 		if calls == 2 {
 			return wantErr
@@ -758,7 +758,7 @@ func TestCoordinatorForcesFreshTransactionOnceOnly(t *testing.T) {
 	// the drain.
 	coord, _ := newDrainCoordinator(t, DefaultMaxDrainChunks)
 
-	_, err := coord.OnCommit(context.Background(), 101, func([]Row) error { return nil })
+	_, err := coord.OnCommit(t.Context(), 101, func([]Row) error { return nil })
 	require.NoError(t, err)
 
 	deps := coord.cfg.Deps.(*scriptedMockDeps)

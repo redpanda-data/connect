@@ -9,7 +9,6 @@
 package pglogicalstream
 
 import (
-	"context"
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
@@ -104,7 +103,7 @@ func TestResolveIncrementalPKColumnsUsesIncrementalDB(t *testing.T) {
 	db := newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"tenant_id"}, {"id"}}, nil)
 	s := &Stream{incSnapshotConn: db}
 
-	cols, err := s.resolveIncrementalPKColumns(context.Background(), TableFQN{Schema: `"public"`, Table: `"orders"`})
+	cols, err := s.resolveIncrementalPKColumns(t.Context(), TableFQN{Schema: `"public"`, Table: `"orders"`})
 	require.NoError(t, err)
 	assert.Equal(t, []string{`"tenant_id"`, `"id"`}, cols)
 }
@@ -113,7 +112,7 @@ func TestResolveIncrementalPKColumnsNoPrimaryKey(t *testing.T) {
 	db := newFakeQueryDB(t, []string{"attname"}, nil, nil)
 	s := &Stream{incSnapshotConn: db}
 
-	_, err := s.resolveIncrementalPKColumns(context.Background(), TableFQN{Schema: `"public"`, Table: `"orders"`})
+	_, err := s.resolveIncrementalPKColumns(t.Context(), TableFQN{Schema: `"public"`, Table: `"orders"`})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no primary key found")
 }
@@ -131,14 +130,14 @@ func TestIncrementalPKColumnsCachesAndUnquotes(t *testing.T) {
 
 	table := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
 
-	cols, err := s.incrementalPKColumns(context.Background(), table)
+	cols, err := s.incrementalPKColumns(t.Context(), table)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"id"}, cols, "cached columns must be unquoted")
 	assert.Equal(t, 1, queries)
 
 	// Second call for the same table must be served from the cache, not
 	// issue a second query.
-	cols, err = s.incrementalPKColumns(context.Background(), table)
+	cols, err = s.incrementalPKColumns(t.Context(), table)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"id"}, cols)
 	assert.Equal(t, 1, queries, "second lookup for the same table must be cached")
@@ -151,7 +150,7 @@ func TestResolveIncrementalMaxKeyEmptyTableIsNotAnError(t *testing.T) {
 	s := &Stream{incSnapshotConn: db}
 
 	table := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
-	pk, err := s.resolveIncrementalMaxKey(context.Background(), table, []string{"id"}, "SELECT id FROM orders")
+	pk, err := s.resolveIncrementalMaxKey(t.Context(), table, []string{"id"}, "SELECT id FROM orders")
 	require.NoError(t, err)
 	assert.Nil(t, pk)
 }
