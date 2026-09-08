@@ -311,13 +311,18 @@ func runEmulator(t *testing.T) emulator {
 	}
 }
 
+// writeSFTPFile writes data to a temporary name and then renames it into place.
+// The file appears atomically at its full size, so a watcher poll can never
+// observe a partially written file.
 func writeSFTPFile(t *testing.T, client *sftp.Client, path, data string) {
 	t.Helper()
-	file, err := client.Create(path)
+	tmpPath := path + ".tmp"
+	file, err := client.Create(tmpPath)
 	require.NoError(t, err, "creating file")
-	defer file.Close()
 	_, err = fmt.Fprint(file, data)
 	require.NoError(t, err, "writing file contents")
+	require.NoError(t, file.Close(), "closing file")
+	require.NoError(t, client.Rename(tmpPath, path), "renaming file into place")
 }
 
 // readSFTPInput builds an sftp input for the emulator and connects it.
