@@ -104,6 +104,7 @@ input:
       enabled: false
       tables: [] # No default (optional)
       chunk_size: 1024
+      heartbeat_interval: 1s
       checkpoint_cache: "" # No default (optional)
       checkpoint_cache_key: postgres_cdc_incremental_snapshot
     auto_replay_nacks: true
@@ -302,7 +303,7 @@ unchanged_toast_value: __redpanda_connect_unchanged_toast_value__
 
 The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.
 
-Heartbeats also pace `incremental_snapshot`: the snapshot advances only on streamed transactions, so on a quiet table the heartbeat is the only thing moving it forward. A non-zero interval is required when incremental snapshotting is enabled, and it bounds how quickly the initial backfill completes.
+Heartbeats also pace `incremental_snapshot`: on a quiet table they are the only thing advancing the snapshot. This interval just keeps the slot current, so a backfill uses `incremental_snapshot.heartbeat_interval` and the more frequent of the two applies. A non-zero value is still required here when incremental snapshotting is enabled.
 
 
 *Type*: `string`
@@ -638,7 +639,7 @@ Configures chunked snapshotting that runs alongside replication streaming.
 
 Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `stream_snapshot` it needs no up-front snapshot phase, does not delay replication, and needs no signal table. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.
 
-Progress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, and `heartbeat_interval` must be non-zero for them to advance at all.
+Progress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `heartbeat_interval`.
 
 A row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. That second window spans the snapshots of all preceding tables, so it can be long. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.
 
@@ -665,6 +666,15 @@ The number of rows to read per chunk while incrementally snapshotting a table.
 *Type*: `int`
 
 *Default*: `1024`
+
+=== `incremental_snapshot.heartbeat_interval`
+
+How often to heartbeat while a backfill is in progress. The snapshot only advances on a streamed transaction, so on quiet tables this paces it; the effective heartbeat is whichever of this and the top-level `heartbeat_interval` is more frequent. Raise it to reduce write load at the cost of a slower backfill.
+
+
+*Type*: `string`
+
+*Default*: `"1s"`
 
 === `incremental_snapshot.checkpoint_cache`
 

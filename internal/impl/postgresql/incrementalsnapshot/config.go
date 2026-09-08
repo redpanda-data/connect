@@ -8,7 +8,11 @@
 
 package incrementalsnapshot
 
-import "github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
+import (
+	"time"
+
+	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
+)
 
 var (
 	// DefaultIncSnapshotEnabled is the default for enabling the snapshot.
@@ -19,6 +23,10 @@ var (
 
 	// DefaultIncSnapshotCheckpointKey is the default checkpoint cache key.
 	DefaultIncSnapshotCheckpointKey = "postgres_cdc_incremental_snapshot"
+
+	// DefaultIncSnapshotHeartbeatInterval is frequent enough that the
+	// backfill is bound by chunk reads rather than by the heartbeat.
+	DefaultIncSnapshotHeartbeatInterval = time.Second
 )
 
 // DefaultMaxDrainChunks is the coordinator's drain limit: the most chunks one
@@ -28,10 +36,14 @@ const DefaultMaxDrainChunks = incrementalsnapshot.DefaultMaxDrainChunks
 
 // Cfg holds the incremental snapshot configuration.
 type Cfg struct {
-	Enabled     bool
-	Tables      []string
-	ChunkSize   int
-	ResumeState *incrementalsnapshot.State
+	Enabled   bool
+	Tables    []string
+	ChunkSize int
+	// HeartbeatInterval is how often the snapshot needs a commit to advance
+	// on, separate from Config.HeartbeatInterval, which only keeps the
+	// replication slot current.
+	HeartbeatInterval time.Duration
+	ResumeState       *incrementalsnapshot.State
 }
 
 // IsEnabled reports whether the snapshot is enabled.
