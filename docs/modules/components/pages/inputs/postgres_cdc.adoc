@@ -636,7 +636,7 @@ Configures chunked snapshotting that runs alongside replication streaming.
 
 === `incremental_snapshot.enabled`
 
-Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `stream_snapshot` it needs no up-front snapshot phase, does not delay replication, and needs no signal table. The two are independent and can be enabled together.
+Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `stream_snapshot` it needs no up-front snapshot phase, does not delay replication, and needs no signal table. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.
 
 Progress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, and `heartbeat_interval` must be non-zero for them to advance at all.
 
