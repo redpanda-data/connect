@@ -649,7 +649,7 @@ A row can arrive twice, once from replication and once from the backfill: when a
 
 === `incremental_snapshot.tables`
 
-The tables to incrementally snapshot. If omitted, the tables configured in `tables` are used instead.
+The tables to incrementally snapshot. If omitted, the tables configured in `tables` are used instead, so at least one of the two must be set. Each entry must be replicated, so it must appear in `tables` unless that list is empty, which replicates everything.
 
 Only read when a snapshot starts from scratch. Once a checkpoint exists the table set comes from it, so edits here are silently ignored: added tables are not backfilled, and removed tables still are. Change `checkpoint_cache_key`, or clear the existing key, to pick up an edited list.
 

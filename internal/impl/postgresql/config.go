@@ -15,6 +15,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
 type incSnapshotCfg struct {
@@ -29,7 +30,7 @@ func newDefaultIncSnapshotCfg() *incSnapshotCfg {
 	}
 }
 
-func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resources, heartbeatInterval time.Duration) (*incSnapshotCfg, error) {
+func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resources, heartbeatInterval time.Duration, replicatedTables []string) (*incSnapshotCfg, error) {
 	out := newDefaultIncSnapshotCfg()
 	if conf.Contains(fieldIncSnapshot) {
 		var (
@@ -52,6 +53,43 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resour
 		}
 		if cfg.ChunkSize <= 0 {
 			return nil, fmt.Errorf("%s.%s must be > 0, got %d", fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, cfg.ChunkSize)
+		}
+
+		// Both lists empty: no table names to read, so the coordinator would
+		// report itself complete without emitting a row.
+		if cfg.Enabled && len(cfg.Tables) == 0 && len(replicatedTables) == 0 {
+			return nil, fmt.Errorf(
+				"%s.%s is true but no tables are listed: set %s.%s, or %s to inherit from",
+				fieldIncSnapshot, fieldIncSnapshotEnabled,
+				fieldIncSnapshot, fieldIncrementalSnapshotTables, fieldTables,
+			)
+		}
+
+		// An unreplicated table is backfilled with no live changes to dedup
+		// against, so writes after its chunk is read are lost. Only an
+		// explicit list needs checking: an empty one inherits the replicated
+		// set, and an empty replicatedTables means FOR ALL TABLES.
+		if cfg.Enabled && len(cfg.Tables) > 0 && len(replicatedTables) > 0 {
+			replicated := make(map[string]struct{}, len(replicatedTables))
+			for _, table := range replicatedTables {
+				normalized, err := sanitize.NormalizePostgresIdentifier(table)
+				if err != nil {
+					return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+				}
+				replicated[normalized] = struct{}{}
+			}
+			for _, table := range cfg.Tables {
+				normalized, err := sanitize.NormalizePostgresIdentifier(table)
+				if err != nil {
+					return nil, fmt.Errorf("invalid %s.%s entry %q: %w", fieldIncSnapshot, fieldIncrementalSnapshotTables, table, err)
+				}
+				if _, ok := replicated[normalized]; !ok {
+					return nil, fmt.Errorf(
+						"%s.%s entry %q is not listed in %s, so it would not be replicated: no live change could be deduplicated against its backfill",
+						fieldIncSnapshot, fieldIncrementalSnapshotTables, table, fieldTables,
+					)
+				}
+			}
 		}
 
 		// The snapshot moves forward only on a streamed commit. On a table

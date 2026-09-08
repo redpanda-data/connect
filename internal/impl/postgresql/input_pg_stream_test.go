@@ -118,6 +118,56 @@ tables:
 		errContains string
 	}{
 		{
+			// An unreplicated table would lose writes: no live changes to
+			// dedup its backfill against.
+			name: "incremental snapshot table not replicated",
+			conf: base + `
+heartbeat_interval: 5s
+incremental_snapshot:
+  enabled: true
+  tables:
+    - events
+    - customers
+`,
+			errContains: `"customers" is not listed in tables`,
+		},
+		{
+			// Case-folding must match how Postgres resolves the names.
+			name: "incremental snapshot table matches under case folding",
+			conf: base + `
+heartbeat_interval: 5s
+incremental_snapshot:
+  enabled: true
+  tables:
+    - EVENTS
+`,
+			errContains: pastHeartbeatCheck,
+		},
+		{
+			// Both lists empty: no table names to read, so the snapshot
+			// would silently do nothing.
+			name: "incremental snapshot enabled with no tables anywhere",
+			conf: `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+heartbeat_interval: 5s
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: "no tables are listed",
+		},
+		{
+			// An omitted list inherits the replicated tables.
+			name: "incremental snapshot enabled without tables",
+			conf: base + `
+heartbeat_interval: 5s
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: pastHeartbeatCheck,
+		},
+		{
 			// The incremental snapshot moves forward only on a streamed
 			// commit. Without a heartbeat a quiet table stops for ever.
 			name: "incremental snapshot enabled with heartbeats disabled",

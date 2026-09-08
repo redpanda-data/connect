@@ -52,7 +52,7 @@ incremental_snapshot:
 			pConf, err := newPostgresCDCConfig().ParseYAML(test.conf, service.NewEnvironment())
 			require.NoError(t, err)
 
-			got, err := parseIncrementalSnapshotCfg(pConf, service.MockResources(), time.Hour)
+			got, err := parseIncrementalSnapshotCfg(pConf, service.MockResources(), time.Hour, nil)
 			require.NoError(t, err)
 			require.NotNil(t, got, "callers read the returned fields unconditionally")
 
