@@ -30,7 +30,7 @@ func newDefaultIncSnapshotCfg() *incSnapshotCfg {
 	}
 }
 
-func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resources, heartbeatInterval time.Duration, replicatedTables []string, streamSnapshot bool) (*incSnapshotCfg, error) {
+func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, heartbeatInterval time.Duration, replicatedTables []string, streamSnapshot bool) (*incSnapshotCfg, error) {
 	out := newDefaultIncSnapshotCfg()
 	if conf.Contains(fieldIncSnapshot) {
 		var (
@@ -46,6 +46,13 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resour
 			if cfg.Tables, err = snapConf.FieldStringList(fieldIncrementalSnapshotTables); err != nil {
 				return nil, err
 			}
+		}
+
+		if cfg.HeartbeatInterval, err = snapConf.FieldDuration(fieldIncSnapshotHeartbeatInterval); err != nil {
+			return nil, err
+		}
+		if cfg.Enabled && cfg.HeartbeatInterval <= 0 {
+			return nil, fmt.Errorf("%s.%s must be > 0, got %s", fieldIncSnapshot, fieldIncSnapshotHeartbeatInterval, cfg.HeartbeatInterval)
 		}
 
 		if cfg.ChunkSize, err = snapConf.FieldInt(fieldIncrementalSnapshotChunkSize); err != nil {
@@ -111,24 +118,6 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resour
 				fieldIncSnapshot, fieldIncSnapshotEnabled, fieldHeartbeatInterval, fieldHeartbeatInterval,
 			)
 		}
-		if cfg.Enabled && heartbeatInterval > incSnapshotSlowHeartbeatThreshold {
-			// The snapshot depends on the heartbeat here also, but the
-			// result is less severe. A commit that arrives while the
-			// database is quiet releases a maximum of DefaultMaxDrainChunks
-			// chunks. A long interval therefore adds delay but does not
-			// reduce the number of rows for each commit. Report it, because
-			// the interval still controls how fast a quiet table completes.
-			rowsPerBeat := int64(cfg.ChunkSize) * int64(incrementalsnapshot.DefaultMaxDrainChunks)
-			mgr.Logger().Warnf(
-				"Incremental snapshot progress is paced by streamed commits, and %s is %s. On tables with little write traffic each heartbeat backfills up to %d rows (%s.%s=%d x %d chunks drained per commit); lower %s if the initial backfill needs to finish sooner.",
-				fieldHeartbeatInterval, heartbeatInterval,
-				rowsPerBeat,
-				fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, cfg.ChunkSize,
-				incrementalsnapshot.DefaultMaxDrainChunks,
-				fieldHeartbeatInterval,
-			)
-		}
-
 		if snapConf.Contains(fieldIncSnapshotCheckpointCache) {
 			if out.cache, err = snapConf.FieldString(fieldIncSnapshotCheckpointCache); err != nil {
 				return nil, err

@@ -63,12 +63,7 @@ const (
 	fieldIncrementalSnapshotChunkSize  = "chunk_size"
 	fieldIncSnapshotCheckpointCache    = "checkpoint_cache"
 	fieldIncSnapshotCheckpointCacheKey = "checkpoint_cache_key"
-
-	// incSnapshotSlowHeartbeatThreshold is the heartbeat_interval that
-	// starts a warning about the speed of the incremental snapshot. The
-	// value makes the input warn at the default interval of one hour,
-	// because a large table then needs many days.
-	incSnapshotSlowHeartbeatThreshold = time.Minute
+	fieldIncSnapshotHeartbeatInterval  = "heartbeat_interval"
 )
 
 func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *pgconn.Config, _ *service.Logger) (TokenBuilder, error) {
@@ -178,7 +173,7 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Optional().
 			Advanced()).
 		Field(service.NewDurationField(fieldHeartbeatInterval).
-			Description("The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.\n\nHeartbeats also pace `incremental_snapshot`: the snapshot advances only on streamed transactions, so on a quiet table the heartbeat is the only thing moving it forward. A non-zero interval is required when incremental snapshotting is enabled, and it bounds how quickly the initial backfill completes.").
+			Description("The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.\n\nHeartbeats also pace `incremental_snapshot`: on a quiet table they are the only thing advancing the snapshot. This interval just keeps the slot current, so a backfill uses `" + fieldIncSnapshot + "." + fieldIncSnapshotHeartbeatInterval + "` and the more frequent of the two applies. A non-zero value is still required here when incremental snapshotting is enabled.").
 			ShortDescription("Interval at which to write heartbeat messages, keeping the replication slot current on low-traffic tables.").
 			Default("1h").
 			Example("0s").
@@ -278,7 +273,7 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 		// incremental snapshot config
 		Field(service.NewObjectField(fieldIncSnapshot,
 			service.NewBoolField(fieldIncSnapshotEnabled).
-				Description("Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `"+fieldStreamSnapshot+"` it needs no up-front snapshot phase, does not delay replication, and needs no signal table. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, and `"+fieldHeartbeatInterval+"` must be non-zero for them to advance at all.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. That second window spans the snapshots of all preceding tables, so it can be long. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
+				Description("Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `"+fieldStreamSnapshot+"` it needs no up-front snapshot phase, does not delay replication, and needs no signal table. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `"+fieldIncSnapshotHeartbeatInterval+"`.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. That second window spans the snapshots of all preceding tables, so it can be long. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
 				ShortDescription("Snapshot the configured tables in chunks, alongside replication streaming.").
 				Default(incsnapshot.DefaultIncSnapshotEnabled),
 			service.NewStringListField(fieldIncrementalSnapshotTables).
@@ -287,6 +282,10 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 			service.NewIntField(fieldIncrementalSnapshotChunkSize).
 				Description("The number of rows to read per chunk while incrementally snapshotting a table.").
 				Default(incsnapshot.DefaultIncSnapshotChunkSize),
+			service.NewDurationField(fieldIncSnapshotHeartbeatInterval).
+				Description("How often to heartbeat while a backfill is in progress. The snapshot only advances on a streamed transaction, so on quiet tables this paces it; the effective heartbeat is whichever of this and the top-level `"+fieldHeartbeatInterval+"` is more frequent. Raise it to reduce write load at the cost of a slower backfill.").
+				ShortDescription("How often to heartbeat while a backfill runs, which is what paces it on quiet tables.").
+				Default(incsnapshot.DefaultIncSnapshotHeartbeatInterval.String()),
 			service.NewStringField(fieldIncSnapshotCheckpointCache).
 				Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] storing the snapshot's progress, so a restart resumes instead of starting over. Required when `"+fieldIncSnapshotEnabled+"` is `true`.").
 				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
@@ -420,7 +419,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
-	incSnapshot, err := parseIncrementalSnapshotCfg(conf, mgr, heartbeatInterval, tables, streamSnapshot)
+	incSnapshot, err := parseIncrementalSnapshotCfg(conf, heartbeatInterval, tables, streamSnapshot)
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ package pgstream
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -239,4 +240,22 @@ heartbeat_interval: 0s
 			}
 		})
 	}
+}
+
+func TestIncSnapshotHeartbeatIntervalRejectsZero(t *testing.T) {
+	// The snapshot cannot advance without commits to compare against.
+	pConf, err := newPostgresCDCConfig().ParseYAML(`
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+tables:
+  - events
+incremental_snapshot:
+  enabled: true
+  heartbeat_interval: 0s
+`, service.NewEnvironment())
+	require.NoError(t, err)
+
+	_, err = parseIncrementalSnapshotCfg(pConf, time.Hour, []string{"events"}, false)
+	require.ErrorContains(t, err, "incremental_snapshot.heartbeat_interval must be > 0")
 }

@@ -165,6 +165,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if config.HeartbeatInterval > 0 {
 		stream.heartbeat, err = newHeartbeat(
 			config,
+			EffectiveHeartbeatInterval(config.HeartbeatInterval, config.IncrementalSnapshotCfg()),
 			"redpanda_connect_"+stream.slotName,
 			`{"type":"heartbeat"}`,
 		)
