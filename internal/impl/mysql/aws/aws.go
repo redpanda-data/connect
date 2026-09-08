@@ -16,7 +16,10 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -30,6 +33,8 @@ import (
 
 	mysqlimpl "github.com/redpanda-data/connect/v4/internal/impl/mysql"
 )
+
+const defaultMySQLPort = "3306"
 
 type roleConfig struct {
 	arn        string
@@ -58,6 +63,9 @@ func awsIAMAuth(ctx context.Context, awsConf *service.ParsedConfig, dbConf *mysq
 		return nil, fmt.Errorf("unable to load AWS config: %w", err)
 	}
 	if endpoint, err = awsConf.FieldString("endpoint"); err != nil {
+		return nil, err
+	}
+	if endpoint, err = normalizeIAMEndpoint(endpoint, dbConf.Addr); err != nil {
 		return nil, err
 	}
 	if region, _ = awsConf.FieldString("region"); region != "" {
@@ -151,6 +159,28 @@ func assumeRoleChain(ctx context.Context, awsCfg aws.Config, roles []roleConfig,
 	}
 
 	return currentConfig, nil
+}
+
+// normalizeIAMEndpoint returns a `host:port` value suitable for
+// auth.BuildAuthToken. The AWS SDK rejects an endpoint without a port, so this
+// helper fills one in: if `endpoint` is empty the DSN address is used; if
+// `endpoint` is a bare hostname the port is taken from the DSN address, with
+// the well-known MySQL port as a final fallback.
+func normalizeIAMEndpoint(endpoint, dsnAddr string) (string, error) {
+	if endpoint == "" {
+		endpoint = dsnAddr
+	}
+	if endpoint == "" {
+		return "", errors.New("aws IAM authentication requires an endpoint and the DSN does not contain an address")
+	}
+	if strings.Contains(endpoint, ":") {
+		return endpoint, nil
+	}
+	port := defaultMySQLPort
+	if _, p, splitErr := net.SplitHostPort(dsnAddr); splitErr == nil && p != "" {
+		port = p
+	}
+	return net.JoinHostPort(endpoint, port), nil
 }
 
 func parseRoleConfig(awsConf *service.ParsedConfig) ([]roleConfig, error) {
