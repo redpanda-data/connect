@@ -1,0 +1,12 @@
+FROM confluentinc/cp-kafka-connect:7.7.8
+
+# Download the official Snowflake Kafka Connector (fat jar, all deps bundled --
+# unlike SAP's ngdbc.jar this one isn't license-gated, so it's baked into the
+# image instead of fetched/mounted at deploy time).
+ARG SF_KC_VERSION=3.4.0
+
+USER root
+RUN mkdir -p /usr/share/kafka-connect-snowflake && \
+    curl -fsSL -o /usr/share/kafka-connect-snowflake/snowflake-kafka-connector.jar \
+    "https://repo1.maven.org/maven2/com/snowflake/snowflake-kafka-connector/${SF_KC_VERSION}/snowflake-kafka-connector-${SF_KC_VERSION}.jar"
+USER appuser

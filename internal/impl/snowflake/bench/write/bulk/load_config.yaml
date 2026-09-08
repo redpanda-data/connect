@@ -1,0 +1,29 @@
+http:
+  debug_endpoints: true
+
+# Produces the same message shape as benchmark_config.yaml's generate input,
+# but to the local Kafka topic instead of straight to Snowflake -- feeds the
+# Kafka Connect (Snowpipe) comparison bench.
+input:
+  generate:
+    count: 0
+    interval: ""
+    mapping: |
+      root.ID = counter()
+      root.USER_ID = (counter() % 10000) + 1
+      root.EVENT_TYPE = ["click", "view", "purchase", "scroll", "hover"].index(counter() % 5)
+      root.VALUE = (counter() % 1000) + random_int(max: 100)
+      root.INFO = "event info for record " + counter().string()
+      root.TS = now()
+
+output:
+  kafka_franz:
+    seed_brokers: [ "localhost:9092" ]
+    topic: rpcns-snowflake-bulk-bench
+    max_in_flight: 64
+    batching:
+      count: 1000
+      period: 100ms
+
+logger:
+  level: INFO
