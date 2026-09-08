@@ -15,7 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -439,6 +439,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		replicationLag:  replicationLag,
 		stopSig:         shutdown.NewSignaller(),
 
+		snapshotAckDrained: make(chan struct{}, 1),
+
 		iamAuthEnabled: iamAuthEnabled,
 	}
 
@@ -490,11 +492,21 @@ type pgStreamInput struct {
 	controlSig      controlSignaller
 	stopSig         *shutdown.Signaller
 
-	// snapshotAckWG tracks in-flight snapshot batches: incremented when a
+	// snapshotAckPending tracks in-flight snapshot batches: incremented when a
 	// snapshot batch (nil LSN) is enqueued and decremented when it is
 	// acknowledged. The snapshot->stream handoff blocks until it drains so the
 	// replication slot is not promoted before snapshot rows are durable.
-	snapshotAckWG sync.WaitGroup
+	snapshotAckPending atomic.Int64
+	// snapshotAckDrained is signalled (best-effort, buffered capacity 1) each
+	// time snapshotAckPending reaches zero, so the handoff can wait on it
+	// without spawning a helper goroutine around WaitGroup.Wait.
+	snapshotAckDrained chan struct{}
+	// snapshotAckFailed is a sticky flag set when any snapshot batch settles
+	// via a nack (as opposed to an ack). The counter drains the same way for
+	// acks and nacks, so this flag is what tells the handoff apart: a drain
+	// caused by a nack must never promote the slot, since the corresponding
+	// rows were never durably delivered downstream.
+	snapshotAckFailed atomic.Bool
 
 	// IAM authentication fields
 	iamAuthEnabled bool
@@ -518,6 +530,12 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	}
 	// Reset our stop signal
 	p.stopSig = shutdown.NewSignaller()
+	// A new connect starts a fresh snapshot attempt, so any nack recorded
+	// against the previous epoch is no longer relevant: the snapshot rows are
+	// about to be re-read and re-emitted from scratch. Note that a late,
+	// cross-epoch nack racing in after this reset would simply re-set the
+	// flag and force another conservative re-run, which is safe.
+	p.snapshotAckFailed.Store(false)
 	go p.processStream(pgStream, batcher)
 	return err
 }
@@ -568,16 +586,23 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 		case batch := <-pgStream.Messages():
 			if len(batch) == 1 && batch[0].Operation == pglogicalstream.SnapshotCompleteOpType {
 				// Snapshot fully emitted. Flush any buffered rows, then block
-				// until every snapshot batch is acknowledged downstream before
-				// signalling the stream to promote the replication slot. Blocks
-				// until acks drain or soft-stop (no timeout, by design).
+				// until every snapshot batch has settled downstream before
+				// deciding whether to promote the replication slot. Blocks
+				// until settlement drains or soft-stop (no timeout, by
+				// design). The counter alone can't tell an ack from a nack -
+				// it drains either way - so snapshotAckFailed is consulted
+				// once drained to distinguish "durably delivered" from
+				// "rejected downstream". If soft-stop wins the race instead,
+				// the slot is likewise left unpromoted: batches settling
+				// during teardown are nacks, not durable delivery.
 				nextTimedBatchChan = nil
 				flushedBatch, err := batcher.Flush(ctx)
 				if err != nil {
 					p.logger.Debugf("error flushing snapshot completion batch: %s", err)
 					// The sentinel is a one-shot signal; if we bail here without
-					// acking, the barrier's snapshot goroutine blocks on
-					// snapshotAcked forever. Trigger a restart instead of stalling.
+					// acking, the drain wait below would block forever waiting for
+					// snapshotAckPending to reach zero. Trigger a restart instead
+					// of stalling.
 					p.stopSig.TriggerSoftStop()
 					break
 				}
@@ -586,17 +611,33 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					p.stopSig.TriggerSoftStop()
 					break
 				}
-				drained := make(chan struct{})
-				go func() {
-					// May outlive the select below if soft-stop fires while the
-					// downstream is stalled; bounded by process lifetime.
-					p.snapshotAckWG.Wait()
-					close(drained)
-				}()
-				select {
-				case <-drained:
+				drained := p.snapshotAckPending.Load() == 0
+			drainWait:
+				for !drained {
+					select {
+					case <-p.snapshotAckDrained:
+						drained = p.snapshotAckPending.Load() == 0
+					case <-p.stopSig.SoftStopChan():
+						// Abandon the handoff without promoting the slot:
+						// batches settling during teardown are nacks, not
+						// durable delivery, so the snapshot must re-run on
+						// restart.
+						break drainWait
+					}
+				}
+				switch {
+				case drained && !p.snapshotAckFailed.Load():
 					pgStream.MarkSnapshotAcknowledged()
-				case <-p.stopSig.SoftStopChan():
+				case drained:
+					// The counter reached zero because every outstanding
+					// snapshot batch settled, but at least one of them was
+					// rejected downstream (a nack), not durably delivered.
+					// Promoting the slot here would let those rows be lost
+					// forever, so leave it unpromoted and restart the stream:
+					// the snapshot will re-read and re-emit every row on the
+					// next connect.
+					p.logger.Errorf("a snapshot batch was rejected downstream (nacked); leaving the replication slot unpromoted so the snapshot re-runs on restart")
+					p.stopSig.TriggerSoftStop()
 				}
 				break
 			}
@@ -704,9 +745,16 @@ func (p *pgStreamInput) flushBatch(
 	// in the read loop).
 	isSnapshot := lsn == nil
 
-	ackFn := func(ctx context.Context, _ error) error {
+	ackFn := func(ctx context.Context, ackErr error) error {
 		if isSnapshot {
-			defer p.snapshotAckWG.Done()
+			// Record whether this batch settled via nack *before* the
+			// deferred snapshotAckDone runs, so the flag is guaranteed
+			// visible to the handoff by the time the drain signal (which
+			// snapshotAckDone sends) wakes it up.
+			if ackErr != nil {
+				p.snapshotAckFailed.Store(true)
+			}
+			defer p.snapshotAckDone()
 		}
 		maxOffset := resolveFn()
 		if maxOffset == nil {
@@ -722,17 +770,35 @@ func (p *pgStreamInput) flushBatch(
 		return nil
 	}
 	if isSnapshot {
-		p.snapshotAckWG.Add(1)
+		p.snapshotAckPending.Add(1)
 	}
 	select {
 	case p.msgChan <- asyncMessage{msg: batch, ackFn: ackFn}:
 	case <-ctx.Done():
 		if isSnapshot {
-			p.snapshotAckWG.Done()
+			p.snapshotAckDone()
 		}
 		return ctx.Err()
 	}
 	return nil
+}
+
+// snapshotAckDone marks one in-flight snapshot batch as settled and signals
+// the drain channel when the count reaches zero. A negative result means a
+// batch settled twice (e.g. both acked and nacked), which would otherwise
+// silently prevent the drain from ever completing, so we panic loudly
+// instead of promoting the slot on a corrupted counter.
+func (p *pgStreamInput) snapshotAckDone() {
+	n := p.snapshotAckPending.Add(-1)
+	if n < 0 {
+		panic("postgres cdc: snapshot ack counter went negative (batch settled twice)")
+	}
+	if n == 0 {
+		select {
+		case p.snapshotAckDrained <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func (p *pgStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {

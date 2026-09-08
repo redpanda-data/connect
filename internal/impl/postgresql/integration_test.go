@@ -400,6 +400,9 @@ pg_stream:
 
 	// Run 1: receive the snapshot rows but never acknowledge them, then simulate
 	// a crash by cancelling the run before the slot can be promoted.
+	run1Ctx, crash := context.WithCancel(context.Background())
+	defer crash()
+
 	received := make(chan struct{}, 1)
 	run1Builder := service.NewStreamBuilder()
 	require.NoError(t, run1Builder.SetLoggerYAML(`level: OFF`))
@@ -409,15 +412,21 @@ pg_stream:
 		case received <- struct{}{}:
 		default:
 		}
-		// Block without acking until the simulated crash cancels our context.
-		<-ctx.Done()
-		return ctx.Err()
+		// Block without acking until the simulated crash. Benthos invokes
+		// consumer funcs with context.Background(), so waiting on the passed
+		// ctx alone would block this goroutine forever and leak it (and the
+		// unacked stream behind it) past the end of the test.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-run1Ctx.Done():
+			return run1Ctx.Err()
+		}
 	}))
 	run1, err := run1Builder.Build()
 	require.NoError(t, err)
 	license.InjectTestService(run1.Resources())
 
-	run1Ctx, crash := context.WithCancel(context.Background())
 	run1Done := make(chan struct{})
 	go func() {
 		defer close(run1Done)
@@ -437,6 +446,14 @@ pg_stream:
 	case <-run1Done:
 	case <-time.After(30 * time.Second):
 		t.Fatal("run 1 did not stop after the simulated crash")
+	}
+	// Run returns as soon as its context is cancelled without tearing the
+	// stream down, so stop it explicitly here; otherwise the crashed stream
+	// (wedged on the never-acknowledged snapshot batch) leaks its goroutines
+	// past the end of the test. Errors are expected: the stream cannot stop
+	// gracefully by construction.
+	if err := run1.StopWithin(10 * time.Second); err != nil {
+		t.Log(err)
 	}
 
 	// The barrier must have prevented the temporary slot from being promoted to
@@ -496,6 +513,150 @@ pg_stream:
 		mu.Lock()
 		defer mu.Unlock()
 		assert.Equal(c, rowCount, reads, "snapshot should have re-run and re-delivered every row after the crash")
+	}, 30*time.Second, 100*time.Millisecond)
+
+	require.NoError(t, run2.StopWithin(10*time.Second))
+}
+
+// TestIntegrationPostgresSnapshotNackBarrier verifies that the snapshot->stream
+// handoff distinguishes an ack from a nack: settling the last in-flight
+// snapshot batch via a nack must not promote the replication slot, even though
+// the same "pending count reaches zero" condition fires either way. With
+// auto_replay_nacks disabled the raw nack reaches the input's ack func
+// directly (instead of being retried internally forever), which is what
+// exercises the bug: the handoff previously only checked whether the pending
+// count drained, not whether it drained because rows were durably delivered
+// or because they were rejected downstream. See CON-179.
+func TestIntegrationPostgresSnapshotNackBarrier(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	const rowCount = 5
+	for i := range rowCount {
+		f := pgtest.GetFakeFlightRecord()
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+
+	// batching.count == rowCount forces all snapshot rows into a single output
+	// batch, so nacking that one batch nacks the *entire* snapshot in a single
+	// settle - exactly the "last in-flight snapshot batch settles via nack"
+	// scenario the fix targets. auto_replay_nacks is disabled so the nack
+	// reaches pgStreamInput's ack func as a real error instead of being
+	// silently retried forever by the framework.
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_snapshot_nack_barrier
+    stream_snapshot: true
+    snapshot_batch_size: 1000
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+    batching:
+      count: %d
+      period: 1h
+    auto_replay_nacks: false
+`, databaseURL, rowCount)
+
+	// Run 1: every batch delivered downstream is permanently rejected
+	// (nacked), including the lone snapshot batch. The snapshotAckPending
+	// counter drains to zero via that nack alone - no crash or teardown race
+	// required to reach the buggy state.
+	simulatedNackErr := errors.New("simulated downstream rejection")
+	received := make(chan struct{}, 1)
+	run1Builder := service.NewStreamBuilder()
+	require.NoError(t, run1Builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, run1Builder.AddInputYAML(template))
+	require.NoError(t, run1Builder.AddBatchConsumerFunc(func(_ context.Context, _ service.MessageBatch) error {
+		select {
+		case received <- struct{}{}:
+		default:
+		}
+		return simulatedNackErr
+	}))
+	run1, err := run1Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run1.Resources())
+
+	run1Ctx, cancelRun1 := context.WithCancel(context.Background())
+	defer cancelRun1()
+	run1Done := make(chan struct{})
+	go func() {
+		defer close(run1Done)
+		_ = run1.Run(run1Ctx)
+	}()
+
+	select {
+	case <-received:
+	case <-time.After(30 * time.Second):
+		t.Fatal("snapshot rows were never delivered to the run-1 output")
+	}
+	// Give the handoff time to have acted on the nack - and, in the buggy
+	// version, to have mistaken the drain for a successful delivery and
+	// promoted the slot - before we inspect it.
+	time.Sleep(2 * time.Second)
+
+	// The nack must have prevented the temporary slot from being promoted to
+	// a permanent one, since the snapshot batch was rejected, not durably
+	// delivered. This is the core guarantee: without the fix, the permanent
+	// slot would exist here even though every row was nacked.
+	var permanentSlots int
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_nack_barrier'`).Scan(&permanentSlots))
+	require.Zero(t, permanentSlots, "replication slot must not be promoted when the snapshot batch was nacked, not acked")
+
+	// Stop run 1. Unlike a crash, the nack path tears the stream down
+	// gracefully (the fix triggers a soft stop and the normal Close path
+	// runs), so no backend-termination trick should be needed here - but we
+	// still poll for the temporary slot's release before restarting, the same
+	// way the ack-barrier test does, since a graceful close racing the
+	// database's own bookkeeping is still asynchronous from this test's point
+	// of view.
+	cancelRun1()
+	select {
+	case <-run1Done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("run 1 did not stop after being cancelled")
+	}
+	if err := run1.StopWithin(10 * time.Second); err != nil {
+		t.Log(err)
+	}
+
+	require.Eventually(t, func() bool {
+		_, _ = db.Exec(`SELECT pg_terminate_backend(active_pid) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_nack_barrier_tmp' AND active_pid IS NOT NULL`)
+		var tmpSlots int
+		if err := db.QueryRow(`SELECT count(*) FROM pg_replication_slots WHERE slot_name = 'test_slot_snapshot_nack_barrier_tmp'`).Scan(&tmpSlots); err != nil {
+			return false
+		}
+		return tmpSlots == 0
+	}, 30*time.Second, 500*time.Millisecond, "temporary snapshot slot from run 1 was not released")
+
+	// Run 2: restart against the same slot. Since run 1's snapshot batch was
+	// nacked rather than acked, the slot must not have been promoted, so the
+	// snapshot re-runs and every row is delivered again.
+	var mu sync.Mutex
+	var reads int
+	run2Builder := service.NewStreamBuilder()
+	require.NoError(t, run2Builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, run2Builder.AddInputYAML(template))
+	require.NoError(t, run2Builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		if op, _ := m.MetaGet("operation"); op == "read" { // ReadOpType: snapshot row
+			mu.Lock()
+			reads++
+			mu.Unlock()
+		}
+		return nil
+	}))
+	run2, err := run2Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run2.Resources())
+	go func() { _ = run2.Run(t.Context()) }()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Equal(c, rowCount, reads, "snapshot should have re-run and re-delivered every row since run 1's snapshot batch was nacked, not acked")
 	}, 30*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, run2.StopWithin(10*time.Second))

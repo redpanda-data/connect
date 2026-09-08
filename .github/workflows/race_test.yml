@@ -1,0 +1,158 @@
+name: Race Detector Tests
+
+# Advisory-first race-detector job (CON-179 R3).
+#
+# Runs `go test -race` scoped to the internal/impl/<component> packages a PR
+# touches, mirroring the auto-scoping in integration_test.yml to keep the
+# 2-10x race-detector runtime cost bounded.
+#
+# Failures are advisory (a warning annotation, not a red check) unless the
+# failing package is listed in .github/race-blocking-packages.txt. Packages
+# are promoted to that list only after they hold a green -race baseline, so
+# this job can never fail a PR on a pre-existing race the PR didn't touch.
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: 'Package filter (e.g. sql kafka). Required for manual runs.'
+        required: true
+        type: string
+
+jobs:
+  race-test:
+    runs-on: ubuntu-latest
+    # Bounded comfortably above the worst case of the "Run race-detector
+    # tests" step: that step caps itself at MAX_PACKAGES=8 packages tested
+    # serially, each under its own `go test -timeout 10m` budget (80m worst
+    # case), plus headroom for per-package compilation, checkout with
+    # fetch-depth: 0, and the Go setup step. Packages beyond MAX_PACKAGES are
+    # skipped with a logged advisory warning rather than run, so the job
+    # should never actually approach this ceiling; it exists purely so a
+    # slow-but-not-hanging run can never be killed by the job timeout, which
+    # would produce a red check with no actual race (violating the
+    # advisory-first design).
+    timeout-minutes: 120
+    env:
+      # The Go race detector requires cgo.
+      CGO_ENABLED: 1
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed packages
+        if: ${{ github.event_name == 'pull_request' }}
+        id: detect
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          # Each of these runs as its own statement (rather than nested
+          # inside another command's argument list) so that `set -e` catches
+          # a git failure directly, instead of silently yielding an empty
+          # FILTERS that would be indistinguishable from "no packages
+          # touched".
+          MERGE_BASE=$(git merge-base HEAD "origin/${BASE_REF}")
+          CHANGED=$(git diff --name-only "${MERGE_BASE}"...HEAD)
+          # grep exits 1 when nothing matches "^internal/impl/" - that IS the
+          # legitimate "no connector packages touched" case, so only this
+          # command is allowed to fail non-fatally.
+          MATCHED=$(printf '%s\n' "${CHANGED}" | { grep '^internal/impl/' || true; })
+          # xargs (not tr) joins the package names: on empty/blank input it
+          # emits a genuinely empty string, whereas tr '\n' ' ' would emit a
+          # lone space that defeats the `filters != ''` step guards below and
+          # runs the job (checkout, Go install, empty summary table) on every
+          # PR that touches no connector packages.
+          FILTERS=$(printf '%s\n' "${MATCHED}" | cut -d/ -f3 | sort -u | xargs)
+          echo "filters=${FILTERS}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Go
+        if: ${{ steps.detect.outputs.filters != '' || github.event.inputs.filter != '' }}
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Run race-detector tests
+        if: ${{ steps.detect.outputs.filters != '' || github.event.inputs.filter != '' }}
+        env:
+          FILTER: ${{ steps.detect.outputs.filters || github.event.inputs.filter }}
+        run: |
+          set -uo pipefail
+          BLOCKING_FILE=.github/race-blocking-packages.txt
+          # Cap the number of packages tested per run so the job's own
+          # worst-case duration is bounded (see the job-level timeout-minutes
+          # comment). Packages beyond the cap are skipped with a logged
+          # advisory warning rather than risking a job timeout kill, which
+          # would produce a red check with no actual race.
+          MAX_PACKAGES=8
+          PKG_TIMEOUT=10m
+
+          ALL_PKGS=()
+          for pkg in ${FILTER}; do
+            [ -d "internal/impl/${pkg}" ] && ALL_PKGS+=("${pkg}")
+          done
+
+          PKGS=("${ALL_PKGS[@]}")
+          if [ "${#ALL_PKGS[@]}" -gt "${MAX_PACKAGES}" ]; then
+            PKGS=("${ALL_PKGS[@]:0:${MAX_PACKAGES}}")
+            SKIPPED=("${ALL_PKGS[@]:${MAX_PACKAGES}}")
+            echo "::warning::Race detector job only tests the first ${MAX_PACKAGES} changed packages per run to bound job duration. Skipped this run (not tested, advisory only): ${SKIPPED[*]}"
+            echo "> ⚠️ Race detector: skipped ${#SKIPPED[@]} package(s) to bound job duration: \`${SKIPPED[*]}\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          {
+            echo "## Race detector results"
+            echo ""
+            echo "| Package | Result |"
+            echo "| --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          BLOCKING_FAILED=()
+
+          for pkg in "${PKGS[@]}"; do
+            outfile=$(mktemp)
+            echo "::group::go test -race ./internal/impl/${pkg}/..."
+            # `set -e` is on by default for GitHub Actions run steps; the
+            # trailing `|| status=$?` keeps a non-zero go test exit from
+            # aborting the script so every package gets classified and its
+            # summary row written, instead of the loop dying on the first
+            # failure.
+            status=0
+            go test -count=1 -race -timeout "${PKG_TIMEOUT}" -shuffle=on "./internal/impl/${pkg}/..." >"${outfile}" 2>&1 || status=$?
+            cat "${outfile}"
+            echo "::endgroup::"
+
+            # Only an actual data race counts as a race for blocking
+            # purposes - build errors, flakes, and per-package timeouts must
+            # not be classified as races, and must never land in the
+            # blocking bucket even for a package on the blocking list (the
+            # ordinary unit-test workflow already gates plain failures).
+            is_race=false
+            grep -q "WARNING: DATA RACE" "${outfile}" && is_race=true
+            is_blocking=false
+            grep -qxF "${pkg}" "${BLOCKING_FILE}" 2>/dev/null && is_blocking=true
+
+            if [ "${status}" -eq 0 ]; then
+              result="✅ pass"
+            elif [ "${is_race}" = true ] && [ "${is_blocking}" = true ]; then
+              result="❌ RACE (blocking)"
+              BLOCKING_FAILED+=("${pkg}")
+            elif [ "${is_race}" = true ]; then
+              result="⚠️ RACE (advisory)"
+              echo "::warning::Data race detected in ${pkg} (advisory, non-blocking). See the job log. Packages get promoted to blocking via ${BLOCKING_FILE} once their -race baseline is green."
+            else
+              result="⚠️ failed (non-race)"
+              echo "::warning::go test failed in ${pkg} without a detected data race (build error, flake, or timeout). Not a race-detector finding, so this stays advisory-only; the ordinary unit-test workflow gates plain test failures."
+            fi
+
+            echo "| \`${pkg}\` | ${result} |" >> "$GITHUB_STEP_SUMMARY"
+            rm -f "${outfile}"
+          done
+
+          if [ "${#BLOCKING_FAILED[@]}" -gt 0 ]; then
+            echo "::error::Race detector failures in blocking packages: ${BLOCKING_FAILED[*]}. These packages have a green -race baseline; this failure was introduced by the PR."
+            exit 1
+          fi

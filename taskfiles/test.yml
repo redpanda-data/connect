@@ -11,11 +11,11 @@ tasks:
       - go test {{.GO_FLAGS}} -timeout {{.TIMEOUT}} -shuffle=on {{if .CI}}{{else}}-v{{end}} ./...
 
   unit-race:
-    desc: Run unit tests with race detection
+    desc: "Run unit tests with race detection, optionally scoped to a package (e.g. task test:unit-race -- ./internal/impl/kafka/). Flags mirror the race-detector CI job (race_test.yml) so local results can't diverge via the test cache."
     aliases:
       - ut-race
     cmds:
-      - go test {{.GO_FLAGS}} -timeout 3m -shuffle=on -race {{if .CI}}{{else}}-v{{end}} ./...
+      - go test {{.GO_FLAGS}} -count=1 -timeout 10m -shuffle=on -race {{if .CI}}{{else}}-v{{end}} {{.CLI_ARGS | default "./..."}}
 
   integration:
     desc: "Run integration tests (e.g. task test:integration -- aws kafka). See cmd/tools/integration/README.md"

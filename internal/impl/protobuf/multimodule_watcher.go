@@ -53,7 +53,11 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-const watcherTimeout = 10 * time.Second
+// watcherTimeout bounds how long newSchemaWatcher waits for a freshly created
+// prototransform.SchemaWatcher to become ready. It is a variable (rather than
+// a const) so that tests can shorten it to make AwaitReady failures fast to
+// exercise.
+var watcherTimeout = 10 * time.Second
 
 type multiModuleWatcher struct {
 	bsrClients map[string]*prototransform.SchemaWatcher
@@ -69,6 +73,16 @@ func newMultiModuleWatcher(bsrModules []*service.ParsedConfig) (*multiModuleWatc
 
 	// Initialise one client for each module
 	multiModuleWatcher.bsrClients = make(map[string]*prototransform.SchemaWatcher)
+
+	// Any error return below drops out of the loop before every module has a
+	// watcher, so guard against leaking the watchers that already started.
+	ok := false
+	defer func() {
+		if !ok {
+			multiModuleWatcher.close()
+		}
+	}()
+
 	for _, bsrModule := range bsrModules {
 		var bsrURL string
 		bsrURL, err := bsrModule.FieldString(fieldBSRUrl)
@@ -91,6 +105,13 @@ func newMultiModuleWatcher(bsrModules []*service.ParsedConfig) (*multiModuleWatc
 			return nil, err
 		}
 
+		if _, exists := multiModuleWatcher.bsrClients[module]; exists {
+			// Without this check the earlier watcher's map entry would be
+			// silently overwritten below, leaving its running poll
+			// goroutine unreachable by close().
+			return nil, fmt.Errorf("duplicate BSR module %q", module)
+		}
+
 		watcher, err := newSchemaWatcher(context.Background(), bsrURL, bsrAPIKey, module, version)
 		if err != nil {
 			return nil, err
@@ -98,6 +119,7 @@ func newMultiModuleWatcher(bsrModules []*service.ParsedConfig) (*multiModuleWatc
 		multiModuleWatcher.bsrClients[module] = watcher
 	}
 
+	ok = true
 	return multiModuleWatcher, nil
 }
 
@@ -133,6 +155,7 @@ func newSchemaWatcher(ctx context.Context, bsrURL, bsrAPIKey, module, version st
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, watcherTimeout)
 	defer cancel()
 	if err = watcher.AwaitReady(ctxWithTimeout); err != nil {
+		watcher.Stop()
 		return nil, fmt.Errorf("schema watcher never became ready: %w", err)
 	}
 
@@ -207,4 +230,13 @@ func (w *multiModuleWatcher) FindEnumByName(enum protoreflect.FullName) (protore
 		return enumType, nil
 	}
 	return nil, fmt.Errorf("could not find %s in any loaded modules", enum)
+}
+
+// close stops every schema watcher owned by w, cancelling their background
+// polling goroutines. It is safe to call multiple times as Stop() is
+// idempotent.
+func (w *multiModuleWatcher) close() {
+	for _, schemaWatcher := range w.bsrClients {
+		schemaWatcher.Stop()
+	}
 }

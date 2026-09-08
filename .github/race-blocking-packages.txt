@@ -1,0 +1,11 @@
+# Packages promoted to BLOCKING in the race-detector CI job (CON-179 R3).
+#
+# The race_test.yml workflow runs `go test -race` on every internal/impl
+# package a PR touches. For packages listed here (one directory name per
+# line, e.g. `sql`), a race failure fails the job; for everything else the
+# failure is an advisory warning only.
+#
+# Promotion rule: add a package here only after it holds a green -race
+# baseline (repeated clean runs of `task test:unit-race` scoped to the
+# package, plus a green advisory run in CI). A blocking gate must never be
+# able to fail on a pre-existing race the PR didn't touch.
