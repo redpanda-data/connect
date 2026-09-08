@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kafka Connect → Redpanda Connect</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, system-ui, sans-serif; background: #1e1e1e; color: #ddd; }
+  header { padding: 10px 16px; background: #252526; border-bottom: 1px solid #333; font-size: 14px; }
+  header b { color: #fff; }
+  .panes { display: flex; height: calc(100vh - 86px); }
+  .pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .pane + .pane { border-left: 1px solid #333; }
+  .pane h2 { margin: 0; padding: 6px 12px; font-size: 12px; font-weight: 600; color: #aaa; background: #252526; text-transform: uppercase; letter-spacing: .05em; }
+  textarea, pre { flex: 1; margin: 0; border: 0; padding: 12px; font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; line-height: 1.5; background: #1e1e1e; color: #ddd; resize: none; overflow: auto; white-space: pre; tab-size: 2; }
+  textarea:focus { outline: none; }
+  #warnings { padding: 6px 12px; font-size: 12px; background: #2d2d2d; border-top: 1px solid #333; color: #c8a; min-height: 16px; }
+  #warnings.ok { color: #6a6; }
+  .bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px; background: #252526; border-top: 1px solid #333; }
+  button { font-size: 12px; background: #0e639c; color: #fff; border: 0; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
+  button:hover { background: #1177bb; }
+</style>
+</head>
+<body>
+<header>Kafka Connect → <b>Redpanda Connect</b> converter — paste a connector config on the left, the pipeline appears on the right.</header>
+<div class="panes">
+  <div class="pane">
+    <h2>Kafka Connect JSON</h2>
+    <textarea id="input" spellcheck="false"></textarea>
+  </div>
+  <div class="pane">
+    <h2>Redpanda Connect YAML</h2>
+    <pre id="output"></pre>
+    <div class="bar"><span id="warnings">&nbsp;</span><button id="copy">Copy</button></div>
+  </div>
+</div>
+<script>
+const input = document.getElementById("input");
+const output = document.getElementById("output");
+const warnings = document.getElementById("warnings");
+const copyBtn = document.getElementById("copy");
+
+input.value = JSON.stringify({
+  name: "s3-sink",
+  config: {
+    "connector.class": "io.confluent.connect.s3.S3SinkConnector",
+    "s3.bucket.name": "my-bucket",
+    "s3.region": "us-east-1",
+    "flush.size": "1000",
+    "format.class": "io.confluent.connect.s3.format.avro.AvroFormat",
+    "topics": "orders"
+  }
+}, null, 2);
+
+let timer = null;
+function scheduleConvert() {
+  clearTimeout(timer);
+  timer = setTimeout(convert, 300);
+}
+
+async function convert() {
+  try {
+    const resp = await fetch("/convert", { method: "POST", body: input.value });
+    const data = await resp.json();
+    if (data.error) {
+      output.textContent = "# error: " + data.error;
+      warnings.textContent = "invalid input";
+      warnings.className = "";
+      return;
+    }
+    output.textContent = data.yaml;
+    const n = (data.warnings || []).length;
+    warnings.textContent = n === 0 ? "no warnings" : n + " warning(s) — review # TODO markers";
+    warnings.className = n === 0 ? "ok" : "";
+  } catch (e) {
+    output.textContent = "# request failed: " + e;
+    warnings.textContent = "";
+    warnings.className = "";
+  }
+}
+
+input.addEventListener("input", scheduleConvert);
+copyBtn.addEventListener("click", () => navigator.clipboard.writeText(output.textContent));
+convert();
+</script>
+</body>
+</html>

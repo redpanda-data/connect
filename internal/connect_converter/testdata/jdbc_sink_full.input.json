@@ -1,0 +1,12 @@
+{
+  "name": "jdbc-sink-full",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "connection.url": "jdbc:postgresql://h:5432/db",
+    "table.name.format": "orders",
+    "insert.mode": "upsert",
+    "batch.size": "500",
+    "pk.fields": "id",
+    "auto.create": "true"
+  }
+}
