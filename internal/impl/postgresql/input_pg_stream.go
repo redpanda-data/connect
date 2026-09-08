@@ -278,7 +278,7 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 		// incremental snapshot config
 		Field(service.NewObjectField(fieldIncSnapshot,
 			service.NewBoolField(fieldIncSnapshotEnabled).
-				Description("Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `"+fieldStreamSnapshot+"` it needs no up-front snapshot phase, does not delay replication, and needs no signal table. The two are independent and can be enabled together.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, and `"+fieldHeartbeatInterval+"` must be non-zero for them to advance at all.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. That second window spans the snapshots of all preceding tables, so it can be long. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
+				Description("Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `"+fieldStreamSnapshot+"` it needs no up-front snapshot phase, does not delay replication, and needs no signal table. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, and `"+fieldHeartbeatInterval+"` must be non-zero for them to advance at all.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. That second window spans the snapshots of all preceding tables, so it can be long. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
 				ShortDescription("Snapshot the configured tables in chunks, alongside replication streaming.").
 				Default(incsnapshot.DefaultIncSnapshotEnabled),
 			service.NewStringListField(fieldIncrementalSnapshotTables).
@@ -420,7 +420,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
-	incSnapshot, err := parseIncrementalSnapshotCfg(conf, mgr, heartbeatInterval, tables)
+	incSnapshot, err := parseIncrementalSnapshotCfg(conf, mgr, heartbeatInterval, tables, streamSnapshot)
 	if err != nil {
 		return nil, err
 	}

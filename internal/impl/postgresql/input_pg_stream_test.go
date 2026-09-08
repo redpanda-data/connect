@@ -144,6 +144,23 @@ incremental_snapshot:
 			errContains: pastHeartbeatCheck,
 		},
 		{
+			// Both modes read the same rows, so together they double-deliver.
+			name: "both snapshot modes enabled",
+			conf: base + `
+stream_snapshot: true
+heartbeat_interval: 5s
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: "mutually exclusive",
+		},
+		{
+			name: "blocking snapshot alone",
+			conf: base + `
+stream_snapshot: true
+`,
+		},
+		{
 			// Both lists empty: no table names to read, so the snapshot
 			// would silently do nothing.
 			name: "incremental snapshot enabled with no tables anywhere",

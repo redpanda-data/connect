@@ -30,7 +30,7 @@ func newDefaultIncSnapshotCfg() *incSnapshotCfg {
 	}
 }
 
-func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resources, heartbeatInterval time.Duration, replicatedTables []string) (*incSnapshotCfg, error) {
+func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resources, heartbeatInterval time.Duration, replicatedTables []string, streamSnapshot bool) (*incSnapshotCfg, error) {
 	out := newDefaultIncSnapshotCfg()
 	if conf.Contains(fieldIncSnapshot) {
 		var (
@@ -53,6 +53,15 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, mgr *service.Resour
 		}
 		if cfg.ChunkSize <= 0 {
 			return nil, fmt.Errorf("%s.%s must be > 0, got %d", fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, cfg.ChunkSize)
+		}
+
+		// The two snapshot modes read the same rows by different means, so
+		// running both delivers every row twice.
+		if cfg.Enabled && streamSnapshot {
+			return nil, fmt.Errorf(
+				"%s and %s.%s are mutually exclusive: enable one snapshot mode",
+				fieldStreamSnapshot, fieldIncSnapshot, fieldIncSnapshotEnabled,
+			)
 		}
 
 		// Both lists empty: no table names to read, so the coordinator would
