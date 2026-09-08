@@ -9,6 +9,7 @@
 package incrementalsnapshot
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -103,4 +104,91 @@ func TestWindowBufferDifferentTablesSamePKAreDistinct(t *testing.T) {
 	remaining := w.Flush()
 	require.Len(t, remaining, 1)
 	assert.Equal(t, rowB, remaining[0])
+}
+
+func TestWindowBufferRemoveKeepsOrder(t *testing.T) {
+	// Removal marks a slot rather than shifting the slice, so Flush has to
+	// compact while preserving insertion order.
+	table := TableID{Schema: "public", Table: "a"}
+	w := NewWindowBuffer()
+	for pk := 1; pk <= 6; pk++ {
+		w.Add(Row{Table: table, PK: PrimaryKey{pk}})
+	}
+
+	// Take one from each end and two from the middle.
+	for _, pk := range []int{1, 3, 4, 6} {
+		require.True(t, w.Remove(table, PrimaryKey{pk}))
+	}
+	assert.Equal(t, 2, w.Len())
+
+	flushed := w.Flush()
+	require.Len(t, flushed, 2)
+	assert.Equal(t, PrimaryKey{2}, flushed[0].PK)
+	assert.Equal(t, PrimaryKey{5}, flushed[1].PK)
+	assert.Zero(t, w.Len(), "Flush must empty the buffer")
+}
+
+func TestWindowBufferRemoveEveryRow(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+	w := NewWindowBuffer()
+	for pk := 1; pk <= 3; pk++ {
+		w.Add(Row{Table: table, PK: PrimaryKey{pk}})
+	}
+	for pk := 1; pk <= 3; pk++ {
+		require.True(t, w.Remove(table, PrimaryKey{pk}))
+	}
+
+	assert.Zero(t, w.Len())
+	assert.Empty(t, w.Flush())
+}
+
+func TestWindowBufferAddReplacesExistingKey(t *testing.T) {
+	// A repeated key must not leave the earlier row behind to be emitted as
+	// well, since the buffer holds one row per key.
+	table := TableID{Schema: "public", Table: "a"}
+	w := NewWindowBuffer()
+	w.Add(Row{Table: table, PK: PrimaryKey{1}, Data: map[string]any{"v": "first"}})
+	w.Add(Row{Table: table, PK: PrimaryKey{2}})
+	w.Add(Row{Table: table, PK: PrimaryKey{1}, Data: map[string]any{"v": "second"}})
+
+	assert.Equal(t, 2, w.Len())
+	flushed := w.Flush()
+	require.Len(t, flushed, 2)
+	assert.Equal(t, PrimaryKey{2}, flushed[0].PK)
+	assert.Equal(t, PrimaryKey{1}, flushed[1].PK)
+	assert.Equal(t, "second", flushed[1].Data["v"])
+}
+
+func TestWindowBufferAddAfterRemoveSameKey(t *testing.T) {
+	// The stream can evict a key that a later chunk then re-reads.
+	table := TableID{Schema: "public", Table: "a"}
+	w := NewWindowBuffer()
+	w.Add(Row{Table: table, PK: PrimaryKey{1}})
+	require.True(t, w.Remove(table, PrimaryKey{1}))
+	w.Add(Row{Table: table, PK: PrimaryKey{1}})
+
+	assert.Equal(t, 1, w.Len())
+	require.True(t, w.Remove(table, PrimaryKey{1}), "the re-added row must be removable")
+	assert.Zero(t, w.Len())
+}
+
+// BenchmarkWindowBufferDrainChunk drains a full chunk one row at a time,
+// which is what a table under sustained write load does during its backfill.
+// Removal must not depend on the chunk size.
+func BenchmarkWindowBufferDrainChunk(b *testing.B) {
+	table := TableID{Schema: "public", Table: "a"}
+	for _, size := range []int{1024, 16384, 100000} {
+		b.Run(fmt.Sprintf("chunk=%d", size), func(b *testing.B) {
+			for b.Loop() {
+				w := NewWindowBuffer()
+				for pk := range size {
+					w.Add(Row{Table: table, PK: PrimaryKey{pk}})
+				}
+				for pk := range size {
+					w.Remove(table, PrimaryKey{pk})
+				}
+				w.Flush()
+			}
+		})
+	}
 }

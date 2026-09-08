@@ -31,11 +31,20 @@ func newWindowKey(table TableID, pk PrimaryKey) windowKey {
 }
 
 // WindowBuffer is an ordered, deduplicated buffer of Rows keyed by (table,
-// key). Remove excises a row from the middle without disturbing the order of
-// the rest.
+// key). Remove is O(1) and preserves the order of the remaining rows; Flush
+// returns them in insertion order.
 type WindowBuffer struct {
 	rows    []Row
 	indexOf map[windowKey]int
+	// deleted marks the slots Remove has vacated, and live counts the rest.
+	//
+	// Remove runs on the caller's replication loop for every streamed row on
+	// a snapshotted table, so it must not re-index indexOf or shift rows: a
+	// chunk drained row by row would then cost O(len(rows)^2), enough at a
+	// large chunk size to stall that loop past the server's timeout. Marking
+	// the slot instead leaves the compaction to Flush, which runs once.
+	deleted []bool
+	live    int
 }
 
 // NewWindowBuffer returns an empty WindowBuffer.
@@ -45,11 +54,18 @@ func NewWindowBuffer() *WindowBuffer {
 	}
 }
 
-// Add puts a row at the end of the buffer.
+// Add puts a row at the end of the buffer. If the buffer already holds that
+// key, the new row replaces it and keeps the later position.
 func (w *WindowBuffer) Add(row Row) {
 	key := newWindowKey(row.Table, row.PK)
+	if idx, exists := w.indexOf[key]; exists {
+		w.deleted[idx] = true
+		w.live--
+	}
 	w.indexOf[key] = len(w.rows)
 	w.rows = append(w.rows, row)
+	w.deleted = append(w.deleted, false)
+	w.live++
 }
 
 // Remove excises the row for table and pk, reporting whether it was there.
@@ -61,26 +77,32 @@ func (w *WindowBuffer) Remove(table TableID, pk PrimaryKey) bool {
 	}
 
 	delete(w.indexOf, key)
-	w.rows = append(w.rows[:idx], w.rows[idx+1:]...)
-
-	// Shift every later row's index down to match.
-	for k, i := range w.indexOf {
-		if i > idx {
-			w.indexOf[k] = i - 1
-		}
-	}
+	w.deleted[idx] = true
+	w.live--
 	return true
 }
 
 // Flush returns the buffered rows in insertion order and empties the buffer.
 func (w *WindowBuffer) Flush() []Row {
 	rows := w.rows
+	if w.live < len(rows) {
+		compacted := make([]Row, 0, w.live)
+		for i, row := range rows {
+			if !w.deleted[i] {
+				compacted = append(compacted, row)
+			}
+		}
+		rows = compacted
+	}
+
 	w.rows = nil
+	w.deleted = nil
+	w.live = 0
 	w.indexOf = make(map[windowKey]int)
 	return rows
 }
 
-// Len returns the number of rows in the buffer.
+// Len returns the number of rows in the buffer, excluding removed ones.
 func (w *WindowBuffer) Len() int {
-	return len(w.rows)
+	return w.live
 }
