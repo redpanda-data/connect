@@ -170,18 +170,6 @@ func TestCanonicalizePKValue(t *testing.T) {
 		assert.Equal(t, int32(5), canonicalizePKValue(int32(5)))
 		assert.Nil(t, canonicalizePKValue(nil))
 	})
-
-	t.Run("both decode paths produce the same canonical value for the same uuid", func(t *testing.T) {
-		// Mirrors the two real decode paths for a uuid PK column: the live
-		// streaming path (decodeTextColumnData) already normalizes to
-		// uuid.UUID.String(), while the incrementalDB backfill path
-		// (prepareScannersAndGetters) may hand back a plain string too, but
-		// canonicalizePKValue must treat a raw [16]byte the same as its
-		// string form regardless of which path produced it.
-		fromStreamingPath := canonicalizePKValue(id.String())
-		fromBackfillPath := canonicalizePKValue([16]byte(id))
-		assert.Equal(t, fromStreamingPath, fromBackfillPath)
-	})
 }
 
 // TestCanonicalizePKValueDedupsAcrossDecodePaths proves the fix end-to-end
