@@ -190,11 +190,54 @@ func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P, emit EmitFunc) 
 
 // releaseWindow hands the buffered chunk to emit, advancing the committed
 // state first so State reports the right checkpoint from inside emit.
+//
+// emit is what delivers the rows, so an error from it means nothing was
+// sent. The advance is then undone and the rows go back in the buffer:
+// State must never report a chunk as checkpointed that no consumer
+// received, or a resume from that State would fetch past those rows and
+// drop them.
 func (c *Coordinator[P, W]) releaseWindow(emit EmitFunc) error {
 	rows := c.window.Flush()
+	undo := c.snapshotCommitted()
+	wasOpened := c.windowOpened
+
 	c.windowOpened = false
 	c.commitLiveState()
-	return emit(rows)
+
+	if err := emit(rows); err != nil {
+		c.restoreCommitted(undo)
+		c.windowOpened = wasOpened
+		for _, row := range rows {
+			c.window.Add(row)
+		}
+		return err
+	}
+	return nil
+}
+
+// committedState is the checkpoint half of the coordinator, saved so a
+// failed emit can be undone.
+type committedState struct {
+	remaining  []TableID
+	current    *TableID
+	maxPK      PrimaryKey
+	lastSentPK PrimaryKey
+}
+
+func (c *Coordinator[P, W]) snapshotCommitted() committedState {
+	return committedState{
+		remaining:  c.committedRemaining,
+		current:    c.committedCurrent,
+		maxPK:      c.committedMaxPK,
+		lastSentPK: c.committedLastSentPK,
+	}
+}
+
+func (c *Coordinator[P, W]) restoreCommitted(s committedState) {
+	c.committedRemaining = s.remaining
+	c.committedCurrent = s.current
+	c.committedMaxPK = s.maxPK
+	c.committedLastSentPK = s.lastSentPK
 }
 
 // planAndDrain buffers the next chunk, then keeps releasing and replanning
@@ -242,7 +285,12 @@ func (c *Coordinator[P, W]) emitTerminalState(emit EmitFunc) error {
 		return nil
 	}
 	c.doneEmitted = true
-	return c.releaseWindow(emit)
+	if err := c.releaseWindow(emit); err != nil {
+		// Nothing was delivered, so the terminal checkpoint is still owed.
+		c.doneEmitted = false
+		return err
+	}
+	return nil
 }
 
 // readUndisturbed reports whether the buffered chunk's watermarks prove a
