@@ -14,11 +14,93 @@ import (
 	"math"
 	"time"
 
+	"github.com/apache/iceberg-go"
 	"github.com/parquet-go/parquet-go"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/schema"
 )
+
+// secondsPerDay is the number of seconds in a UTC day, used to turn a
+// days-since-epoch DATE value into an absolute instant.
+const secondsPerDay = 86400
+
+// NumericTemporalToTime interprets a bare numeric value destined for a temporal
+// Iceberg column (DATE / TIME / TIMESTAMP / TIMESTAMPTZ) exactly as the
+// shredder's insert path (convertLeafValue -> convertDate / convertTime /
+// convertTimestamp) would, returning the equivalent UTC time.Time.
+//
+// It exists so the mutation paths (which encode values through the shared
+// jsonLeafValue canonicaliser + array.RecordFromJSON, and historically
+// required a time.Time) can share the shredder's unit interpretation instead
+// of diverging from it. The unit scaling is delegated to the very same helpers the insert
+// path uses — numericToTimeMicros for TIME and scaleTimestampNumeric for
+// TIMESTAMP, with DATE treated as already-days like convertDate — so the two
+// paths cannot drift on how a bare number is scaled. That drift was the source
+// of the year-50000 corruption when copy-on-write rejected the numeric the
+// insert path happily interpreted. TestNumericTemporalToTimeMatchesConvert pins
+// the equivalence.
+//
+// ok is false when value is not a bare number (NaN/±Inf included, so the
+// caller's existing type check rejects them) or typ is not one of the four
+// supported temporal types; the caller then keeps its existing time.Time-only
+// handling. strict mirrors [RecordShredder.StrictTemporalMode]: when true and
+// the metadata required to disambiguate the unit is absent, it returns the same
+// error the insert path returns, so copy-on-write honours require_schema_metadata
+// identically to inserts.
+//
+// This handles only the microsecond temporal types, which are exactly the ones
+// copy-on-write supports as columns; the V3 nanosecond variants are out of
+// scope (they are not copy-on-write-supported column types).
+func NumericTemporalToTime(value any, typ iceberg.Type, common *schema.Common, strict bool) (time.Time, bool, error) {
+	n, isNum := numericInt64(value)
+	switch typ.(type) {
+	case iceberg.DateType:
+		if !isNum {
+			return time.Time{}, false, nil
+		}
+		if strict && (common == nil || common.Type != schema.Date) {
+			return time.Time{}, true, errors.New("date column received numeric value without matching schema.Common (Type=Date); require_schema_metadata=true demands a Date metadata entry to disambiguate the unit")
+		}
+		// DATE numerics are days since the epoch (convertDate applies no unit
+		// scaling); midnight UTC of that day formats back to the same day.
+		return time.Unix(n*secondsPerDay, 0).UTC(), true, nil
+	case iceberg.TimeType:
+		if !isNum {
+			return time.Time{}, false, nil
+		}
+		if strict && (common == nil || common.Type != schema.TimeOfDay || common.Logical == nil || common.Logical.TimeOfDay == nil) {
+			return time.Time{}, true, errors.New("time column received numeric value without matching schema.Common (Type=TimeOfDay with Logical.TimeOfDay); require_schema_metadata=true demands a TimeOfDay metadata entry with declared unit")
+		}
+		micros, err := numericToTimeMicros(n, common)
+		if err != nil {
+			return time.Time{}, true, err
+		}
+		// 1970-01-01 + micros; its UTC wall-clock is the time-of-day, which the
+		// writer formats as HH:MM:SS.ffffff.
+		return time.UnixMicro(micros).UTC(), true, nil
+	case iceberg.TimestampType, iceberg.TimestampTzType:
+		if !isNum {
+			return time.Time{}, false, nil
+		}
+		if common != nil && common.Type == schema.Timestamp {
+			micros := scaleTimestampNumeric(n, common.EffectiveTimestamp().Unit, false)
+			return time.UnixMicro(micros).UTC(), true, nil
+		}
+		if strict {
+			return time.Time{}, true, errors.New("timestamp column received numeric value with no Timestamp schema metadata; require_schema_metadata=true demands a schema.Common with Type=Timestamp to disambiguate the unit")
+		}
+		// No metadata: match convertTimestamp's bloblang seconds-default
+		// fallback so the two paths agree even absent metadata.
+		t, err := bloblang.ValueAsTimestamp(value)
+		if err != nil {
+			return time.Time{}, true, err
+		}
+		return t.UTC(), true, nil
+	default:
+		return time.Time{}, false, nil
+	}
+}
 
 // commonForField returns the upstream schema.Common registered for the given
 // iceberg field ID, or nil when no metadata has been registered for that
@@ -97,6 +179,13 @@ func convertDate(value any, common *schema.Common, strictTemporal bool) (parquet
 func convertTime(value any, common *schema.Common, strictTemporal bool) (parquet.Value, error) {
 	switch v := value.(type) {
 	case time.Duration:
+		// Gated like the numeric arms: a duration outside [0, 24h) has no
+		// time-of-day meaning, and storing the raw (spec-invalid) micros
+		// would create a key the mutation paths — which reject the same
+		// value — could never match or delete.
+		if us := v.Microseconds(); us < 0 || us >= 24*60*60*1_000_000 {
+			return parquet.NullValue(), fmt.Errorf("time column given duration %v outside the time-of-day range [0, 24h)", v)
+		}
 		return parquet.Int64Value(v.Microseconds()), nil
 	case time.Time:
 		dur := time.Duration(v.Hour())*time.Hour +
@@ -115,18 +204,34 @@ func convertTime(value any, common *schema.Common, strictTemporal bool) (parquet
 		}
 		switch v := v.(type) {
 		case int64:
-			return parquet.Int64Value(numericToTimeMicros(v, common)), nil
+			us, err := numericToTimeMicros(v, common)
+			if err != nil {
+				return parquet.NullValue(), err
+			}
+			return parquet.Int64Value(us), nil
 		case int32:
 			// Avro time-millis is int32; accept it directly as well.
-			return parquet.Int64Value(numericToTimeMicros(int64(v), common)), nil
+			us, err := numericToTimeMicros(int64(v), common)
+			if err != nil {
+				return parquet.NullValue(), err
+			}
+			return parquet.Int64Value(us), nil
 		case int:
-			return parquet.Int64Value(numericToTimeMicros(int64(v), common)), nil
+			us, err := numericToTimeMicros(int64(v), common)
+			if err != nil {
+				return parquet.NullValue(), err
+			}
+			return parquet.Int64Value(us), nil
 		case float64:
 			// NaN/±Inf cast is implementation-defined; reject explicitly.
 			if math.IsNaN(v) || math.IsInf(v, 0) {
 				return parquet.NullValue(), fmt.Errorf("cannot convert %v to time", v)
 			}
-			return parquet.Int64Value(numericToTimeMicros(int64(v), common)), nil
+			us, err := numericToTimeMicros(int64(v), common)
+			if err != nil {
+				return parquet.NullValue(), err
+			}
+			return parquet.Int64Value(us), nil
 		}
 		return parquet.NullValue(), fmt.Errorf("cannot convert %T to time", value)
 	default:
@@ -134,31 +239,45 @@ func convertTime(value any, common *schema.Common, strictTemporal bool) (parquet
 	}
 }
 
-// numericToTimeMicros scales a numeric time-of-day value to microseconds
-// using the schema's declared unit. Without schema metadata, the input is
-// assumed to already be microseconds (Iceberg's internal representation),
-// which preserves the pre-PR behavior for numeric inputs.
-//
-// An unrecognised TimeUnit reaching this function indicates a benthos
-// schema-package contract violation — Validate() guards against it
-// upstream — and we panic rather than silently misinterpret. Returning n
-// unchanged would conflate a malformed schema with the no-metadata case.
-func numericToTimeMicros(n int64, common *schema.Common) int64 {
-	if common == nil || common.Logical == nil || common.Logical.TimeOfDay == nil {
-		return n
+// numericToTimeMicros scales a numeric TIME value to microseconds-of-day per
+// the declared unit, rejecting anything outside [0, 24h). The bound is
+// checked BEFORE multiplying (n against dayMicros/scale), so a huge
+// mis-declared value cannot overflow int64, wrap back into range, and be
+// silently accepted as a garbage time-of-day. The gate lives here — the one
+// scaling point both the insert path (convertTime) and the mutation paths
+// (NumericTemporalToTime) share — because the two sides MUST agree: a
+// spec-invalid value that inserts accepted but mutations rejected would be a
+// permanently unmatchable, undeletable key.
+// Without schema metadata the input is assumed to already be microseconds
+// (Iceberg's internal representation). An unrecognised TimeUnit indicates a
+// benthos schema-package contract violation — Validate() guards it upstream —
+// so we panic rather than silently misinterpret.
+func numericToTimeMicros(n int64, common *schema.Common) (int64, error) {
+	const dayMicros = 24 * 60 * 60 * 1_000_000
+	scaleUp := int64(1)
+	unit := schema.TimeUnitMicros
+	if common != nil && common.Logical != nil && common.Logical.TimeOfDay != nil {
+		unit = common.Logical.TimeOfDay.Unit
 	}
-	switch common.Logical.TimeOfDay.Unit {
+	var micros int64
+	switch unit {
 	case schema.TimeUnitSeconds:
-		return n * 1_000_000
+		scaleUp = 1_000_000
+		micros = n * scaleUp
 	case schema.TimeUnitMillis:
-		return n * 1_000
+		scaleUp = 1_000
+		micros = n * scaleUp
 	case schema.TimeUnitMicros:
-		return n
+		micros = n
 	case schema.TimeUnitNanos:
-		return n / 1_000
+		micros = n / 1_000
 	default:
-		panic(fmt.Sprintf("unreachable: invalid TimeUnit %v escaped Validate()", common.Logical.TimeOfDay.Unit))
+		panic(fmt.Sprintf("unreachable: invalid TimeUnit %v escaped Validate()", unit))
 	}
+	if n < 0 || (unit != schema.TimeUnitNanos && n >= dayMicros/scaleUp) || micros >= dayMicros {
+		return 0, fmt.Errorf("time column given numeric value %d (unit %v) outside the time-of-day range [0, 24h)", n, unit)
+	}
+	return micros, nil
 }
 
 // convertTimestamp converts a Go value into the Parquet representation of an
@@ -271,7 +390,7 @@ func scaleTimestampNumeric(n int64, unit schema.TimeUnit, nanos bool) int64 {
 	}
 }
 
-// coerceTemporalToNumeric handles the rolling-upgrade case where the iceberg
+// CoerceTemporalToNumeric handles the rolling-upgrade case where the iceberg
 // table holds a numeric column (BIGINT / INT) that pre-dates the metadata
 // fix for issue #4399, but the upgraded upstream now emits a temporal Go
 // value (`time.Time` for Timestamp / Date, `time.Duration` for TimeOfDay)
@@ -291,7 +410,11 @@ func scaleTimestampNumeric(n int64, unit schema.TimeUnit, nanos bool) int64 {
 // common produces UnixMilli, Micros produces UnixMicro, etc. — preserving
 // the wire-equivalent representation the operator's pre-fix pipeline had
 // been storing in the same column.
-func coerceTemporalToNumeric(value any, common *schema.Common) (int64, bool) {
+//
+// Exported so the iceberg output's mutation paths (copy-on-write rewrite,
+// equality-delete keys, filter literals) can accept the same rolling-upgrade
+// population with the identical unit semantics the insert path applies.
+func CoerceTemporalToNumeric(value any, common *schema.Common) (int64, bool) {
 	if common == nil {
 		return 0, false
 	}

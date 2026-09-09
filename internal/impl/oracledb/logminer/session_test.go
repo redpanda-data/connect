@@ -239,6 +239,34 @@ func TestSessionManager(t *testing.T) {
 	})
 }
 
+func TestGetLogsBySCNRangeQueryShape(t *testing.T) {
+	files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+	conn, fc := newFakeSQLConn(t, files)
+
+	_, err := (&LogFileCollector{}).GetLogsBySCNRange(t.Context(), conn, 100, 200)
+	require.NoError(t, err)
+
+	require.Len(t, fc.queries, 1, "GetLogsBySCNRange must issue exactly one query")
+	require.Equal(t, 1, fc.queryCount("V$ARCHIVED_LOG"),
+		"GetLogsBySCNRange must issue exactly one query referencing V$ARCHIVED_LOG")
+	query := fc.queries[0]
+
+	unionIdx := strings.Index(query, "UNION")
+	require.Greater(t, unionIdx, 0, "query must contain a UNION separating the online and archived branches")
+
+	onlineBranch := query[:unionIdx]
+	archivedBranch := query[unionIdx:]
+
+	assert.Contains(t, onlineBranch, "FROM V$LOGFILE F, V$LOG L")
+	assert.NotContains(t, onlineBranch, "RESETLOGS",
+		"the online-redo branch must not filter on RESETLOGS - V$LOG/V$LOGFILE only ever reflect the current incarnation")
+
+	assert.Contains(t, archivedBranch, "FROM V$ARCHIVED_LOG A, V$DATABASE D",
+		"the archived-log branch must join V$DATABASE to scope RESETLOGS_CHANGE#/RESETLOGS_TIME to the current incarnation")
+	assert.Contains(t, archivedBranch, "A.RESETLOGS_CHANGE# = D.RESETLOGS_CHANGE#")
+	assert.Contains(t, archivedBranch, "A.RESETLOGS_TIME = D.RESETLOGS_TIME")
+}
+
 // --- fake database/sql driver used to exercise SessionManager/LogMiner
 // session logic without a real Oracle connection. Only the subset of
 // database/sql/driver behaviour exercised by prepareLogsAndStartSession
@@ -277,6 +305,7 @@ type fakeConn struct {
 	mu         sync.Mutex
 	logFiles   []*LogFile
 	execs      []string
+	queries    []string
 	currentSCN uint64
 }
 
@@ -286,6 +315,18 @@ func (c *fakeConn) count(substr string) int {
 	n := 0
 	for _, e := range c.execs {
 		if strings.Contains(e, substr) {
+			n++
+		}
+	}
+	return n
+}
+
+func (c *fakeConn) queryCount(substr string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, q := range c.queries {
+		if strings.Contains(q, substr) {
 			n++
 		}
 	}
@@ -305,6 +346,7 @@ func (*fakeConn) Begin() (driver.Tx, error) {
 func (c *fakeConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.queries = append(c.queries, query)
 	if strings.Contains(query, "CURRENT_SCN") {
 		return &fakeSCNRow{scn: c.currentSCN}, nil
 	}

@@ -86,7 +86,7 @@ func TestCommitDeleteOnlyProducesDeleteSnapshot(t *testing.T) {
 	deleteFiles, err := w.writeEqualityDeletes(ctx, service.MessageBatch{structuredMsg(t, map[string]any{"id": 2})})
 	require.NoError(t, err)
 
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -110,7 +110,7 @@ func TestCommitUpsertProducesOverwriteSnapshot(t *testing.T) {
 	// the shape an upsert produces.
 	dataFile := synthDataFile(t, tbl.Spec(), fmt.Sprintf("%s/data/new-%s.parquet", tbl.Location(), uuid.New()))
 
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -132,7 +132,7 @@ func TestCommitInsertOnlyStaysAppend(t *testing.T) {
 
 	dataFile := synthDataFile(t, tbl.Spec(), fmt.Sprintf("%s/data/ins-%s.parquet", tbl.Location(), uuid.New()))
 
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -211,7 +211,7 @@ func TestCommitRowDeltaConcurrentNotCoalesced(t *testing.T) {
 	ctx := t.Context()
 	tbl, cat := newTestTable(t)
 	logger := service.MockResources().Logger()
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 5}, reloadFn(cat), logger)
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 5}, reloadFn(cat), logger)
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -325,7 +325,7 @@ func TestCommitUpgradesFormatVersionV1ToV2(t *testing.T) {
 	tbl, cat := newTestTableV1(t)
 	require.EqualValues(t, 1, tbl.Metadata().Version(), "precondition: table starts at v1")
 
-	c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -352,7 +352,7 @@ func TestCommitRetriesOnConflict(t *testing.T) {
 		_, plain := newTestTable(t)
 		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 2, failErr: rest.ErrCommitFailed}
 		ftbl := fc.snapshot()
-		c, err := NewCommitter(ftbl, CommitConfig{MaxRetries: 5}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+		c, err := NewCommitter(ftbl, fc, CommitConfig{MaxRetries: 5}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		defer c.Close()
 
@@ -362,11 +362,28 @@ func TestCommitRetriesOnConflict(t *testing.T) {
 		assert.Equal(t, 3, fc.calls(), "commit must be retried past the conflicts")
 	})
 
+	// iceberg-go's client-side conflict-validation sentinels (armed by the
+	// commit.retry.num-retries table property) wrap ONLY table.ErrCommitFailed,
+	// not rest.ErrCommitFailed, yet they are the same clean-conflict verdict:
+	// nothing landed, reload-and-retry is safe. The retry guard must match them.
+	t.Run("client-side conflict sentinel is retried", func(t *testing.T) {
+		_, plain := newTestTable(t)
+		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1, failErr: table.ErrConflictingDataFiles}
+		ftbl := fc.snapshot()
+		c, err := NewCommitter(ftbl, fc, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		df := synthDataFile(t, ftbl.Spec(), fmt.Sprintf("%s/data/retry-%s.parquet", ftbl.Location(), uuid.New()))
+		require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: c.currentSchemaID()}))
+		assert.Equal(t, 2, fc.calls(), "a client-side conflict-validation rejection is a clean conflict and must be retried")
+	})
+
 	t.Run("fails after exhausting retries", func(t *testing.T) {
 		_, plain := newTestTable(t)
 		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1 << 30, failErr: rest.ErrCommitFailed}
 		ftbl := fc.snapshot()
-		c, err := NewCommitter(ftbl, CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+		c, err := NewCommitter(ftbl, fc, CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		defer c.Close()
 
@@ -390,7 +407,7 @@ func TestWriteCleansUpFilesOnCommitFailure(t *testing.T) {
 	// Control: a healthy committer leaves the written parquet file in place.
 	t.Run("control writes a file", func(t *testing.T) {
 		tbl, cat := newTestTable(t)
-		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
+		c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
 		require.NoError(t, err)
 		defer c.Close()
 		require.NoError(t, os.MkdirAll(filepath.Join(tbl.Location(), "data"), 0o755))
@@ -401,9 +418,9 @@ func TestWriteCleansUpFilesOnCommitFailure(t *testing.T) {
 
 	t.Run("failed commit cleans up", func(t *testing.T) {
 		_, plain := newTestTable(t)
-		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1 << 30, failErr: errors.New("storage unavailable")}
+		fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1 << 30, failErr: fmt.Errorf("%w: request malformed", rest.ErrBadRequest)}
 		ftbl := fc.snapshot()
-		c, err := NewCommitter(ftbl, CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+		c, err := NewCommitter(ftbl, fc, CommitConfig{MaxRetries: 2}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
 		require.NoError(t, err)
 		defer c.Close()
 
@@ -413,6 +430,276 @@ func TestWriteCleansUpFilesOnCommitFailure(t *testing.T) {
 		require.Error(t, err)
 		assert.Zero(t, countParquetFiles(t, ftbl.Location()), "the uncommitted parquet file must be cleaned up after a failed commit")
 	})
+}
+
+// TestWriteSkipsCleanupWhenDisabled pins the `commit.cleanup_on_failure: false`
+// escape hatch on the writer's commit path: even a DEFINITIVE rejection — the
+// one case TestWriteCleansUpFilesOnCommitFailure proves does delete the written
+// files — must leave them in place once cleanup is disabled. The only cost is
+// orphaned storage, which Iceberg orphan-file maintenance reclaims.
+func TestWriteSkipsCleanupWhenDisabled(t *testing.T) {
+	ctx := t.Context()
+	logger := service.MockResources().Logger()
+
+	_, plain := newTestTable(t)
+	fc := &flakyCatalog{memCatalog: plain, failuresLeft: 1 << 30, failErr: fmt.Errorf("%w: request malformed", rest.ErrBadRequest)}
+	ftbl := fc.snapshot()
+	c, err := NewCommitter(ftbl, fc, CommitConfig{MaxRetries: 2, DisableCleanupOnFailure: true}, func(context.Context) (*table.Table, error) { return fc.snapshot(), nil }, logger)
+	require.NoError(t, err)
+	defer c.Close()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(ftbl.Location(), "data"), 0o755))
+	w := &writer{table: ftbl, committer: c, caseSensitive: true, logger: logger}
+	err = w.Write(ctx, service.MessageBatch{structuredMsg(t, map[string]any{"id": 1})})
+	require.Error(t, err)
+	require.NotErrorIs(t, err, rest.ErrCommitStateUnknown, "the rejection must be definitive, so cleanup is skipped by the kill switch and not by the ambiguity gate")
+	assert.Positive(t, countParquetFiles(t, ftbl.Location()),
+		"cleanup_on_failure: false must leave the uncommitted parquet file for Iceberg orphan-file maintenance")
+}
+
+// TestWriteSkipsCleanupOnAmbiguousCommit pins the writer-side cleanup gate: when
+// every commit attempt's outcome remains ambiguous (ErrCommitStateUnknown, which
+// commitLocked joins into its error returns), the writer must NOT delete the
+// data and equality-delete files it wrote — the commit may still land
+// server-side and reference them. They are left for Iceberg orphan-file
+// maintenance instead, mirroring commitOverwrite's cleanup gate.
+func TestWriteSkipsCleanupOnAmbiguousCommit(t *testing.T) {
+	ctx := t.Context()
+	logger := service.MockResources().Logger()
+
+	_, mem := newTestTable(t)
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{
+		commitUnknownNoLand, commitUnknownNoLand, commitUnknownNoLand,
+	}}
+	tbl := cat.snapshot()
+	require.NoError(t, os.MkdirAll(filepath.Join(tbl.Location(), "data"), 0o755))
+
+	comm, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+	require.NoError(t, err)
+	defer comm.Close()
+
+	w := newDeleteWriter(t, tbl)
+	w.committer = comm
+	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+
+	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})})
+	require.Error(t, err)
+	require.ErrorIs(t, err, rest.ErrCommitStateUnknown, "exhausted ambiguous attempts must surface as unknown-state")
+	assert.Positive(t, countParquetFiles(t, tbl.Location()),
+		"ambiguous commit outcome: written files must be left for orphan-file maintenance, not deleted")
+}
+
+// TestWriteMORAmbiguousThenConflictStaysSticky pins the production log shape
+// behind the fielded corruption reports, end-to-end through writer.Write on
+// the merge-on-read path: an ambiguous attempt mid-loop, clean-conflict
+// terminal failures, and reloads failing for the WHOLE loop (a catalog outage
+// produces exactly this correlation). The returned error must carry BOTH
+// sentinels — commit-failed from the terminal attempt AND unknown-state from
+// the sticky earlier ambiguity — and no written file may be deleted: the
+// ambiguous attempt may still land, and reloads never got to prove anything.
+func TestWriteMORAmbiguousThenConflictStaysSticky(t *testing.T) {
+	ctx := t.Context()
+	logger := service.MockResources().Logger()
+
+	_, mem := newTestTable(t)
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{
+		commitUnknownNoLand, commitConflict, commitConflict,
+	}}
+	tbl := cat.snapshot()
+	require.NoError(t, os.MkdirAll(filepath.Join(tbl.Location(), "data"), 0o755))
+
+	comm, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 3},
+		func(context.Context) (*table.Table, error) { return nil, errors.New("catalog reload unavailable") }, logger)
+	require.NoError(t, err)
+	defer comm.Close()
+
+	w := newDeleteWriter(t, tbl)
+	w.committer = comm
+	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+
+	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})})
+	require.Error(t, err)
+	require.ErrorIs(t, err, rest.ErrCommitFailed, "the terminal clean conflict must surface")
+	require.ErrorIs(t, err, rest.ErrCommitStateUnknown,
+		"the mid-loop ambiguity must stay sticky through writer.Write even though a differently-classed error terminated the loop")
+	assert.Positive(t, countParquetFiles(t, tbl.Location()),
+		"no written file may be deleted while an attempt's outcome is ambiguous and unproven")
+}
+
+// TestWriteMORLandedFinalAttemptSucceeds closes the writer-level loop on the
+// landed-but-misreported commit: the final attempt applies server-side but
+// reports unknown-state; the retry's reload finds the commit-id token, so
+// writer.Write must return SUCCESS — not an error that nacks the batch into
+// redelivery and duplicate rows — with the mutation applied exactly once.
+func TestWriteMORLandedFinalAttemptSucceeds(t *testing.T) {
+	ctx := t.Context()
+	logger := service.MockResources().Logger()
+
+	_, mem := newTestTable(t)
+	cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{
+		commitConflict, commitLandThenUnknown,
+	}}
+	tbl := cat.snapshot()
+	require.NoError(t, os.MkdirAll(filepath.Join(tbl.Location(), "data"), 0o755))
+
+	comm, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 3},
+		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+	require.NoError(t, err)
+	defer comm.Close()
+
+	w := newDeleteWriter(t, tbl)
+	w.committer = comm
+	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+
+	require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})}),
+		"a landed-but-misreported final attempt must resolve to success via the token check, not surface an error")
+	assert.Equal(t, 2, cat.calls, "conflict, then the landed-but-unknown attempt; the token check must prevent a third")
+	assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+		"the mutation must be applied exactly once")
+}
+
+// morUpsertInput builds an upsert-shaped merge-on-read CommitInput (one data
+// file plus one equality-delete file for the given id) against tbl. It mirrors
+// the shape TestCommitUpsertProducesOverwriteSnapshot uses, so the RowDelta
+// commit derives an overwrite snapshot.
+func morUpsertInput(t testing.TB, ctx context.Context, tbl *table.Table, id int) CommitInput {
+	t.Helper()
+	w := newDeleteWriter(t, tbl)
+	deleteFiles, err := w.writeEqualityDeletes(ctx, service.MessageBatch{structuredMsg(t, map[string]any{"id": id})})
+	require.NoError(t, err)
+	dataFile := synthDataFile(t, tbl.Spec(), fmt.Sprintf("%s/data/mor-%s.parquet", tbl.Location(), uuid.New()))
+	return CommitInput{Files: []iceberg.DataFile{dataFile}, DeleteFiles: deleteFiles, SchemaID: tbl.Schema().ID}
+}
+
+// TestCommitRowDeltaIdempotentOnUnknownState pins the merge-on-read half of the
+// commit-id idempotency guarantee: a RowDelta commit is safe to retry after an
+// ambiguous (ErrCommitStateUnknown) catalog response because the commit-id
+// stamped into the snapshot summary lets the retry tell a landed commit from a
+// lost one. Both danger paths must leave the mutation applied exactly once.
+func TestCommitRowDeltaIdempotentOnUnknownState(t *testing.T) {
+	logger := service.MockResources().Logger()
+
+	// (A) landed-but-reported-unknown: the first CommitTable applies the RowDelta
+	// server-side, then reports ErrCommitStateUnknown. The retry must find the
+	// commit-id in the reloaded snapshot and return success WITHOUT committing a
+	// second time — exactly one snapshot carries the token, and CommitTable is
+	// called exactly once (no re-apply).
+	t.Run("landed then unknown applies once", func(t *testing.T) {
+		ctx := t.Context()
+		_, mem := newTestTable(t)
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitLandThenUnknown}}
+		c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, cat.snapshot(), 2)))
+
+		assert.Equal(t, 1, cat.calls, "a landed commit must not be re-committed after an unknown-state response")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+			"exactly one snapshot must carry the commit-id (mutation applied once)")
+	})
+
+	// (B) not-landed-unknown: the first CommitTable returns ErrCommitStateUnknown
+	// WITHOUT applying. The commit-id is therefore absent on reload, so the retry
+	// must re-apply and succeed — still exactly once.
+	t.Run("unknown without landing re-applies once", func(t *testing.T) {
+		ctx := t.Context()
+		_, mem := newTestTable(t)
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitUnknownNoLand}}
+		c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, cat.snapshot(), 2)))
+
+		assert.Equal(t, 2, cat.calls, "a commit that did not land must be retried")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+			"the mutation must be committed exactly once on the successful retry")
+	})
+
+	// (C) landed-but-reported-ambiguous-NON-sentinel: iceberg-go maps only
+	// HTTP 500/502/503/504 to ErrCommitStateUnknown; other 5xx surface as
+	// rest.ErrServerError (and client-side timeouts as raw transport errors).
+	// These are just as ambiguous — the commit may have landed — so
+	// commitLocked must normalise them onto the sentinel and run the same
+	// reload + commit-id check, finding the token and returning success
+	// WITHOUT a duplicate apply. Before the normalisation fix these errors
+	// took the terminal branch: the landed commit was reported as failed and
+	// redelivery re-applied the mutation.
+	t.Run("landed then server error applies once", func(t *testing.T) {
+		ctx := t.Context()
+		_, mem := newTestTable(t)
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitLandThenServerError}}
+		c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, cat.snapshot(), 2)))
+
+		assert.Equal(t, 1, cat.calls, "a landed commit must not be re-committed after a non-sentinel ambiguous 5xx")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+			"exactly one snapshot must carry the commit-id (mutation applied once)")
+	})
+
+	// Clean conflict (ErrCommitFailed, nothing landed): the commit-id is absent on
+	// reload, so the genuine-conflict retry still re-applies exactly once — the
+	// idempotency check must not over-filter a legitimate retry.
+	t.Run("clean conflict re-applies once", func(t *testing.T) {
+		ctx := t.Context()
+		_, mem := newTestTable(t)
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitConflict}}
+		c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, cat.snapshot(), 2)))
+
+		assert.Equal(t, 2, cat.calls, "a genuine conflict must be retried")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+			"the mutation must be committed exactly once after the conflict")
+	})
+
+	// (T-13) landed-but-reported-failed (a lost ack on a 409): the first CommitTable
+	// applies the RowDelta server-side, then reports ErrCommitFailed as if it had
+	// been a clean conflict. The retry must find the commit-id in the reloaded
+	// snapshot and short-circuit to success WITHOUT committing a second time —
+	// exactly one CommitTable call, exactly one snapshot carrying the token.
+	t.Run("landed then failed applies once", func(t *testing.T) {
+		ctx := t.Context()
+		_, mem := newTestTable(t)
+		cat := &scriptedCatalog{memCatalog: mem, outcomes: []commitOutcome{commitLandThenFail}}
+		c, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3}, func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, logger)
+		require.NoError(t, err)
+		defer c.Close()
+
+		require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, cat.snapshot(), 2)))
+
+		assert.Equal(t, 1, cat.calls, "a landed commit must not be re-committed after a lost-ack conflict")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()),
+			"exactly one snapshot must carry the commit-id (mutation applied once)")
+	})
+}
+
+// TestCommitRowDeltaWritesCommitIDToSummary is the direct round-trip test for the
+// idempotency token: a normal (non-flaky) merge-on-read commit must write a
+// commit-id into the snapshot summary that is still readable after a catalog
+// reload (and is a valid UUID).
+func TestCommitRowDeltaWritesCommitIDToSummary(t *testing.T) {
+	ctx := t.Context()
+	tbl, cat := newTestTable(t)
+	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), service.MockResources().Logger())
+	require.NoError(t, err)
+	defer c.Close()
+
+	require.NoError(t, c.Commit(ctx, morUpsertInput(t, ctx, tbl, 2)))
+
+	snap := cat.snapshot().CurrentSnapshot()
+	require.NotNil(t, snap)
+	require.NotNil(t, snap.Summary)
+	id := snap.Summary.Properties[commitIDProp]
+	require.NotEmpty(t, id, "the mutation snapshot must carry the commit-id after reload")
+	_, err = uuid.Parse(id)
+	assert.NoError(t, err, "the commit-id must be a valid UUID")
 }
 
 // BenchmarkCommitterAppend measures the append fast path (no delete files),
@@ -427,7 +714,7 @@ func BenchmarkCommitterAppend(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		tbl, cat := newTestTable(b)
-		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
+		c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
 		require.NoError(b, err)
 		df := synthDataFile(b, tbl.Spec(), fmt.Sprintf("%s/data/bench-%d.parquet", tbl.Location(), i))
 		b.StartTimer()
@@ -457,7 +744,7 @@ func BenchmarkCommitterRowDelta(b *testing.B) {
 		deleteFiles, err := w.writeEqualityDeletes(ctx, service.MessageBatch{structuredMsg(b, map[string]any{"id": i})})
 		require.NoError(b, err)
 		dataFile := synthDataFile(b, tbl.Spec(), fmt.Sprintf("%s/data/bench-%d.parquet", tbl.Location(), i))
-		c, err := NewCommitter(tbl, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
+		c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1}, reloadFn(cat), logger)
 		require.NoError(b, err)
 		b.StartTimer()
 

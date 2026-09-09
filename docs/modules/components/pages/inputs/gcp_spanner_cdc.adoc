@@ -51,6 +51,7 @@ input:
       byte_size: 0
       period: ""
       check: ""
+    checkpoint_limit: 1024
     auto_replay_nacks: true
 ```
 
@@ -81,6 +82,7 @@ input:
       period: ""
       check: ""
       processors: [] # No default (optional)
+    checkpoint_limit: 1024
     auto_replay_nacks: true
 ```
 
@@ -319,6 +321,15 @@ processors:
   - archive:
       format: json_array
 ```
+
+=== `checkpoint_limit`
+
+The maximum number of messages that can be processed at a given time per partition. Increasing this limit enables parallel processing and batching at the output level. Any given partition watermark will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.
+
+
+*Type*: `int`
+
+*Default*: `1024`
 
 === `auto_replay_nacks`
 

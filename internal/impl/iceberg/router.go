@@ -67,6 +67,70 @@ const maxSchemaEvolutionRetries = 10
 type tableEntry struct {
 	mu     sync.RWMutex
 	writer *writer
+
+	// tsEncoding caches the table's resolved timestamp encoding (see
+	// resolveTimestampEncoding) so the footer-probe/stamp bootstrap runs at
+	// most once per table per process — writer re-creation (schema evolution,
+	// error recovery) reuses it. Guarded by mu; valid when tsEncodingResolved.
+	tsEncoding         icebergx.TimestampEncoding
+	tsEncodingResolved bool
+
+	// tsEncodingProbeErr negative-caches a probe-bound failure
+	// (errTimestampProbeBoundExceeded) observed on tsEncodingProbeSnapshot:
+	// the scan is deterministic for a given snapshot, so re-running it on
+	// every retried write would re-pay up to maxProbedFiles object-store
+	// footer reads under this entry's lock for the identical answer. The
+	// cache self-heals: a new snapshot (files landed) re-probes, and an
+	// operator setting the pinning property takes the property-present path,
+	// which never consults it. Guarded by mu. Only the deterministic bound
+	// error is ever cached — transient probe failures must retry.
+	tsEncodingProbeErr      error
+	tsEncodingProbeSnapshot int64
+
+	// retryPropWarned dedupes the commit.retry.num-retries hazard warning to
+	// once per table per process (writer recreation would otherwise repeat it
+	// on every failure). Guarded by mu.
+	retryPropWarned bool
+
+	// prohibitedProps persists the catalog-prohibited property keys learned
+	// by this table's committers (mirroring the tsEncoding cache pattern):
+	// writeWithRetry closes the writer on every failure, so without it each
+	// recreated committer would re-learn the keys at the cost of one rejected
+	// commit per generation. Created lazily in createWriter under mu; the set
+	// carries its own lock, so committers share it race-safely.
+	prohibitedProps *prohibitedKeySet
+}
+
+// cachedProbeErr returns the negative-cached probe-bound error when it was
+// observed on tbl's CURRENT snapshot; a different (or absent) snapshot means
+// files have landed since, so the cache is cleared and the probe re-runs.
+// Caller must hold e.mu.
+func (e *tableEntry) cachedProbeErr(tbl *table.Table) error {
+	if e.tsEncodingProbeErr == nil {
+		return nil
+	}
+	if snap := tbl.CurrentSnapshot(); snap != nil && snap.SnapshotID == e.tsEncodingProbeSnapshot {
+		return e.tsEncodingProbeErr
+	}
+	e.tsEncodingProbeErr = nil
+	return nil
+}
+
+// noteProbeErr caches err against tbl's current snapshot when — and only
+// when — it is the deterministic probe-bound failure; transient probe
+// failures are never cached and must retry. Reports whether it cached, so the
+// caller can emit the one-time warning. Caller must hold e.mu.
+func (e *tableEntry) noteProbeErr(tbl *table.Table, err error) bool {
+	if !errors.Is(err, errTimestampProbeBoundExceeded) {
+		return false
+	}
+	snap := tbl.CurrentSnapshot()
+	if snap == nil {
+		return false
+	}
+	e.tsEncodingProbeErr = err
+	e.tsEncodingProbeSnapshot = snap.SnapshotID
+	return true
 }
 
 // Router routes message batches to per-table writers.
@@ -259,7 +323,7 @@ func (r *Router) doWrite(ctx context.Context, key tableKey, entry *tableEntry, b
 			entry.mu.Unlock()
 			continue
 		}
-		w, err := r.createWriter(ctx, key)
+		w, err := r.createWriter(ctx, key, entry)
 		if err != nil {
 			entry.mu.Unlock()
 			return err
@@ -381,6 +445,12 @@ func (r *Router) createTable(ctx context.Context, key tableKey, batch service.Me
 		location := tableLocationFor(r.schemaEvoCfg.TableLocation, nsParts, key.table)
 		createOpts = append(createOpts, catalog.WithLocation(location))
 	}
+	// Pin the timestamp encoding at birth: tables created by this connector
+	// are spec-encoded from their first file, so the footer-probe bootstrap
+	// (resolveTimestampEncoding) never has to run for them.
+	createOpts = append(createOpts, catalog.WithProperties(iceberg.Properties{
+		icebergx.TimestampEncodingProperty: icebergx.TimestampEncodingSpec.String(),
+	}))
 
 	// Create the table
 	_, err = client.CreateTable(ctx, key.table, schema, createOpts...)
@@ -393,6 +463,11 @@ func (r *Router) createTable(ctx context.Context, key tableKey, batch service.Me
 		}
 		return err
 	}
+
+	// The property is stamped in the creation commit, so the resolution is
+	// already known — cache it to spare createWriter a parse.
+	entry.tsEncoding = icebergx.TimestampEncodingSpec
+	entry.tsEncodingResolved = true
 
 	r.logger.Infof("Created table: %s.%s with %d columns", key.namespace, key.table, len(schema.Fields()))
 	// Invalidate cached writer so it gets recreated with the new table
@@ -496,8 +571,14 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 // With no identifier_fields configured the schema is created exactly as before
 // (all columns optional, no identifier-field-ids), so append-only table
 // creation is unchanged.
+//
+// Under copy-on-write (merge_strategy: copy-on-write) the identifier_fields are
+// the connector-side merge key only and are deliberately NOT registered as the
+// table's Iceberg identifier-field-ids, nor are the columns forced required:
+// this is what lets engine-backed catalogs (e.g. the Databricks Unity Catalog)
+// accept the CREATE TABLE. Merge-on-read (the default) keeps registering them.
 func (r *Router) schemaWithIdentifierFields(fields []iceberg.NestedField) (*iceberg.Schema, error) {
-	if len(r.rowOpCfg.IdentifierFields) == 0 {
+	if len(r.rowOpCfg.IdentifierFields) == 0 || r.rowOpCfg.MergeStrategy == mergeStrategyCOW {
 		return iceberg.NewSchema(0, fields...), nil
 	}
 
@@ -689,8 +770,8 @@ func (*Router) closeWriter(entry *tableEntry) {
 }
 
 // createWriter creates a new writer for a table.
-// Caller must ensure this is only called when entry.writer is nil.
-func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error) {
+// Caller must hold entry.mu.Lock() and ensure entry.writer is nil.
+func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEntry) (*writer, error) {
 	// Parse namespace into parts
 	nsParts := strings.Split(key.namespace, ".")
 
@@ -709,9 +790,18 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 		return nil, err
 	}
 
-	committerTbl, err := client.LoadTable(ctx, key.table)
-	if err != nil {
-		return nil, err
+	// The standard table property commit.retry.num-retries arms iceberg-go's
+	// OWN refresh-and-replay retry loop inside every commit. That replay
+	// re-submits the ORIGINAL updates with only the ref requirement rewritten
+	// — a replayed snapshot's manifest list was built against the old base, so
+	// under concurrent writers a peer's non-conflicting commit can be dropped
+	// from the table state. This committer's retry loop already re-stages
+	// safely from a reloaded snapshot, making the inner loop pure risk here.
+	// Warn (once per table per process) rather than refuse: the property is
+	// legitimately set on tables other engines also write.
+	if n := writerTbl.Properties()[table.CommitNumRetriesKey]; n != "" && n != "0" && !entry.retryPropWarned {
+		entry.retryPropWarned = true
+		r.logger.Warnf("Table %v carries %s=%s, which arms the Iceberg library's internal commit replay; this output's own commit retry already re-stages safely, and the library-level replay can drop a concurrent writer's commit — consider unsetting the property on tables this output writes to", key.table, table.CommitNumRetriesKey, n)
 	}
 
 	// reloadTable creates a fresh catalog client and reloads the table,
@@ -725,8 +815,56 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 		return rc.LoadTable(ctx, key.table)
 	}
 
-	// Create committer with its own table reference
-	comm, err := NewCommitter(committerTbl, r.commitCfg, reloadTable, r.logger)
+	// Resolve the table's timestamp encoding before any file is written, so
+	// every parquet file this writer produces matches the table's existing
+	// annotation. When the pinning property is present on the freshly loaded
+	// table it is authoritative and re-read on every writer (re)creation —
+	// this is metadata already in hand, and it means an operator who migrates
+	// a table (rewrite files, flip the property to spec) is honoured at the
+	// next writer recreation rather than being overridden by a stale cache.
+	// The entry cache (guarded by entry.mu, which we hold) only short-circuits
+	// the property-ABSENT bootstrap, so the footer probe and pinning stamp run
+	// at most once per table per process.
+	if _, propPresent := writerTbl.Properties()[icebergx.TimestampEncodingProperty]; propPresent || !entry.tsEncodingResolved {
+		// A probe-bound failure is deterministic per snapshot: serve the
+		// cached error instead of re-paying the full footer scan on every
+		// retried write (see tableEntry.tsEncodingProbeErr).
+		if !propPresent {
+			if cached := entry.cachedProbeErr(writerTbl); cached != nil {
+				return nil, cached
+			}
+		}
+		enc, stampedTbl, err := resolveTimestampEncoding(ctx, writerTbl, reloadTable, r.logger)
+		if err != nil {
+			if entry.noteProbeErr(writerTbl, err) {
+				r.logger.Warnf("Timestamp-encoding probe for table %v hit its %d-file bound; refusing writes until the %s table property is set (or new data files land) — this result is cached, so retries will not re-scan", key.table, maxProbedFiles, icebergx.TimestampEncodingProperty)
+			}
+			return nil, err
+		}
+		entry.tsEncoding = enc
+		entry.tsEncodingResolved = true
+		writerTbl = stampedTbl
+	}
+
+	committerTbl, err := client.LoadTable(ctx, key.table)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create committer with its own table reference. Copy-on-write writes only
+	// plain data files, so it works on a v1 table and must not trigger the
+	// irreversible v1->v2 upgrade the merge-on-read path needs.
+	commitCfg := r.commitCfg
+	commitCfg.SkipFormatUpgrade = r.rowOpCfg.MergeStrategy == mergeStrategyCOW
+	// Seed the committer with the entry's persistent prohibited-key set (we
+	// hold entry.mu), so property keys a catalog rejection taught a previous
+	// committer stay stripped after writer recreation instead of costing one
+	// rejected commit per writer generation.
+	if entry.prohibitedProps == nil {
+		entry.prohibitedProps = newProhibitedKeySet()
+	}
+	commitCfg.ProhibitedKeys = entry.prohibitedProps
+	comm, err := NewCommitter(committerTbl, client.TableIO(), commitCfg, reloadTable, r.logger)
 	if err != nil {
 		return nil, fmt.Errorf("creating committer: %w", err)
 	}
@@ -735,7 +873,46 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 	// Create writer with its own table reference and the committer.
 	// The resolver is passed so the writer can use schema metadata to
 	// interpret numeric inputs into time-typed columns at shredding time.
-	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, r.logger)
+	// Surface copy-on-write configuration-vs-table conflicts at writer
+	// creation rather than on the first mutating batch — but ONLY for
+	// configurations that can actually mutate. A static `row_operation:
+	// insert` never touches the merge-key or delete-mode machinery, and a
+	// previously-healthy insert-only pipeline must not go down because its
+	// unused identifier_fields column has an unsupported type; mutating() is
+	// false exactly for that class. A dynamic row_operation CAN mutate, but
+	// may in practice never do so, so it gets a WARNING here and the
+	// authoritative error on the first mutating batch. A static upsert/delete
+	// gets the hard error: no batch it produces can ever succeed. Columns
+	// missing from the schema are deliberately not checked at all (the
+	// mutation paths report those with full context).
+	if r.rowOpCfg.MergeStrategy == mergeStrategyCOW && r.rowOpCfg.mutating() {
+		_, staticOp := r.rowOpCfg.Operation.Static()
+		tblSchema := writerTbl.Schema()
+		for _, name := range r.rowOpCfg.IdentifierFields {
+			if field, ok := findSchemaField(tblSchema, name, r.caseSensitive); ok {
+				if err := cowKeyTypeSupported(name, field.Type); err != nil {
+					if staticOp {
+						return nil, err
+					}
+					r.logger.Warnf("Copy-on-write merge key check: %v — every upsert/delete batch will fail until the configuration or table schema changes", err)
+				}
+			}
+		}
+		// The same fail-fast for an explicit write.delete.mode conflict: the
+		// per-commit stage check remains the backstop, but a static mutating
+		// config against a table explicitly pinned to merge-on-read deletes
+		// can never commit a mutation, and surfacing that only per attempt
+		// would nack/redeliver forever.
+		if mode := writerTbl.Properties()[table.WriteDeleteModeKey]; mode != "" && mode != table.WriteModeCopyOnWrite {
+			err := fmt.Errorf("table property %s is explicitly set to %q, which conflicts with merge_strategy: copy-on-write; unset the property (or set it to %q), or switch this output to merge_strategy: merge-on-read", table.WriteDeleteModeKey, mode, table.WriteModeCopyOnWrite)
+			if staticOp {
+				return nil, err
+			}
+			r.logger.Warnf("Copy-on-write delete-mode check: %v — every upsert/delete batch will fail until resolved", err)
+		}
+	}
+
+	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
 	w.metrics = r.metrics
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 

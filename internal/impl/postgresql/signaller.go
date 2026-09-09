@@ -18,31 +18,39 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
-type postgresSignaller struct {
-	log *service.Logger
+// controlSignaller checks WAL change entries for control signals.
+type controlSignaller interface {
+	listen(msg *pglogicalstream.StreamMessage) (*replication.ControlSignal, error)
+}
 
+type noopSignaller struct{}
+
+func (noopSignaller) listen(*pglogicalstream.StreamMessage) (*replication.ControlSignal, error) {
+	return nil, nil
+}
+
+type postgresSignaller struct {
 	schema    string
 	tableName string
+	log       *service.Logger
 }
 
 // newControlSignaller creates a signal listener that checks WAL change entries for control signals.
-func newControlSignaller(schema, tableName string, log *service.Logger) (*postgresSignaller, error) {
+// If tableName is empty, it returns a no-op signaller.
+func newControlSignaller(schema, tableName string, log *service.Logger) (controlSignaller, error) {
+	if tableName == "" {
+		return noopSignaller{}, nil
+	}
+
 	normalizedSchema, err := wireFormPostgresIdentifier(schema)
 	if err != nil {
 		return nil, fmt.Errorf("invalid schema %q: %w", schema, err)
 	}
-	normalizedTableName := tableName
-	if tableName != "" {
-		if normalizedTableName, err = wireFormPostgresIdentifier(tableName); err != nil {
-			return nil, fmt.Errorf("invalid signal table name %q: %w", tableName, err)
-		}
+	normalizedTableName, err := wireFormPostgresIdentifier(tableName)
+	if err != nil {
+		return nil, fmt.Errorf("invalid signal table name %q: %w", tableName, err)
 	}
 	return &postgresSignaller{log: log, schema: normalizedSchema, tableName: normalizedTableName}, nil
-}
-
-// enabled reports whether a signal table was configured.
-func (s *postgresSignaller) enabled() bool {
-	return s.tableName != ""
 }
 
 // listen returns any actionable signal found; signal rows should always be
