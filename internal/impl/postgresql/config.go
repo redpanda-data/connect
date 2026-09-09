@@ -57,16 +57,13 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, heartbeatInterval t
 
 		if cfg.ChunkSize, err = snapConf.FieldInt(fieldIncrementalSnapshotChunkSize); err != nil {
 			return nil, err
-		}
-		if cfg.ChunkSize <= 0 {
+		} else if cfg.ChunkSize <= 0 {
 			return nil, fmt.Errorf("%s.%s must be > 0, got %d", fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, cfg.ChunkSize)
 		}
 
-		// The two snapshot modes read the same rows by different means, so
-		// running both delivers every row twice.
 		if cfg.Enabled && streamSnapshot {
 			return nil, fmt.Errorf(
-				"%s and %s.%s are mutually exclusive: enable one snapshot mode",
+				"%s and %s.%s are mutually exclusive snapshot modes, only one can be enabled",
 				fieldStreamSnapshot, fieldIncSnapshot, fieldIncSnapshotEnabled,
 			)
 		}

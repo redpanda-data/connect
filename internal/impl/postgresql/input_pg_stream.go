@@ -163,7 +163,8 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Example("6s").
 			Default("3s")).
 		Field(service.NewIntField(fieldMaxParallelSnapshotTables).
-			Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage").
+			Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage.\n\nApplies to the `" + fieldStreamSnapshot + "` snapshot only.").
+			ShortDescription("Number of tables to snapshot in parallel. Applies to `" + fieldStreamSnapshot + "` only.").
 			Default(1)).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
 			Description("The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.").
@@ -273,7 +274,7 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 		// incremental snapshot config
 		Field(service.NewObjectField(fieldIncSnapshot,
 			service.NewBoolField(fieldIncSnapshotEnabled).
-				Description("Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `"+fieldStreamSnapshot+"` it needs no up-front snapshot phase, does not delay replication, and needs no signal table. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `"+fieldIncSnapshotHeartbeatInterval+"`.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. That second window spans the snapshots of all preceding tables, so it can be long. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
+				Description("Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `"+fieldStreamSnapshot+"` it needs no up-front snapshot phase, does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `"+fieldIncSnapshotHeartbeatInterval+"`.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
 				ShortDescription("Snapshot the configured tables in chunks, alongside replication streaming.").
 				Default(incsnapshot.DefaultIncSnapshotEnabled),
 			service.NewStringListField(fieldIncrementalSnapshotTables).

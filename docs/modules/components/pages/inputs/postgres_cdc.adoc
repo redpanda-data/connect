@@ -277,7 +277,9 @@ pg_wal_monitor_interval: 6s
 
 === `max_parallel_snapshot_tables`
 
-Int specifies a number of tables that will be processed in parallel during the snapshot processing stage
+Int specifies a number of tables that will be processed in parallel during the snapshot processing stage.
+
+Applies to the `stream_snapshot` snapshot only.
 
 
 *Type*: `int`
@@ -637,11 +639,11 @@ Configures chunked snapshotting that runs alongside replication streaming.
 
 === `incremental_snapshot.enabled`
 
-Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `stream_snapshot` it needs no up-front snapshot phase, does not delay replication, and needs no signal table. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.
+Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `stream_snapshot` it needs no up-front snapshot phase, does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.
 
 Progress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `heartbeat_interval`.
 
-A row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. That second window spans the snapshots of all preceding tables, so it can be long. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.
+A row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.
 
 
 *Type*: `bool`
