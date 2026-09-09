@@ -1,0 +1,115 @@
+# Declared-schema variant of profile_config.yaml, for measuring whether a
+# declared schema reduces per-record CPU cost.
+#
+# Identical workload, but every message carries schema metadata (the common
+# schema format shared with parquet_encode's schema_metadata) in the
+# `iceberg_schema` metadata field, and the output is configured with
+# schema_evolution.schema_metadata: iceberg_schema. This exercises the
+# declared-schema path: type resolution at table creation/evolution comes from
+# the declared schema, and the shredder receives field schema metadata
+# (SetFieldSchemaMetadata) instead of relying purely on dynamic inference.
+#
+# Declared types mirror what inference produces for the same payload so the
+# resulting table is identical to the schemaless run (apples-to-apples).
+#
+# Run at 1 core with GOMAXPROCS=1. See profile_config.yaml for capture notes.
+
+http:
+  debug_endpoints: true
+
+input:
+  generate:
+    count: ${COUNT:0}
+    interval: ""
+    mapping: |
+      root.id = counter()
+      root.user_id = (counter() % 10000) + 1
+      root.session_id = uuid_v4()
+      root.trace_id = uuid_v4()
+      root.span_id = uuid_v4()
+      root.request_id = uuid_v4()
+      root.device_id = uuid_v4()
+      root.correlation_id = uuid_v4()
+      root.event_type = ["click", "view", "purchase", "scroll", "hover"].index(counter() % 5)
+      root.country = ["US", "GB", "DE", "FR", "JP", "BR", "IN", "AU"].index(counter() % 8)
+      root.value = random_int(max: 1000000)
+      root.amount = random_int(max: 10000000) / 100.0
+      root.score = random_int(max: 100000) / 1000.0
+      root.latency_ms = random_int(max: 30000)
+      root.is_mobile = counter() % 2 == 0
+      root.user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+      root.url = "https://shop.example.com/products/" + uuid_v4() + "?ref=" + uuid_v4()
+      root.referrer = "https://www.google.com/search?q=" + uuid_v4()
+      root.payload_a = uuid_v4() + ":" + uuid_v4()
+      root.payload_b = uuid_v4() + ":" + uuid_v4()
+      root.payload_c = uuid_v4() + ":" + uuid_v4()
+      root.payload_d = uuid_v4() + ":" + uuid_v4()
+      root.description = "synthetic high entropy event record number " + counter().string() + " for per-record cpu profiling"
+      root.ts = now()
+      meta iceberg_schema = {
+        "type": "OBJECT",
+        "children": [
+          {"name": "id", "type": "INT64"},
+          {"name": "user_id", "type": "INT64"},
+          {"name": "session_id", "type": "STRING"},
+          {"name": "trace_id", "type": "STRING"},
+          {"name": "span_id", "type": "STRING"},
+          {"name": "request_id", "type": "STRING"},
+          {"name": "device_id", "type": "STRING"},
+          {"name": "correlation_id", "type": "STRING"},
+          {"name": "event_type", "type": "STRING"},
+          {"name": "country", "type": "STRING"},
+          {"name": "value", "type": "INT64"},
+          {"name": "amount", "type": "FLOAT64"},
+          {"name": "score", "type": "FLOAT64"},
+          {"name": "latency_ms", "type": "INT64"},
+          {"name": "is_mobile", "type": "BOOLEAN"},
+          {"name": "user_agent", "type": "STRING"},
+          {"name": "url", "type": "STRING"},
+          {"name": "referrer", "type": "STRING"},
+          {"name": "payload_a", "type": "STRING"},
+          {"name": "payload_b", "type": "STRING"},
+          {"name": "payload_c", "type": "STRING"},
+          {"name": "payload_d", "type": "STRING"},
+          {"name": "description", "type": "STRING"},
+          {"name": "ts", "type": "STRING"}
+        ]
+      }
+
+pipeline:
+  processors:
+    - mapping: 'root = content()'
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+
+output:
+  iceberg:
+    catalog:
+      url: "${CATALOG_URL:http://localhost:8181}"
+    namespace: bench
+    table: "${TABLE:events_profile_schema}"
+    max_in_flight: ${MIF:4}
+    storage:
+      aws_s3:
+        bucket: "${MINIO_BUCKET:warehouse}"
+        region: "${MINIO_REGION:us-east-1}"
+        endpoint: "${MINIO_ENDPOINT:http://localhost:9000}"
+        force_path_style_urls: true
+        credentials:
+          id: "${MINIO_USER:admin}"
+          secret: "${MINIO_PASSWORD:password}"
+    schema_evolution:
+      enabled: true
+      schema_metadata: iceberg_schema
+    batching:
+      count: 10000
+      period: 5s
+
+logger:
+  level: INFO
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
