@@ -10,6 +10,7 @@ package pglogicalstream
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"slices"
@@ -26,7 +27,9 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
+	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 const decodingPlugin = "pgoutput"
@@ -62,6 +65,20 @@ type Stream struct {
 	heartbeat               *heartbeat
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
+	pgVersion               int
+
+	// incremental snapshot
+	incSnapshotCoordinator *incsnapshot.Coordinator
+	incSnapshotConn        *sql.DB
+	incSnapshotPKCache     map[string][]string
+	incSnapshotTables      map[incrementalsnapshot.TableID]struct{}
+	incSnapshotLastTable   *incrementalsnapshot.TableID // used for logging
+
+	// BlockingSnapshot is true only when this session runs the one-shot
+	// stream_snapshot backfill, which also emits a SnapshotCompleteOpType
+	// sentinel. False when the slot already existed, since that backfill only
+	// runs against a fresh slot.
+	BlockingSnapshot bool
 }
 
 // NewPgStream creates a new instance of the Stream struct.
@@ -145,6 +162,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if config.HeartbeatInterval > 0 {
 		stream.heartbeat, err = newHeartbeat(
 			config,
+			EffectiveHeartbeatInterval(config.HeartbeatInterval, config.IncrementalSnapshotCfg()),
 			"redpanda_connect_"+stream.slotName,
 			`{"type":"heartbeat"}`,
 		)
@@ -159,8 +177,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		})
 	}
 
-	var version int
-	if version, err = getPostgresVersion(config); err != nil {
+	if stream.pgVersion, err = getPostgresVersion(config); err != nil {
 		return nil, err
 	}
 
@@ -170,7 +187,13 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		fmt.Sprintf("publication_names 'pglog_stream_%s'", config.ReplicationSlotName),
 	}
 
-	if version > 14 {
+	// The incremental snapshot advances only on a
+	// decoded COMMIT, which on a quiet table only the heartbeat produces.
+	// PostgreSQL 13 has no "messages" option and refuses the slot. From
+	// PostgreSQL 15 an empty transaction is dropped, so without the decoded
+	// message no BEGIN or COMMIT arrives. Earlier versions still send the
+	// empty transaction, and its BEGIN carries a real xid.
+	if stream.pgVersion > 14 {
 		pluginArguments = append(pluginArguments, "messages 'true'")
 	}
 
@@ -198,6 +221,19 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	cleanups = append(cleanups, func() {
 		// TODO: Drop publication if it was created (meaning it's not existing state we might want to keep).
 	})
+
+	if err := stream.setupIncrementalSnapshot(ctx, config); err != nil {
+		return nil, fmt.Errorf("setting up incremental snapshot: %w", err)
+	}
+	if stream.incSnapshotConn != nil {
+		cleanups = append(cleanups, func() {
+			if stream != nil && stream.incSnapshotConn != nil {
+				if err := stream.incSnapshotConn.Close(); err != nil {
+					config.Logger.Warnf("unable to properly cleanup incremental snapshot connection on stream creation failure: %s", err)
+				}
+			}
+		})
+	}
 
 	query, err := sanitize.SQLQuery("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = $1", config.ReplicationSlotName)
 	if err != nil {
@@ -230,6 +266,12 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			}
 		}
 		stream.logger.Debugf("starting stream from LSN %s", confirmedLSNFromDB.String())
+		if stream.incSnapshotCoordinator != nil {
+			if err := stream.incSnapshotCoordinator.Start(ctx); err != nil {
+				return nil, fmt.Errorf("starting incremental snapshot: %w", err)
+			}
+			stream.logger.Debugf("Incremental snapshot: coordinator started")
+		}
 		if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
 			return nil, err
 		}
@@ -245,6 +287,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	var snapshotter *snapshotter
 	if config.StreamOldData {
+		stream.BlockingSnapshot = true
 		// A crash between snapshot completion and slot promotion leaves <slot>_tmp
 		// behind, owned by the dead session. We only get here when no permanent
 		// slot exists, so any leftover _tmp slot is necessarily stale - drop it
@@ -345,6 +388,13 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		stream.ackedLSNMu.Lock()
 		stream.ackedLSN = startLSN
 		stream.ackedLSNMu.Unlock()
+		if stream.incSnapshotCoordinator != nil {
+			if err := stream.incSnapshotCoordinator.Start(ctx); err != nil {
+				stream.errors <- fmt.Errorf("starting incremental snapshot: %w", err)
+				return
+			}
+			stream.logger.Debugf("Incremental snapshot: coordinator started")
+		}
 		if err := stream.startLr(ctx, startLSN); err != nil {
 			stream.errors <- fmt.Errorf("starting logical replication: %w", err)
 			return
@@ -434,6 +484,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		lastEmittedLSN       = currentLSN
 		lastEmittedCommitLSN = currentLSN
 		currentTxnCommitTime time.Time
+		currentTxnXid        uint32
 	)
 
 	commitLSN := func(force bool) (committed bool, err error) {
@@ -511,7 +562,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 				return fmt.Errorf("parsing XLogData: %w", err)
 			}
 			msgLSN := xld.WALStart + LSN(len(xld.WALData))
-			result, err := s.processChange(ctx, msgLSN, xld, relations, typeMap, schemaCache, &currentTxnCommitTime)
+			result, err := s.processChange(ctx, msgLSN, xld, relations, typeMap, schemaCache, &currentTxnCommitTime, &currentTxnXid)
 			if err != nil {
 				return fmt.Errorf("decoding postgres changes failed: %w", err)
 			}
@@ -542,7 +593,7 @@ const (
 )
 
 // Handle handles the pgoutput output.
-func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time) (processChangeResult, error) {
+func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time, currentTxnXid *uint32) (processChangeResult, error) {
 	logicalMsg, err := Parse(xld.WALData)
 	if err != nil {
 		return changeResultNoMessage, err
@@ -555,11 +606,16 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 		delete(schemaCache, rel.RelationID)
 	}
 
-	// capture transaction commit time for insert, update and delete events
+	// capture transaction commit time and xid for insert, update and delete events
 	if begin, ok := logicalMsg.(*BeginMessage); ok {
 		*currentTxnCommitTime = begin.CommitTime
+		*currentTxnXid = begin.Xid
 	} else if _, ok := logicalMsg.(*CommitMessage); ok {
+		if err := s.advanceIncrementalSnapshot(ctx, *currentTxnXid); err != nil {
+			return changeResultNoMessage, err
+		}
 		*currentTxnCommitTime = time.Time{}
+		*currentTxnXid = 0
 	}
 
 	// parse changes inside the transaction
@@ -605,6 +661,10 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 			schemaCache[relID] = schema
 			message.ColumnSchema = schema
 		}
+	}
+
+	if err := s.deduplicateStreamedRow(ctx, message); err != nil {
+		return changeResultNoMessage, err
 	}
 
 	message.CommitTime = *currentTxnCommitTime
@@ -834,9 +894,10 @@ func (s *Stream) Errors() chan error {
 	return s.errors
 }
 
-func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]string, error) {
-	/// Query to get all primary key columns in their correct order
-	q, err := sanitize.SQLQuery(`
+// primaryKeyColumnsQuery returns the query used to resolve table's primary
+// key columns, in index order.
+func primaryKeyColumnsQuery(table string) (string, error) {
+	return sanitize.SQLQuery(`
         SELECT a.attname
         FROM   pg_index i
         JOIN   pg_attribute a ON a.attrelid = i.indrelid
@@ -844,7 +905,18 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]str
         WHERE  i.indrelid = $1::regclass
         AND    i.indisprimary
         ORDER BY array_position(i.indkey, a.attnum);
-    `, table.String())
+    `, table)
+}
+
+// getPrimaryKeyColumn resolves table's primary key columns over s.pgConn.
+// Only safe to call before logical replication starts (COPY BOTH mode) --
+// s.pgConn is the dedicated replication protocol connection from that point
+// on, and issuing a plain Exec on it concurrently corrupts/deadlocks the
+// stream. Callers that may run once streaming has started (e.g. incremental
+// snapshot's PK resolution) must instead use resolveIncrementalPKColumns,
+// which queries over s.incrementalDB.
+func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]string, error) {
+	q, err := primaryKeyColumnsQuery(table.String())
 	if err != nil {
 		return nil, fmt.Errorf("sanitizing query: %w", err)
 	}
@@ -876,13 +948,24 @@ func (s *Stream) Stop(ctx context.Context) error {
 	stopNowCtx, done := s.shutSig.HardStopCtx(ctx)
 	defer done()
 	wg.Go(func() error {
-		// Wait for streamMessages to finish using pgConn before closing it,
-		// otherwise we race on pgconn internal state (lock field, write buffer).
+		// Wait for streamMessages to finish using pgConn (and, if incremental
+		// snapshotting is enabled, incrementalDB) before closing them,
+		// otherwise we race on pgconn internal state (lock field, write buffer)
+		// or on a connection that's mid-query.
 		select {
 		case <-s.shutSig.HasStoppedChan():
 		case <-stopNowCtx.Done():
 		}
-		return s.pgConn.Close(stopNowCtx)
+		var errs []error
+		if err := s.pgConn.Close(stopNowCtx); err != nil {
+			errs = append(errs, err)
+		}
+		if s.incSnapshotConn != nil {
+			if err := s.incSnapshotConn.Close(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return errors.Join(errs...)
 	})
 	wg.Go(func() error {
 		return s.monitor.Stop()
