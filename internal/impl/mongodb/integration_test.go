@@ -16,12 +16,17 @@ package mongodb_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -155,6 +160,161 @@ cache_resources:
 			}),
 		)
 	})
+}
+
+// freeHostPort reserves an ephemeral port and immediately releases it, so it can
+// be used as a fixed docker host port binding.
+func freeHostPort(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
+	require.NoError(t, l.Close())
+	return port
+}
+
+// TestIntegrationOutputReconnectsAfterOutage is the end-to-end proof of the
+// write-error -> isConnPoolError -> service.ErrNotConnected -> Connect rebuild
+// loop that the AWS IAM credential-expiry path depends on. An expired IAM
+// session surfaces to the output as a handshake failure on a rebuilt pool
+// connection, which is the same class of error as the connection outage staged
+// here, and the only recovery is for the output to report ErrNotConnected so the
+// framework re-runs Connect (which re-resolves credentials) and retries.
+//
+// The container is bound to a fixed host port on purpose: docker re-allocates an
+// ephemeral published port on restart (verified: 27017 -> 55152 became
+// 27017 -> 55153 after stop/start), which would move the server out from under
+// the output's static url and make the test prove nothing.
+func TestIntegrationOutputReconnectsAfterOutage(t *testing.T) {
+	integration.CheckSkip(t)
+
+	hostPort := freeHostPort(t)
+	ctr, err := testcontainers.Run(t.Context(), "mongo:latest",
+		testcontainers.WithExposedPorts("27017/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"MONGO_INITDB_ROOT_USERNAME": "mongoadmin",
+			"MONGO_INITDB_ROOT_PASSWORD": "secret",
+		}),
+		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
+			hc.PortBindings = network.PortMap{
+				network.MustParsePort("27017/tcp"): {{HostPort: hostPort}},
+			}
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("27017/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+
+	// The rest of the test is meaningless if the binding did not take effect.
+	mp, err := ctr.MappedPort(t.Context(), "27017/tcp")
+	require.NoError(t, err)
+	require.Equal(t, hostPort, mp.Port(), "container must be bound to the fixed host port")
+
+	mongoClient, err := mongo.Connect(options.Client().
+		SetConnectTimeout(10 * time.Second).
+		SetTimeout(30 * time.Second).
+		SetServerSelectionTimeout(30 * time.Second).
+		SetAuth(options.Credential{Username: "mongoadmin", Password: "secret"}).
+		ApplyURI("mongodb://localhost:" + hostPort))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = mongoClient.Disconnect(context.Background()) })
+	require.Eventually(t, func() bool {
+		return mongoClient.Ping(t.Context(), nil) == nil
+	}, time.Minute, time.Second)
+
+	coll := mongoClient.Database("TestDB").Collection("outage")
+	countID := func(id int) int64 {
+		n, err := coll.CountDocuments(context.Background(), bson.M{"id": id})
+		if err != nil {
+			t.Logf("count for id %d failed: %v", id, err)
+			return -1
+		}
+		return n
+	}
+
+	builder := service.NewStreamBuilder()
+	produce, err := builder.AddProducerFunc()
+	require.NoError(t, err)
+	require.NoError(t, builder.AddOutputYAML(fmt.Sprintf(`
+mongodb:
+  url: mongodb://localhost:%s
+  database: TestDB
+  collection: outage
+  username: mongoadmin
+  password: secret
+  operation: insert-one
+  document_map: 'root = this'
+  write_concern:
+    w: 1
+    w_timeout: 5s
+`, hostPort)))
+	stream, err := builder.Build()
+	require.NoError(t, err)
+
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+	var runWG sync.WaitGroup
+	runWG.Go(func() {
+		if err := stream.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("stream run: %v", err)
+		}
+	})
+	t.Cleanup(func() {
+		cancelRun()
+		runWG.Wait()
+	})
+
+	send := func(ctx context.Context, id int) error {
+		msg := service.NewMessage(nil)
+		msg.SetStructured(map[string]any{"id": id})
+		return produce(ctx, msg)
+	}
+
+	// Healthy baseline: writes land.
+	for id := 1; id <= 3; id++ {
+		require.NoError(t, send(t.Context(), id))
+	}
+	require.Eventually(t, func() bool { return countID(1) == 1 && countID(3) == 1 },
+		30*time.Second, 250*time.Millisecond, "baseline writes never landed")
+
+	// Outage. Stop (not Terminate) keeps the container and its fixed binding.
+	stopTimeout := 30 * time.Second
+	require.NoError(t, ctr.Stop(t.Context(), &stopTimeout))
+
+	// This write cannot succeed while the server is down. The framework retries
+	// the same batch forever while the output keeps reporting ErrNotConnected,
+	// so produce blocks rather than failing - which is what makes the delivery
+	// assertion below proof of a successful rebuild rather than of a retry
+	// happening to be issued by the caller.
+	outageSendCtx, cancelOutageSend := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancelOutageSend()
+	outageErr := make(chan error, 1)
+	go func() { outageErr <- send(outageSendCtx, 4) }()
+
+	// Give the output time to actually observe the failure before healing it.
+	time.Sleep(5 * time.Second)
+	require.Empty(t, outageErr, "the write must not have been resolved while the server was down")
+
+	require.NoError(t, ctr.Start(t.Context()))
+	mp, err = ctr.MappedPort(t.Context(), "27017/tcp")
+	require.NoError(t, err)
+	require.Equal(t, hostPort, mp.Port(), "host port binding must survive a restart")
+
+	select {
+	case err := <-outageErr:
+		require.NoError(t, err, "the write issued during the outage must eventually be acked")
+	case <-time.After(2 * time.Minute):
+		t.Fatal("the write issued during the outage was never resolved after the server came back")
+	}
+	require.Eventually(t, func() bool { return countID(4) == 1 },
+		time.Minute, 500*time.Millisecond, "the write issued during the outage never landed")
+
+	// And the rebuilt client keeps working for fresh traffic.
+	require.NoError(t, send(t.Context(), 5))
+	require.Eventually(t, func() bool { return countID(5) == 1 },
+		time.Minute, 500*time.Millisecond, "writes after the outage never landed")
 }
 
 func TestMongoDBConnectionTestIntegration(t *testing.T) {

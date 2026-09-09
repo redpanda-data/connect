@@ -141,7 +141,7 @@ We generally recommend altering this or top_p but not both.`).
 				service.NewStringField(ocpFieldJSONSchemaSchema).Description("The JSON schema for the LLM to use when generating the output."),
 			).
 				Optional().
-				Description("The JSON schema to use when responding in `json_schema` format. To learn more about what JSON schema is supported see the https://platform.openai.com/docs/guides/structured-outputs/supported-schemas[OpenAI documentation^].").
+				Description("The JSON schema to use when responding in `json_schema` format. To learn more about what JSON schema is supported see the https://platform.openai.com/docs/guides/structured-outputs[OpenAI documentation^].").
 				ShortDescription("The JSON schema to use when responding in json_schema format."),
 			service.NewObjectField(
 				ocpFieldSchemaRegistry,
@@ -161,7 +161,7 @@ We generally recommend altering this or top_p but not both.`).
 					service.NewHTTPRequestAuthSignerFields(),
 				)...,
 			).
-				Description("The schema registry to dynamically load schemas from when responding in `json_schema` format. Schemas themselves must be in JSON format. To learn more about what JSON schema is supported see the https://platform.openai.com/docs/guides/structured-outputs/supported-schemas[OpenAI documentation^].").
+				Description("The schema registry to dynamically load schemas from when responding in `json_schema` format. Schemas themselves must be in JSON format. To learn more about what JSON schema is supported see the https://platform.openai.com/docs/guides/structured-outputs[OpenAI documentation^].").
 				ShortDescription("Schema registry to load schemas from when responding in json_schema format. Schemas must be JSON.").
 				Optional().
 				Advanced(),
