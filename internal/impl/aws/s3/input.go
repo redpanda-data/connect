@@ -52,6 +52,7 @@ const (
 	s3iSQSFieldWaitTimeSeconds     = "wait_time_seconds"
 	s3iSQSNackVisibilityTimeout    = "nack_visibility_timeout"
 	s3iSQSFieldZeroKeyWarnInterval = "zero_key_warn_interval"
+	s3iSQSFieldIdlePollPeriod      = "idle_poll_period"
 
 	// S3 Input Fields
 	s3iFieldBucket             = "bucket"
@@ -72,6 +73,7 @@ type s3iSQSConfig struct {
 	WaitTimeSeconds     int64
 	VisibilityTimeout   int32
 	ZeroKeyWarnInterval time.Duration
+	IdlePollPeriod      time.Duration
 }
 
 func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err error) {
@@ -103,6 +105,13 @@ func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err
 		return
 	}
 	if conf.ZeroKeyWarnInterval, err = pConf.FieldDuration(s3iSQSFieldZeroKeyWarnInterval); err != nil {
+		return
+	}
+	if conf.IdlePollPeriod, err = pConf.FieldDuration(s3iSQSFieldIdlePollPeriod); err != nil {
+		return
+	}
+	if conf.IdlePollPeriod < 0 {
+		err = fmt.Errorf("%v.%v cannot be negative", s3iFieldSQS, s3iSQSFieldIdlePollPeriod)
 		return
 	}
 	return
@@ -251,6 +260,10 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Example("0s").
 					Default("30s").
 					LintRule(`root = if this.parse_duration().catch(0) < 0 { [ "`+s3iSQSFieldZeroKeyWarnInterval+` must not be negative" ] }`).
+					Advanced(),
+				service.NewDurationField(s3iSQSFieldIdlePollPeriod).
+					Description("How long to wait before the next SQS `ReceiveMessage` poll after a receive returns no messages. This back-off is applied *in addition to* `wait_time_seconds` long-polling and lets a mostly-idle queue issue far fewer requests, which is useful when polling SQS from outside AWS (for example across a NAT gateway). It trades latency for fewer requests: the first message arriving after an idle period may wait up to this long before being picked up, so keep it small for latency-sensitive queues. The default `0s` preserves the historical behaviour of a fixed 500ms throttle between empty polls; values below 500ms are raised to 500ms.").
+					Default("0s").
 					Advanced(),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").
@@ -413,6 +426,11 @@ func (staticTargetReader) Close(context.Context) error {
 
 //------------------------------------------------------------------------------
 
+// defaultIdleThrottle is the wait between empty SQS receives when no
+// idle_poll_period is configured, and the floor below which a configured
+// idle_poll_period is never allowed to drop.
+const defaultIdleThrottle = 500 * time.Millisecond
+
 type sqsTargetReader struct {
 	conf s3iConfig
 	log  *service.Logger
@@ -457,7 +475,8 @@ func (s *sqsTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 		return nil, err
 	}
 	if len(s.pending) == 0 {
-		s.nextRequest = time.Now().Add(time.Millisecond * 500)
+		idleThrottle := max(defaultIdleThrottle, s.conf.SQS.IdlePollPeriod)
+		s.nextRequest = time.Now().Add(idleThrottle)
 		return nil, context.Canceled
 	}
 	s.nextRequest = time.Time{}
