@@ -610,6 +610,7 @@ func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) err
 	emit := func(rows []incrementalsnapshot.Row) error {
 		if len(rows) > 0 {
 			s.logger.Debugf("Incremental snapshot: flushed %d row(s) for table %s", len(rows), rows[0].Table)
+			s.monitor.UpdateSnapshotProgressForTable(tableFQN(rows[0].Table), len(rows))
 		} else {
 			s.logger.Debugf("Incremental snapshot: checkpoint advanced with no rows to flush (fully deduplicated)")
 		}
@@ -631,8 +632,18 @@ func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) err
 	}
 	if changed && s.incSnapshotCoordinator.Done() {
 		s.logger.Debugf("Incremental snapshot: complete")
+		for table := range s.incSnapshotTables {
+			s.monitor.MarkSnapshotComplete(tableFQN(table))
+		}
 	}
 	return nil
+}
+
+func tableFQN(table incrementalsnapshot.TableID) TableFQN {
+	return TableFQN{
+		Schema: sanitize.QuotePostgresIdentifier(table.Schema),
+		Table:  sanitize.QuotePostgresIdentifier(table.Table),
+	}
 }
 
 // Handle handles the pgoutput output.
