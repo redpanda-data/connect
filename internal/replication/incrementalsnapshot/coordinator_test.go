@@ -976,6 +976,71 @@ func TestCoordinatorDrainPropagatesEmitError(t *testing.T) {
 	})
 	require.ErrorIs(t, err, wantErr)
 	assert.Equal(t, 2, calls, "the drain must stop at the failing emit")
+
+	// Only the first chunk reached the consumer, so the checkpoint must
+	// cover that chunk and no more. The second chunk stays buffered for a
+	// retry or a resume to deliver.
+	state := coord.State()
+	assert.Equal(t, PrimaryKey{2}, state.LastSentPK)
+	assert.Equal(t, 2, coord.window.Len(), "the undelivered chunk must go back in the buffer")
+}
+
+// TestCoordinatorEmitFailureLeavesCheckpointUnmoved: emit is what delivers
+// the rows, so State must not report a chunk as sent when emit rejected it.
+// Otherwise a resume fetches past those rows and drops them silently.
+func TestCoordinatorEmitFailureLeavesCheckpointUnmoved(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+	const chunkSize = 2
+	rows := []Row{
+		rowFor(table, 1), rowFor(table, 2),
+		rowFor(table, 3), rowFor(table, 4),
+	}
+
+	newDeps := func() *refetchMockDeps {
+		return &refetchMockDeps{
+			rows:       rows,
+			maxPK:      PrimaryKey{4},
+			chunkSize:  chunkSize,
+			watermarks: []testWatermark{{Xmin: 100, Xmax: 100}},
+		}
+	}
+
+	cfg := testConfig{Tables: []TableID{table}, ChunkSize: chunkSize, Deps: newDeps()}
+	coord, err := NewCoordinator(cfg, nil)
+	require.NoError(t, err)
+	require.NoError(t, coord.Start(t.Context()))
+
+	sentinel := errors.New("downstream gone")
+	changed, err := coord.OnCommit(t.Context(), 101, func([]Row) error { return sentinel })
+	require.ErrorIs(t, err, sentinel)
+	assert.False(t, changed, "nothing was delivered, so nothing changed")
+
+	// Nothing was sent, so the checkpoint must still be at the start and
+	// the rows must still be buffered.
+	state := coord.State()
+	require.False(t, state.Done)
+	assert.Nil(t, state.LastSentPK)
+	assert.Equal(t, chunkSize, coord.window.Len())
+
+	// A coordinator resumed from that checkpoint must deliver the whole
+	// table, first chunk included.
+	resumed, err := NewCoordinator(testConfig{
+		Tables:    []TableID{table},
+		ChunkSize: chunkSize,
+		Deps:      newDeps(),
+	}, state)
+	require.NoError(t, err)
+	require.NoError(t, resumed.Start(t.Context()))
+
+	var got []int
+	_, err = resumed.OnCommit(t.Context(), 201, func(chunk []Row) error {
+		for _, row := range chunk {
+			got = append(got, row.PK[0].(int))
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []int{1, 2, 3, 4}, got)
 }
 
 func TestCoordinatorForcesFreshTransactionOnceOnly(t *testing.T) {
