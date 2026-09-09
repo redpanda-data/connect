@@ -2,42 +2,72 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+    types: [opened, synchronize, ready_for_review, reopened, labeled]
 
 concurrency:
   group: claude-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  # Gate runs as its OWN job so that, for non-write authors, the review job below is
-  # skipped at the JOB level. A job-level skip reports the `claude-review` check as
-  # "skipped" (neutral/grey), not "success" (green) — a skipped review must never read
-  # as "reviewed & clean." (A step-level `if:` skip, by contrast, leaves the job green.)
-  # The permission check and the .claude/ abort guard are unchanged from before; only
-  # their location moved.
+  # Gate is its own job so a skip here shows as "skipped" (neutral), not a false
+  # "success" from a step-level `if:`.
+  #
+  # Two triggers: auto-review on every push for write-access PR authors, or a
+  # maintainer with write access applying the "Claude Review" label to manually
+  # review someone else's PR once (labels only need Triage access, so we still check
+  # the applier explicitly rather than trusting GitHub's label permission alone). The
+  # review job removes the label when done, so a re-run means re-applying it.
   gate:
+    # Only react to our own label.
+    if: github.event.action != 'labeled' || github.event.label.name == 'Claude Review'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      has_write_access: ${{ steps.check-permissions.outputs.has_write_access }}
+      should_review: ${{ steps.check-permissions.outputs.should_review }}
 
     steps:
       - name: Check for Claude config changes
         id: check-permissions
         env:
           GH_TOKEN: ${{ github.token }}
+          # No checkout in this job, so gh needs GH_REPO to resolve the repo.
+          GH_REPO: ${{ github.repository }}
         run: |
-          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.event.pull_request.user.login }}/permission --jq '.permission')
-          if [[ "$PERMISSION" == "admin" || "$PERMISSION" == "write" ]]; then
-            echo "Author has write access, skipping config change check."
-            echo "has_write_access=true" >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.event.action }}" == "labeled" ]]; then
+            SENDER="${{ github.event.sender.login }}"
+            PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/$SENDER/permission --jq '.permission')
+            if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "write" ]]; then
+              echo "::error::@$SENDER does not have write access ($PERMISSION); only maintainers can invoke a review via the 'Claude Review' label."
+              exit 1
+            fi
+
+            echo "Trigger: 'Claude Review' label applied by $SENDER"
+
+            # Never write should_review=true before this check can still abort — a
+            # failed step must not leave a 'true' output for the downstream job to read.
+            MODIFIED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path')
+            echo "$MODIFIED_FILES"
+            if echo "$MODIFIED_FILES" | grep -qE '(^|/)\.claude/|CLAUDE\.md$'; then
+              echo "::error::PR modifies .claude/ or CLAUDE.md files. Aborting review."
+              exit 1
+            fi
+
+            echo "should_review=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "has_write_access=false" >> "$GITHUB_OUTPUT"
+          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.event.pull_request.user.login }}/permission --jq '.permission')
+          if [[ "$PERMISSION" == "admin" || "$PERMISSION" == "write" ]]; then
+            echo "Author has write access, skipping config change check."
+            echo "should_review=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
+          echo "should_review=false" >> "$GITHUB_OUTPUT"
+
+          # Diff is untrusted regardless of trigger, so always check for .claude/ tampering.
           MODIFIED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path')
           echo "$MODIFIED_FILES"
           if echo "$MODIFIED_FILES" | grep -qE '(^|/)\.claude/|CLAUDE\.md$'; then
@@ -47,15 +77,17 @@ jobs:
 
   claude-review:
     needs: gate
-    # Only run for write-access authors. For everyone else this job is SKIPPED, which
-    # reports the check as skipped/neutral rather than a passing review. If the gate job
-    # fails (e.g. an untrusted PR edited .claude/ or CLAUDE.md), `needs` is unmet and this
-    # job is skipped too, leaving the failed gate as the visible (red) signal.
-    if: needs.gate.outputs.has_write_access == 'true'
+    # Runs only when gate succeeded AND said so; skipped otherwise (neutral, not a
+    # false pass). A custom job `if:` drops the implicit "needs jobs must have
+    # succeeded" gate unless success() is included explicitly — without it, a gate
+    # job that fails after already writing should_review=true would still let this
+    # job run.
+    if: success() && needs.gate.outputs.should_review == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      issues: write # to remove the "Claude Review" label afterward
       id-token: write
 
     steps:
@@ -220,3 +252,11 @@ jobs:
             **Reference: Review Policy, Project Patterns & Contribution Guidelines**
 
             ${{ env.REVIEW_GUIDES }}
+
+      - name: Remove "Claude Review" label
+        # Runs even on failure, so the label is always gone afterward — re-running
+        # requires deliberately re-applying it.
+        if: always() && github.event.action == 'labeled'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr edit ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --remove-label "Claude Review"

@@ -375,6 +375,9 @@ jobs:
           VERSION="${{ github.ref_name }}"
           COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${{ github.ref_name }}"
           STATUS="${FAILURES}${LINKS}"
+          # Slack rejects section blocks whose text exceeds 3000 chars, so the
+          # release body is split across multiple section blocks. Empty
+          # sections are dropped (Slack rejects those too).
           jq -n \
             --arg body "$BODY" \
             --arg release_url "$RELEASE_URL" \
@@ -382,21 +385,35 @@ jobs:
             --arg compare_url "$COMPARE_URL" \
             --arg header_icon "$HEADER_ICON" \
             --arg status "$STATUS" \
-            '{
+            'def chunk_lines(limit):
+              split("\n") | reduce .[] as $line ([];
+                if length > 0 and ((.[-1] + "\n" + $line) | length) <= limit
+                then .[0:-1] + [.[-1] + "\n" + $line]
+                else . + [$line]
+                end)
+              # a single line longer than limit lands above as an oversized
+              # chunk; hard-split those so every emitted chunk is bounded
+              | map(. as $chunk | ($chunk | length) as $len |
+                  if $len <= limit then [$chunk]
+                  else [range(0; $len; limit) as $i | $chunk[$i:$i+limit]]
+                  end)
+              | add // [];
+            {
               text: ("New Redpanda Connect release: " + $version),
               unfurl_links: false,
               unfurl_media: false,
-              blocks: [
+              blocks: ([
                 {type: "header", text: {type: "plain_text", text: ($header_icon + " Redpanda Connect " + $version), emoji: true}},
                 {type: "section", text: {type: "mrkdwn", text: ("*Release:* <" + $release_url + "|" + $version + ">")}},
-                {type: "divider"},
-                {type: "section", text: {type: "mrkdwn", text: $body}},
-                {type: "section", text: {type: "mrkdwn", text: $status}},
-                {type: "actions", elements: [
+                {type: "divider"}
+              ]
+              + ($body | chunk_lines(3000) | map(select(length > 0) | {type: "section", text: {type: "mrkdwn", text: .}}))
+              + (if $status == "" then [] else [{type: "section", text: {type: "mrkdwn", text: $status}}] end)
+              + [{type: "actions", elements: [
                   {type: "button", text: {type: "plain_text", text: ":github: View Release", emoji: true}, url: $release_url},
                   {type: "button", text: {type: "plain_text", text: ":page_facing_up: Full Changelog", emoji: true}, url: $compare_url}
-                ]}
-              ]
+                ]}]
+              )
             }' > "$RUNNER_TEMP/slack_payload.json"
 
       - name: Post changelog to Slack
@@ -405,3 +422,6 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload-file-path: ${{ runner.temp }}/slack_payload.json
+          # Fail the job when the webhook post fails; the default silently
+          # swallows errors and reports success.
+          errors: true

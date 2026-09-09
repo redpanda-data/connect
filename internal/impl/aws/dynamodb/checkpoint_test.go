@@ -277,6 +277,49 @@ func shardRow(streamArn, shardID, seq, ts string) map[string]types.AttributeValu
 	return row
 }
 
+func TestHasAnyState(t *testing.T) {
+	t.Run("false on an empty partition", func(t *testing.T) {
+		c := globalCheckpointerWithPartition(t, "arn:A", nil)
+		has, err := c.HasAnyState(context.Background())
+		require.NoError(t, err)
+		require.False(t, has)
+	})
+
+	t.Run("true when any row exists", func(t *testing.T) {
+		c := globalCheckpointerWithPartition(t, "arn:A", []map[string]types.AttributeValue{
+			shardRow("arn:A", "shard-1", "seq-9", ""),
+		})
+		has, err := c.HasAnyState(context.Background())
+		require.NoError(t, err)
+		require.True(t, has)
+	})
+
+	t.Run("queries the namespaced hash key", func(t *testing.T) {
+		var queryIn *dynamodb.QueryInput
+		api := &fakeCheckpointAPI{
+			describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+				return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{TableStatus: types.TableStatusActive}}, nil
+			},
+			query: func(_ context.Context, in *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+				queryIn = in
+				return &dynamodb.QueryOutput{}, nil
+			},
+		}
+		c, err := NewCheckpointer(context.Background(), api, CheckpointerConfig{
+			TableName: "cps", SourceTable: "t", StreamArn: "arn:A",
+			Namespace: "dev", CheckpointLimit: 1, Region: "us-east-1",
+		}, checkpointTestLogger())
+		require.NoError(t, err)
+
+		_, err = c.HasAnyState(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, queryIn)
+		hv, ok := queryIn.ExpressionAttributeValues[":hv"].(*types.AttributeValueMemberS)
+		require.True(t, ok)
+		require.Equal(t, "dev#arn:A", hv.Value)
+	})
+}
+
 func TestCDCCheckpointProbeNeeded(t *testing.T) {
 	// Only an exact, same-region resume can be a stale checkpoint: its sequence
 	// number belongs to this stream, so a failed iterator means trimmed data.

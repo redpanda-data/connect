@@ -18,3 +18,5 @@ __pycache__
 compile_out.txt
 test_output.txt
 benchmark_results.json
+# Enterprise license files must never reach the (public) repo.
+*.license

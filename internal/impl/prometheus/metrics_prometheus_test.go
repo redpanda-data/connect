@@ -172,6 +172,67 @@ func TestPrometheusMetrics(t *testing.T) {
 	assert.Contains(t, body, "\ngaugethree 10.452")
 }
 
+func TestPrometheusDeleteSeriesPartialMatch(t *testing.T) {
+	nm, handler := getTestProm(t)
+
+	ctr := nm.NewCounterCtor("input_received", "label", "stream")
+	ctr("in", "foo").Incr(3)
+	ctr("in", "bar").Incr(4)
+
+	gge := nm.NewGaugeCtor("input_connection_up", "stream")
+	gge("foo").Set(1)
+	gge("bar").Set(1)
+
+	tmr := nm.NewTimerCtor("input_latency_ns", "stream")
+	tmr("foo").Timing(100)
+	tmr("bar").Timing(200)
+
+	unlabelled := nm.NewCounterCtor("uptime")()
+	unlabelled.Incr(9)
+
+	// A vec with labels that do not include the matched key must be untouched:
+	// client_golang treats an unknown label key as a non-match, not a wildcard.
+	otherLabels := nm.NewCounterCtor("batch_created", "mechanism")
+	otherLabels("count").Incr(5)
+
+	body := getPage(t, handler)
+	require.Contains(t, body, "\ninput_received{label=\"in\",stream=\"foo\"} 3")
+	require.Contains(t, body, "\ninput_latency_ns_sum{stream=\"foo\"} 100")
+
+	// The exporter is bound to service.MetricsExporterSeriesDeleter by a
+	// compile-time assertion in metrics_prometheus.go, so the method can be
+	// exercised directly here.
+	nm.DeleteSeriesPartialMatch(map[string]string{"stream": "foo"})
+
+	body = getPage(t, handler)
+	assert.NotContains(t, body, "stream=\"foo\"")
+	assert.Contains(t, body, "\ninput_received{label=\"in\",stream=\"bar\"} 4")
+	assert.Contains(t, body, "\ninput_connection_up{stream=\"bar\"} 1")
+	assert.Contains(t, body, "\ninput_latency_ns_sum{stream=\"bar\"} 200")
+	assert.Contains(t, body, "\nuptime 9")
+	assert.Contains(t, body, "\nbatch_created{mechanism=\"count\"} 5")
+}
+
+func TestPrometheusDeleteSeriesPartialMatchHistogram(t *testing.T) {
+	nm := promFromYAML(t, `
+use_histogram_timing: true
+`)
+
+	tmr := nm.NewTimerCtor("input_latency_ns", "stream")
+	tmr("foo").Timing(100)
+	tmr("bar").Timing(200)
+
+	handler := nm.HandlerFunc()
+	body := getPage(t, handler)
+	require.Contains(t, body, "stream=\"foo\"")
+
+	nm.DeleteSeriesPartialMatch(map[string]string{"stream": "foo"})
+
+	body = getPage(t, handler)
+	assert.NotContains(t, body, "stream=\"foo\"")
+	assert.Contains(t, body, "\ninput_latency_ns_count{stream=\"bar\"} 1")
+}
+
 func TestPrometheusHistMetrics(t *testing.T) {
 	nm := promFromYAML(t, `
 use_histogram_timing: true
