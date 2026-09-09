@@ -26,7 +26,7 @@ import (
 // fakeQueryDriver is a minimal database/sql driver that ignores whatever SQL
 // text it's given and always returns the canned rows/columns it was
 // constructed with. It exists so tests can exercise code that queries
-// *sql.DB (i.e. Stream.incrementalDB) without a real Postgres connection.
+// *sql.DB (i.e. Stream.incSnapshotConn) without a real Postgres connection.
 type fakeQueryDriver struct {
 	columns []string
 	rows    [][]driver.Value
@@ -93,9 +93,9 @@ func newFakeQueryDB(t *testing.T, columns []string, rows [][]driver.Value, queri
 	return db
 }
 
-func TestResolveIncrementalPKColumnsUsesIncrementalDB(t *testing.T) {
+func TestResolveIncrementalPKColumnsUsesSnapshotConn(t *testing.T) {
 	// pgConn is deliberately left nil: if resolveIncrementalPKColumns (or
-	// anything it calls) touched s.pgConn instead of s.incrementalDB, this
+	// anything it calls) touched s.pgConn instead of s.incSnapshotConn, this
 	// would panic with a nil pointer dereference rather than returning a
 	// result -- this is precisely the deadlock/crash bug being guarded
 	// against, since s.pgConn is occupied by the replication protocol once
@@ -184,7 +184,7 @@ func TestCanonicalizePKValueDedupsAcrossDecodePaths(t *testing.T) {
 
 	window := incrementalsnapshot.NewWindowBuffer()
 
-	// Simulates a row buffered by the incrementalDB backfill path.
+	// Simulates a row buffered by the snapshot backfill path.
 	backfillPK := incrementalsnapshot.PrimaryKey{canonicalizePKValue([16]byte(id))}
 	window.Add(incrementalsnapshot.Row{Table: table, PK: backfillPK, Data: map[string]any{"id": id.String()}})
 	require.Equal(t, 1, window.Len())

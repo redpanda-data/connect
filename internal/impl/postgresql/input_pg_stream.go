@@ -884,10 +884,10 @@ func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogica
 
 // persistIncSnapshotState writes offset's snapshot state to the cache.
 //
-// Acknowledgements run concurrently, so it holds incStateMu across the test
-// and the write to keep the pair atomic. The lock alone is not enough: the
-// calls can take it in either order, so it also rejects any offset that is
-// not newer than the one already written.
+// Acknowledgements run concurrently, so it holds lastPersistedMu across the
+// test and the write to keep the pair atomic. The lock alone is not enough:
+// the calls can take it in either order, so it also rejects any offset that
+// is not newer than the one already written.
 func (p *pgStreamInput) persistIncSnapshotState(ctx context.Context, offset incsnapshot.CheckpointOffset) error {
 	p.lastPersistedMu.Lock()
 	defer p.lastPersistedMu.Unlock()
