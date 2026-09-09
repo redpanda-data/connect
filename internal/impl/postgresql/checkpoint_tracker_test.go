@@ -21,6 +21,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
+	replincsnapshot "github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 // TestCheckpointTrackerPreventsClobberFromRowlessSentinel reproduces the
@@ -276,4 +277,23 @@ func TestCheckpointsPersistAcrossTrackerReplacement(t *testing.T) {
 	got, err = p.loadCachedIncSnapshotStateBytes(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, state, got, "checkpoints must keep persisting after a reconnect")
+}
+
+func TestLoadCachedIncSnapshotStateRejectsForeignVersion(t *testing.T) {
+	// A checkpoint this build cannot interpret must fail loudly, and the
+	// error must name the way out.
+	const cacheName = "inc_snapshot_cache"
+	mgr := service.MockResources(service.MockResourcesOptAddCache(cacheName))
+
+	p := &pgStreamInput{
+		mgr:                           mgr,
+		incSnapshotCheckpointCache:    cacheName,
+		incSnapshotCheckpointCacheKey: "key",
+	}
+
+	require.NoError(t, p.saveIncrementalSnapshotState(t.Context(), []byte(`{"version":99,"last_sent_pk":[42]}`)))
+
+	_, err := p.loadCachedIncSnapshotState(t.Context())
+	require.ErrorIs(t, err, replincsnapshot.ErrUnsupportedStateVersion)
+	assert.ErrorContains(t, err, "checkpoint_cache_key")
 }

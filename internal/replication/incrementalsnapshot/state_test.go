@@ -10,6 +10,7 @@ package incrementalsnapshot
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,11 +18,6 @@ import (
 )
 
 func TestStateRoundTripsBigintPrimaryKeysExactly(t *testing.T) {
-	// Regression test. PrimaryKey is a slice of any, so the standard decoder
-	// makes a float64 from each JSON number and rounds all values above
-	// 2^53. The encoder is exact, so a bigint key is correct in the file and
-	// wrong after the read. A MaxPK that rounds down removes rows from the
-	// query `pk <= max` for ever.
 	const (
 		snowflake = int64(1234567890123456789)
 		justOver  = int64(1)<<53 + 1
@@ -125,4 +121,29 @@ func TestStateUnmarshalDoneCheckpoint(t *testing.T) {
 	assert.True(t, got.Done)
 	assert.Equal(t, CurrentStateVersion, got.Version)
 	assert.Nil(t, got.CurrentTable)
+}
+
+func TestStateUnmarshalRejectsForeignVersion(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{"newer version", `{"version":2,"last_sent_pk":[42]}`},
+		{"older version", `{"version":0,"last_sent_pk":[42]}`},
+		{"version absent", `{"last_sent_pk":[42]}`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got State
+			err := json.Unmarshal([]byte(test.raw), &got)
+			require.ErrorIs(t, err, ErrUnsupportedStateVersion)
+		})
+	}
+}
+
+func TestStateUnmarshalAcceptsCurrentVersion(t *testing.T) {
+	var got State
+	require.NoError(t, json.Unmarshal(fmt.Appendf(nil, `{"version":%d,"done":true}`, CurrentStateVersion), &got))
+	assert.True(t, got.Done)
 }

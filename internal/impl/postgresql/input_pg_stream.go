@@ -1015,6 +1015,9 @@ func (p *pgStreamInput) loadCachedIncSnapshotState(ctx context.Context) (*increm
 	}
 	state := new(incrementalsnapshot.State)
 	if err := json.Unmarshal(cacheVal, state); err != nil {
+		if errors.Is(err, incrementalsnapshot.ErrUnsupportedStateVersion) {
+			return nil, fmt.Errorf("%w: change %s.%s, or clear that key, to start a fresh snapshot", err, fieldIncSnapshot, fieldIncSnapshotCheckpointCacheKey)
+		}
 		return nil, fmt.Errorf("unable to unmarshal incremental snapshot checkpoint: %w", err)
 	}
 	return state, nil

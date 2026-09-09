@@ -11,11 +11,16 @@ package incrementalsnapshot
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 )
 
-// CurrentStateVersion is bumped by hand when a State change needs caller-side
-// migration.
+// CurrentStateVersion contains the version of the state.
 const CurrentStateVersion = 1
+
+// ErrUnsupportedStateVersion reports a checkpoint written by a build using a
+// different State layout.
+var ErrUnsupportedStateVersion = errors.New("unsupported incremental snapshot state version")
 
 // State is a coordinator's resumable state, stored as a checkpoint. It holds
 // no watermark: a persisted one could be arbitrarily stale, so watermarks are
@@ -55,6 +60,10 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	*s = State(raw)
 	narrowPrimaryKey(s.LastSentPK)
 	narrowPrimaryKey(s.MaxPK)
+
+	if s.Version != CurrentStateVersion {
+		return fmt.Errorf("%w: got %d, want %d", ErrUnsupportedStateVersion, s.Version, CurrentStateVersion)
+	}
 	return nil
 }
 
