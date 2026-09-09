@@ -67,7 +67,7 @@ output:
 		).
 		Example(
 			"Insert JSON Documents",
-			"The following example inserts JSON documents into the table `footable` of the keyspace `foospace` using INSERT JSON (https://cassandra.apache.org/doc/latest/cql/json.html#insert-json).",
+			"The following example inserts JSON documents into the table `footable` of the keyspace `foospace` using INSERT JSON (https://cassandra.apache.org/doc/latest/cassandra/developing/cql/json.html#insert-json).",
 			`
 output:
   cassandra:

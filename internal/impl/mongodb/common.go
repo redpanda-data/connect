@@ -15,9 +15,11 @@
 package mongodb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -50,6 +52,276 @@ const (
 	commonFieldClientAppName  = "app_name"
 )
 
+const (
+	// FieldAWSIAMAuth is the name of the AWS IAM authentication object field.
+	FieldAWSIAMAuth = "aws"
+	// FieldAWSIAMAuthEnabled is the name of the field enabling AWS IAM authentication.
+	FieldAWSIAMAuthEnabled = "enabled"
+	// FieldAWSIAMAuthRegion is the name of the AWS region field.
+	FieldAWSIAMAuthRegion = "region"
+	// FieldAWSIAMAuthSessionDuration is the name of the STS session duration field.
+	FieldAWSIAMAuthSessionDuration = "session_duration"
+	// FieldAWSIAMAuthID is the name of the static access key ID field.
+	FieldAWSIAMAuthID = "id"
+	// FieldAWSIAMAuthSecret is the name of the static secret key field.
+	FieldAWSIAMAuthSecret = "secret"
+	// FieldAWSIAMAuthToken is the name of the static session token field.
+	FieldAWSIAMAuthToken = "token"
+	// FieldAWSIAMAuthRole is the name of the role ARN field, also used for entries of the roles list.
+	FieldAWSIAMAuthRole = "role"
+	// FieldAWSIAMAuthRoleExternalID is the name of the role external ID field, also used for entries of the roles list.
+	FieldAWSIAMAuthRoleExternalID = "role_external_id"
+	// FieldAWSIAMAuthRoles is the name of the role-chaining list field.
+	FieldAWSIAMAuthRoles = "roles"
+)
+
+// clientConstructTimeout bounds client construction for components without a
+// connect lifecycle (processor, cache). Role assumption is rejected for these
+// components, so no STS calls happen under this context — it only bounds the
+// driver handshake work, which is further limited by the client's own
+// connect/server-selection timeouts.
+const clientConstructTimeout = time.Minute
+
+// CredentialBuilder resolves a MONGODB-AWS credential at connection time. It
+// returns nil when there is no credential to apply.
+type CredentialBuilder func(ctx context.Context) (*options.Credential, error)
+
+func notImportedAWSOptFn(awsConf *service.ParsedConfig, _ *service.Logger) (CredentialBuilder, error) {
+	if enabled, _ := awsConf.FieldBool(FieldAWSIAMAuthEnabled); !enabled {
+		return nil, nil
+	}
+	return nil, errors.New("unable to configure AWS authentication as this binary does not import components/aws")
+}
+
+// AWSOptFn is populated by the child `aws` package when imported. It parses and
+// validates the `aws` config block eagerly, so that misconfiguration fails at
+// startup, and returns a builder which resolves credentials at connection time.
+// A nil builder is returned when IAM authentication is disabled.
+var AWSOptFn = notImportedAWSOptFn
+
+// AWSIAMAuthField returns the spec of the `aws` IAM authentication block
+// shared by all MongoDB components.
+func AWSIAMAuthField() *service.ConfigField {
+	return service.NewObjectField(FieldAWSIAMAuth,
+		service.NewBoolField(FieldAWSIAMAuthEnabled).
+			Description("Enable AWS IAM authentication using the driver-native `MONGODB-AWS` mechanism. The MongoDB Atlas database user must be created with the AWS IAM authentication type, and connections require TLS. When no static credentials or roles are configured, the ambient AWS credential chain (environment variables, EC2 instance profile, EKS pod role) is used and expiring credentials are refreshed automatically.").
+			ShortDescription("Enable AWS IAM authentication using the MONGODB-AWS mechanism.").
+			Default(false),
+		service.NewStringField(FieldAWSIAMAuthRegion).
+			Description("The AWS region used when assuming roles (for STS calls). Only used when `role` or `roles` are configured; the ambient and static-key paths ignore it. If no region is specified then the environment default is used.").
+			ShortDescription("The AWS region used for STS calls when assuming roles. Defaults to the environment region.").
+			Optional(),
+		service.NewDurationField(FieldAWSIAMAuthSessionDuration).
+			Description("The duration of the STS session requested when assuming roles. AWS requires at least 15 minutes and caps sessions created through role chaining at one hour. Only used when `role` or `roles` are configured. When using `mongodb_cdc` with role assumption, credentials are freshly resolved after the initial snapshot completes, so the streaming phase starts with a full session. The snapshot itself must still complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. Once the snapshot completes and is fully acknowledged, its position is checkpointed, so later restarts resume the stream without re-running the snapshot. For very large snapshots prefer the ambient credential chain.").
+			ShortDescription("STS session duration when assuming roles. AWS requires at least 15m and caps role chaining at 1h.").
+			Default("1h").
+			Advanced(),
+		service.NewStringField(FieldAWSIAMAuthID).
+			Description("The ID of credentials to use.").
+			Optional().Advanced(),
+		service.NewStringField(FieldAWSIAMAuthSecret).
+			Description("The secret for the credentials being used.").
+			Optional().Advanced().Secret(),
+		service.NewStringField(FieldAWSIAMAuthToken).
+			Description("The token for the credentials being used, required when using short term credentials.").
+			Optional().Advanced(),
+		service.NewStringField(FieldAWSIAMAuthRole).
+			Description("Optional AWS IAM role ARN to assume for authentication. Cannot be combined with `roles`; use the `roles` array instead when chaining multiple roles.").
+			ShortDescription("Optional AWS IAM role ARN to assume for authentication. Cannot be combined with roles.").
+			Optional(),
+		service.NewStringField(FieldAWSIAMAuthRoleExternalID).
+			Description("Optional external ID for the role assumption. Only used with the `role` field, which cannot be combined with `roles`.").
+			ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
+			Optional(),
+		service.NewObjectListField(FieldAWSIAMAuthRoles,
+			service.NewStringField(FieldAWSIAMAuthRole).
+				Default("").
+				Description("AWS IAM role ARN to assume."),
+			service.NewStringField(FieldAWSIAMAuthRoleExternalID).
+				Description("Optional external ID for the role assumption.").
+				Default("").
+				Optional(),
+		).
+			Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID. Cannot be combined with `role`.").
+			ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
+			Optional(),
+	).
+		Description("AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against MongoDB Atlas. When enabled, IAM credentials are used instead of a static username and password. Role-derived session credentials are resolved when the component connects and are re-resolved whenever it reconnects. The `mongodb` processor and cache establish their client once at creation and cannot refresh expiring session credentials, so `role`, `roles` and session tokens are rejected for those components; use the ambient credential chain or long-lived access keys with them. For long-running pipelines, prefer the ambient credential chain (leave keys and roles unset), which the driver refreshes automatically.").
+		ShortDescription("AWS IAM authentication configuration (MONGODB-AWS).").
+		Advanced().
+		Optional().
+		Version("4.106.0")
+}
+
+// ClientConfig holds parsed MongoDB connection settings so that a client can be
+// built - and rebuilt with freshly resolved credentials - at connect time.
+type ClientConfig struct {
+	url              string
+	appName          string
+	database         string
+	username         string
+	password         string
+	credBuilder      CredentialBuilder // nil unless aws.enabled
+	assumesRole      bool
+	usesSessionToken bool
+}
+
+// AssumesRole reports whether the aws block is configured with role
+// assumption, which yields expiring session credentials that can only be
+// refreshed by rebuilding the client.
+func (c *ClientConfig) AssumesRole() bool {
+	return c.assumesRole
+}
+
+// UsesSessionToken reports whether the aws block is configured with a static
+// STS session token, which is an expiring snapshot of session credentials that
+// can only be replaced by editing the config - there is no refresh path.
+func (c *ClientConfig) UsesSessionToken() bool {
+	return c.usesSessionToken
+}
+
+// uriHasUserInfo reports whether a MongoDB connection string carries a
+// userinfo section. Detection is textual - the userinfo, when present, is the
+// segment between the scheme separator and an '@' occurring before the first
+// '/' or '?' - so that mongodb+srv URLs can be checked without the SRV
+// resolution that the driver's parser performs eagerly.
+//
+// A raw '@' cannot appear inside the userinfo: the driver's parser splits on
+// the first '@' and then rejects any further '@' in the host section
+// ("unescaped @ sign in user info"), so '@' in a username or password must be
+// percent-encoded. Presence therefore reduces to "does that segment contain an
+// '@'", which is the same answer under either the first-@ or last-@ delimiter
+// convention.
+func uriHasUserInfo(uri string) bool {
+	_, rest, ok := strings.Cut(uri, "://")
+	if !ok {
+		return false
+	}
+	if idx := strings.IndexAny(rest, "/?"); idx >= 0 {
+		rest = rest[:idx]
+	}
+	return strings.Contains(rest, "@")
+}
+
+// ClientConfigFromParsed parses and validates the connection fields shared by
+// all MongoDB components (url, app_name, database, username, password and the
+// aws IAM block). Any AWS configuration is validated here, at construction
+// time, while the credentials themselves are resolved on each connect.
+func ClientConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) (*ClientConfig, error) {
+	c := &ClientConfig{}
+
+	var err error
+	if c.url, err = conf.FieldString(commonFieldClientURL); err != nil {
+		return nil, err
+	}
+	if c.appName, err = conf.FieldString(commonFieldClientAppName); err != nil {
+		return nil, err
+	}
+	if c.database, err = conf.FieldString(commonFieldClientDatabase); err != nil {
+		return nil, err
+	}
+	if c.username, err = conf.FieldString(commonFieldClientUsername); err != nil {
+		return nil, err
+	}
+	if c.password, err = conf.FieldString(commonFieldClientPassword); err != nil {
+		return nil, err
+	}
+
+	// Probe the URL so that malformed connection strings are rejected at
+	// startup - but only for plain `mongodb://` URLs, where parsing is cheap and
+	// DNS-free. The driver resolves SRV and TXT records while parsing a
+	// `mongodb+srv://` URL (connstring.Parse installs dns.DefaultResolver), and
+	// a constructor is never retried, so a transient DNS failure here would kill
+	// the pipeline. Connect() applies the same URL and *is* retried, which is
+	// the whole point of the lazy-connect design, so parse and DNS errors for
+	// SRV URLs are left to surface there.
+	if !strings.HasPrefix(c.url, "mongodb+srv://") {
+		if err := options.Client().ApplyURI(c.url).Validate(); err != nil {
+			return nil, fmt.Errorf("invalid url: %w", err)
+		}
+	}
+
+	awsConf := conf.Namespace(FieldAWSIAMAuth)
+	if enabled, _ := awsConf.FieldBool(FieldAWSIAMAuthEnabled); enabled {
+		if c.username != "" || c.password != "" {
+			return nil, errors.New("username and password cannot be set when aws.enabled is true, the MONGODB-AWS mechanism authenticates with IAM credentials instead")
+		}
+		// Only userinfo in the URL is a conflict: URLs which merely name the
+		// mechanism (`?authSource=$external&authMechanism=MONGODB-AWS`, as Atlas
+		// suggests for IAM users) carry no credentials and are fine.
+		if uriHasUserInfo(c.url) {
+			return nil, errors.New("credentials embedded in the url cannot be combined with aws.enabled; the MONGODB-AWS mechanism authenticates with IAM credentials instead")
+		}
+		role, _ := awsConf.FieldString(FieldAWSIAMAuthRole)
+		roles, _ := awsConf.FieldObjectList(FieldAWSIAMAuthRoles)
+		c.assumesRole = role != "" || len(roles) > 0
+		token, _ := awsConf.FieldString(FieldAWSIAMAuthToken)
+		c.usesSessionToken = token != ""
+		if c.credBuilder, err = AWSOptFn(awsConf, logger); err != nil {
+			return nil, err
+		}
+	}
+
+	return c, nil
+}
+
+// Connect builds a MongoDB client using freshly resolved credentials. The
+// optFns allow callers to adjust the client options (e.g. BSON settings) before
+// connecting.
+func (c *ClientConfig) Connect(ctx context.Context, optFns ...func(*options.ClientOptions)) (*mongo.Client, *mongo.Database, error) {
+	opt := options.Client().
+		SetConnectTimeout(10 * time.Second).
+		SetTimeout(30 * time.Second).
+		SetServerSelectionTimeout(30 * time.Second).
+		ApplyURI(c.url).
+		SetAppName(c.appName)
+	for _, fn := range optFns {
+		fn(opt)
+	}
+
+	if c.credBuilder != nil {
+		cred, err := c.credBuilder(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		if cred != nil {
+			opt.SetAuth(*cred)
+		}
+	} else if c.username != "" && c.password != "" {
+		opt.SetAuth(options.Credential{
+			Username: c.username,
+			Password: c.password,
+		})
+	}
+
+	client, err := mongo.Connect(opt)
+	if err != nil {
+		return nil, nil, err
+	}
+	return client, client.Database(c.database), nil
+}
+
+// isConnPoolError reports whether err indicates the client's connection pool
+// is unusable — a handshake (including MONGODB-AWS auth) failure, a cleared
+// pool, or the server being unselectable — as opposed to an ordinary
+// operation error. Components with a connect lifecycle should treat these by
+// rebuilding the client, which also re-resolves IAM credentials.
+//
+// The pool-cleared error type has no Unwrap, so text matching is the only
+// available detection for some shapes.
+func isConnPoolError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if mongo.IsNetworkError(err) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "error occurred during connection handshake") ||
+		(strings.Contains(msg, "connection pool for ") && strings.Contains(msg, " was cleared")) ||
+		strings.Contains(msg, "server selection error")
+}
+
 func clientFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewURLField(commonFieldClientURL).
@@ -68,54 +340,8 @@ func clientFields() []*service.ConfigField {
 			Description("The client application name.").
 			Default("benthos").
 			Advanced(),
+		AWSIAMAuthField(),
 	}
-}
-
-func getClient(parsedConf *service.ParsedConfig) (client *mongo.Client, database *mongo.Database, err error) {
-	var url string
-	if url, err = parsedConf.FieldString(commonFieldClientURL); err != nil {
-		return
-	}
-
-	var username, password string
-	if username, err = parsedConf.FieldString(commonFieldClientUsername); err != nil {
-		return
-	}
-	if password, err = parsedConf.FieldString(commonFieldClientPassword); err != nil {
-		return
-	}
-
-	var appName string
-	if appName, err = parsedConf.FieldString(commonFieldClientAppName); err != nil {
-		return
-	}
-
-	opt := options.Client().
-		SetConnectTimeout(10 * time.Second).
-		SetTimeout(30 * time.Second).
-		SetServerSelectionTimeout(30 * time.Second).
-		ApplyURI(url).
-		SetAppName(appName)
-
-	if username != "" && password != "" {
-		creds := options.Credential{
-			Username: username,
-			Password: password,
-		}
-		opt.SetAuth(creds)
-	}
-
-	if client, err = mongo.Connect(opt); err != nil {
-		return
-	}
-
-	var databaseStr string
-	if databaseStr, err = parsedConf.FieldString(commonFieldClientDatabase); err != nil {
-		return
-	}
-
-	database = client.Database(databaseStr)
-	return
 }
 
 //------------------------------------------------------------------------------

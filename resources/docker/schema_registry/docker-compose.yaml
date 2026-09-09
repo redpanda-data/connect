@@ -14,13 +14,13 @@ services:
       - '--advertise-pandaproxy-addr redpanda:8082'
 
   connect-in:
-    image: ghcr.io/redpanda-data/connect
+    image: docker.redpanda.com/redpandadata/connect
     command: [ '-w', '-c', '/connect.yaml' ]
     volumes:
       - ./in.yaml:/connect.yaml
 
   connect-out:
-    image: ghcr.io/redpanda-data/connect
+    image: docker.redpanda.com/redpandadata/connect
     command: [ '-w', '-c', '/connect.yaml' ]
     volumes:
       - ./out.yaml:/connect.yaml

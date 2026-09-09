@@ -138,7 +138,8 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 			tableName = table.FullName()
 		)
 		l := s.log.With("src_table", tableName)
-		if _, hasFilter := s.filters[tableName]; hasFilter {
+		customQuery, hasFilter := s.filters[tableName]
+		if hasFilter {
 			l.Infof("Launching snapshot of table '%s' with snapshot filter", tableName)
 		} else {
 			l.Infof("Launching snapshot of table '%s'", tableName)
@@ -196,34 +197,43 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 			}
 		}()
 
-		var tablePks []string
-		if tablePks, err = getTablePrimaryKeys(ctx, tx, table); err != nil {
-			return err
-		}
-
-		l.Debugf("Found primary keys for table '%s': %v", table, tablePks)
-		lastSeenPksValues := map[string]any{}
-		for _, pk := range tablePks {
-			lastSeenPksValues[pk] = nil
-		}
-
-		var (
-			numRowsProcessed int
-			batchCount       int
-		)
-		for {
-			var pksForQuery map[string]any
-			if numRowsProcessed > 0 {
-				pksForQuery = lastSeenPksValues
-			}
-			batchCount, err = s.processBatch(ctx, tx, table, tablePks, pksForQuery, lastSeenPksValues, maxBatchSize, tableName)
-			if err != nil {
-				return fmt.Errorf("processing snapshot batch: %w", err)
+		var numRowsProcessed int
+		if hasFilter {
+			// Custom filters may join or aggregate, so a physical-order scan can't safely
+			// assume every row maps to a stable ROWID/heap position; keep the PK-keyset
+			// pagination path for these.
+			var tablePks []string
+			if tablePks, err = getTablePrimaryKeys(ctx, tx, table); err != nil {
+				return err
 			}
 
-			numRowsProcessed += batchCount
-			if batchCount < maxBatchSize {
-				break
+			l.Debugf("Found primary keys for table '%s': %v", table, tablePks)
+			lastSeenPksValues := map[string]any{}
+			for _, pk := range tablePks {
+				lastSeenPksValues[pk] = nil
+			}
+
+			var batchCount int
+			for {
+				var pksForQuery map[string]any
+				if numRowsProcessed > 0 {
+					pksForQuery = lastSeenPksValues
+				}
+				batchCount, err = s.processBatch(ctx, tx, table, tablePks, pksForQuery, lastSeenPksValues, maxBatchSize, tableName, customQuery)
+				if err != nil {
+					return fmt.Errorf("processing snapshot batch: %w", err)
+				}
+
+				numRowsProcessed += batchCount
+				if batchCount < maxBatchSize {
+					break
+				}
+			}
+		} else {
+			// No Filter: whole table scan through single unordered cursor is faster due to no
+			// random i/o that ORDER BY forces
+			if numRowsProcessed, err = s.snapshotTableFullScan(ctx, tx, table, maxBatchSize, tableName); err != nil {
+				return fmt.Errorf("processing snapshot table scan: %w", err)
 			}
 		}
 
@@ -241,8 +251,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 // pksForQuery is passed to querySnapshotTable for cursor-based pagination (nil on first batch).
 // lastSeenPksValues is mutated in place with the PK values from the last row of the batch,
 // so the caller can pass it as pksForQuery on the next iteration.
-func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable, tablePks []string, pksForQuery map[string]any, lastSeenPksValues map[string]any, maxBatchSize int, tableName string) (batchCount int, err error) {
-	customQuery := s.filters[table.FullName()]
+func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable, tablePks []string, pksForQuery map[string]any, lastSeenPksValues map[string]any, maxBatchSize int, tableName, customQuery string) (batchCount int, err error) {
 	batchRows, err := querySnapshotTable(ctx, tx, table, tablePks, pksForQuery, maxBatchSize, customQuery)
 	if err != nil {
 		return 0, fmt.Errorf("execute snapshot table query: %w", err)
@@ -274,40 +283,8 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 			return 0, err
 		}
 
-		var (
-			v      any
-			mapErr error
-		)
-		row := map[string]any{}
-		for idx, value := range values {
-			if v, mapErr = mappers[idx](value); mapErr != nil {
-				return 0, mapErr
-			}
-			if !s.lobEnabled && IsLOBTypeName(types[idx].DatabaseTypeName()) {
-				v = nil
-			}
-			row[columns[idx]] = v
-			if _, ok := lastSeenPksValues[columns[idx]]; ok {
-				lastSeenPksValues[columns[idx]] = value
-			}
-		}
-
-		m := MessageEvent{
-			Table:      table.Name,
-			Schema:     table.Schema,
-			Data:       row,
-			Operation:  MessageOperationRead,
-			ColumnMeta: colMeta,
-		}
-		if s.scn != InvalidSCN {
-			m.SCN = s.scn
-		}
-		if !s.commitTimestamp.IsZero() {
-			m.CommitTimestamp = s.commitTimestamp
-		}
-
-		if err = s.publisher.Publish(ctx, &m); err != nil {
-			return 0, fmt.Errorf("handling snapshot table row: %w", err)
+		if err := s.publishRow(ctx, table, columns, types, values, mappers, colMeta, lastSeenPksValues); err != nil {
+			return 0, err
 		}
 	}
 
@@ -316,6 +293,99 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 	}
 	s.snapshotRowsTotalMetric.Incr(int64(batchCount), tableName)
 	return batchCount, nil
+}
+
+func (s *Snapshot) publishRow(ctx context.Context, table UserTable, columns []string, types []*sql.ColumnType, values []any, mappers []func(any) (any, error), colMeta []ColumnMeta, lastSeenPksValues map[string]any) error {
+	row := map[string]any{}
+	for idx, value := range values {
+		v, err := mappers[idx](value)
+		if err != nil {
+			return err
+		}
+		if !s.lobEnabled && IsLOBTypeName(types[idx].DatabaseTypeName()) {
+			v = nil
+		}
+		row[columns[idx]] = v
+		if _, ok := lastSeenPksValues[columns[idx]]; ok {
+			lastSeenPksValues[columns[idx]] = value
+		}
+	}
+
+	m := MessageEvent{
+		Table:      table.Name,
+		Schema:     table.Schema,
+		Data:       row,
+		Operation:  MessageOperationRead,
+		ColumnMeta: colMeta,
+	}
+	if s.scn != InvalidSCN {
+		m.SCN = s.scn
+	}
+	if !s.commitTimestamp.IsZero() {
+		m.CommitTimestamp = s.commitTimestamp
+	}
+
+	if err := s.publisher.Publish(ctx, &m); err != nil {
+		return fmt.Errorf("handling snapshot table row: %w", err)
+	}
+	return nil
+}
+
+// snapshotTableFullScan performs a single, full unordered scan so Oracle's optimizer
+// picks a full table scan (sequential multiblock reads) over random disk I/O when ordered.
+func (s *Snapshot) snapshotTableFullScan(ctx context.Context, tx *sql.Tx, table UserTable, maxBatchSize int, tableName string) (numRowsProcessed int, err error) {
+	q := fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name)
+	rows, err := tx.QueryContext(ctx, q)
+	if err != nil {
+		return 0, fmt.Errorf("execute snapshot table scan: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("closing snapshot rows: %w", closeErr)
+		}
+	}()
+
+	types, err := rows.ColumnTypes()
+	if err != nil {
+		return 0, fmt.Errorf("fetch column types: %w", err)
+	}
+
+	values, mappers := prepSnapshotScannerAndMappers(types)
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return 0, fmt.Errorf("fetch columns: %w", err)
+	}
+
+	colMeta := buildColumnMeta(types)
+
+	var sinceCancelCheck int
+	for rows.Next() {
+		if err = rows.Scan(values...); err != nil {
+			return numRowsProcessed, err
+		}
+
+		if err = s.publishRow(ctx, table, columns, types, values, mappers, colMeta, nil); err != nil {
+			return numRowsProcessed, err
+		}
+
+		numRowsProcessed++
+		s.snapshotRowsTotalMetric.Incr(1, tableName)
+
+		sinceCancelCheck++
+		if sinceCancelCheck >= maxBatchSize {
+			sinceCancelCheck = 0
+			if err = ctx.Err(); err != nil {
+				return numRowsProcessed, err
+			}
+		}
+	}
+
+	if err = rows.Err(); err != nil {
+		return numRowsProcessed, fmt.Errorf("iterating snapshot table row: %w", err)
+	}
+
+	return numRowsProcessed, nil
 }
 
 func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]string, error) {
