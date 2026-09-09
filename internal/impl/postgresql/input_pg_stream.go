@@ -712,25 +712,25 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				break
 			}
 			if len(batch) == 1 && batch[0].Operation == pglogicalstream.IncrementalSnapshotCheckpointOpType {
-				// The state moved forward but the coordinator emitted no
-				// rows. For example, the stream had already delivered each
-				// buffered row. Therefore no message can carry the state.
+				// State advanced with no rows emitted, so no message can
+				// carry it. Hold it pending -- state only advances, so the
+				// newest wins and anything left pending rides out on the
+				// next flush.
+				pendingIncrementalState = batch[0].IncrementalSnapshotState
 				if batcherBuffered > 0 {
-					// The batcher still holds earlier snapshot rows, and
-					// the tracker does not have them. A checkpoint now
-					// would include those rows. A failure before the flush
-					// would then lose them, because the snapshot never
-					// reads them again. Keep the state and send it after
-					// those rows on the next flush.
-					pendingIncrementalState = batch[0].IncrementalSnapshotState
+					// The tracker cannot see the rows still in the batcher,
+					// so committing now would checkpoint past them.
 					break
 				}
-				// The tracker has all buffered rows. Therefore this
-				// checkpoint still comes after each earlier batch that the
-				// tracker has not resolved.
+				// Nothing untracked is buffered, so this still resolves
+				// behind any unresolved earlier batch.
 				if err := p.commitIncrementalSnapshotCheckpoint(ctx, pgStream, cp, batch[0].IncrementalSnapshotState); err != nil {
-					p.logger.Debugf("failed to commit incremental snapshot checkpoint: %s", err)
+					// Stays pending for the next flush. Until one succeeds
+					// the stored checkpoint is stale.
+					p.logger.Warnf("unable to commit incremental snapshot checkpoint, retrying on the next flush: %s", err)
+					break
 				}
+				pendingIncrementalState = nil
 				break
 			}
 			var (
