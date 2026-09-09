@@ -13,12 +13,18 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
@@ -194,4 +200,138 @@ func TestCanonicalizePKValueDedupsAcrossDecodePaths(t *testing.T) {
 	removed := window.Remove(table, streamedPK)
 	assert.True(t, removed, "the same uuid decoded via either path must dedup to the same window key")
 	assert.Equal(t, 0, window.Len())
+}
+
+func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, replURL := createDockerInstance(t)
+	defer cleanup()
+
+	// createDockerInstance hands back a replication DSN; plain queries need
+	// one without it. Use the driver the snapshot connection uses.
+	queryDSN := strings.ReplaceAll(replURL, " replication=database", "")
+	pcfg, err := pgxpool.ParseConfig(queryDSN)
+	require.NoError(t, err)
+	db := stdlib.OpenDB(*pcfg.ConnConfig)
+	t.Cleanup(func() { _ = db.Close() })
+	require.NoError(t, db.Ping())
+
+	cases := []struct {
+		name    string
+		colType string
+		value   string
+	}{
+		{"int4", "integer", "42"},
+		{"int8", "bigint", "9007199254740993"},
+		{"int2", "smallint", "32767"},
+		{"text", "text", "'abc'"},
+		{"varchar", "varchar(10)", "'xy'"},
+		// char(n) is blank-padded by its output function.
+		{"bpchar", "char(5)", "'ab'"},
+		{"uuid", "uuid", "'0b7f2e1e-4a5b-4c3d-8e9f-0a1b2c3d4e5f'::uuid"},
+		// numeric reaches the snapshot decoder's default branch as raw text
+		// while the stream canonicalises it, so it is the type most likely
+		// to drift apart.
+		{"numeric", "numeric", "1.50"},
+		{"numeric_scaled", "numeric(10,2)", "1.5"},
+		{"numeric_nan", "numeric", "'NaN'::numeric"},
+		// bytea arrives as []byte from the stream and as a string from the
+		// snapshot, which is what canonicalizePKValue reconciles.
+		{"bytea", "bytea", "'\\x0102ff'::bytea"},
+		{"timestamptz", "timestamptz", "'2026-01-02 03:04:05.678+00'::timestamptz"},
+		{"timestamp", "timestamp", "'2026-01-02 03:04:05.678'::timestamp"},
+		{"date", "date", "'2026-01-02'::date"},
+		{"float8", "double precision", "0.1"},
+		{"bool", "boolean", "true"},
+		{"inet", "inet", "'192.168.0.1/24'::inet"},
+	}
+	// Excluded: numeric with a negative scale, e.g. numeric(5,-2). The
+	// streaming decoder rejects it outright because
+	// pgNumericModFromAtttypmod misreads the scale. That is a pre-existing
+	// fault in replication_message_decoders.go, unrelated to key parity.
+
+	for _, tc := range cases {
+		_, err := db.Exec(fmt.Sprintf("CREATE TABLE %s (id %s PRIMARY KEY)", tc.name, tc.colType))
+		require.NoError(t, err, "creating table for %s", tc.name)
+	}
+
+	_, err = db.Exec("CREATE PUBLICATION parity_pub FOR ALL TABLES")
+	require.NoError(t, err)
+	_, err = db.Exec("SELECT pg_create_logical_replication_slot('parity_slot', 'pgoutput')")
+	require.NoError(t, err)
+
+	for _, tc := range cases {
+		_, err := db.Exec(fmt.Sprintf("INSERT INTO %s (id) VALUES (%s)", tc.name, tc.value))
+		require.NoError(t, err, "inserting into %s", tc.name)
+	}
+
+	streamed := streamedPKValues(t, db)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			streamVal, decoded := streamed[tc.name]
+			require.True(t, decoded, "no streamed insert decoded for %s", tc.name)
+
+			rows, err := db.Query(fmt.Sprintf("SELECT id FROM %s", tc.name))
+			require.NoError(t, err)
+			defer rows.Close()
+			columnTypes, err := rows.ColumnTypes()
+			require.NoError(t, err)
+			scanArgs, getters := prepareScannersAndGetters(columnTypes)
+			require.True(t, rows.Next())
+			require.NoError(t, rows.Scan(scanArgs...))
+			snapshotVal, err := getters[0](scanArgs[0])
+			require.NoError(t, err)
+			require.NoError(t, rows.Err())
+
+			snapshotKey := fmt.Sprintf("%v", canonicalizePKValue(snapshotVal))
+			streamKey := fmt.Sprintf("%v", canonicalizePKValue(streamVal))
+			assert.Equal(t, snapshotKey, streamKey,
+				"snapshot and stream must reduce a %s key to the same window key", tc.colType)
+		})
+	}
+}
+
+// streamedPKValues drains the pgoutput slot and returns, per table, the
+// decoded primary key of its insert -- the value OnStreamedRow would key on.
+func streamedPKValues(t *testing.T, db *sql.DB) map[string]any {
+	t.Helper()
+
+	rows, err := db.Query(`SELECT data FROM pg_logical_slot_get_binary_changes(
+		'parity_slot', NULL, NULL, 'proto_version', '1', 'publication_names', 'parity_pub')`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	typeMap := pgtype.NewMap()
+	relations := map[uint32]*RelationMessage{}
+	out := map[string]any{}
+
+	for rows.Next() {
+		var data []byte
+		require.NoError(t, rows.Scan(&data))
+
+		msg, err := Parse(data)
+		require.NoError(t, err)
+
+		switch m := msg.(type) {
+		case *RelationMessage:
+			relations[m.RelationID] = m
+		case *InsertMessage:
+			rel, found := relations[m.RelationID]
+			require.True(t, found, "insert for unknown relation %d", m.RelationID)
+
+			for i, col := range rel.Columns {
+				// Flag 1 marks the column as part of the key.
+				if col.Flags != 1 {
+					continue
+				}
+				val, err := decodeTextColumnData(typeMap, m.Tuple.Columns[i].Data, col.DataType, col.TypeModifier)
+				require.NoError(t, err, "decoding streamed key for %s", rel.RelationName)
+				out[rel.RelationName] = val
+			}
+		}
+	}
+	require.NoError(t, rows.Err())
+	return out
 }
