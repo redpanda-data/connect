@@ -428,6 +428,156 @@ func TestCoordinatorResumeRefetchesUnflushedChunk(t *testing.T) {
 	assert.Equal(t, PrimaryKey{4}, emitted[1].PK)
 }
 
+// TestCoordinatorWrapsDepsErrors: a Deps failure must reach the caller
+// saying what the coordinator was doing, and must stay unwrapped-to so
+// callers can match on it. Start reaches all five methods, in this order.
+func TestCoordinatorWrapsDepsErrors(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+
+	for _, tc := range []struct {
+		method string
+		want   string
+	}{
+		{"ForceFreshTransaction", "forcing fresh transaction"},
+		{"ResolvePrimaryKey", "resolving primary key columns for table public.a"},
+		{"ResolveMaxKey", "resolving max key for table public.a"},
+		{"ResolveWatermark", "resolving watermark"},
+		{"FetchChunk", "fetching chunk for table public.a"},
+	} {
+		t.Run(tc.method, func(t *testing.T) {
+			sentinel := errors.New("deps unavailable")
+
+			mock := newScriptedMockDeps(map[string]*mockTable{
+				table.String(): {
+					pkCols: []string{"id"},
+					rows:   []Row{rowFor(table, 1)},
+					maxPK:  PrimaryKey{1},
+				},
+			}, 1)
+			mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
+			mock.failOn(tc.method, sentinel)
+
+			coord, err := NewCoordinator(testConfig{
+				Tables:    []TableID{table},
+				ChunkSize: 1,
+				Deps:      mock,
+			}, nil)
+			require.NoError(t, err)
+
+			err = coord.Start(t.Context())
+			require.ErrorIs(t, err, sentinel)
+			require.ErrorContains(t, err, tc.want)
+		})
+	}
+}
+
+// TestCoordinatorMidDrainFailureResumesWithoutLoss: a Deps failure partway
+// through a drain leaves the coordinator part-advanced. releaseWindow has
+// already committed and emitted every chunk before the failing one, so the
+// checkpoint has moved. State must therefore report a position a fresh
+// coordinator continues from, losing and repeating no row.
+//
+// The two cases fail a different Deps method partway through the drain,
+// after earlier chunks have already been committed and emitted.
+func TestCoordinatorMidDrainFailureResumesWithoutLoss(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+	const chunkSize = 2
+	rows := []Row{
+		rowFor(table, 1), rowFor(table, 2),
+		rowFor(table, 3), rowFor(table, 4),
+		rowFor(table, 5), rowFor(table, 6),
+	}
+
+	// refetchMockDeps honours the lower bound, so the resumed coordinator
+	// reads from the checkpoint rather than from a cursor the double keeps.
+	newDeps := func() *refetchMockDeps {
+		return &refetchMockDeps{
+			rows:      rows,
+			maxPK:     PrimaryKey{6},
+			chunkSize: chunkSize,
+			// One quiesced pair, repeated: every read looks undisturbed, so
+			// the coordinator drains instead of stopping after one chunk.
+			watermarks: []testWatermark{{Xmin: 100, Xmax: 100}},
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		fail func(*refetchMockDeps, error)
+		want string
+	}{
+		{
+			name: "fetch fails",
+			// Start fetches chunk 1 and the drain fetches chunk 2, so the
+			// third call is the one that fails, buffering nothing.
+			fail: func(d *refetchMockDeps, err error) { d.failAfter("FetchChunk", 2, err) },
+			want: "fetching chunk for table public.a",
+		},
+		{
+			name: "watermark fails",
+			// Two watermarks per chunk, so the sixth call is chunk 3's high
+			// watermark. planNextChunk reads it before buffering the rows,
+			// so this covers the watermark path mid-drain rather than at
+			// Start.
+			fail: func(d *refetchMockDeps, err error) { d.failAfter("ResolveWatermark", 5, err) },
+			want: "resolving watermark",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sentinel := errors.New("deps unavailable")
+			deps := newDeps()
+			tc.fail(deps, sentinel)
+
+			coord, err := NewCoordinator(testConfig{
+				Tables:    []TableID{table},
+				ChunkSize: chunkSize,
+				Deps:      deps,
+			}, nil)
+			require.NoError(t, err)
+			require.NoError(t, coord.Start(t.Context()))
+
+			var before [][]Row
+			changed, err := coord.OnCommit(t.Context(), 101, collect(&before))
+			require.ErrorIs(t, err, sentinel)
+			require.ErrorContains(t, err, tc.want)
+			assert.True(t, changed, "the chunks released before the failure did advance the state")
+			require.Len(t, before, 2, "chunks 1 and 2 were released before the failure")
+
+			// The checkpoint must cover exactly what was emitted -- never a
+			// chunk that was only fetched.
+			state := coord.State()
+			require.False(t, state.Done)
+			require.NotNil(t, state.CurrentTable)
+			assert.Equal(t, table, *state.CurrentTable)
+			assert.Equal(t, PrimaryKey{4}, state.LastSentPK)
+
+			resumed, err := NewCoordinator(testConfig{
+				Tables:    []TableID{table},
+				ChunkSize: chunkSize,
+				Deps:      newDeps(),
+			}, state)
+			require.NoError(t, err)
+			require.NoError(t, resumed.Start(t.Context()))
+
+			var after [][]Row
+			_, err = resumed.OnCommit(t.Context(), 201, collect(&after))
+			require.NoError(t, err)
+			assert.True(t, resumed.Done())
+
+			// The whole table must come out exactly once across the two runs.
+			var got []int
+			for _, chunks := range [][][]Row{before, after} {
+				for _, chunk := range chunks {
+					for _, row := range chunk {
+						got = append(got, row.PK[0].(int))
+					}
+				}
+			}
+			assert.Equal(t, []int{1, 2, 3, 4, 5, 6}, got)
+		})
+	}
+}
+
 func TestCoordinatorConfigValidation(t *testing.T) {
 	validDeps := newScriptedMockDeps(map[string]*mockTable{}, 1)
 
@@ -448,6 +598,45 @@ func TestCoordinatorConfigValidation(t *testing.T) {
 	})
 }
 
+// depsFaults injects failures into a Deps test double, so the coordinator's
+// error paths can be exercised without a database. A method fails once it has
+// been called more than its allowance, which lets a test fail it on the first
+// call or partway through a drain.
+type depsFaults struct {
+	errs  map[string]error
+	after map[string]int
+	calls map[string]int
+}
+
+// failOn makes method fail on its first call.
+func (f *depsFaults) failOn(method string, err error) {
+	f.failAfter(method, 0, err)
+}
+
+// failAfter makes method fail once it has served after calls.
+func (f *depsFaults) failAfter(method string, after int, err error) {
+	if f.errs == nil {
+		f.errs = map[string]error{}
+		f.after = map[string]int{}
+	}
+	f.errs[method] = err
+	f.after[method] = after
+}
+
+// check counts a call to method and returns the injected error once that
+// method is past its allowance.
+func (f *depsFaults) check(method string) error {
+	if f.calls == nil {
+		f.calls = map[string]int{}
+	}
+	f.calls[method]++
+	err, injected := f.errs[method]
+	if !injected || f.calls[method] <= f.after[method] {
+		return nil
+	}
+	return err
+}
+
 // mockTable is a fixture of fake rows used to script FetchChunk/ResolveMaxKey
 // without a real database.
 type mockTable struct {
@@ -460,6 +649,8 @@ type mockTable struct {
 // from an in-memory fixture and scripted watermarks, tracking a per-table
 // cursor instead of parsing SQL/args.
 type scriptedMockDeps struct {
+	depsFaults
+
 	tables    map[string]*mockTable
 	cursor    map[string]int
 	chunkSize int
@@ -482,14 +673,23 @@ func (m *scriptedMockDeps) pushWatermark(wm testWatermark) {
 }
 
 func (m *scriptedMockDeps) ResolvePrimaryKey(_ context.Context, table TableID) ([]string, error) {
+	if err := m.check("ResolvePrimaryKey"); err != nil {
+		return nil, err
+	}
 	return m.tables[table.String()].pkCols, nil
 }
 
 func (m *scriptedMockDeps) ResolveMaxKey(_ context.Context, table TableID, _ []string) (PrimaryKey, error) {
+	if err := m.check("ResolveMaxKey"); err != nil {
+		return nil, err
+	}
 	return m.tables[table.String()].maxPK, nil
 }
 
 func (m *scriptedMockDeps) ResolveWatermark(context.Context) (testWatermark, error) {
+	if err := m.check("ResolveWatermark"); err != nil {
+		return testWatermark{}, err
+	}
 	idx := m.watermarkCalls
 	if idx >= len(m.watermarks) {
 		idx = len(m.watermarks) - 1
@@ -499,11 +699,17 @@ func (m *scriptedMockDeps) ResolveWatermark(context.Context) (testWatermark, err
 }
 
 func (m *scriptedMockDeps) ForceFreshTransaction(context.Context) error {
+	if err := m.check("ForceFreshTransaction"); err != nil {
+		return err
+	}
 	m.forceFreshCalls++
 	return nil
 }
 
 func (m *scriptedMockDeps) FetchChunk(_ context.Context, table TableID, _ []string, _, _ PrimaryKey, _ int) ([]Row, error) {
+	if err := m.check("FetchChunk"); err != nil {
+		return nil, err
+	}
 	key := table.String()
 	mt := m.tables[key]
 	start := m.cursor[key]
@@ -530,6 +736,8 @@ func rowFor(table TableID, pk int) Row {
 // the same lower bound is idempotent -- proving a resumed Coordinator
 // refetches rather than skips a chunk. Assumes single-column int keys.
 type refetchMockDeps struct {
+	depsFaults
+
 	rows      []Row
 	maxPK     PrimaryKey
 	chunkSize int
@@ -539,25 +747,37 @@ type refetchMockDeps struct {
 	fetchLog       []string
 }
 
-func (*refetchMockDeps) ResolvePrimaryKey(context.Context, TableID) ([]string, error) {
+func (d *refetchMockDeps) ResolvePrimaryKey(context.Context, TableID) ([]string, error) {
+	if err := d.check("ResolvePrimaryKey"); err != nil {
+		return nil, err
+	}
 	return []string{"id"}, nil
 }
 
 func (d *refetchMockDeps) ResolveMaxKey(context.Context, TableID, []string) (PrimaryKey, error) {
+	if err := d.check("ResolveMaxKey"); err != nil {
+		return nil, err
+	}
 	return d.maxPK, nil
 }
 
-func (*refetchMockDeps) ForceFreshTransaction(context.Context) error {
-	return nil
+func (d *refetchMockDeps) ForceFreshTransaction(context.Context) error {
+	return d.check("ForceFreshTransaction")
 }
 
 func (d *refetchMockDeps) ResolveWatermark(context.Context) (testWatermark, error) {
+	if err := d.check("ResolveWatermark"); err != nil {
+		return testWatermark{}, err
+	}
 	idx := min(d.watermarkCalls, len(d.watermarks)-1)
 	d.watermarkCalls++
 	return d.watermarks[idx], nil
 }
 
 func (d *refetchMockDeps) FetchChunk(_ context.Context, _ TableID, _ []string, lower, _ PrimaryKey, _ int) ([]Row, error) {
+	if err := d.check("FetchChunk"); err != nil {
+		return nil, err
+	}
 	d.fetchLog = append(d.fetchLog, fmt.Sprint(lower))
 	return sortedRowsAfter(d.rows, lower, d.chunkSize), nil
 }
