@@ -100,6 +100,13 @@ input:
       role_external_id: "" # No default (optional)
       roles: [] # No default (optional)
     signal_table_name: ""
+    incremental_snapshot:
+      enabled: false
+      tables: [] # No default (optional)
+      chunk_size: 1024
+      heartbeat_interval: 1s
+      checkpoint_cache: "" # No default (optional)
+      checkpoint_cache_key: postgres_cdc_incremental_snapshot
     auto_replay_nacks: true
     batching:
       count: 0
@@ -270,7 +277,9 @@ pg_wal_monitor_interval: 6s
 
 === `max_parallel_snapshot_tables`
 
-Int specifies a number of tables that will be processed in parallel during the snapshot processing stage
+Int specifies a number of tables that will be processed in parallel during the snapshot processing stage.
+
+Applies to the `stream_snapshot` snapshot only.
 
 
 *Type*: `int`
@@ -295,6 +304,8 @@ unchanged_toast_value: __redpanda_connect_unchanged_toast_value__
 === `heartbeat_interval`
 
 The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.
+
+Heartbeats also pace `incremental_snapshot`: on a quiet table they are the only thing advancing the snapshot. This interval just keeps the slot current, so `incremental_snapshot.heartbeat_interval` applies alongside it and the more frequent wins for the life of the input. A non-zero value is still required here.
 
 
 *Type*: `string`
@@ -617,6 +628,76 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 
 signal_table_name: rpcn_signal_table
 ```
+
+=== `incremental_snapshot`
+
+Configures chunked snapshotting that runs alongside replication streaming.
+
+
+*Type*: `object`
+
+
+=== `incremental_snapshot.enabled`
+
+Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `stream_snapshot` it needs no up-front snapshot phase, does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.
+
+Progress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `heartbeat_interval`.
+
+A row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `incremental_snapshot.tables`
+
+The tables to incrementally snapshot. If omitted, the tables configured in `tables` are used instead, so at least one of the two must be set. Each entry must be replicated, so it must appear in `tables` unless that list is empty, which replicates everything.
+
+Only read when a snapshot starts from scratch. Once a checkpoint exists the table set comes from it, so edits here are silently ignored: added tables are not backfilled, and removed tables still are. Change `checkpoint_cache_key`, or clear the existing key, to pick up an edited list.
+
+
+*Type*: `array`
+
+
+=== `incremental_snapshot.chunk_size`
+
+The number of rows to read per chunk while incrementally snapshotting a table.
+
+
+*Type*: `int`
+
+*Default*: `1024`
+
+=== `incremental_snapshot.heartbeat_interval`
+
+How often to heartbeat while `enabled` is `true`. The snapshot only advances on a streamed transaction, so on quiet tables this paces it. Raise it to reduce write load at the cost of a slower backfill.
+
+Whichever of this and the top-level `heartbeat_interval` is more frequent wins, and applies for the life of the input -- it is fixed at startup, not reverted when the backfill completes. Heartbeats are transactional while this is enabled, so each consumes a transaction id.
+
+
+*Type*: `string`
+
+*Default*: `"1s"`
+
+=== `incremental_snapshot.checkpoint_cache`
+
+A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] storing the snapshot's progress, so a restart resumes instead of starting over. Required when `enabled` is `true`.
+
+
+*Type*: `string`
+
+
+=== `incremental_snapshot.checkpoint_cache_key`
+
+The key used to store the incremental snapshot progress in `checkpoint_cache`. Use a different key if multiple incremental snapshots share the same cache.
+
+Changing or clearing this key starts a fresh snapshot of the configured tables -- currently the only way to re-run a backfill.
+
+
+*Type*: `string`
+
+*Default*: `"postgres_cdc_incremental_snapshot"`
 
 === `auto_replay_nacks`
 

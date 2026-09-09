@@ -11,6 +11,9 @@ package pglogicalstream
 import (
 	"context"
 	"database/sql"
+	"time"
+
+	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -22,15 +25,32 @@ type heartbeat struct {
 	task          *asyncroutine.Periodic
 	logger        *service.Logger
 	prefix, value string
+	// transactional selects a transactional heartbeat message. It must be
+	// true during an incremental snapshot. OnCommit gets a transaction id
+	// from a transactional message only. On a quiet table the heartbeat can
+	// also be the only write.
+	transactional bool
 }
 
-func newHeartbeat(config *Config, prefix, value string) (*heartbeat, error) {
+// EffectiveHeartbeatInterval returns how often to heartbeat: the more
+// frequent of the two intervals while a snapshot is enabled, since a snapshot
+// needs commits far more often than slot retention does, and heartbeating
+// faster serves both.
+func EffectiveHeartbeatInterval(configured time.Duration, incSnapshot *incsnapshot.Cfg) time.Duration {
+	if !incSnapshot.IsEnabled() || incSnapshot.HeartbeatInterval <= 0 {
+		return configured
+	}
+	return min(configured, incSnapshot.HeartbeatInterval)
+}
+
+func newHeartbeat(config *Config, interval time.Duration, prefix, value string) (*heartbeat, error) {
 	dbConn, err := openPgConnectionFromConfig(config)
 	if err != nil {
 		return nil, err
 	}
-	h := &heartbeat{db: dbConn, task: nil, logger: config.Logger, prefix: prefix, value: value}
-	h.task = asyncroutine.NewPeriodicWithContext(config.HeartbeatInterval, h.run)
+	enabled := config.IncrementalSnapshotCfg().IsEnabled()
+	h := &heartbeat{db: dbConn, task: nil, logger: config.Logger, prefix: prefix, value: value, transactional: enabled}
+	h.task = asyncroutine.NewPeriodicWithContext(interval, h.run)
 	return h, nil
 }
 
@@ -39,7 +59,12 @@ func (h *heartbeat) Start() {
 }
 
 func (h *heartbeat) run(ctx context.Context) {
-	_, err := h.db.ExecContext(ctx, "SELECT pg_logical_emit_message(false, $1, $2)", h.prefix, h.value)
+	var err error
+	if h.transactional {
+		_, err = h.db.ExecContext(ctx, "SELECT pg_logical_emit_message(true, $1, $2)", h.prefix, h.value)
+	} else {
+		_, err = h.db.ExecContext(ctx, "SELECT pg_logical_emit_message(false, $1, $2)", h.prefix, h.value)
+	}
 	if err != nil {
 		h.logger.Warnf("unable to write heartbeat message: %v", err)
 	}
