@@ -914,7 +914,7 @@ func primaryKeyColumnsQuery(table string) (string, error) {
 // on, and issuing a plain Exec on it concurrently corrupts/deadlocks the
 // stream. Callers that may run once streaming has started (e.g. incremental
 // snapshot's PK resolution) must instead use resolveIncrementalPKColumns,
-// which queries over s.incrementalDB.
+// which queries over s.incSnapshotConn.
 func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]string, error) {
 	q, err := primaryKeyColumnsQuery(table.String())
 	if err != nil {
@@ -949,7 +949,7 @@ func (s *Stream) Stop(ctx context.Context) error {
 	defer done()
 	wg.Go(func() error {
 		// Wait for streamMessages to finish using pgConn (and, if incremental
-		// snapshotting is enabled, incrementalDB) before closing them,
+		// snapshotting is enabled, incSnapshotConn) before closing them,
 		// otherwise we race on pgconn internal state (lock field, write buffer)
 		// or on a connection that's mid-query.
 		select {
