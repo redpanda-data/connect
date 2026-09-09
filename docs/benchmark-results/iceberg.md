@@ -215,6 +215,33 @@ To reproduce: the localhost benchmark configs live under [`internal/impl/iceberg
 
 ---
 
+## Shredder Allocations — 2026-08-20
+
+Record shredding (JSON `map[string]any` → columnar parquet values) built two maps per struct per record to support case-insensitive key matching. Case-sensitive matching is the default (`case_sensitive_columns: true`) and makes those maps redundant, so it now has a dedicated path that looks fields up directly and skips unknown-field scanning when every input key is accounted for.
+
+Driven by `BenchmarkShredWide` in [`internal/impl/iceberg/bench/`](../../internal/impl/iceberg/bench/) — a wide-schema shredder micro-benchmark that mirrors the profiling pipeline's record shape without standing up infrastructure.
+
+**Environment:** darwin/arm64, Apple M3 Pro, `GOMAXPROCS=1`, Go benchmark, `benchstat` over n=8
+
+**Changed since last run:** the case-sensitive shredding path. No configuration or behaviour change.
+
+| metric | before | after | delta |
+|-----------|---------|---------|-------------------|
+| sec/op | 4.369µs | 1.472µs | **-66.3%** (p=0.000) |
+| B/op | 4.312 KiB | 1.609 KiB | **-62.7%** (p=0.000) |
+| allocs/op | 71 | 41 | **-42.3%** (p=0.000) |
+
+Per sub-benchmark, sec/op: `declared_schema=false` 4.304µs → 1.394µs (-67.6%); `declared_schema=true` 4.435µs → 1.555µs (-64.9%).
+
+**Observations:**
+
+- **This is the shredder in isolation, not a sink-level number.** Earlier 1-vCPU profiling attributed ~27% of the sink's CPU to shredding, so the end-to-end effect should be appreciable but much smaller than 66%. **It has not been measured end to end** — no throughput figure above or elsewhere in this file has been re-run for this change.
+- The two `declared_schema` variants are within noise of each other both before and after, consistent with the earlier finding that the `schema_metadata` knob does not bypass decode, shredding or encode.
+
+To reproduce: `GOMAXPROCS=1 go test -bench BenchmarkShredWide -benchmem -run '^$' -count=8 ./internal/impl/iceberg/bench/`
+
+---
+
 ## Tuning Recipes
 
 The single most important factor for `iceberg` throughput is **records per commit**. Each catalog
