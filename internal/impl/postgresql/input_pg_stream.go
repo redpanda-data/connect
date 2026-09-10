@@ -877,26 +877,31 @@ func (t *checkpointTracker) Track(ctx context.Context, offset checkpointOffset, 
 	return t.cp.Track(ctx, t.last, batchSize)
 }
 
-// commitCheckpoint applies a resolved checkpointOffset. It writes
-// incSnapshotState even when the LSN acknowledgement fails. A temporary
-// AckLSN error must not stop the input from saving snapshot progress.
+// commitCheckpoint applies a resolved checkpointOffset: the snapshot state
+// first, then the LSN.
 //
-// The opposite order is worse. If the input acknowledges the LSN first and
-// then writes the state, a failure between the two steps leaves an
-// acknowledged LSN with no state.
+// The order matters in both directions. Acknowledging the LSN first would
+// leave an acknowledged position with no state if the write then failed, so
+// the state goes first. And the LSN is only acknowledged once that write
+// succeeded: acknowledging it anyway advances the slot past rows the state
+// was meant to account for -- a snapshot signal among them, which never
+// streams again. Holding the acknowledgement back only retains WAL until
+// the next attempt, which is the recoverable direction.
+//
+// A failed AckLSN does not undo the state write. The state is a checkpoint
+// of what was delivered, which stays true, and the position is retried.
 func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, offset checkpointOffset) error {
-	var errs []error
 	if offset.incSnapshotState != nil {
 		if err := p.persistIncSnapshotState(ctx, offset); err != nil {
-			errs = append(errs, err)
+			return err
 		}
 	}
 	if offset.lsn != nil {
 		if err := pgStream.AckLSN(ctx, *offset.lsn); err != nil {
-			errs = append(errs, fmt.Errorf("unable to ack LSN to postgres: %w", err))
+			return fmt.Errorf("unable to ack LSN to postgres: %w", err)
 		}
 	}
-	return errors.Join(errs...)
+	return nil
 }
 
 // persistIncSnapshotState writes offset's snapshot state to the cache.

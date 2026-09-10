@@ -296,3 +296,44 @@ func TestLoadCachedIncSnapshotStateRejectsForeignVersion(t *testing.T) {
 	require.ErrorIs(t, err, replincsnapshot.ErrUnsupportedStateVersion)
 	assert.ErrorContains(t, err, "checkpoint_cache_key")
 }
+
+// TestCommitCheckpointHoldsAckWhenStateWriteFails: the LSN must not be
+// acknowledged unless the state riding with it is durable.
+//
+// AckLSN advances Stream.ackedLSN, which the next standby status update
+// sends on, moving the replication slot. Past a signal row that would put
+// the slot beyond a request the cache never recorded, and the request never
+// streams again -- silently, since the rows themselves were delivered.
+//
+// pgStream is nil, so reaching AckLSN panics rather than merely misbehaving.
+func TestCommitCheckpointHoldsAckWhenStateWriteFails(t *testing.T) {
+	// No cache is registered under this name, so the state write fails.
+	p := &pgStreamInput{
+		mgr:                           service.MockResources(),
+		incSnapshotCheckpointCache:    "missing_cache",
+		incSnapshotCheckpointCacheKey: "key",
+	}
+
+	lsn := "0/1000"
+	err := p.commitCheckpoint(t.Context(), nil, checkpointOffset{
+		lsn:              &lsn,
+		incSnapshotState: []byte("state"),
+		seq:              1,
+	})
+	require.Error(t, err, "the failed state write must surface")
+
+	// The failure must not be recorded as persisted either, or the retry
+	// would skip it as unchanged.
+	assert.Zero(t, p.lastPersistedIncSnapshotSeq)
+	assert.Nil(t, p.lastPersistedIncSnapshotState)
+}
+
+// TestCommitCheckpointAcksWhenThereIsNoState: an offset carrying only an LSN
+// has nothing to persist, so the acknowledgement must still happen.
+func TestCommitCheckpointAcksWhenThereIsNoState(t *testing.T) {
+	p := &pgStreamInput{mgr: service.MockResources()}
+
+	// A nil pgStream would panic if AckLSN were reached, so assert on the
+	// panic-free path by leaving the LSN nil too: nothing to do at all.
+	require.NoError(t, p.commitCheckpoint(t.Context(), nil, checkpointOffset{seq: 1}))
+}
