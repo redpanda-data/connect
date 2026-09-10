@@ -42,6 +42,20 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 
 	// Nothing is queued at first: tables are requested by signal. A resumed
 	// checkpoint brings back what the last run covered.
+	// A signal may only ask for a replicated table. An empty DBTables means
+	// the publication is FOR ALL TABLES, so leave the set nil to accept any.
+	if len(config.DBTables) > 0 {
+		s.incSnapshotReplicated = make(map[incrementalsnapshot.TableID]struct{}, len(config.DBTables))
+		for _, name := range config.DBTables {
+			table, err := normalizeTableID(config.DBSchema, name)
+			if err != nil {
+				_ = db.Close()
+				return fmt.Errorf("resolving replicated table %q: %w", name, err)
+			}
+			s.incSnapshotReplicated[table] = struct{}{}
+		}
+	}
+
 	s.incSnapshotConn = db
 	s.incSnapshotPKCache = make(map[string][]string)
 	s.incSnapshotTables = make(map[incrementalsnapshot.TableID]struct{})
@@ -518,6 +532,25 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 	return nil
 }
 
+// checkReplicated rejects a table the publication does not carry.
+//
+// Its backfill would have no live changes to deduplicate against, so a write
+// landing after its chunk is read would be lost: the stale snapshot row
+// would be the last thing delivered for that key, with nothing following to
+// correct it.
+func (s *Stream) checkReplicated(table incrementalsnapshot.TableID) error {
+	if s.incSnapshotReplicated == nil {
+		return nil // FOR ALL TABLES
+	}
+	if _, replicated := s.incSnapshotReplicated[table]; replicated {
+		return nil
+	}
+	return fmt.Errorf(
+		"table %s is not replicated, so a write during its backfill could not be deduplicated and would be lost: add it to the input's tables",
+		table,
+	)
+}
+
 // snapshotSignalTables reads a snapshot signal's table list, or nil when the
 // row is not one. A malformed payload is an error, not a row to ignore: the
 // request came from a user, who would otherwise wait for a backfill that
@@ -555,6 +588,11 @@ func (s *Stream) snapshotSignalTables(message *StreamMessage) ([]incrementalsnap
 		table, err := normalizeTableID(s.snapshotSchema, name)
 		if err != nil {
 			return nil, fmt.Errorf("signal row: resolving table %q: %w", name, err)
+		}
+		if err := s.checkReplicated(table); err != nil {
+			// Reject the whole request rather than part of it: a caller who
+			// asked for three tables and got two would have no way to tell.
+			return nil, fmt.Errorf("signal row: %w", err)
 		}
 		tables = append(tables, table)
 	}
