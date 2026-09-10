@@ -31,8 +31,8 @@ const (
 	throttlePinWarnInterval = 5 * time.Minute
 )
 
-// pinClock encapsulates continuous throttling duration tracking and rate-limited
-// warning log state.
+// pinClock encapsulates continuous throttling duration tracking and
+// rate-limited warning log state.
 type pinClock struct {
 	// throttledSince records when reservations started continuously failing
 	// without an intervening successful reservation/check; zero while not
@@ -48,7 +48,8 @@ func (c *pinClock) clear() {
 }
 
 // check records the start of a throttling event or checks if a warning is due.
-// Returns the total duration spent continuously throttled and whether a log warning should be emitted.
+// Returns the total duration spent continuously throttled and whether a log
+// warning should be emitted.
 func (c *pinClock) check(now time.Time) (since time.Duration, shouldWarn bool) {
 	if c.throttledSince.IsZero() {
 		c.throttledSince = now
@@ -208,12 +209,13 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// If the batcher has zero messages in flight, always allow the first reservation
-	// to go through, even if it exceeds the maximum budget.
+	// If the batcher has zero messages in flight, always allow the first
+	// reservation to go through, even if it exceeds the maximum budget.
 	//
-	// Why? Even though configuration validation normally ensures batch sizes are smaller
-	// than the budget, a batch that is larger than the limit must never cause the reader
-	// loop to hang forever waiting for space that can never clear.
+	// Why? Even though configuration validation normally ensures batch sizes
+	// are smaller than the budget, a batch that is larger than the limit must
+	// never cause the reader loop to hang forever waiting for space that can
+	// never clear.
 	globalInFlight := b.inFlightCountLocked()
 	if globalInFlight > 0 && globalInFlight+n > b.maxTrackedMessages {
 		// Surface a continuously pinned budget: every shard reader parks on
@@ -606,8 +608,8 @@ func (b *RecordBatcher) InFlightCount() int {
 	return b.inFlightCountLocked()
 }
 
-// shardInFlightLocked returns the in-flight (tracked and reserved) message count
-// for a specific shard. Callers must hold b.mu.
+// shardInFlightLocked returns the in-flight (tracked and reserved) message
+// count for a specific shard. Callers must hold b.mu.
 func (b *RecordBatcher) shardInFlightLocked(shardID string) int {
 	inflight := 0
 	if st := b.shards[shardID]; st != nil {
