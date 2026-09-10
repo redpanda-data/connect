@@ -240,7 +240,6 @@ func TestCoordinatorOnCommitNoopsWhenIdle(t *testing.T) {
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
-	coord.AddTables(nil)
 	require.NoError(t, coord.Start(t.Context()))
 	require.True(t, coord.Idle())
 
@@ -747,6 +746,58 @@ func TestCoordinatorAddTablesCheckpointFailureRetries(t *testing.T) {
 	assert.Empty(t, chunks[0])
 }
 
+// TestCoordinatorAddTablesBeforeStartOnResume: Start replaces the queue from
+// the checkpoint, so anything AddTables seeded beforehand has to be
+// re-applied behind it. AddTables reported those tables as queued, and
+// dropping them would strand them silently.
+func TestCoordinatorAddTablesBeforeStartOnResume(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+	tableB := TableID{Schema: "public", Table: "b"}
+
+	newDeps := func() *scriptedMockDeps {
+		mock := newScriptedMockDeps(map[string]*mockTable{
+			tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1)}, maxPK: PrimaryKey{1}},
+			tableB.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableB, 1)}, maxPK: PrimaryKey{1}},
+		}, 1)
+		mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
+		return mock
+	}
+
+	start := func(t *testing.T, resume *State, seed []TableID) *Coordinator[uint64, testWatermark] {
+		t.Helper()
+		coord, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: newDeps()}, resume)
+		require.NoError(t, err)
+		coord.AddTables(seed)
+		require.NoError(t, coord.Start(t.Context()))
+		return coord
+	}
+
+	t.Run("seeded table survives the checkpoint load", func(t *testing.T) {
+		coord := start(t, &State{Version: CurrentStateVersion, Tables: []TableID{tableA}}, []TableID{tableB})
+
+		assert.False(t, coord.Idle(), "the seeded table must still be queued")
+		assert.Equal(t, []TableID{tableA, tableB}, coord.State().Tables)
+	})
+
+	t.Run("a table the checkpoint covers is still skipped", func(t *testing.T) {
+		coord := start(t, &State{Version: CurrentStateVersion, Tables: []TableID{tableA}}, []TableID{tableA})
+
+		assert.True(t, coord.Idle(), "tableA was finished, so seeding it again must not re-read it")
+		assert.Equal(t, []TableID{tableA}, coord.State().Tables)
+	})
+
+	t.Run("the checkpoint's own queue keeps priority", func(t *testing.T) {
+		coord := start(t, &State{
+			Version:         CurrentStateVersion,
+			RemainingTables: []TableID{tableA},
+			Tables:          []TableID{tableA},
+		}, []TableID{tableB})
+
+		assert.Equal(t, []TableID{tableA, tableB}, coord.State().RemainingTables,
+			"the resumed queue comes first, the seeded table behind it")
+	})
+}
+
 func TestCoordinatorConfigValidation(t *testing.T) {
 	validDeps := newScriptedMockDeps(map[string]*mockTable{}, 1)
 
@@ -1250,7 +1301,6 @@ func TestCoordinatorGoesIdleAfterResume(t *testing.T) {
 		Deps:      mock,
 	}, resume)
 	require.NoError(t, err)
-	coord.AddTables([]TableID{table})
 	require.NoError(t, coord.Start(t.Context()))
 	require.True(t, coord.Idle(), "the empty chunk read should empty the queue")
 

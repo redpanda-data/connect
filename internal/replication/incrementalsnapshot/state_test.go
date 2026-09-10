@@ -112,50 +112,45 @@ func TestStateUnmarshalRejectsMalformedJSON(t *testing.T) {
 	require.Error(t, json.Unmarshal([]byte(`{"version":`), &got))
 }
 
-func TestStateUnmarshalDoneCheckpoint(t *testing.T) {
-	// State returns this value after the snapshot of each table is
-	// complete.
-	var got State
-	require.NoError(t, json.Unmarshal(fmt.Appendf(nil, `{"version":%d}`, CurrentStateVersion), &got))
-
-	assert.Equal(t, CurrentStateVersion, got.Version)
-	assert.Nil(t, got.CurrentTable)
-}
-
-// TestStateUnmarshalAcceptsVersion1: a checkpoint written before Tables
-// existed must still load, or an upgrade would restart every backfill. It
-// carries no table set, which Start makes safe by counting every configured
-// table as known.
-func TestStateUnmarshalAcceptsVersion1(t *testing.T) {
-	var got State
-	require.NoError(t, json.Unmarshal([]byte(`{"version":1,"last_sent_pk":[42],"remaining_tables":[{"schema":"public","table":"b"}]}`), &got))
-
-	assert.Equal(t, 1, got.Version)
-	assert.Equal(t, PrimaryKey{int64(42)}, got.LastSentPK)
-	assert.Nil(t, got.Tables)
-}
-
-func TestStateUnmarshalRejectsForeignVersion(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  string
+// TestStateUnmarshalVersions: a checkpoint from any supported layout must
+// load, or an upgrade would restart every backfill in progress. Anything
+// outside the range must be refused rather than half-read.
+//
+// Version 1 predates Tables, and version 2 carried a Done flag that no
+// longer exists. Neither is a problem to decode: a queue that outlived them
+// is still in RemainingTables.
+func TestStateUnmarshalVersions(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		raw     string
+		wantErr bool
 	}{
-		{"newer version", `{"version":4,"last_sent_pk":[42]}`},
-		{"older version", `{"version":0,"last_sent_pk":[42]}`},
-		{"version absent", `{"last_sent_pk":[42]}`},
-	}
-
-	for _, test := range tests {
+		{name: "version 1", raw: `{"version":1,"last_sent_pk":[42]}`},
+		{name: "version 2", raw: `{"version":2,"done":true,"last_sent_pk":[42]}`},
+		{name: "current version", raw: fmt.Sprintf(`{"version":%d,"last_sent_pk":[42]}`, CurrentStateVersion)},
+		{name: "newer than current", raw: `{"version":4,"last_sent_pk":[42]}`, wantErr: true},
+		{name: "older than supported", raw: `{"version":0,"last_sent_pk":[42]}`, wantErr: true},
+		{name: "version absent", raw: `{"last_sent_pk":[42]}`, wantErr: true},
+	} {
 		t.Run(test.name, func(t *testing.T) {
 			var got State
 			err := json.Unmarshal([]byte(test.raw), &got)
-			require.ErrorIs(t, err, ErrUnsupportedStateVersion)
+			if test.wantErr {
+				require.ErrorIs(t, err, ErrUnsupportedStateVersion)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, PrimaryKey{int64(42)}, got.LastSentPK)
 		})
 	}
 }
 
-func TestStateUnmarshalAcceptsCurrentVersion(t *testing.T) {
+// TestStateUnmarshalVersion1CarriesNoTables: version 1 has no table set, so
+// a resumed coordinator knows only what its queue names.
+func TestStateUnmarshalVersion1CarriesNoTables(t *testing.T) {
 	var got State
-	require.NoError(t, json.Unmarshal(fmt.Appendf(nil, `{"version":%d}`, CurrentStateVersion), &got))
-	assert.Equal(t, CurrentStateVersion, got.Version)
+	require.NoError(t, json.Unmarshal([]byte(`{"version":1,"remaining_tables":[{"schema":"public","table":"b"}]}`), &got))
+
+	assert.Nil(t, got.Tables)
+	assert.Equal(t, []TableID{{Schema: "public", Table: "b"}}, got.RemainingTables)
 }
