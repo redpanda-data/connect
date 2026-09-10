@@ -20,7 +20,6 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 	replincsnapshot "github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
@@ -36,10 +35,10 @@ func TestCheckpointTrackerPreventsClobberFromRowlessSentinel(t *testing.T) {
 
 	tracker := newCheckpointTracker(10, new(atomic.Uint64))
 
-	resolveBatch, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{LSN: &lsn}, 1)
+	resolveBatch, err := tracker.Track(t.Context(), checkpointOffset{lsn: &lsn}, 1)
 	require.NoError(t, err)
 
-	resolveSentinel, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{IncSnapshotState: state}, 0)
+	resolveSentinel, err := tracker.Track(t.Context(), checkpointOffset{incSnapshotState: state}, 0)
 	require.NoError(t, err)
 
 	// The sentinel resolves immediately, ahead of the still-pending batch;
@@ -50,8 +49,8 @@ func TestCheckpointTrackerPreventsClobberFromRowlessSentinel(t *testing.T) {
 	// snapshot state spliced onto it - neither field lost.
 	maxOffset := resolveBatch()
 	require.NotNil(t, maxOffset)
-	assert.Equal(t, &lsn, maxOffset.LSN)
-	assert.Equal(t, state, maxOffset.IncSnapshotState)
+	assert.Equal(t, &lsn, maxOffset.lsn)
+	assert.Equal(t, state, maxOffset.incSnapshotState)
 }
 
 // TestCheckpointTrackerPreservesPendingStateAcrossLaterBatch is the mirror
@@ -66,10 +65,10 @@ func TestCheckpointTrackerPreservesPendingStateAcrossLaterBatch(t *testing.T) {
 
 	tracker := newCheckpointTracker(10, new(atomic.Uint64))
 
-	resolveA, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{LSN: &lsnA, IncSnapshotState: stateA}, 1)
+	resolveA, err := tracker.Track(t.Context(), checkpointOffset{lsn: &lsnA, incSnapshotState: stateA}, 1)
 	require.NoError(t, err)
 
-	resolveB, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{LSN: &lsnB}, 1)
+	resolveB, err := tracker.Track(t.Context(), checkpointOffset{lsn: &lsnB}, 1)
 	require.NoError(t, err)
 
 	// B resolves first, while A is still pending; nothing visible yet.
@@ -77,8 +76,8 @@ func TestCheckpointTrackerPreservesPendingStateAcrossLaterBatch(t *testing.T) {
 
 	maxOffset := resolveA()
 	require.NotNil(t, maxOffset)
-	assert.Equal(t, &lsnB, maxOffset.LSN, "B's own LSN must still surface once A resolves")
-	assert.Equal(t, stateA, maxOffset.IncSnapshotState, "A's pending snapshot state must not be lost even though B resolved first")
+	assert.Equal(t, &lsnB, maxOffset.lsn, "B's own LSN must still surface once A resolves")
+	assert.Equal(t, stateA, maxOffset.incSnapshotState, "A's pending snapshot state must not be lost even though B resolved first")
 }
 
 // TestCommitCheckpointSkipsRedundantStatePersist verifies commitCheckpoint
@@ -99,9 +98,9 @@ func TestCommitCheckpointSkipsRedundantStatePersist(t *testing.T) {
 	ctx := t.Context()
 	stateA := []byte("state-a")
 
-	// offset.LSN is nil throughout this test, so commitCheckpoint never
+	// offset.lsn is nil throughout this test, so commitCheckpoint never
 	// touches pgStream - passing nil is safe.
-	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: stateA, Seq: 1}))
+	require.NoError(t, p.commitCheckpoint(ctx, nil, checkpointOffset{incSnapshotState: stateA, seq: 1}))
 
 	got, err := p.loadCachedIncSnapshotStateBytes(ctx)
 	require.NoError(t, err)
@@ -117,13 +116,13 @@ func TestCommitCheckpointSkipsRedundantStatePersist(t *testing.T) {
 	// would carry stateA forward onto every later checkpoint even when
 	// nothing new happened, so commitCheckpoint must recognise it's
 	// unchanged and skip the redundant cache write.
-	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: stateA, Seq: 2}))
+	require.NoError(t, p.commitCheckpoint(ctx, nil, checkpointOffset{incSnapshotState: stateA, seq: 2}))
 	_, err = p.loadCachedIncSnapshotStateBytes(ctx)
 	require.ErrorIs(t, err, service.ErrKeyNotFound, "unchanged state must not be re-persisted")
 
 	// A genuinely new state must still be persisted.
 	stateB := []byte("state-b")
-	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: stateB, Seq: 3}))
+	require.NoError(t, p.commitCheckpoint(ctx, nil, checkpointOffset{incSnapshotState: stateB, seq: 3}))
 	got, err = p.loadCachedIncSnapshotStateBytes(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, stateB, got)
@@ -131,7 +130,7 @@ func TestCommitCheckpointSkipsRedundantStatePersist(t *testing.T) {
 
 // loadCachedIncSnapshotStateBytes is a small test helper reading the raw
 // cache bytes directly, sidestepping loadCachedIncSnapshotState's JSON
-// unmarshal (which requires a valid incrementalsnapshot.State payload).
+// unmarshal (which requires a valid replincsnapshot.State payload).
 func (p *pgStreamInput) loadCachedIncSnapshotStateBytes(ctx context.Context) ([]byte, error) {
 	var (
 		val  []byte
@@ -153,17 +152,17 @@ func TestTrackAssignsIncreasingSeq(t *testing.T) {
 
 	tracker := newCheckpointTracker(10, new(atomic.Uint64))
 
-	resolveA, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{LSN: &lsnA}, 1)
+	resolveA, err := tracker.Track(t.Context(), checkpointOffset{lsn: &lsnA}, 1)
 	require.NoError(t, err)
 	offsetA := resolveA()
 	require.NotNil(t, offsetA)
-	assert.Equal(t, uint64(1), offsetA.Seq)
+	assert.Equal(t, uint64(1), offsetA.seq)
 
-	resolveB, err := tracker.Track(t.Context(), incrementalsnapshot.CheckpointOffset{LSN: &lsnB}, 1)
+	resolveB, err := tracker.Track(t.Context(), checkpointOffset{lsn: &lsnB}, 1)
 	require.NoError(t, err)
 	offsetB := resolveB()
 	require.NotNil(t, offsetB)
-	assert.Equal(t, uint64(2), offsetB.Seq)
+	assert.Equal(t, uint64(2), offsetB.seq)
 }
 
 // TestCommitCheckpointRejectsOlderState covers the race between concurrent
@@ -185,10 +184,10 @@ func TestCommitCheckpointRejectsOlderState(t *testing.T) {
 	newer := []byte("state-2")
 
 	// Newer acknowledgement lands first.
-	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: newer, Seq: 2}))
+	require.NoError(t, p.commitCheckpoint(ctx, nil, checkpointOffset{incSnapshotState: newer, seq: 2}))
 
 	// Older one arrives after, and must not write.
-	require.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{IncSnapshotState: older, Seq: 1}))
+	require.NoError(t, p.commitCheckpoint(ctx, nil, checkpointOffset{incSnapshotState: older, seq: 1}))
 
 	got, err := p.loadCachedIncSnapshotStateBytes(ctx)
 	require.NoError(t, err)
@@ -217,9 +216,9 @@ func TestCommitCheckpointConcurrentAcksNeverRegress(t *testing.T) {
 		go func(seq uint64) {
 			defer wg.Done()
 			state := fmt.Appendf(nil, "state-%03d", seq)
-			assert.NoError(t, p.commitCheckpoint(ctx, nil, incrementalsnapshot.CheckpointOffset{
-				IncSnapshotState: state,
-				Seq:              seq,
+			assert.NoError(t, p.commitCheckpoint(ctx, nil, checkpointOffset{
+				incSnapshotState: state,
+				seq:              seq,
 			}))
 		}(uint64(i))
 	}
@@ -245,15 +244,15 @@ func TestCheckpointsPersistAcrossTrackerReplacement(t *testing.T) {
 		incSnapshotCheckpointCacheKey: "key",
 	}
 
-	// offset.LSN stays nil throughout, so commitCheckpoint never touches
+	// offset.lsn stays nil throughout, so commitCheckpoint never touches
 	// pgStream and passing nil for it is safe.
 	ctx := t.Context()
 
 	// First connection: track and commit a few checkpoints.
-	first := newCheckpointTracker(10, &p.incSnapshotSeq)
+	first := newCheckpointTracker(10, &p.checkpointSeq)
 	for i := range 5 {
 		state := fmt.Appendf(nil, "state-a-%d", i)
-		resolve, err := first.Track(ctx, incrementalsnapshot.CheckpointOffset{IncSnapshotState: state}, 1)
+		resolve, err := first.Track(ctx, checkpointOffset{incSnapshotState: state}, 1)
 		require.NoError(t, err)
 		offset := resolve()
 		require.NotNil(t, offset)
@@ -265,13 +264,13 @@ func TestCheckpointsPersistAcrossTrackerReplacement(t *testing.T) {
 	require.Equal(t, []byte("state-a-4"), got)
 
 	// Reconnect: a new tracker, the same input.
-	second := newCheckpointTracker(10, &p.incSnapshotSeq)
+	second := newCheckpointTracker(10, &p.checkpointSeq)
 	state := []byte("state-b-0")
-	resolve, err := second.Track(ctx, incrementalsnapshot.CheckpointOffset{IncSnapshotState: state}, 1)
+	resolve, err := second.Track(ctx, checkpointOffset{incSnapshotState: state}, 1)
 	require.NoError(t, err)
 	offset := resolve()
 	require.NotNil(t, offset)
-	assert.Greater(t, offset.Seq, uint64(5), "Seq must continue past the first connection")
+	assert.Greater(t, offset.seq, uint64(5), "Seq must continue past the first connection")
 	require.NoError(t, p.commitCheckpoint(ctx, nil, *offset))
 
 	got, err = p.loadCachedIncSnapshotStateBytes(ctx)

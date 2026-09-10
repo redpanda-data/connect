@@ -44,35 +44,3 @@ type Cfg struct {
 func (c *Cfg) IsEnabled() bool {
 	return c != nil && c.Enabled
 }
-
-// CheckpointOffset is the per-batch payload the LSN checkpointer tracks.
-// IncSnapshotState is non-nil when the batch carries a checkpoint, giving it
-// the same ack ordering as the LSN.
-type CheckpointOffset struct {
-	LSN              *string
-	IncSnapshotState []byte
-	// Seq orders the checkpoints; the tracker assigns it. Acknowledgements
-	// run concurrently and IncSnapshotState does not reveal which state is
-	// newer, so the writer compares this instead.
-	Seq uint64
-}
-
-// Merge overlays each non-nil field of other onto a copy of o.
-//
-// Resolving a node out of order assigns its whole payload onto its unresolved
-// predecessor, so a nil field would wipe whatever the predecessor held.
-// Callers must therefore merge against the last tracked payload before
-// calling Track.
-func (o CheckpointOffset) Merge(other CheckpointOffset) CheckpointOffset {
-	merged := o
-	if other.LSN != nil {
-		merged.LSN = other.LSN
-	}
-	if other.IncSnapshotState != nil {
-		merged.IncSnapshotState = other.IncSnapshotState
-	}
-	if other.Seq > merged.Seq {
-		merged.Seq = other.Seq
-	}
-	return merged
-}
