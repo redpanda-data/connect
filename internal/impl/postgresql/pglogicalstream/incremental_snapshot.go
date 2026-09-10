@@ -602,9 +602,11 @@ func (s *Stream) snapshotSignalTables(message *StreamMessage) ([]incrementalsnap
 // dispatchSnapshotSignal queues the tables a snapshot signal asks for.
 //
 // It runs while the signal row is decoded, before the commit that carries
-// it, so the checkpoint that commit emits already holds the new queue.
-// Queueing afterwards would acknowledge the row's LSN with the older queue,
-// losing the request on a restart: an acknowledged row never streams again.
+// it, so the checkpoint that commit emits holds the new queue -- AddTables
+// makes the coordinator emit one whether or not a backfill was already
+// running. Queueing afterwards would acknowledge the row's LSN with the
+// older queue, losing the request on a restart: an acknowledged row never
+// streams again.
 func (s *Stream) dispatchSnapshotSignal(message *StreamMessage) error {
 	tables, err := s.snapshotSignalTables(message)
 	if err != nil || len(tables) == 0 {

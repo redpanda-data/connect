@@ -48,6 +48,10 @@ type Coordinator[P any, W Watermark[P]] struct {
 	// AddTables supplies more. It is not terminal: tables arrive at any
 	// time, so no completion is ever emitted.
 	idle bool
+	// queueChanged marks a queue AddTables has extended but no checkpoint
+	// has recorded. The next OnCommit emits one before anything else, so the
+	// request survives the acknowledgement of whatever carried it.
+	queueChanged bool
 	// needsPlan marks a coordinator that left idle, so it holds no chunk
 	// and no window bounds. The next OnCommit plans before it judges a
 	// window: the bounds left from going idle would close an empty one and
@@ -124,6 +128,10 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 		c.AddTables(seeded)
 	}
 
+	// Anything seeded before now owes no checkpoint: the caller has
+	// acknowledged nothing yet, so there is no request that could be lost.
+	c.queueChanged = false
+
 	// Baseline: nothing fetched yet. planNextChunk advances past it.
 	c.commitLiveState()
 
@@ -177,6 +185,12 @@ func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
 		// table could never be read.
 		c.committedRemaining = append(c.committedRemaining, table)
 	}
+	if len(added) > 0 {
+		// Owed whether or not a backfill is already running: a signal that
+		// arrives mid-backfill is just as unrepeatable as one that arrives
+		// idle, and the running table's window may not close for a while.
+		c.queueChanged = true
+	}
 	if len(added) > 0 && c.idle {
 		c.idle = false
 		c.needsPlan = true
@@ -210,24 +224,32 @@ func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P, emit EmitFunc) 
 		return false, nil
 	}
 
-	if c.needsPlan {
-		// First commit since AddTables brought work back.
-		//
-		// Checkpoint the queue before reading anything. The request for
-		// these tables belongs to this transaction, so once the caller
+	if c.queueChanged {
+		// Checkpoint the extended queue before anything else. The request
+		// for those tables belongs to this transaction, so once the caller
 		// acknowledges this position it is gone: nothing replays it, and a
-		// restart would find the tables unqueued. The window is empty, so
-		// this emits state alone.
-		c.needsPlan = false
+		// restart would find the tables unqueued.
+		//
+		// State reports the committed queue, which AddTables has already
+		// extended, and the window holds nothing new, so this emits state
+		// alone.
+		c.queueChanged = false
 		if err := emit(nil); err != nil {
 			// Not delivered, so the queue is still owed a checkpoint.
-			c.needsPlan = true
+			c.queueChanged = true
 			return false, err
 		}
 
-		// Buffer a chunk and let the following commit close its window, the
-		// normal cadence.
-		return true, c.planNextChunk(ctx)
+		if c.needsPlan {
+			// The queue was empty until now, so buffer a chunk and let the
+			// following commit close its window, the normal cadence.
+			c.needsPlan = false
+			return true, c.planNextChunk(ctx)
+		}
+		// A backfill is already running: fall through so this commit is
+		// still judged against its window. The checkpoint above already
+		// counts as a change, whatever the window does.
+		changed = true
 	}
 
 	if !c.windowOpened && c.low.OpensAt(pos) {
@@ -237,7 +259,7 @@ func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P, emit EmitFunc) 
 	// Both watermarks must be clear of pos: they bracket the chunk read, so
 	// the later of the two is the real bound.
 	if !c.windowOpened || !c.low.ClosesAt(pos) || !c.high.ClosesAt(pos) {
-		return false, nil
+		return changed, nil
 	}
 
 	if err := c.releaseWindow(emit); err != nil {
