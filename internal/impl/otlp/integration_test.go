@@ -16,11 +16,13 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/moby/moby/api/types/container"
+	dockercontainer "github.com/moby/moby/api/types/container"
+	mobynet "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -166,7 +168,11 @@ func TestIntegrationOTLPWithSchemaRegistry(t *testing.T) {
 			createTopic(t, seed, topic)
 
 			t.Log("And: OTel Collector")
-			collectorHTTP, collectorGRPC, collectorContainer := startOtelCollectorContainerWithDebugExporter(t, tc.signalType)
+			collectorHTTPPort, err := integration.GetFreePort()
+			require.NoError(t, err)
+			collectorGRPCPort, err := integration.GetFreePort()
+			require.NoError(t, err)
+			collectorHTTP, collectorGRPC, collectorContainer := startOtelCollectorContainerWithDebugExporter(t, tc.signalType, collectorHTTPPort, collectorGRPCPort)
 			t.Logf("OTel Collector endpoints - HTTP: %s, gRPC: %s", collectorHTTP, collectorGRPC)
 
 			t.Log("When: generating telemetry data and sending to Redpanda via Benthos pipeline")
@@ -247,7 +253,7 @@ func runOtelgen(t *testing.T, cmd []string) {
 			// host.docker.internal, which only resolves automatically on Docker
 			// Desktop. Map it to the host gateway so the container can reach the
 			// host on Linux CI runners too.
-			HostConfigModifier: func(hc *container.HostConfig) {
+			HostConfigModifier: func(hc *dockercontainer.HostConfig) {
 				hc.ExtraHosts = []string{"host.docker.internal:host-gateway"}
 			},
 		},
@@ -270,7 +276,7 @@ func runOtelgen(t *testing.T, cmd []string) {
 	require.Equal(t, 0, state.ExitCode, "otelgen should complete successfully")
 }
 
-func startOtelCollectorContainerWithDebugExporter(t *testing.T, sig SignalType) (httpEndpoint, grpcEndpoint string, container testcontainers.Container) {
+func startOtelCollectorContainerWithDebugExporter(t *testing.T, sig SignalType, httpPort, grpcPort int) (httpEndpoint, grpcEndpoint string, container testcontainers.Container) {
 	t.Helper()
 
 	conf := fmt.Sprintf(`
@@ -308,6 +314,12 @@ service:
 			},
 		},
 		Cmd: []string{"--config=/etc/otel-config.yaml"},
+		HostConfigModifier: func(hc *dockercontainer.HostConfig) {
+			hc.PortBindings = mobynet.PortMap{
+				mobynet.MustParsePort("4318/tcp"): []mobynet.PortBinding{{HostPort: strconv.Itoa(httpPort)}},
+				mobynet.MustParsePort("4317/tcp"): []mobynet.PortBinding{{HostPort: strconv.Itoa(grpcPort)}},
+			}
+		},
 	}
 
 	ctx := t.Context()
@@ -324,14 +336,8 @@ service:
 		}
 	})
 
-	// Get mapped ports
-	httpPort, err := container.MappedPort(ctx, "4318")
-	require.NoError(t, err)
-	grpcPort, err := container.MappedPort(ctx, "4317")
-	require.NoError(t, err)
-
-	httpEndpoint = fmt.Sprintf("localhost:%s", httpPort.Port())
-	grpcEndpoint = fmt.Sprintf("localhost:%s", grpcPort.Port())
+	httpEndpoint = fmt.Sprintf("localhost:%d", httpPort)
+	grpcEndpoint = fmt.Sprintf("localhost:%d", grpcPort)
 	return
 }
 
