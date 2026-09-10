@@ -79,6 +79,10 @@ type Stream struct {
 	signalTable *incrementalsnapshot.TableID
 	// snapshotSchema resolves the table names a snapshot signal carries.
 	snapshotSchema string
+	// incSnapshotReplicated is the set a snapshot signal may name, in the
+	// unquoted form replication messages report. Nil means the publication
+	// is FOR ALL TABLES, so any table is allowed.
+	incSnapshotReplicated map[incrementalsnapshot.TableID]struct{}
 	// incSnapshotBackfilling reports whether the coordinator has work
 	// queued. The heartbeat reads it from its own goroutine, and Coordinator
 	// is not safe for concurrent use, so the replication loop mirrors the

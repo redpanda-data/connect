@@ -26,6 +26,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
+	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
@@ -347,4 +348,63 @@ func streamedPKValues(t *testing.T, db *sql.DB) map[string]any {
 	}
 	require.NoError(t, rows.Err())
 	return out
+}
+
+// TestSnapshotSignalRejectsUnreplicatedTable: a signal may only name a table
+// the publication carries. Backfilling an unreplicated one has no live
+// changes to deduplicate against, so a write during the backfill would be
+// lost behind the stale snapshot row.
+func TestSnapshotSignalRejectsUnreplicatedTable(t *testing.T) {
+	signalRow := func(tables string) *StreamMessage {
+		return &StreamMessage{
+			Operation: InsertOpType,
+			Schema:    "public",
+			Table:     "rpcn_signal",
+			Data: map[string]any{
+				"type": "snapshot",
+				"data": fmt.Sprintf(`{"tables": [%s]}`, tables),
+			},
+		}
+	}
+
+	newStream := func(replicated map[incrementalsnapshot.TableID]struct{}) *Stream {
+		signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
+		return &Stream{
+			// Any non-nil coordinator: the check runs before it is used.
+			incSnapshotCoordinator: &incsnapshot.Coordinator{},
+			signalTable:            &signalTable,
+			snapshotSchema:         "public",
+			incSnapshotReplicated:  replicated,
+		}
+	}
+
+	replicated := map[incrementalsnapshot.TableID]struct{}{
+		{Schema: "public", Table: "flights"}: {},
+	}
+
+	t.Run("replicated table is accepted", func(t *testing.T) {
+		got, err := newStream(replicated).snapshotSignalTables(signalRow(`"flights"`))
+		require.NoError(t, err)
+		assert.Equal(t, []incrementalsnapshot.TableID{{Schema: "public", Table: "flights"}}, got)
+	})
+
+	t.Run("unreplicated table is rejected", func(t *testing.T) {
+		_, err := newStream(replicated).snapshotSignalTables(signalRow(`"users"`))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "public.users is not replicated")
+	})
+
+	t.Run("one unreplicated table rejects the whole request", func(t *testing.T) {
+		// Queueing only the valid half would leave the caller with no way to
+		// tell which tables were accepted.
+		_, err := newStream(replicated).snapshotSignalTables(signalRow(`"flights", "users"`))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "public.users is not replicated")
+	})
+
+	t.Run("a nil set means FOR ALL TABLES", func(t *testing.T) {
+		got, err := newStream(nil).snapshotSignalTables(signalRow(`"anything"`))
+		require.NoError(t, err)
+		assert.Equal(t, []incrementalsnapshot.TableID{{Schema: "public", Table: "anything"}}, got)
+	})
 }
