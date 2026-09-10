@@ -28,9 +28,10 @@ import (
 // customer escalation where financial fields defaulted to DOUBLE.
 func TestNumericPrecisionIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	t.Run("TypedIntegersMapToCorrectColumnTypes", func(t *testing.T) {
 		const ns = "numeric_types_ns"

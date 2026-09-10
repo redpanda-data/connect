@@ -72,8 +72,9 @@ func assertCOWSnapshot(t *testing.T, ctx context.Context, infra *testInfrastruct
 // are intentionally not exercised as keys here.
 func TestCOWRowOperationKeyTypesIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 	const ns = "cow_keytypes"
 	infra.CreateNamespace(t, ns)
 
