@@ -19,11 +19,11 @@ import (
 // while a replication stream runs, dropping each buffered row the stream has
 // already delivered.
 //
-// It holds only the algorithm: which table and key range to read next, when a
-// chunk is safe to emit, and what the caller may checkpoint. Side effects come
-// from Deps, window comparisons from Watermark.
+// It holds only the algorithm: which table and key range to read next, when
+// a chunk is safe to emit, and what the caller may checkpoint. Side effects
+// come from Deps, window comparisons from Watermark.
 //
-// Not safe for concurrent use: call OnStreamedRow and OnCommit from a single
+// Not safe for concurrent use: call OnStreamedRow and OnCommit from one
 // goroutine, in stream order. OnCommit's chunk read blocks on I/O by design.
 type Coordinator[P any, W Watermark[P]] struct {
 	cfg CoordinatorConfig[P, W]
@@ -36,8 +36,8 @@ type Coordinator[P any, W Watermark[P]] struct {
 	current   *TableID
 	// currentExhausted marks current's last chunk as fetched, so the next
 	// plan advances tables. current stays set until then, keeping the
-	// buffered final chunk dedupable. Deliberately not in State: a resume
-	// re-issues one empty query for the table and moves on.
+	// buffered final chunk dedupable. Not in State: a resume re-issues one
+	// empty query and moves on.
 	currentExhausted bool
 	pkCols           map[string][]string
 	maxPK            PrimaryKey
@@ -53,10 +53,9 @@ type Coordinator[P any, W Watermark[P]] struct {
 	// has recorded. The next OnCommit emits one before anything else, so the
 	// request survives the acknowledgement of whatever carried it.
 	queueChanged bool
-	// needsPlan marks a coordinator that left idle, so it holds no chunk
-	// and no window bounds. The next OnCommit plans before it judges a
-	// window: the bounds left from going idle would close an empty one and
-	// checkpoint no rows.
+	// needsPlan marks a coordinator that left idle, so it holds no chunk and
+	// no window bounds. The next OnCommit plans first: the bounds left from
+	// going idle would close an empty window and checkpoint no rows.
 	needsPlan bool
 	window    *WindowBuffer
 
@@ -93,13 +92,12 @@ func NewCoordinator[P any, W Watermark[P]](cfg CoordinatorConfig[P, W], resume *
 	}, nil
 }
 
-// EmitFunc receives one chunk's rows as the coordinator releases them. It is
-// called after the committed state has advanced past those rows, so State may
-// be read from inside it to get their checkpoint.
+// EmitFunc receives one chunk's rows as the coordinator releases them, after
+// the committed state has advanced past them -- so State read from inside it
+// gives their checkpoint.
 //
-// It is also the drain's backpressure: the next chunk is only released once
-// EmitFunc returns, so a slow consumer costs one buffered chunk. An error
-// aborts the operation.
+// It is also the drain's backpressure: the next chunk waits for it to
+// return, so a slow consumer costs one buffered chunk. An error aborts.
 type EmitFunc func(rows []Row) error
 
 // Start must be called once before any other method.
@@ -114,8 +112,7 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 
 	if resume != nil {
 		// The checkpoint replaces the queue, so anything AddTables queued
-		// before Start is re-applied behind it. AddTables already reported
-		// these as queued.
+		// before Start is re-applied behind it rather than dropped.
 		seeded := c.remaining
 
 		c.current = resume.CurrentTable
@@ -124,8 +121,8 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 		c.remaining = resume.RemainingTables
 		c.knownTables = resume.Tables
 
-		// Through AddTables, so a table the checkpoint already covers is
-		// skipped and a resume cannot re-read a finished one.
+		// Through AddTables, so a table the checkpoint covers is skipped and
+		// a resume cannot re-read a finished one.
 		c.AddTables(seeded)
 	}
 
@@ -179,17 +176,16 @@ func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
 		added = append(added, table)
 		c.knownTables = append(c.knownTables, table)
 		c.remaining = append(c.remaining, table)
-		// Also the committed queue, which is what State reports. Nothing
-		// has been read yet, so "committed" is the truth here. Without it
-		// State reports the table under Tables with no queue entry, and a
-		// resume from that is idle and rejects a repeat request -- the
-		// table could never be read.
+		// Also the committed queue, which State reports. Nothing has been
+		// read yet, so "committed" is the truth. Without it State reports the
+		// table under Tables with no queue entry, and a resume from that is
+		// idle and rejects a repeat request.
 		c.committedRemaining = append(c.committedRemaining, table)
 	}
 	if len(added) > 0 {
-		// Owed whether or not a backfill is already running: a signal that
-		// arrives mid-backfill is just as unrepeatable as one that arrives
-		// idle, and the running table's window may not close for a while.
+		// Owed whether or not a backfill is running: a mid-backfill request
+		// is just as unrepeatable, and the running window may not close for
+		// a while.
 		c.queueChanged = true
 	}
 	if len(added) > 0 && c.idle {
@@ -204,8 +200,8 @@ func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
 //
 // Known limitation: a row can be delivered twice when an insert reuses a key
 // below MaxPK and streams in before the covering chunk is read. Monotonic
-// keys (serial, UUIDv7) cannot hit this. Consumers should treat rows as
-// idempotent upserts by key, as standard CDC practice.
+// keys (serial, UUIDv7) cannot hit it. Treat rows as idempotent upserts by
+// key, as standard CDC practice.
 func (c *Coordinator[P, W]) OnStreamedRow(table TableID, pk PrimaryKey) (removed bool) {
 	if c.idle || c.current == nil || table != *c.current {
 		return false
@@ -226,14 +222,11 @@ func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P, emit EmitFunc) 
 	}
 
 	if c.queueChanged {
-		// Checkpoint the extended queue before anything else. The request
-		// for those tables belongs to this transaction, so once the caller
-		// acknowledges this position it is gone: nothing replays it, and a
-		// restart would find the tables unqueued.
-		//
-		// State reports the committed queue, which AddTables has already
-		// extended, and the window holds nothing new, so this emits state
-		// alone.
+		// Checkpoint the extended queue first. The request belongs to this
+		// transaction, so once the caller acknowledges this position it is
+		// gone: nothing replays it, and a restart would find the tables
+		// unqueued. AddTables has already extended the committed queue, and
+		// the window holds nothing new, so this emits state alone.
 		c.queueChanged = false
 		if err := emit(nil); err != nil {
 			// Not delivered, so the queue is still owed a checkpoint.
@@ -242,14 +235,13 @@ func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P, emit EmitFunc) 
 		}
 
 		if c.needsPlan {
-			// The queue was empty until now, so buffer a chunk and let the
-			// following commit close its window, the normal cadence.
+			// The queue was empty, so buffer a chunk and let the following
+			// commit close its window, the normal cadence.
 			c.needsPlan = false
 			return true, c.planNextChunk(ctx)
 		}
-		// A backfill is already running: fall through so this commit is
-		// still judged against its window. The checkpoint above already
-		// counts as a change, whatever the window does.
+		// A backfill is running: fall through so this commit is still judged
+		// against its window. The checkpoint counts as a change regardless.
 		changed = true
 	}
 
@@ -272,11 +264,9 @@ func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P, emit EmitFunc) 
 // releaseWindow hands the buffered chunk to emit, advancing the committed
 // state first so State reports the right checkpoint from inside emit.
 //
-// emit is what delivers the rows, so an error from it means nothing was
-// sent. The advance is then undone and the rows go back in the buffer:
-// State must never report a chunk as checkpointed that no consumer
-// received, or a resume from that State would fetch past those rows and
-// drop them.
+// emit delivers the rows, so an error means nothing was sent: the advance is
+// undone and the rows go back in the buffer. State must never report a chunk
+// as checkpointed that no consumer received, or a resume would fetch past it.
 func (c *Coordinator[P, W]) releaseWindow(emit EmitFunc) error {
 	rows := c.window.Flush()
 	undo := c.snapshotCommitted()
@@ -322,18 +312,14 @@ func (c *Coordinator[P, W]) restoreCommitted(s committedState) {
 }
 
 // planAndDrain buffers the next chunk, then keeps releasing and replanning
-// while each chunk came from an undisturbed read.
-//
-// An equal, quiesced watermark pair proves nothing could have modified the
-// chunk during the read, so no streamed row can supersede it and there is
-// nothing to wait for. Holding it would mean waiting for a commit that, on a
-// quiet table, only arrives with the next heartbeat -- which is what
-// otherwise caps the backfill at one chunk per heartbeat.
+// while each chunk came from an undisturbed read -- refer to
+// readUndisturbed. Nothing can supersede such a chunk, so holding it would
+// only wait for a commit that a quiet table sees on the next heartbeat,
+// capping the backfill at one chunk per heartbeat.
 //
 // Capped at cfg.MaxDrainChunks per call: emitting runs on the caller's
 // replication loop, which usually also owes standby keepalives, so an
-// unbounded drain risks the server dropping the connection. Progress resumes
-// on the next commit.
+// unbounded drain risks the server dropping the connection.
 func (c *Coordinator[P, W]) planAndDrain(ctx context.Context, emit EmitFunc) error {
 	for range c.cfg.MaxDrainChunks {
 		if err := c.planNextChunk(ctx); err != nil {
@@ -356,8 +342,8 @@ func (c *Coordinator[P, W]) readUndisturbed() bool {
 	return c.low == c.high && c.low.Quiesced()
 }
 
-// State returns the resumable state; safe to call any time after Start. It
-// reports the committed fields.
+// State returns the resumable state, from the committed fields. Safe to call
+// any time after Start.
 func (c *Coordinator[P, W]) State() *State {
 	s := &State{
 		Version:         CurrentStateVersion,
@@ -429,8 +415,7 @@ func (c *Coordinator[P, W]) planNextChunk(ctx context.Context) error {
 		}
 
 		if c.maxPK == nil {
-			// Empty table: treat like an exhausted one rather than
-			// failing the whole coordinator.
+			// Empty table: treat as exhausted rather than failing.
 			c.current = nil
 			continue
 		}
@@ -454,8 +439,7 @@ func (c *Coordinator[P, W]) planNextChunk(ctx context.Context) error {
 		c.high = high
 
 		if len(rows) == 0 {
-			// Exhausted; keep looping until a table has rows or none
-			// remain.
+			// Exhausted; loop until a table has rows or none remain.
 			c.current = nil
 			continue
 		}
@@ -468,10 +452,9 @@ func (c *Coordinator[P, W]) planNextChunk(ctx context.Context) error {
 		if len(rows) < c.cfg.ChunkSize {
 			// Final, partial chunk. Mark the table exhausted so the next
 			// plan skips a wasted empty query, but leave c.current set:
-			// these rows are still buffered, and OnStreamedRow can only
-			// dedup them while current names their table. Clearing it
-			// would let a concurrent update stream past undeduped and be
-			// overwritten by this stale chunk on flush.
+			// OnStreamedRow can only dedup these buffered rows while current
+			// names their table, and a concurrent update would otherwise
+			// stream past undeduped and be overwritten on flush.
 			c.currentExhausted = true
 		}
 
@@ -508,9 +491,9 @@ func (c *Coordinator[P, W]) resolveMaxPK(ctx context.Context, table TableID, pkC
 	return nil
 }
 
-// resolveWatermark reads a watermark. It deliberately forces no transaction
-// first: each read is its own statement and already sees a current snapshot,
-// and assigning an id here would make every chunk's pair differ, which
+// resolveWatermark reads a watermark, forcing no transaction first: each
+// read is its own statement and already sees a current snapshot, and
+// assigning an id here would make every chunk's pair differ, which
 // readUndisturbed relies on not happening.
 func (c *Coordinator[P, W]) resolveWatermark(ctx context.Context) (W, error) {
 	var zero W
