@@ -3,6 +3,25 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.109.0 - 2026-09-10
+
+### Added
+
+- avro: Added max_decompressed_block_bytes configuration field to cap OCF block decompression and prevent decompression-bomb denial-of-service attacks. ([@Jeffail](https://github.com/Jeffail), [#4773](https://github.com/redpanda-data/connect/pull/4773))
+- aws_kinesis: Added enhanced fan-out support and configurable poll period to avoid Kinesis's shared 5 GetRecords/sec/shard limit, with automatic stream consumer registration and HTTP/2 push-based consumption. ([@squiidz](https://github.com/squiidz), [#4724](https://github.com/redpanda-data/connect/pull/4724))
+- iceberg: Added optional parquet compression codec configuration supporting snappy, gzip, and zstd compression, with fallback to table properties for compatibility. ([@Jeffail](https://github.com/Jeffail), [#4785](https://github.com/redpanda-data/connect/pull/4785))
+
+### Fixed
+
+- general: Bumped amqp091-go dependency to address CVE-2026-79921. ([@josephwoodward](https://github.com/josephwoodward), [#4795](https://github.com/redpanda-data/connect/pull/4795))
+- mysql_cdc: Fixed MySQL CDC to accept Unicode characters in table names, including accented Latin, CJK, and Cyrillic identifiers that MySQL permits. ([@samarth70](https://github.com/samarth70), [#4745](https://github.com/redpanda-data/connect/pull/4745))
+- redis_script: Fixed dead documentation link in redis_script reference to point to the current Redis manual page. ([@JakeSCahill](https://github.com/JakeSCahill), [#4783](https://github.com/redpanda-data/connect/pull/4783))
+
+### Changed
+
+- iceberg: Optimized Iceberg shredder to eliminate unnecessary allocations on case-sensitive record matching, reducing memory usage and CPU overhead by 42% in the shredding step. ([@Jeffail](https://github.com/Jeffail), [#4784](https://github.com/redpanda-data/connect/pull/4784))
+- sftp: Improved SFTP input to advance to the next file without reconnecting, eliminating unnecessary delays when rotating through files. ([@Leward](https://github.com/Leward), [#4777](https://github.com/redpanda-data/connect/pull/4777))
+
 ## Unreleased
 
 ### Added
