@@ -293,7 +293,7 @@ logged, so a repeated signal does not re-read it. To read one again, point
 				Description("The number of rows to read per chunk while incrementally snapshotting a table.").
 				Default(incsnapshot.DefaultIncSnapshotChunkSize),
 			service.NewDurationField(fieldIncSnapshotHeartbeatInterval).
-				Description("How often to heartbeat while `"+fieldIncSnapshotEnabled+"` is `true`. The snapshot only advances on a streamed transaction, so on quiet tables this paces it. Raise it to reduce write load at the cost of a slower backfill.\n\nWhichever of this and the top-level `"+fieldHeartbeatInterval+"` is more frequent wins, and applies for the life of the input -- it is fixed at startup, not reverted when the backfill completes. Heartbeats are transactional while this is enabled, so each consumes a transaction id.").
+				Description("How often to heartbeat while `"+fieldIncSnapshotEnabled+"` is `true`. The snapshot only advances on a streamed transaction, so on quiet tables this paces it. Raise it to reduce write load at the cost of a slower backfill.\n\nWhichever of this and the top-level `"+fieldHeartbeatInterval+"` is more frequent wins, and applies for the life of the input: it is fixed at startup, and stays in force between backfills as well as during them. Heartbeats are transactional only while a backfill is in progress, since that is the only time the snapshot needs a transaction id from one; between backfills they cost nothing extra.").
 				ShortDescription("How often to heartbeat while incremental snapshotting is enabled, which paces it on quiet tables.").
 				Default(incsnapshot.DefaultIncSnapshotHeartbeatInterval.String()),
 			service.NewStringField(fieldIncSnapshotCheckpointCache).
@@ -643,7 +643,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 
 	// blockingSnapshotComplete gates the isSnapshot/snapshotAckWG barrier to
 	// the one-shot stream_snapshot phase, never to incremental snapshot's
-	// nil-LSN batches. See WillEmitBlockingSnapshot.
+	// nil-LSN batches. See Stream.BlockingSnapshot.
 	blockingSnapshotComplete := !pgStream.BlockingSnapshot
 
 	// pendingIncrementalState holds the newest checkpoint state until the

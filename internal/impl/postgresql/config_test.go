@@ -63,7 +63,7 @@ incremental_snapshot:
 }
 
 // TestParseIncrementalSnapshotCfgRequiresSignalTable: tables are requested
-// by signal, so without a signal table nothing could ever be backfilled.
+// by signal, so without one nothing could ever be backfilled.
 func TestParseIncrementalSnapshotCfgRequiresSignalTable(t *testing.T) {
 	const conf = `
 dsn: postgres://user:pass@localhost:5432/db

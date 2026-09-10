@@ -25,17 +25,23 @@ type heartbeat struct {
 	task          *asyncroutine.Periodic
 	logger        *service.Logger
 	prefix, value string
-	// transactional selects a transactional heartbeat message. It must be
-	// true during an incremental snapshot. OnCommit gets a transaction id
-	// from a transactional message only. On a quiet table the heartbeat can
-	// also be the only write.
-	transactional bool
+	// transactional reports whether this tick needs a transactional
+	// message. Only a transactional one carries a transaction id, which
+	// OnCommit needs to advance an incremental snapshot -- on a quiet table
+	// the heartbeat is the only write there is.
+	//
+	// It is read per tick, so a backfill starting or finishing takes effect
+	// on the next one. A transaction id costs something, so an idle
+	// coordinator gets the cheaper non-transactional message.
+	transactional func() bool
 }
 
 // EffectiveHeartbeatInterval returns how often to heartbeat: the more
 // frequent of the two intervals while a snapshot is enabled, since a snapshot
 // needs commits far more often than slot retention does, and heartbeating
-// faster serves both.
+// faster serves both. The interval is fixed for the life of the input, but
+// the ticks only cost a transaction id while a backfill runs -- refer to
+// heartbeat.transactional.
 func EffectiveHeartbeatInterval(configured time.Duration, incSnapshot *incsnapshot.Cfg) time.Duration {
 	if !incSnapshot.IsEnabled() || incSnapshot.HeartbeatInterval <= 0 {
 		return configured
@@ -43,13 +49,14 @@ func EffectiveHeartbeatInterval(configured time.Duration, incSnapshot *incsnapsh
 	return min(configured, incSnapshot.HeartbeatInterval)
 }
 
-func newHeartbeat(config *Config, interval time.Duration, prefix, value string) (*heartbeat, error) {
+// newHeartbeat builds the heartbeat. transactional is consulted on each tick;
+// a nil one means never transactional.
+func newHeartbeat(config *Config, interval time.Duration, prefix, value string, transactional func() bool) (*heartbeat, error) {
 	dbConn, err := openPgConnectionFromConfig(config)
 	if err != nil {
 		return nil, err
 	}
-	enabled := config.IncrementalSnapshotCfg().IsEnabled()
-	h := &heartbeat{db: dbConn, task: nil, logger: config.Logger, prefix: prefix, value: value, transactional: enabled}
+	h := &heartbeat{db: dbConn, task: nil, logger: config.Logger, prefix: prefix, value: value, transactional: transactional}
 	h.task = asyncroutine.NewPeriodicWithContext(interval, h.run)
 	return h, nil
 }
@@ -60,7 +67,7 @@ func (h *heartbeat) Start() {
 
 func (h *heartbeat) run(ctx context.Context) {
 	var err error
-	if h.transactional {
+	if h.transactional != nil && h.transactional() {
 		_, err = h.db.ExecContext(ctx, "SELECT pg_logical_emit_message(true, $1, $2)", h.prefix, h.value)
 	} else {
 		_, err = h.db.ExecContext(ctx, "SELECT pg_logical_emit_message(false, $1, $2)", h.prefix, h.value)

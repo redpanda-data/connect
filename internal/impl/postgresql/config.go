@@ -66,9 +66,8 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, heartbeatInterval t
 		)
 	}
 
-	// Tables come only from snapshot signals, which arrive as inserts into
-	// the signal table. Without one there is no way to ask for a backfill,
-	// so the snapshot could never read anything.
+	// Tables come only from signals, which arrive as inserts into the
+	// signal table. Without one nothing could ask for a backfill.
 	if cfg.Enabled && signalTableName == "" {
 		return nil, fmt.Errorf(
 			"%s.%s is true but %s is not set: tables are requested by inserting a %q signal, so a signal table is required",
