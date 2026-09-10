@@ -261,12 +261,34 @@ func BenchmarkStreamMessages(b *testing.B) {
 	b.ResetTimer()
 	streamDone := make(chan error, 1)
 	go func() { streamDone <- s.streamMessages(startLSN) }()
-	<-gotAll
+
+	// Wait for the consumer to see b.N rows, but guard against the fake
+	// walsender or streamMessages failing silently: a non-nil serveOnce error
+	// fails the benchmark immediately, a nil one (the fake finished replaying
+	// all frames, which can happen before the consumer reaches b.N) is
+	// expected and just drops out of the select, and an overall timeout
+	// catches any other hang with a clear message instead of blocking forever.
+	srvDone := srv.done
+	timeout := time.After(2 * time.Minute)
+waitForRows:
+	for {
+		select {
+		case <-gotAll:
+			break waitForRows
+		case err := <-srvDone:
+			if err != nil {
+				b.Fatalf("fake walsender: %v", err)
+			}
+			srvDone = nil
+		case <-timeout:
+			b.Fatal("timed out waiting for streamMessages to deliver b.N rows")
+		}
+	}
 	b.StopTimer()
 
 	s.shutSig.TriggerSoftStop()
 	select {
-	case <-streamDone: // nil on soft stop, or EOF error once the fake closes; both fine
+	case <-streamDone: // nil on soft stop, or a wrapped context.Canceled from the blocked channel send once the fake closes; both fine
 	case <-time.After(10 * time.Second):
 		b.Fatal("streamMessages did not stop")
 	}
