@@ -625,6 +625,10 @@ with a `tables` key listing table names in the configured `schema`, excluding th
 INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('snapshot', '{"tables": ["orders", "customers"]}');
 ```
 
+Each table must appear in `tables` (or that list must be empty, replicating everything):
+an unreplicated table has no live changes to deduplicate its backfill against, so a write landing
+after its chunk is read would be lost. A signal naming one is rejected and logged.
+
 Each table joins the back of the backfill queue. A table this run already covers is skipped and
 logged, so a repeated signal does not re-read it. To read one again, point
 `incremental_snapshot.checkpoint_cache_key` at a fresh key.
