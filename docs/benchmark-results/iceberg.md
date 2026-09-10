@@ -334,6 +334,31 @@ To reproduce: `TESTCONTAINERS_RYUK_DISABLED=true go test ./internal/impl/iceberg
 
 ---
 
+## CPU Profile — Per-record Attribution
+
+Where per-record CPU actually goes in the `iceberg` output, from profiling the pipeline in [`internal/impl/iceberg/bench/`](../../internal/impl/iceberg/bench/) (`task bench:profile`) at `GOMAXPROCS=1`. This is what motivated the shredder allocation cut and is the baseline the profiling configs in this PR exist to let anyone re-take.
+
+**Environment:** local development machine, `GOMAXPROCS=1`, ~16.6k rec/s steady state, schemaless (no `schema_metadata`)
+
+**Changed since last run:** first profile.
+
+| stage | share of sink CPU |
+|---|---:|
+| JSON decode | ~46% |
+| Shredding | ~27% |
+| Parquet encode | ~14% |
+| Upload / other | ~12% |
+
+**Observations:**
+
+- **The process is allocation/GC-bound overall** — `mallocgc` alone accounts for roughly 35% of sink CPU, which is why the shredder allocation cut targeted this path specifically rather than, say, the encode step.
+- **Of the "upload/other" share, ~3.6% is the storage client's per-upload content-MD5 computation** — a fixed cost independent of anything else measured here.
+- **The declared-schema config (`bench:profile:schema`, exercising `schema_metadata`) measured as a ~4% regression, not a win.** It only affects create/evolve-time type resolution and temporal coercion — it never bypasses decode, shredding or encode, so a declared schema does not reduce per-record CPU the way "the schema is already known" might suggest.
+
+To reproduce: `task bench:profile CORES=1 COUNT=500000` (schemaless) and `task bench:profile:schema CORES=1 COUNT=500000` (declared schema), from [`internal/impl/iceberg/bench/`](../../internal/impl/iceberg/bench/). Both expose pprof over HTTP at `localhost:4195/debug/pprof/` while running; capture with `curl -o cpu.pb.gz 'http://localhost:4195/debug/pprof/profile?seconds=60'` and inspect with `go tool pprof`.
+
+---
+
 ## Tuning Recipes
 
 The single most important factor for `iceberg` throughput is **records per commit**. Each catalog
