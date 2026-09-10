@@ -476,7 +476,11 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 			case s.messages <- msgs:
 			case <-ctx.Done():
 				// The batch was never handed over, so it was never emitted:
-				// leave the bookkeeping where the consumer last saw it.
+				// leave the bookkeeping where the consumer last saw it. A soft
+				// stop is a clean shutdown, not a stream error.
+				if s.shutSig.IsSoftStopSignalled() {
+					return nil
+				}
 				return ctx.Err()
 			}
 		}

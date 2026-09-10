@@ -185,6 +185,12 @@ func (f *fakeWalSender) serveOnce() error {
 // transaction, with a consumer goroutine draining the messages channel.
 // Reports ns/row, MB/s (via SetBytes) and allocations.
 //
+// The pre-built frame slice holds roughly 1.2 KB per row for the whole of
+// b.N, so at the documented -benchtime 200000x that is about 245 MB resident
+// for the frames alone; do not raise it by 10x casually. The measured time
+// also includes the fake sender's pgproto3 encoding and loopback syscalls, so
+// ns/row is a pipeline figure rather than a pure reader cost.
+//
 //	go test ./internal/impl/postgresql/pglogicalstream/ -run '^$' -bench BenchmarkStreamMessages -benchmem -benchtime 200000x -count 3
 func BenchmarkStreamMessages(b *testing.B) {
 	const (

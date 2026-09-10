@@ -72,6 +72,14 @@ func TestStreamBatchByteCapFlushesMidTransaction(t *testing.T) {
 	require.False(t, b.shouldFlush(), "byte counter resets on take")
 }
 
+func TestStreamBatchByteCapFlushesAtExactBoundary(t *testing.T) {
+	b := newStreamBatch(1000, 100, LSN(100))
+	b.append(row(110), 40, LSN(110))
+	require.False(t, b.shouldFlush())
+	b.append(row(120), 60, LSN(120))
+	require.True(t, b.shouldFlush(), "bytes == maxBytes must flush")
+}
+
 func TestStreamBatchSuppressedCommitWithNothingPending(t *testing.T) {
 	b := newStreamBatch(10, 1<<20, LSN(100))
 	b.markCommit(LSN(150))
