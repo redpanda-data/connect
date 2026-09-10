@@ -71,7 +71,8 @@ type Coordinator[P any, W Watermark[P]] struct {
 }
 
 // NewCoordinator builds a Coordinator. A non-nil resume makes Start continue
-// from that state; otherwise it starts fresh from cfg.Tables.
+// from that state; otherwise it starts with an empty queue, which AddTables
+// fills.
 func NewCoordinator[P any, W Watermark[P]](cfg CoordinatorConfig[P, W], resume *State) (*Coordinator[P, W], error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -107,10 +108,7 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 	resume := c.resume
 	c.resume = nil
 
-	if resume == nil {
-		c.remaining = slices.Clone(c.cfg.Tables)
-		c.knownTables = slices.Clone(c.cfg.Tables)
-	} else {
+	if resume != nil {
 		c.current = resume.CurrentTable
 		c.lastSentPK = resume.LastSentPK
 		c.maxPK = resume.MaxPK
@@ -148,8 +146,12 @@ func (c *Coordinator[P, W]) Idle() bool {
 }
 
 // AddTables queues tables for backfill, skipping any this run already
-// covers, and reports the ones it queued. Safe to call at any time after
-// Start; the next OnCommit plans the first of them.
+// covers, and reports the ones it queued. It is the only way a table enters
+// the queue.
+//
+// Call it at any time. Before Start, it seeds the queue and Start plans the
+// first chunk. Afterwards, the next OnCommit checkpoints the queue and plans
+// -- refer to that checkpoint's reason there.
 //
 // A table is only skipped when knownTables holds it, which covers the
 // finished ones too. Re-reading a finished table takes a second AddTables

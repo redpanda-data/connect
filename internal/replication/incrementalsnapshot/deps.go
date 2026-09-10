@@ -54,10 +54,6 @@ type Deps[W any] interface {
 // CoordinatorConfig configures a Coordinator. P is the database's position
 // type and W its watermark type; see Watermark.
 type CoordinatorConfig[P any, W Watermark[P]] struct {
-	// Tables seeds a fresh run's queue. Leave it empty for a coordinator
-	// driven only by AddTables, as the Postgres connector does: it takes
-	// its tables from snapshot signals.
-	Tables    []TableID
 	ChunkSize int
 	Deps      Deps[W]
 	// MaxDrainChunks caps how many chunks one OnCommit may release, which it
