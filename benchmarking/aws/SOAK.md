@@ -15,7 +15,7 @@ files named below.
 | Runner soak mode | `runner/` (main.go, matrix.go, cloudwatch.go) | scaled cadences, 10-min S3 checkpoints, per-minute CloudWatch emission, backlog series |
 | Dashboards + alarms | `terraform/persistent/` (`main.tf` `soak_scenarios` var, `alarms.tf`) | one dashboard + three alarms (stall / rss-slope / backlog) per scenario → SNS `redpanda-connect-bench-soak-alerts` |
 | Archive + baseline | `redpanda-connect-bench-soak-archive` bucket | result.json + raw artifacts per run; `soak-index/` feeds the rolling-baseline comparator (advisory < 3 runs, then fails the job on throughput < 85% / RSS > 130% of baseline) |
-| Nightly workflow | `.github/workflows/soak_nightly.yml` | 08:10 UTC cron (arms only from the default branch) + manual dispatch; OIDC creds (4h), license from Secrets Manager, teardown verified against AWS |
+| Nightly workflow | `.github/workflows/soak_nightly.yml` | 08:10 UTC cron over the rotation matrix (postgres, mysql; serialized, arms only from the default branch) + manual dispatch; OIDC creds (4h), license from Secrets Manager, teardown verified against AWS |
 | PR comparison | `.github/workflows/soak_pr.yml` | `/soak` comment (write-access gated) → base-vs-PR binaries, same infra, sticky comparison comment |
 
 ## Adding a connector to the rotation
@@ -32,14 +32,23 @@ files named below.
    in `terraform/persistent/variables.tf` (key → connector + scenario
    name), then `task aws:persistent`. Alarms and the dashboard are
    generated per entry; Slack delivery is on by default via `slack.tf`'s
-   committed IDs — no extra vars needed.
-4. **First runs**: dispatch the nightly workflow manually with the
+   committed IDs — no extra vars needed. **Apply this BEFORE the rotation
+   entry merges** — the cron arms itself the moment the workflow lands on
+   the default branch, and until the persistent apply runs, nothing
+   watches the new connector's metrics.
+4. **Add it to the nightly rotation**: append the scenario path to the
+   schedule list in `soak_nightly.yml`'s plan job. The matrix is
+   serialized (`max-parallel: 1` — one bench at a time) and
+   `fail-fast: false`, so each rotation entry soaks even when another is
+   red; a manual dispatch still runs only the scenario named in the input.
+5. **First runs**: dispatch the nightly workflow manually with the
    scenario input. The baseline comparator stays advisory until three
    soak-index entries exist.
-5. **Optionally add a PR variant** (`*-soak-pr.yaml`): same scenario with
+6. **Optionally add a PR variant** (`*-soak-pr.yaml`): same scenario with
    30m duration and `arms: [{id: base, binary: base}, {id: pr, binary:
    pr}]`. The scenario NAME must differ from the nightly's so its metrics
-   land outside the alarm dimensions.
+   land outside the alarm dimensions. `/soak <engine>/<name>-pr` selects it
+   on a PR (the default remains postgres/orders-soak-pr).
 
 ## Operating it
 
@@ -106,7 +115,7 @@ files named below.
   backend now uses S3-native `use_lockfile` locking), disarmed the orphan
   reaper's schedule rule **every night**, and deleted the stall + backlog
   alarms. The exemption is the `cloud-nuke-excluded = true` tag, applied via
-  `default_tags` in all three stacks — the persistent stack so the reaper
+  `default_tags` in every stack — the persistent stack so the reaper
   schedule and alarms survive, the session stacks so a live bench crossing
   02:25 UTC isn't terminated mid-run. Our OWN reaper keys on `Project`, not
   this tag, so bench cleanup at the 4h TTL is unaffected. Any new resource
@@ -115,8 +124,11 @@ files named below.
 
 - postgres_cdc IAM auth cannot work against vanilla RDS (replication-
   protocol connections reject IAM tokens — verified live 2026-08-12), so
-  the credential-rotation window is covered by a future mysql_cdc soak or
-  Aurora, not the postgres soak.
+  the postgres soak cannot cover the credential-rotation window. The mysql
+  soak is its designated home (RDS IAM tokens ride normal-protocol MySQL
+  connections), but it runs password auth today — the IAM increment (the
+  AWSAuthenticationPlugin DB user in reset, the rds-db:connect policy in
+  the mysql stack, a live validation pass) is still open.
 - The nightly cron only arms once `soak_nightly.yml` is on the repo's
   default branch; until then, manual dispatch.
 - The weekly 24h soak needs two prerequisites before it can exist: a

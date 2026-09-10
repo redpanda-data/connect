@@ -97,14 +97,40 @@ func TestEngineSpecFor_Postgres(t *testing.T) {
 	}
 }
 
+func TestEngineSpecFor_MySQL(t *testing.T) {
+	es, ok := engineSpecFor("mysql_cdc")
+	if !ok {
+		t.Fatalf("mysql_cdc should be registered")
+	}
+	if es.DSNOutputKey != "mysql_dsn" {
+		t.Errorf("DSNOutputKey = %q, want mysql_dsn", es.DSNOutputKey)
+	}
+	if es.DSNEnvVar != "MYSQL_DSN" {
+		t.Errorf("DSNEnvVar = %q, want MYSQL_DSN", es.DSNEnvVar)
+	}
+	// The mysql CLI takes discrete flags, not a DSN URL, so the reset
+	// builder needs every split-out output key populated.
+	for name, got := range map[string]string{
+		"ResetHostOutputKey": es.ResetHostOutputKey,
+		"ResetPortOutputKey": es.ResetPortOutputKey,
+		"ResetUserOutputKey": es.ResetUserOutputKey,
+		"ResetPassOutputKey": es.ResetPassOutputKey,
+		"ResetDBOutputKey":   es.ResetDBOutputKey,
+	} {
+		if got == "" {
+			t.Errorf("%s must be set for mysql's discrete-flags reset form", name)
+		}
+	}
+}
+
 func TestEngineSpecFor_Unknown(t *testing.T) {
 	if _, ok := engineSpecFor("kafka_franz_in_disguise"); ok {
 		t.Error("unknown connector should not resolve")
 	}
-	// mysql_cdc, oracledb_cdc, microsoft_sql_server_cdc, mongodb_cdc, and
+	// oracledb_cdc, microsoft_sql_server_cdc, mongodb_cdc, and
 	// aws_dynamodb_cdc were trimmed from the registry in this scope-reduced
-	// (postgres_cdc-only) tree; each returns with its own stack PR.
-	for _, trimmed := range []string{"mysql_cdc", "oracledb_cdc", "microsoft_sql_server_cdc", "mongodb_cdc", "aws_dynamodb_cdc"} {
+	// tree; each returns with its own stack PR.
+	for _, trimmed := range []string{"oracledb_cdc", "microsoft_sql_server_cdc", "mongodb_cdc", "aws_dynamodb_cdc"} {
 		if _, ok := engineSpecFor(trimmed); ok {
 			t.Errorf("%s should not be registered in this scope-reduced tree", trimmed)
 		}
@@ -388,6 +414,41 @@ func TestLoadScenario_OrdersSoak(t *testing.T) {
 	require.Equal(t, 5*time.Minute, s.Workload.Warmup)
 	require.Equal(t, 10000, s.Workload.WriteRatePerSec)
 	require.NoError(t, s.Validate())
+}
+
+// TestLoadScenario_MySQLOrdersSoak is the same validity gate for the mysql
+// rotation entry: the shipped scenarios/mysql/orders-soak.yaml must load and
+// validate as a soak scenario, not merely parse.
+func TestLoadScenario_MySQLOrdersSoak(t *testing.T) {
+	s, err := LoadScenario("../scenarios/mysql/orders-soak.yaml")
+	require.NoError(t, err)
+	require.True(t, s.Soak)
+	require.Equal(t, "mysql_cdc", s.Connector)
+	require.Equal(t, "mysql", s.Stack)
+	require.Equal(t, []int{2}, s.Matrix.CPUPoints)
+	require.Empty(t, s.Matrix.Arms)
+	require.Equal(t, "c8g.xlarge", s.Infra.Runner.InstanceType)
+	require.NotNil(t, s.Workload)
+	require.Equal(t, 90*time.Minute, s.Workload.Duration)
+	require.Equal(t, 5*time.Minute, s.Workload.Warmup)
+	require.Equal(t, 10000, s.Workload.WriteRatePerSec)
+	// mysql_cdc requires a checkpoint cache resource; the scenario must ship
+	// one or the rendered config fails lint on the runner host, an hour of
+	// provisioning too late.
+	require.Contains(t, s.Pipeline, "cache_resources")
+	require.NoError(t, s.Validate())
+}
+
+// TestLoadScenario_MySQLOrdersSoakPR pins the /soak A/B variant: binary-only
+// arms on the same single-point soak profile as the nightly, under a
+// deliberately different scenario name so its metrics dodge the alarms.
+func TestLoadScenario_MySQLOrdersSoakPR(t *testing.T) {
+	s, err := LoadScenario("../scenarios/mysql/orders-soak-pr.yaml")
+	require.NoError(t, err)
+	require.True(t, s.Soak)
+	require.True(t, s.IsBinaryArmScenario())
+	require.Equal(t, 30*time.Minute, s.Workload.Duration)
+	require.NotEqual(t, "mysql-orders-soak", s.Name)
 }
 
 func TestScenarioValidate_RejectsSoakWithMultipleCPUPoints(t *testing.T) {
