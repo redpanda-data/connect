@@ -578,6 +578,188 @@ func TestCoordinatorMidDrainFailureResumesWithoutLoss(t *testing.T) {
 	}
 }
 
+// TestCoordinatorReconcilesConfiguredTablesOnResume covers what Start makes
+// of a checkpoint whose table set no longer matches the config.
+func TestCoordinatorReconcilesConfiguredTablesOnResume(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+	tableB := TableID{Schema: "public", Table: "b"}
+	tableC := TableID{Schema: "public", Table: "c"}
+
+	newCoordinator := func(t *testing.T, configured []TableID, resume *State) *Coordinator[uint64, testWatermark] {
+		t.Helper()
+		tables := map[string]*mockTable{}
+		for _, table := range append([]TableID{tableA, tableB, tableC}, configured...) {
+			tables[table.String()] = &mockTable{
+				pkCols: []string{"id"},
+				rows:   []Row{rowFor(table, 1)},
+				maxPK:  PrimaryKey{1},
+			}
+		}
+		mock := newScriptedMockDeps(tables, 1)
+		mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
+
+		coord, err := NewCoordinator(testConfig{
+			Tables:    configured,
+			ChunkSize: 1,
+			Deps:      mock,
+		}, resume)
+		require.NoError(t, err)
+		require.NoError(t, coord.Start(t.Context()))
+		return coord
+	}
+
+	t.Run("fresh start records the configured set", func(t *testing.T) {
+		coord := newCoordinator(t, []TableID{tableA, tableB}, nil)
+		assert.Equal(t, []TableID{tableA, tableB}, coord.State().Tables)
+		assert.Empty(t, coord.AddedOnResume())
+		assert.Empty(t, coord.RemovedOnResume())
+	})
+
+	t.Run("added table is queued for backfill", func(t *testing.T) {
+		coord := newCoordinator(t, []TableID{tableA, tableB}, &State{
+			Version:      CurrentStateVersion,
+			CurrentTable: &tableA,
+			LastSentPK:   PrimaryKey{int64(5)},
+			MaxPK:        PrimaryKey{int64(9)},
+			Tables:       []TableID{tableA},
+		})
+
+		assert.Equal(t, []TableID{tableB}, coord.AddedOnResume())
+		assert.Equal(t, []TableID{tableA, tableB}, coord.State().Tables)
+		assert.Equal(t, []TableID{tableB}, coord.State().RemainingTables,
+			"the added table joins the back of the queue")
+	})
+
+	t.Run("added table reopens a finished snapshot", func(t *testing.T) {
+		coord := newCoordinator(t, []TableID{tableA, tableB}, &State{
+			Version: CurrentStateVersion,
+			Done:    true,
+			Tables:  []TableID{tableA},
+		})
+
+		assert.False(t, coord.Done(), "a finished checkpoint must reopen, or the new table is never read")
+		assert.Equal(t, []TableID{tableB}, coord.AddedOnResume())
+	})
+
+	t.Run("finished snapshot stays finished when nothing was added", func(t *testing.T) {
+		coord := newCoordinator(t, []TableID{tableA}, &State{
+			Version: CurrentStateVersion,
+			Done:    true,
+			Tables:  []TableID{tableA},
+		})
+
+		assert.True(t, coord.Done())
+		assert.Empty(t, coord.AddedOnResume())
+		assert.Equal(t, []TableID{tableA}, coord.State().Tables,
+			"the terminal checkpoint must keep the table set, or a later addition looks known")
+	})
+
+	t.Run("already finished table is not backfilled again", func(t *testing.T) {
+		// tableA is in Tables but neither current nor remaining, so this run
+		// finished it. Listing it in the config must not re-read it.
+		coord := newCoordinator(t, []TableID{tableA, tableB}, &State{
+			Version:      CurrentStateVersion,
+			CurrentTable: &tableB,
+			LastSentPK:   PrimaryKey{int64(3)},
+			MaxPK:        PrimaryKey{int64(7)},
+			Tables:       []TableID{tableA, tableB},
+		})
+
+		assert.Empty(t, coord.AddedOnResume())
+		assert.Empty(t, coord.State().RemainingTables)
+	})
+
+	t.Run("queued table dropped when no longer configured", func(t *testing.T) {
+		coord := newCoordinator(t, []TableID{tableA}, &State{
+			Version:         CurrentStateVersion,
+			CurrentTable:    &tableA,
+			LastSentPK:      PrimaryKey{int64(1)},
+			MaxPK:           PrimaryKey{int64(9)},
+			RemainingTables: []TableID{tableC},
+			Tables:          []TableID{tableA, tableC},
+		})
+
+		assert.Equal(t, []TableID{tableC}, coord.RemovedOnResume())
+		assert.Empty(t, coord.State().RemainingTables)
+		assert.Equal(t, []TableID{tableA}, coord.State().Tables)
+	})
+
+	t.Run("current table dropped when no longer configured", func(t *testing.T) {
+		// tableC is mid-backfill. Dropping it abandons the read where it
+		// stopped, and the next plan takes tableA from the queue.
+		coord := newCoordinator(t, []TableID{tableA}, &State{
+			Version:         CurrentStateVersion,
+			CurrentTable:    &tableC,
+			LastSentPK:      PrimaryKey{int64(4)},
+			MaxPK:           PrimaryKey{int64(9)},
+			RemainingTables: []TableID{tableA},
+			Tables:          []TableID{tableC, tableA},
+		})
+
+		assert.Equal(t, []TableID{tableC}, coord.RemovedOnResume())
+
+		// State reports the committed fields, so the chunk Start just
+		// buffered is not in it yet. The checkpoint must therefore leave
+		// tableA queued, so a crash before the first flush re-plans it.
+		state := coord.State()
+		assert.Nil(t, state.CurrentTable)
+		assert.Equal(t, []TableID{tableA}, state.RemainingTables)
+		assert.Equal(t, []TableID{tableA}, state.Tables)
+		assert.Nil(t, state.LastSentPK, "the abandoned table's key bound must not carry over")
+		assert.Nil(t, state.MaxPK)
+	})
+
+	t.Run("removing every table completes the snapshot", func(t *testing.T) {
+		coord := newCoordinator(t, []TableID{tableA}, &State{
+			Version:         CurrentStateVersion,
+			CurrentTable:    &tableB,
+			LastSentPK:      PrimaryKey{int64(1)},
+			MaxPK:           PrimaryKey{int64(9)},
+			RemainingTables: []TableID{tableC},
+			Tables:          []TableID{tableB, tableC},
+		})
+
+		assert.ElementsMatch(t, []TableID{tableB, tableC}, coord.RemovedOnResume())
+		// tableA is configured but unknown, so it is added and backfilled.
+		assert.Equal(t, []TableID{tableA}, coord.AddedOnResume())
+		assert.Equal(t, []TableID{tableA}, coord.State().Tables)
+	})
+
+	t.Run("removal applies to a version 1 checkpoint", func(t *testing.T) {
+		// A version 1 checkpoint adds nothing, but a removal needs only the
+		// queue, so it still applies.
+		coord := newCoordinator(t, []TableID{tableA}, &State{
+			Version:         1,
+			CurrentTable:    &tableA,
+			LastSentPK:      PrimaryKey{int64(2)},
+			MaxPK:           PrimaryKey{int64(9)},
+			RemainingTables: []TableID{tableC},
+		})
+
+		assert.Equal(t, []TableID{tableC}, coord.RemovedOnResume())
+		assert.Empty(t, coord.State().RemainingTables)
+		assert.Equal(t, []TableID{tableA}, coord.State().Tables)
+	})
+
+	t.Run("version 1 checkpoint adds nothing", func(t *testing.T) {
+		// A version 1 checkpoint has no Tables, so its finished tables are
+		// unknown. Adding on that basis would re-read them, so this run adds
+		// nothing and only records the set for next time.
+		coord := newCoordinator(t, []TableID{tableA, tableB}, &State{
+			Version:      1,
+			CurrentTable: &tableA,
+			LastSentPK:   PrimaryKey{int64(4)},
+			MaxPK:        PrimaryKey{int64(8)},
+		})
+
+		assert.Empty(t, coord.AddedOnResume())
+		assert.Empty(t, coord.State().RemainingTables)
+		assert.Equal(t, []TableID{tableA, tableB}, coord.State().Tables)
+		assert.Equal(t, CurrentStateVersion, coord.State().Version,
+			"the checkpoint it writes must be the current version")
+	})
+}
+
 func TestCoordinatorConfigValidation(t *testing.T) {
 	validDeps := newScriptedMockDeps(map[string]*mockTable{}, 1)
 

@@ -16,7 +16,12 @@ import (
 )
 
 // CurrentStateVersion contains the version of the state.
-const CurrentStateVersion = 1
+const CurrentStateVersion = 2
+
+// minSupportedStateVersion is the oldest layout a checkpoint may use. A
+// version 1 checkpoint carries no Tables, which Start treats as an unknown
+// table set. Refer to reconcileTables.
+const minSupportedStateVersion = 1
 
 // ErrUnsupportedStateVersion reports a checkpoint written by a build using a
 // different State layout.
@@ -32,6 +37,10 @@ type State struct {
 	LastSentPK      PrimaryKey `json:"last_sent_pk,omitempty"`
 	MaxPK           PrimaryKey `json:"max_pk,omitempty"`
 	RemainingTables []TableID  `json:"remaining_tables,omitempty"`
+	// Tables is every table this run covers, the finished ones included. It
+	// is what makes a table added to the config afterwards recognisable as
+	// new. Version 1 checkpoints omit it.
+	Tables []TableID `json:"tables,omitempty"`
 }
 
 // UnmarshalJSON decodes a checkpoint, keeping integer keys exact.
@@ -61,8 +70,8 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	narrowPrimaryKey(s.LastSentPK)
 	narrowPrimaryKey(s.MaxPK)
 
-	if s.Version != CurrentStateVersion {
-		return fmt.Errorf("%w: got %d, want %d", ErrUnsupportedStateVersion, s.Version, CurrentStateVersion)
+	if s.Version < minSupportedStateVersion || s.Version > CurrentStateVersion {
+		return fmt.Errorf("%w: got %d, want %d..%d", ErrUnsupportedStateVersion, s.Version, minSupportedStateVersion, CurrentStateVersion)
 	}
 	return nil
 }
@@ -113,6 +122,9 @@ func (s *State) Clone() *State {
 	}
 	if s.RemainingTables != nil {
 		clone.RemainingTables = append([]TableID{}, s.RemainingTables...)
+	}
+	if s.Tables != nil {
+		clone.Tables = append([]TableID{}, s.Tables...)
 	}
 
 	return clone
