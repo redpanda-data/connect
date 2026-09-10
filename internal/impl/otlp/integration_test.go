@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -38,12 +39,9 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/redpanda"
 )
 
-func producerConfig(transport string, encoding Encoding, broker, srURL, topic string) string {
-	port := "4318"
-
+func producerConfig(transport string, encoding Encoding, port int, broker, srURL, topic string) string {
 	inputType := "otlp_http"
 	if transport == "grpc" {
-		port = "4317"
 		inputType = "otlp_grpc"
 	}
 
@@ -53,7 +51,7 @@ logger:
 
 input:
   %s:
-    address: "0.0.0.0:%s"
+    address: "0.0.0.0:%d"
     encoding: "%s"
     schema_registry:
       url: "%s"
@@ -104,7 +102,7 @@ output:
 `, broker, topic, srURL, outputConfig)
 }
 
-func otelgenCommand(signalType SignalType, transport string, rate int, duration time.Duration) []string {
+func otelgenCommand(signalType SignalType, transport string, port int, rate int, duration time.Duration) []string {
 	cmd := []string{
 		signalType.String() + "s", // telemetrygen expects plural forms: traces, logs, metrics
 		"--rate", fmt.Sprintf("%d", rate),
@@ -112,10 +110,11 @@ func otelgenCommand(signalType SignalType, transport string, rate int, duration 
 		"--workers", "1",
 		"--otlp-insecure",
 	}
+	endpoint := fmt.Sprintf("host.docker.internal:%d", port)
 	if transport == "grpc" {
-		cmd = append(cmd, "--otlp-endpoint", "host.docker.internal:4317")
+		cmd = append(cmd, "--otlp-endpoint", endpoint)
 	} else {
-		cmd = append(cmd, "--otlp-http", "--otlp-endpoint", "host.docker.internal:4318")
+		cmd = append(cmd, "--otlp-http", "--otlp-endpoint", endpoint)
 	}
 
 	return cmd
@@ -148,8 +147,15 @@ func TestIntegrationOTLPWithSchemaRegistry(t *testing.T) {
 		{SignalTypeMetric, EncodingProtobuf, "grpc"},
 	}
 
+	// cap how many tests/containers run concurrently
+	sem := make(chan struct{}, 4)
+
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("%s_%s_%s", tc.signalType, tc.transport, tc.encoding), func(t *testing.T) {
+			t.Parallel()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
 			t.Log("Given: Redpanda with Schema Registry")
 			seed, srURL := startRedpandaWithSchemaRegistry(t)
 			t.Logf("Redpanda broker: %s", seed)
@@ -164,8 +170,11 @@ func TestIntegrationOTLPWithSchemaRegistry(t *testing.T) {
 			t.Logf("OTel Collector endpoints - HTTP: %s, gRPC: %s", collectorHTTP, collectorGRPC)
 
 			t.Log("When: generating telemetry data and sending to Redpanda via Benthos pipeline")
-			ps := startStream(t, producerConfig(tc.transport, tc.encoding, seed, srURL, topic))
-			runOtelgen(t, otelgenCommand(tc.signalType, tc.transport, *soakRate, *soakDuration))
+			producerPort, err := integration.GetFreePort()
+			require.NoError(t, err)
+			ps := startStream(t, producerConfig(tc.transport, tc.encoding, producerPort, seed, srURL, topic))
+			waitForListening(t, producerPort)
+			runOtelgen(t, otelgenCommand(tc.signalType, tc.transport, producerPort, *soakRate, *soakDuration))
 			require.NoError(t, ps.StopWithin(3*time.Second))
 
 			t.Log("And: reading from Redpanda and sending to OTel Collector via pipeline")
@@ -371,4 +380,17 @@ func startStream(t *testing.T, confYAML string) *service.Stream {
 	})
 
 	return stream
+}
+
+func waitForListening(t *testing.T, port int) {
+	t.Helper()
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	require.Eventually(t, func() bool {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			return false
+		}
+		_ = conn.Close()
+		return true
+	}, 10*time.Second, 50*time.Millisecond, "otlp input server did not start listening on %s in time", addr)
 }
