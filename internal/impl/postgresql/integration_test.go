@@ -134,6 +134,12 @@ func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *pgtes
 
 		// flights_non_streamed is a control table with data that should not be streamed or queried by snapshot streaming
 		_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights_non_streamed (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
+		if err != nil {
+			return false
+		}
+
+		// The incremental snapshot takes its tables from this table.
+		_, err = db.Exec("CREATE TABLE IF NOT EXISTS rpcn_signal (id serial PRIMARY KEY, type VARCHAR(32), data TEXT);")
 
 		return err == nil
 	}, 2*time.Minute, time.Second, "could not connect to postgres")
@@ -1718,6 +1724,25 @@ postgres_cdc:
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
 }
 
+// signalIncrementalSnapshot asks for a backfill of tables.
+//
+// It waits for the replication slot first: a signal inserted before the slot
+// exists is not in the streamed WAL, so the connector would never see it.
+func signalIncrementalSnapshot(t *testing.T, db *pgtest.TestDB, slotName string, tables ...string) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		var found bool
+		err := db.QueryRow(`SELECT EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = $1)`, slotName).Scan(&found)
+		return err == nil && found
+	}, time.Minute, 50*time.Millisecond, "replication slot %s was never created", slotName)
+
+	payload, err := json.Marshal(map[string]any{"tables": tables})
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO rpcn_signal (type, data) VALUES ('snapshot', $1)`, string(payload))
+	require.NoError(t, err)
+}
+
 func TestIntegrationIncrementalSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -1746,6 +1771,7 @@ postgres_cdc:
     heartbeat_interval: 500ms
     tables:
       - flights
+    signal_table_name: rpcn_signal
     incremental_snapshot:
         enabled: true
         chunk_size: 20
@@ -1767,6 +1793,12 @@ memory: {}`))
 			mu.Lock()
 			defer mu.Unlock()
 			for _, msg := range batch {
+				// The snapshot signal row streams like any other insert. It
+				// is not test data, and its serial id collides with the ids
+				// under test.
+				if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+					continue
+				}
 				data, err := msg.AsStructured()
 				if err != nil {
 					return err
@@ -1792,6 +1824,10 @@ memory: {}`))
 				t.Error(err)
 			}
 		}()
+
+		// Tables come from a signal, so ask for the backfill now that
+		// the slot exists.
+		signalIncrementalSnapshot(t, db, "test_slot_incremental_concurrent", "flights")
 
 		// Wait for at least one backfill row before writing concurrently: it
 		// proves the coordinator's max-PK bound is already frozen, so every
@@ -1905,6 +1941,7 @@ postgres_cdc:
     heartbeat_interval: 500ms
     tables:
       - %s
+    signal_table_name: rpcn_signal
     incremental_snapshot:
         enabled: true
         chunk_size: 50
@@ -1931,6 +1968,12 @@ memory: {}`))
 				mu.Lock()
 				defer mu.Unlock()
 				for _, msg := range batch {
+					// The snapshot signal row streams like any other insert. It
+					// is not test data, and its serial id collides with the ids
+					// under test.
+					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+						continue
+					}
 					data, err := msg.AsStructured()
 					if err != nil {
 						return err
@@ -1967,6 +2010,10 @@ memory: {}`))
 					t.Error(err)
 				}
 			}()
+
+			// Tables come from a signal, so ask for the backfill now that
+			// the slot exists.
+			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_%s", keyed.table), keyed.table)
 
 			require.Eventually(t, func() bool {
 				mu.Lock()
@@ -2041,6 +2088,7 @@ postgres_cdc:
     heartbeat_interval: 500ms
     tables:
       - flights
+    signal_table_name: rpcn_signal
     incremental_snapshot:
         enabled: true
         chunk_size: 50
@@ -2070,6 +2118,12 @@ memory: {}`))
 			mu.Lock()
 			defer mu.Unlock()
 			for _, msg := range batch {
+				// The snapshot signal row streams like any other insert. It
+				// is not test data, and its serial id collides with the ids
+				// under test.
+				if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+					continue
+				}
 				data, err := msg.AsStructured()
 				if err != nil {
 					return err
@@ -2106,6 +2160,10 @@ memory: {}`))
 				t.Error(err)
 			}
 		}()
+
+		// Tables come from a signal, so ask for the backfill now that
+		// the slot exists.
+		signalIncrementalSnapshot(t, db, "test_slot_incremental_collision", "flights")
 
 		// Wait for the backfill to start, so the max-key bound is frozen and
 		// the updates below genuinely race chunk reads.
@@ -2191,6 +2249,7 @@ postgres_cdc:
     heartbeat_interval: 200ms
     tables:
       - flights
+    signal_table_name: rpcn_signal
     incremental_snapshot:
         enabled: true
         chunk_size: 20
@@ -2212,6 +2271,12 @@ memory: {}`))
 				mu.Lock()
 				defer mu.Unlock()
 				for _, msg := range batch {
+					// The snapshot signal row streams like any other insert. It
+					// is not test data, and its serial id collides with the ids
+					// under test.
+					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+						continue
+					}
 					data, err := msg.AsStructured()
 					if err != nil {
 						return err
@@ -2237,6 +2302,10 @@ memory: {}`))
 					t.Error(err)
 				}
 			}()
+
+			// Tables come from a signal, so ask for the backfill now that
+			// the slot exists.
+			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_quiet_pg%s", version), "flights")
 
 			// No writes from here, so only the heartbeat advances the
 			// snapshot.
@@ -2273,6 +2342,7 @@ postgres_cdc:
     heartbeat_interval: 100ms
     tables:
       - flights
+    signal_table_name: rpcn_signal
     incremental_snapshot:
         enabled: true
         chunk_size: 20
@@ -2297,6 +2367,12 @@ file:
 				mu.Lock()
 				defer mu.Unlock()
 				for _, msg := range batch {
+					// The snapshot signal row streams like any other insert. It
+					// is not test data, and its serial id collides with the ids
+					// under test.
+					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+						continue
+					}
 					data, err := msg.AsStructured()
 					if err != nil {
 						return err
@@ -2322,6 +2398,10 @@ file:
 					t.Error(err)
 				}
 			}()
+
+			// Tables come from a signal, so ask for the backfill now that
+			// the slot exists.
+			signalIncrementalSnapshot(t, db, "test_slot_incremental_resume", "flights")
 
 			require.Eventually(t, func() bool {
 				mu.Lock()

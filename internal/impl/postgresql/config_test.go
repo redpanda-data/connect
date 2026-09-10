@@ -52,7 +52,7 @@ incremental_snapshot:
 			pConf, err := newPostgresCDCConfig().ParseYAML(test.conf, service.NewEnvironment())
 			require.NoError(t, err)
 
-			got, err := parseIncrementalSnapshotCfg(pConf, time.Hour, nil, false)
+			got, err := parseIncrementalSnapshotCfg(pConf, time.Hour, "", false)
 			require.NoError(t, err)
 			require.NotNil(t, got, "callers read the returned fields unconditionally")
 
@@ -60,4 +60,26 @@ incremental_snapshot:
 			assert.Equal(t, newDefaultIncSnapshotCfg(), got)
 		})
 	}
+}
+
+// TestParseIncrementalSnapshotCfgRequiresSignalTable: tables are requested
+// by signal, so without a signal table nothing could ever be backfilled.
+func TestParseIncrementalSnapshotCfgRequiresSignalTable(t *testing.T) {
+	const conf = `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+tables:
+  - events
+incremental_snapshot:
+  enabled: true
+  checkpoint_cache: snap_cache
+`
+
+	pConf, err := newPostgresCDCConfig().ParseYAML(conf, service.NewEnvironment())
+	require.NoError(t, err)
+
+	_, err = parseIncrementalSnapshotCfg(pConf, time.Hour, "", false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "signal_table_name")
 }

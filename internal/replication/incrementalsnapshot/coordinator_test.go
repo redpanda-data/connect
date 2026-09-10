@@ -89,7 +89,7 @@ func TestCoordinatorFullScenario(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, coord.Start(t.Context()))
 
-	require.False(t, coord.Done())
+	require.False(t, coord.Idle())
 	require.NotNil(t, coord.current)
 	assert.Equal(t, tableA, *coord.current)
 	assert.Equal(t, PrimaryKey{3}, coord.lastSentPK)
@@ -163,7 +163,7 @@ func TestCoordinatorFullScenario(t *testing.T) {
 	assert.Equal(t, PrimaryKey{11}, emitted[1].PK)
 
 	// B's short chunk skipped the zero-row round-trip straight to done.
-	assert.True(t, coord.Done())
+	assert.True(t, coord.Idle())
 }
 
 func TestCoordinatorZeroRowAdvanceBetweenTables(t *testing.T) {
@@ -229,10 +229,10 @@ func TestCoordinatorZeroRowAdvanceBetweenTables(t *testing.T) {
 	assert.True(t, changed)
 	assert.Len(t, emitted, 2)
 
-	assert.True(t, coord.Done())
+	assert.True(t, coord.Idle())
 }
 
-func TestCoordinatorOnCommitNoopsWhenDone(t *testing.T) {
+func TestCoordinatorOnCommitNoopsWhenIdle(t *testing.T) {
 	cfg := testConfig{
 		Tables:    nil,
 		ChunkSize: 10,
@@ -242,12 +242,15 @@ func TestCoordinatorOnCommitNoopsWhenDone(t *testing.T) {
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
 	require.NoError(t, coord.Start(t.Context()))
-	require.True(t, coord.Done())
+	require.True(t, coord.Idle())
 
+	// An idle coordinator has nothing queued and nothing buffered, so a
+	// commit has no bearing on it. It emits no completion: AddTables may
+	// bring more work at any time.
 	emitted, changed, err := onCommit(t, coord, 100)
 	require.NoError(t, err)
-	assert.True(t, changed, "the Done checkpoint must reach the caller")
-	assert.Empty(t, emitted, "it carries state only, no rows")
+	assert.False(t, changed)
+	assert.Empty(t, emitted)
 
 	emitted, changed, err = onCommit(t, coord, 101)
 	require.NoError(t, err)
@@ -286,7 +289,7 @@ func TestCoordinatorSkipsEmptyTable(t *testing.T) {
 
 	// The empty table must be skipped entirely, straight on to table B,
 	// without erroring or wasting a watermark/fetch round trip on it.
-	require.False(t, coord.Done())
+	require.False(t, coord.Idle())
 	require.NotNil(t, coord.current)
 	assert.Equal(t, tableB, *coord.current)
 	assert.Equal(t, 2, coord.window.Len())
@@ -295,7 +298,7 @@ func TestCoordinatorSkipsEmptyTable(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, changed)
 	assert.Len(t, emitted, 2)
-	assert.True(t, coord.Done())
+	assert.True(t, coord.Idle())
 }
 
 // TestCoordinatorAllTablesEmpty: every configured table having no rows must
@@ -319,7 +322,7 @@ func TestCoordinatorAllTablesEmpty(t *testing.T) {
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
 	require.NoError(t, coord.Start(t.Context()))
-	assert.True(t, coord.Done())
+	assert.True(t, coord.Idle())
 }
 
 func TestCoordinatorResumeAlwaysDerivesFreshWatermark(t *testing.T) {
@@ -354,7 +357,6 @@ func TestCoordinatorResumeAlwaysDerivesFreshWatermark(t *testing.T) {
 	// Pre-flush checkpoint must report the baseline, not tableA's unflushed
 	// first chunk.
 	state := coord.State()
-	require.False(t, state.Done)
 	assert.Nil(t, state.CurrentTable)
 	assert.Equal(t, []TableID{tableA, tableB}, state.RemainingTables)
 
@@ -407,7 +409,6 @@ func TestCoordinatorResumeRefetchesUnflushedChunk(t *testing.T) {
 
 	// Chunk 2 fetched but not flushed; checkpoint must reflect only chunk 1.
 	state := coord.State()
-	require.False(t, state.Done)
 	require.NotNil(t, state.CurrentTable)
 	assert.Equal(t, tableA, *state.CurrentTable)
 	assert.Equal(t, PrimaryKey{2}, state.LastSentPK)
@@ -546,7 +547,6 @@ func TestCoordinatorMidDrainFailureResumesWithoutLoss(t *testing.T) {
 			// The checkpoint must cover exactly what was emitted -- never a
 			// chunk that was only fetched.
 			state := coord.State()
-			require.False(t, state.Done)
 			require.NotNil(t, state.CurrentTable)
 			assert.Equal(t, table, *state.CurrentTable)
 			assert.Equal(t, PrimaryKey{4}, state.LastSentPK)
@@ -562,7 +562,7 @@ func TestCoordinatorMidDrainFailureResumesWithoutLoss(t *testing.T) {
 			var after [][]Row
 			_, err = resumed.OnCommit(t.Context(), 201, collect(&after))
 			require.NoError(t, err)
-			assert.True(t, resumed.Done())
+			assert.True(t, resumed.Idle())
 
 			// The whole table must come out exactly once across the two runs.
 			var got []int
@@ -578,185 +578,81 @@ func TestCoordinatorMidDrainFailureResumesWithoutLoss(t *testing.T) {
 	}
 }
 
-// TestCoordinatorReconcilesConfiguredTablesOnResume covers what Start makes
-// of a checkpoint whose table set no longer matches the config.
-func TestCoordinatorReconcilesConfiguredTablesOnResume(t *testing.T) {
+// TestCoordinatorAddTables covers the signal-driven path: a coordinator
+// starts with nothing queued and takes its tables at runtime.
+func TestCoordinatorAddTables(t *testing.T) {
 	tableA := TableID{Schema: "public", Table: "a"}
 	tableB := TableID{Schema: "public", Table: "b"}
-	tableC := TableID{Schema: "public", Table: "c"}
 
-	newCoordinator := func(t *testing.T, configured []TableID, resume *State) *Coordinator[uint64, testWatermark] {
+	newCoordinator := func(t *testing.T, resume *State) (*Coordinator[uint64, testWatermark], *scriptedMockDeps) {
 		t.Helper()
-		tables := map[string]*mockTable{}
-		for _, table := range append([]TableID{tableA, tableB, tableC}, configured...) {
-			tables[table.String()] = &mockTable{
-				pkCols: []string{"id"},
-				rows:   []Row{rowFor(table, 1)},
-				maxPK:  PrimaryKey{1},
-			}
-		}
-		mock := newScriptedMockDeps(tables, 1)
+		mock := newScriptedMockDeps(map[string]*mockTable{
+			tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1)}, maxPK: PrimaryKey{1}},
+			tableB.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableB, 1)}, maxPK: PrimaryKey{1}},
+		}, 1)
 		mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
 
-		coord, err := NewCoordinator(testConfig{
-			Tables:    configured,
-			ChunkSize: 1,
-			Deps:      mock,
-		}, resume)
+		coord, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: mock}, resume)
 		require.NoError(t, err)
 		require.NoError(t, coord.Start(t.Context()))
-		return coord
+		return coord, mock
 	}
 
-	t.Run("fresh start records the configured set", func(t *testing.T) {
-		coord := newCoordinator(t, []TableID{tableA, tableB}, nil)
-		assert.Equal(t, []TableID{tableA, tableB}, coord.State().Tables)
-		assert.Empty(t, coord.AddedOnResume())
-		assert.Empty(t, coord.RemovedOnResume())
+	t.Run("starts idle with nothing queued", func(t *testing.T) {
+		coord, _ := newCoordinator(t, nil)
+		assert.True(t, coord.Idle())
+		assert.Empty(t, coord.State().Tables)
 	})
 
-	t.Run("added table is queued for backfill", func(t *testing.T) {
-		coord := newCoordinator(t, []TableID{tableA, tableB}, &State{
-			Version:      CurrentStateVersion,
-			CurrentTable: &tableA,
-			LastSentPK:   PrimaryKey{int64(5)},
-			MaxPK:        PrimaryKey{int64(9)},
-			Tables:       []TableID{tableA},
-		})
+	t.Run("added tables leave idle and are recorded", func(t *testing.T) {
+		coord, _ := newCoordinator(t, nil)
 
-		assert.Equal(t, []TableID{tableB}, coord.AddedOnResume())
+		added := coord.AddTables([]TableID{tableA, tableB})
+		assert.Equal(t, []TableID{tableA, tableB}, added)
+		assert.False(t, coord.Idle())
 		assert.Equal(t, []TableID{tableA, tableB}, coord.State().Tables)
-		assert.Equal(t, []TableID{tableB}, coord.State().RemainingTables,
-			"the added table joins the back of the queue")
 	})
 
-	t.Run("added table reopens a finished snapshot", func(t *testing.T) {
-		coord := newCoordinator(t, []TableID{tableA, tableB}, &State{
+	t.Run("a table this run covers is not queued twice", func(t *testing.T) {
+		coord, _ := newCoordinator(t, nil)
+		require.Len(t, coord.AddTables([]TableID{tableA}), 1)
+
+		// Still queued, so a repeat signal must not duplicate it.
+		assert.Empty(t, coord.AddTables([]TableID{tableA}))
+		assert.Equal(t, []TableID{tableA}, coord.State().Tables)
+	})
+
+	t.Run("a finished table is not read again", func(t *testing.T) {
+		// Tables holds it but the queue does not, so this run finished it.
+		coord, _ := newCoordinator(t, &State{
 			Version: CurrentStateVersion,
-			Done:    true,
 			Tables:  []TableID{tableA},
 		})
 
-		assert.False(t, coord.Done(), "a finished checkpoint must reopen, or the new table is never read")
-		assert.Equal(t, []TableID{tableB}, coord.AddedOnResume())
+		assert.Empty(t, coord.AddTables([]TableID{tableA}))
+		assert.True(t, coord.Idle())
 	})
 
-	t.Run("finished snapshot stays finished when nothing was added", func(t *testing.T) {
-		coord := newCoordinator(t, []TableID{tableA}, &State{
-			Version: CurrentStateVersion,
-			Done:    true,
-			Tables:  []TableID{tableA},
-		})
+	t.Run("added table is backfilled on the next commit", func(t *testing.T) {
+		coord, _ := newCoordinator(t, nil)
+		coord.AddTables([]TableID{tableA})
 
-		assert.True(t, coord.Done())
-		assert.Empty(t, coord.AddedOnResume())
-		assert.Equal(t, []TableID{tableA}, coord.State().Tables,
-			"the terminal checkpoint must keep the table set, or a later addition looks known")
-	})
+		// The first commit only plans: it must not flush a checkpoint for a
+		// window that never held anything.
+		var chunks [][]Row
+		changed, err := coord.OnCommit(t.Context(), 5, collect(&chunks))
+		require.NoError(t, err)
+		assert.False(t, changed)
+		assert.Empty(t, chunks)
 
-	t.Run("already finished table is not backfilled again", func(t *testing.T) {
-		// tableA is in Tables but neither current nor remaining, so this run
-		// finished it. Listing it in the config must not re-read it.
-		coord := newCoordinator(t, []TableID{tableA, tableB}, &State{
-			Version:      CurrentStateVersion,
-			CurrentTable: &tableB,
-			LastSentPK:   PrimaryKey{int64(3)},
-			MaxPK:        PrimaryKey{int64(7)},
-			Tables:       []TableID{tableA, tableB},
-		})
-
-		assert.Empty(t, coord.AddedOnResume())
-		assert.Empty(t, coord.State().RemainingTables)
-	})
-
-	t.Run("queued table dropped when no longer configured", func(t *testing.T) {
-		coord := newCoordinator(t, []TableID{tableA}, &State{
-			Version:         CurrentStateVersion,
-			CurrentTable:    &tableA,
-			LastSentPK:      PrimaryKey{int64(1)},
-			MaxPK:           PrimaryKey{int64(9)},
-			RemainingTables: []TableID{tableC},
-			Tables:          []TableID{tableA, tableC},
-		})
-
-		assert.Equal(t, []TableID{tableC}, coord.RemovedOnResume())
-		assert.Empty(t, coord.State().RemainingTables)
-		assert.Equal(t, []TableID{tableA}, coord.State().Tables)
-	})
-
-	t.Run("current table dropped when no longer configured", func(t *testing.T) {
-		// tableC is mid-backfill. Dropping it abandons the read where it
-		// stopped, and the next plan takes tableA from the queue.
-		coord := newCoordinator(t, []TableID{tableA}, &State{
-			Version:         CurrentStateVersion,
-			CurrentTable:    &tableC,
-			LastSentPK:      PrimaryKey{int64(4)},
-			MaxPK:           PrimaryKey{int64(9)},
-			RemainingTables: []TableID{tableA},
-			Tables:          []TableID{tableC, tableA},
-		})
-
-		assert.Equal(t, []TableID{tableC}, coord.RemovedOnResume())
-
-		// State reports the committed fields, so the chunk Start just
-		// buffered is not in it yet. The checkpoint must therefore leave
-		// tableA queued, so a crash before the first flush re-plans it.
-		state := coord.State()
-		assert.Nil(t, state.CurrentTable)
-		assert.Equal(t, []TableID{tableA}, state.RemainingTables)
-		assert.Equal(t, []TableID{tableA}, state.Tables)
-		assert.Nil(t, state.LastSentPK, "the abandoned table's key bound must not carry over")
-		assert.Nil(t, state.MaxPK)
-	})
-
-	t.Run("removing every table completes the snapshot", func(t *testing.T) {
-		coord := newCoordinator(t, []TableID{tableA}, &State{
-			Version:         CurrentStateVersion,
-			CurrentTable:    &tableB,
-			LastSentPK:      PrimaryKey{int64(1)},
-			MaxPK:           PrimaryKey{int64(9)},
-			RemainingTables: []TableID{tableC},
-			Tables:          []TableID{tableB, tableC},
-		})
-
-		assert.ElementsMatch(t, []TableID{tableB, tableC}, coord.RemovedOnResume())
-		// tableA is configured but unknown, so it is added and backfilled.
-		assert.Equal(t, []TableID{tableA}, coord.AddedOnResume())
-		assert.Equal(t, []TableID{tableA}, coord.State().Tables)
-	})
-
-	t.Run("removal applies to a version 1 checkpoint", func(t *testing.T) {
-		// A version 1 checkpoint adds nothing, but a removal needs only the
-		// queue, so it still applies.
-		coord := newCoordinator(t, []TableID{tableA}, &State{
-			Version:         1,
-			CurrentTable:    &tableA,
-			LastSentPK:      PrimaryKey{int64(2)},
-			MaxPK:           PrimaryKey{int64(9)},
-			RemainingTables: []TableID{tableC},
-		})
-
-		assert.Equal(t, []TableID{tableC}, coord.RemovedOnResume())
-		assert.Empty(t, coord.State().RemainingTables)
-		assert.Equal(t, []TableID{tableA}, coord.State().Tables)
-	})
-
-	t.Run("version 1 checkpoint adds nothing", func(t *testing.T) {
-		// A version 1 checkpoint has no Tables, so its finished tables are
-		// unknown. Adding on that basis would re-read them, so this run adds
-		// nothing and only records the set for next time.
-		coord := newCoordinator(t, []TableID{tableA, tableB}, &State{
-			Version:      1,
-			CurrentTable: &tableA,
-			LastSentPK:   PrimaryKey{int64(4)},
-			MaxPK:        PrimaryKey{int64(8)},
-		})
-
-		assert.Empty(t, coord.AddedOnResume())
-		assert.Empty(t, coord.State().RemainingTables)
-		assert.Equal(t, []TableID{tableA, tableB}, coord.State().Tables)
-		assert.Equal(t, CurrentStateVersion, coord.State().Version,
-			"the checkpoint it writes must be the current version")
+		// The next one closes that chunk's window and releases it.
+		changed, err = coord.OnCommit(t.Context(), 6, collect(&chunks))
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.NotEmpty(t, chunks)
+		require.NotEmpty(t, chunks[0])
+		assert.Equal(t, tableA, chunks[0][0].Table)
+		assert.Equal(t, PrimaryKey{1}, chunks[0][0].PK)
 	})
 }
 
@@ -1034,7 +930,7 @@ func TestCoordinatorDedupsBufferedFinalChunk(t *testing.T) {
 	require.True(t, changed)
 	require.Len(t, emitted, 1)
 	assert.Equal(t, PrimaryKey{2}, emitted[0].PK)
-	assert.True(t, coord.Done())
+	assert.True(t, coord.Idle())
 }
 
 // newDrainCoordinator makes a coordinator for one table of six rows in three
@@ -1081,12 +977,11 @@ func TestCoordinatorDrainsQuietDatabaseInOneCommit(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, changed)
 
-	require.Len(t, chunks, 4, "every chunk should drain on one commit")
+	require.Len(t, chunks, 3, "every chunk should drain on one commit")
 	assert.Equal(t, PrimaryKey{1}, chunks[0][0].PK)
 	assert.Equal(t, PrimaryKey{3}, chunks[1][0].PK)
 	assert.Equal(t, PrimaryKey{5}, chunks[2][0].PK)
-	assert.Empty(t, chunks[3])
-	assert.True(t, coord.Done())
+	assert.True(t, coord.Idle(), "the queue is empty, but no completion is emitted")
 }
 
 func TestCoordinatorDrainRespectsMaxDrainChunks(t *testing.T) {
@@ -1102,7 +997,7 @@ func TestCoordinatorDrainRespectsMaxDrainChunks(t *testing.T) {
 
 	// The chunk of the window, and one more chunk from the drain.
 	require.Len(t, chunks, 2)
-	assert.False(t, coord.Done(), "a chunk stays buffered for the next commit")
+	assert.False(t, coord.Idle(), "a chunk stays buffered for the next commit")
 }
 
 func TestCoordinatorDrainStopsOnConcurrentActivity(t *testing.T) {
@@ -1200,7 +1095,6 @@ func TestCoordinatorEmitFailureLeavesCheckpointUnmoved(t *testing.T) {
 	// Nothing was sent, so the checkpoint must still be at the start and
 	// the rows must still be buffered.
 	state := coord.State()
-	require.False(t, state.Done)
 	assert.Nil(t, state.LastSentPK)
 	assert.Equal(t, chunkSize, coord.window.Len())
 
@@ -1238,7 +1132,10 @@ func TestCoordinatorForcesFreshTransactionOnceOnly(t *testing.T) {
 	assert.Equal(t, 1, deps.forceFreshCalls, "only Start should force a transaction id")
 }
 
-func TestCoordinatorEmitsTerminalStateAfterResume(t *testing.T) {
+// TestCoordinatorGoesIdleAfterResume: a checkpoint taken just before a
+// table was exhausted must not leave the coordinator reading. It goes idle
+// on the empty chunk and emits nothing, since more tables may be signalled.
+func TestCoordinatorGoesIdleAfterResume(t *testing.T) {
 	table := TableID{Schema: "public", Table: "a"}
 
 	const chunkSize = 2
@@ -1248,7 +1145,7 @@ func TestCoordinatorEmitsTerminalStateAfterResume(t *testing.T) {
 	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100})
 
 	// A checkpoint written just before the backfill finished: the table is
-	// current, its keys are exhausted, but done is still false.
+	// current and its keys are exhausted.
 	resume := &State{
 		Version:      CurrentStateVersion,
 		CurrentTable: &table,
@@ -1263,20 +1160,22 @@ func TestCoordinatorEmitsTerminalStateAfterResume(t *testing.T) {
 	}, resume)
 	require.NoError(t, err)
 	require.NoError(t, coord.Start(t.Context()))
-	require.True(t, coord.Done(), "the empty chunk read should complete the snapshot")
+	require.True(t, coord.Idle(), "the empty chunk read should empty the queue")
 
 	var chunks [][]Row
 	changed, err := coord.OnCommit(t.Context(), 101, collect(&chunks))
 	require.NoError(t, err)
-	require.True(t, changed, "the caller must see the completion so it can checkpoint and report it")
-	require.Len(t, chunks, 1)
-	assert.Empty(t, chunks[0], "the terminal checkpoint carries no rows")
-	assert.True(t, coord.State().Done, "the persisted state must now be done")
-
-	// Nothing further: the checkpoint is written once.
-	chunks = nil
-	changed, err = coord.OnCommit(t.Context(), 102, collect(&chunks))
-	require.NoError(t, err)
 	assert.False(t, changed)
 	assert.Empty(t, chunks)
+
+	// A signal brings it back to work, from a checkpoint that never said
+	// the snapshot was over.
+	other := TableID{Schema: "public", Table: "b"}
+	mock.tables[other.String()] = &mockTable{
+		pkCols: []string{"id"},
+		rows:   []Row{rowFor(other, 1)},
+		maxPK:  PrimaryKey{1},
+	}
+	assert.Equal(t, []TableID{other}, coord.AddTables([]TableID{other}))
+	assert.False(t, coord.Idle())
 }

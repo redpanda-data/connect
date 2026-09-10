@@ -18,6 +18,7 @@ import (
 
 	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
+	"github.com/redpanda-data/connect/v4/internal/replication"
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
@@ -39,29 +40,19 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 		return fmt.Errorf("pinging incremental snapshot connection: %w", err)
 	}
 
-	tableNames := incSnapshotCfg.Tables
-	if len(tableNames) == 0 {
-		tableNames = config.DBTables
-	}
-
-	tables := make([]incrementalsnapshot.TableID, 0, len(tableNames))
-	tableSet := make(map[incrementalsnapshot.TableID]struct{}, len(tableNames))
-	for _, name := range tableNames {
-		table, err := normalizeTableID(config.DBSchema, name)
-		if err != nil {
-			_ = db.Close()
-			return fmt.Errorf("resolving incremental snapshot table %q: %w", name, err)
-		}
-		tables = append(tables, table)
-		tableSet[table] = struct{}{}
-	}
-
+	// The coordinator starts with nothing queued: tables are requested by
+	// snapshot signal. A resumed checkpoint brings back whatever the last
+	// run was covering.
 	s.incSnapshotConn = db
 	s.incSnapshotPKCache = make(map[string][]string)
-	s.incSnapshotTables = tableSet
+	s.incSnapshotTables = make(map[incrementalsnapshot.TableID]struct{})
+	if resume := incSnapshotCfg.ResumeState; resume != nil {
+		for _, table := range resume.Tables {
+			s.incSnapshotTables[table] = struct{}{}
+		}
+	}
 
 	coordinator, err := incsnapshot.NewCoordinator(incsnapshot.CoordinatorConfig{
-		Tables:    tables,
 		ChunkSize: incSnapshotCfg.ChunkSize,
 		Deps:      incrementalSnapshotDeps{stream: s},
 	}, incSnapshotCfg.ResumeState)
@@ -73,7 +64,7 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 		return fmt.Errorf("constructing incremental snapshot coordinator: %w", err)
 	}
 	s.incSnapshotCoordinator = coordinator
-	s.logger.Debugf("Incremental snapshot: enabled for %d table(s) %v, chunk_size=%d", len(tables), tables, incSnapshotCfg.ChunkSize)
+	s.logger.Debugf("Incremental snapshot: enabled with chunk_size=%d, resuming %d table(s)", incSnapshotCfg.ChunkSize, len(s.incSnapshotTables))
 	return nil
 }
 
@@ -454,13 +445,12 @@ func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) err
 	if err != nil {
 		return fmt.Errorf("advancing incremental snapshot: %w", err)
 	}
-	if changed && s.incSnapshotCoordinator.Done() {
-		// The last table never sees a following checkpoint, so report it here.
+	if changed && s.incSnapshotCoordinator.Idle() {
+		// The queue is empty, so the last table sees no following
+		// checkpoint. Report it here. More tables may arrive by signal, so
+		// this is not a completion.
 		s.reportTableTransition(nil)
-		s.logger.Info("Incremental snapshot: complete")
-		for table := range s.incSnapshotTables {
-			s.monitor.MarkSnapshotComplete(tableFQN(table))
-		}
+		s.logger.Info("Incremental snapshot: queue empty, waiting for a snapshot signal")
 	}
 	return nil
 }
@@ -524,17 +514,75 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 	return nil
 }
 
-// reportResumeReconciliation logs what Start made of a resumed checkpoint
-// whose table set no longer matches the config. It logs nothing when the two
-// agree, which is the normal case.
-func (s *Stream) reportResumeReconciliation() {
-	if added := s.incSnapshotCoordinator.AddedOnResume(); len(added) > 0 {
-		s.logger.Infof("Incremental snapshot: %d table(s) added to the config since the checkpoint, queued for backfill: %v", len(added), added)
+// snapshotSignalTables reads a snapshot signal's table list, or nil when the
+// row is not one. It reports a malformed payload as an error rather than
+// ignoring it: the request came from a user and dropping it silently would
+// leave them waiting for a backfill that never starts.
+func (s *Stream) snapshotSignalTables(message *StreamMessage) ([]incrementalsnapshot.TableID, error) {
+	if s.incSnapshotCoordinator == nil || message.Operation != InsertOpType {
+		return nil, nil
 	}
-	if removed := s.incSnapshotCoordinator.RemovedOnResume(); len(removed) > 0 {
-		s.logger.Warnf(
-			"Incremental snapshot: dropped %d table(s) the checkpoint covers but the config no longer lists: %v. A table that was part-read stops there, so its remaining rows are not backfilled",
-			len(removed), removed,
-		)
+	if s.signalTable == nil || message.Schema != s.signalTable.Schema || message.Table != s.signalTable.Table {
+		return nil, nil
 	}
+
+	row, isMap := message.Data.(map[string]any)
+	if !isMap {
+		return nil, fmt.Errorf("signal row: expected map data, got %T", message.Data)
+	}
+	if signalType, _ := row["type"].(string); signalType != replication.SnapshotSignalType {
+		return nil, nil
+	}
+
+	payload, isText := row["data"].(string)
+	if !isText {
+		return nil, fmt.Errorf("signal row: expected string data column, got %T", row["data"])
+	}
+	var signal replication.SnapshotSignal
+	if err := json.Unmarshal([]byte(payload), &signal); err != nil {
+		return nil, fmt.Errorf("signal row: parsing %s payload: %w", replication.SnapshotSignalType, err)
+	}
+	if len(signal.Tables) == 0 {
+		return nil, fmt.Errorf("signal row: %s payload lists no tables", replication.SnapshotSignalType)
+	}
+
+	tables := make([]incrementalsnapshot.TableID, 0, len(signal.Tables))
+	for _, name := range signal.Tables {
+		table, err := normalizeTableID(s.snapshotSchema, name)
+		if err != nil {
+			return nil, fmt.Errorf("signal row: resolving table %q: %w", name, err)
+		}
+		tables = append(tables, table)
+	}
+	return tables, nil
+}
+
+// dispatchSnapshotSignal queues the tables a snapshot signal asks for.
+//
+// It runs while decoding the signal row, before the commit that carries it,
+// so the checkpoint the commit emits already holds the new queue. Queueing
+// after the commit would let the signal row's LSN be acknowledged with the
+// older queue, and the request would be lost on a restart -- the row is
+// acknowledged, so it never streams again.
+func (s *Stream) dispatchSnapshotSignal(message *StreamMessage) error {
+	tables, err := s.snapshotSignalTables(message)
+	if err != nil || len(tables) == 0 {
+		return err
+	}
+
+	added := s.incSnapshotCoordinator.AddTables(tables)
+	for _, table := range added {
+		// deduplicateStreamedRow gates on this set, so a table joins it at
+		// the same time as the queue.
+		s.incSnapshotTables[table] = struct{}{}
+	}
+	if len(added) == 0 {
+		s.logger.Warnf("Incremental snapshot: signal asked for %v, all of which this run already covers, so nothing was queued", tables)
+		return nil
+	}
+	s.logger.Infof("Incremental snapshot: signal queued %d table(s) for backfill: %v", len(added), added)
+	if len(added) < len(tables) {
+		s.logger.Warnf("Incremental snapshot: signal asked for %v but this run already covers some of them, so only %v was queued", tables, added)
+	}
+	return nil
 }

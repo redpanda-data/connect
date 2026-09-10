@@ -102,7 +102,6 @@ input:
     signal_table_name: ""
     incremental_snapshot:
       enabled: false
-      tables: [] # No default (optional)
       chunk_size: 1024
       heartbeat_interval: 1s
       checkpoint_cache: "" # No default (optional)
@@ -618,6 +617,18 @@ a JSON object with a `message` key, whose value is written to the connector's lo
 INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message": "Signal message"}');
 ```
 
+**`snapshot`** — backfills the named tables incrementally, alongside streaming. Requires
+`incremental_snapshot.enabled`. The `data` column must contain a JSON object
+with a `tables` key listing table names in the configured `schema`, excluding the schema itself:
+
+```sql
+INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('snapshot', '{"tables": ["orders", "customers"]}');
+```
+
+Each table joins the back of the backfill queue. A table this run already covers is skipped and
+logged, so a repeated signal does not re-read it. To read one again, point
+`incremental_snapshot.checkpoint_cache_key` at a fresh key.
+
 
 *Type*: `string`
 
@@ -639,7 +650,7 @@ Configures chunked snapshotting that runs alongside replication streaming.
 
 === `incremental_snapshot.enabled`
 
-Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `stream_snapshot` it needs no up-front snapshot phase, does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.
+Backfills tables in chunks alongside replication, on request. Tables are not configured here: insert a `snapshot` row into `signal_table_name` to ask for one, so a backfill can be started at any time without a config change. A signal table is therefore required. Unlike `stream_snapshot` this needs no up-front snapshot phase and does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.
 
 Progress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `heartbeat_interval`.
 
@@ -649,16 +660,6 @@ A row can arrive twice, once from replication and once from the backfill: when a
 *Type*: `bool`
 
 *Default*: `false`
-
-=== `incremental_snapshot.tables`
-
-The tables to incrementally snapshot. If omitted, the tables configured in `tables` are used instead, so at least one of the two must be set. Each entry must be replicated, so it must appear in `tables` unless that list is empty, which replicates everything.
-
-This list is reconciled against the checkpoint on every restart. Adding a table backfills it, even once the snapshot has finished. Removing one drops it, and a table that was part-read stops where it is, leaving it incomplete downstream -- both are logged. Change `checkpoint_cache_key`, or clear the existing key, to start over from this list.
-
-
-*Type*: `array`
-
 
 === `incremental_snapshot.chunk_size`
 
@@ -692,7 +693,7 @@ A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache r
 
 The key used to store the incremental snapshot progress in `checkpoint_cache`. Use a different key if multiple incremental snapshots share the same cache.
 
-Changing or clearing this key starts a fresh snapshot of the configured tables -- currently the only way to re-run a backfill.
+Changing or clearing this key discards the record of which tables have been backfilled, so a `snapshot` signal reads a table again.
 
 
 *Type*: `string`

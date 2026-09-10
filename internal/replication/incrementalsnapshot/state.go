@@ -16,11 +16,13 @@ import (
 )
 
 // CurrentStateVersion contains the version of the state.
-const CurrentStateVersion = 2
+const CurrentStateVersion = 3
 
-// minSupportedStateVersion is the oldest layout a checkpoint may use. A
-// version 1 checkpoint carries no Tables, which Start treats as an unknown
-// table set. Refer to reconcileTables.
+// minSupportedStateVersion is the oldest layout a checkpoint may use.
+// Version 3 dropped Done: the snapshot takes tables from signals, so an
+// empty queue is idle rather than complete. An older checkpoint decodes
+// without it, and the ignored flag costs nothing: a queue that outlived it
+// is still in RemainingTables.
 const minSupportedStateVersion = 1
 
 // ErrUnsupportedStateVersion reports a checkpoint written by a build using a
@@ -32,7 +34,6 @@ var ErrUnsupportedStateVersion = errors.New("unsupported incremental snapshot st
 // always re-derived on resume.
 type State struct {
 	Version         int        `json:"version"`
-	Done            bool       `json:"done"`
 	CurrentTable    *TableID   `json:"current_table,omitempty"`
 	LastSentPK      PrimaryKey `json:"last_sent_pk,omitempty"`
 	MaxPK           PrimaryKey `json:"max_pk,omitempty"`
@@ -105,10 +106,7 @@ func (s *State) Clone() *State {
 		return nil
 	}
 
-	clone := &State{
-		Version: s.Version,
-		Done:    s.Done,
-	}
+	clone := &State{Version: s.Version}
 
 	if s.CurrentTable != nil {
 		table := *s.CurrentTable

@@ -116,9 +116,8 @@ func TestStateUnmarshalDoneCheckpoint(t *testing.T) {
 	// State returns this value after the snapshot of each table is
 	// complete.
 	var got State
-	require.NoError(t, json.Unmarshal(fmt.Appendf(nil, `{"version":%d,"done":true}`, CurrentStateVersion), &got))
+	require.NoError(t, json.Unmarshal(fmt.Appendf(nil, `{"version":%d}`, CurrentStateVersion), &got))
 
-	assert.True(t, got.Done)
 	assert.Equal(t, CurrentStateVersion, got.Version)
 	assert.Nil(t, got.CurrentTable)
 }
@@ -141,7 +140,7 @@ func TestStateUnmarshalRejectsForeignVersion(t *testing.T) {
 		name string
 		raw  string
 	}{
-		{"newer version", `{"version":3,"last_sent_pk":[42]}`},
+		{"newer version", `{"version":4,"last_sent_pk":[42]}`},
 		{"older version", `{"version":0,"last_sent_pk":[42]}`},
 		{"version absent", `{"last_sent_pk":[42]}`},
 	}
@@ -157,6 +156,6 @@ func TestStateUnmarshalRejectsForeignVersion(t *testing.T) {
 
 func TestStateUnmarshalAcceptsCurrentVersion(t *testing.T) {
 	var got State
-	require.NoError(t, json.Unmarshal(fmt.Appendf(nil, `{"version":%d,"done":true}`, CurrentStateVersion), &got))
-	assert.True(t, got.Done)
+	require.NoError(t, json.Unmarshal(fmt.Appendf(nil, `{"version":%d}`, CurrentStateVersion), &got))
+	assert.Equal(t, CurrentStateVersion, got.Version)
 }
