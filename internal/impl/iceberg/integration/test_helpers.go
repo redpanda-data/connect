@@ -14,8 +14,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,6 +28,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
@@ -49,14 +53,59 @@ type testInfrastructure struct {
 	RestInternalURL  string // Endpoint for containers to reach REST catalog (via Docker network)
 }
 
-// setupTestInfra starts all containers, creates the warehouse bucket, and
-// registers cleanup. This is the single entry point for all integration tests.
-func setupTestInfra(t *testing.T, ctx context.Context) *testInfrastructure {
+var (
+	sharedInfraOnce sync.Once
+	sharedInfra     *testInfrastructure
+	sharedInfraErr  error
+
+	// catalogMu ensures there no data race between catalog operations and DuckDB queries
+	catalogMu sync.RWMutex
+)
+
+// setupTestInfra returns the package-wide MinIO + iceberg-rest-fixture +
+// DuckDB stack, starting it on first use.
+//
+// A fresh three-container stack per test costs about 15s to boot. With 27
+// tests in this package that is over six minutes spent booting containers
+// before any test does useful work. Worse, under `go test -shuffle=on` a test
+// that happens to run late can be left with too little of the package
+// `-timeout` budget to even finish its own boot, so it fails before it gets
+// to make an assertion. Sharing one stack across the package removes that
+// boot cost from every test but the first.
+//
+// Callers must use unique namespaces (and, where relevant, unique table
+// names) per test, since all tests run against the same catalog and bucket.
+func setupTestInfra(t *testing.T) *testInfrastructure {
 	t.Helper()
-	infra := startTestInfrastructure(t, ctx)
-	t.Cleanup(func() { require.NoError(t, infra.Terminate(context.Background())) })
-	infra.CreateBucket(t, "warehouse")
-	return infra
+
+	sharedInfraOnce.Do(func() {
+		// context.Background(), not t.Context(): the stack outlives the
+		// first test that happens to trigger startup.
+		ctx := context.Background()
+
+		infra, err := startTestInfrastructure(ctx)
+		if err != nil {
+			sharedInfraErr = err
+			return
+		}
+
+		if err := infra.createBucket(ctx, "warehouse"); err != nil {
+			_ = infra.Terminate(ctx)
+			sharedInfraErr = err
+			return
+		}
+
+		if err := infra.installDuckDBExtensions(ctx); err != nil {
+			_ = infra.Terminate(ctx)
+			sharedInfraErr = err
+			return
+		}
+
+		sharedInfra = infra
+	})
+	require.NoError(t, sharedInfraErr)
+
+	return sharedInfra
 }
 
 // CatalogConfig returns a catalogx.Config pre-populated with MinIO/REST
@@ -211,13 +260,13 @@ func createMessageWithMeta(t *testing.T, data map[string]any, metaKey, metaValue
 // ---------------------------------------------------------------------------
 
 // startTestInfrastructure starts MinIO, iceberg-rest-fixture, and DuckDB containers.
-func startTestInfrastructure(t *testing.T, ctx context.Context) *testInfrastructure {
-	t.Helper()
-
+func startTestInfrastructure(ctx context.Context) (*testInfrastructure, error) {
 	infra := &testInfrastructure{}
 
 	net, err := network.New(ctx)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, fmt.Errorf("creating network: %w", err)
+	}
 	infra.network = net
 	networkName := net.Name
 
@@ -245,13 +294,22 @@ func startTestInfrastructure(t *testing.T, ctx context.Context) *testInfrastruct
 		},
 		Started: true,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		_ = infra.Terminate(ctx)
+		return nil, fmt.Errorf("starting minio: %w", err)
+	}
 	infra.minioContainer = minioContainer
 
 	minioHost, err := minioContainer.Host(ctx)
-	require.NoError(t, err)
+	if err != nil {
+		_ = infra.Terminate(ctx)
+		return nil, fmt.Errorf("getting minio host: %w", err)
+	}
 	minioMappedPort, err := minioContainer.MappedPort(ctx, minioInternalPort)
-	require.NoError(t, err)
+	if err != nil {
+		_ = infra.Terminate(ctx)
+		return nil, fmt.Errorf("getting minio mapped port: %w", err)
+	}
 
 	if minioHost == "localhost" {
 		minioHost = "127.0.0.1"
@@ -259,7 +317,7 @@ func startTestInfrastructure(t *testing.T, ctx context.Context) *testInfrastruct
 	infra.MinioEndpoint = fmt.Sprintf("http://%s:%s", minioHost, minioMappedPort.Port())
 	infra.MinioInternalURL = "http://minio:" + minioInternalPort
 
-	t.Logf("MinIO started at: %s (internal: %s)", infra.MinioEndpoint, infra.MinioInternalURL)
+	log.Printf("MinIO started at: %s (internal: %s)", infra.MinioEndpoint, infra.MinioInternalURL)
 
 	// Start iceberg-rest-fixture
 	restContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -286,13 +344,22 @@ func startTestInfrastructure(t *testing.T, ctx context.Context) *testInfrastruct
 		},
 		Started: true,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		_ = infra.Terminate(ctx)
+		return nil, fmt.Errorf("starting rest catalog: %w", err)
+	}
 	infra.restContainer = restContainer
 
 	restHost, err := restContainer.Host(ctx)
-	require.NoError(t, err)
+	if err != nil {
+		_ = infra.Terminate(ctx)
+		return nil, fmt.Errorf("getting rest host: %w", err)
+	}
 	restMappedPort, err := restContainer.MappedPort(ctx, restInternalPort)
-	require.NoError(t, err)
+	if err != nil {
+		_ = infra.Terminate(ctx)
+		return nil, fmt.Errorf("getting rest mapped port: %w", err)
+	}
 
 	if restHost == "localhost" {
 		restHost = "127.0.0.1"
@@ -300,7 +367,7 @@ func startTestInfrastructure(t *testing.T, ctx context.Context) *testInfrastruct
 	infra.RestURL = fmt.Sprintf("http://%s:%s", restHost, restMappedPort.Port())
 	infra.RestInternalURL = "http://rest:" + restInternalPort
 
-	t.Logf("Iceberg REST catalog started at: %s (internal: %s)", infra.RestURL, infra.RestInternalURL)
+	log.Printf("Iceberg REST catalog started at: %s (internal: %s)", infra.RestURL, infra.RestInternalURL)
 
 	// Start DuckDB
 	duckdbContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -312,10 +379,13 @@ func startTestInfrastructure(t *testing.T, ctx context.Context) *testInfrastruct
 		},
 		Started: true,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		_ = infra.Terminate(ctx)
+		return nil, fmt.Errorf("starting duckdb: %w", err)
+	}
 	infra.duckdbContainer = duckdbContainer
 
-	return infra
+	return infra, nil
 }
 
 // Terminate cleans up all containers and network.
@@ -349,18 +419,18 @@ func (infra *testInfrastructure) Terminate(ctx context.Context) error {
 	return nil
 }
 
-// CreateBucket creates a bucket in MinIO.
-func (infra *testInfrastructure) CreateBucket(t *testing.T, bucket string) {
-	t.Helper()
-
-	ctx := context.Background()
+// createBucket creates a bucket in MinIO. A bucket that already exists is
+// not an error, so the call is safe to repeat against the same MinIO.
+func (infra *testInfrastructure) createBucket(ctx context.Context, bucket string) error {
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion("us-east-1"),
 		config.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider("admin", "password", ""),
 		),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		return fmt.Errorf("loading aws config: %w", err)
+	}
 
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(infra.MinioEndpoint)
@@ -370,12 +440,25 @@ func (infra *testInfrastructure) CreateBucket(t *testing.T, bucket string) {
 	_, err = client.CreateBucket(ctx, &s3.CreateBucketInput{
 		Bucket: aws.String(bucket),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		var alreadyOwned *types.BucketAlreadyOwnedByYou
+		var alreadyExists *types.BucketAlreadyExists
+		if errors.As(err, &alreadyOwned) || errors.As(err, &alreadyExists) {
+			return nil
+		}
+		return fmt.Errorf("creating bucket %q: %w", bucket, err)
+	}
+	return nil
 }
 
-// CreateNamespace creates a namespace in the Iceberg REST catalog.
+// CreateNamespace creates an empty namespace in the Iceberg REST catalog.
+// The catalog is shared by every test in the process, so a namespace left
+// behind by an earlier run (for example with go test -count=2) is dropped
+// first, together with its tables. Each test owns a distinct namespace, so
+// this is safe under t.Parallel.
 func (infra *testInfrastructure) CreateNamespace(t *testing.T, namespace string) {
 	t.Helper()
+	infra.EnsureNamespaceAbsent(t, namespace)
 
 	body := `{"namespace": ["` + namespace + `"]}`
 	resp, err := http.Post(infra.RestURL+"/v1/namespaces", "application/json", strings.NewReader(body))
@@ -386,12 +469,60 @@ func (infra *testInfrastructure) CreateNamespace(t *testing.T, namespace string)
 		"create namespace failed: %d", resp.StatusCode)
 }
 
+// EnsureNamespaceAbsent gives a test a clean slate in the shared catalog. It
+// purges every table in the namespace and then drops the namespace itself, so
+// state left behind by an earlier run (for example with go test -count=2) does
+// not leak into this one. A namespace that does not exist is not an error.
+func (infra *testInfrastructure) EnsureNamespaceAbsent(t *testing.T, namespace string) {
+	t.Helper()
+	catalogMu.Lock()
+	defer catalogMu.Unlock()
+
+	nsURL := infra.RestURL + "/v1/namespaces/" + url.PathEscape(namespace)
+
+	resp, err := http.Get(nsURL + "/tables")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return
+	}
+	require.Equal(t, http.StatusOK, resp.StatusCode, "list tables in namespace %q failed", namespace)
+
+	var listed struct {
+		Identifiers []struct {
+			Name string `json:"name"`
+		} `json:"identifiers"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&listed))
+
+	for _, id := range listed.Identifiers {
+		restDelete(t, nsURL+"/tables/"+url.PathEscape(id.Name)+"?purgeRequested=true")
+	}
+	restDelete(t, nsURL)
+}
+
+// restDelete sends a DELETE to the REST catalog. A 404 is not an error, so
+// the call is safe to repeat.
+func restDelete(t *testing.T, target string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, target, nil)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.True(t, resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound,
+		"DELETE %s failed: %d", target, resp.StatusCode)
+}
+
 // ExecSQL executes SQL in the DuckDB container and returns the output.
 func (infra *testInfrastructure) ExecSQL(ctx context.Context, sql string) (string, error) {
 	if infra.duckdbContainer == nil {
 		return "", errors.New("duckdb container not started")
 	}
 
+	catalogMu.RLock()
+	defer catalogMu.RUnlock()
 	exitCode, reader, err := infra.duckdbContainer.Exec(ctx, []string{"/duckdb", "-json", "-c", sql})
 	if err != nil {
 		return "", fmt.Errorf("executing duckdb: %w", err)
@@ -411,7 +542,20 @@ func (infra *testInfrastructure) ExecSQL(ctx context.Context, sql string) (strin
 	return output, nil
 }
 
+// installDuckDBExtensions installs the iceberg and httpfs DuckDB extensions.
+// This must run exactly once: the extensions persist on the container
+// filesystem between execs, and installing them concurrently from parallel
+// tests races.
+func (infra *testInfrastructure) installDuckDBExtensions(ctx context.Context) error {
+	_, err := infra.ExecSQL(ctx, "INSTALL iceberg; INSTALL httpfs;")
+	if err != nil {
+		return fmt.Errorf("installing duckdb extensions: %w", err)
+	}
+	return nil
+}
+
 // duckDBSetupSQL returns SQL to configure DuckDB with Iceberg REST catalog and S3/MinIO access.
+// The iceberg and httpfs extensions must already be installed; see installDuckDBExtensions.
 func (infra *testInfrastructure) duckDBSetupSQL(catalog string) string {
 	minioHostPort := strings.TrimPrefix(infra.MinioInternalURL, "http://")
 	minioHostPort = strings.TrimPrefix(minioHostPort, "https://")
@@ -423,9 +567,7 @@ func (infra *testInfrastructure) duckDBSetupSQL(catalog string) string {
 	)
 
 	return replacer.Replace(`
-		INSTALL iceberg;
 		LOAD iceberg;
-		INSTALL httpfs;
 		LOAD httpfs;
 
 		SET s3_region='us-east-1';

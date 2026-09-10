@@ -96,8 +96,9 @@ func removeTableProperty(t *testing.T, infra *testInfrastructure, ns, tblName, p
 // error instead of iceberg-go's cryptic mid-commit failure.
 func TestTimestampEncodingLegacyTableIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const ns, tblName = "ts_enc_legacy_ns", "ts_enc_legacy_test"
 	infra.CreateNamespace(t, ns)
@@ -214,8 +215,9 @@ func TestTimestampEncodingLegacyTableIntegration(t *testing.T) {
 // column as a plain TIMESTAMP holding the exact written instant.
 func TestTimestampEncodingNewTableIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const ns, tblName = "ts_enc_new_ns", "ts_enc_new_test"
 	infra.CreateNamespace(t, ns)
