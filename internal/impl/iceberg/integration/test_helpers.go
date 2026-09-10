@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -56,6 +57,9 @@ var (
 	sharedInfraOnce sync.Once
 	sharedInfra     *testInfrastructure
 	sharedInfraErr  error
+
+	// catalogMu ensures there no data race between catalog operations and DuckDB queries
+	catalogMu sync.RWMutex
 )
 
 // setupTestInfra returns the package-wide MinIO + iceberg-rest-fixture +
@@ -447,9 +451,14 @@ func (infra *testInfrastructure) createBucket(ctx context.Context, bucket string
 	return nil
 }
 
-// CreateNamespace creates a namespace in the Iceberg REST catalog.
+// CreateNamespace creates an empty namespace in the Iceberg REST catalog.
+// The catalog is shared by every test in the process, so a namespace left
+// behind by an earlier run (for example with go test -count=2) is dropped
+// first, together with its tables. Each test owns a distinct namespace, so
+// this is safe under t.Parallel.
 func (infra *testInfrastructure) CreateNamespace(t *testing.T, namespace string) {
 	t.Helper()
+	infra.EnsureNamespaceAbsent(t, namespace)
 
 	body := `{"namespace": ["` + namespace + `"]}`
 	resp, err := http.Post(infra.RestURL+"/v1/namespaces", "application/json", strings.NewReader(body))
@@ -460,12 +469,60 @@ func (infra *testInfrastructure) CreateNamespace(t *testing.T, namespace string)
 		"create namespace failed: %d", resp.StatusCode)
 }
 
+// EnsureNamespaceAbsent gives a test a clean slate in the shared catalog. It
+// purges every table in the namespace and then drops the namespace itself, so
+// state left behind by an earlier run (for example with go test -count=2) does
+// not leak into this one. A namespace that does not exist is not an error.
+func (infra *testInfrastructure) EnsureNamespaceAbsent(t *testing.T, namespace string) {
+	t.Helper()
+	catalogMu.Lock()
+	defer catalogMu.Unlock()
+
+	nsURL := infra.RestURL + "/v1/namespaces/" + url.PathEscape(namespace)
+
+	resp, err := http.Get(nsURL + "/tables")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return
+	}
+	require.Equal(t, http.StatusOK, resp.StatusCode, "list tables in namespace %q failed", namespace)
+
+	var listed struct {
+		Identifiers []struct {
+			Name string `json:"name"`
+		} `json:"identifiers"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&listed))
+
+	for _, id := range listed.Identifiers {
+		restDelete(t, nsURL+"/tables/"+url.PathEscape(id.Name)+"?purgeRequested=true")
+	}
+	restDelete(t, nsURL)
+}
+
+// restDelete sends a DELETE to the REST catalog. A 404 is not an error, so
+// the call is safe to repeat.
+func restDelete(t *testing.T, target string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, target, nil)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.True(t, resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound,
+		"DELETE %s failed: %d", target, resp.StatusCode)
+}
+
 // ExecSQL executes SQL in the DuckDB container and returns the output.
 func (infra *testInfrastructure) ExecSQL(ctx context.Context, sql string) (string, error) {
 	if infra.duckdbContainer == nil {
 		return "", errors.New("duckdb container not started")
 	}
 
+	catalogMu.RLock()
+	defer catalogMu.RUnlock()
 	exitCode, reader, err := infra.duckdbContainer.Exec(ctx, []string{"/duckdb", "-json", "-c", sql})
 	if err != nil {
 		return "", fmt.Errorf("executing duckdb: %w", err)

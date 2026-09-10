@@ -36,6 +36,7 @@ func TestNumericPrecisionIntegration(t *testing.T) {
 	t.Run("TypedIntegersMapToCorrectColumnTypes", func(t *testing.T) {
 		const ns = "numeric_types_ns"
 		const tbl = "numeric_types_table"
+		infra.EnsureNamespaceAbsent(t, ns)
 
 		router := infra.NewRouter(t, ns, tbl,
 			WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{Enabled: true}))
@@ -69,6 +70,7 @@ func TestNumericPrecisionIntegration(t *testing.T) {
 	t.Run("Int64ValuesPreservePrecision", func(t *testing.T) {
 		const ns = "precision_ns"
 		const tbl = "precision_table"
+		infra.EnsureNamespaceAbsent(t, ns)
 
 		router := infra.NewRouter(t, ns, tbl,
 			WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{Enabled: true}))
@@ -103,6 +105,7 @@ func TestNumericPrecisionIntegration(t *testing.T) {
 	t.Run("NestedStructs", func(t *testing.T) {
 		const ns = "nested_ns"
 		const tbl = "nested_table"
+		infra.EnsureNamespaceAbsent(t, ns)
 
 		router := infra.NewRouter(t, ns, tbl,
 			WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{Enabled: true}))
@@ -160,6 +163,7 @@ func TestNumericPrecisionIntegration(t *testing.T) {
 		// Auto-create table, then write messages where some nested fields are absent.
 		const ns = "nullable_nested_ns"
 		const tbl = "nullable_nested_table"
+		infra.EnsureNamespaceAbsent(t, ns)
 
 		router := infra.NewRouter(t, ns, tbl,
 			WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{Enabled: true}))
@@ -208,6 +212,7 @@ func TestNumericPrecisionIntegration(t *testing.T) {
 	t.Run("SchemaEvolution_NewIntegerColumn", func(t *testing.T) {
 		const ns = "evo_int_ns"
 		const tbl = "evo_int_table"
+		infra.EnsureNamespaceAbsent(t, ns)
 
 		router := infra.NewRouter(t, ns, tbl,
 			WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{Enabled: true}))
