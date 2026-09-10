@@ -335,7 +335,13 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 	require.NoError(t, err)
 	txt, err := srDst.SchemaTextByVersion(t.Context(), subj, 1)
 	require.NoError(t, err)
-	assert.Equal(t, schema, txt)
+	// The schema registry canonicalizes a primitive Avro type object
+	// ({"type":"int"}) down to its bare string form ("int") on write, so
+	// compare against what the source registry stored rather than the
+	// literal schema submitted by the test.
+	srcTxt, err := srScr.SchemaTextByVersion(t.Context(), subj, 1)
+	require.NoError(t, err)
+	assert.Equal(t, srcTxt, txt)
 
 	t.Logf("And: %d schema-encoded messages are present in destination topic %s", numMessages, migratorTestTopic)
 	records := readTopicContent(dst, numMessages)
