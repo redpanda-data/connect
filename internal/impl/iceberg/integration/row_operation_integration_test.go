@@ -36,9 +36,10 @@ func opMsg(t *testing.T, op, body string) *service.Message {
 // the upserted row wins (no duplicate) and the deleted row is gone.
 func TestRowOperationsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const ns, tbl = "row_ops_ns", "row_ops_test"
 
