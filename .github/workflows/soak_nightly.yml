@@ -77,7 +77,7 @@ jobs:
           fetch-depth: 0
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
           aws-region: us-east-2
