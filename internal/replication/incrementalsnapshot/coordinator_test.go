@@ -80,13 +80,13 @@ func TestCoordinatorFullScenario(t *testing.T) {
 	mock.pushWatermark(testWatermark{Xmin: 125, Xmax: 125}) // high, B chunk 1
 
 	cfg := testConfig{
-		Tables:    []TableID{tableA, tableB},
 		ChunkSize: chunkSize,
 		Deps:      mock,
 	}
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
+	coord.AddTables([]TableID{tableA, tableB})
 	require.NoError(t, coord.Start(t.Context()))
 
 	require.False(t, coord.Idle())
@@ -192,13 +192,13 @@ func TestCoordinatorZeroRowAdvanceBetweenTables(t *testing.T) {
 	mock.pushWatermark(testWatermark{Xmin: 17, Xmax: 17})
 
 	cfg := testConfig{
-		Tables:    []TableID{tableA, tableB},
 		ChunkSize: chunkSize,
 		Deps:      mock,
 	}
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
+	coord.AddTables([]TableID{tableA, tableB})
 	require.NoError(t, coord.Start(t.Context()))
 
 	require.NotNil(t, coord.current)
@@ -234,13 +234,13 @@ func TestCoordinatorZeroRowAdvanceBetweenTables(t *testing.T) {
 
 func TestCoordinatorOnCommitNoopsWhenIdle(t *testing.T) {
 	cfg := testConfig{
-		Tables:    nil,
 		ChunkSize: 10,
 		Deps:      newScriptedMockDeps(map[string]*mockTable{}, 10),
 	}
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
+	coord.AddTables(nil)
 	require.NoError(t, coord.Start(t.Context()))
 	require.True(t, coord.Idle())
 
@@ -278,13 +278,13 @@ func TestCoordinatorSkipsEmptyTable(t *testing.T) {
 	mock.pushWatermark(testWatermark{Xmin: 2, Xmax: 2})
 
 	cfg := testConfig{
-		Tables:    []TableID{tableEmpty, tableB},
 		ChunkSize: chunkSize,
 		Deps:      mock,
 	}
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
+	coord.AddTables([]TableID{tableEmpty, tableB})
 	require.NoError(t, coord.Start(t.Context()))
 
 	// The empty table must be skipped entirely, straight on to table B,
@@ -314,13 +314,13 @@ func TestCoordinatorAllTablesEmpty(t *testing.T) {
 	}, 10)
 
 	cfg := testConfig{
-		Tables:    []TableID{tableA, tableB},
 		ChunkSize: 10,
 		Deps:      mock,
 	}
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
+	coord.AddTables([]TableID{tableA, tableB})
 	require.NoError(t, coord.Start(t.Context()))
 	assert.True(t, coord.Idle())
 }
@@ -342,13 +342,13 @@ func TestCoordinatorResumeAlwaysDerivesFreshWatermark(t *testing.T) {
 	mock.pushWatermark(testWatermark{Xmin: 2, Xmax: 2})
 
 	cfg := testConfig{
-		Tables:    []TableID{tableA, tableB},
 		ChunkSize: chunkSize,
 		Deps:      mock,
 	}
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
+	coord.AddTables([]TableID{tableA, tableB})
 	require.NoError(t, coord.Start(t.Context()))
 
 	callsBeforeResume := mock.watermarkCalls
@@ -390,10 +390,11 @@ func TestCoordinatorResumeRefetchesUnflushedChunk(t *testing.T) {
 		},
 	}
 
-	cfg := testConfig{Tables: []TableID{tableA}, ChunkSize: chunkSize, Deps: deps}
+	cfg := testConfig{ChunkSize: chunkSize, Deps: deps}
 
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
+	coord.AddTables([]TableID{tableA})
 	require.NoError(t, coord.Start(t.Context())) // fetches chunk 1 ([1,2])
 
 	_, changed, err := onCommit(t, coord, 1) // opens, doesn't close (1 <= closeThreshold 2)
@@ -459,11 +460,11 @@ func TestCoordinatorWrapsDepsErrors(t *testing.T) {
 			mock.failOn(tc.method, sentinel)
 
 			coord, err := NewCoordinator(testConfig{
-				Tables:    []TableID{table},
 				ChunkSize: 1,
 				Deps:      mock,
 			}, nil)
 			require.NoError(t, err)
+			coord.AddTables([]TableID{table})
 
 			err = coord.Start(t.Context())
 			require.ErrorIs(t, err, sentinel)
@@ -530,11 +531,11 @@ func TestCoordinatorMidDrainFailureResumesWithoutLoss(t *testing.T) {
 			tc.fail(deps, sentinel)
 
 			coord, err := NewCoordinator(testConfig{
-				Tables:    []TableID{table},
 				ChunkSize: chunkSize,
 				Deps:      deps,
 			}, nil)
 			require.NoError(t, err)
+			coord.AddTables([]TableID{table})
 			require.NoError(t, coord.Start(t.Context()))
 
 			var before [][]Row
@@ -552,7 +553,6 @@ func TestCoordinatorMidDrainFailureResumesWithoutLoss(t *testing.T) {
 			assert.Equal(t, PrimaryKey{4}, state.LastSentPK)
 
 			resumed, err := NewCoordinator(testConfig{
-				Tables:    []TableID{table},
 				ChunkSize: chunkSize,
 				Deps:      newDeps(),
 			}, state)
@@ -994,11 +994,11 @@ func TestCoordinatorDedupsBufferedFinalChunk(t *testing.T) {
 	mock.pushWatermark(testWatermark{Xmin: 105, Xmax: 105}) // high
 
 	coord, err := NewCoordinator(testConfig{
-		Tables:    []TableID{table},
 		ChunkSize: chunkSize,
 		Deps:      mock,
 	}, nil)
 	require.NoError(t, err)
+	coord.AddTables([]TableID{table})
 	require.NoError(t, coord.Start(t.Context()))
 
 	require.Equal(t, 2, coord.window.Len())
@@ -1045,12 +1045,12 @@ func newDrainCoordinator(t *testing.T, maxDrain int) (*Coordinator[uint64, testW
 	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100})
 
 	coord, err := NewCoordinator(testConfig{
-		Tables:         []TableID{table},
 		ChunkSize:      chunkSize,
 		Deps:           mock,
 		MaxDrainChunks: maxDrain,
 	}, nil)
 	require.NoError(t, err)
+	coord.AddTables([]TableID{table})
 	require.NoError(t, coord.Start(t.Context()))
 	return coord, table
 }
@@ -1111,11 +1111,11 @@ func TestCoordinatorDrainStopsOnConcurrentActivity(t *testing.T) {
 	mock.pushWatermark(testWatermark{Xmin: 102, Xmax: 102}) // high, chunk 2
 
 	coord, err := NewCoordinator(testConfig{
-		Tables:    []TableID{table},
 		ChunkSize: chunkSize,
 		Deps:      mock,
 	}, nil)
 	require.NoError(t, err)
+	coord.AddTables([]TableID{table})
 	require.NoError(t, coord.Start(t.Context()))
 
 	var chunks [][]Row
@@ -1173,9 +1173,10 @@ func TestCoordinatorEmitFailureLeavesCheckpointUnmoved(t *testing.T) {
 		}
 	}
 
-	cfg := testConfig{Tables: []TableID{table}, ChunkSize: chunkSize, Deps: newDeps()}
+	cfg := testConfig{ChunkSize: chunkSize, Deps: newDeps()}
 	coord, err := NewCoordinator(cfg, nil)
 	require.NoError(t, err)
+	coord.AddTables([]TableID{table})
 	require.NoError(t, coord.Start(t.Context()))
 
 	sentinel := errors.New("downstream gone")
@@ -1192,11 +1193,11 @@ func TestCoordinatorEmitFailureLeavesCheckpointUnmoved(t *testing.T) {
 	// A coordinator resumed from that checkpoint must deliver the whole
 	// table, first chunk included.
 	resumed, err := NewCoordinator(testConfig{
-		Tables:    []TableID{table},
 		ChunkSize: chunkSize,
 		Deps:      newDeps(),
 	}, state)
 	require.NoError(t, err)
+	resumed.AddTables([]TableID{table})
 	require.NoError(t, resumed.Start(t.Context()))
 
 	var got []int
@@ -1245,11 +1246,11 @@ func TestCoordinatorGoesIdleAfterResume(t *testing.T) {
 	}
 
 	coord, err := NewCoordinator(testConfig{
-		Tables:    []TableID{table},
 		ChunkSize: chunkSize,
 		Deps:      mock,
 	}, resume)
 	require.NoError(t, err)
+	coord.AddTables([]TableID{table})
 	require.NoError(t, coord.Start(t.Context()))
 	require.True(t, coord.Idle(), "the empty chunk read should empty the queue")
 
