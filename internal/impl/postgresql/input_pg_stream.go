@@ -332,7 +332,12 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 	if batching, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
 		return nil, err
-	} else if batching.IsNoop() {
+	}
+	// With no policy configured the input passes each reader batch (one
+	// transaction, or a snapshot page) straight through as one output batch.
+	// Count is still forced to 1 so a Batcher can be constructed.
+	batchingConfigured := !batching.IsNoop()
+	if !batchingConfigured {
 		batching.Count = 1
 	}
 
@@ -429,9 +434,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			HeartbeatInterval:        heartbeatInterval,
 			SignalTableName:          signalTableName,
 		},
-		batching:        batching,
-		checkpointLimit: checkpointLimit,
-		msgChan:         make(chan asyncMessage),
+		batching:           batching,
+		batchingConfigured: batchingConfigured,
+		checkpointLimit:    checkpointLimit,
+		msgChan:            make(chan asyncMessage),
 
 		mgr:             mgr,
 		logger:          mgr.Logger(),
@@ -478,12 +484,13 @@ func init() {
 }
 
 type pgStreamInput struct {
-	streamConfig    *pglogicalstream.Config
-	logger          *service.Logger
-	mgr             *service.Resources
-	msgChan         chan asyncMessage
-	batching        service.BatchPolicy
-	checkpointLimit int
+	streamConfig       *pglogicalstream.Config
+	logger             *service.Logger
+	mgr                *service.Resources
+	msgChan            chan asyncMessage
+	batching           service.BatchPolicy
+	batchingConfigured bool
+	checkpointLimit    int
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
@@ -601,9 +608,14 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				break
 			}
 			var (
-				flush bool
-				mb    []byte
+				mb []byte
+				// passThrough collects the whole reader batch when no
+				// batching policy is configured.
+				passThrough service.MessageBatch
 			)
+			if !p.batchingConfigured {
+				passThrough = make(service.MessageBatch, 0, len(batch))
+			}
 			for _, msg := range batch {
 				// noop if not configured
 				if _, err := p.controlSig.listen(&msg); err != nil {
@@ -647,11 +659,17 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if msg.BeforeData != nil {
 					batchMsg.MetaSetImmut("before", service.ImmutableAny{V: msg.BeforeData})
 				}
-				if batcher.Add(batchMsg) {
-					flush = true
+
+				if !p.batchingConfigured {
+					passThrough = append(passThrough, batchMsg)
+					continue
 				}
-			}
-			if flush {
+				if !batcher.Add(batchMsg) {
+					continue
+				}
+				// The policy is honoured per message: a multi-row reader batch
+				// may cross the configured count several times, and every
+				// crossing is its own output batch.
 				nextTimedBatchChan = nil
 				flushedBatch, err := batcher.Flush(ctx)
 				if err != nil {
@@ -662,11 +680,17 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					p.logger.Debugf("failed to flush batch: %s", err)
 					break
 				}
-			} else {
-				d, ok := batcher.UntilNext()
-				if ok {
-					nextTimedBatchChan = time.After(d)
+			}
+			if !p.batchingConfigured {
+				if err := p.flushBatch(ctx, pgStream, cp, passThrough); err != nil {
+					p.logger.Debugf("failed to flush batch: %s", err)
 				}
+				break
+			}
+			if d, ok := batcher.UntilNext(); ok {
+				nextTimedBatchChan = time.After(d)
+			} else {
+				nextTimedBatchChan = nil
 			}
 		case err := <-pgStream.Errors():
 			p.logger.Warnf("logical replication stream error: %s", err)
