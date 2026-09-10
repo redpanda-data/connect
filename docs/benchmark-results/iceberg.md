@@ -273,7 +273,7 @@ How commit coalescing responds to catalog commit latency and the number of concu
 - **At `max_in_flight: 1` records per commit is pinned to a single submission**, giving `records-per-submission / commit-latency` — 591 rec/sec at 500ms, matching the "throughput trap" regime described under Tuning Recipes. This is structural: the sole submitter is blocked inside the commit it is waiting on, so no second submission can exist to batch with. A commit-side linger cannot improve this case, and would add latency to it.
 - Submissions per commit settles near `max_in_flight / 2` rather than `max_in_flight`, which suggests the batcher samples its queue before the just-released submitters have all re-queued. Whether closing that gap is worth anything is untested.
 
-To reproduce: `go test -run TestCommitRegimeSweep -iceberg.commit-regime -timeout 20m ./internal/impl/iceberg/` (add `-iceberg.commit-regime-realistic` for 320ms/5s/10s latencies).
+To reproduce: `go test -v -run TestCommitRegimeSweep -iceberg.commit-regime -timeout 20m ./internal/impl/iceberg/` (add `-iceberg.commit-regime-realistic` for 320ms/5s/10s latencies). The `-v` is required — the sweep never asserts, so it always passes, and `go test` suppresses `t.Log` output (which is how the table is printed) for passing tests without it.
 
 ---
 
