@@ -1756,7 +1756,7 @@ postgres_cdc:
 	go func() { _ = streamOut.Run(t.Context()) }()
 
 	// Give the replication slot time to be created before writing.
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	const rowCount = 5
 	tx, err := db.Begin()
@@ -1775,6 +1775,10 @@ postgres_cdc:
 	}, 25*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, streamOut.StopWithin(10*time.Second))
+
+	sizesMut.Lock()
+	defer sizesMut.Unlock()
+	assert.Equal(t, []int{rowCount}, sizes, "no extra batch should arrive after the stream is stopped")
 }
 
 // TestIntegrationPostgresBatchingCountHonoured verifies that a configured
@@ -1817,7 +1821,7 @@ postgres_cdc:
 	license.InjectTestService(streamOut.Resources())
 	go func() { _ = streamOut.Run(t.Context()) }()
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	const rowCount = 9
 	tx, err := db.Begin()
@@ -1836,4 +1840,8 @@ postgres_cdc:
 	}, 25*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, streamOut.StopWithin(10*time.Second))
+
+	sizesMut.Lock()
+	defer sizesMut.Unlock()
+	assert.Equal(t, []int{3, 3, 3}, sizes, "no extra batch should arrive after the stream is stopped")
 }

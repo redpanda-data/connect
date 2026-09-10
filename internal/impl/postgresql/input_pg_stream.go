@@ -670,10 +670,15 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				// The policy is honoured per message: a multi-row reader batch
 				// may cross the configured count several times, and every
 				// crossing is its own output batch.
-				nextTimedBatchChan = nil
 				flushedBatch, err := batcher.Flush(ctx)
 				if err != nil {
-					p.logger.Debugf("error flushing batch: %s", err)
+					// The remaining rows in this reader batch were never Add()ed
+					// to the batcher, so restarting is the only safe option:
+					// letting the stream keep running would let a later
+					// transaction's ack remap confirm_flush_lsn past these rows,
+					// dropping them for good.
+					p.logger.Errorf("error flushing batch, restarting stream: %s", err)
+					p.stopSig.TriggerSoftStop()
 					break
 				}
 				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
@@ -685,9 +690,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if err := p.flushBatch(ctx, pgStream, cp, passThrough); err != nil {
 					p.logger.Debugf("failed to flush batch: %s", err)
 				}
-				break
-			}
-			if d, ok := batcher.UntilNext(); ok {
+			} else if d, ok := batcher.UntilNext(); ok {
 				nextTimedBatchChan = time.After(d)
 			} else {
 				nextTimedBatchChan = nil
@@ -726,6 +729,13 @@ func (p *pgStreamInput) flushBatch(
 	// Snapshot batches carry no LSN. Track them so the snapshot->stream handoff
 	// can block until they are acknowledged downstream (see the sentinel handling
 	// in the read loop).
+	//
+	// Deriving this from only the last message relies on a reader batch never
+	// mixing snapshot rows with stream rows: snapshot batches come from
+	// processSnapshot with all-nil LSNs, the sentinel is its own one-element
+	// send, and streaming batches only start being produced by the reader's
+	// flush after the snapshot has completed and the batcher was drained at
+	// the sentinel.
 	isSnapshot := lsn == nil
 
 	ackFn := func(ctx context.Context, _ error) error {
