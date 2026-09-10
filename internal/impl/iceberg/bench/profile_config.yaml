@@ -7,7 +7,9 @@
 #     so the iceberg output performs a real JSON parse per record, matching the
 #     production Kafka -> iceberg path. Messages produced by `generate` are
 #     otherwise already structured and AsStructured() would be free.
-#   - batching.count 10000 so commits are amortised and per-record CPU dominates
+#   - larger batches so commits are amortised and per-record CPU dominates —
+#     the YAML default below is 10000, but `task bench:profile` always
+#     overrides it via BATCH, which itself defaults to 5000
 #
 # pprof endpoints are exposed at http://localhost:4195/debug/pprof/ via
 # http.debug_endpoints. Capture with:

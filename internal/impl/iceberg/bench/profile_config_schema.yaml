@@ -49,8 +49,8 @@ input:
       meta iceberg_schema = {
         "type": "OBJECT",
         "children": [
-          {"name": "id", "type": "INT64"},
-          {"name": "user_id", "type": "INT64"},
+          {"name": "id", "type": "FLOAT64"},
+          {"name": "user_id", "type": "FLOAT64"},
           {"name": "session_id", "type": "STRING"},
           {"name": "trace_id", "type": "STRING"},
           {"name": "span_id", "type": "STRING"},
@@ -59,10 +59,10 @@ input:
           {"name": "correlation_id", "type": "STRING"},
           {"name": "event_type", "type": "STRING"},
           {"name": "country", "type": "STRING"},
-          {"name": "value", "type": "INT64"},
+          {"name": "value", "type": "FLOAT64"},
           {"name": "amount", "type": "FLOAT64"},
           {"name": "score", "type": "FLOAT64"},
-          {"name": "latency_ms", "type": "INT64"},
+          {"name": "latency_ms", "type": "FLOAT64"},
           {"name": "is_mobile", "type": "BOOLEAN"},
           {"name": "user_agent", "type": "STRING"},
           {"name": "url", "type": "STRING"},
