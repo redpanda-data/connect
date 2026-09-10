@@ -796,6 +796,97 @@ func TestCoordinatorAddTablesBeforeStartOnResume(t *testing.T) {
 	})
 }
 
+// TestCoordinatorAddTablesMidBackfillIsDurable: a request arriving while a
+// backfill runs is no more repeatable than one arriving idle. The running
+// table's window may not close for some time, so the queue must reach a
+// checkpoint on the commit that carried the request, not whenever that
+// window happens to close.
+func TestCoordinatorAddTablesMidBackfillIsDurable(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+	tableB := TableID{Schema: "public", Table: "b"}
+
+	newDeps := func() *scriptedMockDeps {
+		mock := newScriptedMockDeps(map[string]*mockTable{
+			tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1), rowFor(tableA, 2)}, maxPK: PrimaryKey{2}},
+			tableB.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableB, 1)}, maxPK: PrimaryKey{1}},
+		}, 1)
+		// In flight at both ends, so the window will not close on the commit
+		// that carries the request and the drain will not run.
+		mock.pushWatermark(testWatermark{Xmin: 10, Xmax: 20})
+		return mock
+	}
+
+	coord, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: newDeps()}, nil)
+	require.NoError(t, err)
+	coord.AddTables([]TableID{tableA})
+	require.NoError(t, coord.Start(t.Context())) // buffers A's first chunk
+	require.False(t, coord.Idle(), "A is mid-backfill")
+
+	// Only what the caller saw, which is all it could have persisted.
+	var persisted *State
+	emit := func([]Row) error {
+		persisted = coord.State()
+		return nil
+	}
+
+	require.Equal(t, []TableID{tableB}, coord.AddTables([]TableID{tableB}))
+
+	changed, err := coord.OnCommit(t.Context(), 15, emit)
+	require.NoError(t, err)
+	assert.True(t, changed, "the queue checkpoint is a change even though the window stayed open")
+	require.NotNil(t, persisted, "without a checkpoint the request is lost once its position is acknowledged")
+	assert.Equal(t, []TableID{tableA, tableB}, persisted.Tables)
+
+	// A coordinator resumed from that checkpoint must read both tables.
+	resumed, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: newDeps()}, persisted)
+	require.NoError(t, err)
+	require.NoError(t, resumed.Start(t.Context()))
+
+	var got []int
+	for _, pos := range []uint64{30, 31, 32, 33, 34, 35} {
+		var chunks [][]Row
+		_, err := resumed.OnCommit(t.Context(), pos, collect(&chunks))
+		require.NoError(t, err)
+		for _, rows := range chunks {
+			for _, row := range rows {
+				got = append(got, row.PK[0].(int))
+			}
+		}
+	}
+	assert.Equal(t, []int{1, 2, 1}, got, "both tables must be read: A's two rows and B's one")
+	assert.True(t, resumed.Idle())
+}
+
+// TestCoordinatorAddTablesMidBackfillCheckpointFailureRetries: the queue
+// checkpoint is emitted, so it can fail, and the next commit still owes it.
+func TestCoordinatorAddTablesMidBackfillCheckpointFailureRetries(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+	tableB := TableID{Schema: "public", Table: "b"}
+
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1)}, maxPK: PrimaryKey{1}},
+		tableB.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableB, 1)}, maxPK: PrimaryKey{1}},
+	}, 1)
+	mock.pushWatermark(testWatermark{Xmin: 10, Xmax: 20})
+
+	coord, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: mock}, nil)
+	require.NoError(t, err)
+	coord.AddTables([]TableID{tableA})
+	require.NoError(t, coord.Start(t.Context()))
+	coord.AddTables([]TableID{tableB})
+
+	sentinel := errors.New("downstream gone")
+	_, err = coord.OnCommit(t.Context(), 15, func([]Row) error { return sentinel })
+	require.ErrorIs(t, err, sentinel)
+
+	var chunks [][]Row
+	changed, err := coord.OnCommit(t.Context(), 16, collect(&chunks))
+	require.NoError(t, err)
+	assert.True(t, changed)
+	require.Len(t, chunks, 1)
+	assert.Empty(t, chunks[0], "the retry carries state only")
+}
+
 func TestCoordinatorConfigValidation(t *testing.T) {
 	validDeps := newScriptedMockDeps(map[string]*mockTable{}, 1)
 
