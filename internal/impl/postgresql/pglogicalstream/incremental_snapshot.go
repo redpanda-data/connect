@@ -40,8 +40,6 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 		return fmt.Errorf("pinging incremental snapshot connection: %w", err)
 	}
 
-	// Nothing is queued at first: tables are requested by signal. A resumed
-	// checkpoint brings back what the last run covered.
 	// A signal may only ask for a replicated table. An empty DBTables means
 	// the publication is FOR ALL TABLES, so leave the set nil to accept any.
 	if len(config.DBTables) > 0 {
@@ -65,9 +63,17 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 		}
 	}
 
+	// Nothing is queued at first: tables are requested by signal. A resumed
+	// checkpoint brings back what the last run covered.
 	coordinator, err := incsnapshot.NewCoordinator(incsnapshot.CoordinatorConfig{
 		ChunkSize: incSnapshotCfg.ChunkSize,
 		Deps:      incrementalSnapshotDeps{stream: s},
+		OnTableDropped: func(table incrementalsnapshot.TableID, err error) {
+			// Accepted by checkBackfillable, then dropped or its key
+			// removed before it was planned.
+			s.logger.Warnf("Incremental snapshot: dropped table %s from the queue, it can no longer be backfilled: %s", table, err)
+			delete(s.incSnapshotTables, table)
+		},
 	}, incSnapshotCfg.ResumeState)
 	if err != nil {
 		_ = db.Close()
@@ -169,7 +175,10 @@ func (s *Stream) resolveIncrementalPKColumns(ctx context.Context, table TableFQN
 	}
 
 	if len(pkColumns) == 0 {
-		return nil, fmt.Errorf("no primary key found for table %s", table)
+		// Unusable, not a failure: the backfill pages by key and no retry
+		// will produce one. REPLICA IDENTITY FULL replicates a table
+		// without one, so this is reachable.
+		return nil, fmt.Errorf("%w: no primary key found for table %s", incrementalsnapshot.ErrTableUnusable, table)
 	}
 
 	return pkColumns, nil
@@ -532,6 +541,20 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 	return nil
 }
 
+// checkBackfillable rejects a table the snapshot could not read, so a bad
+// request fails where the user can see it rather than once it is queued and
+// checkpointed. Refer to incrementalsnapshot.ErrTableUnusable.
+func (s *Stream) checkBackfillable(ctx context.Context, table incrementalsnapshot.TableID) error {
+	if err := s.checkReplicated(table); err != nil {
+		return err
+	}
+	// The backfill pages by key, so a table without one can never be read.
+	if _, err := s.incrementalPKColumns(ctx, table); err != nil {
+		return err
+	}
+	return nil
+}
+
 // checkReplicated rejects a table the publication does not carry.
 //
 // Its backfill would have no live changes to deduplicate against, so a write
@@ -555,7 +578,7 @@ func (s *Stream) checkReplicated(table incrementalsnapshot.TableID) error {
 // row is not one. A malformed payload is an error, not a row to ignore: the
 // request came from a user, who would otherwise wait for a backfill that
 // never starts.
-func (s *Stream) snapshotSignalTables(message *StreamMessage) ([]incrementalsnapshot.TableID, error) {
+func (s *Stream) snapshotSignalTables(ctx context.Context, message *StreamMessage) ([]incrementalsnapshot.TableID, error) {
 	if s.incSnapshotCoordinator == nil || message.Operation != InsertOpType {
 		return nil, nil
 	}
@@ -589,7 +612,7 @@ func (s *Stream) snapshotSignalTables(message *StreamMessage) ([]incrementalsnap
 		if err != nil {
 			return nil, fmt.Errorf("signal row: resolving table %q: %w", name, err)
 		}
-		if err := s.checkReplicated(table); err != nil {
+		if err := s.checkBackfillable(ctx, table); err != nil {
 			// Reject the whole request rather than part of it: a caller who
 			// asked for three tables and got two would have no way to tell.
 			return nil, fmt.Errorf("signal row: %w", err)
@@ -607,8 +630,8 @@ func (s *Stream) snapshotSignalTables(message *StreamMessage) ([]incrementalsnap
 // running. Queueing afterwards would acknowledge the row's LSN with the
 // older queue, losing the request on a restart: an acknowledged row never
 // streams again.
-func (s *Stream) dispatchSnapshotSignal(message *StreamMessage) error {
-	tables, err := s.snapshotSignalTables(message)
+func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMessage) error {
+	tables, err := s.snapshotSignalTables(ctx, message)
 	if err != nil || len(tables) == 0 {
 		return err
 	}

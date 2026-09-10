@@ -887,6 +887,84 @@ func TestCoordinatorAddTablesMidBackfillCheckpointFailureRetries(t *testing.T) {
 	assert.Empty(t, chunks[0], "the retry carries state only")
 }
 
+// TestCoordinatorDropsUnusableTable: a queued table that can never be read
+// must be dropped, not turned into an error -- refer to ErrTableUnusable. A
+// transient error must still fail, or a blip would discard tables.
+func TestCoordinatorDropsUnusableTable(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+	tableB := TableID{Schema: "public", Table: "b"}
+
+	newDeps := func() *scriptedMockDeps {
+		mock := newScriptedMockDeps(map[string]*mockTable{
+			tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1)}, maxPK: PrimaryKey{1}},
+			tableB.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableB, 1)}, maxPK: PrimaryKey{1}},
+		}, 1)
+		mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
+		return mock
+	}
+
+	t.Run("unusable table is dropped and the rest proceed", func(t *testing.T) {
+		mock := newDeps()
+		mock.failOn("ResolvePrimaryKey", fmt.Errorf("%w: no primary key", ErrTableUnusable))
+
+		var dropped []TableID
+		coord, err := NewCoordinator(testConfig{
+			ChunkSize:      1,
+			Deps:           mock,
+			OnTableDropped: func(table TableID, _ error) { dropped = append(dropped, table) },
+		}, nil)
+		require.NoError(t, err)
+		coord.AddTables([]TableID{tableA, tableB})
+
+		// Start plans, so it hits the failure and must not return it.
+		require.NoError(t, coord.Start(t.Context()))
+
+		// The double fails for every table, so both are dropped and the
+		// queue empties rather than the coordinator failing.
+		assert.Equal(t, []TableID{tableA, tableB}, dropped)
+		assert.True(t, coord.Idle())
+	})
+
+	t.Run("a transient error still fails", func(t *testing.T) {
+		mock := newDeps()
+		mock.failOn("ResolvePrimaryKey", errors.New("connection reset"))
+
+		var dropped []TableID
+		coord, err := NewCoordinator(testConfig{
+			ChunkSize:      1,
+			Deps:           mock,
+			OnTableDropped: func(table TableID, _ error) { dropped = append(dropped, table) },
+		}, nil)
+		require.NoError(t, err)
+		coord.AddTables([]TableID{tableA})
+
+		err = coord.Start(t.Context())
+		require.ErrorContains(t, err, "connection reset")
+		assert.Empty(t, dropped, "a retryable failure must not discard the table")
+	})
+
+	t.Run("an unusable table found mid-run does not stop the others", func(t *testing.T) {
+		// A fails on its second plan, by which point B is queued behind it.
+		mock := newDeps()
+		mock.failAfter("ResolvePrimaryKey", 1, fmt.Errorf("%w: table dropped", ErrTableUnusable))
+
+		var dropped []TableID
+		coord, err := NewCoordinator(testConfig{
+			ChunkSize:      1,
+			Deps:           mock,
+			OnTableDropped: func(table TableID, _ error) { dropped = append(dropped, table) },
+		}, nil)
+		require.NoError(t, err)
+		coord.AddTables([]TableID{tableA, tableB})
+		require.NoError(t, coord.Start(t.Context()))
+
+		var chunks [][]Row
+		_, err = coord.OnCommit(t.Context(), 5, collect(&chunks))
+		require.NoError(t, err, "the unusable table must not fail the commit")
+		assert.NotEmpty(t, dropped)
+	})
+}
+
 func TestCoordinatorConfigValidation(t *testing.T) {
 	validDeps := newScriptedMockDeps(map[string]*mockTable{}, 1)
 

@@ -693,7 +693,7 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 		}
 	}
 
-	if err := s.dispatchSnapshotSignal(message); err != nil {
+	if err := s.dispatchSnapshotSignal(ctx, message); err != nil {
 		// A bad signal must not stop replication. Log it and carry on: the
 		// row still reaches the consumer.
 		s.logger.Errorf("Incremental snapshot: %s", err)

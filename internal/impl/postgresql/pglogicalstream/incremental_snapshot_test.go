@@ -135,6 +135,9 @@ func TestResolveIncrementalPKColumnsNoPrimaryKey(t *testing.T) {
 	_, err := s.resolveIncrementalPKColumns(t.Context(), TableFQN{Schema: `"public"`, Table: `"orders"`})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no primary key found")
+	// The coordinator drops rather than fails on this, so it must be
+	// distinguishable from a transient error.
+	assert.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable)
 }
 
 func TestIncrementalPKColumnsCachesAndUnquotes(t *testing.T) {
@@ -375,6 +378,9 @@ func TestSnapshotSignalRejectsUnreplicatedTable(t *testing.T) {
 			signalTable:            &signalTable,
 			snapshotSchema:         "public",
 			incSnapshotReplicated:  replicated,
+			// The accept path resolves the key columns too.
+			incSnapshotConn:    newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"id"}}, nil),
+			incSnapshotPKCache: map[string][]string{},
 		}
 	}
 
@@ -383,13 +389,13 @@ func TestSnapshotSignalRejectsUnreplicatedTable(t *testing.T) {
 	}
 
 	t.Run("replicated table is accepted", func(t *testing.T) {
-		got, err := newStream(replicated).snapshotSignalTables(signalRow(`"flights"`))
+		got, err := newStream(replicated).snapshotSignalTables(t.Context(), signalRow(`"flights"`))
 		require.NoError(t, err)
 		assert.Equal(t, []incrementalsnapshot.TableID{{Schema: "public", Table: "flights"}}, got)
 	})
 
 	t.Run("unreplicated table is rejected", func(t *testing.T) {
-		_, err := newStream(replicated).snapshotSignalTables(signalRow(`"users"`))
+		_, err := newStream(replicated).snapshotSignalTables(t.Context(), signalRow(`"users"`))
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "public.users is not replicated")
 	})
@@ -397,14 +403,46 @@ func TestSnapshotSignalRejectsUnreplicatedTable(t *testing.T) {
 	t.Run("one unreplicated table rejects the whole request", func(t *testing.T) {
 		// Queueing only the valid half would leave the caller with no way to
 		// tell which tables were accepted.
-		_, err := newStream(replicated).snapshotSignalTables(signalRow(`"flights", "users"`))
+		_, err := newStream(replicated).snapshotSignalTables(t.Context(), signalRow(`"flights", "users"`))
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "public.users is not replicated")
 	})
 
 	t.Run("a nil set means FOR ALL TABLES", func(t *testing.T) {
-		got, err := newStream(nil).snapshotSignalTables(signalRow(`"anything"`))
+		got, err := newStream(nil).snapshotSignalTables(t.Context(), signalRow(`"anything"`))
 		require.NoError(t, err)
 		assert.Equal(t, []incrementalsnapshot.TableID{{Schema: "public", Table: "anything"}}, got)
 	})
+}
+
+// TestSnapshotSignalRejectsTableWithoutPrimaryKey: the backfill pages by
+// key, so a table without one can never be read, and accepting the signal
+// would queue it into the checkpoint. REPLICA IDENTITY FULL replicates a
+// table without a key, so this is reachable rather than broken.
+func TestSnapshotSignalRejectsTableWithoutPrimaryKey(t *testing.T) {
+	signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
+	s := &Stream{
+		incSnapshotCoordinator: &incsnapshot.Coordinator{},
+		signalTable:            &signalTable,
+		snapshotSchema:         "public",
+		incSnapshotReplicated: map[incrementalsnapshot.TableID]struct{}{
+			{Schema: "public", Table: "nopk"}: {},
+		},
+		// No rows: the table has no primary key.
+		incSnapshotConn:    newFakeQueryDB(t, []string{"attname"}, nil, nil),
+		incSnapshotPKCache: map[string][]string{},
+	}
+
+	_, err := s.snapshotSignalTables(t.Context(), &StreamMessage{
+		Operation: InsertOpType,
+		Schema:    "public",
+		Table:     "rpcn_signal",
+		Data: map[string]any{
+			"type": "snapshot",
+			"data": `{"tables": ["nopk"]}`,
+		},
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable)
+	assert.Contains(t, err.Error(), "no primary key found")
 }

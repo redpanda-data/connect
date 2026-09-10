@@ -10,6 +10,7 @@ package incrementalsnapshot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 )
@@ -369,6 +370,27 @@ func (c *Coordinator[P, W]) State() *State {
 	return s.Clone()
 }
 
+// dropUnusable removes the current table from the run when err reports it
+// can never be backfilled -- refer to ErrTableUnusable for why dropping
+// beats failing. Reports whether it dropped anything.
+//
+// The table stays in knownTables, so a later request for it is a no-op
+// until the caller starts from a fresh checkpoint. Re-reading it would fail
+// the same way.
+func (c *Coordinator[P, W]) dropUnusable(table TableID, err error) bool {
+	if !errors.Is(err, ErrTableUnusable) {
+		return false
+	}
+	if c.cfg.OnTableDropped != nil {
+		c.cfg.OnTableDropped(table, err)
+	}
+	c.current = nil
+	c.currentExhausted = false
+	c.lastSentPK = nil
+	c.maxPK = nil
+	return true
+}
+
 // planNextChunk buffers the current table's next chunk, advancing tables
 // until one has rows or none remain.
 func (c *Coordinator[P, W]) planNextChunk(ctx context.Context) error {
@@ -393,10 +415,16 @@ func (c *Coordinator[P, W]) planNextChunk(ctx context.Context) error {
 
 		pkCols, err := c.resolvePKCols(ctx, table)
 		if err != nil {
+			if c.dropUnusable(table, err) {
+				continue
+			}
 			return err
 		}
 
 		if err := c.resolveMaxPK(ctx, table, pkCols); err != nil {
+			if c.dropUnusable(table, err) {
+				continue
+			}
 			return err
 		}
 
