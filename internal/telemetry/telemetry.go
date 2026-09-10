@@ -54,7 +54,7 @@ const (
 
 // ActivateExporter runs the telemetry exporter asynchronously, provided all
 // conditions for telemetry are satisfied.
-func ActivateExporter(identifier, version, deploymentType, tenantID string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) {
+func ActivateExporter(identifier, version, deploymentType, tenantID, pipelineID string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) {
 	// If TLS information isn't present in the build then we do not send
 	// telemetry data.
 	if privateKey == "" {
@@ -82,7 +82,7 @@ func ActivateExporter(identifier, version, deploymentType, tenantID string, logg
 		exportHost = ExportHost
 	}
 
-	p, err := extractPayload(identifier, deploymentType, tenantID, logger, schema, conf)
+	p, err := extractPayload(identifier, deploymentType, tenantID, pipelineID, logger, schema, conf)
 	if err != nil {
 		logger.With("error", err).Debug("Failed to create telemetry payload")
 		return
