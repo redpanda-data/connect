@@ -242,6 +242,41 @@ To reproduce: `GOMAXPROCS=1 go test -bench BenchmarkShredWide -benchmem -run '^$
 
 ---
 
+## Commit Regime — Commit Latency vs `max_in_flight` (synthetic)
+
+How commit coalescing responds to catalog commit latency and the number of concurrent in-flight submissions, measured by the flag-gated `TestCommitRegimeSweep` in [`internal/impl/iceberg/commit_regime_bench_test.go`](../../internal/impl/iceberg/commit_regime_bench_test.go).
+
+**Environment:** darwin/arm64, Apple M3 Pro; in-memory catalog with a fixed injected per-commit delay; 6s window per point; 300 records per submission
+
+**Changed since last run:** first run of this harness. No production change — the committer and its batcher are as on `main`. These numbers describe batcher coalescing behaviour, so re-run them if the commit batching path changes.
+
+**Caveat — read the numbers as ratios, not throughput.** Nothing here writes parquet or touches object storage, and the injected delay is not a real catalog, so the absolute rec/sec are not sink throughput figures and are not comparable with the localhost or live-catalog sections above. What the harness measures is how many submissions a commit carries, and at what latency.
+
+| commit latency | `max_in_flight` | rec/sec | records/commit | submissions/commit |
+|---------------:|----------------:|--------:|---------------:|-------------------:|
+| 50ms | 1 | 5,238 | 300 | 1.00 |
+| 50ms | 4 | 10,437 | 600 | 2.00 |
+| 50ms | 16 | 41,790 | 2,400 | 8.00 |
+| 50ms | 64 | 166,306 | 9,600 | 32.00 |
+| 200ms | 1 | 1,449 | 300 | 1.00 |
+| 200ms | 4 | 2,896 | 600 | 2.00 |
+| 200ms | 16 | 11,563 | 2,400 | 8.00 |
+| 200ms | 64 | 46,230 | 9,600 | 32.00 |
+| 500ms | 1 | 591 | 300 | 1.00 |
+| 500ms | 4 | 1,187 | 600 | 2.00 |
+| 500ms | 16 | 4,416 | 2,238 | 7.46 |
+| 500ms | 64 | 20,354 | 10,338 | 34.46 |
+
+**Observations:**
+
+- **The commit batcher already coalesces concurrent submissions.** Submissions that arrive while a commit is in flight are merged into the next one, so records per commit scales with `max_in_flight` without any time-based batching involved.
+- **At `max_in_flight: 1` records per commit is pinned to a single submission**, giving `records-per-submission / commit-latency` — 591 rec/sec at 500ms, matching the "throughput trap" regime described under Tuning Recipes. This is structural: the sole submitter is blocked inside the commit it is waiting on, so no second submission can exist to batch with. A commit-side linger cannot improve this case, and would add latency to it.
+- Submissions per commit settles near `max_in_flight / 2` rather than `max_in_flight`, which suggests the batcher samples its queue before the just-released submitters have all re-queued. Whether closing that gap is worth anything is untested.
+
+To reproduce: `go test -v -run TestCommitRegimeSweep -iceberg.commit-regime -timeout 20m ./internal/impl/iceberg/` (add `-iceberg.commit-regime-realistic` for 320ms/5s/10s latencies). The `-v` is required — the sweep never asserts, so it always passes, and `go test` suppresses `t.Log` output (which is how the table is printed) for passing tests without it.
+
+---
+
 ## Tuning Recipes
 
 The single most important factor for `iceberg` throughput is **records per commit**. Each catalog
