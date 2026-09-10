@@ -162,6 +162,14 @@ func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
 		added = append(added, table)
 		c.knownTables = append(c.knownTables, table)
 		c.remaining = append(c.remaining, table)
+		// Also the committed queue, which is what State reports. Nothing
+		// has been read for this table, so "committed" is the truth: it is
+		// queued and nothing was sent. Leaving it out of the committed half
+		// would make State report a table as covered by Tables while no
+		// queue entry carries it, and a coordinator resumed from that state
+		// would be idle and would reject a repeat signal -- the table could
+		// then never be read.
+		c.committedRemaining = append(c.committedRemaining, table)
 	}
 	if len(added) > 0 && c.idle {
 		c.idle = false
@@ -197,10 +205,23 @@ func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P, emit EmitFunc) 
 	}
 
 	if c.needsPlan {
-		// First commit since AddTables brought work back. Buffer a chunk and
-		// let the following commit close its window, the normal cadence.
+		// First commit since AddTables brought work back.
+		//
+		// Checkpoint the queue before reading anything. Whatever asked for
+		// these tables is part of this transaction, so once the caller
+		// acknowledges this position the request is gone: it cannot be
+		// replayed, and a restart would find the tables unqueued. The window
+		// is empty, so this emits state alone.
 		c.needsPlan = false
-		return false, c.planNextChunk(ctx)
+		if err := emit(nil); err != nil {
+			// Not delivered, so the queue is still owed a checkpoint.
+			c.needsPlan = true
+			return false, err
+		}
+
+		// Buffer a chunk and let the following commit close its window, the
+		// normal cadence.
+		return true, c.planNextChunk(ctx)
 	}
 
 	if !c.windowOpened && c.low.OpensAt(pos) {
