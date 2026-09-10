@@ -50,9 +50,10 @@ import (
 // (not BIGINT) and the value must round-trip to the correct calendar date.
 func TestIntegrationSchemaMetadataDrivesTimestampColumn(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const namespace = "schema_meta_timestamp"
 	infra.CreateNamespace(t, namespace)
@@ -159,9 +160,10 @@ func TestIntegrationSchemaMetadataDrivesTimestampColumn(t *testing.T) {
 // directly (covered by the test above).
 func TestIntegrationCoerceTemporalIntoExistingBigintColumn(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const namespace = "coerce_existing_bigint"
 	const tableName = "events_existing_bigint"
@@ -241,9 +243,10 @@ func TestIntegrationCoerceTemporalIntoExistingBigintColumn(t *testing.T) {
 // flag.
 func TestIntegrationStrictModeRejectsCoerceOnExistingBigintColumn(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const namespace = "coerce_strict_reject"
 	const tableName = "events_strict_bigint"

@@ -36,8 +36,9 @@ import (
 // invariant of zero delete-content manifests. DuckDB confirms the surviving row.
 func TestCOWDeleteOnlyBatchIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const ns, tbl = "cow_delonly_ns", "cow_delonly_test"
 	infra.CreateNamespace(t, ns)
@@ -94,8 +95,9 @@ func TestCOWDeleteOnlyBatchIntegration(t *testing.T) {
 // partitions and re-appends it routed by its new partition value.
 func TestCOWCrossPartitionKeyMoveIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const ns, tbl = "cow_move_ns", "cow_move_test"
 	infra.CreateNamespace(t, ns)
