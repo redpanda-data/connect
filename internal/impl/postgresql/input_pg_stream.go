@@ -279,7 +279,10 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('snapshot', '{"tab
 
 Each table must appear in ` + "`" + fieldTables + "`" + ` (or that list must be empty, replicating everything):
 an unreplicated table has no live changes to deduplicate its backfill against, so a write landing
-after its chunk is read would be lost. A signal naming one is rejected and logged.
+after its chunk is read would be lost. Each must also have a primary key, which the backfill pages
+by — a table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. A signal
+naming a table that fails either check is rejected and logged, and one that becomes unreadable
+after being queued is dropped from the queue with a warning.
 
 Each table joins the back of the backfill queue. A table this run already covers is skipped and
 logged, so a repeated signal does not re-read it. To read one again, point

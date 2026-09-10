@@ -27,11 +27,17 @@ import (
 type Deps[W any] interface {
 	// ResolvePrimaryKey returns the table's unquoted key columns. The
 	// coordinator caches the result per table.
+	//
+	// Wrap ErrTableUnusable for a table that can never be backfilled, such
+	// as one with no primary key, and the coordinator drops it rather than
+	// failing.
 	ResolvePrimaryKey(ctx context.Context, table TableID) (columns []string, err error)
 
 	// ResolveMaxKey returns the table's current largest key, which bounds the
 	// backfill: rows inserted after that are left to the stream. A nil key
 	// with a nil error means the table is empty, which is not an error.
+	//
+	// It may also wrap ErrTableUnusable, for a table that has gone.
 	ResolveMaxKey(ctx context.Context, table TableID, pkColumnsUnquoted []string) (PrimaryKey, error)
 
 	// ResolveWatermark reads a fresh watermark.
@@ -51,6 +57,15 @@ type Deps[W any] interface {
 	FetchChunk(ctx context.Context, table TableID, pkColumnsUnquoted []string, lower, upper PrimaryKey, limit int) ([]Row, error)
 }
 
+// ErrTableUnusable reports a queued table the connector can never backfill,
+// such as one with no primary key, or one dropped after it was queued.
+//
+// Deps wraps it so the coordinator can tell it from a transient failure,
+// which must fail and be retried. This one never succeeds, so the
+// coordinator drops the table: failing would be permanent, since the table
+// is already in the checkpoint and every restart would replan it.
+var ErrTableUnusable = errors.New("table cannot be backfilled")
+
 // CoordinatorConfig configures a Coordinator. P is the database's position
 // type and W its watermark type; see Watermark.
 type CoordinatorConfig[P any, W Watermark[P]] struct {
@@ -63,6 +78,11 @@ type CoordinatorConfig[P any, W Watermark[P]] struct {
 	//
 	// Zero selects DefaultMaxDrainChunks; a negative value disables draining.
 	MaxDrainChunks int
+
+	// OnTableDropped reports a queued table dropped as unusable. The
+	// coordinator has no logger, so this is how the caller logs it.
+	// Optional.
+	OnTableDropped func(table TableID, err error)
 }
 
 // DefaultMaxDrainChunks applies when CoordinatorConfig.MaxDrainChunks is
