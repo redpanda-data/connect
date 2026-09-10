@@ -54,6 +54,22 @@ const (
 	// payloadLen makes each JSON record ~1.2KB, mirroring the earlier
 	// benchmark methodology (id + seq + ~1.1KB string payload + JSON framing).
 	payloadLen = 1100
+	// payloadPoolSize is the shared random pool that payload strings are
+	// sliced from. Must be large enough to hold payloadLen-sized slices at
+	// varied offsets without the pool becoming the bottleneck on entropy.
+	payloadPoolSize = 64 * 1024
+	// warmupBatchSize is the uncounted first batch that absorbs a table's
+	// first-write bootstrap cost (table load + timestamp-encoding property
+	// stamp) so measured calls are steady-state appends.
+	warmupBatchSize = 10
+	// maxFailuresPerPoint aborts a point after this many Route failures
+	// (not required to be consecutive — see the "consecutive-ish" log line
+	// where this is used), rather than retrying indefinitely against a
+	// catalog that is consistently rejecting writes.
+	maxFailuresPerPoint = 3
+	// maxWarningSamples caps how many redacted warning-log lines are kept per
+	// point, so a run with many warnings does not balloon the report.
+	maxWarningSamples = 5
 )
 
 // syncBuffer is a concurrency-safe bytes.Buffer for the capturing logger —
@@ -85,7 +101,7 @@ func newCapturingRouter(t *testing.T, namespace, tableName string, rowOp iceberg
 	tableStr, err := service.NewInterpolatedString(tableName)
 	require.NoError(t, err)
 
-	sb := &syncBuffer{}
+	sb := new(syncBuffer)
 	logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(sb, &slog.HandlerOptions{
 		Level: slog.LevelWarn,
 	})))
@@ -150,7 +166,7 @@ func collectWarnings(logged string) warnEvidence {
 		default:
 			continue
 		}
-		if len(ev.samples) < 5 {
+		if len(ev.samples) < maxWarningSamples {
 			ev.samples = append(ev.samples, redact(line))
 		}
 	}
@@ -195,7 +211,7 @@ func TestDatabricksThroughput(t *testing.T) {
 	// Shared random pool for payload slicing (allocated once for the run).
 	poolRng := rand.New(rand.NewSource(42)) //nolint:gosec // bench entropy, not crypto
 	const alnum = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	poolBytes := make([]byte, 64*1024)
+	poolBytes := make([]byte, payloadPoolSize)
 	for i := range poolBytes {
 		poolBytes[i] = alnum[poolRng.Intn(len(alnum))]
 	}
@@ -225,13 +241,14 @@ func TestDatabricksThroughput(t *testing.T) {
 			// load + timestamp-encoding property stamp) so measured calls
 			// are steady-state appends.
 			nextID := int64(1)
-			require.NoError(t, router.Route(ctx, benchBatch(pool, nextID, 10)))
-			nextID += 10
+			require.NoError(t, router.Route(ctx, benchBatch(pool, nextID, warmupBatchSize)))
+			nextID += warmupBatchSize
 
 			var (
-				latencies []time.Duration
-				records   int64
-				failures  int
+				latencies    []time.Duration
+				records      int64
+				failures     int
+				firstCallDur time.Duration
 			)
 			start := time.Now()
 			var elapsed time.Duration
@@ -243,11 +260,14 @@ func TestDatabricksThroughput(t *testing.T) {
 				routeErr := router.Route(ctx, batch)
 				callDur := time.Since(callStart)
 				elapsed = time.Since(start)
+				if len(latencies)+failures == 0 {
+					firstCallDur = callDur
+				}
 
 				if routeErr != nil {
 					failures++
 					t.Logf("batch=%d commit %d FAILED after %v: %v", batchSize, len(latencies)+failures, callDur.Round(time.Millisecond), redact(routeErr.Error()))
-					if failures >= 3 {
+					if failures >= maxFailuresPerPoint {
 						t.Logf("batch=%d: aborting point after %d consecutive-ish failures", batchSize, failures)
 						break
 					}
@@ -260,10 +280,12 @@ func TestDatabricksThroughput(t *testing.T) {
 				if elapsed >= throughputWindow {
 					break
 				}
-				// Very large batches: cap at two calls if a single call
-				// blows past the cutoff (keeps live time bounded).
-				if len(latencies)+failures >= 2 && callDur > bigRouteCutoff {
-					t.Logf("batch=%d: truncating point to %d calls (single Route exceeded %v)", batchSize, len(latencies)+failures, bigRouteCutoff)
+				// Very large batches: if the first measured Route call
+				// already blew past the cutoff, every subsequent call will
+				// too (batch size is fixed for the point) — stop after one
+				// corroborating call rather than burn the full window.
+				if len(latencies)+failures >= 2 && firstCallDur > bigRouteCutoff {
+					t.Logf("batch=%d: truncating point to %d calls (first Route call exceeded %v)", batchSize, len(latencies)+failures, bigRouteCutoff)
 					break
 				}
 			}
