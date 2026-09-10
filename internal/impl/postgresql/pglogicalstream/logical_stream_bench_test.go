@@ -236,7 +236,7 @@ func BenchmarkStreamMessages(b *testing.B) {
 	s := &Stream{
 		pgConn:                pgConn,
 		shutSig:               shutdown.NewSignaller(),
-		messages:              make(chan []StreamMessage), // Task 3 changes this to streamChannelDepth
+		messages:              make(chan []StreamMessage, streamChannelDepth),
 		errors:                make(chan error, 1),
 		slotName:              "bench",
 		standbyMessageTimeout: time.Second,

@@ -117,7 +117,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 	stream := &Stream{
 		pgConn:                dbConn,
-		messages:              make(chan []StreamMessage),
+		messages:              make(chan []StreamMessage, streamChannelDepth),
 		errors:                make(chan error, 1),
 		snapshotAcked:         make(chan struct{}),
 		slotName:              config.ReplicationSlotName,
@@ -430,10 +430,13 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		schemaCache = map[uint32]any{}
 		// If we don't stream commit messages we could not ack them, which means postgres will replay the whole transaction
 		// so if we're at the end of a stream and we get an ack for the last message in a txn, we need to ack the txn not the
-		// last message.
+		// last message. "Emitted" here means handed to the consumer: both values are only advanced when a batch is flushed.
 		lastEmittedLSN       = currentLSN
 		lastEmittedCommitLSN = currentLSN
 		currentTxnCommitTime time.Time
+		// Decoded rows are accumulated here and handed to the consumer at commit
+		// boundaries or when a cap is hit, instead of one row per channel send.
+		batch = newStreamBatch(streamBatchMaxRows, streamBatchMaxBytes, currentLSN)
 	)
 
 	commitLSN := func(force bool) (committed bool, err error) {
@@ -459,9 +462,27 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		}
 	}()
 
-	nextStandbyMessageDeadline := time.Now().Add(s.standbyMessageTimeout)
 	ctx, done := s.shutSig.SoftStopCtx(context.Background())
 	defer done()
+
+	// flush hands the pending batch to the consumer and promotes the LSN
+	// bookkeeping. It always promotes, even when there is nothing to send, so a
+	// suppressed commit with no pending rows still advances lastEmittedCommitLSN.
+	flush := func() error {
+		msgs, promotedLast, promotedCommit := batch.take()
+		lastEmittedLSN, lastEmittedCommitLSN = promotedLast, promotedCommit
+		if len(msgs) == 0 {
+			return nil
+		}
+		select {
+		case s.messages <- msgs:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	nextStandbyMessageDeadline := time.Now().Add(s.standbyMessageTimeout)
 	for !s.shutSig.IsSoftStopSignalled() {
 		if committed, err := commitLSN(time.Now().After(nextStandbyMessageDeadline)); err != nil {
 			return err
@@ -511,25 +532,34 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 				return fmt.Errorf("parsing XLogData: %w", err)
 			}
 			msgLSN := xld.WALStart + LSN(len(xld.WALData))
-			result, err := s.processChange(ctx, msgLSN, xld, relations, typeMap, schemaCache, &currentTxnCommitTime)
+			message, result, err := s.processChange(msgLSN, xld, relations, typeMap, schemaCache, &currentTxnCommitTime)
 			if err != nil {
 				return fmt.Errorf("decoding postgres changes failed: %w", err)
 			}
-			// See the explanation above about lastEmittedCommitLSN but if this is a commit message, we want to
-			// only remap the commit of the last message in a transaction, so only update the remapped value if
-			// it was a suppressed commit, otherwise we just provide a noop mapping of commit LSN
+			// A suppressed commit only moves the commit LSN the last row of the
+			// transaction is remapped to. An emitted message moves both; when
+			// that message is itself the commit marker (include_transaction_markers)
+			// it also closes the transaction.
 			switch result {
 			case changeResultSuppressedCommitMessage:
-				lastEmittedCommitLSN = msgLSN
+				batch.markCommit(msgLSN)
 			case changeResultEmittedMessage:
-				lastEmittedLSN = msgLSN
-				lastEmittedCommitLSN = msgLSN
+				batch.append(*message, len(xld.WALData), msgLSN)
+				if message.Operation == CommitOpType {
+					batch.markCommit(msgLSN)
+				}
+			}
+			if batch.shouldFlush() {
+				if err := flush(); err != nil {
+					return err
+				}
 			}
 		default:
 			return fmt.Errorf("unknown message type: %c", msg.Data[0])
 		}
 	}
-	// clean shutdown, return nil
+	// clean shutdown, return nil. Anything still pending in the batch was never
+	// handed to the consumer, so it was never acked and will be re-read on restart.
 	return nil
 }
 
@@ -541,11 +571,12 @@ const (
 	changeResultEmittedMessage          processChangeResult = 2
 )
 
-// Handle handles the pgoutput output.
-func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time) (processChangeResult, error) {
+// processChange decodes one XLogData payload into at most one StreamMessage.
+// It does not send; the caller batches emitted messages (see streamMessages).
+func (s *Stream) processChange(msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time) (*StreamMessage, processChangeResult, error) {
 	logicalMsg, err := Parse(xld.WALData)
 	if err != nil {
-		return changeResultNoMessage, err
+		return nil, changeResultNoMessage, err
 	}
 
 	// Invalidate the schema cache when a RelationMessage arrives — PostgreSQL sends one
@@ -565,23 +596,23 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	// parse changes inside the transaction
 	message, err := toStreamMessage(logicalMsg, relations, typeMap, s.unchangedToastValue)
 	if err != nil {
-		return changeResultNoMessage, err
+		return nil, changeResultNoMessage, err
 	}
 	if message == nil {
 		// In the case of heartbeats we can treat that the same as suppressed commit messages and advance the LSN that way.
 		// this is only needed for low frequency tables to continue to progress the LSN.
 		if logicalMsg, ok := logicalMsg.(*LogicalDecodingMessage); ok && logicalMsg.Prefix == "redpanda_connect_"+s.slotName {
-			return changeResultSuppressedCommitMessage, nil
+			return nil, changeResultSuppressedCommitMessage, nil
 		}
-		return changeResultNoMessage, nil
+		return nil, changeResultNoMessage, nil
 	}
 
 	if !s.includeTxnMarkers {
 		switch message.Operation {
 		case CommitOpType:
-			return changeResultSuppressedCommitMessage, nil
+			return nil, changeResultSuppressedCommitMessage, nil
 		case BeginOpType:
-			return changeResultNoMessage, nil
+			return nil, changeResultNoMessage, nil
 		}
 	}
 
@@ -610,12 +641,7 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	message.CommitTime = *currentTxnCommitTime
 	lsn := msgLSN.String()
 	message.LSN = &lsn
-	select {
-	case s.messages <- []StreamMessage{*message}:
-		return changeResultEmittedMessage, nil
-	case <-ctx.Done():
-		return changeResultNoMessage, ctx.Err()
-	}
+	return message, changeResultEmittedMessage, nil
 }
 
 func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) error {
