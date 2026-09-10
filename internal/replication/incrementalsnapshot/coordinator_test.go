@@ -637,23 +637,114 @@ func TestCoordinatorAddTables(t *testing.T) {
 		coord, _ := newCoordinator(t, nil)
 		coord.AddTables([]TableID{tableA})
 
-		// The first commit only plans: it must not flush a checkpoint for a
-		// window that never held anything.
+		// The first commit checkpoints the queue and plans, so it emits
+		// state alone -- see TestCoordinatorAddTablesIsDurable.
 		var chunks [][]Row
 		changed, err := coord.OnCommit(t.Context(), 5, collect(&chunks))
 		require.NoError(t, err)
-		assert.False(t, changed)
-		assert.Empty(t, chunks)
+		require.True(t, changed)
+		require.Len(t, chunks, 1)
+		require.Empty(t, chunks[0])
 
-		// The next one closes that chunk's window and releases it.
+		// The next one closes that chunk's window and releases the rows.
 		changed, err = coord.OnCommit(t.Context(), 6, collect(&chunks))
 		require.NoError(t, err)
 		require.True(t, changed)
-		require.NotEmpty(t, chunks)
-		require.NotEmpty(t, chunks[0])
-		assert.Equal(t, tableA, chunks[0][0].Table)
-		assert.Equal(t, PrimaryKey{1}, chunks[0][0].PK)
+		require.Len(t, chunks, 2)
+		require.NotEmpty(t, chunks[1])
+		assert.Equal(t, tableA, chunks[1][0].Table)
+		assert.Equal(t, PrimaryKey{1}, chunks[1][0].PK)
 	})
+}
+
+// TestCoordinatorAddTablesIsDurable: whatever asked for these tables is
+// part of the transaction whose commit follows, so once the caller
+// acknowledges that position the request is gone -- it cannot be replayed.
+// The queue must therefore be in a checkpoint by then, and that checkpoint
+// must be one a fresh coordinator can continue from.
+func TestCoordinatorAddTablesIsDurable(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+
+	newDeps := func() *scriptedMockDeps {
+		mock := newScriptedMockDeps(map[string]*mockTable{
+			tableA.String(): {
+				pkCols: []string{"id"},
+				rows:   []Row{rowFor(tableA, 1), rowFor(tableA, 2)},
+				maxPK:  PrimaryKey{2},
+			},
+		}, 1)
+		mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
+		return mock
+	}
+
+	coord, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: newDeps()}, nil)
+	require.NoError(t, err)
+	require.NoError(t, coord.Start(t.Context()))
+
+	coord.AddTables([]TableID{tableA})
+
+	// Both halves of the queue must agree at once. Tables without a queue
+	// entry would report the table as covered while nothing reads it, and
+	// AddTables would then reject a repeat request for it.
+	state := coord.State()
+	assert.Equal(t, []TableID{tableA}, state.Tables)
+	assert.Equal(t, []TableID{tableA}, state.RemainingTables)
+
+	// The commit that carries the request must hand the caller a checkpoint.
+	var chunks [][]Row
+	changed, err := coord.OnCommit(t.Context(), 5, collect(&chunks))
+	require.NoError(t, err)
+	assert.True(t, changed, "the queue must be checkpointed before this position is acknowledged")
+	require.Len(t, chunks, 1)
+	assert.Empty(t, chunks[0], "it carries state only, no rows")
+
+	// A coordinator resumed from that checkpoint must read the whole table.
+	resumed, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: newDeps()}, coord.State())
+	require.NoError(t, err)
+	require.NoError(t, resumed.Start(t.Context()))
+	assert.False(t, resumed.Idle(), "the queued table must survive the restart")
+
+	var got []int
+	for _, pos := range []uint64{6, 7, 8} {
+		var chunk [][]Row
+		_, err := resumed.OnCommit(t.Context(), pos, collect(&chunk))
+		require.NoError(t, err)
+		for _, rows := range chunk {
+			for _, row := range rows {
+				got = append(got, row.PK[0].(int))
+			}
+		}
+	}
+	assert.Equal(t, []int{1, 2}, got)
+}
+
+// TestCoordinatorAddTablesCheckpointFailureRetries: the checkpoint that
+// makes the queue durable is emitted, so it can fail. Nothing was delivered
+// then, and the next commit still owes it.
+func TestCoordinatorAddTablesCheckpointFailureRetries(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1)}, maxPK: PrimaryKey{1}},
+	}, 1)
+	mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
+
+	coord, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: mock}, nil)
+	require.NoError(t, err)
+	require.NoError(t, coord.Start(t.Context()))
+	coord.AddTables([]TableID{tableA})
+
+	sentinel := errors.New("downstream gone")
+	changed, err := coord.OnCommit(t.Context(), 5, func([]Row) error { return sentinel })
+	require.ErrorIs(t, err, sentinel)
+	assert.False(t, changed)
+
+	// Retried on the next commit rather than skipped.
+	var chunks [][]Row
+	changed, err = coord.OnCommit(t.Context(), 6, collect(&chunks))
+	require.NoError(t, err)
+	assert.True(t, changed)
+	require.Len(t, chunks, 1)
+	assert.Empty(t, chunks[0])
 }
 
 func TestCoordinatorConfigValidation(t *testing.T) {
