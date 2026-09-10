@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -103,16 +102,6 @@ func setupTestInfra(t *testing.T) *testInfrastructure {
 	require.NoError(t, sharedInfraErr)
 
 	return sharedInfra
-}
-
-// TestMain terminates the shared test infrastructure (if it was started)
-// after the package's tests complete.
-func TestMain(m *testing.M) {
-	code := m.Run()
-	if sharedInfra != nil {
-		_ = sharedInfra.Terminate(context.Background())
-	}
-	os.Exit(code)
 }
 
 // CatalogConfig returns a catalogx.Config pre-populated with MinIO/REST
