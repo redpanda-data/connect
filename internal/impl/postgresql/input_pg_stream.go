@@ -565,7 +565,10 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			nextTimedBatchChan = nil
 			flushedBatch, err := batcher.Flush(ctx)
 			if err != nil {
-				p.logger.Debugf("timed flush batch error: %s", err)
+				// Same reasoning as the message path below: continuing would let a
+				// later transaction's ack confirm past the rows this flush dropped.
+				p.logger.Errorf("timed flush batch error, restarting stream: %s", err)
+				p.stopSig.TriggerSoftStop()
 				break
 			}
 			if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
@@ -688,7 +691,11 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			}
 			if !p.batchingConfigured {
 				if err := p.flushBatch(ctx, pgStream, cp, passThrough); err != nil {
-					p.logger.Debugf("failed to flush batch: %s", err)
+					// The reader has already promoted its LSN bookkeeping for this
+					// batch; if it is not handed on, the stream must restart rather
+					// than continue past it.
+					p.logger.Errorf("failed to flush batch, restarting stream: %s", err)
+					p.stopSig.TriggerSoftStop()
 				}
 			} else if d, ok := batcher.UntilNext(); ok {
 				nextTimedBatchChan = time.After(d)

@@ -1845,3 +1845,109 @@ postgres_cdc:
 	defer sizesMut.Unlock()
 	assert.Equal(t, []int{3, 3, 3}, sizes, "no extra batch should arrive after the stream is stopped")
 }
+
+// TestIntegrationPostgresLargeTransactionSpansBatches covers the reader's row
+// cap: a single transaction larger than streamBatchMaxRows (1000) must arrive
+// as several batches with no rows lost, and a restart on the same slot after
+// everything was acked must not replay any of them.
+func TestIntegrationPostgresLargeTransactionSpansBatches(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_large_txn
+    stream_snapshot: false
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+`, databaseURL)
+
+	var (
+		mut   sync.Mutex
+		sizes []int
+		seqs  = map[int64]int{}
+	)
+	record := func(mb service.MessageBatch) error {
+		mut.Lock()
+		defer mut.Unlock()
+		sizes = append(sizes, len(mb))
+		for _, m := range mb {
+			var row struct {
+				Seq int64 `json:"Seq"`
+			}
+			b, err := m.AsBytes()
+			if err != nil {
+				return err
+			}
+			if err := json.Unmarshal(b, &row); err != nil {
+				return err
+			}
+			seqs[row.Seq]++
+		}
+		return nil
+	}
+
+	build := func() *service.Stream {
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, sb.AddInputYAML(template))
+		require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error { return record(mb) }))
+		s, err := sb.Build()
+		require.NoError(t, err)
+		license.InjectTestService(s.Resources())
+		return s
+	}
+
+	run1 := build()
+	go func() { _ = run1.Run(t.Context()) }()
+	time.Sleep(5 * time.Second)
+
+	const rowCount = 1500
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	for i := range rowCount {
+		f := pgtest.GetFakeFlightRecord()
+		_, err = tx.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+	require.NoError(t, tx.Commit())
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mut.Lock()
+		defer mut.Unlock()
+		assert.Equal(c, []int{1000, 500}, sizes, "a 1500-row transaction must split at the 1000-row cap")
+		assert.Len(c, seqs, rowCount)
+	}, 60*time.Second, 200*time.Millisecond)
+	require.NoError(t, run1.StopWithin(10*time.Second))
+
+	// Restart on the same slot: nothing already acked may be replayed, and
+	// new rows must still arrive.
+	mut.Lock()
+	sizes = nil
+	mut.Unlock()
+	run2 := build()
+	go func() { _ = run2.Run(t.Context()) }()
+	time.Sleep(5 * time.Second)
+
+	for i := rowCount; i < rowCount+3; i++ {
+		f := pgtest.GetFakeFlightRecord()
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mut.Lock()
+		defer mut.Unlock()
+		assert.Equal(c, []int{1, 1, 1}, sizes, "only the three new single-row transactions may arrive after restart")
+	}, 30*time.Second, 200*time.Millisecond)
+	require.NoError(t, run2.StopWithin(10*time.Second))
+
+	mut.Lock()
+	defer mut.Unlock()
+	require.Len(t, seqs, rowCount+3)
+	for seq, n := range seqs {
+		require.Equal(t, 1, n, "seq %d delivered %d times", seq, n)
+	}
+}
