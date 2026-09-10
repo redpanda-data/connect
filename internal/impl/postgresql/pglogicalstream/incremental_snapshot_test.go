@@ -37,6 +37,9 @@ type fakeQueryDriver struct {
 	columns []string
 	rows    [][]driver.Value
 	queries *int
+	// prepared collects the SQL text each Prepare receives, for tests that
+	// assert on the statement rather than the result.
+	prepared *[]string
 }
 
 func (d *fakeQueryDriver) Open(string) (driver.Conn, error) {
@@ -45,7 +48,10 @@ func (d *fakeQueryDriver) Open(string) (driver.Conn, error) {
 
 type fakeQueryConn struct{ driver *fakeQueryDriver }
 
-func (c *fakeQueryConn) Prepare(string) (driver.Stmt, error) {
+func (c *fakeQueryConn) Prepare(query string) (driver.Stmt, error) {
+	if c.driver.prepared != nil {
+		*c.driver.prepared = append(*c.driver.prepared, query)
+	}
 	return &fakeQueryStmt{conn: c}, nil
 }
 func (*fakeQueryConn) Close() error              { return nil }
@@ -91,8 +97,15 @@ var fakeQueryDriverSeq atomic.Int64
 // query counts (e.g. to prove caching avoids a repeat round trip).
 func newFakeQueryDB(t *testing.T, columns []string, rows [][]driver.Value, queries *int) *sql.DB {
 	t.Helper()
+	return newFakeQueryDBCapturing(t, columns, rows, queries, nil)
+}
+
+// newFakeQueryDBCapturing also collects the SQL text of every Prepare into
+// prepared.
+func newFakeQueryDBCapturing(t *testing.T, columns []string, rows [][]driver.Value, queries *int, prepared *[]string) *sql.DB {
+	t.Helper()
 	name := fmt.Sprintf("fake_pglog_test_%d", fakeQueryDriverSeq.Add(1))
-	sql.Register(name, &fakeQueryDriver{columns: columns, rows: rows, queries: queries})
+	sql.Register(name, &fakeQueryDriver{columns: columns, rows: rows, queries: queries, prepared: prepared})
 	db, err := sql.Open(name, "")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })

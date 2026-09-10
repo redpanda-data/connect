@@ -271,7 +271,7 @@ postgres_cdc:
 // TestIntegrationSignallingDetectedWithoutInterruptingStream verifies that a
 // recognized log signal is detected and forwarded downstream like any other
 // message, and streaming is never paused, flushed early, or restarted
-// because of it (see postgresSignaller.Listen and processStream's handling
+// because of it (see postgresSignaller.listen and processStream's handling
 // of the detected signal in input_pg_stream.go).
 func TestIntegrationSignallingDetectedWithoutInterruptingStream(t *testing.T) {
 	integration.CheckSkip(t)

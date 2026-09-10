@@ -44,15 +44,14 @@ type Coordinator[P any, W Watermark[P]] struct {
 	low              W
 	high             W
 	windowOpened     bool
-	// idle records that the queue is empty, so there is nothing to read
-	// until AddTables supplies more. It is not terminal: the snapshot is a
-	// service that accepts tables at any time, so no completion checkpoint
-	// is ever emitted.
+	// idle records an empty queue, so there is nothing to read until
+	// AddTables supplies more. It is not terminal: tables arrive at any
+	// time, so no completion is ever emitted.
 	idle bool
-	// needsPlan marks a coordinator that left idle and so has no chunk
-	// buffered and no window bounds. The next OnCommit plans before it
-	// judges any window, or the stale bounds left from going idle would
-	// close a window that holds nothing and flush a checkpoint for no rows.
+	// needsPlan marks a coordinator that left idle, so it holds no chunk
+	// and no window bounds. The next OnCommit plans before it judges a
+	// window: the bounds left from going idle would close an empty one and
+	// checkpoint no rows.
 	needsPlan bool
 	window    *WindowBuffer
 
@@ -65,8 +64,8 @@ type Coordinator[P any, W Watermark[P]] struct {
 	committedLastSentPK PrimaryKey
 
 	// knownTables is every table this run covers, the finished ones
-	// included. Start fixes it and State reports it, so a later run can tell
-	// a newly configured table from one already backfilled.
+	// included. AddTables extends it and State reports it, so a later run
+	// can tell a newly requested table from one already backfilled.
 	knownTables []TableID
 }
 
@@ -109,9 +108,9 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 	c.resume = nil
 
 	if resume != nil {
-		// Whatever AddTables queued before Start. The checkpoint replaces
-		// the queue, so these are re-applied behind it rather than dropped:
-		// AddTables already reported them as queued.
+		// The checkpoint replaces the queue, so anything AddTables queued
+		// before Start is re-applied behind it. AddTables already reported
+		// these as queued.
 		seeded := c.remaining
 
 		c.current = resume.CurrentTable
@@ -120,8 +119,8 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 		c.remaining = resume.RemainingTables
 		c.knownTables = resume.Tables
 
-		// Re-applying through AddTables skips any table the checkpoint
-		// already covers, so a resume cannot re-read a finished table.
+		// Through AddTables, so a table the checkpoint already covers is
+		// skipped and a resume cannot re-read a finished one.
 		c.AddTables(seeded)
 	}
 
@@ -148,24 +147,21 @@ func (c *Coordinator[P, W]) commitLiveState() {
 	c.committedLastSentPK = c.lastSentPK
 }
 
-// Idle reports whether the queue is empty, so nothing is being read. More
-// tables may arrive through AddTables, so this is not a completion signal.
+// Idle reports an empty queue, so nothing is being read. AddTables may
+// bring more, so this is not a completion signal.
 func (c *Coordinator[P, W]) Idle() bool {
 	return c.idle
 }
 
-// AddTables queues tables for backfill, skipping any this run already
-// covers, and reports the ones it queued. It is the only way a table enters
-// the queue.
+// AddTables queues tables for backfill and reports the ones it queued. It
+// is the only way a table enters the queue.
 //
-// Call it at any time. Before Start it seeds the queue, and Start plans the
-// first chunk; on a resume the checkpoint's own queue is read first and the
-// seeded tables follow it. Afterwards, the next OnCommit checkpoints the
-// queue and plans -- refer to that checkpoint's reason there.
+// Call it at any time. Before Start it seeds the queue; on a resume the
+// checkpoint's queue is read first and these follow it. Afterwards the next
+// OnCommit checkpoints the queue and plans.
 //
-// A table is only skipped when knownTables holds it, which covers the
-// finished ones too. Re-reading a finished table takes a second AddTables
-// after the caller drops it from a fresh checkpoint.
+// A table is skipped when knownTables holds it, which covers the finished
+// ones. Re-reading one takes a fresh checkpoint.
 func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
 	for _, table := range tables {
 		if slices.Contains(c.knownTables, table) {
@@ -175,12 +171,10 @@ func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
 		c.knownTables = append(c.knownTables, table)
 		c.remaining = append(c.remaining, table)
 		// Also the committed queue, which is what State reports. Nothing
-		// has been read for this table, so "committed" is the truth: it is
-		// queued and nothing was sent. Leaving it out of the committed half
-		// would make State report a table as covered by Tables while no
-		// queue entry carries it, and a coordinator resumed from that state
-		// would be idle and would reject a repeat signal -- the table could
-		// then never be read.
+		// has been read yet, so "committed" is the truth here. Without it
+		// State reports the table under Tables with no queue entry, and a
+		// resume from that is idle and rejects a repeat request -- the
+		// table could never be read.
 		c.committedRemaining = append(c.committedRemaining, table)
 	}
 	if len(added) > 0 && c.idle {
@@ -211,19 +205,19 @@ func (c *Coordinator[P, W]) OnStreamedRow(table TableID, pk PrimaryKey) (removed
 // window spuriously.
 func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P, emit EmitFunc) (changed bool, err error) {
 	if c.idle {
-		// Nothing queued and nothing buffered, so this commit has no bearing
-		// on the snapshot. AddTables clears this.
+		// Nothing queued or buffered, so this commit has no bearing on the
+		// snapshot. AddTables clears it.
 		return false, nil
 	}
 
 	if c.needsPlan {
 		// First commit since AddTables brought work back.
 		//
-		// Checkpoint the queue before reading anything. Whatever asked for
-		// these tables is part of this transaction, so once the caller
-		// acknowledges this position the request is gone: it cannot be
-		// replayed, and a restart would find the tables unqueued. The window
-		// is empty, so this emits state alone.
+		// Checkpoint the queue before reading anything. The request for
+		// these tables belongs to this transaction, so once the caller
+		// acknowledges this position it is gone: nothing replays it, and a
+		// restart would find the tables unqueued. The window is empty, so
+		// this emits state alone.
 		c.needsPlan = false
 		if err := emit(nil); err != nil {
 			// Not delivered, so the queue is still owed a checkpoint.

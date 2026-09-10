@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/shutdown"
@@ -73,11 +74,16 @@ type Stream struct {
 	incSnapshotPKCache     map[string][]string
 	incSnapshotTables      map[incrementalsnapshot.TableID]struct{}
 	incSnapshotLastTable   *incrementalsnapshot.TableID // used for logging
-	// signalTable is the signal table in the unquoted form replication
-	// messages report, or nil when no signal table is configured.
+	// signalTable is in the unquoted form replication messages report, or
+	// nil when none is configured.
 	signalTable *incrementalsnapshot.TableID
 	// snapshotSchema resolves the table names a snapshot signal carries.
 	snapshotSchema string
+	// incSnapshotBackfilling reports whether the coordinator has work
+	// queued. The heartbeat reads it from its own goroutine, and Coordinator
+	// is not safe for concurrent use, so the replication loop mirrors the
+	// state here rather than exposing the coordinator.
+	incSnapshotBackfilling atomic.Bool
 
 	// BlockingSnapshot is true only when this session runs the one-shot
 	// stream_snapshot backfill, which also emits a SnapshotCompleteOpType
@@ -170,6 +176,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			EffectiveHeartbeatInterval(config.HeartbeatInterval, config.IncrementalSnapshotCfg()),
 			"redpanda_connect_"+stream.slotName,
 			`{"type":"heartbeat"}`,
+			stream.incSnapshotBackfilling.Load,
 		)
 		if err != nil {
 			return nil, err
@@ -217,8 +224,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			tablesForPublication = append(slices.Clone(tables), signalTable)
 		}
 
-		// Replication messages report unquoted names, so keep the signal
-		// table in that form for comparing against a decoded row.
+		// Unquoted, to compare against a decoded row.
 		signalTableID, err := normalizeTableID(schema, config.SignalTableName)
 		if err != nil {
 			return nil, fmt.Errorf("resolving signal table: %w", err)
@@ -284,6 +290,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			if err := stream.incSnapshotCoordinator.Start(ctx); err != nil {
 				return nil, fmt.Errorf("starting incremental snapshot: %w", err)
 			}
+			// Start plans the first chunk, so it decides whether the
+			// heartbeat owes transaction ids before the first tick.
+			stream.incSnapshotBackfilling.Store(!stream.incSnapshotCoordinator.Idle())
 			stream.logger.Debugf("Incremental snapshot: coordinator started")
 		}
 		if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
@@ -407,6 +416,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				stream.errors <- fmt.Errorf("starting incremental snapshot: %w", err)
 				return
 			}
+			// Start plans the first chunk, so it decides whether the
+			// heartbeat owes transaction ids before the first tick.
+			stream.incSnapshotBackfilling.Store(!stream.incSnapshotCoordinator.Idle())
 			stream.logger.Debugf("Incremental snapshot: coordinator started")
 		}
 		if err := stream.startLr(ctx, startLSN); err != nil {
@@ -678,8 +690,8 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	}
 
 	if err := s.dispatchSnapshotSignal(message); err != nil {
-		// A bad signal must not stop replication: log it and carry on, so
-		// the row still reaches the consumer for inspection.
+		// A bad signal must not stop replication. Log it and carry on: the
+		// row still reaches the consumer.
 		s.logger.Errorf("Incremental snapshot: %s", err)
 	}
 

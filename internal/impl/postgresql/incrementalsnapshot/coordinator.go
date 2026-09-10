@@ -29,7 +29,8 @@ type (
 )
 
 // NewCoordinator builds a Postgres Coordinator. A non-nil resume makes Start
-// continue from that state; otherwise it starts fresh from cfg.Tables.
+// continue from that state; otherwise it starts with an empty queue, which
+// AddTables fills.
 func NewCoordinator(cfg CoordinatorConfig, resume *incrementalsnapshot.State) (*Coordinator, error) {
 	return incrementalsnapshot.NewCoordinator(cfg, resume)
 }

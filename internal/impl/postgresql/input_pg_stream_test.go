@@ -137,8 +137,8 @@ stream_snapshot: true
 `,
 		},
 		{
-			// Tables arrive by signal, so there is no table list to check.
-			// Without a signal table nothing could ever be requested.
+			// Tables arrive by signal, so there is no list to check, and
+			// without a signal table nothing could be requested.
 			name: "incremental snapshot enabled with no signal table",
 			conf: `
 dsn: postgres://user:pass@localhost:5432/db

@@ -19,10 +19,9 @@ import (
 const CurrentStateVersion = 3
 
 // minSupportedStateVersion is the oldest layout a checkpoint may use.
-// Version 3 dropped Done: the snapshot takes tables from signals, so an
-// empty queue is idle rather than complete. An older checkpoint decodes
-// without it, and the ignored flag costs nothing: a queue that outlived it
-// is still in RemainingTables.
+// Version 3 dropped Done, because an empty queue is now idle rather than
+// complete. Older checkpoints still decode: the ignored flag costs nothing,
+// and any queue that outlived it is in RemainingTables.
 const minSupportedStateVersion = 1
 
 // ErrUnsupportedStateVersion reports a checkpoint written by a build using a
@@ -38,9 +37,9 @@ type State struct {
 	LastSentPK      PrimaryKey `json:"last_sent_pk,omitempty"`
 	MaxPK           PrimaryKey `json:"max_pk,omitempty"`
 	RemainingTables []TableID  `json:"remaining_tables,omitempty"`
-	// Tables is every table this run covers, the finished ones included. It
-	// is what makes a table added to the config afterwards recognisable as
-	// new. Version 1 checkpoints omit it.
+	// Tables is every table this run covers, the finished ones included, so
+	// a table requested later is recognisable as new. Version 1 checkpoints
+	// omit it.
 	Tables []TableID `json:"tables,omitempty"`
 }
 

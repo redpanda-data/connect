@@ -1724,10 +1724,9 @@ postgres_cdc:
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
 }
 
-// signalIncrementalSnapshot asks for a backfill of tables.
-//
-// It waits for the replication slot first: a signal inserted before the slot
-// exists is not in the streamed WAL, so the connector would never see it.
+// signalIncrementalSnapshot asks for a backfill of tables. It waits for the
+// replication slot first: a signal inserted before the slot exists is not in
+// the streamed WAL, so the connector never sees it.
 func signalIncrementalSnapshot(t *testing.T, db *pgtest.TestDB, slotName string, tables ...string) {
 	t.Helper()
 
@@ -1793,9 +1792,8 @@ memory: {}`))
 			mu.Lock()
 			defer mu.Unlock()
 			for _, msg := range batch {
-				// The snapshot signal row streams like any other insert. It
-				// is not test data, and its serial id collides with the ids
-				// under test.
+				// The signal row streams like any other insert, and its
+				// serial id collides with the ids under test.
 				if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
 					continue
 				}
@@ -1825,8 +1823,7 @@ memory: {}`))
 			}
 		}()
 
-		// Tables come from a signal, so ask for the backfill now that
-		// the slot exists.
+		// Ask for the backfill now the slot exists.
 		signalIncrementalSnapshot(t, db, "test_slot_incremental_concurrent", "flights")
 
 		// Wait for at least one backfill row before writing concurrently: it
@@ -1968,9 +1965,8 @@ memory: {}`))
 				mu.Lock()
 				defer mu.Unlock()
 				for _, msg := range batch {
-					// The snapshot signal row streams like any other insert. It
-					// is not test data, and its serial id collides with the ids
-					// under test.
+					// The signal row streams like any other insert, and its
+					// serial id collides with the ids under test.
 					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
 						continue
 					}
@@ -2011,8 +2007,7 @@ memory: {}`))
 				}
 			}()
 
-			// Tables come from a signal, so ask for the backfill now that
-			// the slot exists.
+			// Ask for the backfill now the slot exists.
 			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_%s", keyed.table), keyed.table)
 
 			require.Eventually(t, func() bool {
@@ -2118,9 +2113,8 @@ memory: {}`))
 			mu.Lock()
 			defer mu.Unlock()
 			for _, msg := range batch {
-				// The snapshot signal row streams like any other insert. It
-				// is not test data, and its serial id collides with the ids
-				// under test.
+				// The signal row streams like any other insert, and its
+				// serial id collides with the ids under test.
 				if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
 					continue
 				}
@@ -2161,8 +2155,7 @@ memory: {}`))
 			}
 		}()
 
-		// Tables come from a signal, so ask for the backfill now that
-		// the slot exists.
+		// Ask for the backfill now the slot exists.
 		signalIncrementalSnapshot(t, db, "test_slot_incremental_collision", "flights")
 
 		// Wait for the backfill to start, so the max-key bound is frozen and
@@ -2271,9 +2264,8 @@ memory: {}`))
 				mu.Lock()
 				defer mu.Unlock()
 				for _, msg := range batch {
-					// The snapshot signal row streams like any other insert. It
-					// is not test data, and its serial id collides with the ids
-					// under test.
+					// The signal row streams like any other insert, and its
+					// serial id collides with the ids under test.
 					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
 						continue
 					}
@@ -2303,8 +2295,7 @@ memory: {}`))
 				}
 			}()
 
-			// Tables come from a signal, so ask for the backfill now that
-			// the slot exists.
+			// Ask for the backfill now the slot exists.
 			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_quiet_pg%s", version), "flights")
 
 			// No writes from here, so only the heartbeat advances the
@@ -2367,9 +2358,8 @@ file:
 				mu.Lock()
 				defer mu.Unlock()
 				for _, msg := range batch {
-					// The snapshot signal row streams like any other insert. It
-					// is not test data, and its serial id collides with the ids
-					// under test.
+					// The signal row streams like any other insert, and its
+					// serial id collides with the ids under test.
 					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
 						continue
 					}
@@ -2399,8 +2389,7 @@ file:
 				}
 			}()
 
-			// Tables come from a signal, so ask for the backfill now that
-			// the slot exists.
+			// Ask for the backfill now the slot exists.
 			signalIncrementalSnapshot(t, db, "test_slot_incremental_resume", "flights")
 
 			require.Eventually(t, func() bool {

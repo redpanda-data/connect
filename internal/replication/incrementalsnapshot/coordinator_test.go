@@ -243,9 +243,8 @@ func TestCoordinatorOnCommitNoopsWhenIdle(t *testing.T) {
 	require.NoError(t, coord.Start(t.Context()))
 	require.True(t, coord.Idle())
 
-	// An idle coordinator has nothing queued and nothing buffered, so a
-	// commit has no bearing on it. It emits no completion: AddTables may
-	// bring more work at any time.
+	// Nothing queued or buffered, so a commit has no bearing on it, and no
+	// completion is emitted: AddTables may bring more work.
 	emitted, changed, err := onCommit(t, coord, 100)
 	require.NoError(t, err)
 	assert.False(t, changed)
@@ -577,8 +576,8 @@ func TestCoordinatorMidDrainFailureResumesWithoutLoss(t *testing.T) {
 	}
 }
 
-// TestCoordinatorAddTables covers the signal-driven path: a coordinator
-// starts with nothing queued and takes its tables at runtime.
+// TestCoordinatorAddTables covers the signal-driven path: nothing is queued
+// at construction and the tables arrive at runtime.
 func TestCoordinatorAddTables(t *testing.T) {
 	tableA := TableID{Schema: "public", Table: "a"}
 	tableB := TableID{Schema: "public", Table: "b"}
@@ -656,11 +655,10 @@ func TestCoordinatorAddTables(t *testing.T) {
 	})
 }
 
-// TestCoordinatorAddTablesIsDurable: whatever asked for these tables is
-// part of the transaction whose commit follows, so once the caller
-// acknowledges that position the request is gone -- it cannot be replayed.
-// The queue must therefore be in a checkpoint by then, and that checkpoint
-// must be one a fresh coordinator can continue from.
+// TestCoordinatorAddTablesIsDurable: the request for these tables belongs
+// to the transaction whose commit follows, and nothing replays it once the
+// caller acknowledges that position. The queue must be in a checkpoint by
+// then, and a fresh coordinator must continue from it.
 func TestCoordinatorAddTablesIsDurable(t *testing.T) {
 	tableA := TableID{Schema: "public", Table: "a"}
 
@@ -682,9 +680,9 @@ func TestCoordinatorAddTablesIsDurable(t *testing.T) {
 
 	coord.AddTables([]TableID{tableA})
 
-	// Both halves of the queue must agree at once. Tables without a queue
-	// entry would report the table as covered while nothing reads it, and
-	// AddTables would then reject a repeat request for it.
+	// Both halves must agree at once. Tables without a queue entry reports
+	// the table as covered while nothing reads it, and a repeat request is
+	// then rejected.
 	state := coord.State()
 	assert.Equal(t, []TableID{tableA}, state.Tables)
 	assert.Equal(t, []TableID{tableA}, state.RemainingTables)
@@ -717,9 +715,9 @@ func TestCoordinatorAddTablesIsDurable(t *testing.T) {
 	assert.Equal(t, []int{1, 2}, got)
 }
 
-// TestCoordinatorAddTablesCheckpointFailureRetries: the checkpoint that
-// makes the queue durable is emitted, so it can fail. Nothing was delivered
-// then, and the next commit still owes it.
+// TestCoordinatorAddTablesCheckpointFailureRetries: the checkpoint is
+// emitted, so it can fail. Nothing was delivered then, and the next commit
+// still owes it.
 func TestCoordinatorAddTablesCheckpointFailureRetries(t *testing.T) {
 	tableA := TableID{Schema: "public", Table: "a"}
 	mock := newScriptedMockDeps(map[string]*mockTable{
@@ -746,10 +744,10 @@ func TestCoordinatorAddTablesCheckpointFailureRetries(t *testing.T) {
 	assert.Empty(t, chunks[0])
 }
 
-// TestCoordinatorAddTablesBeforeStartOnResume: Start replaces the queue from
-// the checkpoint, so anything AddTables seeded beforehand has to be
-// re-applied behind it. AddTables reported those tables as queued, and
-// dropping them would strand them silently.
+// TestCoordinatorAddTablesBeforeStartOnResume: Start replaces the queue
+// from the checkpoint, so anything seeded beforehand is re-applied behind
+// it. AddTables reported those tables as queued; dropping them would strand
+// them silently.
 func TestCoordinatorAddTablesBeforeStartOnResume(t *testing.T) {
 	tableA := TableID{Schema: "public", Table: "a"}
 	tableB := TableID{Schema: "public", Table: "b"}
@@ -1277,7 +1275,7 @@ func TestCoordinatorForcesFreshTransactionOnceOnly(t *testing.T) {
 
 // TestCoordinatorGoesIdleAfterResume: a checkpoint taken just before a
 // table was exhausted must not leave the coordinator reading. It goes idle
-// on the empty chunk and emits nothing, since more tables may be signalled.
+// on the empty chunk and emits nothing.
 func TestCoordinatorGoesIdleAfterResume(t *testing.T) {
 	table := TableID{Schema: "public", Table: "a"}
 

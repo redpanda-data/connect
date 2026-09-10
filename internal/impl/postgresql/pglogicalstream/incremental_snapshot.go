@@ -40,9 +40,8 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 		return fmt.Errorf("pinging incremental snapshot connection: %w", err)
 	}
 
-	// The coordinator starts with nothing queued: tables are requested by
-	// snapshot signal. A resumed checkpoint brings back whatever the last
-	// run was covering.
+	// Nothing is queued at first: tables are requested by signal. A resumed
+	// checkpoint brings back what the last run covered.
 	s.incSnapshotConn = db
 	s.incSnapshotPKCache = make(map[string][]string)
 	s.incSnapshotTables = make(map[incrementalsnapshot.TableID]struct{})
@@ -445,10 +444,15 @@ func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) err
 	if err != nil {
 		return fmt.Errorf("advancing incremental snapshot: %w", err)
 	}
+	// The heartbeat only owes transaction ids while there is something to
+	// read. Mirrored on every commit, not on the transition: OnCommit
+	// reports no change once idle, so a transition-only update could never
+	// clear this.
+	s.incSnapshotBackfilling.Store(!s.incSnapshotCoordinator.Idle())
+
 	if changed && s.incSnapshotCoordinator.Idle() {
-		// The queue is empty, so the last table sees no following
-		// checkpoint. Report it here. More tables may arrive by signal, so
-		// this is not a completion.
+		// The last table sees no following checkpoint, so report it here.
+		// More may arrive by signal, so this is not a completion.
 		s.reportTableTransition(nil)
 		s.logger.Info("Incremental snapshot: queue empty, waiting for a snapshot signal")
 	}
@@ -515,9 +519,9 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 }
 
 // snapshotSignalTables reads a snapshot signal's table list, or nil when the
-// row is not one. It reports a malformed payload as an error rather than
-// ignoring it: the request came from a user and dropping it silently would
-// leave them waiting for a backfill that never starts.
+// row is not one. A malformed payload is an error, not a row to ignore: the
+// request came from a user, who would otherwise wait for a backfill that
+// never starts.
 func (s *Stream) snapshotSignalTables(message *StreamMessage) ([]incrementalsnapshot.TableID, error) {
 	if s.incSnapshotCoordinator == nil || message.Operation != InsertOpType {
 		return nil, nil
@@ -559,11 +563,10 @@ func (s *Stream) snapshotSignalTables(message *StreamMessage) ([]incrementalsnap
 
 // dispatchSnapshotSignal queues the tables a snapshot signal asks for.
 //
-// It runs while decoding the signal row, before the commit that carries it,
-// so the checkpoint the commit emits already holds the new queue. Queueing
-// after the commit would let the signal row's LSN be acknowledged with the
-// older queue, and the request would be lost on a restart -- the row is
-// acknowledged, so it never streams again.
+// It runs while the signal row is decoded, before the commit that carries
+// it, so the checkpoint that commit emits already holds the new queue.
+// Queueing afterwards would acknowledge the row's LSN with the older queue,
+// losing the request on a restart: an acknowledged row never streams again.
 func (s *Stream) dispatchSnapshotSignal(message *StreamMessage) error {
 	tables, err := s.snapshotSignalTables(message)
 	if err != nil || len(tables) == 0 {
@@ -571,9 +574,14 @@ func (s *Stream) dispatchSnapshotSignal(message *StreamMessage) error {
 	}
 
 	added := s.incSnapshotCoordinator.AddTables(tables)
+	if len(added) > 0 {
+		// The heartbeat must carry transaction ids again: on a quiet table
+		// it is the only thing that advances the backfill.
+		s.incSnapshotBackfilling.Store(true)
+	}
 	for _, table := range added {
-		// deduplicateStreamedRow gates on this set, so a table joins it at
-		// the same time as the queue.
+		// deduplicateStreamedRow gates on this set, so a table joins it
+		// with the queue.
 		s.incSnapshotTables[table] = struct{}{}
 	}
 	if len(added) == 0 {
