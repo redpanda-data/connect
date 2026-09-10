@@ -4,9 +4,9 @@
 // License (the "License"); you may not use this file except in compliance with
 // the License. You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package incrementalsnapshot
+package pgstream
 
 import (
 	"testing"
@@ -25,32 +25,32 @@ func TestCheckpointOffsetMerge(t *testing.T) {
 		// incremental snapshot checkpoint (LSN=nil) resolving out of order
 		// must not erase a pending real batch's LSN, and a real batch with
 		// no new snapshot state must not erase pending snapshot progress.
-		receiver := CheckpointOffset{LSN: &lsn1, IncSnapshotState: state1}
+		receiver := checkpointOffset{lsn: &lsn1, incSnapshotState: state1}
 
-		merged := receiver.Merge(CheckpointOffset{})
-		assert.Equal(t, &lsn1, merged.LSN)
-		assert.Equal(t, state1, merged.IncSnapshotState)
+		merged := receiver.merge(checkpointOffset{})
+		assert.Equal(t, &lsn1, merged.lsn)
+		assert.Equal(t, state1, merged.incSnapshotState)
 	})
 
 	t.Run("non-nil fields on other overwrite the receiver", func(t *testing.T) {
-		receiver := CheckpointOffset{LSN: &lsn1, IncSnapshotState: state1}
+		receiver := checkpointOffset{lsn: &lsn1, incSnapshotState: state1}
 
-		merged := receiver.Merge(CheckpointOffset{LSN: &lsn2, IncSnapshotState: state2})
-		assert.Equal(t, &lsn2, merged.LSN)
-		assert.Equal(t, state2, merged.IncSnapshotState)
+		merged := receiver.merge(checkpointOffset{lsn: &lsn2, incSnapshotState: state2})
+		assert.Equal(t, &lsn2, merged.lsn)
+		assert.Equal(t, state2, merged.incSnapshotState)
 	})
 
 	t.Run("merge is independent per field", func(t *testing.T) {
-		receiver := CheckpointOffset{LSN: &lsn1, IncSnapshotState: nil}
+		receiver := checkpointOffset{lsn: &lsn1, incSnapshotState: nil}
 
-		merged := receiver.Merge(CheckpointOffset{LSN: nil, IncSnapshotState: state2})
-		assert.Equal(t, &lsn1, merged.LSN, "LSN must carry forward from the receiver, unaffected by other's state advancing")
-		assert.Equal(t, state2, merged.IncSnapshotState)
+		merged := receiver.merge(checkpointOffset{lsn: nil, incSnapshotState: state2})
+		assert.Equal(t, &lsn1, merged.lsn, "LSN must carry forward from the receiver, unaffected by other's state advancing")
+		assert.Equal(t, state2, merged.incSnapshotState)
 	})
 
 	t.Run("merging two zero values stays zero", func(t *testing.T) {
-		merged := CheckpointOffset{}.Merge(CheckpointOffset{})
-		assert.Nil(t, merged.LSN)
-		assert.Nil(t, merged.IncSnapshotState)
+		merged := checkpointOffset{}.merge(checkpointOffset{})
+		assert.Nil(t, merged.lsn)
+		assert.Nil(t, merged.incSnapshotState)
 	})
 }

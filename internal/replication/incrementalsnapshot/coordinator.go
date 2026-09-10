@@ -109,11 +109,20 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 	c.resume = nil
 
 	if resume != nil {
+		// Whatever AddTables queued before Start. The checkpoint replaces
+		// the queue, so these are re-applied behind it rather than dropped:
+		// AddTables already reported them as queued.
+		seeded := c.remaining
+
 		c.current = resume.CurrentTable
 		c.lastSentPK = resume.LastSentPK
 		c.maxPK = resume.MaxPK
 		c.remaining = resume.RemainingTables
 		c.knownTables = resume.Tables
+
+		// Re-applying through AddTables skips any table the checkpoint
+		// already covers, so a resume cannot re-read a finished table.
+		c.AddTables(seeded)
 	}
 
 	// Baseline: nothing fetched yet. planNextChunk advances past it.
@@ -149,9 +158,10 @@ func (c *Coordinator[P, W]) Idle() bool {
 // covers, and reports the ones it queued. It is the only way a table enters
 // the queue.
 //
-// Call it at any time. Before Start, it seeds the queue and Start plans the
-// first chunk. Afterwards, the next OnCommit checkpoints the queue and plans
-// -- refer to that checkpoint's reason there.
+// Call it at any time. Before Start it seeds the queue, and Start plans the
+// first chunk; on a resume the checkpoint's own queue is read first and the
+// seeded tables follow it. Afterwards, the next OnCommit checkpoints the
+// queue and plans -- refer to that checkpoint's reason there.
 //
 // A table is only skipped when knownTables holds it, which covers the
 // finished ones too. Re-reading a finished table takes a second AddTables
