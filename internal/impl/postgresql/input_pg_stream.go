@@ -278,7 +278,7 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 				ShortDescription("Snapshot the configured tables in chunks, alongside replication streaming.").
 				Default(incsnapshot.DefaultIncSnapshotEnabled),
 			service.NewStringListField(fieldIncrementalSnapshotTables).
-				Description("The tables to incrementally snapshot. If omitted, the tables configured in `"+fieldTables+"` are used instead, so at least one of the two must be set. Each entry must be replicated, so it must appear in `"+fieldTables+"` unless that list is empty, which replicates everything.\n\nOnly read when a snapshot starts from scratch. Once a checkpoint exists the table set comes from it, so edits here are silently ignored: added tables are not backfilled, and removed tables still are. Change `"+fieldIncSnapshotCheckpointCacheKey+"`, or clear the existing key, to pick up an edited list.").
+				Description("The tables to incrementally snapshot. If omitted, the tables configured in `"+fieldTables+"` are used instead, so at least one of the two must be set. Each entry must be replicated, so it must appear in `"+fieldTables+"` unless that list is empty, which replicates everything.\n\nThis list is reconciled against the checkpoint on every restart. Adding a table backfills it, even once the snapshot has finished. Removing one drops it, and a table that was part-read stops where it is, leaving it incomplete downstream -- both are logged. Change `"+fieldIncSnapshotCheckpointCacheKey+"`, or clear the existing key, to start over from this list.").
 				Optional(),
 			service.NewIntField(fieldIncrementalSnapshotChunkSize).
 				Description("The number of rows to read per chunk while incrementally snapshotting a table.").
