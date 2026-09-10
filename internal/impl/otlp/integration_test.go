@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -165,6 +166,11 @@ func TestIntegrationOTLPWithSchemaRegistry(t *testing.T) {
 
 			t.Log("When: generating telemetry data and sending to Redpanda via Benthos pipeline")
 			ps := startStream(t, producerConfig(tc.transport, tc.encoding, seed, srURL, topic))
+			producerPort := "4318"
+			if tc.transport == "grpc" {
+				producerPort = "4317"
+			}
+			waitForListening(t, producerPort)
 			runOtelgen(t, otelgenCommand(tc.signalType, tc.transport, *soakRate, *soakDuration))
 			require.NoError(t, ps.StopWithin(3*time.Second))
 
@@ -371,4 +377,16 @@ func startStream(t *testing.T, confYAML string) *service.Stream {
 	})
 
 	return stream
+}
+
+func waitForListening(t *testing.T, port string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		conn, err := net.Dial("tcp", "127.0.0.1:"+port)
+		if err != nil {
+			return false
+		}
+		_ = conn.Close()
+		return true
+	}, 10*time.Second, 50*time.Millisecond, "otlp input server did not start listening on port %s in time", port)
 }
