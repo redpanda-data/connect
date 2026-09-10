@@ -93,11 +93,13 @@ tasks:
 
   # Profiling run — same pipeline as `bench` but with the ~1.2kB high-entropy
   # payload from profile_config.yaml, parsed per record so the sink does real
-  # JSON decode + shredding + encode work. Writes pprof profiles for attributing
-  # per-record CPU.
+  # JSON decode + shredding + encode work. Exposes pprof over HTTP at
+  # localhost:4195/debug/pprof/ for attributing per-record CPU — capture with
+  # curl while this is running, e.g.
+  #   curl -o cpu.pb.gz 'http://localhost:4195/debug/pprof/profile?seconds=60'
   # Usage: task bench:profile CORES=1 BATCH=5000 COUNT=500000
   bench:profile:
-    desc: "Run the profiling pipeline and write CPU/heap profiles (e.g. task bench:profile CORES=1 COUNT=500000)"
+    desc: "Run the profiling pipeline, exposing pprof over HTTP for capture (e.g. task bench:profile CORES=1 COUNT=500000)"
     vars:
       CORES: '{{.CORES | default "1"}}'
       BATCH: '{{.BATCH | default "5000"}}'

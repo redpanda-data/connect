@@ -334,11 +334,11 @@ To reproduce: `TESTCONTAINERS_RYUK_DISABLED=true go test ./internal/impl/iceberg
 
 ---
 
-## CPU Profile — Per-record Attribution
+## CPU Profile — Per-record Attribution — 2026-08-03
 
-Where per-record CPU actually goes in the `iceberg` output, from profiling the pipeline in [`internal/impl/iceberg/bench/`](../../internal/impl/iceberg/bench/) (`task bench:profile`) at `GOMAXPROCS=1`. This is what motivated the shredder allocation cut and is the baseline the profiling configs in this PR exist to let anyone re-take.
+Where per-record CPU actually goes in the `iceberg` output, from profiling the pipeline in [`internal/impl/iceberg/bench/`](../../internal/impl/iceberg/bench/) (`task bench:profile`) at `GOMAXPROCS=1`. This is what motivated the shredder allocation cut and is the baseline the profiling configs in [#4787](https://github.com/redpanda-data/connect/pull/4787) exist to let anyone re-take.
 
-**Environment:** local development machine, `GOMAXPROCS=1`, ~16.6k rec/s steady state, schemaless (no `schema_metadata`)
+**Environment:** `GOMAXPROCS=1`, ~16.6k rec/s steady state, schemaless (no `schema_metadata`). **Hardware/OS were not recorded for this run** — it predates this PR's tooling and is included for the CPU-share numbers, not as a reproducible baseline; a re-run with `task bench:profile` will record proper environment details alongside its numbers.
 
 **Changed since last run:** first profile.
 
@@ -353,7 +353,7 @@ Where per-record CPU actually goes in the `iceberg` output, from profiling the p
 
 - **The process is allocation/GC-bound overall** — `mallocgc` alone accounts for roughly 35% of sink CPU, which is why the shredder allocation cut targeted this path specifically rather than, say, the encode step.
 - **Of the "upload/other" share, ~3.6% is the storage client's per-upload content-MD5 computation** — a fixed cost independent of anything else measured here.
-- **The declared-schema config (`bench:profile:schema`, exercising `schema_metadata`) measured as a ~4% regression, not a win.** It only affects create/evolve-time type resolution and temporal coercion — it never bypasses decode, shredding or encode, so a declared schema does not reduce per-record CPU the way "the schema is already known" might suggest.
+- **The declared-schema config (`bench:profile:schema`, exercising `schema_metadata`) measured as a ~4% regression, not a win.** It only affects create/evolve-time type resolution and temporal coercion — it never bypasses decode, shredding or encode, so a declared schema does not reduce per-record CPU the way "the schema is already known" might suggest. **Caveat:** this run predates a fix (in #4787) to `profile_config_schema.yaml` declaring `INT64` for four fields that schemaless inference maps to `Float64Type` — so the comparison mixed declared-schema overhead with a different column type and encode path. Directionally still useful (a declared schema is not free), but the ~4% figure itself has not been re-measured against the corrected, genuinely apples-to-apples config.
 
 To reproduce: `task bench:profile CORES=1 COUNT=500000` (schemaless) and `task bench:profile:schema CORES=1 COUNT=500000` (declared schema), from [`internal/impl/iceberg/bench/`](../../internal/impl/iceberg/bench/). Both expose pprof over HTTP at `localhost:4195/debug/pprof/` while running; capture with `curl -o cpu.pb.gz 'http://localhost:4195/debug/pprof/profile?seconds=60'` and inspect with `go tool pprof`.
 
