@@ -1717,3 +1717,123 @@ postgres_cdc:
 	}
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
 }
+
+// TestIntegrationPostgresDefaultBatchingIsTransactionSized verifies that with
+// no batching policy configured, rows committed in one transaction arrive
+// downstream as a single output batch (the reader batches per transaction and
+// the input passes that batch straight through).
+func TestIntegrationPostgresDefaultBatchingIsTransactionSized(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_default_batching
+    stream_snapshot: false
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+`, databaseURL)
+
+	var (
+		sizesMut sync.Mutex
+		sizes    []int
+	)
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		sizesMut.Lock()
+		defer sizesMut.Unlock()
+		sizes = append(sizes, len(mb))
+		return nil
+	}))
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+	go func() { _ = streamOut.Run(t.Context()) }()
+
+	// Give the replication slot time to be created before writing.
+	time.Sleep(3 * time.Second)
+
+	const rowCount = 5
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	for i := range rowCount {
+		f := pgtest.GetFakeFlightRecord()
+		_, err = tx.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+	require.NoError(t, tx.Commit())
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		sizesMut.Lock()
+		defer sizesMut.Unlock()
+		assert.Equal(c, []int{rowCount}, sizes, "one transaction should arrive as one batch")
+	}, 25*time.Second, 100*time.Millisecond)
+
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
+}
+
+// TestIntegrationPostgresBatchingCountHonoured verifies that a configured
+// batching.count is honoured exactly even when the reader delivers a whole
+// transaction at once: 9 rows in one transaction with count 3 must arrive as
+// three batches of three.
+func TestIntegrationPostgresBatchingCountHonoured(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_batching_count
+    stream_snapshot: false
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+    batching:
+      count: 3
+      period: 1h
+`, databaseURL)
+
+	var (
+		sizesMut sync.Mutex
+		sizes    []int
+	)
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		sizesMut.Lock()
+		defer sizesMut.Unlock()
+		sizes = append(sizes, len(mb))
+		return nil
+	}))
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+	go func() { _ = streamOut.Run(t.Context()) }()
+
+	time.Sleep(3 * time.Second)
+
+	const rowCount = 9
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	for i := range rowCount {
+		f := pgtest.GetFakeFlightRecord()
+		_, err = tx.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+	require.NoError(t, tx.Commit())
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		sizesMut.Lock()
+		defer sizesMut.Unlock()
+		assert.Equal(c, []int{3, 3, 3}, sizes, "count 3 must split one 9-row transaction into three batches")
+	}, 25*time.Second, 100*time.Millisecond)
+
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
+}

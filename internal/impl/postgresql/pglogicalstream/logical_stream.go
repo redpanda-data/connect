@@ -466,20 +466,22 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 	defer done()
 
 	// flush hands the pending batch to the consumer and promotes the LSN
-	// bookkeeping. It always promotes, even when there is nothing to send, so a
-	// suppressed commit with no pending rows still advances lastEmittedCommitLSN.
+	// bookkeeping. It promotes after a successful send, or immediately when
+	// there is nothing to send, so a suppressed commit with no pending rows
+	// still advances lastEmittedCommitLSN.
 	flush := func() error {
 		msgs, promotedLast, promotedCommit := batch.take()
+		if len(msgs) > 0 {
+			select {
+			case s.messages <- msgs:
+			case <-ctx.Done():
+				// The batch was never handed over, so it was never emitted:
+				// leave the bookkeeping where the consumer last saw it.
+				return ctx.Err()
+			}
+		}
 		lastEmittedLSN, lastEmittedCommitLSN = promotedLast, promotedCommit
-		if len(msgs) == 0 {
-			return nil
-		}
-		select {
-		case s.messages <- msgs:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+		return nil
 	}
 
 	nextStandbyMessageDeadline := time.Now().Add(s.standbyMessageTimeout)
@@ -536,9 +538,9 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 			if err != nil {
 				return fmt.Errorf("decoding postgres changes failed: %w", err)
 			}
-			// A suppressed commit only moves the commit LSN the last row of the
-			// transaction is remapped to. An emitted message moves both; when
-			// that message is itself the commit marker (include_transaction_markers)
+			// A suppressed commit only moves the commit LSN to which the last
+			// row of the transaction is remapped. An emitted message moves both;
+			// when that message is itself the commit marker (include_transaction_markers)
 			// it also closes the transaction.
 			switch result {
 			case changeResultSuppressedCommitMessage:
@@ -549,6 +551,10 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 					batch.markCommit(msgLSN)
 				}
 			}
+			// Flushing only from here is safe because with proto_version 1 a
+			// transaction arrives as one contiguous run of XLogData frames ending
+			// in its commit record; there is no in-progress transaction streaming
+			// that could leave rows pending across keepalives.
 			if batch.shouldFlush() {
 				if err := flush(); err != nil {
 					return err
