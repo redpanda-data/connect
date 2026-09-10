@@ -31,6 +31,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/replication"
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
@@ -59,7 +60,6 @@ const (
 
 	fieldIncSnapshot                   = "incremental_snapshot"
 	fieldIncSnapshotEnabled            = "enabled"
-	fieldIncrementalSnapshotTables     = "tables"
 	fieldIncrementalSnapshotChunkSize  = "chunk_size"
 	fieldIncSnapshotCheckpointCache    = "checkpoint_cache"
 	fieldIncSnapshotCheckpointCacheKey = "checkpoint_cache_key"
@@ -267,19 +267,28 @@ a JSON object with a ` + "`message`" + ` key, whose value is written to the conn
 
 ` + "```sql" + `
 INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message": "Signal message"}');
-` + "```").
+` + "```" + `
+
+**` + "`snapshot`" + `** — backfills the named tables incrementally, alongside streaming. Requires
+` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotEnabled + "`" + `. The ` + "`data`" + ` column must contain a JSON object
+with a ` + "`tables`" + ` key listing table names in the configured ` + "`schema`" + `, excluding the schema itself:
+
+` + "```sql" + `
+INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('snapshot', '{"tables": ["orders", "customers"]}');
+` + "```" + `
+
+Each table joins the back of the backfill queue. A table this run already covers is skipped and
+logged, so a repeated signal does not re-read it. To read one again, point
+` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotCheckpointCacheKey + "`" + ` at a fresh key.`).
 			Example("rpcn_signal_table").
 			Default("").
 			Advanced()).
 		// incremental snapshot config
 		Field(service.NewObjectField(fieldIncSnapshot,
 			service.NewBoolField(fieldIncSnapshotEnabled).
-				Description("Snapshots the configured tables in chunks, starting as soon as replication begins. Unlike `"+fieldStreamSnapshot+"` it needs no up-front snapshot phase, does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `"+fieldIncSnapshotHeartbeatInterval+"`.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
-				ShortDescription("Snapshot the configured tables in chunks, alongside replication streaming.").
+				Description("Backfills tables in chunks alongside replication, on request. Tables are not configured here: insert a `"+replication.SnapshotSignalType+"` row into `"+fieldSignalTableName+"` to ask for one, so a backfill can be started at any time without a config change. A signal table is therefore required. Unlike `"+fieldStreamSnapshot+"` this needs no up-front snapshot phase and does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `"+fieldIncSnapshotHeartbeatInterval+"`.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.").
+				ShortDescription("Backfill signalled tables in chunks, alongside replication streaming.").
 				Default(incsnapshot.DefaultIncSnapshotEnabled),
-			service.NewStringListField(fieldIncrementalSnapshotTables).
-				Description("The tables to incrementally snapshot. If omitted, the tables configured in `"+fieldTables+"` are used instead, so at least one of the two must be set. Each entry must be replicated, so it must appear in `"+fieldTables+"` unless that list is empty, which replicates everything.\n\nThis list is reconciled against the checkpoint on every restart. Adding a table backfills it, even once the snapshot has finished. Removing one drops it, and a table that was part-read stops where it is, leaving it incomplete downstream -- both are logged. Change `"+fieldIncSnapshotCheckpointCacheKey+"`, or clear the existing key, to start over from this list.").
-				Optional(),
 			service.NewIntField(fieldIncrementalSnapshotChunkSize).
 				Description("The number of rows to read per chunk while incrementally snapshotting a table.").
 				Default(incsnapshot.DefaultIncSnapshotChunkSize),
@@ -292,7 +301,7 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
 				Optional(),
 			service.NewStringField(fieldIncSnapshotCheckpointCacheKey).
-				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. Use a different key if multiple incremental snapshots share the same cache.\n\nChanging or clearing this key starts a fresh snapshot of the configured tables -- currently the only way to re-run a backfill.").
+				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. Use a different key if multiple incremental snapshots share the same cache.\n\nChanging or clearing this key discards the record of which tables have been backfilled, so a `"+replication.SnapshotSignalType+"` signal reads a table again.").
 				Default(incsnapshot.DefaultIncSnapshotCheckpointKey),
 		).
 			Description("Configures chunked snapshotting that runs alongside replication streaming.").
@@ -420,7 +429,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
-	incSnapshot, err := parseIncrementalSnapshotCfg(conf, heartbeatInterval, tables, streamSnapshot)
+	incSnapshot, err := parseIncrementalSnapshotCfg(conf, heartbeatInterval, signalTableName, streamSnapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -583,7 +592,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		if state == nil {
 			p.logger.Debugf("Incremental snapshot: no checkpoint found, will start fresh")
 		} else {
-			p.logger.Debugf("Incremental snapshot: loaded checkpoint (done=%v, current_table=%v, remaining=%d)", state.Done, state.CurrentTable, len(state.RemainingTables))
+			p.logger.Debugf("Incremental snapshot: loaded checkpoint (current_table=%v, remaining=%d, tables=%d)", state.CurrentTable, len(state.RemainingTables), len(state.Tables))
 		}
 	}
 

@@ -44,12 +44,17 @@ type Coordinator[P any, W Watermark[P]] struct {
 	low              W
 	high             W
 	windowOpened     bool
-	done             bool
-	// doneEmitted records that the terminal Done checkpoint has been handed
-	// to emit. Until it is persisted a resume re-resolves every table's key
-	// bounds and re-issues an empty chunk query, and never reports complete.
-	doneEmitted bool
-	window      *WindowBuffer
+	// idle records that the queue is empty, so there is nothing to read
+	// until AddTables supplies more. It is not terminal: the snapshot is a
+	// service that accepts tables at any time, so no completion checkpoint
+	// is ever emitted.
+	idle bool
+	// needsPlan marks a coordinator that left idle and so has no chunk
+	// buffered and no window bounds. The next OnCommit plans before it
+	// judges any window, or the stale bounds left from going idle would
+	// close a window that holds nothing and flush a checkpoint for no rows.
+	needsPlan bool
+	window    *WindowBuffer
 
 	// committed mirrors remaining/current/maxPK/lastSentPK but only advances
 	// after a flush. State reports these, so a crash before a flush re-reads
@@ -63,10 +68,6 @@ type Coordinator[P any, W Watermark[P]] struct {
 	// included. Start fixes it and State reports it, so a later run can tell
 	// a newly configured table from one already backfilled.
 	knownTables []TableID
-	// addedOnResume and removedOnResume record what reconcileTables changed,
-	// for the caller to report.
-	addedOnResume   []TableID
-	removedOnResume []TableID
 }
 
 // NewCoordinator builds a Coordinator. A non-nil resume makes Start continue
@@ -100,8 +101,8 @@ type EmitFunc func(rows []Row) error
 //
 // It never emits: it buffers the first chunk and returns, leaving OnCommit to
 // release everything. Callers may therefore start the coordinator before
-// their downstream is consuming. A resume that finds nothing left completes
-// here, and the first OnCommit then releases the terminal checkpoint.
+// their downstream is consuming. With nothing queued it goes idle and waits
+// for AddTables.
 func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 	resume := c.resume
 	c.resume = nil
@@ -110,16 +111,11 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 		c.remaining = slices.Clone(c.cfg.Tables)
 		c.knownTables = slices.Clone(c.cfg.Tables)
 	} else {
-		c.done = resume.Done
 		c.current = resume.CurrentTable
 		c.lastSentPK = resume.LastSentPK
 		c.maxPK = resume.MaxPK
 		c.remaining = resume.RemainingTables
-		c.reconcileTables(resume)
-
-		if c.done {
-			return nil
-		}
+		c.knownTables = resume.Tables
 	}
 
 	// Baseline: nothing fetched yet. planNextChunk advances past it.
@@ -136,83 +132,6 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 	return c.planNextChunk(ctx)
 }
 
-// reconcileTables makes a resumed checkpoint match the configured tables.
-//
-// A table the checkpoint does not know is new to the config, so it joins the
-// back of the queue and gets backfilled. A finished run reopens for it,
-// because the checkpoint would otherwise report complete for ever and the
-// table would never be read.
-//
-// A table the checkpoint knows but the config no longer lists is dropped. If
-// it is the one being read, the read stops where it is and the next plan
-// moves on, which leaves that table part-delivered downstream. The caller
-// reports this.
-//
-// A version 1 checkpoint carries no Tables. Its finished tables cannot be
-// recovered, so every configured table counts as known: this run adds
-// nothing, and the version 2 checkpoint it writes makes later additions
-// visible. Removals still apply, since they need only the queue.
-func (c *Coordinator[P, W]) reconcileTables(resume *State) {
-	c.knownTables = resume.Tables
-	if c.knownTables == nil {
-		c.knownTables = slices.Clone(c.cfg.Tables)
-	}
-	if c.current != nil && !slices.Contains(c.knownTables, *c.current) {
-		c.knownTables = append(c.knownTables, *c.current)
-	}
-	for _, table := range c.remaining {
-		if !slices.Contains(c.knownTables, table) {
-			c.knownTables = append(c.knownTables, table)
-		}
-	}
-
-	for _, table := range c.cfg.Tables {
-		if slices.Contains(c.knownTables, table) {
-			continue
-		}
-		c.addedOnResume = append(c.addedOnResume, table)
-		c.knownTables = append(c.knownTables, table)
-		c.remaining = append(c.remaining, table)
-	}
-	if len(c.addedOnResume) > 0 {
-		c.done = false
-		c.doneEmitted = false
-	}
-
-	configured := func(table TableID) bool { return slices.Contains(c.cfg.Tables, table) }
-
-	for _, table := range c.knownTables {
-		if !configured(table) {
-			c.removedOnResume = append(c.removedOnResume, table)
-		}
-	}
-	if len(c.removedOnResume) == 0 {
-		return
-	}
-
-	c.knownTables = slices.DeleteFunc(c.knownTables, func(table TableID) bool { return !configured(table) })
-	c.remaining = slices.DeleteFunc(c.remaining, func(table TableID) bool { return !configured(table) })
-	if c.current != nil && !configured(*c.current) {
-		// Abandon the part-read table. Clearing the bounds too makes the
-		// next plan take the following table from the front of the queue.
-		c.current = nil
-		c.lastSentPK = nil
-		c.maxPK = nil
-	}
-}
-
-// AddedOnResume lists the configured tables the checkpoint did not know,
-// which this run backfills. Valid after Start.
-func (c *Coordinator[P, W]) AddedOnResume() []TableID {
-	return c.addedOnResume
-}
-
-// RemovedOnResume lists the tables the checkpoint covered that the config no
-// longer lists, which this run dropped. Valid after Start.
-func (c *Coordinator[P, W]) RemovedOnResume() []TableID {
-	return c.removedOnResume
-}
-
 // commitLiveState snapshots the live fields into the committed ones. Call
 // only once everything fetched so far has been flushed.
 func (c *Coordinator[P, W]) commitLiveState() {
@@ -222,9 +141,33 @@ func (c *Coordinator[P, W]) commitLiveState() {
 	c.committedLastSentPK = c.lastSentPK
 }
 
-// Done reports whether every configured table is fully snapshotted.
-func (c *Coordinator[P, W]) Done() bool {
-	return c.done
+// Idle reports whether the queue is empty, so nothing is being read. More
+// tables may arrive through AddTables, so this is not a completion signal.
+func (c *Coordinator[P, W]) Idle() bool {
+	return c.idle
+}
+
+// AddTables queues tables for backfill, skipping any this run already
+// covers, and reports the ones it queued. Safe to call at any time after
+// Start; the next OnCommit plans the first of them.
+//
+// A table is only skipped when knownTables holds it, which covers the
+// finished ones too. Re-reading a finished table takes a second AddTables
+// after the caller drops it from a fresh checkpoint.
+func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
+	for _, table := range tables {
+		if slices.Contains(c.knownTables, table) {
+			continue
+		}
+		added = append(added, table)
+		c.knownTables = append(c.knownTables, table)
+		c.remaining = append(c.remaining, table)
+	}
+	if len(added) > 0 && c.idle {
+		c.idle = false
+		c.needsPlan = true
+	}
+	return added
 }
 
 // OnStreamedRow must be cheap and do no I/O. It removes pk from the buffer
@@ -235,7 +178,7 @@ func (c *Coordinator[P, W]) Done() bool {
 // keys (serial, UUIDv7) cannot hit this. Consumers should treat rows as
 // idempotent upserts by key, as standard CDC practice.
 func (c *Coordinator[P, W]) OnStreamedRow(table TableID, pk PrimaryKey) (removed bool) {
-	if c.done || c.current == nil || table != *c.current {
+	if c.idle || c.current == nil || table != *c.current {
 		return false
 	}
 	return c.window.Remove(table, pk)
@@ -247,17 +190,17 @@ func (c *Coordinator[P, W]) OnStreamedRow(table TableID, pk PrimaryKey) (removed
 // first: a zero value standing in for a missing BEGIN can open or close the
 // window spuriously.
 func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P, emit EmitFunc) (changed bool, err error) {
-	if c.done {
-		// Start sets done on a resume that finds nothing left, and it has no
-		// emit to hand the terminal checkpoint to. Flush it on the first
-		// commit instead.
-		if c.doneEmitted {
-			return false, nil
-		}
-		if err := c.emitTerminalState(emit); err != nil {
-			return false, err
-		}
-		return true, nil
+	if c.idle {
+		// Nothing queued and nothing buffered, so this commit has no bearing
+		// on the snapshot. AddTables clears this.
+		return false, nil
+	}
+
+	if c.needsPlan {
+		// First commit since AddTables brought work back. Buffer a chunk and
+		// let the following commit close its window, the normal cadence.
+		c.needsPlan = false
+		return false, c.planNextChunk(ctx)
 	}
 
 	if !c.windowOpened && c.low.OpensAt(pos) {
@@ -346,39 +289,14 @@ func (c *Coordinator[P, W]) planAndDrain(ctx context.Context, emit EmitFunc) err
 		if err := c.planNextChunk(ctx); err != nil {
 			return err
 		}
-		if c.done {
-			return c.emitTerminalState(emit)
-		}
-		if !c.readUndisturbed() {
+		if c.idle || !c.readUndisturbed() {
 			return nil
 		}
 		if err := c.releaseWindow(emit); err != nil {
 			return err
 		}
 	}
-	if err := c.planNextChunk(ctx); err != nil {
-		return err
-	}
-	if c.done {
-		return c.emitTerminalState(emit)
-	}
-	return nil
-}
-
-// emitTerminalState releases the Done checkpoint, once. The window is empty by
-// then -- only a zero-row read completes the snapshot -- so this emits state
-// alone.
-func (c *Coordinator[P, W]) emitTerminalState(emit EmitFunc) error {
-	if c.doneEmitted {
-		return nil
-	}
-	c.doneEmitted = true
-	if err := c.releaseWindow(emit); err != nil {
-		// Nothing was delivered, so the terminal checkpoint is still owed.
-		c.doneEmitted = false
-		return err
-	}
-	return nil
+	return c.planNextChunk(ctx)
 }
 
 // readUndisturbed reports whether the buffered chunk's watermarks prove a
@@ -389,15 +307,8 @@ func (c *Coordinator[P, W]) readUndisturbed() bool {
 }
 
 // State returns the resumable state; safe to call any time after Start. It
-// reports the committed fields, except when done -- only a zero-row read can
-// finish the snapshot, and that buffers nothing.
+// reports the committed fields.
 func (c *Coordinator[P, W]) State() *State {
-	if c.done {
-		// Tables still ships: without it a later run cannot tell a newly
-		// configured table from one this run already finished.
-		s := &State{Version: CurrentStateVersion, Done: true, Tables: c.knownTables}
-		return s.Clone()
-	}
 	s := &State{
 		Version:         CurrentStateVersion,
 		CurrentTable:    c.committedCurrent,
@@ -417,7 +328,7 @@ func (c *Coordinator[P, W]) planNextChunk(ctx context.Context) error {
 			if len(c.remaining) == 0 {
 				c.current = nil
 				c.currentExhausted = false
-				c.done = true
+				c.idle = true
 				return nil
 			}
 

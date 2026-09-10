@@ -15,7 +15,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
-	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
+	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
 type incSnapshotCfg struct {
@@ -30,7 +30,7 @@ func newDefaultIncSnapshotCfg() *incSnapshotCfg {
 	}
 }
 
-func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, heartbeatInterval time.Duration, replicatedTables []string, streamSnapshot bool) (*incSnapshotCfg, error) {
+func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, heartbeatInterval time.Duration, signalTableName string, streamSnapshot bool) (*incSnapshotCfg, error) {
 	out := newDefaultIncSnapshotCfg()
 	// No config block: the snapshot is off and out holds the defaults.
 	if !conf.Contains(fieldIncSnapshot) {
@@ -46,12 +46,6 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, heartbeatInterval t
 	if cfg.Enabled, err = snapConf.FieldBool(fieldIncSnapshotEnabled); err != nil {
 		return nil, err
 	}
-	if snapConf.Contains(fieldIncrementalSnapshotTables) {
-		if cfg.Tables, err = snapConf.FieldStringList(fieldIncrementalSnapshotTables); err != nil {
-			return nil, err
-		}
-	}
-
 	if cfg.HeartbeatInterval, err = snapConf.FieldDuration(fieldIncSnapshotHeartbeatInterval); err != nil {
 		return nil, err
 	}
@@ -72,41 +66,14 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, heartbeatInterval t
 		)
 	}
 
-	// Both lists empty: no table names to read, so the coordinator would
-	// report itself complete without emitting a row.
-	if cfg.Enabled && len(cfg.Tables) == 0 && len(replicatedTables) == 0 {
+	// Tables come only from snapshot signals, which arrive as inserts into
+	// the signal table. Without one there is no way to ask for a backfill,
+	// so the snapshot could never read anything.
+	if cfg.Enabled && signalTableName == "" {
 		return nil, fmt.Errorf(
-			"%s.%s is true but no tables are listed: set %s.%s, or %s to inherit from",
-			fieldIncSnapshot, fieldIncSnapshotEnabled,
-			fieldIncSnapshot, fieldIncrementalSnapshotTables, fieldTables,
+			"%s.%s is true but %s is not set: tables are requested by inserting a %q signal, so a signal table is required",
+			fieldIncSnapshot, fieldIncSnapshotEnabled, fieldSignalTableName, replication.SnapshotSignalType,
 		)
-	}
-
-	// An unreplicated table is backfilled with no live changes to dedup
-	// against, so writes after its chunk is read are lost. Only an
-	// explicit list needs checking: an empty one inherits the replicated
-	// set, and an empty replicatedTables means FOR ALL TABLES.
-	if cfg.Enabled && len(cfg.Tables) > 0 && len(replicatedTables) > 0 {
-		replicated := make(map[string]struct{}, len(replicatedTables))
-		for _, table := range replicatedTables {
-			normalized, err := sanitize.NormalizePostgresIdentifier(table)
-			if err != nil {
-				return nil, fmt.Errorf("invalid table name %q: %w", table, err)
-			}
-			replicated[normalized] = struct{}{}
-		}
-		for _, table := range cfg.Tables {
-			normalized, err := sanitize.NormalizePostgresIdentifier(table)
-			if err != nil {
-				return nil, fmt.Errorf("invalid %s.%s entry %q: %w", fieldIncSnapshot, fieldIncrementalSnapshotTables, table, err)
-			}
-			if _, ok := replicated[normalized]; !ok {
-				return nil, fmt.Errorf(
-					"%s.%s entry %q is not listed in %s, so it would not be replicated: no live change could be deduplicated against its backfill",
-					fieldIncSnapshot, fieldIncrementalSnapshotTables, table, fieldTables,
-				)
-			}
-		}
 	}
 
 	// The snapshot moves forward only on a streamed commit. On a table
