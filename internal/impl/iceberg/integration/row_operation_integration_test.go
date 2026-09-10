@@ -42,6 +42,7 @@ func TestRowOperationsIntegration(t *testing.T) {
 	infra := setupTestInfra(t)
 
 	const ns, tbl = "row_ops_ns", "row_ops_test"
+	infra.EnsureNamespaceAbsent(t, ns)
 
 	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
 	require.NoError(t, err)
