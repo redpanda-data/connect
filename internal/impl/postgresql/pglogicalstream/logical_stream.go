@@ -270,7 +270,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			if err := stream.incSnapshotCoordinator.Start(ctx); err != nil {
 				return nil, fmt.Errorf("starting incremental snapshot: %w", err)
 			}
-			stream.logger.Debugf("Incremental snapshot: coordinator started")
+			stream.reportResumeReconciliation()
 		}
 		if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
 			return nil, err
@@ -393,7 +393,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				stream.errors <- fmt.Errorf("starting incremental snapshot: %w", err)
 				return
 			}
-			stream.logger.Debugf("Incremental snapshot: coordinator started")
+			stream.reportResumeReconciliation()
 		}
 		if err := stream.startLr(ctx, startLSN); err != nil {
 			stream.errors <- fmt.Errorf("starting logical replication: %w", err)

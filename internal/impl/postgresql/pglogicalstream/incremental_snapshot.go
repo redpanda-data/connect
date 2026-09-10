@@ -523,3 +523,18 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 	}
 	return nil
 }
+
+// reportResumeReconciliation logs what Start made of a resumed checkpoint
+// whose table set no longer matches the config. It logs nothing when the two
+// agree, which is the normal case.
+func (s *Stream) reportResumeReconciliation() {
+	if added := s.incSnapshotCoordinator.AddedOnResume(); len(added) > 0 {
+		s.logger.Infof("Incremental snapshot: %d table(s) added to the config since the checkpoint, queued for backfill: %v", len(added), added)
+	}
+	if removed := s.incSnapshotCoordinator.RemovedOnResume(); len(removed) > 0 {
+		s.logger.Warnf(
+			"Incremental snapshot: dropped %d table(s) the checkpoint covers but the config no longer lists: %v. A table that was part-read stops there, so its remaining rows are not backfilled",
+			len(removed), removed,
+		)
+	}
+}
