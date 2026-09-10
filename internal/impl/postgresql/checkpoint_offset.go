@@ -9,18 +9,17 @@
 package pgstream
 
 // checkpointOffset is the per-batch payload checkpointTracker tracks. Every
-// run carries one, whether or not the incremental snapshot is enabled: lsn
-// is what acknowledges the replication slot.
+// run carries one, snapshot or not: lsn acknowledges the replication slot.
 //
 // incSnapshotState is the snapshot's contribution, non-nil only on a batch
-// that carries a checkpoint. Riding here gives it the same acknowledgement
-// ordering as the lsn.
+// that carries a checkpoint. Riding here gives it the lsn's acknowledgement
+// ordering.
 type checkpointOffset struct {
 	lsn              *string
 	incSnapshotState []byte
 	// seq orders the offsets; the tracker assigns it. Acknowledgements run
-	// concurrently and incSnapshotState does not reveal which state is
-	// newer, so the writer compares this instead.
+	// concurrently and incSnapshotState does not say which state is newer,
+	// so the writer compares this instead.
 	seq uint64
 }
 

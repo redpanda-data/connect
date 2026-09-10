@@ -112,13 +112,10 @@ func TestStateUnmarshalRejectsMalformedJSON(t *testing.T) {
 	require.Error(t, json.Unmarshal([]byte(`{"version":`), &got))
 }
 
-// TestStateUnmarshalVersions: a checkpoint from any supported layout must
-// load, or an upgrade would restart every backfill in progress. Anything
-// outside the range must be refused rather than half-read.
-//
-// Version 1 predates Tables, and version 2 carried a Done flag that no
-// longer exists. Neither is a problem to decode: a queue that outlived them
-// is still in RemainingTables.
+// TestStateUnmarshalVersions: every supported layout must load, or an
+// upgrade would restart the backfills in progress, and anything outside the
+// range must be refused rather than half-read. Version 1 predates Tables
+// and version 2 carried the removed Done flag; both still decode.
 func TestStateUnmarshalVersions(t *testing.T) {
 	for _, test := range []struct {
 		name    string
