@@ -44,9 +44,10 @@ import (
 //     append).
 func TestCOWPartitionedRowOperationsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const ns, tbl = "cow_part_ns", "cow_part_test"
 	infra.CreateNamespace(t, ns)
