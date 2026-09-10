@@ -103,6 +103,7 @@ func TestNewPgStreamInputIncSnapshotHeartbeat(t *testing.T) {
 dsn: postgres://user:pass@localhost:5432/db
 slot_name: my_slot
 schema: dbo
+signal_table_name: dbz_signal
 tables:
   - events
 `
@@ -118,32 +119,6 @@ tables:
 		conf        string
 		errContains string
 	}{
-		{
-			// An unreplicated table would lose writes: no live changes to
-			// dedup its backfill against.
-			name: "incremental snapshot table not replicated",
-			conf: base + `
-heartbeat_interval: 5s
-incremental_snapshot:
-  enabled: true
-  tables:
-    - events
-    - customers
-`,
-			errContains: `"customers" is not listed in tables`,
-		},
-		{
-			// Case-folding must match how Postgres resolves the names.
-			name: "incremental snapshot table matches under case folding",
-			conf: base + `
-heartbeat_interval: 5s
-incremental_snapshot:
-  enabled: true
-  tables:
-    - EVENTS
-`,
-			errContains: pastHeartbeatCheck,
-		},
 		{
 			// Both modes read the same rows, so together they double-deliver.
 			name: "both snapshot modes enabled",
@@ -162,28 +137,20 @@ stream_snapshot: true
 `,
 		},
 		{
-			// Both lists empty: no table names to read, so the snapshot
-			// would silently do nothing.
-			name: "incremental snapshot enabled with no tables anywhere",
+			// Tables arrive by signal, so there is no table list to check.
+			// Without a signal table nothing could ever be requested.
+			name: "incremental snapshot enabled with no signal table",
 			conf: `
 dsn: postgres://user:pass@localhost:5432/db
 slot_name: my_slot
 schema: dbo
 heartbeat_interval: 5s
+tables:
+  - events
 incremental_snapshot:
   enabled: true
 `,
-			errContains: "no tables are listed",
-		},
-		{
-			// An omitted list inherits the replicated tables.
-			name: "incremental snapshot enabled without tables",
-			conf: base + `
-heartbeat_interval: 5s
-incremental_snapshot:
-  enabled: true
-`,
-			errContains: pastHeartbeatCheck,
+			errContains: "signal_table_name is not set",
 		},
 		{
 			// The incremental snapshot moves forward only on a streamed
@@ -256,6 +223,6 @@ incremental_snapshot:
 `, service.NewEnvironment())
 	require.NoError(t, err)
 
-	_, err = parseIncrementalSnapshotCfg(pConf, time.Hour, []string{"events"}, false)
+	_, err = parseIncrementalSnapshotCfg(pConf, time.Hour, "dbz_signal", false)
 	require.ErrorContains(t, err, "incremental_snapshot.heartbeat_interval must be > 0")
 }

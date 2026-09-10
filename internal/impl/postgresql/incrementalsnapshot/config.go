@@ -32,7 +32,6 @@ var (
 // Cfg holds the incremental snapshot configuration.
 type Cfg struct {
 	Enabled   bool
-	Tables    []string
 	ChunkSize int
 	// HeartbeatInterval is how often the snapshot needs a commit to advance
 	// on, separate from Config.HeartbeatInterval, which only keeps the

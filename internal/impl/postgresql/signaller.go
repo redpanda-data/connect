@@ -91,6 +91,11 @@ func (s *postgresSignaller) listen(msg *pglogicalstream.StreamMessage) (*replica
 			return nil, fmt.Errorf("unmarshaling control signal %s.data: %w", s.tableName, err)
 		}
 		log.Infof("%s (lsn=%s)", sig.Message, sig.LSN)
+	case replication.SnapshotSignalType:
+		// Acted on in pglogicalstream, while the row is decoded: the queue
+		// must be in the checkpoint the enclosing commit emits, or this
+		// signal would be lost on a restart. Recognised here only so it is
+		// not reported as an unknown type.
 	default:
 		log.Warnf("Control signal %q received but not a recognized type", sig.SignalType)
 	}

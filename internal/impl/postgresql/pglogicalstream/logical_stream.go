@@ -73,6 +73,11 @@ type Stream struct {
 	incSnapshotPKCache     map[string][]string
 	incSnapshotTables      map[incrementalsnapshot.TableID]struct{}
 	incSnapshotLastTable   *incrementalsnapshot.TableID // used for logging
+	// signalTable is the signal table in the unquoted form replication
+	// messages report, or nil when no signal table is configured.
+	signalTable *incrementalsnapshot.TableID
+	// snapshotSchema resolves the table names a snapshot signal carries.
+	snapshotSchema string
 
 	// BlockingSnapshot is true only when this session runs the one-shot
 	// stream_snapshot backfill, which also emits a SnapshotCompleteOpType
@@ -211,7 +216,16 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		if len(tables) > 0 {
 			tablesForPublication = append(slices.Clone(tables), signalTable)
 		}
+
+		// Replication messages report unquoted names, so keep the signal
+		// table in that form for comparing against a decoded row.
+		signalTableID, err := normalizeTableID(schema, config.SignalTableName)
+		if err != nil {
+			return nil, fmt.Errorf("resolving signal table: %w", err)
+		}
+		stream.signalTable = &signalTableID
 	}
+	stream.snapshotSchema = config.DBSchema
 
 	pubName := "pglog_stream_" + config.ReplicationSlotName
 	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
@@ -270,7 +284,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			if err := stream.incSnapshotCoordinator.Start(ctx); err != nil {
 				return nil, fmt.Errorf("starting incremental snapshot: %w", err)
 			}
-			stream.reportResumeReconciliation()
+			stream.logger.Debugf("Incremental snapshot: coordinator started")
 		}
 		if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
 			return nil, err
@@ -393,7 +407,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				stream.errors <- fmt.Errorf("starting incremental snapshot: %w", err)
 				return
 			}
-			stream.reportResumeReconciliation()
+			stream.logger.Debugf("Incremental snapshot: coordinator started")
 		}
 		if err := stream.startLr(ctx, startLSN); err != nil {
 			stream.errors <- fmt.Errorf("starting logical replication: %w", err)
@@ -661,6 +675,12 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 			schemaCache[relID] = schema
 			message.ColumnSchema = schema
 		}
+	}
+
+	if err := s.dispatchSnapshotSignal(message); err != nil {
+		// A bad signal must not stop replication: log it and carry on, so
+		// the row still reaches the consumer for inspection.
+		s.logger.Errorf("Incremental snapshot: %s", err)
 	}
 
 	if err := s.deduplicateStreamedRow(ctx, message); err != nil {
