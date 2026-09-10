@@ -3,6 +3,16 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- aws_kinesis: Added a `poll_period` field to bound the rate of `GetRecords` calls per shard, and an `enhanced_fan_out` configuration block that consumes streams via a dedicated enhanced fan-out consumer with 2MB/s per shard of read throughput, avoiding the shared 5 reads per second per shard limit. ([@squiidz](https://github.com/squiidz), [#4724](https://github.com/redpanda-data/connect/pull/4724))
+
+### Fixed
+
+- aws_kinesis: The input now falls back to the oldest retained record when a stored sequence has aged out of the stream's retention window, instead of retrying the stale position indefinitely. ([@squiidz](https://github.com/squiidz), [#4724](https://github.com/redpanda-data/connect/pull/4724))
+
 ## 4.108.0 - 2026-09-03
 
 ### Fixed
