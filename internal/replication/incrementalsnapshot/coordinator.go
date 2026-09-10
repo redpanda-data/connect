@@ -58,6 +58,15 @@ type Coordinator[P any, W Watermark[P]] struct {
 	committedCurrent    *TableID
 	committedMaxPK      PrimaryKey
 	committedLastSentPK PrimaryKey
+
+	// knownTables is every table this run covers, the finished ones
+	// included. Start fixes it and State reports it, so a later run can tell
+	// a newly configured table from one already backfilled.
+	knownTables []TableID
+	// addedOnResume and removedOnResume record what reconcileTables changed,
+	// for the caller to report.
+	addedOnResume   []TableID
+	removedOnResume []TableID
 }
 
 // NewCoordinator builds a Coordinator. A non-nil resume makes Start continue
@@ -99,12 +108,14 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 
 	if resume == nil {
 		c.remaining = slices.Clone(c.cfg.Tables)
+		c.knownTables = slices.Clone(c.cfg.Tables)
 	} else {
 		c.done = resume.Done
 		c.current = resume.CurrentTable
 		c.lastSentPK = resume.LastSentPK
 		c.maxPK = resume.MaxPK
 		c.remaining = resume.RemainingTables
+		c.reconcileTables(resume)
 
 		if c.done {
 			return nil
@@ -123,6 +134,83 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 	// State never captures an unflushed chunk, so resuming always means
 	// planning the next one. Watermarks are always re-derived.
 	return c.planNextChunk(ctx)
+}
+
+// reconcileTables makes a resumed checkpoint match the configured tables.
+//
+// A table the checkpoint does not know is new to the config, so it joins the
+// back of the queue and gets backfilled. A finished run reopens for it,
+// because the checkpoint would otherwise report complete for ever and the
+// table would never be read.
+//
+// A table the checkpoint knows but the config no longer lists is dropped. If
+// it is the one being read, the read stops where it is and the next plan
+// moves on, which leaves that table part-delivered downstream. The caller
+// reports this.
+//
+// A version 1 checkpoint carries no Tables. Its finished tables cannot be
+// recovered, so every configured table counts as known: this run adds
+// nothing, and the version 2 checkpoint it writes makes later additions
+// visible. Removals still apply, since they need only the queue.
+func (c *Coordinator[P, W]) reconcileTables(resume *State) {
+	c.knownTables = resume.Tables
+	if c.knownTables == nil {
+		c.knownTables = slices.Clone(c.cfg.Tables)
+	}
+	if c.current != nil && !slices.Contains(c.knownTables, *c.current) {
+		c.knownTables = append(c.knownTables, *c.current)
+	}
+	for _, table := range c.remaining {
+		if !slices.Contains(c.knownTables, table) {
+			c.knownTables = append(c.knownTables, table)
+		}
+	}
+
+	for _, table := range c.cfg.Tables {
+		if slices.Contains(c.knownTables, table) {
+			continue
+		}
+		c.addedOnResume = append(c.addedOnResume, table)
+		c.knownTables = append(c.knownTables, table)
+		c.remaining = append(c.remaining, table)
+	}
+	if len(c.addedOnResume) > 0 {
+		c.done = false
+		c.doneEmitted = false
+	}
+
+	configured := func(table TableID) bool { return slices.Contains(c.cfg.Tables, table) }
+
+	for _, table := range c.knownTables {
+		if !configured(table) {
+			c.removedOnResume = append(c.removedOnResume, table)
+		}
+	}
+	if len(c.removedOnResume) == 0 {
+		return
+	}
+
+	c.knownTables = slices.DeleteFunc(c.knownTables, func(table TableID) bool { return !configured(table) })
+	c.remaining = slices.DeleteFunc(c.remaining, func(table TableID) bool { return !configured(table) })
+	if c.current != nil && !configured(*c.current) {
+		// Abandon the part-read table. Clearing the bounds too makes the
+		// next plan take the following table from the front of the queue.
+		c.current = nil
+		c.lastSentPK = nil
+		c.maxPK = nil
+	}
+}
+
+// AddedOnResume lists the configured tables the checkpoint did not know,
+// which this run backfills. Valid after Start.
+func (c *Coordinator[P, W]) AddedOnResume() []TableID {
+	return c.addedOnResume
+}
+
+// RemovedOnResume lists the tables the checkpoint covered that the config no
+// longer lists, which this run dropped. Valid after Start.
+func (c *Coordinator[P, W]) RemovedOnResume() []TableID {
+	return c.removedOnResume
 }
 
 // commitLiveState snapshots the live fields into the committed ones. Call
@@ -305,7 +393,10 @@ func (c *Coordinator[P, W]) readUndisturbed() bool {
 // finish the snapshot, and that buffers nothing.
 func (c *Coordinator[P, W]) State() *State {
 	if c.done {
-		return &State{Version: CurrentStateVersion, Done: true}
+		// Tables still ships: without it a later run cannot tell a newly
+		// configured table from one this run already finished.
+		s := &State{Version: CurrentStateVersion, Done: true, Tables: c.knownTables}
+		return s.Clone()
 	}
 	s := &State{
 		Version:         CurrentStateVersion,
@@ -313,6 +404,7 @@ func (c *Coordinator[P, W]) State() *State {
 		LastSentPK:      c.committedLastSentPK,
 		MaxPK:           c.committedMaxPK,
 		RemainingTables: c.committedRemaining,
+		Tables:          c.knownTables,
 	}
 	return s.Clone()
 }
