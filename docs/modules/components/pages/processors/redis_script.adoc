@@ -23,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Performs actions against Redis using https://redis.io/docs/manual/programmability/eval-intro/[LUA scripts^].
+Performs actions against Redis using https://redis.io/docs/latest/develop/programmability/eval-intro/[LUA scripts^].
 
 Introduced in version 4.11.0.
 
