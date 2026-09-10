@@ -485,15 +485,29 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 	}
 
 	nextStandbyMessageDeadline := time.Now().Add(s.standbyMessageTimeout)
+	// The receive deadline only moves when a standby status update is sent or a
+	// keepalive requests a reply, so build the deadline context once per move
+	// instead of allocating a timer per row.
+	var (
+		recvCtx      context.Context
+		recvCancel   context.CancelFunc = func() {}
+		recvDeadline time.Time
+	)
+	defer func() { recvCancel() }()
 	for !s.shutSig.IsSoftStopSignalled() {
 		if committed, err := commitLSN(time.Now().After(nextStandbyMessageDeadline)); err != nil {
 			return err
 		} else if committed {
 			nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
 		}
-		recvCtx, cancel := context.WithDeadline(ctx, nextStandbyMessageDeadline)
+		if recvCtx == nil || !recvDeadline.Equal(nextStandbyMessageDeadline) {
+			recvCancel()
+			var newCancel context.CancelFunc
+			recvCtx, newCancel = context.WithDeadline(ctx, nextStandbyMessageDeadline)
+			recvCancel = newCancel
+			recvDeadline = nextStandbyMessageDeadline
+		}
 		rawMsg, err := s.pgConn.ReceiveMessage(recvCtx)
-		cancel() // don't leak goroutine
 		hitStandbyTimeout := errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil
 		if err != nil {
 			if hitStandbyTimeout || pgconn.Timeout(err) {
