@@ -282,11 +282,11 @@ func bytesReaderAt(b []byte) *bytes.Reader { return bytes.NewReader(b) }
 // The shape matters a great deal for anything size-related, which is why it is
 // selectable rather than fixed. "regular" mirrors the localhost bench config's
 // generator: sequential ids and an `info` string sharing a 21-character prefix.
-// Parquet's byte-array encoding compresses that prefix away before any codec
-// runs, so the same 20k records occupy ~4 bytes each with no compression at all
-// — measuring a codec against it would show almost no win and imply, wrongly,
-// that compression does not pay. "high-entropy" fills `info` with random text
-// instead, which is the regime where a codec earns its cost.
+// That repetition is exactly what a codec exploits, so this is the shape that
+// shows a codec's size win (measured at ~15x smaller with zstd). "high-entropy"
+// fills `info` with random text instead — genuinely incompressible content, so
+// it bounds the size win at a few percent and isolates a codec's CPU cost from
+// its size benefit, since there is barely any size benefit left to confound it.
 func buildThroughputBatches(t *testing.T, total, perBatch int, payload string, extraColumns int) []service.MessageBatch {
 	t.Helper()
 	require.Contains(t, []string{"regular", "high-entropy"}, payload,

@@ -298,7 +298,7 @@ The sink write path driven directly against containerised MinIO + Iceberg REST, 
 - **Treat `GOMAXPROCS=1` here as "one core for the writer", not as a 1-vCPU deployment.** MinIO and the catalog run in containers with their own cores on the same machine, and there is no benthos input or pipeline in the loop, so the CPU mix differs from a constrained container running the whole thing.
 - Consequence for the shredder change: the isolated win is solid and measured, and its end-to-end value on these workloads is **not demonstrated**. It reduces per-record allocations and CPU in a component that profiling says accounts for about a quarter of sink CPU; whether that is visible at the sink depends on what else the workload is spending time on, and on these two record shapes it is not.
 
-To reproduce: `TESTCONTAINERS_RYUK_DISABLED=true go test ./internal/impl/iceberg/integration/ -run TestWriteThroughput -timeout 25m -iceberg.throughput -iceberg.throughput.records=200000 -iceberg.throughput.codec=uncompressed` (add `-iceberg.throughput.columns=45` for the wide schema).
+To reproduce the 5-column rows: `TESTCONTAINERS_RYUK_DISABLED=true go test ./internal/impl/iceberg/integration/ -run TestWriteThroughput -timeout 25m -iceberg.throughput -iceberg.throughput.records=200000 -iceberg.throughput.codec=uncompressed`. For the 50-column row, drop the record count to match the table: add `-iceberg.throughput.columns=45 -iceberg.throughput.records=100000`.
 
 ---
 
@@ -330,7 +330,7 @@ Record shape matters more than anything else here, so both are given. "regular" 
 
 **Note on defaults, worth knowing before reading the table:** a table created through the Iceberg Go library — which includes tables this output creates itself — comes back carrying `write.parquet.compression-codec: zstd` in its properties, materialised at creation. Since an unset `parquet.compression` defers to the table property, such tables get **zstd**, not the uncompressed default that applies only to a table whose property is absent. The uncompressed rows above required setting the property explicitly.
 
-To reproduce: as above, with `-iceberg.throughput.codec=zstd|snappy|uncompressed` and `-iceberg.throughput.payload=regular|high-entropy`.
+To reproduce: `TESTCONTAINERS_RYUK_DISABLED=true go test ./internal/impl/iceberg/integration/ -run TestWriteThroughput -timeout 25m -iceberg.throughput -iceberg.throughput.records=100000 -iceberg.throughput.codec=zstd|snappy|uncompressed -iceberg.throughput.payload=regular|high-entropy`.
 
 ---
 
