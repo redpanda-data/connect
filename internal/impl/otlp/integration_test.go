@@ -16,11 +16,15 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/moby/moby/api/types/container"
+	dockercontainer "github.com/moby/moby/api/types/container"
+	mobynet "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -125,6 +129,31 @@ var (
 	soakRate     = flag.Int("soak-rate", 100, "Rate of messages per second for soak test")
 )
 
+var (
+	otelSuitePortOnce sync.Once
+	otelSuitePortBase int
+	otelSuitePortSeq  atomic.Int64
+)
+
+// nextOtelSuitePort hands out a unique port for this test run. Every port
+// the suite uses (each subtest's producer input, and its OTel Collector's
+// pinned HTTP/gRPC ports) is derived from a single probed starting point
+// and then just incremented, rather than each independently probing for a
+// free port. With up to 4 subtests requesting ports concurrently,
+// independent probes (and Docker's own dynamic port allocation for
+// container-published ports) can hand the same "free" port to two
+// different things before either side actually binds it, causing
+// intermittent "address already in use" / wrong-protocol failures.
+func nextOtelSuitePort(t *testing.T) int {
+	t.Helper()
+	otelSuitePortOnce.Do(func() {
+		base, err := integration.GetFreePort()
+		require.NoError(t, err)
+		otelSuitePortBase = base
+	})
+	return otelSuitePortBase + int(otelSuitePortSeq.Add(1))
+}
+
 func TestIntegrationOTLPWithSchemaRegistry(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -166,12 +195,13 @@ func TestIntegrationOTLPWithSchemaRegistry(t *testing.T) {
 			createTopic(t, seed, topic)
 
 			t.Log("And: OTel Collector")
-			collectorHTTP, collectorGRPC, collectorContainer := startOtelCollectorContainerWithDebugExporter(t, tc.signalType)
+			collectorHTTPPort := nextOtelSuitePort(t)
+			collectorGRPCPort := nextOtelSuitePort(t)
+			collectorHTTP, collectorGRPC, collectorContainer := startOtelCollectorContainerWithDebugExporter(t, tc.signalType, collectorHTTPPort, collectorGRPCPort)
 			t.Logf("OTel Collector endpoints - HTTP: %s, gRPC: %s", collectorHTTP, collectorGRPC)
 
 			t.Log("When: generating telemetry data and sending to Redpanda via Benthos pipeline")
-			producerPort, err := integration.GetFreePort()
-			require.NoError(t, err)
+			producerPort := nextOtelSuitePort(t)
 			ps := startStream(t, producerConfig(tc.transport, tc.encoding, producerPort, seed, srURL, topic))
 			waitForListening(t, producerPort)
 			runOtelgen(t, otelgenCommand(tc.signalType, tc.transport, producerPort, *soakRate, *soakDuration))
@@ -247,7 +277,7 @@ func runOtelgen(t *testing.T, cmd []string) {
 			// host.docker.internal, which only resolves automatically on Docker
 			// Desktop. Map it to the host gateway so the container can reach the
 			// host on Linux CI runners too.
-			HostConfigModifier: func(hc *container.HostConfig) {
+			HostConfigModifier: func(hc *dockercontainer.HostConfig) {
 				hc.ExtraHosts = []string{"host.docker.internal:host-gateway"}
 			},
 		},
@@ -270,7 +300,7 @@ func runOtelgen(t *testing.T, cmd []string) {
 	require.Equal(t, 0, state.ExitCode, "otelgen should complete successfully")
 }
 
-func startOtelCollectorContainerWithDebugExporter(t *testing.T, sig SignalType) (httpEndpoint, grpcEndpoint string, container testcontainers.Container) {
+func startOtelCollectorContainerWithDebugExporter(t *testing.T, sig SignalType, httpPort, grpcPort int) (httpEndpoint, grpcEndpoint string, container testcontainers.Container) {
 	t.Helper()
 
 	conf := fmt.Sprintf(`
@@ -308,6 +338,18 @@ service:
 			},
 		},
 		Cmd: []string{"--config=/etc/otel-config.yaml"},
+		// Pin the published ports to our own dedicated, deduplicated
+		// range (see nextOtelSuitePort) instead of letting Docker pick
+		// them dynamically. Docker's own dynamic port allocation draws
+		// from the same OS ephemeral range as other free-port probes in
+		// this suite, and under concurrency the two can race and hand
+		// out the same "free" port to two different things.
+		HostConfigModifier: func(hc *dockercontainer.HostConfig) {
+			hc.PortBindings = mobynet.PortMap{
+				mobynet.MustParsePort("4318/tcp"): []mobynet.PortBinding{{HostPort: strconv.Itoa(httpPort)}},
+				mobynet.MustParsePort("4317/tcp"): []mobynet.PortBinding{{HostPort: strconv.Itoa(grpcPort)}},
+			}
+		},
 	}
 
 	ctx := t.Context()
@@ -324,14 +366,8 @@ service:
 		}
 	})
 
-	// Get mapped ports
-	httpPort, err := container.MappedPort(ctx, "4318")
-	require.NoError(t, err)
-	grpcPort, err := container.MappedPort(ctx, "4317")
-	require.NoError(t, err)
-
-	httpEndpoint = fmt.Sprintf("localhost:%s", httpPort.Port())
-	grpcEndpoint = fmt.Sprintf("localhost:%s", grpcPort.Port())
+	httpEndpoint = fmt.Sprintf("localhost:%d", httpPort)
+	grpcEndpoint = fmt.Sprintf("localhost:%d", grpcPort)
 	return
 }
 
