@@ -1198,8 +1198,8 @@ github.com/klauspost/compress v1.13.6/go.mod h1:/3/Vjq9QcHkK5uEr5lBEmyoZ1iFhe47e
 github.com/klauspost/compress v1.14.4/go.mod h1:/3/Vjq9QcHkK5uEr5lBEmyoZ1iFhe47etQ6QUkpK6sk=
 github.com/klauspost/compress v1.15.1/go.mod h1:/3/Vjq9QcHkK5uEr5lBEmyoZ1iFhe47etQ6QUkpK6sk=
 github.com/klauspost/compress v1.15.9/go.mod h1:PhcZ0MbTNciWF3rruxRgKxI5NkcHHrHUDtV4Yw2GlzU=
-github.com/klauspost/compress v1.19.2 h1:hMRETovs/pu/dVWN7zIT1PGG8t509MwT6bO7XSi26R8=
-github.com/klauspost/compress v1.19.2/go.mod h1:cwPg85FWrGar70rWktvGQj8/hthj3wpl0PGDogxkrSQ=
+github.com/klauspost/compress v1.20.0 h1:a3C1ke2ohxFymNlb2HWAHjDeKCI90scRskErZkR0ezA=
+github.com/klauspost/compress v1.20.0/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
 github.com/klauspost/cpuid/v2 v2.0.1/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=
 github.com/klauspost/cpuid/v2 v2.0.4/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=
 github.com/klauspost/cpuid/v2 v2.0.9/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=
@@ -1542,8 +1542,8 @@ github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 h1:bsUq1dX0N8A
 github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9/go.mod h1:bCqnVzQkZxMG4s8nGwiZ5l3QUCyqpo9Y+/ZMZ9VjZe4=
 github.com/redis/go-redis/v9 v9.18.0 h1:pMkxYPkEbMPwRdenAzUNyFNrDgHx9U+DrBabWNfSRQs=
 github.com/redis/go-redis/v9 v9.18.0/go.mod h1:k3ufPphLU5YXwNTUcCRXGxUoF1fqxnhFQmscfkCoDA0=
-github.com/redpanda-data/benthos/v4 v4.79.0 h1:GCanGsspMJ5fRtEr/YEk+P+6wPU41litDskDAjoR1vo=
-github.com/redpanda-data/benthos/v4 v4.79.0/go.mod h1:CvVIn1QUIBypsuvce9rFKaSuEZhxgvtmdHfek3tkkak=
+github.com/redpanda-data/benthos/v4 v4.80.0 h1:EjuJlO151Lzln0wpKRjgXBye2wr8Vib2OPjD2m8CJW4=
+github.com/redpanda-data/benthos/v4 v4.80.0/go.mod h1:3+ZgkW9gfnGwhfvckzIR6nVQvmvrrePPub0ECsw0kzc=
 github.com/redpanda-data/common-go/authz v0.2.1-0.20260319205134-242ab3c168b8 h1:hZTIp81OUDNOTCTD0gM01b1t821pDbToU9jWnZRnd/E=
 github.com/redpanda-data/common-go/authz v0.2.1-0.20260319205134-242ab3c168b8/go.mod h1:sHhzCYf64ZYUBi7snbopQl+wQaKySbFsKCvGhmSckhk=
 github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0 h1:xL2THs63tUTZmTiBfBm/mrjFMrwQaHKduvgQ6gIizXg=
