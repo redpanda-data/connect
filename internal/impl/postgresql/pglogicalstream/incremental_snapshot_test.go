@@ -524,3 +524,30 @@ func TestSnapshotSignalRejectionVsFailure(t *testing.T) {
 		})
 	}
 }
+
+// TestDeduplicateStreamedRowOnlyTouchesTheCurrentTable: a table a previous
+// run finished is still in the checkpoint, so a gate on that would resolve
+// keys for it on every restart. The lookup is a live query, and its failure
+// used to stop replication for every table -- for work OnStreamedRow
+// discards, since it only matters for the table being read.
+func TestDeduplicateStreamedRowOnlyTouchesTheCurrentTable(t *testing.T) {
+	// Closed, so any key lookup fails the way a reset connection would.
+	broken := newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"id"}}, nil)
+	require.NoError(t, broken.Close())
+
+	s := &Stream{
+		// Snapshotting nothing: a zero coordinator reads no table.
+		incSnapshotCoordinator: &incsnapshot.Coordinator{},
+		incSnapshotConn:        broken,
+		incSnapshotPKCache:     map[string][]string{},
+	}
+
+	for _, op := range []OpType{InsertOpType, UpdateOpType, DeleteOpType} {
+		require.NoError(t, s.deduplicateStreamedRow(t.Context(), &StreamMessage{
+			Operation: op,
+			Schema:    "public",
+			Table:     "finished",
+			Data:      map[string]any{"id": 1},
+		}), "a row on a table the snapshot is not reading must not touch the database")
+	}
+}
