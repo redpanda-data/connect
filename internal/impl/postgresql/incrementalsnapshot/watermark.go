@@ -15,6 +15,11 @@ import (
 	"strings"
 )
 
+const (
+	xidEpoch     = 1 << 32
+	xidHalfEpoch = 1 << 31
+)
+
 // Watermark holds the bounds of a Postgres snapshot, which the coordinator
 // compares against streamed transactions. Xmin is the oldest transaction in
 // flight, Xmax the first id not yet assigned.
@@ -39,30 +44,6 @@ func (w Watermark) ClosesAt(xid uint32) bool {
 // between them to be running.
 func (w Watermark) Quiesced() bool {
 	return w.Xmin == w.Xmax
-}
-
-const (
-	xidEpoch     = 1 << 32
-	xidHalfEpoch = 1 << 31
-)
-
-// normalizeXID widens a raw 32-bit transaction id into the epoch of ref, so
-// the two can be compared. It picks the epoch that puts xid within half an
-// epoch of ref, which is the nearest interpretation and the only one a
-// running system can reach.
-func normalizeXID(xid uint32, ref uint64) uint64 {
-	full := (ref & ^uint64(math.MaxUint32)) | uint64(xid)
-	switch {
-	case full > ref && full-ref > xidHalfEpoch && full >= xidEpoch:
-		// xid wrapped ahead of ref, so it belongs to the previous epoch.
-		// The last test guards underflow: epoch 0 has no predecessor.
-		return full - xidEpoch
-	case ref > full && ref-full > xidHalfEpoch:
-		// ref wrapped ahead of xid, so xid belongs to the next epoch.
-		return full + xidEpoch
-	default:
-		return full
-	}
 }
 
 // ParseSnapshot reads a snapshot's text form, xmin:xmax:xip_list, as in
@@ -94,4 +75,19 @@ func ParseSnapshot(raw string) (Watermark, error) {
 	}
 
 	return Watermark{Xmin: xmin, Xmax: xmax}, nil
+}
+
+func normalizeXID(xid uint32, ref uint64) uint64 {
+	full := (ref & ^uint64(math.MaxUint32)) | uint64(xid)
+	switch {
+	case full > ref && full-ref > xidHalfEpoch && full >= xidEpoch:
+		// xid wrapped ahead of ref, so it belongs to the previous epoch.
+		// The last test guards underflow: epoch 0 has no predecessor.
+		return full - xidEpoch
+	case ref > full && ref-full > xidHalfEpoch:
+		// ref wrapped ahead of xid, so xid belongs to the next epoch.
+		return full + xidEpoch
+	default:
+		return full
+	}
 }
