@@ -59,10 +59,9 @@ func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 		}
 
 		var (
-			outBatches   []string
-			outBatchesMu sync.Mutex
-			stream       *service.Stream
-			err          error
+			batch  oracledbtest.Batch
+			stream *service.Stream
+			err    error
 		)
 		t.Log("Launching component in CDB mode...")
 		{
@@ -81,40 +80,10 @@ oracledb_cdc:
   batching:
     count: 500`
 
-			streamBuilder := service.NewStreamBuilder()
-			require.NoError(t, streamBuilder.AddInputYAML(cfg))
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
-			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-				outBatchesMu.Lock()
-				defer outBatchesMu.Unlock()
-				for _, msg := range mb {
-					msgBytes, err := msg.AsBytes()
-					assert.NoError(t, err)
-					outBatches = append(outBatches, string(msgBytes))
-				}
-				return nil
-			}))
-
-			stream, err = streamBuilder.Build()
-			require.NoError(t, err)
-			license.InjectTestService(stream.Resources())
-
-			go func() {
-				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-					t.Error(err)
-				}
-			}()
+			stream = oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
 			t.Log("Verifying snapshot changes from FREEPDB1...")
-			var got int
-			assert.Eventually(t, func() bool {
-				outBatchesMu.Lock()
-				defer outBatchesMu.Unlock()
-				got = len(outBatches)
-				return got >= want
-			}, time.Minute*5, time.Second*1)
-			assert.Equalf(t, want, got, "Wanted %d snapshot messages but got %d", want, got)
+			oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
 		}
 
 		t.Log("Verifying streaming changes from FREEPDB1...")
@@ -130,18 +99,9 @@ BEGIN
 END;`)
 			require.NoError(t, err)
 
-			outBatchesMu.Lock()
-			outBatches = nil
-			outBatchesMu.Unlock()
+			batch.Reset()
 
-			var got int
-			assert.Eventually(t, func() bool {
-				outBatchesMu.Lock()
-				defer outBatchesMu.Unlock()
-				got = len(outBatches)
-				return got >= want
-			}, time.Minute*5, time.Second*1)
-			assert.Equalf(t, want, got, "Wanted %d streaming messages but got %d", want, got)
+			oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
 		}
 
 		require.NoError(t, stream.StopWithin(time.Second*10))
@@ -164,10 +124,8 @@ END;`)
 		}
 
 		var (
-			outBatches   []string
-			outBatchesMu sync.Mutex
-			stream       *service.Stream
-			err          error
+			batch  oracledbtest.Batch
+			stream *service.Stream
 		)
 		t.Log("Launching component...")
 		{
@@ -186,42 +144,12 @@ oracledb_cdc:
   batching:
     count: 500`
 
-			streamBuilder := service.NewStreamBuilder()
-			require.NoError(t, streamBuilder.AddInputYAML(cfg))
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
-			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-				outBatchesMu.Lock()
-				defer outBatchesMu.Unlock()
-				for _, msg := range mb {
-					msgBytes, err := msg.AsBytes()
-					assert.NoError(t, err)
-					outBatches = append(outBatches, string(msgBytes))
-				}
-				return nil
-			}))
-
-			stream, err = streamBuilder.Build()
-			require.NoError(t, err)
-			license.InjectTestService(stream.Resources())
-
-			go func() {
-				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-					t.Error(err)
-				}
-			}()
+			stream = oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
 			time.Sleep(10 * time.Second)
 
 			t.Log("Verifying snapshot changes...")
-			var got int
-			assert.Eventually(t, func() bool {
-				outBatchesMu.Lock()
-				defer outBatchesMu.Unlock()
-				got = len(outBatches)
-				return got >= want
-			}, time.Minute*5, time.Second*1)
-			assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
+			oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
 		}
 
 		t.Log("Verifying streaming changes...")
@@ -239,18 +167,9 @@ oracledb_cdc:
 	END;`)
 			require.NoError(t, err)
 
-			outBatchesMu.Lock()
-			outBatches = nil
-			outBatchesMu.Unlock()
+			batch.Reset()
 
-			var got int
-			assert.Eventually(t, func() bool {
-				outBatchesMu.Lock()
-				defer outBatchesMu.Unlock()
-				got = len(outBatches)
-				return got >= want
-			}, time.Minute*5, time.Second*1)
-			assert.Truef(t, (got == want), "Wanted %d streaming messages but got %d", want, got)
+			oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
 		}
 
 		require.NoError(t, stream.StopWithin(time.Second*10))
@@ -275,10 +194,8 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	}
 
 	var (
-		outBatches   []*service.Message
-		outBatchesMu sync.Mutex
-		stream       *service.Stream
-		err          error
+		batch  oracledbtest.MsgBatch
+		stream *service.Stream
 	)
 	t.Log("Launching component...")
 	{
@@ -295,45 +212,17 @@ oracledb_cdc:
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			for _, msg := range mb {
-				outBatches = append(outBatches, msg)
-			}
-			return nil
-		}))
-
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		stream = oracledbtest.StartPipeline(t, cfg, batch.Consumer())
 
 		time.Sleep(10 * time.Second)
 
 		t.Log("Verifying snapshot changes...")
-		var got int
-		assert.Eventually(t, func() bool {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			got = len(outBatches)
-			return got >= want
-		}, time.Minute*5, time.Second*1)
-		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
-		outBatchesMu.Lock()
+		oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
 
-		expectedSCN, _ := outBatches[0].MetaGetMut("scn")
-		expectedCommitTs, _ := outBatches[0].MetaGetMut("commit_ts_ms")
-		for i, msg := range outBatches {
+		msgs := batch.Clone()
+		expectedSCN, _ := msgs[0].MetaGetMut("scn")
+		expectedCommitTs, _ := msgs[0].MetaGetMut("commit_ts_ms")
+		for i, msg := range msgs {
 			scn, ok := msg.MetaGet("scn")
 			assert.Truef(t, ok, "Expected snapshot message[%d] to have scn metadata", i)
 			assert.NotEmptyf(t, scn, "Expected snapshot message[%d] scn metadata to be non-empty", i)
@@ -344,7 +233,6 @@ oracledb_cdc:
 			assert.NotEmptyf(t, commitTs, "Expected snapshot message[%d] commit_ts_ms metadata to be non-empty", i)
 			assert.Equal(t, expectedCommitTs, commitTs, "Expected snapshot commit_ts_ms to be identical for all messages but was not")
 		}
-		outBatchesMu.Unlock()
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
@@ -369,10 +257,8 @@ func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	var (
-		outBatches   []string
-		outBatchesMu sync.Mutex
-		stream       *service.Stream
-		err          error
+		batch  oracledbtest.Batch
+		stream *service.Stream
 	)
 	t.Log("Launching component...")
 	{
@@ -391,49 +277,17 @@ oracledb_cdc:
   include: ["TESTDB.FOO", "TESTDB.FOO2"]
   exclude: ["TESTDB.DOESNOTEXIST"]`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
-
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				outBatches = append(outBatches, string(msgBytes))
-			}
-			return nil
-		}))
-
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		stream = oracledbtest.StartPipelineWithLogLevel(t, fmt.Sprintf(cfg, connStr), "DEBUG", batch.Consumer(t))
 
 		t.Log("Verifying snapshot changes...")
-		var got int
-		assert.Eventually(t, func() bool {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			got = len(outBatches)
-			return got >= want
-		}, time.Minute*5, time.Second*1)
-		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
+		oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
 
-		outBatchesMu.Lock()
-		for _, msg := range outBatches {
+		for _, msg := range batch.Clone() {
 			var row map[string]any
 			require.NoError(t, json.Unmarshal([]byte(msg), &row))
 			assert.Contains(t, row, "NAME", "expected NAME column in snapshot row")
 			assert.NotContains(t, row, "EXCLUDED_COL", "expected EXCLUDED_COL to be absent from snapshot row")
 		}
-		outBatchesMu.Unlock()
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
@@ -446,10 +300,7 @@ func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
-	var (
-		outBatches   []string
-		outBatchesMu sync.Mutex
-	)
+	var batch oracledbtest.Batch
 
 	cfg := `
 oracledb_cdc:
@@ -465,35 +316,12 @@ oracledb_cdc:
 
 	t.Log("Launching component to stream initial data...")
 	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				outBatches = append(outBatches, string(msgBytes))
-			}
-			return nil
-		}))
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
 		// Wait for component to start
 		time.Sleep(5 * time.Second)
 
-		_, err = db.Exec(`
+		_, err := db.Exec(`
 		BEGIN
 			FOR i IN 1..1000 LOOP
 				INSERT INTO testdb.foo (id) VALUES (DEFAULT);
@@ -503,10 +331,7 @@ oracledb_cdc:
 		require.NoError(t, err)
 
 		assert.Eventually(t, func() bool {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-
-			got := len(outBatches)
+			got := batch.Count()
 			t.Logf("Found %d of 1000 records...", got)
 
 			return got == 1000
@@ -526,37 +351,11 @@ oracledb_cdc:
 		END;`)
 		require.NoError(t, err)
 
-		// Create new stream builder for second phase
-		streamBuilder2 := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder2.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder2.SetLoggerYAML(`level: INFO`))
-
-		require.NoError(t, streamBuilder2.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				outBatches = append(outBatches, string(msgBytes))
-			}
-			return nil
-		}))
-
-		streamResume, err := streamBuilder2.Build()
-		require.NoError(t, err)
-		license.InjectTestService(streamResume.Resources())
-
-		go func() {
-			if err := streamResume.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		// Create new stream for second phase
+		streamResume := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
 		assert.Eventually(t, func() bool {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-
-			got := len(outBatches)
+			got := batch.Count()
 			t.Logf("Found %d of 2000 records...", got)
 
 			return got == 2000
@@ -647,20 +446,7 @@ oracledb_cdc:
 	const phase1Rows = 20
 
 	t.Log("Launching component to stream pre-incident data...")
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(consume))
-
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+	stream := oracledbtest.StartPipeline(t, cfg, consume)
 
 	// Wait for component to start.
 	time.Sleep(5 * time.Second)
@@ -738,7 +524,7 @@ oracledb_cdc:
 	require.NoError(t, streamBuilder2.AddInputYAML(cfg))
 	require.NoError(t, streamBuilder2.AddBatchConsumerFunc(consume))
 
-	stream, err = streamBuilder2.Build()
+	stream, err := streamBuilder2.Build()
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
 
@@ -859,10 +645,7 @@ oracledb_cdc:
 		readsMu sync.Mutex
 		reads   int
 	)
-	run2Builder := service.NewStreamBuilder()
-	require.NoError(t, run2Builder.AddInputYAML(cfg))
-	require.NoError(t, run2Builder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, run2Builder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+	run2 := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 		readsMu.Lock()
 		defer readsMu.Unlock()
 		for _, msg := range mb {
@@ -871,15 +654,7 @@ oracledb_cdc:
 			}
 		}
 		return nil
-	}))
-	run2, err := run2Builder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(run2.Resources())
-	go func() {
-		if err := run2.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+	})
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		readsMu.Lock()
@@ -1226,7 +1001,6 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 		snapshotRows = 50
 
 		stream *service.Stream
-		err    error
 	)
 
 	t.Run("lob_enabled=false", func(t *testing.T) {
@@ -1245,30 +1019,7 @@ oracledb_cdc:
     lob_enabled: false
     min_scn_window_size: 0
   include: ["TESTDB.LOBDISABLED"]`
-			streamBuilder := service.NewStreamBuilder()
-			require.NoError(t, streamBuilder.AddInputYAML(cfg))
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
-
-			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-				batch.Lock()
-				defer batch.Unlock()
-				for _, msg := range mb {
-					msgBytes, err := msg.AsBytes()
-					assert.NoError(t, err)
-					batch.Msgs = append(batch.Msgs, string(msgBytes))
-				}
-				return nil
-			}))
-
-			stream, err = streamBuilder.Build()
-			require.NoError(t, err)
-			license.InjectTestService(stream.Resources())
-
-			go func() {
-				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-					t.Error(err)
-				}
-			}()
+			stream = oracledbtest.StartPipelineWithLogLevel(t, cfg, "WARN", batch.Consumer(t))
 		}
 
 		t.Logf("%s: assert snapshot...", t.Name())
@@ -1336,30 +1087,7 @@ oracledb_cdc:
     lob_enabled: true
     min_scn_window_size: 0
   include: ["TESTDB.LOBENABLED"]`
-			streamBuilder := service.NewStreamBuilder()
-			require.NoError(t, streamBuilder.AddInputYAML(cfg))
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
-			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-				batch.Lock()
-				defer batch.Unlock()
-				for _, msg := range mb {
-					msgBytes, err := msg.AsBytes()
-					assert.NoError(t, err)
-					batch.Msgs = append(batch.Msgs, string(msgBytes))
-				}
-				return nil
-			}))
-
-			stream, err = streamBuilder.Build()
-			require.NoError(t, err)
-			license.InjectTestService(stream.Resources())
-
-			go func() {
-				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-					t.Error(err)
-				}
-			}()
+			stream = oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 		}
 
 		t.Logf("%s: assert snapshot...", t.Name())
@@ -1445,23 +1173,7 @@ oracledb_cdc:
     lob_enabled: %t
     min_scn_window_size: 0
   include: ["%s"]`, streamFetchConnStr, strings.ReplaceAll(table, ".", "_"), lobEnabled, strings.ToUpper(table))
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			batch.Lock()
-			defer batch.Unlock()
-			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				batch.Msgs = append(batch.Msgs, string(msgBytes))
-			}
-			return nil
-		}))
-
-		leg, err := streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(leg.Resources())
+		leg := oracledbtest.StartPipelineWithLogLevel(t, cfg, "WARN", batch.Consumer(t))
 		// Cleanup rather than a caller-side StopWithin: a require failure
 		// below must not leak a live stream into subsequent legs.
 		t.Cleanup(func() {
@@ -1469,11 +1181,6 @@ oracledb_cdc:
 				t.Errorf("stopping %s stream: %v", table, err)
 			}
 		})
-		go func() {
-			if err := leg.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
 
 		var got int
 		assert.Eventually(t, func() bool {
@@ -1594,10 +1301,10 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 			time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC),                  // smalldatetime min (timestamp)
 			time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC),                     // time (stored as timestamp)
 			time.Date(1, 1, 1, 0, 0, 0, 0, time.FixedZone("", -14*3600)), // timestamp with time zone
-			"AAAAAAAAAA", // char(10)
-			"",           // varchar2(255)
-			"АААААААААА", // nchar(10)
-			"",           // nvarchar2(255)
+			"AAAAAAAAAA",                                                 // char(10)
+			"",                                                           // varchar2(255)
+			"АААААААААА",                                                 // nchar(10)
+			"",                                                           // nvarchar2(255)
 			[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // raw(16)
 			[]byte{0x00}, // raw(255)
 			nil,          // clob (varcharmax_col)
@@ -1615,9 +1322,8 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 	db.MustEnableSupplementalLogging(t.Context(), "testdb.all_data_types")
 
 	var (
-		outBatches   []string
-		outBatchesMu sync.Mutex
-		stream       *service.Stream
+		batch  oracledbtest.Batch
+		stream *service.Stream
 	)
 	t.Log("Starting Component...")
 	{
@@ -1633,45 +1339,19 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.ALL_DATA_TYPES"]`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
-
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				outBatches = append(outBatches, string(msgBytes))
-			}
-			return nil
-		}))
-
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		stream = oracledbtest.StartPipelineWithLogLevel(t, cfg, "DEBUG", batch.Consumer(t))
 
 		// Wait for snapshot to complete (should have 1 batch with min values)
 		t.Log("Waiting for snapshot to complete...")
 		assert.Eventually(t, func() bool {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-
-			got := len(outBatches)
+			got := batch.Count()
 			t.Logf("Snapshot progress: %d/1 records", got)
 
 			return got == 1
 		}, time.Second*60, time.Millisecond*500)
 
-		require.Len(t, outBatches, 1, "Expected 1 snapshot record")
-		t.Logf("Snapshot record received: %s", outBatches[0])
+		require.Len(t, batch.Clone(), 1, "Expected 1 snapshot record")
+		t.Logf("Snapshot record received: %s", batch.Clone()[0])
 	}
 
 	largeClob := strings.Repeat("A", 5000)
@@ -1713,27 +1393,23 @@ oracledb_cdc:
 		minWant := 2
 		t.Log("Waiting for streaming record(s)...")
 		assert.Eventually(t, func() bool {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-
-			got := len(outBatches)
+			got := batch.Count()
 			t.Logf("Total records received: %d (expecting at least %d)", got, minWant)
 
 			return got >= minWant
 		}, time.Second*30, time.Millisecond*500)
 
-		outBatchesMu.Lock()
-		totalRecords := len(outBatches)
+		totalRecords := batch.Count()
 		require.GreaterOrEqualf(t, totalRecords, minWant, "Expected at least %d records but got %d", minWant, totalRecords)
 
 		// Debug: Log all records to understand what LogMiner is generating
-		for i, batch := range outBatches {
-			t.Logf("Record %d: %s", i, batch)
+		for i, record := range batch.Clone() {
+			t.Logf("Record %d: %s", i, record)
 		}
-		outBatchesMu.Unlock()
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
+	outBatches := batch.Clone()
 
 	t.Log("Verifying values from snapshot...")
 	{
@@ -1834,24 +1510,12 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_SNAP"]`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		stream := oracledbtest.StartPipelineWithLogLevel(t, cfg, "DEBUG", func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
 				msgChan <- msg
 			}
 			return nil
-		}))
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		})
 		go func() { <-t.Context().Done(); close(msgChan) }()
 
 		// Collect 2 snapshot messages
@@ -1913,24 +1577,12 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_INS"]`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
 				msgChan <- msg
 			}
 			return nil
-		}))
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		})
 		go func() { <-t.Context().Done(); close(msgChan) }()
 
 		time.Sleep(10 * time.Second)
@@ -1974,24 +1626,12 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_UPD"]`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
 				msgChan <- msg
 			}
 			return nil
-		}))
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		})
 		go func() { <-t.Context().Done(); close(msgChan) }()
 
 		time.Sleep(10 * time.Second)
@@ -2039,24 +1679,12 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_DEL"]`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
 				msgChan <- msg
 			}
 			return nil
-		}))
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		})
 		go func() { <-t.Context().Done(); close(msgChan) }()
 
 		time.Sleep(10 * time.Second)
@@ -2096,10 +1724,7 @@ func TestIntegrationOracleDBCDCSchemaConsistentAcrossPhases(t *testing.T) {
 
 	db.MustExec("INSERT INTO testdb.schema_phases VALUES (1, 'snapshot')")
 
-	var (
-		outMsgs   []*service.Message
-		outMsgsMu sync.Mutex
-	)
+	var batch oracledbtest.MsgBatch
 
 	cfg := `
 oracledb_cdc:
@@ -2112,51 +1737,24 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_PHASES"]`
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		outMsgsMu.Lock()
-		defer outMsgsMu.Unlock()
-		for _, msg := range mb {
-			outMsgs = append(outMsgs, msg)
-		}
-		return nil
-	}))
-
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+	stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer())
 
 	// Wait for snapshot
 	assert.Eventually(t, func() bool {
-		outMsgsMu.Lock()
-		defer outMsgsMu.Unlock()
-		return len(outMsgs) >= 1
+		return batch.Count() >= 1
 	}, 2*time.Minute, time.Second)
 
-	outMsgsMu.Lock()
-	snapshotMsg := outMsgs[0]
-	outMsgs = nil
-	outMsgsMu.Unlock()
+	snapshotMsg := batch.Clone()[0]
+	batch.Reset()
 
 	// Now insert via streaming
 	db.MustExec("INSERT INTO testdb.schema_phases VALUES (2, 'streaming')")
 
 	assert.Eventually(t, func() bool {
-		outMsgsMu.Lock()
-		defer outMsgsMu.Unlock()
-		return len(outMsgs) >= 1
+		return batch.Count() >= 1
 	}, 2*time.Minute, time.Second)
 
-	outMsgsMu.Lock()
-	streamingMsg := outMsgs[0]
-	outMsgsMu.Unlock()
+	streamingMsg := batch.Clone()[0]
 
 	snapshotFP := oracledbtest.ExtractFingerprint(t, snapshotMsg)
 	streamingFP := oracledbtest.ExtractFingerprint(t, streamingMsg)
@@ -2187,24 +1785,12 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_DRIFT"]`
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+	stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
 			msgChan <- msg
 		}
 		return nil
-	}))
-
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+	})
 	go func() { <-t.Context().Done(); close(msgChan) }()
 
 	time.Sleep(10 * time.Second)
@@ -2261,24 +1847,12 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_T1", "TESTDB.SCHEMA_T2"]`
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+	stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
 			msgChan <- msg
 		}
 		return nil
-	}))
-
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+	})
 	go func() { <-t.Context().Done(); close(msgChan) }()
 
 	time.Sleep(10 * time.Second)
@@ -2350,10 +1924,7 @@ func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 
 	db.MustEnableSupplementalLogging(t.Context(), "testdb.schema_types")
 
-	var (
-		outMsgs   []*service.Message
-		outMsgsMu sync.Mutex
-	)
+	var batch oracledbtest.MsgBatch
 
 	cfg := `
 oracledb_cdc:
@@ -2366,39 +1937,16 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_TYPES"]`
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		outMsgsMu.Lock()
-		defer outMsgsMu.Unlock()
-		for _, msg := range mb {
-			outMsgs = append(outMsgs, msg)
-		}
-		return nil
-	}))
-
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+	stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer())
 
 	// Wait for snapshot message
 	t.Log("Waiting for snapshot...")
 	assert.Eventually(t, func() bool {
-		outMsgsMu.Lock()
-		defer outMsgsMu.Unlock()
-		return len(outMsgs) >= 1
+		return batch.Count() >= 1
 	}, 2*time.Minute, time.Second)
 
-	outMsgsMu.Lock()
-	snapshotMsg := outMsgs[0]
-	outMsgs = nil
-	outMsgsMu.Unlock()
+	snapshotMsg := batch.Clone()[0]
+	batch.Reset()
 
 	// Insert same row via DML for streaming
 	t.Log("Inserting streaming row...")
@@ -2415,14 +1963,10 @@ oracledb_cdc:
 
 	t.Log("Waiting for streaming message...")
 	assert.Eventually(t, func() bool {
-		outMsgsMu.Lock()
-		defer outMsgsMu.Unlock()
-		return len(outMsgs) >= 1
+		return batch.Count() >= 1
 	}, 2*time.Minute, time.Second)
 
-	outMsgsMu.Lock()
-	streamingMsg := outMsgs[0]
-	outMsgsMu.Unlock()
+	streamingMsg := batch.Clone()[0]
 
 	// Define expected CommonType per column
 	expectedTypes := map[string]schema.CommonType{
@@ -2520,29 +2064,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.LOBTRIM"]`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			batch.Lock()
-			defer batch.Unlock()
-			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				batch.Msgs = append(batch.Msgs, string(msgBytes))
-			}
-			return nil
-		}))
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
 		time.Sleep(10 * time.Second)
 
@@ -2603,29 +2125,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.LOBTRIMBASIC"]`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			batch.Lock()
-			defer batch.Unlock()
-			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				batch.Msgs = append(batch.Msgs, string(msgBytes))
-			}
-			return nil
-		}))
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
 		time.Sleep(10 * time.Second)
 
@@ -2683,29 +2183,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.LOBTRIMBASICOOR"]`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			batch.Lock()
-			defer batch.Unlock()
-			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				batch.Msgs = append(batch.Msgs, string(msgBytes))
-			}
-			return nil
-		}))
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
 		time.Sleep(10 * time.Second)
 
@@ -2764,29 +2242,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.LOBFILTER_INCLUDED"]`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			batch.Lock()
-			defer batch.Unlock()
-			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				batch.Msgs = append(batch.Msgs, string(msgBytes))
-			}
-			return nil
-		}))
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
 		// Allow LogMiner to start up and reach the current SCN before producing data.
 		time.Sleep(10 * time.Second)

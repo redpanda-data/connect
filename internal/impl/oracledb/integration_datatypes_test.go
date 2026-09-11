@@ -11,7 +11,6 @@ package oracledb_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -31,7 +30,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	oracledbtest "github.com/redpanda-data/connect/v4/internal/impl/oracledb/oracledbtest"
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // capturedMessage holds a single emitted CDC message decoded for type analysis
@@ -146,7 +144,6 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 		mu       sync.Mutex
 		captured []capturedMessage
 		stream   *service.Stream
-		err      error
 	)
 
 	collect := func(_ context.Context, mb service.MessageBatch) error {
@@ -211,22 +208,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.ALL_TYPES"]`
 
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(collect))
-
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if rErr := stream.Run(t.Context()); rErr != nil && !errors.Is(rErr, context.Canceled) {
-				t.Error(rErr)
-			}
-		}()
-	}
+	stream = oracledbtest.StartPipelineWithLogLevel(t, fmt.Sprintf(cfg, connStr), "WARN", collect)
 
 	// Capture one message per phase: snapshot read, streaming INSERT, streaming
 	// UPDATE — each pinned to its operation so a duplicate delivery of an
@@ -255,22 +237,7 @@ oracledb_cdc:
 	captured = nil
 	mu.Unlock()
 
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(collect))
-
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if rErr := stream.Run(t.Context()); rErr != nil && !errors.Is(rErr, context.Canceled) {
-				t.Error(rErr)
-			}
-		}()
-	}
+	stream = oracledbtest.StartPipelineWithLogLevel(t, fmt.Sprintf(cfg, connStr), "WARN", collect)
 
 	// The post-restart phase must capture the fresh INSERT and must never see
 	// a snapshot read: if the checkpoint wasn't persisted or resumed, the
