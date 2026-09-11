@@ -135,8 +135,57 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 		cols[i] = unquoted
 	}
 
+	// Checked before the cache is populated, so an unusable key is reported
+	// every time it is asked for rather than once.
+	if err := s.checkKeyTypesBindable(ctx, table); err != nil {
+		return nil, err
+	}
+
 	s.incSnapshotPKCache[key] = cols
 	return cols, nil
+}
+
+// checkKeyTypesBindable rejects a primary key the chunk query cannot page by.
+//
+// A key value is read back through prepareScannersAndGetters and then bound
+// as the next chunk's bound, so it has to survive that round trip. bytea does
+// not: it has no case there, so it scans as a sql.NullString holding raw
+// bytes, and binding that string to a bytea parameter makes the server read
+// the bytes as text -- "invalid byte sequence for encoding UTF8" for any key
+// that is not valid UTF-8. The same raw bytes are also lost by the
+// checkpoint's JSON encoding, which replaces them with U+FFFD.
+//
+// Every other key type tested pages and checkpoints correctly, so this
+// rejects bytea specifically rather than guessing at a wider class.
+func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsnapshot.TableID) error {
+	q, err := primaryKeyColumnTypesQuery(TableFQN{
+		Schema: sanitize.QuotePostgresIdentifier(table.Schema),
+		Table:  sanitize.QuotePostgresIdentifier(table.Table),
+	}.String())
+	if err != nil {
+		return fmt.Errorf("sanitizing primary key type query: %w", err)
+	}
+
+	rows, err := s.incSnapshotConn.QueryContext(ctx, q)
+	if err != nil {
+		return fmt.Errorf("reading primary key types for table %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var column, typeName string
+		if err := rows.Scan(&column, &typeName); err != nil {
+			return fmt.Errorf("scanning primary key types for table %s: %w", table, err)
+		}
+		if typeName == "bytea" {
+			return fmt.Errorf("%w: primary key column %q of table %s has type bytea, which the incremental snapshot cannot page by",
+				incrementalsnapshot.ErrTableUnusable, column, table)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("reading primary key types for table %s: %w", table, err)
+	}
+	return nil
 }
 
 // resolveIncrementalPKColumns reads the primary key columns of the table. It
