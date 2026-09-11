@@ -303,7 +303,7 @@ func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbNa
 		}
 		defer masterDB.Close()
 
-		if openErr = masterDB.Ping(); openErr != nil {
+		if openErr = masterDB.PingContext(ctx); openErr != nil {
 			lastErr = openErr
 			return false
 		}
@@ -313,7 +313,7 @@ func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbNa
 			BEGIN
 				CREATE DATABASE %s;
 			END;`, dbName, dbName)
-		if _, openErr = masterDB.Exec(query); openErr != nil {
+		if _, openErr = masterDB.ExecContext(ctx, query); openErr != nil {
 			lastErr = openErr
 			return false
 		}
@@ -351,14 +351,14 @@ func openAndEnableCDC(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, db
 		db.SetMaxIdleConns(5)
 		db.SetConnMaxLifetime(5 * time.Minute)
 
-		if openErr = db.Ping(); openErr != nil {
+		if openErr = db.PingContext(ctx); openErr != nil {
 			lastErr = openErr
 			db.Close()
 			db = nil
 			return false
 		}
 
-		if _, openErr = db.Exec("EXEC sys.sp_cdc_enable_db;"); openErr != nil {
+		if _, openErr = db.ExecContext(ctx, "EXEC sys.sp_cdc_enable_db;"); openErr != nil {
 			lastErr = openErr
 			db.Close()
 			db = nil
