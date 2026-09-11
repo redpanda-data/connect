@@ -11,6 +11,7 @@ package pglogicalstream
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -69,14 +70,15 @@ func TestIncrementalSnapshotKeyResolution(t *testing.T) {
 		cols, err := s.incrementalPKColumns(t.Context(), orders)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"id"}, cols, "cached columns must be unquoted")
-		assert.Equal(t, 1, queries)
+		// Two: the key columns, then their types.
+		assert.Equal(t, 2, queries)
 
 		// The dedup path resolves these per streamed row, so a repeat
 		// lookup must not cost a round trip.
 		cols, err = s.incrementalPKColumns(t.Context(), orders)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"id"}, cols)
-		assert.Equal(t, 1, queries, "second lookup for the same table must be cached")
+		assert.Equal(t, 2, queries, "second lookup for the same table must be cached")
 	})
 
 	t.Run("an empty table has no max key and no error", func(t *testing.T) {
@@ -160,9 +162,6 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 		{"numeric", "numeric", "1.50"},
 		{"numeric_scaled", "numeric(10,2)", "1.5"},
 		{"numeric_nan", "numeric", "'NaN'::numeric"},
-		// bytea arrives as []byte from the stream and as a string from the
-		// snapshot, which is what canonicalizePKValue reconciles.
-		{"bytea", "bytea", "'\\x0102ff'::bytea"},
 		{"timestamptz", "timestamptz", "'2026-01-02 03:04:05.678+00'::timestamptz"},
 		{"timestamp", "timestamp", "'2026-01-02 03:04:05.678'::timestamp"},
 		{"date", "date", "'2026-01-02'::date"},
@@ -170,6 +169,12 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 		{"bool", "boolean", "true"},
 		{"inet", "inet", "'192.168.0.1/24'::inet"},
 	}
+	// Excluded: bytea. The two decode paths do reduce to the same window
+	// key, but the key is also bound as the next chunk's bound and written
+	// to the checkpoint, and raw bytes survive neither. It is rejected as a
+	// key type instead -- refer to
+	// TestIntegrationIncrementalSnapshotRejectsUnbindableKey.
+	//
 	// Excluded: numeric with a negative scale, e.g. numeric(5,-2). The
 	// streaming decoder rejects it outright because
 	// pgNumericModFromAtttypmod misreads the scale. That is a pre-existing
@@ -508,6 +513,11 @@ type fakeQueryDriver struct {
 	queries  *int
 	prepared *[]string
 	queryErr error
+	// keyTypes answers the primary key type query as {column, type name}
+	// rows. Left nil, each configured key column is reported as int8, which
+	// the chunk query can bind -- so a test that only cares about the key
+	// columns needs to say nothing about their types.
+	keyTypes [][]driver.Value
 }
 
 func (d *fakeQueryDriver) Open(string) (driver.Conn, error) {
@@ -520,12 +530,15 @@ func (c *fakeQueryConn) Prepare(query string) (driver.Stmt, error) {
 	if c.driver.prepared != nil {
 		*c.driver.prepared = append(*c.driver.prepared, query)
 	}
-	return &fakeQueryStmt{conn: c}, nil
+	return &fakeQueryStmt{conn: c, query: query}, nil
 }
 func (*fakeQueryConn) Close() error              { return nil }
 func (*fakeQueryConn) Begin() (driver.Tx, error) { return nil, fmt.Errorf("not implemented") }
 
-type fakeQueryStmt struct{ conn *fakeQueryConn }
+type fakeQueryStmt struct {
+	conn  *fakeQueryConn
+	query string
+}
 
 func (*fakeQueryStmt) Close() error  { return nil }
 func (*fakeQueryStmt) NumInput() int { return -1 }
@@ -540,7 +553,27 @@ func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
 	if err := s.conn.driver.queryErr; err != nil {
 		return nil, err
 	}
+	// The key type query has its own shape, so it needs its own result.
+	if strings.Contains(s.query, "pg_type") {
+		return &fakeQueryRows{
+			columns: []string{"attname", "typname"},
+			rows:    s.conn.driver.keyTypeRows(),
+		}, nil
+	}
 	return &fakeQueryRows{columns: s.conn.driver.columns, rows: s.conn.driver.rows}, nil
+}
+
+func (d *fakeQueryDriver) keyTypeRows() [][]driver.Value {
+	if d.keyTypes != nil {
+		return d.keyTypes
+	}
+	rows := make([][]driver.Value, 0, len(d.rows))
+	for _, row := range d.rows {
+		if len(row) > 0 {
+			rows = append(rows, []driver.Value{row[0], "int8"})
+		}
+	}
+	return rows
 }
 
 type fakeQueryRows struct {
@@ -558,4 +591,104 @@ func (r *fakeQueryRows) Next(dest []driver.Value) error {
 	copy(dest, r.rows[r.idx])
 	r.idx++
 	return nil
+}
+
+// TestIntegrationIncrementalSnapshotRejectsUnbindableKey covers a key type the
+// chunk query cannot bind. Before the check, such a table halted replication
+// for every table: FetchChunk failed, the error reached processChange, the
+// stream restarted, reloaded the same checkpoint and failed identically.
+func TestIntegrationIncrementalSnapshotRejectsUnbindableKey(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, replURL := createDockerInstance(t)
+	defer cleanup()
+
+	queryDSN := strings.ReplaceAll(replURL, " replication=database", "")
+	pcfg, err := pgxpool.ParseConfig(queryDSN)
+	require.NoError(t, err)
+	db := stdlib.OpenDB(*pcfg.ConnConfig)
+	t.Cleanup(func() { _ = db.Close() })
+	require.NoError(t, db.Ping())
+
+	_, err = db.Exec(`CREATE DOMAIN blob_key AS bytea`)
+	require.NoError(t, err)
+
+	for _, ddl := range []string{
+		`CREATE TABLE bytea_key (id bytea PRIMARY KEY, payload text)`,
+		`CREATE TABLE composite_bytea_key (tenant bigint, id bytea, payload text, PRIMARY KEY (tenant, id))`,
+		`CREATE TABLE domain_bytea_key (id blob_key PRIMARY KEY, payload text)`,
+		`CREATE TABLE bigint_key (id bigint PRIMARY KEY, payload text)`,
+		`CREATE TABLE text_key (id text PRIMARY KEY, payload text)`,
+	} {
+		_, err := db.Exec(ddl)
+		require.NoError(t, err, ddl)
+	}
+
+	stream := &Stream{
+		incSnapshotConn:    db,
+		incSnapshotPKCache: map[string][]string{},
+	}
+	tableID := func(name string) incrementalsnapshot.TableID {
+		return incrementalsnapshot.TableID{Schema: "public", Table: name}
+	}
+
+	for _, name := range []string{"bytea_key", "composite_bytea_key", "domain_bytea_key"} {
+		t.Run("rejects "+name, func(t *testing.T) {
+			_, err := stream.incrementalPKColumns(t.Context(), tableID(name))
+			require.Error(t, err)
+			assert.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable,
+				"must be unusable, so a signal is rejected and a resumed queue entry is dropped rather than looping")
+
+			// And the signal path turns that into a rejection, which is
+			// logged and skipped rather than restarting the stream.
+			err = stream.checkBackfillable(t.Context(), tableID(name))
+			assert.ErrorIs(t, err, errSignalRejected)
+		})
+	}
+
+	for _, name := range []string{"bigint_key", "text_key"} {
+		t.Run("accepts "+name, func(t *testing.T) {
+			cols, err := stream.incrementalPKColumns(t.Context(), tableID(name))
+			require.NoError(t, err)
+			assert.Equal(t, []string{"id"}, cols)
+		})
+	}
+
+	t.Run("an accepted key pages across several chunks", func(t *testing.T) {
+		// The property the rejected types break: the key of the last row of
+		// one chunk, put through the checkpoint's JSON encoding, binds as the
+		// next chunk's lower bound and reads the rows that follow it.
+		for i := 1; i <= 7; i++ {
+			_, err := db.Exec(`INSERT INTO text_key VALUES ($1, $2)`, fmt.Sprintf("k%02d", i), "v")
+			require.NoError(t, err)
+		}
+
+		table := tableID("text_key")
+		maxQ, err := incsnapshot.BuildMaxKeyQuery(table, []string{"id"})
+		require.NoError(t, err)
+		maxPK, err := stream.resolveIncrementalMaxKey(t.Context(), table, []string{"id"}, maxQ)
+		require.NoError(t, err)
+
+		var seen []string
+		var lower incrementalsnapshot.PrimaryKey
+		for chunk := 0; chunk < 10; chunk++ {
+			q, args, err := incsnapshot.BuildChunkQuery(table, []string{"id"}, lower, maxPK, 3)
+			require.NoError(t, err)
+			rows, err := stream.fetchIncrementalChunk(t.Context(), table, []string{"id"}, q, args)
+			require.NoError(t, err, "chunk %d must bind the previous chunk's key", chunk)
+			if len(rows) == 0 {
+				break
+			}
+			for _, row := range rows {
+				seen = append(seen, fmt.Sprintf("%v", row.PK[0]))
+			}
+			// Through the checkpoint, as a resume would.
+			encoded, err := json.Marshal(rows[len(rows)-1].PK)
+			require.NoError(t, err)
+			require.NoError(t, json.Unmarshal(encoded, &lower))
+		}
+
+		assert.Equal(t, []string{"k01", "k02", "k03", "k04", "k05", "k06", "k07"}, seen,
+			"every row exactly once, so each bound round-tripped")
+	})
 }

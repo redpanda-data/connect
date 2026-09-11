@@ -280,8 +280,10 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('snapshot', '{"tab
 Each table must appear in ` + "`" + fieldTables + "`" + ` (or that list must be empty, replicating everything):
 an unreplicated table has no live changes to deduplicate its backfill against, so a write landing
 after its chunk is read would be lost. Each must also have a primary key, which the backfill pages
-by — a table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. A signal
-naming a table that fails either check is rejected and logged dropped from the snapshot queue. If a check cannot be run at all - a
+by — a table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. That key
+may not be ` + "`bytea`" + `: its value is read back and bound as the next chunk's bound, and raw bytes
+survive neither that nor the checkpoint. A signal naming a table that fails any of these checks is
+rejected and logged, and it is left to replication alone. If a check cannot be run at all - a
 connection reset, say - the stream restarts and the signal is read again, so the request is not lost.
 
 Each table joins the back of the backfill queue. A table this run already covers is skipped and
