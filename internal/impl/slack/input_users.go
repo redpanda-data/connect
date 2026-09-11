@@ -31,9 +31,7 @@ func usersInputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Description(`Reads all users in a slack organization (optionally filtered by a team ID).`).
 		Fields(
-			service.NewStringField(iFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
-        root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
-      `),
+			service.NewStringField(iFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(tokenLintRule("xoxb-")),
 			service.NewStringField(iFieldTeamID).Description("The team ID to filter by").Default(""),
 			service.NewAutoRetryNacksToggleField(),
 		)
