@@ -872,26 +872,24 @@ func newCheckpointTracker(limit int64, seq *atomic.Uint64) *checkpointTracker {
 }
 
 func (t *checkpointTracker) Track(ctx context.Context, offset checkpointOffset, batchSize int64) (func() *checkpointOffset, error) {
-	// Orders the offsets for commitCheckpoint. Monotonic for the life of the
-	// input, across any number of trackers.
+	// Orders the offsets for commitCheckpoint, monotonic for the life of the
+	// input across any number of trackers.
 	offset.seq = t.seq.Add(1)
 	t.last = t.last.merge(offset)
 	return t.cp.Track(ctx, t.last, batchSize)
 }
 
 // commitCheckpoint applies a resolved checkpointOffset: the snapshot state
-// first, then the LSN.
+// first, then the LSN, and the LSN only if that write succeeded.
 //
-// The order matters in both directions. Acknowledging the LSN first would
-// leave an acknowledged position with no state if the write then failed, so
-// the state goes first. And the LSN is only acknowledged once that write
-// succeeded: acknowledging it anyway advances the slot past rows the state
-// was meant to account for -- a snapshot signal among them, which never
-// streams again. Holding the acknowledgement back only retains WAL until
-// the next attempt, which is the recoverable direction.
+// Either order alone is wrong. Acknowledging first leaves an acknowledged
+// position with no state; acknowledging anyway advances the slot past rows
+// the state was meant to account for, a snapshot signal among them, which
+// never streams again. Holding the acknowledgement back only retains WAL
+// until the next attempt, which is the recoverable direction.
 //
-// A failed AckLSN does not undo the state write. The state is a checkpoint
-// of what was delivered, which stays true, and the position is retried.
+// A failed AckLSN leaves the state written: it records what was delivered,
+// which stays true, and the position is retried.
 func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, offset checkpointOffset) error {
 	if offset.incSnapshotState != nil {
 		if err := p.persistIncSnapshotState(ctx, offset); err != nil {
@@ -909,9 +907,9 @@ func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream *pglogica
 // persistIncSnapshotState writes offset's snapshot state to the cache.
 //
 // Acknowledgements run concurrently, so it holds lastPersistedMu across the
-// test and the write to keep the pair atomic. The lock alone is not enough:
-// the calls can take it in either order, so it also rejects any offset that
-// is not newer than the one already written.
+// test and the write to keep them atomic. The lock alone is not enough --
+// the calls can take it in either order -- so it also rejects an offset no
+// newer than the one already written.
 func (p *pgStreamInput) persistIncSnapshotState(ctx context.Context, offset checkpointOffset) error {
 	p.lastPersistedMu.Lock()
 	defer p.lastPersistedMu.Unlock()
@@ -921,7 +919,7 @@ func (p *pgStreamInput) persistIncSnapshotState(ctx context.Context, offset chec
 		return nil
 	}
 
-	// Unchanged state: record the new Seq but skip the write.
+	// Unchanged state: record the seq, skip the write.
 	if bytes.Equal(offset.incSnapshotState, p.lastPersistedIncSnapshotState) {
 		p.lastPersistedIncSnapshotSeq = offset.seq
 		return nil
@@ -935,15 +933,14 @@ func (p *pgStreamInput) persistIncSnapshotState(ctx context.Context, offset chec
 	return nil
 }
 
-// commitIncrementalSnapshotCheckpoint tracks a checkpoint that has no rows
-// and then resolves it. It tracks the checkpoint and does not write it
-// directly. The checkpoint then still comes after each earlier tracked
-// batch and cannot pass rows that the pipeline has not acknowledged.
+// commitIncrementalSnapshotCheckpoint tracks a row-less checkpoint and
+// resolves it. Tracking rather than writing it directly keeps it behind
+// every earlier batch, so it cannot pass rows the pipeline has not
+// acknowledged.
 //
-// Call this function only when the batcher holds no rows that the tracker
-// does not have. The tracker orders only the batches that it has. It cannot
-// see rows in the batcher, and this function would then resolve past those
-// rows.
+// Only call it when the batcher holds no rows the tracker does not have.
+// The tracker cannot see rows still in the batcher, so it would resolve
+// past them.
 func (p *pgStreamInput) commitIncrementalSnapshotCheckpoint(ctx context.Context, pgStream *pglogicalstream.Stream, checkpointer *checkpointTracker, state []byte) error {
 	resolveFn, err := checkpointer.Track(ctx, checkpointOffset{incSnapshotState: state}, 0)
 	if err != nil {
