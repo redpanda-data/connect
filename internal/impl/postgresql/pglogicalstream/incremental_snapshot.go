@@ -57,12 +57,6 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 
 	s.incSnapshotConn = db
 	s.incSnapshotPKCache = make(map[string][]string)
-	s.incSnapshotTables = make(map[incrementalsnapshot.TableID]struct{})
-	if resume := incSnapshotCfg.ResumeState; resume != nil {
-		for _, table := range resume.Tables {
-			s.incSnapshotTables[table] = struct{}{}
-		}
-	}
 
 	// Nothing is queued at first: tables are requested by signal. A resumed
 	// checkpoint brings back what the last run covered.
@@ -73,18 +67,20 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 			// Accepted by checkBackfillable, then dropped or its key
 			// removed before it was planned.
 			s.logger.Warnf("Incremental snapshot: dropped table %s from the queue, it can no longer be backfilled: %s", table, err)
-			delete(s.incSnapshotTables, table)
 		},
 	}, incSnapshotCfg.ResumeState)
 	if err != nil {
 		_ = db.Close()
 		s.incSnapshotConn = nil
 		s.incSnapshotPKCache = nil
-		s.incSnapshotTables = nil
 		return fmt.Errorf("constructing incremental snapshot coordinator: %w", err)
 	}
 	s.incSnapshotCoordinator = coordinator
-	s.logger.Debugf("Incremental snapshot: enabled with chunk_size=%d, resuming %d table(s)", incSnapshotCfg.ChunkSize, len(s.incSnapshotTables))
+	var resuming int
+	if resume := incSnapshotCfg.ResumeState; resume != nil {
+		resuming = len(resume.Tables)
+	}
+	s.logger.Debugf("Incremental snapshot: enabled with chunk_size=%d, resuming %d table(s)", incSnapshotCfg.ChunkSize, resuming)
 	return nil
 }
 
@@ -527,8 +523,12 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 		return nil
 	}
 
+	// Only the table being read can have a buffered row to supersede. Every
+	// other one -- finished, or queued behind this one -- would cost a key
+	// lookup whose result OnStreamedRow discards, and a failed lookup would
+	// stop replication for a table the snapshot is not even touching.
 	table := incrementalsnapshot.TableID{Schema: message.Schema, Table: message.Table}
-	if _, tracked := s.incSnapshotTables[table]; !tracked {
+	if !s.incSnapshotCoordinator.Snapshotting(table) {
 		return nil
 	}
 
@@ -669,11 +669,6 @@ func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMess
 		// The heartbeat must carry transaction ids again: on a quiet table
 		// it is the only thing that advances the backfill.
 		s.incSnapshotBackfilling.Store(true)
-	}
-	for _, table := range added {
-		// deduplicateStreamedRow gates on this set, so a table joins it
-		// with the queue.
-		s.incSnapshotTables[table] = struct{}{}
 	}
 	if len(added) == 0 {
 		s.logger.Warnf("Incremental snapshot: signal asked for %v, all of which this run already covers, so nothing was queued", tables)

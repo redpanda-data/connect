@@ -1491,3 +1491,42 @@ func TestCoordinatorGoesIdleAfterResume(t *testing.T) {
 	assert.Equal(t, []TableID{other}, coord.AddTables([]TableID{other}))
 	assert.False(t, coord.Idle())
 }
+
+// TestCoordinatorSnapshotting: the gate the caller uses before spending a
+// query to resolve a streamed row's key.
+//
+// It must be true only for the table being read. A finished table stays in
+// knownTables and so in the checkpoint, and a caller gating on that would
+// resolve keys for tables the snapshot is not touching -- where a failed
+// lookup would stop replication for no benefit, since OnStreamedRow
+// discards the result anyway.
+func TestCoordinatorSnapshotting(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+	tableB := TableID{Schema: "public", Table: "b"}
+
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1)}, maxPK: PrimaryKey{1}},
+		tableB.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableB, 1)}, maxPK: PrimaryKey{1}},
+	}, 1)
+	mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
+
+	coord, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: mock}, nil)
+	require.NoError(t, err)
+	coord.AddTables([]TableID{tableA, tableB})
+	require.NoError(t, coord.Start(t.Context())) // reads A's first chunk
+
+	assert.True(t, coord.Snapshotting(tableA), "A is being read")
+	assert.False(t, coord.Snapshotting(tableB), "B is queued, so it has nothing buffered to supersede")
+
+	// A resume that knows both tables but is reading neither.
+	idle, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: mock}, &State{
+		Version: CurrentStateVersion,
+		Tables:  []TableID{tableA, tableB},
+	})
+	require.NoError(t, err)
+	require.NoError(t, idle.Start(t.Context()))
+	require.True(t, idle.Idle())
+
+	assert.False(t, idle.Snapshotting(tableA), "a finished table must not be gated in")
+	assert.False(t, idle.Snapshotting(tableB))
+}
