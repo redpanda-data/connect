@@ -10,13 +10,6 @@ package incrementalsnapshot
 
 import "github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 
-// The coordinator itself is database-agnostic and lives in
-// internal/replication/incrementalsnapshot. These aliases pin it to Postgres'
-// position type and watermark, keeping the type arguments out of call sites.
-//
-// The position is a uint32 because pgoutput reports a raw 32-bit xid on
-// BEGIN; naming that in the type stops an epoch-extended id being passed by
-// mistake. Watermark handles the widening.
 type (
 	// Coordinator is the incremental snapshot coordinator for Postgres.
 	Coordinator = incrementalsnapshot.Coordinator[uint32, Watermark]
@@ -29,8 +22,7 @@ type (
 )
 
 // NewCoordinator builds a Postgres Coordinator. A non-nil resume makes Start
-// continue from that state; otherwise it starts with an empty queue, which
-// AddTables fills.
+// continue from that state; otherwise it starts with an empty queue.
 func NewCoordinator(cfg CoordinatorConfig, resume *incrementalsnapshot.State) (*Coordinator, error) {
 	return incrementalsnapshot.NewCoordinator(cfg, resume)
 }
