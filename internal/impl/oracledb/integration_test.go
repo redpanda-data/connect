@@ -1301,10 +1301,11 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 			time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC),                  // smalldatetime min (timestamp)
 			time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC),                     // time (stored as timestamp)
 			time.Date(1, 1, 1, 0, 0, 0, 0, time.FixedZone("", -14*3600)), // timestamp with time zone
-			"AAAAAAAAAA",                                                 // char(10)
-			"",                                                           // varchar2(255)
-			"АААААААААА",                                                 // nchar(10)
-			"",                                                           // nvarchar2(255)
+
+			"AAAAAAAAAA", // char(10)
+			"",           // varchar2(255)
+			"АААААААААА", // nchar(10)
+			"",           // nvarchar2(255)
 			[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // raw(16)
 			[]byte{0x00}, // raw(255)
 			nil,          // clob (varcharmax_col)
