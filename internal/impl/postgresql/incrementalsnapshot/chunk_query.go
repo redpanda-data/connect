@@ -42,8 +42,6 @@ func quotedColumns(colsUnquoted []string) []string {
 	return quoted
 }
 
-// quotedRowExpr renders the key columns as a ROW constructor, e.g.
-// ROW("id", "tenant_id"), for the left side of a row-wise comparison.
 func quotedRowExpr(pkColsUnquoted []string) string {
 	return "ROW(" + strings.Join(quotedColumns(pkColsUnquoted), ", ") + ")"
 }
@@ -52,11 +50,7 @@ func quotedTableName(table incrementalsnapshot.TableID) string {
 	return sanitize.QuotePostgresIdentifier(table.Schema) + "." + sanitize.QuotePostgresIdentifier(table.Table)
 }
 
-// BuildChunkQuery builds the paginated chunk SELECT behind
-// incrementalsnapshot.Deps.FetchChunk. A nil lower omits the lower bound, for
-// a table's first chunk; upper is the table's fixed max-key bound and must
-// not be nil. Selects "*" since the column list is unknown here -- callers
-// decode whatever comes back.
+// BuildChunkQuery builds the paginated chunk SELECT behind incrementalsnapshot.Deps.FetchChunk
 func BuildChunkQuery(table incrementalsnapshot.TableID, pkColsUnquoted []string, lower, upper incrementalsnapshot.PrimaryKey, limit int) (query string, args []any, err error) {
 	if len(pkColsUnquoted) == 0 {
 		return "", nil, errors.New("BuildChunkQuery: no primary key columns provided")
@@ -91,9 +85,7 @@ func BuildChunkQuery(table incrementalsnapshot.TableID, pkColsUnquoted []string,
 	return query, args, nil
 }
 
-// BuildMaxKeyQuery builds the query behind
-// incrementalsnapshot.Deps.ResolveMaxKey, reading the table's current largest
-// key.
+// BuildMaxKeyQuery builds the query behind incrementalsnapshot.Deps.ResolveMaxKey, reading the table's current largest key.
 func BuildMaxKeyQuery(table incrementalsnapshot.TableID, pkColsUnquoted []string) (query string, err error) {
 	if len(pkColsUnquoted) == 0 {
 		return "", errors.New("BuildMaxKeyQuery: no primary key columns provided")

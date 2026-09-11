@@ -17,13 +17,10 @@ import (
 var (
 	// DefaultIncSnapshotEnabled is the default for enabling the snapshot.
 	DefaultIncSnapshotEnabled = false
-
 	// DefaultIncSnapshotChunkSize is the default row count per chunk.
 	DefaultIncSnapshotChunkSize = 1024
-
 	// DefaultIncSnapshotCheckpointKey is the default checkpoint cache key.
 	DefaultIncSnapshotCheckpointKey = "postgres_cdc_incremental_snapshot"
-
 	// DefaultIncSnapshotHeartbeatInterval is frequent enough that the
 	// backfill is bound by chunk reads rather than by the heartbeat.
 	DefaultIncSnapshotHeartbeatInterval = time.Second
@@ -31,11 +28,8 @@ var (
 
 // Cfg holds the incremental snapshot configuration.
 type Cfg struct {
-	Enabled   bool
-	ChunkSize int
-	// HeartbeatInterval is how often the snapshot needs a commit to advance
-	// on, separate from Config.HeartbeatInterval, which only keeps the
-	// replication slot current.
+	Enabled           bool
+	ChunkSize         int
 	HeartbeatInterval time.Duration
 	ResumeState       *incrementalsnapshot.State
 }

@@ -17,77 +17,73 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
-func TestBuildChunkQueryFirstChunkSingleColumnPK(t *testing.T) {
-	table := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
+func TestBuildChunkQuery(t *testing.T) {
+	orders := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
+	lineItems := incrementalsnapshot.TableID{Schema: "public", Table: "line_items"}
 
-	query, args, err := BuildChunkQuery(table, []string{"id"}, nil, incrementalsnapshot.PrimaryKey{100}, 500)
-	require.NoError(t, err)
+	t.Run("first chunk of a single-column key", func(t *testing.T) {
+		query, args, err := BuildChunkQuery(orders, []string{"id"}, nil, incrementalsnapshot.PrimaryKey{100}, 500)
+		require.NoError(t, err)
 
-	assert.Equal(
-		t,
-		`SELECT * FROM "public"."orders" WHERE (ROW("id") <= ROW($1)) ORDER BY "id" ASC LIMIT 500`,
-		query,
-	)
-	assert.Equal(t, []any{100}, args)
-}
+		assert.Equal(
+			t,
+			`SELECT * FROM "public"."orders" WHERE (ROW("id") <= ROW($1)) ORDER BY "id" ASC LIMIT 500`,
+			query,
+		)
+		assert.Equal(t, []any{100}, args)
+	})
 
-func TestBuildChunkQuerySubsequentChunkCompositePK(t *testing.T) {
-	table := incrementalsnapshot.TableID{Schema: "public", Table: "line_items"}
+	t.Run("later chunk of a composite key", func(t *testing.T) {
+		query, args, err := BuildChunkQuery(
+			lineItems,
+			[]string{"order_id", "line_no"},
+			incrementalsnapshot.PrimaryKey{5, 2},
+			incrementalsnapshot.PrimaryKey{50, 9},
+			250,
+		)
+		require.NoError(t, err)
 
-	query, args, err := BuildChunkQuery(
-		table,
-		[]string{"order_id", "line_no"},
-		incrementalsnapshot.PrimaryKey{5, 2},
-		incrementalsnapshot.PrimaryKey{50, 9},
-		250,
-	)
-	require.NoError(t, err)
+		assert.Equal(
+			t,
+			`SELECT * FROM "public"."line_items" WHERE (ROW("order_id", "line_no") > ROW($1, $2) AND ROW("order_id", "line_no") <= ROW($3, $4)) ORDER BY "order_id" ASC, "line_no" ASC LIMIT 250`,
+			query,
+		)
+		assert.Equal(t, []any{5, 2, 50, 9}, args)
+	})
 
-	assert.Equal(
-		t,
-		`SELECT * FROM "public"."line_items" WHERE (ROW("order_id", "line_no") > ROW($1, $2) AND ROW("order_id", "line_no") <= ROW($3, $4)) ORDER BY "order_id" ASC, "line_no" ASC LIMIT 250`,
-		query,
-	)
-	assert.Equal(t, []any{5, 2, 50, 9}, args)
-}
+	t.Run("nil upper bound is an error", func(t *testing.T) {
+		_, _, err := BuildChunkQuery(orders, []string{"id"}, nil, nil, 500)
+		require.Error(t, err)
+	})
 
-func TestBuildChunkQueryNilUpperIsError(t *testing.T) {
-	table := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
-
-	_, _, err := BuildChunkQuery(table, []string{"id"}, nil, nil, 500)
-	require.Error(t, err)
-}
-
-func TestBuildChunkQueryNoPKColumnsIsError(t *testing.T) {
-	table := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
-
-	_, _, err := BuildChunkQuery(table, nil, nil, incrementalsnapshot.PrimaryKey{1}, 500)
-	require.Error(t, err)
+	t.Run("no key columns is an error", func(t *testing.T) {
+		_, _, err := BuildChunkQuery(orders, nil, nil, incrementalsnapshot.PrimaryKey{1}, 500)
+		require.Error(t, err)
+	})
 }
 
 func TestBuildMaxKeyQuery(t *testing.T) {
-	table := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
+	orders := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
+	lineItems := incrementalsnapshot.TableID{Schema: "public", Table: "line_items"}
 
-	query, err := BuildMaxKeyQuery(table, []string{"id"})
-	require.NoError(t, err)
-	assert.Equal(t, `SELECT "id" FROM "public"."orders" ORDER BY "id" DESC LIMIT 1`, query)
-}
+	t.Run("single-column key", func(t *testing.T) {
+		query, err := BuildMaxKeyQuery(orders, []string{"id"})
+		require.NoError(t, err)
+		assert.Equal(t, `SELECT "id" FROM "public"."orders" ORDER BY "id" DESC LIMIT 1`, query)
+	})
 
-func TestBuildMaxKeyQueryCompositePK(t *testing.T) {
-	table := incrementalsnapshot.TableID{Schema: "public", Table: "line_items"}
+	t.Run("composite key", func(t *testing.T) {
+		query, err := BuildMaxKeyQuery(lineItems, []string{"order_id", "line_no"})
+		require.NoError(t, err)
+		assert.Equal(
+			t,
+			`SELECT "order_id", "line_no" FROM "public"."line_items" ORDER BY "order_id" DESC, "line_no" DESC LIMIT 1`,
+			query,
+		)
+	})
 
-	query, err := BuildMaxKeyQuery(table, []string{"order_id", "line_no"})
-	require.NoError(t, err)
-	assert.Equal(
-		t,
-		`SELECT "order_id", "line_no" FROM "public"."line_items" ORDER BY "order_id" DESC, "line_no" DESC LIMIT 1`,
-		query,
-	)
-}
-
-func TestBuildMaxKeyQueryNoPKColumnsIsError(t *testing.T) {
-	table := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
-
-	_, err := BuildMaxKeyQuery(table, nil)
-	require.Error(t, err)
+	t.Run("no key columns is an error", func(t *testing.T) {
+		_, err := BuildMaxKeyQuery(orders, nil)
+		require.Error(t, err)
+	})
 }
