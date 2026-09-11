@@ -10,13 +10,11 @@ package pglogicalstream
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/shutdown"
@@ -28,7 +26,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
-	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
@@ -68,18 +65,14 @@ type Stream struct {
 	unchangedToastValue     any
 	pgVersion               int
 
-	// incremental snapshot
-	incSnapshotCoordinator *incsnapshot.Coordinator
-	incSnapshotConn        *sql.DB
-	incSnapshotPKCache     map[string][]string
-	incSnapshotLastTable   *incrementalsnapshot.TableID // used for logging
+	incSnapshot incrementalSnapshot
 
 	// signalTable is in the unquoted form replication messages report, or
-	// nil when none is configured.
-	signalTable            *incrementalsnapshot.TableID
-	snapshotSchema         string
-	incSnapshotReplicated  map[incrementalsnapshot.TableID]struct{}
-	incSnapshotBackfilling atomic.Bool
+	// nil when none is configured. Not part of incrementalSnapshot: a signal
+	// table is configured on its own, and is read whether or not the
+	// snapshot runs.
+	signalTable    *incrementalsnapshot.TableID
+	snapshotSchema string
 	// BlockingSnapshot is true only when this session runs the one-shot
 	// stream_snapshot backfill.
 	BlockingSnapshot bool
@@ -166,7 +159,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if config.HeartbeatInterval > 0 {
 		interval := effectiveHeartbeatInterval(config.HeartbeatInterval, config.IncrementalSnapshotCfg())
 		prefix := "redpanda_connect_" + stream.slotName
-		stream.heartbeat, err = newHeartbeat(config, interval, prefix, `{"type":"heartbeat"}`, stream.incSnapshotBackfilling.Load)
+		stream.heartbeat, err = newHeartbeat(config, interval, prefix, `{"type":"heartbeat"}`, stream.incSnapshot.backfilling.Load)
 		if err != nil {
 			return nil, err
 		}
@@ -234,10 +227,10 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if err := stream.setupIncrementalSnapshot(ctx, config); err != nil {
 		return nil, fmt.Errorf("setting up incremental snapshot: %w", err)
 	}
-	if stream.incSnapshotConn != nil {
+	if stream.incSnapshot.conn != nil {
 		cleanups = append(cleanups, func() {
-			if stream != nil && stream.incSnapshotConn != nil {
-				if err := stream.incSnapshotConn.Close(); err != nil {
+			if stream != nil && stream.incSnapshot.conn != nil {
+				if err := stream.incSnapshot.conn.Close(); err != nil {
 					config.Logger.Warnf("unable to properly cleanup incremental snapshot connection on stream creation failure: %s", err)
 				}
 			}
@@ -275,13 +268,13 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			}
 		}
 		stream.logger.Debugf("starting stream from LSN %s", confirmedLSNFromDB.String())
-		if stream.incSnapshotCoordinator != nil {
-			if err := stream.incSnapshotCoordinator.Start(ctx); err != nil {
+		if stream.incSnapshot.coordinator != nil {
+			if err := stream.incSnapshot.coordinator.Start(ctx); err != nil {
 				return nil, fmt.Errorf("starting incremental snapshot: %w", err)
 			}
 			// Start plans the first chunk, so it decides whether the
 			// heartbeat owes transaction ids before the first tick.
-			stream.incSnapshotBackfilling.Store(!stream.incSnapshotCoordinator.Idle())
+			stream.incSnapshot.backfilling.Store(!stream.incSnapshot.coordinator.Idle())
 			stream.logger.Debugf("Incremental snapshot: coordinator started")
 		}
 		if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
@@ -400,14 +393,14 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		stream.ackedLSNMu.Lock()
 		stream.ackedLSN = startLSN
 		stream.ackedLSNMu.Unlock()
-		if stream.incSnapshotCoordinator != nil {
-			if err := stream.incSnapshotCoordinator.Start(ctx); err != nil {
+		if stream.incSnapshot.coordinator != nil {
+			if err := stream.incSnapshot.coordinator.Start(ctx); err != nil {
 				stream.errors <- fmt.Errorf("starting incremental snapshot: %w", err)
 				return
 			}
 			// Start plans the first chunk, so it decides whether the
 			// heartbeat owes transaction ids before the first tick.
-			stream.incSnapshotBackfilling.Store(!stream.incSnapshotCoordinator.Idle())
+			stream.incSnapshot.backfilling.Store(!stream.incSnapshot.coordinator.Idle())
 			stream.logger.Debugf("Incremental snapshot: coordinator started")
 		}
 		if err := stream.startLr(ctx, startLSN); err != nil {
@@ -952,7 +945,7 @@ func primaryKeyColumnsQuery(table string) (string, error) {
 // on, and issuing a plain Exec on it concurrently corrupts/deadlocks the
 // stream. Callers that may run once streaming has started (e.g. incremental
 // snapshot's PK resolution) must instead use resolveIncrementalPKColumns,
-// which queries over s.incSnapshotConn.
+// which queries over s.incSnapshot.conn.
 func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]string, error) {
 	q, err := primaryKeyColumnsQuery(table.String())
 	if err != nil {
@@ -987,7 +980,7 @@ func (s *Stream) Stop(ctx context.Context) error {
 	defer done()
 	wg.Go(func() error {
 		// Wait for streamMessages to finish using pgConn (and, if incremental
-		// snapshotting is enabled, incSnapshotConn) before closing them,
+		// snapshotting is enabled, incSnapshot.conn) before closing them,
 		// otherwise we race on pgconn internal state (lock field, write buffer)
 		// or on a connection that's mid-query.
 		select {
@@ -998,8 +991,8 @@ func (s *Stream) Stop(ctx context.Context) error {
 		if err := s.pgConn.Close(stopNowCtx); err != nil {
 			errs = append(errs, err)
 		}
-		if s.incSnapshotConn != nil {
-			if err := s.incSnapshotConn.Close(); err != nil {
+		if s.incSnapshot.conn != nil {
+			if err := s.incSnapshot.conn.Close(); err != nil {
 				errs = append(errs, err)
 			}
 		}
