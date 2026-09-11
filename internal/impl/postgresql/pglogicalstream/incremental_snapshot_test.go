@@ -40,7 +40,7 @@ func TestIncrementalSnapshotKeyResolution(t *testing.T) {
 
 	t.Run("key columns come back quoted, in key order", func(t *testing.T) {
 		db := newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"tenant_id"}, {"id"}}, nil)
-		s := &Stream{incSnapshotConn: db}
+		s := &Stream{incSnapshot: incrementalSnapshot{conn: db}}
 
 		cols, err := s.resolveIncrementalPKColumns(t.Context(), ordersFQN)
 		require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestIncrementalSnapshotKeyResolution(t *testing.T) {
 
 	t.Run("no primary key is unusable, not a failure", func(t *testing.T) {
 		db := newFakeQueryDB(t, []string{"attname"}, nil, nil)
-		s := &Stream{incSnapshotConn: db}
+		s := &Stream{incSnapshot: incrementalSnapshot{conn: db}}
 
 		_, err := s.resolveIncrementalPKColumns(t.Context(), ordersFQN)
 		require.Error(t, err)
@@ -63,8 +63,10 @@ func TestIncrementalSnapshotKeyResolution(t *testing.T) {
 		queries := 0
 		db := newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"id"}}, &queries)
 		s := &Stream{
-			incSnapshotConn:    db,
-			incSnapshotPKCache: make(map[string][]string),
+			incSnapshot: incrementalSnapshot{
+				conn:    db,
+				pkCache: make(map[string][]string),
+			},
 		}
 
 		cols, err := s.incrementalPKColumns(t.Context(), orders)
@@ -85,7 +87,7 @@ func TestIncrementalSnapshotKeyResolution(t *testing.T) {
 		// Zero rows means nothing to backfill, which the coordinator treats
 		// as an exhausted table rather than a failure.
 		db := newFakeQueryDB(t, []string{"id"}, nil, nil)
-		s := &Stream{incSnapshotConn: db}
+		s := &Stream{incSnapshot: incrementalSnapshot{conn: db}}
 
 		pk, err := s.resolveIncrementalMaxKey(t.Context(), orders, []string{"id"}, "SELECT id FROM orders")
 		require.NoError(t, err)
@@ -286,13 +288,15 @@ func TestSnapshotSignalRejectsUnreplicatedTable(t *testing.T) {
 		signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
 		return &Stream{
 			// Any non-nil coordinator: the check runs before it is used.
-			incSnapshotCoordinator: &incsnapshot.Coordinator{},
-			signalTable:            &signalTable,
-			snapshotSchema:         "public",
-			incSnapshotReplicated:  replicated,
-			// The accept path resolves the key columns too.
-			incSnapshotConn:    newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"id"}}, nil),
-			incSnapshotPKCache: map[string][]string{},
+			signalTable:    &signalTable,
+			snapshotSchema: "public",
+			incSnapshot: incrementalSnapshot{
+				coordinator: &incsnapshot.Coordinator{},
+				replicated:  replicated,
+				// The accept path resolves the key columns too.
+				conn:    newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"id"}}, nil),
+				pkCache: map[string][]string{},
+			},
 		}
 	}
 
@@ -334,15 +338,17 @@ func TestSnapshotSignalRejectsUnreplicatedTable(t *testing.T) {
 func TestSnapshotSignalRejectsTableWithoutPrimaryKey(t *testing.T) {
 	signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
 	s := &Stream{
-		incSnapshotCoordinator: &incsnapshot.Coordinator{},
-		signalTable:            &signalTable,
-		snapshotSchema:         "public",
-		incSnapshotReplicated: map[incrementalsnapshot.TableID]struct{}{
-			{Schema: "public", Table: "nopk"}: {},
+		signalTable:    &signalTable,
+		snapshotSchema: "public",
+		incSnapshot: incrementalSnapshot{
+			coordinator: &incsnapshot.Coordinator{},
+			replicated: map[incrementalsnapshot.TableID]struct{}{
+				{Schema: "public", Table: "nopk"}: {},
+			},
+			// No rows: the table has no primary key.
+			conn:    newFakeQueryDB(t, []string{"attname"}, nil, nil),
+			pkCache: map[string][]string{},
 		},
-		// No rows: the table has no primary key.
-		incSnapshotConn:    newFakeQueryDB(t, []string{"attname"}, nil, nil),
-		incSnapshotPKCache: map[string][]string{},
 	}
 
 	_, err := s.snapshotSignalTables(t.Context(), &StreamMessage{
@@ -418,12 +424,14 @@ func TestSnapshotSignalRejectionVsFailure(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s := &Stream{
-				incSnapshotCoordinator: &incsnapshot.Coordinator{},
-				signalTable:            &signalTable,
-				snapshotSchema:         "public",
-				incSnapshotReplicated:  replicated,
-				incSnapshotConn:        test.conn(t),
-				incSnapshotPKCache:     map[string][]string{},
+				signalTable:    &signalTable,
+				snapshotSchema: "public",
+				incSnapshot: incrementalSnapshot{
+					coordinator: &incsnapshot.Coordinator{},
+					replicated:  replicated,
+					conn:        test.conn(t),
+					pkCache:     map[string][]string{},
+				},
 			}
 
 			msg := &StreamMessage{
@@ -462,10 +470,12 @@ func TestDeduplicateStreamedRowOnlyTouchesTheCurrentTable(t *testing.T) {
 	require.NoError(t, broken.Close())
 
 	s := &Stream{
-		// Snapshotting nothing: a zero coordinator reads no table.
-		incSnapshotCoordinator: &incsnapshot.Coordinator{},
-		incSnapshotConn:        broken,
-		incSnapshotPKCache:     map[string][]string{},
+		incSnapshot: incrementalSnapshot{
+			// Snapshotting nothing: a zero coordinator reads no table.
+			coordinator: &incsnapshot.Coordinator{},
+			conn:        broken,
+			pkCache:     map[string][]string{},
+		},
 	}
 
 	for _, op := range []OpType{InsertOpType, UpdateOpType, DeleteOpType} {
@@ -625,8 +635,10 @@ func TestIntegrationIncrementalSnapshotRejectsUnbindableKey(t *testing.T) {
 	}
 
 	stream := &Stream{
-		incSnapshotConn:    db,
-		incSnapshotPKCache: map[string][]string{},
+		incSnapshot: incrementalSnapshot{
+			conn:    db,
+			pkCache: map[string][]string{},
+		},
 	}
 	tableID := func(name string) incrementalsnapshot.TableID {
 		return incrementalsnapshot.TableID{Schema: "public", Table: name}
