@@ -693,10 +693,10 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 		}
 	}
 
+	// A rejected signal is logged there and does not reach here: this row is
+	// not acknowledged yet, so failing redelivers it.
 	if err := s.dispatchSnapshotSignal(ctx, message); err != nil {
-		// A bad signal must not stop replication. Log it and carry on: the
-		// row still reaches the consumer.
-		s.logger.Errorf("Incremental snapshot: %s", err)
+		return changeResultNoMessage, fmt.Errorf("dispatching snapshot signal: %w", err)
 	}
 
 	if err := s.deduplicateStreamedRow(ctx, message); err != nil {

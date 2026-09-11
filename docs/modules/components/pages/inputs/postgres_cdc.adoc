@@ -630,7 +630,9 @@ an unreplicated table has no live changes to deduplicate its backfill against, s
 after its chunk is read would be lost. Each must also have a primary key, which the backfill pages
 by — a table replicated under `REPLICA IDENTITY FULL` without one cannot be snapshotted. A signal
 naming a table that fails either check is rejected and logged, and one that becomes unreadable
-after being queued is dropped from the queue with a warning.
+after being queued is dropped from the queue with a warning. If a check cannot be run at all — a
+connection reset, say — the stream restarts and the signal is read again, so the request is not
+lost.
 
 Each table joins the back of the backfill queue. A table this run already covers is skipped and
 logged, so a repeated signal does not re-read it. To read one again, point
