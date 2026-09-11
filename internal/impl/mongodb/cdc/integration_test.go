@@ -330,11 +330,14 @@ func (s *sharedMongo) start(customizers []testcontainers.ContainerCustomizer) (s
 	s.once.Do(func() {
 		ctx := context.Background() // not t.Context(): container outlives individual tests
 		container, err := mongocontainer.Run(ctx, "mongo:7", customizers...)
+		// Run can return a live container together with an error, for example
+		// when the wait strategy times out. Remember it before the error check
+		// so that terminate() still removes it.
+		s.container = container
 		if err != nil {
 			s.err = err
 			return
 		}
-		s.container = container
 
 		connStr, err := container.ConnectionString(ctx)
 		if err != nil {
