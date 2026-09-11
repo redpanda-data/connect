@@ -158,17 +158,6 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 }
 
 // checkKeyTypesBindable rejects a primary key the chunk query cannot page by.
-//
-// A key value is read back through prepareScannersAndGetters and then bound
-// as the next chunk's bound, so it has to survive that round trip. bytea does
-// not: it has no case there, so it scans as a sql.NullString holding raw
-// bytes, and binding that string to a bytea parameter makes the server read
-// the bytes as text -- "invalid byte sequence for encoding UTF8" for any key
-// that is not valid UTF-8. The same raw bytes are also lost by the
-// checkpoint's JSON encoding, which replaces them with U+FFFD.
-//
-// Every other key type tested pages and checkpoints correctly, so this
-// rejects bytea specifically rather than guessing at a wider class.
 func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsnapshot.TableID) error {
 	q, err := primaryKeyColumnTypesQuery(TableFQN{
 		Schema: sanitize.QuotePostgresIdentifier(table.Schema),
@@ -200,14 +189,10 @@ func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsna
 	return nil
 }
 
-// resolveIncrementalPKColumns reads the primary key columns of the table. It
+// resolveIncrementalPKColumns reads the primary key columns of the table.
 // must use s.incSnapshot.conn and never s.pgConn: after the stream starts,
 // s.pgConn is in COPY BOTH for the replication protocol, and a normal query
 // on it at the same time stops or damages the stream.
-//
-// Its only caller, incrementalPKColumns, can run at any time during the
-// stream - from Deps.ResolvePrimaryKey when planning a chunk, and from
-// incrementalStreamedRowPK on each insert, update or delete.
 func (s *Stream) resolveIncrementalPKColumns(ctx context.Context, table TableFQN) ([]string, error) {
 	q, err := primaryKeyColumnsQuery(table.String())
 	if err != nil {
