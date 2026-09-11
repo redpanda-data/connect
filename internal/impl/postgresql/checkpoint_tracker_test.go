@@ -23,12 +23,6 @@ import (
 	replincsnapshot "github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
-// TestCheckpointTrackerPreventsClobberFromRowlessSentinel reproduces the
-// deadlock/data-loss scenario in commitIncrementalSnapshotCheckpoint: a
-// row-less incremental snapshot checkpoint (LSN=nil) is tracked right after
-// a real batch and resolved synchronously, without waiting on that batch's
-// own ack. Without checkpointTracker's merge, the sentinel's nil LSN would
-// wipe out the still-pending batch's real LSN.
 func TestCheckpointTrackerPreventsClobberFromRowlessSentinel(t *testing.T) {
 	lsn := "1/AAAA"
 	state := []byte("snapshot-state")
@@ -53,11 +47,6 @@ func TestCheckpointTrackerPreventsClobberFromRowlessSentinel(t *testing.T) {
 	assert.Equal(t, state, maxOffset.incSnapshotState)
 }
 
-// TestCheckpointTrackerPreservesPendingStateAcrossLaterBatch is the mirror
-// scenario: a later batch with no new snapshot state (because
-// pendingIncrementalState was already consumed by the earlier batch)
-// resolves before its still-pending predecessor, which is still carrying
-// unflushed snapshot state.
 func TestCheckpointTrackerPreservesPendingStateAcrossLaterBatch(t *testing.T) {
 	lsnA := "1/AAAA"
 	lsnB := "1/BBBB"
@@ -80,11 +69,6 @@ func TestCheckpointTrackerPreservesPendingStateAcrossLaterBatch(t *testing.T) {
 	assert.Equal(t, stateA, maxOffset.incSnapshotState, "A's pending snapshot state must not be lost even though B resolved first")
 }
 
-// TestCommitCheckpointSkipsRedundantStatePersist verifies commitCheckpoint
-// only writes to the checkpoint cache when the incremental snapshot state
-// actually changed, since checkpointTracker.Track now carries the
-// last-known state forward onto every checkpoint (including ones that
-// didn't themselves advance it) to prevent the clobber above.
 func TestCommitCheckpointSkipsRedundantStatePersist(t *testing.T) {
 	const cacheName = "inc_snapshot_cache"
 	mgr := service.MockResources(service.MockResourcesOptAddCache(cacheName))
@@ -128,9 +112,6 @@ func TestCommitCheckpointSkipsRedundantStatePersist(t *testing.T) {
 	assert.Equal(t, stateB, got)
 }
 
-// loadCachedIncSnapshotStateBytes is a small test helper reading the raw
-// cache bytes directly, sidestepping loadCachedIncSnapshotState's JSON
-// unmarshal (which requires a valid replincsnapshot.State payload).
 func (p *pgStreamInput) loadCachedIncSnapshotStateBytes(ctx context.Context) ([]byte, error) {
 	var (
 		val  []byte
@@ -297,15 +278,6 @@ func TestLoadCachedIncSnapshotStateRejectsForeignVersion(t *testing.T) {
 	assert.ErrorContains(t, err, "checkpoint_cache_key")
 }
 
-// TestCommitCheckpointHoldsAckWhenStateWriteFails: the LSN must not be
-// acknowledged unless the state riding with it is durable.
-//
-// AckLSN advances Stream.ackedLSN, which the next standby status update
-// sends on, moving the replication slot. Past a signal row that would put
-// the slot beyond a request the cache never recorded, and the request never
-// streams again -- silently, since the rows themselves were delivered.
-//
-// pgStream is nil, so reaching AckLSN panics rather than merely misbehaving.
 func TestCommitCheckpointHoldsAckWhenStateWriteFails(t *testing.T) {
 	// No cache is registered under this name, so the state write fails.
 	p := &pgStreamInput{
@@ -328,12 +300,7 @@ func TestCommitCheckpointHoldsAckWhenStateWriteFails(t *testing.T) {
 	assert.Nil(t, p.lastPersistedIncSnapshotState)
 }
 
-// TestCommitCheckpointAcksWhenThereIsNoState: an offset carrying only an LSN
-// has nothing to persist, so the acknowledgement must still happen.
 func TestCommitCheckpointAcksWhenThereIsNoState(t *testing.T) {
 	p := &pgStreamInput{mgr: service.MockResources()}
-
-	// A nil pgStream would panic if AckLSN were reached, so assert on the
-	// panic-free path by leaving the LSN nil too: nothing to do at all.
 	require.NoError(t, p.commitCheckpoint(t.Context(), nil, checkpointOffset{seq: 1}))
 }
