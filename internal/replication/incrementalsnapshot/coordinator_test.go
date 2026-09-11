@@ -718,6 +718,9 @@ func TestCoordinatorAddTablesIsDurable(t *testing.T) {
 // TestCoordinatorAddTablesCheckpointFailureRetries: the checkpoint is
 // emitted, so it can fail. Nothing was delivered then, and the next commit
 // still owes it.
+//
+// Not covered by the interruption sweep, whose emit never fails: keep this
+// and the other emit-failure tests even though the sweep looks broader.
 func TestCoordinatorAddTablesCheckpointFailureRetries(t *testing.T) {
 	tableA := TableID{Schema: "public", Table: "a"}
 	mock := newScriptedMockDeps(map[string]*mockTable{
