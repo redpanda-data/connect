@@ -452,12 +452,16 @@ func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) err
 	emit := func(rows []incrementalsnapshot.Row) error {
 		if len(rows) > 0 {
 			s.logger.Debugf("Incremental snapshot: flushed %d row(s) for table %s", len(rows), rows[0].Table)
+			// Before the update, not on the transition below: the transition
+			// reports the table the coordinator moved on to, which is not
+			// necessarily the one these rows came from.
+			s.monitor.TrackSnapshotTable(ctx, tableFQN(rows[0].Table))
 			s.monitor.UpdateSnapshotProgressForTable(tableFQN(rows[0].Table), len(rows))
 		} else {
 			s.logger.Debugf("Incremental snapshot: checkpoint advanced with no rows to flush (fully deduplicated)")
 		}
 		checkpoint := s.incSnapshotCoordinator.State()
-		s.reportTableTransition(checkpoint.CurrentTable)
+		s.reportTableTransition(ctx, checkpoint.CurrentTable)
 
 		state, err := json.Marshal(checkpoint)
 		if err != nil {
@@ -484,13 +488,13 @@ func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) err
 	if changed && s.incSnapshotCoordinator.Idle() {
 		// The last table sees no following checkpoint, so report it here.
 		// More may arrive by signal, so this is not a completion.
-		s.reportTableTransition(nil)
+		s.reportTableTransition(ctx, nil)
 		s.logger.Info("Incremental snapshot: queue empty, waiting for a snapshot signal")
 	}
 	return nil
 }
 
-func (s *Stream) reportTableTransition(current *incrementalsnapshot.TableID) {
+func (s *Stream) reportTableTransition(ctx context.Context, current *incrementalsnapshot.TableID) {
 	previous := s.incSnapshotLastTable
 	s.incSnapshotLastTable = current
 	if sameTable(previous, current) {
@@ -502,6 +506,9 @@ func (s *Stream) reportTableTransition(current *incrementalsnapshot.TableID) {
 	}
 	if current != nil {
 		s.logger.Infof("Incremental snapshot: starting table %s", *current)
+		// So the metric exists from the start of the backfill, including for a
+		// table whose first chunks fully deduplicate and emit no rows.
+		s.monitor.TrackSnapshotTable(ctx, tableFQN(*current))
 	}
 }
 
