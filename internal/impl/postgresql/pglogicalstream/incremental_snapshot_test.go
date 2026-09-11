@@ -692,3 +692,74 @@ func TestIntegrationIncrementalSnapshotRejectsUnbindableKey(t *testing.T) {
 			"every row exactly once, so each bound round-tripped")
 	})
 }
+
+// TestSnapshotSignalWithSnapshotDisabled: configuring a signal table but
+// leaving incremental_snapshot.enabled false is the likeliest operator
+// mistake, and it used to produce nothing at all -- the signaller stopped
+// reporting the type as unknown once it recognised it, and the connector
+// returned early on the nil coordinator.
+func TestSnapshotSignalWithSnapshotDisabled(t *testing.T) {
+	signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
+
+	// A disabled snapshot leaves the coordinator and its connection nil.
+	newStream := func() *Stream {
+		return &Stream{
+			signalTable:    &signalTable,
+			snapshotSchema: "public",
+			logger:         service.MockResources().Logger(),
+		}
+	}
+
+	row := func(signalType, data string) *StreamMessage {
+		return &StreamMessage{
+			Operation: InsertOpType,
+			Schema:    "public",
+			Table:     "rpcn_signal",
+			Data:      map[string]any{"type": signalType, "data": data},
+		}
+	}
+
+	t.Run("a snapshot signal is reported", func(t *testing.T) {
+		s := newStream()
+		_, err := s.snapshotSignalTables(t.Context(), row("snapshot", `{"tables": ["orders"]}`))
+		require.Error(t, err)
+		assert.ErrorIs(t, err, errSnapshotDisabled)
+		assert.NotErrorIs(t, err, errSignalRejected,
+			"the request is well formed, so it is a configuration warning rather than a rejection")
+		assert.Contains(t, err.Error(), "incremental_snapshot.enabled",
+			"the message must name the setting to turn on")
+
+		// Warned and swallowed: a config mistake must not stop replication.
+		assert.NoError(t, s.dispatchSnapshotSignal(t.Context(), row("snapshot", `{"tables": ["orders"]}`)))
+	})
+
+	for _, quiet := range []struct {
+		name string
+		msg  *StreamMessage
+	}{
+		// Reported by the signaller, which handles it whether or not the
+		// snapshot runs.
+		{"another signal type", row("log", `{"message": "hi"}`)},
+		// Already reported by the signaller, so saying it twice adds noise.
+		{"malformed signal data", &StreamMessage{
+			Operation: InsertOpType,
+			Schema:    "public",
+			Table:     "rpcn_signal",
+			Data:      "not a map",
+		}},
+		{"a row from another table", &StreamMessage{
+			Operation: InsertOpType,
+			Schema:    "public",
+			Table:     "orders",
+			Data:      map[string]any{"type": "snapshot"},
+		}},
+	} {
+		t.Run(quiet.name+" says nothing", func(t *testing.T) {
+			s := newStream()
+			tables, err := s.snapshotSignalTables(t.Context(), quiet.msg)
+			require.NoError(t, err)
+			assert.Empty(t, tables)
+			assert.NoError(t, s.dispatchSnapshotSignal(t.Context(), quiet.msg))
+		})
+	}
+}
