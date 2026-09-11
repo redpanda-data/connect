@@ -205,7 +205,7 @@ tables:
 
 === `checkpoint_limit`
 
-The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.
+The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees. Streaming batches handed to the pipeline are capped at half this value so that two can be in flight; a snapshot page (`snapshot_batch_size` rows) is always admitted whole, so in-flight messages can exceed this limit by up to one page.
 
 
 *Type*: `int`

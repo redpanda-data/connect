@@ -1847,9 +1847,10 @@ postgres_cdc:
 }
 
 // TestIntegrationPostgresLargeTransactionSpansBatches covers the reader's row
-// cap: a single transaction larger than streamBatchMaxRows (1000) must arrive
-// as several batches with no rows lost, and a restart on the same slot after
-// everything was acked must not replay any of them.
+// cap: a single transaction larger than the streaming cap (half the default
+// checkpoint_limit of 1024, i.e. 512 rows) must arrive as several batches
+// with no rows lost, and a restart on the same slot after everything was
+// acked must not replay any of them.
 func TestIntegrationPostgresLargeTransactionSpansBatches(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
@@ -1918,7 +1919,7 @@ postgres_cdc:
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		mut.Lock()
 		defer mut.Unlock()
-		assert.Equal(c, []int{1000, 500}, sizes, "a 1500-row transaction must split at the 1000-row cap")
+		assert.Equal(c, []int{512, 512, 476}, sizes, "a 1500-row transaction must split at the 512-row cap derived from the default checkpoint_limit")
 		assert.Len(c, seqs, rowCount)
 	}, 60*time.Second, 200*time.Millisecond)
 	require.NoError(t, run1.StopWithin(10*time.Second))

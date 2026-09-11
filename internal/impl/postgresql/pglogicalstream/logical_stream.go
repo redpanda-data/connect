@@ -62,6 +62,10 @@ type Stream struct {
 	heartbeat               *heartbeat
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
+	// streamMaxRows caps the rows the streaming reader accumulates before
+	// handing a batch to the consumer. Defaults to streamBatchMaxRows; named
+	// to avoid clashing with that constant.
+	streamMaxRows int
 }
 
 // NewPgStream creates a new instance of the Stream struct.
@@ -115,6 +119,10 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if config.BatchSize > 0 {
 		batchSize = config.BatchSize
 	}
+	streamMaxRows := streamBatchMaxRows
+	if config.StreamBatchMaxRows > 0 {
+		streamMaxRows = min(streamBatchMaxRows, config.StreamBatchMaxRows)
+	}
 	stream := &Stream{
 		pgConn:                dbConn,
 		messages:              make(chan []StreamMessage, streamChannelDepth),
@@ -129,6 +137,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		includeTxnMarkers:     config.IncludeTxnMarkers,
 		standbyMessageTimeout: config.PgStandbyTimeout,
 		unchangedToastValue:   config.UnchangedToastValue,
+		streamMaxRows:         streamMaxRows,
 	}
 
 	monitor, err := NewMonitor(ctx, config, stream.logger, tables, stream.slotName)
@@ -436,15 +445,25 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		currentTxnCommitTime time.Time
 		// Decoded rows are accumulated here and handed to the consumer at commit
 		// boundaries or when a cap is hit, instead of one row per channel send.
-		batch = newStreamBatch(streamBatchMaxRows, streamBatchMaxBytes, currentLSN)
+		batch = newStreamBatch(s.streamMaxRows, streamBatchMaxBytes, currentLSN)
+		// remap remembers recent (last row, commit) LSN pairs so an ack for a
+		// transaction still sitting in the channel buffer can be resolved to
+		// its commit record. See commitRemap.
+		remap commitRemap
 	)
 
 	commitLSN := func(force bool) (committed bool, err error) {
 		ctx, done := s.shutSig.HardStopCtx(context.Background())
 		defer done()
 		ackedLSN := s.getAckedLSN()
+		// An ack for the last row of a transaction is confirmed as that
+		// transaction's commit record, otherwise Postgres replays the whole
+		// transaction on restart. The most recent pair is the common case; the
+		// ring covers transactions still sitting in the channel buffer.
 		if ackedLSN == lastEmittedLSN {
 			ackedLSN = lastEmittedCommitLSN
+		} else if c, ok := remap.lookup(ackedLSN); ok {
+			ackedLSN = c
 		}
 		if force || ackedLSN > currentLSN {
 			if err := s.commitAckedLSN(ctx, ackedLSN); err != nil {
@@ -485,6 +504,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 			}
 		}
 		lastEmittedLSN, lastEmittedCommitLSN = promotedLast, promotedCommit
+		remap.record(promotedLast, promotedCommit)
 		return nil
 	}
 
@@ -569,10 +589,14 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 					batch.markCommit(msgLSN)
 				}
 			}
-			// Flushing only from here is safe because with proto_version 1 a
-			// transaction arrives as one contiguous run of XLogData frames ending
-			// in its commit record; there is no in-progress transaction streaming
-			// that could leave rows pending across keepalives.
+			// Flush decisions are made only here, on XLogData. The walsender can
+			// interleave keepalive frames between one transaction's XLogData frames
+			// when the client is slow, so rows routinely sit pending across
+			// keepalives; that is harmless because keepalives never flush. What makes
+			// this correct is proto_version 1 (see decodingPluginArguments in
+			// NewPgStream): a transaction's rows always end with its commit record
+			// before the next transaction's rows begin, so a commit-triggered flush
+			// is always a transaction boundary.
 			if batch.shouldFlush() {
 				if err := flush(); err != nil {
 					return err

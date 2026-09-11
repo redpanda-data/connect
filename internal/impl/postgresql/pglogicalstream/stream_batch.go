@@ -14,11 +14,19 @@ const (
 	// large transaction. Normal transactions flush at their commit record.
 	streamBatchMaxRows = 1000
 	// streamBatchMaxBytes caps the summed WAL payload of a pending batch, so
-	// wide rows cannot buffer unbounded memory before a flush.
+	// wide rows cannot buffer unbounded memory before a flush. The cap counts
+	// raw WAL payload bytes; the decoded rows held in memory (maps, boxed
+	// values, before-images) are typically several times larger, so resident
+	// memory per batch is a multiple of this figure.
 	streamBatchMaxBytes = 4 << 20
 	// streamChannelDepth is the number of batches the messages channel buffers,
 	// letting the reader keep decoding while the consumer marshals.
 	streamChannelDepth = 4
+	// commitRemapRingSize bounds how many recent (last row, commit) pairs the
+	// reader remembers. It comfortably exceeds the channel depth plus the batch
+	// being decoded plus what the consumer may hold, so an ack for the last row
+	// of any transaction still in flight can be remapped to its commit record.
+	commitRemapRingSize = 16
 )
 
 // streamBatch accumulates decoded streaming messages and decides when the
@@ -78,4 +86,44 @@ func (b *streamBatch) take() (msgs []StreamMessage, lastLSN, commitLSN LSN) {
 	b.bytes = 0
 	b.commitSeen = false
 	return msgs, b.lastLSN, b.commitLSN
+}
+
+// commitRemap remembers, for recently flushed transactions, the LSN of the
+// last emitted row and the LSN of the commit record that closed it. When the
+// consumer acks that last row, the reader confirms the commit LSN instead so
+// Postgres does not replay the transaction on restart. Keeping several pairs
+// (rather than only the latest) matters because up to streamChannelDepth
+// batches can sit in the channel unconsumed: an ack for an earlier
+// transaction's last row must still find its commit.
+type commitRemap struct {
+	pairs [commitRemapRingSize]commitRemapPair
+	next  int
+	n     int
+}
+
+type commitRemapPair struct{ lastRow, commit LSN }
+
+// record stores a pair. Pairs whose commit equals the last row carry no
+// information (a cap-triggered flush mid-transaction) and are skipped.
+func (r *commitRemap) record(lastRow, commit LSN) {
+	if commit == lastRow {
+		return
+	}
+	r.pairs[r.next] = commitRemapPair{lastRow: lastRow, commit: commit}
+	r.next = (r.next + 1) % commitRemapRingSize
+	if r.n < commitRemapRingSize {
+		r.n++
+	}
+}
+
+// lookup returns the commit LSN recorded for lastRow, if any. Newest first,
+// so a repeated LSN resolves to its most recent commit.
+func (r *commitRemap) lookup(lastRow LSN) (LSN, bool) {
+	for i := 1; i <= r.n; i++ {
+		p := r.pairs[(r.next-i+commitRemapRingSize)%commitRemapRingSize]
+		if p.lastRow == lastRow {
+			return p.commit, true
+		}
+	}
+	return 0, false
 }

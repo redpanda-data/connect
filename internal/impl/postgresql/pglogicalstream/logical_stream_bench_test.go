@@ -246,6 +246,7 @@ func BenchmarkStreamMessages(b *testing.B) {
 		errors:                make(chan error, 1),
 		slotName:              "bench",
 		standbyMessageTimeout: time.Second,
+		streamMaxRows:         streamBatchMaxRows,
 	}
 	require.NoError(b, StartReplication(ctx, pgConn, "bench", startLSN, StartReplicationOptions{
 		PluginArgs: []string{"proto_version '1'", "publication_names 'bench'"},
@@ -272,8 +273,9 @@ func BenchmarkStreamMessages(b *testing.B) {
 	// walsender or streamMessages failing silently: a non-nil serveOnce error
 	// fails the benchmark immediately, a nil one (the fake finished replaying
 	// all frames, which can happen before the consumer reaches b.N) is
-	// expected and just drops out of the select, and an overall timeout
-	// catches any other hang with a clear message instead of blocking forever.
+	// expected and just drops out of the select, an early exit from
+	// streamMessages itself is also a failure, and an overall timeout catches
+	// any other hang with a clear message instead of blocking forever.
 	srvDone := srv.done
 	timeout := time.After(2 * time.Minute)
 waitForRows:
@@ -286,6 +288,8 @@ waitForRows:
 				b.Fatalf("fake walsender: %v", err)
 			}
 			srvDone = nil
+		case err := <-streamDone:
+			b.Fatalf("streamMessages exited before delivering %d rows: %v", b.N, err)
 		case <-timeout:
 			b.Fatal("timed out waiting for streamMessages to deliver b.N rows")
 		}
@@ -294,7 +298,7 @@ waitForRows:
 
 	s.shutSig.TriggerSoftStop()
 	select {
-	case <-streamDone: // nil on soft stop, or a wrapped context.Canceled from the blocked channel send once the fake closes; both fine
+	case <-streamDone: // nil on soft stop, or a wrapped error (e.g. a connection reset, not necessarily EOF) from the blocked channel send once the fake closes; both fine
 	case <-time.After(10 * time.Second):
 		b.Fatal("streamMessages did not stop")
 	}
