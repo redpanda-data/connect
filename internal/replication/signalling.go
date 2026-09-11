@@ -38,3 +38,12 @@ func (s *ControlSignal) Type() string {
 	}
 	return ""
 }
+
+// SnapshotSignalType requests an incremental snapshot of the named tables.
+const SnapshotSignalType = "snapshot"
+
+// SnapshotSignal is the decoded "data" payload for a SnapshotSignalType
+// signal. Names are resolved against the connector's configured schema.
+type SnapshotSignal struct {
+	Tables []string `json:"tables"`
+}

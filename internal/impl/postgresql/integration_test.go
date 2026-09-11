@@ -134,6 +134,12 @@ func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *pgtes
 
 		// flights_non_streamed is a control table with data that should not be streamed or queried by snapshot streaming
 		_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights_non_streamed (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
+		if err != nil {
+			return false
+		}
+
+		// The incremental snapshot takes its tables from this table.
+		_, err = db.Exec("CREATE TABLE IF NOT EXISTS rpcn_signal (id serial PRIMARY KEY, type VARCHAR(32), data TEXT);")
 
 		return err == nil
 	}, 2*time.Minute, time.Second, "could not connect to postgres")
@@ -1716,4 +1722,727 @@ postgres_cdc:
 		byName[child["name"].(string)] = child["type"].(string)
 	}
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
+}
+
+// signalIncrementalSnapshot asks for a backfill of tables. It waits for the
+// replication slot first: a signal inserted before the slot exists is not in
+// the streamed WAL, so the connector never sees it.
+func signalIncrementalSnapshot(t *testing.T, db *pgtest.TestDB, slotName string, tables ...string) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		var found bool
+		err := db.QueryRow(`SELECT EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = $1)`, slotName).Scan(&found)
+		return err == nil && found
+	}, time.Minute, 50*time.Millisecond, "replication slot %s was never created", slotName)
+
+	payload, err := json.Marshal(map[string]any{"tables": tables})
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO rpcn_signal (type, data) VALUES ('snapshot', $1)`, string(payload))
+	require.NoError(t, err)
+}
+
+func TestIntegrationIncrementalSnapshot(t *testing.T) {
+	integration.CheckSkip(t)
+
+	type incrementalSnapshotRow struct {
+		id        int64
+		operation string
+	}
+
+	t.Run("Concurrent Writes", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		// Pre-existing rows: only ever observable via the incremental snapshot
+		// backfill, since the replication slot is created after these commits.
+		const numPreExisting = 1000
+		for range numPreExisting {
+			_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('pre', NOW())`)
+			require.NoError(t, err)
+		}
+
+		template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_incremental_concurrent
+    schema: public
+    heartbeat_interval: 500ms
+    tables:
+      - flights
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 20
+        checkpoint_cache: snap_cache
+`, databaseURL)
+
+		builder := service.NewStreamBuilder()
+		require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, builder.AddInputYAML(template))
+		require.NoError(t, builder.AddCacheYAML(`
+label: snap_cache
+memory: {}`))
+
+		var (
+			mu   sync.Mutex
+			rows []incrementalSnapshotRow
+		)
+		require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range batch {
+				// The signal row streams like any other insert, and its
+				// serial id collides with the ids under test.
+				if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+					continue
+				}
+				data, err := msg.AsStructured()
+				if err != nil {
+					return err
+				}
+				id, err := data.(map[string]any)["id"].(json.Number).Int64()
+				if err != nil {
+					return err
+				}
+				op, _ := msg.MetaGet("operation")
+				rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
+			}
+			return nil
+		}))
+
+		stream, err := builder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		streamStopped := make(chan struct{})
+		go func() {
+			defer close(streamStopped)
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		// Ask for the backfill now the slot exists.
+		signalIncrementalSnapshot(t, db, "test_slot_incremental_concurrent", "flights")
+
+		// Wait for at least one backfill row before writing concurrently: it
+		// proves the coordinator's max-PK bound is already frozen, so every
+		// subsequent insert gets a serial PK above it -- immune to the
+		// double-delivery race documented on Coordinator.OnStreamedRow.
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return len(rows) >= 1
+		}, 30*time.Second, 50*time.Millisecond, "did not observe any snapshot backfill rows before starting the concurrent writer")
+
+		// Write new rows while the backfill is still running, racing chunk
+		// reads against live inserts on the same table.
+		const numConcurrent = 1000
+		writerDone := make(chan struct{})
+		// require calls FailNow, which is invalid off the test goroutine: it
+		// would stop the writer early and surface as a missing-rows failure
+		// instead of the insert error. Carry the error out and assert it
+		// here, where closing writerDone orders the write before this read.
+		var writerErr error
+		go func() {
+			defer close(writerDone)
+			for range numConcurrent {
+				if _, err := db.Exec(`INSERT INTO flights (name, created_at) VALUES ('concurrent', NOW())`); err != nil {
+					writerErr = err
+					return
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		}()
+		<-writerDone
+		require.NoError(t, writerErr, "concurrent writer failed")
+
+		var totalRows int64
+		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM flights`).Scan(&totalRows))
+		require.EqualValues(t, numPreExisting+numConcurrent, totalRows)
+
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return int64(len(rows)) >= totalRows
+		}, 60*time.Second, 100*time.Millisecond, "did not observe every row from the pre-existing backfill and the concurrent writes")
+
+		require.NoError(t, stream.StopWithin(10*time.Second))
+		select {
+		case <-streamStopped:
+		case <-time.After(30 * time.Second):
+			require.Fail(t, "stream did not stop in time")
+		}
+
+		// Every row, backfill or live, must be observed exactly once: dedup must
+		// neither drop nor double-deliver.
+		mu.Lock()
+		defer mu.Unlock()
+		counts := make(map[int64]int, len(rows))
+		for _, r := range rows {
+			counts[r.id]++
+		}
+		assert.Len(t, counts, int(totalRows), "expected exactly %d distinct rows to be observed", totalRows)
+		for id, count := range counts {
+			assert.Equal(t, 1, count, "row id %d observed %d times, expected exactly once", id, count)
+		}
+	})
+
+	// Non-integer keys, run through the real decoders. The window keys rows
+	// by the formatted key, so if the snapshot and streaming paths disagree
+	// on a type no live row evicts its buffered copy and the stale snapshot
+	// row lands after the update that superseded it.
+	for _, keyed := range []struct {
+		name    string
+		table   string
+		ddl     string
+		insert  string
+		keyCols []string
+	}{
+		{
+			name:    "UUIDKey",
+			table:   "uuid_keyed",
+			ddl:     `CREATE TABLE uuid_keyed (id uuid PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO uuid_keyed (id, name) VALUES (gen_random_uuid(), 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "CompositeUUIDTextKey",
+			table:   "uuid_text_keyed",
+			ddl:     `CREATE TABLE uuid_text_keyed (id uuid, tenant TEXT, name TEXT, PRIMARY KEY (id, tenant))`,
+			insert:  `INSERT INTO uuid_text_keyed (id, tenant, name) VALUES (gen_random_uuid(), 'tenant-a', 'orig')`,
+			keyCols: []string{"id", "tenant"},
+		},
+	} {
+		t.Run("Concurrent Updates/"+keyed.name, func(t *testing.T) {
+			databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+			require.NoError(t, err)
+
+			_, err = db.Exec(keyed.ddl)
+			require.NoError(t, err)
+
+			// Inserted before the slot exists, so only the snapshot can
+			// deliver them.
+			const numPreExisting = 400
+			for range numPreExisting {
+				_, err = db.Exec(keyed.insert)
+				require.NoError(t, err)
+			}
+
+			template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_inc_%s
+    schema: public
+    heartbeat_interval: 500ms
+    tables:
+      - %s
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 50
+        checkpoint_cache: snap_cache
+`, databaseURL, keyed.table, keyed.table)
+
+			builder := service.NewStreamBuilder()
+			require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
+			require.NoError(t, builder.AddInputYAML(template))
+			require.NoError(t, builder.AddCacheYAML(`
+label: snap_cache
+memory: {}`))
+
+			// Key on the formatted primary key, mirroring how the dedup window
+			// keys rows, so a decode mismatch shows up as extra keys as well
+			// as a stale value.
+			var (
+				mu      sync.Mutex
+				latest  = map[string]string{}
+				updates int
+				reads   int
+			)
+			require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					// The signal row streams like any other insert, and its
+					// serial id collides with the ids under test.
+					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+						continue
+					}
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					fields, ok := data.(map[string]any)
+					if !ok {
+						return fmt.Errorf("unexpected payload shape %T", data)
+					}
+					key := make([]string, 0, len(keyed.keyCols))
+					for _, col := range keyed.keyCols {
+						key = append(key, fmt.Sprint(fields[col]))
+					}
+					op, _ := msg.MetaGet("operation")
+					switch op {
+					case "read":
+						reads++
+					case "update":
+						updates++
+					}
+					name, _ := fields["name"].(string)
+					latest[strings.Join(key, "|")] = name
+				}
+				return nil
+			}))
+
+			stream, err := builder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			streamStopped := make(chan struct{})
+			go func() {
+				defer close(streamStopped)
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+
+			// Ask for the backfill now the slot exists.
+			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_%s", keyed.table), keyed.table)
+
+			require.Eventually(t, func() bool {
+				mu.Lock()
+				defer mu.Unlock()
+				return reads >= 1
+			}, 30*time.Second, 50*time.Millisecond, "did not observe any backfill rows before updating")
+
+			// Update every row repeatedly while the backfill runs, so updates
+			// land on chunks already read, currently buffered, and not yet
+			// reached.
+			const updatePasses = 3
+			for pass := range updatePasses {
+				_, err := db.Exec(`UPDATE `+keyed.table+` SET name = $1`, fmt.Sprintf("updated-%d", pass))
+				require.NoError(t, err)
+			}
+			finalName := fmt.Sprintf("updated-%d", updatePasses-1)
+
+			var totalRows int64
+			require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM `+keyed.table).Scan(&totalRows))
+			require.EqualValues(t, numPreExisting, totalRows)
+
+			require.Eventually(t, func() bool {
+				mu.Lock()
+				defer mu.Unlock()
+				if int64(len(latest)) < totalRows {
+					return false
+				}
+				for _, name := range latest {
+					if name != finalName {
+						return false
+					}
+				}
+				return true
+			}, 90*time.Second, 100*time.Millisecond,
+				"a row never settled on its updated value, so the snapshot and streaming decoders disagreed on the primary key")
+
+			require.NoError(t, stream.StopWithin(10*time.Second))
+			<-streamStopped
+
+			mu.Lock()
+			defer mu.Unlock()
+			// One key per row: a decode mismatch would produce two.
+			require.Len(t, latest, int(totalRows))
+			require.NotZero(t, updates, "no updates streamed, so dedup was not exercised")
+		})
+	}
+
+	t.Run("Concurrent Updates", func(t *testing.T) {
+		// Whichever order the two occur in, the consumer must end on the updated
+		// value: an update committing before its chunk is read is already in the
+		// snapshot's result, and one committing after must evict the buffered
+		// row.
+
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		// Not a multiple of chunk_size, so the last chunk is a partial one.
+		const numPreExisting = 605 // 12 full chunks of 50, then 5
+		for range numPreExisting {
+			_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('orig', NOW())`)
+			require.NoError(t, err)
+		}
+
+		var minID, maxID int64
+		require.NoError(t, db.QueryRow(`SELECT MIN(id), MAX(id) FROM flights`).Scan(&minID, &maxID))
+
+		template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_incremental_collision
+    schema: public
+    heartbeat_interval: 500ms
+    tables:
+      - flights
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 50
+        checkpoint_cache: snap_cache
+`, databaseURL)
+
+		builder := service.NewStreamBuilder()
+		require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, builder.AddInputYAML(template))
+		require.NoError(t, builder.AddCacheYAML(`
+label: snap_cache
+memory: {}`))
+
+		// Keep the last operation and value seen per id, plus the arrival
+		// order, so a stale read landing after an update is detectable.
+		type observation struct {
+			operation string
+			name      string
+		}
+		var (
+			mu      sync.Mutex
+			latest  = map[int64]observation{}
+			updates int
+			reads   int
+		)
+		require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range batch {
+				// The signal row streams like any other insert, and its
+				// serial id collides with the ids under test.
+				if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+					continue
+				}
+				data, err := msg.AsStructured()
+				if err != nil {
+					return err
+				}
+				fields, ok := data.(map[string]any)
+				if !ok {
+					return fmt.Errorf("unexpected payload shape %T", data)
+				}
+				id, err := fields["id"].(json.Number).Int64()
+				if err != nil {
+					return err
+				}
+				name, _ := fields["name"].(string)
+				op, _ := msg.MetaGet("operation")
+				switch op {
+				case "read":
+					reads++
+				case "update":
+					updates++
+				}
+				latest[id] = observation{operation: op, name: name}
+			}
+			return nil
+		}))
+
+		stream, err := builder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		streamStopped := make(chan struct{})
+		go func() {
+			defer close(streamStopped)
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		// Ask for the backfill now the slot exists.
+		signalIncrementalSnapshot(t, db, "test_slot_incremental_collision", "flights")
+
+		// Wait for the backfill to start, so the max-key bound is frozen and
+		// the updates below genuinely race chunk reads.
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return reads >= 1
+		}, 30*time.Second, 50*time.Millisecond, "did not observe any backfill rows before updating")
+
+		// Update every row repeatedly while the backfill is mid-flight. Each
+		// pass walks the key range, so updates land on chunks already read,
+		// currently buffered, and not yet reached. Several passes widen the
+		// window in which an update can collide with a buffered chunk.
+		const updatePasses = 3
+		for pass := range updatePasses {
+			name := fmt.Sprintf("updated-%d", pass)
+			for id := minID; id <= maxID; id++ {
+				_, err := db.Exec(`UPDATE flights SET name = $1 WHERE id = $2`, name, id)
+				require.NoError(t, err)
+			}
+		}
+		finalName := fmt.Sprintf("updated-%d", updatePasses-1)
+
+		var totalRows int64
+		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM flights`).Scan(&totalRows))
+		require.EqualValues(t, numPreExisting, totalRows)
+
+		// Every row must be accounted for, and settle on the updated value.
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			if int64(len(latest)) < totalRows {
+				return false
+			}
+			for _, obs := range latest {
+				if obs.name != finalName {
+					return false
+				}
+			}
+			return true
+		}, 90*time.Second, 100*time.Millisecond,
+			"a row never settled on its updated value, so a stale snapshot read overwrote a streamed change")
+
+		require.NoError(t, stream.StopWithin(10*time.Second))
+		<-streamStopped
+
+		mu.Lock()
+		defer mu.Unlock()
+		require.Len(t, latest, int(totalRows))
+		// Sanity check on the race itself: if every update had been folded
+		// into the snapshot reads, no update would have streamed and the
+		// assertion above would pass without exercising dedup at all.
+		require.NotZero(t, updates, "no updates streamed as change events; the test did not exercise deduplication")
+		for id, obs := range latest {
+			assert.Equal(t, finalName, obs.name, "row %d settled on %q via %q", id, obs.name, obs.operation)
+		}
+	})
+
+	for _, version := range []string{"17", "16", "15", "14", "13"} {
+		// On a quiet table only the heartbeat produces the COMMIT that advances
+		// the snapshot, and pgoutput decodes the heartbeat message on PostgreSQL
+		// 15 and later only. Run on each version, because a change to the plugin
+		// options or to the heartbeat can stop the snapshot without an error.
+		t.Run("QuietTable/PG"+version, func(t *testing.T) {
+			t.Parallel()
+
+			databaseURL, db, err := ResourceWithPostgreSQLVersion(t, version)
+			require.NoError(t, err)
+
+			// Inserted before the slot exists, so only the snapshot can
+			// deliver them.
+			const numPreExisting = 200
+			for range numPreExisting {
+				_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('quiet', NOW())`)
+				require.NoError(t, err)
+			}
+
+			template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_inc_quiet_pg%s
+    schema: public
+    heartbeat_interval: 200ms
+    tables:
+      - flights
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 20
+        checkpoint_cache: snap_cache
+`, databaseURL, version)
+
+			builder := service.NewStreamBuilder()
+			require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
+			require.NoError(t, builder.AddInputYAML(template))
+			require.NoError(t, builder.AddCacheYAML(`
+label: snap_cache
+memory: {}`))
+
+			var (
+				mu   sync.Mutex
+				rows []incrementalSnapshotRow
+			)
+			require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					// The signal row streams like any other insert, and its
+					// serial id collides with the ids under test.
+					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+						continue
+					}
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					id, err := data.(map[string]any)["id"].(json.Number).Int64()
+					if err != nil {
+						return err
+					}
+					op, _ := msg.MetaGet("operation")
+					rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
+				}
+				return nil
+			}))
+
+			stream, err := builder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			streamStopped := make(chan struct{})
+			go func() {
+				defer close(streamStopped)
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+
+			// Ask for the backfill now the slot exists.
+			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_quiet_pg%s", version), "flights")
+
+			// No writes from here, so only the heartbeat advances the
+			// snapshot.
+			require.Eventually(t, func() bool {
+				mu.Lock()
+				defer mu.Unlock()
+				return len(rows) >= numPreExisting
+			}, 90*time.Second, 100*time.Millisecond,
+				"the snapshot did not deliver each row of a quiet table on PostgreSQL "+version)
+
+			require.NoError(t, stream.StopWithin(10*time.Second))
+			<-streamStopped
+		})
+	}
+
+	t.Run("Resume", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		const numRows = 1000
+		for range numRows {
+			_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('pre', NOW())`)
+			require.NoError(t, err)
+		}
+
+		// A file cache, not memory, so the checkpoint survives across the two
+		// independent stream instances below, like an actual restart.
+		cacheDir := t.TempDir()
+		template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_incremental_resume
+    schema: public
+    heartbeat_interval: 100ms
+    tables:
+      - flights
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 20
+        checkpoint_cache: snap_cache_resume
+`, databaseURL)
+		cacheTemplate := fmt.Sprintf(`
+label: snap_cache_resume
+file:
+  directory: '%s'`, cacheDir)
+
+		runPartial := func(minRows int) []incrementalSnapshotRow {
+			builder := service.NewStreamBuilder()
+			require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
+			require.NoError(t, builder.AddInputYAML(template))
+			require.NoError(t, builder.AddCacheYAML(cacheTemplate))
+
+			var (
+				mu   sync.Mutex
+				rows []incrementalSnapshotRow
+			)
+			require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					// The signal row streams like any other insert, and its
+					// serial id collides with the ids under test.
+					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+						continue
+					}
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					id, err := data.(map[string]any)["id"].(json.Number).Int64()
+					if err != nil {
+						return err
+					}
+					op, _ := msg.MetaGet("operation")
+					rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
+				}
+				return nil
+			}))
+
+			stream, err := builder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			streamStopped := make(chan struct{})
+			go func() {
+				defer close(streamStopped)
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+
+			// Ask for the backfill now the slot exists.
+			signalIncrementalSnapshot(t, db, "test_slot_incremental_resume", "flights")
+
+			require.Eventually(t, func() bool {
+				mu.Lock()
+				defer mu.Unlock()
+				return len(rows) >= minRows
+			}, 60*time.Second, 20*time.Millisecond, "did not observe the minimum number of rows before stopping")
+
+			require.NoError(t, stream.StopWithin(10*time.Second))
+			select {
+			case <-streamStopped:
+			case <-time.After(30 * time.Second):
+				require.Fail(t, "stream did not stop in time")
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]incrementalSnapshotRow(nil), rows...)
+		}
+
+		// Stop early, leaving the backfill (and its checkpoint) partway through.
+		firstRun := runPartial(10)
+		require.NotEmpty(t, firstRun)
+		require.Less(t, len(firstRun), numRows, "first run should not have completed the entire backfill; the test can't exercise resume otherwise")
+
+		// Reuses the same slot and cache directory: a correct resume picks up
+		// from the checkpoint, so none of the first run's rows should reappear.
+		secondRun := runPartial(numRows - len(firstRun))
+
+		firstIDs := make(map[int64]struct{}, len(firstRun))
+		for _, r := range firstRun {
+			firstIDs[r.id] = struct{}{}
+		}
+		for _, r := range secondRun {
+			_, seenBefore := firstIDs[r.id]
+			assert.False(t, seenBefore, "row id %d observed in both the first and second run; resume should not re-deliver already-observed rows", r.id)
+		}
+
+		allCounts := make(map[int64]int, numRows)
+		for _, r := range firstRun {
+			allCounts[r.id]++
+		}
+		for _, r := range secondRun {
+			allCounts[r.id]++
+		}
+
+		var totalRows int64
+		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM flights`).Scan(&totalRows))
+		require.EqualValues(t, numRows, totalRows)
+
+		assert.Len(t, allCounts, int(totalRows), "expected exactly %d distinct rows across both runs combined", totalRows)
+		for id, count := range allCounts {
+			assert.Equal(t, 1, count, "row id %d observed %d times across both runs, expected exactly once", id, count)
+		}
+	})
 }
