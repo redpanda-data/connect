@@ -917,6 +917,23 @@ func (s *Stream) Errors() chan error {
 
 // primaryKeyColumnsQuery returns the query used to resolve table's primary
 // key columns, in index order.
+// primaryKeyColumnTypesQuery reports the primary key columns of a table with
+// their type names, resolving a domain to the type it is built on so a domain
+// over an unusable type is not mistaken for a usable one.
+func primaryKeyColumnTypesQuery(table string) (string, error) {
+	return sanitize.SQLQuery(`
+        SELECT a.attname, COALESCE(bt.typname, t.typname)
+        FROM   pg_index i
+        JOIN   pg_attribute a ON a.attrelid = i.indrelid
+            AND a.attnum = ANY(i.indkey)
+        JOIN   pg_type t ON t.oid = a.atttypid
+        LEFT JOIN pg_type bt ON bt.oid = NULLIF(t.typbasetype, 0)
+        WHERE  i.indrelid = $1::regclass
+        AND    i.indisprimary
+        ORDER BY array_position(i.indkey, a.attnum);
+    `, table)
+}
+
 func primaryKeyColumnsQuery(table string) (string, error) {
 	return sanitize.SQLQuery(`
         SELECT a.attname
