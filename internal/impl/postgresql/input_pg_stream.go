@@ -163,8 +163,8 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Example("6s").
 			Default("3s")).
 		Field(service.NewIntField(fieldMaxParallelSnapshotTables).
-			Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage.\n\nApplies to the `" + fieldStreamSnapshot + "` snapshot only.").
-			ShortDescription("Number of tables to snapshot in parallel. Applies to `" + fieldStreamSnapshot + "` only.").
+			Description("Int specifies a number of tables that will be processed in parallel during the initial snapshot processing stage.").
+			ShortDescription("Number of tables to snapshot in parallel.").
 			Default(1)).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
 			Description("The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.").
@@ -281,10 +281,8 @@ Each table must appear in ` + "`" + fieldTables + "`" + ` (or that list must be 
 an unreplicated table has no live changes to deduplicate its backfill against, so a write landing
 after its chunk is read would be lost. Each must also have a primary key, which the backfill pages
 by — a table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. A signal
-naming a table that fails either check is rejected and logged, and one that becomes unreadable
-after being queued is dropped from the queue with a warning. If a check cannot be run at all — a
-connection reset, say — the stream restarts and the signal is read again, so the request is not
-lost.
+naming a table that fails either check is rejected and logged dropped from the snapshot queue. If a check cannot be run at all - a
+connection reset, say - the stream restarts and the signal is read again, so the request is not lost.
 
 Each table joins the back of the backfill queue. A table this run already covers is skipped and
 logged, so a repeated signal does not re-read it. To read one again, point
