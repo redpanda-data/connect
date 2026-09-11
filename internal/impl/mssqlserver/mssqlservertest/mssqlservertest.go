@@ -231,15 +231,30 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 // creates a testdb database, enables CDC, and returns the connection string and TestDB wrapper.
 // The container is automatically cleaned up when the test completes.
 func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
-	ctr, err := tcmssql.Run(t.Context(),
-		"mcr.microsoft.com/mssql/server:2025-latest",
-		testcontainers.WithImagePlatform("linux/amd64"),
-		tcmssql.WithAcceptEULA(),
-		tcmssql.WithPassword("YourStrong!Passw0rd"),
-		testcontainers.WithEnv(map[string]string{
-			"MSSQL_AGENT_ENABLED": "true",
-		}),
+	const maxAttempts = 3
+	var (
+		ctr *tcmssql.MSSQLServerContainer
+		err error
 	)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		ctr, err = tcmssql.Run(t.Context(),
+			"mcr.microsoft.com/mssql/server:2025-latest",
+			testcontainers.WithImagePlatform("linux/amd64"),
+			tcmssql.WithAcceptEULA(),
+			tcmssql.WithPassword("YourStrong!Passw0rd"),
+			testcontainers.WithEnv(map[string]string{
+				"MSSQL_AGENT_ENABLED": "true",
+			}),
+		)
+		if err == nil {
+			break
+		}
+		t.Logf("mssqlserver container start attempt %d/%d failed: %v", attempt, maxAttempts, err)
+		if ctr != nil {
+			_ = ctr.Terminate(context.Background())
+			ctr = nil
+		}
+	}
 	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
