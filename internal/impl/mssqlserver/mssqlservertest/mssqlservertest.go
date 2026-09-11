@@ -242,6 +242,10 @@ func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
 		ctr, err = startMSSQLServerContainer(t.Context())
 		if err != nil {
 			t.Logf("mssqlserver container start attempt %d/%d failed: %v", attempt, maxAttempts, err)
+			if ctr != nil { // ensure we don't leak a running container
+				_ = ctr.Terminate(context.Background())
+				ctr = nil
+			}
 			continue
 		}
 
