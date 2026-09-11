@@ -24,9 +24,11 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
-// setupIncrementalSnapshot adds a Coordinator to the stream. It does nothing
-// when the snapshot is disabled, and leaves the coordinator and the
-// connection nil.
+var (
+	errSignalRejected   = errors.New("rejected")
+	errSnapshotDisabled = errors.New("a " + replication.SnapshotSignalType + " signal needs incremental_snapshot.enabled set to true, so no backfill was queued for it")
+)
+
 func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) error {
 	incSnapshotCfg := config.IncrementalSnapshotCfg()
 	if !incSnapshotCfg.IsEnabled() {
@@ -85,10 +87,6 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 	return nil
 }
 
-// normalizeTableID makes a TableID from a schema name and a table name. It
-// uses the same rules as NewPgStream, then removes the quotation marks: a
-// TableID must hold unquoted names, because Postgres reports them in this
-// form in replication messages.
 func normalizeTableID(schemaRaw, tableRaw string) (incrementalsnapshot.TableID, error) {
 	schemaNorm, err := sanitize.NormalizePostgresIdentifier(schemaRaw)
 	if err != nil {
@@ -109,9 +107,6 @@ func normalizeTableID(schemaRaw, tableRaw string) (incrementalsnapshot.TableID, 
 	return incrementalsnapshot.TableID{Schema: schema, Table: table}, nil
 }
 
-// incrementalPKColumns reads the unquoted primary key columns of the table
-// and keeps them in a cache. ResolvePrimaryKey and incrementalStreamedRowPK
-// both need the same columns to make a PrimaryKey that OnStreamedRow matches.
 func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnapshot.TableID) ([]string, error) {
 	key := table.String()
 	if cols, exists := s.incSnapshotPKCache[key]; exists {
@@ -575,11 +570,6 @@ func tableFQN(table incrementalsnapshot.TableID) TableFQN {
 	}
 }
 
-// deduplicateStreamedRow tells the coordinator that the stream carries this
-// row, which drops any copy the window buffer holds for the same key. That
-// copy is stale or redundant, and this message gives the current value.
-//
-// A no-op unless the snapshot runs and the table is one it snapshots.
 func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMessage) error {
 	if s.incSnapshotCoordinator == nil {
 		return nil
@@ -609,20 +599,6 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 	return nil
 }
 
-// errSignalRejected marks a signal the connector will never honour, as
-// against a failure to judge one.
-//
-// Only a rejection may be logged and skipped. The signal row is forwarded
-// and its position acknowledged, so a request dropped on a failed check is
-// dropped for good -- an acknowledged row never streams again. Anything else
-// must reach the caller, which restarts the stream and redelivers the row.
-var errSignalRejected = errors.New("rejected")
-
-// checkBackfillable rejects a table the snapshot could not read, so a bad
-// request fails where the user can see it rather than once it is queued and
-// checkpointed. Refer to incrementalsnapshot.ErrTableUnusable.
-//
-// A rejection wraps errSignalRejected; a failure to check does not.
 func (s *Stream) checkBackfillable(ctx context.Context, table incrementalsnapshot.TableID) error {
 	if err := s.checkReplicated(table); err != nil {
 		return fmt.Errorf("%w: %w", errSignalRejected, err)
@@ -639,12 +615,6 @@ func (s *Stream) checkBackfillable(ctx context.Context, table incrementalsnapsho
 	return nil
 }
 
-// checkReplicated rejects a table the publication does not carry.
-//
-// Its backfill would have no live changes to deduplicate against, so a write
-// landing after its chunk is read would be lost: the stale snapshot row
-// would be the last thing delivered for that key, with nothing following to
-// correct it.
 func (s *Stream) checkReplicated(table incrementalsnapshot.TableID) error {
 	if s.incSnapshotReplicated == nil {
 		return nil // FOR ALL TABLES
@@ -663,7 +633,7 @@ func (s *Stream) checkReplicated(table incrementalsnapshot.TableID) error {
 // request came from a user, who would otherwise wait for a backfill that
 // never starts.
 func (s *Stream) snapshotSignalTables(ctx context.Context, message *StreamMessage) ([]incrementalsnapshot.TableID, error) {
-	if s.incSnapshotCoordinator == nil || message.Operation != InsertOpType {
+	if message.Operation != InsertOpType {
 		return nil, nil
 	}
 	if s.signalTable == nil || message.Schema != s.signalTable.Schema || message.Table != s.signalTable.Table {
@@ -672,10 +642,20 @@ func (s *Stream) snapshotSignalTables(ctx context.Context, message *StreamMessag
 
 	row, isMap := message.Data.(map[string]any)
 	if !isMap {
+		if s.incSnapshotCoordinator == nil {
+			// Nothing to act on, and the signaller reports this row anyway.
+			return nil, nil
+		}
 		return nil, fmt.Errorf("signal row: %w: expected map data, got %T", errSignalRejected, message.Data)
 	}
 	if signalType, _ := row["type"].(string); signalType != replication.SnapshotSignalType {
 		return nil, nil
+	}
+	// The request is a snapshot signal, so report it rather than discarding
+	// it silently. Identifying one needs no coordinator: the signal table is
+	// configured separately.
+	if s.incSnapshotCoordinator == nil {
+		return nil, fmt.Errorf("signal row: %w", errSnapshotDisabled)
 	}
 
 	payload, isText := row["data"].(string)
@@ -709,6 +689,12 @@ func (s *Stream) snapshotSignalTables(ctx context.Context, message *StreamMessag
 func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMessage) error {
 	tables, err := s.snapshotSignalTables(ctx, message)
 	if err != nil {
+		if errors.Is(err, errSnapshotDisabled) {
+			// A configuration mistake rather than a bad request, so it warns
+			// rather than erroring, and replication carries on regardless.
+			s.logger.Warnf("Incremental snapshot: %s", err)
+			return nil
+		}
 		if errors.Is(err, errSignalRejected) {
 			// The connector will never honour it, so log and carry on: the
 			// row still reaches the consumer for inspection.
