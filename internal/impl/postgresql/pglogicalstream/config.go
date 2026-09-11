@@ -55,7 +55,6 @@ type Config struct {
 	UnchangedToastValue any
 	// The interval to send logical messages
 	HeartbeatInterval time.Duration
-
 	// IncrementalSnapshot holds the incremental snapshot configuration.
 	IncrementalSnapshot *incrementalsnapshot.Cfg
 }

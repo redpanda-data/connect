@@ -74,25 +74,15 @@ type Stream struct {
 	incSnapshotPKCache     map[string][]string
 	incSnapshotTables      map[incrementalsnapshot.TableID]struct{}
 	incSnapshotLastTable   *incrementalsnapshot.TableID // used for logging
+
 	// signalTable is in the unquoted form replication messages report, or
 	// nil when none is configured.
-	signalTable *incrementalsnapshot.TableID
-	// snapshotSchema resolves the table names a snapshot signal carries.
-	snapshotSchema string
-	// incSnapshotReplicated is the set a snapshot signal may name, in the
-	// unquoted form replication messages report. Nil means the publication
-	// is FOR ALL TABLES, so any table is allowed.
-	incSnapshotReplicated map[incrementalsnapshot.TableID]struct{}
-	// incSnapshotBackfilling reports whether the coordinator has work
-	// queued. The heartbeat reads it from its own goroutine, and Coordinator
-	// is not safe for concurrent use, so the replication loop mirrors the
-	// state here rather than exposing the coordinator.
+	signalTable            *incrementalsnapshot.TableID
+	snapshotSchema         string
+	incSnapshotReplicated  map[incrementalsnapshot.TableID]struct{}
 	incSnapshotBackfilling atomic.Bool
-
 	// BlockingSnapshot is true only when this session runs the one-shot
-	// stream_snapshot backfill, which also emits a SnapshotCompleteOpType
-	// sentinel. False when the slot already existed, since that backfill only
-	// runs against a fresh slot.
+	// stream_snapshot backfill.
 	BlockingSnapshot bool
 }
 
@@ -175,16 +165,13 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	})
 
 	if config.HeartbeatInterval > 0 {
-		stream.heartbeat, err = newHeartbeat(
-			config,
-			EffectiveHeartbeatInterval(config.HeartbeatInterval, config.IncrementalSnapshotCfg()),
-			"redpanda_connect_"+stream.slotName,
-			`{"type":"heartbeat"}`,
-			stream.incSnapshotBackfilling.Load,
-		)
+		interval := EffectiveHeartbeatInterval(config.HeartbeatInterval, config.IncrementalSnapshotCfg())
+		prefix := "redpanda_connect_" + stream.slotName
+		stream.heartbeat, err = newHeartbeat(config, interval, prefix, `{"type":"heartbeat"}`, stream.incSnapshotBackfilling.Load)
 		if err != nil {
 			return nil, err
 		}
+
 		stream.heartbeat.Start()
 		cleanups = append(cleanups, func() {
 			if err := stream.heartbeat.Stop(); err != nil {
