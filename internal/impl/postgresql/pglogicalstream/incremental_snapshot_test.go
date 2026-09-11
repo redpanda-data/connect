@@ -11,6 +11,7 @@ package pglogicalstream
 import (
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
@@ -445,4 +447,80 @@ func TestSnapshotSignalRejectsTableWithoutPrimaryKey(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable)
 	assert.Contains(t, err.Error(), "no primary key found")
+}
+
+// TestSnapshotSignalRejectionVsFailure: only a signal the connector will
+// never honour may be logged and skipped.
+//
+// The row is forwarded and its position acknowledged either way, so a
+// request dropped because a check could not run is dropped for good. A
+// failure must instead reach the caller, which restarts the stream and
+// redelivers the still-unacknowledged row.
+func TestSnapshotSignalRejectionVsFailure(t *testing.T) {
+	signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
+	replicated := map[incrementalsnapshot.TableID]struct{}{
+		{Schema: "public", Table: "flights"}: {},
+		{Schema: "public", Table: "nopk"}:    {},
+	}
+
+	withKey := func(t *testing.T) *sql.DB {
+		return newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"id"}}, nil)
+	}
+	withoutKey := func(t *testing.T) *sql.DB {
+		return newFakeQueryDB(t, []string{"attname"}, nil, nil)
+	}
+	unreachable := func(t *testing.T) *sql.DB {
+		// Closed, so the validation query fails the way a reset connection
+		// or a pool timeout would.
+		db := withKey(t)
+		require.NoError(t, db.Close())
+		return db
+	}
+
+	for _, test := range []struct {
+		name     string
+		conn     func(*testing.T) *sql.DB
+		payload  string
+		rejected bool
+	}{
+		{name: "unreplicated table", conn: withKey, payload: `{"tables": ["users"]}`, rejected: true},
+		{name: "no primary key", conn: withoutKey, payload: `{"tables": ["nopk"]}`, rejected: true},
+		{name: "malformed payload", conn: withKey, payload: `not json`, rejected: true},
+		{name: "empty table list", conn: withKey, payload: `{"tables": []}`, rejected: true},
+		{name: "invalid table name", conn: withKey, payload: `{"tables": ["*"]}`, rejected: true},
+		{name: "validation query fails", conn: unreachable, payload: `{"tables": ["flights"]}`, rejected: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s := &Stream{
+				incSnapshotCoordinator: &incsnapshot.Coordinator{},
+				signalTable:            &signalTable,
+				snapshotSchema:         "public",
+				incSnapshotReplicated:  replicated,
+				incSnapshotConn:        test.conn(t),
+				incSnapshotPKCache:     map[string][]string{},
+			}
+
+			msg := &StreamMessage{
+				Operation: InsertOpType,
+				Schema:    "public",
+				Table:     "rpcn_signal",
+				Data:      map[string]any{"type": "snapshot", "data": test.payload},
+			}
+
+			_, err := s.snapshotSignalTables(t.Context(), msg)
+			require.Error(t, err)
+			assert.Equal(t, test.rejected, errors.Is(err, errSignalRejected))
+
+			// What the replication loop acts on: a rejection is swallowed
+			// after logging, anything else propagates and restarts the
+			// stream so the row is redelivered.
+			s.logger = service.MockResources().Logger()
+			err = s.dispatchSnapshotSignal(t.Context(), msg)
+			if test.rejected {
+				assert.NoError(t, err, "a rejection must not stop replication")
+			} else {
+				assert.Error(t, err, "a failed check must reach the caller")
+			}
+		})
+	}
 }

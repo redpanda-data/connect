@@ -11,6 +11,7 @@ package pglogicalstream
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -541,15 +542,31 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 	return nil
 }
 
+// errSignalRejected marks a signal the connector will never honour, as
+// against a failure to judge one.
+//
+// Only a rejection may be logged and skipped. The signal row is forwarded
+// and its position acknowledged, so a request dropped on a failed check is
+// dropped for good -- an acknowledged row never streams again. Anything else
+// must reach the caller, which restarts the stream and redelivers the row.
+var errSignalRejected = errors.New("rejected")
+
 // checkBackfillable rejects a table the snapshot could not read, so a bad
 // request fails where the user can see it rather than once it is queued and
 // checkpointed. Refer to incrementalsnapshot.ErrTableUnusable.
+//
+// A rejection wraps errSignalRejected; a failure to check does not.
 func (s *Stream) checkBackfillable(ctx context.Context, table incrementalsnapshot.TableID) error {
 	if err := s.checkReplicated(table); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errSignalRejected, err)
 	}
 	// The backfill pages by key, so a table without one can never be read.
 	if _, err := s.incrementalPKColumns(ctx, table); err != nil {
+		if errors.Is(err, incrementalsnapshot.ErrTableUnusable) {
+			return fmt.Errorf("%w: %w", errSignalRejected, err)
+		}
+		// The query itself failed, so whether the table is usable is still
+		// unknown. Propagate, and the redelivered row asks again.
 		return err
 	}
 	return nil
@@ -588,7 +605,7 @@ func (s *Stream) snapshotSignalTables(ctx context.Context, message *StreamMessag
 
 	row, isMap := message.Data.(map[string]any)
 	if !isMap {
-		return nil, fmt.Errorf("signal row: expected map data, got %T", message.Data)
+		return nil, fmt.Errorf("signal row: %w: expected map data, got %T", errSignalRejected, message.Data)
 	}
 	if signalType, _ := row["type"].(string); signalType != replication.SnapshotSignalType {
 		return nil, nil
@@ -596,21 +613,21 @@ func (s *Stream) snapshotSignalTables(ctx context.Context, message *StreamMessag
 
 	payload, isText := row["data"].(string)
 	if !isText {
-		return nil, fmt.Errorf("signal row: expected string data column, got %T", row["data"])
+		return nil, fmt.Errorf("signal row: %w: expected string data column, got %T", errSignalRejected, row["data"])
 	}
 	var signal replication.SnapshotSignal
 	if err := json.Unmarshal([]byte(payload), &signal); err != nil {
-		return nil, fmt.Errorf("signal row: parsing %s payload: %w", replication.SnapshotSignalType, err)
+		return nil, fmt.Errorf("signal row: %w: parsing %s payload: %w", errSignalRejected, replication.SnapshotSignalType, err)
 	}
 	if len(signal.Tables) == 0 {
-		return nil, fmt.Errorf("signal row: %s payload lists no tables", replication.SnapshotSignalType)
+		return nil, fmt.Errorf("signal row: %w: %s payload lists no tables", errSignalRejected, replication.SnapshotSignalType)
 	}
 
 	tables := make([]incrementalsnapshot.TableID, 0, len(signal.Tables))
 	for _, name := range signal.Tables {
 		table, err := normalizeTableID(s.snapshotSchema, name)
 		if err != nil {
-			return nil, fmt.Errorf("signal row: resolving table %q: %w", name, err)
+			return nil, fmt.Errorf("signal row: %w: resolving table %q: %w", errSignalRejected, name, err)
 		}
 		if err := s.checkBackfillable(ctx, table); err != nil {
 			// Reject the whole request rather than part of it: a caller who
@@ -632,8 +649,19 @@ func (s *Stream) snapshotSignalTables(ctx context.Context, message *StreamMessag
 // streams again.
 func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMessage) error {
 	tables, err := s.snapshotSignalTables(ctx, message)
-	if err != nil || len(tables) == 0 {
+	if err != nil {
+		if errors.Is(err, errSignalRejected) {
+			// The connector will never honour it, so log and carry on: the
+			// row still reaches the consumer for inspection.
+			s.logger.Errorf("Incremental snapshot: %s", err)
+			return nil
+		}
+		// The signal could not be judged, so returning is the only way to
+		// keep the request -- refer to errSignalRejected.
 		return err
+	}
+	if len(tables) == 0 {
+		return nil
 	}
 
 	added := s.incSnapshotCoordinator.AddTables(tables)
