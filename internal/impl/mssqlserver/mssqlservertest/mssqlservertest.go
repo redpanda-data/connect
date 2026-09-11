@@ -233,90 +233,38 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
 	const maxAttempts = 3
 	var (
-		ctr *tcmssql.MSSQLServerContainer
-		err error
+		ctr              *tcmssql.MSSQLServerContainer
+		connectionString string
+		db               *sql.DB
+		err              error
 	)
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		ctr, err = tcmssql.Run(t.Context(),
-			"mcr.microsoft.com/mssql/server:2025-latest",
-			testcontainers.WithImagePlatform("linux/amd64"),
-			tcmssql.WithAcceptEULA(),
-			tcmssql.WithPassword("YourStrong!Passw0rd"),
-			testcontainers.WithEnv(map[string]string{
-				"MSSQL_AGENT_ENABLED": "true",
-			}),
-		)
-		if err == nil {
-			break
+		ctr, err = startMSSQLServerContainer(t.Context())
+		if err != nil {
+			t.Logf("mssqlserver container start attempt %d/%d failed: %v", attempt, maxAttempts, err)
+			continue
 		}
-		t.Logf("mssqlserver container start attempt %d/%d failed: %v", attempt, maxAttempts, err)
-		if ctr != nil {
+
+		if err = createDatabase(t.Context(), ctr, "testdb"); err != nil {
+			t.Logf("mssqlserver create testdb attempt %d/%d failed: %v", attempt, maxAttempts, err)
 			_ = ctr.Terminate(context.Background())
 			ctr = nil
+			continue
 		}
+
+		db, connectionString, err = openAndEnableCDC(t.Context(), ctr, "testdb")
+		if err != nil {
+			t.Logf("mssqlserver enable CDC attempt %d/%d failed: %v", attempt, maxAttempts, err)
+			_ = ctr.Terminate(context.Background())
+			ctr = nil
+			continue
+		}
+
+		err = nil
+		break
 	}
 	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-
-	connectionString, err := ctr.ConnectionString(t.Context(), "database=master", "encrypt=disable")
-	require.NoError(t, err)
-
-	// Retry creating testdb and enabling CDC — the SQL Agent may not be ready immediately.
-	require.Eventually(t, func() bool {
-		db, err := sql.Open("mssql", connectionString)
-		if err != nil {
-			return false
-		}
-		defer db.Close()
-
-		if err = db.Ping(); err != nil {
-			return false
-		}
-
-		if _, err = db.Exec(`
-			IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'testdb')
-			BEGIN
-				CREATE DATABASE testdb;
-			END;`); err != nil {
-			return false
-		}
-
-		return true
-	}, 2*time.Minute, 2*time.Second)
-
-	connectionString, err = ctr.ConnectionString(t.Context(), "database=testdb", "encrypt=disable")
-	require.NoError(t, err)
-
-	var db *sql.DB
-	require.Eventually(t, func() bool {
-		if db != nil {
-			db.Close()
-		}
-		var openErr error
-		db, openErr = sql.Open("mssql", connectionString)
-		if openErr != nil {
-			return false
-		}
-
-		db.SetMaxOpenConns(10)
-		db.SetMaxIdleConns(5)
-		db.SetConnMaxLifetime(time.Minute * 5)
-
-		if openErr = db.Ping(); openErr != nil {
-			db.Close()
-			db = nil
-			return false
-		}
-
-		// enable CDC on database
-		if _, openErr = db.Exec("EXEC sys.sp_cdc_enable_db;"); openErr != nil {
-			db.Close()
-			db = nil
-			return false
-		}
-
-		return true
-	}, 2*time.Minute, 2*time.Second)
 
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())
@@ -324,12 +272,8 @@ func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
 	return connectionString, &TestDB{db, t}
 }
 
-// MustSetupTestWithMicrosoftSQLServerVersion starts a Microsoft SQL Server Docker container with the specified version
-// and returns the connection string and raw sql.DB connected to the master database.
-// Unlike SetupTestWithMicrosoftSQLServerVersion, this does not create testdb or enable CDC.
-// The container is automatically cleaned up when the test completes.
-func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) {
-	ctr, err := tcmssql.Run(t.Context(),
+func startMSSQLServerContainer(ctx context.Context) (*tcmssql.MSSQLServerContainer, error) {
+	return tcmssql.Run(ctx,
 		"mcr.microsoft.com/mssql/server:2025-latest",
 		testcontainers.WithImagePlatform("linux/amd64"),
 		tcmssql.WithAcceptEULA(),
@@ -338,6 +282,119 @@ func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) 
 			"MSSQL_AGENT_ENABLED": "true",
 		}),
 	)
+}
+
+func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbName string) error {
+	masterConn, err := ctr.ConnectionString(ctx, "database=master", "encrypt=disable")
+	if err != nil {
+		return fmt.Errorf("master connection string: %w", err)
+	}
+
+	var lastErr error
+	ok := eventually(ctx, 30*time.Second, 2*time.Second, func() bool {
+		masterDB, openErr := sql.Open("mssql", masterConn)
+		if openErr != nil {
+			lastErr = openErr
+			return false
+		}
+		defer masterDB.Close()
+
+		if openErr = masterDB.Ping(); openErr != nil {
+			lastErr = openErr
+			return false
+		}
+
+		query := fmt.Sprintf(`
+			IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'%s')
+			BEGIN
+				CREATE DATABASE %s;
+			END;`, dbName, dbName)
+		if _, openErr = masterDB.Exec(query); openErr != nil {
+			lastErr = openErr
+			return false
+		}
+
+		return true
+	})
+	if !ok {
+		return fmt.Errorf("create database %q: %w", dbName, lastErr)
+	}
+	return nil
+}
+
+func openAndEnableCDC(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbName string) (*sql.DB, string, error) {
+	connStr, err := ctr.ConnectionString(ctx, "database="+dbName, "encrypt=disable")
+	if err != nil {
+		return nil, "", fmt.Errorf("connection string: %w", err)
+	}
+
+	var (
+		db      *sql.DB
+		lastErr error
+	)
+	ok := eventually(ctx, 30*time.Second, 2*time.Second, func() bool {
+		if db != nil {
+			db.Close()
+		}
+		var openErr error
+		db, openErr = sql.Open("mssql", connStr)
+		if openErr != nil {
+			lastErr = openErr
+			return false
+		}
+
+		db.SetMaxOpenConns(10)
+		db.SetMaxIdleConns(5)
+		db.SetConnMaxLifetime(5 * time.Minute)
+
+		if openErr = db.Ping(); openErr != nil {
+			lastErr = openErr
+			db.Close()
+			db = nil
+			return false
+		}
+
+		if _, openErr = db.Exec("EXEC sys.sp_cdc_enable_db;"); openErr != nil {
+			lastErr = openErr
+			db.Close()
+			db = nil
+			return false
+		}
+
+		return true
+	})
+	if !ok {
+		if db != nil {
+			db.Close()
+		}
+		return nil, "", fmt.Errorf("enable CDC on %q: %w", dbName, lastErr)
+	}
+	return db, connStr, nil
+}
+
+func eventually(ctx context.Context, timeout, tick time.Duration, fn func() bool) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if fn() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(tick):
+		}
+	}
+}
+
+// MustSetupTestWithMicrosoftSQLServerVersion starts a Microsoft SQL Server Docker container with the specified version
+// and returns the connection string and raw sql.DB connected to the master database.
+// Unlike SetupTestWithMicrosoftSQLServerVersion, this does not create testdb or enable CDC.
+// The container is automatically cleaned up when the test completes.
+func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) {
+	ctr, err := startMSSQLServerContainer(t.Context())
 	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
