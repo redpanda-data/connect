@@ -92,11 +92,6 @@ func (s *postgresSignaller) listen(msg *pglogicalstream.StreamMessage) (*replica
 		}
 		log.Infof("%s (lsn=%s)", sig.Message, sig.LSN)
 	case replication.SnapshotSignalType:
-		// Acted on in pglogicalstream, while the row is decoded, so the
-		// queue reaches the enclosing commit's checkpoint. Recognised here
-		// only so it is not reported as an unknown type; that includes
-		// warning when the incremental snapshot is disabled, which is the
-		// one case nothing else would report.
 	default:
 		log.Warnf("Control signal %q received but not a recognized type", sig.SignalType)
 	}
