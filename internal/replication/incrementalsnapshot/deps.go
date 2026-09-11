@@ -59,11 +59,6 @@ type Deps[W any] interface {
 
 // ErrTableUnusable reports a queued table the connector can never backfill,
 // such as one with no primary key, or one dropped after it was queued.
-//
-// Deps wraps it so the coordinator can tell it from a transient failure,
-// which must fail and be retried. This one never succeeds, so the
-// coordinator drops the table: failing would be permanent, since the table
-// is already in the checkpoint and every restart would replan it.
 var ErrTableUnusable = errors.New("table cannot be backfilled")
 
 // CoordinatorConfig configures a Coordinator. P is the database's position

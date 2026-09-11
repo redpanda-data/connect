@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -32,152 +33,62 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
-// fakeQueryDriver is a minimal database/sql driver that ignores whatever SQL
-// text it's given and always returns the canned rows/columns it was
-// constructed with. It exists so tests can exercise code that queries
-// *sql.DB (i.e. Stream.incSnapshotConn) without a real Postgres connection.
-type fakeQueryDriver struct {
-	columns []string
-	rows    [][]driver.Value
-	queries *int
-	// prepared collects the SQL text each Prepare receives, for tests that
-	// assert on the statement rather than the result.
-	prepared *[]string
-}
+func TestIncrementalSnapshotKeyResolution(t *testing.T) {
+	orders := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
+	ordersFQN := TableFQN{Schema: `"public"`, Table: `"orders"`}
 
-func (d *fakeQueryDriver) Open(string) (driver.Conn, error) {
-	return &fakeQueryConn{driver: d}, nil
-}
+	t.Run("key columns come back quoted, in key order", func(t *testing.T) {
+		db := newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"tenant_id"}, {"id"}}, nil)
+		s := &Stream{incSnapshotConn: db}
 
-type fakeQueryConn struct{ driver *fakeQueryDriver }
+		cols, err := s.resolveIncrementalPKColumns(t.Context(), ordersFQN)
+		require.NoError(t, err)
+		assert.Equal(t, []string{`"tenant_id"`, `"id"`}, cols)
+	})
 
-func (c *fakeQueryConn) Prepare(query string) (driver.Stmt, error) {
-	if c.driver.prepared != nil {
-		*c.driver.prepared = append(*c.driver.prepared, query)
-	}
-	return &fakeQueryStmt{conn: c}, nil
-}
-func (*fakeQueryConn) Close() error              { return nil }
-func (*fakeQueryConn) Begin() (driver.Tx, error) { return nil, fmt.Errorf("not implemented") }
+	t.Run("no primary key is unusable, not a failure", func(t *testing.T) {
+		db := newFakeQueryDB(t, []string{"attname"}, nil, nil)
+		s := &Stream{incSnapshotConn: db}
 
-type fakeQueryStmt struct{ conn *fakeQueryConn }
+		_, err := s.resolveIncrementalPKColumns(t.Context(), ordersFQN)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no primary key found")
+		// The coordinator drops rather than fails on this, so it must be
+		// distinguishable from a transient error.
+		assert.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable)
+	})
 
-func (*fakeQueryStmt) Close() error  { return nil }
-func (*fakeQueryStmt) NumInput() int { return -1 }
-func (*fakeQueryStmt) Exec([]driver.Value) (driver.Result, error) {
-	return nil, fmt.Errorf("not implemented")
-}
+	t.Run("columns are unquoted and cached", func(t *testing.T) {
+		queries := 0
+		db := newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"id"}}, &queries)
+		s := &Stream{
+			incSnapshotConn:    db,
+			incSnapshotPKCache: make(map[string][]string),
+		}
 
-func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
-	if s.conn.driver.queries != nil {
-		*s.conn.driver.queries++
-	}
-	return &fakeQueryRows{columns: s.conn.driver.columns, rows: s.conn.driver.rows}, nil
-}
+		cols, err := s.incrementalPKColumns(t.Context(), orders)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"id"}, cols, "cached columns must be unquoted")
+		assert.Equal(t, 1, queries)
 
-type fakeQueryRows struct {
-	columns []string
-	rows    [][]driver.Value
-	idx     int
-}
+		// The dedup path resolves these per streamed row, so a repeat
+		// lookup must not cost a round trip.
+		cols, err = s.incrementalPKColumns(t.Context(), orders)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"id"}, cols)
+		assert.Equal(t, 1, queries, "second lookup for the same table must be cached")
+	})
 
-func (r *fakeQueryRows) Columns() []string { return r.columns }
-func (*fakeQueryRows) Close() error        { return nil }
-func (r *fakeQueryRows) Next(dest []driver.Value) error {
-	if r.idx >= len(r.rows) {
-		return io.EOF
-	}
-	copy(dest, r.rows[r.idx])
-	r.idx++
-	return nil
-}
+	t.Run("an empty table has no max key and no error", func(t *testing.T) {
+		// Zero rows means nothing to backfill, which the coordinator treats
+		// as an exhausted table rather than a failure.
+		db := newFakeQueryDB(t, []string{"id"}, nil, nil)
+		s := &Stream{incSnapshotConn: db}
 
-var fakeQueryDriverSeq atomic.Int64
-
-// newFakeQueryDB registers a fresh fakeQueryDriver under a unique name (since
-// sql.Register panics on reuse) and opens a *sql.DB backed by it. If queries
-// is non-nil it's incremented once per Query call, letting tests assert on
-// query counts (e.g. to prove caching avoids a repeat round trip).
-func newFakeQueryDB(t *testing.T, columns []string, rows [][]driver.Value, queries *int) *sql.DB {
-	t.Helper()
-	return newFakeQueryDBCapturing(t, columns, rows, queries, nil)
-}
-
-// newFakeQueryDBCapturing also collects the SQL text of every Prepare into
-// prepared.
-func newFakeQueryDBCapturing(t *testing.T, columns []string, rows [][]driver.Value, queries *int, prepared *[]string) *sql.DB {
-	t.Helper()
-	name := fmt.Sprintf("fake_pglog_test_%d", fakeQueryDriverSeq.Add(1))
-	sql.Register(name, &fakeQueryDriver{columns: columns, rows: rows, queries: queries, prepared: prepared})
-	db, err := sql.Open(name, "")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db
-}
-
-func TestResolveIncrementalPKColumnsUsesSnapshotConn(t *testing.T) {
-	// pgConn is deliberately left nil: if resolveIncrementalPKColumns (or
-	// anything it calls) touched s.pgConn instead of s.incSnapshotConn, this
-	// would panic with a nil pointer dereference rather than returning a
-	// result -- this is precisely the deadlock/crash bug being guarded
-	// against, since s.pgConn is occupied by the replication protocol once
-	// streaming has started.
-	db := newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"tenant_id"}, {"id"}}, nil)
-	s := &Stream{incSnapshotConn: db}
-
-	cols, err := s.resolveIncrementalPKColumns(t.Context(), TableFQN{Schema: `"public"`, Table: `"orders"`})
-	require.NoError(t, err)
-	assert.Equal(t, []string{`"tenant_id"`, `"id"`}, cols)
-}
-
-func TestResolveIncrementalPKColumnsNoPrimaryKey(t *testing.T) {
-	db := newFakeQueryDB(t, []string{"attname"}, nil, nil)
-	s := &Stream{incSnapshotConn: db}
-
-	_, err := s.resolveIncrementalPKColumns(t.Context(), TableFQN{Schema: `"public"`, Table: `"orders"`})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no primary key found")
-	// The coordinator drops rather than fails on this, so it must be
-	// distinguishable from a transient error.
-	assert.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable)
-}
-
-func TestIncrementalPKColumnsCachesAndUnquotes(t *testing.T) {
-	queries := 0
-	// pgConn is left nil for the same reason as above: incrementalPKColumns
-	// backs both the coordinator's PK resolution and live DML dedup lookups,
-	// either of which may run concurrently with replication streaming.
-	db := newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"id"}}, &queries)
-	s := &Stream{
-		incSnapshotConn:    db,
-		incSnapshotPKCache: make(map[string][]string),
-	}
-
-	table := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
-
-	cols, err := s.incrementalPKColumns(t.Context(), table)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"id"}, cols, "cached columns must be unquoted")
-	assert.Equal(t, 1, queries)
-
-	// Second call for the same table must be served from the cache, not
-	// issue a second query.
-	cols, err = s.incrementalPKColumns(t.Context(), table)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"id"}, cols)
-	assert.Equal(t, 1, queries, "second lookup for the same table must be cached")
-}
-
-func TestResolveIncrementalMaxKeyEmptyTableIsNotAnError(t *testing.T) {
-	// Zero rows means the table currently has nothing to backfill; this must
-	// be reported as (nil, nil), not an error that aborts the whole stream.
-	db := newFakeQueryDB(t, []string{"id"}, nil, nil)
-	s := &Stream{incSnapshotConn: db}
-
-	table := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
-	pk, err := s.resolveIncrementalMaxKey(t.Context(), table, []string{"id"}, "SELECT id FROM orders")
-	require.NoError(t, err)
-	assert.Nil(t, pk)
+		pk, err := s.resolveIncrementalMaxKey(t.Context(), orders, []string{"id"}, "SELECT id FROM orders")
+		require.NoError(t, err)
+		assert.Nil(t, pk)
+	})
 }
 
 func TestCanonicalizePKValue(t *testing.T) {
@@ -197,12 +108,6 @@ func TestCanonicalizePKValue(t *testing.T) {
 	})
 }
 
-// TestCanonicalizePKValueDedupsAcrossDecodePaths proves the fix end-to-end
-// against the dedup window: without canonicalizing PK values before they
-// reach incrementalsnapshot.PrimaryKey, a UUID primary key decoded as a raw
-// [16]byte on one path and a canonical string on the other would never
-// dedup, since the window's key is built by directly formatting each
-// PrimaryKey element.
 func TestCanonicalizePKValueDedupsAcrossDecodePaths(t *testing.T) {
 	table := incrementalsnapshot.TableID{Schema: "public", Table: "widgets"}
 	id := uuid.New()
@@ -476,6 +381,13 @@ func TestSnapshotSignalRejectionVsFailure(t *testing.T) {
 		require.NoError(t, db.Close())
 		return db
 	}
+	// The query resolves the table with ::regclass, so a name that does not
+	// resolve fails at execution rather than returning no rows.
+	pgFailure := func(code string) func(*testing.T) *sql.DB {
+		return func(t *testing.T) *sql.DB {
+			return newFailingQueryDB(t, &pgconn.PgError{Code: code, Message: "from the server"})
+		}
+	}
 
 	for _, test := range []struct {
 		name     string
@@ -489,6 +401,15 @@ func TestSnapshotSignalRejectionVsFailure(t *testing.T) {
 		{name: "empty table list", conn: withKey, payload: `{"tables": []}`, rejected: true},
 		{name: "invalid table name", conn: withKey, payload: `{"tables": ["*"]}`, rejected: true},
 		{name: "validation query fails", conn: unreachable, payload: `{"tables": ["flights"]}`, rejected: false},
+		// A typo, or a schema-qualified name in one string, resolves to no
+		// relation. Propagating that would wedge replication for every
+		// table until someone deleted the signal row.
+		{name: "table does not exist", conn: pgFailure(pgErrUndefinedTable), payload: `{"tables": ["flights"]}`, rejected: true},
+		{name: "schema does not exist", conn: pgFailure(pgErrInvalidSchemaName), payload: `{"tables": ["flights"]}`, rejected: true},
+		{name: "no privilege on the table", conn: pgFailure(pgErrInsufficientPrivilege), payload: `{"tables": ["flights"]}`, rejected: true},
+		// A server-side error that says nothing about the table stays
+		// retryable.
+		{name: "server error is retryable", conn: pgFailure("40001"), payload: `{"tables": ["flights"]}`, rejected: false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s := &Stream{
@@ -550,4 +471,91 @@ func TestDeduplicateStreamedRowOnlyTouchesTheCurrentTable(t *testing.T) {
 			Data:      map[string]any{"id": 1},
 		}), "a row on a table the snapshot is not reading must not touch the database")
 	}
+}
+
+var fakeQueryDriverSeq atomic.Int64
+
+func newFailingQueryDB(t *testing.T, err error) *sql.DB {
+	t.Helper()
+	name := fmt.Sprintf("fake_pglog_test_%d", fakeQueryDriverSeq.Add(1))
+	sql.Register(name, &fakeQueryDriver{queryErr: err})
+	db, openErr := sql.Open(name, "")
+	require.NoError(t, openErr)
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+// newFakeQueryDBCapturing also collects the SQL text of every Prepare into
+// prepared.
+func newFakeQueryDBCapturing(t *testing.T, columns []string, rows [][]driver.Value, queries *int, prepared *[]string) *sql.DB {
+	t.Helper()
+	name := fmt.Sprintf("fake_pglog_test_%d", fakeQueryDriverSeq.Add(1))
+	sql.Register(name, &fakeQueryDriver{columns: columns, rows: rows, queries: queries, prepared: prepared})
+	db, err := sql.Open(name, "")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+func newFakeQueryDB(t *testing.T, columns []string, rows [][]driver.Value, queries *int) *sql.DB {
+	t.Helper()
+	return newFakeQueryDBCapturing(t, columns, rows, queries, nil)
+}
+
+type fakeQueryDriver struct {
+	columns  []string
+	rows     [][]driver.Value
+	queries  *int
+	prepared *[]string
+	queryErr error
+}
+
+func (d *fakeQueryDriver) Open(string) (driver.Conn, error) {
+	return &fakeQueryConn{driver: d}, nil
+}
+
+type fakeQueryConn struct{ driver *fakeQueryDriver }
+
+func (c *fakeQueryConn) Prepare(query string) (driver.Stmt, error) {
+	if c.driver.prepared != nil {
+		*c.driver.prepared = append(*c.driver.prepared, query)
+	}
+	return &fakeQueryStmt{conn: c}, nil
+}
+func (*fakeQueryConn) Close() error              { return nil }
+func (*fakeQueryConn) Begin() (driver.Tx, error) { return nil, fmt.Errorf("not implemented") }
+
+type fakeQueryStmt struct{ conn *fakeQueryConn }
+
+func (*fakeQueryStmt) Close() error  { return nil }
+func (*fakeQueryStmt) NumInput() int { return -1 }
+func (*fakeQueryStmt) Exec([]driver.Value) (driver.Result, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
+	if s.conn.driver.queries != nil {
+		*s.conn.driver.queries++
+	}
+	if err := s.conn.driver.queryErr; err != nil {
+		return nil, err
+	}
+	return &fakeQueryRows{columns: s.conn.driver.columns, rows: s.conn.driver.rows}, nil
+}
+
+type fakeQueryRows struct {
+	columns []string
+	rows    [][]driver.Value
+	idx     int
+}
+
+func (r *fakeQueryRows) Columns() []string { return r.columns }
+func (*fakeQueryRows) Close() error        { return nil }
+func (r *fakeQueryRows) Next(dest []driver.Value) error {
+	if r.idx >= len(r.rows) {
+		return io.EOF
+	}
+	copy(dest, r.rows[r.idx])
+	r.idx++
+	return nil
 }

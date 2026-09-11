@@ -16,6 +16,7 @@ import (
 	"slices"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
@@ -154,6 +155,9 @@ func (s *Stream) resolveIncrementalPKColumns(ctx context.Context, table TableFQN
 
 	rows, err := s.incSnapshotConn.QueryContext(ctx, q)
 	if err != nil {
+		if errIsPermanent(err) {
+			return nil, fmt.Errorf("%w: reading primary key columns for table %s: %w", incrementalsnapshot.ErrTableUnusable, table, err)
+		}
 		return nil, fmt.Errorf("querying primary key columns for table %s: %w", table, err)
 	}
 	defer rows.Close()
@@ -181,8 +185,24 @@ func (s *Stream) resolveIncrementalPKColumns(ctx context.Context, table TableFQN
 	return pkColumns, nil
 }
 
-// incrementalSnapshotDeps makes *Stream satisfy incrementalsnapshot.Deps,
-// keeping these general method names out of the API of Stream.
+const (
+	pgErrUndefinedTable        = "42P01"
+	pgErrInvalidSchemaName     = "3F000"
+	pgErrInsufficientPrivilege = "42501"
+)
+
+func errIsPermanent(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	switch pgErr.Code {
+	case pgErrUndefinedTable, pgErrInvalidSchemaName, pgErrInsufficientPrivilege:
+		return true
+	}
+	return false
+}
+
 type incrementalSnapshotDeps struct {
 	stream *Stream
 }
@@ -238,15 +258,6 @@ func (s *Stream) incrementalStreamedRowPK(ctx context.Context, table incremental
 	return pk, nil
 }
 
-// canonicalizePKValue changes a decoded primary key value to one stable
-// form. The window buffer keys rows on the text form of each PrimaryKey
-// element - refer to newWindowKey in the shared package - so one value must
-// give one key on both decode paths.
-//
-// The paths disagree: the stream uses decodeTextColumnData and the snapshot
-// uses prepareScannersAndGetters, so one Postgres type can arrive as two Go
-// types. A UUID can come as 16 bytes or as text. The buffer would then hold
-// both rows and remove neither.
 func canonicalizePKValue(v any) any {
 	switch val := v.(type) {
 	case [16]byte:
@@ -639,14 +650,6 @@ func (s *Stream) snapshotSignalTables(ctx context.Context, message *StreamMessag
 	return tables, nil
 }
 
-// dispatchSnapshotSignal queues the tables a snapshot signal asks for.
-//
-// It runs while the signal row is decoded, before the commit that carries
-// it, so the checkpoint that commit emits holds the new queue -- AddTables
-// makes the coordinator emit one whether or not a backfill was already
-// running. Queueing afterwards would acknowledge the row's LSN with the
-// older queue, losing the request on a restart: an acknowledged row never
-// streams again.
 func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMessage) error {
 	tables, err := s.snapshotSignalTables(ctx, message)
 	if err != nil {
