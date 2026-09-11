@@ -671,7 +671,7 @@ func TestIntegrationIncrementalSnapshotRejectsUnbindableKey(t *testing.T) {
 
 		var seen []string
 		var lower incrementalsnapshot.PrimaryKey
-		for chunk := 0; chunk < 10; chunk++ {
+		for chunk := range 10 {
 			q, args, err := incsnapshot.BuildChunkQuery(table, []string{"id"}, lower, maxPK, 3)
 			require.NoError(t, err)
 			rows, err := stream.fetchIncrementalChunk(t.Context(), table, []string{"id"}, q, args)

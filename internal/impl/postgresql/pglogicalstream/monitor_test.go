@@ -34,11 +34,11 @@ type estimateStub struct {
 
 func (s *estimateStub) Open(string) (driver.Conn, error) { return &estimateConn{stub: s}, nil }
 
-func (s *estimateStub) result() (float64, error, int) {
+func (s *estimateStub) result() (float64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.queries++
-	return s.count, s.err, s.queries
+	return s.count, s.err
 }
 
 func (s *estimateStub) queryCount() int {
@@ -49,12 +49,12 @@ func (s *estimateStub) queryCount() int {
 
 type estimateConn struct{ stub *estimateStub }
 
-func (c *estimateConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("unused") }
-func (c *estimateConn) Close() error                        { return nil }
-func (c *estimateConn) Begin() (driver.Tx, error)           { return nil, errors.New("unused") }
+func (*estimateConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("unused") }
+func (*estimateConn) Close() error                        { return nil }
+func (*estimateConn) Begin() (driver.Tx, error)           { return nil, errors.New("unused") }
 
 func (c *estimateConn) Query(string, []driver.Value) (driver.Rows, error) {
-	count, err, _ := c.stub.result()
+	count, err := c.stub.result()
 	if err != nil {
 		return nil, err
 	}
@@ -66,8 +66,8 @@ type estimateRows struct {
 	done  bool
 }
 
-func (r *estimateRows) Columns() []string { return []string{"reltuples"} }
-func (r *estimateRows) Close() error      { return nil }
+func (*estimateRows) Columns() []string { return []string{"reltuples"} }
+func (*estimateRows) Close() error      { return nil }
 func (r *estimateRows) Next(dest []driver.Value) error {
 	if r.done {
 		return io.EOF
