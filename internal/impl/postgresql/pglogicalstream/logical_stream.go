@@ -170,7 +170,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		stream.heartbeat.Start()
 		cleanups = append(cleanups, func() {
 			if err := stream.heartbeat.Stop(); err != nil {
