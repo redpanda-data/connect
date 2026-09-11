@@ -1717,3 +1717,238 @@ postgres_cdc:
 	}
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
 }
+
+// TestIntegrationPostgresDefaultBatchingIsTransactionSized verifies that with
+// no batching policy configured, rows committed in one transaction arrive
+// downstream as a single output batch (the reader batches per transaction and
+// the input passes that batch straight through).
+func TestIntegrationPostgresDefaultBatchingIsTransactionSized(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_default_batching
+    stream_snapshot: false
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+`, databaseURL)
+
+	var (
+		sizesMut sync.Mutex
+		sizes    []int
+	)
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		sizesMut.Lock()
+		defer sizesMut.Unlock()
+		sizes = append(sizes, len(mb))
+		return nil
+	}))
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+	go func() { _ = streamOut.Run(t.Context()) }()
+
+	// Give the replication slot time to be created before writing.
+	time.Sleep(5 * time.Second)
+
+	const rowCount = 5
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	for i := range rowCount {
+		f := pgtest.GetFakeFlightRecord()
+		_, err = tx.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+	require.NoError(t, tx.Commit())
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		sizesMut.Lock()
+		defer sizesMut.Unlock()
+		assert.Equal(c, []int{rowCount}, sizes, "one transaction should arrive as one batch")
+	}, 25*time.Second, 100*time.Millisecond)
+
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
+
+	sizesMut.Lock()
+	defer sizesMut.Unlock()
+	assert.Equal(t, []int{rowCount}, sizes, "no extra batch should arrive after the stream is stopped")
+}
+
+// TestIntegrationPostgresBatchingCountHonoured verifies that a configured
+// batching.count is honoured exactly even when the reader delivers a whole
+// transaction at once: 9 rows in one transaction with count 3 must arrive as
+// three batches of three.
+func TestIntegrationPostgresBatchingCountHonoured(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_batching_count
+    stream_snapshot: false
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+    batching:
+      count: 3
+      period: 1h
+`, databaseURL)
+
+	var (
+		sizesMut sync.Mutex
+		sizes    []int
+	)
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		sizesMut.Lock()
+		defer sizesMut.Unlock()
+		sizes = append(sizes, len(mb))
+		return nil
+	}))
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+	go func() { _ = streamOut.Run(t.Context()) }()
+
+	time.Sleep(5 * time.Second)
+
+	const rowCount = 9
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	for i := range rowCount {
+		f := pgtest.GetFakeFlightRecord()
+		_, err = tx.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+	require.NoError(t, tx.Commit())
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		sizesMut.Lock()
+		defer sizesMut.Unlock()
+		assert.Equal(c, []int{3, 3, 3}, sizes, "count 3 must split one 9-row transaction into three batches")
+	}, 25*time.Second, 100*time.Millisecond)
+
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
+
+	sizesMut.Lock()
+	defer sizesMut.Unlock()
+	assert.Equal(t, []int{3, 3, 3}, sizes, "no extra batch should arrive after the stream is stopped")
+}
+
+// TestIntegrationPostgresLargeTransactionSpansBatches covers the reader's row
+// cap: a single transaction larger than the streaming cap (half the default
+// checkpoint_limit of 1024, i.e. 512 rows) must arrive as several batches
+// with no rows lost, and a restart on the same slot after everything was
+// acked must not replay any of them.
+func TestIntegrationPostgresLargeTransactionSpansBatches(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_large_txn
+    stream_snapshot: false
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+`, databaseURL)
+
+	var (
+		mut   sync.Mutex
+		sizes []int
+		seqs  = map[int64]int{}
+	)
+	record := func(mb service.MessageBatch) error {
+		mut.Lock()
+		defer mut.Unlock()
+		sizes = append(sizes, len(mb))
+		for _, m := range mb {
+			var row struct {
+				Seq int64 `json:"Seq"`
+			}
+			b, err := m.AsBytes()
+			if err != nil {
+				return err
+			}
+			if err := json.Unmarshal(b, &row); err != nil {
+				return err
+			}
+			seqs[row.Seq]++
+		}
+		return nil
+	}
+
+	build := func() *service.Stream {
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, sb.AddInputYAML(template))
+		require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error { return record(mb) }))
+		s, err := sb.Build()
+		require.NoError(t, err)
+		license.InjectTestService(s.Resources())
+		return s
+	}
+
+	run1 := build()
+	go func() { _ = run1.Run(t.Context()) }()
+	time.Sleep(5 * time.Second)
+
+	const rowCount = 1500
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	for i := range rowCount {
+		f := pgtest.GetFakeFlightRecord()
+		_, err = tx.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+	require.NoError(t, tx.Commit())
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mut.Lock()
+		defer mut.Unlock()
+		assert.Equal(c, []int{512, 512, 476}, sizes, "a 1500-row transaction must split at the 512-row cap derived from the default checkpoint_limit")
+		assert.Len(c, seqs, rowCount)
+	}, 60*time.Second, 200*time.Millisecond)
+	require.NoError(t, run1.StopWithin(10*time.Second))
+
+	// Restart on the same slot: nothing already acked may be replayed, and
+	// new rows must still arrive.
+	mut.Lock()
+	sizes = nil
+	mut.Unlock()
+	run2 := build()
+	go func() { _ = run2.Run(t.Context()) }()
+	time.Sleep(5 * time.Second)
+
+	for i := rowCount; i < rowCount+3; i++ {
+		f := pgtest.GetFakeFlightRecord()
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mut.Lock()
+		defer mut.Unlock()
+		assert.Equal(c, []int{1, 1, 1}, sizes, "only the three new single-row transactions may arrive after restart")
+	}, 30*time.Second, 200*time.Millisecond)
+	require.NoError(t, run2.StopWithin(10*time.Second))
+
+	mut.Lock()
+	defer mut.Unlock()
+	require.Len(t, seqs, rowCount+3)
+	for seq, n := range seqs {
+		require.Equal(t, 1, n, "seq %d delivered %d times", seq, n)
+	}
+}

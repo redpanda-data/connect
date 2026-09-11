@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- postgres_cdc: Streaming replication now hands decoded rows to the pipeline in per-transaction batches over a buffered channel instead of one row at a time, so the reader and the batching/marshalling stages can overlap rather than run in lockstep. With no `batching` policy configured, each transaction now arrives downstream as one batch (previously one message at a time); any configured `batching` policy, including an explicit `count: 1`, is honoured exactly. Streaming batches are capped at half of `checkpoint_limit` so that two can be in flight. ([@squiidz](https://github.com/squiidz), [#NNNN](https://github.com/redpanda-data/connect/pull/NNNN))
+- postgres_cdc: A configured `batching` policy is now honoured exactly on both the snapshot and streaming paths; previously a batch could exceed the configured `count` by up to a whole snapshot page. ([@squiidz](https://github.com/squiidz), [#NNNN](https://github.com/redpanda-data/connect/pull/NNNN))
+
 ## 4.109.0 - 2026-09-10
 
 ### Added
