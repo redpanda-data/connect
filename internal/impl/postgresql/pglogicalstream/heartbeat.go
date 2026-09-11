@@ -26,22 +26,11 @@ type heartbeat struct {
 	logger        *service.Logger
 	prefix, value string
 	// transactional reports whether this tick needs a transactional
-	// message. Only a transactional one carries a transaction id, which
-	// OnCommit needs to advance an incremental snapshot -- on a quiet table
-	// the heartbeat is the only write there is.
-	//
-	// It is read per tick, so a backfill starting or finishing takes effect
-	// on the next one. A transaction id costs something, so an idle
-	// coordinator gets the cheaper non-transactional message.
+	// message used to advance incremental snapshot on a quiet table.
 	transactional func() bool
 }
 
-// EffectiveHeartbeatInterval returns how often to heartbeat: the more
-// frequent of the two intervals while a snapshot is enabled, since a snapshot
-// needs commits far more often than slot retention does, and heartbeating
-// faster serves both. The interval is fixed for the life of the input, but
-// the ticks only cost a transaction id while a backfill runs -- refer to
-// heartbeat.transactional.
+// EffectiveHeartbeatInterval returns the lowest configured heartbeat value.
 func EffectiveHeartbeatInterval(configured time.Duration, incSnapshot *incsnapshot.Cfg) time.Duration {
 	if !incSnapshot.IsEnabled() || incSnapshot.HeartbeatInterval <= 0 {
 		return configured
@@ -49,8 +38,6 @@ func EffectiveHeartbeatInterval(configured time.Duration, incSnapshot *incsnapsh
 	return min(configured, incSnapshot.HeartbeatInterval)
 }
 
-// newHeartbeat builds the heartbeat. transactional is consulted on each tick;
-// a nil one means never transactional.
 func newHeartbeat(config *Config, interval time.Duration, prefix, value string, transactional func() bool) (*heartbeat, error) {
 	dbConn, err := openPgConnectionFromConfig(config)
 	if err != nil {

@@ -19,14 +19,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// TestHeartbeatTransactionalPerTick: only a transactional message carries a
-// transaction id, which an incremental snapshot needs to advance. Each one
-// spends an id though, so an idle coordinator gets the cheaper
-// non-transactional message.
-//
-// The predicate is read per tick, so a backfill starting or finishing takes
-// effect on the next heartbeat without rebuilding it -- the interval is
-// fixed at construction, the message kind is not.
 func TestHeartbeatTransactionalPerTick(t *testing.T) {
 	var prepared []string
 	db := newFakeQueryDBCapturing(t, nil, nil, nil, &prepared)
