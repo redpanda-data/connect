@@ -29,7 +29,7 @@ import (
 // docs.
 func connectionHeadFields() []*service.ConfigField {
 	return []*service.ConfigField{
-		service.NewStringListField("urls").
+		service.NewURLListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://username:password@127.0.0.1:4222"}),
