@@ -39,9 +39,9 @@ type Stream struct {
 
 	shutSig *shutdown.Signaller
 
-	ackedLSNMu sync.Mutex
 	// The LSN acked by the stream, we may not have acked this to postgres yet (ack, ack, ack)
-	ackedLSN LSN
+	ackedLSN   LSN
+	ackedLSNMu sync.Mutex
 
 	standbyMessageTimeout time.Duration
 	messages              chan []StreamMessage
@@ -64,18 +64,13 @@ type Stream struct {
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
 	pgVersion               int
+	incSnapshot             incrementalSnapshot
 
-	incSnapshot incrementalSnapshot
-
-	// signalTable is in the unquoted form replication messages report, or
-	// nil when none is configured. Not part of incrementalSnapshot: a signal
-	// table is configured on its own, and is read whether or not the
-	// snapshot runs.
 	signalTable    *incrementalsnapshot.TableID
 	snapshotSchema string
-	// BlockingSnapshot is true only when this session runs the one-shot
+	// IsBlockingSnapshot is true only when this session runs the one-shot
 	// stream_snapshot backfill.
-	BlockingSnapshot bool
+	IsBlockingSnapshot bool
 }
 
 // NewPgStream creates a new instance of the Stream struct.
@@ -292,7 +287,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	var snapshotter *snapshotter
 	if config.StreamOldData {
-		stream.BlockingSnapshot = true
+		stream.IsBlockingSnapshot = true
 		// A crash between snapshot completion and slot promotion leaves <slot>_tmp
 		// behind, owned by the dead session. We only get here when no permanent
 		// slot exists, so any leftover _tmp slot is necessarily stale - drop it
