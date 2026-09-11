@@ -10,10 +10,12 @@ package pglogicalstream
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -28,6 +30,21 @@ var (
 	errSignalRejected   = errors.New("rejected")
 	errSnapshotDisabled = errors.New("a " + replication.SnapshotSignalType + " signal needs incremental_snapshot.enabled set to true, so no backfill was queued for it")
 )
+
+type incrementalSnapshot struct {
+	coordinator *incsnapshot.Coordinator
+	// conn is a plain query connection. The snapshot must never use
+	// Stream.pgConn, which is in COPY BOTH for replication.
+	conn    *sql.DB
+	pkCache map[string][]string
+	// lastTable is only used to log a transition between tables.
+	lastTable *incrementalsnapshot.TableID
+	// replicated is the set a signal may ask for, nil when the publication
+	// is FOR ALL TABLES and so accepts any.
+	replicated map[incrementalsnapshot.TableID]struct{}
+	// backfilling tells the heartbeat whether it still owes transaction ids.
+	backfilling atomic.Bool
+}
 
 func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) error {
 	incSnapshotCfg := config.IncrementalSnapshotCfg()
@@ -47,19 +64,19 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 	// A signal may only ask for a replicated table. An empty DBTables means
 	// the publication is FOR ALL TABLES, so leave the set nil to accept any.
 	if len(config.DBTables) > 0 {
-		s.incSnapshotReplicated = make(map[incrementalsnapshot.TableID]struct{}, len(config.DBTables))
+		s.incSnapshot.replicated = make(map[incrementalsnapshot.TableID]struct{}, len(config.DBTables))
 		for _, name := range config.DBTables {
 			table, err := normalizeTableID(config.DBSchema, name)
 			if err != nil {
 				_ = db.Close()
 				return fmt.Errorf("resolving replicated table %q: %w", name, err)
 			}
-			s.incSnapshotReplicated[table] = struct{}{}
+			s.incSnapshot.replicated[table] = struct{}{}
 		}
 	}
 
-	s.incSnapshotConn = db
-	s.incSnapshotPKCache = make(map[string][]string)
+	s.incSnapshot.conn = db
+	s.incSnapshot.pkCache = make(map[string][]string)
 
 	// Nothing is queued at first: tables are requested by signal. A resumed
 	// checkpoint brings back what the last run covered.
@@ -74,11 +91,11 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 	}, incSnapshotCfg.ResumeState)
 	if err != nil {
 		_ = db.Close()
-		s.incSnapshotConn = nil
-		s.incSnapshotPKCache = nil
+		s.incSnapshot.conn = nil
+		s.incSnapshot.pkCache = nil
 		return fmt.Errorf("constructing incremental snapshot coordinator: %w", err)
 	}
-	s.incSnapshotCoordinator = coordinator
+	s.incSnapshot.coordinator = coordinator
 	var resuming int
 	if resume := incSnapshotCfg.ResumeState; resume != nil {
 		resuming = len(resume.Tables)
@@ -109,7 +126,7 @@ func normalizeTableID(schemaRaw, tableRaw string) (incrementalsnapshot.TableID, 
 
 func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnapshot.TableID) ([]string, error) {
 	key := table.String()
-	if cols, exists := s.incSnapshotPKCache[key]; exists {
+	if cols, exists := s.incSnapshot.pkCache[key]; exists {
 		return cols, nil
 	}
 
@@ -136,7 +153,7 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 		return nil, err
 	}
 
-	s.incSnapshotPKCache[key] = cols
+	s.incSnapshot.pkCache[key] = cols
 	return cols, nil
 }
 
@@ -161,7 +178,7 @@ func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsna
 		return fmt.Errorf("sanitizing primary key type query: %w", err)
 	}
 
-	rows, err := s.incSnapshotConn.QueryContext(ctx, q)
+	rows, err := s.incSnapshot.conn.QueryContext(ctx, q)
 	if err != nil {
 		return fmt.Errorf("reading primary key types for table %s: %w", table, err)
 	}
@@ -184,7 +201,7 @@ func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsna
 }
 
 // resolveIncrementalPKColumns reads the primary key columns of the table. It
-// must use s.incSnapshotConn and never s.pgConn: after the stream starts,
+// must use s.incSnapshot.conn and never s.pgConn: after the stream starts,
 // s.pgConn is in COPY BOTH for the replication protocol, and a normal query
 // on it at the same time stops or damages the stream.
 //
@@ -197,7 +214,7 @@ func (s *Stream) resolveIncrementalPKColumns(ctx context.Context, table TableFQN
 		return nil, fmt.Errorf("sanitizing query: %w", err)
 	}
 
-	rows, err := s.incSnapshotConn.QueryContext(ctx, q)
+	rows, err := s.incSnapshot.conn.QueryContext(ctx, q)
 	if err != nil {
 		if errIsPermanent(err) {
 			return nil, fmt.Errorf("%w: reading primary key columns for table %s: %w", incrementalsnapshot.ErrTableUnusable, table, err)
@@ -315,7 +332,7 @@ func canonicalizePKValue(v any) any {
 
 // resolveIncrementalMaxKey backs Deps.ResolveMaxKey.
 func (s *Stream) resolveIncrementalMaxKey(ctx context.Context, table incrementalsnapshot.TableID, pkCols []string, query string) (incrementalsnapshot.PrimaryKey, error) {
-	rows, err := s.incSnapshotConn.QueryContext(ctx, query)
+	rows, err := s.incSnapshot.conn.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("querying max key for table %s: %w", table, err)
 	}
@@ -367,7 +384,7 @@ func currentSnapshotQuery(pgVersion int) string {
 func (s *Stream) resolveIncrementalWatermark(ctx context.Context) (incsnapshot.Watermark, error) {
 	query := currentSnapshotQuery(s.pgVersion)
 	var raw string
-	if err := s.incSnapshotConn.QueryRowContext(ctx, query).Scan(&raw); err != nil {
+	if err := s.incSnapshot.conn.QueryRowContext(ctx, query).Scan(&raw); err != nil {
 		return incsnapshot.Watermark{}, fmt.Errorf("querying current snapshot with %q: %w", query, err)
 	}
 	wm, err := incsnapshot.ParseSnapshot(raw)
@@ -380,7 +397,7 @@ func (s *Stream) resolveIncrementalWatermark(ctx context.Context) (incsnapshot.W
 // forceFreshIncrementalTransaction backs Deps.ForceFreshTransaction.
 func (s *Stream) forceFreshIncrementalTransaction(ctx context.Context) error {
 	var txid uint64
-	if err := s.incSnapshotConn.QueryRowContext(ctx, "SELECT txid_current()").Scan(&txid); err != nil {
+	if err := s.incSnapshot.conn.QueryRowContext(ctx, "SELECT txid_current()").Scan(&txid); err != nil {
 		return fmt.Errorf("querying txid_current: %w", err)
 	}
 	return nil
@@ -388,7 +405,7 @@ func (s *Stream) forceFreshIncrementalTransaction(ctx context.Context) error {
 
 // fetchIncrementalChunk backs Deps.FetchChunk.
 func (s *Stream) fetchIncrementalChunk(ctx context.Context, table incrementalsnapshot.TableID, pkCols []string, query string, args []any) ([]incrementalsnapshot.Row, error) {
-	rows, err := s.incSnapshotConn.QueryContext(ctx, query, args...)
+	rows, err := s.incSnapshot.conn.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("fetching chunk for table %s: %w", table, err)
 	}
@@ -486,7 +503,7 @@ func buildIncrementalSnapshotMessages(emitted []incrementalsnapshot.Row, state [
 // supplied one, and zero sorts below every watermark, so it would open or
 // close the window spuriously.
 func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) error {
-	if s.incSnapshotCoordinator == nil || xid == 0 {
+	if s.incSnapshot.coordinator == nil || xid == 0 {
 		return nil
 	}
 
@@ -504,7 +521,7 @@ func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) err
 		} else {
 			s.logger.Debugf("Incremental snapshot: checkpoint advanced with no rows to flush (fully deduplicated)")
 		}
-		checkpoint := s.incSnapshotCoordinator.State()
+		checkpoint := s.incSnapshot.coordinator.State()
 		s.reportTableTransition(ctx, checkpoint.CurrentTable)
 
 		state, err := json.Marshal(checkpoint)
@@ -519,7 +536,7 @@ func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) err
 		}
 	}
 
-	changed, err := s.incSnapshotCoordinator.OnCommit(ctx, xid, emit)
+	changed, err := s.incSnapshot.coordinator.OnCommit(ctx, xid, emit)
 	if err != nil {
 		return fmt.Errorf("advancing incremental snapshot: %w", err)
 	}
@@ -527,9 +544,9 @@ func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) err
 	// read. Mirrored on every commit, not on the transition: OnCommit
 	// reports no change once idle, so a transition-only update could never
 	// clear this.
-	s.incSnapshotBackfilling.Store(!s.incSnapshotCoordinator.Idle())
+	s.incSnapshot.backfilling.Store(!s.incSnapshot.coordinator.Idle())
 
-	if changed && s.incSnapshotCoordinator.Idle() {
+	if changed && s.incSnapshot.coordinator.Idle() {
 		// The last table sees no following checkpoint, so report it here.
 		// More may arrive by signal, so this is not a completion.
 		s.reportTableTransition(ctx, nil)
@@ -539,8 +556,8 @@ func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) err
 }
 
 func (s *Stream) reportTableTransition(ctx context.Context, current *incrementalsnapshot.TableID) {
-	previous := s.incSnapshotLastTable
-	s.incSnapshotLastTable = current
+	previous := s.incSnapshot.lastTable
+	s.incSnapshot.lastTable = current
 	if sameTable(previous, current) {
 		return
 	}
@@ -571,7 +588,7 @@ func tableFQN(table incrementalsnapshot.TableID) TableFQN {
 }
 
 func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMessage) error {
-	if s.incSnapshotCoordinator == nil {
+	if s.incSnapshot.coordinator == nil {
 		return nil
 	}
 	switch message.Operation {
@@ -585,7 +602,7 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 	// lookup whose result OnStreamedRow discards, and a failed lookup would
 	// stop replication for a table the snapshot is not even touching.
 	table := incrementalsnapshot.TableID{Schema: message.Schema, Table: message.Table}
-	if !s.incSnapshotCoordinator.Snapshotting(table) {
+	if !s.incSnapshot.coordinator.Snapshotting(table) {
 		return nil
 	}
 
@@ -593,7 +610,7 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 	if err != nil {
 		return fmt.Errorf("resolving primary key for incremental snapshot deduplication on table %s: %w", table, err)
 	}
-	if s.incSnapshotCoordinator.OnStreamedRow(table, pk) {
+	if s.incSnapshot.coordinator.OnStreamedRow(table, pk) {
 		s.logger.Debugf("Incremental snapshot: deduplicated live row for table %s pk=%v", table, pk)
 	}
 	return nil
@@ -616,10 +633,10 @@ func (s *Stream) checkBackfillable(ctx context.Context, table incrementalsnapsho
 }
 
 func (s *Stream) checkReplicated(table incrementalsnapshot.TableID) error {
-	if s.incSnapshotReplicated == nil {
+	if s.incSnapshot.replicated == nil {
 		return nil // FOR ALL TABLES
 	}
-	if _, replicated := s.incSnapshotReplicated[table]; replicated {
+	if _, replicated := s.incSnapshot.replicated[table]; replicated {
 		return nil
 	}
 	return fmt.Errorf(
@@ -642,7 +659,7 @@ func (s *Stream) snapshotSignalTables(ctx context.Context, message *StreamMessag
 
 	row, isMap := message.Data.(map[string]any)
 	if !isMap {
-		if s.incSnapshotCoordinator == nil {
+		if s.incSnapshot.coordinator == nil {
 			// Nothing to act on, and the signaller reports this row anyway.
 			return nil, nil
 		}
@@ -654,7 +671,7 @@ func (s *Stream) snapshotSignalTables(ctx context.Context, message *StreamMessag
 	// The request is a snapshot signal, so report it rather than discarding
 	// it silently. Identifying one needs no coordinator: the signal table is
 	// configured separately.
-	if s.incSnapshotCoordinator == nil {
+	if s.incSnapshot.coordinator == nil {
 		return nil, fmt.Errorf("signal row: %w", errSnapshotDisabled)
 	}
 
@@ -709,11 +726,11 @@ func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMess
 		return nil
 	}
 
-	added := s.incSnapshotCoordinator.AddTables(tables)
+	added := s.incSnapshot.coordinator.AddTables(tables)
 	if len(added) > 0 {
 		// The heartbeat must carry transaction ids again: on a quiet table
 		// it is the only thing that advances the backfill.
-		s.incSnapshotBackfilling.Store(true)
+		s.incSnapshot.backfilling.Store(true)
 	}
 	if len(added) == 0 {
 		s.logger.Warnf("Incremental snapshot: signal asked for %v, all of which this run already covers, so nothing was queued", tables)
