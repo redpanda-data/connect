@@ -915,8 +915,6 @@ func (s *Stream) Errors() chan error {
 	return s.errors
 }
 
-// primaryKeyColumnsQuery returns the query used to resolve table's primary
-// key columns, in index order.
 // primaryKeyColumnTypesQuery reports the primary key columns of a table with
 // their type names, resolving a domain to the type it is built on so a domain
 // over an unusable type is not mistaken for a usable one.
@@ -934,6 +932,8 @@ func primaryKeyColumnTypesQuery(table string) (string, error) {
     `, table)
 }
 
+// primaryKeyColumnsQuery returns the query used to resolve table's primary
+// key columns, in index order.
 func primaryKeyColumnsQuery(table string) (string, error) {
 	return sanitize.SQLQuery(`
         SELECT a.attname
