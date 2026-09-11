@@ -36,8 +36,14 @@ type Config struct {
 	TemporaryReplicationSlot bool
 	// StreamOldData is whether to stream all existing data
 	StreamOldData bool
-	// BatchSize is the batch size for streaming
+	// BatchSize is the number of rows per snapshot page (snapshot_batch_size).
+	// It does not affect the streaming path; see StreamBatchMaxRows.
 	BatchSize int
+	// StreamBatchMaxRows caps the rows the streaming reader accumulates before
+	// handing a batch to the consumer. Zero means the package default
+	// (streamBatchMaxRows). The input sets it from checkpoint_limit so that at
+	// least two streaming batches fit under the checkpoint cap.
+	StreamBatchMaxRows int
 	// If true, include BEGIN and COMMIT messages in the stream
 	IncludeTxnMarkers bool
 	// SignalTableName is the name of the signal table. Rows inserted into this

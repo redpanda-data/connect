@@ -114,3 +114,51 @@ func TestStreamBatchTakeReturnsIndependentSlice(t *testing.T) {
 	require.Equal(t, LSN(110).String(), *first[0].LSN, "a later append must not overwrite a slice already handed out")
 	require.Equal(t, LSN(120).String(), *second[0].LSN)
 }
+
+func TestCommitRemapLookupMissOnEmpty(t *testing.T) {
+	var r commitRemap
+	_, ok := r.lookup(LSN(110))
+	require.False(t, ok)
+}
+
+func TestCommitRemapRecordsAndLooksUp(t *testing.T) {
+	var r commitRemap
+	r.record(LSN(110), LSN(130))
+	r.record(LSN(210), LSN(230))
+
+	commit, ok := r.lookup(LSN(110))
+	require.True(t, ok)
+	require.Equal(t, LSN(130), commit)
+
+	commit, ok = r.lookup(LSN(210))
+	require.True(t, ok)
+	require.Equal(t, LSN(230), commit)
+
+	_, ok = r.lookup(LSN(120))
+	require.False(t, ok)
+}
+
+func TestCommitRemapSkipsIdentityPairs(t *testing.T) {
+	var r commitRemap
+	r.record(LSN(110), LSN(110))
+	_, ok := r.lookup(LSN(110))
+	require.False(t, ok)
+}
+
+func TestCommitRemapEvictsOldest(t *testing.T) {
+	var r commitRemap
+	for i := 1; i <= commitRemapRingSize+1; i++ {
+		r.record(LSN(i*10), LSN(i*10+5))
+	}
+
+	_, ok := r.lookup(LSN(10))
+	require.False(t, ok, "the oldest pair must have been evicted")
+
+	commit, ok := r.lookup(LSN((commitRemapRingSize + 1) * 10))
+	require.True(t, ok)
+	require.Equal(t, LSN((commitRemapRingSize+1)*10+5), commit)
+
+	commit, ok = r.lookup(LSN(20))
+	require.True(t, ok)
+	require.Equal(t, LSN(25), commit)
+}
