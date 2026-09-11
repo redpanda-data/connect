@@ -76,12 +76,12 @@ func ffiProcessorConfig() *service.ConfigSpec {
 			).Description("The signature of the function."),
 		).Example(
 		"Call a libc function",
-		"This is an example of loading libc.so and calling a function on linux.",
+		"This is an example of loading libc.so.6 and calling a function on linux.",
 		`
 pipeline:
   processors:
     - ffi:
-        library_path: libc.6.so
+        library_path: libc.so.6
         function_name: memcmp
         args_mapping: 'root = ["foo", "bar", 3]'
         signature:
