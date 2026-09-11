@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- postgres_cdc: Streaming replication now hands decoded rows to the pipeline in per-transaction batches over a buffered channel instead of one row at a time, so the reader and the batching/marshalling stages can overlap rather than run in lockstep. With no `batching` policy configured, each transaction now arrives downstream as one batch (previously one message at a time); any configured `batching` policy, including an explicit `count: 1`, is honoured exactly. Streaming batches are capped at half of `checkpoint_limit` so that two can be in flight. ([@squiidz](https://github.com/squiidz), [#NNNN](https://github.com/redpanda-data/connect/pull/NNNN))
+- postgres_cdc: A configured `batching` policy is now honoured exactly on both the snapshot and streaming paths; previously a batch could exceed the configured `count` by up to a whole snapshot page. ([@squiidz](https://github.com/squiidz), [#NNNN](https://github.com/redpanda-data/connect/pull/NNNN))
+
 ## 4.109.0 - 2026-09-10
 
 ### Added
@@ -10,11 +17,6 @@ All notable changes to this project will be documented in this file.
 - avro: Added max_decompressed_block_bytes configuration field to cap OCF block decompression and prevent decompression-bomb denial-of-service attacks. ([@Jeffail](https://github.com/Jeffail), [#4773](https://github.com/redpanda-data/connect/pull/4773))
 - aws_kinesis: Added a `poll_period` field to bound the rate of `GetRecords` calls per shard, and an `enhanced_fan_out` configuration block that consumes streams via a dedicated enhanced fan-out consumer with 2MB/s per shard of read throughput, avoiding the shared 5 reads per second per shard limit. ([@squiidz](https://github.com/squiidz), [#4724](https://github.com/redpanda-data/connect/pull/4724))
 - iceberg: Added optional parquet compression codec configuration supporting snappy, gzip, and zstd compression, with fallback to table properties for compatibility. ([@Jeffail](https://github.com/Jeffail), [#4785](https://github.com/redpanda-data/connect/pull/4785))
-
-### Changed
-
-- postgres_cdc: Streaming replication now hands decoded rows to the pipeline in per-transaction batches over a buffered channel instead of one row at a time, so the reader and the batching/marshalling stages can overlap rather than run in lockstep. With no `batching` policy configured, each transaction now arrives downstream as one batch (previously one message at a time). A `batching.count` of 2 or more is honoured exactly; `count: 1` on its own is still treated as no policy, so pair it with a `period` if you need one message per batch. ([@squiidz](https://github.com/squiidz), [#NNNN](https://github.com/redpanda-data/connect/pull/NNNN))
-- postgres_cdc: A configured `batching` policy is now honoured exactly on both the snapshot and streaming paths; previously a batch could exceed the configured `count` by up to a whole snapshot page. ([@squiidz](https://github.com/squiidz), [#NNNN](https://github.com/redpanda-data/connect/pull/NNNN))
 
 ### Fixed
 
