@@ -557,15 +557,13 @@ type pgStreamInput struct {
 	replicationLag  *service.MetricGauge
 	controlSig      controlSignaller
 	stopSig         *shutdown.Signaller
+	iamAuthEnabled  bool
 
 	// snapshotAckWG tracks in-flight snapshot batches: incremented when a
 	// snapshot batch (nil LSN) is enqueued and decremented when it is
 	// acknowledged. The snapshot->stream handoff blocks until it drains so the
 	// replication slot is not promoted before snapshot rows are durable.
 	snapshotAckWG sync.WaitGroup
-
-	// IAM authentication fields
-	iamAuthEnabled bool
 
 	// only applies to incremental snapshot when enabled
 	incSnapshotCheckpointCache    string
