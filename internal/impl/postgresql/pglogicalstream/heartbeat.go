@@ -30,14 +30,6 @@ type heartbeat struct {
 	transactional func() bool
 }
 
-// EffectiveHeartbeatInterval returns the lowest configured heartbeat value.
-func EffectiveHeartbeatInterval(configured time.Duration, incSnapshot *incsnapshot.Cfg) time.Duration {
-	if !incSnapshot.IsEnabled() || incSnapshot.HeartbeatInterval <= 0 {
-		return configured
-	}
-	return min(configured, incSnapshot.HeartbeatInterval)
-}
-
 func newHeartbeat(config *Config, interval time.Duration, prefix, value string, transactional func() bool) (*heartbeat, error) {
 	dbConn, err := openPgConnectionFromConfig(config)
 	if err != nil {
@@ -67,4 +59,12 @@ func (h *heartbeat) run(ctx context.Context) {
 func (h *heartbeat) Stop() error {
 	h.task.Stop()
 	return h.db.Close()
+}
+
+// EffectiveHeartbeatInterval returns the lowest configured heartbeat value.
+func EffectiveHeartbeatInterval(configured time.Duration, incSnapshot *incsnapshot.Cfg) time.Duration {
+	if !incSnapshot.IsEnabled() || incSnapshot.HeartbeatInterval <= 0 {
+		return configured
+	}
+	return min(configured, incSnapshot.HeartbeatInterval)
 }
