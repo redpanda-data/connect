@@ -195,6 +195,20 @@ func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
 	return added
 }
 
+// Snapshotting reports whether table is the one being read, so a streamed
+// row on it could supersede a buffered one.
+//
+// It is the gate for the work OnStreamedRow needs: resolving a streamed
+// row's key costs a query, and OnStreamedRow discards the result for any
+// other table. It reports the live table, not the committed one, because the
+// chunk in flight is exactly what needs deduplicating.
+//
+// A nil current covers idle too: planNextChunk clears one as it sets the
+// other.
+func (c *Coordinator[P, W]) Snapshotting(table TableID) bool {
+	return c.current != nil && table == *c.current
+}
+
 // OnStreamedRow must be cheap and do no I/O. It removes pk from the buffer
 // only while that table is being snapshotted; otherwise it is a no-op.
 //

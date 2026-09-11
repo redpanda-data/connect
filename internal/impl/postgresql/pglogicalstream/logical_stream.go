@@ -72,7 +72,6 @@ type Stream struct {
 	incSnapshotCoordinator *incsnapshot.Coordinator
 	incSnapshotConn        *sql.DB
 	incSnapshotPKCache     map[string][]string
-	incSnapshotTables      map[incrementalsnapshot.TableID]struct{}
 	incSnapshotLastTable   *incrementalsnapshot.TableID // used for logging
 
 	// signalTable is in the unquoted form replication messages report, or
