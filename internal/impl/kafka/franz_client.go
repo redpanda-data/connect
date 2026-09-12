@@ -46,6 +46,7 @@ func FranzConnectionOptionalFields() []*service.ConfigField {
 	fields := FranzConnectionFields()
 	fields[0] = fields[0].
 		Description(kfcFieldSeedBrokersDescription + " When this field is omitted the global `redpanda` block will be referenced for connection details.").
+		ShortDescription("Broker addresses used to establish connections. Omit to use the global redpanda block.").
 		Optional()
 	return fields
 }
@@ -56,6 +57,7 @@ func FranzConnectionFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField(kfcFieldSeedBrokers).
 			Description(kfcFieldSeedBrokersDescription).
+			ShortDescription("Broker addresses used to establish connections. Items containing commas are expanded.").
 			Example([]string{"localhost:9092"}).
 			Example([]string{"foo:9092", "bar:9092"}).
 			Example([]string{"foo:9092,bar:9092"}),
@@ -67,10 +69,12 @@ func FranzConnectionFields() []*service.ConfigField {
 		SASLFields(),
 		service.NewDurationField(kfcFieldMetadataMaxAge).
 			Description("The maximum age of metadata before it is refreshed. This interval also controls how frequently regex topic patterns are re-evaluated to discover new matching topics.").
+			ShortDescription("Maximum age of metadata before it is refreshed. Also controls how often regex topic patterns are re-evaluated.").
 			Default("1m").
 			Advanced(),
 		service.NewDurationField(kfcFieldRequestTimeoutOverhead).
 			Description("The request time overhead. Uses the given time as overhead while deadlining requests. Roughly equivalent to request.timeout.ms, but grants additional time to requests that have timeout fields.").
+			ShortDescription("Additional time granted when deadlining requests. Roughly equivalent to request.timeout.ms.").
 			Default("10s").
 			Advanced(),
 		service.NewDurationField(kfcFieldConnIdleTimeout).

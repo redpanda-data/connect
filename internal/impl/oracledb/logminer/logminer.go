@@ -100,20 +100,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		fmt.Fprintf(&buf, " AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
 	}
 
-	logMinerQuery := fmt.Sprintf(`
-		SELECT
-			SCN,
-			SQL_REDO,
-			OPERATION_CODE,
-			TABLE_NAME,
-			SEG_OWNER,
-			TIMESTAMP,
-			XID,
-			COMMIT_SCN,
-			CSF
-		FROM V$LOGMNR_CONTENTS
-		WHERE SCN > :1 AND SCN <= :2%s
-	`, buf.String())
+	logMinerQuery := "SELECT SCN, SQL_REDO, OPERATION_CODE, TABLE_NAME, SEG_OWNER, TIMESTAMP, XID, COMMIT_SCN, CSF FROM V$LOGMNR_CONTENTS WHERE SCN > :1 AND SCN <= :2" + buf.String()
 
 	lm := &LogMiner{
 		cfg:                  cfg,
@@ -211,6 +198,17 @@ func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
 	return replication.SCN(currentPos), nil
 }
 
+func (lm *LogMiner) endExpiredIdleSession(ctx context.Context, conn *sql.Conn) {
+	if !lm.sessionMgr.IsExpired(lm.cfg.MaxSessionAge) {
+		return
+	}
+	lm.log.Debugf("LogMiner session has been open for %s, exceeding max_session_age of %s — ending idle session to release accumulated session memory",
+		lm.sessionMgr.Age(), lm.cfg.MaxSessionAge)
+	if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
+		lm.log.Errorf("Failed to end idle LogMiner session: %v", err)
+	}
+}
+
 func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
 	// Get database's current SCN to know our target
 	var dbCurrentSCN uint64
@@ -219,10 +217,12 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	}
 
 	if lm.currentSCN >= dbCurrentSCN {
+		lm.endExpiredIdleSession(ctx, conn)
 		return true, nil
 	}
 
 	if deferMiningCycle(lm.currentSCN, dbCurrentSCN, lm.cfg.MinSCNWindowSize) {
+		lm.endExpiredIdleSession(ctx, conn)
 		return true, nil
 	}
 
@@ -244,6 +244,10 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 			return false, fmt.Errorf("preparing logs and starting session at position %d: %w\n\n"+
 				"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
 				"This typically happens when processing takes longer than Oracle's log retention period.\n\n"+
+				"This can also happen after a flashback and OPEN RESETLOGS on the source database: if this\n"+
+				"connector's last checkpoint predates the new incarnation's RESETLOGS_CHANGE#, no log file —\n"+
+				"old or new incarnation — covers that gap. This is not a retention issue, and increasing\n"+
+				"retention (below) will not help; only option 3 applies in that case.\n\n"+
 				"To fix this issue:\n"+
 				"1. Increase Oracle's archived log retention using RMAN:\n"+
 				"   CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;\n\n"+
@@ -253,7 +257,13 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"   - Increase input batching.count for better throughput\n"+
 				"   - Use faster output (e.g., drop: {} for benchmarking)\n\n"+
 				"3. Restart the connector from the current database SCN to skip missing logs:\n"+
-				"   Note: This will result in data loss for events in the purged logs, so a snapshot may be required.",
+				"   - Delete the checkpoint cache entry at checkpoint_cache_key and restart. A flashback rolls\n"+
+				"     this row back rather than clearing it (with the default Oracle-based cache), so it will\n"+
+				"     still be present and must be deleted explicitly, or the connector resumes from the same\n"+
+				"     stale SCN and hits this error again.\n"+
+				"   - This loses events between the last checkpoint and the restart. To avoid that, delete the\n"+
+				"     checkpoint and set snapshot_mode to snapshot_and_stream at the same time — snapshot_mode\n"+
+				"     alone has no effect, since a checkpoint that is still present skips snapshotting entirely.",
 				lm.currentSCN, err, lm.cfg.SCNWindowSize, lm.cfg.MiningBackoffInterval)
 		}
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
@@ -913,6 +923,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	}
 
 	// Use the pre-built query from initialization
+	lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
 	queryStart := time.Now()
 	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
@@ -1053,12 +1064,14 @@ func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, 
 				A.SEQUENCE# AS SEQ,
 				'ARCHIVED' AS TYPE,
 				A.THREAD# AS THREAD
-			FROM V$ARCHIVED_LOG A
+			FROM V$ARCHIVED_LOG A, V$DATABASE D
 			WHERE A.NAME IS NOT NULL
 			AND A.ARCHIVED = 'YES'
 			AND A.STATUS = 'A'
 			AND A.NEXT_CHANGE# >= :1
 			AND A.FIRST_CHANGE# <= :2
+			AND A.RESETLOGS_CHANGE# = D.RESETLOGS_CHANGE#
+			AND A.RESETLOGS_TIME = D.RESETLOGS_TIME
 			AND A.DEST_ID IN (
 				SELECT DEST_ID
 				FROM V$ARCHIVE_DEST_STATUS
@@ -1133,8 +1146,18 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	}
 	lm.log.Debugf("Collected %d redo log file(s) for LogMiner: %v", len(logFiles), types)
 
-	if lm.sessionMgr.logFilesChanged(logFiles) {
-		// Log files have changed (first start or log switch) — full reload required.
+	// On databases where redo log switches are infrequent, a LogMiner session can stay
+	// open for hours, accumulating server-side PGA (notably around online catalog
+	// dictionary lookups) until Oracle kills it outright with ORA-04036.
+	sessionExpired := lm.sessionMgr.IsExpired(lm.cfg.MaxSessionAge)
+	if sessionExpired {
+		lm.log.Debugf("LogMiner session has been open for %s, exceeding max_session_age of %s — forcing restart to release accumulated session memory",
+			lm.sessionMgr.Age(), lm.cfg.MaxSessionAge)
+	}
+
+	if lm.sessionMgr.logFilesChanged(logFiles) || sessionExpired {
+		// Log files have changed (first start or log switch), or the session has exceeded
+		// its maximum age — full reload required.
 		if lm.sessionMgr.IsActive() {
 			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
 				lm.log.Errorf("Failed to end existing LogMiner session: %v", err)

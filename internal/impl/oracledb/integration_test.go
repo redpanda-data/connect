@@ -10,9 +10,13 @@ package oracledb_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,6 +26,8 @@ import (
 	_ "github.com/sijms/go-ora/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	tcexec "github.com/testcontainers/testcontainers-go/exec"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
@@ -560,6 +566,329 @@ oracledb_cdc:
 	}
 }
 
+// TestIntegrationOracleDBCDCResetlogsSurfacesGuidedError regression-tests a flashback +
+// OPEN RESETLOGS bug: GetLogsBySCNRange matched V$ARCHIVED_LOG by SCN overlap alone, so a
+// stale prior-incarnation log could take LogMiner's NEW slot and get the current
+// incarnation's online redo file rejected with ORA-01287.
+//
+// Asserts the resumed pipeline never hits ORA-01287, but does hit ORA-01291 with the new
+// guidance text.
+func TestIntegrationOracleDBCDCResetlogsSurfacesGuidedError(t *testing.T) {
+	integration.CheckSkip(t)
+
+	mustExecInContainer := func(t *testing.T, ctx context.Context, ctr testcontainers.Container, script string, opts ...tcexec.ProcessOption) string {
+		t.Helper()
+
+		opts = append(opts, tcexec.Multiplexed())
+		code, reader, err := ctr.Exec(ctx, []string{"bash", "-c", script}, opts...)
+		require.NoError(t, err)
+
+		outBytes, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		out := string(outBytes)
+
+		t.Logf("container exec %q exited with code %d, output:\n%s", script, code, out)
+		require.Zero(t, code, "container exec failed (%q): %s", script, out)
+		return out
+	}
+
+	ctx := t.Context()
+	connStr, db, ctr := oracledbtest.SetupTestWithOracleDBVersionAndContainer(t)
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, "testdb.resetlogs_probe",
+		"CREATE TABLE testdb.resetlogs_probe (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, note VARCHAR2(64))"))
+
+	cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  snapshot_mode: none
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["TESTDB.RESETLOGS_PROBE"]
+  batching:
+    count: 10
+    period: 500ms`
+
+	var (
+		outMu sync.Mutex
+		notes []string
+	)
+	consume := func(_ context.Context, mb service.MessageBatch) error {
+		outMu.Lock()
+		defer outMu.Unlock()
+		for _, msg := range mb {
+			b, err := msg.AsBytes()
+			if err != nil {
+				continue
+			}
+			var row map[string]any
+			if err := json.Unmarshal(b, &row); err != nil {
+				continue
+			}
+			if note, ok := row["NOTE"].(string); ok {
+				notes = append(notes, note)
+			}
+		}
+		return nil
+	}
+	countNotes := func(note string) int {
+		outMu.Lock()
+		defer outMu.Unlock()
+		n := 0
+		for _, v := range notes {
+			if v == note {
+				n++
+			}
+		}
+		return n
+	}
+
+	const phase1Rows = 20
+
+	t.Log("Launching component to stream pre-incident data...")
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(cfg))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(consume))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	// Wait for component to start.
+	time.Sleep(5 * time.Second)
+
+	for range phase1Rows {
+		db.MustExec("INSERT INTO testdb.resetlogs_probe (note) VALUES ('phase1')")
+	}
+	db.MustExec("COMMIT")
+
+	require.Eventually(t, func() bool {
+		got := countNotes("phase1")
+		t.Logf("captured %d/%d phase1 rows...", got, phase1Rows)
+		return got == phase1Rows
+	}, time.Minute*2, time.Millisecond*500, "pipeline did not capture all phase1 rows before the incident")
+
+	// Keep the pipeline running through the flashback/restore-point/throwaway steps below
+	// so its checkpoint stays close to "now" right up to the incident - the condition that
+	// makes the pre-reset archived log stale rather than simply out of retention.
+	t.Log("Enabling Flashback Database and the Fast Recovery Area...")
+	mustExecInContainer(t, ctx, ctr, "mkdir -p /opt/oracle/oradata/fra && chown -R oracle:oinstall /opt/oracle/oradata/fra")
+	db.MustExec("ALTER SYSTEM SET db_recovery_file_dest_size=5G SCOPE=BOTH")
+	db.MustExec("ALTER SYSTEM SET db_recovery_file_dest='/opt/oracle/oradata/fra' SCOPE=BOTH")
+	db.MustExec("ALTER DATABASE FLASHBACK ON")
+
+	t.Log("Creating a guaranteed restore point and generating changes to be flashed back away...")
+	// Requires SYSDBA (ORA-01031 over the "system" connection), so this goes through
+	// the SYSDBA SQL*Plus session rather than db.MustExec.
+	restorePointOut := mustExecInContainer(t, ctx, ctr,
+		`echo -e "CREATE RESTORE POINT before_reset GUARANTEE FLASHBACK DATABASE;\nexit;" | sqlplus -S / as sysdba`,
+		tcexec.WithUser("oracle"))
+	require.NotContains(t, restorePointOut, "ORA-", "unexpected Oracle error creating restore point")
+	for range 5 {
+		db.MustExec("INSERT INTO testdb.resetlogs_probe (note) VALUES ('throwaway')")
+	}
+	db.MustExec("COMMIT")
+	// Generate a stale prior-incarnation archived log before the reset.
+	db.MustExec("ALTER SYSTEM SWITCH LOGFILE")
+	db.MustExec("ALTER SYSTEM SWITCH LOGFILE")
+
+	// Stop cleanly so the near-current checkpoint SCN is durably persisted for the
+	// resumed pipeline below.
+	require.NoError(t, stream.StopWithin(time.Second*10))
+
+	t.Log("Performing FLASHBACK DATABASE + OPEN RESETLOGS via a SYSDBA SQL*Plus session...")
+	// SHUTDOWN/STARTUP/FLASHBACK/OPEN RESETLOGS can't go over a plain SQL connection -
+	// they need an OS-authenticated SYSDBA session; SQL*Plus reconnects automatically
+	// across the shutdown/startup within one piped script.
+	resetlogsScript := `echo -e "SHUTDOWN IMMEDIATE;\nSTARTUP MOUNT;\nFLASHBACK DATABASE TO RESTORE POINT before_reset;\nALTER DATABASE OPEN RESETLOGS;\nexit;" | sqlplus -S / as sysdba`
+	out := mustExecInContainer(t, ctx, ctr, resetlogsScript, tcexec.WithUser("oracle"))
+	require.NotContains(t, out, "ORA-", "unexpected Oracle error during flashback/resetlogs")
+
+	t.Log("Waiting for the database to become reachable again after OPEN RESETLOGS...")
+	reachable := assert.Eventually(t, func() bool {
+		pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		return db.PingContext(pingCtx) == nil
+	}, time.Minute*5, time.Second*3)
+	require.True(t, reachable, "database did not become reachable again after OPEN RESETLOGS")
+
+	// Trigger a mining cycle on the relaunched pipeline below; not asserted on delivery,
+	// since seamless recovery isn't what this test expects (see doc comment above).
+	db.MustExec("INSERT INTO testdb.resetlogs_probe (note) VALUES ('phase2')")
+	db.MustExec("COMMIT")
+
+	t.Log("Relaunching component after RESETLOGS to verify it surfaces a guided ORA-01291 error rather than ORA-01287...")
+
+	// stream.Run won't return the error itself: oracledb_cdc's ReadBatch returns
+	// service.ErrNotConnected once mining dies, which makes the framework retry Connect()
+	// forever rather than propagate. So capture the logged error via a buffered logger
+	// instead, then stop the pipeline and confirm stream.Run unblocks cleanly.
+	var logBuf oracledbtest.SyncBuffer
+
+	streamBuilder2 := service.NewStreamBuilder()
+	streamBuilder2.SetLogger(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logBuf), &slog.HandlerOptions{Level: slog.LevelInfo})))
+	require.NoError(t, streamBuilder2.AddInputYAML(cfg))
+	require.NoError(t, streamBuilder2.AddBatchConsumerFunc(consume))
+
+	stream, err = streamBuilder2.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- stream.Run(t.Context())
+	}()
+
+	assert.Eventually(t, func() bool {
+		return strings.Contains(logBuf.String(), "ORA-01291")
+	}, time.Minute*3, time.Millisecond*500, "expected the resumed pipeline to hit ORA-01291 (missing log file) since its checkpoint predates the new incarnation's RESETLOGS_CHANGE#")
+
+	logOutput := logBuf.String()
+	assert.NotContains(t, logOutput, "ORA-01287",
+		"the GetLogsBySCNRange incarnation fix should prevent ORA-01287 (wrong-incarnation file selection) even though ORA-01291 is still expected")
+	assert.Contains(t, logOutput, "flashback and OPEN RESETLOGS",
+		"expected the ORA-01291 error to include the clarifying guidance for the resetlogs-checkpoint-gap scenario")
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
+
+	select {
+	case runErr := <-runErrCh:
+		assert.Truef(t, runErr == nil || errors.Is(runErr, context.Canceled),
+			"expected stream.Run to unblock cleanly after StopWithin, got: %v", runErr)
+	case <-time.After(time.Second * 15):
+		t.Fatal("stream.Run did not return after StopWithin")
+	}
+}
+
+// TestIntegrationOracleDBCDCSnapshotAckBarrier verifies that a crash during
+// the snapshot->streaming handoff (after snapshot rows are emitted but before
+// they are acknowledged) does not lose data: because the post-snapshot SCN is
+// only persisted once every snapshot batch is acked, the snapshot must re-run
+// on restart. See CON-504.
+func TestIntegrationOracleDBCDCSnapshotAckBarrier(t *testing.T) {
+	integration.CheckSkip(t)
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.ackbarrier", "CREATE TABLE testdb.ackbarrier (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+
+	const rowCount = 5
+	for range rowCount {
+		db.MustExec("INSERT INTO testdb.ackbarrier (id) VALUES (DEFAULT)")
+	}
+	db.MustExec("COMMIT")
+
+	// batching.count == rowCount forces all snapshot rows into a single output
+	// batch, so the run-1 consumer receives them all at once and can then block
+	// without acking - reproducing the "emitted but not yet acked" handoff state.
+	cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  snapshot_mode: snapshot_and_stream
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["TESTDB.ACKBARRIER"]
+  batching:
+    count: %d
+    period: 1h`, connStr, rowCount)
+
+	// Run 1: receive the snapshot rows but never acknowledge them, then
+	// simulate a crash by cancelling the run before the SCN can be persisted.
+	t.Log("Launching run 1 (blocked consumer, simulated crash)...")
+	received := make(chan struct{}, 1)
+	run1Builder := service.NewStreamBuilder()
+	require.NoError(t, run1Builder.AddInputYAML(cfg))
+	require.NoError(t, run1Builder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, run1Builder.AddBatchConsumerFunc(func(ctx context.Context, _ service.MessageBatch) error {
+		select {
+		case received <- struct{}{}:
+		default:
+		}
+		// Block without acking until the simulated crash cancels our context.
+		<-ctx.Done()
+		return ctx.Err()
+	}))
+	run1, err := run1Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run1.Resources())
+
+	run1Ctx, crash := context.WithCancel(t.Context())
+	run1Done := make(chan struct{})
+	go func() {
+		defer close(run1Done)
+		_ = run1.Run(run1Ctx)
+	}()
+
+	select {
+	case <-received:
+	case <-time.After(5 * time.Minute):
+		t.Fatal("snapshot rows were never delivered to the run-1 output")
+	}
+	// Give the input time to reach the ack barrier (and, in the buggy version,
+	// to persist the post-snapshot SCN) before we crash.
+	time.Sleep(5 * time.Second)
+	crash()
+	select {
+	case <-run1Done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("run 1 did not stop after the simulated crash")
+	}
+
+	// The barrier must have prevented the post-snapshot SCN from being
+	// persisted, since the snapshot rows were never acknowledged. This is the
+	// core guarantee: without it a cached SCN would exist here and the
+	// snapshot would be skipped on restart, silently losing the un-acked rows.
+	var checkpoints int
+	require.NoError(t, db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM RPCN.CDC_CHECKPOINT_CACHE").Scan(&checkpoints))
+	require.Zero(t, checkpoints, "post-snapshot SCN must not be persisted before snapshot rows are acknowledged")
+
+	// Run 2: restart against the same checkpoint cache. Since run 1 never
+	// acked the snapshot, no SCN was cached, so the snapshot re-runs and every
+	// row is delivered again.
+	t.Log("Launching run 2 (verifying the snapshot re-runs)...")
+	var (
+		readsMu sync.Mutex
+		reads   int
+	)
+	run2Builder := service.NewStreamBuilder()
+	require.NoError(t, run2Builder.AddInputYAML(cfg))
+	require.NoError(t, run2Builder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, run2Builder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		readsMu.Lock()
+		defer readsMu.Unlock()
+		for _, msg := range mb {
+			if op, _ := msg.MetaGet("operation"); op == "read" {
+				reads++
+			}
+		}
+		return nil
+	}))
+	run2, err := run2Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run2.Resources())
+	go func() {
+		if err := run2.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		readsMu.Lock()
+		defer readsMu.Unlock()
+		assert.Equal(c, rowCount, reads, "snapshot should have re-run and re-delivered every row after the crash")
+	}, 5*time.Minute, 500*time.Millisecond)
+	require.NoError(t, run2.StopWithin(time.Second*30))
+}
+
 func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	integration.CheckSkip(t)
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -648,17 +977,19 @@ oracledb_cdc:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
+    max_session_age: 5s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]
   batching:
     count: 500`
 
+		var logBuf oracledbtest.SyncBuffer
+
 		t.Log("Launching component...")
 		{
 			streamBuilder := service.NewStreamBuilder()
+			streamBuilder.SetLogger(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logBuf), &slog.HandlerOptions{Level: slog.LevelDebug})))
 			require.NoError(t, streamBuilder.AddInputYAML(cfg))
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				for _, msg := range mb {
 					msgChan <- msg
@@ -702,6 +1033,13 @@ oracledb_cdc:
 			assert.Len(t, row, 2)
 			assert.Contains(t, row, "ID")
 			assert.EqualValues(t, "1", row["VAL"])
+		})
+
+		t.Run("Session is forcibly ended after max_session_age", func(t *testing.T) {
+			require.Eventually(t, func() bool {
+				return strings.Contains(logBuf.String(), "exceeding max_session_age of 5s")
+			}, 30*time.Second, 4*time.Second,
+				"expected a LogMiner session-expiry debug log entry within max_session_age (5s)")
 		})
 
 		t.Run("Streaming update changes...", func(t *testing.T) {
@@ -860,6 +1198,21 @@ file:
 func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 	integration.CheckSkip(t)
 
+	findMsgByID := func(t *testing.T, msgs []string, id string) string {
+		t.Helper()
+		for _, m := range msgs {
+			var parsed struct {
+				ID string `json:"ID"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(m), &parsed))
+			if parsed.ID == id {
+				return m
+			}
+		}
+		require.Failf(t, "message not found", "no message with ID %q in batch of %d", id, len(msgs))
+		return ""
+	}
+
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
 	sql := `CREATE TABLE testdb.lobdisabled (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
@@ -932,7 +1285,7 @@ oracledb_cdc:
 		"VARCHARCOL": "snapshot",
 		"INLINELOB": null,
 		"OUTOFLINELOB": null
-		}`, batch.Clone()[0], "Failed to assert snapshot LOB columns")
+		}`, findMsgByID(t, batch.Clone(), "1"), "Failed to assert snapshot LOB columns")
 		}
 
 		batch.Reset()
@@ -1023,7 +1376,7 @@ oracledb_cdc:
 		"VARCHARCOL": "snapshot",
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
-		}`, batch.Clone()[0], "Failed to snapshot LOB columns")
+		}`, findMsgByID(t, batch.Clone(), "1"), "Failed to snapshot LOB columns")
 		}
 
 		batch.Reset()
@@ -1049,11 +1402,105 @@ oracledb_cdc:
 		"OUTOFLINELOB": "`+outofline+`"
 		}`, batch.Clone()[0], "Failed to assert streaming LOB columns")
 		}
+
+		// Stop inside the subtest: leaving this stream running would let its
+		// in-flight acks re-write the shared default checkpoint key while
+		// later legs run.
+		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
 
-	if stream != nil {
-		require.NoError(t, stream.StopWithin(time.Second*10))
+	// Non-inline LOB fetching: with `lob fetch=stream` (or `post`) in the
+	// connection string, go-ora reports LOB columns under their locator type
+	// names (OCIClobLocator/OCIBlobLocator) instead of rewriting them to
+	// LongVarChar/LongRaw as inline mode does — a different set of driver
+	// spellings feeding the snapshot scanner, the schema mapping, and the
+	// lob_enabled filter. These legs assert snapshot behaviour only: the
+	// LogMiner streaming path reads redo records and is independent of the
+	// client's LOB fetch mode, which the inline legs above already cover.
+	//
+	// Each leg uses its own checkpoint_cache_key: the default key is shared
+	// by every oracledb_cdc input against this database, so a stream from an
+	// earlier subtest that is still flushing acks could re-write a checkpoint
+	// between our TRUNCATE and Connect(), making the leg silently skip the
+	// snapshot it exists to assert.
+	streamFetchConnStr := connStr + "?lob%20fetch=stream"
+	blobPayload := []byte(strings.Repeat("C", 4000))
+	lobStreamRows := 5
+
+	runLobStreamLeg := func(t *testing.T, table string, lobEnabled bool, wantRow string) {
+		t.Helper()
+		sql := `CREATE TABLE ` + table + ` (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),cloblob NCLOB,bloblob BLOB)`
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), table, sql))
+		for range lobStreamRows {
+			db.MustExec("INSERT INTO "+table+" (varcharcol, cloblob, bloblob) VALUES (:1, :2, :3)", "snapshot", outofline, blobPayload)
+		}
+
+		var batch oracledbtest.Batch
+		cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  snapshot_mode: snapshot_and_stream
+  checkpoint_cache_key: %s
+  logminer:
+    lob_enabled: %t
+    min_scn_window_size: 0
+  include: ["%s"]`, streamFetchConnStr, strings.ReplaceAll(table, ".", "_"), lobEnabled, strings.ToUpper(table))
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			batch.Lock()
+			defer batch.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				assert.NoError(t, err)
+				batch.Msgs = append(batch.Msgs, string(msgBytes))
+			}
+			return nil
+		}))
+
+		leg, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(leg.Resources())
+		// Cleanup rather than a caller-side StopWithin: a require failure
+		// below must not leak a live stream into subsequent legs.
+		t.Cleanup(func() {
+			if err := leg.StopWithin(time.Second * 10); err != nil {
+				t.Errorf("stopping %s stream: %v", table, err)
+			}
+		})
+		go func() {
+			if err := leg.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		var got int
+		assert.Eventually(t, func() bool {
+			got = batch.Count()
+			return got >= lobStreamRows
+		}, time.Minute*5, time.Second*1)
+		require.Truef(t, (got == lobStreamRows), "Wanted %d snapshot messages but got %d", lobStreamRows, got)
+		require.JSONEq(t, wantRow, findMsgByID(t, batch.Clone(), "1"), "Failed to assert snapshot LOB columns under lob fetch=stream")
 	}
+
+	t.Run("lob_enabled=false lob-fetch=stream", func(t *testing.T) {
+		runLobStreamLeg(t, "testdb.lobstreamdisabled", false, `{
+		"ID": "1",
+		"VARCHARCOL": "snapshot",
+		"CLOBLOB": null,
+		"BLOBLOB": null
+		}`)
+	})
+
+	t.Run("lob_enabled=true lob-fetch=stream", func(t *testing.T) {
+		runLobStreamLeg(t, "testdb.lobstreamenabled", true, `{
+		"ID": "1",
+		"VARCHARCOL": "snapshot",
+		"CLOBLOB": "`+outofline+`",
+		"BLOBLOB": "`+base64.StdEncoding.EncodeToString(blobPayload)+`"
+		}`)
+	})
 }
 
 func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {

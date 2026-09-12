@@ -100,7 +100,8 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Default("text"),
 			service.NewIntField(ocpFieldMaxTokens).
 				Optional().
-				Description("The maximum number of tokens to predict and output. Limiting the amount of output means that requests are processed faster and have a fixed limit on the cost."),
+				Description("The maximum number of tokens to predict and output. Limiting the amount of output means that requests are processed faster and have a fixed limit on the cost.").
+				ShortDescription("The maximum number of tokens to predict and output."),
 			service.NewIntField(ocpFieldTemp).
 				Optional().
 				Description("The temperature of the model. Increasing the temperature makes the model answer more creatively.").
@@ -108,46 +109,56 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 			service.NewIntField(ocpFieldNumKeep).
 				Optional().
 				Advanced().
-				Description("Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to `4`. Use `-1` to retain all tokens from the initial prompt."),
+				Description("Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to `4`. Use `-1` to retain all tokens from the initial prompt.").
+				ShortDescription("Tokens from the initial prompt to retain when the model resets its context. Use -1 to keep all."),
 			service.NewIntField(ocpFieldSeed).
 				Optional().
 				Advanced().
 				Description("Sets the random number seed to use for generation. Setting this to a specific number will make the model generate the same text for the same prompt.").
+				ShortDescription("The random number seed for generation. A fixed seed makes the same prompt produce the same text.").
 				Example(42),
 			service.NewIntField(ocpFieldTopK).
 				Optional().
 				Advanced().
-				Description("Reduces the probability of generating nonsense. A higher value, for example `100`, will give more diverse answers. A lower value, for example `10`, will be more conservative."),
+				Description("Reduces the probability of generating nonsense. A higher value, for example `100`, will give more diverse answers. A lower value, for example `10`, will be more conservative.").
+				ShortDescription("Reduces the probability of nonsense. Higher values give more diverse answers."),
 			service.NewFloatField(ocpFieldTopP).
 				Optional().
 				Advanced().
 				Description("Works together with `top-k`. A higher value, for example 0.95, will lead to more diverse text. A lower value, for example 0.5, will generate more focused and conservative text.").
+				ShortDescription("Works with top_k. Higher values give more diverse text, lower values more focused text.").
 				LintRule(`root = if this > 1 || this < 0 { [ "field must be between 0.0 and 1.0" ] }`),
 			service.NewFloatField(ocpFieldRepeatPenalty).
 				Optional().
 				Advanced().
 				Description(`Sets how strongly to penalize repetitions. A higher value, for example 1.5, will penalize repetitions more strongly. A lower value, for example 0.9, will be more lenient.`).
+				ShortDescription("How strongly to penalise repetition. Higher values penalise more strongly.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewFloatField(ocpFieldPresencePenalty).
 				Optional().
 				Advanced().
 				Description(`Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.`).
+				ShortDescription("Positive values penalise tokens that already appear, encouraging new topics.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewFloatField(ocpFieldFrequencyPenalty).
 				Optional().
 				Advanced().
 				Description(`Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.`).
+				ShortDescription("Positive values penalise tokens by how often they already appear, reducing verbatim repetition.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewStringListField(ocpFieldStop).
 				Optional().
 				Advanced().
-				Description(`Sets the stop sequences to use. When this pattern is encountered the LLM stops generating text and returns the final response.`),
+				Description(`Sets the stop sequences to use. When this pattern is encountered the LLM stops generating text and returns the final response.`).
+				ShortDescription("Stop sequences. When one is encountered the LLM stops generating and returns its response."),
 			service.NewBoolField(ocpFieldEmitPromptMetadata).
 				Default(false).
-				Description(`If enabled the prompt is saved as @prompt metadata on the output message. If system_prompt is used it's also saved as @system_prompt`),
+				Description(`If enabled the prompt is saved as @prompt metadata on the output message. If system_prompt is used it's also saved as @system_prompt`).
+				ShortDescription("Save the prompt as @prompt metadata on the output message, and system_prompt as @system_prompt."),
 			service.NewBloblangField(ocpFieldHistory).
 				Optional().
-				Description(`Historical messages to include in the chat request. The result of the bloblang query should be an array of objects of the form of [{"role": "", "content":""}].`),
+				Description(`Historical messages to include in the chat request. The result of the bloblang query should be an array of objects of the form of [{"role": "", "content":""}].`).
+				ShortDescription("Historical messages to include in the chat request, as an array of role and content objects."),
 			service.NewIntField(ocpFieldMaxToolCalls).
 				Default(3).
 				Advanced().
@@ -169,6 +180,7 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				).Description("The parameters the LLM needs to provide to invoke this tool."),
 				service.NewProcessorListField(ocpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
 			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.").
+				ShortDescription("The tools the LLM may invoke, allowing subpipelines to be called for agentic actions.").
 				Default([]any{}),
 		).Fields(commonFields()...).
 		Example(

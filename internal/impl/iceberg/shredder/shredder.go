@@ -87,6 +87,14 @@ type RecordShredder struct {
 	// iceberg's recommended convention and with engines like Spark and Trino
 	// in their default configurations.
 	caseSensitive bool
+	// duplicateFieldNames records whether any struct in the schema repeats a
+	// field name. When it does, shredStructExact cannot use its matched-count
+	// shortcut: the count is per field, so two fields sharing a name inflate it
+	// and an unaccounted-for input key can be mistaken for a full match, which
+	// would silently drop an unknown-field notification and with it schema
+	// evolution of that column. Pinned by
+	// TestShredStructPathsAgreeWithDuplicateFieldNames.
+	duplicateFieldNames bool
 	// fieldCommons optionally maps an iceberg field ID to the upstream
 	// schema.Common describing the same field. When present, the leaf
 	// value-conversion step uses Logical params (timestamp unit,
@@ -115,10 +123,50 @@ type RecordShredder struct {
 // if false, matching is case-insensitive (and ambiguous case-only duplicates
 // in the input cause an error).
 func NewRecordShredder(schema *iceberg.Schema, caseSensitive bool) *RecordShredder {
+	rootFields := schema.Fields()
 	return &RecordShredder{
-		schema:        schema,
-		rootFields:    schema.Fields(),
-		caseSensitive: caseSensitive,
+		schema:              schema,
+		rootFields:          rootFields,
+		caseSensitive:       caseSensitive,
+		duplicateFieldNames: hasDuplicateFieldNames(rootFields),
+	}
+}
+
+// hasDuplicateFieldNames reports whether any struct in the schema tree repeats a
+// field name. Iceberg rejects duplicate field *IDs* but not duplicate names, and
+// nothing upstream of the shredder enforces name uniqueness in case-sensitive
+// mode — so this has to be treated as possible rather than assumed away.
+//
+// Computed once per shredder because it only gates an optimisation
+// (shredStructExact's unknown-field shortcut); the walk is over schema
+// structure, not data, so it costs nothing per record.
+func hasDuplicateFieldNames(fields []iceberg.NestedField) bool {
+	seen := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		if _, dup := seen[field.Name]; dup {
+			return true
+		}
+		seen[field.Name] = struct{}{}
+		if nestedHasDuplicateFieldNames(field.Type) {
+			return true
+		}
+	}
+	return false
+}
+
+// nestedHasDuplicateFieldNames recurses into whatever structs a type contains,
+// including through list element and map value types, since those reach
+// shredStruct too.
+func nestedHasDuplicateFieldNames(typ iceberg.Type) bool {
+	switch t := typ.(type) {
+	case *iceberg.StructType:
+		return hasDuplicateFieldNames(t.FieldList)
+	case *iceberg.ListType:
+		return nestedHasDuplicateFieldNames(t.Element)
+	case *iceberg.MapType:
+		return nestedHasDuplicateFieldNames(t.KeyType) || nestedHasDuplicateFieldNames(t.ValueType)
+	default:
+		return false
 	}
 }
 
@@ -153,6 +201,22 @@ func (rs *RecordShredder) shredStruct(
 	repLevel, defLevel, maxRepLevel int,
 	sink Sink,
 ) error {
+	// Case-sensitive matching makes the match-key the identity function, so
+	// schema fields can be looked up directly in the input map and neither of
+	// the two per-record maps below is needed. That path is split out because
+	// this function runs once per record (and once per nested struct within
+	// it), and a 1-vCPU allocation profile attributed a material share of the
+	// sink's total allocations to those two maps.
+	if rs.caseSensitive {
+		return rs.shredStructExact(fields, value, path, repLevel, defLevel, maxRepLevel, sink)
+	}
+
+	// The case-insensitive body stays inline here rather than in a sibling
+	// function: it runs once per struct per record, and extracting it measured
+	// ~5% slower on BenchmarkShredCaseInsensitive for the extra call. Nothing
+	// needs it callable on its own — TestShredStructPathsAgree compares the two
+	// paths through the public Shred entry point, using a shredder of each kind.
+	//
 	// Build an index of input keys by their match-key (the original key in
 	// case-sensitive mode, or its lowercase form in case-insensitive mode).
 	// In case-insensitive mode, multiple input keys may collide on the same
@@ -220,6 +284,89 @@ func (rs *RecordShredder) shredStruct(
 	// Detect unknown fields in input.
 	for key, val := range value {
 		if _, ok := matched[key]; !ok {
+			sink.OnNewField(slices.Clone(path), key, val)
+		}
+	}
+
+	return nil
+}
+
+// shredStructExact is shredStruct's case-sensitive equivalent: input keys must
+// match schema field names byte-for-byte, so a field's value is just
+// value[field.Name] and case-collision ambiguity is impossible (Go map keys are
+// themselves case-sensitive).
+//
+// It must stay behaviourally identical to the general path for case-sensitive
+// shredders — same required-field errors, same null handling, same
+// OnNewField notifications, same traversal order of fields.
+func (rs *RecordShredder) shredStructExact(
+	fields []iceberg.NestedField,
+	value map[string]any,
+	path icebergx.Path,
+	repLevel, defLevel, maxRepLevel int,
+	sink Sink,
+) error {
+	// Count how many input keys were claimed by a schema field, so unknown-field
+	// detection below can usually be skipped without tracking a set.
+	matchedKeys := 0
+
+	for _, field := range fields {
+		fieldValue, exists := value[field.Name]
+		if exists {
+			matchedKeys++
+		}
+
+		// Validate required fields.
+		if field.Required && (!exists || fieldValue == nil) {
+			return &RequiredFieldNullError{field, path}
+		}
+
+		// Compute this field's definition level contribution.
+		fieldDefLevel := defLevel
+		if !field.Required {
+			fieldDefLevel++ // Optional field adds to max def level.
+		}
+
+		// Build path for this field. The schema's casing is the input's casing
+		// here, so no canonicalisation is needed.
+		fieldPath := append(path, icebergx.PathSegment{Kind: icebergx.PathField, Name: field.Name})
+
+		if !exists || fieldValue == nil {
+			// Field is null or missing - emit null for all leaf descendants.
+			if err := rs.shredNull(field.Type, field.ID, repLevel, defLevel, sink); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := rs.shredValue(field.Type, field.ID, fieldValue, fieldPath, repLevel, fieldDefLevel, maxRepLevel, sink); err != nil {
+			return fmt.Errorf("field %q: %w", field.Name, err)
+		}
+	}
+
+	// Detect unknown fields in input. When field names are unique within a
+	// struct, each matched field claimed exactly one distinct input key, so
+	// agreeing counts mean every key is accounted for and there is nothing to
+	// report — the steady state once a schema has stabilised, and what makes the
+	// common case allocation-free. (A count above len(value) is harmless: it
+	// falls through to the scan.)
+	//
+	// Duplicate field names break that reasoning, because matchedKeys counts
+	// fields rather than distinct keys: fields [a, a] against {"a":1,"b":2}
+	// reaches 2 == 2 while "b" is genuinely unknown. Iceberg permits duplicate
+	// names, so the shortcut is disabled for such schemas rather than assumed
+	// away.
+	if !rs.duplicateFieldNames && matchedKeys == len(value) {
+		return nil
+	}
+
+	// Something is unknown: pay for a lookup set now, on the rare path only.
+	known := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		known[field.Name] = struct{}{}
+	}
+	for key, val := range value {
+		if _, ok := known[key]; !ok {
 			sink.OnNewField(slices.Clone(path), key, val)
 		}
 	}
@@ -473,7 +620,7 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common, strict
 		// Honour the schema's unit and emit the wire-equivalent integer.
 		// Strict mode (require_schema_metadata=true) disables this bridge
 		// and refuses the type disagreement loudly instead.
-		if n, ok := coerceTemporalToNumeric(value, common); ok {
+		if n, ok := CoerceTemporalToNumeric(value, common); ok {
 			if strictTemporal {
 				return parquet.NullValue(), fmt.Errorf("int column received %T while schema metadata declares type %v; require_schema_metadata=true demands the existing column type match the schema metadata — recreate the table to migrate", value, common.Type)
 			}
@@ -488,7 +635,16 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common, strict
 			return parquet.Int32Value(int32(n)), nil
 		}
 		i, err := bloblang.ValueAsInt64(value)
-		return parquet.Int32Value(int32(i)), err
+		if err != nil {
+			return parquet.NullValue(), err
+		}
+		// Range-check before narrowing: a bare int32(i) silently wraps
+		// (4294967297 would store 1), corrupting the stored value with no
+		// error anywhere.
+		if i > math.MaxInt32 || i < math.MinInt32 {
+			return parquet.NullValue(), fmt.Errorf("int (32-bit) column given value %d outside the int32 range [%d, %d]; values that size need a long (64-bit) column", i, math.MinInt32, math.MaxInt32)
+		}
+		return parquet.Int32Value(int32(i)), nil
 
 	case iceberg.Int64Type:
 		// Coerce-to-existing-column-type: see the Int32Type arm above. For
@@ -497,7 +653,7 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common, strict
 		// time.Time for timestamp-millis with preserve_logical_types=true)
 		// keep writing to a pre-existing BIGINT column that pre-dates the
 		// metadata fix.
-		if n, ok := coerceTemporalToNumeric(value, common); ok {
+		if n, ok := CoerceTemporalToNumeric(value, common); ok {
 			if strictTemporal {
 				return parquet.NullValue(), fmt.Errorf("bigint column received %T while schema metadata declares type %v; require_schema_metadata=true demands the existing column type match the schema metadata — recreate the table to migrate", value, common.Type)
 			}
@@ -657,6 +813,49 @@ func convertToDecimal(value any, dt iceberg.DecimalType) (parquet.Value, error) 
 
 	b := parquetdecimal.EncodeBytes(unscaled, dt.Precision())
 	return parquet.FixedLenByteArrayValue(b), nil
+}
+
+// DecimalNumberToString canonicalises a decimal supplied as text (a string or
+// json.Number) to the column's exact scale, using the SAME parse-and-round the
+// insert path's convertToDecimal applies (stringToUnscaled) so both sides
+// agree by construction. Exported for the mutation paths' shared leaf encoder:
+// every spelling of one decimal ("1.5", "1.50", float 1.5) must canonicalise
+// to one form, or the in-batch key collapse treats equal keys as distinct.
+func DecimalNumberToString(s string, prec, scale int) (string, error) {
+	unscaled, err := stringToUnscaled(s, scale)
+	if err != nil {
+		return "", err
+	}
+	if unscaled.CmpAbs(parquetdecimal.Pow10(prec)) >= 0 {
+		return "", fmt.Errorf("value %v exceeds decimal(%d, %d) precision", s, prec, scale)
+	}
+	return new(big.Rat).SetFrac(unscaled, parquetdecimal.Pow10(scale)).FloatString(scale), nil
+}
+
+// DecimalFloatToString renders a float64 as the decimal string whose parsed
+// unscaled value is EXACTLY what the shredder's insert path stores for the same
+// float in a decimal(prec, scale) column. It is built on floatToUnscaled — the
+// very conversion convertToDecimal applies — so parity holds by construction,
+// including the half-AWAY-from-zero tie rounding (0.125 at scale 2 renders as
+// "0.13", matching the stored unscaled 13; strconv.FormatFloat's half-to-even
+// would render "0.12" and silently diverge on every exact binary tie). It
+// mirrors convertToDecimal's NaN/±Inf rejection and precision validation, so an
+// input the insert path refuses is refused here too.
+//
+// Exported for the iceberg output's mutation paths (copy-on-write rewrite,
+// equality-delete keys), which encode values as JSON strings and must agree
+// byte-for-byte with what inserts store.
+func DecimalFloatToString(f float64, prec, scale int) (string, error) {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return "", fmt.Errorf("cannot convert %v to decimal", f)
+	}
+	unscaled := floatToUnscaled(f, scale)
+	if unscaled.CmpAbs(parquetdecimal.Pow10(prec)) >= 0 {
+		return "", fmt.Errorf("value %v exceeds decimal(%d, %d) precision", f, prec, scale)
+	}
+	// The fraction is exact (denominator 10^scale), so FloatString performs no
+	// rounding of its own.
+	return new(big.Rat).SetFrac(unscaled, parquetdecimal.Pow10(scale)).FloatString(scale), nil
 }
 
 // floatToUnscaled converts a float64 to an unscaled big.Int by multiplying by 10^scale.

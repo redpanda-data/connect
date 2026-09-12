@@ -55,9 +55,11 @@ To learn more about translation, see the https://platform.openai.com/docs/guides
 		Fields(
 			service.NewBloblangField(otlpFieldFile).
 				Description("The audio file object (not file name) to translate, in one of the following formats: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, or `webm`.").
+				ShortDescription("The audio file object to translate. Supports flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav and webm.").
 				Optional(),
 			service.NewInterpolatedStringField(otlpFieldPrompt).
 				Description("Optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.").
+				ShortDescription("Optional text guiding the model's style or continuing a previous audio segment.").
 				Optional().
 				Advanced(),
 		)

@@ -29,18 +29,20 @@ their proper Go types using column metadata from the schema cache.
 | Oracle Type | Schema Type | Snapshot Go Type | Streaming Go Type | JSON Wire Format |
 |---|---|---|---|---|
 | `NUMBER(p≤18, 0)` | Int64 | `int64` | `int64` ¹ | `42` |
-| `NUMBER(p>18, 0)` | String | `json.Number` | `json.Number` ¹ | `99999999999999999999` |
-| `NUMBER(p, s>0)` | String | `json.Number` | `json.Number` ¹ | `123.456` |
-| `NUMBER` (bare) | String | `json.Number` | `json.Number` ¹ | `42` |
-| `INTEGER` / `INT` / `SMALLINT` | Int64 ² | `int64` | `int64` ¹ | `42` |
-| `FLOAT` | String ² | `json.Number` | `json.Number` ¹ | `1.5` |
+| `NUMBER(p>18, 0)` | Decimal(p,0) | `string` | `string` ¹ | `"99999999999999999999"` |
+| `NUMBER(p, 0<s≤p)` | Decimal(p,s) | `string` | `string` ¹ | `"123.456"` |
+| `NUMBER(p, s>p)` | BigDecimal ⁵ | `string` | `string` ¹ | `"0.00042"` |
+| `NUMBER(p, s<0)` | BigDecimal ⁵ | `string` | `string` ¹ | `"1200"` |
+| `NUMBER` (bare) | BigDecimal | `string` | `string` ¹ | `"42"` |
+| `INTEGER` / `INT` / `SMALLINT` | Decimal(38,0) ² | `string` | `string` ¹ | `"42"` |
+| `FLOAT` | BigDecimal ² | `string` | `string` ¹ | `"1.5"` |
 | `BINARY_FLOAT` | Float32 | `float64` | `float64` ¹ | `1.5` |
 | `BINARY_DOUBLE` | Float64 | `float64` | `float64` ¹ | `3.14` |
 | `DATE` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00Z"` |
 | `TIMESTAMP` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00.123456Z"` |
 | `TIMESTAMP WITH TIME ZONE` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00+05:30"` |
 | `TIMESTAMP WITH LOCAL TIME ZONE` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00Z"` |
-| `RAW` / `LONG RAW` / `BLOB` | ByteArray | `[]byte` | `[]byte` ³ | `"DEADBEEF"` (base64) |
+| `RAW` / `LONG RAW` / `BLOB` | ByteArray | `[]byte` | `[]byte` ³ | `"3q2+7w=="` (base64) |
 | `CHAR` / `VARCHAR2` | String | `string` | `string` | `"hello"` |
 | `NCHAR` / `NVARCHAR2` | String | `string` | `string` | `"hello"` |
 | `CLOB` / `NCLOB` / `LONG` | String | `string` | `string` | `"long text..."` |
@@ -55,12 +57,15 @@ function in the publish path then converts these strings to the proper Go type u
 column metadata from the schema cache. See [Value Coercion](#value-coercion) below.
 
 ² **Precision-dependent mapping.** Oracle's `INTEGER`, `INT`, `SMALLINT`, and `FLOAT`
-are aliases for `NUMBER` with specific precision/scale. `isNumberType()` routes these
-through `oracleNumberToCommonType()` which considers precision and scale. For example,
-`INTEGER` (which is `NUMBER(38,0)`) maps to `String` (precision > 18), while
-`SMALLINT` (which is `NUMBER(38,0)` as well) also maps to `String`. In practice,
-the actual `DATA_PRECISION` and `DATA_SCALE` reported by `ALL_TAB_COLUMNS` determine
-the mapping.
+are aliases for `NUMBER` with specific precision/scale, routed through
+`NumberToCommon()`. The two schema sources encode "undeclared precision"
+differently and `catalogNumberInfo()` bridges them: `ALL_TAB_COLUMNS` reports
+NULL `DATA_PRECISION` for `NUMBER(*,s)` columns (which is what
+`INTEGER`/`INT`/`SMALLINT` are — `NUMBER(*,0)`), while the driver reports
+precision 38 for the same columns; the catalog side substitutes 38 so both
+sources land on `Decimal(38, s)`. `FLOAT` reports a binary precision with NULL
+scale in the catalog and the (38, 0xFF) undeclared-scale sentinel from the
+driver — both land on BigDecimal.
 
 ³ **Converted by Oracle function calls.** In streaming, date/timestamp values appear
 as `TO_DATE(...)`, `TO_TIMESTAMP(...)`, etc., which the `OracleValueConverter` converts
@@ -71,6 +76,17 @@ conversions happen at parse time, before the coercion step.
 `SQL_REDO`. There is no way to distinguish a JSON string from a regular string at
 parse time, so JSON columns produce `string` in streaming vs `any` (unmarshalled) in
 snapshot. This is an accepted limitation — JSON columns are uncommon in CDC workloads.
+Note that go-ora v2.9.0's `DatabaseTypeName()` renders the native JSON type (TNS
+type 119) as the literal string `TNSType(119)`, which `oracleTypeToCommonType`
+aliases back to the JSON mapping.
+
+⁵ **Out-of-range scales.** Declared scales outside `0..p` map to BigDecimal from
+both sources. For negative scale (`NUMBER(p,-s)`) the catalog reports it
+faithfully, but the driver's `uint8` scale wraps (e.g. `-2` → `254`) and trips
+the scale-greater-than-precision branch in `NumberToCommon`, so the catalog side
+maps to BigDecimal as well to keep the two sources in agreement. A declared
+scale greater than precision (e.g. `NUMBER(2,5)`, legal in Oracle) reaches the
+same branch directly from both sources.
 
 ## Value Coercion
 
@@ -160,23 +176,44 @@ Messages from the same table with the same schema always have the same
 fingerprint, regardless of whether they came from snapshot or streaming.
 This enables efficient schema caching in downstream processors.
 
-## go-ora Driver Type Names
+## Type Names: Catalog vs Driver
 
-The go-ora Oracle driver reports non-standard type names via
-`sql.ColumnType.DatabaseTypeName()`. Both the snapshot scanner and schema
-mapper handle these aliases:
+The schema cache is populated from two sources that report DIFFERENT names for
+the same column type, and both must map identically (see
+`TestOracleSchemaSourceParity`):
 
-| Oracle Type | go-ora `DatabaseTypeName()` | Standard `ALL_TAB_COLUMNS.DATA_TYPE` |
+- **Catalog** (`ALL_TAB_COLUMNS.DATA_TYPE`): embeds parenthesised size
+  qualifiers in the type name itself for the TIMESTAMP and INTERVAL families —
+  a `TIMESTAMP` column is reported as `TIMESTAMP(6)` (or whatever its
+  fractional-seconds precision is), never as bare `TIMESTAMP`.
+- **Driver** (go-ora's `sql.ColumnType.DatabaseTypeName()`): reports
+  non-standard bare names (TNS type names).
+
+| Oracle Type | go-ora `DatabaseTypeName()` | `ALL_TAB_COLUMNS.DATA_TYPE` |
 |---|---|---|
 | `BINARY_FLOAT` | `IBFloat` or `BFloat` | `BINARY_FLOAT` |
 | `BINARY_DOUBLE` | `IBDouble` or `BDouble` | `BINARY_DOUBLE` |
-| `TIMESTAMP WITH TIME ZONE` | `TimeStampTZ` or `TIMESTAMPTZ` | `TIMESTAMP WITH TIME ZONE` |
-| `TIMESTAMP WITH LOCAL TIME ZONE` | `TimeStampeLTZ` or `TimeStampLTZ_DTY` | `TIMESTAMP WITH LOCAL TIME ZONE` |
-| `TIMESTAMP` (internal) | `TimeStampDTY` or `TimeStampTZ_DTY` | varies |
+| `RAW` | `RAW` or `VarRaw` | `RAW` |
+| `TIMESTAMP` | `TimeStampDTY` or `TIMESTAMP` | `TIMESTAMP(n)` |
+| `TIMESTAMP WITH TIME ZONE` | `TimeStampTZ_DTY` or `TimeStampTZ` | `TIMESTAMP(n) WITH TIME ZONE` |
+| `TIMESTAMP WITH LOCAL TIME ZONE` | `TimeStampLTZ_DTY` or `TimeStampeLTZ` | `TIMESTAMP(n) WITH LOCAL TIME ZONE` |
+| `BLOB` | `OCIBlobLocator` (or `LongRaw` inline) | `BLOB` |
+| `CLOB` / `NCLOB` | `OCIClobLocator` (or `LongVarChar` inline) | `CLOB` / `NCLOB` |
+| `LONG RAW` | `LongRaw` | `LONG RAW` |
+| `JSON` | `TNSType(119)` (no stringer entry in v2.9.0) | `JSON` |
+| `INTERVAL DAY TO SECOND` | `IntervalDS_DTY` | `INTERVAL DAY(n) TO SECOND(m)` |
 
-The `oracleTypeToCommonType()` function normalises all variants via
-`strings.ToUpper()`. The snapshot scanner in `prepSnapshotScannerAndMappers`
-lists the exact driver names since its switch is case-sensitive.
+The `oracleTypeToCommonType()` function accepts both spellings: it strips
+parenthesised size qualifiers via `normalizeOracleTypeName()` (so
+`TIMESTAMP(6) WITH TIME ZONE` matches `TIMESTAMP WITH TIME ZONE`), upper-cases
+the result, and lists the go-ora aliases alongside the catalog names. Failing
+to handle one source's spelling is not cosmetic: the schema attached to a
+message then flips between snapshot-seeded and catalog-refreshed cache states,
+and Schema Registry permanently rejects every message from the losing path
+with a BACKWARD `MISSING_UNION_BRANCH` error.
+
+The snapshot scanner in `prepSnapshotScannerAndMappers` lists the exact driver
+names since its switch is case-sensitive (it only ever sees driver names).
 
 ## Key Files
 

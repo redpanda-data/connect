@@ -82,6 +82,7 @@ You can access these metadata fields using xref:guides:bloblang/about.adoc[Blobl
 				Example("my-app-logs"),
 			service.NewStringListField(cwlFieldLogStreamNames).
 				Description("An optional list of log stream names to consume from. If not set, events from all streams in the log group will be consumed.").
+				ShortDescription("Log stream names to consume from. All streams in the log group are consumed if unset.").
 				Optional().
 				Example([]string{"stream-1", "stream-2"}),
 			service.NewStringField(cwlFieldLogStreamPrefix).
@@ -90,10 +91,12 @@ You can access these metadata fields using xref:guides:bloblang/about.adoc[Blobl
 				Example("prod-"),
 			service.NewStringField(cwlFieldFilterPattern).
 				Description("An optional CloudWatch Logs filter pattern to apply when querying log events. See AWS documentation for filter pattern syntax.").
+				ShortDescription("An optional CloudWatch Logs filter pattern to apply when querying log events.").
 				Optional().
 				Example("[ERROR]"),
 			service.NewStringField(cwlFieldStartTime).
 				Description("The time to start consuming log events from. Can be an RFC3339 timestamp (e.g., `2024-01-01T00:00:00Z`) or the string `now` to start consuming from the current time. If not set, starts from the beginning of available logs.").
+				ShortDescription("When to start consuming log events. An RFC3339 timestamp, or now for the current time.").
 				Optional().
 				Example("2024-01-01T00:00:00Z").
 				Example("now"),
@@ -107,6 +110,7 @@ You can access these metadata fields using xref:guides:bloblang/about.adoc[Blobl
 				Advanced(),
 			service.NewBoolField(cwlFieldStructuredLog).
 				Description("Whether to output log events as structured JSON objects with all metadata fields, or as plain text messages with metadata in message metadata.").
+				ShortDescription("Emit log events as structured JSON objects rather than plain text messages.").
 				Default(true).
 				Advanced(),
 			service.NewDurationField(cwlFieldAPITimeout).

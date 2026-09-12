@@ -59,6 +59,7 @@ Can download a file from Google Drive based on a file ID.
 					"application/vnd.google-apps.script":       "application/vnd.google-apps.script+json",
 				}).
 				Description("A map of Google Drive MIME types to their export formats. The key is the MIME type, and the value is the export format. See https://developers.google.com/workspace/drive/api/guides/ref-export-formats[^Google Drive API Documentation] for a list of supported export types").
+				ShortDescription("A map of Google Drive MIME types to the export format each should use.").
 				Example(map[string]string{
 					"application/vnd.google-apps.document":     "application/pdf",
 					"application/vnd.google-apps.spreadsheet":  "application/pdf",

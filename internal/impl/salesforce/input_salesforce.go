@@ -70,31 +70,37 @@ Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in
 	spec = spec.Fields(authFieldSpecs()...).
 		Field(service.NewStringField(sfiFieldObject).
 			Description("The sObject API name to SELECT from. Case-sensitive; uses the API name, not the display label. Standard objects use the noun (`Account`, `Opportunity`); custom objects end with `__c`; Big Objects end with `__b`; External Objects end with `__x`. Confirm the exact API name in Setup → Object Manager.").
+			ShortDescription("The sObject API name to SELECT from. Case-sensitive, and uses the API name not the display label.").
 			Example("Account").
 			Example("Contact").
 			Example("MyCustom__c")).
 		Field(service.NewStringListField(sfiFieldColumns).
 			Description("Ordered list of field API names to retrieve. SOQL does not accept `*` — every field must be listed explicitly. Standard fields use their documented names; custom fields end with `__c`. Relationship fields traverse parents via dot notation (`Account.Name`, `Owner.Manager.Email`) up to 5 levels deep. Requesting a non-existent or non-queryable field fails at Connect time with a SOQL compile error.").
+			ShortDescription("Ordered list of field API names to retrieve. SOQL requires every field to be listed explicitly.").
 			Example([]string{"Id", "Name", "LastModifiedDate"}).
 			Example([]string{"Id", "Account.Name", "Owner.Email"}).
 			Example([]string{"Id", "MyCustom__c"})).
 		Field(service.NewStringField(sfiFieldWhere).
 			Description("Optional SOQL WHERE body, without the `WHERE` keyword. `?` placeholders are substituted client-side from `args_mapping` with SOQL literal escaping (quoted strings, ISO-8601 datetimes). Supports the full WHERE grammar: `AND`/`OR`/`NOT`, `LIKE`, `IN`, date literals (`TODAY`, `LAST_N_DAYS:7`), subqueries. Date/datetime comparisons require ISO-8601 with explicit timezone.").
+			ShortDescription("Optional SOQL WHERE body, without the WHERE keyword. Placeholders are substituted from args_mapping.").
 			Example("LastModifiedDate > ?").
 			Example("Status__c = ? AND CreatedDate > ?").
 			Example("OwnerId IN (?, ?)").
 			Optional()).
 		Field(service.NewBloblangField(sfiFieldArgsMapping).
 			Description("Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an array of values matching the count of `?` placeholders in `where`. Values are SOQL-escaped: strings become quoted literals, timestamps become ISO-8601, booleans and numbers pass through. The mapping is evaluated once at startup with no message context — use `now()`, `env()`, or `cache()`.").
+			ShortDescription("Optional Bloblang mapping returning an array of values matching the ? placeholders in where.").
 			Example(`root = [ (now() - "1h").ts_format("2006-01-02T15:04:05Z") ]`).
 			Example(`root = [ "Active", (now() - "24h").ts_format("2006-01-02T15:04:05Z") ]`).
 			Optional()).
 		Field(service.NewStringField(sfiFieldPrefix).
 			Description("Optional SOQL fragment inserted before the SELECT keyword. Rarely needed — provided for forward compatibility with future SOQL extensions or Bulk API framing.").
+			ShortDescription("Optional SOQL fragment inserted before the SELECT keyword. Rarely needed.").
 			Optional().
 			Advanced()).
 		Field(service.NewStringField(sfiFieldSuffix).
 			Description("Optional SOQL fragment appended after the WHERE clause. Typical uses: `ORDER BY` for deterministic pagination, `LIMIT` to cap result size, `FOR REFERENCE` / `FOR VIEW` to mark records for Chatter tracking.").
+			ShortDescription("Optional SOQL fragment appended after the WHERE clause, such as ORDER BY or LIMIT.").
 			Example("ORDER BY LastModifiedDate DESC").
 			Example("ORDER BY Id LIMIT 1000").
 			Example("ORDER BY CreatedDate DESC LIMIT 10000").

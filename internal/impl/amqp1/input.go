@@ -49,6 +49,7 @@ func amqp1InputSpec() *service.ConfigSpec {
 				Optional(),
 			service.NewURLListField(urlsField).
 				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
+				ShortDescription("URLs to connect to. The first to connect successfully is used until the connection closes.").
 				Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
 				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
 				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
@@ -66,10 +67,12 @@ func amqp1InputSpec() *service.ConfigSpec {
 				Advanced(),
 			service.NewBoolField(getMessageHeaderField).
 				Description("Read additional message header fields into `amqp_*` metadata properties.").
+				ShortDescription("Read additional message header fields into amqp_* metadata properties.").
 				Version("4.25.0").
 				Default(false).Advanced(),
 			service.NewIntField(creditField).
 				Description("Specifies the maximum number of unacknowledged messages the sender can transmit. Once this limit is reached, no more messages will arrive until messages are acknowledged and settled.").
+				ShortDescription("The maximum number of unacknowledged messages the sender may transmit.").
 				LintRule(`root = if this < 1 { [ "`+creditField+` must be at least 1" ] }`).
 				Version("4.26.0").
 				Default(64).

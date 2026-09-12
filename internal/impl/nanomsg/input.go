@@ -58,6 +58,7 @@ func inputConfigSpec() *service.ConfigSpec {
 			service.NewAutoRetryNacksToggleField(),
 			service.NewStringListField(niFieldSubFilters).
 				Description("A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.").
+				ShortDescription("Subscription topic filters for a SUB socket. A single empty filter subscribes to everything.").
 				Default([]any{}),
 			service.NewDurationField(niFieldPollTimeout).
 				Description("The period to wait until a poll is abandoned and reattempted.").

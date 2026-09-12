@@ -63,6 +63,7 @@ To learn more about turning text into spoken audio, see the https://platform.ope
 				Examples("alloy", "echo", "fable", "onyx", "nova", "shimmer"),
 			service.NewInterpolatedStringField(ospFieldResponseFormat).
 				Description("The format to generate audio in. Default is `mp3`.").
+				ShortDescription("The audio format to generate.").
 				Examples("mp3", "opus", "aac", "flac", "wav", "pcm").
 				Advanced().
 				Optional(),

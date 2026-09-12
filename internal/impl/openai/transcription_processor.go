@@ -55,7 +55,8 @@ To learn more about audio transcription, see the: https://platform.openai.com/do
 		).
 		Fields(
 			service.NewBloblangField(otspFieldFile).
-				Description("The audio file object (not file name) to transcribe, in one of the following formats: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, or `webm`."),
+				Description("The audio file object (not file name) to transcribe, in one of the following formats: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, or `webm`.").
+				ShortDescription("The audio file object to transcribe. Supports flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav and webm."),
 			service.NewInterpolatedStringField(otspFieldLang).
 				Description("The language of the input audio. Supplying the input language in ISO-639-1 format improves accuracy and latency.").
 				Examples("en", "fr", "de", "zh").
@@ -63,6 +64,7 @@ To learn more about audio transcription, see the: https://platform.openai.com/do
 				Advanced(),
 			service.NewInterpolatedStringField(otspFieldPrompt).
 				Description("Optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.").
+				ShortDescription("Optional text guiding the model's style or continuing a previous audio segment.").
 				Optional().
 				Advanced(),
 		)

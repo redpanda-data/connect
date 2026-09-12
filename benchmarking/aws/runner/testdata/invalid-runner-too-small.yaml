@@ -1,0 +1,35 @@
+name: postgres-orders-cdc
+description: Stream changes from a 75M-row orders table at 5K writes/sec sustained.
+connector: postgres_cdc
+stack: postgres
+infra:
+  source:
+    instance_class: db.r6g.2xlarge
+    storage_gb: 400
+    iops: 12000
+  runner:
+    instance_type: c7i.large
+dataset:
+  initial_rows: 75000000
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-postgres
+workload:
+  write_rate_per_sec: 5000
+  duration: 15m
+  warmup: 2m
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      stream_snapshot: false
+      schema: public
+      tables: [orders]
+      slot_name: bench_slot
+      batching:
+        count: 5000
+        period: 1s
+matrix:
+  cpu_points: [1, 2, 4, 8]
+reset:
+  - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"

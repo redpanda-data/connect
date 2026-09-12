@@ -48,6 +48,7 @@ func clientFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewURLListField(msFieldClientURLs).
 			Description("A list of URLs to connect to. The format should be `scheme://host:port` where `scheme` is one of `tcp`, `ssl`, or `ws`, `host` is the ip-address (or hostname) and `port` is the port on which the broker is accepting connections. If an item of the list contains commas it will be expanded into multiple URLs.").
+			ShortDescription("URLs to connect to, as scheme://host:port where scheme is tcp, ssl or ws.").
 			Example([]string{"tcp://localhost:1883"}),
 		service.NewStringField(msFieldClientClientID).
 			Description("An identifier for the client connection.").
@@ -56,6 +57,7 @@ func clientFields() []*service.ConfigField {
 			"nanoid": "append a nanoid of length 21 characters",
 		}).
 			Description("Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Redpanda Connect producers.").
+			ShortDescription("Append a generated suffix to client_id on each run, useful when clustering producers.").
 			Optional().
 			Advanced().
 			LintRule(`root = []`), // Disable linting for now

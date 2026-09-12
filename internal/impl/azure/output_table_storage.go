@@ -138,6 +138,7 @@ properties:
 				Default(map[string]any{}),
 			service.NewInterpolatedStringEnumField(tsoFieldInsertType, `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`).
 				Description("Type of insert operation. Valid options are `INSERT`, `INSERT_MERGE` and `INSERT_REPLACE`").
+				ShortDescription("Type of insert operation: INSERT, INSERT_MERGE or INSERT_REPLACE.").
 				Example(`${! json("operation") }`).Example(`${! meta("operation") }`).Example(`INSERT`).
 				Advanced().Deprecated().
 				Default(""),

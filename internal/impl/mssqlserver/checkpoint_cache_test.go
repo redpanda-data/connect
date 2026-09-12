@@ -61,7 +61,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache(t *testing.T) {
 
 		// verify set
 		var wanted replication.LSN
-		require.NoError(t, wanted.Scan([]byte("0x0000002d000004b00003")))
+		require.NoError(t, wanted.Scan([]byte{0x00, 0x00, 0x00, 0x2d, 0x00, 0x00, 0x04, 0xb0, 0x00, 0x03}))
 		require.NoError(t, cache.Set(t.Context(), "", wanted, nil))
 
 		// verify get
@@ -106,6 +106,296 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache(t *testing.T) {
 
 		err = cache.db.PingContext(t.Context())
 		require.Contains(t, err.Error(), "sql: database is closed")
+	})
+}
+
+func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *testing.T) {
+	integration.CheckSkip(t)
+	connStr, db := mssqlservertest.MustSetupTestWithMicrosoftSQLServerVersion(t)
+
+	// highByteLSN has bytes >= 0x80, which a character column's collation decode corrupts on read.
+	highByteLSN := replication.LSN{0x00, 0x04, 0x8b, 0x73, 0x00, 0x01, 0x73, 0xe2, 0x00, 0x01}
+
+	t.Run("round trips a high-byte LSN cleanly", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn1;`)
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn1.CdcCheckpointCache"
+		cache, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+
+		require.NoError(t, cache.Set(t.Context(), "", highByteLSN, nil))
+
+		got, err := cache.Get(t.Context(), "")
+		require.NoError(t, err)
+		require.Equal(t, []byte(highByteLSN), got)
+	})
+
+	t.Run("reads a legacy varchar cache table and recovers the true LSN via CONVERT, no DDL", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn2;`)
+		require.NoError(t, err)
+
+		// Legacy schema: cache_val varchar(100), seeded with intact on-disk bytes.
+		_, err = db.Exec(`CREATE TABLE rpcn2.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val varchar(100)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn2.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, []byte(highByteLSN))
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn2.CdcCheckpointCache"
+		cache, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+
+		got, err := cache.Get(t.Context(), "")
+		require.NoError(t, err)
+		require.Equal(t, []byte(highByteLSN), got, "CONVERT-on-read should recover the true on-disk LSN, not a re-corrupted value")
+
+		// no DDL is ever run - the column must still be varchar
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn2.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "varchar", typeName)
+	})
+
+	t.Run("Set writes cleanly into a legacy varchar table via the live proc", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn11;`)
+		require.NoError(t, err)
+
+		// Empty legacy varchar(100) table; Set writes through the live proc, not a seeded row.
+		_, err = db.Exec(`CREATE TABLE rpcn11.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val varchar(100)
+		);`)
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn11.CdcCheckpointCache"
+		cache, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+
+		require.NoError(t, cache.Set(t.Context(), "", highByteLSN, nil))
+
+		got, err := cache.Get(t.Context(), "")
+		require.NoError(t, err)
+		require.Equal(t, []byte(highByteLSN), got, "Set through the live proc should write byte-preserving data into the still-varchar column")
+
+		// no DDL is ever run - the column must still be varchar
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn11.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "varchar", typeName)
+	})
+
+	t.Run("Get fails on a too-short legacy value rather than resuming from a bogus LSN", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn4;`)
+		require.NoError(t, err)
+
+		shortVal := []byte{0x01, 0x02, 0x03, 0x04}
+
+		_, err = db.Exec(`CREATE TABLE rpcn4.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val varchar(100)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn4.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, shortVal)
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn4.CdcCheckpointCache"
+		cache, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err, "construction only validates the column type, not row values")
+
+		_, err = cache.Get(t.Context(), "")
+		require.ErrorContains(t, err, "cannot be safely recovered")
+
+		var shortAfter []byte
+		require.NoError(t, db.QueryRow(`SELECT cache_val FROM rpcn4.CdcCheckpointCache WHERE cache_key = ?;`, defaultCacheKey).Scan(&shortAfter))
+		require.Equal(t, shortVal, shortAfter, "row should be left untouched, pending manual intervention")
+	})
+
+	t.Run("Get fails on a too-long legacy value, proving source length is checked before truncation", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn10;`)
+		require.NoError(t, err)
+
+		// DATALENGTH is checked on the raw source, not the always-<=10-byte converted result.
+		overlongVal := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+
+		_, err = db.Exec(`CREATE TABLE rpcn10.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val varchar(100)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn10.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, overlongVal)
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn10.CdcCheckpointCache"
+		cache, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+
+		_, err = cache.Get(t.Context(), "")
+		require.ErrorContains(t, err, "cannot be safely recovered")
+	})
+
+	t.Run("fails startup for a char legacy column rather than corrupting it via a mismatched proc", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn5;`)
+		require.NoError(t, err)
+
+		// char: DATALENGTH returns the declared (blank-padded) length, not actual content length.
+		_, err = db.Exec(`CREATE TABLE rpcn5.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val char(100)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn5.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, []byte(highByteLSN))
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn5.CdcCheckpointCache"
+		_, err = newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.ErrorContains(t, err, "unexpected type")
+		require.ErrorContains(t, err, "manual inspection is required")
+
+		// column type is left untouched
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn5.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "char", typeName)
+	})
+
+	t.Run("fails startup for an nvarchar legacy column rather than corrupting it via a mismatched proc", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn6;`)
+		require.NoError(t, err)
+
+		_, err = db.Exec(`CREATE TABLE rpcn6.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val nvarchar(100)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn6.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, []byte(highByteLSN))
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn6.CdcCheckpointCache"
+		_, err = newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.ErrorContains(t, err, "unexpected type")
+		require.ErrorContains(t, err, "manual inspection is required")
+
+		// column type is left untouched
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn6.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "nvarchar", typeName)
+	})
+
+	t.Run("fails startup for an nchar legacy column rather than corrupting it via a mismatched proc", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn7;`)
+		require.NoError(t, err)
+
+		// nchar: has both char's DATALENGTH padding problem and nvarchar's UTF-16LE expansion problem.
+		_, err = db.Exec(`CREATE TABLE rpcn7.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val nchar(100)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn7.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, []byte(highByteLSN))
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn7.CdcCheckpointCache"
+		_, err = newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.ErrorContains(t, err, "unexpected type")
+		require.ErrorContains(t, err, "manual inspection is required")
+
+		// column type is left untouched
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn7.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "nchar", typeName)
+	})
+
+	t.Run("fails startup for a binary(20) legacy column rather than permanently hard-failing Get", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn8;`)
+		require.NoError(t, err)
+
+		// binary(20): DATALENGTH reports the padded declared length (20), not the actual 10 bytes.
+		_, err = db.Exec(`CREATE TABLE rpcn8.CdcCheckpointCache (
+			cache_key varchar(7) NOT NULL PRIMARY KEY,
+			cache_val binary(20)
+		);`)
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO rpcn8.CdcCheckpointCache (cache_key, cache_val) VALUES (?, ?);`,
+			defaultCacheKey, []byte(highByteLSN))
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn8.CdcCheckpointCache"
+		_, err = newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.ErrorContains(t, err, "unexpected type")
+		require.ErrorContains(t, err, "manual inspection is required")
+
+		// column type must be left exactly as it was, not touched
+		var typeName string
+		require.NoError(t, db.QueryRow(`
+			SELECT t.name FROM sys.columns c
+			JOIN sys.types t ON t.user_type_id = c.user_type_id
+			WHERE c.object_id = OBJECT_ID('rpcn8.CdcCheckpointCache') AND c.name = 'cache_val';`).Scan(&typeName))
+		require.Equal(t, "binary", typeName)
+	})
+
+	t.Run("is idempotent across multiple constructions", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := db.Exec(`CREATE SCHEMA rpcn3;`)
+		require.NoError(t, err)
+
+		cacheTableToCreate := "rpcn3.CdcCheckpointCache"
+
+		cacheA, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+		require.NoError(t, cacheA.Set(t.Context(), "", highByteLSN, nil))
+
+		// second construction against the same table must not error
+		cacheB, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
+		require.NoError(t, err)
+
+		got, err := cacheB.Get(t.Context(), "")
+		require.NoError(t, err)
+		require.Equal(t, []byte(highByteLSN), got)
+
+		require.NoError(t, cacheB.Set(t.Context(), "", highByteLSN, nil))
+		got, err = cacheA.Get(t.Context(), "")
+		require.NoError(t, err)
+		require.Equal(t, []byte(highByteLSN), got)
 	})
 }
 

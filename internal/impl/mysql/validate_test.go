@@ -45,6 +45,29 @@ func TestValidateTableName(t *testing.T) {
 			tableName:   "UserProfiles",
 			expectedErr: nil,
 		},
+		// MySQL permits the extended range U+0080..U+FFFF in unquoted
+		// identifiers, alongside the ASCII set.
+		// https://dev.mysql.com/doc/refman/8.4/en/identifiers.html
+		{
+			name:        "Valid table name with accented latin characters",
+			tableName:   "café",
+			expectedErr: nil,
+		},
+		{
+			name:        "Valid table name starting with an extended character",
+			tableName:   "日本語テーブル",
+			expectedErr: nil,
+		},
+		{
+			name:        "Valid table name with cyrillic characters",
+			tableName:   "Пользователи",
+			expectedErr: nil,
+		},
+		{
+			name:        "Valid table name mixing ascii and extended characters",
+			tableName:   "orders_ñ_2024",
+			expectedErr: nil,
+		},
 
 		// Invalid cases
 		{
@@ -76,6 +99,21 @@ func TestValidateTableName(t *testing.T) {
 			name:        "Too long table name",
 			tableName:   strings.Repeat("a", 65),
 			expectedErr: errInvalidTableLength,
+		},
+		{
+			name:        "Too long table name counted in runes",
+			tableName:   strings.Repeat("é", 65),
+			expectedErr: errInvalidTableLength,
+		},
+		{
+			name:        "Supplementary characters are not permitted",
+			tableName:   "table_😀",
+			expectedErr: errInvalidTableName,
+		},
+		{
+			name:        "Invalid utf-8 is rejected",
+			tableName:   "table_" + string([]byte{0xff}),
+			expectedErr: errInvalidTableName,
 		},
 	}
 

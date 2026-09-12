@@ -272,6 +272,7 @@ func httpTransportFieldSpec() *service.ConfigField {
 			Default(h2.MaxReadFrameSize),
 		service.NewIntField(cFieldH2MaxRecvBufferPerConn).
 			Description("Maximum flow-control window size in bytes for data received on a connection. Must be at least 64 KiB and less than 4 MiB.").
+			ShortDescription("Maximum flow-control window size in bytes for received data. Must be at least 64 KiB and under 4 MiB.").
 			Default(h2.MaxReceiveBufferPerConnection),
 		service.NewIntField(cFieldH2MaxRecvBufferPerStream).
 			Description("Maximum flow-control window size in bytes for data received on a single stream. Must be less than 4 MiB.").
@@ -321,6 +322,7 @@ func httpTransportFieldSpec() *service.ConfigField {
 			Default(int(defaults.MaxResponseHeaderBytes)),
 		service.NewIntField(cFieldHTTPMaxResponseBodyBytes).
 			Description("Maximum bytes of response body the client will read. The response body is wrapped with a limit reader; reads beyond this cap return EOF. 0 disables the limit.").
+			ShortDescription("Maximum bytes of response body the client will read. Set to 0 to disable the limit.").
 			Default(int(defaults.MaxResponseBodyBytes)),
 		service.NewIntField(cFieldHTTPWriteBufferSize).
 			Description("Size in bytes of the per-connection write buffer.").

@@ -82,7 +82,8 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Description("The table to read messages from.").
 				Example(`Foo`),
 			service.NewStringField(tsiFieldFilter).
-				Description("OData filter expression. Is not set all rows are returned. Valid operators are `eq, ne, gt, lt, ge and le`").Example(`PartitionKey eq 'foo' and RowKey gt '1000'`).
+				Description("OData filter expression. Is not set all rows are returned. Valid operators are `eq, ne, gt, lt, ge and le`").
+				ShortDescription("OData filter expression. All rows are returned if unset. Operators: eq, ne, gt, lt, ge, le.").Example(`PartitionKey eq 'foo' and RowKey gt '1000'`).
 				Advanced().
 				Default(""),
 			service.NewStringField(tsiFieldSelect).

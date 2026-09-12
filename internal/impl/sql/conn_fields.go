@@ -82,6 +82,7 @@ The ` + "`pgx`" + ` driver is an alternative to the standard ` + "`postgres`" + 
 The ` + "`snowflake`" + ` driver supports multiple DSN formats. Please consult https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String[the docs^] for more details. For https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication[key pair authentication^], the DSN has the following format: ` + "`<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`" + `, where the value for the ` + "`privateKey`" + ` parameter can be constructed from an unencrypted RSA private key file ` + "`rsa_key.p8`" + ` using ` + "`openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0`" + ` (you can use ` + "`gbasenc`" + ` instead of ` + "`basenc`" + ` on OSX if you install ` + "`coreutils`" + ` via Homebrew). If you have a password-encrypted private key, you can decrypt it using ` + "`openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`" + `. Also, make sure fields such as the username are URL-encoded.
 
 The ` + "https://pkg.go.dev/github.com/microsoft/gocosmos[`gocosmos`^]" + ` driver is still experimental, but it has support for https://learn.microsoft.com/en-us/azure/cosmos-db/hierarchical-partition-keys[hierarchical partition keys^] as well as https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/how-to-query-container#cross-partition-query[cross-partition queries^]. Please refer to the https://github.com/microsoft/gocosmos/blob/main/SQL.md[SQL notes^] for details.`).
+	ShortDescription("A Data Source Name to identify the target database.").
 	Example("clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60").
 	Example("foouser:foopassword@tcp(localhost:3306)/foodb").
 	Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable").
@@ -98,6 +99,7 @@ Care should be taken to ensure that the statements are idempotent, and therefore
 
 If a statement fails for any reason a warning log will be emitted but the operation of this component will not be stopped.
 `).
+			ShortDescription("File paths containing SQL statements to execute on the first connection to the database.").
 			Example([]any{`./init/*.sql`}).
 			Example([]any{`./foo.sql`, `./bar.sql`}).
 			Optional().
@@ -111,6 +113,7 @@ If both ` + "`init_statement` and `init_files` are specified the `init_statement
 
 If the statement fails for any reason a warning log will be emitted but the operation of this component will not be stopped.
 `).
+			ShortDescription("An optional SQL statement to execute on the first connection to the database.").
 			Example(`
 CREATE TABLE IF NOT EXISTS some_table (
   foo varchar(50) not null,
@@ -124,19 +127,23 @@ CREATE TABLE IF NOT EXISTS some_table (
 			Version("4.10.0"),
 		service.NewDurationField("conn_max_idle_time").
 			Description("An optional maximum amount of time a connection may be idle. Expired connections may be closed lazily before reuse. If `value <= 0`, connections are not closed due to a connections idle time.").
+			ShortDescription("Maximum time a connection may be idle. Set to 0 or less to never close on idle time.").
 			Optional().
 			Advanced(),
 		service.NewDurationField("conn_max_life_time").
 			Description("An optional maximum amount of time a connection may be reused. Expired connections may be closed lazily before reuse. If `value <= 0`, connections are not closed due to a connections age.").
+			ShortDescription("Maximum time a connection may be reused. Set to 0 or less to never close on age.").
 			Optional().
 			Advanced(),
 		service.NewIntField("conn_max_idle").
 			Description("An optional maximum number of connections in the idle connection pool. If conn_max_open is greater than 0 but less than the new conn_max_idle, then the new conn_max_idle will be reduced to match the conn_max_open limit. If `value <= 0`, no idle connections are retained. The default max idle connections is currently 2. This may change in a future release.").
+			ShortDescription("Maximum number of connections in the idle connection pool.").
 			Default(2).
 			Optional().
 			Advanced(),
 		service.NewIntField("conn_max_open").
 			Description("An optional maximum number of open connections to the database. If conn_max_idle is greater than 0 and the new conn_max_open is less than conn_max_idle, then conn_max_idle will be reduced to match the new conn_max_open limit. If `value <= 0`, then there is no limit on the number of open connections. The default is 0 (unlimited).").
+			ShortDescription("Maximum number of open connections to the database.").
 			Optional().
 			Advanced(),
 	}
@@ -167,12 +174,14 @@ func rawQueryField() *service.ConfigField {
 ` + "| `snowflake` | Question mark |" + `
 ` + "| `trino` | Question mark |" + `
 ` + "| `gocosmos` | Colon |" + `
-`)
+`).
+		ShortDescription("The query to execute. Placeholder style depends on the driver.")
 }
 
 func rawQueryArgsMappingField() *service.ConfigField {
 	return service.NewBloblangField("args_mapping").
 		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
+		ShortDescription("An optional Bloblang mapping evaluating to an array of values matching the placeholders in query.").
 		Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 		Example(`root = [ meta("user.id") ]`).
 		Optional()
@@ -181,6 +190,7 @@ func rawQueryArgsMappingField() *service.ConfigField {
 func rawQueryWhenField() *service.ConfigField {
 	return service.NewBloblangField("when").
 		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether this query should be executed. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is the one that executes. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.").
+		ShortDescription("An optional Bloblang mapping evaluated per message to decide whether this query runs. Must return a boolean.").
 		Example(`root = meta("kafka_tombstone_message") == "true"`).
 		Example(`root = this.operation == "delete"`).
 		Optional()

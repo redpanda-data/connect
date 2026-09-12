@@ -59,19 +59,23 @@ To learn more about image generation, see the https://platform.openai.com/docs/g
 		Fields(
 			service.NewBloblangField(oipFieldPrompt).
 				Description("A text description of the image you want to generate. The `prompt` field accepts a maximum of 1000 characters for `dall-e-2` and 4000 characters for `dall-e-3`.").
+				ShortDescription("A text description of the image to generate.").
 				Optional(),
 			service.NewInterpolatedStringField(oipFieldQuality).
 				Description("The quality of the image to generate. Use `hd` to create images with finer details and greater consistency across the image. This parameter is only supported for `dall-e-3` models.").
+				ShortDescription("The quality of the image to generate. Use hd for finer detail. Only supported by dall-e-3.").
 				Examples("standard", "hd").
 				Advanced().
 				Optional(),
 			service.NewInterpolatedStringField(oipFieldSize).
 				Description("The size of the generated image. Choose from `256x256`, `512x512`, or `1024x1024` for `dall-e-2`. Choose from `1024x1024`, `1792x1024`, or `1024x1792` for `dall-e-3` models.").
+				ShortDescription("The size of the generated image. Valid sizes depend on the model.").
 				Examples("1024x1024", "512x512", "1792x1024", "1024x1792").
 				Advanced().
 				Optional(),
 			service.NewInterpolatedStringField(oipFieldStyle).
 				Description("The style of the generated image. Choose from `vivid` or `natural`. Vivid causes the model to lean towards generating hyperreal and dramatic images. Natural causes the model to produce more natural, less hyperreal looking images. This parameter is only supported for `dall-e-3`.").
+				ShortDescription("The style of the generated image: vivid for hyperreal and dramatic, or natural.").
 				Examples("vivid", "natural").
 				Advanced().
 				Optional(),

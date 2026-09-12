@@ -98,7 +98,8 @@ This input adds the following metadata fields to each message:
 			Example([]string{"table1", "table2"}).
 			LintRule("root = if this.length() == 0 { [ \"field 'tables' must contain at least one table\" ] }"),
 		service.NewStringField(fieldCheckpointCache).
-			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table."),
+			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table.").
+			ShortDescription("Cache resource storing the last delivered BinLog position, so restarts resume instead of re-reading the table."),
 		service.NewStringField(fieldCheckpointKey).
 			Description("The key to use to store the snapshot position in `"+fieldCheckpointCache+"`. An alternative key can be provided if multiple CDC inputs share the same cache.").
 			Default("mysql_binlog_position"),
@@ -107,10 +108,12 @@ This input adds the following metadata fields to each message:
 			Default(1000),
 		service.NewIntField(fieldMaxReconnectAttempts).
 			Description("The maximum number of attempts the MySQL driver will try to re-establish a broken connection before Connect attempts reconnection. A zero or negative number means infinite retry attempts.").
+			ShortDescription("Attempts the MySQL driver makes to re-establish a broken connection. Zero or less means infinite.").
 			Advanced().
 			Default(10),
 		service.NewBoolField(fieldStreamSnapshot).
-			Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current binlog position."),
+			Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current binlog position.").
+			ShortDescription("Query all existing data as a snapshot first. Otherwise streaming starts from the current binlog position."),
 		service.NewIntField(fieldMaxParallelSnapshotTables).
 			Description("Specifies the number of tables that will be snapshotted in parallel.").
 			Default(1).
@@ -118,6 +121,7 @@ This input adds the following metadata fields to each message:
 		service.NewAutoRetryNacksToggleField(),
 		service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			ShortDescription("The maximum number of messages that can be processed at a given time.").
 			Default(1024),
 		service.NewTLSField("tls").
 			Description("Using this field overrides the SSL/TLS settings in the environment and DSN.").
@@ -142,9 +146,11 @@ This input adds the following metadata fields to each message:
 				Optional().Advanced(),
 			service.NewStringField("role").
 				Description("Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.").
+				ShortDescription("Optional AWS IAM role ARN to assume for authentication.").
 				Optional(),
 			service.NewStringField("role_external_id").
 				Description("Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.").
+				ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
 				Optional(),
 			service.NewObjectListField("roles",
 				service.NewStringField("role").
@@ -156,9 +162,11 @@ This input adds the following metadata fields to each message:
 					Optional(),
 			).
 				Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.").
+				ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
 				Optional(),
 		).
 			Description("AWS IAM authentication configuration for MySQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
+			ShortDescription("AWS IAM authentication configuration for MySQL instances.").
 			Advanced().
 			Optional(),
 		service.NewBatchPolicyField(fieldBatching),

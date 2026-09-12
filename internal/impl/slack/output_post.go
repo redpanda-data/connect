@@ -45,8 +45,10 @@ func outputSpec() *service.ConfigSpec {
 			service.NewInterpolatedStringField(oFieldChannelID).Description("The channel ID to post messages to."),
 			service.NewInterpolatedStringField(oFieldThreadTS).Description("Optional thread timestamp to post messages to.").Default(slack.DEFAULT_MESSAGE_THREAD_TIMESTAMP),
 			service.NewInterpolatedStringField(oFieldText).Description("The text content of the message. Mutually exclusive with `blocks`.").
+				ShortDescription("The text content of the message. Mutually exclusive with blocks.").
 				Default(""),
 			service.NewBloblangField(oFieldBlocks).Description("A Bloblang query that should return a JSON array of Slack blocks (see https://api.slack.com/reference/block-kit/blocks[Blocks in Slack documentation]). Mutually exclusive with `text`.").
+				ShortDescription("A Bloblang query returning a JSON array of Slack blocks. Mutually exclusive with text.").
 				Optional(),
 			service.NewBoolField(oFieldMarkdown).Description("Enable markdown formatting in the message.").Default(slack.DEFAULT_MESSAGE_MARKDOWN),
 			service.NewBoolField(oFieldUnfurlLinks).Description("Enable link unfurling in the message.").Default(slack.DEFAULT_MESSAGE_UNFURL_LINKS),

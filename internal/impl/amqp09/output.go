@@ -45,6 +45,7 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 		Fields(
 			service.NewURLListField(urlsField).
 				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
+				ShortDescription("URLs to connect to. The first to connect successfully is used until the connection closes.").
 				Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
 				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
 				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
@@ -63,6 +64,7 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 					Default(true),
 				service.NewStringMapField(exchangeDeclareArgumentsField).
 					Description("Optional arguments specific to the server's implementation of the exchange that can be sent for exchange types which require extra parameters.").
+					ShortDescription("Optional arguments specific to the server's exchange implementation, for types needing extra parameters.").
 					Advanced().
 					Optional().
 					Example(map[string]any{
@@ -104,6 +106,7 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 				Default(""),
 			service.NewInterpolatedStringField(userIDField).
 				Description("Set the user ID to the name of the publisher.  If this property is set by a publisher, its value must be equal to the name of the user used to open the connection.").
+				ShortDescription("The user ID of the publisher. Must equal the user that opened the connection.").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(appIDField).
@@ -126,10 +129,12 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 				Default(false),
 			service.NewBoolField(mandatoryField).
 				Description("Whether to set the mandatory flag on published messages. When set if a published message is routed to zero queues it is returned.").
+				ShortDescription("Set the mandatory flag, returning messages that route to zero queues.").
 				Advanced().
 				Default(false),
 			service.NewBoolField(immediateField).
 				Description("Whether to set the immediate flag on published messages. When set if there are no ready consumers of a queue then the message is dropped instead of waiting.").
+				ShortDescription("Set the immediate flag, dropping messages when a queue has no ready consumers.").
 				Advanced().
 				Default(false),
 			service.NewDurationField(timeoutField).

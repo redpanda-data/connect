@@ -106,6 +106,7 @@ This processor adds the following metadata fields to each message, depending on 
 				Description("The operation to perform on the KV bucket."),
 			service.NewInterpolatedStringField(kvpFieldKey).
 				Description("The key for each message. Supports https://docs.nats.io/nats-concepts/subjects#wildcards[wildcards^] for the `history` and `keys` operations.").
+				ShortDescription("The key for each message. Supports wildcards for the history and keys operations.").
 				Example("foo").
 				Example("foo.bar.baz").
 				Example("foo.*").
@@ -113,6 +114,7 @@ This processor adds the following metadata fields to each message, depending on 
 				Example(`foo.${! json("meta.type") }`).LintRule(`if this == "" {[ "'key' must be set to a non-empty string" ]}`),
 			service.NewInterpolatedStringField(kvpFieldRevision).
 				Description("The revision of the key to operate on. Used for `get_revision` and `update` operations.").
+				ShortDescription("The revision of the key to operate on. Used by get_revision and update operations.").
 				Example("42").
 				Example(`${! @nats_kv_revision }`).
 				Optional().

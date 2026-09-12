@@ -63,12 +63,14 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 				"This field maps to the `max.message.bytes` Kafka property. " +
 				"Ensure the Redpanda broker's `kafka_batch_max_bytes` property is at least as large as this value, " +
 				"see https://docs.redpanda.com/current/reference/properties/cluster-properties/#kafka_batch_max_bytes.").
+			ShortDescription("Maximum size of a produced record batch. Maps to the Kafka max.message.bytes property.").
 			Advanced().
 			Default("1MiB").
 			Example("100MB").
 			Example("50mib"),
 		service.NewStringField(kfwFieldBrokerWriteMaxBytes).
 			Description("The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.").
+			ShortDescription("Upper bound on bytes written to a broker connection in a single write.").
 			Advanced().
 			Default("100MiB").
 			Example("128MB").
@@ -77,6 +79,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 			Description("The maximum number of records the client will buffer in memory before blocking. " +
 				"When this limit is reached, `Produce()` calls will block until buffered records are delivered and space frees up. " +
 				"Increase this value for high-throughput pipelines to avoid back-pressure stalls.").
+			ShortDescription("Maximum records buffered in memory before producing blocks.").
 			Advanced().
 			Default(10000),
 		service.NewStringField(kfwFieldMaxBufferedBytes).
@@ -84,14 +87,18 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 				"When this limit is reached, `Produce()` calls will block until buffered records are delivered. " +
 				"Set to `0` to disable the byte-level limit (only `max_buffered_records` applies). " +
 				"This limit is checked after `max_buffered_records`.").
+			ShortDescription("Maximum bytes buffered in memory before producing blocks. Set to 0 to disable the byte limit.").
 			Advanced().
 			Default("0").
 			Example("256MB").
 			Example("50mib"),
 		service.NewIntField(kfwFieldMaxInFlightRequestsPerBrkr).
 			Description("The maximum number of produce requests in flight per broker connection. " +
-				"When `idempotent_write` is enabled, this is capped at 5 by the Kafka protocol (and at 1 for Kafka < v1.0.0). " +
-				"When `idempotent_write` is disabled, higher values improve throughput by pipelining requests but may cause out-of-order delivery.").
+				"While `idempotent_write` is enabled (the default) this must be `1`, as the client relies on a single in-flight request per broker to guarantee ordering. " +
+				"To use higher values you must set `idempotent_write` to `false`, which allows requests to be pipelined for throughput but may cause duplicate and out-of-order delivery on retries. " +
+				"Note that this is distinct from the output's `max_in_flight` field, which counts message batches being written in parallel rather than produce requests on the wire. " +
+				"A value of `1` is not a throughput ceiling: records from concurrent writes are coalesced into fewer, larger produce requests.").
+			ShortDescription("Maximum produce requests in flight per broker connection. Must be 1 while idempotent_write is enabled.").
 			Advanced().
 			Default(1),
 		service.NewIntField(kfwFieldRecordRetries).
@@ -99,6 +106,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 				"When a record fails, all records buffered in the same partition are also failed to preserve gapless ordering. " +
 				"Set to `0` for unlimited retries (the default). " +
 				"With `idempotent_write` enabled, retries are only enforced when safe to do so without creating invalid sequence numbers.").
+			ShortDescription("Maximum number of times a record produce is retried before the record fails.").
 			Advanced().
 			Default(0),
 		service.NewDurationField(kfwFieldRecordDeliveryTimeout).
@@ -107,6 +115,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 				"When a record times out, all records in the same partition are also failed. " +
 				"Set to `0s` for no timeout (the default). " +
 				"With `idempotent_write` enabled, timeouts are only enforced when safe to do so without creating invalid sequence numbers.").
+			ShortDescription("Maximum time a record may sit in the producer buffer before failing. Equivalent to Kafka's delivery.timeout.ms.").
 			Advanced().
 			Default("0s"),
 	}
@@ -133,6 +142,7 @@ func FranzProducerFields() []*service.ConfigField {
 					"Note: Idempotent writes are strictly a win for data integrity but may be unavailable in restricted environments " +
 					"(e.g., some managed Kafka services, Redpanda with strict ACLs). " +
 					"Disabling this option is safe and only affects retry behavior—duplicates may occur on producer retries, but the pipeline will continue to function normally.").
+				ShortDescription("Enable the idempotent write producer option for exactly-once semantics per partition. Requires the IDEMPOTENT_WRITE permission on CLUSTER.").
 				Default(true).
 				Advanced(),
 			service.NewStringAnnotatedEnumField(kfwFieldAcks, map[string]string{
@@ -142,10 +152,12 @@ func FranzProducerFields() []*service.ConfigField {
 			}).
 				Description("The number of acknowledgements the leader broker must receive from ISR brokers before responding to the produce request. " +
 					"When `idempotent_write` is enabled this must be set to `all`.").
+				ShortDescription("Acknowledgements the leader must receive from ISR brokers before responding. Must be all when idempotent_write is enabled.").
 				Default("all").
 				Advanced(),
 			service.NewStringEnumField(kfwFieldCompression, "lz4", "snappy", "gzip", "none", "zstd").
 				Description("Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.").
+				ShortDescription("Explicit compression type. Defaults to snappy when the broker supports it, otherwise none.").
 				Optional().
 				Advanced(),
 			service.NewBoolField(kfwFieldAllowAutoTopicCreation).
@@ -321,6 +333,19 @@ func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) 
 		return nil, fmt.Errorf("idempotent_write requires acks to be \"all\", got %q", acksStr)
 	}
 
+	// The franz-go client rejects any value other than 1 here while idempotency
+	// is enabled, because it relies on a single in-flight request per broker to
+	// keep producer sequence numbers gapless. Without this check that rejection
+	// surfaces from within Connect() as a retryable connection error, so the
+	// pipeline starts, retries forever and silently produces nothing.
+	maxInFlightRequests, err := conf.FieldInt(kfwFieldMaxInFlightRequestsPerBrkr)
+	if err != nil {
+		return nil, err
+	}
+	if idempotentWrite && maxInFlightRequests != 1 {
+		return nil, fmt.Errorf("idempotent_write requires max_in_flight_requests to be 1, got %d (set idempotent_write to false to use higher values, at the cost of possible duplicate and out-of-order delivery on retries)", maxInFlightRequests)
+	}
+
 	if !idempotentWrite {
 		opts = append(opts, kgo.DisableIdempotentWrite())
 	}
@@ -369,6 +394,7 @@ func FranzWriterConfigFields() []*service.ConfigField {
 			Description("An optional key to populate for each message.").Optional(),
 		service.NewInterpolatedStringField(kfwFieldPartition).
 			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").
+			ShortDescription("An explicit partition for each message. Only relevant when partitioner is set to manual.").
 			Example(`${! meta("partition") }`).
 			Optional(),
 		service.NewMetadataFilterField(kfwFieldMetadata).
@@ -396,7 +422,8 @@ func FranzWriterConfigLints() string {
   this.partitioner == "manual" && this.partition.or("") == "" => "a partition must be specified when the partitioner is set to manual"
   this.partitioner != "manual" && this.partition.or("") != "" => "a partition cannot be specified unless the partitioner is set to manual"
   this.timestamp.or("") != "" && this.timestamp_ms.or("") != "" => "both timestamp and timestamp_ms cannot be specified simultaneously"
-  this.idempotent_write == true && this.acks.or("all") != "all" => "idempotent_write requires acks to be set to all"
+  this.idempotent_write.or(true) == true && this.acks.or("all") != "all" => "idempotent_write requires acks to be set to all"
+  this.idempotent_write.or(true) == true && this.max_in_flight_requests.or(1) != 1 => "idempotent_write requires max_in_flight_requests to be 1, set idempotent_write to false to use higher values"
 }`
 }
 

@@ -253,15 +253,18 @@ output:
 		// Topic fields
 		Field(service.NewInterpolatedStringField(rmoFieldTopic).
 			Description("The topic to write messages to. Use interpolation to derive destination topic names from source topics. The source topic name is available as 'kafka_topic' metadata.").
+			ShortDescription("The topic to write messages to. Interpolation can derive it from the kafka_topic metadata.").
 			Default("${! @kafka_topic }").
 			Example("prod_${! @kafka_topic }")).
 		Field(service.NewIntField(rmoFieldTopicReplicationFactor).
 			Description("The replication factor for created topics. If not specified, inherits the replication factor from source topics. Useful when migrating to clusters with different sizes.").
+			ShortDescription("Replication factor for created topics. Inherits from the source topics if unset.").
 			Example("3").
 			Example("1  # For single-node clusters").
 			Optional()).
 		Field(service.NewDurationField(rmoFieldSyncTopicInterval).
 			Description("How often to synchronize topics from the source cluster to the destination. This creates destination topics for any new source topics, including empty topics with no message flow. Set to 0s to disable periodic sync (topics are still created on first message).").
+			ShortDescription("How often to synchronise topics from source to destination. Set to 0s to disable periodic syncing.").
 			Example("0s     # Disable periodic sync").
 			Example("1m     # Sync every minute").
 			Example("5m     # Sync every 5 minutes").
@@ -269,9 +272,11 @@ output:
 			Advanced()).
 		Field(service.NewBoolField(rmoFieldSyncTopicACLs).
 			Description("Whether to synchronise topic ACLs from source to destination cluster. ACLs are transformed safely: ALLOW WRITE permissions are excluded, and ALLOW ALL is downgraded to ALLOW READ to prevent conflicts.").
+			ShortDescription("Whether to synchronise topic ACLs from source to destination. WRITE permissions are excluded.").
 			Default(false)).
 		Field(service.NewBoolField(rmoFieldServerless).
 			Description("Enable serverless mode for Redpanda Cloud serverless clusters. This restricts topic configurations and schema features to those supported by serverless environments.").
+			ShortDescription("Enable serverless mode, restricting topic and schema features to those Redpanda Cloud serverless supports.").
 			Default(false).
 			Advanced()).
 		Field(service.NewInterpolatedStringMapField(rmoFieldHeaders).
@@ -292,10 +297,12 @@ output:
 				"If empty, no offset header is added and exact offset translation is disabled. " +
 				"When disabled, consumer groups are still migrated but precision for empty groups may not be ideal if there are multiple records with the same timestamp, as timestamps have millisecond resolution. " +
 				"When consumer group migration is disabled, this header is not added.").
+			ShortDescription("Header added to migrated records carrying the source offset. Leave empty to disable exact offset translation.").
 			Default(DefaultOffsetHeader).
 			Advanced()).
 		Field(service.NewIntField(rmoFieldMaxInFlight).
 			Description("Maximum number of batches to have in flight at any given time. For optimal throughput, set this to the total number of partitions being copied in parallel (up to all partitions in the cluster). Setting it higher than the number of consumed partitions is ineffective.").
+			ShortDescription("Maximum number of batches in flight at any given time.").
 			Default(10).
 			Example("64  # For a cluster with 64 partitions").
 			Example("128 # For multiple topics with combined 128 partitions")).

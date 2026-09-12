@@ -1,7 +1,7 @@
 ---
 name: godev
 description: PROACTIVELY handles Go code writing, reviews, refactoring, component architecture, registration, and multi-distribution builds for Redpanda Connect
-tools: bash, file_access, git
+tools: Bash, Read, Write, Edit, Grep, Glob
 model: sonnet
 ---
 

@@ -61,7 +61,8 @@ The output of this processor is an array of objects, each containing a "document
 		).
 		Fields(
 			service.NewInterpolatedStringField(crpFieldQuery).Description("The search query"),
-			service.NewBloblangField(crpFieldDocuments).Description("A list of texts that will be compared to the query. For optimal performance Cohere recommends against sending more than 1000 documents in a single request. NOTE: structured data should be formatted as YAML for best performance."),
+			service.NewBloblangField(crpFieldDocuments).Description("A list of texts that will be compared to the query. For optimal performance Cohere recommends against sending more than 1000 documents in a single request. NOTE: structured data should be formatted as YAML for best performance.").
+				ShortDescription("A list of texts to compare against the query. Cohere recommends no more than 1000 per request."),
 			service.NewInterpolatedStringField(crpFieldTopN).Default("0").Description("The number of documents to return, if 0 all documents are returned."),
 			service.NewIntField(crpFieldMaxTokens).Default(4096).Description("Long documents will be automatically truncated to the specified number of tokens."),
 		).

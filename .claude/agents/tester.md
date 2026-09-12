@@ -1,7 +1,7 @@
 ---
 name: tester
 description: PROACTIVELY writes and maintains unit and integration tests for Redpanda Connect using testify, table-driven patterns, testcontainers-go, and the benthos service API
-tools: bash, file_access, git
+tools: Bash, Read, Write, Edit, Grep, Glob
 model: sonnet
 ---
 

@@ -41,7 +41,8 @@ func inputConfig() *service.ConfigSpec {
 			service.NewStringField("bot_token").
 				Description("A bot token used for authentication."),
 			service.NewStringField("cache").
-				Description("A cache resource to use for performing unread message backfills, the ID of the last message received will be stored in this cache and used for subsequent requests."),
+				Description("A cache resource to use for performing unread message backfills, the ID of the last message received will be stored in this cache and used for subsequent requests.").
+				ShortDescription("Cache resource for unread message backfills, storing the ID of the last message received."),
 			service.NewStringField("cache_key").
 				Description("The key identifier used when storing the ID of the last message received.").
 				Default("last_message_id").
@@ -51,6 +52,7 @@ func inputConfig() *service.ConfigSpec {
 			// Deprecated
 			service.NewDurationField("poll_period").
 				Description("The length of time (as a duration string) to wait between each poll for backlogged messages. This field can be set empty, in which case requests are made at the limit set by the rate limit. This field also supports cron expressions.").
+				ShortDescription("How long to wait between polls for backlogged messages. Leave empty to poll at the rate limit.").
 				Default("1m").
 				Deprecated(),
 			service.NewIntField("limit").

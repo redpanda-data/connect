@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -1340,4 +1340,98 @@ func TestShredNewFieldStillDetectedWhenTrulyUnknown(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, sink.newFields, 1)
 	assert.Equal(t, "EMAIL", sink.newFields[0].name)
+}
+
+// TestConvertLeafValueInt32RangeRejected pins the int (32-bit) range guard on
+// the insert path: before the guard, int32(i) silently wrapped — 4294967297
+// (2^32+1) stored 1 with no error anywhere.
+func TestConvertLeafValueInt32RangeRejected(t *testing.T) {
+	for _, v := range []any{
+		int64(4294967297), // 2^32+1: wrapped to 1 pre-guard
+		int64(math.MaxInt32) + 1,
+		int64(math.MinInt32) - 1,
+		float64(4294967297),
+		json.Number("4294967297"),
+	} {
+		_, err := convertLeafValue(v, iceberg.Int32Type{}, nil, false)
+		require.Errorf(t, err, "out-of-range value %v (%T) must be rejected, not wrapped", v, v)
+		assert.Contains(t, err.Error(), "outside the int32 range")
+		assert.Contains(t, err.Error(), "long (64-bit)", "the error must point at the fix")
+	}
+
+	// The exact boundaries stay accepted — the guard rejects only values
+	// strictly outside [MinInt32, MaxInt32].
+	for _, v := range []int64{math.MaxInt32, math.MinInt32} {
+		pv, err := convertLeafValue(v, iceberg.Int32Type{}, nil, false)
+		require.NoError(t, err)
+		assert.Equal(t, int32(v), pv.Int32())
+	}
+}
+
+// TestDecimalFloatToStringMatchesConvertToDecimal is the anti-drift guard for
+// the exported DecimalFloatToString helper: for every float the string it
+// renders must parse back to EXACTLY the unscaled value convertToDecimal (the
+// insert path) stores — including the half-away-from-zero ties that
+// strconv.FormatFloat's half-to-even rounding would get wrong.
+func TestDecimalFloatToStringMatchesConvertToDecimal(t *testing.T) {
+	// parse extracts the unscaled integer from a fixed-scale decimal string.
+	parse := func(t *testing.T, s string, scale int) *big.Int {
+		t.Helper()
+		if scale > 0 {
+			dot := len(s) - scale - 1
+			require.Equal(t, byte('.'), s[dot], "rendered string %q must carry exactly %d fractional digits", s, scale)
+			s = s[:dot] + s[dot+1:]
+		}
+		n, ok := new(big.Int).SetString(s, 10)
+		require.True(t, ok, "rendered string %q must be a plain decimal", s)
+		return n
+	}
+	// twos decodes the insert path's big-endian two's-complement bytes.
+	twos := func(b []byte) *big.Int {
+		n := new(big.Int).SetBytes(b)
+		if len(b) > 0 && b[0]&0x80 != 0 {
+			n.Sub(n, new(big.Int).Lsh(big.NewInt(1), uint(len(b))*8))
+		}
+		return n
+	}
+
+	cases := []struct {
+		f           float64
+		prec, scale int
+		want        string // rendered form, doubling as documentation
+	}{
+		// Exact binary ties: half-AWAY-from-zero, like the insert path — NOT
+		// FormatFloat's half-to-even ("0.12", "-0.12", "8").
+		{0.125, 10, 2, "0.13"},
+		{-0.125, 10, 2, "-0.13"},
+		{8.5, 10, 0, "9"},
+		{-8.5, 10, 0, "-9"},
+		// Non-tie controls.
+		{123.45, 10, 2, "123.45"},
+		{2.675, 10, 2, "2.67"}, // stored float is 2.67499999…, both sides truncate alike
+		{0.0, 10, 2, "0.00"},
+		{1000000.0, 10, 2, "1000000.00"},
+		{-42.1, 10, 3, "-42.100"},
+	}
+	for _, c := range cases {
+		dt := iceberg.DecimalTypeOf(c.prec, c.scale)
+		pv, err := convertToDecimal(c.f, dt)
+		require.NoErrorf(t, err, "convertToDecimal(%v)", c.f)
+		want := twos(pv.ByteArray())
+
+		s, err := DecimalFloatToString(c.f, c.prec, c.scale)
+		require.NoErrorf(t, err, "DecimalFloatToString(%v)", c.f)
+		assert.Equalf(t, c.want, s, "rendered form for %v", c.f)
+		assert.Equalf(t, want.String(), parse(t, s, c.scale).String(),
+			"unscaled drift for %v: insert path stores %s", c.f, want)
+	}
+
+	// Both sides refuse the same inputs: non-finite floats and values whose
+	// unscaled form exceeds the declared precision.
+	for _, f := range []float64{math.NaN(), math.Inf(1), math.Inf(-1), 1e12} {
+		_, cerr := convertToDecimal(f, iceberg.DecimalTypeOf(4, 2))
+		_, serr := DecimalFloatToString(f, 4, 2)
+		assert.Errorf(t, cerr, "convertToDecimal(%v)", f)
+		assert.Errorf(t, serr, "DecimalFloatToString(%v)", f)
+	}
 }

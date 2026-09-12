@@ -85,6 +85,7 @@ data privacy. The encryption key never leaves your infrastructure.
 			service.NewBloblangField(poFieldVectorMapping).
 				Optional().
 				Description("The mapping to extract out the vector from the document. The result must be a floating point array. Required for upsert operations.").
+				ShortDescription("Mapping extracting the vector from the document, returning a float array. Required for upserts.").
 				Example("root = this.embeddings_vector").
 				Example("root = [1.2, 0.5, 0.76]"),
 			service.NewBloblangField(poFieldMetadataMapping).

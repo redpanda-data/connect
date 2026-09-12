@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -62,6 +63,7 @@ const (
 	ociFieldLOBEnabled           = "lob_enabled"
 	ociFieldTransactionCache     = "transaction_cache"
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
+	ociFieldMaxSessionAge        = "max_session_age"
 
 	//-- snapshot specific
 	ociFieldSnapshotFilters = "snapshot_filters"
@@ -94,24 +96,38 @@ This input adds the following metadata fields to each message:
 == Permissions
 
 When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
+
+== Performance
+
+Streaming throughput is bounded by the LogMiner session, not by CPU: each pipeline mines the redo stream through a single synchronous LogMiner reader, so adding cores to Redpanda Connect does not raise the capture rate. To capture more aggregate change volume from one database, run multiple pipelines that each ` + "`include`" + ` a disjoint set of tables — every pipeline gets its own LogMiner reader.
+
+Large transactions and driver fetch size: the Oracle driver fetches 25 rows per network round trip by default, which can make large committed transactions appear minutes late while the database, network and connector all look idle — each round trip costs a full network exchange, and a large transaction requires thousands of them. Raise the fetch size with the ` + "`PREFETCH_ROWS`" + ` query parameter on ` + "`" + ociFieldConnectionString + "`" + `, for example ` + "`?PREFETCH_ROWS=1000`" + `.
+
+Redo log retention must cover idle periods, not just outages: the SCN checkpoint only advances when messages are delivered, so a monitored table set that goes idle leaves the checkpoint stationary while the database ages out redo/archive logs. If the checkpointed SCN is no longer available when activity resumes or the pipeline restarts, the input cannot resume and repeatedly fails with ORA-01292. Ensure archive log retention exceeds the longest plausible idle period, and alert on a stagnant checkpoint SCN or repeated ORA errors.
+
+A flashback or point-in-time recovery on the source database followed by ` + "`OPEN RESETLOGS`" + ` permanently invalidates any checkpoint taken before that event: the checkpoint belongs to a prior database incarnation, and no log file from either incarnation covers the gap. This is a different failure from the retention case above and surfaces as ORA-01291; increasing retention will not help, because the problem is incarnation identity rather than log availability. Recovery always requires clearing the connector's checkpoint so it resumes from the database's current SCN — with the default Oracle-based checkpoint cache the checkpoint row lives in the same database, so the flashback rolls it back rather than clearing it, and it must be deleted explicitly. Clearing the checkpoint alone loses any changes committed between the last checkpoint and the restart; to avoid that gap, clear the checkpoint and set ` + "`" + ociFieldSnapshotMode + "`" + ` to ` + "`snapshot_and_stream`" + ` together — setting ` + "`" + ociFieldSnapshotMode + "`" + ` alone has no effect, since a checkpoint that is still present skips snapshotting entirely.
 		`).
 	Field(service.NewStringField(ociFieldConnectionString).
 		Description("The connection string of the Oracle database to connect to. Additional connection options can be supplied as URL query parameters, for example: `oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true`.").
+		ShortDescription("The connection string of the Oracle database. Options may be supplied as URL query parameters.").
 		Example("oracle://username:password@host:port/service_name").
 		Example("oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true"),
 	).
 	Field(service.NewStringField(ociFieldWalletPath).
 		Description("Path to the Oracle Wallet directory. When set, SSL is enabled automatically. The directory must contain either `cwallet.sso` (auto-login, no password required) or `ewallet.p12` (requires `wallet_password`).").
+		ShortDescription("Path to the Oracle Wallet directory, which enables SSL automatically.").
 		Example("/opt/oracle/wallet").
 		Optional(),
 	).
 	Field(service.NewStringField(ociFieldWalletPassword).
 		Secret().
 		Description("Password for the `ewallet.p12` PKCS#12 wallet file. Only required when the wallet directory contains `ewallet.p12` rather than `cwallet.sso`.").
+		ShortDescription("Password for the ewallet.p12 wallet file. Not needed when the wallet directory holds cwallet.sso.").
 		Optional(),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
+		ShortDescription("Query all existing data as a snapshot first. Otherwise streaming starts from the current SCN.").
 		Example(true).
 		Default(false).
 		Deprecated(),
@@ -121,6 +137,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 		string(SnapshotModeSnapshotOnly),
 		string(SnapshotModeSnapshotAndStream)).
 		Description("Controls snapshot behaviour. `none` (default) skips snapshotting and starts streaming from the current SCN. `snapshot_only` performs a full snapshot, persists the SCN checkpoint, then stops without streaming. `snapshot_and_stream` performs a full snapshot then transitions to streaming.").
+		ShortDescription("Controls snapshot behaviour, from skipping it entirely to a full snapshot before streaming.").
 		Optional().
 		Version("4.99.0"),
 	).
@@ -128,7 +145,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
 		Default(1)).
 	Field(service.NewIntField(ociFieldSnapshotMaxBatchSize).
-		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
+		Description("The maximum number of rows fetched per query when taking a snapshot of a table with a `" + ociFieldSnapshotFilters + "` entry configured. Tables without one are streamed through a single unordered cursor, where this value only paces how often a cancellation is checked.").
 		Default(1000),
 	).
 	// logminer config
@@ -138,26 +155,32 @@ When using the default Oracle based cache, the Connect user requires permission 
 			Default(logminer.DefaultSCNWindowSize),
 		service.NewIntField(ociFieldMinSCNWindowSize).
 			Description("The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.").
+			ShortDescription("The minimum SCN gap required before a new LogMiner session is started.").
 			Default(logminer.DefaultMinSCNWindowSize),
 		service.NewIntField(ociFieldMaxSCNWindowSize).
 			Description(`The maximum SCN range that can be mined in a single cycle. The window starts at `+ociFieldSCNWindowSize+` and grows by `+ociFieldSCNWindowSize+` each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.`).
 			Default(logminer.DefaultMaxSCNWindowSize),
 		service.NewDurationField(ociFieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
+			ShortDescription("Interval between checks for new changes once all data is processed.").
 			Default(logminer.DefaultMiningBackoffInterval.String()).
 			Example("5s").Example("1m"),
 		service.NewDurationField(ociFieldMiningInterval).
 			Description("The interval between mining cycles during normal operation. Controls how frequently LogMiner polls for new changes when not caught up.").
+			ShortDescription("Interval between mining cycles, controlling how often LogMiner polls for new changes.").
 			Default(logminer.DefaultMiningInterval.String()).
 			Example("100ms").Example("1s"),
 		service.NewStringField(ociFieldMiningStrategy).
 			Description("Controls how LogMiner retrieves data dictionary information. `online_catalog` (default) uses the current data dictionary for best performance but cannot capture DDL changes. `online_catalog` currently only supported.").
+			ShortDescription("How LogMiner retrieves data dictionary information. online_catalog performs best but cannot capture DDL.").
 			Default(logminer.DefaultMiningStrategy),
 		service.NewIntField(ociFieldMaxTransactionEvents).
 			Description("The maximum number of events that can be buffered for a single transaction. If a transaction exceeds this limit it is discarded and its events will not be emitted. Set to 0 to disable the limit.").
+			ShortDescription("Maximum events buffered for a single transaction. Exceeding it discards the transaction. Set to 0 to disable.").
 			Default(logminer.DefaultMaxTransactionEvents),
 		service.NewBoolField(ociFieldLOBEnabled).
 			Description("When enabled, large object (CLOB, BLOB) columns are included in both snapshot and streaming change events. When disabled, these columns are still present but contain no values. Enabling this option introduces additional performance overhead and increases memory requirements.").
+			ShortDescription("Include large object (CLOB, BLOB) columns in snapshot and change events. They are empty when disabled.").
 			Default(logminer.DefaultLOBEnabled),
 		service.NewStringField(ociFieldTransactionCache).
 			Description(`A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for buffering in-flight transactions. When set, DML events are serialized and stored in the named cache rather than held in memory, reducing connector memory usage for workloads with large or long-running transactions. If not set, an in-memory buffer is used.
@@ -165,10 +188,18 @@ When using the default Oracle based cache, the Connect user requires permission 
 Each in-flight transaction is stored as N+1 cache entries: one metadata key holding the transaction ID, start SCN, and event count; and one event key per DML event. A transaction with 1000 events occupies 1001 cache entries. Each AddEvent call writes exactly two keys regardless of how many events the transaction has already accumulated.
 
 This cache is designed for low-latency stores with cheap per-operation cost. Redis and Memcached are the recommended backends. The built-in `+"`memory:{}`"+` cache works but provides no durability across restarts. High-latency or per-request-cost stores such as S3 or DynamoDB are not recommended - a transaction with 1000 events generates approximately 3000 cache operations across its lifetime, and because LogMiner processes events on a single goroutine, per-call latency directly reduces throughput. A backend that causes timeouts or errors will also cause the mining cycle to restart from an earlier checkpoint SCN, which can result in duplicate event delivery.`).
+			ShortDescription("A cache resource for buffering in-flight transactions, where DML events are serialized and stored.").
 			Optional(),
 		service.NewStringField(ociFieldTransactionCacheKey).
 			Description("The key prefix used when storing transactions in `"+ociFieldTransactionCache+"`. An alternative prefix must be set if multiple `oracledb_cdc` inputs share the same cache resource, since Oracle transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance and would otherwise collide.").
 			Default(logminer.DefaultTransactionCacheKey).
+			Optional(),
+		service.NewDurationField(ociFieldMaxSessionAge).
+			Description("The maximum duration a single LogMiner session may stay open before being forcibly ended and restarted, even if the underlying redo log files haven't changed. By default, a LogMiner session is only restarted when a redo log switch is detected. On databases where switches are infrequent, a session can stay open for a long time, and LogMiner has been observed to accumulate server-side PGA memory (particularly around online catalog dictionary lookups) until Oracle terminates the session with ORA-04036. Setting this forces a periodic restart independent of log switches. Set to 0 (default) to disable and restart only on log switches.").
+			ShortDescription("Maximum duration before a LogMiner session is force-restarted, independent of redo log switches.").
+			Default(logminer.DefaultMaxSessionAge.String()).
+			Example("20m").
+			LintRule(`root = if this.parse_duration().catch(0) < 0 { [ "`+ociFieldMaxSessionAge+` must be 0 or greater" ] }`).
 			Optional(),
 	).Description("LogMiner configuration settings."),
 	).
@@ -176,6 +207,7 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 		Description(`A map of fully-qualified table names (e.g. SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
 
 Each query must project every column of the table's primary key - all of them, for a composite key - even if it otherwise selects only a subset of columns. Snapshotting pages through a table's rows by filtering and sorting on its full primary key, against the query's own result set - if any primary key column isn't projected, this fails part-way through the snapshot, once the first batch of rows has been read.`).
+		ShortDescription("A map of fully-qualified table names to SELECT queries, overriding the default snapshot query per table.").
 		Example(map[string]any{
 			"TESTDB.USERS":    "SELECT * FROM TESTDB.USERS",
 			"TESTDB.PRODUCTS": "SELECT * FROM TESTDB.PRODUCTS WHERE ID > 1000",
@@ -209,10 +241,12 @@ Each query must project every column of the table's primary key - all of them, f
 	).
 	Field(service.NewIntField(ociFieldCheckpointLimit).
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given System Change Number (SCN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+		ShortDescription("The maximum number of messages that can be processed at a given time.").
 		Default(1024),
 	).
 	Field(service.NewStringField(ociFieldPDBName).
 		Description("The name of the pluggable database (PDB) to monitor. When connecting to a CDB root, LogMiner output is scoped to this PDB via SRC_CON_NAME filtering and catalog queries use ALTER SESSION SET CONTAINER to switch context. Requires GRANT SET CONTAINER TO <user> CONTAINER=ALL.").
+		ShortDescription("The name of the pluggable database (PDB) to monitor.").
 		Optional(),
 	).
 	Field(service.NewAutoRetryNacksToggleField()).
@@ -242,14 +276,30 @@ type oracleDBCDCInput struct {
 	lmCfg *logminer.Config
 	db    *sql.DB
 
-	res       *service.Resources
-	publisher *batchPublisher
+	res *service.Resources
+	// publisher is rebuilt by Connect when poisoned, and read by ReadBatch
+	// and Close on other goroutines: atomic so those reads can never observe
+	// a torn or stale pointer and Close always stops the CURRENT publisher.
+	publisher atomic.Pointer[batchPublisher]
 	metrics   *service.Metrics
 
 	stopSig          *shutdown.Signaller
 	snapshotOnlyDone atomic.Bool
 	log              *service.Logger
 	cpCache          service.Cache
+
+	// batching and checkpointLimit are retained so Connect can rebuild a
+	// poisoned publisher (see batchPublisher.poisoned).
+	batching        service.BatchPolicy
+	checkpointLimit int
+
+	// persistMu serializes cacheSCN writes and lastPersistedSCN keeps them
+	// monotonic: ack functions run on concurrent pipeline goroutines, and
+	// after a publisher rebuild a previous session's late acks may still
+	// arrive - without ordering, a stale write could regress the durable
+	// resume position.
+	persistMu        sync.Mutex
+	lastPersistedSCN replication.SCN
 }
 
 func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
@@ -388,22 +438,25 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 				Exclude: tableExcludes,
 			},
 		},
-		lmCfg:     lmCfg,
-		res:       resources,
-		log:       logger,
-		metrics:   resources.Metrics(),
-		stopSig:   shutdown.NewSignaller(),
-		publisher: newBatchPublisher(batcher, cp, logger),
-		cpCache:   cpCache,
+		lmCfg:           lmCfg,
+		res:             resources,
+		log:             logger,
+		metrics:         resources.Metrics(),
+		stopSig:         shutdown.NewSignaller(),
+		cpCache:         cpCache,
+		batching:        policy,
+		checkpointLimit: checkpointLimit,
 	}
+
+	pub := newBatchPublisher(batcher, cp, logger)
+	pub.cacheSCN = o.cacheSCN
+	o.publisher.Store(pub)
 
 	defer func() {
 		if err != nil {
-			o.publisher.Close()
+			pub.Close()
 		}
 	}()
-
-	o.publisher.cacheSCN = o.cacheSCN
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
 	o.stopSig.TriggerHasStopped()
@@ -416,13 +469,47 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	return conf.WrapBatchInputExtractTracingSpanMapping("oracledb_cdc", batchInput)
 }
 
+// rebuildPublisherIfPoisoned returns the current publisher, replacing it
+// first when a failed send or a sealed flush queue poisoned it: the old
+// generation is closed (in-flight ack functions keep resolving into the
+// abandoned tracker, where cacheSCN's monotonic guard makes any stale
+// persist a no-op) and a fresh batcher and tracker take its place, so the
+// new session resumes from the last durable SCN.
+func (o *oracleDBCDCInput) rebuildPublisherIfPoisoned() (*batchPublisher, error) {
+	publisher := o.publisher.Load()
+	if !publisher.poisoned.Load() {
+		return publisher, nil
+	}
+	o.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	publisher.Close()
+	batcher, err := o.batching.NewBatcher(o.res)
+	if err != nil {
+		return nil, fmt.Errorf("rebuilding batcher: %w", err)
+	}
+	publisher = newBatchPublisher(batcher, checkpoint.NewCapped[replication.SCN](int64(o.checkpointLimit)), o.log)
+	publisher.cacheSCN = o.cacheSCN
+	o.publisher.Store(publisher)
+	return publisher, nil
+}
+
 func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	var (
 		userTables []replication.UserTable
 		cachedSCN  replication.SCN
-		err        error
 		isCDB      bool
 	)
+
+	// A failed batch send leaves an unresolvable slot in the ordered tracker
+	// (see sendTracked), so a poisoned publisher can never checkpoint again.
+	// Rebuild it with a fresh tracker: the new session resumes from the last
+	// durable SCN, which is necessarily before the orphaned rows, and the old
+	// session's late acks resolve into the abandoned tracker (cacheSCN's
+	// monotonic guard turns any stale write into a no-op).
+	publisher, err := o.rebuildPublisherIfPoisoned()
+	if err != nil {
+		return err
+	}
+
 	if o.db != nil {
 		_ = o.db.Close()
 		o.db = nil
@@ -516,7 +603,8 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			o.log.Warnf("Failed to pre-fetch schema for %s.%s: %v", t.Schema, t.Name, err)
 		}
 	}
-	o.publisher.schemas = schemas
+
+	publisher.schemas = schemas
 
 	if cachedSCN, err = o.getCachedSCN(ctx); err != nil {
 		if errors.Is(err, service.ErrKeyNotFound) {
@@ -549,7 +637,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	// no cached SCN means we're not recovering from a restart
 	if !o.cfg.SnapshotMode.IsSnapshotNone() && cachedSCN == replication.InvalidSCN {
-		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.cfg.SnapshotFilters, o.publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
+		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.cfg.SnapshotFilters, publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 		defer func() {
@@ -566,7 +654,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		if o.lmCfg.TransactionCacheConfig.CacheName != "" {
 			txnCache = logminer.NewConnectCacheResource(o.res, o.lmCfg.TransactionCacheConfig, o.metrics, o.log)
 		}
-		streaming = logminer.NewMiner(o.db, userTables, o.publisher, o.lmCfg, txnCache, o.metrics, o.log)
+		streaming = logminer.NewMiner(o.db, userTables, publisher, o.lmCfg, txnCache, o.metrics, o.log)
 	} else {
 		return errors.New("logminer configuration required for streaming")
 	}
@@ -602,6 +690,31 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 				return
 			}
 
+			// Flush the partial snapshot batch still held by the batcher, then
+			// block until every snapshot batch is acknowledged downstream.
+			// Persisting the SCN any earlier would let a crash in this window
+			// skip un-acked snapshot rows on restart. Blocks until acks drain
+			// or soft-stop (no timeout, by design; see postgres_cdc's
+			// equivalent barrier).
+			if err = publisher.flushCurrent(softCtx); err != nil {
+				// A graceful stop lands here whenever shutdown hits the
+				// handoff window (nothing drains msgChan any more, so the
+				// blocked send exits via softCtx): normal operation, Info.
+				// Genuine flush failures keep the error level.
+				if errors.Is(err, context.Canceled) && !o.stopSig.IsHardStopSignalled() {
+					o.log.Infof("Interrupted while flushing remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				} else {
+					o.log.Errorf("Failed to flush remaining snapshot batches. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				}
+				o.stopSig.TriggerHasStopped()
+				return
+			}
+			if err = publisher.waitSnapshotAcks(softCtx); err != nil {
+				o.log.Infof("Interrupted while waiting for snapshot acknowledgements. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				o.stopSig.TriggerHasStopped()
+				return
+			}
+
 			if err = o.cacheSCN(softCtx, startSCN); err != nil {
 				o.log.Errorf("Failed to capture SCN after snapshot completion. Snapshot will re-run on restart (may cause duplicate data): %s", err)
 				o.stopSig.TriggerHasStopped()
@@ -612,7 +725,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		}
 
 		if o.cfg.SnapshotMode.IsSnapshotOnly() {
-			if err = o.publisher.FlushRemaining(softCtx); err != nil {
+			if err = publisher.FlushRemaining(softCtx); err != nil {
 				o.log.Errorf("Failed to flush remaining snapshot events: %s", err)
 			}
 			o.log.Infof("Snapshot-only mode complete, stopping at SCN %s", startSCN)
@@ -678,6 +791,16 @@ func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 		return errors.New("SCN for caching is empty")
 	}
 
+	// Serialized and monotonic: concurrent acks (and, after a publisher
+	// rebuild, a previous session's late acks) must never land a stale SCN
+	// over a newer durable position. SCNs only grow, so skipping
+	// non-advancing writes is always safe.
+	o.persistMu.Lock()
+	defer o.persistMu.Unlock()
+	if o.lastPersistedSCN.IsValid() && scn <= o.lastPersistedSCN {
+		return nil
+	}
+
 	// Use internal Oracle-based cache if set (when no external cache configured),
 	// otherwise use external cache resource
 	var cErr error
@@ -694,20 +817,49 @@ func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 	if cErr != nil {
 		return fmt.Errorf("persisting checkpoint to cache: %w", cErr)
 	}
+	o.lastPersistedSCN = scn
 	return nil
 }
 
 func (o *oracleDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	select {
-	case m := <-o.publisher.msgs():
-		return m.msg, m.ackFn, nil
-	case <-o.stopSig.HasStoppedChan():
-		if o.snapshotOnlyDone.Load() {
-			return nil, nil, service.ErrEndOfInput
+	pub := o.publisher.Load()
+	// Observed so a dead flush loop cannot silently stall the pipeline: with
+	// period-only batching that loop is the only flusher, and its error paths
+	// poison the publisher but cannot force a reconnect themselves.
+	pubStopped := pub.shutSig.HasStoppedChan()
+	for {
+		select {
+		case m := <-pub.msgs():
+			return m.msg, m.ackFn, nil
+		case <-pubStopped:
+			if pub.poisoned.Load() {
+				// Fatal flush-loop exit: tear the session down BEFORE handing
+				// control to Connect - the session goroutine may still be
+				// alive and holds o.db and o.stopSig, which Connect replaces.
+				// Every session path escapes on the soft stop (contexts
+				// cancel, sealed admissions refuse), and the constructor
+				// leaves HasStopped triggered, so this wait is bounded; ctx
+				// remains the escape hatch regardless.
+				o.stopSig.TriggerSoftStop()
+				select {
+				case <-o.stopSig.HasStoppedChan():
+				case <-ctx.Done():
+					return nil, nil, ctx.Err()
+				}
+				return nil, nil, service.ErrNotConnected
+			}
+			// Deliberate stop (FlushRemaining at the snapshot-only handoff):
+			// keep draining - the final flushed batch is still delivered on
+			// msgs() after the loop exits.
+			pubStopped = nil
+		case <-o.stopSig.HasStoppedChan():
+			if o.snapshotOnlyDone.Load() {
+				return nil, nil, service.ErrEndOfInput
+			}
+			return nil, nil, service.ErrNotConnected
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
 		}
-		return nil, nil, service.ErrNotConnected
-	case <-ctx.Done():
-		return nil, nil, ctx.Err()
 	}
 }
 
@@ -736,6 +888,12 @@ func (o *oracleDBCDCInput) Close(ctx context.Context) error {
 	if o.stopSig == nil {
 		return nil // Never connected
 	}
+	// Mark the publisher as stopping BEFORE any cancellation propagates: the
+	// session's contexts unwind off stopSig, and sendTracked needs the flag
+	// already visible to log the graceful unwind at debug rather than warn.
+	if pub := o.publisher.Load(); pub != nil {
+		pub.stopping.Store(true)
+	}
 	o.stopSig.TriggerSoftStop()
 	select {
 	case <-ctx.Done():
@@ -751,8 +909,8 @@ func (o *oracleDBCDCInput) Close(ctx context.Context) error {
 	case <-o.stopSig.HasStoppedChan():
 	}
 
-	if o.publisher != nil {
-		o.publisher.Close()
+	if pub := o.publisher.Load(); pub != nil {
+		pub.Close()
 	}
 
 	// Close both resources and combine errors to avoid resource leaks
@@ -819,6 +977,12 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.LOBEnabled, err = lmConf.FieldBool(ociFieldLOBEnabled); err != nil {
 			return nil, err
+		}
+		if cfg.MaxSessionAge, err = lmConf.FieldDuration(ociFieldMaxSessionAge); err != nil {
+			return nil, err
+		}
+		if cfg.MaxSessionAge < 0 {
+			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %s", ociFieldMaxSessionAge, cfg.MaxSessionAge)
 		}
 		// support cache_resources for buffering logminer transactions
 		if lmConf.Contains(ociFieldTransactionCache) {

@@ -68,10 +68,12 @@ Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in
 	spec = spec.Fields(authFieldSpecs()...).
 		Field(service.NewStringField(sfgqlFieldQuery).
 			Description("The GraphQL query document as a single string. Must target the Salesforce UIAPI schema (`uiapi.query.*` or `uiapi.mutation.*`). Typically follows the UIAPI convention of nested `edges { node { field { value } } }`. Variables are referenced with `$name` and supplied via the `variables` field. For automatic pagination, include `pageInfo { hasNextPage endCursor }` in the relevant connection.").
+			ShortDescription("The GraphQL query document, as a single string targeting the Salesforce UIAPI schema.").
 			Example(`query Accounts { uiapi { query { Account { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } }`).
 			Example(`query Accounts($first: Int) { uiapi { query { Account(first: $first) { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } }`)).
 		Field(service.NewBloblangField(sfgqlFieldVariables).
 			Description("Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an object whose keys are GraphQL variable names referenced by `query`. Values pass through as JSON in the request body's `variables` field. The mapping is evaluated once at startup with no message context — use `env()`, `now()`, `cache()`, or static literals.").
+			ShortDescription("Optional Bloblang mapping returning an object keyed by the GraphQL variable names used in query.").
 			Example(`root = {"first": 100}`).
 			Example(`root = {"since": now().ts_format("2006-01-02T15:04:05Z"), "limit": 500}`).
 			Optional()).

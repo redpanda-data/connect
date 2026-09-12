@@ -107,21 +107,27 @@ You can monitor the output batch size using the `+"`snowflake_compressed_output_
 		Fields(
 			service.NewStringField(ssoFieldAccount).
 				Description(`The Snowflake https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account name^]. Which should be formatted as `+"`<orgname>-<account_name>`"+` where `+"`<orgname>`"+` is the name of your Snowflake organization and `+"`<account_name>`"+` is the unique name of your account within your organization.
-`).Example("ORG-ACCOUNT"),
+`).
+				ShortDescription("The Snowflake account name, formatted as orgname-account_name.").Example("ORG-ACCOUNT"),
 			service.NewStringField(ssoFieldURL).
 				Description("Override the default URL used to connect to Snowflake which is https://ORG-ACCOUNT.snowflakecomputing.com").Optional().Example("https://org-account.privatelink.snowflakecomputing.com").Advanced(),
-			service.NewStringField(ssoFieldUser).Description("The user to run the Snowpipe Stream as. See https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake Documentation^] on how to create a user."),
-			service.NewStringField(ssoFieldRole).Description("The role for the `user` field. The role must have the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#required-access-privileges[required privileges^] to call the Snowpipe Streaming APIs. See https://docs.snowflake.com/en/user-guide/admin-user-management#user-roles[Snowflake Documentation^] for more information about roles.").Example("ACCOUNTADMIN"),
+			service.NewStringField(ssoFieldUser).Description("The user to run the Snowpipe Stream as. See https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake Documentation^] on how to create a user.").
+				ShortDescription("The user to run the Snowpipe Stream as."),
+			service.NewStringField(ssoFieldRole).Description("The role for the `user` field. The role must have the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#required-access-privileges[required privileges^] to call the Snowpipe Streaming APIs. See https://docs.snowflake.com/en/user-guide/admin-user-management#user-roles[Snowflake Documentation^] for more information about roles.").
+				ShortDescription("The role for the user field. It must have the privileges required to call the Snowpipe Streaming APIs.").Example("ACCOUNTADMIN"),
 			service.NewStringField(ssoFieldDB).Description("The Snowflake database to ingest data into.").Example("MY_DATABASE"),
 			service.NewStringField(ssoFieldSchema).Description("The Snowflake schema to ingest data into.").Example("PUBLIC"),
 			service.NewInterpolatedStringField(ssoFieldTable).Description("The Snowflake table to ingest data into.").Example("MY_TABLE"),
-			service.NewStringField(ssoFieldKey).Description("The PEM encoded private RSA key to use for authenticating with Snowflake. Either this or `private_key_file` must be specified.").Optional().Secret(), /*.LintRule(`root = if !this.re_match("(?s)^-----BEGIN [A-Z ]+-----\\n[0-9A-Za-z+/=\\n]+-----END [A-Z ]+-----\\n?$") && !this.re_match("[0-9A-Za-z+/=]") { ["field private_key must be in PEM format"] }`)*/
-			service.NewStringField(ssoFieldKeyFile).Description("The file to load the private RSA key from. This should be a `.p8` PEM encoded file. Either this or `private_key` must be specified.").Optional(),
+			service.NewStringField(ssoFieldKey).Description("The PEM encoded private RSA key to use for authenticating with Snowflake. Either this or `private_key_file` must be specified.").
+				ShortDescription("PEM encoded private RSA key for authenticating with Snowflake. Either this or private_key_file is required.").Optional().Secret(), /*.LintRule(`root = if !this.re_match("(?s)^-----BEGIN [A-Z ]+-----\\n[0-9A-Za-z+/=\\n]+-----END [A-Z ]+-----\\n?$") && !this.re_match("[0-9A-Za-z+/=]") { ["field private_key must be in PEM format"] }`)*/
+			service.NewStringField(ssoFieldKeyFile).Description("The file to load the private RSA key from. This should be a `.p8` PEM encoded file. Either this or `private_key` must be specified.").
+				ShortDescription("File to load the private RSA key from, as a .p8 PEM file. Either this or private_key is required.").Optional(),
 			service.NewStringField(ssoFieldKeyPass).Description("The RSA key passphrase if the RSA key is encrypted.").Optional().Secret(),
 			service.NewBloblangField(ssoFieldMapping).Description("A bloblang mapping to execute on each message.").Optional(),
 			service.NewStringField(ssoFieldInitStatement).Description(`
 Optional SQL statements to execute immediately upon the first connection. This is a useful way to initialize tables before processing data. Care should be taken to ensure that the statement is idempotent, and therefore would not cause issues when run multiple times after service restarts.
-`).Optional().Example(`
+`).
+				ShortDescription("Optional SQL statements to execute on the first connection, useful for initialising tables.").Optional().Example(`
 CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
 `).Example(`
 ALTER TABLE t1 ALTER COLUMN c1 DROP NOT NULL;
@@ -129,23 +135,28 @@ ALTER TABLE t1 ADD COLUMN a2 NUMBER;
 `),
 			service.NewObjectField(ssoFieldSchemaEvolution,
 				service.NewBoolField(ssoFieldSchemaEvolutionEnabled).Description("Whether schema evolution is enabled."),
-				service.NewBoolField(ssoFieldSchemaEvolutionIgnoreNulls).Description("If `true`, then new columns that are `null` are ignored and schema evolution is not triggered. If `false` then null columns trigger schema migrations in Snowflake. NOTE: unless you already know what type this column will be in advance, it's highly encouraged to ignore null values.").Default(true).Advanced(),
+				service.NewBoolField(ssoFieldSchemaEvolutionIgnoreNulls).Description("If `true`, then new columns that are `null` are ignored and schema evolution is not triggered. If `false` then null columns trigger schema migrations in Snowflake. NOTE: unless you already know what type this column will be in advance, it's highly encouraged to ignore null values.").
+					ShortDescription("Ignore new columns that are null, so they do not trigger schema evolution.").Default(true).Advanced(),
 				service.NewBloblangField(ssoFieldSchemaEvolutionNewColumnTypeMapping).Description(`
 The mapping function from Redpanda Connect type to column type in Snowflake. Overriding this can allow for customization of the datatype if there is specific information that you know about the data types in use. This mapping should result in the `+"`root`"+` variable being assigned a string with the data type for the new column in Snowflake.
 
-        The input to this mapping is either the output of `+"`processors`"+` if specified, otherwise it is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`).Optional().Deprecated(),
+        The input to this mapping is either the output of `+"`processors`"+` if specified, otherwise it is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`).
+					ShortDescription("The mapping from Redpanda Connect type to Snowflake column type.").Optional().Deprecated(),
 				service.NewProcessorListField(ssoFieldSchemaEvolutionProcessors).Description(`
 A series of processors to execute when new columns are added to the table. Specifying this can support running side effects when the schema evolves or enriching the message with additional data to guide the schema changes. For example, one could read the schema the message was produced with from the schema registry and use that to decide which type the new column in Snowflake should be.
 
-        The input to these processors is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`+"`. The output of these series of processors should be a single message, where the contents of the message is a string indicating the column data type to use (FLOAT, VARIANT, NUMBER(38, 0), etc. An ALTER TABLE statement will then be executed on the table in Snowflake to add the column with the corresponding data type.").Optional().Advanced().Example([]map[string]any{
+        The input to these processors is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`+"`. The output of these series of processors should be a single message, where the contents of the message is a string indicating the column data type to use (FLOAT, VARIANT, NUMBER(38, 0), etc. An ALTER TABLE statement will then be executed on the table in Snowflake to add the column with the corresponding data type.").
+					ShortDescription("Processors to execute when new columns are added to the table, for side effects or enrichment.").Optional().Advanced().Example([]map[string]any{
 					{"mapping": defaultSchemaEvolutionNewColumnMapping},
 				}),
 			).Description(`Options to control schema evolution within the pipeline as new columns are added to the pipeline.`).Optional(),
-			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").Optional().Advanced().Deprecated(),
+			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").
+				ShortDescription("Maximum parallelism used when building the output for Snowflake.").Optional().Advanced().Deprecated(),
 			service.NewObjectField(ssoFieldBuildOpts,
 				service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use.").Default(1).LintRule(`root = if this < 1 { ["parallelism must be positive"] }`),
 				service.NewIntField(ssoFieldBuildChunkSize).Description("The number of rows to chunk for parallelization.").Default(50_000).LintRule(`root = if this < 1 { ["chunk_size must be positive"] }`),
-			).Advanced().Description("Options to optimize the time to build output data that is sent to Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`."),
+			).Advanced().Description("Options to optimize the time to build output data that is sent to Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").
+				ShortDescription("Options to optimise the time taken to build output data sent to Snowflake."),
 			service.NewBatchPolicyField(ssoFieldBatching),
 			service.NewOutputMaxInFlightField().Default(4),
 			service.NewStringField(ssoFieldChannelPrefix).
@@ -185,11 +196,13 @@ NOTE: It's assumed that messages within a batch are in increasing order by offse
       the value so that it's lexicographically ordered in its string representation, since offset tokens are compared in string form.
 
 For more information about offset tokens, see https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[^Snowflake Documentation]`).
+				ShortDescription("The offset token used for exactly-once delivery, compared against the latest token for a channel.").
 				Optional().
 				Advanced().
 				Examples(`offset-${!"%016X".format(@kafka_offset)}`, `postgres-${!@lsn}`),
 			service.NewDurationField(ssoFieldCommitTimeout).
 				Description(`Deprecated: use `+"`commit_backoff.max_elapsed_time`"+` instead.`).
+				ShortDescription("Deprecated: use commit_backoff.max_elapsed_time instead.").
 				Default("").
 				Advanced().
 				Deprecated(),
@@ -219,6 +232,7 @@ For more information about offset tokens, see https://docs.snowflake.com/en/user
 				Example("array"),
 			service.NewStringField(ssoFieldTimestampFormat).
 				Description("The format to parse string values for TIMESTAMP, TIMESTAMP_LTZ and TIMESTAMP_NTZ columns. Should be a layout for https://pkg.go.dev/time#Parse[^time.Parse] in Golang.").
+				ShortDescription("Format used to parse string values for TIMESTAMP columns, as a Go time.Parse layout.").
 				Default(time.RFC3339Nano).
 				Advanced(),
 		).

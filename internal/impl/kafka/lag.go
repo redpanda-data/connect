@@ -28,6 +28,16 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 )
 
+const (
+	// lagMetricNameRedpanda is the consumer lag gauge emitted by the
+	// Redpanda branded inputs (`redpanda`, `redpanda_common` and the migrator).
+	lagMetricNameRedpanda = "redpanda_lag"
+
+	// lagMetricNameKafka is the consumer lag gauge emitted by the Kafka branded
+	// inputs (`kafka_franz`, `ockam_kafka`).
+	lagMetricNameKafka = "kafka_lag"
+)
+
 // ConsumerLag is a struct that manages the consumer lag for Kafka topics.
 type ConsumerLag struct {
 	lagUpdater    *asyncroutine.Periodic

@@ -1009,7 +1009,7 @@ max_buffered_bytes: 50mib
 
 === `max_in_flight_requests`
 
-The maximum number of produce requests in flight per broker connection. When `idempotent_write` is enabled, this is capped at 5 by the Kafka protocol (and at 1 for Kafka < v1.0.0). When `idempotent_write` is disabled, higher values improve throughput by pipelining requests but may cause out-of-order delivery.
+The maximum number of produce requests in flight per broker connection. While `idempotent_write` is enabled (the default) this must be `1`, as the client relies on a single in-flight request per broker to guarantee ordering. To use higher values you must set `idempotent_write` to `false`, which allows requests to be pipelined for throughput but may cause duplicate and out-of-order delivery on retries. Note that this is distinct from the output's `max_in_flight` field, which counts message batches being written in parallel rather than produce requests on the wire. A value of `1` is not a throughput ceiling: records from concurrent writes are coalesced into fewer, larger produce requests.
 
 
 *Type*: `int`

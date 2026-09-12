@@ -110,12 +110,15 @@ Limitations (v1): OAuth and the worklogs resource are not yet supported. For res
 			Default(resourceIssues)).
 		Field(service.NewStringField("jql").
 			Description("Jira JQL filter. The input appends an `updated >= cursor` predicate and `ORDER BY updated ASC, key ASC`. Empty means all issues visible to the principal.").
+			ShortDescription("Jira JQL filter. An updated cursor predicate and ordering are appended automatically.").
 			Default("")).
 		Field(service.NewStringListField("fields").
 			Description("Jira `fields` query parameter - narrow this for throughput.").
+			ShortDescription("Jira fields query parameter. Narrow this for throughput.").
 			Default([]any{"*all"})).
 		Field(service.NewStringListField("expand").
 			Description("Jira `expand` query parameter. The input automatically adds `changelog` when resource=changelog.").
+			ShortDescription("Jira expand query parameter. changelog is added automatically when resource is changelog.").
 			Default([]any{})).
 		Field(service.NewIntField("page_size").
 			Description("Issues per Jira page (Jira max 100).").
@@ -128,9 +131,11 @@ Limitations (v1): OAuth and the worklogs resource are not yet supported. For res
 				Description("Name of a cache resource used to persist the cursor."),
 			service.NewStringField("key").
 				Description("Cache key. Defaults to `redpanda_connect_jira_input_<resource>`.").
+				ShortDescription("Cache key. Defaults to redpanda_connect_jira_input_<resource>.").
 				Default(""),
 			service.NewDurationField("overlap").
 				Description("Widens `updated >= cursor - overlap` to absorb minute-boundary effects. Jira JQL's `updated` operator has minute precision, so this should be set to at least 1m to have an effect.").
+				ShortDescription("Widens the updated cursor window to absorb minute-boundary effects. Set to at least 1m.").
 				Default("60s"),
 		).Description("Cursor checkpoint storage.")).
 		Field(service.NewAutoRetryNacksToggleField())

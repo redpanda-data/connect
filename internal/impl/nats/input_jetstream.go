@@ -66,6 +66,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 			Optional()).
 		Field(service.NewStringField("subject").
 			Description("A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.").
+			ShortDescription("A subject to consume from, supporting wildcards. Either a subject or stream is required.").
 			Optional().
 			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
 		Field(service.NewStringField("durable").

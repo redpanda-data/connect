@@ -92,6 +92,7 @@ input:
       max_messages: 10
       wait_time_seconds: 0
       nack_visibility_timeout: 0
+      zero_key_warn_interval: 30s
 ```
 
 --
@@ -106,6 +107,8 @@ Redpanda Connect is able to follow this pattern when you configure an `sqs.url`,
 If your notification events are being routed to SQS via an SNS topic then the events will be enveloped by SNS, in which case you also need to specify the field `sqs.envelope_path`, which in the case of SNS to SQS will usually be `Message`.
 
 When using SQS please make sure you have sensible values for `sqs.max_messages` and also the visibility timeout of the queue itself. When Redpanda Connect consumes an S3 object the SQS message that triggered it is not deleted until the S3 object has been sent onwards. This ensures at-least-once crash resiliency, but also means that if the S3 object takes longer to process than the visibility timeout of your queue then the same objects might be processed multiple times.
+
+Amazon S3 sends an `s3:TestEvent` notification whenever a bucket's event configuration is saved, to verify the queue is reachable. Redpanda Connect detects these (including via an SNS envelope) and deletes them automatically. Any other message with no extractable target key, for example due to a misconfigured `sqs.key_path`/`sqs.bucket_path`, is logged as a warning and left on the queue instead.
 
 == Download large files
 
@@ -427,5 +430,22 @@ Custom SQS Nack Visibility timeout in seconds. Default is 0
 *Type*: `int`
 
 *Default*: `0`
+
+=== `sqs.zero_key_warn_interval`
+
+A message from which no target key can be extracted (e.g. due to a misconfigured `key_path`/`bucket_path`) is never deleted, so it's redelivered and re-evaluated repeatedly until the underlying issue is fixed. This field limits how often that condition is logged as a warning, to avoid flooding the logs; every occurrence is still logged at debug level. Set to `0s` to warn on every occurrence.
+
+
+*Type*: `string`
+
+*Default*: `"30s"`
+
+```yml
+# Examples
+
+zero_key_warn_interval: 10s
+
+zero_key_warn_interval: 0s
+```
 
 

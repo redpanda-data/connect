@@ -38,6 +38,7 @@ func parquetDecodeProcessorConfig() *service.ConfigSpec {
 		Summary("Decodes https://parquet.apache.org/docs/[Parquet files^] into a batch of structured messages.").
 		Field(service.NewBoolField(pFieldByteArrayAsString).
 			Description("Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices in all cases. Values with a logical type of UTF8 will automatically be extracted as strings irrespective of this field. Enabling this field makes serializing the data as JSON more intuitive as `[]byte` values are serialized as base64 encoded strings by default.").
+			ShortDescription("Extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices.").
 			Default(false).Deprecated()).
 		Field(service.NewStringAnnotatedEnumField(pFieldHandleLogicalTypes, map[string]string{
 			"v1": "No special handling of logical types",
@@ -46,6 +47,7 @@ func parquetDecodeProcessorConfig() *service.ConfigSpec {
 - UUID - decodes as a string, i.e. ` + "`00112233-4455-6677-8899-aabbccddeeff`" + `.`,
 		}).
 			Description("Whether to be smart about decoding logical types. In the Parquet format, logical types are stored as one of the standard physical types with some additional metadata describing the logical type. For example, UUIDs are stored in a FIXED_LEN_BYTE_ARRAY physical type, but there is metadata in the schema denoting that it is a UUID. By default, this logical type metadata will be ignored and values will be decoded directly from the physical type, which isn't always desirable. By enabling this option, logical types will be given special treatment and will decode into more useful values. The value for this field specifies a version, i.e. v0, v1... Any given version enables the logical type handling for that version and all versions below it, which allows the handling of new logical types to be introduced without breaking existing pipelines. We recommend enabling the newest version available of this feature when creating new pipelines.").
+			ShortDescription("Decode logical types into their logical form rather than the underlying physical type.").
 			Example("v2").
 			Default("v1")). // TODO: V5 bump this to the latest version
 		Description(`

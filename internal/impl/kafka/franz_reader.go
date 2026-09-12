@@ -139,6 +139,7 @@ A list of topics to consume from. Multiple comma separated topics can be listed 
 Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. ` + "`foo:0`" + ` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. ` + "`foo:0-10`" + ` would consume partitions 0 through to 10 inclusive.
 
 Finally, it's also possible to specify an explicit offset to consume from by adding another colon after the partition, e.g. ` + "`foo:0:10`" + ` would consume the partition 0 of the topic foo starting from the offset 10. If the offset is not present (or remains unspecified) then the field ` + "`start_from_oldest`" + ` determines which offset to start from.`).
+			ShortDescription("A list of topics to consume from. Multiple comma-separated topics may share one element.").
 			Example([]string{"foo", "bar"}).
 			Example([]string{"things.*"}).
 			Example([]string{"foo,bar"}).
@@ -148,38 +149,47 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Optional(),
 		service.NewBoolField(kfrFieldRegexpTopics).
 			Description("Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When enabled, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. When topics are specified with explicit partitions this field must remain set to `false`.\n\nThis field is deprecated, use `regexp_topics_include` instead.").
+			ShortDescription("Whether listed topics should be treated as regular expression patterns matching multiple topics.").
 			Default(false).
 			Deprecated(),
 		service.NewStringListField(kfrFieldRegexpTopicsInclude).
 			Description("A list of regular expression patterns for matching topics to consume from. When specified, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. This enables regex mode and cannot be used together with the `topics` field. Use `regexp_topics_exclude` to exclude specific patterns.").
+			ShortDescription("Regular expression patterns matching topics to consume from, refreshed periodically to discover new topics.").
 			Example([]string{"logs_.*", "metrics_.*"}).
 			Example([]string{"events_[0-9]+"}).
 			Optional(),
 		service.NewStringListField(kfrFieldRegexpTopicsExclude).
 			Description("A list of regular expression patterns for excluding topics when regex mode is enabled (via `regexp_topics` or `regexp_topics_include`). Topics matching any of these patterns will be excluded from consumption, even if they match include patterns.").
+			ShortDescription("Regular expression patterns for topics to exclude when regex mode is enabled.").
 			Optional(),
 		service.NewStringField(kfrFieldRackID).
 			Description("A rack specifies where the client is physically located and changes fetch requests to consume from the closest replica as opposed to the leader replica.").
+			ShortDescription("Where the client is physically located, so fetches consume from the closest replica rather than the leader.").
 			Default("").
 			Advanced(),
 		service.NewStringField(kfrFieldInstanceID).
 			Description("When using a consumer group, an instance ID specifies the groups static membership, which can prevent rebalances during reconnects. When using a instance ID the client does NOT leave the group when closing. To actually leave the group one must use an external admin command to leave the group on behalf of this instance ID. This ID must be unique per consumer within the group.").
+			ShortDescription("Static consumer group membership ID, which prevents rebalances on reconnect. The client does not leave the group on close.").
 			Default("").
 			Advanced(),
 		service.NewDurationField(kfrFieldRebalanceTimeout).
 			Description("When using a consumer group, `rebalance_timeout` sets how long group members are allowed to take when a rebalance has begun. This timeout is how long all members are allowed to complete work and commit offsets, minus the time it took to detect the rebalance (from a heartbeat).").
+			ShortDescription("How long consumer group members may take to complete work and commit offsets during a rebalance.").
 			Default("45s").
 			Advanced(),
 		service.NewDurationField(kfrFieldSessionTimeout).
 			Description("When using a consumer group, `session_timeout` sets how long a member in the group can go between heartbeats. If a member does not heartbeat in this timeout, the broker will remove the member from the group and initiate a rebalance.").
+			ShortDescription("How long a consumer group member may go between heartbeats before the broker removes it.").
 			Default("1m").
 			Advanced(),
 		service.NewDurationField(kfrFieldHeartbeatInterval).
 			Description("When using a consumer group, `heartbeat_interval` sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's session stays active. This value should be no higher than 1/3rd of the `session_timeout`. This is equivalent to the Java heartbeat.interval.ms setting.").
+			ShortDescription("How long a consumer group member waits between heartbeats to Kafka.").
 			Default("3s").
 			Advanced(),
 		service.NewBoolField(kfrFieldStartFromOldest).
 			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
+			ShortDescription("Consume from the oldest available offset rather than the latest. Applied when the consumer group is new.").
 			Default(true).
 			Advanced().
 			Deprecated(),
@@ -192,18 +202,22 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Advanced(),
 		service.NewStringField(kfrFieldFetchMaxBytes).
 			Description("Sets the maximum amount of bytes a broker will try to send during a fetch. Note that brokers may not obey this limit if it has records larger than this limit. This is the equivalent to the Java fetch.max.bytes setting.").
+			ShortDescription("Maximum bytes a broker will try to send during a fetch. Equivalent to the Java fetch.max.bytes setting.").
 			Advanced().
 			Default("50MiB"),
 		service.NewDurationField(kfrFieldFetchMaxWait).
 			Description("Sets the maximum amount of time a broker will wait for a fetch response to hit the minimum number of required bytes. This is the equivalent to the Java fetch.max.wait.ms setting.").
+			ShortDescription("Maximum time a broker waits for a fetch to reach the minimum required bytes.").
 			Advanced().
 			Default("5s"),
 		service.NewStringField(kfrFieldFetchMinBytes).
 			Description("Sets the minimum amount of bytes a broker will try to send during a fetch. This is the equivalent to the Java fetch.min.bytes setting.").
+			ShortDescription("Minimum bytes a broker will try to send during a fetch. Equivalent to the Java fetch.min.bytes setting.").
 			Advanced().
 			Default("1B"),
 		service.NewStringField(kfrFieldFetchMaxPartitionBytes).
 			Description("Sets the maximum amount of bytes that will be consumed for a single partition in a fetch request. Note that if a single batch is larger than this number, that batch will still be returned so the client can make progress. This is the equivalent to the Java fetch.max.partition.bytes setting.").
+			ShortDescription("Maximum bytes consumed for a single partition in a fetch request.").
 			Advanced().
 			Default("1MiB"),
 		service.NewStringAnnotatedEnumField(kfrFieldTransactionIsolation, map[string]string{
