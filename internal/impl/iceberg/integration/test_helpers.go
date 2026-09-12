@@ -224,23 +224,29 @@ func startTestInfrastructure(t *testing.T, ctx context.Context) *testInfrastruct
 	const minioInternalPort = "19123"
 	const restInternalPort = "18181"
 
-	// Start MinIO
+	// Versity Gateway is a stateless S3 gateway over a POSIX directory.
+	// It replaces MinIO, which stopped publishing community images.
+	// Pin by digest so that a retag cannot change what the tests run.
+	const s3Image = "versity/versitygw:v1.8.0@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499"
+
+	// Start the S3 store. The network alias stays "minio" so that the
+	// container-side endpoint strings do not change.
 	minioContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "minio/minio:latest",
+			Image:        s3Image,
 			ExposedPorts: []string{minioInternalPort + "/tcp"},
-			Env: map[string]string{
-				"MINIO_ROOT_USER":     "admin",
-				"MINIO_ROOT_PASSWORD": "password",
-				"MINIO_REGION":        "us-east-1",
+			Cmd: []string{
+				"--access", "admin",
+				"--secret", "password",
+				"--region", "us-east-1",
+				"--port", ":" + minioInternalPort,
+				"posix", "/tmp",
 			},
-			Cmd:      []string{"server", "/data", "--address", ":" + minioInternalPort},
 			Networks: []string{networkName},
 			NetworkAliases: map[string][]string{
 				networkName: {"minio"},
 			},
-			WaitingFor: wait.ForHTTP("/minio/health/live").
-				WithPort(minioInternalPort + "/tcp").
+			WaitingFor: wait.ForListeningPort(minioInternalPort + "/tcp").
 				WithStartupTimeout(time.Minute),
 		},
 		Started: true,
