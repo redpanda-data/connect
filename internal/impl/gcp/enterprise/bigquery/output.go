@@ -104,7 +104,7 @@ Messages can be formatted as JSON (default) or raw protobuf bytes.
 When using JSON format the component automatically fetches the table schema and converts each message to the corresponding proto representation.
 
 WARNING: protojson encodes int64 and uint64 values as strings, bytes as base64-encoded strings, and timestamps as RFC 3339 strings.
-JSON messages must follow these conventions (e.g. `+"`"+`"age": "30"`+"`"+`, `+"`"+`"data": "aGVsbG8="`+"`"+`, `+"`"+`"created_at": "2026-01-02T15:04:05Z"`+"`"+`); otherwise the write will fail with an unmarshalling error.
+JSON messages must follow these conventions (for example, `+"`"+`"age": "30"`+"`"+`, `+"`"+`"data": "aGVsbG8="`+"`"+`, `+"`"+`"created_at": "2026-01-02T15:04:05Z"`+"`"+`); otherwise the write will fail with an unmarshalling error.
 
 When batching is enabled the table name is resolved from the first message in each batch.
 All messages in the same batch are written to that table.
@@ -175,7 +175,7 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 			service.NewStringListField(bqwaFieldPrimaryKeys).
 				Description("Optional list of primary-key column names."+
 					" Required when `auto_create_table` is true and `write_mode` is `upsert` or `upsert_delete`."+
-					" A pre-existing table must already declare its PRIMARY KEY — this field cannot add one;"+
+					" A pre-existing table must already declare its PRIMARY KEY: this field cannot add one;"+
 					" when both are set they must match exactly (same columns, same order)."+
 					" Up to 16 columns; composite keys are supported in the same order they are listed.").
 				ShortDescription("Primary-key column names. Required when auto_create_table is true and write_mode is upsert or upsert_delete.").
@@ -225,7 +225,7 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 					Default(false),
 			).
 				Description("Optional time-partitioning settings applied during `auto_create_table`."+
-					" Setting `type` is the trigger — when omitted, the block is treated as absent.").
+					" Setting `type` is the trigger: when omitted, the block is treated as absent.").
 				ShortDescription("Time-partitioning settings applied during auto_create_table. Setting type activates the block.").
 				Advanced().
 				Optional(),

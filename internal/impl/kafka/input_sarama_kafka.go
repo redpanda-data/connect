@@ -103,7 +103,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 					[]string{"localhost:9041", "localhost:9042"},
 				),
 			service.NewStringListField(iskFieldTopics).
-				Description("A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. `foo:0-10` would consume partitions 0 through to 10 inclusive.").
+				Description("A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name. For example `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges. For example `foo:0-10` would consume partitions 0 through to 10 inclusive.").
 				ShortDescription("A list of topics to consume from, optionally with explicit partitions. Comma-separated topics may share one element.").
 				Examples(
 					[]string{"foo", "bar"},

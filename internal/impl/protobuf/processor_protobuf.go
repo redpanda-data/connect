@@ -123,7 +123,7 @@ This operator is also considerably faster in scenario where you manipulate the d
 			Default(false),
 		service.NewObjectListField(fieldBSRConfig,
 			service.NewStringField(fieldBSRModule).
-				Description("Module to fetch from a Buf Schema Registry e.g. 'buf.build/exampleco/mymodule'."),
+				Description("Module to fetch from a Buf Schema Registry, for example, 'buf.build/exampleco/mymodule'."),
 			service.NewStringField(fieldBSRUrl).
 				Description("Buf Schema Registry URL, leave blank to extract from module.").
 				Default("").Advanced(),

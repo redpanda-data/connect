@@ -199,7 +199,7 @@ Consumer Key of the Salesforce Connected App authorized for the OAuth Client Cre
 
 === `client_secret`
 
-Consumer Secret of the Salesforce Connected App, paired with `client_id`. Sensitive — prefer environment variable interpolation (`${SALESFORCE_CLIENT_SECRET}`) over inlining.
+Consumer Secret of the Salesforce Connected App, paired with `client_id`. Sensitive; prefer environment variable interpolation (`${SALESFORCE_CLIENT_SECRET}`) over inlining.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
@@ -212,7 +212,7 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 === `api_version`
 
-Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/{api_version}/...`) and available fields/objects. Must be supported by your org — check Setup → Company Information. Older versions may lack recent fields.
+Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/{api_version}/...`) and available fields/objects. Must be supported by your org; check Setup → Company Information. Older versions may lack recent fields.
 
 
 *Type*: `string`
@@ -290,7 +290,7 @@ topic name to match against the message's 'topic' field
 
 === `topic_mappings[].sobject`
 
-Salesforce SObject API name (e.g., Account, Contact, MyObject__c)
+Salesforce SObject API name (for example, Account, Contact, MyObject__c)
 
 
 *Type*: `string`

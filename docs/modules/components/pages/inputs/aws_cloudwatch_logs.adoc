@@ -175,7 +175,7 @@ filter_pattern: '[ERROR]'
 
 === `start_time`
 
-The time to start consuming log events from. Can be an RFC3339 timestamp (e.g., `2024-01-01T00:00:00Z`) or the string `now` to start consuming from the current time. If not set, starts from the beginning of available logs.
+The time to start consuming log events from. Can be an RFC3339 timestamp (for example, `2024-01-01T00:00:00Z`) or the string `now` to start consuming from the current time. If not set, starts from the beginning of available logs.
 
 
 *Type*: `string`

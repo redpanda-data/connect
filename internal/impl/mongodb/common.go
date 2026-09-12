@@ -99,9 +99,22 @@ func notImportedAWSOptFn(awsConf *service.ParsedConfig, _ *service.Logger) (Cred
 // A nil builder is returned when IAM authentication is disabled.
 var AWSOptFn = notImportedAWSOptFn
 
+// awsSessionDurationDescription documents `session_duration` for every MongoDB
+// component. It stays generic on purpose: the block is shared, so anything
+// specific to one component's read pattern belongs in that component's note
+// rather than here, where it would describe behavior the other components do
+// not have.
+const awsSessionDurationDescription = "The duration of the STS session requested when assuming roles. AWS requires at least 15 minutes and caps sessions created through role chaining at one hour. Only used when `role` or `roles` are configured. For long-running pipelines, prefer the ambient credential chain over a fixed session duration, since the driver refreshes ambient credentials automatically as they near expiry."
+
 // AWSIAMAuthField returns the spec of the `aws` IAM authentication block
 // shared by all MongoDB components.
-func AWSIAMAuthField() *service.ConfigField {
+//
+// sessionDurationNotes are appended to the `session_duration` description, for
+// components whose read pattern interacts with credential expiry. Components
+// without a snapshot phase pass none.
+func AWSIAMAuthField(sessionDurationNotes ...string) *service.ConfigField {
+	sessionDuration := strings.Join(append([]string{awsSessionDurationDescription}, sessionDurationNotes...), " ")
+
 	return service.NewObjectField(FieldAWSIAMAuth,
 		service.NewBoolField(FieldAWSIAMAuthEnabled).
 			Description("Enable AWS IAM authentication using the driver-native `MONGODB-AWS` mechanism. The MongoDB Atlas database user must be created with the AWS IAM authentication type, and connections require TLS. When no static credentials or roles are configured, the ambient AWS credential chain (environment variables, EC2 instance profile, EKS pod role) is used and expiring credentials are refreshed automatically.").
@@ -112,7 +125,7 @@ func AWSIAMAuthField() *service.ConfigField {
 			ShortDescription("The AWS region used for STS calls when assuming roles. Defaults to the environment region.").
 			Optional(),
 		service.NewDurationField(FieldAWSIAMAuthSessionDuration).
-			Description("The duration of the STS session requested when assuming roles. AWS requires at least 15 minutes and caps sessions created through role chaining at one hour. Only used when `role` or `roles` are configured. When using `mongodb_cdc` with role assumption, credentials are freshly resolved after the initial snapshot completes, so the streaming phase starts with a full session. The snapshot itself must still complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. Once the snapshot completes and is fully acknowledged, its position is checkpointed, so later restarts resume the stream without re-running the snapshot. For very large snapshots prefer the ambient credential chain.").
+			Description(sessionDuration).
 			ShortDescription("STS session duration when assuming roles. AWS requires at least 15m and caps role chaining at 1h.").
 			Default("1h").
 			Advanced(),

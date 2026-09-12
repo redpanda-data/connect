@@ -49,8 +49,8 @@ Use ` + "`salesforce_graphql`" + ` for:
 
 Use a different Salesforce input instead if:
 
-- You only need single-object SELECTs — use xref:components:inputs/salesforce.adoc[` + "`salesforce`" + `] (simpler, no GraphQL schema knowledge needed).
-- You need continuous change events — use xref:components:inputs/salesforce_cdc.adoc[` + "`salesforce_cdc`" + `].
+- You only need single-object SELECTs: use xref:components:inputs/salesforce.adoc[` + "`salesforce`" + `] (simpler, no GraphQL schema knowledge needed).
+- You need continuous change events: use xref:components:inputs/salesforce_cdc.adoc[` + "`salesforce_cdc`" + `].
 
 == Pagination
 
@@ -72,7 +72,7 @@ Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in
 			Example(`query Accounts { uiapi { query { Account { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } }`).
 			Example(`query Accounts($first: Int) { uiapi { query { Account(first: $first) { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } }`)).
 		Field(service.NewBloblangField(sfgqlFieldVariables).
-			Description("Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an object whose keys are GraphQL variable names referenced by `query`. Values pass through as JSON in the request body's `variables` field. The mapping is evaluated once at startup with no message context — use `env()`, `now()`, `cache()`, or static literals.").
+			Description("Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an object whose keys are GraphQL variable names referenced by `query`. Values pass through as JSON in the request body's `variables` field. The mapping is evaluated once at startup with no message context; use `env()`, `now()`, `cache()`, or static literals.").
 			ShortDescription("Optional Bloblang mapping returning an object keyed by the GraphQL variable names used in query.").
 			Example(`root = {"first": 100}`).
 			Example(`root = {"since": now().ts_format("2006-01-02T15:04:05Z"), "limit": 500}`).

@@ -115,7 +115,7 @@ poll_interval: 10s
 
 === `include_patterns`
 
-A list of file patterns to include (e.g., '**/*.md', 'configs/*.yaml'). If empty, all files will be included. Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.
+A list of file patterns to include (for example, '**/*.md', 'configs/*.yaml'). If empty, all files will be included. Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.
 
 
 *Type*: `array`
@@ -124,7 +124,7 @@ A list of file patterns to include (e.g., '**/*.md', 'configs/*.yaml'). If empty
 
 === `exclude_patterns`
 
-A list of file patterns to exclude (e.g., '.git/**', '**/*.png'). These patterns take precedence over include_patterns. Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.
+A list of file patterns to exclude (for example, '.git/**', '**/*.png'). These patterns take precedence over include_patterns. Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.
 
 
 *Type*: `array`
