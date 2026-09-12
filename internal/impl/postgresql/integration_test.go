@@ -1338,38 +1338,44 @@ postgres_cdc:
 		outBatches,
 		[]any{
 			map[string]any{
-				"operation": "read",
-				"table":     "FlightsCompositePK",
+				"operation":       "read",
+				"table":           "FlightsCompositePK",
+				"database_schema": "public",
 			},
 			map[string]any{
-				"operation": "read",
-				"table":     "flights",
+				"operation":       "read",
+				"table":           "flights",
+				"database_schema": "public",
 			},
 			map[string]any{
-				"operation":    "insert",
-				"table":        "FlightsCompositePK",
-				"lsn":          "XXX/XXX",
-				"commit_ts_ms": "SET",
+				"operation":       "insert",
+				"table":           "FlightsCompositePK",
+				"lsn":             "XXX/XXX",
+				"commit_ts_ms":    "SET",
+				"database_schema": "public",
 			},
 			map[string]any{
-				"operation":    "insert",
-				"table":        "flights",
-				"lsn":          "XXX/XXX",
-				"commit_ts_ms": "SET",
+				"operation":       "insert",
+				"table":           "flights",
+				"lsn":             "XXX/XXX",
+				"commit_ts_ms":    "SET",
+				"database_schema": "public",
 			},
 			map[string]any{
-				"operation":    "update",
-				"table":        "flights",
-				"lsn":          "XXX/XXX",
-				"commit_ts_ms": "SET",
-				"before":       "SET",
+				"operation":       "update",
+				"table":           "flights",
+				"lsn":             "XXX/XXX",
+				"commit_ts_ms":    "SET",
+				"before":          "SET",
+				"database_schema": "public",
 			},
 			map[string]any{
-				"operation":    "delete",
-				"table":        "flights",
-				"lsn":          "XXX/XXX",
-				"commit_ts_ms": "SET",
-				"before":       "SET",
+				"operation":       "delete",
+				"table":           "flights",
+				"lsn":             "XXX/XXX",
+				"commit_ts_ms":    "SET",
+				"before":          "SET",
+				"database_schema": "public",
 			},
 		},
 	)
@@ -1716,4 +1722,988 @@ postgres_cdc:
 		byName[child["name"].(string)] = child["type"].(string)
 	}
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
+}
+
+func TestIntegrationMultiSchemaSnapshotAndCDC(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	// Two tenant schemas with the same table name, replicated on a single slot.
+	for _, schema := range []string{"tenant_a", "tenant_b"} {
+		_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA %s", schema))
+		require.NoError(t, err)
+		_, err = db.Exec(fmt.Sprintf(
+			"CREATE TABLE %s.events (id SERIAL PRIMARY KEY, name TEXT)", schema))
+		require.NoError(t, err)
+	}
+
+	// Pre-load snapshot data: 2 rows in tenant_a, 1 in tenant_b.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('alice'), ('bob')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('carol')")
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		dbSchema  string
+		table     string
+		operation string
+		lsn       string
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: multi_schema_test_slot
+    stream_snapshot: true
+    schema_include: tenant_*
+    tables:
+      - events
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			m := msgMeta{}
+			m.dbSchema, _ = msg.MetaGet("database_schema")
+			m.table, _ = msg.MetaGet("table")
+			m.operation, _ = msg.MetaGet("operation")
+			m.lsn, _ = msg.MetaGet("lsn")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	// Wait for all 3 snapshot rows.
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected) >= 3
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot rows")
+
+	// Insert CDC rows.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('dave')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('eve')")
+	require.NoError(t, err)
+
+	// Wait for 2 CDC rows (total 5).
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Len(c, collected, 5)
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for CDC rows")
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	var snapshots, cdcMsgs []msgMeta
+	for _, m := range collected {
+		if m.operation == "read" {
+			snapshots = append(snapshots, m)
+		} else {
+			cdcMsgs = append(cdcMsgs, m)
+		}
+	}
+
+	// Snapshot assertions.
+	require.Len(t, snapshots, 3)
+	snapshotSchemas := make(map[string]int)
+	for _, m := range snapshots {
+		assert.Equal(t, "events", m.table, "snapshot: table should be bare name without schema prefix")
+		assert.Empty(t, m.lsn, "snapshot rows have no LSN")
+		snapshotSchemas[m.dbSchema]++
+	}
+	assert.Equal(t, 2, snapshotSchemas["tenant_a"], "expected 2 snapshot rows from tenant_a")
+	assert.Equal(t, 1, snapshotSchemas["tenant_b"], "expected 1 snapshot row from tenant_b")
+
+	// CDC assertions.
+	require.Len(t, cdcMsgs, 2)
+	cdcSchemas := make(map[string]int)
+	for _, m := range cdcMsgs {
+		assert.Equal(t, "insert", m.operation)
+		assert.Equal(t, "events", m.table)
+		assert.NotEmpty(t, m.lsn, "CDC rows must have an LSN")
+		cdcSchemas[m.dbSchema]++
+	}
+	assert.Equal(t, 1, cdcSchemas["tenant_a"], "expected 1 CDC row from tenant_a")
+	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
+}
+
+// TestIntegrationSchemaExcludeCarvesOutTenant verifies that schema_exclude
+// carves an exception out of a broad schema_include: a schema that matches
+// schema_include but also matches a schema_exclude entry contributes no
+// rows at all, neither during the initial snapshot nor from subsequent CDC
+// changes.
+func TestIntegrationSchemaExcludeCarvesOutTenant(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	// Three tenant schemas match tenant_*; tenant_c is carved out via schema_exclude.
+	for _, schema := range []string{"tenant_a", "tenant_b", "tenant_c"} {
+		_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA %s", schema))
+		require.NoError(t, err)
+		_, err = db.Exec(fmt.Sprintf(
+			"CREATE TABLE %s.events (id SERIAL PRIMARY KEY, name TEXT)", schema))
+		require.NoError(t, err)
+	}
+
+	// Pre-load snapshot data, including a row in the excluded schema that must
+	// never surface.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('alice'), ('bob')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('carol')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_c.events (name) VALUES ('mallory')")
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		dbSchema  string
+		table     string
+		operation string
+		lsn       string
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+	collectedLen := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected)
+	}
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: schema_exclude_test_slot
+    stream_snapshot: true
+    schema_include: tenant_*
+    schema_exclude:
+      - tenant_c
+    tables:
+      - events
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			m := msgMeta{}
+			m.dbSchema, _ = msg.MetaGet("database_schema")
+			m.table, _ = msg.MetaGet("table")
+			m.operation, _ = msg.MetaGet("operation")
+			m.lsn, _ = msg.MetaGet("lsn")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	// Wait for the 3 snapshot rows from the two non-excluded schemas; tenant_c's
+	// row must never contribute to this count.
+	assert.Eventually(t, func() bool {
+		return collectedLen() >= 3
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot rows")
+
+	// Insert CDC rows into all three schemas, including the excluded one.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('dave')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('eve')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_c.events (name) VALUES ('trudy')")
+	require.NoError(t, err)
+
+	// Wait for the 2 CDC rows from the non-excluded schemas (total 5).
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, 5, collectedLen())
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for CDC rows")
+
+	// tenant_c's CDC insert above raced the same replication stream as the
+	// tenant_a/tenant_b inserts already confirmed above, so if it were going
+	// to leak through it would have by now; assert the count never climbs
+	// past 5 to catch a delayed leak instead of just checking once.
+	assert.Never(t, func() bool {
+		return collectedLen() > 5
+	}, 3*time.Second, 200*time.Millisecond, "received unexpected message(s) from excluded schema tenant_c")
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	require.Len(t, collected, 5)
+	for _, m := range collected {
+		assert.NotEqual(t, "tenant_c", m.dbSchema, "tenant_c is excluded and must never appear, got message: %+v", m)
+	}
+
+	var snapshots, cdcMsgs []msgMeta
+	for _, m := range collected {
+		if m.operation == "read" {
+			snapshots = append(snapshots, m)
+		} else {
+			cdcMsgs = append(cdcMsgs, m)
+		}
+	}
+
+	// Snapshot assertions.
+	require.Len(t, snapshots, 3)
+	snapshotSchemas := make(map[string]int)
+	for _, m := range snapshots {
+		assert.Equal(t, "events", m.table, "snapshot: table should be bare name without schema prefix")
+		assert.Empty(t, m.lsn, "snapshot rows have no LSN")
+		snapshotSchemas[m.dbSchema]++
+	}
+	assert.Equal(t, 2, snapshotSchemas["tenant_a"], "expected 2 snapshot rows from tenant_a")
+	assert.Equal(t, 1, snapshotSchemas["tenant_b"], "expected 1 snapshot row from tenant_b")
+
+	// CDC assertions.
+	require.Len(t, cdcMsgs, 2)
+	cdcSchemas := make(map[string]int)
+	for _, m := range cdcMsgs {
+		assert.Equal(t, "insert", m.operation)
+		assert.Equal(t, "events", m.table)
+		assert.NotEmpty(t, m.lsn, "CDC rows must have an LSN")
+		cdcSchemas[m.dbSchema]++
+	}
+	assert.Equal(t, 1, cdcSchemas["tenant_a"], "expected 1 CDC row from tenant_a")
+	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
+}
+
+func TestIntegrationSchemaIncludeMatchesHyphenatedUUIDSchema(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	const uuidSchema = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+	_, err = db.Exec(fmt.Sprintf(`CREATE SCHEMA "%s"`, uuidSchema))
+	require.NoError(t, err)
+	_, err = db.Exec(fmt.Sprintf(`CREATE TABLE "%s".events (id SERIAL PRIMARY KEY, name TEXT)`, uuidSchema))
+	require.NoError(t, err)
+	_, err = db.Exec(fmt.Sprintf(`INSERT INTO "%s".events (name) VALUES ('alice')`, uuidSchema))
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		dbSchema  string
+		table     string
+		operation string
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+	collectedLen := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected)
+	}
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: hyphenated_schema_include_slot
+    stream_snapshot: true
+    schema_include: a0eebc99-*
+    tables:
+      - events
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			m := msgMeta{}
+			m.dbSchema, _ = msg.MetaGet("database_schema")
+			m.table, _ = msg.MetaGet("table")
+			m.operation, _ = msg.MetaGet("operation")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	assert.Eventually(t, func() bool {
+		return collectedLen() >= 1
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot row from hyphenated UUID schema")
+
+	_, err = db.Exec(fmt.Sprintf(`INSERT INTO "%s".events (name) VALUES ('bob')`, uuidSchema))
+	require.NoError(t, err)
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, 2, collectedLen())
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for CDC row from hyphenated UUID schema")
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, collected, 2)
+	for _, m := range collected {
+		assert.Equal(t, uuidSchema, m.dbSchema, "database_schema metadata should be the raw, unquoted, case-preserved schema name")
+		assert.Equal(t, "events", m.table)
+	}
+}
+
+func TestIntegrationMultiSchemaMissingTableDegradesGracefully(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	// tenant_a is fully provisioned with the "events" table; tenant_b matches
+	// the schema glob but is missing it (e.g. still being migrated). Before
+	// this fix, CreatePublication's FOR TABLE clause would reference the
+	// non-existent tenant_b.events relation and fail publication setup for
+	// every matched schema, not just the drifted one.
+	_, err = db.Exec("CREATE SCHEMA tenant_a")
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE TABLE tenant_a.events (id SERIAL PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE SCHEMA tenant_b")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('alice')")
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		dbSchema string
+		table    string
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: missing_table_degrade_slot
+    stream_snapshot: true
+    schema_include: tenant_*
+    tables:
+      - events
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			m := msgMeta{}
+			m.dbSchema, _ = msg.MetaGet("database_schema")
+			m.table, _ = msg.MetaGet("table")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	// tenant_a should keep streaming even though tenant_b is missing the table.
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected) >= 1
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for tenant_a snapshot row; a missing table in tenant_b should not block replication")
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, collected, 1)
+	assert.Equal(t, "tenant_a", collected[0].dbSchema)
+	assert.Equal(t, "events", collected[0].table)
+}
+
+// TestIntegrationMultiSchemaViewNamesakeDegradesGracefully guards against a
+// relation that exists but isn't publishable: tenant_c matches the schema
+// glob and has an "events" view (e.g. a compatibility shim over a renamed
+// table), not the "events" table configured. Before restricting
+// resolveExistingTables to table_type = 'BASE TABLE', this view counted as
+// present, so CreatePublication's FOR TABLE clause referenced it and failed
+// setup for every matched schema with "... is not supported for views".
+// tenant_c's view should instead be skipped with a warning, the same way a
+// genuinely missing table is, leaving tenant_a free to stream.
+func TestIntegrationMultiSchemaViewNamesakeDegradesGracefully(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	_, err = db.Exec("CREATE SCHEMA tenant_a")
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE TABLE tenant_a.events (id SERIAL PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE SCHEMA tenant_c")
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE VIEW tenant_c.events AS SELECT 1 AS id, 'namesake'::text AS name")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('alice')")
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		dbSchema string
+		table    string
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: view_namesake_degrade_slot
+    stream_snapshot: true
+    schema_include: tenant_*
+    tables:
+      - events
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			m := msgMeta{}
+			m.dbSchema, _ = msg.MetaGet("database_schema")
+			m.table, _ = msg.MetaGet("table")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	// tenant_a should keep streaming even though tenant_c's "events" is a
+	// view rather than a publishable table.
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected) >= 1
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for tenant_a snapshot row; a view namesake in tenant_c should not block replication or fail publication setup")
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, collected, 1)
+	assert.Equal(t, "tenant_a", collected[0].dbSchema)
+	assert.Equal(t, "events", collected[0].table)
+}
+
+func TestIntegrationNoSchemasMatchedReturnsError(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	tmpl := fmt.Sprintf(`
+dsn: %s
+slot_name: no_schema_match_slot
+schema_include: nonexistent_schema_zzz_*
+tables:
+  - events
+`, databaseURL)
+
+	conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
+	require.NoError(t, err)
+
+	mgr := service.MockResources()
+	license.InjectTestService(mgr)
+
+	input, err := newPgStreamInput(conf, mgr)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	// Bypass the benthos AsyncReader's infinite connect-retry loop by calling
+	// Connect directly: a schema-include-not-found error is permanent, but
+	// stream.Run has no path to surface it (it only returns once ctx is done),
+	// so going through StreamBuilder/Run here would just time out instead.
+	err = input.Connect(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no schemas found matching schema_include pattern")
+}
+
+// TestIntegrationSchemaIncludeNonMatchingFailsEvenWithEmptyTables guards the
+// fixed behaviour: schema_include always scopes replication, even when
+// `tables` is left empty. A schema_include matching nothing in the database
+// must fail startup rather than silently falling back to a database-wide
+// FOR ALL TABLES publication (the old behaviour, which made schema_exclude
+// meaningless whenever tables was left unset).
+func TestIntegrationSchemaIncludeNonMatchingFailsEvenWithEmptyTables(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, _, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	tmpl := fmt.Sprintf(`
+dsn: %s
+slot_name: no_schema_match_empty_tables_slot
+schema_include: nonexistent_schema_zzz_*
+`, databaseURL)
+
+	conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
+	require.NoError(t, err)
+
+	mgr := service.MockResources()
+	license.InjectTestService(mgr)
+
+	input, err := newPgStreamInput(conf, mgr)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	// Bypass the benthos AsyncReader's infinite connect-retry loop, same as
+	// TestIntegrationNoSchemasMatchedReturnsError.
+	err = input.Connect(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no schemas found matching schema_include pattern")
+}
+
+// TestIntegrationSchemaExcludeCarvesOutTenantAutoDiscover is
+// TestIntegrationSchemaExcludeCarvesOutTenant with `tables` left unset: it
+// verifies that leaving `tables` empty under schema_include auto-discovers
+// the "events" table in each matched schema instead of falling back to a
+// database-wide FOR ALL TABLES publication, so schema_exclude still carves
+// tenant_c out of both the snapshot and CDC.
+func TestIntegrationSchemaExcludeCarvesOutTenantAutoDiscover(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	// Three tenant schemas match tenant_*; tenant_c is carved out via schema_exclude.
+	for _, schema := range []string{"tenant_a", "tenant_b", "tenant_c"} {
+		_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA %s", schema))
+		require.NoError(t, err)
+		_, err = db.Exec(fmt.Sprintf(
+			"CREATE TABLE %s.events (id SERIAL PRIMARY KEY, name TEXT)", schema))
+		require.NoError(t, err)
+	}
+
+	// Pre-load snapshot data, including a row in the excluded schema that must
+	// never surface.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('alice'), ('bob')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('carol')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_c.events (name) VALUES ('mallory')")
+	require.NoError(t, err)
+
+	type msgMeta struct {
+		dbSchema  string
+		table     string
+		operation string
+		lsn       string
+	}
+
+	var (
+		mu        sync.Mutex
+		collected []msgMeta
+	)
+	collectedLen := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(collected)
+	}
+
+	// No `tables` field: every base table in tenant_a/tenant_b must be
+	// auto-discovered without listing "events" by hand.
+	tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: auto_discover_schema_exclude_test_slot
+    stream_snapshot: true
+    schema_include: tenant_*
+    schema_exclude:
+      - tenant_c
+`, databaseURL)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(tmpl))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			m := msgMeta{}
+			m.dbSchema, _ = msg.MetaGet("database_schema")
+			m.table, _ = msg.MetaGet("table")
+			m.operation, _ = msg.MetaGet("operation")
+			m.lsn, _ = msg.MetaGet("lsn")
+			collected = append(collected, m)
+		}
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+	// Wait for the 3 snapshot rows from the two non-excluded schemas; tenant_c's
+	// row must never contribute to this count.
+	assert.Eventually(t, func() bool {
+		return collectedLen() >= 3
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for snapshot rows")
+
+	// Insert CDC rows into all three schemas, including the excluded one.
+	_, err = db.Exec("INSERT INTO tenant_a.events (name) VALUES ('dave')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_b.events (name) VALUES ('eve')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tenant_c.events (name) VALUES ('trudy')")
+	require.NoError(t, err)
+
+	// Wait for the 2 CDC rows from the non-excluded schemas (total 5).
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, 5, collectedLen())
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for CDC rows")
+
+	// tenant_c's CDC insert above raced the same replication stream as the
+	// tenant_a/tenant_b inserts already confirmed above, so if it were going
+	// to leak through it would have by now; assert the count never climbs
+	// past 5 to catch a delayed leak instead of just checking once.
+	assert.Never(t, func() bool {
+		return collectedLen() > 5
+	}, 3*time.Second, 200*time.Millisecond, "received unexpected message(s) from excluded schema tenant_c")
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	require.Len(t, collected, 5)
+	for _, m := range collected {
+		assert.NotEqual(t, "tenant_c", m.dbSchema, "tenant_c is excluded and must never appear, got message: %+v", m)
+	}
+
+	var snapshots, cdcMsgs []msgMeta
+	for _, m := range collected {
+		if m.operation == "read" {
+			snapshots = append(snapshots, m)
+		} else {
+			cdcMsgs = append(cdcMsgs, m)
+		}
+	}
+
+	// Snapshot assertions.
+	require.Len(t, snapshots, 3)
+	snapshotSchemas := make(map[string]int)
+	for _, m := range snapshots {
+		assert.Equal(t, "events", m.table, "snapshot: table should be bare name without schema prefix")
+		assert.Empty(t, m.lsn, "snapshot rows have no LSN")
+		snapshotSchemas[m.dbSchema]++
+	}
+	assert.Equal(t, 2, snapshotSchemas["tenant_a"], "expected 2 snapshot rows from tenant_a")
+	assert.Equal(t, 1, snapshotSchemas["tenant_b"], "expected 1 snapshot row from tenant_b")
+
+	// CDC assertions.
+	require.Len(t, cdcMsgs, 2)
+	cdcSchemas := make(map[string]int)
+	for _, m := range cdcMsgs {
+		assert.Equal(t, "insert", m.operation)
+		assert.Equal(t, "events", m.table)
+		assert.NotEmpty(t, m.lsn, "CDC rows must have an LSN")
+		cdcSchemas[m.dbSchema]++
+	}
+	assert.Equal(t, 1, cdcSchemas["tenant_a"], "expected 1 CDC row from tenant_a")
+	assert.Equal(t, 1, cdcSchemas["tenant_b"], "expected 1 CDC row from tenant_b")
+}
+
+func TestIntegrationSchemaAndTableMatchingTest(t *testing.T) {
+	integration.CheckSkip(t)
+
+	t.Run("exact schema match with missing table fails", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		_, err = db.Exec("CREATE TABLE IF NOT EXISTS orders (id SERIAL PRIMARY KEY, name TEXT);")
+		require.NoError(t, err)
+
+		tmpl := fmt.Sprintf(`
+dsn: %s
+slot_name: exact_schema_missing_table_slot
+schema: public
+tables:
+  - orders
+  - ordres
+`, databaseURL)
+
+		conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
+		require.NoError(t, err)
+
+		mgr := service.MockResources()
+		license.InjectTestService(mgr)
+
+		input, err := newPgStreamInput(conf, mgr)
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+
+		// Bypass the benthos AsyncReader's infinite connect-retry loop, same as
+		// TestIntegrationNoSchemasMatchedReturnsError.
+		err = input.Connect(ctx)
+		require.Error(t, err, "typo'd table %q should fail startup loudly instead of silently streaming only %q", "ordres", "orders")
+		assert.Contains(t, err.Error(), "ordres")
+	})
+
+	t.Run("glob schema matching multiple schemas with one or more missing tables fails", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		_, err = db.Exec(`
+			CREATE SCHEMA tenant_a;
+			CREATE SCHEMA tenant_b;
+
+			CREATE TABLE tenant_a.orders (id SERIAL PRIMARY KEY, name TEXT);
+			CREATE TABLE tenant_b.orders (id SERIAL PRIMARY KEY, name TEXT);
+		`)
+		require.NoError(t, err)
+
+		tmpl := fmt.Sprintf(`
+dsn: %s
+slot_name: glob_schema_total_miss_slot
+schema_include: tenant_*
+tables:
+  - orders
+  - ordres
+`, databaseURL)
+
+		conf, err := newPostgresCDCConfig().ParseYAML(tmpl, nil)
+		require.NoError(t, err)
+
+		mgr := service.MockResources()
+		license.InjectTestService(mgr)
+
+		input, err := newPgStreamInput(conf, mgr)
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+
+		err = input.Connect(ctx)
+		require.Error(t, err, "ordres exists in neither tenant_a nor tenant_b, so it should fail startup instead of silently streaming only tenant_a/b.orders")
+		assert.Contains(t, err.Error(), "ordres")
+	})
+
+	t.Run("glob schema matching multiple schemas with matching tables passes", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		_, err = db.Exec(`
+			CREATE SCHEMA tenant_a;
+			CREATE SCHEMA tenant_b;
+
+			CREATE TABLE tenant_a.orders (id SERIAL PRIMARY KEY, name TEXT);
+			CREATE TABLE tenant_b.ordres (id SERIAL PRIMARY KEY, name TEXT);
+
+			INSERT INTO tenant_a.orders (name) VALUES ('alice');
+			INSERT INTO tenant_b.ordres (name) VALUES ('bob');
+		`)
+		require.NoError(t, err)
+
+		type msgMeta struct {
+			dbSchema string
+			table    string
+		}
+
+		var (
+			mu        sync.Mutex
+			collected []msgMeta
+		)
+
+		tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: glob_schema_partial_match_slot
+    stream_snapshot: true
+    schema_include: tenant_*
+    tables:
+      - orders
+      - ordres
+`, databaseURL)
+
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+		require.NoError(t, sb.AddInputYAML(tmpl))
+		require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range batch {
+				m := msgMeta{}
+				m.dbSchema, _ = msg.MetaGet("database_schema")
+				m.table, _ = msg.MetaGet("table")
+				collected = append(collected, m)
+			}
+			return nil
+		}))
+
+		stream, err := sb.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+		assert.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return len(collected) >= 2
+		}, 30*time.Second, 100*time.Millisecond, "timed out waiting for both tenant_a.orders and tenant_b.ordres snapshot rows")
+
+		mu.Lock()
+		defer mu.Unlock()
+		require.Len(t, collected, 2)
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_a", table: "orders"})
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_b", table: "ordres"})
+	})
+
+	t.Run("glob schema matching multiple schemas with all tables present in all schemas passes", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		_, err = db.Exec(`
+			CREATE SCHEMA tenant_a;
+			CREATE SCHEMA tenant_b;
+
+			CREATE TABLE tenant_a.orders (id SERIAL PRIMARY KEY, name TEXT);
+			CREATE TABLE tenant_a.ordres (id SERIAL PRIMARY KEY, name TEXT);
+			CREATE TABLE tenant_b.orders (id SERIAL PRIMARY KEY, name TEXT);
+			CREATE TABLE tenant_b.ordres (id SERIAL PRIMARY KEY, name TEXT);
+
+			INSERT INTO tenant_a.orders (name) VALUES ('alice');
+			INSERT INTO tenant_a.ordres (name) VALUES ('bob');
+			INSERT INTO tenant_b.orders (name) VALUES ('carol');
+			INSERT INTO tenant_b.ordres (name) VALUES ('dave');
+		`)
+		require.NoError(t, err)
+
+		type msgMeta struct {
+			dbSchema string
+			table    string
+		}
+
+		var (
+			mu        sync.Mutex
+			collected []msgMeta
+		)
+
+		tmpl := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: glob_schema_full_match_slot
+    stream_snapshot: true
+    schema_include: tenant_*
+    tables:
+      - orders
+      - ordres
+`, databaseURL)
+
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+		require.NoError(t, sb.AddInputYAML(tmpl))
+		require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range batch {
+				m := msgMeta{}
+				m.dbSchema, _ = msg.MetaGet("database_schema")
+				m.table, _ = msg.MetaGet("table")
+				collected = append(collected, m)
+			}
+			return nil
+		}))
+
+		stream, err := sb.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
+
+		assert.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return len(collected) >= 4
+		}, 30*time.Second, 100*time.Millisecond, "timed out waiting for all four tenant_{a,b}.{orders,ordres} snapshot rows")
+
+		mu.Lock()
+		defer mu.Unlock()
+		require.Len(t, collected, 4)
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_a", table: "orders"})
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_a", table: "ordres"})
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_b", table: "orders"})
+		assert.Contains(t, collected, msgMeta{dbSchema: "tenant_b", table: "ordres"})
+	})
 }
