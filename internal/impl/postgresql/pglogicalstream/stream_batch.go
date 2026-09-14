@@ -108,8 +108,13 @@ func (b *streamBatch) take() (msgs []StreamMessage, lastLSN, commitLSN LSN) {
 //
 // The zero value works with a window of commitRemapRingSize; newCommitRemap
 // sizes it to the caller's in-flight bound.
+//
+// lookup runs on every received WAL frame, so it is a map read rather than a
+// scan of the ring: slot holds each live last row's ring position, and
+// eviction removes the evicted row from it.
 type commitRemap struct {
 	pairs []commitRemapPair
+	slot  map[LSN]int
 	next  int
 	n     int
 }
@@ -121,7 +126,11 @@ type commitRemapPair struct{ lastRow, commit LSN }
 // row. Callers pass checkpoint_limit plus the channel depth and the batches
 // the reader and consumer each hold.
 func newCommitRemap(inFlightBatches int) commitRemap {
-	return commitRemap{pairs: make([]commitRemapPair, max(inFlightBatches, commitRemapRingSize))}
+	size := max(inFlightBatches, commitRemapRingSize)
+	return commitRemap{
+		pairs: make([]commitRemapPair, size),
+		slot:  make(map[LSN]int, size),
+	}
 }
 
 // record stores a pair. Pairs whose commit equals the last row carry no
@@ -135,7 +144,7 @@ func (r *commitRemap) record(lastRow, commit LSN) {
 		return
 	}
 	if r.pairs == nil {
-		r.pairs = make([]commitRemapPair, commitRemapRingSize)
+		*r = newCommitRemap(commitRemapRingSize)
 	}
 	size := len(r.pairs)
 	if r.n > 0 {
@@ -145,22 +154,27 @@ func (r *commitRemap) record(lastRow, commit LSN) {
 			return
 		}
 	}
+	if r.n == size {
+		// The slot about to be reused holds the oldest pair; forget its row
+		// unless a newer slot has since claimed the same row.
+		if evicted := r.pairs[r.next]; r.slot[evicted.lastRow] == r.next {
+			delete(r.slot, evicted.lastRow)
+		}
+	}
 	r.pairs[r.next] = commitRemapPair{lastRow: lastRow, commit: commit}
+	r.slot[lastRow] = r.next
 	r.next = (r.next + 1) % size
 	if r.n < size {
 		r.n++
 	}
 }
 
-// lookup returns the commit LSN recorded for lastRow, if any. Newest first,
-// so a repeated LSN resolves to its most recent commit.
+// lookup returns the commit LSN recorded for lastRow, if any. A repeated row
+// resolves to its most recent commit.
 func (r *commitRemap) lookup(lastRow LSN) (LSN, bool) {
-	size := len(r.pairs)
-	for i := 1; i <= r.n; i++ {
-		p := r.pairs[(r.next-i+size)%size]
-		if p.lastRow == lastRow {
-			return p.commit, true
-		}
+	idx, ok := r.slot[lastRow]
+	if !ok {
+		return 0, false
 	}
-	return 0, false
+	return r.pairs[idx].commit, true
 }
