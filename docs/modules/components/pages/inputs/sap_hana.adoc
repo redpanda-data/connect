@@ -25,7 +25,7 @@ component_type_dropdown::[]
 
 Reads rows from a SAP HANA table.
 
-Introduced in version 4.92.0.
+Introduced in version 4.110.0.
 
 
 [tabs]
