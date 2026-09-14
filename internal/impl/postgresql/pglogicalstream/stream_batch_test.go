@@ -204,3 +204,33 @@ func TestNewCommitRemapCoversInFlightWindow(t *testing.T) {
 	small := newCommitRemap(1)
 	require.Len(t, small.pairs, commitRemapRingSize, "never smaller than the default window")
 }
+
+// TestCommitRemapEvictionForgetsTheRow: the index must not outlive its ring
+// slot, or an evicted row would resolve to whatever commit reused the slot.
+func TestCommitRemapEvictionForgetsTheRow(t *testing.T) {
+	r := newCommitRemap(commitRemapRingSize)
+	for i := 1; i <= commitRemapRingSize*3; i++ {
+		r.record(LSN(i*10), LSN(i*10+5))
+	}
+	require.Len(t, r.slot, commitRemapRingSize, "the index tracks exactly the live slots")
+	for i := 1; i <= commitRemapRingSize*2; i++ {
+		_, ok := r.lookup(LSN(i * 10))
+		require.False(t, ok, "row %d was evicted", i*10)
+	}
+	for i := commitRemapRingSize*2 + 1; i <= commitRemapRingSize*3; i++ {
+		commit, ok := r.lookup(LSN(i * 10))
+		require.True(t, ok)
+		require.Equal(t, LSN(i*10+5), commit)
+	}
+}
+
+func BenchmarkCommitRemapLookupMiss(b *testing.B) {
+	r := newCommitRemap(1030)
+	for i := 1; i <= 1030; i++ {
+		r.record(LSN(i*10), LSN(i*10+5))
+	}
+	b.ReportAllocs()
+	for i := range b.N {
+		r.lookup(LSN(i*10 + 3))
+	}
+}
