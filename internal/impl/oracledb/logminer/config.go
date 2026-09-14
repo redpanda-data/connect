@@ -40,6 +40,31 @@ var (
 	// before being forcibly restarted, independent of redo log switches. 0 disables this,
 	// restarting only on log switches (the previous, and still default, behaviour).
 	DefaultMaxSessionAge = 0 * time.Second
+	// DefaultRedoVolumeMin is the minimum redo volume budget mined per cycle,
+	// per redo thread, under the WindowStrategyRedoVolume window strategy,
+	// expressed in multiples of the online redo log's configured size.
+	DefaultRedoVolumeMin = 2
+	// DefaultRedoVolumeGrowthMax is the ceiling the per-thread redo volume
+	// budget can grow to under the WindowStrategyRedoVolume window strategy,
+	// once forward progress stalls.
+	DefaultRedoVolumeGrowthMax = 4
+	// MinRedoVolumeGrowthCeiling is the smallest growth ceiling that avoids a
+	// permanent stall: a budget of 1 file always reselects its own single
+	// file forever, since that file's own boundary re-qualifies it next
+	// cycle, so growth is its only way to make progress.
+	MinRedoVolumeGrowthCeiling = 2
+)
+
+// WindowStrategy selects how the SCN range mined per LogMiner cycle is sized.
+type WindowStrategy string
+
+const (
+	// WindowStrategySCNWindow sizes the mined range by growing/shrinking a fixed
+	// SCN-count window each cycle.
+	WindowStrategySCNWindow WindowStrategy = "scn_window"
+	// WindowStrategyRedoVolume sizes the mined range by a bounded redo volume
+	// budget per cycle, per redo thread.
+	WindowStrategyRedoVolume WindowStrategy = "redo_volume"
 )
 
 // MiningStrategy defines how LogMiner accesses dictionary information
@@ -70,6 +95,9 @@ type Config struct {
 	PDBName                string
 	TransactionCacheConfig TransactionCacheConfig
 	MaxSessionAge          time.Duration
+	WindowStrategy         WindowStrategy
+	RedoVolumeMin          int
+	RedoVolumeGrowthMax    int
 }
 
 // NewDefaultConfig returns a Config with default values
@@ -84,5 +112,8 @@ func NewDefaultConfig() *Config {
 		MaxTransactionEvents:  DefaultMaxTransactionEvents,
 		LOBEnabled:            DefaultLOBEnabled,
 		MaxSessionAge:         DefaultMaxSessionAge,
+		WindowStrategy:        WindowStrategySCNWindow,
+		RedoVolumeMin:         DefaultRedoVolumeMin,
+		RedoVolumeGrowthMax:   DefaultRedoVolumeGrowthMax,
 	}
 }
