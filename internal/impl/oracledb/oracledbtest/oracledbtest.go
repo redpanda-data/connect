@@ -483,3 +483,18 @@ func (b *SyncBuffer) String() string {
 	defer b.mu.Unlock()
 	return b.buf.String()
 }
+
+// CollectMessages collects messages given a want value, returning them for examination.
+func CollectMessages(t *testing.T, c chan *service.Message, want int) []*service.Message {
+	t.Helper()
+	msgs := make([]*service.Message, 0, want)
+	for msg := range c {
+		msgs = append(msgs, msg)
+		if len(msgs) == want {
+			break
+		}
+		require.LessOrEqualf(t, len(msgs), want, "received too many messages")
+	}
+	require.Lenf(t, msgs, want, "channel closed before receiving %d messages, got %d", want, len(msgs))
+	return msgs
+}
