@@ -33,6 +33,10 @@ jobs:
       - name: Install Task
         uses: ./.github/actions/setup-task
 
+      # Fetch all modules up front so a Go proxy error fails here, not inside a random test package.
+      - name: Download Go modules
+        run: go mod download
+
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
 
@@ -142,6 +146,10 @@ jobs:
 
       - name: Install Task
         uses: ./.github/actions/setup-task
+
+      # Fetch all modules up front so a Go proxy error fails here, not inside a random test package.
+      - name: Download Go modules
+        run: go mod download
 
       - name: Verify Integration Tests Registry
         run: task test:integration:verify
