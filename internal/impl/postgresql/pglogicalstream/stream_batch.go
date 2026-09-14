@@ -21,11 +21,17 @@ const (
 	streamBatchMaxBytes = 4 << 20
 	// streamChannelDepth is the number of batches the messages channel buffers,
 	// letting the reader keep decoding while the consumer marshals.
+	//
+	// It also bounds the rows resident between reader and consumer during a
+	// consumer stall, none of which checkpoint_limit counts: the buffered
+	// batches, the one the reader is filling, and the one the consumer holds,
+	// so (streamChannelDepth + 2) batches of up to streamBatchMaxBytes of WAL
+	// each, several times that once decoded.
 	streamChannelDepth = 4
-	// commitRemapRingSize bounds how many recent (last row, commit) pairs the
-	// reader remembers. It comfortably exceeds the channel depth plus the batch
-	// being decoded plus what the consumer may hold, so an ack for the last row
-	// of any transaction still in flight can be remapped to its commit record.
+	// commitRemapRingSize is the smallest window of recent (last row, commit)
+	// pairs the reader remembers, used when the caller supplies no
+	// checkpoint_limit. The real window must cover every transaction that can
+	// be in flight; see newCommitRemap.
 	commitRemapRingSize = 16
 )
 
@@ -91,27 +97,57 @@ func (b *streamBatch) take() (msgs []StreamMessage, lastLSN, commitLSN LSN) {
 // commitRemap remembers, for recently flushed transactions, the LSN of the
 // last emitted row and the LSN of the commit record that closed it. When the
 // consumer acks that last row, the reader confirms the commit LSN instead so
-// Postgres does not replay the transaction on restart. Keeping several pairs
-// (rather than only the latest) matters because up to streamChannelDepth
-// batches can sit in the channel unconsumed: an ack for an earlier
-// transaction's last row must still find its commit.
+// Postgres does not replay the transaction on restart.
+//
+// Keeping many pairs (rather than only the latest) matters because acks
+// arrive out of order and late: a transaction's last row can be acked while
+// up to checkpoint_limit later messages are already tracked downstream, plus
+// the batches buffered in the channel. A miss is not data loss -- the row LSN
+// is below its commit, so the transaction is replayed rather than skipped --
+// but it is a duplicate the ring exists to prevent.
+//
+// The zero value works with a window of commitRemapRingSize; newCommitRemap
+// sizes it to the caller's in-flight bound.
 type commitRemap struct {
-	pairs [commitRemapRingSize]commitRemapPair
+	pairs []commitRemapPair
 	next  int
 	n     int
 }
 
 type commitRemapPair struct{ lastRow, commit LSN }
 
+// newCommitRemap sizes the window for inFlightBatches, the most batches whose
+// acks can still be outstanding, each holding at least one transaction's last
+// row. Callers pass checkpoint_limit plus the channel depth and the batches
+// the reader and consumer each hold.
+func newCommitRemap(inFlightBatches int) commitRemap {
+	return commitRemap{pairs: make([]commitRemapPair, max(inFlightBatches, commitRemapRingSize))}
+}
+
 // record stores a pair. Pairs whose commit equals the last row carry no
-// information (a cap-triggered flush mid-transaction) and are skipped.
+// information (a cap-triggered flush mid-transaction) and are skipped. A pair
+// for the same last row as the newest entry replaces it in place: a
+// heartbeat or an empty transaction moves that row's commit forward without
+// costing a slot, so a long output stall under frequent heartbeats cannot
+// evict the transactions whose acks are still pending.
 func (r *commitRemap) record(lastRow, commit LSN) {
 	if commit == lastRow {
 		return
 	}
+	if r.pairs == nil {
+		r.pairs = make([]commitRemapPair, commitRemapRingSize)
+	}
+	size := len(r.pairs)
+	if r.n > 0 {
+		newest := (r.next - 1 + size) % size
+		if r.pairs[newest].lastRow == lastRow {
+			r.pairs[newest].commit = commit
+			return
+		}
+	}
 	r.pairs[r.next] = commitRemapPair{lastRow: lastRow, commit: commit}
-	r.next = (r.next + 1) % commitRemapRingSize
-	if r.n < commitRemapRingSize {
+	r.next = (r.next + 1) % size
+	if r.n < size {
 		r.n++
 	}
 }
@@ -119,8 +155,9 @@ func (r *commitRemap) record(lastRow, commit LSN) {
 // lookup returns the commit LSN recorded for lastRow, if any. Newest first,
 // so a repeated LSN resolves to its most recent commit.
 func (r *commitRemap) lookup(lastRow LSN) (LSN, bool) {
+	size := len(r.pairs)
 	for i := 1; i <= r.n; i++ {
-		p := r.pairs[(r.next-i+commitRemapRingSize)%commitRemapRingSize]
+		p := r.pairs[(r.next-i+size)%size]
 		if p.lastRow == lastRow {
 			return p.commit, true
 		}

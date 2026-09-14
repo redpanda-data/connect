@@ -162,3 +162,45 @@ func TestCommitRemapEvictsOldest(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, LSN(25), commit)
 }
+
+// TestCommitRemapUpdatesNewestInPlace: a heartbeat or an empty transaction
+// after a flushed transaction moves that transaction's last row to a later
+// commit. It must not take a new slot each time, or a long output stall under
+// frequent heartbeats evicts the pairs whose acks are still pending.
+func TestCommitRemapUpdatesNewestInPlace(t *testing.T) {
+	var r commitRemap
+	r.record(LSN(110), LSN(130))
+	for i := range commitRemapRingSize * 2 {
+		r.record(LSN(210), LSN(230+i))
+	}
+
+	commit, ok := r.lookup(LSN(110))
+	require.True(t, ok, "the earlier transaction must survive the heartbeats")
+	require.Equal(t, LSN(130), commit)
+
+	commit, ok = r.lookup(LSN(210))
+	require.True(t, ok)
+	require.Equal(t, LSN(230+commitRemapRingSize*2-1), commit, "the newest commit wins")
+}
+
+// TestNewCommitRemapCoversInFlightWindow: acks can be outstanding for as many
+// transactions as checkpoint_limit admits, so the window is sized to it
+// rather than to the channel depth.
+func TestNewCommitRemapCoversInFlightWindow(t *testing.T) {
+	const window = 1030
+	r := newCommitRemap(window)
+	for i := 1; i <= window; i++ {
+		r.record(LSN(i*10), LSN(i*10+5))
+	}
+
+	commit, ok := r.lookup(LSN(10))
+	require.True(t, ok, "the oldest in-flight transaction must still resolve")
+	require.Equal(t, LSN(15), commit)
+
+	r.record(LSN((window+1)*10), LSN((window+1)*10+5))
+	_, ok = r.lookup(LSN(10))
+	require.False(t, ok, "one past the window evicts the oldest")
+
+	small := newCommitRemap(1)
+	require.Len(t, small.pairs, commitRemapRingSize, "never smaller than the default window")
+}

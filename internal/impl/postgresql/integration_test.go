@@ -1755,8 +1755,7 @@ postgres_cdc:
 	license.InjectTestService(streamOut.Resources())
 	go func() { _ = streamOut.Run(t.Context()) }()
 
-	// Give the replication slot time to be created before writing.
-	time.Sleep(5 * time.Second)
+	waitForActiveReplicationSlot(t, db, "test_slot_default_batching")
 
 	const rowCount = 5
 	tx, err := db.Begin()
@@ -1821,7 +1820,7 @@ postgres_cdc:
 	license.InjectTestService(streamOut.Resources())
 	go func() { _ = streamOut.Run(t.Context()) }()
 
-	time.Sleep(5 * time.Second)
+	waitForActiveReplicationSlot(t, db, "test_slot_batching_count")
 
 	const rowCount = 9
 	tx, err := db.Begin()
@@ -1904,7 +1903,7 @@ postgres_cdc:
 
 	run1 := build()
 	go func() { _ = run1.Run(t.Context()) }()
-	time.Sleep(5 * time.Second)
+	waitForActiveReplicationSlot(t, db, "test_slot_large_txn")
 
 	const rowCount = 1500
 	tx, err := db.Begin()
@@ -1931,7 +1930,9 @@ postgres_cdc:
 	mut.Unlock()
 	run2 := build()
 	go func() { _ = run2.Run(t.Context()) }()
-	time.Sleep(5 * time.Second)
+	// The slot already exists from the first run; wait for the second run
+	// to be streaming from it.
+	waitForActiveReplicationSlot(t, db, "test_slot_large_txn")
 
 	for i := rowCount; i < rowCount+3; i++ {
 		f := pgtest.GetFakeFlightRecord()
@@ -1951,4 +1952,19 @@ postgres_cdc:
 	for seq, n := range seqs {
 		require.Equal(t, 1, n, "seq %d delivered %d times", seq, n)
 	}
+}
+
+// waitForActiveReplicationSlot blocks until slot exists and a walsender is
+// streaming from it, so a row written afterwards is decoded. A fixed sleep is
+// flaky on loaded runners: the slot is created on a goroutine after the
+// stream starts, and a transaction committed before that is never seen.
+func waitForActiveReplicationSlot(t *testing.T, db interface {
+	QueryRow(query string, args ...any) *sql.Row
+}, slot string,
+) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		var active bool
+		return db.QueryRow("SELECT active FROM pg_replication_slots WHERE slot_name = $1", slot).Scan(&active) == nil && active
+	}, 30*time.Second, 250*time.Millisecond, "replication slot %s never became active", slot)
 }
