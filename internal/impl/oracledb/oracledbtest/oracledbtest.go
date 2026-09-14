@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -29,6 +30,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // Batch represents the expected test output.
@@ -56,6 +59,111 @@ func (c *Batch) Clone() []string {
 	c.Lock()
 	defer c.Unlock()
 	return slices.Clone(c.Msgs)
+}
+
+// Append adds messages to the batch.
+func (c *Batch) Append(msgs ...string) {
+	c.Lock()
+	defer c.Unlock()
+	c.Msgs = append(c.Msgs, msgs...)
+}
+
+// Consumer returns a batch consumer that appends the raw bytes of each message
+// to the batch as a string.
+func (c *Batch) Consumer(t *testing.T) service.MessageBatchHandlerFunc {
+	return func(_ context.Context, mb service.MessageBatch) error {
+		c.Lock()
+		defer c.Unlock()
+		for _, msg := range mb {
+			msgBytes, err := msg.AsBytes()
+			assert.NoError(t, err)
+			c.Msgs = append(c.Msgs, string(msgBytes))
+		}
+		return nil
+	}
+}
+
+// MsgBatch collects raw messages for tests that assert on message metadata.
+type MsgBatch struct {
+	sync.Mutex
+	Msgs []*service.Message
+}
+
+// Reset sets the messages in the batch to nil.
+func (c *MsgBatch) Reset() {
+	c.Lock()
+	defer c.Unlock()
+	c.Msgs = nil
+}
+
+// Count returns the total number of messages in the batch.
+func (c *MsgBatch) Count() int {
+	c.Lock()
+	defer c.Unlock()
+	return len(c.Msgs)
+}
+
+// Clone returns a clone of the underlying Msgs.
+func (c *MsgBatch) Clone() []*service.Message {
+	c.Lock()
+	defer c.Unlock()
+	return slices.Clone(c.Msgs)
+}
+
+// Append adds messages to the batch.
+func (c *MsgBatch) Append(msgs ...*service.Message) {
+	c.Lock()
+	defer c.Unlock()
+	c.Msgs = append(c.Msgs, msgs...)
+}
+
+// Consumer returns a batch consumer that appends each message to the batch.
+func (c *MsgBatch) Consumer() service.MessageBatchHandlerFunc {
+	return func(_ context.Context, mb service.MessageBatch) error {
+		c.Append(mb...)
+		return nil
+	}
+}
+
+// StartPipeline builds a stream from the input config, logs at INFO level, and
+// runs it in the background. The caller must stop the stream with StopWithin.
+func StartPipeline(t *testing.T, cfg string, consume service.MessageBatchHandlerFunc) *service.Stream {
+	t.Helper()
+	return StartPipelineWithLogLevel(t, cfg, "INFO", consume)
+}
+
+// StartPipelineWithLogLevel is StartPipeline with a custom log level.
+func StartPipelineWithLogLevel(t *testing.T, cfg, logLevel string, consume service.MessageBatchHandlerFunc) *service.Stream {
+	t.Helper()
+
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(cfg))
+	require.NoError(t, streamBuilder.SetLoggerYAML("level: "+logLevel))
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(consume))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	return stream
+}
+
+// WaitForCount waits until count returns at least want, then asserts that the
+// last observed value is exactly want. It polls once per second.
+func WaitForCount(t *testing.T, count func() int, want int, wait time.Duration) {
+	t.Helper()
+
+	var got int
+	assert.Eventually(t, func() bool {
+		got = count()
+		return got >= want
+	}, wait, time.Second)
+	assert.Equalf(t, want, got, "Wanted %d messages but got %d", want, got)
 }
 
 // TestDB wraps sql.DB with testing utilities for Oracle database integration tests.
