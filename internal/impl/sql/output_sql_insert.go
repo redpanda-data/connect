@@ -139,9 +139,12 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	if s.driver, err = conf.FieldString("driver"); err != nil {
 		return nil, err
 	}
+	// Drivers whose databases reject multi-row INSERT ... VALUES lists and
+	// need one prepared statement executed per row inside a transaction.
 	if _, in := map[string]struct{}{
 		"clickhouse": {},
 		"oracle":     {},
+		"hana":       {},
 	}[s.driver]; in {
 		s.useTxStmt = true
 	}

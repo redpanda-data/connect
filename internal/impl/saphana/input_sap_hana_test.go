@@ -9,6 +9,7 @@
 package saphana
 
 import (
+	"io"
 	"math"
 	"math/big"
 	"testing"
@@ -102,6 +103,16 @@ mode: query
 `,
 			errContains: "query",
 		},
+		{
+			name: "fetch_size below one",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: bulk
+table: MY_TABLE
+fetch_size: 0
+`,
+			errContains: "fetch_size",
+		},
 	}
 
 	for _, tc := range tests {
@@ -134,6 +145,15 @@ table: MY_TABLE
 `)
 	_, err := newSAPHANAInput(conf, service.MockResources())
 	require.Error(t, err)
+}
+
+// fakeLob mimics the value go-hdb yields for a LOB column scanned into *any:
+// an object whose content is only reachable through Scan(io.Writer).
+type fakeLob string
+
+func (l fakeLob) Scan(wr io.Writer) error {
+	_, err := io.WriteString(wr, string(l))
+	return err
 }
 
 func decimalColType(t *testing.T, precision, scale int32) *schema.Common {
@@ -194,6 +214,29 @@ func TestNormalizeHANAValue(t *testing.T) {
 			colType: &schema.Common{Name: "col", Type: schema.String},
 			want:    "plain text",
 		},
+		// ── LOB columns (CLOB/NCLOB/TEXT/BLOB) arrive as a lob scanner ────
+		{
+			name:    "text LOB drained to string with String schema",
+			input:   fakeLob("a long clob body"),
+			colType: &schema.Common{Name: "col", Type: schema.String},
+			want:    "a long clob body",
+		},
+		{
+			name:    "binary LOB drained to bytes with ByteArray schema",
+			input:   fakeLob("\xde\xad\xbe\xef"),
+			colType: &schema.Common{Name: "col", Type: schema.ByteArray},
+			want:    []byte{0xDE, 0xAD, 0xBE, 0xEF},
+		},
+		{
+			name:  "text LOB drained to string without schema",
+			input: fakeLob("clob without schema"),
+			want:  "clob without schema",
+		},
+		{
+			name:  "binary LOB stays bytes without schema",
+			input: fakeLob("\xde\xad\xbe\xef"),
+			want:  []byte{0xDE, 0xAD, 0xBE, 0xEF},
+		},
 		// ── integer passthrough ────────────────────────────────────────────
 		{
 			name:  "max int64 passthrough",
@@ -242,6 +285,22 @@ func TestNormalizeHANAValue(t *testing.T) {
 			colType:        decimalColType(t, 18, 4),
 			numericMapping: shNumericMappingNone,
 			want:           "-0.0001",
+		},
+		{
+			// The cached schema can lag an online ALTER that widened the
+			// scale; the value must not be silently rounded to the stale scale.
+			name:           "decimal wider than cached schema scale is not truncated",
+			input:          decVal("1.2345"),
+			colType:        decimalColType(t, 12, 2),
+			numericMapping: shNumericMappingNone,
+			want:           "1.2345",
+		},
+		{
+			name:           "decimal shorter than schema scale is padded",
+			input:          decVal("1.5"),
+			colType:        decimalColType(t, 12, 2),
+			numericMapping: shNumericMappingNone,
+			want:           "1.50",
 		},
 		// ── DECIMAL with Int64 schema (scale=0) → int64 ───────────────────
 		{
@@ -329,7 +388,8 @@ func TestNormalizeHANAValue(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := normalizeHANAValue(tc.input, tc.colType, tc.numericMapping)
+			got, err := normalizeHANAValue(tc.input, tc.colType, tc.numericMapping)
+			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
 		})
 	}
@@ -345,6 +405,13 @@ func TestRatToNaturalDecimalString(t *testing.T) {
 		{"123456789/10000", "12345.6789"},
 		{"-7/100", "-0.07"},
 		{"0/1", "0"},
+		// go-hdb builds decimals with big.Rat.SetFrac, which reduces the
+		// fraction: the denominator is then 2^a·5^b rather than a power of 10.
+		{"1/2", "0.5"},
+		{"51/4", "12.75"},
+		{"157/50", "3.14"},
+		{"1/8", "0.125"},
+		{"-3/40", "-0.075"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {

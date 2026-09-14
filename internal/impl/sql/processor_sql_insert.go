@@ -127,9 +127,12 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 	if err != nil {
 		return nil, err
 	}
+	// Drivers whose databases reject multi-row INSERT ... VALUES lists and
+	// need one prepared statement executed per row inside a transaction.
 	if _, in := map[string]struct{}{
 		"clickhouse": {},
 		"oracle":     {},
+		"hana":       {},
 	}[driverStr]; in {
 		s.useTxStmt = true
 	}

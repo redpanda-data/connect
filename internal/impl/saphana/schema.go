@@ -40,7 +40,7 @@ func hanaTypeToCommonType(dataType string) schema.CommonType {
 		return schema.Boolean
 	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE":
 		return schema.Timestamp
-	case "VARBINARY", "BLOB":
+	case "BINARY", "VARBINARY", "BLOB", "BSTRING":
 		return schema.ByteArray
 	default:
 		// VARCHAR, NVARCHAR, CHAR, NCHAR, ALPHANUM, SHORTTEXT, CLOB, NCLOB,
@@ -50,9 +50,33 @@ func hanaTypeToCommonType(dataType string) schema.CommonType {
 }
 
 // isDecimalType reports whether dataType is a HANA decimal type that needs
-// precision/scale-aware mapping.
+// precision/scale-aware mapping. The FIXED* names are what the go-hdb wire
+// protocol reports for DECIMAL columns at newer data-format versions.
 func isDecimalType(dataType string) bool {
-	return dataType == "DECIMAL" || dataType == "NUMERIC"
+	switch dataType {
+	case "DECIMAL", "NUMERIC", "SMALLDECIMAL", "FIXED8", "FIXED12", "FIXED16":
+		return true
+	}
+	return false
+}
+
+// driverColumnTypes builds per-column schema entries from the driver's result
+// metadata (rows.ColumnTypes()), used when catalog schema metadata is not
+// available so that value normalisation still knows which columns are binary
+// and how DECIMALs are declared.
+func driverColumnTypes(cols []*sql.ColumnType, numericMapping string) map[string]schema.Common {
+	out := make(map[string]schema.Common, len(cols))
+	for _, c := range cols {
+		name, dbType := c.Name(), c.DatabaseTypeName()
+		if isDecimalType(dbType) {
+			p, s, ok := c.DecimalSize()
+			out[name] = hanaDecimalToCommon(name,
+				sql.NullInt64{Int64: p, Valid: ok}, sql.NullInt64{Int64: s, Valid: ok}, true, numericMapping)
+			continue
+		}
+		out[name] = schema.Common{Name: name, Type: hanaTypeToCommonType(dbType), Optional: true}
+	}
+	return out
 }
 
 // float64MaxSafeDigits is the number of significant decimal digits a float64
@@ -126,6 +150,33 @@ const hanaColumnQuery = `SELECT COLUMN_NAME, DATA_TYPE_NAME, LENGTH, SCALE, IS_N
 FROM SYS.TABLE_COLUMNS
 WHERE SCHEMA_NAME = ? AND TABLE_NAME = ?
 ORDER BY POSITION`
+
+const hanaColumnTypeQuery = `SELECT DATA_TYPE_NAME
+FROM SYS.TABLE_COLUMNS
+WHERE SCHEMA_NAME = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`
+
+// hanaColumnTypeCurrentSchemaQuery is used when no schema_name is configured
+// and the table is resolved against the connection's current schema.
+const hanaColumnTypeCurrentSchemaQuery = `SELECT DATA_TYPE_NAME
+FROM SYS.TABLE_COLUMNS
+WHERE SCHEMA_NAME = CURRENT_SCHEMA AND TABLE_NAME = ? AND COLUMN_NAME = ?`
+
+// fetchHANAColumnType returns the catalog DATA_TYPE_NAME of a single column.
+func fetchHANAColumnType(ctx context.Context, db *sql.DB, schemaName, tableName, columnName string) (string, error) {
+	var (
+		row      *sql.Row
+		dataType string
+	)
+	if schemaName != "" {
+		row = db.QueryRowContext(ctx, hanaColumnTypeQuery, schemaName, tableName, columnName)
+	} else {
+		row = db.QueryRowContext(ctx, hanaColumnTypeCurrentSchemaQuery, tableName, columnName)
+	}
+	if err := row.Scan(&dataType); err != nil {
+		return "", fmt.Errorf("querying SYS.TABLE_COLUMNS for column %q of %s: %w", columnName, tableName, err)
+	}
+	return dataType, nil
+}
 
 const hanaPKQuery = `SELECT ic.COLUMN_NAME
 FROM SYS.INDEX_COLUMNS ic
