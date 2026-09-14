@@ -428,6 +428,48 @@ checkpoint_cache: %s
 	assert.Equal(t, int64(3), *cp.IncrHWMInt)
 }
 
+// The mid-window resume key must be one row's (timestamp, incrementing) pair.
+// A NULL incrementing value leaves the HWM at an earlier row; pairing that
+// stale HWM with the current row's timestamp would skip rows on resume.
+func TestSAPHANAInputTimestampIncrementingNullKeyFallsBackToWindowStart(t *testing.T) {
+	res := enterpriseResourcesWithCache()
+	s, mock := newTestInput(t, res, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: timestamp+incrementing
+table: T
+timestamp_column: TS
+incrementing_column: ID
+timestamp_initial_value: "2026-01-01T00:00:00Z"
+poll_interval: 1ms
+fetch_size: 2
+max_retries: 0
+timestamp_delay: 0s
+checkpoint_cache: %s
+`, testCacheName))
+
+	initial := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t0 := initial.Add(1 * time.Second)
+	t1 := initial.Add(2 * time.Second)
+	dbNow := initial.Add(time.Minute)
+	mock.ExpectQuery(hanaClockQuery).WithArgs(float64(0)).
+		WillReturnRows(sqlmock.NewRows([]string{"NOW"}).AddRow(dbNow))
+	mock.ExpectQuery(testTSIncFallback).WithArgs(initial, dbNow).
+		WillReturnRows(sqlmock.NewRows([]string{"TS", "ID"}).
+			AddRow(t0, int64(99)).AddRow(t1, nil).AddRow(t1, int64(5)))
+
+	_, ack, err := s.ReadBatch(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, ack(t.Context(), nil))
+
+	cp := readCheckpoint(t, res)
+	require.NotNil(t, cp)
+	require.NotNil(t, cp.TimestampHWM)
+	require.NotNil(t, cp.IncrHWMInt)
+	assert.True(t, initial.Equal(*cp.TimestampHWM),
+		"with no usable key on the last row the checkpoint must stay at the window start, got %v", *cp.TimestampHWM)
+	assert.Equal(t, int64(99), *cp.IncrHWMInt)
+}
+
 // The schema metadata value is shared by every message from the cache, so a
 // downstream component editing what MetaGetMut hands it must not be able to
 // corrupt the cached tree (the documented contract of immutable metadata).

@@ -40,11 +40,12 @@ func hanaTypeToCommonType(dataType string) schema.CommonType {
 		return schema.Boolean
 	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE":
 		return schema.Timestamp
-	case "BINARY", "VARBINARY", "BLOB", "BSTRING":
+	case "BINARY", "VARBINARY", "BLOB", "BSTRING", "ST_GEOMETRY", "ST_POINT":
+		// Spatial types are delivered as WKB, i.e. arbitrary bytes.
 		return schema.ByteArray
 	default:
 		// VARCHAR, NVARCHAR, CHAR, NCHAR, ALPHANUM, SHORTTEXT, CLOB, NCLOB,
-		// TEXT, ST_GEOMETRY, ST_POINT, and all unrecognised types.
+		// TEXT, and all unrecognised types.
 		return schema.String
 	}
 }

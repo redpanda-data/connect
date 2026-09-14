@@ -190,6 +190,14 @@ func init() {
 		})
 }
 
+// rowKey is one row's (timestamp, incrementing) position, the unit the
+// timestamp+incrementing tie-break predicate resumes from. A zero incr means
+// the row had no usable key.
+type rowKey struct {
+	ts   time.Time
+	incr any
+}
+
 type sapHANAInput struct {
 	dsn             string
 	fetchSize       int
@@ -206,7 +214,7 @@ type sapHANAInput struct {
 
 	timestampCol   string
 	timestampHWM   time.Time
-	lastRowTS      time.Time // timestamp of the most recently scanned row (timestamp+incrementing mid-window checkpoints)
+	lastRowKey     rowKey // resume key of the most recently scanned row (timestamp+incrementing mid-window checkpoints)
 	tsQueryUpper   time.Time
 	timestampDelay time.Duration
 	timestampClock string
@@ -702,8 +710,8 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 					// (timestamp, incrementing) pair: the tie-break predicate
 					// resumes exactly after it, instead of re-reading the whole
 					// window from its start on restart.
-					if !s.lastRowTS.IsZero() {
-						return s.deliverBatchAt(ctx, batch, s.hwm, s.lastRowTS)
+					if k := s.lastRowKey; k.incr != nil {
+						return s.deliverBatchAt(ctx, batch, k.incr, k.ts)
 					}
 				}
 				return s.deliverBatch(ctx, batch, s.hwm)
@@ -812,12 +820,11 @@ func normalizeHANAValue(v any, colType *schema.Common, numericMapping string) (a
 // must stay []byte so JSON base64-encodes them losslessly — an invalid-UTF-8
 // string would be mangled into U+FFFD replacement characters by encoding/json.
 func normalizeBytes(val []byte, colType *schema.Common) any {
-	if colType != nil {
-		if colType.Type == schema.ByteArray {
-			return val
-		}
-		return string(val)
+	if colType != nil && colType.Type == schema.ByteArray {
+		return val
 	}
+	// Even a column the catalog calls text is only converted when the bytes
+	// really are UTF-8: a lossy conversion is worse than a schema mismatch.
 	if utf8.Valid(val) {
 		return string(val)
 	}
@@ -978,14 +985,22 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 		rowMap[name] = v
 	}
 
+	var incrVal any
 	if (s.mode == shModeIncrementing || s.mode == shModeTimestampIncrementing) && s.incrementingCol != "" {
 		if v, ok := rowMap[s.incrementingCol]; ok && v != nil {
 			s.hwm = v
+			incrVal = v
 		}
 	}
 	if s.mode == shModeTimestampIncrementing {
-		if ts, ok := rowMap[s.timestampCol].(time.Time); ok {
-			s.lastRowTS = ts
+		// The mid-window resume key must be a single row's (timestamp,
+		// incrementing) pair. A row with no usable incrementing value
+		// invalidates it (rather than pairing its timestamp with an earlier
+		// row's HWM, which would skip rows on resume) and the checkpoint
+		// falls back to the window start.
+		s.lastRowKey = rowKey{}
+		if ts, ok := rowMap[s.timestampCol].(time.Time); ok && incrVal != nil {
+			s.lastRowKey = rowKey{ts: ts, incr: incrVal}
 		}
 	}
 
