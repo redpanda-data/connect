@@ -343,6 +343,9 @@ oracledb_cdc:
 			assert.Truef(t, ok, "Expected snapshot message[%d] to have commit_ts_ms metadata", i)
 			assert.NotEmptyf(t, commitTs, "Expected snapshot message[%d] commit_ts_ms metadata to be non-empty", i)
 			assert.Equal(t, expectedCommitTs, commitTs, "Expected snapshot commit_ts_ms to be identical for all messages but was not")
+
+			userName, hasUserName := msg.MetaGet("user_name")
+			assert.Falsef(t, hasUserName, "Expected snapshot message[%d] to have no 'user_name' metadata, got %q", i, userName)
 		}
 		outBatchesMu.Unlock()
 	}
