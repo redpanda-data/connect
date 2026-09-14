@@ -70,7 +70,7 @@ const (
 
 var sapHANAInputConfigSpec = service.NewConfigSpec().
 	Categories("Services").
-	Version("4.92.0").
+	Version("4.110.0").
 	Summary("Reads rows from a SAP HANA table.").
 	Description(`Reads rows from a SAP HANA table. Supports five modes:
 
@@ -246,6 +246,15 @@ type sapHANAInput struct {
 	stopChan chan struct{}
 	stopOnce sync.Once
 
+	// Low-cardinality operational signals: rows emitted, polls issued, query
+	// retries, checkpoint persist failures (otherwise only a log line), and
+	// the time each poll query takes to open.
+	mRowsRead           *service.MetricCounter
+	mPolls              *service.MetricCounter
+	mQueryRetries       *service.MetricCounter
+	mCheckpointFailures *service.MetricCounter
+	mQueryDuration      *service.MetricTimer
+
 	bulkExhausted bool
 	// polledOnce gates the poll_interval wait so the first query of a polling
 	// mode runs immediately on startup.
@@ -267,9 +276,15 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	}
 
 	s := &sapHANAInput{
-		log:      mgr.Logger(),
-		mgr:      mgr,
-		stopChan: make(chan struct{}),
+		log: mgr.Logger(),
+
+		mRowsRead:           mgr.Metrics().NewCounter("sap_hana_rows_read_total"),
+		mPolls:              mgr.Metrics().NewCounter("sap_hana_polls_total"),
+		mQueryRetries:       mgr.Metrics().NewCounter("sap_hana_query_retries_total"),
+		mCheckpointFailures: mgr.Metrics().NewCounter("sap_hana_checkpoint_write_failures_total"),
+		mQueryDuration:      mgr.Metrics().NewTimer("sap_hana_query_duration"),
+		mgr:                 mgr,
+		stopChan:            make(chan struct{}),
 	}
 
 	var err error
@@ -578,6 +593,7 @@ func (s *sapHANAInput) openRowsWithRetry(ctx context.Context) (*sql.Rows, error)
 	var err error
 	for attempt := 0; attempt <= s.maxRetries; attempt++ {
 		if attempt > 0 {
+			s.mQueryRetries.Incr(1)
 			s.log.Warnf("Query failed (attempt %d/%d), retrying: %v", attempt, s.maxRetries, err)
 			s.dbMut.Unlock()
 			select {
@@ -595,7 +611,11 @@ func (s *sapHANAInput) openRowsWithRetry(ctx context.Context) (*sql.Rows, error)
 			}
 		}
 		var rows *sql.Rows
-		if rows, err = s.openRows(ctx); err == nil {
+		started := time.Now()
+		rows, err = s.openRows(ctx)
+		s.mQueryDuration.Timing(time.Since(started).Nanoseconds())
+		if err == nil {
+			s.mPolls.Incr(1)
 			return rows, nil
 		}
 	}
@@ -1222,6 +1242,7 @@ func (s *sapHANAInput) deliverBatchAt(ctx context.Context, batch service.Message
 	if err != nil {
 		return nil, nil, err
 	}
+	s.mRowsRead.Incr(int64(len(batch)))
 	return batch, ackFn, nil
 }
 
@@ -1251,6 +1272,7 @@ func (s *sapHANAInput) trackBatch(ctx context.Context, batchLen int, hwm any, ts
 			return nil
 		}
 		if saveErr := s.persistCheckpoint(ctx, *cp); saveErr != nil {
+			s.mCheckpointFailures.Incr(1)
 			s.log.Warnf("Failed to save checkpoint: %v", saveErr)
 		}
 		return nil
