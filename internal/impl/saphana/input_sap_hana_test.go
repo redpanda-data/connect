@@ -103,6 +103,71 @@ mode: query
 `,
 			errContains: "query",
 		},
+		// Fields that are inert for the selected mode are rejected rather than
+		// silently ignored: the reviewer's example was an incremental-intent
+		// config that ran as a one-shot bulk scan because mode defaulted.
+		{
+			name: "bulk (default mode) with incrementing_column",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+table: ORDERS
+incrementing_column: ID
+`,
+			errContains: "incrementing_column",
+		},
+		{
+			name: "bulk with checkpoint_cache",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: bulk
+table: ORDERS
+checkpoint_cache: redis_cache
+`,
+			errContains: "checkpoint_cache",
+		},
+		{
+			name: "query with table",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: query
+query: "SELECT 1 FROM DUMMY"
+table: ORDERS
+`,
+			errContains: "table",
+		},
+		{
+			name: "incrementing with timestamp_column",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: ORDERS
+incrementing_column: ID
+timestamp_column: TS
+`,
+			errContains: "timestamp_column",
+		},
+		{
+			name: "timestamp with query",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: ORDERS
+timestamp_column: TS
+query: "SELECT 1 FROM DUMMY"
+`,
+			errContains: "query",
+		},
+		{
+			name: "timestamp with incrementing_initial_value",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: ORDERS
+timestamp_column: TS
+incrementing_initial_value: "5"
+`,
+			errContains: "incrementing_initial_value",
+		},
 		{
 			name: "fetch_size below one",
 			yaml: `
