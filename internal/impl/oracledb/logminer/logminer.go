@@ -515,7 +515,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 							OldValues:     acc.PKValues,
 							TransactionID: redoEvent.TransactionID,
 							Timestamp:     redoEvent.Timestamp,
-							UserName:      redoEvent.UserName.String,
+							Username:      redoEvent.Username.String,
 						}
 						txn.Events = append(txn.Events, synthetic)
 						lm.log.Debugf("LOB merge: synthesized UPDATE for %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
@@ -959,7 +959,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			&event.TransactionID,
 			&commitSCN,
 			&csf,
-			&event.UserName,
+			&event.Username,
 		); err != nil {
 			return err
 		}
@@ -1203,7 +1203,7 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, com
 		Timestamp:       dml.Timestamp,
 		TransactionID:   dml.TransactionID.String(),
 		CommitTimestamp: commitTimestamp,
-		UserName:        dml.UserName,
+		Username:        dml.Username,
 	}
 
 	switch dml.Operation {

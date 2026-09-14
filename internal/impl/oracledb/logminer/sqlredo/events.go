@@ -163,7 +163,7 @@ type DMLEvent struct {
 	OldValues     map[string]any
 	Timestamp     time.Time
 	TransactionID TransactionID
-	UserName      string
+	Username      string
 }
 
 // RedoEvent represents a redo log row from V$LOGMNR_CONTENTS
@@ -176,5 +176,5 @@ type RedoEvent struct {
 	SchemaName    sql.NullString
 	Timestamp     time.Time
 	TransactionID TransactionID
-	UserName      sql.NullString
+	Username      sql.NullString
 }

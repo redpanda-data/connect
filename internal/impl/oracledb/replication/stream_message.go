@@ -134,5 +134,5 @@ type MessageEvent struct {
 	CommitTimestamp time.Time
 	ColumnMeta      []ColumnMeta
 	TransactionID   string
-	UserName        string
+	Username        string
 }

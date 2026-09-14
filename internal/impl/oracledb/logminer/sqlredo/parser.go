@@ -68,8 +68,8 @@ func (p Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (DMLEvent, error) {
 	if redoEvent.TableName.Valid {
 		event.Table = redoEvent.TableName.String
 	}
-	if redoEvent.UserName.Valid {
-		event.UserName = redoEvent.UserName.String
+	if redoEvent.Username.Valid {
+		event.Username = redoEvent.Username.String
 	}
 
 	if strings.TrimSpace(redoEvent.SQLRedo.String) != "" {
