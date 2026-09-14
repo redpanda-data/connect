@@ -88,7 +88,7 @@ func TestSessionManager(t *testing.T) {
 		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
 		conn, fc := newFakeSQLConn(t, files)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200, nil))
 		require.True(t, lm.sessionMgr.IsActive())
 		require.Equal(t, 1, fc.count("ADD_LOGFILE"), "first call has no prior session, so it must add log files")
 		require.Equal(t, 0, fc.count("END_LOGMNR"), "first call has no prior session, so there is nothing to end")
@@ -97,7 +97,7 @@ func TestSessionManager(t *testing.T) {
 		// underlying log files - the only thing that can trigger a restart here is age.
 		lm.sessionMgr.sessionOpened = time.Now().Add(-time.Hour)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 200, 300))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 200, 300, nil))
 
 		assert.Equal(t, 1, fc.count("END_LOGMNR"),
 			"a stale session must be explicitly ended even though the log file set is unchanged")
@@ -164,7 +164,7 @@ func TestSessionManager(t *testing.T) {
 		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
 		conn, fc := newFakeSQLConn(t, files)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200, nil))
 		require.True(t, lm.sessionMgr.IsActive())
 
 		// Database is caught up with what we've already mined, and the session
@@ -216,7 +216,7 @@ func TestSessionManager(t *testing.T) {
 				files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
 				conn, fc := newFakeSQLConn(t, files)
 
-				require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+				require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200, nil))
 				require.True(t, lm.sessionMgr.IsActive())
 
 				lm.currentSCN = 200
@@ -249,7 +249,7 @@ func TestSessionManager(t *testing.T) {
 		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
 		conn, fc := newFakeSQLConn(t, files)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200, nil))
 		require.True(t, lm.sessionMgr.IsActive())
 
 		// Database has advanced past currentSCN, but by less than MinSCNWindowSize,
@@ -281,7 +281,7 @@ func TestSessionManager(t *testing.T) {
 		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
 		conn, fc := newFakeSQLConn(t, files)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200, nil))
 		require.Equal(t, 1, fc.count("ADD_LOGFILE"))
 
 		// Artificially age the session far beyond any sane max_session_age value,
@@ -290,7 +290,7 @@ func TestSessionManager(t *testing.T) {
 		lm.sessionMgr.sessionOpened = time.Now().Add(-24 * time.Hour)
 		staleOpened := lm.sessionMgr.sessionOpened
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 200, 300))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 200, 300, nil))
 
 		assert.Equal(t, 0, fc.count("END_LOGMNR"),
 			"session must not be ended when MaxSessionAge is disabled (0)")

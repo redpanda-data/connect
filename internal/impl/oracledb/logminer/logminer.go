@@ -45,9 +45,13 @@ type LogMiner struct {
 	logCollector *LogFileCollector
 	currentSCN   uint64
 	windowSize   int
-	sessionMgr   *SessionManager
-	db           *sql.DB
-	dmlParser    *sqlredo.Parser
+	// logSelector implements the log_count window strategy. It is always
+	// constructed, but only consulted when cfg.WindowStrategy is
+	// WindowStrategyLogCount.
+	logSelector *logFileSelector
+	sessionMgr  *SessionManager
+	db          *sql.DB
+	dmlParser   *sqlredo.Parser
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
@@ -123,6 +127,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
 		windowSize:       cfg.SCNWindowSize,
+		logSelector:      &logFileSelector{minCount: cfg.LogCountMin, growthMax: cfg.LogCountGrowthMax},
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -274,18 +279,33 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		return true, nil
 	}
 
-	endSCN := dbCurrentSCN
-	hitCap := false
-	if maxRange := uint64(lm.windowSize); lm.currentSCN+maxRange < dbCurrentSCN {
-		endSCN = lm.currentSCN + maxRange
-		hitCap = true
+	var (
+		endSCN   uint64
+		selected []*LogFile
+		hitCap   bool
+		capped   bool
+	)
+
+	switch lm.cfg.WindowStrategy {
+	case WindowStrategyLogCount:
+		files, err := lm.logCollector.GetLogsBySCNRange(ctx, conn, lm.currentSCN, dbCurrentSCN)
+		if err != nil {
+			return false, fmt.Errorf("collecting redo logs for logminer: %w", err)
+		}
+		selected, endSCN, capped = lm.logSelector.selectForSession(files, dbCurrentSCN)
+	default:
+		endSCN = dbCurrentSCN
+		if maxRange := uint64(lm.windowSize); lm.currentSCN+maxRange < dbCurrentSCN {
+			endSCN = lm.currentSCN + maxRange
+			hitCap = true
+		}
 	}
 
 	// Restart the session on every cycle with explicit SCN bounds. Oracle's START_LOGMNR
 	// with ENDSCN=0 freezes the session's view at session start time, making events written
 	// after session start invisible. Per-window restart with explicit endSCN ensures all
 	// events in [currentSCN, endSCN] are visible.
-	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN); err != nil {
+	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN, selected); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeMissingLogFile {
 			//nolint:staticcheck
@@ -339,7 +359,16 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
 
-	lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
+	switch lm.cfg.WindowStrategy {
+	case WindowStrategyLogCount:
+		if !capped {
+			// Caught up within the file budget - reset to the minimum rather
+			// than staying grown from an earlier stalled cycle.
+			lm.logSelector.count = lm.cfg.LogCountMin
+		}
+	default:
+		lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
+	}
 	lm.currentSCN = endSCN
 	return endSCN >= dbCurrentSCN, nil
 }
@@ -1225,10 +1254,18 @@ func deduplicateLogs(archived, online []*LogFile) []*LogFile {
 // starts (or restarts) a LogMiner session with explicit SCN bounds. Files are only reloaded
 // (via ADD_LOGFILE) when the required set of logs that contain SCN range changes - so the session is kept
 // open across consecutive windows that cover the same log files.
-func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) error {
-	logFiles, err := lm.logCollector.GetLogsBySCNRange(ctx, conn, startSCN, endSCN)
-	if err != nil {
-		return fmt.Errorf("collecting redo logs for logminer: %w", err)
+//
+// preSelected, when non-nil, is the log_count strategy's already-chosen file
+// set (which also derived endSCN from it) and is used as-is instead of
+// collecting via GetLogsBySCNRange. Pass nil for the scn_window strategy,
+// which still collects logs for [startSCN, endSCN].
+func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, preSelected []*LogFile) error {
+	logFiles := preSelected
+	if logFiles == nil {
+		var err error
+		if logFiles, err = lm.logCollector.GetLogsBySCNRange(ctx, conn, startSCN, endSCN); err != nil {
+			return fmt.Errorf("collecting redo logs for logminer: %w", err)
+		}
 	}
 	types := make([]string, len(logFiles))
 	for i, f := range logFiles {

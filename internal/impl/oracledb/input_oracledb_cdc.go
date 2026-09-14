@@ -65,6 +65,9 @@ const (
 	ociFieldTransactionCache     = "transaction_cache"
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
 	ociFieldMaxSessionAge        = "max_session_age"
+	ociFieldWindowStrategy       = "window_strategy"
+	ociFieldLogCountMin          = "log_count_min"
+	ociFieldLogCountGrowthMax    = "log_count_growth_max"
 
 	//-- snapshot specific
 	ociFieldSnapshotFilters = "snapshot_filters"
@@ -162,12 +165,27 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 			Description(`The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + `+ociFieldSCNWindowSize+`. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.`).
 			Default(logminer.DefaultSCNWindowSize),
 		service.NewIntField(ociFieldMinSCNWindowSize).
-			Description("The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.").
+			Description("The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. This gate applies regardless of `"+ociFieldWindowStrategy+"`. Set to 0 to disable.").
 			ShortDescription("The minimum SCN gap required before a new LogMiner session is started.").
 			Default(logminer.DefaultMinSCNWindowSize),
 		service.NewIntField(ociFieldMaxSCNWindowSize).
 			Description(`The maximum SCN range that can be mined in a single cycle. The window starts at `+ociFieldSCNWindowSize+` and grows by `+ociFieldSCNWindowSize+` each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.`).
 			Default(logminer.DefaultMaxSCNWindowSize),
+		service.NewStringEnumField(ociFieldWindowStrategy, string(logminer.WindowStrategySCNWindow), string(logminer.WindowStrategyLogCount)).
+			Description("Controls how the SCN range mined per cycle is sized. `"+string(logminer.WindowStrategySCNWindow)+"` (default) grows/shrinks the mined SCN range by a fixed increment ("+ociFieldSCNWindowSize+") based on backlog, bounded by "+ociFieldMinSCNWindowSize+"/"+ociFieldMaxSCNWindowSize+". `"+string(logminer.WindowStrategyLogCount)+"` instead bounds the range by a fixed number of redo log files ("+ociFieldLogCountMin+"/"+ociFieldLogCountGrowthMax+"), decoupling session cost from raw SCN movement. Use `"+string(logminer.WindowStrategyLogCount)+"` when the database's current SCN can advance independently of real transaction volume against the monitored tables - for example RAC cross-instance SCN synchronization, a CDB-shared SCN advanced by another PDB, or Oracle's automatic maintenance window generating many small internal commits - since "+string(logminer.WindowStrategySCNWindow)+" would otherwise burn many cycles ramping the window up to its ceiling, paying LogMiner's fixed per-cycle overhead on ranges that are mostly empty of real changes, whereas "+string(logminer.WindowStrategyLogCount)+" absorbs the same event in however many log files it actually touches. This is opt-in: validate it against the specific database exhibiting the problem before relying on it.").
+			ShortDescription("How the mined SCN range per cycle is sized: by a growing/shrinking SCN window, or by a fixed count of redo log files.").
+			Default(string(logminer.WindowStrategySCNWindow)).
+			Advanced(),
+		service.NewIntField(ociFieldLogCountMin).
+			Description("The minimum number of redo log files mined per cycle. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyLogCount)+"`.").
+			ShortDescription("The minimum number of redo log files mined per cycle, under the "+string(logminer.WindowStrategyLogCount)+" window strategy.").
+			Default(logminer.DefaultLogCountMin).
+			Advanced(),
+		service.NewIntField(ociFieldLogCountGrowthMax).
+			Description("The maximum number of redo log files that can be mined in a single cycle. The file budget starts at `"+ociFieldLogCountMin+"` and grows by one file each cycle in which the same set of files is selected as the previous cycle (typically caused by a long-running open transaction pinning the window's start SCN), up to this limit. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyLogCount)+"`.").
+			ShortDescription("The maximum number of redo log files mined per cycle once grown, under the "+string(logminer.WindowStrategyLogCount)+" window strategy.").
+			Default(logminer.DefaultLogCountGrowthMax).
+			Advanced(),
 		service.NewDurationField(ociFieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
 			ShortDescription("Interval between checks for new changes once all data is processed.").
@@ -209,7 +227,21 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 			Example("20m").
 			LintRule(`root = if this.parse_duration().catch(0) < 0 { [ "`+ociFieldMaxSessionAge+` must be 0 or greater" ] }`).
 			Optional(),
-	).Description("LogMiner configuration settings."),
+	).Description("LogMiner configuration settings.").
+		// These fields always default-fill (they carry Default()), so this.exists()
+		// would always be true; compare against the known defaults instead to catch
+		// a meaningful override.
+		LintRule(`root = if this.` + ociFieldWindowStrategy + ` == "` + string(logminer.WindowStrategyLogCount) + `" && (
+  this.` + ociFieldSCNWindowSize + ` != ` + strconv.Itoa(logminer.DefaultSCNWindowSize) + ` ||
+  this.` + ociFieldMaxSCNWindowSize + ` != ` + strconv.Itoa(logminer.DefaultMaxSCNWindowSize) + `
+) {
+  [ "` + ociFieldSCNWindowSize + ` and ` + ociFieldMaxSCNWindowSize + ` have no effect when ` + ociFieldWindowStrategy + ` is \"` + string(logminer.WindowStrategyLogCount) + `\"" ]
+} else if this.` + ociFieldWindowStrategy + ` == "` + string(logminer.WindowStrategySCNWindow) + `" && (
+  this.` + ociFieldLogCountMin + ` != ` + strconv.Itoa(logminer.DefaultLogCountMin) + ` ||
+  this.` + ociFieldLogCountGrowthMax + ` != ` + strconv.Itoa(logminer.DefaultLogCountGrowthMax) + `
+) {
+  [ "` + ociFieldLogCountMin + ` and ` + ociFieldLogCountGrowthMax + ` have no effect when ` + ociFieldWindowStrategy + ` is \"` + string(logminer.WindowStrategySCNWindow) + `\"" ]
+}`),
 	).
 	Field(service.NewStringMapField(ociFieldSnapshotFilters).
 		Description(`A map of fully-qualified table names (for example, SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
@@ -968,6 +1000,23 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.MaxSCNWindowSize < cfg.SCNWindowSize {
 			return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldMaxSCNWindowSize, cfg.MaxSCNWindowSize, ociFieldSCNWindowSize, cfg.SCNWindowSize)
+		}
+		if strategy, err := lmConf.FieldString(ociFieldWindowStrategy); err != nil {
+			return nil, err
+		} else {
+			cfg.WindowStrategy = logminer.WindowStrategy(strategy)
+		}
+		if cfg.LogCountMin, err = lmConf.FieldInt(ociFieldLogCountMin); err != nil {
+			return nil, err
+		}
+		if cfg.LogCountMin <= 0 {
+			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldLogCountMin, cfg.LogCountMin)
+		}
+		if cfg.LogCountGrowthMax, err = lmConf.FieldInt(ociFieldLogCountGrowthMax); err != nil {
+			return nil, err
+		}
+		if cfg.LogCountGrowthMax < cfg.LogCountMin {
+			return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldLogCountGrowthMax, cfg.LogCountGrowthMax, ociFieldLogCountMin, cfg.LogCountMin)
 		}
 		if cfg.MiningBackoffInterval, err = lmConf.FieldDuration(ociFieldBackoffInterval); err != nil {
 			return nil, err

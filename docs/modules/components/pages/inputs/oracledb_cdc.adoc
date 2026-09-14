@@ -95,6 +95,9 @@ input:
       scn_window_size: 20000
       min_scn_window_size: 1000
       max_scn_window_size: 100000
+      window_strategy: scn_window
+      log_count_min: 2
+      log_count_growth_max: 4
       backoff_interval: 5s
       mining_interval: 300ms
       strategy: online_catalog
@@ -261,7 +264,7 @@ The SCN range to mine per cycle. Each cycle reads changes between the current SC
 
 === `logminer.min_scn_window_size`
 
-The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.
+The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. This gate applies regardless of `window_strategy`. Set to 0 to disable.
 
 
 *Type*: `int`
@@ -276,6 +279,38 @@ The maximum SCN range that can be mined in a single cycle. The window starts at 
 *Type*: `int`
 
 *Default*: `100000`
+
+=== `logminer.window_strategy`
+
+Controls how the SCN range mined per cycle is sized. `scn_window` (default) grows/shrinks the mined SCN range by a fixed increment (scn_window_size) based on backlog, bounded by min_scn_window_size/max_scn_window_size. `log_count` instead bounds the range by a fixed number of redo log files (log_count_min/log_count_growth_max), decoupling session cost from raw SCN movement. Use `log_count` when the database's current SCN can advance independently of real transaction volume against the monitored tables - for example RAC cross-instance SCN synchronization, a CDB-shared SCN advanced by another PDB, or Oracle's automatic maintenance window generating many small internal commits - since scn_window would otherwise burn many cycles ramping the window up to its ceiling, paying LogMiner's fixed per-cycle overhead on ranges that are mostly empty of real changes, whereas log_count absorbs the same event in however many log files it actually touches. This is opt-in: validate it against the specific database exhibiting the problem before relying on it.
+
+
+*Type*: `string`
+
+*Default*: `"scn_window"`
+
+Options:
+`scn_window`
+, `log_count`
+.
+
+=== `logminer.log_count_min`
+
+The minimum number of redo log files mined per cycle. Only applies when `window_strategy` is `log_count`.
+
+
+*Type*: `int`
+
+*Default*: `2`
+
+=== `logminer.log_count_growth_max`
+
+The maximum number of redo log files that can be mined in a single cycle. The file budget starts at `log_count_min` and grows by one file each cycle in which the same set of files is selected as the previous cycle (typically caused by a long-running open transaction pinning the window's start SCN), up to this limit. Only applies when `window_strategy` is `log_count`.
+
+
+*Type*: `int`
+
+*Default*: `4`
 
 === `logminer.backoff_interval`
 
