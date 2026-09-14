@@ -214,6 +214,14 @@ func TestNormalizeHANAValue(t *testing.T) {
 			colType: &schema.Common{Name: "col", Type: schema.String},
 			want:    "plain text",
 		},
+		{
+			// A column the catalog calls text can still deliver bytes that
+			// are not UTF-8; losing them is worse than a schema mismatch.
+			name:    "invalid UTF-8 bytes stay bytes even with String schema",
+			input:   []byte{0xDE, 0xAD, 0xBE, 0xEF},
+			colType: &schema.Common{Name: "col", Type: schema.String},
+			want:    []byte{0xDE, 0xAD, 0xBE, 0xEF},
+		},
 		// ── LOB columns (CLOB/NCLOB/TEXT/BLOB) arrive as a lob scanner ────
 		{
 			name:    "text LOB drained to string with String schema",

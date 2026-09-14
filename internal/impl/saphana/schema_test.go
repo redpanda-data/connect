@@ -41,6 +41,10 @@ func TestHanaTypeToCommonType(t *testing.T) {
 		{"SECONDDATE", schema.Timestamp},
 		{"VARBINARY", schema.ByteArray},
 		{"BLOB", schema.ByteArray},
+		{"BINARY", schema.ByteArray},
+		// Spatial types arrive as WKB, i.e. arbitrary bytes, not text.
+		{"ST_GEOMETRY", schema.ByteArray},
+		{"ST_POINT", schema.ByteArray},
 		{"VARCHAR", schema.String},
 		{"NVARCHAR", schema.String},
 		{"CHAR", schema.String},
