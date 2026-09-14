@@ -361,14 +361,14 @@ func (c *fakeConn) ExecContext(_ context.Context, query string, _ []driver.Named
 }
 
 // fakeRows implements driver.Rows over the LogFileCollector.GetLogsBySCNRange
-// column set: FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD.
+// column set: FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD, STATUS.
 type fakeRows struct {
 	files []*LogFile
 	idx   int
 }
 
 func (*fakeRows) Columns() []string {
-	return []string{"FILE_NAME", "FIRST_CHANGE", "NEXT_CHANGE", "SEQ", "TYPE", "THREAD"}
+	return []string{"FILE_NAME", "FIRST_CHANGE", "NEXT_CHANGE", "SEQ", "TYPE", "THREAD", "STATUS"}
 }
 
 func (*fakeRows) Close() error { return nil }
@@ -384,6 +384,7 @@ func (r *fakeRows) Next(dest []driver.Value) error {
 	dest[3] = f.Sequence
 	dest[4] = f.Type
 	dest[5] = int64(f.Thread)
+	dest[6] = f.Status
 	r.idx++
 	return nil
 }

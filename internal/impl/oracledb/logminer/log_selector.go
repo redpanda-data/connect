@@ -91,9 +91,13 @@ func (s *logFileSelector) selectForSession(files []*LogFile, dbCurrentSCN uint64
 	s.prevKeys = logKeysOf(candidate)
 
 	last := candidate[len(candidate)-1]
-	if last.IsCurrent {
-		// The still-open current online log keeps extending its NextSCN, so
-		// the only meaningful upper bound is the database's live current SCN.
+	if last.IsOpenCurrent() {
+		// The genuinely still-open current online log keeps extending its
+		// NextSCN, so the only meaningful upper bound is the database's live
+		// current SCN. Note this is deliberately narrower than last.IsCurrent:
+		// an ACTIVE/INACTIVE online log has already switched away from and
+		// has a fixed, final NextSCN just like an archived log, so it falls
+		// through to the capped return below instead.
 		return candidate, dbCurrentSCN, false
 	}
 	return candidate, last.NextSCN, true
