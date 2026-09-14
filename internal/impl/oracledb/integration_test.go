@@ -1239,7 +1239,11 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 			db.MustExec("INSERT INTO testdb.lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "snapshot", inline, outofline)
 		}
 
-		var batch oracledbtest.Batch
+		var (
+			batch           oracledbtest.Batch
+			userNameByID    = make(map[string]string)
+			hasUserNameByID = make(map[string]bool)
+		)
 		t.Logf("%s: Launching component...", t.Name())
 		{
 			cfg := `
@@ -1261,6 +1265,15 @@ oracledb_cdc:
 					msgBytes, err := msg.AsBytes()
 					assert.NoError(t, err)
 					batch.Msgs = append(batch.Msgs, string(msgBytes))
+
+					var parsed struct {
+						ID string `json:"ID"`
+					}
+					if assert.NoError(t, json.Unmarshal(msgBytes, &parsed)) {
+						userName, hasUser := msg.MetaGet("user_name")
+						userNameByID[parsed.ID] = userName
+						hasUserNameByID[parsed.ID] = hasUser
+					}
 				}
 				return nil
 			}))
@@ -1291,6 +1304,11 @@ oracledb_cdc:
 		"INLINELOB": null,
 		"OUTOFLINELOB": null
 		}`, findMsgByID(t, batch.Clone(), "1"), "Failed to assert snapshot LOB columns")
+
+			batch.Lock()
+			hasUser := hasUserNameByID["1"]
+			batch.Unlock()
+			assert.Falsef(t, hasUser, "snapshot message should not carry 'user_name' metadata")
 		}
 
 		batch.Reset()
@@ -1315,6 +1333,12 @@ oracledb_cdc:
 		"INLINELOB": "",
 		"OUTOFLINELOB": ""
 		}`, batch.Clone()[0], "Failed to assert streaming LOB columns")
+
+			batch.Lock()
+			userName, hasUser := userNameByID["51"], hasUserNameByID["51"]
+			batch.Unlock()
+			require.Truef(t, hasUser, "streaming message missing 'user_name' metadata")
+			assert.Equalf(t, "SYSTEM", userName, "expected user_name 'SYSTEM', got %q", userName)
 		}
 
 		require.NoError(t, stream.StopWithin(time.Second*10))
@@ -1329,7 +1353,11 @@ oracledb_cdc:
 			db.MustExec("INSERT INTO testdb.lobenabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "snapshot", inline, outofline)
 		}
 
-		var batch oracledbtest.Batch
+		var (
+			batch           oracledbtest.Batch
+			userNameByID    = make(map[string]string)
+			hasUserNameByID = make(map[string]bool)
+		)
 		t.Logf("%s: Launching component...", t.Name())
 		{
 			cfg := `
@@ -1352,6 +1380,15 @@ oracledb_cdc:
 					msgBytes, err := msg.AsBytes()
 					assert.NoError(t, err)
 					batch.Msgs = append(batch.Msgs, string(msgBytes))
+
+					var parsed struct {
+						ID string `json:"ID"`
+					}
+					if assert.NoError(t, json.Unmarshal(msgBytes, &parsed)) {
+						userName, hasUser := msg.MetaGet("user_name")
+						userNameByID[parsed.ID] = userName
+						hasUserNameByID[parsed.ID] = hasUser
+					}
 				}
 				return nil
 			}))
@@ -1382,6 +1419,11 @@ oracledb_cdc:
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
 		}`, findMsgByID(t, batch.Clone(), "1"), "Failed to snapshot LOB columns")
+
+			batch.Lock()
+			hasUser := hasUserNameByID["1"]
+			batch.Unlock()
+			assert.Falsef(t, hasUser, "snapshot message should not carry 'user_name' metadata")
 		}
 
 		batch.Reset()
@@ -1406,6 +1448,12 @@ oracledb_cdc:
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
 		}`, batch.Clone()[0], "Failed to assert streaming LOB columns")
+
+			batch.Lock()
+			userName, hasUser := userNameByID["51"], hasUserNameByID["51"]
+			batch.Unlock()
+			require.Truef(t, hasUser, "streaming message missing 'user_name' metadata")
+			assert.Equalf(t, "SYSTEM", userName, "expected user_name 'SYSTEM', got %q", userName)
 		}
 
 		// Stop inside the subtest: leaving this stream running would let its
