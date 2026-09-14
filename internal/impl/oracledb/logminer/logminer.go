@@ -1113,15 +1113,41 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	return lastSCN, nil
 }
 
+// logStatusCurrent is Oracle's V$LOG.STATUS value for the single online
+// redo log group that is genuinely still open and being written to. Every
+// other online group (ACTIVE, INACTIVE, etc.) has already switched away
+// from and has a fixed, final NEXT_CHANGE#, just like an archived log.
+const logStatusCurrent = "CURRENT"
+
 // LogFile represents a redo or archive log file
 type LogFile struct {
-	FileName  string
-	FirstSCN  uint64
-	NextSCN   uint64
-	Sequence  int64
-	Type      string // "ONLINE" or "ARCHIVED"
+	FileName string
+	FirstSCN uint64
+	NextSCN  uint64
+	Sequence int64
+	Type     string // "ONLINE" or "ARCHIVED"
+	// IsCurrent is true for every row returned by the online-log branch of
+	// GetLogsBySCNRange's query (i.e. Type == "ONLINE"), including
+	// ACTIVE/INACTIVE groups that have already switched away from. It only
+	// answers "did this row come from the online query branch" - it does
+	// NOT mean NextSCN is still advancing. Use IsOpenCurrent for that.
 	IsCurrent bool
-	Thread    int
+	// Status carries Oracle's V$LOG.STATUS value verbatim for online-branch
+	// rows (e.g. "CURRENT", "ACTIVE", "INACTIVE"). Archived-branch rows carry
+	// a fixed placeholder, since an archived log is never the genuinely open
+	// current log.
+	Status string
+	Thread int
+}
+
+// IsOpenCurrent reports whether this is Oracle's single genuinely open
+// current online redo log (V$LOG.STATUS = 'CURRENT') - the only log file
+// whose NextSCN keeps advancing as new redo is written. Unlike IsCurrent,
+// this is false for ACTIVE/INACTIVE online groups that have already
+// switched away from and have a fixed, final NextSCN, just like an
+// archived log.
+func (lf *LogFile) IsOpenCurrent() bool {
+	return lf.Status == logStatusCurrent
 }
 
 // LogFileCollector finds relevant log files to mine
@@ -1138,7 +1164,7 @@ func NewLogFileCollector() *LogFileCollector {
 // GetLogsBySCNRange collects log files whose SCN range overlaps [startSCN, endSCN].
 func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
 	query := `
-		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD
+		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD, STATUS
 		FROM (
 
 			-- Online redo logs that overlap [startSCN, endSCN]
@@ -1148,12 +1174,13 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 				L.NEXT_CHANGE# NEXT_CHANGE,
 				L.SEQUENCE# AS SEQ,
 				'ONLINE' AS TYPE,
-				L.THREAD# AS THREAD
+				L.THREAD# AS THREAD,
+				L.STATUS AS STATUS
 			FROM V$LOGFILE F, V$LOG L
 			WHERE (L.STATUS = 'CURRENT' OR L.NEXT_CHANGE# >= :1)
 			AND L.FIRST_CHANGE# <= :2
 			AND F.GROUP# = L.GROUP#
-			GROUP BY L.FIRST_CHANGE#, L.NEXT_CHANGE#, L.SEQUENCE#, L.THREAD#
+			GROUP BY L.FIRST_CHANGE#, L.NEXT_CHANGE#, L.SEQUENCE#, L.THREAD#, L.STATUS
 
 			UNION
 
@@ -1164,7 +1191,8 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 				A.NEXT_CHANGE# NEXT_CHANGE,
 				A.SEQUENCE# AS SEQ,
 				'ARCHIVED' AS TYPE,
-				A.THREAD# AS THREAD
+				A.THREAD# AS THREAD,
+				'ARCHIVED' AS STATUS
 			FROM V$ARCHIVED_LOG A, V$DATABASE D
 			WHERE A.NAME IS NOT NULL
 			AND A.ARCHIVED = 'YES'
@@ -1198,7 +1226,7 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 	var archived, online []*LogFile
 	for rows.Next() {
 		lf := &LogFile{}
-		if err := rows.Scan(&lf.FileName, &lf.FirstSCN, &lf.NextSCN, &lf.Sequence, &lf.Type, &lf.Thread); err != nil {
+		if err := rows.Scan(&lf.FileName, &lf.FirstSCN, &lf.NextSCN, &lf.Sequence, &lf.Type, &lf.Thread, &lf.Status); err != nil {
 			return nil, fmt.Errorf("scanning logs row: %w", err)
 		}
 		lf.IsCurrent = lf.Type == "ONLINE"

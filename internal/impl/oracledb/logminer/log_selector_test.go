@@ -17,21 +17,27 @@ import (
 )
 
 // mkLogFile builds a minimal *LogFile fixture for exercising selectForSession.
-// FirstSCN/Type are irrelevant to the selection logic and are omitted.
-func mkLogFile(sequence int64, nextSCN uint64, isCurrent bool) *LogFile {
+// FirstSCN/Type are irrelevant to the selection logic and are omitted. status
+// mirrors what GetLogsBySCNRange scans into LogFile.Status: pass
+// logStatusCurrent for the single genuinely open current online log, or any
+// other value (e.g. "ACTIVE"/"INACTIVE" for an online log that has already
+// switched away from, or "ARCHIVED" for an archived log) for a file whose
+// NextSCN is fixed and final - selectForSession derives IsOpenCurrent from
+// this the same way the real scan path does.
+func mkLogFile(sequence int64, nextSCN uint64, status string) *LogFile {
 	return &LogFile{
-		FileName:  fmt.Sprintf("log_%d.arc", sequence),
-		NextSCN:   nextSCN,
-		Sequence:  sequence,
-		IsCurrent: isCurrent,
-		Thread:    1,
+		FileName: fmt.Sprintf("log_%d.arc", sequence),
+		NextSCN:  nextSCN,
+		Sequence: sequence,
+		Status:   status,
+		Thread:   1,
 	}
 }
 
 func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("fits within budget returns all files uncapped", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
-		files := []*LogFile{mkLogFile(1, 1000, false)}
+		files := []*LogFile{mkLogFile(1, 1000, "ARCHIVED")}
 
 		selected, endSCN, capped := s.selectForSession(files, 5000)
 
@@ -43,9 +49,9 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("capped selection when the last budgeted file is archived", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1000, false),
-			mkLogFile(2, 2000, false),
-			mkLogFile(3, 3000, false),
+			mkLogFile(1, 1000, "ARCHIVED"),
+			mkLogFile(2, 2000, "ARCHIVED"),
+			mkLogFile(3, 3000, "ARCHIVED"),
 		}
 
 		selected, endSCN, capped := s.selectForSession(files, 5000)
@@ -59,9 +65,9 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("last budgeted file being current keeps selection uncapped despite truncation", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1000, false),
-			mkLogFile(2, 2000, true), // still-open current online log, within budget
-			mkLogFile(3, 3000, false),
+			mkLogFile(1, 1000, "ARCHIVED"),
+			mkLogFile(2, 2000, logStatusCurrent), // still-open current online log, within budget
+			mkLogFile(3, 3000, "ARCHIVED"),
 		}
 
 		selected, endSCN, capped := s.selectForSession(files, 5000)
@@ -75,11 +81,11 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("repeated identical selection stalls and grows the budget up to growthMax then plateaus", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1000, false),
-			mkLogFile(2, 2000, false),
-			mkLogFile(3, 3000, false),
-			mkLogFile(4, 4000, false),
-			mkLogFile(5, 5000, false),
+			mkLogFile(1, 1000, "ARCHIVED"),
+			mkLogFile(2, 2000, "ARCHIVED"),
+			mkLogFile(3, 3000, "ARCHIVED"),
+			mkLogFile(4, 4000, "ARCHIVED"),
+			mkLogFile(5, 5000, "ARCHIVED"),
 		}
 
 		// Cycle 1: fresh selector, budget starts at minCount (2), no stall detected yet.
@@ -117,9 +123,9 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("growth that ends up covering all available files returns everything uncapped", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1000, false),
-			mkLogFile(2, 2000, false),
-			mkLogFile(3, 3000, false),
+			mkLogFile(1, 1000, "ARCHIVED"),
+			mkLogFile(2, 2000, "ARCHIVED"),
+			mkLogFile(3, 3000, "ARCHIVED"),
 		}
 
 		// Cycle 1: budget starts at minCount (2), capped selection of the first two files.
@@ -138,14 +144,14 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("different non-overlapping file sets do not trigger growth", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		firstFiles := []*LogFile{
-			mkLogFile(1, 1000, false),
-			mkLogFile(2, 2000, false),
-			mkLogFile(3, 3000, false),
+			mkLogFile(1, 1000, "ARCHIVED"),
+			mkLogFile(2, 2000, "ARCHIVED"),
+			mkLogFile(3, 3000, "ARCHIVED"),
 		}
 		secondFiles := []*LogFile{
-			mkLogFile(4, 4000, false),
-			mkLogFile(5, 5000, false),
-			mkLogFile(6, 6000, false),
+			mkLogFile(4, 4000, "ARCHIVED"),
+			mkLogFile(5, 5000, "ARCHIVED"),
+			mkLogFile(6, 6000, "ARCHIVED"),
 		}
 
 		selected, _, capped := s.selectForSession(firstFiles, 9000)
@@ -160,13 +166,55 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.Equal(t, 2, s.count, "a different file set must not be mistaken for a stall")
 	})
 
+	t.Run("regression: last budgeted file switched away but not archived must still be capped", func(t *testing.T) {
+		// Reviewer-caught data-loss bug: an ACTIVE/INACTIVE online log has
+		// already switched away from and has a fixed, final NextSCN, just
+		// like an archived log - it is NOT the genuinely open current log.
+		// The old code used LogFile.IsCurrent (true for any online-branch
+		// row, including ACTIVE/INACTIVE) to decide this, so a truncated
+		// candidate ending on such a file wrongly jumped endSCN straight to
+		// dbCurrentSCN - silently skipping online#10 (the real current log)
+		// forever, with no error and no indication anything was missed.
+		s := &logFileSelector{minCount: 2, growthMax: 4}
+		files := []*LogFile{
+			mkLogFile(8, 8000, "ARCHIVED"),
+			mkLogFile(9, 9000, "ACTIVE"),           // switched away from, not yet archived - NOT open
+			mkLogFile(10, 10000, logStatusCurrent), // the real, genuinely open current log
+		}
+
+		selected, endSCN, capped := s.selectForSession(files, 20000)
+
+		require.Len(t, selected, 2, "budget should truncate to [arch#8, online#9], excluding online#10")
+		assert.Equal(t, files[:2], selected)
+		assert.Equal(t, uint64(9000), endSCN, "endSCN must be online#9's NextSCN, not dbCurrentSCN")
+		assert.True(t, capped, "must be capped - online#10 was not actually selected or mined")
+	})
+
+	t.Run("regression sanity check: genuinely open current log as the last budgeted file stays uncapped", func(t *testing.T) {
+		// Mirror image of the case above, to confirm the fix didn't
+		// overcorrect: when the last (and here, only remaining) budgeted
+		// file truly is the open current log, endSCN must still fall back
+		// to dbCurrentSCN and capped must still be false.
+		s := &logFileSelector{minCount: 2, growthMax: 4}
+		files := []*LogFile{
+			mkLogFile(8, 8000, "ARCHIVED"),
+			mkLogFile(9, 9000, logStatusCurrent), // genuinely open current log
+		}
+
+		selected, endSCN, capped := s.selectForSession(files, 20000)
+
+		assert.Equal(t, files, selected)
+		assert.Equal(t, uint64(20000), endSCN, "endSCN should fall back to the live current SCN")
+		assert.False(t, capped)
+	})
+
 	t.Run("count reset to minCount after a successful cycle takes effect on the next selection", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1000, false),
-			mkLogFile(2, 2000, false),
-			mkLogFile(3, 3000, false),
-			mkLogFile(4, 4000, false),
+			mkLogFile(1, 1000, "ARCHIVED"),
+			mkLogFile(2, 2000, "ARCHIVED"),
+			mkLogFile(3, 3000, "ARCHIVED"),
+			mkLogFile(4, 4000, "ARCHIVED"),
 		}
 
 		// Grow the budget to 3 via a stalled repeat, mirroring what miningCycle would see
