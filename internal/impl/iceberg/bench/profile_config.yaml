@@ -12,8 +12,11 @@
 #     overrides it via BATCH, which itself defaults to 5000
 #
 # pprof endpoints are exposed at http://localhost:4195/debug/pprof/ via
-# http.debug_endpoints. Capture with:
-#   curl -o cpu.pb.gz 'http://localhost:4195/debug/pprof/profile?seconds=60'
+# http.debug_endpoints. Capture with (keep `seconds` below how long the run
+# takes for the given COUNT — the process exits and tears down this server
+# once COUNT is exhausted, and a capture window that outlasts the run gets a
+# truncated profile go tool pprof can't parse):
+#   curl -o cpu.pb.gz 'http://localhost:4195/debug/pprof/profile?seconds=20'
 #   curl -o allocs.pb.gz 'http://localhost:4195/debug/pprof/allocs'
 #
 # Run at 1 core with GOMAXPROCS=1 (taskset does not exist on darwin).

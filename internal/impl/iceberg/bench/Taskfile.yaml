@@ -96,7 +96,7 @@ tasks:
   # JSON decode + shredding + encode work. Exposes pprof over HTTP at
   # localhost:4195/debug/pprof/ for attributing per-record CPU — capture with
   # curl while this is running, e.g.
-  #   curl -o cpu.pb.gz 'http://localhost:4195/debug/pprof/profile?seconds=60'
+  #   curl -o cpu.pb.gz 'http://localhost:4195/debug/pprof/profile?seconds=20'
   # Usage: task bench:profile CORES=1 BATCH=5000 COUNT=500000
   bench:profile:
     desc: "Run the profiling pipeline, exposing pprof over HTTP for capture (e.g. task bench:profile CORES=1 COUNT=500000)"
