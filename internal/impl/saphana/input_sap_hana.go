@@ -9,11 +9,13 @@
 package saphana
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"strconv"
 	"sync"
@@ -44,6 +46,10 @@ const (
 	shFieldTimestampColumn     = "timestamp_column"
 	shFieldTimestampInitialVal = "timestamp_initial_value"
 	shFieldTimestampDelay      = "timestamp_delay"
+	shFieldTimestampClock      = "timestamp_clock"
+
+	shTimestampClockDatabase    = "database"
+	shTimestampClockDatabaseUTC = "database_utc"
 
 	shFieldCheckpointCache    = "checkpoint_cache"
 	shFieldCheckpointCacheKey = "checkpoint_cache_key"
@@ -71,8 +77,8 @@ var sapHANAInputConfigSpec = service.NewConfigSpec().
 - ` + "`bulk`" + `: reads all rows once then the input terminates (use with xref:components:inputs/sequence.adoc[sequence] for periodic re-reads).
 - ` + "`incrementing`" + `: polls for rows where ` + "`incrementing_column`" + ` exceeds the last seen value, emitting only net-new rows.
 - ` + "`query`" + `: executes a user-supplied SQL statement and emits one message per result row.
-- ` + "`timestamp`" + `: polls for rows where ` + "`timestamp_column`" + ` falls within ` + "`(last_hwm, NOW()-timestamp_delay]`" + `, advancing the HWM after each batch. The delay absorbs DB clock skew.
-- ` + "`timestamp+incrementing`" + `: like ` + "`timestamp`" + ` but breaks ties within the same timestamp using ` + "`incrementing_column`" + `, preventing duplicate or missed rows when multiple rows share an identical timestamp.
+- ` + "`timestamp`" + `: polls for rows where ` + "`timestamp_column`" + ` falls within ` + "`(last_hwm, database_now - timestamp_delay]`" + `. The bound is read from the database clock (see ` + "`timestamp_clock`" + `) and the delay absorbs commit lag. The HWM advances to the window bound once the window is fully consumed, so a restart mid-window re-reads that window from its start (rows sharing a timestamp cannot be split, hence no finer checkpoint).
+- ` + "`timestamp+incrementing`" + `: like ` + "`timestamp`" + ` but orders by ` + "`(timestamp_column, incrementing_column)`" + ` and resumes after the exact ` + "`(timestamp, incrementing)`" + ` pair of the last delivered row, so rows sharing a timestamp are neither duplicated nor missed and a restart mid-window continues from the last acknowledged batch rather than the window start.
 
 == Metadata
 
@@ -114,7 +120,7 @@ Messages produced in ` + "`bulk`, `incrementing`, `timestamp`, and `timestamp+in
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldIncrementingInitialVal).
-		Description("Initial high-water mark value. When empty, all existing rows are emitted on the first run.").
+		Description("Initial high-water mark value. When empty, all existing rows are emitted on the first run. The value is converted to the `incrementing_column`'s type from the catalog on connect: integers for integer columns, RFC3339 or `YYYY-MM-DD[ HH:MM:SS]` for DATE/TIMESTAMP columns, and the literal string (leading zeros preserved) for character columns. A persisted checkpoint takes precedence over this value.").
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldPollInterval).
@@ -132,10 +138,15 @@ Messages produced in ` + "`bulk`, `incrementing`, `timestamp`, and `timestamp+in
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldTimestampDelay).
-		Description("Clock-skew buffer for timestamp modes. The upper bound for each poll is `NOW()-timestamp_delay`, ensuring recently inserted rows are not missed due to clock differences.").
+		Description("Commit-lag buffer for timestamp modes. The upper bound for each poll is the database clock minus `timestamp_delay`, so rows whose timestamp was assigned slightly before a still-uncommitted transaction finished are not missed.").
 		Default("5s").
 		Example("0s").
 		Example("30s"),
+	).
+	Field(service.NewStringEnumField(shFieldTimestampClock, shTimestampClockDatabase, shTimestampClockDatabaseUTC).
+		Description("Which database clock bounds each timestamp-mode poll window. The bound is always read from HANA, never from the connector host, so it shares the clock and timezone convention of the column it is compared against:\n\n- `database`: `CURRENT_TIMESTAMP` (session timezone), matching columns populated by `DEFAULT CURRENT_TIMESTAMP` or `NOW()`.\n- `database_utc`: `CURRENT_UTCTIMESTAMP`, for columns populated with UTC values.").
+		Default(shTimestampClockDatabase).
+		Advanced(),
 	).
 	Field(service.NewStringEnumField(shFieldNumericMapping, shNumericMappingNone, shNumericMappingBestFit).
 		Description("Controls how DECIMAL/NUMERIC columns are emitted:\n\n- `none`: emit as a canonical decimal string preserving full precision, except integer-typed columns (`DECIMAL(p,0)` with precision <= 18) which are emitted as integers.\n- `best_fit`: additionally emit columns whose precision fits a double (precision <= 15) as floating-point numbers; wider values fall back to canonical decimal strings.").
@@ -187,6 +198,7 @@ type sapHANAInput struct {
 	mode            string
 	customQuery     string
 	incrementingCol string
+	incrInitialRaw  string // incrementing_initial_value as configured, before type coercion
 	hwm             any
 	hwmSafe         any              // last checkpointable HWM: highest value whose tie-group is fully emitted
 	peekedRow       *service.Message // row buffered from peek-ahead at fetch_size boundary
@@ -194,8 +206,10 @@ type sapHANAInput struct {
 
 	timestampCol   string
 	timestampHWM   time.Time
+	lastRowTS      time.Time // timestamp of the most recently scanned row (timestamp+incrementing mid-window checkpoints)
 	tsQueryUpper   time.Time
 	timestampDelay time.Duration
+	timestampClock string
 
 	numericMapping     string
 	maxRetries         int
@@ -211,6 +225,9 @@ type sapHANAInput struct {
 	// ackMut makes resolve-then-persist atomic so a lower checkpoint can never
 	// overwrite a higher one when acks land concurrently.
 	ackMut sync.Mutex
+	// lastPersisted is the marshalled state most recently written to the
+	// cache, used to skip writes that would not change it. Guarded by ackMut.
+	lastPersisted []byte
 
 	db      *sql.DB
 	rows    *sql.Rows
@@ -232,6 +249,7 @@ type sapHANAInput struct {
 	rowCachedSchema   any
 	rowCachedPKCols   []string
 	rowCachedColTypes map[string]schema.Common
+	rowDriverColTypes map[string]schema.Common // from rows.ColumnTypes(); fallback when the catalog schema is unavailable
 	rowSchemaFetched  bool
 }
 
@@ -252,6 +270,9 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	}
 	if s.fetchSize, err = conf.FieldInt(shFieldFetchSize); err != nil {
 		return nil, err
+	}
+	if s.fetchSize < 1 {
+		return nil, fmt.Errorf("field %q must be at least 1", shFieldFetchSize)
 	}
 	if conf.Contains(shFieldSchemaName) {
 		if s.schemaName, err = conf.FieldString(shFieldSchemaName); err != nil {
@@ -281,6 +302,9 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 		return nil, err
 	}
 	if hwmInit != "" {
+		// Best-effort guess at the bind type; Connect replaces it with the
+		// incrementing column's catalog type once a connection exists.
+		s.incrInitialRaw = hwmInit
 		s.hwm = parseIncrHWMString(hwmInit)
 	}
 	if s.pollInterval, err = conf.FieldDuration(shFieldPollInterval); err != nil {
@@ -301,6 +325,9 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 		}
 	}
 	if s.timestampDelay, err = conf.FieldDuration(shFieldTimestampDelay); err != nil {
+		return nil, err
+	}
+	if s.timestampClock, err = conf.FieldString(shFieldTimestampClock); err != nil {
 		return nil, err
 	}
 	if s.numericMapping, err = conf.FieldString(shFieldNumericMapping); err != nil {
@@ -377,10 +404,21 @@ func (s *sapHANAInput) Connect(ctx context.Context) error {
 	s.db = db
 	s.schemas = newSchemaCache(db, s.log, s.numericMapping)
 
-	if err := s.loadCheckpoint(ctx); err != nil {
+	resumedHWM, err := s.loadCheckpoint(ctx)
+	if err != nil {
 		_ = db.Close()
 		s.db = nil
 		return fmt.Errorf("loading checkpoint: %w", err)
+	}
+	// A persisted checkpoint already carries the HWM with its real type; only
+	// a fresh start binds the configured initial value, which must match the
+	// column's type or go-hdb rejects the parameter on every poll.
+	if !resumedHWM && s.incrInitialRaw != "" && s.incrementingCol != "" {
+		if err := s.resolveIncrementingInitialValue(ctx); err != nil {
+			_ = db.Close()
+			s.db = nil
+			return err
+		}
 	}
 	// hwmSafe must start at the loaded checkpoint value so that a partial
 	// batch on the first poll never persists nil and regresses progress.
@@ -419,7 +457,11 @@ func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
 
 	case shModeTimestamp:
 		tsc := quoteIdentifier(s.timestampCol)
-		s.tsQueryUpper = time.Now().Add(-s.timestampDelay)
+		upper, err := s.fetchWindowUpperBound(ctx)
+		if err != nil {
+			return nil, err
+		}
+		s.tsQueryUpper = upper
 		if s.timestampHWM.IsZero() {
 			q := `SELECT * FROM ` + s.tableRef() + ` WHERE ` + tsc + ` <= ? ORDER BY ` + tsc
 			return s.db.QueryContext(ctx, q, s.tsQueryUpper)
@@ -430,7 +472,11 @@ func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
 	case shModeTimestampIncrementing:
 		tsc := quoteIdentifier(s.timestampCol)
 		inc := quoteIdentifier(s.incrementingCol)
-		s.tsQueryUpper = time.Now().Add(-s.timestampDelay)
+		upper, err := s.fetchWindowUpperBound(ctx)
+		if err != nil {
+			return nil, err
+		}
+		s.tsQueryUpper = upper
 		if s.timestampHWM.IsZero() {
 			q := `SELECT * FROM ` + s.tableRef() + ` WHERE ` + tsc + ` <= ? ORDER BY ` + tsc + `, ` + inc
 			return s.db.QueryContext(ctx, q, s.tsQueryUpper)
@@ -452,6 +498,31 @@ func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
 	default:
 		return nil, fmt.Errorf("unknown mode %q", s.mode)
 	}
+}
+
+// hanaClockQuery and hanaUTCClockQuery return the database's current time
+// shifted by a (negative) number of seconds. The bound must come from the
+// database rather than the connector host: a TIMESTAMP column has no
+// timezone, so only the clock that populated it can be compared against it,
+// and an hours-scale host/database offset would otherwise skip or delay rows
+// forever.
+const (
+	hanaClockQuery    = `SELECT ADD_SECONDS(CURRENT_TIMESTAMP, ?) FROM DUMMY`
+	hanaUTCClockQuery = `SELECT ADD_SECONDS(CURRENT_UTCTIMESTAMP, ?) FROM DUMMY`
+)
+
+// fetchWindowUpperBound reads the timestamp-mode poll window's upper bound
+// (database now minus timestamp_delay) from the configured database clock.
+func (s *sapHANAInput) fetchWindowUpperBound(ctx context.Context) (time.Time, error) {
+	q := hanaClockQuery
+	if s.timestampClock == shTimestampClockDatabaseUTC {
+		q = hanaUTCClockQuery
+	}
+	var upper time.Time
+	if err := s.db.QueryRowContext(ctx, q, -s.timestampDelay.Seconds()).Scan(&upper); err != nil {
+		return time.Time{}, fmt.Errorf("reading database clock for the poll window: %w", err)
+	}
+	return upper, nil
 }
 
 // openRowsWithRetry calls openRows, retrying up to s.maxRetries times on
@@ -492,6 +563,7 @@ func (s *sapHANAInput) resetCursorCache() {
 	s.rowCachedSchema = nil
 	s.rowCachedPKCols = nil
 	s.rowCachedColTypes = nil
+	s.rowDriverColTypes = nil
 	s.rowSchemaFetched = false
 	s.peekedRow = nil
 }
@@ -626,6 +698,13 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 					// auto-replays nacks), so the cursor may safely resume from
 					// the current HWM after an error.
 					s.hwmSafe = s.hwm
+					// Mid-window, checkpoint the last delivered row's
+					// (timestamp, incrementing) pair: the tie-break predicate
+					// resumes exactly after it, instead of re-reading the whole
+					// window from its start on restart.
+					if !s.lastRowTS.IsZero() {
+						return s.deliverBatchAt(ctx, batch, s.hwm, s.lastRowTS)
+					}
 				}
 				return s.deliverBatch(ctx, batch, s.hwm)
 			}
@@ -689,41 +768,60 @@ func parseIncrHWMString(s string) any {
 	return s
 }
 
+// lobScanner is the shape go-hdb gives a LOB column (CLOB, NCLOB, BLOB, TEXT)
+// scanned into *any: the content is only reachable by draining it through
+// Scan(io.Writer). Passing such a value to encoding/json yields "{}".
+type lobScanner interface {
+	Scan(wr io.Writer) error
+}
+
 // normalizeHANAValue converts go-hdb-specific types to JSON-friendly Go types.
-// NVARCHAR/VARCHAR arrive as []byte off the wire; DECIMAL as gohdb.Decimal (big.Rat alias).
-// colType carries schema metadata for the column (nil when schema is unavailable).
-// numericMapping controls how DECIMAL/NUMERIC values are emitted.
-func normalizeHANAValue(v any, colType *schema.Common, numericMapping string) any {
+// NVARCHAR/VARCHAR arrive as []byte off the wire; DECIMAL as gohdb.Decimal
+// (big.Rat alias); LOBs as a lob scanner that must be drained while the
+// cursor is still open. colType carries schema metadata for the column (nil
+// when schema is unavailable). numericMapping controls how DECIMAL/NUMERIC
+// values are emitted.
+func normalizeHANAValue(v any, colType *schema.Common, numericMapping string) (any, error) {
 	switch val := v.(type) {
 	case []byte:
-		// go-hdb returns text columns as []byte; convert those to string.
-		// Binary columns must stay []byte so JSON base64-encodes them
-		// losslessly — an invalid-UTF-8 string would be mangled into U+FFFD
-		// replacement characters by encoding/json.
-		if colType != nil {
-			if colType.Type == schema.ByteArray {
-				return val
-			}
-			return string(val)
+		return normalizeBytes(val, colType), nil
+	case lobScanner:
+		var b []byte
+		if err := gohdb.ScanLobBytes(val, &b); err != nil {
+			return nil, fmt.Errorf("reading LOB column: %w", err)
 		}
-		if utf8.Valid(val) {
-			return string(val)
-		}
-		return val
+		return normalizeBytes(b, colType), nil
 	case gohdb.Decimal:
-		return normalizeDecimal((*big.Rat)(&val), colType, numericMapping)
+		return normalizeDecimal((*big.Rat)(&val), colType, numericMapping), nil
 	case *gohdb.Decimal:
 		if val == nil {
-			return nil
+			return nil, nil
 		}
-		return normalizeDecimal((*big.Rat)(val), colType, numericMapping)
+		return normalizeDecimal((*big.Rat)(val), colType, numericMapping), nil
 	case *big.Rat:
 		if val == nil {
-			return nil
+			return nil, nil
 		}
-		return normalizeDecimal(val, colType, numericMapping)
+		return normalizeDecimal(val, colType, numericMapping), nil
 	}
-	return v
+	return v, nil
+}
+
+// normalizeBytes decides whether raw column bytes are text or binary. go-hdb
+// returns text columns as []byte, so those convert to string; binary columns
+// must stay []byte so JSON base64-encodes them losslessly — an invalid-UTF-8
+// string would be mangled into U+FFFD replacement characters by encoding/json.
+func normalizeBytes(val []byte, colType *schema.Common) any {
+	if colType != nil {
+		if colType.Type == schema.ByteArray {
+			return val
+		}
+		return string(val)
+	}
+	if utf8.Valid(val) {
+		return string(val)
+	}
+	return val
 }
 
 // normalizeDecimal converts a big.Rat decimal to the representation selected
@@ -745,8 +843,12 @@ func normalizeDecimal(r *big.Rat, colType *schema.Common, numericMapping string)
 			if colType.Logical != nil && colType.Logical.Decimal != nil {
 				p := colType.Logical.Decimal.Precision
 				s := colType.Logical.Decimal.Scale
-				text := r.FloatString(int(s))
-				if out, err := sqlutil.CanonicaliseDecimal(text, p, s); err == nil {
+				// Pass the exact value, not one pre-rounded to the cached
+				// scale: the schema cache is addition-only, so after an online
+				// ALTER widens the scale the helper's over-scale rejection is
+				// what keeps values from being silently truncated (falling
+				// through to the exact BigDecimal path below).
+				if out, err := sqlutil.CanonicaliseDecimal(ratToNaturalDecimalString(r), p, s); err == nil {
 					return out
 				}
 			}
@@ -795,20 +897,33 @@ func decimalFitsFloat64(text string) bool {
 
 // ratToNaturalDecimalString converts a *big.Rat to a decimal string using the
 // minimal number of fractional digits that exactly represent the value.
-// For HANA DECIMAL values the denominator is always a power of 10.
+// big.Rat keeps fractions reduced, so a terminating decimal's denominator is
+// 2^a·5^b rather than a power of 10 (0.5 is 1/2, 12.75 is 51/4); the exact
+// scale is max(a, b). Any other prime factor means a non-terminating
+// expansion, which HANA DECIMAL cannot produce, so that case falls back to a
+// fixed 38 digits (HANA's maximum precision).
 func ratToNaturalDecimalString(r *big.Rat) string {
 	denom := new(big.Int).Set(r.Denom())
-	ten := big.NewInt(10)
-	scale := 0
-	for denom.Cmp(big.NewInt(1)) > 0 {
-		q, rem := new(big.Int).DivMod(denom, ten, new(big.Int))
-		if rem.Sign() != 0 {
-			return r.FloatString(38)
-		}
-		denom = q
-		scale++
+	twos := stripFactor(denom, 2)
+	fives := stripFactor(denom, 5)
+	if denom.Cmp(big.NewInt(1)) != 0 {
+		return r.FloatString(38)
 	}
-	return r.FloatString(scale)
+	return r.FloatString(max(twos, fives))
+}
+
+// stripFactor divides n by p while divisible, returning the multiplicity.
+func stripFactor(n *big.Int, p int64) int {
+	pBig := big.NewInt(p)
+	count := 0
+	for {
+		q, rem := new(big.Int).DivMod(n, pBig, new(big.Int))
+		if rem.Sign() != 0 || n.Sign() == 0 {
+			return count
+		}
+		n.Set(q)
+		count++
+	}
 }
 
 // scanRow reads the current row into a message and attaches metadata.
@@ -833,6 +948,15 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 			}
 			s.rowSchemaFetched = true
 		}
+		// The driver's result metadata is the fallback when catalog schema
+		// metadata is unavailable (query mode, or schema_name unset), so text
+		// vs binary and integer vs decimal are decided once per column, not
+		// re-guessed from each row's bytes.
+		colTypes, err := rows.ColumnTypes()
+		if err != nil {
+			return nil, fmt.Errorf("getting column types: %w", err)
+		}
+		s.rowDriverColTypes = driverColumnTypes(colTypes, s.numericMapping)
 	}
 
 	if err := rows.Scan(s.rowPtrs...); err != nil {
@@ -842,17 +966,26 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 	rowMap := make(map[string]any, len(s.rowColNames))
 	for i, name := range s.rowColNames {
 		var ct *schema.Common
-		if s.rowCachedColTypes != nil {
-			if c, ok := s.rowCachedColTypes[name]; ok {
-				ct = &c
-			}
+		if c, ok := s.rowCachedColTypes[name]; ok {
+			ct = &c
+		} else if c, ok := s.rowDriverColTypes[name]; ok {
+			ct = &c
 		}
-		rowMap[name] = normalizeHANAValue(s.rowValues[i], ct, s.numericMapping)
+		v, err := normalizeHANAValue(s.rowValues[i], ct, s.numericMapping)
+		if err != nil {
+			return nil, fmt.Errorf("normalising column %q: %w", name, err)
+		}
+		rowMap[name] = v
 	}
 
 	if (s.mode == shModeIncrementing || s.mode == shModeTimestampIncrementing) && s.incrementingCol != "" {
 		if v, ok := rowMap[s.incrementingCol]; ok && v != nil {
 			s.hwm = v
+		}
+	}
+	if s.mode == shModeTimestampIncrementing {
+		if ts, ok := rowMap[s.timestampCol].(time.Time); ok {
+			s.lastRowTS = ts
 		}
 	}
 
@@ -865,7 +998,9 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 
 	if s.rowSchemaFetched {
 		if s.rowCachedSchema != nil {
-			msg.MetaSetMut("schema", s.rowCachedSchema)
+			// The tree is owned by the schema cache and shared by every
+			// message; immutable storage hands downstream mutators a copy.
+			msg.MetaSetImmut("schema", service.ImmutableAny{V: s.rowCachedSchema})
 		}
 		if len(s.rowCachedPKCols) > 0 {
 			if pkJSON, merr := json.Marshal(s.rowCachedPKCols); merr == nil {
@@ -892,9 +1027,12 @@ type sapHANACheckpointState struct {
 	IncrHWMTime  *time.Time `json:"incr_hwm_time,omitempty"`
 }
 
-func (s *sapHANAInput) loadCheckpoint(ctx context.Context) error {
-	if s.checkpointCache == "" {
-		return nil
+// loadCheckpoint restores persisted HWM state from the cache. It reports
+// whether an incrementing HWM was restored, since that value supersedes the
+// configured initial value.
+func (s *sapHANAInput) loadCheckpoint(ctx context.Context) (bool, error) {
+	if !s.checkpointingEnabled() {
+		return false, nil
 	}
 	var (
 		raw    []byte
@@ -903,22 +1041,23 @@ func (s *sapHANAInput) loadCheckpoint(ctx context.Context) error {
 	if err := s.mgr.AccessCache(ctx, s.checkpointCache, func(c service.Cache) {
 		raw, getErr = c.Get(ctx, s.checkpointCacheKey)
 	}); err != nil {
-		return fmt.Errorf("accessing checkpoint cache %q: %w", s.checkpointCache, err)
+		return false, fmt.Errorf("accessing checkpoint cache %q: %w", s.checkpointCache, err)
 	}
 	if errors.Is(getErr, service.ErrKeyNotFound) {
-		return nil
+		return false, nil
 	}
 	if getErr != nil {
-		return fmt.Errorf("reading checkpoint key %q: %w", s.checkpointCacheKey, getErr)
+		return false, fmt.Errorf("reading checkpoint key %q: %w", s.checkpointCacheKey, getErr)
 	}
 
 	var cp sapHANACheckpointState
 	if err := json.Unmarshal(raw, &cp); err != nil {
-		return fmt.Errorf("parsing checkpoint: %w", err)
+		return false, fmt.Errorf("parsing checkpoint: %w", err)
 	}
 	if cp.TimestampHWM != nil {
 		s.timestampHWM = *cp.TimestampHWM
 	}
+	resumedHWM := true
 	switch {
 	case cp.IncrHWMStr != nil:
 		s.hwm = *cp.IncrHWMStr
@@ -928,9 +1067,73 @@ func (s *sapHANAInput) loadCheckpoint(ctx context.Context) error {
 		s.hwm = *cp.IncrHWMFloat
 	case cp.IncrHWMTime != nil:
 		s.hwm = *cp.IncrHWMTime
+	default:
+		resumedHWM = false
 	}
 	s.log.Debugf("Loaded checkpoint: ts_hwm=%v incr_hwm=%v", s.timestampHWM, s.hwm)
+	return resumedHWM, nil
+}
+
+// resolveIncrementingInitialValue coerces the configured
+// incrementing_initial_value to the incrementing column's catalog type. YAML
+// only gives us a string, and go-hdb converts bind parameters client-side
+// against the prepared statement's metadata: an int64 against an NVARCHAR
+// key or a string against a TIMESTAMP is rejected on every poll, so the
+// input would never progress. If the catalog is unreadable the constructor's
+// heuristic guess is kept and the situation is logged.
+func (s *sapHANAInput) resolveIncrementingInitialValue(ctx context.Context) error {
+	dataType, err := fetchHANAColumnType(ctx, s.db, s.schemaName, s.tableName, s.incrementingCol)
+	if err != nil {
+		s.log.Warnf("Could not determine the type of %s column %q from SYS.TABLE_COLUMNS, binding %s as %T: %v",
+			shFieldIncrementingColumn, s.incrementingCol, shFieldIncrementingInitialVal, s.hwm, err)
+		return nil
+	}
+	v, err := coerceIncrementingValue(s.incrInitialRaw, dataType)
+	if err != nil {
+		return fmt.Errorf("%s %q does not match %s %q of type %s: %w",
+			shFieldIncrementingInitialVal, s.incrInitialRaw, shFieldIncrementingColumn, s.incrementingCol, dataType, err)
+	}
+	s.hwm = v
 	return nil
+}
+
+// incrementingTimeLayouts are the accepted spellings of a DATE/TIMESTAMP
+// initial value, tried in order.
+var incrementingTimeLayouts = []string{
+	time.RFC3339Nano,
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02 15:04:05",
+	"2006-01-02",
+}
+
+// coerceIncrementingValue converts the configured initial value to the Go
+// type go-hdb expects for a column of the given HANA data type.
+func coerceIncrementingValue(raw, dataType string) (any, error) {
+	switch dataType {
+	case "TINYINT", "SMALLINT", "INT", "INTEGER", "BIGINT":
+		i, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("expected an integer: %w", err)
+		}
+		return i, nil
+	case "DECIMAL", "NUMERIC", "SMALLDECIMAL", "REAL", "FLOAT", "DOUBLE":
+		f, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return nil, fmt.Errorf("expected a number: %w", err)
+		}
+		return f, nil
+	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE":
+		for _, layout := range incrementingTimeLayouts {
+			if t, err := time.Parse(layout, raw); err == nil {
+				return t.UTC(), nil
+			}
+		}
+		return nil, errors.New("expected an RFC3339 or 'YYYY-MM-DD[ HH:MM:SS]' timestamp")
+	default:
+		// Character types (VARCHAR, NVARCHAR, ALPHANUM, ...) bind as-is,
+		// preserving leading zeros and other formatting.
+		return raw, nil
+	}
 }
 
 // checkpointSnapshot captures HWM values as the JSON state persisted to the
@@ -957,7 +1160,12 @@ func checkpointSnapshot(hwm any, tsHWM time.Time) *sapHANACheckpointState {
 // deliverBatch registers the batch with the ack-order tracker and returns it
 // alongside the AckFunc that resolves its checkpoint slot.
 func (s *sapHANAInput) deliverBatch(ctx context.Context, batch service.MessageBatch, hwm any) (service.MessageBatch, service.AckFunc, error) {
-	ackFn, err := s.trackBatch(ctx, len(batch), hwm, s.timestampHWM)
+	return s.deliverBatchAt(ctx, batch, hwm, s.timestampHWM)
+}
+
+// deliverBatchAt is deliverBatch with an explicit timestamp HWM snapshot.
+func (s *sapHANAInput) deliverBatchAt(ctx context.Context, batch service.MessageBatch, hwm any, tsHWM time.Time) (service.MessageBatch, service.AckFunc, error) {
+	ackFn, err := s.trackBatch(ctx, len(batch), hwm, tsHWM)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -998,12 +1206,18 @@ func (s *sapHANAInput) trackBatch(ctx context.Context, batchLen int, hwm any, ts
 
 // persistCheckpoint writes the checkpoint state to the configured cache.
 func (s *sapHANAInput) persistCheckpoint(ctx context.Context, cp *sapHANACheckpointState) error {
-	if s.checkpointCache == "" {
+	if !s.checkpointingEnabled() {
 		return nil
 	}
 	b, err := json.Marshal(cp)
 	if err != nil {
 		return fmt.Errorf("marshalling checkpoint: %w", err)
+	}
+	// Out-of-order acks behind a pending batch and idle empty polls resolve
+	// to the same highest checkpoint again and again; only pay for a cache
+	// write when the persisted state actually changes. Callers hold ackMut.
+	if bytes.Equal(b, s.lastPersisted) {
+		return nil
 	}
 	var setErr error
 	if err := s.mgr.AccessCache(ctx, s.checkpointCache, func(c service.Cache) {
@@ -1014,7 +1228,19 @@ func (s *sapHANAInput) persistCheckpoint(ctx context.Context, cp *sapHANACheckpo
 	if setErr != nil {
 		return fmt.Errorf("writing checkpoint key %q: %w", s.checkpointCacheKey, setErr)
 	}
+	s.lastPersisted = b
 	return nil
+}
+
+// checkpointingEnabled reports whether HWM state is loaded from and persisted
+// to the cache: only when a cache is configured and the mode has an HWM to
+// track. bulk and query modes have none, and writing an empty state from them
+// would clobber a polling input sharing the same cache key.
+func (s *sapHANAInput) checkpointingEnabled() bool {
+	if s.checkpointCache == "" {
+		return false
+	}
+	return s.mode != shModeBulk && s.mode != shModeQuery
 }
 
 func (s *sapHANAInput) Close(_ context.Context) error {
