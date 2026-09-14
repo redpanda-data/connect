@@ -386,8 +386,46 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	if s.mode == shModeTimestampIncrementing && s.incrementingCol == "" {
 		return nil, fmt.Errorf("field %q is required when mode is %q", shFieldIncrementingColumn, shModeTimestampIncrementing)
 	}
+	if err := s.rejectInertFields(conf); err != nil {
+		return nil, err
+	}
 
 	return s, nil
+}
+
+// rejectInertFields fails configs that set fields the selected mode never
+// reads. Silently ignoring them hides intent errors: with mode defaulting to
+// bulk, a config carrying incrementing_column and checkpoint_cache would run
+// a one-shot full scan and exit instead of the incremental capture the user
+// meant. Only fields without defaults (or with an empty default) can be
+// checked, since defaulted fields are always present in the parsed config.
+func (s *sapHANAInput) rejectInertFields(conf *service.ParsedConfig) error {
+	usesIncrementing := s.mode == shModeIncrementing || s.mode == shModeTimestampIncrementing
+	usesTimestamp := s.mode == shModeTimestamp || s.mode == shModeTimestampIncrementing
+	polls := usesIncrementing || usesTimestamp
+
+	inert := func(field string, set bool, allowed string) error {
+		if !set {
+			return nil
+		}
+		return fmt.Errorf("field %q has no effect when mode is %q (it applies to %s)", field, s.mode, allowed)
+	}
+	checks := []error{
+		inert(shFieldIncrementingColumn, !usesIncrementing && conf.Contains(shFieldIncrementingColumn),
+			"incrementing and timestamp+incrementing modes"),
+		inert(shFieldIncrementingInitialVal, !usesIncrementing && s.incrInitialRaw != "",
+			"incrementing and timestamp+incrementing modes"),
+		inert(shFieldTimestampColumn, !usesTimestamp && conf.Contains(shFieldTimestampColumn),
+			"timestamp and timestamp+incrementing modes"),
+		inert(shFieldTimestampInitialVal, !usesTimestamp && !s.timestampHWM.IsZero(),
+			"timestamp and timestamp+incrementing modes"),
+		inert(shFieldQuery, s.mode != shModeQuery && conf.Contains(shFieldQuery), "query mode"),
+		inert(shFieldTable, s.mode == shModeQuery && conf.Contains(shFieldTable), "table-driven modes"),
+		inert(shFieldSchemaName, s.mode == shModeQuery && conf.Contains(shFieldSchemaName), "table-driven modes"),
+		inert(shFieldCheckpointCache, !polls && conf.Contains(shFieldCheckpointCache),
+			"incrementing, timestamp, and timestamp+incrementing modes"),
+	}
+	return errors.Join(checks...)
 }
 
 func (s *sapHANAInput) Connect(ctx context.Context) error {
