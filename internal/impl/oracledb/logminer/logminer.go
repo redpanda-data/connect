@@ -1011,7 +1011,12 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	}
 
 	// Use the pre-built query from initialization
-	lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
+	switch lm.cfg.WindowStrategy {
+	case WindowStrategyLogCount:
+		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d, log_count budget=%d files)", startSCN, endSCN, lm.logSelector.count)
+	default:
+		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
+	}
 	if lm.contentStmt == nil {
 		stmt, err := conn.PrepareContext(ctx, lm.logMinerQuery)
 		if err != nil {
