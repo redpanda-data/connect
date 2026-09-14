@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	neturl "net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -187,13 +188,17 @@ NOTE: There is a limit of 10,000 streams per table - if using more than 10k stre
 				Examples(`partition-${!@kafka_partition}`),
 			service.NewInterpolatedStringField(ssoFieldOffsetToken).
 				Description(`The offset token to use for exactly once delivery of data in the pipeline. When data is sent on a channel, each message in a batch's offset token
-is compared to the latest token for a channel. If the offset token is lexicographically less than the latest in the channel, it's assumed the message is a duplicate and
+is compared to the latest token for a channel. If the offset token is less than the latest in the channel, it's assumed the message is a duplicate and
 is dropped. This means it is *very important* to have ordered delivery to the output, any out of order messages to the output will be seen as duplicates and dropped.
 Specifically this means that retried messages could be seen as duplicates if later messages have succeeded in the meantime, so in most circumstances a dead letter queue
 output should be employed for failed messages.
 
-NOTE: It's assumed that messages within a batch are in increasing order by offset token, additionally if you're using a numeric value as an offset token, make sure to pad
-      the value so that it's lexicographically ordered in its string representation, since offset tokens are compared in string form.
+Offset tokens that both parse as base-10 integers (up to 64 bits) are compared numerically, so a bare numeric token such as `+"`${!@kafka_offset}`"+` does not need padding. Any
+other token, including numbers outside of the 64-bit integer range or a numeric value combined with a prefix or separator (as in the examples below), falls back to a
+lexicographic comparison of its string representation, so if you're using one of those as an offset token, make sure to pad it so that it's lexicographically ordered in its
+string representation.
+
+NOTE: It's assumed that messages within a batch are in increasing order by offset token.
 
 For more information about offset tokens, see https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[^Snowflake Documentation]`).
 				ShortDescription("The offset token used for exactly-once delivery, compared against the latest token for a channel.").
@@ -1190,7 +1195,17 @@ func preprocessForExactlyOnce(
 	offsetTokenMapping *service.InterpolatedString,
 	batch service.MessageBatch,
 ) (service.MessageBatch, *streaming.OffsetTokenRange, error) {
-	latest := channel.LatestOffsetToken()
+	return filterAlreadyCommitted(channel.LatestOffsetToken(), offsetTokenMapping, batch)
+}
+
+// filterAlreadyCommitted drops any messages in batch whose offset token is
+// not strictly after latest (nil meaning nothing has been committed on this
+// channel yet), so that redelivered rows aren't re-inserted.
+func filterAlreadyCommitted(
+	latest *streaming.OffsetToken,
+	offsetTokenMapping *service.InterpolatedString,
+	batch service.MessageBatch,
+) (service.MessageBatch, *streaming.OffsetTokenRange, error) {
 	exec := batch.InterpolationExecutor(offsetTokenMapping)
 	firstRawToken, err := exec.TryString(0)
 	if err != nil {
@@ -1201,7 +1216,7 @@ func preprocessForExactlyOnce(
 		return nil, nil, err
 	}
 	// Common case, all data is new
-	if latest == nil || firstRawToken > string(*latest) {
+	if latest == nil || compareOffsetTokens(firstRawToken, string(*latest)) > 0 {
 		return batch, &streaming.OffsetTokenRange{Start: streaming.OffsetToken(firstRawToken), End: streaming.OffsetToken(lastRawToken)}, nil
 	}
 	// We need to filter out data that is too old.
@@ -1212,7 +1227,7 @@ func preprocessForExactlyOnce(
 		if err != nil {
 			return nil, nil, err
 		}
-		if rawToken <= string(*latest) {
+		if compareOffsetTokens(rawToken, string(*latest)) <= 0 {
 			continue
 		}
 		filteredBatch = append(filteredBatch, batch[i])
@@ -1221,7 +1236,28 @@ func preprocessForExactlyOnce(
 		return filteredBatch, nil, nil
 	}
 	// This is a lazy way to compute the bounds, but filtering should be a rare operation.
-	return preprocessForExactlyOnce(channel, offsetTokenMapping, filteredBatch)
+	return filterAlreadyCommitted(latest, offsetTokenMapping, filteredBatch)
+}
+
+// compareOffsetTokens orders two offset tokens numerically when both parse as
+// base-10 integers (e.g. a bare `${!@kafka_offset}`), so that e.g. "10"
+// correctly sorts after "9" across a digit-count boundary. It falls back to a
+// lexicographic byte comparison when either token isn't a plain integer,
+// preserving today's behaviour for non-numeric custom tokens.
+func compareOffsetTokens(a, b string) int {
+	an, aErr := strconv.ParseInt(a, 10, 64)
+	bn, bErr := strconv.ParseInt(b, 10, 64)
+	if aErr == nil && bErr == nil {
+		switch {
+		case an < bn:
+			return -1
+		case an > bn:
+			return 1
+		default:
+			return 0
+		}
+	}
+	return strings.Compare(a, b)
 }
 
 func wrapInsertError(err error) error {
