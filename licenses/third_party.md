@@ -70,7 +70,6 @@
 | github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue | Apache-2.0 |
 | github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression | Apache-2.0 |
 | github.com/aws/aws-sdk-go-v2/feature/ec2/imds | Apache-2.0 |
-| github.com/aws/aws-sdk-go-v2/feature/s3/manager | Apache-2.0 |
 | github.com/aws/aws-sdk-go-v2/internal/configsources | Apache-2.0 |
 | github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 | Apache-2.0 |
 | github.com/aws/aws-sdk-go-v2/internal/ini | Apache-2.0 |

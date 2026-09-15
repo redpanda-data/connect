@@ -833,8 +833,12 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 
 		filePath := path.Join(f.stagePath, fileName+"."+f.fileExtension)
 
-		// v2 of the driver always raises PUT/GET errors, so the former
-		// RaisePutGetError file transfer option is no longer needed.
+		// gosnowflake v2 removed SnowflakeFileTransferOptions.RaisePutGetError
+		// and always surfaces PUT/GET failures as errors (see "File Transfer
+		// Changes" in the driver's v2 migration guide and the unconditional
+		// error return in snowflakeFileTransferAgent.result). The explicit
+		// opt-in that v1 needed to avoid silent PUT failures (gosnowflake#701)
+		// is therefore the default behaviour here.
 		_, err := s.db.ExecContext(gosnowflake.WithFilePutStream(ctx, bytes.NewReader(fBytes)),
 			fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
 		if err != nil {
