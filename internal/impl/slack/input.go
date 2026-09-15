@@ -33,12 +33,8 @@ func inputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Description(`Connects to Slack using https://api.slack.com/apis/socket-mode[^Socket Mode]. This allows for receiving events, interactions and slash commands. Each message emitted from this input has a @type metadata of the event type "events_api", "interactions" or "slash_commands".`).
 		Fields(
-			service.NewStringField(iFieldAppToken).Description("The Slack App token to use.").LintRule(`
-        root = if !this.has_prefix("xapp-") { [ "field must start with xapp-" ] }
-      `),
-			service.NewStringField(iFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
-        root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
-      `),
+			service.NewStringField(iFieldAppToken).Description("The Slack App token to use.").LintRule(tokenLintRule("xapp-")),
+			service.NewStringField(iFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(tokenLintRule("xoxb-")),
 			service.NewAutoRetryNacksToggleField(),
 		).
 		Example(echobotExample())
