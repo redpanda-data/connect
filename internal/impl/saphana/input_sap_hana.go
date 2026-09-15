@@ -68,6 +68,15 @@ const (
 	shModeTimestampIncrementing = "timestamp+incrementing"
 )
 
+// Defaults of the mode-specific fields that carry one, mirrored from the
+// config spec so rejectInertFields can tell an explicit value from the
+// default. Keep in sync with the Default(...) calls in the spec below.
+const (
+	shDefaultPollInterval       = 60 * time.Second
+	shDefaultTimestampDelay     = 5 * time.Second
+	shDefaultCheckpointCacheKey = "sap_hana_hwm"
+)
+
 var sapHANAInputConfigSpec = service.NewConfigSpec().
 	Categories("Services").
 	Version("4.110.0").
@@ -412,8 +421,9 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 // reads. Silently ignoring them hides intent errors: with mode defaulting to
 // bulk, a config carrying incrementing_column and checkpoint_cache would run
 // a one-shot full scan and exit instead of the incremental capture the user
-// meant. Only fields without defaults (or with an empty default) can be
-// checked, since defaulted fields are always present in the parsed config.
+// meant. Fields without defaults are checked for presence. Defaulted fields
+// are always present in the parsed config, so for those only an explicit
+// non-default value can reveal intent, and that is what is rejected.
 func (s *sapHANAInput) rejectInertFields(conf *service.ParsedConfig) error {
 	usesIncrementing := s.mode == shModeIncrementing || s.mode == shModeTimestampIncrementing
 	usesTimestamp := s.mode == shModeTimestamp || s.mode == shModeTimestampIncrementing
@@ -439,6 +449,14 @@ func (s *sapHANAInput) rejectInertFields(conf *service.ParsedConfig) error {
 		inert(shFieldSchemaName, s.mode == shModeQuery && conf.Contains(shFieldSchemaName), "table-driven modes"),
 		inert(shFieldCheckpointCache, !polls && conf.Contains(shFieldCheckpointCache),
 			"incrementing, timestamp, and timestamp+incrementing modes"),
+		inert(shFieldPollInterval, !polls && s.pollInterval != shDefaultPollInterval,
+			"incrementing, timestamp, and timestamp+incrementing modes"),
+		inert(shFieldTimestampDelay, !usesTimestamp && s.timestampDelay != shDefaultTimestampDelay,
+			"timestamp and timestamp+incrementing modes"),
+		inert(shFieldTimestampClock, !usesTimestamp && s.timestampClock != shTimestampClockDatabase,
+			"timestamp and timestamp+incrementing modes"),
+		inert(shFieldCheckpointCacheKey, s.checkpointCache == "" && s.checkpointCacheKey != shDefaultCheckpointCacheKey,
+			"configs that set checkpoint_cache"),
 	}
 	return errors.Join(checks...)
 }
@@ -1195,7 +1213,7 @@ func coerceIncrementingValue(raw, dataType string) (any, error) {
 			return nil, fmt.Errorf("expected a number: %w", err)
 		}
 		return f, nil
-	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE":
+	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE", "LONGDATE", "DAYDATE", "SECONDTIME":
 		for _, layout := range incrementingTimeLayouts {
 			if t, err := time.Parse(layout, raw); err == nil {
 				return t.UTC(), nil

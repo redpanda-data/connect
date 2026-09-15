@@ -38,7 +38,9 @@ func hanaTypeToCommonType(dataType string) schema.CommonType {
 		return schema.Float32
 	case "BOOLEAN":
 		return schema.Boolean
-	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE":
+	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE", "LONGDATE", "DAYDATE", "SECONDTIME":
+		// LONGDATE, DAYDATE and SECONDTIME are the data-format-version 3
+		// spellings HANA reports for TIMESTAMP, DATE and TIME columns.
 		return schema.Timestamp
 	case "BINARY", "VARBINARY", "BLOB", "BSTRING", "ST_GEOMETRY", "ST_POINT":
 		// Spatial types are delivered as WKB, i.e. arbitrary bytes.

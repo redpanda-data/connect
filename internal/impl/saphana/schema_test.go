@@ -39,6 +39,10 @@ func TestHanaTypeToCommonType(t *testing.T) {
 		{"TIME", schema.Timestamp},
 		{"TIMESTAMP", schema.Timestamp},
 		{"SECONDDATE", schema.Timestamp},
+		// DFV level 3 spellings HANA reports for TIMESTAMP/DATE/TIME columns.
+		{"LONGDATE", schema.Timestamp},
+		{"DAYDATE", schema.Timestamp},
+		{"SECONDTIME", schema.Timestamp},
 		{"VARBINARY", schema.ByteArray},
 		{"BLOB", schema.ByteArray},
 		{"BINARY", schema.ByteArray},
