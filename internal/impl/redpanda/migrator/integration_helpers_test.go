@@ -331,7 +331,7 @@ func consume(cluster EmbeddedRedpandaCluster, topic, group string, numMessages i
 
 // ListTopics lists all topics.
 func (e *EmbeddedRedpandaCluster) ListTopics() []string {
-	metadata, err := e.Admin.Metadata(e.t.Context())
+	metadata, err := e.Admin.Metadata(kadm.WithAuthorizedOps(e.t.Context()))
 	require.NoError(e.t, err)
 
 	topics := make([]string, 0, len(metadata.Topics))

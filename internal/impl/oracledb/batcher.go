@@ -383,6 +383,9 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	if !m.CommitTimestamp.IsZero() {
 		msg.MetaSet("commit_ts_ms", strconv.FormatInt(m.CommitTimestamp.UnixMilli(), 10))
 	}
+	if m.Username != "" {
+		msg.MetaSet("username", m.Username)
+	}
 
 	if schemaAny != nil {
 		msg.MetaSetImmut("schema", service.ImmutableAny{V: schemaAny})
