@@ -53,6 +53,12 @@ type LogMiner struct {
 	logMinerQuery string
 	txnCache      TransactionCache
 
+	contentStmt    *sql.Stmt
+	currentSCNStmt *sql.Stmt
+	// boundConn is the connection contentStmt/currentSCNStmt were prepared
+	// on; see bindConn.
+	boundConn *sql.Conn
+
 	// Redo logs don't include data types so we have to find lob types up front.
 	// ie "TESTDB.PRODUCTS.DESCRIPTION": "NCLOB",
 	lobColTypes map[string]string
@@ -143,6 +149,12 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		}
 	}()
 
+	defer func() {
+		if err := lm.Close(); err != nil {
+			lm.log.Errorf("closing prepared logminer statements: %v", err)
+		}
+	}()
+
 	if err := replication.ApplyNLSSettings(ctx, conn); err != nil {
 		return fmt.Errorf("applying NLS settings for logminer: %w", err)
 	}
@@ -185,6 +197,40 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 	}
 }
 
+// Close releases all statements prepared over the lifetime of a ReadChanges
+// call, along with those owned by the session manager and log file
+// collector. It must only be called once the dedicated connection those
+// statements were prepared on is no longer needed for LogMiner operations.
+func (lm *LogMiner) Close() error {
+	var errs []error
+
+	if lm.contentStmt != nil {
+		if err := lm.contentStmt.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing logminer contents statement: %w", err))
+		}
+		lm.contentStmt = nil
+	}
+
+	if lm.currentSCNStmt != nil {
+		if err := lm.currentSCNStmt.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing current SCN statement: %w", err))
+		}
+		lm.currentSCNStmt = nil
+	}
+
+	if err := lm.logCollector.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("closing log file collector statements: %w", err))
+	}
+
+	if err := lm.sessionMgr.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("closing session manager statements: %w", err))
+	}
+
+	lm.boundConn = nil
+
+	return errors.Join(errs...)
+}
+
 // FindStartPos returns the database's current SCN so that streaming begins from
 // the present moment rather than replaying historical redo logs.
 func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
@@ -210,9 +256,20 @@ func (lm *LogMiner) endExpiredIdleSession(ctx context.Context, conn *sql.Conn) {
 }
 
 func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
+	if err := bindConn(&lm.boundConn, conn); err != nil {
+		return false, fmt.Errorf("running mining cycle: %w", err)
+	}
+
 	// Get database's current SCN to know our target
+	if lm.currentSCNStmt == nil {
+		stmt, err := conn.PrepareContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE")
+		if err != nil {
+			return false, fmt.Errorf("preparing current SCN query: %w", err)
+		}
+		lm.currentSCNStmt = stmt
+	}
 	var dbCurrentSCN uint64
-	if err := conn.QueryRowContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&dbCurrentSCN); err != nil {
+	if err := lm.currentSCNStmt.QueryRowContext(ctx).Scan(&dbCurrentSCN); err != nil {
 		return false, fmt.Errorf("fetching current SCN: %w", err)
 	}
 
@@ -923,10 +980,21 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 		return nil
 	}
 
+	if err := bindConn(&lm.boundConn, conn); err != nil {
+		return fmt.Errorf("querying logminer contents: %w", err)
+	}
+
 	// Use the pre-built query from initialization
 	lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
+	if lm.contentStmt == nil {
+		stmt, err := conn.PrepareContext(ctx, lm.logMinerQuery)
+		if err != nil {
+			return fmt.Errorf("preparing logminer contents query: %w", err)
+		}
+		lm.contentStmt = stmt
+	}
 	queryStart := time.Now()
-	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
+	rows, err := lm.contentStmt.QueryContext(ctx, startSCN, endSCN)
 	if err != nil {
 		return fmt.Errorf("querying logminer: %w", err)
 	}
@@ -1028,7 +1096,11 @@ type LogFile struct {
 }
 
 // LogFileCollector finds relevant log files to mine
-type LogFileCollector struct{}
+type LogFileCollector struct {
+	stmt *sql.Stmt
+	// boundConn is the connection stmt was prepared on; see bindConn.
+	boundConn *sql.Conn
+}
 
 // NewLogFileCollector creates a new *LogFileCollector which is responsible for
 // discovering the relevant log files to mine.
@@ -1037,7 +1109,11 @@ func NewLogFileCollector() *LogFileCollector {
 }
 
 // GetLogsBySCNRange collects log files whose SCN range overlaps [startSCN, endSCN].
-func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
+func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
+	if err := bindConn(&c.boundConn, conn); err != nil {
+		return nil, fmt.Errorf("getting logs by SCN range: %w", err)
+	}
+
 	query := `
 		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD
 		FROM (
@@ -1082,7 +1158,15 @@ func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, 
 		)
 		ORDER BY SEQ`
 
-	rows, err := conn.QueryContext(ctx, query, startSCN, endSCN)
+	if c.stmt == nil {
+		stmt, err := conn.PrepareContext(ctx, query)
+		if err != nil {
+			return nil, fmt.Errorf("preparing logs by SCN range query: %w", err)
+		}
+		c.stmt = stmt
+	}
+
+	rows, err := c.stmt.QueryContext(ctx, startSCN, endSCN)
 	if err != nil {
 		return nil, fmt.Errorf("querying logs overlapping SCN range [%d, %d]: %w", startSCN, endSCN, err)
 	}
@@ -1105,6 +1189,17 @@ func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, 
 		return nil, err
 	}
 	return deduplicateLogs(archived, online), nil
+}
+
+// Close releases the prepared GetLogsBySCNRange statement, if any.
+func (c *LogFileCollector) Close() error {
+	c.boundConn = nil
+	if c.stmt == nil {
+		return nil
+	}
+	err := c.stmt.Close()
+	c.stmt = nil
+	return err
 }
 
 // deduplicateLogs merges archive and online log lists, preferring the archive

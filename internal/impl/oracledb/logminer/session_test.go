@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
 func TestSessionManager(t *testing.T) {
@@ -47,6 +48,77 @@ func TestSessionManager(t *testing.T) {
 
 		require.NoError(t, sm.EndSession(t.Context(), conn))
 		assert.Equal(t, time.Duration(0), sm.Age(), "age must reset to zero once the session has ended")
+	})
+
+	t.Run("StartSessionBindsSCNsInsteadOfInliningThem", func(t *testing.T) {
+		cfg := NewDefaultConfig()
+		sm := NewSessionManager(cfg, service.NewLoggerFromSlog(slog.Default()))
+
+		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+		conn, fc := newFakeSQLConn(t, files)
+
+		const startSCN, endSCN = uint64(123456), uint64(789012)
+		require.NoError(t, sm.StartSession(t.Context(), conn, startSCN, endSCN, false))
+
+		require.Len(t, fc.execs, 1, "StartSession must issue exactly one exec")
+		query := fc.execs[0]
+
+		assert.Contains(t, query, "STARTSCN => :1",
+			"STARTSCN must be a bind parameter so the same prepared statement/cursor can be reused across cycles")
+		assert.Contains(t, query, "ENDSCN => :2",
+			"ENDSCN must be a bind parameter so the same prepared statement/cursor can be reused across cycles")
+		assert.NotContains(t, query, fmt.Sprintf("%d", startSCN),
+			"the literal startSCN value must not be inlined into the query text once bind parameters are used")
+		assert.NotContains(t, query, fmt.Sprintf("%d", endSCN),
+			"the literal endSCN value must not be inlined into the query text once bind parameters are used")
+
+		// A ":1"/":2" placeholder in the text proves nothing about which
+		// value actually lands in which position - assert on the bind
+		// values database/sql actually sent, not just the query text.
+		require.Len(t, fc.execArgs, 1)
+		require.Len(t, fc.execArgs[0], 2, "exactly two bind values must be sent for STARTSCN and ENDSCN")
+		assert.Equal(t, int64(startSCN), fc.execArgs[0][0], ":1 must carry startSCN")
+		assert.Equal(t, int64(endSCN), fc.execArgs[0][1], ":2 must carry endSCN")
+	})
+
+	t.Run("RejectsReuseAcrossDifferentConnections", func(t *testing.T) {
+		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+
+		t.Run("AddLogFile", func(t *testing.T) {
+			cfg := NewDefaultConfig()
+			sm := NewSessionManager(cfg, service.NewLoggerFromSlog(slog.Default()))
+			conn1, _ := newFakeSQLConn(t, files)
+			conn2, _ := newFakeSQLConn(t, files)
+
+			require.NoError(t, sm.AddLogFile(t.Context(), conn1, files))
+			err := sm.AddLogFile(t.Context(), conn2, files)
+			require.Error(t, err, "a second, different connection must be rejected rather than silently reusing statements prepared on the first")
+			assert.Contains(t, err.Error(), "bound to a different connection")
+		})
+
+		t.Run("StartSession", func(t *testing.T) {
+			cfg := NewDefaultConfig()
+			sm := NewSessionManager(cfg, service.NewLoggerFromSlog(slog.Default()))
+			conn1, _ := newFakeSQLConn(t, files)
+			conn2, _ := newFakeSQLConn(t, files)
+
+			require.NoError(t, sm.StartSession(t.Context(), conn1, 100, 200, false))
+			err := sm.StartSession(t.Context(), conn2, 200, 300, false)
+			require.Error(t, err, "a second, different connection must be rejected rather than silently mining against the stale one")
+			assert.Contains(t, err.Error(), "bound to a different connection")
+		})
+
+		t.Run("EndSession", func(t *testing.T) {
+			cfg := NewDefaultConfig()
+			sm := NewSessionManager(cfg, service.NewLoggerFromSlog(slog.Default()))
+			conn1, _ := newFakeSQLConn(t, files)
+			conn2, _ := newFakeSQLConn(t, files)
+
+			require.NoError(t, sm.AddLogFile(t.Context(), conn1, files))
+			err := sm.EndSession(t.Context(), conn2)
+			require.Error(t, err, "a second, different connection must be rejected rather than silently ending a session on the stale one")
+			assert.Contains(t, err.Error(), "bound to a different connection")
+		})
 	})
 
 	t.Run("PrepareLogsAndStartSessionRestartsOnMaxSessionAge", func(t *testing.T) {
@@ -83,6 +155,18 @@ func TestSessionManager(t *testing.T) {
 			"a new mining session must be started after the restart")
 		assert.Less(t, lm.sessionMgr.Age(), 5*time.Second,
 			"AddLogFile must have refreshed sessionOpened, resetting the reported session age")
+
+		// Each statement is prepared once (on first use) and reused on every
+		// subsequent call, so the prepare counts stay flat even though the
+		// exec counts above grew across the two prepareLogsAndStartSession
+		// calls. ADD_LOGFILE only ever used the "NEW" OPTIONS variant here
+		// (same log file set both times), so it is prepared exactly once too.
+		assert.Equal(t, 1, fc.prepareCount("START_LOGMNR"),
+			"START_LOGMNR must be prepared once and reused across cycles despite being executed twice")
+		assert.Equal(t, 1, fc.prepareCount("END_LOGMNR"),
+			"END_LOGMNR must be prepared once (on first EndSession call) and reused thereafter")
+		assert.Equal(t, 1, fc.prepareCount("ADD_LOGFILE"),
+			"ADD_LOGFILE must be prepared once per distinct OPTIONS variant; only NEW was used here")
 	})
 
 	t.Run("MiningCycleEndsExpiredSessionWhenCaughtUp", func(t *testing.T) {
@@ -243,12 +327,26 @@ func TestGetLogsBySCNRangeQueryShape(t *testing.T) {
 	files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
 	conn, fc := newFakeSQLConn(t, files)
 
-	_, err := (&LogFileCollector{}).GetLogsBySCNRange(t.Context(), conn, 100, 200)
+	collector := NewLogFileCollector()
+
+	_, err := collector.GetLogsBySCNRange(t.Context(), conn, 100, 200)
 	require.NoError(t, err)
 
 	require.Len(t, fc.queries, 1, "GetLogsBySCNRange must issue exactly one query")
 	require.Equal(t, 1, fc.queryCount("V$ARCHIVED_LOG"),
 		"GetLogsBySCNRange must issue exactly one query referencing V$ARCHIVED_LOG")
+
+	// A second call on the same collector/conn must reuse the statement
+	// prepared on the first call rather than preparing a fresh one - this is
+	// what keeps Oracle's server-side cursor alive across mining cycles.
+	_, err = collector.GetLogsBySCNRange(t.Context(), conn, 200, 300)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, fc.queryCount("V$ARCHIVED_LOG"),
+		"GetLogsBySCNRange executes the query on every call")
+	assert.Equal(t, 1, fc.prepareCount("V$ARCHIVED_LOG"),
+		"GetLogsBySCNRange must prepare the query once and reuse it despite being called twice")
+
 	query := fc.queries[0]
 
 	unionIdx := strings.Index(query, "UNION")
@@ -265,6 +363,147 @@ func TestGetLogsBySCNRangeQueryShape(t *testing.T) {
 		"the archived-log branch must join V$DATABASE to scope RESETLOGS_CHANGE#/RESETLOGS_TIME to the current incarnation")
 	assert.Contains(t, archivedBranch, "A.RESETLOGS_CHANGE# = D.RESETLOGS_CHANGE#")
 	assert.Contains(t, archivedBranch, "A.RESETLOGS_TIME = D.RESETLOGS_TIME")
+}
+
+func TestGetLogsBySCNRangeRejectsReuseAcrossDifferentConnections(t *testing.T) {
+	files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+	conn1, _ := newFakeSQLConn(t, files)
+	conn2, _ := newFakeSQLConn(t, files)
+
+	collector := NewLogFileCollector()
+
+	_, err := collector.GetLogsBySCNRange(t.Context(), conn1, 100, 200)
+	require.NoError(t, err)
+
+	_, err = collector.GetLogsBySCNRange(t.Context(), conn2, 200, 300)
+	require.Error(t, err, "a second, different connection must be rejected rather than silently reusing the statement prepared on the first")
+	assert.Contains(t, err.Error(), "bound to a different connection")
+}
+
+func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cfg := NewDefaultConfig()
+
+	lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, &publisherStub{}, cfg, nil, service.MockResources().Metrics(), logger)
+
+	files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1_000_000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+	conn, fc := newFakeSQLConn(t, files)
+
+	const cycles = 3
+	var wantRanges [][2]int64 // (startSCN, endSCN) each cycle should have queried the contents view with
+	for i := range cycles {
+		// Keep the database well ahead of currentSCN so every cycle actually
+		// mines rather than idling/deferring.
+		fc.currentSCN = lm.currentSCN + uint64(lm.windowSize) + uint64(cfg.MinSCNWindowSize) + 1
+
+		startSCN := lm.currentSCN
+		caughtUp, err := lm.miningCycle(t.Context(), conn)
+		require.NoError(t, err)
+		assert.False(t, caughtUp, "cycle %d: database is always kept ahead of currentSCN, so it must mine rather than idle", i)
+		wantRanges = append(wantRanges, [2]int64{int64(startSCN), int64(lm.currentSCN)})
+	}
+
+	assert.Equal(t, cycles, fc.queryCount("V$LOGMNR_CONTENTS"),
+		"the contents query must execute once per cycle")
+	assert.Equal(t, 1, fc.prepareCount("V$LOGMNR_CONTENTS"),
+		"the contents query must be prepared once (first cycle) and reused on every subsequent cycle")
+
+	// A ":1"/":2" placeholder in the query text proves nothing about which
+	// value lands in which position - assert the actual bind values sent
+	// each cycle matched that cycle's (startSCN, endSCN), in order.
+	contentArgs := fc.queryArgsFor("V$LOGMNR_CONTENTS")
+	require.Len(t, contentArgs, cycles)
+	for i, want := range wantRanges {
+		require.Len(t, contentArgs[i], 2, "cycle %d: exactly two bind values must be sent for the SCN range", i)
+		assert.Equal(t, want[0], contentArgs[i][0], "cycle %d: :1 must carry that cycle's startSCN", i)
+		assert.Equal(t, want[1], contentArgs[i][1], "cycle %d: :2 must carry that cycle's endSCN", i)
+	}
+
+	assert.Equal(t, cycles, fc.queryCount("SELECT CURRENT_SCN FROM V$DATABASE"),
+		"the CURRENT_SCN check must execute once per cycle")
+	assert.Equal(t, 1, fc.prepareCount("SELECT CURRENT_SCN FROM V$DATABASE"),
+		"the CURRENT_SCN check must be prepared once (first cycle) and reused on every subsequent cycle")
+}
+
+func TestMiningCycleRejectsReuseAcrossDifferentConnections(t *testing.T) {
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cfg := NewDefaultConfig()
+
+	lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, &publisherStub{}, cfg, nil, service.MockResources().Metrics(), logger)
+
+	files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1_000_000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+	conn1, fc1 := newFakeSQLConn(t, files)
+	conn2, fc2 := newFakeSQLConn(t, files)
+
+	fc1.currentSCN = lm.currentSCN + uint64(lm.windowSize) + uint64(cfg.MinSCNWindowSize) + 1
+	_, err := lm.miningCycle(t.Context(), conn1)
+	require.NoError(t, err)
+
+	fc2.currentSCN = lm.currentSCN + uint64(lm.windowSize) + uint64(cfg.MinSCNWindowSize) + 1
+	_, err = lm.miningCycle(t.Context(), conn2)
+	require.Error(t, err, "a second, different connection must be rejected rather than silently mining against the stale one")
+	assert.Contains(t, err.Error(), "bound to a different connection")
+}
+
+func TestLogMinerCloseReleasesAllPreparedStatements(t *testing.T) {
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cfg := NewDefaultConfig()
+
+	lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, &publisherStub{}, cfg, nil, service.MockResources().Metrics(), logger)
+
+	files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1_000_000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+	conn, fc := newFakeSQLConn(t, files)
+
+	fc.currentSCN = lm.currentSCN + uint64(lm.windowSize) + uint64(cfg.MinSCNWindowSize) + 1
+	caughtUp, err := lm.miningCycle(t.Context(), conn)
+	require.NoError(t, err)
+	require.False(t, caughtUp, "database is kept ahead of currentSCN so the cycle must mine, exercising every statement")
+
+	require.NoError(t, lm.sessionMgr.EndSession(t.Context(), conn))
+	require.NoError(t, lm.Close())
+
+	for _, tc := range []struct {
+		name   string
+		substr string
+	}{
+		{"contents query", "V$LOGMNR_CONTENTS"},
+		{"CURRENT_SCN check", "SELECT CURRENT_SCN FROM V$DATABASE"},
+		{"log file listing query", "V$ARCHIVED_LOG"},
+		{"START_LOGMNR", "START_LOGMNR"},
+		{"END_LOGMNR", "END_LOGMNR"},
+		{"ADD_LOGFILE", "ADD_LOGFILE"},
+	} {
+		assert.Equal(t, 1, fc.closeCount(tc.substr), "%s statement must be closed exactly once by lm.Close()", tc.name)
+	}
+
+	// A second Close() must be a safe no-op: every field/cache was already
+	// cleared by the first call, so nothing should be closed again.
+	require.NoError(t, lm.Close(), "Close() must be safe to call twice")
+	for _, tc := range []struct {
+		name   string
+		substr string
+	}{
+		{"contents query", "V$LOGMNR_CONTENTS"},
+		{"CURRENT_SCN check", "SELECT CURRENT_SCN FROM V$DATABASE"},
+		{"log file listing query", "V$ARCHIVED_LOG"},
+		{"START_LOGMNR", "START_LOGMNR"},
+		{"END_LOGMNR", "END_LOGMNR"},
+		{"ADD_LOGFILE", "ADD_LOGFILE"},
+	} {
+		assert.Equal(t, 1, fc.closeCount(tc.substr), "%s must still show exactly one close after a second Close() call - a repeat call must not attempt to close it again", tc.name)
+	}
+
+	// The whole point of resetting boundConn/the statement caches in Close()
+	// is that a subsequent ReadChanges on a fresh connection can bind and
+	// re-prepare rather than failing bindConn's mismatch check.
+	conn2, fc2 := newFakeSQLConn(t, files)
+	fc2.currentSCN = lm.currentSCN + uint64(lm.windowSize) + uint64(cfg.MinSCNWindowSize) + 1
+	_, err = lm.miningCycle(t.Context(), conn2)
+	require.NoError(t, err, "after Close(), a mining cycle on a different connection must re-prepare rather than failing bindConn")
+	assert.Equal(t, 1, fc2.prepareCount("SELECT CURRENT_SCN FROM V$DATABASE"),
+		"the CURRENT_SCN statement must be freshly prepared on the new connection, not reused from the closed one")
+	assert.Equal(t, 1, fc2.prepareCount("V$LOGMNR_CONTENTS"),
+		"the contents statement must be freshly prepared on the new connection, not reused from the closed one")
 }
 
 // --- fake database/sql driver used to exercise SessionManager/LogMiner
@@ -305,8 +544,25 @@ type fakeConn struct {
 	mu         sync.Mutex
 	logFiles   []*LogFile
 	execs      []string
+	execArgs   [][]any // args[i] are the bind values passed with execs[i]
 	queries    []string
+	queryArgs  [][]any // args[i] are the bind values passed with queries[i]
+	prepares   []string
+	closes     []string
 	currentSCN uint64
+}
+
+// namedValueArgs extracts the plain bind values from args, in positional
+// order, so tests can assert on the actual values a bind parameter carried.-
+func namedValueArgs(args []driver.NamedValue) []any {
+	if args == nil {
+		return nil
+	}
+	vals := make([]any, len(args))
+	for i, a := range args {
+		vals[i] = a.Value
+	}
+	return vals
 }
 
 func (c *fakeConn) count(substr string) int {
@@ -333,8 +589,66 @@ func (c *fakeConn) queryCount(substr string) int {
 	return n
 }
 
-func (*fakeConn) Prepare(string) (driver.Stmt, error) {
-	return nil, errors.New("fakeConn: Prepare not supported, expected ExecContext/QueryContext usage")
+// queryArgsFor returns the recorded bind args for every query whose text
+// contains substr, in call order - e.g. to check that a SCN range bound to
+// ":1"/":2" actually carried (startSCN, endSCN) in that order on each call,
+// not just that the placeholder was present in the query text.
+func (c *fakeConn) queryArgsFor(substr string) [][]any {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out [][]any
+	for i, q := range c.queries {
+		if strings.Contains(q, substr) {
+			out = append(out, c.queryArgs[i])
+		}
+	}
+	return out
+}
+
+func (c *fakeConn) prepareCount(substr string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, p := range c.prepares {
+		if strings.Contains(p, substr) {
+			n++
+		}
+	}
+	return n
+}
+
+// closeCount reports how many statements whose query text contains substr
+// have had Close called on them, so tests can pin down that Close() on
+// LogMiner/SessionManager/LogFileCollector actually releases the Oracle-side
+// cursor for every statement it prepared, rather than just clearing local
+// bookkeeping.
+func (c *fakeConn) closeCount(substr string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, q := range c.closes {
+		if strings.Contains(q, substr) {
+			n++
+		}
+	}
+	return n
+}
+
+// recordClose records that query was closed. Called by fakeStmt.Close - kept
+// as a method on fakeConn itself (rather than fakeStmt locking c.mu
+// directly) since this codebase's lint rules require mutex operations to
+// stay on direct fields, not through a chained selector.
+func (c *fakeConn) recordClose(query string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closes = append(c.closes, query)
+}
+
+func (c *fakeConn) Prepare(query string) (driver.Stmt, error) {
+	c.mu.Lock()
+	c.prepares = append(c.prepares, query)
+	c.mu.Unlock()
+	return &fakeStmt{query: query, conn: c}, nil
 }
 
 func (*fakeConn) Close() error { return nil }
@@ -343,22 +657,72 @@ func (*fakeConn) Begin() (driver.Tx, error) {
 	return nil, errors.New("fakeConn: transactions not supported")
 }
 
-func (c *fakeConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *fakeConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.queries = append(c.queries, query)
-	if strings.Contains(query, "CURRENT_SCN") {
+	c.queryArgs = append(c.queryArgs, namedValueArgs(args))
+	switch {
+	case strings.Contains(query, "CURRENT_SCN"):
 		return &fakeSCNRow{scn: c.currentSCN}, nil
+	case strings.Contains(query, "V$LOGMNR_CONTENTS"):
+		// No redo events are returned - these tests only care about how many
+		// times the query gets prepared/executed, not about the events it
+		// would produce against a real LogMiner session.
+		return &fakeContentRows{}, nil
+	default:
+		return &fakeRows{files: c.logFiles}, nil
 	}
-	return &fakeRows{files: c.logFiles}, nil
 }
 
-func (c *fakeConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+func (c *fakeConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.execs = append(c.execs, query)
+	c.execArgs = append(c.execArgs, namedValueArgs(args))
 	return driver.ResultNoRows, nil
 }
+
+type fakeStmt struct {
+	query string
+	conn  *fakeConn
+}
+
+func (*fakeStmt) NumInput() int { return -1 }
+
+// Close records the closed query text on the parent connection so tests can
+// observe whether a statement was actually released, mirroring the
+// prepares/queries/execs recording above.
+func (s *fakeStmt) Close() error {
+	s.conn.recordClose(s.query)
+	return nil
+}
+
+func (*fakeStmt) Exec([]driver.Value) (driver.Result, error) {
+	return nil, errors.New("fakeStmt: Exec not supported, expected ExecContext usage")
+}
+
+func (*fakeStmt) Query([]driver.Value) (driver.Rows, error) {
+	return nil, errors.New("fakeStmt: Query not supported, expected QueryContext usage")
+}
+
+func (s *fakeStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+	return s.conn.ExecContext(ctx, s.query, args)
+}
+
+func (s *fakeStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+	return s.conn.QueryContext(ctx, s.query, args)
+}
+
+type fakeContentRows struct{}
+
+func (*fakeContentRows) Columns() []string {
+	return []string{"SCN", "SQL_REDO", "OPERATION_CODE", "TABLE_NAME", "SEG_OWNER", "TIMESTAMP", "XID", "COMMIT_SCN", "CSF", "USERNAME"}
+}
+
+func (*fakeContentRows) Close() error { return nil }
+
+func (*fakeContentRows) Next([]driver.Value) error { return io.EOF }
 
 // fakeRows implements driver.Rows over the LogFileCollector.GetLogsBySCNRange
 // column set: FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD.
