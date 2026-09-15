@@ -45,8 +45,9 @@ import (
 // reader.
 func TestCOWNestedSchemaIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const ns, tbl = "cow_nested_ns", "cow_nested_test"
 	infra.CreateNamespace(t, ns)
