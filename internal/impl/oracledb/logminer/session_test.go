@@ -71,6 +71,14 @@ func TestSessionManager(t *testing.T) {
 			"the literal startSCN value must not be inlined into the query text once bind parameters are used")
 		assert.NotContains(t, query, fmt.Sprintf("%d", endSCN),
 			"the literal endSCN value must not be inlined into the query text once bind parameters are used")
+
+		// A ":1"/":2" placeholder in the text proves nothing about which
+		// value actually lands in which position - assert on the bind
+		// values database/sql actually sent, not just the query text.
+		require.Len(t, fc.execArgs, 1)
+		require.Len(t, fc.execArgs[0], 2, "exactly two bind values must be sent for STARTSCN and ENDSCN")
+		assert.Equal(t, int64(startSCN), fc.execArgs[0][0], ":1 must carry startSCN")
+		assert.Equal(t, int64(endSCN), fc.execArgs[0][1], ":2 must carry endSCN")
 	})
 
 	t.Run("RejectsReuseAcrossDifferentConnections", func(t *testing.T) {
@@ -382,20 +390,34 @@ func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
 	conn, fc := newFakeSQLConn(t, files)
 
 	const cycles = 3
+	var wantRanges [][2]int64 // (startSCN, endSCN) each cycle should have queried the contents view with
 	for i := range cycles {
 		// Keep the database well ahead of currentSCN so every cycle actually
 		// mines rather than idling/deferring.
 		fc.currentSCN = lm.currentSCN + uint64(lm.windowSize) + uint64(cfg.MinSCNWindowSize) + 1
 
+		startSCN := lm.currentSCN
 		caughtUp, err := lm.miningCycle(t.Context(), conn)
 		require.NoError(t, err)
 		assert.False(t, caughtUp, "cycle %d: database is always kept ahead of currentSCN, so it must mine rather than idle", i)
+		wantRanges = append(wantRanges, [2]int64{int64(startSCN), int64(lm.currentSCN)})
 	}
 
 	assert.Equal(t, cycles, fc.queryCount("V$LOGMNR_CONTENTS"),
 		"the contents query must execute once per cycle")
 	assert.Equal(t, 1, fc.prepareCount("V$LOGMNR_CONTENTS"),
 		"the contents query must be prepared once (first cycle) and reused on every subsequent cycle")
+
+	// A ":1"/":2" placeholder in the query text proves nothing about which
+	// value lands in which position - assert the actual bind values sent
+	// each cycle matched that cycle's (startSCN, endSCN), in order.
+	contentArgs := fc.queryArgsFor("V$LOGMNR_CONTENTS")
+	require.Len(t, contentArgs, cycles)
+	for i, want := range wantRanges {
+		require.Len(t, contentArgs[i], 2, "cycle %d: exactly two bind values must be sent for the SCN range", i)
+		assert.Equal(t, want[0], contentArgs[i][0], "cycle %d: :1 must carry that cycle's startSCN", i)
+		assert.Equal(t, want[1], contentArgs[i][1], "cycle %d: :2 must carry that cycle's endSCN", i)
+	}
 
 	assert.Equal(t, cycles, fc.queryCount("SELECT CURRENT_SCN FROM V$DATABASE"),
 		"the CURRENT_SCN check must execute once per cycle")
@@ -522,10 +544,25 @@ type fakeConn struct {
 	mu         sync.Mutex
 	logFiles   []*LogFile
 	execs      []string
+	execArgs   [][]any // args[i] are the bind values passed with execs[i]
 	queries    []string
+	queryArgs  [][]any // args[i] are the bind values passed with queries[i]
 	prepares   []string
 	closes     []string
 	currentSCN uint64
+}
+
+// namedValueArgs extracts the plain bind values from args, in positional
+// order, so tests can assert on the actual values a bind parameter carried.-
+func namedValueArgs(args []driver.NamedValue) []any {
+	if args == nil {
+		return nil
+	}
+	vals := make([]any, len(args))
+	for i, a := range args {
+		vals[i] = a.Value
+	}
+	return vals
 }
 
 func (c *fakeConn) count(substr string) int {
@@ -550,6 +587,22 @@ func (c *fakeConn) queryCount(substr string) int {
 		}
 	}
 	return n
+}
+
+// queryArgsFor returns the recorded bind args for every query whose text
+// contains substr, in call order - e.g. to check that a SCN range bound to
+// ":1"/":2" actually carried (startSCN, endSCN) in that order on each call,
+// not just that the placeholder was present in the query text.
+func (c *fakeConn) queryArgsFor(substr string) [][]any {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out [][]any
+	for i, q := range c.queries {
+		if strings.Contains(q, substr) {
+			out = append(out, c.queryArgs[i])
+		}
+	}
+	return out
 }
 
 func (c *fakeConn) prepareCount(substr string) int {
@@ -604,10 +657,11 @@ func (*fakeConn) Begin() (driver.Tx, error) {
 	return nil, errors.New("fakeConn: transactions not supported")
 }
 
-func (c *fakeConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *fakeConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.queries = append(c.queries, query)
+	c.queryArgs = append(c.queryArgs, namedValueArgs(args))
 	switch {
 	case strings.Contains(query, "CURRENT_SCN"):
 		return &fakeSCNRow{scn: c.currentSCN}, nil
@@ -621,10 +675,11 @@ func (c *fakeConn) QueryContext(_ context.Context, query string, _ []driver.Name
 	}
 }
 
-func (c *fakeConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+func (c *fakeConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.execs = append(c.execs, query)
+	c.execArgs = append(c.execArgs, namedValueArgs(args))
 	return driver.ResultNoRows, nil
 }
 
