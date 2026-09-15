@@ -535,6 +535,8 @@ func TestCoerceIncrementingValue(t *testing.T) {
 		{raw: "2024-01-01 10:30:00", dataType: "TIMESTAMP", want: time.Date(2024, 1, 1, 10, 30, 0, 0, time.UTC)},
 		{raw: "2024-01-01", dataType: "DATE", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{raw: "2024-01-01T00:00:00Z", dataType: "SECONDDATE", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{raw: "2024-01-01T00:00:00Z", dataType: "LONGDATE", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{raw: "2024-01-01", dataType: "DAYDATE", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{raw: "abc", dataType: "BIGINT", wantErr: true},
 		{raw: "yesterday", dataType: "TIMESTAMP", wantErr: true},
 	}

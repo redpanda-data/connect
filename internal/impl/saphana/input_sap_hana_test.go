@@ -168,6 +168,72 @@ incrementing_initial_value: "5"
 `,
 			errContains: "incrementing_initial_value",
 		},
+		// Defaulted polling fields are inert in bulk/query mode too, but only an
+		// explicit non-default value signals intent, so that is what is rejected.
+		{
+			name: "bulk with non-default poll_interval",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: bulk
+table: ORDERS
+poll_interval: 5s
+`,
+			errContains: "poll_interval",
+		},
+		{
+			name: "bulk with default poll_interval spelled out is accepted",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: bulk
+table: ORDERS
+poll_interval: 60s
+`,
+		},
+		{
+			name: "incrementing with non-default timestamp_delay",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: ORDERS
+incrementing_column: ID
+timestamp_delay: 30s
+`,
+			errContains: "timestamp_delay",
+		},
+		{
+			name: "incrementing with non-default timestamp_clock",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: ORDERS
+incrementing_column: ID
+timestamp_clock: database_utc
+`,
+			errContains: "timestamp_clock",
+		},
+		{
+			name: "checkpoint_cache_key without checkpoint_cache",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: ORDERS
+incrementing_column: ID
+checkpoint_cache_key: custom_key
+`,
+			errContains: "checkpoint_cache_key",
+		},
+		{
+			name: "timestamp mode with non-default timestamp_delay is accepted",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: ORDERS
+timestamp_column: TS
+timestamp_delay: 30s
+timestamp_clock: database_utc
+poll_interval: 5s
+`,
+		},
 		{
 			name: "fetch_size below one",
 			yaml: `
