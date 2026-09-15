@@ -1,0 +1,53 @@
+http:
+  debug_endpoints: true
+
+# Same as benchmark_config_toxiproxy.yaml, but points at the oracledb-scnbump
+# container (via the 'oracle-scnbump' toxiproxy proxy, task
+# toxiproxy:scnbump:up in connect_contrib_3's bench dir - port 14522 ->
+# 1522) instead of the regular oracledb container. Reset the checkpoint back
+# to the pre-gap baseline first with `task scnbump:reset-checkpoint`.
+#
+# log_count variant, for an A/B against benchmark_config_scnbump_scnwindow.yaml
+# (the scn_window variant, tuned to match a real customer's production
+# scn_window_size/max_scn_window_size). log_count_min/growth_max are raised
+# well above the shipped defaults (2/4) - a run at the defaults needed ~3.5x
+# more LogMiner session restarts than scn_window's customer config to cover
+# the same SCN range, since the budget never grows above log_count_min unless
+# a stall (no forward progress) occurs, which a real backlog rarely triggers.
+# This tests whether a much higher floor closes that gap.
+input:
+  oracledb_cdc:
+    connection_string: oracle://c%23%23testdb:testdb123@localhost:14522/FREE
+    pdb_name: TESTPDB
+    snapshot_mode: none
+    snapshot_max_batch_size: 5000
+    logminer:
+      window_strategy: log_count
+      backoff_interval: 10s
+      mining_interval: 100ms
+      strategy: "online_catalog"
+      lob_enabled: true
+    include:
+      - TESTDB.USERS
+      - TESTDB.PRODUCTS
+      - TESTDB.CART
+    batching:
+      period: 1s
+
+output:
+  # processors:
+  #   - benchmark:
+  #       interval: 1s
+  #       count_bytes: true
+  # file:
+  #   path: "./benchmark_results.json"
+  #   codec: lines
+  stdout: {}
+
+logger:
+  level: DEBUG
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true

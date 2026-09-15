@@ -1,0 +1,48 @@
+http:
+  debug_endpoints: true
+
+# Identical to benchmark_config.yaml, except the connection routes through the
+# 'oracle' toxiproxy proxy (task toxiproxy:up) instead of hitting the
+# oracledb container directly - lets you inject latency/bandwidth/drops with
+# `toxiproxy-cli toxic add oracle ...` while the connector runs against a
+# real, unmodified Oracle database.
+input:
+  oracledb_cdc:
+    connection_string: oracle://c%23%23testdb:testdb123@localhost:14521/FREE?PREFETCH_ROWS=5000
+    pdb_name: TESTPDB
+    snapshot_mode: none
+    snapshot_max_batch_size: 5000
+    logminer:
+      # window_strategy: log_count
+      # log_count_min: 3
+      # log_count_growth_max: 10
+      scn_window_size: 10000
+      max_scn_window_size: 10000
+      backoff_interval: 10s
+      mining_interval: 0ms
+      strategy: "online_catalog"
+      lob_enabled: true
+    include:
+      - TESTDB.USERS
+      - TESTDB.PRODUCTS
+      - TESTDB.CART
+    batching:
+      period: 1s
+
+output:
+  # processors:
+  #   - benchmark:
+  #       interval: 1s
+  #       count_bytes: true
+  # file:
+  #   path: "./benchmark_results.json"
+  #   codec: lines
+  stdout: {}
+
+logger:
+  level: DEBUG
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
