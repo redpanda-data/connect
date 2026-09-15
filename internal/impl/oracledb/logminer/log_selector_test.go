@@ -58,7 +58,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 
 		require.Len(t, selected, 2)
 		assert.Equal(t, files[:2], selected)
-		assert.Equal(t, uint64(2000), endSCN, "endSCN should be the last selected file's NextSCN")
+		assert.Equal(t, uint64(1999), endSCN, "endSCN should be the last selected file's NextSCN minus 1 - NextSCN belongs to the following, unselected file")
 		assert.True(t, capped)
 	})
 
@@ -186,7 +186,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 
 		require.Len(t, selected, 2, "budget should truncate to [arch#8, online#9], excluding online#10")
 		assert.Equal(t, files[:2], selected)
-		assert.Equal(t, uint64(9000), endSCN, "endSCN must be online#9's NextSCN, not dbCurrentSCN")
+		assert.Equal(t, uint64(8999), endSCN, "endSCN must be online#9's NextSCN minus 1, not dbCurrentSCN")
 		assert.True(t, capped, "must be capped - online#10 was not actually selected or mined")
 	})
 
@@ -206,6 +206,21 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.Equal(t, files, selected)
 		assert.Equal(t, uint64(20000), endSCN, "endSCN should fall back to the live current SCN")
 		assert.False(t, capped)
+	})
+
+	t.Run("regression: endSCN must not land on the next unselected file's first SCN", func(t *testing.T) {
+		s := &logFileSelector{minCount: 2, growthMax: 4}
+		files := []*LogFile{
+			mkLogFile(1, 1000, "ARCHIVED"),
+			mkLogFile(2, 2000, "ARCHIVED"),
+			mkLogFile(3, 3000, "ARCHIVED"),
+		}
+
+		_, endSCN, capped := s.selectForSession(files, 9000)
+
+		require.True(t, capped)
+		assert.Less(t, endSCN, files[1].NextSCN, "endSCN must stop strictly before the unselected next file's first SCN")
+		assert.Equal(t, files[1].NextSCN-1, endSCN)
 	})
 
 	t.Run("count reset to minCount after a successful cycle takes effect on the next selection", func(t *testing.T) {
