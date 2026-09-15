@@ -40,6 +40,24 @@ var (
 	// before being forcibly restarted, independent of redo log switches. 0 disables this,
 	// restarting only on log switches (the previous, and still default, behaviour).
 	DefaultMaxSessionAge = 0 * time.Second
+	// DefaultLogCountMin is the minimum number of redo log files mined per cycle
+	// under the WindowStrategyLogCount window strategy.
+	DefaultLogCountMin = 2
+	// DefaultLogCountGrowthMax is the ceiling the log file budget can grow to under
+	// the WindowStrategyLogCount window strategy, once forward progress stalls.
+	DefaultLogCountGrowthMax = 4
+)
+
+// WindowStrategy selects how the SCN range mined per LogMiner cycle is sized.
+type WindowStrategy string
+
+const (
+	// WindowStrategySCNWindow sizes the mined range by growing/shrinking a fixed
+	// SCN-count window each cycle.
+	WindowStrategySCNWindow WindowStrategy = "scn_window"
+	// WindowStrategyLogCount sizes the mined range by a bounded number of redo
+	// log files per cycle.
+	WindowStrategyLogCount WindowStrategy = "log_count"
 )
 
 // MiningStrategy defines how LogMiner accesses dictionary information
@@ -70,6 +88,9 @@ type Config struct {
 	PDBName                string
 	TransactionCacheConfig TransactionCacheConfig
 	MaxSessionAge          time.Duration
+	WindowStrategy         WindowStrategy
+	LogCountMin            int
+	LogCountGrowthMax      int
 }
 
 // NewDefaultConfig returns a Config with default values
@@ -84,5 +105,8 @@ func NewDefaultConfig() *Config {
 		MaxTransactionEvents:  DefaultMaxTransactionEvents,
 		LOBEnabled:            DefaultLOBEnabled,
 		MaxSessionAge:         DefaultMaxSessionAge,
+		WindowStrategy:        WindowStrategySCNWindow,
+		LogCountMin:           DefaultLogCountMin,
+		LogCountGrowthMax:     DefaultLogCountGrowthMax,
 	}
 }

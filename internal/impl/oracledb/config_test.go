@@ -9,6 +9,7 @@
 package oracledb
 
 import (
+	"fmt"
 	"net/url"
 	"testing"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer"
 )
 
 func TestBuildConnectionURL(t *testing.T) {
@@ -225,4 +228,85 @@ logminer: {}
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestParseLogMinerConfigLogCountValidation(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+`
+
+	tests := []struct {
+		name         string
+		logminerYAML string
+		errContains  string
+	}{
+		{
+			name:         "defaults are valid",
+			logminerYAML: "logminer: {}\n",
+		},
+		{
+			name: "log_count_min positive and log_count_growth_max above it is valid",
+			logminerYAML: fmt.Sprintf(`logminer:
+  %s: 3
+  %s: 5
+`, ociFieldLogCountMin, ociFieldLogCountGrowthMax),
+		},
+		{
+			name: "log_count_growth_max equal to log_count_min is valid",
+			logminerYAML: fmt.Sprintf(`logminer:
+  %s: 3
+  %s: 3
+`, ociFieldLogCountMin, ociFieldLogCountGrowthMax),
+		},
+		{
+			name: "log_count_min zero is invalid",
+			logminerYAML: fmt.Sprintf(`logminer:
+  %s: 0
+`, ociFieldLogCountMin),
+			errContains: fmt.Sprintf("logminer.%s must be greater than 0, got 0", ociFieldLogCountMin),
+		},
+		{
+			name: "log_count_min negative is invalid",
+			logminerYAML: fmt.Sprintf(`logminer:
+  %s: -1
+`, ociFieldLogCountMin),
+			errContains: fmt.Sprintf("logminer.%s must be greater than 0, got -1", ociFieldLogCountMin),
+		},
+		{
+			name: "log_count_growth_max below log_count_min is invalid",
+			logminerYAML: fmt.Sprintf(`logminer:
+  %s: 5
+  %s: 2
+`, ociFieldLogCountMin, ociFieldLogCountGrowthMax),
+			errContains: fmt.Sprintf("logminer.%s (2) must be greater than or equal to logminer.%s (5)", ociFieldLogCountGrowthMax, ociFieldLogCountMin),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			conf, err := oracleDBStreamConfigSpec.ParseYAML(minimalOracleCDCYAML+test.logminerYAML, nil)
+			require.NoError(t, err)
+
+			_, err = parseLogMinerConfig(conf)
+			if test.errContains != "" {
+				require.ErrorContains(t, err, test.errContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestParseLogMinerConfigDefaultsMatchLintConstants sanity-checks that the defaults
+// baked into logminer.NewDefaultConfig() line up with the constants the lint rule in
+// input_oracledb_cdc.go compares against, since that rule hardcodes the default
+// values rather than deriving them from logminer.NewDefaultConfig().
+func TestParseLogMinerConfigDefaultsMatchLintConstants(t *testing.T) {
+	cfg := logminer.NewDefaultConfig()
+	assert.Equal(t, logminer.DefaultSCNWindowSize, cfg.SCNWindowSize)
+	assert.Equal(t, logminer.DefaultMaxSCNWindowSize, cfg.MaxSCNWindowSize)
+	assert.Equal(t, logminer.DefaultLogCountMin, cfg.LogCountMin)
+	assert.Equal(t, logminer.DefaultLogCountGrowthMax, cfg.LogCountGrowthMax)
+	assert.Equal(t, logminer.WindowStrategySCNWindow, cfg.WindowStrategy)
 }
