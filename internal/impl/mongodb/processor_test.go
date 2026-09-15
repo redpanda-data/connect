@@ -15,6 +15,7 @@
 package mongodb_test
 
 import (
+	"encoding/base64"
 	"fmt"
 	"testing"
 	"time"
@@ -100,6 +101,12 @@ func TestProcessorIntegration(t *testing.T) {
 	t.Run("aggregate", func(t *testing.T) {
 		testMongoDBProcessorAggregate(mongoClient, port, t)
 	})
+	t.Run("insert_preserve_binary", func(t *testing.T) {
+		testMongoDBProcessorInsertBinaryPreserve(mongoClient, port, t)
+	})
+	t.Run("insert_without_preserve_binary", func(t *testing.T) {
+		testMongoDBProcessorInsertBinaryDontPreserve(mongoClient, port, t)
+	})
 }
 
 func testMProc(t testing.TB, port, collection, configYAML string) *mongodb.Processor {
@@ -131,6 +138,18 @@ func assertMessagesEqual(t testing.TB, batch service.MessageBatch, to []string) 
 		mBytes, err := batch[i].AsBytes()
 		require.NoError(t, err)
 		assert.Equal(t, exp, string(mBytes))
+	}
+}
+
+func assertStructuredMessagesEqual(t testing.TB, batch service.MessageBatch, to []any) {
+	t.Helper()
+	require.Len(t, batch, len(to))
+
+	for i, exp := range to {
+		actual, err := batch[i].AsStructured()
+		require.NoError(t, err)
+
+		assert.Equal(t, exp, actual)
 	}
 }
 
@@ -572,4 +591,81 @@ document_map: |
 			assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", t.Name(), explanation)
 		})
 	}
+}
+
+func testMongoDBProcessorInsertBinaryPreserve(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := t.Context()
+	m := testMProc(t, port, "", `
+write_concern:
+  w: "1"
+  j: false
+  timeout: ""
+operation: "insert-one"
+document_map: |
+  root = this
+preserve_binary: true
+`)
+	collection := mongoClient.Database("TestDB").Collection("TestCollection")
+
+	rawBytes := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+
+	msg := service.NewMessage(nil)
+	msg.SetStructured(map[string]any{"binary_field": rawBytes})
+
+	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{msg})
+	require.NoError(t, err)
+	require.Len(t, resMsgs, 1)
+
+	assertStructuredMessagesEqual(t, resMsgs[0], []any{
+		map[string]any{"binary_field": rawBytes},
+	})
+
+	// Validate the record is in the MongoDB
+	result := collection.FindOne(tCtx, bson.M{"binary_field": rawBytes})
+	b, err := result.Raw()
+	assert.NoError(t, err)
+	val := b.Lookup("binary_field")
+
+	subtype, actualBytes, ok := val.BinaryOK()
+	assert.True(t, ok)
+	assert.Equal(t, byte(0), subtype)
+	assert.Equal(t, rawBytes, actualBytes)
+}
+
+func testMongoDBProcessorInsertBinaryDontPreserve(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := t.Context()
+	m := testMProc(t, port, "", `
+write_concern:
+  w: "1"
+  j: false
+  timeout: ""
+operation: "insert-one"
+document_map: |
+  root = this
+`)
+	collection := mongoClient.Database("TestDB").Collection("TestCollection")
+
+	rawBytes := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	encodedString := base64.StdEncoding.EncodeToString(rawBytes)
+
+	msg := service.NewMessage(nil)
+	msg.SetStructured(map[string]any{"binary_field": rawBytes})
+
+	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{msg})
+	require.NoError(t, err)
+	require.Len(t, resMsgs, 1)
+
+	assertStructuredMessagesEqual(t, resMsgs[0], []any{
+		map[string]any{"binary_field": rawBytes},
+	})
+
+	// Validate the record is in the MongoDB
+	result := collection.FindOne(tCtx, bson.M{"binary_field": encodedString})
+	b, err := result.Raw()
+	assert.NoError(t, err)
+	val := b.Lookup("binary_field")
+
+	stringVal, ok := val.StringValueOK()
+	require.True(t, ok)
+	assert.Equal(t, encodedString, stringVal)
 }
