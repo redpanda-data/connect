@@ -11,6 +11,7 @@ package logminer
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -27,6 +28,24 @@ type SessionManager struct {
 	loadedFiles   []*LogFile
 	sessionOpened time.Time
 	log           *service.Logger
+
+	startStmts map[string]*sql.Stmt
+	endStmt    *sql.Stmt
+	addStmts   map[string]*sql.Stmt
+}
+
+// preparedStmt returns the cached statement for key, preparing and caching it on query text query if this is the first use of that key.
+func preparedStmt(ctx context.Context, conn *sql.Conn, cache map[string]*sql.Stmt, key, query string) (*sql.Stmt, error) {
+	if stmt, exists := cache[key]; exists {
+		return stmt, nil
+	}
+
+	stmt, err := conn.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	cache[key] = stmt
+	return stmt, nil
 }
 
 // NewSessionManager creates a new SessionManager with the specified configuration.
@@ -44,9 +63,11 @@ func NewSessionManager(cfg *Config, logger *service.Logger) *SessionManager {
 	}
 
 	return &SessionManager{
-		cfg:  cfg,
-		opts: options,
-		log:  logger,
+		cfg:        cfg,
+		opts:       options,
+		log:        logger,
+		startStmts: make(map[string]*sql.Stmt),
+		addStmts:   make(map[string]*sql.Stmt),
 	}
 }
 
@@ -74,7 +95,11 @@ func (sm *SessionManager) AddLogFile(ctx context.Context, conn *sql.Conn, files 
 		}
 
 		q := fmt.Sprintf("BEGIN DBMS_LOGMNR.ADD_LOGFILE(LOGFILENAME => :1, OPTIONS => %s); END;", opt)
-		if _, err := conn.ExecContext(ctx, q, f.FileName); err != nil {
+		stmt, err := preparedStmt(ctx, conn, sm.addStmts, opt, q)
+		if err != nil {
+			return fmt.Errorf("preparing logminer add log file statement with option '%s': %w", opt, err)
+		}
+		if _, err := stmt.ExecContext(ctx, f.FileName); err != nil {
 			return fmt.Errorf("adding logminer log file '%s' with option '%s': %w", f.FileName, opt, err)
 		}
 
@@ -97,8 +122,12 @@ func (sm *SessionManager) StartSession(ctx context.Context, conn *sql.Conn, star
 
 	optionsStr := strings.Join(opts, " + ")
 
-	q := fmt.Sprintf("BEGIN SYS.DBMS_LOGMNR.START_LOGMNR(STARTSCN => %d, ENDSCN => %d, OPTIONS => %s); END;", startSCN, endSCN, optionsStr)
-	if _, err := conn.ExecContext(ctx, q); err != nil {
+	q := "BEGIN SYS.DBMS_LOGMNR.START_LOGMNR(STARTSCN => :1, ENDSCN => :2, OPTIONS => " + optionsStr + "); END;"
+	stmt, err := preparedStmt(ctx, conn, sm.startStmts, optionsStr, q)
+	if err != nil {
+		return fmt.Errorf("preparing start logminer session statement: %w", err)
+	}
+	if _, err := stmt.ExecContext(ctx, startSCN, endSCN); err != nil {
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
 
@@ -108,7 +137,14 @@ func (sm *SessionManager) StartSession(ctx context.Context, conn *sql.Conn, star
 
 // EndSession ends the current LogMiner session
 func (sm *SessionManager) EndSession(ctx context.Context, conn *sql.Conn) error {
-	if _, err := conn.ExecContext(ctx, "BEGIN SYS.DBMS_LOGMNR.END_LOGMNR(); END;"); err != nil {
+	if sm.endStmt == nil {
+		stmt, err := conn.PrepareContext(ctx, "BEGIN SYS.DBMS_LOGMNR.END_LOGMNR(); END;")
+		if err != nil {
+			return fmt.Errorf("preparing end logminer session statement: %w", err)
+		}
+		sm.endStmt = stmt
+	}
+	if _, err := sm.endStmt.ExecContext(ctx); err != nil {
 		return fmt.Errorf("ending logminer session: %w", err)
 	}
 
@@ -116,6 +152,37 @@ func (sm *SessionManager) EndSession(ctx context.Context, conn *sql.Conn) error 
 	sm.loadedFiles = nil
 	sm.sessionOpened = time.Time{}
 	return nil
+}
+
+// Close releases all statements prepared on the session's dedicated
+// connection. It must only be called once the connection itself is done
+// being used for LogMiner operations (i.e. at ReadChanges teardown), since a
+// closed statement cannot be reused.
+func (sm *SessionManager) Close() error {
+	var errs []error
+
+	for key, stmt := range sm.startStmts {
+		if err := stmt.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing start logminer statement for options '%s': %w", key, err))
+		}
+	}
+	sm.startStmts = make(map[string]*sql.Stmt)
+
+	for key, stmt := range sm.addStmts {
+		if err := stmt.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing add logfile statement for options '%s': %w", key, err))
+		}
+	}
+	sm.addStmts = make(map[string]*sql.Stmt)
+
+	if sm.endStmt != nil {
+		if err := sm.endStmt.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing end logminer statement: %w", err))
+		}
+		sm.endStmt = nil
+	}
+
+	return errors.Join(errs...)
 }
 
 // IsActive returns true if a LogMiner session is currently active.
