@@ -384,7 +384,7 @@ func QuotePostgresIdentifier(name string) string {
 // UnquotePostgresIdentifier returns the valid unescaped identifier.
 func UnquotePostgresIdentifier(quoted string) (string, error) {
 	var output strings.Builder
-	if !strings.HasPrefix(quoted, `"`) || !strings.HasSuffix(quoted, `"`) || len(quoted) < 2 {
+	if !strings.HasPrefix(quoted, `"`) || !strings.HasSuffix(quoted, `"`) || len(quoted) < 3 {
 		return "", errors.New("missing quotes for identifier")
 	}
 	unquoted := quoted[1 : len(quoted)-1]
