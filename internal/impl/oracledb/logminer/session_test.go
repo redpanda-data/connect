@@ -73,6 +73,46 @@ func TestSessionManager(t *testing.T) {
 			"the literal endSCN value must not be inlined into the query text once bind parameters are used")
 	})
 
+	t.Run("RejectsReuseAcrossDifferentConnections", func(t *testing.T) {
+		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+
+		t.Run("AddLogFile", func(t *testing.T) {
+			cfg := NewDefaultConfig()
+			sm := NewSessionManager(cfg, service.NewLoggerFromSlog(slog.Default()))
+			conn1, _ := newFakeSQLConn(t, files)
+			conn2, _ := newFakeSQLConn(t, files)
+
+			require.NoError(t, sm.AddLogFile(t.Context(), conn1, files))
+			err := sm.AddLogFile(t.Context(), conn2, files)
+			require.Error(t, err, "a second, different connection must be rejected rather than silently reusing statements prepared on the first")
+			assert.Contains(t, err.Error(), "bound to a different connection")
+		})
+
+		t.Run("StartSession", func(t *testing.T) {
+			cfg := NewDefaultConfig()
+			sm := NewSessionManager(cfg, service.NewLoggerFromSlog(slog.Default()))
+			conn1, _ := newFakeSQLConn(t, files)
+			conn2, _ := newFakeSQLConn(t, files)
+
+			require.NoError(t, sm.StartSession(t.Context(), conn1, 100, 200, false))
+			err := sm.StartSession(t.Context(), conn2, 200, 300, false)
+			require.Error(t, err, "a second, different connection must be rejected rather than silently mining against the stale one")
+			assert.Contains(t, err.Error(), "bound to a different connection")
+		})
+
+		t.Run("EndSession", func(t *testing.T) {
+			cfg := NewDefaultConfig()
+			sm := NewSessionManager(cfg, service.NewLoggerFromSlog(slog.Default()))
+			conn1, _ := newFakeSQLConn(t, files)
+			conn2, _ := newFakeSQLConn(t, files)
+
+			require.NoError(t, sm.AddLogFile(t.Context(), conn1, files))
+			err := sm.EndSession(t.Context(), conn2)
+			require.Error(t, err, "a second, different connection must be rejected rather than silently ending a session on the stale one")
+			assert.Contains(t, err.Error(), "bound to a different connection")
+		})
+	})
+
 	t.Run("PrepareLogsAndStartSessionRestartsOnMaxSessionAge", func(t *testing.T) {
 		cfg := NewDefaultConfig()
 		cfg.MaxSessionAge = 20 * time.Millisecond
@@ -317,6 +357,21 @@ func TestGetLogsBySCNRangeQueryShape(t *testing.T) {
 	assert.Contains(t, archivedBranch, "A.RESETLOGS_TIME = D.RESETLOGS_TIME")
 }
 
+func TestGetLogsBySCNRangeRejectsReuseAcrossDifferentConnections(t *testing.T) {
+	files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+	conn1, _ := newFakeSQLConn(t, files)
+	conn2, _ := newFakeSQLConn(t, files)
+
+	collector := NewLogFileCollector()
+
+	_, err := collector.GetLogsBySCNRange(t.Context(), conn1, 100, 200)
+	require.NoError(t, err)
+
+	_, err = collector.GetLogsBySCNRange(t.Context(), conn2, 200, 300)
+	require.Error(t, err, "a second, different connection must be rejected rather than silently reusing the statement prepared on the first")
+	assert.Contains(t, err.Error(), "bound to a different connection")
+}
+
 func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
 	logger := service.NewLoggerFromSlog(slog.Default())
 	cfg := NewDefaultConfig()
@@ -346,6 +401,26 @@ func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
 		"the CURRENT_SCN check must execute once per cycle")
 	assert.Equal(t, 1, fc.prepareCount("SELECT CURRENT_SCN FROM V$DATABASE"),
 		"the CURRENT_SCN check must be prepared once (first cycle) and reused on every subsequent cycle")
+}
+
+func TestMiningCycleRejectsReuseAcrossDifferentConnections(t *testing.T) {
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cfg := NewDefaultConfig()
+
+	lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, &publisherStub{}, cfg, nil, service.MockResources().Metrics(), logger)
+
+	files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1_000_000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+	conn1, fc1 := newFakeSQLConn(t, files)
+	conn2, fc2 := newFakeSQLConn(t, files)
+
+	fc1.currentSCN = lm.currentSCN + uint64(lm.windowSize) + uint64(cfg.MinSCNWindowSize) + 1
+	_, err := lm.miningCycle(t.Context(), conn1)
+	require.NoError(t, err)
+
+	fc2.currentSCN = lm.currentSCN + uint64(lm.windowSize) + uint64(cfg.MinSCNWindowSize) + 1
+	_, err = lm.miningCycle(t.Context(), conn2)
+	require.Error(t, err, "a second, different connection must be rejected rather than silently mining against the stale one")
+	assert.Contains(t, err.Error(), "bound to a different connection")
 }
 
 // --- fake database/sql driver used to exercise SessionManager/LogMiner

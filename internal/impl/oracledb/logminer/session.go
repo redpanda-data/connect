@@ -36,6 +36,10 @@ type SessionManager struct {
 	startStmts map[string]*sql.Stmt
 	endStmt    *sql.Stmt
 	addStmts   map[string]*sql.Stmt
+	// boundConn is the connection every cached statement above was prepared
+	// on. A *sql.Stmt from Conn.PrepareContext is permanently bound to that
+	// one connection, so it must never be reused against a different one.
+	boundConn *sql.Conn
 }
 
 // preparedStmt returns the cached statement for key, preparing and caching it on query text query if this is the first use of that key.
@@ -50,6 +54,24 @@ func preparedStmt(ctx context.Context, conn *sql.Conn, cache map[string]*sql.Stm
 	}
 	cache[key] = stmt
 	return stmt, nil
+}
+
+// bindConn checks conn against *bound, binding to it on the first call.
+// A *sql.Stmt returned by Conn.PrepareContext is permanently tied to the
+// connection it was prepared on, so every method that may reuse a
+// previously cached statement must call this before touching that cache -
+// otherwise a caller that (today, never; in the future, perhaps after a
+// reconnect-in-place) passes a different connection would silently mine
+// against the stale one instead of getting an error.
+func bindConn(bound **sql.Conn, conn *sql.Conn) error {
+	switch {
+	case *bound == nil:
+		*bound = conn
+	case *bound != conn:
+		return errors.New("prepared logminer statements are bound to a different connection than the one provided; " +
+			"this indicates the caller was reconnected without discarding the previous statement cache")
+	}
+	return nil
 }
 
 // NewSessionManager creates a new SessionManager with the specified configuration.
@@ -92,6 +114,10 @@ func (sm *SessionManager) logFilesChanged(newFiles []*LogFile) bool {
 // AddLogFile adds one or more redo log files to the LogMiner session for mining, clearing
 // previously loaded files before adding new files to the list of files to be mined.
 func (sm *SessionManager) AddLogFile(ctx context.Context, conn *sql.Conn, files []*LogFile) error {
+	if err := bindConn(&sm.boundConn, conn); err != nil {
+		return fmt.Errorf("adding logminer log files: %w", err)
+	}
+
 	for i, f := range files {
 		opt := "DBMS_LOGMNR.ADDFILE"
 		if i == 0 {
@@ -117,6 +143,10 @@ func (sm *SessionManager) AddLogFile(ctx context.Context, conn *sql.Conn, files 
 
 // StartSession starts a LogMiner session with ONLINE_CATALOG strategy
 func (sm *SessionManager) StartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, committedDataOnly bool) error {
+	if err := bindConn(&sm.boundConn, conn); err != nil {
+		return fmt.Errorf("starting logminer session: %w", err)
+	}
+
 	opts := make([]string, 0, len(sm.opts))
 	opts = append(opts, sm.opts...)
 
@@ -141,6 +171,10 @@ func (sm *SessionManager) StartSession(ctx context.Context, conn *sql.Conn, star
 
 // EndSession ends the current LogMiner session
 func (sm *SessionManager) EndSession(ctx context.Context, conn *sql.Conn) error {
+	if err := bindConn(&sm.boundConn, conn); err != nil {
+		return fmt.Errorf("ending logminer session: %w", err)
+	}
+
 	if sm.endStmt == nil {
 		stmt, err := conn.PrepareContext(ctx, "BEGIN SYS.DBMS_LOGMNR.END_LOGMNR(); END;")
 		if err != nil {
@@ -185,6 +219,8 @@ func (sm *SessionManager) Close() error {
 		}
 		sm.endStmt = nil
 	}
+
+	sm.boundConn = nil
 
 	return errors.Join(errs...)
 }

@@ -55,6 +55,9 @@ type LogMiner struct {
 
 	contentStmt    *sql.Stmt
 	currentSCNStmt *sql.Stmt
+	// boundConn is the connection contentStmt/currentSCNStmt were prepared
+	// on; see bindConn.
+	boundConn *sql.Conn
 
 	// Redo logs don't include data types so we have to find lob types up front.
 	// ie "TESTDB.PRODUCTS.DESCRIPTION": "NCLOB",
@@ -223,6 +226,8 @@ func (lm *LogMiner) Close() error {
 		errs = append(errs, fmt.Errorf("closing session manager statements: %w", err))
 	}
 
+	lm.boundConn = nil
+
 	return errors.Join(errs...)
 }
 
@@ -251,6 +256,10 @@ func (lm *LogMiner) endExpiredIdleSession(ctx context.Context, conn *sql.Conn) {
 }
 
 func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
+	if err := bindConn(&lm.boundConn, conn); err != nil {
+		return false, fmt.Errorf("running mining cycle: %w", err)
+	}
+
 	// Get database's current SCN to know our target
 	if lm.currentSCNStmt == nil {
 		stmt, err := conn.PrepareContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE")
@@ -971,6 +980,10 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 		return nil
 	}
 
+	if err := bindConn(&lm.boundConn, conn); err != nil {
+		return fmt.Errorf("querying logminer contents: %w", err)
+	}
+
 	// Use the pre-built query from initialization
 	lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
 	if lm.contentStmt == nil {
@@ -1085,6 +1098,8 @@ type LogFile struct {
 // LogFileCollector finds relevant log files to mine
 type LogFileCollector struct {
 	stmt *sql.Stmt
+	// boundConn is the connection stmt was prepared on; see bindConn.
+	boundConn *sql.Conn
 }
 
 // NewLogFileCollector creates a new *LogFileCollector which is responsible for
@@ -1095,6 +1110,10 @@ func NewLogFileCollector() *LogFileCollector {
 
 // GetLogsBySCNRange collects log files whose SCN range overlaps [startSCN, endSCN].
 func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
+	if err := bindConn(&c.boundConn, conn); err != nil {
+		return nil, fmt.Errorf("getting logs by SCN range: %w", err)
+	}
+
 	query := `
 		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD
 		FROM (
@@ -1174,6 +1193,7 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 
 // Close releases the prepared GetLogsBySCNRange statement, if any.
 func (c *LogFileCollector) Close() error {
+	c.boundConn = nil
 	if c.stmt == nil {
 		return nil
 	}
