@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- snowflake_put, sql_*: Upgraded the Snowflake `gosnowflake` driver from v1.19.0 to v2.2.0. This fixes CVE-2026-85525 (OCSP responses were accepted without checking that they matched the certificate being validated, so a revoked certificate could be accepted) and stops the driver creating a temporary directory at start-up when the `snowflake` driver is never used. ([@squiidz](https://github.com/squiidz), [#TBD](https://github.com/redpanda-data/connect/pull/TBD))
+- snowflake_put, sql_*: Upgraded the Snowflake `gosnowflake` driver from v1.19.0 to v2.2.0. This fixes CVE-2026-85525 (OCSP responses were accepted without checking that they matched the certificate being validated, so a revoked certificate could be accepted) and stops the driver creating a temporary directory at start-up when the `snowflake` driver is never used. ([@squiidz](https://github.com/squiidz), [#4822](https://github.com/redpanda-data/connect/pull/4822))
 
 ### Fixed
 
