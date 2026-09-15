@@ -42,7 +42,8 @@ type SessionManager struct {
 	boundConn *sql.Conn
 }
 
-// preparedStmt returns the cached statement for key, preparing and caching it on query text query if this is the first use of that key.
+// preparedStmt returns the cached statement for key, preparing and
+// caching it on query text query if this is the first use of that key.
 func preparedStmt(ctx context.Context, conn *sql.Conn, cache map[string]*sql.Stmt, key, query string) (*sql.Stmt, error) {
 	if stmt, exists := cache[key]; exists {
 		return stmt, nil

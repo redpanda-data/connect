@@ -567,7 +567,7 @@ func (s *fakeStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (
 type fakeContentRows struct{}
 
 func (*fakeContentRows) Columns() []string {
-	return []string{"SCN", "SQL_REDO", "OPERATION_CODE", "TABLE_NAME", "SEG_OWNER", "TIMESTAMP", "XID", "COMMIT_SCN", "CSF"}
+	return []string{"SCN", "SQL_REDO", "OPERATION_CODE", "TABLE_NAME", "SEG_OWNER", "TIMESTAMP", "XID", "COMMIT_SCN", "CSF", "USERNAME"}
 }
 
 func (*fakeContentRows) Close() error { return nil }
