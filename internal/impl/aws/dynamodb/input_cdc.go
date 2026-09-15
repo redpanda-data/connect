@@ -128,7 +128,7 @@ DynamoDB Streams capture item-level changes in DynamoDB tables. This input suppo
 This input supports three table discovery modes:
 
 - `+"`single`"+` (default) - Stream from a single table specified in the `+"`tables`"+` field
-- `+"`tag`"+` - Auto-discover and stream from multiple tables based on DynamoDB table tags. Use `+"`table_tag_filter`"+` to filter tables (e.g. `+"`key:value`"+`)
+- `+"`tag`"+` - Auto-discover and stream from multiple tables based on DynamoDB table tags. Use `+"`table_tag_filter`"+` to filter tables (for example, `+"`key:value`"+`)
 - `+"`includelist`"+` - Stream from an explicit list of tables specified in the `+"`tables`"+` field
 
 When using `+"`tag`"+` or `+"`includelist`"+` mode, the connector will stream from all matching tables simultaneously. Each table maintains its own checkpoint state. Use `+"`table_discovery_interval`"+` to periodically rescan for new tables (useful for dynamically tagged tables).
@@ -158,7 +158,7 @@ NOTE: Snapshots use eventually consistent reads and do not provide point-in-time
 
 Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures.
 
-Multiple independent pipelines can share a single checkpoint table by giving each one a distinct `+"`checkpoint_namespace`"+` (for example one namespace per developer or environment). Namespaces isolate checkpoints from each other: a pipeline only sees checkpoints written under its own namespace, so changing (or removing) the namespace causes the pipeline to restart from `+"`start_from`"+`. Note that namespaces do not coordinate consumers — two pipelines sharing the *same* namespace will still overwrite each other's checkpoints.
+Multiple independent pipelines can share a single checkpoint table by giving each one a distinct `+"`checkpoint_namespace`"+` (for example one namespace per developer or environment). Namespaces isolate checkpoints from each other: a pipeline only sees checkpoints written under its own namespace, so changing (or removing) the namespace causes the pipeline to restart from `+"`start_from`"+`. Note that namespaces do not coordinate consumers: two pipelines sharing the *same* namespace will still overwrite each other's checkpoints.
 
 ### Alternative
 
@@ -222,7 +222,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				ShortDescription("Namespace for checkpoints, letting independent pipelines share one checkpoint table without overwriting each other.").
 				Default(""),
 			service.NewBoolField(dciFieldGlobalTable).
-				Description("Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. When the table is auto-created it is created as a global table; when it already exists, its replicas are reconciled (missing regions are added via `UpdateTable`). The existing table must have been created in global mode (`TableId` hash key) — enabling this against a pre-existing non-global checkpoint table fails fast with a clear error.").
+				Description("Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. When the table is auto-created it is created as a global table; when it already exists, its replicas are reconciled (missing regions are added via `UpdateTable`). The existing table must have been created in global mode (`TableId` hash key); enabling this against a pre-existing non-global checkpoint table fails fast with a clear error.").
 				ShortDescription("Provision the checkpoint table as a DynamoDB Global Table so checkpoints replicate across regions. Requires global_table_replicas.").
 				Default(false).
 				Advanced(),

@@ -95,7 +95,7 @@ You can access these metadata fields using xref:guides:bloblang/about.adoc[Blobl
 				Optional().
 				Example("[ERROR]"),
 			service.NewStringField(cwlFieldStartTime).
-				Description("The time to start consuming log events from. Can be an RFC3339 timestamp (e.g., `2024-01-01T00:00:00Z`) or the string `now` to start consuming from the current time. If not set, starts from the beginning of available logs.").
+				Description("The time to start consuming log events from. Can be an RFC3339 timestamp (for example, `2024-01-01T00:00:00Z`) or the string `now` to start consuming from the current time. If not set, starts from the beginning of available logs.").
 				ShortDescription("When to start consuming log events. An RFC3339 timestamp, or now for the current time.").
 				Optional().
 				Example("2024-01-01T00:00:00Z").
