@@ -423,6 +423,67 @@ func TestMiningCycleRejectsReuseAcrossDifferentConnections(t *testing.T) {
 	assert.Contains(t, err.Error(), "bound to a different connection")
 }
 
+func TestLogMinerCloseReleasesAllPreparedStatements(t *testing.T) {
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cfg := NewDefaultConfig()
+
+	lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, &publisherStub{}, cfg, nil, service.MockResources().Metrics(), logger)
+
+	files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1_000_000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+	conn, fc := newFakeSQLConn(t, files)
+
+	fc.currentSCN = lm.currentSCN + uint64(lm.windowSize) + uint64(cfg.MinSCNWindowSize) + 1
+	caughtUp, err := lm.miningCycle(t.Context(), conn)
+	require.NoError(t, err)
+	require.False(t, caughtUp, "database is kept ahead of currentSCN so the cycle must mine, exercising every statement")
+
+	require.NoError(t, lm.sessionMgr.EndSession(t.Context(), conn))
+	require.NoError(t, lm.Close())
+
+	for _, tc := range []struct {
+		name   string
+		substr string
+	}{
+		{"contents query", "V$LOGMNR_CONTENTS"},
+		{"CURRENT_SCN check", "SELECT CURRENT_SCN FROM V$DATABASE"},
+		{"log file listing query", "V$ARCHIVED_LOG"},
+		{"START_LOGMNR", "START_LOGMNR"},
+		{"END_LOGMNR", "END_LOGMNR"},
+		{"ADD_LOGFILE", "ADD_LOGFILE"},
+	} {
+		assert.Equal(t, 1, fc.closeCount(tc.substr), "%s statement must be closed exactly once by lm.Close()", tc.name)
+	}
+
+	// A second Close() must be a safe no-op: every field/cache was already
+	// cleared by the first call, so nothing should be closed again.
+	require.NoError(t, lm.Close(), "Close() must be safe to call twice")
+	for _, tc := range []struct {
+		name   string
+		substr string
+	}{
+		{"contents query", "V$LOGMNR_CONTENTS"},
+		{"CURRENT_SCN check", "SELECT CURRENT_SCN FROM V$DATABASE"},
+		{"log file listing query", "V$ARCHIVED_LOG"},
+		{"START_LOGMNR", "START_LOGMNR"},
+		{"END_LOGMNR", "END_LOGMNR"},
+		{"ADD_LOGFILE", "ADD_LOGFILE"},
+	} {
+		assert.Equal(t, 1, fc.closeCount(tc.substr), "%s must still show exactly one close after a second Close() call - a repeat call must not attempt to close it again", tc.name)
+	}
+
+	// The whole point of resetting boundConn/the statement caches in Close()
+	// is that a subsequent ReadChanges on a fresh connection can bind and
+	// re-prepare rather than failing bindConn's mismatch check.
+	conn2, fc2 := newFakeSQLConn(t, files)
+	fc2.currentSCN = lm.currentSCN + uint64(lm.windowSize) + uint64(cfg.MinSCNWindowSize) + 1
+	_, err = lm.miningCycle(t.Context(), conn2)
+	require.NoError(t, err, "after Close(), a mining cycle on a different connection must re-prepare rather than failing bindConn")
+	assert.Equal(t, 1, fc2.prepareCount("SELECT CURRENT_SCN FROM V$DATABASE"),
+		"the CURRENT_SCN statement must be freshly prepared on the new connection, not reused from the closed one")
+	assert.Equal(t, 1, fc2.prepareCount("V$LOGMNR_CONTENTS"),
+		"the contents statement must be freshly prepared on the new connection, not reused from the closed one")
+}
+
 // --- fake database/sql driver used to exercise SessionManager/LogMiner
 // session logic without a real Oracle connection. Only the subset of
 // database/sql/driver behaviour exercised by prepareLogsAndStartSession
@@ -463,6 +524,7 @@ type fakeConn struct {
 	execs      []string
 	queries    []string
 	prepares   []string
+	closes     []string
 	currentSCN uint64
 }
 
@@ -500,6 +562,33 @@ func (c *fakeConn) prepareCount(substr string) int {
 		}
 	}
 	return n
+}
+
+// closeCount reports how many statements whose query text contains substr
+// have had Close called on them, so tests can pin down that Close() on
+// LogMiner/SessionManager/LogFileCollector actually releases the Oracle-side
+// cursor for every statement it prepared, rather than just clearing local
+// bookkeeping.
+func (c *fakeConn) closeCount(substr string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, q := range c.closes {
+		if strings.Contains(q, substr) {
+			n++
+		}
+	}
+	return n
+}
+
+// recordClose records that query was closed. Called by fakeStmt.Close - kept
+// as a method on fakeConn itself (rather than fakeStmt locking c.mu
+// directly) since this codebase's lint rules require mutex operations to
+// stay on direct fields, not through a chained selector.
+func (c *fakeConn) recordClose(query string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closes = append(c.closes, query)
 }
 
 func (c *fakeConn) Prepare(query string) (driver.Stmt, error) {
@@ -546,7 +635,13 @@ type fakeStmt struct {
 
 func (*fakeStmt) NumInput() int { return -1 }
 
-func (*fakeStmt) Close() error { return nil }
+// Close records the closed query text on the parent connection so tests can
+// observe whether a statement was actually released, mirroring the
+// prepares/queries/execs recording above.
+func (s *fakeStmt) Close() error {
+	s.conn.recordClose(s.query)
+	return nil
+}
 
 func (*fakeStmt) Exec([]driver.Value) (driver.Result, error) {
 	return nil, errors.New("fakeStmt: Exec not supported, expected ExecContext usage")
