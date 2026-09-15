@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - aws_kinesis: Added a `poll_period` field to bound the rate of `GetRecords` calls per shard, and an `enhanced_fan_out` configuration block that consumes streams via a dedicated enhanced fan-out consumer with 2MB/s per shard of read throughput, avoiding the shared 5 reads per second per shard limit. ([@squiidz](https://github.com/squiidz), [#4724](https://github.com/redpanda-data/connect/pull/4724))
 - iceberg: Added optional parquet compression codec configuration supporting snappy, gzip, and zstd compression, with fallback to table properties for compatibility. ([@Jeffail](https://github.com/Jeffail), [#4785](https://github.com/redpanda-data/connect/pull/4785))
 
+### Changed
+
+- snowflake_put, sql_*: Upgraded the Snowflake `gosnowflake` driver from v1.19.0 to v2.2.0. This fixes CVE-2026-85525 (OCSP responses were accepted without checking that they matched the certificate being validated, so a revoked certificate could be accepted) and stops the driver creating a temporary directory at start-up when the `snowflake` driver is never used. ([@squiidz](https://github.com/squiidz), [#TBD](https://github.com/redpanda-data/connect/pull/TBD))
+
 ### Fixed
 
 - general: Bumped amqp091-go dependency to address CVE-2026-79921. ([@josephwoodward](https://github.com/josephwoodward), [#4795](https://github.com/redpanda-data/connect/pull/4795))

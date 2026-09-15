@@ -24,7 +24,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/snowflakedb/gosnowflake"
+	"github.com/snowflakedb/gosnowflake/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -548,7 +548,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 	compression := CompressionType(compressionStr)
 	var autoCompress, sourceCompression string
-	// Should match file extensions in https://github.com/snowflakedb/gosnowflake/blob/2648a83699492c0613a888e66298157fc1e45bf5/file_compression_type.go
+	// Should match file extensions in https://github.com/snowflakedb/gosnowflake/blob/v2.2.0/file_compression_type.go
 	switch compression {
 	case CompressionTypeNone:
 		s.defaultStageFileExtension = "json"
@@ -833,9 +833,10 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 
 		filePath := path.Join(f.stagePath, fileName+"."+f.fileExtension)
 
-		_, err := s.db.ExecContext(gosnowflake.WithFileStream(
-			gosnowflake.WithFileTransferOptions(ctx, &gosnowflake.SnowflakeFileTransferOptions{RaisePutGetError: true}),
-			bytes.NewReader(fBytes)), fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
+		// v2 of the driver always raises PUT/GET errors, so the former
+		// RaisePutGetError file transfer option is no longer needed.
+		_, err := s.db.ExecContext(gosnowflake.WithFilePutStream(ctx, bytes.NewReader(fBytes)),
+			fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
 		if err != nil {
 			return fmt.Errorf("running query: %s", err)
 		}

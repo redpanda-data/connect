@@ -302,7 +302,7 @@
 | github.com/sijms/go-ora/v2 | MIT |
 | github.com/sirupsen/logrus | MIT |
 | github.com/smira/go-statsd | MIT |
-| github.com/snowflakedb/gosnowflake | Apache-2.0 |
+| github.com/snowflakedb/gosnowflake/v2 | Apache-2.0 |
 | github.com/sourcegraph/conc | MIT |
 | github.com/spaolacci/murmur3 | BSD-3-Clause |
 | github.com/stretchr/testify | MIT |
