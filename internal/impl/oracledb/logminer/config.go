@@ -53,15 +53,10 @@ type WindowStrategy string
 
 const (
 	// WindowStrategySCNWindow sizes the mined range by growing/shrinking a fixed
-	// SCN-count window each cycle (see SCNWindowSize/MinSCNWindowSize/MaxSCNWindowSize).
-	// This is the default and remains unchanged from prior releases.
+	// SCN-count window each cycle.
 	WindowStrategySCNWindow WindowStrategy = "scn_window"
 	// WindowStrategyLogCount sizes the mined range by a bounded number of redo
-	// log files per cycle instead of an SCN count, decoupling session cost from
-	// raw SCN movement. This matters when the current SCN can advance with
-	// little or no real transaction volume behind it (RAC cross-instance SCN
-	// sync, a CDB-shared SCN from another PDB, or Oracle's automatic
-	// maintenance window).
+	// log files per cycle.
 	WindowStrategyLogCount WindowStrategy = "log_count"
 )
 

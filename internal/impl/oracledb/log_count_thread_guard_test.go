@@ -80,6 +80,7 @@ func (*threadGuardFakeConn) Close() error { return nil }
 func (*threadGuardFakeConn) Begin() (driver.Tx, error) {
 	return nil, errors.New("threadGuardFakeConn: transactions not supported")
 }
+
 func (c *threadGuardFakeConn) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
 	if c.queryErr != nil {
 		return nil, c.queryErr

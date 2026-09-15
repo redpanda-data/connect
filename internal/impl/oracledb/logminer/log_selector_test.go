@@ -16,14 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mkLogFile builds a minimal *LogFile fixture for exercising selectForSession.
-// FirstSCN/Type are irrelevant to the selection logic and are omitted. status
-// mirrors what GetLogsBySCNRange scans into LogFile.Status: pass
-// logStatusCurrent for the single genuinely open current online log, or any
-// other value (e.g. "ACTIVE"/"INACTIVE" for an online log that has already
-// switched away from, or "ARCHIVED" for an archived log) for a file whose
-// NextSCN is fixed and final - selectForSession derives IsOpenCurrent from
-// this the same way the real scan path does.
 func mkLogFile(sequence int64, nextSCN uint64, status string) *LogFile {
 	return &LogFile{
 		FileName: fmt.Sprintf("log_%d.arc", sequence),
@@ -166,15 +158,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.Equal(t, 2, s.count, "a different file set must not be mistaken for a stall")
 	})
 
-	t.Run("regression: last budgeted file switched away but not archived must still be capped", func(t *testing.T) {
-		// Reviewer-caught data-loss bug: an ACTIVE/INACTIVE online log has
-		// already switched away from and has a fixed, final NextSCN, just
-		// like an archived log - it is NOT the genuinely open current log.
-		// The old code used LogFile.IsCurrent (true for any online-branch
-		// row, including ACTIVE/INACTIVE) to decide this, so a truncated
-		// candidate ending on such a file wrongly jumped endSCN straight to
-		// dbCurrentSCN - silently skipping online#10 (the real current log)
-		// forever, with no error and no indication anything was missed.
+	t.Run("last budgeted file switched away but not archived must still be capped", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
 			mkLogFile(8, 8000, "ARCHIVED"),
@@ -190,11 +174,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.True(t, capped, "must be capped - online#10 was not actually selected or mined")
 	})
 
-	t.Run("regression sanity check: genuinely open current log as the last budgeted file stays uncapped", func(t *testing.T) {
-		// Mirror image of the case above, to confirm the fix didn't
-		// overcorrect: when the last (and here, only remaining) budgeted
-		// file truly is the open current log, endSCN must still fall back
-		// to dbCurrentSCN and capped must still be false.
+	t.Run("genuinely open current log as the last budgeted file stays uncapped", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
 			mkLogFile(8, 8000, "ARCHIVED"),
@@ -208,7 +188,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.False(t, capped)
 	})
 
-	t.Run("regression: endSCN must not land on the next unselected file's first SCN", func(t *testing.T) {
+	t.Run("endSCN must not land on the next unselected file's first SCN", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
 			mkLogFile(1, 1000, "ARCHIVED"),

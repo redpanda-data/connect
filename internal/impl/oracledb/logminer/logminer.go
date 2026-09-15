@@ -45,13 +45,10 @@ type LogMiner struct {
 	logCollector *LogFileCollector
 	currentSCN   uint64
 	windowSize   int
-	// logSelector implements the log_count window strategy. It is always
-	// constructed, but only consulted when cfg.WindowStrategy is
-	// WindowStrategyLogCount.
-	logSelector *logFileSelector
-	sessionMgr  *SessionManager
-	db          *sql.DB
-	dmlParser   *sqlredo.Parser
+	logSelector  *logFileSelector
+	sessionMgr   *SessionManager
+	db           *sql.DB
+	dmlParser    *sqlredo.Parser
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
@@ -301,10 +298,6 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		}
 	}
 
-	// Restart the session on every cycle with explicit SCN bounds. Oracle's START_LOGMNR
-	// with ENDSCN=0 freezes the session's view at session start time, making events written
-	// after session start invisible. Per-window restart with explicit endSCN ensures all
-	// events in [currentSCN, endSCN] are visible.
 	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN, selected); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeMissingLogFile {
@@ -1118,39 +1111,24 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	return lastSCN, nil
 }
 
-// logStatusCurrent is Oracle's V$LOG.STATUS value for the single online
-// redo log group that is genuinely still open and being written to. Every
-// other online group (ACTIVE, INACTIVE, etc.) has already switched away
-// from and has a fixed, final NEXT_CHANGE#, just like an archived log.
 const logStatusCurrent = "CURRENT"
 
 // LogFile represents a redo or archive log file
 type LogFile struct {
-	FileName string
-	FirstSCN uint64
-	NextSCN  uint64
-	Sequence int64
-	Type     string // "ONLINE" or "ARCHIVED"
-	// IsCurrent is true for every row returned by the online-log branch of
-	// GetLogsBySCNRange's query (i.e. Type == "ONLINE"), including
-	// ACTIVE/INACTIVE groups that have already switched away from. It only
-	// answers "did this row come from the online query branch" - it does
-	// NOT mean NextSCN is still advancing. Use IsOpenCurrent for that.
+	FileName  string
+	FirstSCN  uint64
+	NextSCN   uint64
+	Sequence  int64
+	Type      string // "ONLINE" or "ARCHIVED"
 	IsCurrent bool
-	// Status carries Oracle's V$LOG.STATUS value verbatim for online-branch
-	// rows (e.g. "CURRENT", "ACTIVE", "INACTIVE"). Archived-branch rows carry
-	// a fixed placeholder, since an archived log is never the genuinely open
-	// current log.
-	Status string
-	Thread int
+	Status    string
+	Thread    int
 }
 
-// IsOpenCurrent reports whether this is Oracle's single genuinely open
-// current online redo log (V$LOG.STATUS = 'CURRENT') - the only log file
-// whose NextSCN keeps advancing as new redo is written. Unlike IsCurrent,
-// this is false for ACTIVE/INACTIVE online groups that have already
-// switched away from and have a fixed, final NextSCN, just like an
-// archived log.
+// IsOpenCurrent reports whether this is the single open current redo log
+// (see logStatusCurrent) - the only file whose NextSCN keeps advancing.
+// Unlike IsCurrent, it is false for ACTIVE/INACTIVE logs that have already
+// switched away.
 func (lf *LogFile) IsOpenCurrent() bool {
 	return lf.Status == logStatusCurrent
 }
