@@ -1,0 +1,31 @@
+input:
+  sap_hana:
+    dsn: ${HANA_DSN}
+    mode: query
+    query: ${HANA_QUERY}
+    fetch_size: ${BENCH_FETCH_SIZE:10000}
+
+output:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+  kafka_franz:
+    seed_brokers:
+      - localhost:9092
+    topic: ${KAFKA_TOPIC:rpcns-hana-bench-query}
+    max_in_flight: ${BENCH_MAX_IN_FLIGHT:10}
+    batching:
+      count: ${BENCH_BATCH_COUNT:1000}
+      period: 500ms
+
+http:
+  debug_endpoints: true
+
+logger:
+  level: INFO
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
