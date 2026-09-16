@@ -143,10 +143,10 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		Version("4.99.0"),
 	).
 	Field(service.NewIntField(ociFieldMaxParallelSnapshotTables).
-		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
+		Description("Specifies a number of tables (or, for large tables split into range chunks, table chunks) that will be processed in parallel during the snapshot processing stage.").
 		Default(1)).
 	Field(service.NewIntField(ociFieldSnapshotMaxBatchSize).
-		Description("The maximum number of rows fetched per query when taking a snapshot of a table with a `" + ociFieldSnapshotFilters + "` entry configured. Tables without one are streamed through a single unordered cursor, where this value only paces how often a cancellation is checked.").
+		Description("The maximum number of rows fetched per query when taking a snapshot of a table. Tables with a `" + ociFieldSnapshotFilters + "` entry configured, or without a primary key, are streamed through a single cursor, where this value paces how often a batch is emitted (and, for the unordered no-primary-key scan, how often a cancellation is checked). Tables with a primary key and no filter are instead scanned in parallel chunks bounded by `" + ociFieldMaxParallelSnapshotTables + "`, where this value paces each chunk's own cursor.").
 		Default(1000),
 	).
 	// logminer config
