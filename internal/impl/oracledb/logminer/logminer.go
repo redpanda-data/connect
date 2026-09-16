@@ -100,7 +100,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		fmt.Fprintf(&buf, " AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
 	}
 
-	logMinerQuery := "SELECT SCN, SQL_REDO, OPERATION_CODE, TABLE_NAME, SEG_OWNER, TIMESTAMP, XID, COMMIT_SCN, CSF, USERNAME FROM V$LOGMNR_CONTENTS WHERE SCN > :1 AND SCN <= :2" + buf.String()
+	logMinerQuery := "SELECT SCN, SQL_REDO, OPERATION_CODE, TABLE_NAME, SEG_OWNER, TIMESTAMP, XID, COMMIT_SCN, CSF, USERNAME, RS_ID, SSN FROM V$LOGMNR_CONTENTS WHERE SCN > :1 AND SCN <= :2" + buf.String()
 
 	lm := &LogMiner{
 		cfg:                  cfg,
@@ -960,6 +960,8 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			&commitSCN,
 			&csf,
 			&event.Username,
+			&event.RSID,
+			&event.SSN,
 		); err != nil {
 			return err
 		}
@@ -967,6 +969,8 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
 		// Rows with CSF=1 are continuation fragments; CSF=0 is the final (or only) row.
 		// Concatenate all fragments before emitting the event.
+		// All fragments of one change share the same RS_ID and SSN, so the first
+		// fragment (kept as the carrier below) identifies the record.
 		if pending != nil {
 			// Append this fragment's SQL to the accumulated SQL.
 			if event.SQLRedo.Valid {
@@ -1204,6 +1208,8 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, com
 		TransactionID:   dml.TransactionID.String(),
 		CommitTimestamp: commitTimestamp,
 		Username:        dml.Username,
+		RSID:            dml.RSID,
+		SSN:             dml.SSN,
 	}
 
 	switch dml.Operation {

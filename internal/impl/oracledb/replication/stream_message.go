@@ -135,4 +135,9 @@ type MessageEvent struct {
 	ColumnMeta      []ColumnMeta
 	TransactionID   string
 	Username        string
+	// RSID and SSN come from V$LOGMNR_CONTENTS.RS_ID and SSN and together identify
+	// one row change. Empty RSID means not available (snapshot rows, synthetic
+	// LOB-only updates).
+	RSID string
+	SSN  int64
 }
