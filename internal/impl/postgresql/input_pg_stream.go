@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/multischema"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -37,6 +39,8 @@ const (
 	fieldSnapshotMemSafetyFactor   = "snapshot_memory_safety_factor"
 	fieldSnapshotBatchSize         = "snapshot_batch_size"
 	fieldSchema                    = "schema"
+	fieldSchemaInclude             = "schema_include"
+	fieldSchemaExclude             = "schema_exclude"
 	fieldTables                    = "tables"
 	fieldCheckpointLimit           = "checkpoint_limit"
 	fieldTemporarySlot             = "temporary_slot"
@@ -85,6 +89,7 @@ Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then th
 
 This input adds the following metadata fields to each message:
 - table: Name of the table that the message originated from
+- database_schema: The database schema for the table where the message originates from (e.g. "public", "tenant_foo"). Useful for per-schema routing when using schema patterns.
 - operation: Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled
 - lsn: the log sequence number in postgres
 - schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
@@ -104,7 +109,7 @@ A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finit
 			ShortDescription("Emit empty BEGIN and COMMIT messages at the start and end of each transaction.").
 			Default(false)).
 		Field(service.NewBoolField(fieldStreamSnapshot).
-			Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `" + fieldTables + "` is left empty, since the snapshot is only planned for tables listed there.").
+			Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `" + fieldTables + "` is left empty and `" + fieldSchemaInclude + "` is NOT set, since in that case the snapshot is only planned for tables listed in `" + fieldTables + "`. When `" + fieldSchemaInclude + "` IS set, leaving `" + fieldTables + "` empty auto-discovers tables to snapshot instead - see `" + fieldTables + "` below - and every discovered table must have a primary key.").
 			ShortDescription("Stream a snapshot of all existing data before streaming changes. Snapshot tables must have a primary key.").
 			Example(true).
 			Default(false)).
@@ -120,13 +125,54 @@ A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finit
 			Default(1000)).
 		Field(service.NewStringField(fieldSchema).
 			Description("The PostgreSQL schema from which to replicate data.").
-			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`),
+			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`).
+			Optional().
+			Default("public"),
+		).
+		Field(service.NewStringField(fieldSchemaInclude).
+			Description(`The PostgreSQL schema pattern to replicate data from. Accepts an exact schema name or a glob pattern using `+"`*`"+` as a wildcard to match multiple schemas.
+
+When a pattern is used, all schemas whose names match the pattern are replicated using a single replication slot and publication. This is useful for multi-tenant databases where each tenant has its own schema (e.g. `+"`tenant_*`"+` matches `+"`tenant_foo`"+`, `+"`tenant_bar`"+`, etc.).
+
+Double-quoted identifiers are treated as exact names and do not support wildcards.
+
+Schema pattern matching is re-evaluated every time the connector connects or reconnects - including the automatic reconnects that follow a transient replication failure - not just once at pipeline startup. This has two consequences that are easy to miss:
+
+- A schema created after the pipeline started that matches the pattern is picked up on the next reconnect and its tables are added to the publication. However, because the replication slot already exists by then, those tables are treated as already caught up, so with `+"`"+fieldStreamSnapshot+"`"+` enabled the rows that existed in that schema before it was picked up are never snapshotted and are silently missing from the output - only changes made after the schema is picked up are streamed.
+- A schema that is dropped, renamed, or loses its `+"`USAGE`"+` grant between reconnects stops matching and its tables are silently removed from the publication on the next reconnect. A warning is logged when a schema becomes inaccessible due to a lost `+"`USAGE`"+` grant, but that warning is about the schema being inaccessible - it is not logged for a dropped or renamed schema, and nothing is ever logged about the resulting publication drop itself.
+
+If this pattern matches no schema in the database, startup fails with an error - this holds whether or not `+"`"+fieldTables+"`"+` is set. See `+"`"+fieldTables+"`"+` below for what happens when it's left empty.
+
+This pattern can contain characters that wouldn't be allowed in an unquoted schema name, because it's only ever compared against the real name of each schema in the database - it doesn't have to be a valid name itself. For example, a schema literally named `+"`a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11`"+` (which must have been created using double quotes, since hyphens aren't allowed in an unquoted `+"`CREATE SCHEMA`"+` statement) can still be matched using the unquoted pattern `+"`a0eebc99-*`"+`.
+
+This field is mutually exclusive with `+"`"+fieldSchema+"`"+`; when set, it takes over schema resolution entirely and `+"`"+fieldSchema+"`"+` must be left at its default.`).
+			Examples("tenant_*", "*", `"MyCaseSensitiveSchemaNeedingQuotes"`).
+			Optional().
+			Default(""),
+		).
+		Field(service.NewStringListField(fieldSchemaExclude).
+			Description(`A list of schema names or glob patterns to exclude from the schemas matched by ` + "`" + fieldSchemaInclude + "`" + `. Only valid when ` + "`" + fieldSchemaInclude + "`" + ` is set.
+
+Each entry uses the same syntax as ` + "`" + fieldSchemaInclude + "`" + `: an exact schema name, a glob pattern using ` + "`*`" + ` as a wildcard, or a double-quoted exact identifier for an exact, case-sensitive match.
+
+A schema that matches ` + "`" + fieldSchemaInclude + "`" + ` and also matches any entry in this list is excluded from replication. An entry that does not match any schema resolved by ` + "`" + fieldSchemaInclude + "`" + ` is silently ignored, so a typo here simply excludes nothing rather than failing startup.
+
+This exclusion is applied before ` + "`" + fieldTables + "`" + ` is resolved, so it also takes effect when ` + "`" + fieldTables + "`" + ` is left empty and tables are auto-discovered.`).
+			Examples([]string{"tenant_internal", "tenant_test_*"}).
+			Optional().
+			Default([]string{}),
 		).
 		Field(service.NewStringListField(fieldTables).
 			Description(`A list of table names to include in the logical replication. Each table should be specified as a separate item.
 
-If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
-			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
+When ` + "`" + fieldSchemaInclude + "`" + ` is set, this list is resolved against each matched schema independently: a table missing from some (but not all) of the matched schemas is skipped for those schemas only (with a warning logged), tolerating multi-tenant setups where a table hasn't been provisioned in every schema yet. A table that's missing from every matched schema, however, is treated as a configuration error (most likely a typo) and startup fails, naming the missing table.
+
+If left empty while ` + "`" + fieldSchemaInclude + "`" + ` is set, every base table in each matched (and un-excluded, see ` + "`" + fieldSchemaExclude + "`" + `) schema is auto-discovered and published explicitly, instead of listing tables by hand - this is the expected way to replicate "every table" in a multi-tenant, schema-per-tenant setup without also picking up unrelated schemas. Startup fails if no matched schema contains any table.
+
+If left empty while ` + "`" + fieldSchemaInclude + "`" + ` is NOT set, the underlying PostgreSQL publication is instead created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
+			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`}).
+			Optional().
+			Default([]string{})).
 		Field(service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			ShortDescription("The maximum number of messages that can be processed at a given time.").
@@ -215,7 +261,7 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Advanced().
 			Optional()).
 		Field(service.NewStringField(fieldSignalTableName).
-			Description(`The name of the table used to send control signals to the connector, excluding the schema. The table must
+			Description(`The name of the table used to send control signals to the connector, excluding the schema. Not supported when ` + "`" + fieldSchemaInclude + "`" + ` is set, since there is no single schema to anchor the signal table to. The table must
 exist in the schema configured via the ` + "`schema`" + ` field, and must not also appear in ` + "`" + fieldTables + "`" + `
 — the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
 it in both places is rejected at startup. It must have at least these columns — startup validation checks
@@ -268,6 +314,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		dbSlotName                string
 		temporarySlot             bool
 		schema                    string
+		schemaInclude             string
+		schemaExclude             []string
 		tables                    []string
 		streamSnapshot            bool
 		includeTxnMarkers         bool
@@ -312,6 +360,44 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 	if schema, err = conf.FieldString(fieldSchema); err != nil {
 		return nil, err
+	}
+
+	if schemaInclude, err = conf.FieldString(fieldSchemaInclude); err != nil {
+		return nil, err
+	}
+	if schemaInclude != "" {
+		if schema != "public" {
+			return nil, errors.New("schema and schema_include are mutually exclusive")
+		}
+		if err = validateSchemaPattern(schemaInclude); err != nil {
+			return nil, fmt.Errorf("invalid schema_include: %w", err)
+		}
+		// Normalize unquoted patterns to lower-case: PostgreSQL folds unquoted
+		// identifiers at creation time, so TENANT_* and tenant_* resolve identically.
+		// Normalizing early avoids silent case-folding surprises in resolveSchemas.
+		if !strings.HasPrefix(schemaInclude, `"`) {
+			schemaInclude = strings.ToLower(schemaInclude)
+		}
+	}
+
+	if schemaExclude, err = conf.FieldStringList(fieldSchemaExclude); err != nil {
+		return nil, err
+	}
+	if len(schemaExclude) > 0 {
+		if schemaInclude == "" {
+			return nil, errors.New("schema_exclude requires schema_include to be set")
+		}
+		for i, pattern := range schemaExclude {
+			if err = validateSchemaPattern(pattern); err != nil {
+				return nil, fmt.Errorf("invalid schema_exclude entry %q: %w", pattern, err)
+			}
+			// Normalize unquoted patterns to lower-case, mirroring schema_include
+			// above: PostgreSQL folds unquoted identifiers at creation time, so
+			// TENANT_TEST and tenant_test resolve to the same schema.
+			if !strings.HasPrefix(pattern, `"`) {
+				schemaExclude[i] = strings.ToLower(pattern)
+			}
+		}
 	}
 
 	if tables, err = conf.FieldStringList(fieldTables); err != nil {
@@ -361,6 +447,9 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	if signalTableName != "" {
+		if schemaInclude != "" {
+			return nil, fmt.Errorf("%s is not supported when %s is set", fieldSignalTableName, fieldSchemaInclude)
+		}
 		normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(signalTableName)
 		if err != nil {
 			return nil, fmt.Errorf("invalid %s %q: %w", fieldSignalTableName, signalTableName, err)
@@ -407,12 +496,18 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	snapshotMetrics := mgr.Metrics().NewGauge("postgres_snapshot_progress", "table")
 	replicationLag := mgr.Metrics().NewGauge("postgres_replication_lag_bytes")
 
+	var schemaResolver *multischema.Resolver
+	if schemaInclude != "" {
+		schemaResolver = multischema.NewResolver(schemaInclude, schemaExclude)
+	}
+
 	i := &pgStreamInput{
 		streamConfig: &pglogicalstream.Config{
 			DBConfig:         pgConnConfig,
 			TLSConfig:        pgConnConfig.TLSConfig,
 			DBRawDSN:         dsn,
 			DBSchema:         schema,
+			SchemaResolver:   schemaResolver,
 			DBTables:         tables,
 			RefreshAuthToken: iamAuthTokenBuilder,
 
@@ -455,6 +550,34 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	return conf.WrapBatchInputExtractTracingSpanMapping("postgres_cdc", r)
+}
+
+// validateSchemaPattern validates a schema name or glob pattern.
+//
+// Unquoted patterns are matched via ILIKE against stored schema names (see
+// resolveSchemas), not parsed as an identifier, so any character or leading
+// character is accepted - including hyphens and leading digits - except a
+// literal '"'. This lets a glob like "a0eebc99-*" match a UUID-suffixed
+// schema that itself had to be created quoted.
+// Double-quoted identifiers (e.g. "MySchema") are accepted as exact names;
+// wildcards are not allowed inside quotes.
+func validateSchemaPattern(s string) error {
+	if s == "" {
+		return errors.New("schema cannot be empty")
+	}
+	if strings.HasPrefix(s, `"`) {
+		if _, err := sanitize.UnquotePostgresIdentifier(s); err != nil {
+			return fmt.Errorf("invalid quoted schema identifier: %w", err)
+		}
+		if strings.ContainsRune(s, '*') {
+			return errors.New("wildcard '*' is not allowed inside a quoted schema identifier")
+		}
+		return nil
+	}
+	if strings.ContainsRune(s, '"') {
+		return fmt.Errorf("unquoted schema pattern %q must not contain '\"'", s)
+	}
+	return nil
 }
 
 // validateSimpleString ensures we aren't vuln to SQL injection.
@@ -634,6 +757,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					batchMsg.SetError(fmt.Errorf("marshalling WAL row from table %s: %w", msg.Table, marshalErr))
 				}
 				batchMsg.MetaSet("table", msg.Table)
+				batchMsg.MetaSet("database_schema", msg.Schema)
 				batchMsg.MetaSet("operation", string(msg.Operation))
 				if msg.LSN != nil {
 					batchMsg.MetaSet("lsn", *msg.LSN)
