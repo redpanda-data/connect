@@ -32,8 +32,8 @@ BEGIN
         SELECT
             'product-' || n,                                                 -- name
             'info-' || n,                                                    -- info
-            RPAD('This is inlined' || n || '. ', 5, 'X'),                    -- description ~500 KB
-            RPAD('This out out of lined' || n || '. ', 100000, 'X'),         -- description ~500 KB
+            RPAD('This is inlined' || n || '. ', 5, 'X'),                    -- inlinedesc: 5 characters, as RPAD also truncates
+            RPAD('This out out of lined' || n || '. ', 100000, 'X'),         -- outoflinedesc: 4,000 characters (~8 KB as NCLOB, so stored out of line), as RPAD in SQL caps at 4,000
             'help' || n || '@example.com',                                   -- email
             SYSDATE - MOD(n, 10000),                                         -- date_added, spread over ~27 years
             SYSTIMESTAMP,                                                    -- join_date
