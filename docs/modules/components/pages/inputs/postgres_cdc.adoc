@@ -43,7 +43,9 @@ input:
     include_transaction_markers: false
     stream_snapshot: false
     snapshot_batch_size: 1000
-    schema: public # No default (required)
+    schema: public
+    schema_include: ""
+    schema_exclude: []
     tables: [] # No default (required)
     checkpoint_limit: 1024
     temporary_slot: false
@@ -73,7 +75,9 @@ input:
     include_transaction_markers: false
     stream_snapshot: false
     snapshot_batch_size: 1000
-    schema: public # No default (required)
+    schema: public
+    schema_include: ""
+    schema_exclude: []
     tables: [] # No default (required)
     checkpoint_limit: 1024
     temporary_slot: false
@@ -141,7 +145,7 @@ When set to true, empty messages with operation types BEGIN and COMMIT are gener
 
 === `stream_snapshot`
 
-When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `tables` is left empty, since the snapshot is only planned for tables listed there.
+When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `tables` is left empty and `schema_include` is NOT set, since in that case the snapshot is only planned for tables listed in `tables`. When `schema_include` IS set, leaving `tables` empty auto-discovers tables to snapshot instead - see `tables` below - and every discovered table must have a primary key.
 
 
 *Type*: `bool`
@@ -176,6 +180,7 @@ The PostgreSQL schema from which to replicate data.
 
 *Type*: `string`
 
+*Default*: `"public"`
 
 ```yml
 # Examples
@@ -185,11 +190,69 @@ schema: public
 schema: '"MyCaseSensitiveSchemaNeedingQuotes"'
 ```
 
+=== `schema_include`
+
+The PostgreSQL schema pattern to replicate data from. Accepts an exact schema name or a glob pattern using `*` as a wildcard to match multiple schemas.
+
+When a pattern is used, all schemas whose names match the pattern are replicated using a single replication slot and publication. This is useful for multi-tenant databases where each tenant has its own schema (e.g. `tenant_*` matches `tenant_foo`, `tenant_bar`, etc.).
+
+Double-quoted identifiers are treated as exact names and do not support wildcards.
+
+Schema pattern matching runs once at pipeline startup. Schemas created after the pipeline starts will not be picked up until the pipeline is restarted.
+
+If this pattern matches no schema in the database, startup fails with an error - this holds whether or not `tables` is set. See `tables` below for what happens when it's left empty.
+
+This pattern can contain characters that wouldn't be allowed in an unquoted schema name, because it's only ever compared against the real name of each schema in the database - it doesn't have to be a valid name itself. For example, a schema literally named `a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11` (which must have been created using double quotes, since hyphens aren't allowed in an unquoted `CREATE SCHEMA` statement) can still be matched using the unquoted pattern `a0eebc99-*`.
+
+This field is mutually exclusive with `schema`; when set, it takes over schema resolution entirely and `schema` must be left at its default.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+schema_include: tenant_*
+
+schema_include: '*'
+
+schema_include: '"MyCaseSensitiveSchemaNeedingQuotes"'
+```
+
+=== `schema_exclude`
+
+A list of schema names or glob patterns to exclude from the schemas matched by `schema_include`. Only valid when `schema_include` is set.
+
+Each entry uses the same syntax as `schema_include`: an exact schema name, a glob pattern using `*` as a wildcard, or a double-quoted exact identifier for an exact, case-sensitive match.
+
+A schema that matches `schema_include` and also matches any entry in this list is excluded from replication. An entry that does not match any schema resolved by `schema_include` is silently ignored, so a typo here simply excludes nothing rather than failing startup.
+
+This exclusion is applied before `tables` is resolved, so it also takes effect when `tables` is left empty and tables are auto-discovered.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+schema_exclude:
+  - tenant_internal
+  - tenant_test_*
+```
+
 === `tables`
 
 A list of table names to include in the logical replication. Each table should be specified as a separate item.
 
-If left empty, the underlying PostgreSQL publication is created `FOR ALL TABLES`, which replicates every table in every schema of the database, ignoring `schema`. This also disables `stream_snapshot`, since the initial snapshot is only planned for tables listed here.
+When `schema_include` is set, this list is resolved against each matched schema independently: a table missing from some (but not all) of the matched schemas is skipped for those schemas only (with a warning logged), tolerating multi-tenant setups where a table hasn't been provisioned in every schema yet. A table that's missing from every matched schema, however, is treated as a configuration error (most likely a typo) and startup fails, naming the missing table.
+
+If left empty while `schema_include` is set, every base table in each matched (and un-excluded, see `schema_exclude`) schema is auto-discovered and published explicitly, instead of listing tables by hand - this is the expected way to replicate "every table" in a multi-tenant, schema-per-tenant setup without also picking up unrelated schemas. Startup fails if no matched schema contains any table.
+
+If left empty while `schema_include` is NOT set, the underlying PostgreSQL publication is instead created `FOR ALL TABLES`, which replicates every table in every schema of the database, ignoring `schema`. This also disables `stream_snapshot`, since the initial snapshot is only planned for tables listed here.
 
 
 *Type*: `array`
@@ -566,7 +629,7 @@ Optional external ID for the role assumption.
 
 === `signal_table_name`
 
-The name of the table used to send control signals to the connector, excluding the schema. The table must
+The name of the table used to send control signals to the connector, excluding the schema. Not supported when `schema_include` is set, since there is no single schema to anchor the signal table to. The table must
 exist in the schema configured via the `schema` field, and must not also appear in `tables`
 — the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
 it in both places is rejected at startup. It must have at least these columns — startup validation checks
