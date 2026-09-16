@@ -1,0 +1,65 @@
+name: Needs Review Digest
+
+on:
+  schedule:
+    - cron: "0 9 * * 1-5" # weekdays at 9am UTC
+  workflow_dispatch:
+
+jobs:
+  needs-review-digest:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+
+    steps:
+      - name: List PRs needing review
+        id: list
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr list --repo "${{ github.repository }}" \
+            --state open \
+            --label "needs review" \
+            --json number,title,url,author,updatedAt \
+            --limit 100 \
+            | jq 'sort_by(.updatedAt)' \
+            | tee "$RUNNER_TEMP/needs-review-prs.json" | jq .
+
+          COUNT=$(jq 'length' "$RUNNER_TEMP/needs-review-prs.json")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "**PRs needing review:** $COUNT" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build Slack payload
+        if: steps.list.outputs.count != '0'
+        run: |
+          jq --argjson count "${{ steps.list.outputs.count }}" '{
+            blocks: (
+              [{
+                type: "header",
+                text: {
+                  type: "plain_text",
+                  text: ($count | tostring) + " PR" + (if $count == 1 then "" else "s" end) + " need" + (if $count == 1 then "s" else "" end) + " review",
+                  emoji: true
+                }
+              }]
+              + [.[] | {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: ("• <" + .url + "|#" + (.number|tostring) + " " + .title + ">  _opened by " + .author.login + "_")
+                  }
+                }]
+            )
+          }' "$RUNNER_TEMP/needs-review-prs.json" > "$RUNNER_TEMP/slack_payload.json"
+          cat "$RUNNER_TEMP/slack_payload.json"
+
+      - name: Post to Slack
+        if: steps.list.outputs.count != '0'
+        uses: slackapi/slack-github-action@v3.0.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload-file-path: ${{ runner.temp }}/slack_payload.json
+          # Fail the job when the webhook post fails; the default silently
+          # swallows errors and reports success.
+          errors: true
