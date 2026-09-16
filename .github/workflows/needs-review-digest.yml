@@ -57,7 +57,7 @@ jobs:
         if: steps.list.outputs.count != '0'
         uses: slackapi/slack-github-action@v3.0.1
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL_PR_REVIEW }}
           webhook-type: incoming-webhook
           payload-file-path: ${{ runner.temp }}/slack_payload.json
           # Fail the job when the webhook post fails; the default silently
