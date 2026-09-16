@@ -15,19 +15,45 @@ jobs:
       - name: List PRs needing review
         id: list
         # Explicit `shell: bash` (rather than the default run shell) enables
-        # `-eo pipefail`, so a failing `gh pr list` fails this step instead
-        # of being swallowed by the trailing `jq`/`tee` in the pipeline. See
+        # `-eo pipefail`, so a failing `gh` call fails this step instead of
+        # being swallowed by the trailing `jq`/`tee` in a pipeline. See
         # soak_nightly.yml's postmortem comment for the same trap.
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
-          gh pr list --repo "${{ github.repository }}" \
+          gh pr list --repo "$REPO" \
             --state open \
             --label "needs review" \
-            --json number,title,url,author,updatedAt \
-            --limit 100 \
-            | jq 'sort_by(.updatedAt)' \
+            --json number,title,url,author,createdAt \
+            --limit 10 \
+            > "$RUNNER_TEMP/needs-review-prs-raw.json"
+
+          # gh pr list doesn't expose when a label was applied, so look it
+          # up per PR via the issue timeline and merge it in as `labeledAt`.
+          # Falls back to `createdAt` later on if no "labeled" event is
+          # found (e.g. it fell outside GitHub's timeline retention).
+          fetch_labeled_at() {
+            local num="$1"
+            local labeled_at
+            labeled_at=$(gh api --paginate "repos/$REPO/issues/$num/timeline" \
+              --jq '[.[] | select(.event == "labeled" and .label.name == "needs review")] | last | .created_at // ""')
+            jq -n --argjson number "$num" --arg labeled_at "$labeled_at" \
+              '{number: $number, labeledAt: (if $labeled_at == "" then null else $labeled_at end)}'
+          }
+          export -f fetch_labeled_at
+          export REPO
+
+          jq -r '.[].number' "$RUNNER_TEMP/needs-review-prs-raw.json" \
+            | xargs -P8 -I{} bash -c 'fetch_labeled_at "$@"' _ {} \
+            > "$RUNNER_TEMP/labeled-at.jsonl"
+
+          jq --slurpfile labeled "$RUNNER_TEMP/labeled-at.jsonl" '
+            ($labeled | map({(.number|tostring): .labeledAt}) | add // {}) as $map
+            | map(. + {labeledAt: ($map[(.number|tostring)] // null)})
+            | sort_by(.labeledAt // .createdAt)
+          ' "$RUNNER_TEMP/needs-review-prs-raw.json" \
             | tee "$RUNNER_TEMP/needs-review-prs.json" | jq .
 
           COUNT=$(jq 'length' "$RUNNER_TEMP/needs-review-prs.json")
@@ -41,8 +67,8 @@ jobs:
       - name: Build Slack payload
         if: steps.list.outputs.count != '0'
         env:
-          # Slack caps a message at 50 blocks; one section block is emitted
-          # per PR shown, plus a header block (and an overflow block, see
+          # Slack caps a message at 50 blocks; one section block holds all
+          # PR lines shown, plus a header block (and an overflow block, see
           # below), so this must stay comfortably under that limit.
           MAX_SHOWN: 5
           SEARCH_URL: "${{ github.server_url }}/${{ github.repository }}/pulls?q=is%3Aopen+is%3Apr+label%3A%22needs+review%22"
@@ -55,6 +81,14 @@ jobs:
              --argjson max_shown "$MAX_SHOWN" \
              --arg search_url "$SEARCH_URL" '
             def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+            def human_age($seconds):
+              ($seconds / 86400 | floor) as $days
+              | if $days >= 1 then ($days | tostring) + "d"
+                else ($seconds / 3600 | floor) as $hours
+                | if $hours >= 1 then ($hours | tostring) + "h"
+                  else (($seconds / 60 | floor) | tostring) + "m"
+                  end
+                end;
             {
             blocks: (
               [{
@@ -65,13 +99,16 @@ jobs:
                   emoji: true
                 }
               }]
-              + [.[0:$max_shown][] | {
-                  type: "section",
-                  text: {
-                    type: "mrkdwn",
-                    text: ("• <" + .url + "|#" + (.number|tostring) + " " + (.title|esc) + ">  _opened by " + (.author.login|esc) + "_")
-                  }
-                }]
+              + (
+                  [.[0:$max_shown][] |
+                    ("• <" + .url + "|#" + (.number|tostring) + " " + (.title|esc) + ">  _by " + (.author.login|esc)
+                      + " · labeled " + human_age(now - ((.labeledAt // .createdAt) | fromdateiso8601)) + " ago_")
+                  ] as $lines
+                  | if ($lines | length) > 0 then [{
+                      type: "section",
+                      text: { type: "mrkdwn", text: ($lines | join("\n")) }
+                    }] else [] end
+                )
               + (if $count > $max_shown then [{
                   type: "section",
                   text: {
