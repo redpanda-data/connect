@@ -136,6 +136,8 @@ This input adds the following metadata fields to each message:
 - source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
 - commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from `V$LOGMNR_CONTENTS.TIMESTAMP` on the COMMIT redo record: this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. For snapshot (`read`) messages, this reflects Oracle's `SYSTIMESTAMP` at the moment the snapshot SCN was captured, so all snapshot messages share the same value.
 - username: The Oracle database username of the session that performed the DML, sourced from `V$LOGMNR_CONTENTS.USERNAME`. Not present on snapshot (`read`) messages, nor on change messages where Oracle reports a NULL or empty username.
+- rs_id: The LogMiner record set ID from `V$LOGMNR_CONTENTS.RS_ID`, identifying the redo record that produced the change. Together with `ssn` it identifies one row change, except for bulk deletes, where all rows of one redo record share the same values. Not present on snapshot (`read`) messages, nor on LOB-only synthetic updates.
+- ssn: The SQL sequence number from `V$LOGMNR_CONTENTS.SSN`. Compare it numerically. Not present whenever `rs_id` is not present.
 - schema: The table schema, for use with schema-aware downstream processors such as `schema_registry_encode`. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
