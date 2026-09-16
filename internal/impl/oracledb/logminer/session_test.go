@@ -113,12 +113,40 @@ func TestSessionManager(t *testing.T) {
 		// exec counts above grew across the two prepareLogsAndStartSession
 		// calls. ADD_LOGFILE only ever used the "NEW" OPTIONS variant here
 		// (same log file set both times), so it is prepared exactly once too.
-		assert.Equal(t, 1, fc.prepareCount("START_LOGMNR"),
-			"START_LOGMNR must be prepared once and reused across cycles despite being executed twice")
-		assert.Equal(t, 1, fc.prepareCount("END_LOGMNR"),
-			"END_LOGMNR must be prepared once (on first EndSession call) and reused thereafter")
-		assert.Equal(t, 1, fc.prepareCount("ADD_LOGFILE"),
-			"ADD_LOGFILE must be prepared once per distinct OPTIONS variant; only NEW was used here")
+		assert.Equal(t, 1, fc.prepareCount("START_LOGMNR"), "START_LOGMNR must be prepared once and reused across cycles despite being executed twice")
+		assert.Equal(t, 1, fc.prepareCount("END_LOGMNR"), "END_LOGMNR must be prepared once (on first EndSession call) and reused thereafter")
+		assert.Equal(t, 1, fc.prepareCount("ADD_LOGFILE"), "ADD_LOGFILE must be prepared once per distinct OPTIONS variant; only NEW was used here")
+		assert.Equal(t, 1, fc.prepareCount("V$ARCHIVED_LOG"), "Must prepare query once and reuse it across both calls")
+
+		require.NoError(t, lm.Close())
+		assert.Equal(t, 1, fc.closeCount("START_LOGMNR"), "the cached START_LOGMNR statement must be closed exactly once")
+		assert.Equal(t, 1, fc.closeCount("END_LOGMNR"), "the cached END_LOGMNR statement must be closed exactly once")
+		assert.Equal(t, 1, fc.closeCount("ADD_LOGFILE"), "the cached ADD_LOGFILE statement must be closed exactly once")
+		assert.Equal(t, 1, fc.closeCount("V$ARCHIVED_LOG"), "the cached GetLogsBySCNRange statement must be closed exactly once")
+
+		// A second Close() must be a genuine no-op - not just error-free, but
+		// without attempting to close anything a second time.
+		require.NoError(t, lm.Close())
+		assert.Equal(t, 1, fc.closeCount("START_LOGMNR"),
+			"a second Close() must not attempt to close the already-closed START_LOGMNR statement again")
+		assert.Equal(t, 1, fc.closeCount("END_LOGMNR"),
+			"a second Close() must not attempt to close the already-closed END_LOGMNR statement again")
+		assert.Equal(t, 1, fc.closeCount("ADD_LOGFILE"),
+			"a second Close() must not attempt to close the already-closed ADD_LOGFILE statement again")
+		assert.Equal(t, 1, fc.closeCount("V$ARCHIVED_LOG"),
+			"a second Close() must not attempt to close the already-closed GetLogsBySCNRange statement again")
+
+		lm.sessionMgr.sessionOpened = time.Now().Add(-time.Hour)
+
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 300, 400))
+		assert.Equal(t, 2, fc.prepareCount("START_LOGMNR"),
+			"START_LOGMNR must be re-prepared after Close() rather than reusing the closed statement")
+		assert.Equal(t, 2, fc.prepareCount("END_LOGMNR"),
+			"END_LOGMNR must be re-prepared after Close() rather than reusing the closed statement")
+		assert.Equal(t, 2, fc.prepareCount("ADD_LOGFILE"),
+			"ADD_LOGFILE must be re-prepared after Close() rather than reusing the closed statement")
+		assert.Equal(t, 2, fc.prepareCount("V$ARCHIVED_LOG"),
+			"GetLogsBySCNRange must be re-prepared after Close() rather than reusing the closed statement")
 	})
 
 	t.Run("MiningCycleEndsExpiredSessionWhenCaughtUp", func(t *testing.T) {
@@ -388,6 +416,7 @@ type fakeConn struct {
 	execs      []string
 	queries    []string
 	prepares   []string
+	closes     []string
 	currentSCN uint64
 }
 
@@ -427,11 +456,29 @@ func (c *fakeConn) prepareCount(substr string) int {
 	return n
 }
 
+func (c *fakeConn) closeCount(substr string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, cl := range c.closes {
+		if strings.Contains(cl, substr) {
+			n++
+		}
+	}
+	return n
+}
+
 func (c *fakeConn) Prepare(query string) (driver.Stmt, error) {
 	c.mu.Lock()
 	c.prepares = append(c.prepares, query)
 	c.mu.Unlock()
 	return &fakeStmt{query: query, conn: c}, nil
+}
+
+func (c *fakeConn) recordClose(query string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closes = append(c.closes, query)
 }
 
 func (*fakeConn) Close() error { return nil }
@@ -471,7 +518,10 @@ type fakeStmt struct {
 
 func (*fakeStmt) NumInput() int { return -1 }
 
-func (*fakeStmt) Close() error { return nil }
+func (s *fakeStmt) Close() error {
+	s.conn.recordClose(s.query)
+	return nil
+}
 
 func (*fakeStmt) Exec([]driver.Value) (driver.Result, error) {
 	return nil, errors.New("fakeStmt: Exec not supported, expected ExecContext usage")
