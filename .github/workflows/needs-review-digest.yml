@@ -10,6 +10,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
+      issues: read
+    env:
+      # Number of PRs actually listed in the Slack message. Must NOT be
+      # used to cap the `gh pr list` fetch: gh returns PRs newest-created
+      # first, so capping the fetch before sorting by label age would only
+      # ever surface the newest PRs and could never surface the PRs that
+      # have been waiting longest — exactly the ones this digest exists to
+      # highlight. The full (up to --limit) set is fetched, sorted, and
+      # only then sliced down to MAX_SHOWN for display.
+      MAX_SHOWN: 5
 
     steps:
       - name: List PRs needing review
@@ -27,18 +37,23 @@ jobs:
             --state open \
             --label "needs review" \
             --json number,title,url,author,createdAt \
-            --limit 10 \
+            --limit 100 \
             > "$RUNNER_TEMP/needs-review-prs-raw.json"
 
-          # gh pr list doesn't expose when a label was applied, so look it
-          # up per PR via the issue timeline and merge it in as `labeledAt`.
-          # Falls back to `createdAt` later on if no "labeled" event is
-          # found (e.g. it fell outside GitHub's timeline retention).
           fetch_labeled_at() {
             local num="$1"
+            local timeline
+            local status
             local labeled_at
-            labeled_at=$(gh api --paginate "repos/$REPO/issues/$num/timeline" \
-              --jq '[.[] | select(.event == "labeled" and .label.name == "needs review")] | last | .created_at // ""')
+            timeline=$(gh api --paginate "repos/$REPO/issues/$num/timeline")
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "::warning::Failed to fetch timeline for PR #$num (gh api exited $status); labeledAt will incorrectly fall back to createdAt unless this fails the step" >&2
+              return 1
+            fi
+            labeled_at=$(printf '%s' "$timeline" \
+              | jq -r '[.[] | select(.event == "labeled" and .label.name == "needs review")] | last | .created_at // ""' \
+              | tail -n 1)
             jq -n --argjson number "$num" --arg labeled_at "$labeled_at" \
               '{number: $number, labeledAt: (if $labeled_at == "" then null else $labeled_at end)}'
           }
@@ -67,10 +82,6 @@ jobs:
       - name: Build Slack payload
         if: steps.list.outputs.count != '0'
         env:
-          # Slack caps a message at 50 blocks; one section block holds all
-          # PR lines shown, plus a header block (and an overflow block, see
-          # below), so this must stay comfortably under that limit.
-          MAX_SHOWN: 5
           SEARCH_URL: "${{ github.server_url }}/${{ github.repository }}/pulls?q=is%3Aopen+is%3Apr+label%3A%22needs+review%22"
         run: |
           # Slack requires &, < and > to be HTML-escaped inside mrkdwn text
@@ -102,7 +113,8 @@ jobs:
               + (
                   [.[0:$max_shown][] |
                     ("• <" + .url + "|#" + (.number|tostring) + " " + (.title|esc) + ">  _by " + (.author.login|esc)
-                      + " · labeled " + human_age(now - ((.labeledAt // .createdAt) | fromdateiso8601)) + " ago_")
+                      + " · opened " + human_age(now - (.createdAt | fromdateiso8601)) + " ago, labeled "
+                      + human_age(now - ((.labeledAt // .createdAt) | fromdateiso8601)) + "_")
                   ] as $lines
                   | if ($lines | length) > 0 then [{
                       type: "section",
