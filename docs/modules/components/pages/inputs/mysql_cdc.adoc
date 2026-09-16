@@ -86,7 +86,7 @@ input:
     aws:
       enabled: false
       region: "" # No default (optional)
-      endpoint: "" # No default (required)
+      endpoint: ""
       id: "" # No default (optional)
       secret: "" # No default (optional)
       token: "" # No default (optional)
@@ -137,7 +137,7 @@ The type of MySQL database to connect to.
 
 === `dsn`
 
-The DSN of the MySQL database to connect to.
+The DSN of the MySQL database to connect to. When `aws.enabled` is `true`, the Go MySQL driver's `allowCleartextPasswords=1` flag is set automatically so the IAM auth token can be transmitted; pair it with TLS (`tls=true` plus the RDS CA bundle, or `tls=skip-verify` for non-production) to protect the token on the wire.
 
 
 *Type*: `string`
@@ -147,6 +147,8 @@ The DSN of the MySQL database to connect to.
 # Examples
 
 dsn: user:password@tcp(localhost:3306)/database
+
+dsn: user@tcp(mydb.abc123.us-east-1.rds.amazonaws.com:3306)/database?tls=true
 ```
 
 === `tables`
@@ -413,11 +415,12 @@ The AWS region where the MySQL instance is located. If no region is specified th
 
 === `aws.endpoint`
 
-The MySQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com).
+The MySQL endpoint as `host:port` (for example `mydb.abc123.us-east-1.rds.amazonaws.com:3306`). The AWS IAM token signer requires the port; if it is omitted the port from the DSN is used, falling back to `3306`. When this field is empty the address from the DSN is used.
 
 
 *Type*: `string`
 
+*Default*: `""`
 
 === `aws.id`
 
