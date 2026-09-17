@@ -3,6 +3,22 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.110.0 - 2026-09-17
+
+### Added
+
+- oracledb_cdc: Oracle CDC connector now includes username as metadata in events for better traceability. ([@josephwoodward](https://github.com/josephwoodward), [#4674](https://github.com/redpanda-data/connect/pull/4674))
+
+### Fixed
+
+- iceberg: Replaced MinIO with silo fork in tests to work around MinIO's removal from Docker Hub. ([@Leward](https://github.com/Leward), [#4819](https://github.com/redpanda-data/connect/pull/4819))
+- snowflake_streaming: Fixed offset token comparison to handle unpadded numeric tokens correctly, preventing duplicate rows or missed deliveries when crossing digit-count boundaries. ([@Jeffail](https://github.com/Jeffail), [#4816](https://github.com/redpanda-data/connect/pull/4816))
+
+### Changed
+
+- oracledb_cdc: Oracle CDC connector now uses prepared statements for improved performance and resource management. ([@josephwoodward](https://github.com/josephwoodward), [#4821](https://github.com/redpanda-data/connect/pull/4821))
+- snowflake: Upgraded Snowflake driver from v1.19.0 to v2.2.0, fixing security vulnerability CVE-2026-85525 and removing deprecated RaisePutGetError option. ([@squiidz](https://github.com/squiidz), [#4822](https://github.com/redpanda-data/connect/pull/4822))
+
 ## Unreleased
 
 ### Changed
