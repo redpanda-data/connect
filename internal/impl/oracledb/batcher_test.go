@@ -704,17 +704,19 @@ func publishAndReceive(t *testing.T, ctx context.Context, publisher *batchPublis
 	return <-publisher.msgs()
 }
 
-// rs_id and ssn metadata are set only when the event carries an RS_ID. Snapshot
-// rows, synthetic LOB-only updates and events restored from a cache written
-// before this field existed all have an empty RSID and must get neither key.
+// rs_id, ssn and row_seq metadata are set only when the event carries an RS_ID.
+// Snapshot rows, synthetic LOB-only updates and events restored from a cache
+// written before this field existed all have an empty RSID and must get none of
+// the three keys.
 func TestPublishRecordIdentityMetadata(t *testing.T) {
 	ctx := t.Context()
 
-	t.Run("streaming event sets rs_id and ssn", func(t *testing.T) {
+	t.Run("streaming event sets rs_id, ssn and row_seq", func(t *testing.T) {
 		publisher, _ := newTestBatchPublisher(t)
 		event := streamingEvent(200)
 		event.RSID = "0x000027.00001a33.0010"
 		event.SSN = 3
+		event.RowSeq = 7
 
 		got := publishAndReceive(t, ctx, publisher, event)
 		require.Len(t, got.msg, 1)
@@ -723,6 +725,8 @@ func TestPublishRecordIdentityMetadata(t *testing.T) {
 		require.Equal(t, "0x000027.00001a33.0010", rsID)
 		ssn, _ := got.msg[0].MetaGet("ssn")
 		require.Equal(t, "3", ssn)
+		rowSeq, _ := got.msg[0].MetaGet("row_seq")
+		require.Equal(t, "7", rowSeq)
 	})
 
 	t.Run("snapshot event has neither", func(t *testing.T) {
@@ -735,12 +739,15 @@ func TestPublishRecordIdentityMetadata(t *testing.T) {
 		require.False(t, ok, "snapshot rows have no rs_id")
 		_, ok = got.msg[0].MetaGet("ssn")
 		require.False(t, ok, "snapshot rows have no ssn")
+		_, ok = got.msg[0].MetaGet("row_seq")
+		require.False(t, ok, "snapshot rows have no row_seq")
 	})
 
-	t.Run("empty RSID suppresses ssn too", func(t *testing.T) {
+	t.Run("empty RSID suppresses ssn and row_seq too", func(t *testing.T) {
 		publisher, _ := newTestBatchPublisher(t)
 		event := streamingEvent(200)
 		event.SSN = 3
+		event.RowSeq = 1
 
 		got := publishAndReceive(t, ctx, publisher, event)
 		require.Len(t, got.msg, 1)
@@ -749,5 +756,7 @@ func TestPublishRecordIdentityMetadata(t *testing.T) {
 		require.False(t, ok)
 		_, ok = got.msg[0].MetaGet("ssn")
 		require.False(t, ok, "ssn without rs_id is meaningless and must not be set")
+		_, ok = got.msg[0].MetaGet("row_seq")
+		require.False(t, ok, "row_seq without rs_id is meaningless and must not be set")
 	})
 }

@@ -27,12 +27,13 @@ import (
 )
 
 // TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange verifies that row changes
-// within a transaction produce distinct (rs_id, ssn) pairs for deduplication
-// and ordering.
+// within a transaction produce distinct (rs_id, ssn, row_seq) triples for
+// deduplication and ordering.
 //
 // For bulk DELETEs, Oracle's LogMiner emits array DELETE redo records where all
-// rows share rs_id and ssn=0. The connector is expected to disambiguate these
-// so every change has a distinct tuple.
+// rows share rs_id and ssn=0. The connector numbers those rows in row_seq so
+// every change has a distinct triple. The other cases check that row_seq does
+// not break what (rs_id, ssn) already told apart.
 func TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange(t *testing.T) {
 	integration.CheckSkip(t)
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -44,7 +45,8 @@ func TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange(t *testing.T) {
 	const rows = 1000
 
 	// Each case runs dml against a table that holds initialRows rows and expects
-	// wantChanges messages, one per changed row, every one with its own (rs_id, ssn).
+	// wantChanges messages, one per changed row, every one with its own
+	// (rs_id, ssn, row_seq).
 	// The initialRows are inserted before the stream starts, so they are not emitted.
 	cases := []struct {
 		name        string
@@ -100,9 +102,9 @@ func TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.dml(tc.table)
 			msgs := collectN(t, msgChan, tc.wantChanges)
-			groups := groupByRSIDSSN(t, msgs)
+			groups := groupByRecordIdentity(t, msgs)
 			assert.Len(t, groups, len(msgs),
-				"every row change must have a distinct (rs_id, ssn) pair: %d row changes, %d distinct pairs", len(msgs), len(groups))
+				"every row change must have a distinct (rs_id, ssn, row_seq) triple: %d row changes, %d distinct triples", len(msgs), len(groups))
 		})
 	}
 }
@@ -168,8 +170,8 @@ func collectN(t *testing.T, c <-chan *service.Message, n int) []*service.Message
 	return msgs
 }
 
-// groupByRSIDSSN counts messages per (rs_id, ssn) pair.
-func groupByRSIDSSN(t *testing.T, msgs []*service.Message) map[string]int {
+// groupByRecordIdentity counts messages per (rs_id, ssn, row_seq) triple.
+func groupByRecordIdentity(t *testing.T, msgs []*service.Message) map[string]int {
 	t.Helper()
 	groups := make(map[string]int)
 	for i, msg := range msgs {
@@ -177,7 +179,9 @@ func groupByRSIDSSN(t *testing.T, msgs []*service.Message) map[string]int {
 		require.Truef(t, ok, "message %d missing rs_id", i)
 		ssn, ok := msg.MetaGet("ssn")
 		require.Truef(t, ok, "message %d missing ssn", i)
-		groups[rsID+":"+ssn]++
+		rowSeq, ok := msg.MetaGet("row_seq")
+		require.Truef(t, ok, "message %d missing row_seq", i)
+		groups[rsID+":"+ssn+":"+rowSeq]++
 	}
 	return groups
 }
