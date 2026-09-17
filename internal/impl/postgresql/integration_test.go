@@ -2446,3 +2446,118 @@ file:
 		}
 	})
 }
+
+func TestIntegrationIncrementalSnapshotSchemaMetadata(t *testing.T) {
+	integration.CheckSkip(t)
+
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	const numPreExisting = 5
+	for range numPreExisting {
+		_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('pre', NOW())`)
+		require.NoError(t, err)
+	}
+
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_inc_schema_meta
+    schema: public
+    heartbeat_interval: 500ms
+    tables:
+      - flights
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 2
+        checkpoint_cache: snap_cache
+`, databaseURL)))
+	require.NoError(t, builder.AddCacheYAML(`
+label: snap_cache
+memory: {}`))
+
+	type observed struct {
+		operation string
+		schema    map[string]any
+		hasSchema bool
+	}
+	var (
+		mu   sync.Mutex
+		msgs []observed
+	)
+	require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			if table, _ := msg.MetaGet("table"); table != "flights" {
+				continue
+			}
+			o := observed{}
+			o.operation, _ = msg.MetaGet("operation")
+			_ = msg.MetaWalkMut(func(key string, value any) error {
+				if key == "schema" {
+					if m, ok := value.(map[string]any); ok {
+						o.hasSchema, o.schema = true, m
+					}
+				}
+				return nil
+			})
+			msgs = append(msgs, o)
+		}
+		return nil
+	}))
+
+	stream, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+	signalIncrementalSnapshot(t, db, "test_slot_inc_schema_meta", "flights")
+
+	// A backfilled row and a streamed one, so the two can be compared.
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		var reads, inserts int
+		for _, m := range msgs {
+			switch m.operation {
+			case "read":
+				reads++
+			case "insert":
+				inserts++
+			}
+		}
+		if reads >= numPreExisting && inserts == 0 {
+			_, err := db.Exec(`INSERT INTO flights (name, created_at) VALUES ('live', NOW())`)
+			require.NoError(t, err)
+		}
+		return reads >= numPreExisting && inserts >= 1
+	}, 60*time.Second, 100*time.Millisecond, "did not observe both backfilled and streamed rows")
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	var readSchema, insertSchema map[string]any
+	for _, m := range msgs {
+		require.True(t, m.hasSchema, "a %q message carried no schema metadata", m.operation)
+		switch m.operation {
+		case "read":
+			readSchema = m.schema
+		case "insert":
+			insertSchema = m.schema
+		}
+	}
+	require.NotNil(t, readSchema, "no backfilled row observed")
+	require.NotNil(t, insertSchema, "no streamed row observed")
+
+	assert.Equal(t, insertSchema, readSchema,
+		"a backfilled row's schema must match a streamed row's for the same table")
+	t.Logf("schema on a backfilled row: %v", readSchema)
+}
