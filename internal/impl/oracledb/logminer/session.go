@@ -29,24 +29,8 @@ type SessionManager struct {
 	sessionOpened time.Time
 	log           *service.Logger
 
-	startStmts map[string]*sql.Stmt
-	endStmt    *sql.Stmt
-	addStmts   map[string]*sql.Stmt
-}
-
-// preparedStmt returns the cached statement for key, preparing
-// and caching it on query text query if this is the first use of that key.
-func preparedStmt(ctx context.Context, conn *sql.Conn, cache map[string]*sql.Stmt, key, query string) (*sql.Stmt, error) {
-	if stmt, exists := cache[key]; exists {
-		return stmt, nil
-	}
-
-	stmt, err := conn.PrepareContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	cache[key] = stmt
-	return stmt, nil
+	lmStmtCache stmtCache
+	endStmt     *sql.Stmt
 }
 
 // NewSessionManager creates a new SessionManager with the specified configuration.
@@ -64,11 +48,10 @@ func NewSessionManager(cfg *Config, logger *service.Logger) *SessionManager {
 	}
 
 	return &SessionManager{
-		cfg:        cfg,
-		opts:       options,
-		log:        logger,
-		startStmts: make(map[string]*sql.Stmt),
-		addStmts:   make(map[string]*sql.Stmt),
+		cfg:         cfg,
+		opts:        options,
+		log:         logger,
+		lmStmtCache: make(stmtCache),
 	}
 }
 
@@ -96,7 +79,7 @@ func (sm *SessionManager) AddLogFile(ctx context.Context, conn *sql.Conn, files 
 		}
 
 		q := fmt.Sprintf("BEGIN DBMS_LOGMNR.ADD_LOGFILE(LOGFILENAME => :1, OPTIONS => %s); END;", opt)
-		stmt, err := preparedStmt(ctx, conn, sm.addStmts, opt, q)
+		stmt, err := sm.lmStmtCache.getOrPrepare(ctx, conn, "add:"+opt, q)
 		if err != nil {
 			return fmt.Errorf("preparing logminer add log file statement with option '%s': %w", opt, err)
 		}
@@ -124,7 +107,7 @@ func (sm *SessionManager) StartSession(ctx context.Context, conn *sql.Conn, star
 	optionsStr := strings.Join(opts, " + ")
 
 	q := "BEGIN SYS.DBMS_LOGMNR.START_LOGMNR(STARTSCN => :1, ENDSCN => :2, OPTIONS => " + optionsStr + "); END;"
-	stmt, err := preparedStmt(ctx, conn, sm.startStmts, optionsStr, q)
+	stmt, err := sm.lmStmtCache.getOrPrepare(ctx, conn, "start:"+optionsStr, q)
 	if err != nil {
 		return fmt.Errorf("preparing start logminer session statement: %w", err)
 	}
@@ -162,19 +145,8 @@ func (sm *SessionManager) EndSession(ctx context.Context, conn *sql.Conn) error 
 func (sm *SessionManager) Close() error {
 	var errs []error
 
-	for key, stmt := range sm.startStmts {
-		if err := stmt.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("closing start logminer statement for options '%s': %w", key, err))
-		}
-	}
-	sm.startStmts = make(map[string]*sql.Stmt)
-
-	for key, stmt := range sm.addStmts {
-		if err := stmt.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("closing add logfile statement for options '%s': %w", key, err))
-		}
-	}
-	sm.addStmts = make(map[string]*sql.Stmt)
+	errs = append(errs, sm.lmStmtCache.closeAll()...)
+	sm.lmStmtCache = make(stmtCache)
 
 	if sm.endStmt != nil {
 		if err := sm.endStmt.Close(); err != nil {
@@ -205,4 +177,31 @@ func (sm *SessionManager) Age() time.Duration {
 // maxAge. Always false when no session is active or maxAge is 0 (disabled).
 func (sm *SessionManager) IsExpired(maxAge time.Duration) bool {
 	return maxAge > 0 && sm.active && sm.Age() >= maxAge
+}
+
+// stmtCache is map keyed off of namespace + option to prevent accidental collisions.
+type stmtCache map[string]*sql.Stmt
+
+// getOrPrepare gets prepared statement from the cache or prepares and adds if does not exist.
+func (c stmtCache) getOrPrepare(ctx context.Context, conn *sql.Conn, key, query string) (*sql.Stmt, error) {
+	if stmt, exists := c[key]; exists {
+		return stmt, nil
+	}
+
+	stmt, err := conn.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	c[key] = stmt
+	return stmt, nil
+}
+
+func (c stmtCache) closeAll() []error {
+	var errs []error
+	for key, stmt := range c {
+		if err := stmt.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing prepared logminer statement '%s': %w", key, err))
+		}
+	}
+	return errs
 }
