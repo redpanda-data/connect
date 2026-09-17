@@ -18,8 +18,9 @@ import (
 	"testing"
 
 	"github.com/go-faker/faker/v4"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // ReceivedMessages is a thread-safe accessor for messages collected by the
@@ -163,11 +164,16 @@ type CollectedMsg struct {
 	Schema    map[string]any
 }
 
+// SchemaMetadataCollector gathers CollectedMsg values from a stream's
+// batches. Consume runs on the stream's own goroutine while the test body
+// reads, so both sides take the lock.
 type SchemaMetadataCollector struct {
 	mu   sync.Mutex
 	msgs []CollectedMsg
 }
 
+// Consume records every message in a batch. Pass it to
+// StreamBuilder.AddBatchConsumerFunc.
 func (c *SchemaMetadataCollector) Consume(_ context.Context, batch service.MessageBatch) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -190,6 +196,7 @@ func (c *SchemaMetadataCollector) Consume(_ context.Context, batch service.Messa
 	return nil
 }
 
+// Snapshot copies what has been collected so far.
 func (c *SchemaMetadataCollector) Snapshot() []CollectedMsg {
 	c.mu.Lock()
 	defer c.mu.Unlock()
