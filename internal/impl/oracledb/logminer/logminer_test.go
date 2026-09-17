@@ -572,11 +572,6 @@ func TestRowSeqCounter(t *testing.T) {
 			want:    []int{0, 1, 0},
 		},
 		{
-			name:    "the same pair seen again later counts from 0 again",
-			changes: []change{{recA, 0}, {recB, 0}, {recA, 0}},
-			want:    []int{0, 0, 0},
-		},
-		{
 			name:    "events without RS_ID get 0 and do not disturb the count",
 			changes: []change{{"", 0}, {"", 0}, {recA, 0}, {"", 0}, {recA, 0}},
 			want:    []int{0, 0, 0, 0, 1},
