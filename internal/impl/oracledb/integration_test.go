@@ -351,6 +351,8 @@ oracledb_cdc:
 			assert.Falsef(t, hasRSID, "Expected snapshot message[%d] to have no 'rs_id' metadata, got %q", i, rsID)
 			ssn, hasSSN := msg.MetaGet("ssn")
 			assert.Falsef(t, hasSSN, "Expected snapshot message[%d] to have no 'ssn' metadata, got %q", i, ssn)
+			rowSeq, hasRowSeq := msg.MetaGet("row_seq")
+			assert.Falsef(t, hasRowSeq, "Expected snapshot message[%d] to have no 'row_seq' metadata, got %q", i, rowSeq)
 		}
 		outBatchesMu.Unlock()
 	}
@@ -925,7 +927,7 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 		t.Helper()
 		results := make(map[string][]*service.Message)
 		scnByTxn := make(map[string][]string)
-		seenPairs := make(map[string]struct{})
+		seenTriples := make(map[string]struct{})
 		for i, msg := range msgs {
 			// assert database_schema metadata
 			schema, ok := msg.MetaGet("database_schema")
@@ -971,25 +973,26 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 			require.Truef(t, ok, "message %d missing 'username' metadata", i)
 			assert.Equalf(t, "SYSTEM", username, "message %d: expected username 'SYSTEM', got %q", i, username)
 
-			// assert rs_id and ssn metadata: (rs_id, ssn) must identify one row change
+			// assert rs_id, ssn and row_seq metadata: the triple must identify one row change
 			rsID, ok := msg.MetaGet("rs_id")
 			require.Truef(t, ok, "message %d missing 'rs_id' metadata", i)
 			assert.Regexpf(t, `(?i)^0x[0-9a-f]+\.[0-9a-f]+\.[0-9a-f]+$`, rsID, "message %d: rs_id %q not in thread.block.offset hex format", i, rsID)
 			ssn, ok := msg.MetaGet("ssn")
 			require.Truef(t, ok, "message %d missing 'ssn' metadata", i)
 			assert.Regexpf(t, `^\d+$`, ssn, "message %d: ssn %q is not a non-negative integer", i, ssn)
+			rowSeq, ok := msg.MetaGet("row_seq")
+			require.Truef(t, ok, "message %d missing 'row_seq' metadata", i)
+			assert.Regexpf(t, `^\d+$`, rowSeq, "message %d: row_seq %q is not a non-negative integer", i, rowSeq)
 
 			scn, ok := msg.MetaGet("scn")
 			require.Truef(t, ok, "message %d missing 'scn' metadata", i)
 			scnByTxn[txID] = append(scnByTxn[txID], scn)
 			// Oracle gives every row of an array DELETE redo record (up to 255 rows)
-			// the same (rs_id, ssn) with ssn=0, so uniqueness only holds for INSERT
-			// and UPDATE. See the rs_id metadata docs.
-			if operation != "delete" {
-				pair := rsID + ":" + ssn
-				assert.NotContainsf(t, seenPairs, pair, "message %d: (rs_id, ssn) %s already seen, pairs must be unique", i, pair)
-				seenPairs[pair] = struct{}{}
-			}
+			// the same (rs_id, ssn) with ssn=0. row_seq tells those rows apart, so
+			// the triple is unique for every operation. See the rs_id metadata docs.
+			triple := rsID + ":" + ssn + ":" + rowSeq
+			assert.NotContainsf(t, seenTriples, triple, "message %d: (rs_id, ssn, row_seq) %s already seen, triples must be unique", i, triple)
+			seenTriples[triple] = struct{}{}
 		}
 
 		// Every row change in a transaction carries the commit SCN, which is why
@@ -1697,10 +1700,10 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 			time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC),                  // smalldatetime min (timestamp)
 			time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC),                     // time (stored as timestamp)
 			time.Date(1, 1, 1, 0, 0, 0, 0, time.FixedZone("", -14*3600)), // timestamp with time zone
-			"AAAAAAAAAA", // char(10)
-			"",           // varchar2(255)
-			"АААААААААА", // nchar(10)
-			"",           // nvarchar2(255)
+			"AAAAAAAAAA",                                                 // char(10)
+			"",                                                           // varchar2(255)
+			"АААААААААА",                                                 // nchar(10)
+			"",                                                           // nvarchar2(255)
 			[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // raw(16)
 			[]byte{0x00}, // raw(255)
 			nil,          // clob (varcharmax_col)

@@ -477,3 +477,120 @@ func TestProcessRedoEventPropagatesRecordIdentity(t *testing.T) {
 		})
 	}
 }
+
+// Oracle gives every row of an array DML redo record (a bulk DELETE, for example)
+// the same RS_ID and SSN. RowSeq numbers the rows of one record from 0 in redo
+// order so that (RS_ID, SSN, RowSeq) identifies one row change. Rows of other
+// records, even in the same transaction, start again at 0.
+func TestProcessRedoEventNumbersRowsOfSharedRedoRecord(t *testing.T) {
+	// --- Arrange ---
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default())))
+
+	const (
+		recA = "0x000027.00001a33.0010"
+		recB = "0x000027.00001a34.0010"
+	)
+
+	// In an array DML, rows in the same record share RSID and SSN.
+	// RowSeq must increment within a record and reset when RSID or SSN changes.
+	scenario := []struct {
+		description string
+		rsID        string
+		ssn         int64
+		wantRowSeq  int
+	}{
+		{description: "recA row 0 (first in array DML)", rsID: recA, ssn: 0, wantRowSeq: 0},
+		{description: "recA row 1 (increments)", rsID: recA, ssn: 0, wantRowSeq: 1},
+		{description: "recA row 2 (increments)", rsID: recA, ssn: 0, wantRowSeq: 2},
+		{description: "recB row 0 (new RSID resets)", rsID: recB, ssn: 0, wantRowSeq: 0},
+		{description: "recB row 1 (new SSN resets)", rsID: recB, ssn: 1, wantRowSeq: 0},
+	}
+
+	// --- Act ---
+	// 1. Begin transaction.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+
+	// 2. Process DML events.
+	for _, step := range scenario {
+		require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+			SCN:           101,
+			Operation:     sqlredo.OpDelete,
+			TransactionID: "txA",
+			SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+			TableName:     sql.NullString{String: "T", Valid: true},
+			SQLRedo:       sql.NullString{String: `delete from "TESTDB"."T" where "ID" = '1'`, Valid: true},
+			RSID:          sql.NullString{String: step.rsID, Valid: true},
+			SSN:           sql.NullInt64{Int64: step.ssn, Valid: true},
+		}))
+	}
+
+	// 3. Commit transaction to flush buffered events to the publisher.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	// --- Assert ---
+	require.Len(t, pub.messages, len(scenario))
+	for i, step := range scenario {
+		assert.Equal(t, step.wantRowSeq, pub.messages[i].RowSeq, "step %d: %s", i, step.description)
+	}
+}
+
+func TestRowSeqCounter(t *testing.T) {
+	type change struct {
+		rsID string
+		ssn  int64
+	}
+	const recA, recB = "0x000027.00001a33.0010", "0x000027.00001a34.0010"
+
+	cases := []struct {
+		name    string
+		changes []change
+		want    []int
+	}{
+		{
+			name:    "single-row records stay at 0",
+			changes: []change{{recA, 0}, {recB, 0}},
+			want:    []int{0, 0},
+		},
+		{
+			name:    "rows of one array record count up",
+			changes: []change{{recA, 0}, {recA, 0}, {recA, 0}},
+			want:    []int{0, 1, 2},
+		},
+		{
+			name:    "a new RS_ID restarts the count",
+			changes: []change{{recA, 0}, {recA, 0}, {recB, 0}, {recB, 0}},
+			want:    []int{0, 1, 0, 1},
+		},
+		{
+			name:    "a new SSN inside the same RS_ID restarts the count",
+			changes: []change{{recA, 1}, {recA, 1}, {recA, 2}},
+			want:    []int{0, 1, 0},
+		},
+		{
+			name:    "the same pair seen again later counts from 0 again",
+			changes: []change{{recA, 0}, {recB, 0}, {recA, 0}},
+			want:    []int{0, 0, 0},
+		},
+		{
+			name:    "events without RS_ID get 0 and do not disturb the count",
+			changes: []change{{"", 0}, {"", 0}, {recA, 0}, {"", 0}, {recA, 0}},
+			want:    []int{0, 0, 0, 0, 1},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var c rowSeqCounter
+			got := make([]int, 0, len(tc.changes))
+			for _, ch := range tc.changes {
+				got = append(got, c.next(&sqlredo.DMLEvent{RSID: ch.rsID, SSN: ch.ssn}))
+			}
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
