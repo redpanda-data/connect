@@ -1477,9 +1477,10 @@ func TestIntegrationPostgresCDCSchemaMetadata(t *testing.T) {
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	// Create a table that exercises every distinct type mapping in pgTypeNameToCommonType,
-	// plus INET as a representative unknown type whose schema falls back to ANY.
-	_, err = db.Exec(`CREATE TABLE schema_test_table (
+	t.Run("every column type maps to its common type", func(t *testing.T) {
+		// Create a table that exercises every distinct type mapping in pgTypeNameToCommonType,
+		// plus INET as a representative unknown type whose schema falls back to ANY.
+		_, err = db.Exec(`CREATE TABLE schema_test_table (
 		id              SERIAL PRIMARY KEY,
 		col_bool        BOOLEAN,
 		col_smallint    SMALLINT,
@@ -1502,10 +1503,10 @@ func TestIntegrationPostgresCDCSchemaMetadata(t *testing.T) {
 		col_uuid        UUID,
 		col_inet        INET
 	)`)
-	require.NoError(t, err)
+		require.NoError(t, err)
 
-	// Insert two rows before starting the stream so they arrive as snapshot reads.
-	_, err = db.Exec(`INSERT INTO schema_test_table
+		// Insert two rows before starting the stream so they arrive as snapshot reads.
+		_, err = db.Exec(`INSERT INTO schema_test_table
 		(col_bool, col_smallint, col_int, col_bigint, col_float4, col_float8,
 		 col_numeric, col_text, col_varchar, col_char, col_bytea, col_date,
 		 col_time, col_timetz, col_timestamp, col_timestamptz, col_json, col_jsonb,
@@ -1519,24 +1520,24 @@ func TestIntegrationPostgresCDCSchemaMetadata(t *testing.T) {
 		 '\x576f726c64', '2024-06-01', '20:00:00', '20:00:00+00',
 		 '2024-06-01 20:00:00', '2024-06-01 20:00:00+00',
 		 '{"k":2}', '{"k":2}', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', '10.0.0.2')`)
-	require.NoError(t, err)
+		require.NoError(t, err)
 
-	type collectedMsg struct {
-		operation string
-		table     string
-		lsn       string
-		hasSchema bool
-		schema    map[string]any
-	}
+		type collectedMsg struct {
+			operation string
+			table     string
+			lsn       string
+			hasSchema bool
+			schema    map[string]any
+		}
 
-	var (
-		mu       sync.Mutex
-		messages []collectedMsg
-	)
+		var (
+			mu       sync.Mutex
+			messages []collectedMsg
+		)
 
-	sb := service.NewStreamBuilder()
-	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
-	require.NoError(t, sb.AddInputYAML(fmt.Sprintf(`
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+		require.NoError(t, sb.AddInputYAML(fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: schema_test_slot
@@ -1547,52 +1548,52 @@ postgres_cdc:
       - schema_test_table
 `, databaseURL)))
 
-	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-		mu.Lock()
-		defer mu.Unlock()
-		for _, msg := range batch {
-			cm := collectedMsg{}
-			cm.operation, _ = msg.MetaGet("operation")
-			cm.table, _ = msg.MetaGet("table")
-			cm.lsn, _ = msg.MetaGet("lsn")
-			_ = msg.MetaWalkMut(func(key string, value any) error {
-				if key == "schema" {
-					if m, ok := value.(map[string]any); ok {
-						cm.hasSchema = true
-						cm.schema = m
+		require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range batch {
+				cm := collectedMsg{}
+				cm.operation, _ = msg.MetaGet("operation")
+				cm.table, _ = msg.MetaGet("table")
+				cm.lsn, _ = msg.MetaGet("lsn")
+				_ = msg.MetaWalkMut(func(key string, value any) error {
+					if key == "schema" {
+						if m, ok := value.(map[string]any); ok {
+							cm.hasSchema = true
+							cm.schema = m
+						}
 					}
-				}
-				return nil
-			})
-			messages = append(messages, cm)
-		}
-		return nil
-	}))
+					return nil
+				})
+				messages = append(messages, cm)
+			}
+			return nil
+		}))
 
-	streamOut, err := sb.Build()
-	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
+		streamOut, err := sb.Build()
+		require.NoError(t, err)
+		license.InjectTestService(streamOut.Resources())
 
-	go func() {
-		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
-	t.Cleanup(func() {
-		require.NoError(t, streamOut.StopWithin(10*time.Second))
-	})
+		go func() {
+			if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		t.Cleanup(func() {
+			require.NoError(t, streamOut.StopWithin(10*time.Second))
+		})
 
-	// --- Phase 1: snapshot + CDC schema check ---
+		// --- Phase 1: snapshot + CDC schema check ---
 
-	// Wait for 2 snapshot rows.
-	assert.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return len(messages) >= 2
-	}, 30*time.Second, 100*time.Millisecond)
+		// Wait for 2 snapshot rows.
+		assert.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return len(messages) >= 2
+		}, 30*time.Second, 100*time.Millisecond)
 
-	// Insert 2 CDC rows.
-	_, err = db.Exec(`INSERT INTO schema_test_table
+		// Insert 2 CDC rows.
+		_, err = db.Exec(`INSERT INTO schema_test_table
 		(col_bool, col_smallint, col_int, col_bigint, col_float4, col_float8,
 		 col_numeric, col_text, col_varchar, col_char, col_bytea, col_date,
 		 col_time, col_timetz, col_timestamp, col_timestamptz, col_json, col_jsonb,
@@ -1606,85 +1607,85 @@ postgres_cdc:
 		 '\x426172', '2024-12-01', '15:00:00', '15:00:00+00',
 		 '2024-12-01 15:00:00', '2024-12-01 15:00:00+00',
 		 '{"k":4}', '{"k":4}', 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44', '10.0.0.4')`)
-	require.NoError(t, err)
+		require.NoError(t, err)
 
-	// Wait for all 4 messages.
-	assert.Eventually(t, func() bool {
+		// Wait for all 4 messages.
+		assert.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return len(messages) >= 4
+		}, 30*time.Second, 100*time.Millisecond)
+
 		mu.Lock()
-		defer mu.Unlock()
-		return len(messages) >= 4
-	}, 30*time.Second, 100*time.Millisecond)
+		phase1 := make([]collectedMsg, 4)
+		copy(phase1, messages)
+		mu.Unlock()
 
-	mu.Lock()
-	phase1 := make([]collectedMsg, 4)
-	copy(phase1, messages)
-	mu.Unlock()
+		// verifySchemaAllCols checks all 21 columns against their expected schema types.
+		verifySchemaAllCols := func(t *testing.T, schema map[string]any) {
+			t.Helper()
+			require.NotNil(t, schema)
+			assert.Equal(t, "schema_test_table", schema["name"])
+			assert.Equal(t, "OBJECT", schema["type"])
 
-	// verifySchemaAllCols checks all 21 columns against their expected schema types.
-	verifySchemaAllCols := func(t *testing.T, schema map[string]any) {
-		t.Helper()
-		require.NotNil(t, schema)
-		assert.Equal(t, "schema_test_table", schema["name"])
-		assert.Equal(t, "OBJECT", schema["type"])
+			rawChildren, ok := schema["children"]
+			require.True(t, ok, "schema must have a children key")
+			children, ok := rawChildren.([]any)
+			require.True(t, ok, "children must be []any")
+			assert.Len(t, children, 21)
 
-		rawChildren, ok := schema["children"]
-		require.True(t, ok, "schema must have a children key")
-		children, ok := rawChildren.([]any)
-		require.True(t, ok, "children must be []any")
-		assert.Len(t, children, 21)
-
-		byName := make(map[string]string, len(children))
-		for _, c := range children {
-			child := c.(map[string]any)
-			byName[child["name"].(string)] = child["type"].(string)
+			byName := make(map[string]string, len(children))
+			for _, c := range children {
+				child := c.(map[string]any)
+				byName[child["name"].(string)] = child["type"].(string)
+			}
+			assert.Equal(t, "INT32", byName["id"])
+			assert.Equal(t, "BOOLEAN", byName["col_bool"], "BOOLEAN column")
+			assert.Equal(t, "INT32", byName["col_smallint"], "SMALLINT column")
+			assert.Equal(t, "INT32", byName["col_int"], "INTEGER column")
+			assert.Equal(t, "INT64", byName["col_bigint"], "BIGINT column")
+			assert.Equal(t, "FLOAT32", byName["col_float4"], "REAL column")
+			assert.Equal(t, "FLOAT64", byName["col_float8"], "DOUBLE PRECISION column")
+			assert.Equal(t, "DECIMAL", byName["col_numeric"], "NUMERIC column")
+			assert.Equal(t, "STRING", byName["col_text"], "TEXT column")
+			assert.Equal(t, "STRING", byName["col_varchar"], "VARCHAR column")
+			assert.Equal(t, "STRING", byName["col_char"], "CHAR column")
+			assert.Equal(t, "BYTE_ARRAY", byName["col_bytea"], "BYTEA column")
+			assert.Equal(t, "TIMESTAMP", byName["col_date"], "DATE column")
+			assert.Equal(t, "STRING", byName["col_time"], "TIME column")
+			assert.Equal(t, "STRING", byName["col_timetz"], "TIMETZ column")
+			assert.Equal(t, "TIMESTAMP", byName["col_timestamp"], "TIMESTAMP column")
+			assert.Equal(t, "TIMESTAMP", byName["col_timestamptz"], "TIMESTAMPTZ column")
+			assert.Equal(t, "ANY", byName["col_json"], "JSON column")
+			assert.Equal(t, "ANY", byName["col_jsonb"], "JSONB column")
+			assert.Equal(t, "STRING", byName["col_uuid"], "UUID column")
+			assert.Equal(t, "ANY", byName["col_inet"], "INET (unknown type) column")
 		}
-		assert.Equal(t, "INT32", byName["id"])
-		assert.Equal(t, "BOOLEAN", byName["col_bool"], "BOOLEAN column")
-		assert.Equal(t, "INT32", byName["col_smallint"], "SMALLINT column")
-		assert.Equal(t, "INT32", byName["col_int"], "INTEGER column")
-		assert.Equal(t, "INT64", byName["col_bigint"], "BIGINT column")
-		assert.Equal(t, "FLOAT32", byName["col_float4"], "REAL column")
-		assert.Equal(t, "FLOAT64", byName["col_float8"], "DOUBLE PRECISION column")
-		assert.Equal(t, "DECIMAL", byName["col_numeric"], "NUMERIC column")
-		assert.Equal(t, "STRING", byName["col_text"], "TEXT column")
-		assert.Equal(t, "STRING", byName["col_varchar"], "VARCHAR column")
-		assert.Equal(t, "STRING", byName["col_char"], "CHAR column")
-		assert.Equal(t, "BYTE_ARRAY", byName["col_bytea"], "BYTEA column")
-		assert.Equal(t, "TIMESTAMP", byName["col_date"], "DATE column")
-		assert.Equal(t, "STRING", byName["col_time"], "TIME column")
-		assert.Equal(t, "STRING", byName["col_timetz"], "TIMETZ column")
-		assert.Equal(t, "TIMESTAMP", byName["col_timestamp"], "TIMESTAMP column")
-		assert.Equal(t, "TIMESTAMP", byName["col_timestamptz"], "TIMESTAMPTZ column")
-		assert.Equal(t, "ANY", byName["col_json"], "JSON column")
-		assert.Equal(t, "ANY", byName["col_jsonb"], "JSONB column")
-		assert.Equal(t, "STRING", byName["col_uuid"], "UUID column")
-		assert.Equal(t, "ANY", byName["col_inet"], "INET (unknown type) column")
-	}
 
-	// Snapshot messages: operation=read, no lsn, schema present.
-	for i, cm := range phase1[:2] {
-		assert.Equal(t, "read", cm.operation, "snapshot msg %d: wrong operation", i)
-		assert.Equal(t, "schema_test_table", cm.table)
-		assert.Empty(t, cm.lsn, "snapshot msg %d: should have no lsn", i)
-		assert.True(t, cm.hasSchema, "snapshot msg %d: missing schema metadata", i)
-		verifySchemaAllCols(t, cm.schema)
-	}
+		// Snapshot messages: operation=read, no lsn, schema present.
+		for i, cm := range phase1[:2] {
+			assert.Equal(t, "read", cm.operation, "snapshot msg %d: wrong operation", i)
+			assert.Equal(t, "schema_test_table", cm.table)
+			assert.Empty(t, cm.lsn, "snapshot msg %d: should have no lsn", i)
+			assert.True(t, cm.hasSchema, "snapshot msg %d: missing schema metadata", i)
+			verifySchemaAllCols(t, cm.schema)
+		}
 
-	// CDC messages: operation=insert, lsn set, schema present.
-	for i, cm := range phase1[2:] {
-		assert.Equal(t, "insert", cm.operation, "cdc msg %d: wrong operation", i)
-		assert.Equal(t, "schema_test_table", cm.table)
-		assert.NotEmpty(t, cm.lsn, "cdc msg %d: should have an lsn", i)
-		assert.True(t, cm.hasSchema, "cdc msg %d: missing schema metadata", i)
-		verifySchemaAllCols(t, cm.schema)
-	}
+		// CDC messages: operation=insert, lsn set, schema present.
+		for i, cm := range phase1[2:] {
+			assert.Equal(t, "insert", cm.operation, "cdc msg %d: wrong operation", i)
+			assert.Equal(t, "schema_test_table", cm.table)
+			assert.NotEmpty(t, cm.lsn, "cdc msg %d: should have an lsn", i)
+			assert.True(t, cm.hasSchema, "cdc msg %d: missing schema metadata", i)
+			verifySchemaAllCols(t, cm.schema)
+		}
 
-	// --- Phase 2: DDL change invalidates the schema cache ---
+		// --- Phase 2: DDL change invalidates the schema cache ---
 
-	_, err = db.Exec(`ALTER TABLE schema_test_table ADD COLUMN extra TEXT`)
-	require.NoError(t, err)
+		_, err = db.Exec(`ALTER TABLE schema_test_table ADD COLUMN extra TEXT`)
+		require.NoError(t, err)
 
-	_, err = db.Exec(`INSERT INTO schema_test_table
+		_, err = db.Exec(`INSERT INTO schema_test_table
 		(col_bool, col_smallint, col_int, col_bigint, col_float4, col_float8,
 		 col_numeric, col_text, col_varchar, col_char, col_bytea, col_date,
 		 col_time, col_timetz, col_timestamp, col_timestamptz, col_json, col_jsonb,
@@ -1695,33 +1696,148 @@ postgres_cdc:
 		 '2025-01-01 08:00:00', '2025-01-01 08:00:00+00',
 		 '{"k":5}', '{"k":5}', 'e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55', '10.0.0.5',
 		 'bonus')`)
-	require.NoError(t, err)
+		require.NoError(t, err)
 
-	assert.Eventually(t, func() bool {
+		assert.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return len(messages) >= 5
+		}, 30*time.Second, 100*time.Millisecond)
+
+		mu.Lock()
+		fifth := messages[4]
+		mu.Unlock()
+
+		assert.Equal(t, "insert", fifth.operation)
+		assert.NotEmpty(t, fifth.lsn)
+		assert.True(t, fifth.hasSchema, "post-ALTER CDC message must have schema metadata")
+
+		rawChildren, ok := fifth.schema["children"]
+		require.True(t, ok, "post-ALTER schema must have children")
+		children := rawChildren.([]any)
+		assert.Len(t, children, 22, "post-ALTER schema should reflect the new column")
+
+		byName := make(map[string]string, len(children))
+		for _, c := range children {
+			child := c.(map[string]any)
+			byName[child["name"].(string)] = child["type"].(string)
+		}
+		assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
+	})
+
+	// The snapshot paths build the schema with columnTypesToSchema over
+	// sql.ColumnType, the stream with relationMessageToSchema over the
+	// pgoutput relation, so a backfilled row is worth comparing against a
+	// streamed one rather than merely checking the metadata is present.
+	t.Run("incremental snapshot rows carry the same schema as streamed rows", func(t *testing.T) {
+		const numPreExisting = 5
+		for range numPreExisting {
+			_, err := db.Exec(`INSERT INTO flights (name, created_at) VALUES ('pre', NOW())`)
+			require.NoError(t, err)
+		}
+
+		builder := service.NewStreamBuilder()
+		require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_inc_schema_meta
+    schema: public
+    heartbeat_interval: 500ms
+    tables:
+      - flights
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 2
+        checkpoint_cache: snap_cache
+`, databaseURL)))
+		require.NoError(t, builder.AddCacheYAML(`
+label: snap_cache
+memory: {}`))
+
+		type observed struct {
+			operation string
+			schema    map[string]any
+			hasSchema bool
+		}
+		var (
+			mu   sync.Mutex
+			msgs []observed
+		)
+		require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range batch {
+				if table, _ := msg.MetaGet("table"); table != "flights" {
+					continue
+				}
+				o := observed{}
+				o.operation, _ = msg.MetaGet("operation")
+				_ = msg.MetaWalkMut(func(key string, value any) error {
+					if key == "schema" {
+						if m, ok := value.(map[string]any); ok {
+							o.hasSchema, o.schema = true, m
+						}
+					}
+					return nil
+				})
+				msgs = append(msgs, o)
+			}
+			return nil
+		}))
+
+		stream, err := builder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+		signalIncrementalSnapshot(t, db, "test_slot_inc_schema_meta", "flights")
+
+		// A backfilled row and a streamed one, so the two can be compared.
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			var reads, inserts int
+			for _, m := range msgs {
+				switch m.operation {
+				case "read":
+					reads++
+				case "insert":
+					inserts++
+				}
+			}
+			if reads >= numPreExisting && inserts == 0 {
+				_, err := db.Exec(`INSERT INTO flights (name, created_at) VALUES ('live', NOW())`)
+				require.NoError(t, err)
+			}
+			return reads >= numPreExisting && inserts >= 1
+		}, 60*time.Second, 100*time.Millisecond, "did not observe both backfilled and streamed rows")
+
 		mu.Lock()
 		defer mu.Unlock()
-		return len(messages) >= 5
-	}, 30*time.Second, 100*time.Millisecond)
 
-	mu.Lock()
-	fifth := messages[4]
-	mu.Unlock()
+		var readSchema, insertSchema map[string]any
+		for _, m := range msgs {
+			require.True(t, m.hasSchema, "a %q message carried no schema metadata", m.operation)
+			switch m.operation {
+			case "read":
+				readSchema = m.schema
+			case "insert":
+				insertSchema = m.schema
+			}
+		}
+		require.NotNil(t, readSchema, "no backfilled row observed")
+		require.NotNil(t, insertSchema, "no streamed row observed")
 
-	assert.Equal(t, "insert", fifth.operation)
-	assert.NotEmpty(t, fifth.lsn)
-	assert.True(t, fifth.hasSchema, "post-ALTER CDC message must have schema metadata")
-
-	rawChildren, ok := fifth.schema["children"]
-	require.True(t, ok, "post-ALTER schema must have children")
-	children := rawChildren.([]any)
-	assert.Len(t, children, 22, "post-ALTER schema should reflect the new column")
-
-	byName := make(map[string]string, len(children))
-	for _, c := range children {
-		child := c.(map[string]any)
-		byName[child["name"].(string)] = child["type"].(string)
-	}
-	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
+		assert.Equal(t, insertSchema, readSchema,
+			"a backfilled row's schema must match a streamed row's for the same table")
+		t.Logf("schema on a backfilled row: %v", readSchema)
+	})
 }
 
 // signalIncrementalSnapshot asks for a backfill of tables. It waits for the
@@ -2445,119 +2561,4 @@ file:
 			assert.Equal(t, 1, count, "row id %d observed %d times across both runs, expected exactly once", id, count)
 		}
 	})
-}
-
-func TestIntegrationIncrementalSnapshotSchemaMetadata(t *testing.T) {
-	integration.CheckSkip(t)
-
-	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
-	require.NoError(t, err)
-
-	const numPreExisting = 5
-	for range numPreExisting {
-		_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('pre', NOW())`)
-		require.NoError(t, err)
-	}
-
-	builder := service.NewStreamBuilder()
-	require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
-postgres_cdc:
-    dsn: %s
-    slot_name: test_slot_inc_schema_meta
-    schema: public
-    heartbeat_interval: 500ms
-    tables:
-      - flights
-    signal_table_name: rpcn_signal
-    incremental_snapshot:
-        enabled: true
-        chunk_size: 2
-        checkpoint_cache: snap_cache
-`, databaseURL)))
-	require.NoError(t, builder.AddCacheYAML(`
-label: snap_cache
-memory: {}`))
-
-	type observed struct {
-		operation string
-		schema    map[string]any
-		hasSchema bool
-	}
-	var (
-		mu   sync.Mutex
-		msgs []observed
-	)
-	require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-		mu.Lock()
-		defer mu.Unlock()
-		for _, msg := range batch {
-			if table, _ := msg.MetaGet("table"); table != "flights" {
-				continue
-			}
-			o := observed{}
-			o.operation, _ = msg.MetaGet("operation")
-			_ = msg.MetaWalkMut(func(key string, value any) error {
-				if key == "schema" {
-					if m, ok := value.(map[string]any); ok {
-						o.hasSchema, o.schema = true, m
-					}
-				}
-				return nil
-			})
-			msgs = append(msgs, o)
-		}
-		return nil
-	}))
-
-	stream, err := builder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
-	t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
-
-	signalIncrementalSnapshot(t, db, "test_slot_inc_schema_meta", "flights")
-
-	// A backfilled row and a streamed one, so the two can be compared.
-	require.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		var reads, inserts int
-		for _, m := range msgs {
-			switch m.operation {
-			case "read":
-				reads++
-			case "insert":
-				inserts++
-			}
-		}
-		if reads >= numPreExisting && inserts == 0 {
-			_, err := db.Exec(`INSERT INTO flights (name, created_at) VALUES ('live', NOW())`)
-			require.NoError(t, err)
-		}
-		return reads >= numPreExisting && inserts >= 1
-	}, 60*time.Second, 100*time.Millisecond, "did not observe both backfilled and streamed rows")
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	var readSchema, insertSchema map[string]any
-	for _, m := range msgs {
-		require.True(t, m.hasSchema, "a %q message carried no schema metadata", m.operation)
-		switch m.operation {
-		case "read":
-			readSchema = m.schema
-		case "insert":
-			insertSchema = m.schema
-		}
-	}
-	require.NotNil(t, readSchema, "no backfilled row observed")
-	require.NotNil(t, insertSchema, "no streamed row observed")
-
-	assert.Equal(t, insertSchema, readSchema,
-		"a backfilled row's schema must match a streamed row's for the same table")
-	t.Logf("schema on a backfilled row: %v", readSchema)
 }
