@@ -374,6 +374,20 @@ func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
 		"the CURRENT_SCN check must execute once per cycle")
 	assert.Equal(t, 1, fc.prepareCount("SELECT CURRENT_SCN FROM V$DATABASE"),
 		"the CURRENT_SCN check must be prepared once (first cycle) and reused on every subsequent cycle")
+
+	require.NoError(t, lm.Close())
+	assert.Equal(t, 1, fc.closeCount("V$LOGMNR_CONTENTS"),
+		"the cached V$LOGMNR_CONTENTS statement must be closed exactly once")
+	assert.Equal(t, 1, fc.closeCount("SELECT CURRENT_SCN FROM V$DATABASE"),
+		"the cached CURRENT_SCN statement must be closed exactly once")
+
+	// A second Close() must be a genuine no-op - not just error-free, but
+	// without attempting to close anything a second time.
+	require.NoError(t, lm.Close())
+	assert.Equal(t, 1, fc.closeCount("V$LOGMNR_CONTENTS"),
+		"a second Close() must not attempt to close the already-closed V$LOGMNR_CONTENTS statement again")
+	assert.Equal(t, 1, fc.closeCount("SELECT CURRENT_SCN FROM V$DATABASE"),
+		"a second Close() must not attempt to close the already-closed CURRENT_SCN statement again")
 }
 
 // --- fake database/sql driver used to exercise SessionManager/LogMiner
