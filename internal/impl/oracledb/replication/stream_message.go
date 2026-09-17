@@ -140,9 +140,9 @@ type MessageEvent struct {
 	RSID string
 	// SSN comes from V$LOGMNR_CONTENTS.SSN.
 	SSN int64
-	// RowSeq numbers the row changes that share one (RSID, SSN) inside a
-	// transaction, from 0 in redo order. Oracle reports the same pair for every
-	// row of an array DML redo record, so only (RSID, SSN, RowSeq) identifies one
-	// row change.
+	// RowSeq numbers consecutive row changes that report the same (RSID, SSN),
+	// from 0 in redo order. Oracle reports the same pair for every row of an
+	// array DML redo record, so only (RSID, SSN, RowSeq) identifies one row
+	// change.
 	RowSeq int
 }
