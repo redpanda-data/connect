@@ -274,9 +274,18 @@ func BenchmarkStreamMessages(b *testing.B) {
 	// fails the benchmark immediately, a nil one (the fake finished replaying
 	// all frames, which can happen before the consumer reaches b.N) is
 	// expected and just drops out of the select, an early exit from
-	// streamMessages itself is also a failure, and an overall timeout catches
-	// any other hang with a clear message instead of blocking forever.
+	// streamMessages itself is a failure unless the rows were in fact
+	// delivered, and an overall timeout catches any other hang with a clear
+	// message instead of blocking forever.
+	//
+	// The fake closes its connection as soon as the last frame is flushed, and
+	// the reader hands the final transaction over at that same last frame (its
+	// commit), so it can hit EOF on the wire while the batch is still in the
+	// channel on its way to the consumer. That is the normal end of the
+	// replay, not a premature exit: give the consumer a moment to drain
+	// before deciding.
 	srvDone := srv.done
+	streamExited := false
 	timeout := time.After(2 * time.Minute)
 waitForRows:
 	for {
@@ -289,13 +298,22 @@ waitForRows:
 			}
 			srvDone = nil
 		case err := <-streamDone:
-			b.Fatalf("streamMessages exited before delivering %d rows: %v", b.N, err)
+			streamExited = true
+			select {
+			case <-gotAll:
+				break waitForRows
+			case <-time.After(5 * time.Second):
+				b.Fatalf("streamMessages exited before delivering %d rows: %v", b.N, err)
+			}
 		case <-timeout:
 			b.Fatal("timed out waiting for streamMessages to deliver b.N rows")
 		}
 	}
 	b.StopTimer()
 
+	if streamExited {
+		return
+	}
 	s.shutSig.TriggerSoftStop()
 	select {
 	case <-streamDone: // nil on soft stop, or a wrapped error (e.g. a connection reset, not necessarily EOF) from the blocked channel send once the fake closes; both fine
