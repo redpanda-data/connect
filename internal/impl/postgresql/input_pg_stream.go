@@ -167,7 +167,7 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			ShortDescription("Number of tables to snapshot in parallel.").
 			Default(1)).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
-			Description("The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.").
+			Description("The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.\n\nPrefer a distinctive sentinel over the `null` default: `null` cannot be told apart from a column that is genuinely null, so a consumer cannot skip the field rather than overwrite a good value with it. This matters most alongside `" + fieldIncSnapshot + "`, where a backfilled row can be the only delivery carrying a large column's real value — see `" + fieldSignalTableName + "`.").
 			ShortDescription("The value to emit when TOAST values are unchanged in the stream.").
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
@@ -288,7 +288,16 @@ connection reset, say - the stream restarts and the signal is read again, so the
 
 Each table joins the back of the backfill queue. A table this run already covers is skipped and
 logged, so a repeated signal does not re-read it. To read one again, point
-` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotCheckpointCacheKey + "`" + ` at a fresh key.`).
+` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotCheckpointCacheKey + "`" + ` at a fresh key.
+
+Set ` + "`REPLICA IDENTITY FULL`" + ` on a table with large (TOASTed) column values before backfilling
+it. PostgreSQL omits an unchanged TOAST value from an ` + "`UPDATE`" + `, sending a marker instead, and
+under the default replica identity there is nothing in the message to recover it from — so
+` + "`" + fieldUnchangedToastValue + "`" + ` is emitted for that column. For a row updated while its chunk is
+buffered, the backfilled copy that held the real value is dropped as a duplicate, leaving the
+placeholder as the only value the destination ever receives for it. ` + "`REPLICA IDENTITY FULL`" + `
+makes PostgreSQL send the previous row, which the connector reads the real value from. It can be
+set for the backfill and reverted afterwards; it takes a brief lock but rewrites nothing.`).
 			Example("rpcn_signal_table").
 			Default("").
 			Advanced()).
