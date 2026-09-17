@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/go-faker/faker/v4"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/stretchr/testify/require"
 )
 
@@ -151,4 +152,46 @@ func (db *TestDB) MustExec(t *testing.T, query string, args ...any) {
 	t.Helper()
 	_, err := db.Exec(query, args...)
 	require.NoError(t, err)
+}
+
+// CollectedMsg is used to capture messages and assert against them.
+type CollectedMsg struct {
+	Operation string
+	Table     string
+	LSN       string
+	HasSchema bool
+	Schema    map[string]any
+}
+
+type SchemaMetadataCollector struct {
+	mu   sync.Mutex
+	msgs []CollectedMsg
+}
+
+func (c *SchemaMetadataCollector) Consume(_ context.Context, batch service.MessageBatch) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, msg := range batch {
+		cm := CollectedMsg{}
+		cm.Operation, _ = msg.MetaGet("operation")
+		cm.Table, _ = msg.MetaGet("table")
+		cm.LSN, _ = msg.MetaGet("lsn")
+		_ = msg.MetaWalkMut(func(key string, value any) error {
+			if key == "schema" {
+				if m, ok := value.(map[string]any); ok {
+					cm.HasSchema = true
+					cm.Schema = m
+				}
+			}
+			return nil
+		})
+		c.msgs = append(c.msgs, cm)
+	}
+	return nil
+}
+
+func (c *SchemaMetadataCollector) Snapshot() []CollectedMsg {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]CollectedMsg(nil), c.msgs...)
 }
