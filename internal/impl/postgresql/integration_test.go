@@ -1718,11 +1718,13 @@ postgres_cdc:
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
 }
 
-// TestIntegrationPostgresDefaultBatchingIsTransactionSized verifies that with
-// no batching policy configured, rows committed in one transaction arrive
-// downstream as a single output batch (the reader batches per transaction and
-// the input passes that batch straight through).
-func TestIntegrationPostgresDefaultBatchingIsTransactionSized(t *testing.T) {
+// TestIntegrationPostgresDefaultBatchingIsOneRowPerMessage pins the default
+// shape of the stream: with no batching policy and batch_transactions off,
+// the rows of one transaction arrive downstream one message per batch, as
+// they did before the reader batched per transaction internally. Existing
+// pipelines rely on this, for example a fallback output that isolates one
+// bad row to a dead-letter queue.
+func TestIntegrationPostgresDefaultBatchingIsOneRowPerMessage(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -1756,6 +1758,69 @@ postgres_cdc:
 	go func() { _ = streamOut.Run(t.Context()) }()
 
 	waitForActiveReplicationSlot(t, db, "test_slot_default_batching")
+
+	const rowCount = 5
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	for i := range rowCount {
+		f := pgtest.GetFakeFlightRecord()
+		_, err = tx.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+	}
+	require.NoError(t, tx.Commit())
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		sizesMut.Lock()
+		defer sizesMut.Unlock()
+		assert.Equal(c, []int{1, 1, 1, 1, 1}, sizes, "by default each row of a transaction is its own batch")
+	}, 25*time.Second, 100*time.Millisecond)
+
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
+
+	sizesMut.Lock()
+	defer sizesMut.Unlock()
+	assert.Equal(t, []int{1, 1, 1, 1, 1}, sizes, "no extra batch should arrive after the stream is stopped")
+}
+
+// TestIntegrationPostgresBatchTransactions verifies that with
+// batch_transactions set and no batching policy, rows committed in one
+// transaction arrive downstream as a single output batch (the reader batches
+// per transaction and the input passes that batch straight through).
+func TestIntegrationPostgresBatchTransactions(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_batch_transactions
+    stream_snapshot: false
+    schema: public
+    tables:
+       - '"FlightsCompositePK"'
+    batch_transactions: true
+`, databaseURL)
+
+	var (
+		sizesMut sync.Mutex
+		sizes    []int
+	)
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		sizesMut.Lock()
+		defer sizesMut.Unlock()
+		sizes = append(sizes, len(mb))
+		return nil
+	}))
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+	go func() { _ = streamOut.Run(t.Context()) }()
+
+	waitForActiveReplicationSlot(t, db, "test_slot_batch_transactions")
 
 	const rowCount = 5
 	tx, err := db.Begin()
@@ -1846,10 +1911,10 @@ postgres_cdc:
 }
 
 // TestIntegrationPostgresLargeTransactionSpansBatches covers the reader's row
-// cap: a single transaction larger than the streaming cap (half the default
-// checkpoint_limit of 1024, i.e. 512 rows) must arrive as several batches
-// with no rows lost, and a restart on the same slot after everything was
-// acked must not replay any of them.
+// cap under batch_transactions: a single transaction larger than the
+// streaming cap (half the default checkpoint_limit of 1024, i.e. 512 rows)
+// must arrive as several batches with no rows lost, and a restart on the same
+// slot after everything was acked must not replay any of them.
 func TestIntegrationPostgresLargeTransactionSpansBatches(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
@@ -1863,6 +1928,7 @@ postgres_cdc:
     schema: public
     tables:
        - '"FlightsCompositePK"'
+    batch_transactions: true
 `, databaseURL)
 
 	var (

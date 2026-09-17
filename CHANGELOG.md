@@ -5,10 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- postgres_cdc: Added a `batch_transactions` field. When set, and no `batching` policy is configured, the rows of each replication transaction are handed to the pipeline as one batch (capped at half of `checkpoint_limit`, and at 1000 rows or 4 MiB of WAL, so a larger transaction spans several batches) instead of one message at a time. It is off by default because a whole-transaction batch changes the unit of failure downstream: an output that fails a batch on one bad row, such as a multi-row `sql_insert` behind `fallback`, then handles the transaction's other rows the same way. ([@squiidz](https://github.com/squiidz), [#4812](https://github.com/redpanda-data/connect/pull/4812))
+
 ### Changed
 
-- postgres_cdc: Streaming replication now hands decoded rows to the pipeline in per-transaction batches over a buffered channel instead of one row at a time, so the reader and the batching/marshalling stages can overlap rather than run in lockstep. With no `batching` policy configured, each transaction now arrives downstream as one batch (previously one message at a time); any configured `batching` policy, including an explicit `count: 1`, is honoured exactly. Streaming batches are capped at half of `checkpoint_limit` so that two can be in flight. ([@squiidz](https://github.com/squiidz), [#4812](https://github.com/redpanda-data/connect/pull/4812))
-- postgres_cdc: A configured `batching` policy is now honoured exactly on both the snapshot and streaming paths; previously a batch could exceed the configured `count` by up to a whole snapshot page. With no policy the input's batcher is bypassed, so the `batch_created` metric no longer advances; configure a policy to keep it. ([@squiidz](https://github.com/squiidz), [#4812](https://github.com/redpanda-data/connect/pull/4812))
+- snowflake_put, sql_*: Upgraded the Snowflake `gosnowflake` driver from v1.19.0 to v2.2.0. This fixes CVE-2026-85525 (OCSP responses were accepted without checking that they matched the certificate being validated, so a revoked certificate could be accepted) and stops the driver creating a temporary directory at start-up when the `snowflake` driver is never used. ([@squiidz](https://github.com/squiidz), [#4822](https://github.com/redpanda-data/connect/pull/4822))
+- postgres_cdc: The streaming replication reader now decodes rows into per-transaction batches and hands them to the input over a buffered channel, so decoding overlaps marshalling and batching instead of running in lockstep one row per channel send. The messages reaching the pipeline are unchanged by default: one per row, or as the configured `batching` policy dictates. ([@squiidz](https://github.com/squiidz), [#4812](https://github.com/redpanda-data/connect/pull/4812))
+- postgres_cdc: A configured `batching` policy is now honoured exactly on both the snapshot and streaming paths; previously a batch could exceed the configured `count` by up to a whole snapshot page. ([@squiidz](https://github.com/squiidz), [#4812](https://github.com/redpanda-data/connect/pull/4812))
 - postgres_cdc: When `batching.processors` fail on a batch, its rows are now published unprocessed with their error set so error-handling components can route them; previously the rows were silently dropped and a later acknowledgement could advance the replication slot past them. ([@squiidz](https://github.com/squiidz), [#4812](https://github.com/redpanda-data/connect/pull/4812))
 
 ## 4.109.0 - 2026-09-10

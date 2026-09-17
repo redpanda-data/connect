@@ -52,6 +52,7 @@ input:
     pg_wal_monitor_interval: 3s
     max_parallel_snapshot_tables: 1
     auto_replay_nacks: true
+    batch_transactions: false
     batching:
       count: 0
       byte_size: 0
@@ -101,6 +102,7 @@ input:
       roles: [] # No default (optional)
     signal_table_name: ""
     auto_replay_nacks: true
+    batch_transactions: false
     batching:
       count: 0
       byte_size: 0
@@ -205,7 +207,7 @@ tables:
 
 === `checkpoint_limit`
 
-The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees. With no `batching` policy, streaming batches handed to the pipeline are capped at half this value, and at 1000 rows or 4 MiB of WAL whichever is smaller, so that two can be in flight; a snapshot page (`snapshot_batch_size` rows) is always admitted whole, so in-flight messages can exceed this limit by up to one page.
+The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees. With `batch_transactions`, the transaction batches handed to the pipeline are capped at half this value, and at 1000 rows or 4 MiB of WAL whichever is smaller, so that two can be in flight; a snapshot page (`snapshot_batch_size` rows) is always admitted whole, so in-flight messages can exceed this limit by up to one page.
 
 
 *Type*: `int`
@@ -627,9 +629,23 @@ Whether messages that are rejected (nacked) at the output level should be automa
 
 *Default*: `true`
 
+=== `batch_transactions`
+
+When set to true, the rows of each replication transaction are handed to the pipeline together as one batch, instead of one message at a time. A batch is capped at half of `checkpoint_limit` and at 1000 rows or 4 MiB of WAL, whichever is smaller, so a larger transaction spans several batches; the rows of one transaction are never mixed with another's. Transaction batches let outputs that write a batch in one operation (a multi-row `sql_insert`, a Kafka produce) apply a transaction's rows together, and they lower the per-message overhead of the streaming path.
+
+This changes how downstream errors behave, which is why it is off by default: the unit of failure and of retry becomes the transaction. If one row of a batch makes an output fail with a plain (non-indexed) error, outputs such as `fallback` handle the whole batch, so the transaction's other rows go the same way as the failing one; with one message per batch only that row is affected. Leave it off for pipelines that rely on isolating a single failing row, for example a `fallback` output routing bad rows to a dead-letter queue.
+
+Cannot be combined with a `batching` policy, which would re-batch the transactions; the input's batcher is bypassed, so `batch_created` does not advance. Snapshot pages are unaffected: each page (`snapshot_batch_size` rows) arrives as one batch whether or not this is set.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+Requires version 4.110.0 or newer
+
 === `batching`
 
-Optional batching of the emitted messages. With no policy configured, each replication transaction arrives as one batch (capped at half of `checkpoint_limit`, at most 1000 rows or 4 MiB of WAL, so a larger transaction spans several batches), and each snapshot page (`snapshot_batch_size` rows) arrives as one batch. Configure a policy to re-batch per message instead; `count: 1` gives one message per batch. If the policy's `processors` fail on a batch, its rows are published unprocessed with their error set rather than dropped or retried, so error-handling components can route them.
+Optional batching of the emitted messages, honoured exactly on both the snapshot and streaming paths: `count: 1` gives one message per batch. With no policy configured, streaming rows arrive one message at a time and each snapshot page (`snapshot_batch_size` rows) arrives as one batch; see `batch_transactions` to receive whole transactions instead. If the policy's `processors` fail on a batch, its rows are published unprocessed with their error set rather than dropped or retried, so error-handling components can route them.
 
 
 *Type*: `object`
