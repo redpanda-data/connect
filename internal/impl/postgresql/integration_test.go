@@ -1471,6 +1471,54 @@ postgres_cdc:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
+// collectedMsg is the metadata TestIntegrationPostgresCDCSchemaMetadata
+// asserts on. schema is held as a structured value rather than a string, so
+// only MetaWalkMut reaches it.
+type collectedMsg struct {
+	operation string
+	table     string
+	lsn       string
+	hasSchema bool
+	schema    map[string]any
+}
+
+// schemaMetadataCollector gathers collectedMsg values from a stream's
+// batches. consume runs on the stream's own goroutine while the test body
+// reads, so both sides take the lock.
+type schemaMetadataCollector struct {
+	mu   sync.Mutex
+	msgs []collectedMsg
+}
+
+func (c *schemaMetadataCollector) consume(_ context.Context, batch service.MessageBatch) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, msg := range batch {
+		cm := collectedMsg{}
+		cm.operation, _ = msg.MetaGet("operation")
+		cm.table, _ = msg.MetaGet("table")
+		cm.lsn, _ = msg.MetaGet("lsn")
+		_ = msg.MetaWalkMut(func(key string, value any) error {
+			if key == "schema" {
+				if m, ok := value.(map[string]any); ok {
+					cm.hasSchema = true
+					cm.schema = m
+				}
+			}
+			return nil
+		})
+		c.msgs = append(c.msgs, cm)
+	}
+	return nil
+}
+
+// snapshot copies what has been collected so far.
+func (c *schemaMetadataCollector) snapshot() []collectedMsg {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]collectedMsg(nil), c.msgs...)
+}
+
 func TestIntegrationPostgresCDCSchemaMetadata(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -1522,18 +1570,7 @@ func TestIntegrationPostgresCDCSchemaMetadata(t *testing.T) {
 		 '{"k":2}', '{"k":2}', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', '10.0.0.2')`)
 		require.NoError(t, err)
 
-		type collectedMsg struct {
-			operation string
-			table     string
-			lsn       string
-			hasSchema bool
-			schema    map[string]any
-		}
-
-		var (
-			mu       sync.Mutex
-			messages []collectedMsg
-		)
+		collector := &schemaMetadataCollector{}
 
 		sb := service.NewStreamBuilder()
 		require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
@@ -1548,27 +1585,7 @@ postgres_cdc:
       - schema_test_table
 `, databaseURL)))
 
-		require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-			mu.Lock()
-			defer mu.Unlock()
-			for _, msg := range batch {
-				cm := collectedMsg{}
-				cm.operation, _ = msg.MetaGet("operation")
-				cm.table, _ = msg.MetaGet("table")
-				cm.lsn, _ = msg.MetaGet("lsn")
-				_ = msg.MetaWalkMut(func(key string, value any) error {
-					if key == "schema" {
-						if m, ok := value.(map[string]any); ok {
-							cm.hasSchema = true
-							cm.schema = m
-						}
-					}
-					return nil
-				})
-				messages = append(messages, cm)
-			}
-			return nil
-		}))
+		require.NoError(t, sb.AddBatchConsumerFunc(collector.consume))
 
 		streamOut, err := sb.Build()
 		require.NoError(t, err)
@@ -1587,9 +1604,7 @@ postgres_cdc:
 
 		// Wait for 2 snapshot rows.
 		assert.Eventually(t, func() bool {
-			mu.Lock()
-			defer mu.Unlock()
-			return len(messages) >= 2
+			return len(collector.snapshot()) >= 2
 		}, 30*time.Second, 100*time.Millisecond)
 
 		// Insert 2 CDC rows.
@@ -1611,15 +1626,10 @@ postgres_cdc:
 
 		// Wait for all 4 messages.
 		assert.Eventually(t, func() bool {
-			mu.Lock()
-			defer mu.Unlock()
-			return len(messages) >= 4
+			return len(collector.snapshot()) >= 4
 		}, 30*time.Second, 100*time.Millisecond)
 
-		mu.Lock()
-		phase1 := make([]collectedMsg, 4)
-		copy(phase1, messages)
-		mu.Unlock()
+		phase1 := collector.snapshot()[:4]
 
 		// verifySchemaAllCols checks all 21 columns against their expected schema types.
 		verifySchemaAllCols := func(t *testing.T, schema map[string]any) {
@@ -1699,14 +1709,10 @@ postgres_cdc:
 		require.NoError(t, err)
 
 		assert.Eventually(t, func() bool {
-			mu.Lock()
-			defer mu.Unlock()
-			return len(messages) >= 5
+			return len(collector.snapshot()) >= 5
 		}, 30*time.Second, 100*time.Millisecond)
 
-		mu.Lock()
-		fifth := messages[4]
-		mu.Unlock()
+		fifth := collector.snapshot()[4]
 
 		assert.Equal(t, "insert", fifth.operation)
 		assert.NotEmpty(t, fifth.lsn)
@@ -1755,36 +1761,20 @@ postgres_cdc:
 label: snap_cache
 memory: {}`))
 
-		type observed struct {
-			operation string
-			schema    map[string]any
-			hasSchema bool
-		}
-		var (
-			mu   sync.Mutex
-			msgs []observed
-		)
-		require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-			mu.Lock()
-			defer mu.Unlock()
-			for _, msg := range batch {
-				if table, _ := msg.MetaGet("table"); table != "flights" {
-					continue
+		collector := &schemaMetadataCollector{}
+		require.NoError(t, builder.AddBatchConsumerFunc(collector.consume))
+
+		// The signal row streams like any other insert, and its schema is
+		// the signal table's, not the one under test.
+		flightRows := func() []collectedMsg {
+			var out []collectedMsg
+			for _, m := range collector.snapshot() {
+				if m.table == "flights" {
+					out = append(out, m)
 				}
-				o := observed{}
-				o.operation, _ = msg.MetaGet("operation")
-				_ = msg.MetaWalkMut(func(key string, value any) error {
-					if key == "schema" {
-						if m, ok := value.(map[string]any); ok {
-							o.hasSchema, o.schema = true, m
-						}
-					}
-					return nil
-				})
-				msgs = append(msgs, o)
 			}
-			return nil
-		}))
+			return out
+		}
 
 		stream, err := builder.Build()
 		require.NoError(t, err)
@@ -1800,10 +1790,8 @@ memory: {}`))
 
 		// A backfilled row and a streamed one, so the two can be compared.
 		require.Eventually(t, func() bool {
-			mu.Lock()
-			defer mu.Unlock()
 			var reads, inserts int
-			for _, m := range msgs {
+			for _, m := range flightRows() {
 				switch m.operation {
 				case "read":
 					reads++
@@ -1818,11 +1806,8 @@ memory: {}`))
 			return reads >= numPreExisting && inserts >= 1
 		}, 60*time.Second, 100*time.Millisecond, "did not observe both backfilled and streamed rows")
 
-		mu.Lock()
-		defer mu.Unlock()
-
 		var readSchema, insertSchema map[string]any
-		for _, m := range msgs {
+		for _, m := range flightRows() {
 			require.True(t, m.hasSchema, "a %q message carried no schema metadata", m.operation)
 			switch m.operation {
 			case "read":
