@@ -404,7 +404,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	msg.MetaSet("operation", m.Operation)
 	if len(m.LSN) != 0 {
 		msg.MetaSet("lsn", string(m.LSN))
-		msg.MetaSet("seqval", string(m.SeqVal))
+		msg.MetaSet("seqval", m.SeqVal.String())
 		msg.MetaSet("command_id", strconv.Itoa(m.CommandID))
 	}
 	if s := b.getOrComputeTableSchema(m.Table, m.ColumnNames, m.ColumnTypes); s != nil {

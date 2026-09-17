@@ -943,7 +943,8 @@ func TestPublishSetsChangeMetadata(t *testing.T) {
 		publisher, _ := newTestBatchPublisher(t)
 
 		event := streamingEvent("00000042", "00000041")
-		event.SeqVal = replication.LSN("seqval0042")
+		// A real __$seqval is 10 arbitrary bytes, usually not valid UTF-8.
+		event.SeqVal = replication.LSN{0x00, 0x00, 0x00, 0x2a, 0x00, 0x00, 0x0f, 0xa0, 0x00, 0x03}
 		event.CommandID = 7
 
 		am := publishAndReceive(t, ctx, publisher, event)
@@ -955,7 +956,7 @@ func TestPublishSetsChangeMetadata(t *testing.T) {
 			"table":           "t",
 			"operation":       replication.MessageOperationInsert.String(),
 			"lsn":             "00000042",
-			"seqval":          "seqval0042",
+			"seqval":          "0x0000002a00000fa00003",
 			"command_id":      "7",
 		}
 		for k, v := range want {

@@ -104,7 +104,7 @@ This input adds the following metadata fields to each message:
 - table (Name of the table that the message originated from)
 - operation (Type of operation that generated the message: "read", "delete", "insert", or "update_before" and "update_after". "read" is from messages that are read in the initial snapshot phase.)
 - lsn (The commit Log Sequence Number of the change, from the change table column `__$start_lsn`. Not present on snapshot (`read`) messages.)
-- seqval (The position of the change in the transaction log, from the change table column `__$seqval`. Not present on snapshot (`read`) messages.)
+- seqval (The position of the change in the transaction log, from the change table column `__$seqval`, encoded as a hexadecimal string with a `0x` prefix. Not present on snapshot (`read`) messages.)
 - command_id (The order of the statement within its transaction, from the change table column `__$command_id`. Use `command_id` for ordering changes that share the same `lsn`. Not present on snapshot (`read`) messages.)
 
 == Permissions
