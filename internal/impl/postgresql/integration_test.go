@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
@@ -2497,5 +2498,298 @@ file:
 		for id, count := range allCounts {
 			assert.Equal(t, 1, count, "row id %d observed %d times across both runs, expected exactly once", id, count)
 		}
+	})
+}
+
+// TestIntegrationIncrementalSnapshotPartitionedTable covers a table whose
+// changes do not stream under the name its backfilled rows are buffered
+// under. PostgreSQL publishes a partitioned table's changes using its leaf
+// partitions' identities unless the publication sets
+// publish_via_partition_root, so the window buffer never sees them: before
+// the guard, a row updated while its chunk was buffered was followed by the
+// stale snapshot copy, silently reverting a committed write.
+func TestIntegrationIncrementalSnapshotPartitionedTable(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		numRows = 40
+		// One chunk covering every row, so the target is certainly buffered
+		// when the update lands.
+		chunkSize = 100
+		targetID  = 25
+	)
+
+	type event struct {
+		op     string
+		id     int64
+		tenant string
+	}
+
+	// run starts a backfill for table, lets the caller drive writes against a
+	// buffered chunk, and returns what reached the consumer plus the logs.
+	run := func(t *testing.T, table, slot string, ddl []string) ([]event, *pgtest.TestLogCapture) {
+		t.Helper()
+
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+		for _, stmt := range ddl {
+			_, err := db.Exec(stmt)
+			require.NoError(t, err, stmt)
+		}
+		// Committed before the slot exists, so only the backfill can see them.
+		for i := 1; i <= numRows; i++ {
+			_, err := db.Exec(fmt.Sprintf(`INSERT INTO %s (id, tenant) VALUES ($1, 'pre')`, table), i)
+			require.NoError(t, err)
+		}
+
+		var (
+			mu     sync.Mutex
+			events []event
+		)
+		logs := pgtest.NewTestLogCapture()
+		builder := service.NewStreamBuilder()
+		builder.SetLogger(slog.New(logs))
+		// Heartbeats long enough that no commit intervenes between the signal
+		// buffering a chunk and the writes below, which is what makes the
+		// race deterministic rather than lucky.
+		require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: %s
+    schema: public
+    heartbeat_interval: 60s
+    tables:
+      - %s
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: %d
+        heartbeat_interval: 60s
+        checkpoint_cache: snap_cache
+`, databaseURL, slot, table, chunkSize)))
+		require.NoError(t, builder.AddCacheYAML(`
+label: snap_cache
+memory: {}`))
+		require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range batch {
+				if tbl, _ := msg.MetaGet("table"); tbl == "rpcn_signal" {
+					continue
+				}
+				op, _ := msg.MetaGet("operation")
+				data, err := msg.AsStructured()
+				if err != nil {
+					return err
+				}
+				row, ok := data.(map[string]any)
+				if !ok {
+					continue
+				}
+				num, ok := row["id"].(json.Number)
+				if !ok {
+					continue
+				}
+				id, err := num.Int64()
+				if err != nil {
+					return err
+				}
+				tenant, _ := row["tenant"].(string)
+				events = append(events, event{op: op, id: id, tenant: tenant})
+			}
+			return nil
+		}))
+
+		stream, err := builder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Logf("stream error: %v", err)
+			}
+		}()
+		t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+		signalIncrementalSnapshot(t, db, slot, table)
+
+		// A buffered chunk emits nothing, so there is no message to wait on.
+		// With the heartbeat at 60s nothing else commits meanwhile.
+		time.Sleep(3 * time.Second)
+
+		_, err = db.Exec(fmt.Sprintf(`UPDATE %s SET tenant = 'updated' WHERE id = $1`, table), targetID)
+		require.NoError(t, err)
+		// The update's own commit only opens the window; a later one closes
+		// it. This insert is that commit -- id 999 is above the frozen max
+		// key, so it is streamed rather than backfilled.
+		_, err = db.Exec(fmt.Sprintf(`INSERT INTO %s (id, tenant) VALUES (999, 'closer')`, table))
+		require.NoError(t, err)
+
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			var updates int
+			for _, e := range events {
+				if e.op == "update" {
+					updates++
+				}
+			}
+			return updates >= 1
+		}, 60*time.Second, 100*time.Millisecond, "the update never streamed")
+
+		// Give the drain a chance to deliver anything it still would.
+		time.Sleep(3 * time.Second)
+
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]event(nil), events...), logs
+	}
+
+	t.Run("an ordinary table dedups the buffered row", func(t *testing.T) {
+		events, _ := run(t, "plain_events", "dedup_plain_slot", []string{
+			`CREATE TABLE plain_events (id bigint PRIMARY KEY, tenant text)`,
+		})
+
+		var seq []string
+		for _, e := range events {
+			if e.id == targetID {
+				seq = append(seq, fmt.Sprintf("%s=%s", e.op, e.tenant))
+			}
+		}
+		require.Equal(t, []string{"update=updated"}, seq,
+			"the buffered row must be dropped, leaving the update as the row's only delivery")
+	})
+
+	t.Run("a partitioned parent is rejected rather than backfilled", func(t *testing.T) {
+		events, logs := run(t, "part_events", "dedup_part_slot", []string{
+			`CREATE TABLE part_events (id bigint, tenant text, PRIMARY KEY (id)) PARTITION BY RANGE (id)`,
+			`CREATE TABLE part_events_p1 PARTITION OF part_events FOR VALUES FROM (1) TO (10000)`,
+		})
+
+		var reads int
+		for _, e := range events {
+			if e.op == "read" {
+				reads++
+			}
+		}
+		assert.Zero(t, reads, "no backfill may run for a table whose changes cannot be deduplicated")
+
+		var rejected bool
+		for _, m := range logs.Messages() {
+			if strings.Contains(m, "publish_via_partition_root") {
+				rejected = true
+				break
+			}
+		}
+		assert.True(t, rejected, "the rejection must name the publication option, got: %v", logs.Messages())
+
+		// And replication itself carries on: a rejected signal must not stop
+		// the stream.
+		var streamed bool
+		for _, e := range events {
+			if e.op == "update" && e.id == targetID {
+				streamed = true
+			}
+		}
+		assert.True(t, streamed, "replication must continue after the rejected signal")
+	})
+}
+
+// TestIntegrationIncrementalSnapshotWarnsAboutPartitionedTables: an operator
+// should learn at startup that a configured table cannot be backfilled,
+// rather than discovering it when their first signal is rejected.
+func TestIntegrationIncrementalSnapshotWarnsAboutPartitionedTables(t *testing.T) {
+	integration.CheckSkip(t)
+
+	// viaRoot pre-creates the publication with the option set. The connector
+	// only passes options on CREATE and leaves an existing publication's
+	// parameters alone, so this is how a deployment ends up with it -- and
+	// the only way to have it in place before setup runs.
+	start := func(t *testing.T, slot string, viaRoot bool) *pgtest.TestLogCapture {
+		t.Helper()
+
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+		for _, stmt := range []string{
+			`CREATE TABLE part_orders (id bigint, tenant text, PRIMARY KEY (id)) PARTITION BY RANGE (id)`,
+			`CREATE TABLE part_orders_p1 PARTITION OF part_orders FOR VALUES FROM (1) TO (1000)`,
+		} {
+			_, err := db.Exec(stmt)
+			require.NoError(t, err, stmt)
+		}
+
+		if viaRoot {
+			_, err := db.Exec(fmt.Sprintf(
+				`CREATE PUBLICATION pglog_stream_%s FOR TABLE part_orders WITH (publish_via_partition_root = true)`, slot))
+			require.NoError(t, err)
+		}
+
+		logs := pgtest.NewTestLogCapture()
+		builder := service.NewStreamBuilder()
+		builder.SetLogger(slog.New(logs))
+		require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: %s
+    schema: public
+    heartbeat_interval: 60s
+    tables:
+      - part_orders
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 100
+        heartbeat_interval: 60s
+        checkpoint_cache: snap_cache
+`, databaseURL, slot)))
+		require.NoError(t, builder.AddCacheYAML(`
+label: snap_cache
+memory: {}`))
+		require.NoError(t, builder.AddBatchConsumerFunc(func(context.Context, service.MessageBatch) error {
+			return nil
+		}))
+
+		stream, err := builder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Logf("stream error: %v", err)
+			}
+		}()
+		t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+		return logs
+	}
+
+	warned := func(logs *pgtest.TestLogCapture) bool {
+		for _, m := range logs.Messages() {
+			if strings.Contains(m, "cannot be backfilled") && strings.Contains(m, "part_orders") {
+				return true
+			}
+		}
+		return false
+	}
+
+	t.Run("warns when the publication does not republish via the root", func(t *testing.T) {
+		logs := start(t, "warn_part_slot", false)
+
+		// No signal is sent: the warning must come from startup alone.
+		require.Eventually(t, func() bool { return warned(logs) },
+			60*time.Second, 100*time.Millisecond,
+			"expected a startup warning naming the partitioned table, got: %v", logs.Messages())
+	})
+
+	t.Run("stays quiet when the publication republishes via the root", func(t *testing.T) {
+		logs := start(t, "warn_part_slot_viaroot", true)
+		require.Eventually(t, func() bool {
+			for _, m := range logs.Messages() {
+				if strings.Contains(m, "Incremental snapshot") {
+					return true
+				}
+			}
+			return false
+		}, 60*time.Second, 100*time.Millisecond, "the snapshot never started")
+		assert.False(t, warned(logs),
+			"a table the publication republishes via the root can be backfilled, got: %v", logs.Messages())
 	})
 }

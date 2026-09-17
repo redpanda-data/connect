@@ -72,15 +72,15 @@ func TestIncrementalSnapshotKeyResolution(t *testing.T) {
 		cols, err := s.incrementalPKColumns(t.Context(), orders)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"id"}, cols, "cached columns must be unquoted")
-		// Two: the key columns, then their types.
-		assert.Equal(t, 2, queries)
+		// Three: the key columns, their types, then the partition state.
+		assert.Equal(t, 3, queries)
 
 		// The dedup path resolves these per streamed row, so a repeat
 		// lookup must not cost a round trip.
 		cols, err = s.incrementalPKColumns(t.Context(), orders)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"id"}, cols)
-		assert.Equal(t, 2, queries, "second lookup for the same table must be cached")
+		assert.Equal(t, 3, queries, "second lookup for the same table must be cached")
 	})
 
 	t.Run("an empty table has no max key and no error", func(t *testing.T) {
@@ -528,6 +528,10 @@ type fakeQueryDriver struct {
 	// the chunk query can bind -- so a test that only cares about the key
 	// columns needs to say nothing about their types.
 	keyTypes [][]driver.Value
+	// partitioned and pubViaRoot answer the partition query. The zero values
+	// describe an ordinary table, which is what most tests want.
+	partitioned bool
+	pubViaRoot  bool
 }
 
 func (d *fakeQueryDriver) Open(string) (driver.Conn, error) {
@@ -562,6 +566,13 @@ func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
 	}
 	if err := s.conn.driver.queryErr; err != nil {
 		return nil, err
+	}
+	// The partition query has its own shape, so it needs its own result.
+	if strings.Contains(s.query, "pg_publication") {
+		return &fakeQueryRows{
+			columns: []string{"partitioned", "pubviaroot"},
+			rows:    [][]driver.Value{{s.conn.driver.partitioned, s.conn.driver.pubViaRoot}},
+		}, nil
 	}
 	// The key type query has its own shape, so it needs its own result.
 	if strings.Contains(s.query, "pg_type") {
@@ -774,4 +785,73 @@ func TestSnapshotSignalWithSnapshotDisabled(t *testing.T) {
 			assert.NoError(t, s.dispatchSnapshotSignal(t.Context(), quiet.msg))
 		})
 	}
+}
+
+// TestSnapshotSignalRejectsUndedupableTable: a partitioned parent's changes
+// stream under its partitions' names unless the publication republishes via
+// the root, so the window buffer never sees them and a row updated during the
+// backfill is followed by the stale snapshot copy.
+func TestSnapshotSignalRejectsUndedupableTable(t *testing.T) {
+	signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
+	events := incrementalsnapshot.TableID{Schema: "public", Table: "events"}
+
+	newStream := func(partitioned, pubViaRoot bool) *Stream {
+		name := fmt.Sprintf("fake_pglog_part_%d", fakeQueryDriverSeq.Add(1))
+		sql.Register(name, &fakeQueryDriver{
+			columns:     []string{"attname"},
+			rows:        [][]driver.Value{{"id"}},
+			partitioned: partitioned,
+			pubViaRoot:  pubViaRoot,
+		})
+		db, err := sql.Open(name, "")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = db.Close() })
+
+		return &Stream{
+			slotName:       "test_slot",
+			signalTable:    &signalTable,
+			snapshotSchema: "public",
+			logger:         service.MockResources().Logger(),
+			incSnapshot: incrementalSnapshot{
+				coordinator: &incsnapshot.Coordinator{},
+				conn:        db,
+				pkCache:     map[string][]string{},
+			},
+		}
+	}
+
+	t.Run("a partitioned parent is rejected", func(t *testing.T) {
+		s := newStream(true, false)
+
+		_, err := s.incrementalPKColumns(t.Context(), events)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable,
+			"unusable, so a signal is rejected and a resumed queue entry is dropped rather than backfilled undedupable")
+		assert.Contains(t, err.Error(), "publish_via_partition_root",
+			"the message must name the publication option that would make it work")
+		assert.Contains(t, err.Error(), "pglog_stream_test_slot", "and the publication it applies to")
+
+		// The signal path turns that into a rejection: logged and skipped,
+		// not a stream restart.
+		assert.ErrorIs(t, s.checkBackfillable(t.Context(), events), errSignalRejected)
+	})
+
+	t.Run("a partitioned parent published via the root is accepted", func(t *testing.T) {
+		// Changes then arrive under the parent's name, so dedup works and the
+		// guard must not fire -- it releases itself once the publication
+		// carries the option, with no change here.
+		s := newStream(true, true)
+
+		cols, err := s.incrementalPKColumns(t.Context(), events)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"id"}, cols)
+	})
+
+	t.Run("an ordinary table is accepted", func(t *testing.T) {
+		s := newStream(false, false)
+
+		cols, err := s.incrementalPKColumns(t.Context(), events)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"id"}, cols)
+	})
 }

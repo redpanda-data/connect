@@ -903,6 +903,34 @@ func (s *Stream) Errors() chan error {
 	return s.errors
 }
 
+// undedupableTablesQuery lists the partitioned parents in a schema when the
+// publication does not republish their changes under the parent's name. It
+// returns nothing when the publication does, since there is then nothing a
+// backfill could not deduplicate.
+func undedupableTablesQuery(schema, publication string) (string, error) {
+	return sanitize.SQLQuery(`
+        SELECT c.relname
+        FROM   pg_class c
+        JOIN   pg_namespace n ON n.oid = c.relnamespace
+        WHERE  c.relkind = 'p'
+        AND    n.nspname = $1
+        AND    NOT COALESCE((SELECT p.pubviaroot FROM pg_publication p WHERE p.pubname = $2), false)
+        ORDER BY c.relname;
+    `, schema, publication)
+}
+
+// partitionDedupQuery reports whether a table is a partitioned parent, and
+// whether the publication republishes its partitions' changes under the
+// parent's name.
+func partitionDedupQuery(table, publication string) (string, error) {
+	return sanitize.SQLQuery(`
+        SELECT c.relkind = 'p',
+               COALESCE((SELECT p.pubviaroot FROM pg_publication p WHERE p.pubname = $2), false)
+        FROM   pg_class c
+        WHERE  c.oid = $1::regclass;
+    `, table, publication)
+}
+
 // primaryKeyColumnTypesQuery reports the primary key columns of a table with
 // their type names, resolving a domain to the type it is built on so a domain
 // over an unusable type is not mistaken for a usable one.
