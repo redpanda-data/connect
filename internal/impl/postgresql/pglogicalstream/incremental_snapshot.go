@@ -101,7 +101,62 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 		resuming = len(resume.Tables)
 	}
 	s.logger.Debugf("Incremental snapshot: enabled with chunk_size=%d, resuming %d table(s)", incSnapshotCfg.ChunkSize, resuming)
+	s.warnUndedupableTables(ctx, config)
 	return nil
+}
+
+// warnUndedupableTables reports at startup the tables a signal would be
+// rejected for, so an operator does not have to discover it by signalling
+// one. Refer to checkDedupReachable for why they cannot be backfilled.
+//
+// Advisory only: these tables replicate normally, and a configuration
+// listing one is not an error -- it is only a backfill that cannot work. So
+// this never fails startup, including when the query itself fails.
+func (s *Stream) warnUndedupableTables(ctx context.Context, config *Config) {
+	publication := "pglog_stream_" + s.slotName
+	q, err := undedupableTablesQuery(config.DBSchema, publication)
+	if err != nil {
+		s.logger.Debugf("Incremental snapshot: unable to build the partitioned table query: %s", err)
+		return
+	}
+
+	rows, err := s.incSnapshot.conn.QueryContext(ctx, q)
+	if err != nil {
+		s.logger.Debugf("Incremental snapshot: unable to check for partitioned tables: %s", err)
+		return
+	}
+	defer rows.Close()
+
+	// The configured names, so the warning covers only tables this connector
+	// replicates. An empty list means FOR ALL TABLES, which covers every one.
+	configured := make(map[string]struct{}, len(config.DBTables))
+	for _, name := range config.DBTables {
+		table, err := normalizeTableID(config.DBSchema, name)
+		if err != nil {
+			continue
+		}
+		configured[table.Table] = struct{}{}
+	}
+
+	var found []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			s.logger.Debugf("Incremental snapshot: unable to read partitioned table names: %s", err)
+			return
+		}
+		if _, ok := configured[name]; ok || len(configured) == 0 {
+			found = append(found, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		s.logger.Debugf("Incremental snapshot: unable to read partitioned table names: %s", err)
+		return
+	}
+	if len(found) > 0 {
+		s.logger.Warnf("Incremental snapshot: %d partitioned table(s) cannot be backfilled because publication %s does not set publish_via_partition_root, so their changes stream under the partition names: %v. They replicate normally; a snapshot signal naming one will be rejected.",
+			len(found), publication, found)
+	}
 }
 
 func normalizeTableID(schemaRaw, tableRaw string) (incrementalsnapshot.TableID, error) {
@@ -152,6 +207,9 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 	if err := s.checkKeyTypesBindable(ctx, table); err != nil {
 		return nil, err
 	}
+	if err := s.checkDedupReachable(ctx, table); err != nil {
+		return nil, err
+	}
 
 	s.incSnapshot.pkCache[key] = cols
 	return cols, nil
@@ -185,6 +243,38 @@ func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsna
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("reading primary key types for table %s: %w", table, err)
+	}
+	return nil
+}
+
+// checkDedupReachable rejects a table whose streamed changes would arrive
+// under a different name than its backfilled rows are buffered under, leaving
+// the window buffer no way to deduplicate them.
+//
+// PostgreSQL publishes a partitioned table's changes under its leaf
+// partitions' identities unless the publication sets
+// publish_via_partition_root. OnStreamedRow is then never called for the
+// parent, so a row updated while its chunk is buffered is followed by the
+// stale snapshot copy -- silently reverting a committed write.
+//
+// The result is cached with the key columns, so flipping the publication
+// option takes effect on the next restart rather than mid-run.
+func (s *Stream) checkDedupReachable(ctx context.Context, table incrementalsnapshot.TableID) error {
+	publication := "pglog_stream_" + s.slotName
+	q, err := partitionDedupQuery(tableFQN(table).String(), publication)
+	if err != nil {
+		return fmt.Errorf("sanitizing partition query: %w", err)
+	}
+
+	var partitioned, viaRoot bool
+	if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&partitioned, &viaRoot); err != nil {
+		return fmt.Errorf("reading partition state for table %s: %w", table, err)
+	}
+	// Gated on the publication rather than on being partitioned at all, so
+	// this releases itself once the publication carries the option.
+	if partitioned && !viaRoot {
+		return fmt.Errorf("%w: table %s is partitioned and publication %s does not set publish_via_partition_root, so its changes stream under the partition names and cannot be deduplicated against the backfill",
+			incrementalsnapshot.ErrTableUnusable, table, publication)
 	}
 	return nil
 }
