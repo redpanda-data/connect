@@ -1,0 +1,116 @@
+= Migrating from snowflake_streaming to snowflake_streaming_pipe
+:description: How to move an existing snowflake_streaming pipeline onto snowflake_streaming_pipe, and what changes in the process.
+
+// © 2026 Redpanda Data Inc.
+
+xref:components:outputs/snowflake_streaming.adoc[`snowflake_streaming`] opens a Snowpipe Streaming channel directly on a *table*. Snowflake's newer Snowpipe Streaming architecture (SSv2) instead ingests through a *pipe*, which is what makes Snowflake's stream-static join enrichment and `WHERE`-clause row filtering possible — the transformation lives in the pipe's `COPY INTO`, and xref:components:outputs/snowflake_streaming_pipe.adoc[`snowflake_streaming_pipe`] sends rows through untouched. This guide covers moving an existing pipeline across, and the behavioral differences that can silently change semantics if you carry a config forward unchanged.
+
+== The one required addition: `pipe`
+
+`snowflake_streaming` writes into a `table` directly. `snowflake_streaming_pipe` writes through a pipe, which owns the `COPY INTO` projection from the raw row into destination columns (and, where your account has it enabled, joins and filters). You must create the pipe yourself and name it in the new `pipe` field — there is no `table` field on this output at all:
+
+[source,sql]
+----
+create or replace pipe MY_PIPE as
+  copy into MY_TABLE
+  from (
+    select $1:id::string, $1:amount::number(38,2)
+    from table(data_source(type => 'STREAMING'))
+  );
+----
+
+Watch your numeric casts: `$1:amount::number` (no precision/scale) resolves to `NUMBER(38,0)` and silently rounds — `12.50` lands as `13`. Always write an explicit `number(p,s)`.
+
+== Table and pipe creation is no longer automatic
+
+`snowflake_streaming` creates the destination table for you the first time a batch hits a missing-table error, then retries. `snowflake_streaming_pipe` has no equivalent — it never issues `CREATE TABLE` or `CREATE PIPE` on your behalf. Create both yourself before running the connector; if either is missing, the connector fails at *startup*, before any message is processed, rather than on the first write.
+
+== Removed fields
+
+These `snowflake_streaming` fields don't exist on `snowflake_streaming_pipe`. Setting any of them is a config-validation error, not a silent no-op.
+
+[cols="1,2"]
+|===
+| Removed field | What to do instead
+
+| `mapping`
+| Row shaping now happens in the pipe's `COPY INTO ... select` projection, or upstream of this output as a xref:components:processors/bloblang.adoc[`bloblang` processor] if you need to reshape the message before it's serialized.
+
+| `schema_evolution`
+| `snowflake_streaming_pipe` does not evolve the destination table for you. Manage the table's DDL yourself alongside the pipe definition.
+
+| `build_options`, `parallelism` / `build_parallelism`, `chunk_size`
+| These tuned the Parquet build/stage-upload stage. `snowflake_streaming_pipe` sends rows as NDJSON directly to the ingest API — there is no build stage left to tune.
+
+| `message_format`, `timestamp_format`
+| `snowflake_streaming_pipe` always sends NDJSON; there's no alternate wire format or separate serialization step to configure.
+
+| `init_statement`
+| No equivalent — there is no hook to run arbitrary SQL when a channel opens. Run it yourself once, or fold it into the pipe's own SQL if it belongs there.
+
+| `commit_backoff` (`initial_interval`, `max_interval`, `max_elapsed_time`, `multiplier`)
+| Collapsed into `commit_timeout`. See below — this is not a drop-in rename.
+
+| `table`
+| Replaced by `pipe` — see above.
+
+| `channel_prefix`
+| No equivalent. In `snowflake_streaming` this field did two things — set a channel-name prefix, *and* selected the pooled/unordered delivery mode (see below). `snowflake_streaming_pipe` has no pooled mode at all, and the naming half added no capability `channel_name` didn't already have, so the field was dropped rather than carried over for either job. Write the same channel name directly: `channel_name: "<prefix>-p${! @kafka_partition }"` — see xref:components:outputs/snowflake_streaming_pipe.adoc[the output's own docs] for the full pattern and what it protects.
+|===
+
+== `commit_timeout` changes meaning
+
+Same field name, different field — this is a repurposing, not a rename.
+
+In `snowflake_streaming`, `commit_timeout` is deprecated in favor of `commit_backoff.max_elapsed_time`, defaults to unset, and is only consulted as a legacy override. In `snowflake_streaming_pipe`, `commit_timeout` is the *primary* field for how long to wait for a commit — there's no backoff schedule left to configure, so this is the only knob. It defaults to `60s`, not unset, and `0` means "wait indefinitely" rather than "unset" or "fail immediately."
+
+Two traps this creates:
+
+* If you followed the old deprecation advice and moved your tuning to `commit_backoff.max_elapsed_time`, that field doesn't exist on `snowflake_streaming_pipe` at all — move it back to `commit_timeout`.
+* If your existing config sets `commit_timeout: 0` for any reason, that value now means "wait forever for a commit" instead of being an inert legacy override. Check for a literal `0` before carrying a config forward unchanged.
+
+== `offset_token` has no default, and comparison is now numeric
+
+Two independent changes here, easy to conflate.
+
+`offset_token` is no longer defaulted to `${! @kafka_offset }` — `snowflake_streaming_pipe` doesn't assume a Kafka-shaped input. If you want the same exactly-once behavior your `snowflake_streaming` config had, carry your `offset_token` setting forward explicitly (including `${! @kafka_offset }` itself, if that's what you were relying on by default). If you leave it unset, `snowflake_streaming_pipe` runs with no dedup at all — genuine at-least-once, not an error — which is a real behavior change from `snowflake_streaming`'s own default of the same expression.
+
+Pick one mode per channel and stay with it. When `offset_token` is unset, `snowflake_streaming_pipe` still has to confirm each commit, so it tags every append with a synthetic token (`~rpcn-at-least-once-<digits>`) that is built to compare as newer than any real token. A channel that has carried those can never treat a real `offset_token` value as new afterwards, so adding `offset_token` to a pipeline that already ran without it is refused with an error rather than silently deduplicating every row away. Since `snowflake_streaming_pipe` channels live on the pipe (not the table) this can't collide with anything `snowflake_streaming` wrote — but if you experiment with both modes while migrating, give each attempt its own `channel_name`.
+
+Separately, `snowflake_streaming` compares offset tokens as strings, which orders `"10"` before `"9"` — wrong for monotonically increasing numeric offsets, and a real correctness gap once a partition's offset reaches double digits (tracked as a v1 bug fix in its own right, independent of this migration). `snowflake_streaming_pipe` parses both sides as `int64` and compares numerically whenever they parse, falling back to lexicographic comparison only for tokens that aren't purely numeric. There's no flag to opt back into the old comparison.
+
+== Dynamic per-message table routing is gone
+
+`snowflake_streaming`'s `table` field accepts interpolation, so one output could route different messages to different tables. `snowflake_streaming_pipe`'s `pipe` field is a plain string — it cannot vary per message. Route to multiple destinations with multiple outputs (for example, fan out with a xref:components:outputs/switch.adoc[`switch` output]), one per pipe.
+
+== The default channel changes shape
+
+The unconfigured default (`channel_name` unset) is worth checking even if you never touched `channel_prefix`, and it's a correctness *improvement*, not a regression: `snowflake_streaming`'s own unconfigured default is its pooled/unordered mode, capped at `max_in_flight` interchangeable channels with no per-partition identity and no exactly-once at all. `snowflake_streaming_pipe`'s unconfigured default is a single, constant, unpartitioned channel, `<database>.<schema>.<pipe>` — ordered and exactly-once-capable, just not parallel. If your `snowflake_streaming` config left `channel_prefix`/`channel_name` unset and depended on that pooled concurrency for throughput rather than caring about ordering, moving to `snowflake_streaming_pipe`'s default trades that concurrency for correctness; set `channel_name` explicitly (see xref:components:outputs/snowflake_streaming_pipe.adoc[its own docs] for the per-partition pattern) to get parallelism back deliberately.
+
+If your `snowflake_streaming` config instead set `channel_name` explicitly (its only way into the ordered, exactly-once indexed mode — the one `snowflake_streaming_pipe` always uses), carry that same expression forward unchanged; nothing about the default matters for you, since you were never relying on it.
+
+== Rows Snowflake rejects
+
+A malformed or uncastable row doesn't fail an append call — Snowflake accepts the request and reports the rejection asynchronously, visible only in the channel's status. By default, new row rejections fail the batch (matching the Kafka Connector's `errors.tolerance=none` default). Set `tolerate_row_errors: true` to log a warning and keep going instead. Either way, watch the `snowflake_rows_error_count` metric if you care about data completeness — a batch completing successfully no longer implies every row in it landed. Rejected rows never reach a dead-letter queue in either output version, since the rejection is only known well after the write already returned success.
+
+If a batch's messages resolve to more than one `channel_name` (see above), that same "no dead-letter queue" limitation applies at the batch level too, not just the row level: `snowflake_streaming_pipe` appends each resolved channel's share of the batch separately, but a `fallback`-to-dead-letter-queue pattern (like the one in this output's own worked examples) still treats the *whole original batch* as the unit that either succeeds or gets dead-lettered. If one channel's share fails after another channel's share already committed, the entire batch — including the rows that already landed — goes to the dead-letter queue. That's not data loss (the already-landed rows are genuinely in Snowflake), but it does mean a dead-lettered batch is not reliable evidence that *none* of it arrived, if it spanned more than one channel.
+
+== A new failure mode: out-of-order submissions
+
+`snowflake_streaming` has no equivalent of this at all — its pooled/unordered default mode never claimed exactly-once in the first place, so there was nothing for it to detect a violation of. `snowflake_streaming_pipe`'s exactly-once mode does make that claim (see `channel_name`'s own documentation: one ordered source, one batch in flight per channel), and now enforces it: if two concurrent, mutually-unordered writers ever contend for the same channel — most commonly, `max_in_flight` set above 1 while relying on the unconfigured default single channel across a multi-partition input — the losing writes fail loudly with an error naming the channel and the offset tokens involved, tracked by the `snowflake_out_of_order_submissions` metric, instead of being silently dropped by the dedup filter as if they were ordinary duplicates.
+
+This is not a transient failure: the same batch will keep failing on every retry for as long as the same concurrent writers keep contending for the channel. If you see this error (or a nonzero `snowflake_out_of_order_submissions`), the fix is the same one `channel_name`'s docs already describe — give each independent source its own channel, or cap `max_in_flight` at 1 for a shared one — not to wait it out.
+
+== Running more than one replica
+
+Worth restating because getting it wrong causes silent duplicates, and it now depends on which channel-naming approach you're using: if you've set a partition-aware `channel_name` (see above) for a Kafka/Redpanda-shaped input, the channel name must be derived from the *partition*, not the process, so a rebalance hands the new owner the same channel and it resumes from the last committed offset token. **Never make the channel name vary per host** (a `channel-${HOST}`-style `channel_name`) — that gives each replica its own channel for the same partition, and every row the previous owner already landed gets re-sent as new on the next rebalance, with no error and no metric to notice it by.
+
+If you're relying on the unconfigured default (a single constant channel), this doesn't apply in the same way — every replica computes the same channel name regardless of host, since there's no partition or host identity in it at all. What it costs instead is parallelism: every replica serializes through that one channel.
+
+== Deployment: no binary or licensing change
+
+`snowflake_streaming_pipe` ships in the same `redpanda-connect` binary as every other output — nothing about *how* you deploy Redpanda Connect changes to use it, unlike an earlier prototype of this feature which required a separate binary. It's licensed the same way as `snowflake_streaming`: both are Enterprise features gated by `license.CheckRunningEnterprise`, so running either requires a Redpanda Enterprise entitlement.
+
+== Cutting over
+
+If your cutover plan has a window where both outputs write concurrently, the question that matters is whether they write to the *same destination table* during that window, not which channel names they use. Exactly-once dedup is scoped to a single channel; two independent channels landing the same event in the same table produces a duplicate regardless of correct per-channel offset handling. Validate `snowflake_streaming_pipe` against a separate table/pipe first, then stop the old output before the new one starts writing to the production table, rather than running both against the same destination at once.
