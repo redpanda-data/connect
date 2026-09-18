@@ -181,7 +181,7 @@ const rowOperationDocs = "\n" +
 	"* *Partitioned tables:* supported, with no requirement that the partition columns be a subset of `identifier_fields`. A `copy-on-write` `upsert` can even move a key from one partition to another.\n" +
 	"* *Table format:* version 1 or version 2, with no forced upgrade.\n" +
 	"\n" +
-	"*Write amplification and throughput.* `copy-on-write` rewrites every data file that contains a touched key: a batch of K keys scattered over M files rewrites roughly K/M of the table, and touching even a single key in a file rewrites that whole file, so a one-row change to a 512 MB file rewrites all 512 MB. To keep amplification low, sort the table by the identifier key so a batch's keys cluster into as few files as possible, and use large batches. This is a batch / moderate-throughput mode, not a streaming one.\n" +
+	"*Write amplification and throughput.* `copy-on-write` rewrites every data file that contains a touched key: a batch of K keys spread across a table of N data files rewrites at worst roughly K/N of the table, and less than that when several keys share a file. Touching even a single key in a file rewrites that whole file, so a one-row change to a 512 MB file rewrites all 512 MB. To keep amplification low, sort the table by the identifier key so a batch's keys cluster into as few files as possible, and use large batches. This is a batch / moderate-throughput mode, not a streaming one.\n" +
 	"\n" +
 	"*Memory.* Under `copy-on-write` the whole new-row batch is materialised in memory as a single Arrow record while the batch commits, so a keyed batch's memory scales with its total row bytes. Size keyed batches to stay within the process memory budget rather than making them arbitrarily large.\n" +
 	"\n" +
@@ -205,7 +205,7 @@ const rowOperationDocs = "\n" +
 	"To guarantee an existing table never ends up with a mix of the two annotations, the encoding is pinned *per table* via the table property `redpanda-connect.timestamp-encoding` (`spec` or `legacy`):\n" +
 	"\n" +
 	"* Tables created by this output carry `redpanda-connect.timestamp-encoding: spec` from creation.\n" +
-	"* For an existing table without the property, the output resolves the encoding automatically on first contact and stamps the result onto the table: if the schema has no no-timezone `timestamp` column, or the table has no data files, it resolves `spec`; otherwise the output inspects one data file's parquet footer and adopts whatever that file already contains (`legacy` for `isAdjustedToUTC=true`). A table that cannot be probed fails the write rather than risk mixing annotations: whether because a footer is unreadable, or because the first 1000 parquet data files probed (in manifest order) carry no no-timezone `timestamp` column at all (possible when the column was added by later schema evolution on a large table); in the latter case the error names the fix: set the property on the table explicitly and the probe never runs. The stamp itself is a `SetProperties` catalog commit, so the principal this output authenticates as needs permission to write table properties in addition to writing data; a principal without it turns a previously-healthy insert pipeline into a hard failure on first contact after upgrading, until the permission is granted or the property is set out-of-band. On a catalog that forbids *all* custom table properties, the set-it-explicitly escape hatch is unavailable by the same rule, the `redpanda-connect.` prefix carries connector semantics and is never silently stripped, so such writes fail loudly rather than risk mixing annotations.\n" +
+	"* For an existing table without the property, the output resolves the encoding automatically on first contact and stamps the result onto the table: if the schema has no no-timezone `timestamp` column, or the table has no data files, it resolves `spec`; otherwise the output inspects one data file's parquet footer and adopts whatever that file already contains (`legacy` for `isAdjustedToUTC=true`). A table that cannot be probed fails the write rather than risk mixing annotations, whether because a footer is unreadable, or because the first 1000 parquet data files probed (in manifest order) carry no no-timezone `timestamp` column at all (possible when the column was added by later schema evolution on a large table); in the latter case the error names the fix: set the property on the table explicitly and the probe never runs. The stamp itself is a `SetProperties` catalog commit, so the principal this output authenticates as needs permission to write table properties in addition to writing data; a principal without it turns a previously-healthy insert pipeline into a hard failure on first contact after upgrading, until the permission is granted or the property is set out-of-band. On a catalog that forbids *all* custom table properties, the set-it-explicitly escape hatch is unavailable by the same rule (the `redpanda-connect.` prefix carries connector semantics and is never silently stripped), so such writes fail loudly rather than risk mixing annotations.\n" +
 	"* Once stamped, the property is authoritative and the probe never runs again. An unrecognised property value is a hard error.\n" +
 	"\n" +
 	"A table pinned `legacy` keeps receiving the legacy annotation on every new file, byte-identical to what previous releases wrote, so appends and `merge-on-read` continue working unchanged forever. The one restriction is mutating `copy-on-write` (`upsert`/`delete`): it must rewrite existing files, which the legacy annotation prevents, so such writes fail upfront with an actionable error (pure `insert` batches still work). To migrate a legacy table to the spec encoding: rewrite/compact the table's data files with an engine that writes the spec annotation (for example, Spark's `rewrite_data_files`), then set the table property `redpanda-connect.timestamp-encoding` to `spec`, keeping any running instances of this output that write to the table stopped (or restarting them) around the migration: a live writer only re-reads the property when its writer is recreated. A table whose existing files already mix both annotations (for example one written to by several engines or connector versions over time) can be pinned either way by the probe, depending on which file it happens to read first, and a `copy-on-write` mutation on such a table may then fail mid-rewrite with the underlying library's type-promotion error rather than the upfront migration message: compact or rewrite such a table to a single encoding before mutating it. Alternatively, keep the table on `merge-on-read`.\n"
@@ -250,6 +250,8 @@ To use with AWS Glue Data Catalog:
 * Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
 * Configure `+"`storage.aws_s3`"+` with the same bucket and region.
 
+== Storage
+
 === Azure Blob Storage (ADLS Gen2)
 
 To use with Azure Data Lake Storage Gen2:
@@ -257,6 +259,10 @@ To use with Azure Data Lake Storage Gen2:
 * Configure `+"`storage.azure_blob_storage`"+` with your storage account name and container.
 * Authenticate using one of: `+"`storage_access_key`"+` (shared key), `+"`storage_sas_token`"+`, or `+"`storage_connection_string`"+`.
 * The storage account must have hierarchical namespace (HNS) enabled for ADLS Gen2 compatibility.
+
+== Type mapping
+
+Values are mapped from Bloblang types to Iceberg types as follows:
 
 [%header,format=dsv]
 |===
