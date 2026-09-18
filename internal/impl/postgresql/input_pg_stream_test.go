@@ -10,6 +10,7 @@ package pgstream
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -92,4 +93,136 @@ signal_table_name: rpcn_signal_table
 			}
 		})
 	}
+}
+
+func TestNewPgStreamInputIncSnapshotHeartbeat(t *testing.T) {
+	env := service.NewEnvironment()
+	spec := newPostgresCDCConfig()
+
+	const base = `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+signal_table_name: dbz_signal
+tables:
+  - events
+`
+
+	// ParseYAML cannot add a cache resource. The checkpoint_cache tests also
+	// run after the heartbeat tests. Therefore the cases that pass look for
+	// the cache error. That error shows that the checks passed the heartbeat
+	// test.
+	const pastHeartbeatCheck = "checkpoint_cache is required"
+
+	tests := []struct {
+		name        string
+		conf        string
+		errContains string
+	}{
+		{
+			// Both modes read the same rows, so together they double-deliver.
+			name: "both snapshot modes enabled",
+			conf: base + `
+stream_snapshot: true
+heartbeat_interval: 5s
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: "mutually exclusive",
+		},
+		{
+			name: "blocking snapshot alone",
+			conf: base + `
+stream_snapshot: true
+`,
+		},
+		{
+			// Tables arrive by signal, so there is no list to check, and
+			// without a signal table nothing could be requested.
+			name: "incremental snapshot enabled with no signal table",
+			conf: `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+heartbeat_interval: 5s
+tables:
+  - events
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: "signal_table_name is not set",
+		},
+		{
+			// The incremental snapshot moves forward only on a streamed
+			// commit. Without a heartbeat a quiet table stops for ever.
+			name: "incremental snapshot enabled with heartbeats disabled",
+			conf: base + `
+heartbeat_interval: 0s
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: "heartbeat_interval is disabled",
+		},
+		{
+			name: "incremental snapshot enabled with a heartbeat interval",
+			conf: base + `
+heartbeat_interval: 5s
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: pastHeartbeatCheck,
+		},
+		{
+			// A long interval makes the snapshot slow but does not stop
+			// it. Therefore the input warns and does not fail.
+			name: "incremental snapshot enabled at the default heartbeat interval",
+			conf: base + `
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: pastHeartbeatCheck,
+		},
+		{
+			// This condition applies only while the snapshot runs.
+			name: "heartbeats disabled with incremental snapshot disabled",
+			conf: base + `
+heartbeat_interval: 0s
+`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pConf, err := spec.ParseYAML(test.conf, env)
+			require.NoError(t, err)
+
+			mgr := service.MockResources()
+			license.InjectTestService(mgr)
+
+			_, err = newPgStreamInput(pConf, mgr)
+			if test.errContains != "" {
+				require.ErrorContains(t, err, test.errContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestIncSnapshotHeartbeatIntervalRejectsZero(t *testing.T) {
+	// The snapshot cannot advance without commits to compare against.
+	pConf, err := newPostgresCDCConfig().ParseYAML(`
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+tables:
+  - events
+incremental_snapshot:
+  enabled: true
+  heartbeat_interval: 0s
+`, service.NewEnvironment())
+	require.NoError(t, err)
+
+	_, err = parseIncrementalSnapshotCfg(pConf, time.Hour, "dbz_signal", false)
+	require.ErrorContains(t, err, "incremental_snapshot.heartbeat_interval must be > 0")
 }

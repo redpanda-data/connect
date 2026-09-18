@@ -91,6 +91,7 @@ func (s *postgresSignaller) listen(msg *pglogicalstream.StreamMessage) (*replica
 			return nil, fmt.Errorf("unmarshaling control signal %s.data: %w", s.tableName, err)
 		}
 		log.Infof("%s (lsn=%s)", sig.Message, sig.LSN)
+	case replication.SnapshotSignalType:
 	default:
 		log.Warnf("Control signal %q received but not a recognized type", sig.SignalType)
 	}

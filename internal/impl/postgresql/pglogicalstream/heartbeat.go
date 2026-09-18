@@ -11,6 +11,9 @@ package pglogicalstream
 import (
 	"context"
 	"database/sql"
+	"time"
+
+	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -22,15 +25,18 @@ type heartbeat struct {
 	task          *asyncroutine.Periodic
 	logger        *service.Logger
 	prefix, value string
+	// transactional reports whether this tick needs a transactional
+	// message used to advance incremental snapshot on a quiet table.
+	transactional func() bool
 }
 
-func newHeartbeat(config *Config, prefix, value string) (*heartbeat, error) {
+func newHeartbeat(config *Config, interval time.Duration, prefix, value string, transactional func() bool) (*heartbeat, error) {
 	dbConn, err := openPgConnectionFromConfig(config)
 	if err != nil {
 		return nil, err
 	}
-	h := &heartbeat{db: dbConn, task: nil, logger: config.Logger, prefix: prefix, value: value}
-	h.task = asyncroutine.NewPeriodicWithContext(config.HeartbeatInterval, h.run)
+	h := &heartbeat{db: dbConn, task: nil, logger: config.Logger, prefix: prefix, value: value, transactional: transactional}
+	h.task = asyncroutine.NewPeriodicWithContext(interval, h.run)
 	return h, nil
 }
 
@@ -39,7 +45,12 @@ func (h *heartbeat) Start() {
 }
 
 func (h *heartbeat) run(ctx context.Context) {
-	_, err := h.db.ExecContext(ctx, "SELECT pg_logical_emit_message(false, $1, $2)", h.prefix, h.value)
+	var err error
+	if h.transactional != nil && h.transactional() {
+		_, err = h.db.ExecContext(ctx, "SELECT pg_logical_emit_message(true, $1, $2)", h.prefix, h.value)
+	} else {
+		_, err = h.db.ExecContext(ctx, "SELECT pg_logical_emit_message(false, $1, $2)", h.prefix, h.value)
+	}
 	if err != nil {
 		h.logger.Warnf("unable to write heartbeat message: %v", err)
 	}
@@ -48,4 +59,11 @@ func (h *heartbeat) run(ctx context.Context) {
 func (h *heartbeat) Stop() error {
 	h.task.Stop()
 	return h.db.Close()
+}
+
+func effectiveHeartbeatInterval(configured time.Duration, incSnapshot *incsnapshot.Cfg) time.Duration {
+	if !incSnapshot.IsEnabled() || incSnapshot.HeartbeatInterval <= 0 {
+		return configured
+	}
+	return min(configured, incSnapshot.HeartbeatInterval)
 }
