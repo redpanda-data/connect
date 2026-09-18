@@ -223,8 +223,8 @@ column names only, not types, so a wrong column type (for example ` + "`data JSO
 is only caught at runtime, on the first signal row read:
 
 - **id**: any type representable as a string (for example ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
-- **type**: should be ` + "`VARCHAR`" + ` or another string type: the signal type (see supported signals below)
-- **data**: should be ` + "`TEXT`" + `: a JSON object containing signal parameters
+- **type**: should be ` + "`VARCHAR`" + ` or another string type (the signal type, see supported signals below)
+- **data**: should be ` + "`TEXT`" + `, a JSON object containing signal parameters
 
 Create the table with:
 
