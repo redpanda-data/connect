@@ -598,6 +598,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 			}
 
+			var rowSeqs rowSeqCounter
 			for _, dmlEvent := range txn.Events {
 				// Suppress Oracle-internal LOB-initialisation UPDATEs. Their LOB values have
 				// already been merged into the corresponding INSERT by the pre-pass above.
@@ -607,7 +608,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 						continue
 					}
 				}
-				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN, redoEvent.Timestamp)
+				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN, redoEvent.Timestamp, rowSeqs.next(dmlEvent))
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
@@ -1258,7 +1259,38 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	return nil
 }
 
-func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, commitTimestamp time.Time) *replication.MessageEvent {
+// rowSeqCounter assigns RowSeq to the events of one transaction.
+//
+// Oracle says (RS_ID, SSN) identifies one row change. That is not true for a
+// bulk DELETE: Oracle writes up to 255 rows into one redo record, and every row
+// gets the same RS_ID and SSN. RowSeq numbers those rows from 0 so that
+// (RS_ID, SSN, RowSeq) is unique again.
+//
+// LogMiner returns the rows of one redo record next to each other, so the
+// counter only has to remember the previous (RS_ID, SSN) and restart at 0 when
+// it changes. The zero value is ready to use.
+type rowSeqCounter struct {
+	rsID string
+	ssn  int64
+	seq  int
+}
+
+// next returns the RowSeq of ev. Call it for every published event of the
+// transaction, in redo order. An event without RS_ID belongs to no redo record,
+// so it gets 0 and does not change the counter.
+func (c *rowSeqCounter) next(ev *sqlredo.DMLEvent) int {
+	if ev.RSID == "" {
+		return 0
+	}
+	if ev.RSID != c.rsID || ev.SSN != c.ssn {
+		c.rsID, c.ssn, c.seq = ev.RSID, ev.SSN, 0
+	} else {
+		c.seq++
+	}
+	return c.seq
+}
+
+func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, commitTimestamp time.Time, rowSeq int) *replication.MessageEvent {
 	var data map[string]any
 	switch dml.Operation {
 	case sqlredo.OpDelete:
@@ -1285,6 +1317,7 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, com
 		Username:        dml.Username,
 		RSID:            dml.RSID,
 		SSN:             dml.SSN,
+		RowSeq:          rowSeq,
 	}
 
 	switch dml.Operation {
