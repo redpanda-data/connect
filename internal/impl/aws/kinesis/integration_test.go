@@ -94,8 +94,8 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 	return shards, nil
 }
 
-func kinesisIntegrationSuite(t *testing.T, lsPort string) {
-	template := `
+func kinesisIntegrationTemplate(inputExtra string) string {
+	return `
 output:
   aws_kinesis:
     endpoint: http://localhost:$PORT
@@ -115,6 +115,7 @@ input:
     endpoint: http://localhost:$PORT
     streams: [ stream-$ID$VAR1 ]
     checkpoint_limit: $VAR2
+` + inputExtra + `
     dynamodb:
       table: stream-$ID
       create: true
@@ -125,6 +126,10 @@ input:
       secret: xxxxx
       token: xxxxx
 `
+}
+
+func kinesisIntegrationSuite(t *testing.T, lsPort string) {
+	template := kinesisIntegrationTemplate("")
 
 	suite := integration.StreamTests(
 		integration.StreamTestOpenClose(),
@@ -184,6 +189,83 @@ input:
 				vars.General["VAR1"] = ":" + shards[0]
 			}),
 			integration.StreamTestOptPort(lsPort),
+			integration.StreamTestOptAllowDupes(),
+			integration.StreamTestOptVarSet("VAR2", "10"),
+		)
+	})
+}
+
+func TestIntegrationKinesisPollPeriod(t *testing.T) {
+	integration.CheckSkip(t)
+
+	servicePort := awstest.GetLocalStack(t)
+
+	template := kinesisIntegrationTemplate(`
+    poll_period: 20ms
+`)
+
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		integration.StreamTestStreamSequential(50),
+	)
+	suite.Run(
+		t, template,
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+			_, err := createKinesisShards(ctx, t, servicePort, vars.ID, 2)
+			require.NoError(t, err)
+		}),
+		integration.StreamTestOptPort(servicePort),
+		integration.StreamTestOptAllowDupes(),
+		integration.StreamTestOptVarSet("VAR1", ""),
+		integration.StreamTestOptVarSet("VAR2", "10"),
+	)
+}
+
+func TestIntegrationKinesisEFO(t *testing.T) {
+	integration.CheckSkip(t)
+
+	servicePort := awstest.GetLocalStack(t)
+
+	template := kinesisIntegrationTemplate(`
+    enhanced_fan_out:
+      enabled: true
+      consumer_name: rpcn-it-consumer
+`)
+
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestStreamSequential(200),
+		integration.StreamTestStreamParallel(200),
+		integration.StreamTestStreamParallelLossy(200),
+		integration.StreamTestStreamParallelLossyThroughReconnect(200),
+	)
+
+	t.Run("with balanced shards", func(t *testing.T) {
+		suite.Run(
+			t, template,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				_, err := createKinesisShards(ctx, t, servicePort, vars.ID, 2)
+				require.NoError(t, err)
+			}),
+			integration.StreamTestOptPort(servicePort),
+			integration.StreamTestOptAllowDupes(),
+			integration.StreamTestOptVarSet("VAR1", ""),
+			integration.StreamTestOptVarSet("VAR2", "10"),
+		)
+	})
+
+	t.Run("single shard checkpointing", func(t *testing.T) {
+		integration.StreamTests(
+			integration.StreamTestCheckpointCapture(),
+		).Run(
+			t, template,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				shards, err := createKinesisShards(ctx, t, servicePort, vars.ID, 1)
+				require.NoError(t, err)
+				vars.General["VAR1"] = ":" + shards[0]
+			}),
+			integration.StreamTestOptPort(servicePort),
 			integration.StreamTestOptAllowDupes(),
 			integration.StreamTestOptVarSet("VAR2", "10"),
 		)

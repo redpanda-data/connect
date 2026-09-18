@@ -48,7 +48,10 @@ func TestInfluxIntegration(t *testing.T) {
 			"INFLUXDB_ADMIN_PASSWORD": "admin",
 		}),
 		testcontainers.WithWaitStrategy(
-			wait.ForHTTP("/ping").WithPort("8086/tcp").WithStartupTimeout(30*time.Second),
+			// Plain /ping returns 204 No Content, which the wait strategy's
+			// default status matcher (200 only) rejects. ?verbose=true makes
+			// InfluxDB respond 200 instead.
+			wait.ForHTTP("/ping?verbose=true").WithPort("8086/tcp").WithStartupTimeout(30*time.Second),
 		),
 	)
 	testcontainers.CleanupContainer(t, ctr)

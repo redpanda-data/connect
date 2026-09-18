@@ -390,7 +390,14 @@ func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 	assert.Equal(t, personSubject, dstPerson.Subject)
 	assert.Equal(t, personSchemaResp.ID, dstPerson.ID)
 	assert.Equal(t, personSchemaResp.Version, dstPerson.Version)
-	assert.True(t, migrator.SchemaStringEquals(personSchema, dstPerson.Schema.Schema, dstPerson.Type))
+	// The schema registry canonicalizes the fully-qualified reference name
+	// ("com.example.schemas.Address") down to its short name ("Address")
+	// on write, since it matches the enclosing namespace. Compare against
+	// what the source registry actually stored rather than the literal
+	// schema submitted by the test.
+	srcPerson, err := src.SchemaByVersion(ctx, personSubject, personSchemaResp.Version)
+	require.NoError(t, err)
+	assert.True(t, migrator.SchemaStringEquals(srcPerson.Schema.Schema, dstPerson.Schema.Schema, dstPerson.Type))
 
 	t.Log("And: person schema has correct reference to address schema")
 	require.Len(t, dstPerson.References, 1)

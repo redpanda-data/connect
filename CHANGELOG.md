@@ -3,6 +3,42 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.110.0 - 2026-09-17
+
+### Added
+
+- oracledb_cdc: Oracle CDC connector now includes username as metadata in events for better traceability. ([@josephwoodward](https://github.com/josephwoodward), [#4674](https://github.com/redpanda-data/connect/pull/4674))
+
+### Fixed
+
+- iceberg: Replaced MinIO with silo fork in tests to work around MinIO's removal from Docker Hub. ([@Leward](https://github.com/Leward), [#4819](https://github.com/redpanda-data/connect/pull/4819))
+- snowflake_streaming: Fixed offset token comparison to handle unpadded numeric tokens correctly, preventing duplicate rows or missed deliveries when crossing digit-count boundaries. ([@Jeffail](https://github.com/Jeffail), [#4816](https://github.com/redpanda-data/connect/pull/4816))
+
+### Changed
+
+- oracledb_cdc: Oracle CDC connector now uses prepared statements for improved performance and resource management. ([@josephwoodward](https://github.com/josephwoodward), [#4821](https://github.com/redpanda-data/connect/pull/4821))
+- snowflake: Upgraded Snowflake driver from v1.19.0 to v2.2.0, fixing security vulnerability CVE-2026-85525 and removing deprecated RaisePutGetError option. ([@squiidz](https://github.com/squiidz), [#4822](https://github.com/redpanda-data/connect/pull/4822))
+
+## 4.109.0 - 2026-09-10
+
+### Added
+
+- avro: Added max_decompressed_block_bytes configuration field to cap OCF block decompression and prevent decompression-bomb denial-of-service attacks. ([@Jeffail](https://github.com/Jeffail), [#4773](https://github.com/redpanda-data/connect/pull/4773))
+- aws_kinesis: Added a `poll_period` field to bound the rate of `GetRecords` calls per shard, and an `enhanced_fan_out` configuration block that consumes streams via a dedicated enhanced fan-out consumer with 2MB/s per shard of read throughput, avoiding the shared 5 reads per second per shard limit. ([@squiidz](https://github.com/squiidz), [#4724](https://github.com/redpanda-data/connect/pull/4724))
+- iceberg: Added optional parquet compression codec configuration supporting snappy, gzip, and zstd compression, with fallback to table properties for compatibility. ([@Jeffail](https://github.com/Jeffail), [#4785](https://github.com/redpanda-data/connect/pull/4785))
+
+### Fixed
+
+- general: Bumped amqp091-go dependency to address CVE-2026-79921. ([@josephwoodward](https://github.com/josephwoodward), [#4795](https://github.com/redpanda-data/connect/pull/4795))
+- mysql_cdc: Fixed MySQL CDC to accept Unicode characters in table names, including accented Latin, CJK, and Cyrillic identifiers that MySQL permits. ([@samarth70](https://github.com/samarth70), [#4745](https://github.com/redpanda-data/connect/pull/4745))
+- aws_kinesis: The input now falls back to the oldest retained record when a stored sequence has aged out of the stream's retention window, instead of retrying the stale position indefinitely. ([@squiidz](https://github.com/squiidz), [#4724](https://github.com/redpanda-data/connect/pull/4724))
+
+### Changed
+
+- iceberg: Optimized Iceberg shredder to eliminate unnecessary allocations on case-sensitive record matching, reducing memory usage and CPU overhead by 42% in the shredding step. ([@Jeffail](https://github.com/Jeffail), [#4784](https://github.com/redpanda-data/connect/pull/4784))
+- sftp: Improved SFTP input to advance to the next file without reconnecting, eliminating unnecessary delays when rotating through files. ([@Leward](https://github.com/Leward), [#4777](https://github.com/redpanda-data/connect/pull/4777))
+- `websocket` input/output: A config that sets `tls.enabled: true` against a `ws://` URL is now rejected at startup. Previously the TLS settings were silently ignored, the connection was plaintext, and any configured `basic_auth`, `jwt` or `oauth` credentials were sent in the clear. Use a `wss://` URL to connect with TLS. (@Leward)
+
 ## 4.108.0 - 2026-09-03
 
 ### Fixed
