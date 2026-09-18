@@ -1,0 +1,144 @@
+name: Needs Review Digest
+
+on:
+  # schedule:
+  #   - cron: "0 9 * * 1-5" # weekdays at 9am UTC
+  workflow_dispatch:
+
+jobs:
+  needs-review-digest:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      issues: read
+    env:
+      # Number of PRs actually listed in the Slack message. Must NOT be
+      # used to cap the `gh pr list` fetch: gh returns PRs newest-created
+      # first, so capping the fetch before sorting by label age would only
+      # ever surface the newest PRs and could never surface the PRs that
+      # have been waiting longest — exactly the ones this digest exists to
+      # highlight. The full (up to --limit) set is fetched, sorted, and
+      # only then sliced down to MAX_SHOWN for display.
+      MAX_SHOWN: 5
+
+    steps:
+      - name: List PRs needing review
+        id: list
+        # Explicit `shell: bash` (rather than the default run shell) enables
+        # `-eo pipefail`, so a failing `gh` call fails this step instead of
+        # being swallowed by the trailing `jq`/`tee` in a pipeline. See
+        # soak_nightly.yml's postmortem comment for the same trap.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr list --repo "$REPO" \
+            --state open \
+            --label "needs review" \
+            --json number,title,url,author,createdAt \
+            --limit 100 \
+            > "$RUNNER_TEMP/needs-review-prs-raw.json"
+
+          fetch_labeled_at() {
+            local num="$1"
+            local timeline
+            local status
+            local labeled_at
+            timeline=$(gh api --paginate "repos/$REPO/issues/$num/timeline")
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "::warning::Failed to fetch timeline for PR #$num (gh api exited $status); labeledAt will incorrectly fall back to createdAt unless this fails the step" >&2
+              return 1
+            fi
+            labeled_at=$(printf '%s' "$timeline" \
+              | jq -r '[.[] | select(.event == "labeled" and .label.name == "needs review")] | last | .created_at // ""' \
+              | tail -n 1)
+            jq -n --argjson number "$num" --arg labeled_at "$labeled_at" \
+              '{number: $number, labeledAt: (if $labeled_at == "" then null else $labeled_at end)}'
+          }
+          export -f fetch_labeled_at
+          export REPO
+
+          jq -r '.[].number' "$RUNNER_TEMP/needs-review-prs-raw.json" \
+            | xargs -P8 -I{} bash -c 'fetch_labeled_at "$@"' _ {} \
+            > "$RUNNER_TEMP/labeled-at.jsonl"
+
+          jq --slurpfile labeled "$RUNNER_TEMP/labeled-at.jsonl" '
+            ($labeled | map({(.number|tostring): .labeledAt}) | add // {}) as $map
+            | map(. + {labeledAt: ($map[(.number|tostring)] // null)})
+            | sort_by(.labeledAt // .createdAt)
+          ' "$RUNNER_TEMP/needs-review-prs-raw.json" \
+            | tee "$RUNNER_TEMP/needs-review-prs.json" | jq .
+
+          COUNT=$(jq 'length' "$RUNNER_TEMP/needs-review-prs.json")
+          if ! [[ "$COUNT" =~ ^[0-9]+$ ]]; then
+            echo "::error::Failed to determine PR count (got '$COUNT')"
+            exit 1
+          fi
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "**PRs needing review:** $COUNT" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build Slack payload
+        if: steps.list.outputs.count != '0'
+        env:
+          SEARCH_URL: "${{ github.server_url }}/${{ github.repository }}/pulls?q=is%3Aopen+is%3Apr+label%3A%22needs+review%22"
+        run: |
+          # Slack requires &, < and > to be HTML-escaped inside mrkdwn text
+          # (in that order, so a literal "&" isn't double-escaped); an
+          # unescaped ">" in a title would otherwise terminate the link
+          # label early and mangle the line.
+          jq --argjson count "${{ steps.list.outputs.count }}" \
+             --argjson max_shown "$MAX_SHOWN" \
+             --arg search_url "$SEARCH_URL" '
+            def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+            def human_age($seconds):
+              ($seconds / 86400 | floor) as $days
+              | if $days >= 1 then ($days | tostring) + "d"
+                else ($seconds / 3600 | floor) as $hours
+                | if $hours >= 1 then ($hours | tostring) + "h"
+                  else (($seconds / 60 | floor) | tostring) + "m"
+                  end
+                end;
+            {
+            blocks: (
+              [{
+                type: "header",
+                text: {
+                  type: "plain_text",
+                  text: (($count | tostring) + " PR" + (if $count == 1 then "" else "s" end) + " need" + (if $count == 1 then "s" else "" end) + " review"),
+                  emoji: true
+                }
+              }]
+              + (
+                  [.[0:$max_shown][] |
+                    ("• <" + .url + "|#" + (.number|tostring) + " " + (.title|esc) + ">  _by " + (.author.login|esc)
+                      + " · opened " + human_age(now - (.createdAt | fromdateiso8601)) + " ago, labeled "
+                      + human_age(now - ((.labeledAt // .createdAt) | fromdateiso8601)) + "_")
+                  ] as $lines
+                  | if ($lines | length) > 0 then [{
+                      type: "section",
+                      text: { type: "mrkdwn", text: ($lines | join("\n")) }
+                    }] else [] end
+                )
+              + (if $count > $max_shown then [{
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: ("… and <" + $search_url + "|" + (($count - $max_shown) | tostring) + " more>")
+                  }
+                }] else [] end)
+            )
+          }' "$RUNNER_TEMP/needs-review-prs.json" > "$RUNNER_TEMP/slack_payload.json"
+          cat "$RUNNER_TEMP/slack_payload.json"
+
+      - name: Post to Slack
+        if: steps.list.outputs.count != '0'
+        uses: slackapi/slack-github-action@v3.0.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL_PR_REVIEW }}
+          webhook-type: incoming-webhook
+          payload-file-path: ${{ runner.temp }}/slack_payload.json
+          # Fail the job when the webhook post fails; the default silently
+          # swallows errors and reports success.
+          errors: true

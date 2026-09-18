@@ -24,7 +24,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/snowflakedb/gosnowflake"
+	"github.com/snowflakedb/gosnowflake/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -180,10 +180,10 @@ The underlying https://github.com/snowflakedb/gosnowflake[`+"`gosnowflake`"+` dr
 the default directory to use for temporary files. Please consult the https://pkg.go.dev/os#TempDir[`+"`os.TempDir`"+`^]
 docs for details on how to change this directory via environment variables.
 
-A silent failure can occur due to https://github.com/snowflakedb/gosnowflake/issues/701[this issue^], where the
-underlying https://github.com/snowflakedb/gosnowflake[`+"`gosnowflake`"+` driver^] doesn't return an error and doesn't
-log a failure if it can't figure out the current username. One way to trigger this behavior is by running Redpanda Connect in a
-Docker container with a non-existent user ID (such as `+"`--user 1000:1000`"+`).
+A failed upload to the stage is returned as an error and the batch is not acknowledged. Older versions of the
+underlying https://github.com/snowflakedb/gosnowflake[`+"`gosnowflake`"+` driver^] could fail silently in some
+environments (https://github.com/snowflakedb/gosnowflake/issues/701[gosnowflake#701^]); this is no longer the case
+with the v2 driver, which always raises PUT errors.
 `+service.OutputPerformanceDocs(true, true)).
 		Field(service.NewStringField("account").Description(`Account name, which is the same as the https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#where-are-account-identifiers-used[Account Identifier^].
 However, when using an https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account Locator^],
@@ -548,7 +548,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 	compression := CompressionType(compressionStr)
 	var autoCompress, sourceCompression string
-	// Should match file extensions in https://github.com/snowflakedb/gosnowflake/blob/2648a83699492c0613a888e66298157fc1e45bf5/file_compression_type.go
+	// Should match file extensions in https://github.com/snowflakedb/gosnowflake/blob/v2.2.0/file_compression_type.go
 	switch compression {
 	case CompressionTypeNone:
 		s.defaultStageFileExtension = "json"
@@ -833,9 +833,10 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 
 		filePath := path.Join(f.stagePath, fileName+"."+f.fileExtension)
 
-		_, err := s.db.ExecContext(gosnowflake.WithFileStream(
-			gosnowflake.WithFileTransferOptions(ctx, &gosnowflake.SnowflakeFileTransferOptions{RaisePutGetError: true}),
-			bytes.NewReader(fBytes)), fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
+		// gosnowflake v2 always raises PUT/GET failures as errors; the v1
+		// RaisePutGetError opt-in no longer exists.
+		_, err := s.db.ExecContext(gosnowflake.WithFilePutStream(ctx, bytes.NewReader(fBytes)),
+			fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
 		if err != nil {
 			return fmt.Errorf("running query: %s", err)
 		}
