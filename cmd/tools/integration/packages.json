@@ -60,7 +60,7 @@
   {"path":"./internal/impl/snowflake/streaming","timeout":"20m"},
   {"path":"./internal/impl/spicedb"},
   {"path":"./internal/impl/splunk"},
-  {"path":"./internal/impl/sql"},
+  {"path":"./internal/impl/sql","timeout":"10m"},
   {"path":"./internal/impl/tigerbeetle","skip":true,"skip_reason":"Requires CGO (tigerbeetle-go client); the CI runner builds with CGO_ENABLED=0 so the test compiles out."},
   {"path":"./internal/impl/zeromq","skip":true,"skip_reason":"Requires CGO and the libzmq C library, and is behind the x_benthos_extra build tag the runner does not pass."},
   {"path":"./internal/mcp"},
