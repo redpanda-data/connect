@@ -44,6 +44,7 @@ const (
 	fieldWalMonitorInterval        = "pg_wal_monitor_interval"
 	fieldSlotName                  = "slot_name"
 	fieldBatching                  = "batching"
+	fieldBatchTransactions         = "batch_transactions"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
@@ -128,7 +129,7 @@ A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finit
 If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(service.NewIntField(fieldCheckpointLimit).
-			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees. With `" + fieldBatchTransactions + "`, the transaction batches handed to the pipeline are capped at half this value, and at 1000 rows or 4 MiB of WAL whichever is smaller, so that two can be in flight; a snapshot page (`snapshot_batch_size` rows) is always admitted whole, so in-flight messages can exceed this limit by up to one page.").
 			ShortDescription("The maximum number of messages that can be processed at a given time.").
 			Default(1024)).
 		Field(service.NewBoolField(fieldTemporarySlot).
@@ -259,7 +260,17 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 			Default("").
 			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).
-		Field(service.NewBatchPolicyField(fieldBatching))
+		Field(service.NewBoolField(fieldBatchTransactions).
+			Description(`When set to true, the rows of each replication transaction are handed to the pipeline together as one batch, instead of one message at a time. A batch is capped at half of ` + "`" + fieldCheckpointLimit + "`" + ` and at 1000 rows or 4 MiB of WAL, whichever is smaller, so a larger transaction spans several batches; the rows of one transaction are never mixed with another's. Transaction batches let outputs that write a batch in one operation (a multi-row ` + "`sql_insert`" + `, a Kafka produce) apply a transaction's rows together, and they lower the per-message overhead of the streaming path.
+
+This changes how downstream errors behave, which is why it is off by default: the unit of failure and of retry becomes the transaction. If one row of a batch makes an output fail with a plain (non-indexed) error, outputs such as ` + "`fallback`" + ` handle the whole batch, so the transaction's other rows go the same way as the failing one; with one message per batch only that row is affected. Leave it off for pipelines that rely on isolating a single failing row, for example a ` + "`fallback`" + ` output routing bad rows to a dead-letter queue.
+
+Cannot be combined with a ` + "`" + fieldBatching + "`" + ` policy, which would re-batch the transactions; the input's batcher is bypassed, so ` + "`batch_created`" + ` does not advance. Snapshot pages are unaffected: each page (` + "`" + fieldSnapshotBatchSize + "`" + ` rows) arrives as one batch whether or not this is set.`).
+			ShortDescription("Hand the rows of each replication transaction to the pipeline as one batch, rather than one message at a time.").
+			Default(false).
+			Version("4.110.0")).
+		Field(service.NewBatchPolicyField(fieldBatching).
+			Description("Optional batching of the emitted messages, honoured exactly on both the snapshot and streaming paths: `count: 1` gives one message per batch. With no policy configured, streaming rows arrive one message at a time and each snapshot page (`" + fieldSnapshotBatchSize + "` rows) arrives as one batch; see `" + fieldBatchTransactions + "` to receive whole transactions instead. If the policy's `processors` fail on a batch, its rows are published unprocessed with their error set rather than dropped or retried, so error-handling components can route them."))
 }
 
 func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
@@ -277,6 +288,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		maxParallelSnapshotTables int
 		pgStandbyTimeout          time.Duration
 		batching                  service.BatchPolicy
+		batchTransactions         bool
 		unchangedToastValue       any
 		heartbeatInterval         time.Duration
 		iamAuthEnabled            bool
@@ -332,8 +344,13 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 	if batching, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
 		return nil, err
-	} else if batching.IsNoop() {
-		batching.Count = 1
+	}
+	if batchTransactions, err = conf.FieldBool(fieldBatchTransactions); err != nil {
+		return nil, err
+	}
+	batching, batchingConfigured, err := resolveBatchingPolicy(batching, batchTransactions)
+	if err != nil {
+		return nil, err
 	}
 
 	if pgStandbyTimeout, err = conf.FieldDuration(fieldPgStandbyTimeout); err != nil {
@@ -428,10 +445,14 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
 			SignalTableName:          signalTableName,
+			StreamBatchMaxRows:       streamBatchMaxRowsFor(checkpointLimit),
+			CheckpointLimit:          checkpointLimit,
 		},
-		batching:        batching,
-		checkpointLimit: checkpointLimit,
-		msgChan:         make(chan asyncMessage),
+		batching:           batching,
+		batchingConfigured: batchingConfigured,
+		batchTransactions:  batchTransactions,
+		checkpointLimit:    checkpointLimit,
+		msgChan:            make(chan asyncMessage),
 
 		mgr:             mgr,
 		logger:          mgr.Logger(),
@@ -477,13 +498,44 @@ func init() {
 	service.MustRegisterBatchInput("pg_stream", newPostgresCDCConfig().Deprecated(), newPgStreamInput)
 }
 
+// resolveBatchingPolicy decides whether the configured batching policy is
+// honoured per message, and whether the caller may combine it with
+// batch_transactions.
+//
+// IsNoop treats count <= 1 as "no policy", but the field defaults to 0, so an
+// explicit count: 1 is distinguishable and honoured (one message per batch).
+// With no policy, Count is forced to 1 so a Batcher can be constructed: that
+// is what delivers streaming rows one message at a time by default. A
+// configured policy and batch_transactions cannot both apply, as the policy
+// would re-batch the transactions; that combination is rejected here rather
+// than silently resolved either way.
+func resolveBatchingPolicy(batching service.BatchPolicy, batchTransactions bool) (policy service.BatchPolicy, configured bool, err error) {
+	configured = !batching.IsNoop() || batching.Count == 1
+	if configured && batchTransactions {
+		return batching, false, fmt.Errorf("%s cannot be combined with a %s policy: the policy would re-batch the transactions", fieldBatchTransactions, fieldBatching)
+	}
+	if !configured {
+		batching.Count = 1
+	}
+	return batching, configured, nil
+}
+
+// streamBatchMaxRowsFor caps a streaming reader batch at half of
+// checkpoint_limit, so two batches fit under the checkpoint cap. The reader
+// further clamps it to its own package default.
+func streamBatchMaxRowsFor(checkpointLimit int) int {
+	return max(1, checkpointLimit/2)
+}
+
 type pgStreamInput struct {
-	streamConfig    *pglogicalstream.Config
-	logger          *service.Logger
-	mgr             *service.Resources
-	msgChan         chan asyncMessage
-	batching        service.BatchPolicy
-	checkpointLimit int
+	streamConfig       *pglogicalstream.Config
+	logger             *service.Logger
+	mgr                *service.Resources
+	msgChan            chan asyncMessage
+	batching           service.BatchPolicy
+	batchingConfigured bool
+	batchTransactions  bool
+	checkpointLimit    int
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
@@ -552,17 +604,15 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 
 	// offsets are nilable since we don't provide offset tracking during the snapshot phase
 	cp := checkpoint.NewCapped[*string](int64(p.checkpointLimit))
+	// pending mirrors the messages added to the batcher since its last flush.
+	// The batcher gives them up if its processors fail, and they are the only
+	// copy the input can still publish. See flushBatcher.
+	var pending service.MessageBatch
 	for !p.stopSig.IsSoftStopSignalled() {
 		select {
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
-			flushedBatch, err := batcher.Flush(ctx)
-			if err != nil {
-				p.logger.Debugf("timed flush batch error: %s", err)
-				break
-			}
-			if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
-				p.logger.Debugf("failed to flush batch: %s", err)
+			if !p.flushBatcher(ctx, pgStream, cp, batcher, &pending) {
 				break
 			}
 		case batch := <-pgStream.Messages():
@@ -572,18 +622,11 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				// signalling the stream to promote the replication slot. Blocks
 				// until acks drain or soft-stop (no timeout, by design).
 				nextTimedBatchChan = nil
-				flushedBatch, err := batcher.Flush(ctx)
-				if err != nil {
-					p.logger.Debugf("error flushing snapshot completion batch: %s", err)
-					// The sentinel is a one-shot signal; if we bail here without
-					// acking, the barrier's snapshot goroutine blocks on
-					// snapshotAcked forever. Trigger a restart instead of stalling.
-					p.stopSig.TriggerSoftStop()
-					break
-				}
-				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
-					p.logger.Debugf("failed to flush snapshot completion batch: %s", err)
-					p.stopSig.TriggerSoftStop()
+				// The sentinel is a one-shot signal: if this flush does not
+				// hand on and ack, the barrier's snapshot goroutine would wait
+				// on snapshotAcked forever, so a failure restarts rather than
+				// stalls. A clean shutdown is already stopping.
+				if !p.flushBatcher(ctx, pgStream, cp, batcher, &pending) {
 					break
 				}
 				drained := make(chan struct{})
@@ -601,9 +644,15 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				break
 			}
 			var (
-				flush bool
-				mb    []byte
+				mb []byte
+				// passThrough collects the whole reader batch when it is
+				// to be handed on as one output batch; see passesThrough.
+				passThrough service.MessageBatch
 			)
+			passesThrough := p.passesThrough(batch)
+			if passesThrough {
+				passThrough = make(service.MessageBatch, 0, len(batch))
+			}
 			for _, msg := range batch {
 				// noop if not configured
 				if _, err := p.controlSig.listen(&msg); err != nil {
@@ -647,26 +696,36 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if msg.BeforeData != nil {
 					batchMsg.MetaSetImmut("before", service.ImmutableAny{V: msg.BeforeData})
 				}
-				if batcher.Add(batchMsg) {
-					flush = true
+
+				if passesThrough {
+					passThrough = append(passThrough, batchMsg)
+					continue
+				}
+				pending = append(pending, batchMsg)
+				if !batcher.Add(batchMsg) {
+					continue
+				}
+				// The policy is honoured per message: a multi-row reader batch
+				// may cross the configured count several times, and every
+				// crossing is its own output batch. The remaining rows of this
+				// reader batch are not yet in the batcher, so a failure here
+				// must stop the stream: carrying on would let a later
+				// transaction's ack confirm past them.
+				if !p.flushBatcher(ctx, pgStream, cp, batcher, &pending) {
+					break
 				}
 			}
-			if flush {
-				nextTimedBatchChan = nil
-				flushedBatch, err := batcher.Flush(ctx)
-				if err != nil {
-					p.logger.Debugf("error flushing batch: %s", err)
+			if passesThrough {
+				// The reader has already promoted its LSN bookkeeping for this
+				// batch, so if it cannot be handed on the stream must restart
+				// rather than continue past it.
+				if !p.emitBatch(ctx, pgStream, cp, passThrough) {
 					break
 				}
-				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
-					p.logger.Debugf("failed to flush batch: %s", err)
-					break
-				}
+			} else if d, ok := batcher.UntilNext(); ok {
+				nextTimedBatchChan = time.After(d)
 			} else {
-				d, ok := batcher.UntilNext()
-				if ok {
-					nextTimedBatchChan = time.After(d)
-				}
+				nextTimedBatchChan = nil
 			}
 		case err := <-pgStream.Errors():
 			p.logger.Warnf("logical replication stream error: %s", err)
@@ -676,6 +735,78 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			p.logger.Debug("soft stop triggered, stopping logical replication stream")
 		}
 	}
+}
+
+// passesThrough reports whether a reader batch is handed to the pipeline as
+// it is, one output batch, rather than fed through the batcher message by
+// message. A configured batching policy always wins. Otherwise a snapshot
+// page passes through whole, as it always has, and a streaming batch (one
+// transaction, or a capped slice of one) passes through only when
+// batch_transactions is set; by default it goes through the count-1 batcher,
+// so streaming rows arrive one message at a time.
+//
+// A reader batch never mixes snapshot rows with streaming rows (see
+// flushBatch), so the first message decides for the batch.
+func (p *pgStreamInput) passesThrough(batch []pglogicalstream.StreamMessage) bool {
+	if p.batchingConfigured || len(batch) == 0 {
+		return false
+	}
+	if batch[0].Operation == pglogicalstream.ReadOpType {
+		return true
+	}
+	return p.batchTransactions
+}
+
+// emitBatch hands a flushed batch to the pipeline and reports whether the
+// loop may continue. flushBatch only fails once the input's context is done,
+// so a failure is a shutdown in progress: the batch was never handed on and
+// is re-read on restart, which is not an error. Anything else is logged and
+// restarts the stream rather than continuing past rows that were dropped.
+func (p *pgStreamInput) emitBatch(ctx context.Context, pgStream *pglogicalstream.Stream, cp *checkpoint.Capped[*string], batch service.MessageBatch) bool {
+	if err := p.flushBatch(ctx, pgStream, cp, batch); err != nil {
+		if ctx.Err() == nil {
+			p.logger.Errorf("failed to flush batch, restarting stream: %s", err)
+			p.stopSig.TriggerSoftStop()
+		}
+		return false
+	}
+	return true
+}
+
+// flushBatcher flushes the batcher, which runs any configured
+// batching.processors, and emits the result. pending is the input's own copy
+// of the messages the batcher holds, and is cleared here.
+//
+// When the processors fail the batcher gives its rows up, and those rows
+// were decoded from WAL the reader has already moved past. Dropping them is
+// silent loss; restarting re-reads and fails identically when the failure is
+// deterministic, so the input would loop forever with the slot never
+// advancing. Instead the rows are published as they were added, with the
+// processors' error set, the same way an unmarshalable row is: at-least-once
+// holds, the stream keeps moving, and error-handling components can route
+// them.
+func (p *pgStreamInput) flushBatcher(ctx context.Context, pgStream *pglogicalstream.Stream, cp *checkpoint.Capped[*string], batcher *service.Batcher, pending *service.MessageBatch) bool {
+	flushed, err := batcher.Flush(ctx)
+	held := *pending
+	*pending = nil
+	if err != nil {
+		if ctx.Err() != nil {
+			// Shutdown in progress; nothing was handed on, so nothing is acked.
+			return false
+		}
+		if len(held) == 0 {
+			p.logger.Errorf("error flushing batch, restarting stream: %s", err)
+			p.stopSig.TriggerSoftStop()
+			return false
+		}
+		p.logger.Warnf("Publishing %d row(s) unprocessed with their error set for error-routing, the batching processors failed: %v", len(held), err)
+		procErr := fmt.Errorf("batching processors: %w", err)
+		for _, msg := range held {
+			msg.SetError(procErr)
+		}
+		flushed = held
+	}
+	return p.emitBatch(ctx, pgStream, cp, flushed)
 }
 
 func (p *pgStreamInput) flushBatch(
@@ -702,6 +833,13 @@ func (p *pgStreamInput) flushBatch(
 	// Snapshot batches carry no LSN. Track them so the snapshot->stream handoff
 	// can block until they are acknowledged downstream (see the sentinel handling
 	// in the read loop).
+	//
+	// Deriving this from only the last message relies on a reader batch never
+	// mixing snapshot rows with stream rows: snapshot batches come from
+	// processSnapshot with all-nil LSNs, the sentinel is its own one-element
+	// send, and streaming batches only start being produced by the reader's
+	// flush after the snapshot has completed and the batcher was drained at
+	// the sentinel.
 	isSnapshot := lsn == nil
 
 	ackFn := func(ctx context.Context, _ error) error {
