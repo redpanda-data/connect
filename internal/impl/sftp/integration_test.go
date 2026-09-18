@@ -206,6 +206,60 @@ cache_resources:
 	}, time.Second*10, time.Millisecond*100)
 }
 
+// TestIntegrationSFTPOutputRecoversFromRepeatedWriteFailures reproduces
+// https://github.com/redpanda-data/connect/issues/3584: an SFTP output that
+// fails to open a remote file (e.g. a permissions error) used to leave a
+// stale SFTP client, and its underlying SSH channel, attached to the writer.
+// Every retry then leaked another channel until the server's per-connection
+// channel limit was exhausted, at which point the output could never
+// reconnect and required a restart. Writes must fail cleanly instead, and
+// the connection must remain usable afterwards.
+func TestIntegrationSFTPOutputRecoversFromRepeatedWriteFailures(t *testing.T) {
+	integration.CheckSkip(t)
+
+	emu := runEmulator(t)
+	require.NoError(t, emu.client.MkdirAll("/upload"))
+
+	// A regular file where the writer will try to create a directory, so
+	// every write below it fails deterministically without relying on
+	// permission configuration.
+	writeSFTPFile(t, emu.client, "/upload/blocked", "not-a-directory")
+
+	conf := fmt.Sprintf(`
+address: %s
+path: /upload/blocked/file.txt
+credentials:
+  username: %s
+  password: %s
+  host_public_key: %s
+codec: all-bytes
+`, emu.address, sftpUsername, sftpPassword, emu.hostKey)
+
+	parsed, err := sftpOutputSpec().ParseYAML(conf, nil)
+	require.NoError(t, err)
+
+	writer, err := newWriterFromParsed(parsed, service.MockResources())
+	require.NoError(t, err)
+	require.NoError(t, writer.Connect(t.Context()))
+	t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+
+	// More attempts than a typical SSH server's default per-connection
+	// channel limit (OpenSSH defaults to 10), so a channel leak on failure
+	// would eventually surface as a connection-level error here.
+	for range 20 {
+		err := writer.Write(t.Context(), service.NewMessage([]byte("payload")))
+		require.Error(t, err)
+		require.NotErrorIs(t, err, service.ErrNotConnected)
+		assert.Nil(t, writer.sftpClient, "a failed write must not leave a stale SFTP client behind")
+		assert.Nil(t, writer.handle, "a failed write must not leave a stale file handle behind")
+	}
+
+	// The underlying SSH connection must still be healthy.
+	writer.path, err = service.NewInterpolatedString("/upload/ok.txt")
+	require.NoError(t, err)
+	require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("payload"))))
+}
+
 type emulator struct {
 	client  *sftp.Client
 	address string
