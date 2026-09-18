@@ -1,0 +1,1 @@
+{"name":"jdbc-src","config":{"connector.class":"io.confluent.connect.jdbc.JdbcSourceConnector","connection.url":"jdbc:postgresql://h:5432/db","table.whitelist":"orders"}}
