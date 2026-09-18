@@ -1,0 +1,322 @@
+// Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
+package saphana
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"strings"
+	"sync"
+
+	"github.com/redpanda-data/benthos/v4/public/schema"
+	"github.com/redpanda-data/benthos/v4/public/service"
+)
+
+// quoteIdentifier wraps s in double-quotes and escapes internal double-quotes
+// by doubling them, per the SQL standard identifier quoting rule.
+func quoteIdentifier(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+}
+
+// hanaTypeToCommonType maps a HANA DATA_TYPE_NAME string to schema.CommonType.
+// For DECIMAL columns, callers should use hanaDecimalToCommon which considers
+// precision and scale for a more specific mapping.
+func hanaTypeToCommonType(dataType string) schema.CommonType {
+	switch dataType {
+	case "TINYINT", "SMALLINT", "INT", "INTEGER", "BIGINT":
+		return schema.Int64
+	case "FLOAT", "DOUBLE":
+		return schema.Float64
+	case "REAL":
+		return schema.Float32
+	case "BOOLEAN":
+		return schema.Boolean
+	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE", "LONGDATE", "DAYDATE", "SECONDTIME":
+		// LONGDATE, DAYDATE and SECONDTIME are the data-format-version 3
+		// spellings HANA reports for TIMESTAMP, DATE and TIME columns.
+		return schema.Timestamp
+	case "BINARY", "VARBINARY", "BLOB", "BSTRING", "ST_GEOMETRY", "ST_POINT":
+		// Spatial types are delivered as WKB, i.e. arbitrary bytes.
+		return schema.ByteArray
+	default:
+		// VARCHAR, NVARCHAR, CHAR, NCHAR, ALPHANUM, SHORTTEXT, CLOB, NCLOB,
+		// TEXT, and all unrecognised types.
+		return schema.String
+	}
+}
+
+// isDecimalType reports whether dataType is a HANA decimal type that needs
+// precision/scale-aware mapping. The FIXED* names are what the go-hdb wire
+// protocol reports for DECIMAL columns at newer data-format versions.
+func isDecimalType(dataType string) bool {
+	switch dataType {
+	case "DECIMAL", "NUMERIC", "SMALLDECIMAL", "FIXED8", "FIXED12", "FIXED16":
+		return true
+	}
+	return false
+}
+
+// driverColumnTypes builds per-column schema entries from the driver's result
+// metadata (rows.ColumnTypes()), used when catalog schema metadata is not
+// available so that value normalisation still knows which columns are binary
+// and how DECIMALs are declared.
+func driverColumnTypes(cols []*sql.ColumnType, numericMapping string) map[string]schema.Common {
+	out := make(map[string]schema.Common, len(cols))
+	for _, c := range cols {
+		name, dbType := c.Name(), c.DatabaseTypeName()
+		if isDecimalType(dbType) {
+			p, s, ok := c.DecimalSize()
+			out[name] = hanaDecimalToCommon(name,
+				sql.NullInt64{Int64: p, Valid: ok}, sql.NullInt64{Int64: s, Valid: ok}, true, numericMapping)
+			continue
+		}
+		out[name] = schema.Common{Name: name, Type: hanaTypeToCommonType(dbType), Optional: true}
+	}
+	return out
+}
+
+// float64MaxSafeDigits is the number of significant decimal digits a float64
+// can round-trip without loss.
+const float64MaxSafeDigits = 15
+
+// hanaDecimalToCommon builds a schema.Common entry for a DECIMAL/NUMERIC column.
+// Mapping rules:
+//   - scale == 0 && 0 < precision <= 18: Int64
+//   - numericMapping == best_fit && 0 < precision <= 15: Float64
+//   - known precision and scale: Decimal(precision, scale)
+//   - otherwise: BigDecimal (undeclared or out-of-bounds)
+func hanaDecimalToCommon(name string, precision, scale sql.NullInt64, optional bool, numericMapping string) schema.Common {
+	if precision.Valid && scale.Valid {
+		p, s := precision.Int64, scale.Int64
+		if s == 0 && p > 0 && p <= 18 {
+			return schema.Common{Name: name, Type: schema.Int64, Optional: optional}
+		}
+		if numericMapping == shNumericMappingBestFit && p > 0 && p <= float64MaxSafeDigits {
+			return schema.Common{Name: name, Type: schema.Float64, Optional: optional}
+		}
+		if s < 0 {
+			s = 0
+		}
+		if c, err := schema.NewDecimal(name, int32(p), int32(s), optional); err == nil {
+			return c
+		}
+	}
+	return schema.NewBigDecimal(name, optional)
+}
+
+// ---------------------------------------------------------------------------
+// Schema cache
+// ---------------------------------------------------------------------------
+
+// schemaResult bundles everything the schema cache vends per table.
+type schemaResult struct {
+	Val      any                      // Avro-compatible schema value for the "schema" metadata field
+	PKCols   []string                 // primary-key column names in key order
+	ColTypes map[string]schema.Common // column name → Common, used for decimal canonicalisation
+}
+
+// cachedSchema holds the prebuilt schema result and a column-name index used
+// for addition-only drift detection.
+type cachedSchema struct {
+	result *schemaResult
+	keys   map[string]struct{}
+}
+
+// schemaCache fetches and caches per-table Avro-compatible schemas from
+// SYS.TABLE_COLUMNS. When an event references a column not present in the
+// cached schema, the cache is refreshed (addition-only drift detection).
+type schemaCache struct {
+	mu             sync.Mutex
+	entries        map[string]*cachedSchema
+	db             *sql.DB
+	log            *service.Logger
+	numericMapping string
+}
+
+func newSchemaCache(db *sql.DB, log *service.Logger, numericMapping string) *schemaCache {
+	return &schemaCache{
+		entries:        make(map[string]*cachedSchema),
+		db:             db,
+		log:            log,
+		numericMapping: numericMapping,
+	}
+}
+
+const hanaColumnQuery = `SELECT COLUMN_NAME, DATA_TYPE_NAME, LENGTH, SCALE, IS_NULLABLE
+FROM SYS.TABLE_COLUMNS
+WHERE SCHEMA_NAME = ? AND TABLE_NAME = ?
+ORDER BY POSITION`
+
+const hanaColumnTypeQuery = `SELECT DATA_TYPE_NAME
+FROM SYS.TABLE_COLUMNS
+WHERE SCHEMA_NAME = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`
+
+// hanaColumnTypeCurrentSchemaQuery is used when no schema_name is configured
+// and the table is resolved against the connection's current schema.
+const hanaColumnTypeCurrentSchemaQuery = `SELECT DATA_TYPE_NAME
+FROM SYS.TABLE_COLUMNS
+WHERE SCHEMA_NAME = CURRENT_SCHEMA AND TABLE_NAME = ? AND COLUMN_NAME = ?`
+
+// fetchHANAColumnType returns the catalog DATA_TYPE_NAME of a single column.
+func fetchHANAColumnType(ctx context.Context, db *sql.DB, schemaName, tableName, columnName string) (string, error) {
+	var (
+		row      *sql.Row
+		dataType string
+	)
+	if schemaName != "" {
+		row = db.QueryRowContext(ctx, hanaColumnTypeQuery, schemaName, tableName, columnName)
+	} else {
+		row = db.QueryRowContext(ctx, hanaColumnTypeCurrentSchemaQuery, tableName, columnName)
+	}
+	if err := row.Scan(&dataType); err != nil {
+		return "", fmt.Errorf("querying SYS.TABLE_COLUMNS for column %q of %s: %w", columnName, tableName, err)
+	}
+	return dataType, nil
+}
+
+const hanaPKQuery = `SELECT ic.COLUMN_NAME
+FROM SYS.INDEX_COLUMNS ic
+JOIN SYS.INDEXES i
+    ON ic.SCHEMA_NAME = i.SCHEMA_NAME
+    AND ic.TABLE_NAME = i.TABLE_NAME
+    AND ic.INDEX_NAME = i.INDEX_NAME
+WHERE i.SCHEMA_NAME = ? AND i.TABLE_NAME = ? AND i.CONSTRAINT = 'PRIMARY KEY'
+ORDER BY ic.POSITION`
+
+func fetchHANASchema(ctx context.Context, db *sql.DB, log *service.Logger, schemaName, tableName, numericMapping string) (*cachedSchema, error) {
+	rows, err := db.QueryContext(ctx, hanaColumnQuery, schemaName, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("querying SYS.TABLE_COLUMNS for %s.%s: %w", schemaName, tableName, err)
+	}
+	defer rows.Close()
+
+	var (
+		children []schema.Common
+		keySet   = make(map[string]struct{})
+		colTypes = make(map[string]schema.Common)
+	)
+
+	for rows.Next() {
+		var (
+			colName    string
+			dataType   string
+			length     sql.NullInt64
+			scale      sql.NullInt64
+			isNullable string
+		)
+		if err := rows.Scan(&colName, &dataType, &length, &scale, &isNullable); err != nil {
+			return nil, fmt.Errorf("scanning column row for %s.%s: %w", schemaName, tableName, err)
+		}
+
+		optional := isNullable == "TRUE"
+
+		var common schema.Common
+		if isDecimalType(dataType) {
+			common = hanaDecimalToCommon(colName, length, scale, optional, numericMapping)
+		} else {
+			common = schema.Common{
+				Name:     colName,
+				Type:     hanaTypeToCommonType(dataType),
+				Optional: optional,
+			}
+		}
+
+		children = append(children, common)
+		keySet[colName] = struct{}{}
+		colTypes[colName] = common
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating column rows for %s.%s: %w", schemaName, tableName, err)
+	}
+	if len(children) == 0 {
+		return nil, fmt.Errorf("no columns found for %s.%s in SYS.TABLE_COLUMNS", schemaName, tableName)
+	}
+
+	pkCols, err := fetchHANAPKCols(ctx, db, schemaName, tableName)
+	if err != nil {
+		// Non-fatal: emit schema without PK info rather than failing, but say
+		// so — the schema is cached, so primary_key_columns stays absent for
+		// the lifetime of the pipeline with no other trace of why.
+		log.Warnf("Failed to fetch primary key columns for %s.%s — primary_key_columns metadata will be omitted: %v", schemaName, tableName, err)
+		pkCols = nil
+	}
+
+	c := schema.Common{
+		Name:     tableName,
+		Type:     schema.Object,
+		Optional: false,
+		Children: children,
+	}
+	result := &schemaResult{
+		Val:      c.ToAny(),
+		PKCols:   pkCols,
+		ColTypes: colTypes,
+	}
+	return &cachedSchema{result: result, keys: keySet}, nil
+}
+
+func fetchHANAPKCols(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]string, error) {
+	rows, err := db.QueryContext(ctx, hanaPKQuery, schemaName, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("querying primary keys for %s.%s: %w", schemaName, tableName, err)
+	}
+	defer rows.Close()
+
+	var cols []string
+	for rows.Next() {
+		var col string
+		if err := rows.Scan(&col); err != nil {
+			return nil, fmt.Errorf("scanning PK column for %s.%s: %w", schemaName, tableName, err)
+		}
+		cols = append(cols, col)
+	}
+	return cols, rows.Err()
+}
+
+// schemaForEvent returns the schema result for the given table, refreshing the
+// cache when eventKeys contains a column name not in the stored schema.
+// Returns nil, nil gracefully when schemaName is empty or on catalog failure.
+func (sc *schemaCache) schemaForEvent(ctx context.Context, schemaName, tableName string, eventKeys []string) (*schemaResult, error) {
+	if schemaName == "" {
+		return nil, nil
+	}
+
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+
+	tableKey := schemaName + "." + tableName
+
+	if cached, exists := sc.entries[tableKey]; exists {
+		allKnown := true
+		for _, k := range eventKeys {
+			if _, ok := cached.keys[k]; !ok {
+				allKnown = false
+				break
+			}
+		}
+		if allKnown {
+			return cached.result, nil
+		}
+		sc.log.Debugf("Schema drift detected for %s — refreshing from SYS.TABLE_COLUMNS", tableKey)
+	}
+
+	fresh, err := fetchHANASchema(ctx, sc.db, sc.log, schemaName, tableName, sc.numericMapping)
+	if err != nil {
+		if existing, exists := sc.entries[tableKey]; exists {
+			sc.log.Warnf("Failed to refresh schema for %s, using cached version: %v", tableKey, err)
+			return existing.result, nil
+		}
+		sc.log.Warnf("Failed to fetch schema for %s — schema metadata will be omitted: %v", tableKey, err)
+		return nil, nil
+	}
+
+	sc.entries[tableKey] = fresh
+	return fresh.result, nil
+}
