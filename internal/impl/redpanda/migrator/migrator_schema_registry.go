@@ -160,7 +160,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			Description("Error on unknown schema IDs. Only relevant when translate_ids is true. " +
 				"When false (default), unknown schema IDs are passed through unchanged, " +
 				"allowing migration of topics with mixed message formats. " +
-				"Note: messages with 0-byte prefixes (e.g., protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
+				"Note: messages with 0-byte prefixes (for example, protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
 			ShortDescription("Error on unknown schema IDs. Only relevant when translate_ids is true.").
 			Default(false),
 		service.NewIntField(srFieldMaxParallelHTTPRequest).

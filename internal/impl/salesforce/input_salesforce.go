@@ -46,21 +46,21 @@ func salesforceInputConfigSpec() *service.ConfigSpec {
 
 Use ` + "`salesforce`" + ` for:
 
-- One-shot extracts (e.g. dump all Accounts into a warehouse).
+- One-shot extracts (for example, dump all Accounts into a warehouse).
 - Periodic full-table refreshes via a scheduled pipeline or xref:components:inputs/sequence.adoc[sequence].
 - Backfills and ad-hoc queries.
 - Warming up a downstream pipeline before switching to CDC.
 
 Use a different Salesforce input instead if:
 
-- You need continuous change events — use xref:components:inputs/salesforce_cdc.adoc[` + "`salesforce_cdc`" + `].
-- You need a GraphQL query (cross-object in one request) — use xref:components:inputs/salesforce_graphql.adoc[` + "`salesforce_graphql`" + `].
+- You need continuous change events: use xref:components:inputs/salesforce_cdc.adoc[` + "`salesforce_cdc`" + `].
+- You need a GraphQL query (cross-object in one request): use xref:components:inputs/salesforce_graphql.adoc[` + "`salesforce_graphql`" + `].
 
 == Metadata
 
 This input adds the following metadata fields to each message:
 
-- ` + "`sobject`" + `: The sObject API name (e.g. "Account").
+- ` + "`sobject`" + `: The sObject API name (for example, "Account").
 
 == Authentication
 
@@ -75,7 +75,7 @@ Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in
 			Example("Contact").
 			Example("MyCustom__c")).
 		Field(service.NewStringListField(sfiFieldColumns).
-			Description("Ordered list of field API names to retrieve. SOQL does not accept `*` — every field must be listed explicitly. Standard fields use their documented names; custom fields end with `__c`. Relationship fields traverse parents via dot notation (`Account.Name`, `Owner.Manager.Email`) up to 5 levels deep. Requesting a non-existent or non-queryable field fails at Connect time with a SOQL compile error.").
+			Description("Ordered list of field API names to retrieve. SOQL does not accept `*`; every field must be listed explicitly. Standard fields use their documented names; custom fields end with `__c`. Relationship fields traverse parents via dot notation (`Account.Name`, `Owner.Manager.Email`) up to 5 levels deep. Requesting a non-existent or non-queryable field fails at Connect time with a SOQL compile error.").
 			ShortDescription("Ordered list of field API names to retrieve. SOQL requires every field to be listed explicitly.").
 			Example([]string{"Id", "Name", "LastModifiedDate"}).
 			Example([]string{"Id", "Account.Name", "Owner.Email"}).
@@ -88,13 +88,13 @@ Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in
 			Example("OwnerId IN (?, ?)").
 			Optional()).
 		Field(service.NewBloblangField(sfiFieldArgsMapping).
-			Description("Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an array of values matching the count of `?` placeholders in `where`. Values are SOQL-escaped: strings become quoted literals, timestamps become ISO-8601, booleans and numbers pass through. The mapping is evaluated once at startup with no message context — use `now()`, `env()`, or `cache()`.").
+			Description("Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an array of values matching the count of `?` placeholders in `where`. Values are SOQL-escaped: strings become quoted literals, timestamps become ISO-8601, booleans and numbers pass through. The mapping is evaluated once at startup with no message context; use `now()`, `env()`, or `cache()`.").
 			ShortDescription("Optional Bloblang mapping returning an array of values matching the ? placeholders in where.").
 			Example(`root = [ (now() - "1h").ts_format("2006-01-02T15:04:05Z") ]`).
 			Example(`root = [ "Active", (now() - "24h").ts_format("2006-01-02T15:04:05Z") ]`).
 			Optional()).
 		Field(service.NewStringField(sfiFieldPrefix).
-			Description("Optional SOQL fragment inserted before the SELECT keyword. Rarely needed — provided for forward compatibility with future SOQL extensions or Bulk API framing.").
+			Description("Optional SOQL fragment inserted before the SELECT keyword. Rarely needed; provided for forward compatibility with future SOQL extensions or Bulk API framing.").
 			ShortDescription("Optional SOQL fragment inserted before the SELECT keyword. Rarely needed.").
 			Optional().
 			Advanced()).

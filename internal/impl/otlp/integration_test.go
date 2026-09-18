@@ -15,11 +15,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/moby/moby/api/types/container"
+	dockercontainer "github.com/moby/moby/api/types/container"
+	mobynet "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -38,12 +41,9 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/redpanda"
 )
 
-func producerConfig(transport string, encoding Encoding, broker, srURL, topic string) string {
-	port := "4318"
-
+func producerConfig(transport string, encoding Encoding, port int, broker, srURL, topic string) string {
 	inputType := "otlp_http"
 	if transport == "grpc" {
-		port = "4317"
 		inputType = "otlp_grpc"
 	}
 
@@ -53,7 +53,7 @@ logger:
 
 input:
   %s:
-    address: "0.0.0.0:%s"
+    address: "0.0.0.0:%d"
     encoding: "%s"
     schema_registry:
       url: "%s"
@@ -104,7 +104,7 @@ output:
 `, broker, topic, srURL, outputConfig)
 }
 
-func otelgenCommand(signalType SignalType, transport string, rate int, duration time.Duration) []string {
+func otelgenCommand(signalType SignalType, transport string, port int, rate int, duration time.Duration) []string {
 	cmd := []string{
 		signalType.String() + "s", // telemetrygen expects plural forms: traces, logs, metrics
 		"--rate", fmt.Sprintf("%d", rate),
@@ -112,10 +112,11 @@ func otelgenCommand(signalType SignalType, transport string, rate int, duration 
 		"--workers", "1",
 		"--otlp-insecure",
 	}
+	endpoint := fmt.Sprintf("host.docker.internal:%d", port)
 	if transport == "grpc" {
-		cmd = append(cmd, "--otlp-endpoint", "host.docker.internal:4317")
+		cmd = append(cmd, "--otlp-endpoint", endpoint)
 	} else {
-		cmd = append(cmd, "--otlp-http", "--otlp-endpoint", "host.docker.internal:4318")
+		cmd = append(cmd, "--otlp-http", "--otlp-endpoint", endpoint)
 	}
 
 	return cmd
@@ -148,8 +149,15 @@ func TestIntegrationOTLPWithSchemaRegistry(t *testing.T) {
 		{SignalTypeMetric, EncodingProtobuf, "grpc"},
 	}
 
+	// cap how many tests/containers run concurrently
+	sem := make(chan struct{}, 4)
+
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("%s_%s_%s", tc.signalType, tc.transport, tc.encoding), func(t *testing.T) {
+			t.Parallel()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
 			t.Log("Given: Redpanda with Schema Registry")
 			seed, srURL := startRedpandaWithSchemaRegistry(t)
 			t.Logf("Redpanda broker: %s", seed)
@@ -160,12 +168,19 @@ func TestIntegrationOTLPWithSchemaRegistry(t *testing.T) {
 			createTopic(t, seed, topic)
 
 			t.Log("And: OTel Collector")
-			collectorHTTP, collectorGRPC, collectorContainer := startOtelCollectorContainerWithDebugExporter(t, tc.signalType)
+			collectorHTTPPort, err := integration.GetFreePort()
+			require.NoError(t, err)
+			collectorGRPCPort, err := integration.GetFreePort()
+			require.NoError(t, err)
+			collectorHTTP, collectorGRPC, collectorContainer := startOtelCollectorContainerWithDebugExporter(t, tc.signalType, collectorHTTPPort, collectorGRPCPort)
 			t.Logf("OTel Collector endpoints - HTTP: %s, gRPC: %s", collectorHTTP, collectorGRPC)
 
 			t.Log("When: generating telemetry data and sending to Redpanda via Benthos pipeline")
-			ps := startStream(t, producerConfig(tc.transport, tc.encoding, seed, srURL, topic))
-			runOtelgen(t, otelgenCommand(tc.signalType, tc.transport, *soakRate, *soakDuration))
+			producerPort, err := integration.GetFreePort()
+			require.NoError(t, err)
+			ps := startStream(t, producerConfig(tc.transport, tc.encoding, producerPort, seed, srURL, topic))
+			waitForListening(t, producerPort)
+			runOtelgen(t, otelgenCommand(tc.signalType, tc.transport, producerPort, *soakRate, *soakDuration))
 			require.NoError(t, ps.StopWithin(3*time.Second))
 
 			t.Log("And: reading from Redpanda and sending to OTel Collector via pipeline")
@@ -238,7 +253,7 @@ func runOtelgen(t *testing.T, cmd []string) {
 			// host.docker.internal, which only resolves automatically on Docker
 			// Desktop. Map it to the host gateway so the container can reach the
 			// host on Linux CI runners too.
-			HostConfigModifier: func(hc *container.HostConfig) {
+			HostConfigModifier: func(hc *dockercontainer.HostConfig) {
 				hc.ExtraHosts = []string{"host.docker.internal:host-gateway"}
 			},
 		},
@@ -261,7 +276,7 @@ func runOtelgen(t *testing.T, cmd []string) {
 	require.Equal(t, 0, state.ExitCode, "otelgen should complete successfully")
 }
 
-func startOtelCollectorContainerWithDebugExporter(t *testing.T, sig SignalType) (httpEndpoint, grpcEndpoint string, container testcontainers.Container) {
+func startOtelCollectorContainerWithDebugExporter(t *testing.T, sig SignalType, httpPort, grpcPort int) (httpEndpoint, grpcEndpoint string, container testcontainers.Container) {
 	t.Helper()
 
 	conf := fmt.Sprintf(`
@@ -299,6 +314,12 @@ service:
 			},
 		},
 		Cmd: []string{"--config=/etc/otel-config.yaml"},
+		HostConfigModifier: func(hc *dockercontainer.HostConfig) {
+			hc.PortBindings = mobynet.PortMap{
+				mobynet.MustParsePort("4318/tcp"): []mobynet.PortBinding{{HostPort: strconv.Itoa(httpPort)}},
+				mobynet.MustParsePort("4317/tcp"): []mobynet.PortBinding{{HostPort: strconv.Itoa(grpcPort)}},
+			}
+		},
 	}
 
 	ctx := t.Context()
@@ -315,14 +336,8 @@ service:
 		}
 	})
 
-	// Get mapped ports
-	httpPort, err := container.MappedPort(ctx, "4318")
-	require.NoError(t, err)
-	grpcPort, err := container.MappedPort(ctx, "4317")
-	require.NoError(t, err)
-
-	httpEndpoint = fmt.Sprintf("localhost:%s", httpPort.Port())
-	grpcEndpoint = fmt.Sprintf("localhost:%s", grpcPort.Port())
+	httpEndpoint = fmt.Sprintf("localhost:%d", httpPort)
+	grpcEndpoint = fmt.Sprintf("localhost:%d", grpcPort)
 	return
 }
 
@@ -371,4 +386,17 @@ func startStream(t *testing.T, confYAML string) *service.Stream {
 	})
 
 	return stream
+}
+
+func waitForListening(t *testing.T, port int) {
+	t.Helper()
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	require.Eventually(t, func() bool {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			return false
+		}
+		_ = conn.Close()
+		return true
+	}, 10*time.Second, 50*time.Millisecond, "otlp input server did not start listening on %s in time", addr)
 }

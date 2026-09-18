@@ -51,7 +51,7 @@ specified encoding.`).
 		Field(service.NewStringEnumField("encoding", "textual", "binary", "single").Description("An Avro encoding format to use for conversions to and from a schema.").Default("textual")).
 		Field(service.NewStringField("schema").Description("A full Avro schema to use.").Default("")).
 		Field(service.NewStringField("schema_path").
-			Description("The path of a schema document to apply. Use either this or the `schema` field. URLs must begin with `file://` or `http://`. Note that `file://` URLs must use absolute paths (e.g. `file:///absolute/path/to/spec.avsc`); relative paths are not supported.").
+			Description("The path of a schema document to apply. Use either this or the `schema` field. URLs must begin with `file://` or `http://`. Note that `file://` URLs must use absolute paths (for example, `file:///absolute/path/to/spec.avsc`); relative paths are not supported.").
 			ShortDescription("Path of a schema document to apply. Use either this or the schema field.").
 			Default("").
 			Example("file:///path/to/spec.avsc").

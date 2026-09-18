@@ -3,11 +3,11 @@
 Production-shaped benchmarks and soak tests for Redpanda Connect connectors,
 run on real AWS infrastructure in a dedicated, disposable account.
 
-This tree contains the framework core plus the **postgres_cdc** stack — the
-subset needed by the soak pipeline (CON-179 R6). Further connector stacks
-(mysql, sqlserver, oracle, mongodb, dynamodb, iceberg) exist on the original
-development fork and land here with their own PRs, each bringing its
-scenarios and tests.
+This tree contains the framework core plus the **postgres_cdc** and
+**mysql_cdc** stacks — the subset needed by the soak pipeline (CON-179 R6).
+Further connector stacks (sqlserver, oracle, mongodb, dynamodb, iceberg)
+exist on the original development fork and land here with their own PRs,
+each bringing its scenarios and tests.
 
 ## What a run does
 
@@ -90,10 +90,10 @@ and re-enabled after.
 | Path | Role |
 |---|---|
 | `runner/` | Go orchestrator: provision → stage → seed → sweep/soak → results → teardown |
-| `scenarios/postgres/` | bench + soak + PR-comparison scenarios |
-| `seeders/cdc-rows-postgres/` | write-workload generator |
+| `scenarios/<engine>/` | bench + soak + PR-comparison scenarios (postgres, mysql) |
+| `seeders/cdc-rows-<engine>/` | write-workload generators |
 | `terraform/shared/` | per-session VPC, hosts, brokers, results bucket |
-| `terraform/stacks/postgres/` | per-session RDS Postgres |
+| `terraform/stacks/<engine>/` | per-session RDS Postgres / RDS MySQL |
 | `terraform/persistent/` | applied once: dashboards, alarms, OIDC, reaper, archive |
 | `cleanup-lambda/` | the orphan reaper (own Go module) |
 | `SOAK.md` | soak operations runbook |
@@ -101,8 +101,9 @@ and re-enabled after.
 ## Known limitations
 
 - postgres_cdc IAM auth cannot work against vanilla RDS (replication
-  connections reject IAM tokens); the credential-rotation soak window is
-  covered by mysql_cdc when its stack lands.
+  connections reject IAM tokens); the credential-rotation soak window
+  belongs to the mysql_cdc soak, which runs password auth today — the IAM
+  increment is still open (see SOAK.md).
 - One-lane serialization: soaks and benches queue on the shared stack.
   Session-scoped isolation is the tracked scaling path.
 - The weekly 24h soak needs a reaper exemption tag + a non-GitHub conductor

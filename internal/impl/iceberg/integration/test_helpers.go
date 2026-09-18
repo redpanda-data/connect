@@ -227,7 +227,7 @@ func startTestInfrastructure(t *testing.T, ctx context.Context) *testInfrastruct
 	// Start MinIO
 	minioContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "minio/minio:latest",
+			Image:        "pgsty/silo:latest",
 			ExposedPorts: []string{minioInternalPort + "/tcp"},
 			Env: map[string]string{
 				"MINIO_ROOT_USER":     "admin",

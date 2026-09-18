@@ -127,10 +127,11 @@ task test              # the e2e suite (skips itself if unconfigured)
 task terraform:destroy # tear everything down
 ```
 
-`task bench` runs the commit-latency measurements; `task full` chains
-apply → test → destroy (destroy is deferred, so it still runs when tests
-fail — but if apply itself dies partway, run `task terraform:destroy`
-manually).
+`task bench` runs the commit-latency measurements; `task throughput` runs the
+append throughput sweep (see [Cost](#cost) below — this one is not tiny);
+`task full` chains apply → test → destroy (destroy is deferred, so it still
+runs when tests fail — but if apply itself dies partway, run
+`task terraform:destroy` manually).
 
 Tests use unique per-run table names and drop their tables via
 `DROP TABLE IF EXISTS` on cleanup, so repeated `task test` runs don't need a
@@ -138,10 +139,17 @@ terraform re-apply.
 
 ## Cost
 
-Minimal: one 2X-Small serverless SQL warehouse with `auto_stop_mins = 1`
-(statement submission auto-restarts it), and a few thousand tiny rows at most
-(the bench writes ~20k rows total). Destroy when done and nothing keeps
-billing.
+`task test` and `task bench` are minimal: one 2X-Small serverless SQL
+warehouse with `auto_stop_mins = 1` (statement submission auto-restarts it),
+and a few thousand tiny rows at most.
+
+`task throughput` is not minimal: it holds that warehouse busy for up to
+~15 minutes and writes on the order of hundreds of thousands of ~1.2KB rows
+(the largest batch point alone can exceed that in a single commit). Same
+`auto_stop_mins = 1` applies once it finishes, but budget for the warehouse
+time while it's running.
+
+Destroy when done and nothing keeps billing.
 
 ## Permission asterisks (and fallbacks)
 
