@@ -66,7 +66,17 @@ This input adds the following metadata fields to each message:
 - schema (The table schema in benthos common schema format, compatible with processors like parquet_encode)
 - table (Name of the table that the message originated from)
 - operation (Type of operation that generated the message: "read", "delete", "insert", or "update_before" and "update_after". "read" is from messages that are read in the initial snapshot phase.)
-- lsn (the Log Sequence Number in Microsoft SQL Server)
+- lsn (The commit Log Sequence Number of the change, from the change table column ` + "`__$start_lsn`" + `. Not present on snapshot (` + "`read`" + `) messages.)
+- seqval (The position of the change in the transaction log, from the change table column ` + "`__$seqval`" + `, as a hexadecimal string with a ` + "`0x`" + ` prefix. Not present on snapshot (` + "`read`" + `) messages.)
+- command_id (The order of the statement within its transaction, from the change table column ` + "`__$command_id`" + `. Not present on snapshot (` + "`read`" + `) messages.)
+
+== Ordering
+
+Change messages are emitted in the order SQL Server recorded them: by ` + "`lsn`" + ` first, then by ` + "`command_id`" + `.
+All rows of one transaction share one ` + "`lsn`" + `, so ` + "`lsn`" + ` alone does not order changes inside a transaction. Use ` + "`command_id`" + ` for that.
+
+The ` + "`update_before`" + ` and ` + "`update_after`" + ` rows of one ` + "`UPDATE`" + ` statement share ` + "`lsn`" + `, ` + "`seqval`" + ` and ` + "`command_id`" + `.
+Use ` + "`operation`" + ` to tell them apart: ` + "`update_before`" + ` is always emitted first.
 
 == Permissions
 
