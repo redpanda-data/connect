@@ -19,11 +19,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/appendblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -32,14 +36,54 @@ const (
 	// Blob Storage Output Fields
 	bsoFieldContainer         = "container"
 	bsoFieldPath              = "path"
+	bsoFieldTags              = "tags"
 	bsoFieldBlobType          = "blob_type"
 	bsoFieldPublicAccessLevel = "public_access_level"
+
+	// The following blob index tag limits are imposed by Azure. See
+	// https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs
+
+	// bsoMaxTagsPermitted is the maximum number of blob index tags a single
+	// blob may carry.
+	bsoMaxTagsPermitted = 10
+	// bsoMaxTagKeyLength is the maximum length of a blob index tag key.
+	bsoMaxTagKeyLength = 128
+	// bsoTagAllowedSpecialChars are the non-alphanumeric characters permitted
+	// within blob index tag keys and values.
+	bsoTagAllowedSpecialChars = " +-./:=_"
 )
+
+// bsoValidateTagKey checks a blob index tag key against the length and character
+// set limits imposed by Azure. Tag keys are always static, so an invalid one is
+// worth rejecting at config time rather than failing every message. Tag values
+// are interpolated per message and so cannot be checked here.
+func bsoValidateTagKey(key string) error {
+	for _, r := range key {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case strings.ContainsRune(bsoTagAllowedSpecialChars, r):
+		default:
+			return fmt.Errorf("blob index tag key %q contains unsupported character %q, only alphanumerics and the characters %q are permitted", key, r, bsoTagAllowedSpecialChars)
+		}
+	}
+	// Only ASCII characters reach here, so byte length matches the character
+	// count Azure counts against the limit.
+	if l := len(key); l < 1 || l > bsoMaxTagKeyLength {
+		return fmt.Errorf("blob index tag key %q must be between 1 and %d characters, got %d", key, bsoMaxTagKeyLength, l)
+	}
+	return nil
+}
+
+type bsoTagPair struct {
+	key   string
+	value *service.InterpolatedString
+}
 
 type bsoConfig struct {
 	client            *azblob.Client
 	Container         *service.InterpolatedString
 	Path              *service.InterpolatedString
+	Tags              []bsoTagPair
 	BlobType          *service.InterpolatedString
 	PublicAccessLevel *service.InterpolatedString
 }
@@ -59,6 +103,26 @@ func bsoConfigFromParsed(pConf *service.ParsedConfig) (conf bsoConfig, err error
 	if conf.Path, err = pConf.FieldInterpolatedString(bsoFieldPath); err != nil {
 		return
 	}
+
+	var tagMap map[string]*service.InterpolatedString
+	if tagMap, err = pConf.FieldInterpolatedStringMap(bsoFieldTags); err != nil {
+		return
+	}
+	if len(tagMap) > bsoMaxTagsPermitted {
+		err = fmt.Errorf("at most %d blob index tags are permitted, got %d", bsoMaxTagsPermitted, len(tagMap))
+		return
+	}
+	conf.Tags = make([]bsoTagPair, 0, len(tagMap))
+	for k, v := range tagMap {
+		if err = bsoValidateTagKey(k); err != nil {
+			return
+		}
+		conf.Tags = append(conf.Tags, bsoTagPair{key: k, value: v})
+	}
+	sort.Slice(conf.Tags, func(i, j int) bool {
+		return conf.Tags[i].key < conf.Tags[j].key
+	})
+
 	if conf.BlobType, err = pConf.FieldInterpolatedString(bsoFieldBlobType); err != nil {
 		return
 	}
@@ -88,7 +152,27 @@ Supports multiple authentication methods but only one of the following is requir
 If multiple are set then the `+"`storage_connection_string`"+` is given priority.
 
 If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+` parameter, please specify it in the
-`+"`storage_account`"+` field.`+service.OutputPerformanceDocs(true, false)).
+`+"`storage_account`"+` field.
+
+== Tags
+
+The `+"`tags`"+` field allows you to attach key/value pairs to blobs as https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs[blob index tags^], where the values support xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions]:
+
+`+"```yaml"+`
+output:
+  azure_blob_storage:
+    container: TODO
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
+    tags:
+      Environment: production
+      Source: ${!meta("kafka_topic")}
+`+"```"+`
+
+Only values support interpolation; keys are static and are validated against Azure's limits at startup. Values are resolved per message and so are only rejected once Azure sees them.
+
+If authenticating with `+"`storage_sas_token`"+`, the token must include the `+"`t`"+` (tags) permission.
+
+When `+"`blob_type`"+` is `+"`APPEND`"+` the tags are written separately from the message content, so they are refreshed on each append on a best-effort basis and may briefly lag the most recent append. A failure to write them is logged and does not fail the message, because retrying would append the message content a second time.`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewInterpolatedStringField(bsoFieldContainer).
 				Description("The container for uploading the messages to.").
@@ -99,6 +183,14 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 				Example(`${!meta("kafka_key")}.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
+			service.NewInterpolatedStringMapField(bsoFieldTags).
+				Description(fmt.Sprintf("Key/value pairs to store with the blob as https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs[blob index tags^]. A maximum of %d tags are permitted, tag keys must be between 1 and 128 characters, and tag values must be between 0 and 256 characters. Keys and values are case-sensitive and only support string values. Not supported on storage accounts with hierarchical namespace (Data Lake Gen2).", bsoMaxTagsPermitted)).
+				Default(map[string]any{}).
+				Example(map[string]any{
+					"Environment": "production",
+					"Source":      `${!meta("kafka_topic")}`,
+				}).
+				Advanced(),
 			service.NewInterpolatedStringEnumField(bsoFieldBlobType, "BLOCK", "APPEND").
 				Description("Block and Append blobs are comprized of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`BLOCK`\"+`.`").
 				ShortDescription("Block and Append blobs are made up of blocks, and each blob supports up to 50,000 blocks.").
@@ -147,7 +239,7 @@ func (*azureBlobStorageWriter) Connect(context.Context) error {
 	return nil
 }
 
-func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, blobName, blobType string, message []byte) error {
+func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, blobName, blobType string, message []byte, tags map[string]string) error {
 	containerClient := a.conf.client.ServiceClient().NewContainerClient(containerName)
 	var err error
 	if blobType == "APPEND" {
@@ -155,7 +247,13 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 		_, err = appendBlobClient.AppendBlock(ctx, streaming.NopCloser(bytes.NewReader(message)), nil)
 		if err != nil {
 			if isErrorCode(err, bloberror.BlobNotFound) {
-				_, err := appendBlobClient.Create(ctx, nil)
+				// Attaching the tags at creation means a newly created blob carries
+				// them even if the refresh below fails.
+				var createOpts *appendblob.CreateOptions
+				if len(tags) > 0 {
+					createOpts = &appendblob.CreateOptions{Tags: tags}
+				}
+				_, err := appendBlobClient.Create(ctx, createOpts)
 				if err != nil && !isErrorCode(err, bloberror.BlobAlreadyExists) {
 					return fmt.Errorf("creating append blob: %w", err)
 				}
@@ -169,8 +267,26 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 				return fmt.Errorf("appending block to blob: %w", err)
 			}
 		}
+		// AppendBlock does not support tags, so they are written separately. This
+		// also covers blobs this output did not create, which never pass through
+		// the creation path above and would otherwise never be tagged.
+		//
+		// A failure here is logged rather than returned: the message content is
+		// already committed at this point, and AppendBlock is not idempotent, so
+		// nacking would append the same content again on redelivery. Losing a tag
+		// update is preferable to duplicating data.
+		if len(tags) > 0 {
+			blobClient := containerClient.NewBlobClient(blobName)
+			if _, tagErr := blobClient.SetTags(ctx, tags, nil); tagErr != nil {
+				a.log.Warnf("Failed to set blob index tags on append blob %v: %v", blobName, tagErr)
+			}
+		}
 	} else {
-		_, err = containerClient.NewBlockBlobClient(blobName).UploadStream(ctx, bytes.NewReader(message), nil)
+		var uploadOpts *blockblob.UploadStreamOptions
+		if len(tags) > 0 {
+			uploadOpts = &blockblob.UploadStreamOptions{Tags: tags}
+		}
+		_, err = containerClient.NewBlockBlobClient(blobName).UploadStream(ctx, bytes.NewReader(message), uploadOpts)
 		if err != nil {
 			return fmt.Errorf("pushing block to blob: %w", err)
 		}
@@ -213,7 +329,19 @@ func (a *azureBlobStorageWriter) Write(ctx context.Context, msg *service.Message
 		return err
 	}
 
-	if err := a.uploadBlob(ctx, containerName, blobName, blobType, mBytes); err != nil {
+	var blobTags map[string]string
+	if len(a.conf.Tags) > 0 {
+		blobTags = make(map[string]string, len(a.conf.Tags))
+		for _, pair := range a.conf.Tags {
+			tagVal, err := pair.value.TryString(msg)
+			if err != nil {
+				return fmt.Errorf("tag %v interpolation: %w", pair.key, err)
+			}
+			blobTags[pair.key] = tagVal
+		}
+	}
+
+	if err := a.uploadBlob(ctx, containerName, blobName, blobType, mBytes, blobTags); err != nil {
 		if isErrorCode(err, bloberror.ContainerNotFound) {
 			var accessLevel string
 			if accessLevel, err = a.conf.PublicAccessLevel.TryString(msg); err != nil {
@@ -226,7 +354,7 @@ func (a *azureBlobStorageWriter) Write(ctx context.Context, msg *service.Message
 				}
 			}
 
-			if err := a.uploadBlob(ctx, containerName, blobName, blobType, mBytes); err != nil {
+			if err := a.uploadBlob(ctx, containerName, blobName, blobType, mBytes, blobTags); err != nil {
 				return fmt.Errorf("error retrying to upload blob: %s", err)
 			}
 		} else {
