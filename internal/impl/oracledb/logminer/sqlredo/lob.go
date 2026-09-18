@@ -164,7 +164,7 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 	for _, acc := range state.Accumulators {
 		assembled := acc.Assemble()
 		if assembled == nil {
-			logDebugf("LOB merge: skipping %s.%s.%s — no fragments accumulated", acc.Schema, acc.Table, acc.Column)
+			logDebugf("LOB merge: skipping %s.%s.%s; no fragments accumulated", acc.Schema, acc.Table, acc.Column)
 			continue
 		}
 
@@ -232,11 +232,11 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 		case 0:
 			// no candidates — fall through to unmerged
 		default:
-			logWarnf("LOB merge: %s.%s.%s has %d candidate events with no PK in WHERE clause — cannot distinguish rows; will synthesize UPDATE", acc.Schema, acc.Table, acc.Column, len(candidates))
+			logWarnf("LOB merge: %s.%s.%s has %d candidate events with no PK in WHERE clause; cannot distinguish rows; will synthesize UPDATE", acc.Schema, acc.Table, acc.Column, len(candidates))
 		}
 
 		if !merged {
-			logDebugf("LOB merge: no matching DML event for %s.%s.%s (pks=%v) — will synthesize UPDATE", acc.Schema, acc.Table, acc.Column, acc.PKValues)
+			logDebugf("LOB merge: no matching DML event for %s.%s.%s (pks=%v); will synthesize UPDATE", acc.Schema, acc.Table, acc.Column, acc.PKValues)
 			unmerged = append(unmerged, acc)
 		}
 	}

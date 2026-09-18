@@ -131,8 +131,8 @@ Use `salesforce_graphql` for:
 
 Use a different Salesforce input instead if:
 
-- You only need single-object SELECTs — use xref:components:inputs/salesforce.adoc[`salesforce`] (simpler, no GraphQL schema knowledge needed).
-- You need continuous change events — use xref:components:inputs/salesforce_cdc.adoc[`salesforce_cdc`].
+- You only need single-object SELECTs: use xref:components:inputs/salesforce.adoc[`salesforce`] (simpler, no GraphQL schema knowledge needed).
+- You need continuous change events: use xref:components:inputs/salesforce_cdc.adoc[`salesforce_cdc`].
 
 == Pagination
 
@@ -215,7 +215,7 @@ Consumer Key of the Salesforce Connected App authorized for the OAuth Client Cre
 
 === `client_secret`
 
-Consumer Secret of the Salesforce Connected App, paired with `client_id`. Sensitive — prefer environment variable interpolation (`${SALESFORCE_CLIENT_SECRET}`) over inlining.
+Consumer Secret of the Salesforce Connected App, paired with `client_id`. Sensitive; prefer environment variable interpolation (`${SALESFORCE_CLIENT_SECRET}`) over inlining.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
@@ -228,7 +228,7 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 === `api_version`
 
-Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/{api_version}/...`) and available fields/objects. Must be supported by your org — check Setup → Company Information. Older versions may lack recent fields.
+Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/{api_version}/...`) and available fields/objects. Must be supported by your org; check Setup → Company Information. Older versions may lack recent fields.
 
 
 *Type*: `string`
@@ -261,7 +261,7 @@ query: 'query Accounts($first: Int) { uiapi { query { Account(first: $first) { e
 
 === `variables`
 
-Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an object whose keys are GraphQL variable names referenced by `query`. Values pass through as JSON in the request body's `variables` field. The mapping is evaluated once at startup with no message context — use `env()`, `now()`, `cache()`, or static literals.
+Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an object whose keys are GraphQL variable names referenced by `query`. Values pass through as JSON in the request body's `variables` field. The mapping is evaluated once at startup with no message context; use `env()`, `now()`, `cache()`, or static literals.
 
 
 *Type*: `string`
