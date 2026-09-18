@@ -71,6 +71,13 @@ func (p Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (DMLEvent, error) {
 	if redoEvent.Username.Valid {
 		event.Username = redoEvent.Username.String
 	}
+	if redoEvent.RSID.Valid {
+		// Oracle pads RS_ID with whitespace.
+		event.RSID = strings.TrimSpace(redoEvent.RSID.String)
+	}
+	if redoEvent.SSN.Valid {
+		event.SSN = redoEvent.SSN.Int64
+	}
 
 	if strings.TrimSpace(redoEvent.SQLRedo.String) != "" {
 		event.SQLRedo = redoEvent.SQLRedo.String
