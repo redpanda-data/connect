@@ -185,17 +185,10 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 	}
 
 	// No usable handle for this path. If a handle for a different path is
-	//  still open, close it and its SFTP client before opening the new file.
+	// still open, close it and its SFTP client before opening the new file.
 	if s.handle != nil {
-		if err := s.handle.Close(); err != nil {
-			s.log.With("error", err).Error("Failed to close written file")
-		}
-		if err := s.sftpClient.Close(); err != nil {
-			s.log.With("error", err).Error("Failed to close SFTP client")
-		}
-		s.handle = nil
-		s.handlePath = ""
-		s.sftpClient = nil
+		s.closeHandle(s.handle)
+		s.closeClient()
 	}
 
 	flag := os.O_CREATE | os.O_WRONLY
@@ -211,19 +204,13 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 	}
 
 	if err := s.sftpClient.MkdirAll(filepath.Dir(path)); err != nil {
-		if err := s.sftpClient.Close(); err != nil {
-			s.log.With("error", err).Error("Failed to close SFTP client")
-		}
-		s.sftpClient = nil
+		s.closeClient()
 		return fmt.Errorf("creating remote directory: %w", err)
 	}
 
 	handle, err := s.sftpClient.OpenFile(path, flag)
 	if err != nil {
-		if err := s.sftpClient.Close(); err != nil {
-			s.log.With("error", err).Error("Failed to close SFTP client")
-		}
-		s.sftpClient = nil
+		s.closeClient()
 		return fmt.Errorf("opening remote file: %w", err)
 	}
 
@@ -232,17 +219,20 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 		// Details here: https://github.com/pkg/sftp/issues/295
 		fi, err := s.sftpClient.Lstat(path)
 		if err != nil {
-			s.closeHandleAndClient(handle)
+			s.closeHandle(handle)
+			s.closeClient()
 			return fmt.Errorf("statting remote file: %w", err)
 		}
 		if _, err := handle.Seek(fi.Size(), 0); err != nil {
-			s.closeHandleAndClient(handle)
+			s.closeHandle(handle)
+			s.closeClient()
 			return fmt.Errorf("seeking remote file: %w", err)
 		}
 	}
 
 	if err := s.writeTo(handle, msg); err != nil {
-		s.closeHandleAndClient(handle)
+		s.closeHandle(handle)
+		s.closeClient()
 		return fmt.Errorf("writing message to SFTP server: %w", err)
 	}
 
@@ -252,19 +242,28 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 	return nil
 }
 
-// closeHandleAndClient closes the given file handle and the writer's current
-// SFTP client, logging any errors. It's used to clean up after a failed
-// write so that a stale, unclosed SFTP client (and its underlying SSH
-// channel) isn't left dangling on the writer for the next attempt to
-// discover.
-func (s *sftpWriter) closeHandleAndClient(handle io.WriteCloser) {
-	if err := handle.Close(); err != nil {
-		s.log.With("error", err).Error("Failed to close written file")
+// closeClient closes the writer's current SFTP client, logging any error. It
+// must be called on every failure path after sftp.NewClient has succeeded, so
+// that a stale, unclosed client (and its underlying SSH channel) isn't left
+// dangling for the next attempt to discover.
+func (s *sftpWriter) closeClient() {
+	if s.sftpClient == nil {
+		return
 	}
 	if err := s.sftpClient.Close(); err != nil {
 		s.log.With("error", err).Error("Failed to close SFTP client")
 	}
 	s.sftpClient = nil
+}
+
+// closeHandle closes the given file handle, logging any error, and clears the
+// cached handle so the next write opens the file again.
+func (s *sftpWriter) closeHandle(h io.WriteCloser) {
+	if err := h.Close(); err != nil {
+		s.log.With("error", err).Error("Failed to close written file")
+	}
+	s.handle = nil
+	s.handlePath = ""
 }
 
 func (s *sftpWriter) Close(context.Context) error {
@@ -276,17 +275,9 @@ func (s *sftpWriter) Close(context.Context) error {
 	}
 
 	if s.handle != nil {
-		if err := s.handle.Close(); err != nil {
-			s.log.With("error", err).Error("Failed to close written file")
-		}
-		s.handle = nil
+		s.closeHandle(s.handle)
 	}
-
-	if s.sftpClient != nil {
-		if err := s.sftpClient.Close(); err != nil {
-			s.log.With("error", err).Error("Failed to close SFTP client")
-		}
-	}
+	s.closeClient()
 
 	if err := s.sshClient.Close(); err != nil {
 		return fmt.Errorf("closing SSH client: %w", err)

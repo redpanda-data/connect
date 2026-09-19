@@ -243,9 +243,15 @@ codec: all-bytes
 	require.NoError(t, writer.Connect(t.Context()))
 	t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
 
+	// Sessions the server already has open, including the emulator's own
+	// client. sftpgo has no per-connection channel cap, so the leak shows up
+	// as a growing session count rather than as a failure to connect.
+	baseline, err := emu.openConnections()
+	require.NoError(t, err)
+
 	// More attempts than a typical SSH server's default per-connection
 	// channel limit (OpenSSH defaults to 10), so a channel leak on failure
-	// would eventually surface as a connection-level error here.
+	// would eventually surface as a connection-level error on such a server.
 	for range 20 {
 		err := writer.Write(t.Context(), service.NewMessage([]byte("payload")))
 		require.Error(t, err)
@@ -253,6 +259,15 @@ codec: all-bytes
 		assert.Nil(t, writer.sftpClient, "a failed write must not leave a stale SFTP client behind")
 		assert.Nil(t, writer.handle, "a failed write must not leave a stale file handle behind")
 	}
+
+	// The server must agree that nothing was left behind. sftpgo drops a
+	// session as soon as its channel closes, but don't rely on that being
+	// synchronous with the client-side Close.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		open, err := emu.openConnections()
+		assert.NoError(c, err)
+		assert.LessOrEqual(c, open, baseline, "failed writes must not leave SFTP channels open on the server")
+	}, time.Second*10, time.Millisecond*100)
 
 	// The underlying SSH connection must still be healthy.
 	writer.path, err = service.NewInterpolatedString("/upload/ok.txt")
@@ -264,6 +279,35 @@ type emulator struct {
 	client  *sftp.Client
 	address string
 	hostKey string
+
+	// httpAddr and adminToken address the sftpgo admin REST API, which
+	// reports the sessions the server currently has open.
+	httpAddr   string
+	adminToken string
+}
+
+// openConnections returns the number of sessions sftpgo currently has open.
+// The server tracks each SFTP channel as its own connection, so this counts
+// live sftp.Client instances rather than SSH connections.
+func (e emulator) openConnections() (int, error) {
+	req, err := http.NewRequest(http.MethodGet, "http://"+e.httpAddr+"/api/v2/connections", nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+e.adminToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("listing connections: unexpected status %d", resp.StatusCode)
+	}
+	var conns []struct{}
+	if err := json.NewDecoder(resp.Body).Decode(&conns); err != nil {
+		return 0, err
+	}
+	return len(conns), nil
 }
 
 func runEmulator(t *testing.T) emulator {
@@ -359,9 +403,11 @@ func runEmulator(t *testing.T) emulator {
 	})
 
 	return emulator{
-		client:  client,
-		address: address,
-		hostKey: hostPubKey,
+		client:     client,
+		address:    address,
+		hostKey:    hostPubKey,
+		httpAddr:   httpAddr,
+		adminToken: tokenResponse.AccessToken,
 	}
 }
 
