@@ -184,8 +184,8 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 		return s.writeTo(s.handle, msg)
 	}
 
-	// The path changed, so close the previous handle and SFTP client before
-	// opening the new file.
+	// No usable handle for this path. If a handle for a different path is
+	//  still open, close it and its SFTP client before opening the new file.
 	if s.handle != nil {
 		if err := s.handle.Close(); err != nil {
 			s.log.With("error", err).Error("Failed to close written file")
