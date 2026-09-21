@@ -438,7 +438,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 
 	// --- boundary ratchet (anti-regression) scenarios ---
 
-	t.Run("closed thread's backlog beyond budget gets pulled forward once a boundary was committed", func(t *testing.T) {
+	t.Run("closed thread's backlog beyond budget tightens endSCN and grows toward it cycle by cycle", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 
 		// Thread 1 (open) is fully caught up on its own genuinely open current log.
@@ -447,7 +447,8 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 			mkLogFile(1, 2, 200, logStatusCurrent),
 		}
 		// Thread 2 (closed) has a substantial backlog of small archived files, far
-		// exceeding the shared budget of 2.
+		// exceeding the shared budget of 2 (and, deliberately, exceeding growthMax
+		// too - see the plateau at cycle 3/4 below).
 		closedThreadBacklog := []*LogFile{
 			mkLogFile(2, 1, 1100, "ARCHIVED"),
 			mkLogFile(2, 2, 1200, "ARCHIVED"),
@@ -457,38 +458,94 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		}
 		files := append(append([]*LogFile{}, openThreadFiles...), closedThreadBacklog...)
 
-		// Cycle 1: thread 1 (the only open thread) is caught up, so the cycle is
-		// uncapped and endSCN falls back to dbCurrentSCN - well past what thread 2's
-		// own budget-truncated selection (its first 2 files, NextSCN 1200) reaches.
-		// This is the exact bug: thread 2's files #3-#5 are dropped with nothing
-		// tightening endSCN to account for it.
+		// Cycle 1: thread 1 (the only open thread) is caught up, but thread 2's
+		// backlog exceeds its budget of 2 - this must tighten endSCN to thread 2's
+		// last selected file, not fall back to dbCurrentSCN. This is the exact bug:
+		// previously, a truncated closed thread never influenced endSCN, so
+		// currentSCN could jump straight to dbCurrentSCN leaving files #3-#5
+		// permanently unreachable once the next cycle's SCN range moved past them.
 		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000)
 		require.NoError(t, err)
-		assert.False(t, capped)
-		assert.Equal(t, uint64(9000), endSCN)
-		require.Len(t, selected, 4, "thread 2 without the fix: only its first 2 (budgeted) files are selected")
-		assert.Equal(t, uint64(9000), s.prevUpperBoundSCN, "committed at the end of this call, ready to drive cycle 2's extension")
+		assert.True(t, capped, "thread 2's untightened backlog must cap the session")
+		assert.Equal(t, uint64(1199), endSCN, "endSCN tightened to thread 2's 2nd (budgeted) file's NextSCN minus 1")
+		require.Len(t, selected, 4, "thread 1's 2 files plus thread 2's budgeted 2 files")
+		assert.Equal(t, uint64(1199), s.prevUpperBoundSCN)
 
-		// Cycle 2: same inputs again (thread 2 produced nothing new since it's
-		// closed). Now that cycle 1 committed to mining up through SCN 9000, the
-		// ratchet must extend thread 2's selection all the way through its
-		// backlog - none of files #3-#5 may be silently dropped.
+		// Cycle 2: same inputs (thread 2 produced nothing new since it's closed).
+		// The identical selection stalls, growing the shared budget to 3 - thread 2
+		// now gets 3 files, tightening endSCN further out.
 		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000)
 		require.NoError(t, err)
-		assert.False(t, capped)
-		assert.Equal(t, uint64(9000), endSCN)
-		assert.Len(t, selected, 7, "thread 1's 2 files plus all 5 of thread 2's backlog, not just its budgeted 2")
-		for _, f := range closedThreadBacklog {
-			assert.Contains(t, selected, f, "no file in the closed thread's backlog may be left behind once a boundary was committed past it")
+		assert.True(t, capped)
+		assert.Equal(t, uint64(1299), endSCN)
+		assert.Len(t, selected, 5, "thread 1's 2 files plus thread 2's grown budget of 3")
+		assert.Equal(t, 3, s.count)
+
+		// Cycle 3: stalled again, budget grows to 4 - the growthMax ceiling.
+		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000)
+		require.NoError(t, err)
+		assert.True(t, capped)
+		assert.Equal(t, uint64(1399), endSCN)
+		assert.Len(t, selected, 6, "thread 1's 2 files plus thread 2's grown budget of 4")
+		assert.Equal(t, 4, s.count)
+
+		// Cycle 4: budget has plateaued at growthMax (4), one short of thread 2's
+		// full 5-file backlog. This is a safe stall, not silent data loss: endSCN
+		// never advances past what was actually selected, so file #5 stays pending
+		// (retried every cycle) rather than being skipped - it only advances once
+		// something else (e.g. thread 1 falling behind too, or a config change)
+		// pushes the boundary past it. See the next test for the case where the
+		// boundary is already established before the backlog is even considered,
+		// which does sweep it up in one shot via extension rather than growth.
+		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000)
+		require.NoError(t, err)
+		assert.True(t, capped)
+		assert.Equal(t, uint64(1399), endSCN, "plateaued - growth cannot exceed growthMax, and nothing else pushes the boundary further")
+		assert.Len(t, selected, 6)
+		assert.Equal(t, 4, s.count)
+		assert.NotContains(t, selected, closedThreadBacklog[4], "file #5 is never silently included without either budget covering it or a boundary already past it")
+	})
+
+	t.Run("closed thread's backlog is swept up in one shot once a boundary already exceeds it", func(t *testing.T) {
+		s := &logFileSelector{minCount: 2, growthMax: 4}
+
+		// Cycle 1: only thread 1 (open) is present, already on its current log -
+		// this legitimately commits the ratchet all the way to dbCurrentSCN, before
+		// thread 2's backlog is even in the picture (e.g. thread 2's shutdown and
+		// this connector noticing its stale backlog happen independently).
+		openThreadFiles := []*LogFile{
+			mkLogFile(1, 1, 100, "ARCHIVED"),
+			mkLogFile(1, 2, 200, logStatusCurrent),
 		}
-
-		// Cycle 3: the ratchet continues to hold with the same inputs (idempotent).
-		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000)
+		_, endSCN, capped, err := s.selectForSession(openThreadFiles, openThread1, 9000)
 		require.NoError(t, err)
-		assert.False(t, capped)
+		require.False(t, capped)
+		require.Equal(t, uint64(9000), endSCN)
+		require.Equal(t, uint64(9000), s.prevUpperBoundSCN)
+
+		// Cycle 2: thread 2's 5-file closed backlog now appears in the collected
+		// range for the first time. Even though its budget is still only 2, every
+		// one of its files has a NextSCN well below the already-committed boundary
+		// of 9000, so extension sweeps in the entire backlog in a single cycle -
+		// far faster than growing the budget one file per stalled cycle, and not
+		// limited by growthMax (see extendThreadPastBoundary's doc comment).
+		closedThreadBacklog := []*LogFile{
+			mkLogFile(2, 1, 1100, "ARCHIVED"),
+			mkLogFile(2, 2, 1200, "ARCHIVED"),
+			mkLogFile(2, 3, 1300, "ARCHIVED"),
+			mkLogFile(2, 4, 1400, "ARCHIVED"),
+			mkLogFile(2, 5, 1500, "ARCHIVED"),
+		}
+		files := append(append([]*LogFile{}, openThreadFiles...), closedThreadBacklog...)
+
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000)
+		require.NoError(t, err)
+		assert.False(t, capped, "the fully-extended closed thread has nothing left to tighten endSCN against")
 		assert.Equal(t, uint64(9000), endSCN)
-		assert.Len(t, selected, 7)
-		assert.Equal(t, uint64(9000), s.prevUpperBoundSCN)
+		assert.Len(t, selected, 7, "thread 1's 2 files plus all 5 of thread 2's backlog, swept up in one shot")
+		for _, f := range closedThreadBacklog {
+			assert.Contains(t, selected, f, "no file in the closed thread's backlog may be left behind once a boundary was already committed past it")
+		}
 	})
 
 	t.Run("boundary ratchet never regresses even when a later cycle legitimately computes a lower endSCN", func(t *testing.T) {
@@ -539,10 +596,10 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000)
 
 		require.NoError(t, err)
-		assert.False(t, capped)
-		assert.Equal(t, uint64(9000), endSCN)
 		require.Len(t, selected, 4, "with no boundary to ratchet against, thread 2 is still limited to its budgeted 2 files - behaviour unchanged from before this feature existed")
 		assert.NotContains(t, selected, closedThreadBacklog[2], "the 3rd backlog file must not be pulled in without a previously committed boundary")
+		assert.True(t, capped, "thread 2's unselected backlog (files #3-#5) must cap the session - it must not be silently dropped just because thread 1 is caught up")
+		assert.Equal(t, uint64(1199), endSCN, "endSCN must be tightened to thread 2's last selected file's NextSCN minus 1, not fall back to dbCurrentSCN")
 	})
 
 	t.Run("extension stops once it reaches the thread's genuinely open current log", func(t *testing.T) {

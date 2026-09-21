@@ -50,10 +50,15 @@ type logFileSelector struct {
 // On RAC, the budget is applied independently to each thread's own sorted
 // file list. An open thread with no files in files is an error - it means
 // the collector query missed logs for an active thread, not that the thread
-// has nothing to mine. The overall session is capped unless every open
-// thread's truncated selection ends on its genuinely open current log; when
-// capped, endSCN is the smallest of the per-thread tightened boundaries so
-// no thread's mined range outruns what was actually selected for it.
+// has nothing to mine. The overall session is capped unless every thread's
+// selection is complete - an open thread only counts as complete once it
+// lands on its genuinely open current log (more redo may still be coming
+// beyond what this range collected), while a closed thread counts as
+// complete simply by covering everything currently available for it (it
+// will never produce more). When capped, endSCN is the smallest of the
+// per-thread tightened boundaries, across every thread and not just open
+// ones, so no thread's mined range - including a closed thread's - outruns
+// what was actually selected for it.
 func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, dbCurrentSCN uint64) (selected []*LogFile, endSCN uint64, capped bool, err error) {
 	if s.count == 0 {
 		s.count = s.minCount
@@ -108,8 +113,9 @@ func (s *logFileSelector) recordUpperBoundSCN(endSCN uint64) {
 // per-thread results into one selection. truncated reports whether the
 // budget alone (before extension) cut any thread's file list, independent
 // of whether the overall selection ends up capped - a truncated thread
-// whose last selected file is still the genuinely open current log does not
-// cap the session, but the selection is still a partial (truncated) one for
+// whose selection is nonetheless complete (see the completeness rule in
+// selectForSession's doc comment) does not cap the session, but the
+// selection is still a partial (truncated) one for
 // stall-detection purposes. budgetKeys identifies the pre-extension
 // selection for that same stall-detection comparison - extension catching a
 // lagging thread up is real progress, not a stall, so it must not be judged
@@ -133,11 +139,11 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 	}
 
 	var (
-		combined        []*LogFile
-		budgetCombined  []*LogFile
-		tightestEndSCN  uint64
-		haveTightest    bool
-		allOpenCaughtUp = true
+		combined       []*LogFile
+		budgetCombined []*LogFile
+		tightestEndSCN uint64
+		haveTightest   bool
+		allCaughtUp    = true
 	)
 	for _, t := range slices.Sorted(maps.Keys(byThread)) {
 		threadFiles := byThread[t]
@@ -152,17 +158,28 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 		extended := extendThreadPastBoundary(threadFiles, budgetCapped, s.prevUpperBoundSCN)
 		combined = append(combined, extended...)
 
-		if _, open := openSet[t]; !open {
-			// A closed thread has no "current" log to catch up to, so it
-			// never influences the capped/endSCN decision below.
+		// A closed thread produces no further redo, so covering everything
+		// currently available for it is sufficient to call it caught up. An
+		// open thread cannot use that same shortcut - more redo may still be
+		// coming beyond what this SCN range collected, so it must land on
+		// its genuinely open current log specifically. A thread that is NOT
+		// caught up - open or closed - must tighten endSCN to its last
+		// selected file's NextSCN, or its unselected tail's SCN range would
+		// permanently drop out of a future GetLogsBySCNRange window once
+		// currentSCN advances past it.
+		last := extended[len(extended)-1]
+		_, open := openSet[t]
+		var caughtUp bool
+		if open {
+			caughtUp = last.IsOpenCurrent()
+		} else {
+			caughtUp = len(extended) == len(threadFiles)
+		}
+		if caughtUp {
 			continue
 		}
 
-		last := extended[len(extended)-1]
-		if last.IsOpenCurrent() {
-			continue
-		}
-		allOpenCaughtUp = false
+		allCaughtUp = false
 		if candidateEnd := last.NextSCN - 1; !haveTightest || candidateEnd < tightestEndSCN {
 			tightestEndSCN = candidateEnd
 			haveTightest = true
@@ -176,7 +193,7 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 		// within budget (extension is then necessarily a no-op too).
 		return files, dbCurrentSCN, false, false, budgetKeys, nil
 	}
-	if allOpenCaughtUp {
+	if allCaughtUp {
 		return combined, dbCurrentSCN, false, true, budgetKeys, nil
 	}
 	return combined, tightestEndSCN, true, true, budgetKeys, nil
