@@ -282,16 +282,26 @@ an unreplicated table has no live changes to deduplicate its backfill against, s
 after its chunk is read would be lost. Each must also have a primary key, which the backfill pages
 by — a table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. That key
 may not be ` + "`bytea`" + `: its value is read back and bound as the next chunk's bound, and raw bytes
-survive neither that nor the checkpoint. A signal naming a table that fails any of these checks is
-rejected and logged, and it is left to replication alone. If a check cannot be run at all - a
+survive neither that nor the checkpoint.
+
+**Paritioned Tables**
+
+Partitioned tables are not yet supported in incremental snapshotting unless its publication sets
+` + "`publish_via_partition_root = true`" + `. PostgreSQL otherwise publishes its changes under the
+individual partitions' names while the snapshot backfill reads the parent making detecting updates to
+read snapshot rows difficult.
+
+A signal naming a table with partitions is rejected and logged, and it is left to replication alone. If a check cannot be run at all - a
 connection reset, say - the stream restarts and the signal is read again, so the request is not lost.
 
 Each table joins the back of the backfill queue. A table this run already covers is skipped and
 logged, so a repeated signal does not re-read it. To read one again, point
 ` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotCheckpointCacheKey + "`" + ` at a fresh key.
 
-Set ` + "`REPLICA IDENTITY FULL`" + ` on a table with large (TOASTed) column values before backfilling
-it. PostgreSQL omits an unchanged TOAST value from an ` + "`UPDATE`" + `, sending a marker instead, and
+**Tables with with large (TOASTed) column values**
+
+Set ` + "`REPLICA IDENTITY FULL`" + ` on a table with large (TOASTed) column values before backfilling using incremental snapshotting. PostgreSQL
+omits an unchanged TOAST value from an ` + "`UPDATE`" + `, sending a marker instead, and
 under the default replica identity there is nothing in the message to recover it from — so
 ` + "`" + fieldUnchangedToastValue + "`" + ` is emitted for that column. For a row updated while its chunk is
 buffered, the backfilled copy that held the real value is dropped as a duplicate, leaving the
