@@ -181,7 +181,12 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 	}
 
 	if s.handle != nil && path == s.handlePath {
-		return s.writeTo(s.handle, msg)
+		if err := s.writeTo(s.handle, msg); err != nil {
+			s.closeHandle(s.handle)
+			s.closeClient()
+			return fmt.Errorf("writing message to SFTP server: %w", err)
+		}
+		return nil
 	}
 
 	// No usable handle for this path. If a handle for a different path is
