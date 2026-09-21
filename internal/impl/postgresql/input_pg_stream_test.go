@@ -108,10 +108,6 @@ tables:
   - events
 `
 
-	// ParseYAML cannot add a cache resource. The checkpoint_cache tests also
-	// run after the heartbeat tests. Therefore the cases that pass look for
-	// the cache error. That error shows that the checks passed the heartbeat
-	// test.
 	const pastHeartbeatCheck = "checkpoint_cache is required"
 
 	tests := []struct {
@@ -120,7 +116,6 @@ tables:
 		errContains string
 	}{
 		{
-			// Both modes read the same rows, so together they double-deliver.
 			name: "both snapshot modes enabled",
 			conf: base + `
 stream_snapshot: true
@@ -137,8 +132,6 @@ stream_snapshot: true
 `,
 		},
 		{
-			// Tables arrive by signal, so there is no list to check, and
-			// without a signal table nothing could be requested.
 			name: "incremental snapshot enabled with no signal table",
 			conf: `
 dsn: postgres://user:pass@localhost:5432/db
@@ -153,8 +146,6 @@ incremental_snapshot:
 			errContains: "signal_table_name is not set",
 		},
 		{
-			// The incremental snapshot moves forward only on a streamed
-			// commit. Without a heartbeat a quiet table stops for ever.
 			name: "incremental snapshot enabled with heartbeats disabled",
 			conf: base + `
 heartbeat_interval: 0s
@@ -173,8 +164,6 @@ incremental_snapshot:
 			errContains: pastHeartbeatCheck,
 		},
 		{
-			// A long interval makes the snapshot slow but does not stop
-			// it. Therefore the input warns and does not fail.
 			name: "incremental snapshot enabled at the default heartbeat interval",
 			conf: base + `
 incremental_snapshot:
@@ -183,7 +172,6 @@ incremental_snapshot:
 			errContains: pastHeartbeatCheck,
 		},
 		{
-			// This condition applies only while the snapshot runs.
 			name: "heartbeats disabled with incremental snapshot disabled",
 			conf: base + `
 heartbeat_interval: 0s

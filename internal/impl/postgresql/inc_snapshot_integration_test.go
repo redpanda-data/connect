@@ -47,6 +47,68 @@ func signalIncrementalSnapshot(t *testing.T, db *pgtest.TestDB, slotName string,
 	require.NoError(t, err)
 }
 
+type incSnapshotStream struct {
+	inputYAML string
+	cacheYAML string
+	consume   func(context.Context, service.MessageBatch) error
+	logs      *pgtest.TestLogCapture
+}
+
+func runIncSnapshotStream(t *testing.T, cfg incSnapshotStream) (stop func()) {
+	t.Helper()
+
+	builder := service.NewStreamBuilder()
+	if cfg.logs != nil {
+		builder.SetLogger(slog.New(cfg.logs))
+	} else {
+		require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
+	}
+	require.NoError(t, builder.AddInputYAML(cfg.inputYAML))
+
+	cacheYAML := cfg.cacheYAML
+	if cacheYAML == "" {
+		cacheYAML = "label: snap_cache\nmemory: {}"
+	}
+	require.NoError(t, builder.AddCacheYAML(cacheYAML))
+
+	consume := cfg.consume
+	if consume == nil {
+		consume = func(context.Context, service.MessageBatch) error { return nil }
+	}
+	require.NoError(t, builder.AddBatchConsumerFunc(consume))
+
+	stream, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		// Cancellation is how the harness ends the stream, not a failure.
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Logf("stream error: %v", err)
+		}
+	}()
+
+	var once sync.Once
+	stop = func() {
+		t.Helper()
+		once.Do(func() {
+			require.NoError(t, stream.StopWithin(20*time.Second))
+			select {
+			case <-stopped:
+			case <-time.After(30 * time.Second):
+				require.Fail(t, "stream did not stop in time")
+			}
+		})
+	}
+
+	t.Cleanup(func() {
+		once.Do(func() { _ = stream.StopWithin(10 * time.Second) })
+	})
+	return stop
+}
+
 func TestIntegrationIncrementalSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -82,51 +144,36 @@ postgres_cdc:
         checkpoint_cache: snap_cache
 `, databaseURL)
 
-		builder := service.NewStreamBuilder()
-		require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
-		require.NoError(t, builder.AddInputYAML(template))
-		require.NoError(t, builder.AddCacheYAML(`
-label: snap_cache
-memory: {}`))
-
 		var (
 			mu   sync.Mutex
 			rows []incrementalSnapshotRow
 		)
-		require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-			mu.Lock()
-			defer mu.Unlock()
-			for _, msg := range batch {
-				// The signal row streams like any other insert, and its
-				// serial id collides with the ids under test.
-				if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
-					continue
-				}
-				data, err := msg.AsStructured()
-				if err != nil {
-					return err
-				}
-				id, err := data.(map[string]any)["id"].(json.Number).Int64()
-				if err != nil {
-					return err
-				}
-				op, _ := msg.MetaGet("operation")
-				rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
-			}
-			return nil
-		}))
 
-		stream, err := builder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		streamStopped := make(chan struct{})
-		go func() {
-			defer close(streamStopped)
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		stop := runIncSnapshotStream(t, incSnapshotStream{
+			inputYAML: template,
+			consume: func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					// The signal row streams like any other insert, and its
+					// serial id collides with the ids under test.
+					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+						continue
+					}
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					id, err := data.(map[string]any)["id"].(json.Number).Int64()
+					if err != nil {
+						return err
+					}
+					op, _ := msg.MetaGet("operation")
+					rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
+				}
+				return nil
+			},
+		})
 
 		// Ask for the backfill now the slot exists.
 		signalIncrementalSnapshot(t, db, "test_slot_incremental_concurrent", "flights")
@@ -173,12 +220,7 @@ memory: {}`))
 			return int64(len(rows)) >= totalRows
 		}, 60*time.Second, 100*time.Millisecond, "did not observe every row from the pre-existing backfill and the concurrent writes")
 
-		require.NoError(t, stream.StopWithin(10*time.Second))
-		select {
-		case <-streamStopped:
-		case <-time.After(30 * time.Second):
-			require.Fail(t, "stream did not stop in time")
-		}
+		stop()
 
 		// Every row, backfill or live, must be observed exactly once: dedup must
 		// neither drop nor double-deliver.
@@ -250,13 +292,6 @@ postgres_cdc:
         checkpoint_cache: snap_cache
 `, databaseURL, keyed.table, keyed.table)
 
-			builder := service.NewStreamBuilder()
-			require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
-			require.NoError(t, builder.AddInputYAML(template))
-			require.NoError(t, builder.AddCacheYAML(`
-label: snap_cache
-memory: {}`))
-
 			// Key on the formatted primary key, mirroring how the dedup window
 			// keys rows, so a decode mismatch shows up as extra keys as well
 			// as a stale value.
@@ -266,51 +301,43 @@ memory: {}`))
 				updates int
 				reads   int
 			)
-			require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-				mu.Lock()
-				defer mu.Unlock()
-				for _, msg := range batch {
-					// The signal row streams like any other insert, and its
-					// serial id collides with the ids under test.
-					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
-						continue
-					}
-					data, err := msg.AsStructured()
-					if err != nil {
-						return err
-					}
-					fields, ok := data.(map[string]any)
-					if !ok {
-						return fmt.Errorf("unexpected payload shape %T", data)
-					}
-					key := make([]string, 0, len(keyed.keyCols))
-					for _, col := range keyed.keyCols {
-						key = append(key, fmt.Sprint(fields[col]))
-					}
-					op, _ := msg.MetaGet("operation")
-					switch op {
-					case "read":
-						reads++
-					case "update":
-						updates++
-					}
-					name, _ := fields["name"].(string)
-					latest[strings.Join(key, "|")] = name
-				}
-				return nil
-			}))
 
-			stream, err := builder.Build()
-			require.NoError(t, err)
-			license.InjectTestService(stream.Resources())
-
-			streamStopped := make(chan struct{})
-			go func() {
-				defer close(streamStopped)
-				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-					t.Error(err)
-				}
-			}()
+			stop := runIncSnapshotStream(t, incSnapshotStream{
+				inputYAML: template,
+				consume: func(_ context.Context, batch service.MessageBatch) error {
+					mu.Lock()
+					defer mu.Unlock()
+					for _, msg := range batch {
+						// The signal row streams like any other insert, and its
+						// serial id collides with the ids under test.
+						if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+							continue
+						}
+						data, err := msg.AsStructured()
+						if err != nil {
+							return err
+						}
+						fields, ok := data.(map[string]any)
+						if !ok {
+							return fmt.Errorf("unexpected payload shape %T", data)
+						}
+						key := make([]string, 0, len(keyed.keyCols))
+						for _, col := range keyed.keyCols {
+							key = append(key, fmt.Sprint(fields[col]))
+						}
+						op, _ := msg.MetaGet("operation")
+						switch op {
+						case "read":
+							reads++
+						case "update":
+							updates++
+						}
+						name, _ := fields["name"].(string)
+						latest[strings.Join(key, "|")] = name
+					}
+					return nil
+				},
+			})
 
 			// Ask for the backfill now the slot exists.
 			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_%s", keyed.table), keyed.table)
@@ -350,8 +377,7 @@ memory: {}`))
 			}, 90*time.Second, 100*time.Millisecond,
 				"a row never settled on its updated value, so the snapshot and streaming decoders disagreed on the primary key")
 
-			require.NoError(t, stream.StopWithin(10*time.Second))
-			<-streamStopped
+			stop()
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -395,13 +421,6 @@ postgres_cdc:
         checkpoint_cache: snap_cache
 `, databaseURL)
 
-		builder := service.NewStreamBuilder()
-		require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
-		require.NoError(t, builder.AddInputYAML(template))
-		require.NoError(t, builder.AddCacheYAML(`
-label: snap_cache
-memory: {}`))
-
 		// Keep the last operation and value seen per id, plus the arrival
 		// order, so a stale read landing after an update is detectable.
 		type observation struct {
@@ -414,51 +433,43 @@ memory: {}`))
 			updates int
 			reads   int
 		)
-		require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-			mu.Lock()
-			defer mu.Unlock()
-			for _, msg := range batch {
-				// The signal row streams like any other insert, and its
-				// serial id collides with the ids under test.
-				if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
-					continue
-				}
-				data, err := msg.AsStructured()
-				if err != nil {
-					return err
-				}
-				fields, ok := data.(map[string]any)
-				if !ok {
-					return fmt.Errorf("unexpected payload shape %T", data)
-				}
-				id, err := fields["id"].(json.Number).Int64()
-				if err != nil {
-					return err
-				}
-				name, _ := fields["name"].(string)
-				op, _ := msg.MetaGet("operation")
-				switch op {
-				case "read":
-					reads++
-				case "update":
-					updates++
-				}
-				latest[id] = observation{operation: op, name: name}
-			}
-			return nil
-		}))
 
-		stream, err := builder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		streamStopped := make(chan struct{})
-		go func() {
-			defer close(streamStopped)
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+		stop := runIncSnapshotStream(t, incSnapshotStream{
+			inputYAML: template,
+			consume: func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					// The signal row streams like any other insert, and its
+					// serial id collides with the ids under test.
+					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+						continue
+					}
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					fields, ok := data.(map[string]any)
+					if !ok {
+						return fmt.Errorf("unexpected payload shape %T", data)
+					}
+					id, err := fields["id"].(json.Number).Int64()
+					if err != nil {
+						return err
+					}
+					name, _ := fields["name"].(string)
+					op, _ := msg.MetaGet("operation")
+					switch op {
+					case "read":
+						reads++
+					case "update":
+						updates++
+					}
+					latest[id] = observation{operation: op, name: name}
+				}
+				return nil
+			},
+		})
 
 		// Ask for the backfill now the slot exists.
 		signalIncrementalSnapshot(t, db, "test_slot_incremental_collision", "flights")
@@ -505,8 +516,7 @@ memory: {}`))
 		}, 90*time.Second, 100*time.Millisecond,
 			"a row never settled on its updated value, so a stale snapshot read overwrote a streamed change")
 
-		require.NoError(t, stream.StopWithin(10*time.Second))
-		<-streamStopped
+		stop()
 
 		mu.Lock()
 		defer mu.Unlock()
@@ -554,51 +564,36 @@ postgres_cdc:
         checkpoint_cache: snap_cache
 `, databaseURL, version)
 
-			builder := service.NewStreamBuilder()
-			require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
-			require.NoError(t, builder.AddInputYAML(template))
-			require.NoError(t, builder.AddCacheYAML(`
-label: snap_cache
-memory: {}`))
-
 			var (
 				mu   sync.Mutex
 				rows []incrementalSnapshotRow
 			)
-			require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-				mu.Lock()
-				defer mu.Unlock()
-				for _, msg := range batch {
-					// The signal row streams like any other insert, and its
-					// serial id collides with the ids under test.
-					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
-						continue
-					}
-					data, err := msg.AsStructured()
-					if err != nil {
-						return err
-					}
-					id, err := data.(map[string]any)["id"].(json.Number).Int64()
-					if err != nil {
-						return err
-					}
-					op, _ := msg.MetaGet("operation")
-					rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
-				}
-				return nil
-			}))
 
-			stream, err := builder.Build()
-			require.NoError(t, err)
-			license.InjectTestService(stream.Resources())
-
-			streamStopped := make(chan struct{})
-			go func() {
-				defer close(streamStopped)
-				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-					t.Error(err)
-				}
-			}()
+			stop := runIncSnapshotStream(t, incSnapshotStream{
+				inputYAML: template,
+				consume: func(_ context.Context, batch service.MessageBatch) error {
+					mu.Lock()
+					defer mu.Unlock()
+					for _, msg := range batch {
+						// The signal row streams like any other insert, and its
+						// serial id collides with the ids under test.
+						if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+							continue
+						}
+						data, err := msg.AsStructured()
+						if err != nil {
+							return err
+						}
+						id, err := data.(map[string]any)["id"].(json.Number).Int64()
+						if err != nil {
+							return err
+						}
+						op, _ := msg.MetaGet("operation")
+						rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
+					}
+					return nil
+				},
+			})
 
 			// Ask for the backfill now the slot exists.
 			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_quiet_pg%s", version), "flights")
@@ -612,8 +607,7 @@ memory: {}`))
 			}, 90*time.Second, 100*time.Millisecond,
 				"the snapshot did not deliver each row of a quiet table on PostgreSQL "+version)
 
-			require.NoError(t, stream.StopWithin(10*time.Second))
-			<-streamStopped
+			stop()
 		})
 	}
 
@@ -650,49 +644,37 @@ file:
   directory: '%s'`, cacheDir)
 
 		runPartial := func(minRows int) []incrementalSnapshotRow {
-			builder := service.NewStreamBuilder()
-			require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
-			require.NoError(t, builder.AddInputYAML(template))
-			require.NoError(t, builder.AddCacheYAML(cacheTemplate))
-
 			var (
 				mu   sync.Mutex
 				rows []incrementalSnapshotRow
 			)
-			require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-				mu.Lock()
-				defer mu.Unlock()
-				for _, msg := range batch {
-					// The signal row streams like any other insert, and its
-					// serial id collides with the ids under test.
-					if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
-						continue
-					}
-					data, err := msg.AsStructured()
-					if err != nil {
-						return err
-					}
-					id, err := data.(map[string]any)["id"].(json.Number).Int64()
-					if err != nil {
-						return err
-					}
-					op, _ := msg.MetaGet("operation")
-					rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
-				}
-				return nil
-			}))
 
-			stream, err := builder.Build()
-			require.NoError(t, err)
-			license.InjectTestService(stream.Resources())
-
-			streamStopped := make(chan struct{})
-			go func() {
-				defer close(streamStopped)
-				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-					t.Error(err)
-				}
-			}()
+			stop := runIncSnapshotStream(t, incSnapshotStream{
+				inputYAML: template,
+				cacheYAML: cacheTemplate,
+				consume: func(_ context.Context, batch service.MessageBatch) error {
+					mu.Lock()
+					defer mu.Unlock()
+					for _, msg := range batch {
+						// The signal row streams like any other insert, and its
+						// serial id collides with the ids under test.
+						if table, _ := msg.MetaGet("table"); table == "rpcn_signal" {
+							continue
+						}
+						data, err := msg.AsStructured()
+						if err != nil {
+							return err
+						}
+						id, err := data.(map[string]any)["id"].(json.Number).Int64()
+						if err != nil {
+							return err
+						}
+						op, _ := msg.MetaGet("operation")
+						rows = append(rows, incrementalSnapshotRow{id: id, operation: op})
+					}
+					return nil
+				},
+			})
 
 			// Ask for the backfill now the slot exists.
 			signalIncrementalSnapshot(t, db, "test_slot_incremental_resume", "flights")
@@ -703,12 +685,7 @@ file:
 				return len(rows) >= minRows
 			}, 60*time.Second, 20*time.Millisecond, "did not observe the minimum number of rows before stopping")
 
-			require.NoError(t, stream.StopWithin(10*time.Second))
-			select {
-			case <-streamStopped:
-			case <-time.After(30 * time.Second):
-				require.Fail(t, "stream did not stop in time")
-			}
+			stop()
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -798,12 +775,12 @@ func TestIntegrationIncrementalSnapshotPartitionedTable(t *testing.T) {
 			events []event
 		)
 		logs := pgtest.NewTestLogCapture()
-		builder := service.NewStreamBuilder()
-		builder.SetLogger(slog.New(logs))
 		// Heartbeats long enough that no commit intervenes between the signal
 		// buffering a chunk and the writes below, which is what makes the
 		// race deterministic rather than lucky.
-		require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+
+		_ = runIncSnapshotStream(t, incSnapshotStream{
+			inputYAML: fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: %s
@@ -817,49 +794,38 @@ postgres_cdc:
         chunk_size: %d
         heartbeat_interval: 60s
         checkpoint_cache: snap_cache
-`, databaseURL, slot, table, chunkSize)))
-		require.NoError(t, builder.AddCacheYAML(`
-label: snap_cache
-memory: {}`))
-		require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-			mu.Lock()
-			defer mu.Unlock()
-			for _, msg := range batch {
-				if tbl, _ := msg.MetaGet("table"); tbl == "rpcn_signal" {
-					continue
+`, databaseURL, slot, table, chunkSize),
+			consume: func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					if tbl, _ := msg.MetaGet("table"); tbl == "rpcn_signal" {
+						continue
+					}
+					op, _ := msg.MetaGet("operation")
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					row, ok := data.(map[string]any)
+					if !ok {
+						continue
+					}
+					num, ok := row["id"].(json.Number)
+					if !ok {
+						continue
+					}
+					id, err := num.Int64()
+					if err != nil {
+						return err
+					}
+					tenant, _ := row["tenant"].(string)
+					events = append(events, event{op: op, id: id, tenant: tenant})
 				}
-				op, _ := msg.MetaGet("operation")
-				data, err := msg.AsStructured()
-				if err != nil {
-					return err
-				}
-				row, ok := data.(map[string]any)
-				if !ok {
-					continue
-				}
-				num, ok := row["id"].(json.Number)
-				if !ok {
-					continue
-				}
-				id, err := num.Int64()
-				if err != nil {
-					return err
-				}
-				tenant, _ := row["tenant"].(string)
-				events = append(events, event{op: op, id: id, tenant: tenant})
-			}
-			return nil
-		}))
-
-		stream, err := builder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Logf("stream error: %v", err)
-			}
-		}()
-		t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+				return nil
+			},
+			logs: logs,
+		})
 
 		signalIncrementalSnapshot(t, db, slot, table)
 
@@ -975,9 +941,9 @@ func TestIntegrationIncrementalSnapshotWarnsAboutPartitionedTables(t *testing.T)
 		}
 
 		logs := pgtest.NewTestLogCapture()
-		builder := service.NewStreamBuilder()
-		builder.SetLogger(slog.New(logs))
-		require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+
+		_ = runIncSnapshotStream(t, incSnapshotStream{
+			inputYAML: fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: %s
@@ -991,23 +957,12 @@ postgres_cdc:
         chunk_size: 100
         heartbeat_interval: 60s
         checkpoint_cache: snap_cache
-`, databaseURL, slot)))
-		require.NoError(t, builder.AddCacheYAML(`
-label: snap_cache
-memory: {}`))
-		require.NoError(t, builder.AddBatchConsumerFunc(func(context.Context, service.MessageBatch) error {
-			return nil
-		}))
-
-		stream, err := builder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Logf("stream error: %v", err)
-			}
-		}()
-		t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+`, databaseURL, slot),
+			consume: func(context.Context, service.MessageBatch) error {
+				return nil
+			},
+			logs: logs,
+		})
 
 		return logs
 	}
@@ -1092,9 +1047,9 @@ func TestIntegrationIncrementalSnapshotWarnsAboutToastedColumns(t *testing.T) {
 			require.NoError(t, err)
 
 			logs := pgtest.NewTestLogCapture()
-			builder := service.NewStreamBuilder()
-			builder.SetLogger(slog.New(logs))
-			require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+
+			_ = runIncSnapshotStream(t, incSnapshotStream{
+				inputYAML: fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: %s
@@ -1108,21 +1063,12 @@ postgres_cdc:
         chunk_size: 100
         heartbeat_interval: 60s
         checkpoint_cache: snap_cache
-`, databaseURL, tc.slot)))
-			require.NoError(t, builder.AddCacheYAML("label: snap_cache\nmemory: {}"))
-			require.NoError(t, builder.AddBatchConsumerFunc(func(context.Context, service.MessageBatch) error {
-				return nil
-			}))
-
-			stream, err := builder.Build()
-			require.NoError(t, err)
-			license.InjectTestService(stream.Resources())
-			go func() {
-				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-					t.Logf("stream error: %v", err)
-				}
-			}()
-			t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+`, databaseURL, tc.slot),
+				consume: func(context.Context, service.MessageBatch) error {
+					return nil
+				},
+				logs: logs,
+			})
 
 			signalIncrementalSnapshot(t, db, tc.slot, "toast_t")
 
@@ -1184,9 +1130,9 @@ postgres_cdc:
 			t.Helper()
 
 			logs := pgtest.NewTestLogCapture()
-			builder := service.NewStreamBuilder()
-			builder.SetLogger(slog.New(logs))
-			require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+
+			stop := runIncSnapshotStream(t, incSnapshotStream{
+				inputYAML: fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: toast_resume_slot
@@ -1200,25 +1146,16 @@ postgres_cdc:
         chunk_size: 100
         heartbeat_interval: 60s
         checkpoint_cache: snap_cache
-`, databaseURL)))
-			require.NoError(t, builder.AddCacheYAML(fmt.Sprintf(`
+`, databaseURL),
+				cacheYAML: fmt.Sprintf(`
 label: snap_cache
 file:
-    directory: %s`, cacheDir)))
-			require.NoError(t, builder.AddBatchConsumerFunc(func(context.Context, service.MessageBatch) error {
-				return nil
-			}))
-
-			stream, err := builder.Build()
-			require.NoError(t, err)
-			license.InjectTestService(stream.Resources())
-			done := make(chan struct{})
-			go func() {
-				defer close(done)
-				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-					t.Logf("stream error: %v", err)
-				}
-			}()
+    directory: %s`, cacheDir),
+				consume: func(context.Context, service.MessageBatch) error {
+					return nil
+				},
+				logs: logs,
+			})
 
 			if signal {
 				signalIncrementalSnapshot(t, db, "toast_resume_slot", "toast_r")
@@ -1245,12 +1182,7 @@ file:
 				time.Sleep(2 * time.Second)
 			}
 
-			require.NoError(t, stream.StopWithin(20*time.Second))
-			select {
-			case <-done:
-			case <-time.After(30 * time.Second):
-				require.Fail(t, "stream did not stop in time")
-			}
+			stop()
 			return logs
 		}
 
@@ -1315,11 +1247,11 @@ func TestIntegrationIncrementalSnapshotPKChangingUpdate(t *testing.T) {
 				emitted []event
 			)
 
-			builder := service.NewStreamBuilder()
-			require.NoError(t, builder.SetLoggerYAML(`level: ERROR`))
 			// One chunk covering every row, heartbeats long enough that no
 			// commit closes its window before the update below.
-			require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+
+			_ = runIncSnapshotStream(t, incSnapshotStream{
+				inputYAML: fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: %s
@@ -1333,46 +1265,36 @@ postgres_cdc:
         chunk_size: 100
         heartbeat_interval: 60s
         checkpoint_cache: snap_cache
-`, databaseURL, tc.slot)))
-			require.NoError(t, builder.AddCacheYAML("label: snap_cache\nmemory: {}"))
-			require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
-				mu.Lock()
-				defer mu.Unlock()
-				for _, msg := range batch {
-					if tbl, _ := msg.MetaGet("table"); tbl != "pkmove" {
-						continue
+`, databaseURL, tc.slot),
+				consume: func(_ context.Context, batch service.MessageBatch) error {
+					mu.Lock()
+					defer mu.Unlock()
+					for _, msg := range batch {
+						if tbl, _ := msg.MetaGet("table"); tbl != "pkmove" {
+							continue
+						}
+						op, _ := msg.MetaGet("operation")
+						data, err := msg.AsStructured()
+						if err != nil {
+							return err
+						}
+						row, ok := data.(map[string]any)
+						if !ok {
+							continue
+						}
+						num, ok := row["id"].(json.Number)
+						if !ok {
+							continue
+						}
+						id, err := num.Int64()
+						if err != nil {
+							return err
+						}
+						emitted = append(emitted, event{op: op, id: id})
 					}
-					op, _ := msg.MetaGet("operation")
-					data, err := msg.AsStructured()
-					if err != nil {
-						return err
-					}
-					row, ok := data.(map[string]any)
-					if !ok {
-						continue
-					}
-					num, ok := row["id"].(json.Number)
-					if !ok {
-						continue
-					}
-					id, err := num.Int64()
-					if err != nil {
-						return err
-					}
-					emitted = append(emitted, event{op: op, id: id})
-				}
-				return nil
-			}))
-
-			stream, err := builder.Build()
-			require.NoError(t, err)
-			license.InjectTestService(stream.Resources())
-			go func() {
-				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-					t.Logf("stream error: %v", err)
-				}
-			}()
-			t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+					return nil
+				},
+			})
 
 			signalIncrementalSnapshot(t, db, tc.slot, "pkmove")
 			// A buffered chunk emits nothing, so there is no message to wait
