@@ -1428,7 +1428,13 @@ postgres_cdc:
 			return false
 		}
 		defer rows.Close()
-		require.NoError(t, rows.Err())
+		// Not require: testify runs this condition on its own goroutine,
+		// where FailNow only ends that goroutine. The error would be
+		// swallowed and the poll would run to its full timeout.
+		if err := rows.Err(); err != nil {
+			t.Logf("Error reading replication slots: %v", err)
+			return false
+		}
 
 		exists := rows.Next()
 		if exists {
