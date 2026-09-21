@@ -5,6 +5,7 @@ on:
     # Run every day at 1AM UTC
     - cron: '0 1 * * *'
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -17,7 +18,7 @@ on:
 
 jobs:
   integration-test:
-    if: ${{ github.event_name != 'issue_comment' && github.event.inputs.filter == '' && (github.event_name != 'pull_request' || startsWith(github.event.pull_request.title, 'build(deps)')) }}
+    if: ${{ github.event_name != 'issue_comment' && github.event.inputs.filter == '' && (github.event_name != 'pull_request' || (startsWith(github.event.pull_request.title, 'build(deps)') && github.event.action != 'labeled')) }}
     runs-on: ubuntu-latest-32
     env:
       CGO_ENABLED: 0
@@ -59,21 +60,24 @@ jobs:
           path: ${{ runner.temp }}/integration/
           retention-days: 7
 
-  check-author-access:
-    # Re-evaluated on opened/synchronize/reopened so write-access PRs auto-rerun on every push.
+  check-integration-access:
     if: >-
-      github.event_name == 'pull_request' &&
-      contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
+      github.event_name == 'pull_request' && (
+        contains(fromJSON('["opened", "reopened"]'), github.event.action) ||
+        (github.event.action == 'labeled' && github.event.label.name == 'run-integration-tests') ||
+        (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'run-integration-tests'))
+      )
     runs-on: ubuntu-latest
     outputs:
       allowed: ${{ steps.perm.outputs.allowed }}
     steps:
-      - name: Check author permission
+      - name: Check permission
         id: perm
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_USER: ${{ (github.event.action == 'labeled' && github.event.sender.login) || github.event.pull_request.user.login }}
         run: |
-          PERMISSION=$(gh api "repos/${{ github.repository }}/collaborators/${{ github.event.pull_request.user.login }}/permission" --jq '.permission' 2>/dev/null || echo "none")
+          PERMISSION=$(gh api "repos/${{ github.repository }}/collaborators/${TARGET_USER}/permission" --jq '.permission' 2>/dev/null || echo "none")
           if [[ "${PERMISSION}" == "admin" || "${PERMISSION}" == "write" ]]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
           else
@@ -81,16 +85,12 @@ jobs:
           fi
 
   integration-test-filter:
-    needs: [check-author-access]
-    # The 'labeled' check only fires on the label-add event itself (not on every later push where
-    # the label happens to still be present), so non-write/fork PRs need an explicit re-trigger
-    # (re-add the label, or comment /integration) after each push rather than auto-rerunning.
+    needs: [check-integration-access]
     if: >-
       always() && (
-        needs.check-author-access.outputs.allowed == 'true' ||
+        needs.check-integration-access.outputs.allowed == 'true' ||
         (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/integration ')) ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.filter != '') ||
-        (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'run-integration-tests')
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.filter != '')
       )
     runs-on: ubuntu-latest-32
     env:
