@@ -289,7 +289,13 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		if err != nil {
 			return false, fmt.Errorf("collecting redo logs for logminer: %w", err)
 		}
-		selected, endSCN, capped = lm.logSelector.selectForSession(files, dbCurrentSCN)
+		openThreads, err := lm.logCollector.GetOpenThreads(ctx, conn)
+		if err != nil {
+			return false, fmt.Errorf("collecting open redo threads for logminer: %w", err)
+		}
+		if selected, endSCN, capped, err = lm.logSelector.selectForSession(files, openThreads, dbCurrentSCN); err != nil {
+			return false, fmt.Errorf("selecting log files for session: %w", err)
+		}
 	default:
 		endSCN = dbCurrentSCN
 		if maxRange := uint64(lm.windowSize); lm.currentSCN+maxRange < dbCurrentSCN {
@@ -1113,6 +1119,13 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 
 const logStatusCurrent = "CURRENT"
 
+// logStatusArchived is the Status value GetLogsBySCNRange hardcodes for
+// every archive log record (see the query below). Oracle's V$LOG.STATUS
+// values (CURRENT/ACTIVE/INACTIVE/...) never take this value, so it
+// reliably distinguishes a fully-archived, immutable copy from an online
+// (still mutable) one, without depending on the Type/IsCurrent fields.
+const logStatusArchived = "ARCHIVED"
+
 // LogFile represents a redo or archive log file
 type LogFile struct {
 	FileName  string
@@ -1131,6 +1144,13 @@ type LogFile struct {
 // switched away.
 func (lf *LogFile) IsOpenCurrent() bool {
 	return lf.Status == logStatusCurrent
+}
+
+// IsArchived reports whether this is a fully-archived, immutable log copy,
+// as opposed to an online one (CURRENT, ACTIVE, or INACTIVE) that Oracle
+// could still be writing to or hasn't archived yet.
+func (lf *LogFile) IsArchived() bool {
+	return lf.Status == logStatusArchived
 }
 
 // LogFileCollector finds relevant log files to mine
@@ -1233,6 +1253,32 @@ func (c *LogFileCollector) Close() error {
 	err := c.stmt.Close()
 	c.stmt = nil
 	return err
+}
+
+// GetOpenThreads returns the redo thread numbers Oracle currently reports as
+// OPEN. The log_count window strategy uses this on RAC databases to check
+// that every open thread actually has log files in a GetLogsBySCNRange
+// result - an open thread with none means the collector query missed
+// something, not that the thread has nothing to mine.
+func (*LogFileCollector) GetOpenThreads(ctx context.Context, conn *sql.Conn) ([]int, error) {
+	rows, err := conn.QueryContext(ctx, `SELECT THREAD# FROM V$THREAD WHERE STATUS = 'OPEN'`)
+	if err != nil {
+		return nil, fmt.Errorf("querying open redo threads: %w", err)
+	}
+	defer rows.Close()
+
+	var threads []int
+	for rows.Next() {
+		var thread int
+		if err := rows.Scan(&thread); err != nil {
+			return nil, fmt.Errorf("scanning open redo thread row: %w", err)
+		}
+		threads = append(threads, thread)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return threads, nil
 }
 
 // deduplicateLogs merges archive and online log lists, preferring the archive

@@ -172,7 +172,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 			Description(`The maximum SCN range that can be mined in a single cycle. The window starts at `+ociFieldSCNWindowSize+` and grows by `+ociFieldSCNWindowSize+` each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.`).
 			Default(logminer.DefaultMaxSCNWindowSize),
 		service.NewStringEnumField(ociFieldWindowStrategy, string(logminer.WindowStrategySCNWindow), string(logminer.WindowStrategyLogCount)).
-			Description("Controls how the SCN range mined per cycle is sized. `"+string(logminer.WindowStrategySCNWindow)+"` (default) grows/shrinks the mined SCN range by a fixed increment ("+ociFieldSCNWindowSize+") based on backlog, bounded by "+ociFieldMinSCNWindowSize+"/"+ociFieldMaxSCNWindowSize+". `"+string(logminer.WindowStrategyLogCount)+"` instead bounds the range by a fixed number of redo log files ("+ociFieldLogCountMin+"/"+ociFieldLogCountGrowthMax+"), decoupling session cost from raw SCN movement. Use `"+string(logminer.WindowStrategyLogCount)+"` when the database's current SCN can advance independently of real transaction volume against the monitored tables - for example a CDB-shared SCN advanced by another PDB, or Oracle's automatic maintenance window generating many small internal commits - since "+string(logminer.WindowStrategySCNWindow)+" would otherwise burn many cycles ramping the window up to its ceiling, paying LogMiner's fixed per-cycle overhead on ranges that are mostly empty of real changes, whereas "+string(logminer.WindowStrategyLogCount)+" absorbs the same event in however many log files it actually touches. `"+string(logminer.WindowStrategyLogCount)+"` is not yet supported on multi-thread (RAC) databases, so the connector refuses to start when more than one redo thread is open.").
+			Description("Controls how the SCN range mined per cycle is sized. `"+string(logminer.WindowStrategySCNWindow)+"` (default) grows/shrinks the mined SCN range by a fixed increment ("+ociFieldSCNWindowSize+") based on backlog, bounded by "+ociFieldMinSCNWindowSize+"/"+ociFieldMaxSCNWindowSize+". `"+string(logminer.WindowStrategyLogCount)+"` instead bounds the range by a fixed number of redo log files ("+ociFieldLogCountMin+"/"+ociFieldLogCountGrowthMax+"), decoupling session cost from raw SCN movement. Use `"+string(logminer.WindowStrategyLogCount)+"` when the database's current SCN can advance independently of real transaction volume against the monitored tables - for example a CDB-shared SCN advanced by another PDB, or Oracle's automatic maintenance window generating many small internal commits - since "+string(logminer.WindowStrategySCNWindow)+" would otherwise burn many cycles ramping the window up to its ceiling, paying LogMiner's fixed per-cycle overhead on ranges that are mostly empty of real changes, whereas "+string(logminer.WindowStrategyLogCount)+" absorbs the same event in however many log files it actually touches. On multi-thread (RAC) databases, "+string(logminer.WindowStrategyLogCount)+" applies its file budget independently to each open redo thread, so the effective number of files mined per cycle scales with the number of open threads.").
 			ShortDescription("How the mined SCN range per cycle is sized: by a growing/shrinking SCN window, or by a fixed count of redo log files.").
 			Default(string(logminer.WindowStrategySCNWindow)).
 			Advanced(),
@@ -571,12 +571,6 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		return fmt.Errorf("validating connection to oracle database: %w", err)
 	}
 
-	if o.lmCfg != nil && o.lmCfg.WindowStrategy == logminer.WindowStrategyLogCount {
-		if err = o.checkSingleThreadForLogCountStrategy(ctx); err != nil {
-			return err
-		}
-	}
-
 	if isCDB, err = o.detectContainerContext(ctx); err != nil {
 		return fmt.Errorf("detecting current container context: %w", err)
 	}
@@ -799,17 +793,6 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		o.stopSig.TriggerHasStopped()
 	}()
 
-	return nil
-}
-
-func (o *oracleDBCDCInput) checkSingleThreadForLogCountStrategy(ctx context.Context) error {
-	var openThreads int
-	if err := o.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM V$THREAD WHERE STATUS = 'OPEN'`).Scan(&openThreads); err != nil {
-		return fmt.Errorf("checking open redo thread count for window_strategy %s: %w", logminer.WindowStrategyLogCount, err)
-	}
-	if openThreads > 1 {
-		return fmt.Errorf("window_strategy: %s is not yet compatible on multi-thread (RAC) databases (%d open redo threads detected); use window_strategy: %s instead until per-thread selection is implemented", logminer.WindowStrategyLogCount, openThreads, logminer.WindowStrategySCNWindow)
-	}
 	return nil
 }
 

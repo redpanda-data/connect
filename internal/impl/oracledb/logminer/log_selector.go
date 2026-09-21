@@ -8,57 +8,223 @@
 
 package logminer
 
-import "slices"
+import (
+	"fmt"
+	"maps"
+	"slices"
+)
 
 type logKey struct {
 	thread   int
 	sequence int64
 }
 
+// logFileSelector implements the log_count window strategy's file budget.
+// count is a single value shared across every redo thread rather than sized
+// per thread - each thread's own sorted file list is truncated to the same
+// count, mirroring Debezium's CappedLogFileSessionSelector.
+//
+// prevUpperBoundSCN is the endSCN this selector last returned (0 means none
+// yet, following the same "0 is never a real SCN" convention used elsewhere
+// in this package, e.g. LogMiner.getCurrentSCN's zero check). It only ever
+// ratchets forward (see recordUpperBoundSCN) and is used by
+// extendThreadPastBoundary to stop a thread's backlog - open or closed -
+// from being permanently skipped once currentSCN advances past a boundary
+// that thread's own budget-capped selection never reached.
 type logFileSelector struct {
-	minCount  int
-	growthMax int
-	count     int
-	prevKeys  []logKey
+	minCount          int
+	growthMax         int
+	count             int
+	prevKeys          []logKey
+	prevUpperBoundSCN uint64
 }
 
-func (s *logFileSelector) selectForSession(files []*LogFile, dbCurrentSCN uint64) (selected []*LogFile, endSCN uint64, capped bool) {
+// selectForSession picks the redo/archive log files to mine for the next
+// LogMiner session. files is the full, SCN-overlap-filtered candidate set
+// across all redo threads (see GetLogsBySCNRange); openThreads lists the
+// thread numbers Oracle currently reports as OPEN (see
+// LogFileCollector.GetOpenThreads). On a single-thread database this reduces
+// to truncating files to the shared budget and capping unless the truncated
+// selection's last file is the genuinely open current log.
+//
+// On RAC, the budget is applied independently to each thread's own sorted
+// file list. An open thread with no files in files is an error - it means
+// the collector query missed logs for an active thread, not that the thread
+// has nothing to mine. The overall session is capped unless every open
+// thread's truncated selection ends on its genuinely open current log; when
+// capped, endSCN is the smallest of the per-thread tightened boundaries so
+// no thread's mined range outruns what was actually selected for it.
+func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, dbCurrentSCN uint64) (selected []*LogFile, endSCN uint64, capped bool, err error) {
 	if s.count == 0 {
 		s.count = s.minCount
 	}
 
-	if len(files) <= s.count {
-		// Nothing to cap - the whole overlapping range fits within budget.
-		s.prevKeys = nil
-		return files, dbCurrentSCN, false
+	selected, endSCN, capped, truncated, budgetKeys, err := s.budgetPerThread(files, openThreads, dbCurrentSCN)
+	if err != nil {
+		return nil, 0, false, err
 	}
 
-	candidate := files[:s.count]
-
-	if logKeysEqual(logKeysOf(candidate), s.prevKeys) {
-		// Same files selected again without progress (see the stall note
-		// above) - grow the budget so a future cycle can advance.
+	// Stall detection compares the pre-extension budget selection, not the
+	// (possibly much larger) extended one - extension catching up a
+	// lagging thread's backlog is real forward progress, not a stall.
+	if truncated && logKeysEqual(budgetKeys, s.prevKeys) {
+		// Same combined selection across every thread again without progress
+		// - grow the shared budget so a future cycle can advance.
 		growTo := s.count + 1
 		if ceiling := max(s.growthMax, s.minCount); growTo > ceiling {
 			growTo = ceiling
 		}
 		s.count = growTo
 
-		if len(files) <= s.count {
-			s.prevKeys = nil
-			return files, dbCurrentSCN, false
+		if selected, endSCN, capped, truncated, budgetKeys, err = s.budgetPerThread(files, openThreads, dbCurrentSCN); err != nil {
+			return nil, 0, false, err
 		}
-		candidate = files[:s.count]
 	}
 
-	s.prevKeys = logKeysOf(candidate)
-
-	last := candidate[len(candidate)-1]
-	if last.IsOpenCurrent() {
-		return candidate, dbCurrentSCN, false
+	if truncated {
+		s.prevKeys = budgetKeys
+	} else {
+		s.prevKeys = nil
 	}
 
-	return candidate, last.NextSCN - 1, true
+	s.recordUpperBoundSCN(endSCN)
+
+	return selected, endSCN, capped, nil
+}
+
+// recordUpperBoundSCN ratchets prevUpperBoundSCN forward only, never letting
+// it regress - it becomes the floor the next call's extension must reach
+// past (see extendThreadPastBoundary), and a lower boundary would let a
+// thread's backlog fall behind again.
+func (s *logFileSelector) recordUpperBoundSCN(endSCN uint64) {
+	if endSCN > s.prevUpperBoundSCN {
+		s.prevUpperBoundSCN = endSCN
+	}
+}
+
+// budgetPerThread applies the current shared budget (s.count) to every redo
+// thread present in files, extends each thread's capped selection past
+// prevUpperBoundSCN (see extendThreadPastBoundary), then combines the
+// per-thread results into one selection. truncated reports whether the
+// budget alone (before extension) cut any thread's file list, independent
+// of whether the overall selection ends up capped - a truncated thread
+// whose last selected file is still the genuinely open current log does not
+// cap the session, but the selection is still a partial (truncated) one for
+// stall-detection purposes. budgetKeys identifies the pre-extension
+// selection for that same stall-detection comparison - extension catching a
+// lagging thread up is real progress, not a stall, so it must not be judged
+// against the grown-budget/stall logic in selectForSession.
+func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, dbCurrentSCN uint64) (selected []*LogFile, endSCN uint64, capped, truncated bool, budgetKeys []logKey, err error) {
+	byThread := groupFilesByThread(files)
+
+	// An open thread with zero files here means the collector's SCN-range
+	// query missed that thread's logs - silently continuing would mine an
+	// incomplete view of the database, so this is a hard error rather than
+	// a skip.
+	for _, t := range openThreads {
+		if len(byThread[t]) == 0 {
+			return nil, 0, false, false, nil, fmt.Errorf("open redo thread %d has no log files in the collected SCN range", t)
+		}
+	}
+
+	openSet := make(map[int]struct{}, len(openThreads))
+	for _, t := range openThreads {
+		openSet[t] = struct{}{}
+	}
+
+	var (
+		combined        []*LogFile
+		budgetCombined  []*LogFile
+		tightestEndSCN  uint64
+		haveTightest    bool
+		allOpenCaughtUp = true
+	)
+	for _, t := range slices.Sorted(maps.Keys(byThread)) {
+		threadFiles := byThread[t]
+
+		budgetCapped := threadFiles
+		if len(threadFiles) > s.count {
+			truncated = true
+			budgetCapped = threadFiles[:s.count]
+		}
+		budgetCombined = append(budgetCombined, budgetCapped...)
+
+		extended := extendThreadPastBoundary(threadFiles, budgetCapped, s.prevUpperBoundSCN)
+		combined = append(combined, extended...)
+
+		if _, open := openSet[t]; !open {
+			// A closed thread has no "current" log to catch up to, so it
+			// never influences the capped/endSCN decision below.
+			continue
+		}
+
+		last := extended[len(extended)-1]
+		if last.IsOpenCurrent() {
+			continue
+		}
+		allOpenCaughtUp = false
+		if candidateEnd := last.NextSCN - 1; !haveTightest || candidateEnd < tightestEndSCN {
+			tightestEndSCN = candidateEnd
+			haveTightest = true
+		}
+	}
+
+	budgetKeys = logKeysOf(budgetCombined)
+
+	if !truncated {
+		// Nothing to cap - every thread's whole overlapping range fits
+		// within budget (extension is then necessarily a no-op too).
+		return files, dbCurrentSCN, false, false, budgetKeys, nil
+	}
+	if allOpenCaughtUp {
+		return combined, dbCurrentSCN, false, true, budgetKeys, nil
+	}
+	return combined, tightestEndSCN, true, true, budgetKeys, nil
+}
+
+// extendThreadPastBoundary extends a thread's budget-capped file list, once
+// a previous cycle has already committed to mining up through
+// prevUpperBoundSCN, so this thread's selection - whether its redo thread is
+// currently open or closed - keeps pace with that boundary. Without this, a
+// thread whose own backlog exceeds the shared budget could have its
+// unselected tail's SCN range permanently drop out of a future
+// GetLogsBySCNRange window once currentSCN advances past it.
+//
+// prevUpperBoundSCN == 0 means no boundary has been committed yet (this is
+// the selector's first call), so there is nothing to extend past.
+func extendThreadPastBoundary(threadFiles, budgetCapped []*LogFile, prevUpperBoundSCN uint64) []*LogFile {
+	if prevUpperBoundSCN == 0 {
+		return budgetCapped
+	}
+
+	extended := slices.Clone(budgetCapped)
+	nextIndex := len(extended)
+	for nextIndex < len(threadFiles) {
+		last := extended[len(extended)-1]
+		if last.IsOpenCurrent() || last.NextSCN > prevUpperBoundSCN {
+			break
+		}
+		extended = append(extended, threadFiles[nextIndex])
+		nextIndex++
+	}
+
+	// A last file that isn't a fully-archived, immutable copy (i.e. it's
+	// online - ACTIVE, INACTIVE, or the genuinely open CURRENT log) can't be
+	// treated as a safe stopping point, so pull in whatever remains of this
+	// thread's files too.
+	if last := extended[len(extended)-1]; !last.IsArchived() {
+		extended = append(extended, threadFiles[nextIndex:]...)
+	}
+
+	return extended
+}
+
+func groupFilesByThread(files []*LogFile) map[int][]*LogFile {
+	groups := make(map[int][]*LogFile)
+	for _, f := range files {
+		groups[f.Thread] = append(groups[f.Thread], f)
+	}
+	return groups
 }
 
 func logKeysOf(files []*LogFile) []logKey {
