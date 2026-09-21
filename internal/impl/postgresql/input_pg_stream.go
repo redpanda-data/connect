@@ -284,12 +284,12 @@ by — a table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one ca
 may not be ` + "`bytea`" + `: its value is read back and bound as the next chunk's bound, and raw bytes
 survive neither that nor the checkpoint.
 
-**Paritioned Tables**
+**Partitioned Tables**
 
-Partitioned tables are not yet supported in incremental snapshotting unless its publication sets
-` + "`publish_via_partition_root = true`" + `. PostgreSQL otherwise publishes its changes under the
-individual partitions' names while the snapshot backfill reads the parent making detecting updates to
-read snapshot rows difficult.
+Partitioned tables are not yet supported in incremental snapshotting unless their publication sets
+` + "`publish_via_partition_root = true`" + `. PostgreSQL otherwise publishes their changes under the
+individual partitions' names while the snapshot backfill reads the parent, so updates to
+already-read snapshot rows cannot be detected.
 
 A signal naming a table with partitions is rejected and logged, and it is left to replication alone. If a check cannot be run at all - a
 connection reset, say - the stream restarts and the signal is read again, so the request is not lost.
@@ -298,7 +298,7 @@ Each table joins the back of the backfill queue. A table this run already covers
 logged, so a repeated signal does not re-read it. To read one again, point
 ` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotCheckpointCacheKey + "`" + ` at a fresh key.
 
-**Tables with with large (TOASTed) column values**
+**Tables with large (TOASTed) column values**
 
 Set ` + "`REPLICA IDENTITY FULL`" + ` on a table with large (TOASTed) column values before backfilling using incremental snapshotting. PostgreSQL
 omits an unchanged TOAST value from an ` + "`UPDATE`" + `, sending a marker instead, and
