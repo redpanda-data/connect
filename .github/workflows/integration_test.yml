@@ -60,7 +60,10 @@ jobs:
           retention-days: 7
 
   check-author-access:
-    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    # Re-evaluated on opened/synchronize/reopened so write-access PRs auto-rerun on every push.
+    if: >-
+      github.event_name == 'pull_request' &&
+      contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
     runs-on: ubuntu-latest
     outputs:
       allowed: ${{ steps.perm.outputs.allowed }}
@@ -79,12 +82,15 @@ jobs:
 
   integration-test-filter:
     needs: [check-author-access]
+    # The 'labeled' check only fires on the label-add event itself (not on every later push where
+    # the label happens to still be present), so non-write/fork PRs need an explicit re-trigger
+    # (re-add the label, or comment /integration) after each push rather than auto-rerunning.
     if: >-
       always() && (
         needs.check-author-access.outputs.allowed == 'true' ||
         (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/integration ')) ||
         (github.event_name == 'workflow_dispatch' && github.event.inputs.filter != '') ||
-        (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-integration-tests'))
+        (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'run-integration-tests')
       )
     runs-on: ubuntu-latest-32
     env:
