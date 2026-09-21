@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -853,5 +854,57 @@ func TestSnapshotSignalRejectsUndedupableTable(t *testing.T) {
 		cols, err := s.incrementalPKColumns(t.Context(), events)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"id"}, cols)
+	})
+}
+
+func TestCanonicalizePKValueNormalisesTimestampZone(t *testing.T) {
+	instant := time.Date(2026, 1, 2, 3, 4, 5, 678000000, time.UTC)
+
+	for _, tc := range []struct {
+		name string
+		zone *time.Location
+	}{
+		{name: "UTC", zone: time.UTC},
+		// What the chunk decoder produces when the host is not UTC.
+		{name: "positive offset", zone: time.FixedZone("IST", 5*3600+1800)},
+		{name: "negative offset", zone: time.FixedZone("PST", -8*3600)},
+		// What pgoutput produces: a zero offset with no name.
+		{name: "unnamed zero offset", zone: time.FixedZone("", 0)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			same := instant.In(tc.zone)
+			require.True(t, same.Equal(instant), "the test case must describe the same instant")
+
+			got := canonicalizePKValue(same)
+			want := canonicalizePKValue(instant)
+			assert.Equal(t, fmt.Sprintf("%v", want), fmt.Sprintf("%v", got),
+				"the same instant in %s must reduce to the same window key", tc.name)
+		})
+	}
+
+	// The key is written to the checkpoint and bound as the next chunk's
+	// bound, so it must not depend on where the connector happens to run.
+	// Normalising to the host zone would make both decode paths agree too,
+	// but only on that host.
+	t.Run("the key does not depend on the host zone", func(t *testing.T) {
+		original := time.Local
+		t.Cleanup(func() { time.Local = original })
+
+		time.Local = time.UTC
+		asUTCHost := fmt.Sprintf("%v", canonicalizePKValue(instant))
+
+		time.Local = time.FixedZone("IST", 5*3600+1800)
+		asISTHost := fmt.Sprintf("%v", canonicalizePKValue(instant))
+
+		assert.Equal(t, asUTCHost, asISTHost,
+			"the same instant must reduce to the same key regardless of the host's zone")
+	})
+
+	t.Run("distinct instants stay distinct", func(t *testing.T) {
+		later := instant.Add(time.Millisecond)
+		assert.NotEqual(t,
+			fmt.Sprintf("%v", canonicalizePKValue(instant)),
+			fmt.Sprintf("%v", canonicalizePKValue(later)),
+			"normalising the zone must not collapse different instants")
 	})
 }

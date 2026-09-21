@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"slices"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -428,6 +429,9 @@ func canonicalizePKValue(v any) any {
 		return uuid.UUID(val).String()
 	case []byte:
 		return string(val)
+	case time.Time:
+		// Normalise on UTC for deduplication
+		return val.UTC()
 	default:
 		return val
 	}
