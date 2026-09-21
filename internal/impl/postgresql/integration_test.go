@@ -1712,9 +1712,7 @@ memory: {}`))
 
 		signalIncrementalSnapshot(t, db, "test_slot_inc_schema_meta", "flights")
 
-		// A backfilled row and a streamed one, so the two can be compared.
-		require.Eventually(t, func() bool {
-			var reads, inserts int
+		countOps := func() (reads, inserts int) {
 			for _, m := range flightRows() {
 				switch m.Operation {
 				case "read":
@@ -1723,12 +1721,22 @@ memory: {}`))
 					inserts++
 				}
 			}
-			if reads >= numPreExisting && inserts == 0 {
-				_, err := db.Exec(`INSERT INTO flights (name, created_at) VALUES ('live', NOW())`)
-				require.NoError(t, err)
-			}
-			return reads >= numPreExisting && inserts >= 1
-		}, 60*time.Second, 100*time.Millisecond, "did not observe both backfilled and streamed rows")
+			return reads, inserts
+		}
+
+		require.Eventually(t, func() bool {
+			reads, _ := countOps()
+			return reads >= numPreExisting
+		}, 60*time.Second, 100*time.Millisecond, "did not observe the backfilled rows")
+
+		// On the test goroutine, so a failure reports the real cause.
+		_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('live', NOW())`)
+		require.NoError(t, err)
+
+		require.Eventually(t, func() bool {
+			_, inserts := countOps()
+			return inserts >= 1
+		}, 60*time.Second, 100*time.Millisecond, "did not observe the streamed row")
 
 		var readSchema, insertSchema map[string]any
 		for _, m := range flightRows() {
