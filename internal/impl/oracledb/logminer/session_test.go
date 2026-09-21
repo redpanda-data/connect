@@ -138,7 +138,7 @@ func TestSessionManager(t *testing.T) {
 
 		lm.sessionMgr.sessionOpened = time.Now().Add(-time.Hour)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 300, 400))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 300, 400, nil))
 		assert.Equal(t, 2, fc.prepareCount("START_LOGMNR"),
 			"START_LOGMNR must be re-prepared after Close() rather than reusing the closed statement")
 		assert.Equal(t, 2, fc.prepareCount("END_LOGMNR"),
