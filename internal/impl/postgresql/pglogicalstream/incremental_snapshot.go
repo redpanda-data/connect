@@ -720,6 +720,22 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 	if s.incSnapshot.coordinator.OnStreamedRow(table, pk) {
 		s.logger.Debugf("Incremental snapshot: deduplicated live row for table %s pk=%v", table, pk)
 	}
+
+	// An update that changes the key leaves a buffered row under the old one,
+	// which would be released as a "read" for a key the table no longer has.
+	// Data holds the new tuple, so only BeforeData names the old key;
+	// PostgreSQL sends it for a key change even under the default replica
+	// identity. An unchanged key is already evicted above, so this is then an
+	// O(1) miss.
+	if message.Operation == UpdateOpType && message.BeforeData != nil {
+		previous, err := s.incrementalStreamedRowPK(ctx, table, message.BeforeData)
+		if err != nil {
+			return fmt.Errorf("resolving previous primary key for incremental snapshot deduplication on table %s: %w", table, err)
+		}
+		if s.incSnapshot.coordinator.OnStreamedRow(table, previous) {
+			s.logger.Debugf("Incremental snapshot: deduplicated the key vacated by an update on table %s pk=%v", table, previous)
+		}
+	}
 	return nil
 }
 

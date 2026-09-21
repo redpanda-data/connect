@@ -1045,11 +1045,6 @@ memory: {}`))
 	})
 }
 
-// TestIntegrationIncrementalSnapshotWarnsAboutToastedColumns: an unchanged
-// out-of-line value is omitted from an UPDATE, and the backfilled row that
-// held it is dropped as a duplicate, so without REPLICA IDENTITY FULL that
-// column's only delivery is the unchanged_toast_value placeholder. Nothing
-// but this warning tells an operator at runtime.
 func TestIntegrationIncrementalSnapshotWarnsAboutToastedColumns(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -1281,4 +1276,145 @@ file:
 		assert.True(t, warned(second),
 			"a resumed backfill must warn again, or nothing reports it after a restart, got: %v", second.Messages())
 	})
+}
+
+func TestIntegrationIncrementalSnapshotPKChangingUpdate(t *testing.T) {
+	integration.CheckSkip(t)
+
+	for _, tc := range []struct {
+		name         string
+		slot         string
+		fullIdentity bool
+	}{
+		// The old tuple is sent for a key change under either identity:
+		// key columns only by default, the whole row with FULL.
+		{name: "default replica identity", slot: "pkmove_slot"},
+		{name: "replica identity full", slot: "pkmove_full_slot", fullIdentity: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+			require.NoError(t, err)
+			_, err = db.Exec(`CREATE TABLE pkmove (id bigint PRIMARY KEY, name text)`)
+			require.NoError(t, err)
+			if tc.fullIdentity {
+				_, err = db.Exec(`ALTER TABLE pkmove REPLICA IDENTITY FULL`)
+				require.NoError(t, err)
+			}
+			const rows = 5
+			for i := 1; i <= rows; i++ {
+				_, err := db.Exec(`INSERT INTO pkmove (id, name) VALUES ($1, 'pre')`, i)
+				require.NoError(t, err)
+			}
+
+			type event struct {
+				op string
+				id int64
+			}
+			var (
+				mu      sync.Mutex
+				emitted []event
+			)
+
+			builder := service.NewStreamBuilder()
+			require.NoError(t, builder.SetLoggerYAML(`level: ERROR`))
+			// One chunk covering every row, heartbeats long enough that no
+			// commit closes its window before the update below.
+			require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: %s
+    schema: public
+    heartbeat_interval: 60s
+    tables:
+      - pkmove
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 100
+        heartbeat_interval: 60s
+        checkpoint_cache: snap_cache
+`, databaseURL, tc.slot)))
+			require.NoError(t, builder.AddCacheYAML("label: snap_cache\nmemory: {}"))
+			require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					if tbl, _ := msg.MetaGet("table"); tbl != "pkmove" {
+						continue
+					}
+					op, _ := msg.MetaGet("operation")
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					row, ok := data.(map[string]any)
+					if !ok {
+						continue
+					}
+					num, ok := row["id"].(json.Number)
+					if !ok {
+						continue
+					}
+					id, err := num.Int64()
+					if err != nil {
+						return err
+					}
+					emitted = append(emitted, event{op: op, id: id})
+				}
+				return nil
+			}))
+
+			stream, err := builder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Logf("stream error: %v", err)
+				}
+			}()
+			t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+			signalIncrementalSnapshot(t, db, tc.slot, "pkmove")
+			// A buffered chunk emits nothing, so there is no message to wait
+			// on; with a 60s heartbeat nothing else commits meanwhile.
+			time.Sleep(3 * time.Second)
+
+			// Move id 3 above the frozen max key: the new key was never
+			// buffered, the old one was.
+			_, err = db.Exec(`UPDATE pkmove SET id = 100 WHERE id = 3`)
+			require.NoError(t, err)
+			// The update's commit only opens the window; this one closes it.
+			_, err = db.Exec(`INSERT INTO pkmove (id, name) VALUES (999, 'closer')`)
+			require.NoError(t, err)
+
+			require.Eventually(t, func() bool {
+				mu.Lock()
+				defer mu.Unlock()
+				var reads int
+				for _, e := range emitted {
+					if e.op == "read" {
+						reads++
+					}
+				}
+				// Every row but the vacated one, or all of them if the
+				// eviction is missing.
+				return reads >= rows-1
+			}, 60*time.Second, 100*time.Millisecond, "the backfill did not drain")
+			time.Sleep(2 * time.Second)
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			var readIDs []int64
+			for _, e := range emitted {
+				if e.op == "read" {
+					readIDs = append(readIDs, e.id)
+				}
+			}
+			assert.NotContains(t, readIDs, int64(3),
+				"the key the update vacated must not be released as a read; it would resurrect a row the source no longer has")
+			assert.ElementsMatch(t, []int64{1, 2, 4, 5}, readIDs,
+				"every untouched row must still be backfilled")
+		})
+	}
 }
