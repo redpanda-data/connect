@@ -371,8 +371,10 @@ tags:
 		require.NoError(t, dl.Body.Close())
 		assert.Equal(t, "firstsecond", string(body))
 
-		// Tags are refreshed on every append, so Source reflects the most recently
-		// written message.
+		// Tags are applied when the blob is created and not re-sent with later
+		// appends, so Source reflects the message that created the blob rather
+		// than the most recent one. An implementation that re-tagged on every
+		// append would leave "second" here.
 		resp, err := blobClient.GetTags(t.Context(), nil)
 		require.NoError(t, err)
 
@@ -383,12 +385,12 @@ tags:
 
 		assert.Equal(t, map[string]string{
 			"Environment": "production",
-			"Source":      "second",
+			"Source":      "first",
 		}, tags)
 	})
 
-	// A blob this output did not create never passes through the creation path, so
-	// it is the case where tags are easiest to silently drop.
+	// A blob this output did not create never passes through the creation path,
+	// and so is never tagged. Documented behaviour, pinned here.
 	t.Run("blob_storage_tags_append_preexisting_blob", func(t *testing.T) {
 		u4, err := uuid.NewV4()
 		require.NoError(t, err)
@@ -439,10 +441,11 @@ tags:
 			tags[*tag.Key] = *tag.Value
 		}
 
-		assert.Equal(t, map[string]string{
-			"Environment": "production",
-			"Source":      "test-suite",
-		}, tags)
+		// Tags are only applied when this output creates the blob, so a blob left
+		// behind by an earlier run stays untagged. This pins the documented
+		// limitation: writing tags here instead would cost a request per message
+		// and only ever reflect the last one.
+		assert.Empty(t, tags)
 
 		// The pre-existing blob must be appended to, not recreated.
 		dl, err := blobClient.DownloadStream(t.Context(), nil)

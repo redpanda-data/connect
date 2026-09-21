@@ -174,7 +174,10 @@ Only values support interpolation; keys are static and are validated against Azu
 
 If authenticating with `+"`storage_sas_token`"+`, the token must include the `+"`t`"+` (tags) permission.
 
-When `+"`blob_type`"+` is `+"`APPEND`"+` the tags are written separately from the message content, so they are refreshed on each append on a best-effort basis and may briefly lag the most recent append. A failure to write them is logged and does not fail the message, because retrying would append the message content a second time.`+service.OutputPerformanceDocs(true, false)).
+When `+"`blob_type`"+` is `+"`APPEND`"+` the tags describe the blob rather than any single message, so they are applied only when this output creates the blob, and are not re-sent with subsequent appends. Two consequences are worth knowing:
+
+- A blob that already exists is never tagged, including one created by an earlier run of the pipeline. Appending to a long-lived blob therefore only picks up tags if this output created it.
+- Interpolated tag values resolve from the message that creates the blob.`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewInterpolatedStringField(bsoFieldContainer).
 				Description(`The container for uploading the messages to.`).
@@ -252,8 +255,14 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 				// Another write can create the blob and append to it before this Create. Without If-None-Match,
 				// Create replaces that blob and its data is lost. With it, Create fails if the blob exists. Azurite
 				// returns BlobAlreadyExists (409). The REST docs give 412 for a failed If-None-Match on writes.
-				// Attaching the tags at creation means a newly created blob carries
-				// them even if the refresh below fails.
+				//
+				// AppendBlock does not support tags, so for append blobs they are
+				// applied here, at creation. Tags describe the blob rather than any
+				// single message, so they are deliberately not re-sent with every
+				// append: that would double the request count on the hot path and
+				// only ever reflect whichever message happened to be last. The
+				// trade-off is that a blob this output did not create is never
+				// tagged, which is documented on the tags field.
 				createOpts := &appendblob.CreateOptions{
 					AccessConditions: &blob.AccessConditions{
 						ModifiedAccessConditions: &blob.ModifiedAccessConditions{IfNoneMatch: to.Ptr(azcore.ETagAny)},
@@ -262,32 +271,16 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 				if len(tags) > 0 {
 					createOpts.Tags = tags
 				}
-				_, err := appendBlobClient.Create(ctx, createOpts)
-				if err != nil && !isErrorCode(err, bloberror.BlobAlreadyExists) && !isErrorCode(err, bloberror.ConditionNotMet) {
-					return fmt.Errorf("creating append blob: %w", err)
+				if _, createErr := appendBlobClient.Create(ctx, createOpts); createErr != nil && !isErrorCode(createErr, bloberror.BlobAlreadyExists) && !isErrorCode(createErr, bloberror.ConditionNotMet) {
+					return fmt.Errorf("creating append blob: %w", createErr)
 				}
 
 				// Try to upload the message again now that we created the blob
-				_, err = appendBlobClient.AppendBlock(ctx, streaming.NopCloser(bytes.NewReader(message)), nil)
-				if err != nil {
+				if _, err = appendBlobClient.AppendBlock(ctx, streaming.NopCloser(bytes.NewReader(message)), nil); err != nil {
 					return fmt.Errorf("failed retrying to append block to blob: %w", err)
 				}
 			} else {
 				return fmt.Errorf("appending block to blob: %w", err)
-			}
-		}
-		// AppendBlock does not support tags, so they are written separately. This
-		// also covers blobs this output did not create, which never pass through
-		// the creation path above and would otherwise never be tagged.
-		//
-		// A failure here is logged rather than returned: the message content is
-		// already committed at this point, and AppendBlock is not idempotent, so
-		// nacking would append the same content again on redelivery. Losing a tag
-		// update is preferable to duplicating data.
-		if len(tags) > 0 {
-			blobClient := containerClient.NewBlobClient(blobName)
-			if _, tagErr := blobClient.SetTags(ctx, tags, nil); tagErr != nil {
-				a.log.Warnf("Failed to set blob index tags on append blob %v: %v", blobName, tagErr)
 			}
 		}
 	} else {
