@@ -919,6 +919,22 @@ func undedupableTablesQuery(schema, publication string) (string, error) {
     `, schema, publication)
 }
 
+// toastFidelityQuery reports whether a table replicates full old tuples, and
+// whether it has any column large enough to be stored out of line.
+func toastFidelityQuery(table string) (string, error) {
+	return sanitize.SQLQuery(`
+        SELECT c.relreplident = 'f',
+               EXISTS (SELECT 1
+                       FROM   pg_attribute a
+                       WHERE  a.attrelid = c.oid
+                       AND    a.attnum > 0
+                       AND    NOT a.attisdropped
+                       AND    a.attstorage IN ('x', 'e'))
+        FROM   pg_class c
+        WHERE  c.oid = $1::regclass;
+    `, table)
+}
+
 // partitionDedupQuery reports whether a table is a partitioned parent, and
 // whether the publication republishes its partitions' changes under the
 // parent's name.

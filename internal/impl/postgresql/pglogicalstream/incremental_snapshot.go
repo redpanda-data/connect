@@ -99,6 +99,12 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 	var resuming int
 	if resume := incSnapshotCfg.ResumeState; resume != nil {
 		resuming = len(resume.Tables)
+		if resume.CurrentTable != nil {
+			s.warnToastFidelity(ctx, *resume.CurrentTable)
+		}
+		for _, table := range resume.RemainingTables {
+			s.warnToastFidelity(ctx, table)
+		}
 	}
 	s.logger.Debugf("Incremental snapshot: enabled with chunk_size=%d, resuming %d table(s)", incSnapshotCfg.ChunkSize, resuming)
 	s.warnUndedupableTables(ctx, config)
@@ -245,6 +251,28 @@ func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsna
 		return fmt.Errorf("reading primary key types for table %s: %w", table, err)
 	}
 	return nil
+}
+
+// If REPLICA IDENTITY DEFAULT is configured then the change event won't include TOAST data (large values moved
+// out of the table) and thus if the incremental snapshot buffer has a read row that contains the TOAST value
+// and an UPDATE is received that DOESN'T modify the toast value then the read will be ejected and no toast value sent.
+func (s *Stream) warnToastFidelity(ctx context.Context, table incrementalsnapshot.TableID) {
+	q, err := toastFidelityQuery(tableFQN(table).String())
+	if err != nil {
+		s.logger.Debugf("Incremental snapshot: unable to build the replica identity query: %s", err)
+		return
+	}
+
+	var fullIdentity, hasToastable bool
+	if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&fullIdentity, &hasToastable); err != nil {
+		s.logger.Debugf("Incremental snapshot: unable to check the replica identity of table %s: %s", table, err)
+		return
+	}
+	if fullIdentity || !hasToastable {
+		return
+	}
+	s.logger.Warnf("Incremental snapshot: table %s has column(s) that can be stored out of line and does not use REPLICA IDENTITY FULL. An update that leaves such a column unchanged sends no value for it, and the backfilled row holding the real value is dropped as a duplicate, so that column would be delivered only as the unchanged_toast_value placeholder. Set REPLICA IDENTITY FULL on %s while it backfills to avoid this.",
+		table, table)
 }
 
 // checkDedupReachable rejects a table whose streamed changes would arrive
@@ -810,6 +838,9 @@ func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMess
 	if len(added) == 0 {
 		s.logger.Warnf("Incremental snapshot: signal asked for %v, all of which this run already covers, so nothing was queued", tables)
 		return nil
+	}
+	for _, table := range added {
+		s.warnToastFidelity(ctx, table)
 	}
 	s.logger.Infof("Incremental snapshot: signal queued %d table(s) for backfill: %v", len(added), added)
 	if len(added) < len(tables) {
