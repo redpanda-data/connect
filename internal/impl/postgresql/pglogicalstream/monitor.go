@@ -11,6 +11,7 @@ package pglogicalstream
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -160,6 +161,10 @@ func (m *Monitor) readTablesStat(ctx context.Context, tables []TableFQN) error {
 			if strings.Contains(err.Error(), "does not exist") {
 				continue
 			}
+			if errors.Is(err, errRowEstimateUnavailable) {
+				m.logger.Warnf("No snapshot progress will be reported for table %s: %s", table, err)
+				continue
+			}
 			// For any other error, we'll return it
 			return err
 		}
@@ -168,6 +173,8 @@ func (m *Monitor) readTablesStat(ctx context.Context, tables []TableFQN) error {
 	}
 	return nil
 }
+
+var errRowEstimateUnavailable = errors.New("row estimate unavailable until the table is analysed; run ANALYZE to populate it")
 
 // readTableRowEstimate reads the planner's row estimate for a table, which
 // is the denominator of its snapshot progress. It is an estimate, so the
@@ -180,6 +187,11 @@ func (m *Monitor) readTableRowEstimate(ctx context.Context, table TableFQN) (flo
 		table.String(),
 	).Scan(&count); err != nil {
 		return 0, fmt.Errorf("error counting rows in table %s: %w", table, err)
+	}
+	// Negative means unknown, not a count. Reporting it as the denominator
+	// would make Report drop the table for the life of the run.
+	if count < 0 {
+		return 0, fmt.Errorf("%w: table %s", errRowEstimateUnavailable, table)
 	}
 	return count, nil
 }
