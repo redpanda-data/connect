@@ -28,20 +28,16 @@ const (
 	// so (streamChannelDepth + 2) batches of up to streamBatchMaxBytes of WAL
 	// each, several times that once decoded.
 	streamChannelDepth = 4
-	// commitRemapRingSize is the smallest window of recent (last row, commit)
-	// pairs the reader remembers, used when the caller supplies no
-	// checkpoint_limit. The real window must cover every transaction that can
-	// be in flight; see newCommitRemap.
-	commitRemapRingSize = 16
 )
 
 // streamBatch accumulates decoded streaming messages and decides when the
 // reader must hand them to the consumer. It also carries the "would-be" LSN
 // bookkeeping the ack path depends on: lastLSN is the LSN of the last row that
-// would be considered emitted, commitLSN the LSN a downstream ack of that row
-// should be remapped to. Both are only observable through take, i.e. once the
-// batch is actually handed over, which preserves the invariant that "emitted"
-// means "sent to the consumer".
+// would be considered emitted, commitLSN the LSN of the newest commit record
+// processed, which becomes the last row's ack stamp when a commit closes the
+// batch. Both are only observable through take, i.e. once the batch is
+// actually handed over, which preserves the invariant that "emitted" means
+// "sent to the consumer".
 type streamBatch struct {
 	maxRows  int
 	maxBytes int
@@ -83,98 +79,26 @@ func (b *streamBatch) shouldFlush() bool {
 	return b.commitSeen || len(b.msgs) >= b.maxRows || b.bytes >= b.maxBytes
 }
 
-// take hands back the pending messages (possibly empty) together with the
-// promoted LSN pair, and resets the pending state. The LSN pair is retained so
-// subsequent takes keep reporting the current values.
-func (b *streamBatch) take() (msgs []StreamMessage, lastLSN, commitLSN LSN) {
+// take hands back the pending messages (possibly empty) and resets the
+// pending state. Every message is stamped with the LSN the consumer should
+// acknowledge for it: its own, except the last message of a batch closed by a
+// commit, which is stamped with the commit LSN so acknowledging it confirms
+// the whole transaction. ackLSN is that last stamp (or the last row when no
+// commit closed the batch) and commitLSN the newest commit processed; both
+// are retained so subsequent takes keep reporting the current values.
+func (b *streamBatch) take() (msgs []StreamMessage, ackLSN, commitLSN LSN) {
 	msgs = b.msgs
+	ackLSN = b.lastLSN
+	for i := range msgs {
+		msgs[i].AckLSN = msgs[i].LSN
+	}
+	if b.commitSeen && len(msgs) > 0 {
+		ackLSN = b.commitLSN
+		commit := b.commitLSN.String()
+		msgs[len(msgs)-1].AckLSN = &commit
+	}
 	b.msgs = nil
 	b.bytes = 0
 	b.commitSeen = false
-	return msgs, b.lastLSN, b.commitLSN
-}
-
-// commitRemap remembers, for recently flushed transactions, the LSN of the
-// last emitted row and the LSN of the commit record that closed it. When the
-// consumer acks that last row, the reader confirms the commit LSN instead so
-// Postgres does not replay the transaction on restart.
-//
-// Keeping many pairs (rather than only the latest) matters because acks
-// arrive out of order and late: a transaction's last row can be acked while
-// up to checkpoint_limit later messages are already tracked downstream, plus
-// the batches buffered in the channel. A miss is not data loss -- the row LSN
-// is below its commit, so the transaction is replayed rather than skipped --
-// but it is a duplicate the ring exists to prevent.
-//
-// The zero value works with a window of commitRemapRingSize; newCommitRemap
-// sizes it to the caller's in-flight bound.
-//
-// lookup runs on every received WAL frame, so it is a map read rather than a
-// scan of the ring: slot holds each live last row's ring position, and
-// eviction removes the evicted row from it.
-type commitRemap struct {
-	pairs []commitRemapPair
-	slot  map[LSN]int
-	next  int
-	n     int
-}
-
-type commitRemapPair struct{ lastRow, commit LSN }
-
-// newCommitRemap sizes the window for inFlightBatches, the most batches whose
-// acks can still be outstanding, each holding at least one transaction's last
-// row. Callers pass checkpoint_limit plus the channel depth and the batches
-// the reader and consumer each hold.
-func newCommitRemap(inFlightBatches int) commitRemap {
-	size := max(inFlightBatches, commitRemapRingSize)
-	return commitRemap{
-		pairs: make([]commitRemapPair, size),
-		slot:  make(map[LSN]int, size),
-	}
-}
-
-// record stores a pair. Pairs whose commit equals the last row carry no
-// information (a cap-triggered flush mid-transaction) and are skipped. A pair
-// for the same last row as the newest entry replaces it in place: a
-// heartbeat or an empty transaction moves that row's commit forward without
-// costing a slot, so a long output stall under frequent heartbeats cannot
-// evict the transactions whose acks are still pending.
-func (r *commitRemap) record(lastRow, commit LSN) {
-	if commit == lastRow {
-		return
-	}
-	if r.pairs == nil {
-		*r = newCommitRemap(commitRemapRingSize)
-	}
-	size := len(r.pairs)
-	if r.n > 0 {
-		newest := (r.next - 1 + size) % size
-		if r.pairs[newest].lastRow == lastRow {
-			r.pairs[newest].commit = commit
-			return
-		}
-	}
-	if r.n == size {
-		// The slot about to be reused holds the oldest pair; forget its row
-		// unless a newer slot has since claimed the same row.
-		if evicted := r.pairs[r.next]; r.slot[evicted.lastRow] == r.next {
-			delete(r.slot, evicted.lastRow)
-		}
-	}
-	r.pairs[r.next] = commitRemapPair{lastRow: lastRow, commit: commit}
-	r.slot[lastRow] = r.next
-	r.next = (r.next + 1) % size
-	if r.n < size {
-		r.n++
-	}
-}
-
-// lookup returns the commit LSN recorded for lastRow, if any. A repeated row
-// resolves to its most recent commit.
-func (r *commitRemap) lookup(lastRow LSN) (LSN, bool) {
-	idx, ok := r.slot[lastRow]
-	if !ok {
-		return 0, false
-	}
-	return r.pairs[idx].commit, true
+	return msgs, ackLSN, b.commitLSN
 }

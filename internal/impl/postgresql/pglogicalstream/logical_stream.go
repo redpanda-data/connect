@@ -66,14 +66,7 @@ type Stream struct {
 	// handing a batch to the consumer. Defaults to streamBatchMaxRows; named
 	// to avoid clashing with that constant.
 	streamMaxRows int
-	// ackRemapWindow is how many flushed batches can have acks outstanding at
-	// once, which sizes the commit remap ring. See newCommitRemap.
-	ackRemapWindow int
 }
-
-// defaultCheckpointLimit mirrors the input's checkpoint_limit default, for a
-// Config that does not supply one.
-const defaultCheckpointLimit = 1024
 
 // NewPgStream creates a new instance of the Stream struct.
 func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
@@ -130,15 +123,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if config.StreamBatchMaxRows > 0 {
 		streamMaxRows = min(streamBatchMaxRows, config.StreamBatchMaxRows)
 	}
-	checkpointLimit := defaultCheckpointLimit
-	if config.CheckpointLimit > 0 {
-		checkpointLimit = config.CheckpointLimit
-	}
-	// Every tracked message may be its own one-row transaction, so up to
-	// checkpoint_limit transactions can await acks downstream, plus the
-	// batches buffered in the channel, the one the reader is filling and the
-	// one the consumer holds.
-	ackRemapWindow := checkpointLimit + streamChannelDepth + 2
 	stream := &Stream{
 		pgConn:                dbConn,
 		messages:              make(chan []StreamMessage, streamChannelDepth),
@@ -154,7 +138,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		standbyMessageTimeout: config.PgStandbyTimeout,
 		unchangedToastValue:   config.UnchangedToastValue,
 		streamMaxRows:         streamMaxRows,
-		ackRemapWindow:        ackRemapWindow,
 	}
 
 	monitor, err := NewMonitor(ctx, config, stream.logger, tables, stream.slotName)
@@ -454,19 +437,20 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		// and invalidated whenever a RelationMessage for that ID is received (which PostgreSQL
 		// sends before any DML when the table definition changes).
 		schemaCache = map[uint32]any{}
-		// If we don't stream commit messages we could not ack them, which means postgres will replay the whole transaction
-		// so if we're at the end of a stream and we get an ack for the last message in a txn, we need to ack the txn not the
-		// last message. "Emitted" here means handed to the consumer: both values are only advanced when a batch is flushed.
-		lastEmittedLSN       = currentLSN
+		// Every emitted message carries the LSN to acknowledge for it (see
+		// StreamMessage.AckLSN), so the consumer's acks arrive already resolved
+		// to commit records where that matters. These two track the last
+		// emitted message's stamp and the newest commit processed since, so an
+		// ack for that message can be advanced over commits that emitted
+		// nothing (suppressed commits of untracked tables, heartbeats).
+		// "Emitted" means handed to the consumer: both are only advanced when a
+		// batch is flushed.
+		lastEmittedAckLSN    = currentLSN
 		lastEmittedCommitLSN = currentLSN
 		currentTxnCommitTime time.Time
 		// Decoded rows are accumulated here and handed to the consumer at commit
 		// boundaries or when a cap is hit, instead of one row per channel send.
 		batch = newStreamBatch(s.streamMaxRows, streamBatchMaxBytes, currentLSN)
-		// remap remembers recent (last row, commit) LSN pairs so an ack for a
-		// transaction still in flight downstream can be resolved to its
-		// commit record. See commitRemap.
-		remap = newCommitRemap(s.ackRemapWindow)
 	)
 
 	// Built once: commitLSN runs on every frame, and a hard-stop context costs
@@ -479,14 +463,12 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 	commitLSN := func(force bool) (committed bool, err error) {
 		ctx := hardStopCtx
 		ackedLSN := s.getAckedLSN()
-		// An ack for the last row of a transaction is confirmed as that
-		// transaction's commit record, otherwise Postgres replays the whole
-		// transaction on restart. The most recent pair is the common case; the
-		// ring covers every transaction whose ack can still be outstanding.
-		if ackedLSN == lastEmittedLSN {
+		// The consumer acks the stamp of the last row it processed, which is
+		// already a commit record at transaction boundaries. When that stamp
+		// belongs to the last message emitted, every commit processed since
+		// emitted nothing, so the confirmation can advance to the newest one.
+		if ackedLSN == lastEmittedAckLSN {
 			ackedLSN = lastEmittedCommitLSN
-		} else if c, ok := remap.lookup(ackedLSN); ok {
-			ackedLSN = c
 		}
 		if force || ackedLSN > currentLSN {
 			if err := s.commitAckedLSN(ctx, ackedLSN); err != nil {
@@ -512,7 +494,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 	// there is nothing to send, so a suppressed commit with no pending rows
 	// still advances lastEmittedCommitLSN.
 	flush := func() error {
-		msgs, promotedLast, promotedCommit := batch.take()
+		msgs, promotedAck, promotedCommit := batch.take()
 		if len(msgs) > 0 {
 			select {
 			case s.messages <- msgs:
@@ -526,8 +508,10 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 				return ctx.Err()
 			}
 		}
-		lastEmittedLSN, lastEmittedCommitLSN = promotedLast, promotedCommit
-		remap.record(promotedLast, promotedCommit)
+		if len(msgs) > 0 {
+			lastEmittedAckLSN = promotedAck
+		}
+		lastEmittedCommitLSN = promotedCommit
 		return nil
 	}
 
@@ -599,10 +583,10 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 			if err != nil {
 				return fmt.Errorf("decoding postgres changes failed: %w", err)
 			}
-			// A suppressed commit only moves the commit LSN to which the last
-			// row of the transaction is remapped. An emitted message moves both;
-			// when that message is itself the commit marker (include_transaction_markers)
-			// it also closes the transaction.
+			// A suppressed commit only moves the commit LSN the batch's last row
+			// is stamped with. An emitted message moves both; when that message
+			// is itself the commit marker (include_transaction_markers) it also
+			// closes the transaction.
 			switch result {
 			case changeResultSuppressedCommitMessage:
 				batch.markCommit(msgLSN)

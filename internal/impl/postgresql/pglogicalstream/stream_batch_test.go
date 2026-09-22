@@ -19,12 +19,26 @@ func row(lsn LSN) StreamMessage {
 	return StreamMessage{Operation: InsertOpType, LSN: &s}
 }
 
+// ackStamps returns each message's AckLSN, the position the consumer will
+// acknowledge for it.
+func ackStamps(t *testing.T, msgs []StreamMessage) []LSN {
+	t.Helper()
+	out := make([]LSN, 0, len(msgs))
+	for _, m := range msgs {
+		require.NotNil(t, m.AckLSN, "every emitted message is stamped")
+		lsn, err := ParseLSN(*m.AckLSN)
+		require.NoError(t, err)
+		out = append(out, lsn)
+	}
+	return out
+}
+
 func TestStreamBatchInitialTakeIsEmptyWithStartLSN(t *testing.T) {
 	b := newStreamBatch(10, 1<<20, LSN(100))
 	require.False(t, b.shouldFlush())
-	msgs, last, commit := b.take()
+	msgs, ack, commit := b.take()
 	require.Empty(t, msgs)
-	require.Equal(t, LSN(100), last)
+	require.Equal(t, LSN(100), ack)
 	require.Equal(t, LSN(100), commit)
 }
 
@@ -36,16 +50,18 @@ func TestStreamBatchCommitFlushesAndPromotesCommitLSN(t *testing.T) {
 	b.markCommit(LSN(130))
 	require.True(t, b.shouldFlush())
 
-	msgs, last, commit := b.take()
+	msgs, ack, commit := b.take()
 	require.Len(t, msgs, 2)
-	require.Equal(t, LSN(120), last, "last emitted is the transaction's final row")
+	require.Equal(t, LSN(130), ack, "the batch closed at a commit, so its ack target is the commit record")
 	require.Equal(t, LSN(130), commit, "commit LSN is the commit record")
+	require.Equal(t, []LSN{110, 130}, ackStamps(t, msgs),
+		"rows are stamped with their own LSN except the last, which carries the commit")
 
 	require.False(t, b.shouldFlush(), "take resets the commit trigger")
-	msgs, last, commit = b.take()
+	msgs, ack, commit = b.take()
 	require.Empty(t, msgs)
-	require.Equal(t, LSN(120), last, "promoted values persist across an empty take")
-	require.Equal(t, LSN(130), commit)
+	require.Equal(t, LSN(120), ack, "with nothing pending the ack target reverts to the last row")
+	require.Equal(t, LSN(130), commit, "the commit persists across an empty take")
 }
 
 func TestStreamBatchRowCapFlushesMidTransaction(t *testing.T) {
@@ -55,10 +71,12 @@ func TestStreamBatchRowCapFlushesMidTransaction(t *testing.T) {
 	b.append(row(120), 50, LSN(120))
 	require.True(t, b.shouldFlush())
 
-	msgs, last, commit := b.take()
+	msgs, ack, commit := b.take()
 	require.Len(t, msgs, 2)
-	require.Equal(t, LSN(120), last)
+	require.Equal(t, LSN(120), ack, "no commit closed this batch, so the ack target is the last row")
 	require.Equal(t, LSN(120), commit, "mid-transaction flush maps commit to the last row, as the per-row path did")
+	require.Equal(t, []LSN{110, 120}, ackStamps(t, msgs),
+		"a cap-triggered flush stamps every row with its own LSN: confirming a commit here would skip the rest of the transaction")
 }
 
 func TestStreamBatchByteCapFlushesMidTransaction(t *testing.T) {
@@ -84,9 +102,9 @@ func TestStreamBatchSuppressedCommitWithNothingPending(t *testing.T) {
 	b := newStreamBatch(10, 1<<20, LSN(100))
 	b.markCommit(LSN(150))
 	require.True(t, b.shouldFlush())
-	msgs, last, commit := b.take()
+	msgs, ack, commit := b.take()
 	require.Empty(t, msgs, "nothing to send")
-	require.Equal(t, LSN(100), last, "last emitted unchanged")
+	require.Equal(t, LSN(100), ack, "ack target unchanged: no row was emitted to stamp")
 	require.Equal(t, LSN(150), commit, "commit LSN still advances, matching the old suppressed-commit path")
 }
 
@@ -97,10 +115,47 @@ func TestStreamBatchCapFlushThenCommit(t *testing.T) {
 	_, _, _ = b.take()
 	b.append(row(130), 10, LSN(130))
 	b.markCommit(LSN(140))
-	msgs, last, commit := b.take()
+	msgs, ack, commit := b.take()
 	require.Len(t, msgs, 1)
-	require.Equal(t, LSN(130), last)
+	require.Equal(t, LSN(140), ack)
 	require.Equal(t, LSN(140), commit)
+	require.Equal(t, []LSN{140}, ackStamps(t, msgs), "the transaction's final row carries the commit")
+}
+
+// TestStreamBatchCommitWithNothingPendingLeavesEarlierStampsAlone: a
+// transaction whose last row went out in a cap-triggered flush cannot have
+// that row re-stamped with the commit. The reader covers this case with its
+// last-emitted bookkeeping (see commitLSN in the read loop); take only
+// reports the commit so that bookkeeping can advance.
+func TestStreamBatchCommitWithNothingPendingLeavesEarlierStampsAlone(t *testing.T) {
+	b := newStreamBatch(2, 1<<20, LSN(100))
+	b.append(row(110), 10, LSN(110))
+	b.append(row(120), 10, LSN(120))
+	first, ack, _ := b.take()
+	require.Equal(t, []LSN{110, 120}, ackStamps(t, first))
+	require.Equal(t, LSN(120), ack)
+
+	b.markCommit(LSN(125))
+	msgs, ack, commit := b.take()
+	require.Empty(t, msgs)
+	require.Equal(t, LSN(120), ack, "ack target is still the row already emitted")
+	require.Equal(t, LSN(125), commit)
+	require.Equal(t, []LSN{110, 120}, ackStamps(t, first), "the emitted slice is not touched after the fact")
+}
+
+// TestStreamBatchEmittedCommitMarkerIsItsOwnStamp: with
+// include_transaction_markers the commit record is itself a message, so the
+// stamp and the commit coincide.
+func TestStreamBatchEmittedCommitMarkerIsItsOwnStamp(t *testing.T) {
+	b := newStreamBatch(10, 1<<20, LSN(100))
+	b.append(row(110), 10, LSN(110))
+	c := LSN(120).String()
+	b.append(StreamMessage{Operation: CommitOpType, LSN: &c}, 5, LSN(120))
+	b.markCommit(LSN(120))
+	msgs, ack, commit := b.take()
+	require.Equal(t, LSN(120), ack)
+	require.Equal(t, LSN(120), commit)
+	require.Equal(t, []LSN{110, 120}, ackStamps(t, msgs))
 }
 
 func TestStreamBatchTakeReturnsIndependentSlice(t *testing.T) {
@@ -113,124 +168,4 @@ func TestStreamBatchTakeReturnsIndependentSlice(t *testing.T) {
 	require.Len(t, second, 1)
 	require.Equal(t, LSN(110).String(), *first[0].LSN, "a later append must not overwrite a slice already handed out")
 	require.Equal(t, LSN(120).String(), *second[0].LSN)
-}
-
-func TestCommitRemapLookupMissOnEmpty(t *testing.T) {
-	var r commitRemap
-	_, ok := r.lookup(LSN(110))
-	require.False(t, ok)
-}
-
-func TestCommitRemapRecordsAndLooksUp(t *testing.T) {
-	var r commitRemap
-	r.record(LSN(110), LSN(130))
-	r.record(LSN(210), LSN(230))
-
-	commit, ok := r.lookup(LSN(110))
-	require.True(t, ok)
-	require.Equal(t, LSN(130), commit)
-
-	commit, ok = r.lookup(LSN(210))
-	require.True(t, ok)
-	require.Equal(t, LSN(230), commit)
-
-	_, ok = r.lookup(LSN(120))
-	require.False(t, ok)
-}
-
-func TestCommitRemapSkipsIdentityPairs(t *testing.T) {
-	var r commitRemap
-	r.record(LSN(110), LSN(110))
-	_, ok := r.lookup(LSN(110))
-	require.False(t, ok)
-}
-
-func TestCommitRemapEvictsOldest(t *testing.T) {
-	var r commitRemap
-	for i := 1; i <= commitRemapRingSize+1; i++ {
-		r.record(LSN(i*10), LSN(i*10+5))
-	}
-
-	_, ok := r.lookup(LSN(10))
-	require.False(t, ok, "the oldest pair must have been evicted")
-
-	commit, ok := r.lookup(LSN((commitRemapRingSize + 1) * 10))
-	require.True(t, ok)
-	require.Equal(t, LSN((commitRemapRingSize+1)*10+5), commit)
-
-	commit, ok = r.lookup(LSN(20))
-	require.True(t, ok)
-	require.Equal(t, LSN(25), commit)
-}
-
-// TestCommitRemapUpdatesNewestInPlace: a heartbeat or an empty transaction
-// after a flushed transaction moves that transaction's last row to a later
-// commit. It must not take a new slot each time, or a long output stall under
-// frequent heartbeats evicts the pairs whose acks are still pending.
-func TestCommitRemapUpdatesNewestInPlace(t *testing.T) {
-	var r commitRemap
-	r.record(LSN(110), LSN(130))
-	for i := range commitRemapRingSize * 2 {
-		r.record(LSN(210), LSN(230+i))
-	}
-
-	commit, ok := r.lookup(LSN(110))
-	require.True(t, ok, "the earlier transaction must survive the heartbeats")
-	require.Equal(t, LSN(130), commit)
-
-	commit, ok = r.lookup(LSN(210))
-	require.True(t, ok)
-	require.Equal(t, LSN(230+commitRemapRingSize*2-1), commit, "the newest commit wins")
-}
-
-// TestNewCommitRemapCoversInFlightWindow: acks can be outstanding for as many
-// transactions as checkpoint_limit admits, so the window is sized to it
-// rather than to the channel depth.
-func TestNewCommitRemapCoversInFlightWindow(t *testing.T) {
-	const window = 1030
-	r := newCommitRemap(window)
-	for i := 1; i <= window; i++ {
-		r.record(LSN(i*10), LSN(i*10+5))
-	}
-
-	commit, ok := r.lookup(LSN(10))
-	require.True(t, ok, "the oldest in-flight transaction must still resolve")
-	require.Equal(t, LSN(15), commit)
-
-	r.record(LSN((window+1)*10), LSN((window+1)*10+5))
-	_, ok = r.lookup(LSN(10))
-	require.False(t, ok, "one past the window evicts the oldest")
-
-	small := newCommitRemap(1)
-	require.Len(t, small.pairs, commitRemapRingSize, "never smaller than the default window")
-}
-
-// TestCommitRemapEvictionForgetsTheRow: the index must not outlive its ring
-// slot, or an evicted row would resolve to whatever commit reused the slot.
-func TestCommitRemapEvictionForgetsTheRow(t *testing.T) {
-	r := newCommitRemap(commitRemapRingSize)
-	for i := 1; i <= commitRemapRingSize*3; i++ {
-		r.record(LSN(i*10), LSN(i*10+5))
-	}
-	require.Len(t, r.slot, commitRemapRingSize, "the index tracks exactly the live slots")
-	for i := 1; i <= commitRemapRingSize*2; i++ {
-		_, ok := r.lookup(LSN(i * 10))
-		require.False(t, ok, "row %d was evicted", i*10)
-	}
-	for i := commitRemapRingSize*2 + 1; i <= commitRemapRingSize*3; i++ {
-		commit, ok := r.lookup(LSN(i * 10))
-		require.True(t, ok)
-		require.Equal(t, LSN(i*10+5), commit)
-	}
-}
-
-func BenchmarkCommitRemapLookupMiss(b *testing.B) {
-	r := newCommitRemap(1030)
-	for i := 1; i <= 1030; i++ {
-		r.record(LSN(i*10), LSN(i*10+5))
-	}
-	b.ReportAllocs()
-	for i := range b.N {
-		r.lookup(LSN(i*10 + 3))
-	}
 }

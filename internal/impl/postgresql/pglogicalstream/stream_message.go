@@ -56,4 +56,11 @@ type StreamMessage struct {
 	ColumnSchema any       `json:"-"`
 	CommitTime   time.Time `json:"-"`
 	BeforeData   any       `json:"-"`
+	// AckLSN is the position the consumer acknowledges to Postgres once this
+	// message is processed: the row's own LSN, or the LSN of the commit record
+	// when this row is the last of its transaction. Confirming a row LSN below
+	// its commit makes Postgres replay the whole transaction on restart, so the
+	// reader stamps the commit here when it flushes a batch at a transaction
+	// boundary. Nil for snapshot rows, which carry no position.
+	AckLSN *string `json:"-"`
 }

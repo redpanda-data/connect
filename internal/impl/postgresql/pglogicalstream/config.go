@@ -46,10 +46,6 @@ type Config struct {
 	// checkpoint_limit so that at least two streaming batches fit under the
 	// checkpoint cap.
 	StreamBatchMaxRows int
-	// CheckpointLimit is the most messages the input tracks unacknowledged at
-	// once. The reader uses it to size the window of transactions whose acks
-	// it can still remap to their commit records. Zero means 1024.
-	CheckpointLimit int
 	// If true, include BEGIN and COMMIT messages in the stream
 	IncludeTxnMarkers bool
 	// SignalTableName is the name of the signal table. Rows inserted into this

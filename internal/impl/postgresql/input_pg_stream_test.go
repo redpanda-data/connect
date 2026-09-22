@@ -272,16 +272,17 @@ func TestFlushBatcherPublishesRowsWhenProcessorsFail(t *testing.T) {
 	}
 	cp := checkpoint.NewCapped[*string](10)
 
-	var pending service.MessageBatch
+	var pending pendingRows
 	for _, lsn := range []string{"0/1", "0/2"} {
 		msg := service.NewMessage([]byte(`{}`))
 		msg.MetaSet("lsn", lsn)
-		pending = append(pending, msg)
+		pending.msgs = append(pending.msgs, msg)
+		pending.ackLSN = &lsn
 		batcher.Add(msg)
 	}
 
 	require.True(t, p.flushBatcher(t.Context(), nil, cp, batcher, &pending), "the stream keeps running")
-	require.Nil(t, pending, "the mirror is cleared with the batcher")
+	require.Equal(t, pendingRows{}, pending, "the mirror is cleared with the batcher")
 	require.False(t, p.stopSig.IsSoftStopSignalled())
 
 	select {
@@ -309,11 +310,155 @@ func TestFlushBatcherCleanShutdownIsSilent(t *testing.T) {
 	cp := checkpoint.NewCapped[*string](10)
 
 	msg := service.NewMessage([]byte(`{}`))
-	pending := service.MessageBatch{msg}
+	pending := pendingRows{msgs: service.MessageBatch{msg}}
 	batcher.Add(msg)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	require.False(t, p.flushBatcher(ctx, nil, cp, batcher, &pending))
 	require.False(t, p.stopSig.IsSoftStopSignalled(), "shutdown was already in progress")
+}
+
+// ackRecorder stands in for the replication stream and records what the
+// input acknowledges to Postgres.
+type ackRecorder struct {
+	mu   sync.Mutex
+	lsns []string
+}
+
+func (a *ackRecorder) AckLSN(_ context.Context, lsn string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.lsns = append(a.lsns, lsn)
+	return nil
+}
+
+func (a *ackRecorder) acked() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]string(nil), a.lsns...)
+}
+
+func newTestInput(t *testing.T, chanDepth int) *pgStreamInput {
+	t.Helper()
+	return &pgStreamInput{
+		msgChan: make(chan asyncMessage, chanDepth),
+		logger:  service.MockResources().Logger(),
+		stopSig: shutdown.NewSignaller(),
+	}
+}
+
+// streamRow builds a message the way processStream does for a streaming
+// row, together with the stamp the reader gave it.
+func streamRow(lsn, ackLSN string) (*service.Message, *string) {
+	msg := service.NewMessage([]byte(`{}`))
+	msg.MetaSet("lsn", lsn)
+	return msg, &ackLSN
+}
+
+func newCountBatcher(t *testing.T, count int) *service.Batcher {
+	t.Helper()
+	batcher, err := (service.BatchPolicy{Count: count}).NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = batcher.Close(context.Background()) })
+	return batcher
+}
+
+// TestFlushBatchAcksTheStampNotTheRowLSN: the checkpoint payload is the
+// reader's stamp for the last row of the batch, which is the commit record
+// when that row closed its transaction. Confirming the row's own LSN would
+// make Postgres replay the transaction on restart.
+func TestFlushBatchAcksTheStampNotTheRowLSN(t *testing.T) {
+	p := newTestInput(t, 1)
+	cp := checkpoint.NewCapped[*string](10)
+	acker := &ackRecorder{}
+
+	msg, stamp := streamRow("0/10", "0/15")
+	require.NoError(t, p.flushBatch(t.Context(), acker, cp, service.MessageBatch{msg}, stamp))
+
+	got := <-p.msgChan
+	require.NoError(t, got.ackFn(t.Context(), nil))
+	require.Equal(t, []string{"0/15"}, acker.acked(), "the commit record is confirmed, not the row below it")
+}
+
+// TestFlushBatcherAcksTheLastRowAddedUnderABatchingPolicy: the reviewer's
+// scenario. With a batching policy the batcher holds rows before they are
+// tracked, so an output batch can be acked long after the reader has moved
+// on by any number of transactions. The ack target travels with the pending
+// rows, so nothing has to be looked up when the ack finally arrives: the
+// position confirmed is the commit of the last transaction in that batch.
+func TestFlushBatcherAcksTheLastRowAddedUnderABatchingPolicy(t *testing.T) {
+	const (
+		checkpointLimit = 1024
+		batchCount      = 10000
+	)
+	p := newTestInput(t, 4)
+	cp := checkpoint.NewCapped[*string](checkpointLimit)
+	acker := &ackRecorder{}
+	batcher := newCountBatcher(t, batchCount)
+
+	// One-row transactions: row at i*10, commit at i*10+5. Each is stamped
+	// with its commit, as the reader does at a commit-triggered flush.
+	next := pglogicalstream.LSN(10)
+	var pending pendingRows
+	add := func() (flushed bool) {
+		rowLSN, commitLSN := next, next+5
+		next += 10
+		msg, stamp := streamRow(rowLSN.String(), commitLSN.String())
+		pending.msgs = append(pending.msgs, msg)
+		pending.ackLSN = stamp
+		if !batcher.Add(msg) {
+			return false
+		}
+		require.True(t, p.flushBatcher(t.Context(), acker, cp, batcher, &pending))
+		return true
+	}
+
+	// Fill and flush output batch X. Its ack is now outstanding downstream.
+	var flushes int
+	for range batchCount {
+		if add() {
+			flushes++
+		}
+	}
+	require.Equal(t, 1, flushes, "the batcher flushed once at count")
+	commitX := (next - 10 + 5).String()
+
+	// Before X is acked, the reader keeps going and the batcher keeps
+	// swallowing rows. None of them is tracked, so checkpoint_limit does not
+	// slow the reader down; far more than checkpoint_limit transactions pass.
+	for range batchCount - 1 {
+		require.False(t, add(), "the batcher is still filling")
+	}
+
+	// X is acked. The position confirmed is the commit of X's last
+	// transaction, however many transactions have gone by since.
+	got := <-p.msgChan
+	require.Len(t, got.msg, batchCount)
+	require.NoError(t, got.ackFn(t.Context(), nil))
+	require.Equal(t, []string{commitX}, acker.acked())
+}
+
+// TestFlushBatcherAcksSnapshotBatchesAsSnapshot: snapshot rows carry no
+// position, so a batch of them is tracked under nil and never confirmed to
+// Postgres; it only counts towards the snapshot ack barrier.
+func TestFlushBatcherAcksSnapshotBatchesAsSnapshot(t *testing.T) {
+	p := newTestInput(t, 1)
+	cp := checkpoint.NewCapped[*string](10)
+	acker := &ackRecorder{}
+	batcher := newCountBatcher(t, 2)
+
+	var pending pendingRows
+	for range 2 {
+		msg := service.NewMessage([]byte(`{}`))
+		pending.msgs = append(pending.msgs, msg)
+		pending.ackLSN = nil
+		batcher.Add(msg)
+	}
+	require.True(t, p.flushBatcher(t.Context(), acker, cp, batcher, &pending))
+
+	got := <-p.msgChan
+	require.NoError(t, got.ackFn(t.Context(), nil))
+	require.Empty(t, acker.acked(), "nothing is confirmed for a snapshot batch")
+	p.snapshotAckWG.Wait()
 }
