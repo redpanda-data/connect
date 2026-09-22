@@ -617,7 +617,7 @@ a JSON object with a `message` key, whose value is written to the connector's lo
 INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message": "Signal message"}');
 ```
 
-**`snapshot`** — backfills the named tables incrementally, alongside streaming. Requires
+**`snapshot-execute`** — backfills the named tables incrementally, alongside streaming. Requires
 `incremental_snapshot.enabled`. The `data` column must contain a JSON object
 with a `tables` key listing table names in the configured `schema`, excluding the schema itself:
 

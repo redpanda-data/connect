@@ -269,12 +269,12 @@ a JSON object with a ` + "`message`" + ` key, whose value is written to the conn
 INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message": "Signal message"}');
 ` + "```" + `
 
-**` + "`snapshot`" + `** — backfills the named tables incrementally, alongside streaming. Requires
+**` + "`" + replication.SnapshotSignalType + "`" + `** — backfills the named tables incrementally, alongside streaming. Requires
 ` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotEnabled + "`" + `. The ` + "`data`" + ` column must contain a JSON object
 with a ` + "`tables`" + ` key listing table names in the configured ` + "`schema`" + `, excluding the schema itself:
 
 ` + "```sql" + `
-INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('snapshot-execute', '{"tables": ["orders", "customers"]}');
+INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('` + replication.SnapshotSignalType + `', '{"tables": ["orders", "customers"]}');
 ` + "```" + `
 
 Each table must appear in ` + "`" + fieldTables + "`" + ` (or that list must be empty, replicating everything):
