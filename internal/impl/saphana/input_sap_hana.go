@@ -97,20 +97,84 @@ var sapHANAInputConfigSpec = service.NewConfigSpec().
 	Summary("Reads rows from a SAP HANA table.").
 	Description(`Reads rows from a SAP HANA table. Supports five modes:
 
-- ` + "`bulk`" + `: reads all rows once then the input terminates (use with xref:components:inputs/sequence.adoc[sequence] for periodic re-reads).
-- ` + "`incrementing`" + `: polls for rows where ` + "`incrementing_column`" + ` exceeds the last seen value, emitting only net-new rows.
-- ` + "`query`" + `: executes a user-supplied SQL statement and emits one message per result row.
-- ` + "`timestamp`" + `: polls for rows where ` + "`timestamp_column`" + ` falls within ` + "`(last_hwm, database_now - timestamp_delay]`" + `. The bound is read from the database clock (see ` + "`timestamp_clock`" + `) and the delay absorbs commit lag. The HWM advances to the window bound once the window is fully consumed, so a restart mid-window re-reads that window from its start (rows sharing a timestamp cannot be split, hence no finer checkpoint).
-- ` + "`timestamp+incrementing`" + `: like ` + "`timestamp`" + ` but orders by ` + "`(timestamp_column, incrementing_column)`" + ` and resumes after the exact ` + "`(timestamp, incrementing)`" + ` pair of the last delivered row, so rows sharing a timestamp are neither duplicated nor missed and a restart mid-window continues from the last acknowledged batch rather than the window start.
+- `+"`bulk`"+`: reads all rows once then the input terminates (use with xref:components:inputs/sequence.adoc[sequence] for periodic re-reads).
+- `+"`incrementing`"+`: polls for rows where `+"`incrementing_column`"+` exceeds the last seen value, emitting only net-new rows.
+- `+"`query`"+`: executes a user-supplied SQL statement and emits one message per result row.
+- `+"`timestamp`"+`: polls for rows where `+"`timestamp_column`"+` falls within `+"`(last_hwm, database_now - timestamp_delay]`"+`. The bound is read from the database clock (see `+"`timestamp_clock`"+`) and the delay absorbs commit lag. The HWM advances to the window bound once the window is fully consumed, so a restart mid-window re-reads that window from its start (rows sharing a timestamp cannot be split, hence no finer checkpoint).
+- `+"`timestamp+incrementing`"+`: like `+"`timestamp`"+` but orders by `+"`(timestamp_column, incrementing_column)`"+` and resumes after the exact `+"`(timestamp, incrementing)`"+` pair of the last delivered row, so rows sharing a timestamp are neither duplicated nor missed and a restart mid-window continues from the last acknowledged batch rather than the window start.
 
 == Metadata
 
-Messages produced in ` + "`bulk`, `incrementing`, `timestamp`, and `timestamp+incrementing`" + ` modes carry the following metadata fields (` + "`query`" + ` mode attaches none):
+Messages produced in `+"`bulk`, `incrementing`, `timestamp`, and `timestamp+incrementing`"+` modes carry the following metadata fields (`+"`query`"+` mode attaches none):
 
-- ` + "`table_name`" + `: The HANA table name.
-- ` + "`database_schema`" + `: The configured ` + "`schema_name`" + `. Only present when ` + "`schema_name`" + ` is set.
-- ` + "`schema`" + `: Avro-compatible schema derived from ` + "`SYS.TABLE_COLUMNS`" + `, suitable for use with ` + "`schema_registry_encode`" + `. Column additions are detected automatically without a pipeline restart. Only present when ` + "`schema_name`" + ` is configured.
-- ` + "`primary_key_columns`" + `: JSON array of the table's primary-key column names in key order. Only present when ` + "`schema_name`" + ` is configured and the table has a primary key.
+- `+"`table_name`"+`: The HANA table name.
+- `+"`database_schema`"+`: The configured `+"`schema_name`"+`. Only present when `+"`schema_name`"+` is set.
+- `+"`schema`"+`: Avro-compatible schema derived from `+"`SYS.TABLE_COLUMNS`"+`, suitable for use with `+"`schema_registry_encode`"+`. Column additions are detected automatically without a pipeline restart. Only present when `+"`schema_name`"+` is configured.
+- `+"`primary_key_columns`"+`: JSON array of the table's primary-key column names in key order. Only present when `+"`schema_name`"+` is configured and the table has a primary key.
+
+== Troubleshooting
+
+*`+"`schema`"+` and `+"`primary_key_columns`"+` metadata are missing.* The input reads them from `+"`SYS.TABLE_COLUMNS`"+` and `+"`SYS.INDEX_COLUMNS`"+`; when that read fails it logs a warning and carries on without them, and `+"`incrementing_initial_value`"+` falls back to a guessed bind type. Check the warning in the logs and grant the connecting user `+"`CATALOG READ`"+` (or `+"`SELECT`"+` on the table's schema), and make sure `+"`schema_name`"+` is set.
+
+*"invalid table name" or "invalid column name" for a table that exists.* Identifiers in this config are quoted when sent to HANA, so they must match the catalog's case exactly. HANA upper-cases identifiers that were created without quotes: a table created as `+"`create table orders`"+` is `+"`ORDERS`"+` in the catalog and must be configured as such.
+
+*Batches arrive one at a time.* `+"`fetch_size`"+` larger than `+"`checkpoint_limit`"+` means a batch cannot be handed on until the previous one is acknowledged (a warning is logged at startup). Raise `+"`checkpoint_limit`"+` or lower `+"`fetch_size`"+`.
+
+*Rows written around the time of a poll are missing in timestamp modes.* The poll window ends at the database clock minus `+"`timestamp_delay`"+`; a row whose timestamp was assigned before that bound but committed after the poll is never seen. Set `+"`timestamp_delay`"+` longer than your longest write transaction, and pick the `+"`timestamp_clock`"+` that matches how the column is populated.
+`).
+	Example("Incremental reads with a durable checkpoint",
+		"Polls an orders table for new rows by primary key every 30 seconds and persists the high-water mark in a file cache so a restart resumes where it left off.",
+		`
+input:
+  sap_hana:
+    dsn: hdb://user:password@hana-host:39017
+    mode: incrementing
+    schema_name: SALES
+    table: ORDERS
+    incrementing_column: ORDER_ID
+    poll_interval: 30s
+    checkpoint_cache: hana_checkpoints
+
+cache_resources:
+  - label: hana_checkpoints
+    file:
+      directory: /var/lib/redpanda-connect/sap_hana
+`).
+	Example("Change tracking by timestamp with automatic Avro schema registration",
+		"Follows an updated-at column together with the primary key so rows sharing a timestamp are neither duplicated nor missed, bounds each poll by the database's UTC clock with a commit-lag buffer, and registers the table's schema from the emitted metadata before encoding.",
+		`
+input:
+  sap_hana:
+    dsn: hdb://user:password@hana-host:39017
+    mode: timestamp+incrementing
+    schema_name: SALES
+    table: ORDERS
+    timestamp_column: UPDATED_AT
+    incrementing_column: ORDER_ID
+    timestamp_clock: database_utc
+    timestamp_delay: 30s
+    poll_interval: 10s
+    checkpoint_cache: hana_checkpoints
+
+pipeline:
+  processors:
+    - schema_registry_encode:
+        url: http://schema-registry:8081
+        subject: sales.orders-value
+        schema_metadata: schema
+        format: avro
+        avro:
+          raw_json: true
+
+output:
+  redpanda:
+    seed_brokers: [ "broker:9092" ]
+    topic: sales.orders
+
+cache_resources:
+  - label: hana_checkpoints
+    file:
+      directory: /var/lib/redpanda-connect/sap_hana
 `).
 	Field(service.NewStringField(shFieldDSN).
 		Description("SAP HANA connection DSN in `hdb://user:password@host:port` form.").
@@ -143,7 +207,7 @@ Messages produced in ` + "`bulk`, `incrementing`, `timestamp`, and `timestamp+in
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldIncrementingInitialVal).
-		Description("Initial high-water mark value. When empty, all existing rows are emitted on the first run. The value is converted to the `incrementing_column`'s type from the catalog on connect: integers for integer columns, RFC3339 or `YYYY-MM-DD[ HH:MM:SS]` for DATE/TIMESTAMP columns, and the literal string (leading zeros preserved) for character columns. A persisted checkpoint takes precedence over this value.").
+		Description("Initial high-water mark value. When empty, all existing rows are emitted on the first run. The value is converted to the `incrementing_column`'s type from the catalog on connect: integers for integer columns, RFC3339 or `YYYY-MM-DD[ HH:MM:SS]` for DATE/TIMESTAMP columns, hexadecimal for BINARY/VARBINARY columns, and the literal string (leading zeros preserved) for character columns. A persisted checkpoint takes precedence over this value.").
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldPollInterval).
@@ -785,7 +849,7 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 							return nil, nil, pErr
 						}
 						s.peekedRow = peekedMsg
-						if s.hwm != hwmAtPeek {
+						if !hwmEqual(s.hwm, hwmAtPeek) {
 							// Group boundary crossed: previous value is fully emitted.
 							s.hwmSafe = hwmAtPeek
 						}
@@ -862,6 +926,19 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 			return nil, nil, service.ErrEndOfInput
 		}
 	}
+}
+
+// hwmEqual compares two high-water mark values. They are the normalised
+// column values scanRow produces (int64, float64, string, time.Time, []byte
+// or nil); a binary key arrives as []byte, and comparing two interfaces that
+// hold slices with == panics, so that case is handled by content.
+func hwmEqual(a, b any) bool {
+	ab, aIsBytes := a.([]byte)
+	bb, bIsBytes := b.([]byte)
+	if aIsBytes || bIsBytes {
+		return aIsBytes && bIsBytes && bytes.Equal(ab, bb)
+	}
+	return a == b
 }
 
 // parseIncrHWMString converts the string value of incrementing_initial_value
@@ -1154,6 +1231,7 @@ type sapHANACheckpointState struct {
 	IncrHWMInt   *int64     `json:"incr_hwm_int,omitempty"`
 	IncrHWMFloat *float64   `json:"incr_hwm_float,omitempty"`
 	IncrHWMTime  *time.Time `json:"incr_hwm_time,omitempty"`
+	IncrHWMBytes []byte     `json:"incr_hwm_bytes,omitempty"` // BINARY/VARBINARY keys, base64 on the wire
 }
 
 // loadCheckpoint restores persisted HWM state from the cache. It reports
@@ -1196,6 +1274,8 @@ func (s *sapHANAInput) loadCheckpoint(ctx context.Context) (bool, error) {
 		s.hwm = *cp.IncrHWMFloat
 	case cp.IncrHWMTime != nil:
 		s.hwm = *cp.IncrHWMTime
+	case cp.IncrHWMBytes != nil:
+		s.hwm = cp.IncrHWMBytes
 	default:
 		resumedHWM = false
 	}
@@ -1276,6 +1356,14 @@ func coerceIncrementingValue(raw, dataType string) (any, error) {
 			return nil, fmt.Errorf("expected a number: %w", err)
 		}
 		return f, nil
+	case "BINARY", "VARBINARY":
+		// A binary key (ULID, UUID) is written in hex; binding the text itself
+		// would compare against the ASCII bytes of the hex, not the key.
+		b, err := hex.DecodeString(raw)
+		if err != nil {
+			return nil, fmt.Errorf("expected hexadecimal bytes: %w", err)
+		}
+		return b, nil
 	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE", "LONGDATE", "DAYDATE", "SECONDTIME":
 		for _, layout := range incrementingTimeLayouts {
 			if t, err := time.Parse(layout, raw); err == nil {
@@ -1307,6 +1395,8 @@ func checkpointSnapshot(hwm any, tsHWM time.Time) *sapHANACheckpointState {
 		cp.IncrHWMFloat = &v
 	case time.Time:
 		cp.IncrHWMTime = &v
+	case []byte:
+		cp.IncrHWMBytes = v
 	}
 	return cp
 }

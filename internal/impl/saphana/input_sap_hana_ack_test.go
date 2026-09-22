@@ -539,6 +539,11 @@ func TestCoerceIncrementingValue(t *testing.T) {
 		{raw: "2024-01-01", dataType: "DAYDATE", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{raw: "abc", dataType: "BIGINT", wantErr: true},
 		{raw: "yesterday", dataType: "TIMESTAMP", wantErr: true},
+		// Binary keys (a ULID or UUID stored as VARBINARY(16)) are written in
+		// hex and bound as bytes, not as the ASCII of the hex text.
+		{raw: "0189f0a1b2c3", dataType: "VARBINARY", want: []byte{0x01, 0x89, 0xf0, 0xa1, 0xb2, 0xc3}},
+		{raw: "00ff", dataType: "BINARY", want: []byte{0x00, 0xff}},
+		{raw: "zz", dataType: "VARBINARY", wantErr: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.dataType+"/"+tc.raw, func(t *testing.T) {
@@ -801,4 +806,75 @@ timestamp_column: TS
 		require.ErrorContains(t, s.validateTimestampColumn(t.Context()), "has type INTEGER")
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
+}
+
+// TestSAPHANAInputBinaryIncrementingKey: a VARBINARY incrementing_column (a
+// monotonic ULID is the realistic case) arrives as []byte. The peek-ahead at a
+// fetch_size boundary compares two HWM values, and comparing two interfaces
+// holding []byte with == panics, so the comparison must be type-aware. The
+// key must also survive the checkpoint round trip, otherwise every restart
+// re-reads the table.
+func TestSAPHANAInputBinaryIncrementingKey(t *testing.T) {
+	res := enterpriseResourcesWithCache()
+	s, mock := newTestInput(t, res, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: T
+incrementing_column: ID
+poll_interval: 1ms
+fetch_size: 1
+max_retries: 0
+checkpoint_cache: %s
+`, testCacheName))
+
+	// The driver reports the column as VARBINARY, which is what keeps the
+	// value a []byte through normalisation (bytes under a text-typed column
+	// that happen to be valid UTF-8 would become a string).
+	k1, k2 := []byte{0x01, 0x00}, []byte{0x01, 0x01}
+	idCol := sqlmock.NewColumn("ID").OfType("VARBINARY", []byte{})
+	mock.ExpectQuery(`SELECT * FROM "T" ORDER BY "ID"`).
+		WillReturnRows(sqlmock.NewRowsWithColumnDefinition(idCol).AddRow(k1).AddRow(k2))
+
+	batch1, ack1, err := s.ReadBatch(t.Context())
+	require.NoError(t, err, "the peek-ahead must not panic on a []byte key")
+	require.Len(t, batch1, 1)
+	batch2, ack2, err := s.ReadBatch(t.Context())
+	require.NoError(t, err)
+	require.Len(t, batch2, 1)
+
+	require.NoError(t, ack1(t.Context(), nil))
+	require.NoError(t, ack2(t.Context(), nil))
+	cp := readCheckpoint(t, res)
+	require.NotNil(t, cp, "a []byte HWM must be persisted like any other key type")
+	require.Equal(t, k2, cp.IncrHWMBytes)
+
+	// The next poll binds the []byte HWM as bytes, and a restart resumes from it.
+	mock.ExpectQuery(testIncQuery).WithArgs(k2).WillReturnError(errors.New("stop here"))
+	_, _, err = s.ReadBatch(t.Context())
+	require.ErrorContains(t, err, "stop here")
+	require.NoError(t, mock.ExpectationsWereMet())
+
+	s2, err := newSAPHANAInput(parseInputConf(t, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: T
+incrementing_column: ID
+checkpoint_cache: %s
+`, testCacheName)), res)
+	require.NoError(t, err)
+	resumed, err := s2.loadCheckpoint(t.Context())
+	require.NoError(t, err)
+	require.True(t, resumed)
+	require.Equal(t, k2, s2.hwm)
+}
+
+func TestHWMEqual(t *testing.T) {
+	assert.True(t, hwmEqual([]byte{1, 2}, []byte{1, 2}))
+	assert.False(t, hwmEqual([]byte{1, 2}, []byte{1, 3}))
+	assert.False(t, hwmEqual([]byte{1}, "\x01"), "a byte slice never equals a string")
+	assert.True(t, hwmEqual(int64(7), int64(7)))
+	assert.False(t, hwmEqual(int64(7), int64(8)))
+	assert.True(t, hwmEqual(nil, nil))
+	assert.False(t, hwmEqual(nil, int64(0)))
+	assert.True(t, hwmEqual("a", "a"))
 }
