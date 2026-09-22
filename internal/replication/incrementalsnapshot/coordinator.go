@@ -23,6 +23,21 @@ import (
 // a chunk is safe to emit, and what the caller may checkpoint. Side effects
 // come from Deps, window comparisons from Watermark.
 //
+// P is the database's transaction position type: whatever identifies and
+// orders a committed transaction, such as a Postgres xid, a MySQL GTID or an
+// Oracle SCN. The coordinator never interprets it — it only hands each
+// position given to OnCommit to W's methods — so any type will do.
+//
+// W is the watermark type, which does interpret P: it decides when a chunk's
+// window opens and closes. Refer to Watermark for the contract, including
+// that implementations must be comparable.
+//
+// Both are pinned once per connector rather than threaded through call sites.
+// Postgres does this with aliases in
+// internal/impl/postgresql/incrementalsnapshot, binding P to uint32 and W to
+// its own Watermark, so the rest of that connector names an unparameterised
+// Coordinator.
+//
 // Not safe for concurrent use: call OnStreamedRow and OnCommit from one
 // goroutine, in stream order. OnCommit's chunk read blocks on I/O by design.
 type Coordinator[P any, W Watermark[P]] struct {
@@ -75,7 +90,7 @@ type Coordinator[P any, W Watermark[P]] struct {
 
 // NewCoordinator builds a Coordinator. A non-nil resume makes Start continue
 // from that state; otherwise it starts with an empty queue, which AddTables
-// fills.
+// fills. P and W are documented on Coordinator.
 func NewCoordinator[P any, W Watermark[P]](cfg CoordinatorConfig[P, W], resume *State) (*Coordinator[P, W], error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err

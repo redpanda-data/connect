@@ -61,8 +61,8 @@ type Deps[W any] interface {
 // such as one with no primary key, or one dropped after it was queued.
 var ErrTableUnusable = errors.New("table cannot be backfilled")
 
-// CoordinatorConfig configures a Coordinator. P is the database's position
-// type and W its watermark type; see Watermark.
+// CoordinatorConfig configures a Coordinator. P and W are documented on
+// Coordinator.
 type CoordinatorConfig[P any, W Watermark[P]] struct {
 	ChunkSize int
 	Deps      Deps[W]
