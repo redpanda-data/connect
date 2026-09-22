@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,14 +69,27 @@ const (
 	shModeTimestampIncrementing = "timestamp+incrementing"
 )
 
-// Defaults of the mode-specific fields that carry one, mirrored from the
-// config spec so rejectInertFields can tell an explicit value from the
-// default. Keep in sync with the Default(...) calls in the spec below.
+// Defaults of the mode-specific fields that carry one. The spec's Default(...)
+// calls use these same constants, and rejectInertFields compares against them
+// to tell an explicit value from the default.
 const (
-	shDefaultPollInterval       = 60 * time.Second
-	shDefaultTimestampDelay     = 5 * time.Second
+	shDefaultPollInterval       = "60s"
+	shDefaultTimestampDelay     = "5s"
 	shDefaultCheckpointCacheKey = "sap_hana_hwm"
 )
+
+var (
+	shDefaultPollIntervalDur   = mustDuration(shDefaultPollInterval)
+	shDefaultTimestampDelayDur = mustDuration(shDefaultTimestampDelay)
+)
+
+func mustDuration(s string) time.Duration {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
+}
 
 var sapHANAInputConfigSpec = service.NewConfigSpec().
 	Categories("Services").
@@ -134,7 +148,7 @@ Messages produced in ` + "`bulk`, `incrementing`, `timestamp`, and `timestamp+in
 	).
 	Field(service.NewDurationField(shFieldPollInterval).
 		Description("How long to wait between polls in `incrementing`, `timestamp`, and `timestamp+incrementing` modes.").
-		Default("60s").
+		Default(shDefaultPollInterval).
 		Example("10s").
 		Example("5m"),
 	).
@@ -148,7 +162,7 @@ Messages produced in ` + "`bulk`, `incrementing`, `timestamp`, and `timestamp+in
 	).
 	Field(service.NewDurationField(shFieldTimestampDelay).
 		Description("Commit-lag buffer for timestamp modes. The upper bound for each poll is the database clock minus `timestamp_delay`, so rows whose timestamp was assigned slightly before a still-uncommitted transaction finished are not missed.").
-		Default("5s").
+		Default(shDefaultTimestampDelay).
 		Example("0s").
 		Example("30s"),
 	).
@@ -178,7 +192,7 @@ Messages produced in ` + "`bulk`, `incrementing`, `timestamp`, and `timestamp+in
 	).
 	Field(service.NewStringField(shFieldCheckpointCacheKey).
 		Description("Key used to store the checkpoint in `checkpoint_cache`. Change this when multiple `sap_hana` inputs share the same cache resource to avoid key collisions.").
-		Default("sap_hana_hwm").
+		Default(shDefaultCheckpointCacheKey).
 		Advanced(),
 	).
 	Field(service.NewIntField(shFieldCheckpointLimit).
@@ -449,14 +463,19 @@ func (s *sapHANAInput) rejectInertFields(conf *service.ParsedConfig) error {
 		inert(shFieldSchemaName, s.mode == shModeQuery && conf.Contains(shFieldSchemaName), "table-driven modes"),
 		inert(shFieldCheckpointCache, !polls && conf.Contains(shFieldCheckpointCache),
 			"incrementing, timestamp, and timestamp+incrementing modes"),
-		inert(shFieldPollInterval, !polls && s.pollInterval != shDefaultPollInterval,
+		inert(shFieldPollInterval, !polls && s.pollInterval != shDefaultPollIntervalDur,
 			"incrementing, timestamp, and timestamp+incrementing modes"),
-		inert(shFieldTimestampDelay, !usesTimestamp && s.timestampDelay != shDefaultTimestampDelay,
+		inert(shFieldTimestampDelay, !usesTimestamp && s.timestampDelay != shDefaultTimestampDelayDur,
 			"timestamp and timestamp+incrementing modes"),
 		inert(shFieldTimestampClock, !usesTimestamp && s.timestampClock != shTimestampClockDatabase,
 			"timestamp and timestamp+incrementing modes"),
-		inert(shFieldCheckpointCacheKey, s.checkpointCache == "" && s.checkpointCacheKey != shDefaultCheckpointCacheKey,
-			"configs that set checkpoint_cache"),
+	}
+	// checkpoint_cache_key is inert for a different reason than the mode: it
+	// only names where the checkpoint is stored, so without checkpoint_cache
+	// there is nothing to store.
+	if s.checkpointCache == "" && s.checkpointCacheKey != shDefaultCheckpointCacheKey {
+		checks = append(checks, fmt.Errorf("field %q is set but %q is not: the key only names where the checkpoint is stored, so set %q or remove it",
+			shFieldCheckpointCacheKey, shFieldCheckpointCache, shFieldCheckpointCache))
 	}
 	return errors.Join(checks...)
 }
@@ -494,6 +513,13 @@ func (s *sapHANAInput) Connect(ctx context.Context) error {
 	// column's type or go-hdb rejects the parameter on every poll.
 	if !resumedHWM && s.incrInitialRaw != "" && s.incrementingCol != "" {
 		if err := s.resolveIncrementingInitialValue(ctx); err != nil {
+			_ = db.Close()
+			s.db = nil
+			return err
+		}
+	}
+	if s.mode == shModeTimestamp || s.mode == shModeTimestampIncrementing {
+		if err := s.validateTimestampColumn(ctx); err != nil {
 			_ = db.Close()
 			s.db = nil
 			return err
@@ -869,6 +895,18 @@ func normalizeHANAValue(v any, colType *schema.Common, numericMapping string) (a
 	switch val := v.(type) {
 	case []byte:
 		return normalizeBytes(val, colType), nil
+	case string:
+		// Every binary type reaches us as []byte except the spatial ones
+		// (ST_POINT, ST_GEOMETRY): go-hdb decodes those through its hex field
+		// reader into a hex string. A string under a bytes-typed column can
+		// only be that, so decode it to the WKB the schema advertises. A
+		// string that is not valid hex is passed through untouched.
+		if colType != nil && colType.Type == schema.ByteArray {
+			if b, err := hex.DecodeString(val); err == nil {
+				return b, nil
+			}
+		}
+		return val, nil
 	case lobScanner:
 		var b []byte
 		if err := gohdb.ScanLobBytes(val, &b); err != nil {
@@ -1185,6 +1223,31 @@ func (s *sapHANAInput) resolveIncrementingInitialValue(ctx context.Context) erro
 			shFieldIncrementingInitialVal, s.incrInitialRaw, shFieldIncrementingColumn, s.incrementingCol, dataType, err)
 	}
 	s.hwm = v
+	return nil
+}
+
+// timestampColumnTypes are the catalog types a timestamp_column may have: the
+// window predicate binds a time.Time against it and compares it with the
+// database clock, which only makes sense for a timestamp-valued column.
+var timestampColumnTypes = map[string]struct{}{
+	"TIMESTAMP": {}, "LONGDATE": {}, "SECONDDATE": {},
+}
+
+// validateTimestampColumn checks timestamp_column against SYS.TABLE_COLUMNS
+// so a wrongly typed column fails at connect time with a clear message rather
+// than on the first poll's bind. An unreadable catalog is logged and skipped,
+// as for the incrementing column.
+func (s *sapHANAInput) validateTimestampColumn(ctx context.Context) error {
+	dataType, err := fetchHANAColumnType(ctx, s.db, s.schemaName, s.tableName, s.timestampCol)
+	if err != nil {
+		s.log.Warnf("Could not determine the type of %s column %q from SYS.TABLE_COLUMNS, continuing without checking it: %v",
+			shFieldTimestampColumn, s.timestampCol, err)
+		return nil
+	}
+	if _, ok := timestampColumnTypes[dataType]; !ok {
+		return fmt.Errorf("%s %q has type %s; %s modes need a TIMESTAMP, LONGDATE or SECONDDATE column",
+			shFieldTimestampColumn, s.timestampCol, dataType, s.mode)
+	}
 	return nil
 }
 
