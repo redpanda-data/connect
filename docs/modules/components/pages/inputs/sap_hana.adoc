@@ -107,6 +107,88 @@ Messages produced in `bulk`, `incrementing`, `timestamp`, and `timestamp+increme
 - `schema`: Avro-compatible schema derived from `SYS.TABLE_COLUMNS`, suitable for use with `schema_registry_encode`. Column additions are detected automatically without a pipeline restart. Only present when `schema_name` is configured.
 - `primary_key_columns`: JSON array of the table's primary-key column names in key order. Only present when `schema_name` is configured and the table has a primary key.
 
+== Troubleshooting
+
+*`schema` and `primary_key_columns` metadata are missing.* The input reads them from `SYS.TABLE_COLUMNS` and `SYS.INDEX_COLUMNS`; when that read fails it logs a warning and carries on without them, and `incrementing_initial_value` falls back to a guessed bind type. Check the warning in the logs and grant the connecting user `CATALOG READ` (or `SELECT` on the table's schema), and make sure `schema_name` is set.
+
+*"invalid table name" or "invalid column name" for a table that exists.* Identifiers in this config are quoted when sent to HANA, so they must match the catalog's case exactly. HANA upper-cases identifiers that were created without quotes: a table created as `create table orders` is `ORDERS` in the catalog and must be configured as such.
+
+*Batches arrive one at a time.* `fetch_size` larger than `checkpoint_limit` means a batch cannot be handed on until the previous one is acknowledged (a warning is logged at startup). Raise `checkpoint_limit` or lower `fetch_size`.
+
+*Rows written around the time of a poll are missing in timestamp modes.* The poll window ends at the database clock minus `timestamp_delay`; a row whose timestamp was assigned before that bound but committed after the poll is never seen. Set `timestamp_delay` longer than your longest write transaction, and pick the `timestamp_clock` that matches how the column is populated.
+
+
+== Examples
+
+[tabs]
+======
+Incremental reads with a durable checkpoint::
++
+--
+
+Polls an orders table for new rows by primary key every 30 seconds and persists the high-water mark in a file cache so a restart resumes where it left off.
+
+```yaml
+input:
+  sap_hana:
+    dsn: hdb://user:password@hana-host:39017
+    mode: incrementing
+    schema_name: SALES
+    table: ORDERS
+    incrementing_column: ORDER_ID
+    poll_interval: 30s
+    checkpoint_cache: hana_checkpoints
+
+cache_resources:
+  - label: hana_checkpoints
+    file:
+      directory: /var/lib/redpanda-connect/sap_hana
+```
+
+--
+Change tracking by timestamp with automatic Avro schema registration::
++
+--
+
+Follows an updated-at column together with the primary key so rows sharing a timestamp are neither duplicated nor missed, bounds each poll by the database's UTC clock with a commit-lag buffer, and registers the table's schema from the emitted metadata before encoding.
+
+```yaml
+input:
+  sap_hana:
+    dsn: hdb://user:password@hana-host:39017
+    mode: timestamp+incrementing
+    schema_name: SALES
+    table: ORDERS
+    timestamp_column: UPDATED_AT
+    incrementing_column: ORDER_ID
+    timestamp_clock: database_utc
+    timestamp_delay: 30s
+    poll_interval: 10s
+    checkpoint_cache: hana_checkpoints
+
+pipeline:
+  processors:
+    - schema_registry_encode:
+        url: http://schema-registry:8081
+        subject: sales.orders-value
+        schema_metadata: schema
+        format: avro
+        avro:
+          raw_json: true
+
+output:
+  redpanda:
+    seed_brokers: [ "broker:9092" ]
+    topic: sales.orders
+
+cache_resources:
+  - label: hana_checkpoints
+    file:
+      directory: /var/lib/redpanda-connect/sap_hana
+```
+
+--
+======
 
 == Fields
 
@@ -189,7 +271,7 @@ Column to use as the high-water mark for `incrementing` mode. Must be strictly m
 
 === `incrementing_initial_value`
 
-Initial high-water mark value. When empty, all existing rows are emitted on the first run. The value is converted to the `incrementing_column`'s type from the catalog on connect: integers for integer columns, RFC3339 or `YYYY-MM-DD[ HH:MM:SS]` for DATE/TIMESTAMP columns, and the literal string (leading zeros preserved) for character columns. A persisted checkpoint takes precedence over this value.
+Initial high-water mark value. When empty, all existing rows are emitted on the first run. The value is converted to the `incrementing_column`'s type from the catalog on connect: integers for integer columns, RFC3339 or `YYYY-MM-DD[ HH:MM:SS]` for DATE/TIMESTAMP columns, hexadecimal for BINARY/VARBINARY columns, and the literal string (leading zeros preserved) for character columns. A persisted checkpoint takes precedence over this value.
 
 
 *Type*: `string`
