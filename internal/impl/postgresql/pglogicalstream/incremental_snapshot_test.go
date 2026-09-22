@@ -172,16 +172,6 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 		{"bool", "boolean", "true"},
 		{"inet", "inet", "'192.168.0.1/24'::inet"},
 	}
-	// Excluded: bytea. The two decode paths do reduce to the same window
-	// key, but the key is also bound as the next chunk's bound and written
-	// to the checkpoint, and raw bytes survive neither. It is rejected as a
-	// key type instead -- refer to
-	// TestIntegrationIncrementalSnapshotRejectsUnbindableKey.
-	//
-	// Excluded: numeric with a negative scale, e.g. numeric(5,-2). The
-	// streaming decoder rejects it outright because
-	// pgNumericModFromAtttypmod misreads the scale. That is a pre-existing
-	// fault in replication_message_decoders.go, unrelated to key parity.
 
 	for _, tc := range cases {
 		_, err := db.Exec(fmt.Sprintf("CREATE TABLE %s (id %s PRIMARY KEY)", tc.name, tc.colType))
@@ -268,10 +258,6 @@ func streamedPKValues(t *testing.T, db *sql.DB) map[string]any {
 	return out
 }
 
-// TestSnapshotSignalRejectsUnreplicatedTable: a signal may only name a table
-// the publication carries. Backfilling an unreplicated one has no live
-// changes to deduplicate against, so a write during the backfill would be
-// lost behind the stale snapshot row.
 func TestSnapshotSignalRejectsUnreplicatedTable(t *testing.T) {
 	signalRow := func(tables string) *StreamMessage {
 		return &StreamMessage{
@@ -332,10 +318,6 @@ func TestSnapshotSignalRejectsUnreplicatedTable(t *testing.T) {
 	})
 }
 
-// TestSnapshotSignalRejectsTableWithoutPrimaryKey: the backfill pages by
-// key, so a table without one can never be read, and accepting the signal
-// would queue it into the checkpoint. REPLICA IDENTITY FULL replicates a
-// table without a key, so this is reachable rather than broken.
 func TestSnapshotSignalRejectsTableWithoutPrimaryKey(t *testing.T) {
 	signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
 	s := &Stream{
@@ -366,13 +348,6 @@ func TestSnapshotSignalRejectsTableWithoutPrimaryKey(t *testing.T) {
 	assert.Contains(t, err.Error(), "no primary key found")
 }
 
-// TestSnapshotSignalRejectionVsFailure: only a signal the connector will
-// never honour may be logged and skipped.
-//
-// The row is forwarded and its position acknowledged either way, so a
-// request dropped because a check could not run is dropped for good. A
-// failure must instead reach the caller, which restarts the stream and
-// redelivers the still-unacknowledged row.
 func TestSnapshotSignalRejectionVsFailure(t *testing.T) {
 	signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
 	replicated := map[incrementalsnapshot.TableID]struct{}{
@@ -460,11 +435,6 @@ func TestSnapshotSignalRejectionVsFailure(t *testing.T) {
 	}
 }
 
-// TestDeduplicateStreamedRowOnlyTouchesTheCurrentTable: a table a previous
-// run finished is still in the checkpoint, so a gate on that would resolve
-// keys for it on every restart. The lookup is a live query, and its failure
-// used to stop replication for every table -- for work OnStreamedRow
-// discards, since it only matters for the table being read.
 func TestDeduplicateStreamedRowOnlyTouchesTheCurrentTable(t *testing.T) {
 	// Closed, so any key lookup fails the way a reset connection would.
 	broken := newFakeQueryDB(t, []string{"attname"}, [][]driver.Value{{"id"}}, nil)
@@ -615,10 +585,6 @@ func (r *fakeQueryRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-// TestIntegrationIncrementalSnapshotRejectsUnbindableKey covers a key type the
-// chunk query cannot bind. Before the check, such a table halted replication
-// for every table: FetchChunk failed, the error reached processChange, the
-// stream restarted, reloaded the same checkpoint and failed identically.
 func TestIntegrationIncrementalSnapshotRejectsUnbindableKey(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -717,11 +683,6 @@ func TestIntegrationIncrementalSnapshotRejectsUnbindableKey(t *testing.T) {
 	})
 }
 
-// TestSnapshotSignalWithSnapshotDisabled: configuring a signal table but
-// leaving incremental_snapshot.enabled false is the likeliest operator
-// mistake, and it used to produce nothing at all -- the signaller stopped
-// reporting the type as unknown once it recognised it, and the connector
-// returned early on the nil coordinator.
 func TestSnapshotSignalWithSnapshotDisabled(t *testing.T) {
 	signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
 
@@ -788,10 +749,6 @@ func TestSnapshotSignalWithSnapshotDisabled(t *testing.T) {
 	}
 }
 
-// TestSnapshotSignalRejectsUndedupableTable: a partitioned parent's changes
-// stream under its partitions' names unless the publication republishes via
-// the root, so the window buffer never sees them and a row updated during the
-// backfill is followed by the stale snapshot copy.
 func TestSnapshotSignalRejectsUndedupableTable(t *testing.T) {
 	signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
 	events := incrementalsnapshot.TableID{Schema: "public", Table: "events"}
@@ -882,10 +839,6 @@ func TestCanonicalizePKValueNormalisesTimestampZone(t *testing.T) {
 		})
 	}
 
-	// The key is written to the checkpoint and bound as the next chunk's
-	// bound, so it must not depend on where the connector happens to run.
-	// Normalising to the host zone would make both decode paths agree too,
-	// but only on that host.
 	t.Run("the key does not depend on the host zone", func(t *testing.T) {
 		original := time.Local
 		t.Cleanup(func() { time.Local = original })

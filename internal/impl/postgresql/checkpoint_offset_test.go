@@ -21,10 +21,6 @@ func TestCheckpointOffsetMerge(t *testing.T) {
 	state2 := []byte("state-2")
 
 	t.Run("nil fields on other never clobber non-nil fields on the receiver", func(t *testing.T) {
-		// This is the exact scenario that used to lose data: a row-less
-		// incremental snapshot checkpoint (LSN=nil) resolving out of order
-		// must not erase a pending real batch's LSN, and a real batch with
-		// no new snapshot state must not erase pending snapshot progress.
 		receiver := checkpointOffset{lsn: &lsn1, incSnapshotState: state1}
 
 		merged := receiver.merge(checkpointOffset{})

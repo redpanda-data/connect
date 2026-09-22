@@ -64,13 +64,10 @@ type Stream struct {
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
 	pgVersion               int
+	signalTable             *incrementalsnapshot.TableID
 	incSnapshot             incrementalSnapshot
-
-	signalTable    *incrementalsnapshot.TableID
-	snapshotSchema string
-	// IsBlockingSnapshot is true only when this session runs the one-shot
-	// stream_snapshot backfill.
-	IsBlockingSnapshot bool
+	snapshotSchema          string
+	IsBlockingSnapshot      bool
 }
 
 // NewPgStream creates a new instance of the Stream struct.

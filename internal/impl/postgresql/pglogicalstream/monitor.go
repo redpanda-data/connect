@@ -108,15 +108,6 @@ func (m *Monitor) MarkSnapshotComplete(table TableFQN) {
 	}
 }
 
-// TrackSnapshotTable makes a progress metric exist for table, reading its row
-// estimate as the denominator. Idempotent, and a no-op for a table already
-// tracked -- calling it twice must not reset the progress of a backfill in
-// flight.
-//
-// An incremental snapshot takes its tables from a signal, so a table can
-// enter the backfill long after NewMonitor read the configured ones. Without
-// this, every update for it is dropped and the operator has no metric to
-// watch the backfill by, which is the whole of the observability for it.
 func (m *Monitor) TrackSnapshotTable(ctx context.Context, table TableFQN) {
 	m.snapshotMu.Lock()
 	_, tracked := m.snapshotProgress[table]

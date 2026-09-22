@@ -654,10 +654,8 @@ func (s *Stream) advanceIncrementalSnapshot(ctx context.Context, xid uint32) err
 	s.incSnapshot.backfilling.Store(!s.incSnapshot.coordinator.Idle())
 
 	if changed && s.incSnapshot.coordinator.Idle() {
-		// The last table sees no following checkpoint, so report it here.
-		// More may arrive by signal, so this is not a completion.
 		s.reportTableTransition(ctx, nil)
-		s.logger.Info("Incremental snapshot: queue empty, waiting for a snapshot signal")
+		s.logger.Info("Incremental snapshot: queue empty")
 	}
 	return nil
 }

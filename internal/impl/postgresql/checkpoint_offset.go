@@ -10,10 +10,6 @@ package pgstream
 
 // checkpointOffset is the per-batch payload checkpointTracker tracks. Every
 // run carries one, snapshot or not: lsn acknowledges the replication slot.
-//
-// incSnapshotState is the snapshot's contribution, non-nil only on a batch
-// that carries a checkpoint. Riding here gives it the lsn's acknowledgement
-// ordering.
 type checkpointOffset struct {
 	lsn              *string
 	incSnapshotState []byte
@@ -24,11 +20,6 @@ type checkpointOffset struct {
 }
 
 // merge overlays each non-nil field of other onto a copy of o.
-//
-// Resolving a node out of order assigns its whole payload onto its unresolved
-// predecessor, so a nil field would wipe whatever the predecessor held.
-// Callers must therefore merge against the last tracked payload before
-// calling Track.
 func (o checkpointOffset) merge(other checkpointOffset) checkpointOffset {
 	merged := o
 	if other.lsn != nil {
