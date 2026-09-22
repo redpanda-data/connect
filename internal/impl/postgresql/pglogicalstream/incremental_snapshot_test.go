@@ -279,7 +279,7 @@ func TestSnapshotSignalRejectsUnreplicatedTable(t *testing.T) {
 			Schema:    "public",
 			Table:     "rpcn_signal",
 			Data: map[string]any{
-				"type": "snapshot",
+				"type": "snapshot-execute",
 				"data": fmt.Sprintf(`{"tables": [%s]}`, tables),
 			},
 		}
@@ -357,7 +357,7 @@ func TestSnapshotSignalRejectsTableWithoutPrimaryKey(t *testing.T) {
 		Schema:    "public",
 		Table:     "rpcn_signal",
 		Data: map[string]any{
-			"type": "snapshot",
+			"type": "snapshot-execute",
 			"data": `{"tables": ["nopk"]}`,
 		},
 	})
@@ -439,7 +439,7 @@ func TestSnapshotSignalRejectionVsFailure(t *testing.T) {
 				Operation: InsertOpType,
 				Schema:    "public",
 				Table:     "rpcn_signal",
-				Data:      map[string]any{"type": "snapshot", "data": test.payload},
+				Data:      map[string]any{"type": "snapshot-execute", "data": test.payload},
 			}
 
 			_, err := s.snapshotSignalTables(t.Context(), msg)
@@ -745,7 +745,7 @@ func TestSnapshotSignalWithSnapshotDisabled(t *testing.T) {
 
 	t.Run("a snapshot signal is reported", func(t *testing.T) {
 		s := newStream()
-		_, err := s.snapshotSignalTables(t.Context(), row("snapshot", `{"tables": ["orders"]}`))
+		_, err := s.snapshotSignalTables(t.Context(), row("snapshot-execute", `{"tables": ["orders"]}`))
 		require.Error(t, err)
 		assert.ErrorIs(t, err, errSnapshotDisabled)
 		assert.NotErrorIs(t, err, errSignalRejected,
@@ -754,7 +754,7 @@ func TestSnapshotSignalWithSnapshotDisabled(t *testing.T) {
 			"the message must name the setting to turn on")
 
 		// Warned and swallowed: a config mistake must not stop replication.
-		assert.NoError(t, s.dispatchSnapshotSignal(t.Context(), row("snapshot", `{"tables": ["orders"]}`)))
+		assert.NoError(t, s.dispatchSnapshotSignal(t.Context(), row("snapshot-execute", `{"tables": ["orders"]}`)))
 	})
 
 	for _, quiet := range []struct {
@@ -775,7 +775,7 @@ func TestSnapshotSignalWithSnapshotDisabled(t *testing.T) {
 			Operation: InsertOpType,
 			Schema:    "public",
 			Table:     "orders",
-			Data:      map[string]any{"type": "snapshot"},
+			Data:      map[string]any{"type": "snapshot-execute"},
 		}},
 	} {
 		t.Run(quiet.name+" says nothing", func(t *testing.T) {

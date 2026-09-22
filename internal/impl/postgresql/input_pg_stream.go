@@ -274,7 +274,7 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 with a ` + "`tables`" + ` key listing table names in the configured ` + "`schema`" + `, excluding the schema itself:
 
 ` + "```sql" + `
-INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('snapshot', '{"tables": ["orders", "customers"]}');
+INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('snapshot-execute', '{"tables": ["orders", "customers"]}');
 ` + "```" + `
 
 Each table must appear in ` + "`" + fieldTables + "`" + ` (or that list must be empty, replicating everything):

@@ -43,7 +43,7 @@ func signalIncrementalSnapshot(t *testing.T, db *pgtest.TestDB, slotName string,
 
 	payload, err := json.Marshal(map[string]any{"tables": tables})
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO rpcn_signal (type, data) VALUES ('snapshot', $1)`, string(payload))
+	_, err = db.Exec(`INSERT INTO rpcn_signal (type, data) VALUES ('snapshot-execute', $1)`, string(payload))
 	require.NoError(t, err)
 }
 

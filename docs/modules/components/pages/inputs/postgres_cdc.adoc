@@ -622,7 +622,7 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message"
 with a `tables` key listing table names in the configured `schema`, excluding the schema itself:
 
 ```sql
-INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('snapshot', '{"tables": ["orders", "customers"]}');
+INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('snapshot-execute', '{"tables": ["orders", "customers"]}');
 ```
 
 Each table must appear in `tables` (or that list must be empty, replicating everything):
@@ -678,7 +678,7 @@ Configures chunked snapshotting that runs alongside replication streaming.
 
 === `incremental_snapshot.enabled`
 
-Backfills tables in chunks alongside replication, on request. Tables are not configured here: insert a `snapshot` row into `signal_table_name` to ask for one, so a backfill can be started at any time without a config change. A signal table is therefore required. Unlike `stream_snapshot` this needs no up-front snapshot phase and does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.
+Backfills tables in chunks alongside replication, on request. Tables are not configured here: insert a `snapshot-execute` row into `signal_table_name` to ask for one, so a backfill can be started at any time without a config change. A signal table is therefore required. Unlike `stream_snapshot` this needs no up-front snapshot phase and does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.
 
 Progress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `heartbeat_interval`.
 
@@ -721,7 +721,7 @@ A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache r
 
 The key used to store the incremental snapshot progress in `checkpoint_cache`. Use a different key if multiple incremental snapshots share the same cache.
 
-Changing or clearing this key discards the record of which tables have been backfilled, so a `snapshot` signal reads a table again.
+Changing or clearing this key discards the record of which tables have been backfilled, so a `snapshot-execute` signal reads a table again.
 
 
 *Type*: `string`

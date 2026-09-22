@@ -40,7 +40,7 @@ func (s *ControlSignal) Type() string {
 }
 
 // SnapshotSignalType requests an incremental snapshot of the named tables.
-const SnapshotSignalType = "snapshot"
+const SnapshotSignalType = "snapshot-execute"
 
 // SnapshotSignal is the decoded "data" payload for a SnapshotSignalType
 // signal. Names are resolved against the connector's configured schema.
