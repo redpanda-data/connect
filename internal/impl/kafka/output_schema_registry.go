@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -233,6 +232,16 @@ func (o *schemaRegistryOutput) Connect(ctx context.Context) error {
 
 	if mode != "READWRITE" && mode != "IMPORT" {
 		return fmt.Errorf("schema registry instance mode must be set to READWRITE or IMPORT instead of %q", mode)
+	}
+
+	// Creating schemas with their original IDs is only accepted in IMPORT mode, while creating schemas without an ID
+	// is only accepted in READWRITE mode. This only warns rather than fails, since the mode can also be set for
+	// individual subjects, which is not visible here.
+	switch {
+	case !o.translateIDs && mode != "IMPORT":
+		o.log.Warnf("Schema registry mode is %q but translate_ids is false: creating schemas with their original IDs requires IMPORT mode, either globally or for each target subject", mode)
+	case o.translateIDs && mode != "READWRITE":
+		o.log.Warnf("Schema registry mode is %q but translate_ids is true: creating schemas with new IDs requires READWRITE mode, either globally or for each target subject", mode)
 	}
 
 	if o.backfillDependencies {
@@ -476,39 +485,15 @@ func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLinea
 	if o.translateIDs {
 		// This should return the destination ID without an error if the schema already exists.
 		destinationID, err = o.client.CreateSchema(ctx, ss.Subject, ss.Schema, o.normalize)
-		if err != nil {
-			return -1, err
-		}
 	} else {
+		// This requires the destination to be in IMPORT mode (Redpanda v25.3 or later, or Confluent Schema Registry).
+		// In IMPORT mode, re-posting an identical schema under its existing ID is idempotent and associating an
+		// existing schema ID with a new subject succeeds, so neither case needs special handling. A different schema
+		// posted under an existing ID is a genuine conflict and is surfaced as an error.
 		destinationID, err = o.client.CreateSchemaWithIDAndVersion(ctx, ss.Subject, ss.Schema, ss.ID, ss.Version, o.normalize)
-		if err != nil {
-			// Temporary hack until https://github.com/redpanda-data/redpanda/issues/26331 is resolved.
-			// If the schema already exists and is identical to the one we're trying to create, Redpanda should not
-			// return an error, but right now it does.
-			if strings.HasSuffix(err.Error(), fmt.Sprintf("Overwrite new schema with id %d is not permitted.", ss.ID)) {
-				existingSchema, errGet := o.client.GetSchemaByID(ctx, ss.ID, true)
-				if errGet != nil {
-					return -1, errGet
-				}
-
-				if !SchemasEqual(ss.Schema, existingSchema) {
-					// If the schemas differ, then we encountered a genuine conflict.
-					return -1, err
-				}
-
-				// Even though this schema already exists, we still need to make sure it's associated with the current
-				// subject.
-				// We use the schema we got from the destination which ensures that we don't allocate a new ID for it
-				// due to normalization differences.
-				destinationID, err = o.client.CreateSchema(ctx, ss.Subject, existingSchema, o.normalize)
-				if err != nil {
-					return -1, fmt.Errorf("associating schema ID %d with subject %q: %s", ss.ID, ss.Subject, err)
-				}
-			} else {
-				// Fail if we get any other errors.
-				return -1, err
-			}
-		}
+	}
+	if err != nil {
+		return -1, err
 	}
 
 	// Cache the schema along with the destination ID.
