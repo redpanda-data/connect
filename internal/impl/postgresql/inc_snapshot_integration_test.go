@@ -81,14 +81,19 @@ func runIncSnapshotStream(t *testing.T, cfg incSnapshotStream) (stop func()) {
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
 
+	var runErr error
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		// Cancellation is how the harness ends the stream, not a failure.
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Logf("stream error: %v", err)
-		}
+		runErr = stream.Run(t.Context())
 	}()
+
+	reportRunErr := func() {
+		t.Helper()
+		if runErr != nil && !errors.Is(runErr, context.Canceled) {
+			t.Errorf("stream failed: %v", runErr)
+		}
+	}
 
 	var once sync.Once
 	stop = func() {
@@ -97,6 +102,7 @@ func runIncSnapshotStream(t *testing.T, cfg incSnapshotStream) (stop func()) {
 			require.NoError(t, stream.StopWithin(20*time.Second))
 			select {
 			case <-stopped:
+				reportRunErr()
 			case <-time.After(30 * time.Second):
 				require.Fail(t, "stream did not stop in time")
 			}
@@ -104,7 +110,15 @@ func runIncSnapshotStream(t *testing.T, cfg incSnapshotStream) (stop func()) {
 	}
 
 	t.Cleanup(func() {
-		once.Do(func() { _ = stream.StopWithin(10 * time.Second) })
+		once.Do(func() {
+			_ = stream.StopWithin(10 * time.Second)
+			select {
+			case <-stopped:
+				reportRunErr()
+			case <-time.After(15 * time.Second):
+				t.Error("stream did not stop within 15s of teardown")
+			}
+		})
 	})
 	return stop
 }
