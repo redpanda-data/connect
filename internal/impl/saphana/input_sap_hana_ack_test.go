@@ -744,3 +744,61 @@ checkpoint_cache: %s
 	require.True(t, resumed, "a persisted incrementing HWM must be reported as resumed so the initial value is not re-applied")
 	require.Equal(t, int64(2), s2.hwm, "restarted input must resume from the persisted HWM")
 }
+
+// TestValidateTimestampColumnType: the field doc promises a TIMESTAMP or
+// LONGDATE column, so a wrongly typed timestamp_column must fail at connect
+// time with the column and its type in the message, not on the first poll's
+// bind. An unreadable catalog only warns, as for incrementing_column.
+func TestValidateTimestampColumnType(t *testing.T) {
+	const confYAML = `
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+schema_name: S
+table: T
+timestamp_column: TS
+`
+	for _, tc := range []struct {
+		dataType string
+		wantErr  string
+	}{
+		{dataType: "TIMESTAMP"},
+		{dataType: "LONGDATE"},
+		{dataType: "SECONDDATE"},
+		{dataType: "NVARCHAR", wantErr: `timestamp_column "TS" has type NVARCHAR`},
+		{dataType: "DATE", wantErr: `has type DATE; timestamp modes need`},
+	} {
+		t.Run(tc.dataType, func(t *testing.T) {
+			s, mock := newTestInput(t, enterpriseResources(), confYAML)
+			mock.ExpectQuery(hanaColumnTypeQuery).WithArgs("S", "T", "TS").
+				WillReturnRows(sqlmock.NewRows([]string{"DATA_TYPE_NAME"}).AddRow(tc.dataType))
+			err := s.validateTimestampColumn(t.Context())
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tc.wantErr)
+			}
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+
+	t.Run("catalog unreadable only warns", func(t *testing.T) {
+		s, mock := newTestInput(t, enterpriseResources(), confYAML)
+		mock.ExpectQuery(hanaColumnTypeQuery).WithArgs("S", "T", "TS").
+			WillReturnError(errors.New("insufficient privilege"))
+		require.NoError(t, s.validateTimestampColumn(t.Context()))
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("without schema_name the lookup uses CURRENT_SCHEMA", func(t *testing.T) {
+		s, mock := newTestInput(t, enterpriseResources(), `
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: T
+timestamp_column: TS
+`)
+		mock.ExpectQuery(hanaColumnTypeCurrentSchemaQuery).WithArgs("T", "TS").
+			WillReturnRows(sqlmock.NewRows([]string{"DATA_TYPE_NAME"}).AddRow("INTEGER"))
+		require.ErrorContains(t, s.validateTimestampColumn(t.Context()), "has type INTEGER")
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+}

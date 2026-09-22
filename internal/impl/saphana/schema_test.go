@@ -35,20 +35,24 @@ func TestHanaTypeToCommonType(t *testing.T) {
 		{"DOUBLE", schema.Float64},
 		{"REAL", schema.Float32},
 		{"BOOLEAN", schema.Boolean},
-		{"DATE", schema.Timestamp},
+		{"DATE", schema.Date},
 		{"TIME", schema.Timestamp},
 		{"TIMESTAMP", schema.Timestamp},
 		{"SECONDDATE", schema.Timestamp},
 		// DFV level 3 spellings HANA reports for TIMESTAMP/DATE/TIME columns.
 		{"LONGDATE", schema.Timestamp},
-		{"DAYDATE", schema.Timestamp},
+		{"DAYDATE", schema.Date},
 		{"SECONDTIME", schema.Timestamp},
 		{"VARBINARY", schema.ByteArray},
 		{"BLOB", schema.ByteArray},
 		{"BINARY", schema.ByteArray},
-		// Spatial types arrive as WKB, i.e. arbitrary bytes, not text.
+		// Spatial types arrive as WKB, i.e. arbitrary bytes, not text. The
+		// catalog spells them with an underscore, go-hdb's driver type name
+		// without one.
 		{"ST_GEOMETRY", schema.ByteArray},
 		{"ST_POINT", schema.ByteArray},
+		{"STGEOMETRY", schema.ByteArray},
+		{"STPOINT", schema.ByteArray},
 		{"VARCHAR", schema.String},
 		{"NVARCHAR", schema.String},
 		{"CHAR", schema.String},

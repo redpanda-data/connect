@@ -9,6 +9,7 @@
 package saphana
 
 import (
+	"encoding/hex"
 	"io"
 	"math"
 	"math/big"
@@ -212,6 +213,8 @@ timestamp_clock: database_utc
 			errContains: "timestamp_clock",
 		},
 		{
+			// Inert for a different reason than the mode, so the error says
+			// what is actually missing instead of blaming the mode.
 			name: "checkpoint_cache_key without checkpoint_cache",
 			yaml: `
 dsn: hdb://user:pass@host:39017
@@ -220,7 +223,7 @@ table: ORDERS
 incrementing_column: ID
 checkpoint_cache_key: custom_key
 `,
-			errContains: "checkpoint_cache_key",
+			errContains: `"checkpoint_cache_key" is set but "checkpoint_cache" is not`,
 		},
 		{
 			name: "timestamp mode with non-default timestamp_delay is accepted",
@@ -590,4 +593,33 @@ func TestSAPHANAInputTableRef(t *testing.T) {
 			require.Equal(t, tc.want, s.tableRef())
 		})
 	}
+}
+
+// TestNormalizeHANAValueDecodesSpatialHex: go-hdb hands ST_POINT/ST_GEOMETRY
+// values over as hex strings, unlike every other binary type. Under a bytes
+// schema they are decoded to the WKB the schema advertises; under any other
+// schema, or when the text is not hex, the string is left alone.
+func TestNormalizeHANAValueDecodesSpatialHex(t *testing.T) {
+	// POINT(1 2) as little-endian WKB.
+	const wkbHex = "0101000000000000000000f03f0000000000000040"
+	wkb, err := hex.DecodeString(wkbHex)
+	require.NoError(t, err)
+
+	bytesCol := &schema.Common{Name: "GEO", Type: schema.ByteArray}
+	got, err := normalizeHANAValue(wkbHex, bytesCol, shNumericMappingNone)
+	require.NoError(t, err)
+	assert.Equal(t, wkb, got, "hex under a bytes column decodes to WKB")
+
+	textCol := &schema.Common{Name: "NAME", Type: schema.String}
+	got, err = normalizeHANAValue(wkbHex, textCol, shNumericMappingNone)
+	require.NoError(t, err)
+	assert.Equal(t, wkbHex, got, "a text column that happens to hold hex is left as text")
+
+	got, err = normalizeHANAValue("not hex", bytesCol, shNumericMappingNone)
+	require.NoError(t, err)
+	assert.Equal(t, "not hex", got, "invalid hex is passed through rather than dropped")
+
+	got, err = normalizeHANAValue(wkbHex, nil, shNumericMappingNone)
+	require.NoError(t, err)
+	assert.Equal(t, wkbHex, got, "without schema guidance nothing is decoded")
 }

@@ -25,7 +25,14 @@ func quoteIdentifier(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
-// hanaTypeToCommonType maps a HANA DATA_TYPE_NAME string to schema.CommonType.
+// hanaTypeToCommonType maps a HANA type name to schema.CommonType. It accepts
+// the union of two vocabularies for the same declared column type: the
+// catalog's SYS.TABLE_COLUMNS.DATA_TYPE_NAME (used when schema_name is set)
+// and go-hdb's ColumnType.DatabaseTypeName (the fallback in query mode or
+// without schema_name), which is the protocol type code upper-cased. They
+// differ for TIMESTAMP/DATE/TIME (LONGDATE/DAYDATE/SECONDTIME on the wire at
+// data format version 3 and up), for the spatial types (STPOINT/STGEOMETRY
+// without the underscore), and for DECIMAL (FIXED8/12/16, see isDecimalType).
 // For DECIMAL columns, callers should use hanaDecimalToCommon which considers
 // precision and scale for a more specific mapping.
 func hanaTypeToCommonType(dataType string) schema.CommonType {
@@ -38,12 +45,25 @@ func hanaTypeToCommonType(dataType string) schema.CommonType {
 		return schema.Float32
 	case "BOOLEAN":
 		return schema.Boolean
-	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE", "LONGDATE", "DAYDATE", "SECONDTIME":
-		// LONGDATE, DAYDATE and SECONDTIME are the data-format-version 3
-		// spellings HANA reports for TIMESTAMP, DATE and TIME columns.
+	case "DATE", "DAYDATE":
+		// A calendar date, no time of day: Avro `date`. DAYDATE is the wire
+		// spelling at data format version 3 and up.
+		return schema.Date
+	case "TIME", "TIMESTAMP", "SECONDDATE", "LONGDATE", "SECONDTIME":
+		// LONGDATE and SECONDTIME are the wire spellings of TIMESTAMP and TIME.
+		//
+		// TIME stays a Timestamp on purpose: go-hdb decodes it as a time.Time
+		// on 0001-01-01, and schema_registry_encode cannot yet encode the
+		// RFC3339 string that becomes into Avro time-millis (hamba wants a
+		// duration since midnight; the encoder only converts strings for
+		// date and timestamp logical types). Switching to schema.TimeOfDay
+		// would fail every pipeline that encodes a TIME column until the
+		// encoder learns that conversion.
 		return schema.Timestamp
-	case "BINARY", "VARBINARY", "BLOB", "BSTRING", "ST_GEOMETRY", "ST_POINT":
-		// Spatial types are delivered as WKB, i.e. arbitrary bytes.
+	case "BINARY", "VARBINARY", "BLOB", "BSTRING", "ST_GEOMETRY", "ST_POINT", "STGEOMETRY", "STPOINT":
+		// Spatial values are WKB. go-hdb hands them over hex-encoded rather
+		// than as []byte; normalizeHANAValue decodes them so the payload is
+		// the bytes this schema promises.
 		return schema.ByteArray
 	default:
 		// VARCHAR, NVARCHAR, CHAR, NCHAR, ALPHANUM, SHORTTEXT, CLOB, NCLOB,
