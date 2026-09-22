@@ -76,6 +76,7 @@ output:
       client_certs: []
     max_in_flight: 64
     api_key: ""
+    timeout: 0s
     basic_auth:
       enabled: false
       username: ""
@@ -517,6 +518,15 @@ This field contains sensitive information that usually shouldn't be added to a c
 *Type*: `string`
 
 *Default*: `""`
+
+=== `timeout`
+
+The maximum period to wait on a single request to the cluster before abandoning it. This covers the whole request, including connecting, sending the batch and reading the response, so it must be generous enough for the largest batch the pipeline produces. The default of `0s` waits indefinitely, in which case a stalled connection blocks the output until the pipeline is shut down.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `basic_auth`
 
