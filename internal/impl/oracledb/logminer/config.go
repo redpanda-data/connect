@@ -40,11 +40,12 @@ var (
 	// before being forcibly restarted, independent of redo log switches. 0 disables this,
 	// restarting only on log switches (the previous, and still default, behaviour).
 	DefaultMaxSessionAge = 0 * time.Second
-	// DefaultLogCountMin is the minimum number of redo log files mined per cycle
-	// under the WindowStrategyLogCount window strategy.
+	// DefaultLogCountMin is the minimum number of redo log files mined per cycle,
+	// per redo thread, under the WindowStrategyLogCount window strategy.
 	DefaultLogCountMin = 2
-	// DefaultLogCountGrowthMax is the ceiling the log file budget can grow to under
-	// the WindowStrategyLogCount window strategy, once forward progress stalls.
+	// DefaultLogCountGrowthMax is the ceiling the per-thread log file budget can
+	// grow to under the WindowStrategyLogCount window strategy, once forward
+	// progress stalls.
 	DefaultLogCountGrowthMax = 4
 )
 
@@ -56,7 +57,7 @@ const (
 	// SCN-count window each cycle.
 	WindowStrategySCNWindow WindowStrategy = "scn_window"
 	// WindowStrategyLogCount sizes the mined range by a bounded number of redo
-	// log files per cycle.
+	// log files per cycle, per redo thread.
 	WindowStrategyLogCount WindowStrategy = "log_count"
 )
 

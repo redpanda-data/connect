@@ -177,13 +177,13 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 			Default(string(logminer.WindowStrategySCNWindow)).
 			Advanced(),
 		service.NewIntField(ociFieldLogCountMin).
-			Description("The minimum number of redo log files mined per cycle. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyLogCount)+"`.").
-			ShortDescription("The minimum number of redo log files mined per cycle, under the "+string(logminer.WindowStrategyLogCount)+" window strategy.").
+			Description("The minimum number of redo log files mined per cycle, applied independently to each open redo thread - on a multi-thread (RAC) database the total number of files mined per cycle scales with the number of open threads. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyLogCount)+"`.").
+			ShortDescription("The minimum number of redo log files mined per cycle per redo thread, under the "+string(logminer.WindowStrategyLogCount)+" window strategy.").
 			Default(logminer.DefaultLogCountMin).
 			Advanced(),
 		service.NewIntField(ociFieldLogCountGrowthMax).
-			Description("The maximum number of redo log files that can be mined in a single cycle. The file budget starts at `"+ociFieldLogCountMin+"` and grows by one file each cycle in which the same set of files is selected as the previous cycle (typically caused by a mining cycle retrying without making progress, such as after an ORA-01368 redo log recycle), up to this limit. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyLogCount)+"`.").
-			ShortDescription("The maximum number of redo log files mined per cycle once grown, under the "+string(logminer.WindowStrategyLogCount)+" window strategy.").
+			Description("The maximum number of redo log files the per-thread budget automatically grows to; like `"+ociFieldLogCountMin+"`, this is applied independently to each open redo thread, so the total number of files mined per cycle scales with the number of open threads on a multi-thread (RAC) database. The budget starts at `"+ociFieldLogCountMin+"` and grows by one file for a thread each cycle in which that thread reselects the same set of files as the previous cycle (typically caused by a mining cycle retrying without making progress, such as after an ORA-01368 redo log recycle), up to this limit. This bounds automatic growth only, not the number of files a thread can end up with: once a cycle has committed to mining up to some SCN, a thread's selection can still be extended past this limit on a later cycle to avoid leaving a gap in that already-committed range. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyLogCount)+"`.").
+			ShortDescription("The maximum number of redo log files the per-thread budget grows to, under the "+string(logminer.WindowStrategyLogCount)+" window strategy (may be exceeded when re-covering already-committed ground).").
 			Default(logminer.DefaultLogCountGrowthMax).
 			Advanced(),
 		service.NewDurationField(ociFieldBackoffInterval).

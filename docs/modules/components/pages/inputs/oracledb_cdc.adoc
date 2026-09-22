@@ -282,7 +282,7 @@ The maximum SCN range that can be mined in a single cycle. The window starts at 
 
 === `logminer.window_strategy`
 
-Controls how the SCN range mined per cycle is sized. `scn_window` (default) grows/shrinks the mined SCN range by a fixed increment (scn_window_size) based on backlog, bounded by min_scn_window_size/max_scn_window_size. `log_count` instead bounds the range by a fixed number of redo log files (log_count_min/log_count_growth_max), decoupling session cost from raw SCN movement. Use `log_count` when the database's current SCN can advance independently of real transaction volume against the monitored tables - for example a CDB-shared SCN advanced by another PDB, or Oracle's automatic maintenance window generating many small internal commits - since scn_window would otherwise burn many cycles ramping the window up to its ceiling, paying LogMiner's fixed per-cycle overhead on ranges that are mostly empty of real changes, whereas log_count absorbs the same event in however many log files it actually touches. `log_count` is not yet supported on multi-thread (RAC) databases, so the connector refuses to start when more than one redo thread is open.
+Controls how the SCN range mined per cycle is sized. `scn_window` (default) grows/shrinks the mined SCN range by a fixed increment (scn_window_size) based on backlog, bounded by min_scn_window_size/max_scn_window_size. `log_count` instead bounds the range by a fixed number of redo log files (log_count_min/log_count_growth_max), decoupling session cost from raw SCN movement. Use `log_count` when the database's current SCN can advance independently of real transaction volume against the monitored tables - for example a CDB-shared SCN advanced by another PDB, or Oracle's automatic maintenance window generating many small internal commits - since scn_window would otherwise burn many cycles ramping the window up to its ceiling, paying LogMiner's fixed per-cycle overhead on ranges that are mostly empty of real changes, whereas log_count absorbs the same event in however many log files it actually touches. On multi-thread (RAC) databases, log_count applies its file budget independently to each open redo thread, so the effective number of files mined per cycle scales with the number of open threads.
 
 
 *Type*: `string`
@@ -296,7 +296,7 @@ Options:
 
 === `logminer.log_count_min`
 
-The minimum number of redo log files mined per cycle. Only applies when `window_strategy` is `log_count`.
+The minimum number of redo log files mined per cycle, applied independently to each open redo thread - on a multi-thread (RAC) database the total number of files mined per cycle scales with the number of open threads. Only applies when `window_strategy` is `log_count`.
 
 
 *Type*: `int`
@@ -305,7 +305,7 @@ The minimum number of redo log files mined per cycle. Only applies when `window_
 
 === `logminer.log_count_growth_max`
 
-The maximum number of redo log files that can be mined in a single cycle. The file budget starts at `log_count_min` and grows by one file each cycle in which the same set of files is selected as the previous cycle (typically caused by a mining cycle retrying without making progress, such as after an ORA-01368 redo log recycle), up to this limit. Only applies when `window_strategy` is `log_count`.
+The maximum number of redo log files the per-thread budget automatically grows to; like `log_count_min`, this is applied independently to each open redo thread, so the total number of files mined per cycle scales with the number of open threads on a multi-thread (RAC) database. The budget starts at `log_count_min` and grows by one file for a thread each cycle in which that thread reselects the same set of files as the previous cycle (typically caused by a mining cycle retrying without making progress, such as after an ORA-01368 redo log recycle), up to this limit. This bounds automatic growth only, not the number of files a thread can end up with: once a cycle has committed to mining up to some SCN, a thread's selection can still be extended past this limit on a later cycle to avoid leaving a gap in that already-committed range. Only applies when `window_strategy` is `log_count`.
 
 
 *Type*: `int`

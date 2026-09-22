@@ -20,9 +20,18 @@ type logKey struct {
 }
 
 // logFileSelector implements the log_count window strategy's file budget.
-// count is a single value shared across every redo thread rather than sized
-// per thread - each thread's own sorted file list is truncated to the same
-// count, mirroring Debezium's CappedLogFileSessionSelector.
+// count is applied to every redo thread's own sorted file list independently
+// (so the effective files-per-cycle scales with the number of open threads
+// on RAC), but is itself a single shared value rather than one sized and
+// grown per thread. Applying the budget per thread, rather than splitting one
+// global total across threads, keeps every thread's progress independent: a
+// single global total could let one thread's backlog consume the whole
+// budget and stall every other thread's selection down to nothing, which a
+// per-thread application can't do. Sharing one value across threads, rather
+// than growing each thread's own counter independently, keeps the growth
+// state and the user-facing config surface (log_count_min/log_count_growth_max)
+// simple - a single knob users reason about, not one per thread on a
+// topology (RAC) that changes over time as threads open and close.
 //
 // prevUpperBoundSCN is the endSCN this selector last returned (0 means none
 // yet, following the same "0 is never a real SCN" convention used elsewhere
@@ -206,6 +215,13 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 // thread whose own backlog exceeds the shared budget could have its
 // unselected tail's SCN range permanently drop out of a future
 // GetLogsBySCNRange window once currentSCN advances past it.
+//
+// This can push a thread's selection past growthMax: re-covering
+// already-committed ground takes priority over the budget, since leaving a
+// gap there is unsafe, whereas exceeding the configured growth ceiling here
+// only costs extra files for one cycle. growthMax bounds how far automatic
+// stall-driven growth climbs, not the number of files a thread can end up
+// with.
 //
 // prevUpperBoundSCN == 0 means no boundary has been committed yet (this is
 // the selector's first call), so there is nothing to extend past.
