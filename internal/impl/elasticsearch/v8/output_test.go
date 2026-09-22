@@ -14,8 +14,13 @@
 package elasticsearch
 
 import (
+	"context"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,6 +37,53 @@ func parseOutputConfig(t *testing.T, yaml string) *esOutput {
 	out, err := outputFromParsed(conf, service.MockResources())
 	require.NoError(t, err)
 	return out
+}
+
+// unresponsiveServer accepts a request and then never answers it, which is the
+// shape of the stall that the timeout exists to break. The handler is released
+// by the test rather than by the request context: the server only notices a
+// client going away once the request body has been consumed, and a handler that
+// reads nothing would otherwise block Close forever.
+func unresponsiveServer(t *testing.T) (url string, served *atomic.Bool) {
+	t.Helper()
+
+	served = &atomic.Bool{}
+	release := make(chan struct{})
+
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		served.Store(true)
+		<-release
+	}))
+
+	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(release) })
+
+	return server.URL, served
+}
+
+func TestConfigTimeout(t *testing.T) {
+	tests := []struct {
+		name  string
+		field string
+		want  time.Duration
+	}{
+		{name: "unset waits indefinitely", field: "", want: 0},
+		{name: "explicit value", field: "timeout: 5s", want: 5 * time.Second},
+		{name: "explicit zero waits indefinitely", field: "timeout: 0s", want: 0},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			out := parseOutputConfig(t, fmt.Sprintf(`
+urls: [ http://localhost:9200 ]
+index: testing
+action: index
+id: ""
+%v
+`, test.field))
+			assert.Equal(t, test.want, out.conf.timeout)
+		})
+	}
 }
 
 // A zero value http.Transport has no dial, TLS handshake or idle connection
@@ -58,4 +110,56 @@ tls:
 	assert.Equal(t, defaults.TLSHandshakeTimeout, transport.TLSHandshakeTimeout)
 	assert.Equal(t, defaults.IdleConnTimeout, transport.IdleConnTimeout)
 	assert.Equal(t, defaults.ExpectContinueTimeout, transport.ExpectContinueTimeout)
+}
+
+func TestWriteBatchTimesOutOnUnresponsiveServer(t *testing.T) {
+	const timeout = 250 * time.Millisecond
+
+	url, served := unresponsiveServer(t)
+
+	out := parseOutputConfig(t, fmt.Sprintf(`
+urls: [ %v ]
+index: testing
+action: index
+id: ""
+timeout: %v
+`, url, timeout))
+
+	require.NoError(t, out.Connect(t.Context()))
+
+	batch := service.MessageBatch{service.NewMessage([]byte(`{"hello":"world"}`))}
+
+	start := time.Now()
+	err := out.WriteBatch(t.Context(), batch)
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 10*timeout, "the write should be abandoned at roughly the configured timeout")
+	assert.True(t, served.Load(), "expected the request to reach the server")
+}
+
+// With the timeout unset, which is the default, the only deadline left is the
+// caller's. This is the behaviour of the output before the field existed.
+func TestWriteBatchZeroTimeoutDefersToCallerContext(t *testing.T) {
+	url, _ := unresponsiveServer(t)
+
+	out := parseOutputConfig(t, fmt.Sprintf(`
+urls: [ %v ]
+index: testing
+action: index
+id: ""
+timeout: 0s
+`, url))
+
+	require.NoError(t, out.Connect(t.Context()))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 250*time.Millisecond)
+	defer cancel()
+
+	batch := service.MessageBatch{service.NewMessage([]byte(`{"hello":"world"}`))}
+
+	err := out.WriteBatch(ctx, batch)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
