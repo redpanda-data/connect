@@ -59,7 +59,7 @@ func schemaRegistryOutputSpec() *service.ConfigSpec {
 		Description(service.OutputPerformanceDocs(true, false)).
 		Fields(
 			schemaRegistryOutputConfigFields()...,
-		).Example("Write schemas", "Write schemas to a Schema Registry instance and log errors for schemas which already exist.", `
+		).Example("Write schemas", "Write schemas to a Schema Registry instance which is in IMPORT mode, preserving their IDs. Re-writing a schema which already exists is idempotent, so the only errors which need handling are genuine conflicts, where a different schema is already registered under the same ID. These are logged and dropped, while any other error is rejected.", `
 output:
   fallback:
     - schema_registry:
@@ -68,13 +68,14 @@ output:
         subject_compatibility_level: ${! @schema_registry_subject_compatibility_level }
     - switch:
         cases:
-          - check: '@fallback_error == "request returned status: 422"'
+          - check: '@fallback_error.contains("Overwrite new schema")'
             output:
               drop: {}
               processors:
                 - log:
+                    level: ERROR
                     message: |
-                      Subject '${! @schema_registry_subject }' version ${! @schema_registry_version } already has schema: ${! content() }
+                      Subject '${! @schema_registry_subject }' version ${! @schema_registry_version } conflicts with a different schema already registered under ID ${! json("id") }: ${! content() }
           - output:
               reject: ${! @fallback_error }
 `)
@@ -90,7 +91,11 @@ func schemaRegistryOutputConfigFields() []*service.ConfigField {
 			Optional().
 			Advanced(),
 		service.NewBoolField(sroFieldBackfillDependencies).Description("Backfill schema references and previous versions.").Default(true).Advanced(),
-		service.NewBoolField(sroFieldTranslateIDs).Description("Translate schema IDs.").Default(false).Advanced(),
+		service.NewBoolField(sroFieldTranslateIDs).
+			Description("Translate schema IDs. When `false`, schemas are created on the destination with their original IDs and versions, which requires the destination schema registry to be in `IMPORT` mode (Redpanda v25.3 or later, or Confluent Schema Registry). When `true`, the destination assigns new IDs and must be in `READWRITE` mode, since schemas registered without an explicit ID are rejected in `IMPORT` mode.").
+			ShortDescription("Translate schema IDs.").
+			Default(false).
+			Advanced(),
 		service.NewBoolField(sroFieldNormalize).Description("Normalize schemas.").Default(true).Advanced(),
 		service.NewBoolField(sroFieldRemoveMetadata).Description("Remove metadata from schemas.").Default(true).Advanced(),
 		service.NewBoolField(sroFieldRemoveRuleSet).Description("Remove rule set from schemas.").Default(true).Advanced(),
