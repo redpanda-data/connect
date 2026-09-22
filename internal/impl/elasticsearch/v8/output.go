@@ -106,9 +106,16 @@ func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
 		return nil, err
 	}
 	if tlsEnabled {
-		conf.clientOpts.Transport = &http.Transport{
-			TLSClientConfig: tlsConf,
+		// Derive from http.DefaultTransport rather than a zero value so that the
+		// standard dial, TLS handshake and idle connection timeouts are retained.
+		// This mirrors what elastictransport does when Transport is left nil.
+		defaultTransport, ok := http.DefaultTransport.(*http.Transport)
+		if !ok {
+			return nil, errors.New("cannot clone http.DefaultTransport")
 		}
+		transport := defaultTransport.Clone()
+		transport.TLSClientConfig = tlsConf
+		conf.clientOpts.Transport = transport
 	}
 
 	if conf.action, err = pConf.FieldInterpolatedString(esFieldAction); err != nil {
