@@ -741,15 +741,158 @@ file:
 			assert.Equal(t, 1, count, "row id %d observed %d times across both runs, expected exactly once", id, count)
 		}
 	})
+
+	t.Run("Streams Other Tables During Backfill", func(t *testing.T) {
+		const (
+			// More rows than one commit can drain: OnCommit releases at most
+			// DefaultMaxDrainChunks (32) chunks, so 500 rows at 5 per chunk needs
+			// at least four commits. Without that the whole backfill could finish
+			// between two polls below and the interleaving would be untested.
+			backfillRows = 500
+			chunkSize    = 5
+			streamedRows = 20
+		)
+
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		for _, stmt := range []string{
+			`CREATE TABLE cart (id bigint PRIMARY KEY, name text)`,
+			`CREATE TABLE products (id bigint PRIMARY KEY, name text)`,
+		} {
+			_, err := db.Exec(stmt)
+			require.NoError(t, err, stmt)
+		}
+		// Committed before the slot exists, so only a backfill can deliver them.
+		for i := 1; i <= backfillRows; i++ {
+			_, err := db.Exec(`INSERT INTO cart (id, name) VALUES ($1, 'pre')`, i)
+			require.NoError(t, err)
+		}
+
+		type event struct {
+			op    string
+			table string
+			id    int64
+		}
+		var (
+			mu       sync.Mutex
+			observed []event
+		)
+
+		// Several chunks, so the backfill is still running while products is
+		// written to below.
+		_ = runIncSnapshotStream(t, incSnapshotStream{
+			inputYAML: fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_backfill_alongside_stream
+    schema: public
+    heartbeat_interval: 500ms
+    tables:
+      - cart
+      - products
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: %d
+        heartbeat_interval: 500ms
+        checkpoint_cache: snap_cache
+`, databaseURL, chunkSize),
+			consume: func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					table, _ := msg.MetaGet("table")
+					if table != "cart" && table != "products" {
+						continue
+					}
+					op, _ := msg.MetaGet("operation")
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					row, ok := data.(map[string]any)
+					if !ok {
+						continue
+					}
+					num, ok := row["id"].(json.Number)
+					if !ok {
+						continue
+					}
+					id, err := num.Int64()
+					if err != nil {
+						return err
+					}
+					observed = append(observed, event{op: op, table: table, id: id})
+				}
+				return nil
+			},
+		})
+
+		// Only cart is backfilled. products is replicated but never requested.
+		signalIncrementalSnapshot(t, db, "test_slot_backfill_alongside_stream", "cart")
+
+		snapshot := func() []event {
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]event(nil), observed...)
+		}
+		countOf := func(evs []event, op, table string) int {
+			var n int
+			for _, e := range evs {
+				if e.op == op && e.table == table {
+					n++
+				}
+			}
+			return n
+		}
+
+		// Wait for the backfill to be genuinely under way but unfinished, so the
+		// writes below land while chunks are still being read.
+		require.Eventually(t, func() bool {
+			evs := snapshot()
+			reads := countOf(evs, "read", "cart")
+			return reads >= chunkSize && reads < backfillRows
+		}, 60*time.Second, 20*time.Millisecond,
+			"the cart backfill never reached a partially complete state")
+
+		for i := 1; i <= streamedRows; i++ {
+			_, err := db.Exec(`INSERT INTO products (id, name) VALUES ($1, 'live')`, i)
+			require.NoError(t, err)
+		}
+
+		require.Eventually(t, func() bool {
+			evs := snapshot()
+			return countOf(evs, "read", "cart") >= backfillRows &&
+				countOf(evs, "insert", "products") >= streamedRows
+		}, 90*time.Second, 100*time.Millisecond,
+			"did not observe the whole cart backfill alongside every products change")
+
+		evs := snapshot()
+
+		// products replicated normally throughout, and was never backfilled.
+		assert.Equal(t, streamedRows, countOf(evs, "insert", "products"))
+		assert.Zero(t, countOf(evs, "read", "products"),
+			"products was never signalled, so it must not be backfilled")
+		assert.Equal(t, backfillRows, countOf(evs, "read", "cart"))
+
+		// The point of the test: the two are interleaved, not sequenced. A
+		// products change arrived before the cart backfill finished.
+		firstStreamed, lastRead := -1, -1
+		for i, e := range evs {
+			if firstStreamed < 0 && e.op == "insert" && e.table == "products" {
+				firstStreamed = i
+			}
+			if e.op == "read" && e.table == "cart" {
+				lastRead = i
+			}
+		}
+		require.Positive(t, firstStreamed, "no products change was observed")
+		assert.Less(t, firstStreamed, lastRead,
+			"a products change must arrive before the cart backfill completes; if it does not, replication was paused for the backfill")
+	})
 }
 
-// TestIntegrationIncrementalSnapshotPartitionedTable covers a table whose
-// changes do not stream under the name its backfilled rows are buffered
-// under. PostgreSQL publishes a partitioned table's changes using its leaf
-// partitions' identities unless the publication sets
-// publish_via_partition_root, so the window buffer never sees them: before
-// the guard, a row updated while its chunk was buffered was followed by the
-// stale snapshot copy, silently reverting a committed write.
 func TestIntegrationIncrementalSnapshotPartitionedTable(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -925,9 +1068,6 @@ postgres_cdc:
 	})
 }
 
-// TestIntegrationIncrementalSnapshotWarnsAboutPartitionedTables: an operator
-// should learn at startup that a configured table cannot be backfilled,
-// rather than discovering it when their first signal is rejected.
 func TestIntegrationIncrementalSnapshotWarnsAboutPartitionedTables(t *testing.T) {
 	integration.CheckSkip(t)
 
