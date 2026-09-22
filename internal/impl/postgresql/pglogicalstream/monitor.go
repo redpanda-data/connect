@@ -108,6 +108,10 @@ func (m *Monitor) MarkSnapshotComplete(table TableFQN) {
 	}
 }
 
+// TrackSnapshotTable makes a progress metric exist for table, reading its row
+// estimate as the denominator. Idempotent, and a no-op for a table already
+// tracked -- calling it twice must not reset the progress of a backfill in
+// flight.
 func (m *Monitor) TrackSnapshotTable(ctx context.Context, table TableFQN) {
 	m.snapshotMu.Lock()
 	_, tracked := m.snapshotProgress[table]
