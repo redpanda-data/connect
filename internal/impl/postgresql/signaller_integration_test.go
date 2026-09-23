@@ -40,7 +40,7 @@ func TestIntegrationSignallingConfiguration(t *testing.T) {
 		db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
 		db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
 
-		received, _ := startSignallingStream(t, fmt.Sprintf(`
+		received, _ := startTestStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling
@@ -76,7 +76,7 @@ postgres_cdc:
 		db.MustExec(t, `INSERT INTO dbo.uuid_test_events (name) VALUES ('initial')`)
 		db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.uuid_signal_table (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), type VARCHAR(32), data TEXT)`)
 
-		received, logs := startSignallingStream(t, fmt.Sprintf(`
+		received, logs := startTestStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_uuid_id
@@ -122,7 +122,7 @@ postgres_cdc:
 		db.MustExec(t, `INSERT INTO dbo.jsonb_test_events (name) VALUES ('initial')`)
 		db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.jsonb_data_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data JSONB)`)
 
-		received, logs := startSignallingStream(t, fmt.Sprintf(`
+		received, logs := startTestStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_jsonb_data
@@ -170,7 +170,7 @@ postgres_cdc:
 	})
 
 	t.Run("errors when signal table does not exist", func(t *testing.T) {
-		_, logs := startSignallingStream(t, fmt.Sprintf(`
+		_, logs := startTestStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_missing_signal_table
@@ -196,7 +196,7 @@ postgres_cdc:
 	t.Run("errors when signal table is missing required columns", func(t *testing.T) {
 		db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.wrong_shape_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), payload TEXT)`)
 
-		_, logs := startSignallingStream(t, fmt.Sprintf(`
+		_, logs := startTestStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_wrong_shape_signal_table
@@ -234,7 +234,7 @@ func TestIntegrationSignallingDisabledWhenTableNameEmpty(t *testing.T) {
 
 	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
 
-	received, _ := startSignallingStream(t, fmt.Sprintf(`
+	received, _ := startTestStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_disabled
@@ -284,7 +284,7 @@ func TestIntegrationSignallingDetectedWithoutInterruptingStream(t *testing.T) {
 
 	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
 
-	received, logs := startSignallingStream(t, fmt.Sprintf(`
+	received, logs := startTestStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_detect_only
@@ -344,7 +344,7 @@ func TestIntegrationSignallingMalformedRowStillPublished(t *testing.T) {
 
 	db.MustExec(t, `INSERT INTO dbo.events (name) VALUES ('initial')`)
 
-	received, _ := startSignallingStream(t, fmt.Sprintf(`
+	received, _ := startTestStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_malformed
@@ -391,7 +391,7 @@ func TestIntegrationSignalTableNameWithEmptyTablesReplicatesAllTables(t *testing
 	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
 	db.MustExec(t, `CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
 
-	received, logs := startSignallingStream(t, fmt.Sprintf(`
+	received, logs := startTestStream(t, fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling_all_tables
@@ -427,7 +427,7 @@ postgres_cdc:
 	})
 }
 
-func startSignallingStream(t *testing.T, inputYAML string) (*pgtest.ReceivedMessages, *pgtest.TestLogCapture) {
+func startTestStream(t *testing.T, inputYAML string) (*pgtest.ReceivedMessages, *pgtest.TestLogCapture) {
 	t.Helper()
 
 	logs := pgtest.NewTestLogCapture()
