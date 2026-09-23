@@ -50,6 +50,14 @@ type LogMiner struct {
 	db           *sql.DB
 	dmlParser    *sqlredo.Parser
 
+	// maxRedoLogSizeInBytes is the online redo log size the log_count window
+	// strategy's byte budget is denominated in (see logFileSelector). Fetched
+	// once, lazily, on first use under WindowStrategyLogCount - 0 means "not
+	// yet fetched" (this value can never legitimately be 0 on a running
+	// database, mirroring the same "0 is never real" convention as
+	// logFileSelector.prevUpperBoundSCN).
+	maxRedoLogSizeInBytes uint64
+
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
 	txnCache      TransactionCache
@@ -285,6 +293,17 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	switch lm.cfg.WindowStrategy {
 	case WindowStrategyLogCount:
+		if lm.maxRedoLogSizeInBytes == 0 {
+			size, err := lm.logCollector.GetMaxRedoLogSize(ctx, conn)
+			if err != nil {
+				return false, fmt.Errorf("fetching max redo log size for logminer: %w", err)
+			}
+			if size == 0 {
+				return false, errors.New("database reported a max redo log size of 0 bytes across V$LOG - cannot size the log_count byte budget")
+			}
+			lm.maxRedoLogSizeInBytes = size
+		}
+
 		files, err := lm.logCollector.GetLogsBySCNRange(ctx, conn, lm.currentSCN, dbCurrentSCN)
 		if err != nil {
 			return false, fmt.Errorf("collecting redo logs for logminer: %w", err)
@@ -293,7 +312,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		if err != nil {
 			return false, fmt.Errorf("collecting open redo threads for logminer: %w", err)
 		}
-		if selected, endSCN, capped, err = lm.logSelector.selectForSession(files, openThreads, dbCurrentSCN); err != nil {
+		if selected, endSCN, capped, err = lm.logSelector.selectForSession(files, openThreads, dbCurrentSCN, lm.maxRedoLogSizeInBytes); err != nil {
 			return false, fmt.Errorf("selecting log files for session: %w", err)
 		}
 	default:
@@ -1136,6 +1155,13 @@ type LogFile struct {
 	IsCurrent bool
 	Status    string
 	Thread    int
+	// Bytes is the file's on-disk size, used by the log_count window
+	// strategy's byte budget (see logFileSelector) rather than a flat file
+	// count - archived log sizes in practice vary enormously (small,
+	// frequent commits produce tiny files; quiet periods still get one file
+	// per switch), so a fixed number of files is a poor proxy for how much
+	// real redo a cycle actually covers.
+	Bytes uint64
 }
 
 // IsOpenCurrent reports whether this is the single open current redo log
@@ -1155,7 +1181,9 @@ func (lf *LogFile) IsArchived() bool {
 
 // LogFileCollector finds relevant log files to mine
 type LogFileCollector struct {
-	stmt *sql.Stmt
+	stmt            *sql.Stmt
+	maxRedoSizeStmt *sql.Stmt
+	openThreadsStmt *sql.Stmt
 }
 
 // NewLogFileCollector creates a new *LogFileCollector which is responsible for
@@ -1167,7 +1195,7 @@ func NewLogFileCollector() *LogFileCollector {
 // GetLogsBySCNRange collects log files whose SCN range overlaps [startSCN, endSCN].
 func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
 	query := `
-		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD, STATUS
+		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD, STATUS, BYTES
 		FROM (
 
 			-- Online redo logs that overlap [startSCN, endSCN]
@@ -1178,12 +1206,13 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 				L.SEQUENCE# AS SEQ,
 				'ONLINE' AS TYPE,
 				L.THREAD# AS THREAD,
-				L.STATUS AS STATUS
+				L.STATUS AS STATUS,
+				L.BYTES AS BYTES
 			FROM V$LOGFILE F, V$LOG L
 			WHERE (L.STATUS = 'CURRENT' OR L.NEXT_CHANGE# >= :1)
 			AND L.FIRST_CHANGE# <= :2
 			AND F.GROUP# = L.GROUP#
-			GROUP BY L.FIRST_CHANGE#, L.NEXT_CHANGE#, L.SEQUENCE#, L.THREAD#, L.STATUS
+			GROUP BY L.FIRST_CHANGE#, L.NEXT_CHANGE#, L.SEQUENCE#, L.THREAD#, L.STATUS, L.BYTES
 
 			UNION
 
@@ -1195,7 +1224,8 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 				A.SEQUENCE# AS SEQ,
 				'ARCHIVED' AS TYPE,
 				A.THREAD# AS THREAD,
-				'ARCHIVED' AS STATUS
+				'ARCHIVED' AS STATUS,
+				A.BLOCKS * A.BLOCK_SIZE AS BYTES
 			FROM V$ARCHIVED_LOG A, V$DATABASE D
 			WHERE A.NAME IS NOT NULL
 			AND A.ARCHIVED = 'YES'
@@ -1229,7 +1259,7 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 	var archived, online []*LogFile
 	for rows.Next() {
 		lf := &LogFile{}
-		if err := rows.Scan(&lf.FileName, &lf.FirstSCN, &lf.NextSCN, &lf.Sequence, &lf.Type, &lf.Thread, &lf.Status); err != nil {
+		if err := rows.Scan(&lf.FileName, &lf.FirstSCN, &lf.NextSCN, &lf.Sequence, &lf.Type, &lf.Thread, &lf.Status, &lf.Bytes); err != nil {
 			return nil, fmt.Errorf("scanning logs row: %w", err)
 		}
 		lf.IsCurrent = lf.Type == "ONLINE"
@@ -1245,14 +1275,50 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 	return deduplicateLogs(archived, online), nil
 }
 
-// Close releases the prepared GetLogsBySCNRange statement, if any.
+// Close releases the prepared GetLogsBySCNRange, GetMaxRedoLogSize, and
+// GetOpenThreads statements, if any.
 func (c *LogFileCollector) Close() error {
-	if c.stmt == nil {
-		return nil
+	var errs []error
+	if c.stmt != nil {
+		if err := c.stmt.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		c.stmt = nil
 	}
-	err := c.stmt.Close()
-	c.stmt = nil
-	return err
+	if c.maxRedoSizeStmt != nil {
+		if err := c.maxRedoSizeStmt.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		c.maxRedoSizeStmt = nil
+	}
+	if c.openThreadsStmt != nil {
+		if err := c.openThreadsStmt.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		c.openThreadsStmt = nil
+	}
+	return errors.Join(errs...)
+}
+
+// GetMaxRedoLogSize returns the largest configured online redo log size, in
+// bytes, across every redo group. The log_count window strategy uses this as
+// the unit its file-count budget is denominated in (N x this size) rather
+// than a literal file count, since online redo log groups are always
+// provisioned to a uniform size, unlike archived log files (see LogFile.Bytes).
+func (c *LogFileCollector) GetMaxRedoLogSize(ctx context.Context, conn *sql.Conn) (uint64, error) {
+	if c.maxRedoSizeStmt == nil {
+		stmt, err := conn.PrepareContext(ctx, "SELECT MAX(BYTES) FROM V$LOG")
+		if err != nil {
+			return 0, fmt.Errorf("preparing max redo log size query: %w", err)
+		}
+		c.maxRedoSizeStmt = stmt
+	}
+
+	var maxBytes uint64
+	if err := c.maxRedoSizeStmt.QueryRowContext(ctx).Scan(&maxBytes); err != nil {
+		return 0, fmt.Errorf("querying max redo log size: %w", err)
+	}
+	return maxBytes, nil
 }
 
 // GetOpenThreads returns the redo thread numbers Oracle currently reports as
@@ -1260,8 +1326,16 @@ func (c *LogFileCollector) Close() error {
 // that every open thread actually has log files in a GetLogsBySCNRange
 // result - an open thread with none means the collector query missed
 // something, not that the thread has nothing to mine.
-func (*LogFileCollector) GetOpenThreads(ctx context.Context, conn *sql.Conn) ([]int, error) {
-	rows, err := conn.QueryContext(ctx, `SELECT THREAD# FROM V$THREAD WHERE STATUS = 'OPEN'`)
+func (c *LogFileCollector) GetOpenThreads(ctx context.Context, conn *sql.Conn) ([]int, error) {
+	if c.openThreadsStmt == nil {
+		stmt, err := conn.PrepareContext(ctx, `SELECT THREAD# FROM V$THREAD WHERE STATUS = 'OPEN'`)
+		if err != nil {
+			return nil, fmt.Errorf("preparing open redo threads query: %w", err)
+		}
+		c.openThreadsStmt = stmt
+	}
+
+	rows, err := c.openThreadsStmt.QueryContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("querying open redo threads: %w", err)
 	}

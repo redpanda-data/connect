@@ -41,11 +41,15 @@ var (
 	// restarting only on log switches (the previous, and still default, behaviour).
 	DefaultMaxSessionAge = 0 * time.Second
 	// DefaultLogCountMin is the minimum number of redo log files mined per cycle,
-	// per redo thread, under the WindowStrategyLogCount window strategy.
+	// per redo thread, under the WindowStrategyLogCount window strategy. This is
+	// applied internally as file-size-equivalent bytes (this many multiples of
+	// the online redo log's configured size), not a literal file count - see
+	// logFileSelector.
 	DefaultLogCountMin = 2
 	// DefaultLogCountGrowthMax is the ceiling the per-thread log file budget can
 	// grow to under the WindowStrategyLogCount window strategy, once forward
-	// progress stalls.
+	// progress stalls. Like DefaultLogCountMin, this is a file-size-equivalent
+	// byte multiplier internally, not a literal file count.
 	DefaultLogCountGrowthMax = 4
 )
 

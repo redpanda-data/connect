@@ -20,22 +20,34 @@ import (
 // test that doesn't care about RAC.
 var openThread1 = []int{1}
 
-func mkLogFile(thread int, sequence int64, nextSCN uint64, status string) *LogFile {
+// testRedoLogSize is the fixed maxRedoLogSizeInBytes used throughout this
+// file, standing in for LogFileCollector.GetMaxRedoLogSize's real result.
+// Most test files below are sized to exactly one testRedoLogSize each, so a
+// budget of N (log_count_min/log_count_growth_max) behaves like "N files" -
+// the same shape the pre-byte-budget tests exercised - unless a test
+// specifically varies file sizes to exercise the byte accounting itself.
+const testRedoLogSize = 1_000_000
+
+// mkLogFile builds a *LogFile for selector tests. firstSCN/nextSCN describe
+// the file's SCN range and bytes its on-disk size - see testRedoLogSize.
+func mkLogFile(thread int, sequence int64, firstSCN, nextSCN uint64, status string, bytes uint64) *LogFile {
 	return &LogFile{
 		FileName: fmt.Sprintf("log_t%d_%d.arc", thread, sequence),
+		FirstSCN: firstSCN,
 		NextSCN:  nextSCN,
 		Sequence: sequence,
 		Status:   status,
 		Thread:   thread,
+		Bytes:    bytes,
 	}
 }
 
 func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("fits within budget returns all files uncapped", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
-		files := []*LogFile{mkLogFile(1, 1, 1000, "ARCHIVED")}
+		files := []*LogFile{mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize)}
 
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 5000)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 5000, testRedoLogSize)
 
 		require.NoError(t, err)
 		assert.Equal(t, files, selected)
@@ -46,32 +58,48 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("capped selection when the last budgeted file is archived", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, "ARCHIVED"),
-			mkLogFile(1, 3, 3000, "ARCHIVED"),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 2000, 3000, "ARCHIVED", testRedoLogSize),
 		}
 
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 5000)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 5000, testRedoLogSize)
 
 		require.NoError(t, err)
-		require.Len(t, selected, 2)
+		require.Len(t, selected, 2, "2 files x 1 redo-log-size each reaches the 2-unit budget threshold")
 		assert.Equal(t, files[:2], selected)
 		assert.Equal(t, uint64(1999), endSCN, "endSCN should be the last selected file's NextSCN minus 1 - NextSCN belongs to the following, unselected file")
+		assert.True(t, capped)
+	})
+
+	t.Run("a single file whose own size already meets the byte threshold caps immediately", func(t *testing.T) {
+		s := &logFileSelector{minCount: 2, growthMax: 4}
+		files := []*LogFile{
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", 3*testRedoLogSize), // one oversized file alone exceeds the 2-unit threshold
+			mkLogFile(1, 2, 1000, 2000, "ARCHIVED", testRedoLogSize),
+		}
+
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 5000, testRedoLogSize)
+
+		require.NoError(t, err)
+		require.Len(t, selected, 1, "the byte threshold is met by the first file alone, so accumulation stops immediately after it")
+		assert.Equal(t, files[:1], selected)
+		assert.Equal(t, uint64(999), endSCN)
 		assert.True(t, capped)
 	})
 
 	t.Run("last budgeted file being current keeps selection uncapped despite truncation", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, logStatusCurrent), // still-open current online log, within budget
-			mkLogFile(1, 3, 3000, "ARCHIVED"),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, logStatusCurrent, testRedoLogSize), // still-open current online log, within budget
+			mkLogFile(1, 3, 2000, 3000, "ARCHIVED", testRedoLogSize),
 		}
 
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 5000)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 5000, testRedoLogSize)
 
 		require.NoError(t, err)
-		require.Len(t, selected, 2, "file list should still be truncated to the budget")
+		require.Len(t, selected, 2, "file list should still be truncated to the byte budget")
 		assert.Equal(t, files[:2], selected)
 		assert.Equal(t, uint64(5000), endSCN, "endSCN should fall back to the live current SCN")
 		assert.False(t, capped, "a current last file must not be reported as capped")
@@ -80,29 +108,32 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("repeated identical selection stalls and grows the budget up to growthMax then plateaus", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, "ARCHIVED"),
-			mkLogFile(1, 3, 3000, "ARCHIVED"),
-			mkLogFile(1, 4, 4000, "ARCHIVED"),
-			mkLogFile(1, 5, 5000, "ARCHIVED"),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 2000, 3000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 4, 3000, 4000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 5, 4000, 5000, "ARCHIVED", testRedoLogSize),
 		}
 
 		// Cycle 1: fresh selector, budget starts at minCount (2), no stall detected yet.
-		selected, _, capped, err := s.selectForSession(files, openThread1, 9000)
+		selected, _, capped, err := s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 2)
 		assert.True(t, capped)
 		assert.Equal(t, 2, s.count)
 
 		// Cycle 2: identical file set selected again -> stall detected, budget grows to 3.
-		selected, _, capped, err = s.selectForSession(files, openThread1, 9000)
+		// (Every file below the mined boundary is exactly 1 redo-log-size, so the derived
+		// jump here agrees with the plain +1 step - see the dedicated derived-jump tests
+		// below for a case where they diverge.)
+		selected, _, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 3)
 		assert.True(t, capped)
 		assert.Equal(t, 3, s.count)
 
 		// Cycle 3: still stalled -> budget grows to 4 (growthMax).
-		selected, _, capped, err = s.selectForSession(files, openThread1, 9000)
+		selected, _, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 4)
 		assert.True(t, capped)
@@ -110,14 +141,14 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 
 		// Cycle 4: still stalled, but growthMax is already reached -> budget plateaus at 4
 		// rather than growing unboundedly to 5.
-		selected, _, capped, err = s.selectForSession(files, openThread1, 9000)
+		selected, _, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 4)
 		assert.True(t, capped)
 		assert.Equal(t, 4, s.count)
 
 		// Cycle 5: one more stalled cycle for good measure, confirming the plateau holds.
-		selected, _, capped, err = s.selectForSession(files, openThread1, 9000)
+		selected, _, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 4)
 		assert.True(t, capped)
@@ -127,20 +158,20 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("growth that ends up covering all available files returns everything uncapped", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, "ARCHIVED"),
-			mkLogFile(1, 3, 3000, "ARCHIVED"),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 2000, 3000, "ARCHIVED", testRedoLogSize),
 		}
 
 		// Cycle 1: budget starts at minCount (2), capped selection of the first two files.
-		selected, _, capped, err := s.selectForSession(files, openThread1, 9000)
+		selected, _, capped, err := s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 2)
 		assert.True(t, capped)
 
 		// Cycle 2: stall grows the budget to 3, which now covers every file - this
 		// must behave like the "fits within budget" case, not a partial, truncated one.
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		assert.Equal(t, files, selected)
 		assert.Equal(t, uint64(9000), endSCN)
@@ -150,23 +181,23 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("different non-overlapping file sets do not trigger growth", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		firstFiles := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, "ARCHIVED"),
-			mkLogFile(1, 3, 3000, "ARCHIVED"),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 2000, 3000, "ARCHIVED", testRedoLogSize),
 		}
 		secondFiles := []*LogFile{
-			mkLogFile(1, 4, 4000, "ARCHIVED"),
-			mkLogFile(1, 5, 5000, "ARCHIVED"),
-			mkLogFile(1, 6, 6000, "ARCHIVED"),
+			mkLogFile(1, 4, 3000, 4000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 5, 4000, 5000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 6, 5000, 6000, "ARCHIVED", testRedoLogSize),
 		}
 
-		selected, _, capped, err := s.selectForSession(firstFiles, openThread1, 9000)
+		selected, _, capped, err := s.selectForSession(firstFiles, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 2)
 		assert.True(t, capped)
 		assert.Equal(t, 2, s.count, "budget should remain at minCount after real forward progress")
 
-		selected, _, capped, err = s.selectForSession(secondFiles, openThread1, 9000)
+		selected, _, capped, err = s.selectForSession(secondFiles, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 2)
 		assert.Equal(t, secondFiles[:2], selected)
@@ -177,12 +208,12 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("last budgeted file switched away but not archived must still be capped", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 8, 8000, "ARCHIVED"),
-			mkLogFile(1, 9, 9000, "ACTIVE"),           // switched away from, not yet archived - NOT open
-			mkLogFile(1, 10, 10000, logStatusCurrent), // the real, genuinely open current log
+			mkLogFile(1, 8, 7000, 8000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 9, 8000, 9000, "ACTIVE", testRedoLogSize),           // switched away from, not yet archived - NOT open
+			mkLogFile(1, 10, 9000, 10000, logStatusCurrent, testRedoLogSize), // the real, genuinely open current log
 		}
 
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 20000)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 20000, testRedoLogSize)
 
 		require.NoError(t, err)
 		require.Len(t, selected, 2, "budget should truncate to [arch#8, online#9], excluding online#10")
@@ -194,11 +225,11 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("genuinely open current log as the last budgeted file stays uncapped", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 8, 8000, "ARCHIVED"),
-			mkLogFile(1, 9, 9000, logStatusCurrent), // genuinely open current log
+			mkLogFile(1, 8, 7000, 8000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 9, 8000, 9000, logStatusCurrent, testRedoLogSize), // genuinely open current log
 		}
 
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 20000)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 20000, testRedoLogSize)
 
 		require.NoError(t, err)
 		assert.Equal(t, files, selected)
@@ -209,12 +240,12 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("endSCN must not land on the next unselected file's first SCN", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, "ARCHIVED"),
-			mkLogFile(1, 3, 3000, "ARCHIVED"),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 2000, 3000, "ARCHIVED", testRedoLogSize),
 		}
 
-		_, endSCN, capped, err := s.selectForSession(files, openThread1, 9000)
+		_, endSCN, capped, err := s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 
 		require.NoError(t, err)
 		require.True(t, capped)
@@ -225,17 +256,17 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("count reset to minCount after a successful cycle takes effect on the next selection", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, "ARCHIVED"),
-			mkLogFile(1, 3, 3000, "ARCHIVED"),
-			mkLogFile(1, 4, 4000, "ARCHIVED"),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 2000, 3000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 4, 3000, 4000, "ARCHIVED", testRedoLogSize),
 		}
 
 		// Grow the budget to 3 via a stalled repeat, mirroring what miningCycle would see
 		// across two capped cycles.
-		_, _, _, err := s.selectForSession(files, openThread1, 9000)
+		_, _, _, err := s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
-		selected, _, capped, err := s.selectForSession(files, openThread1, 9000)
+		selected, _, capped, err := s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 3)
 		assert.True(t, capped)
@@ -249,7 +280,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		// and cycle 2 already committed to mining up through file #3's boundary - so
 		// resetting count alone must not silently re-drop that coverage: the
 		// selection still extends to 3 files, not back down to 2.
-		selected, _, capped, err = s.selectForSession(files, openThread1, 9000)
+		selected, _, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 3, "the boundary ratchet must keep the previously committed coverage even after count is reset")
 		assert.Equal(t, files[:3], selected)
@@ -261,7 +292,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		s.prevUpperBoundSCN = 0
 		s.prevKeys = nil
 
-		selected, _, capped, err = s.selectForSession(files, openThread1, 9000)
+		selected, _, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 2, "selection should honour the reset budget, not the stale grown one, once there's no boundary to ratchet against")
 		assert.Equal(t, files[:2], selected)
@@ -273,13 +304,13 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("two open threads both caught up on their current log returns everything uncapped", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, logStatusCurrent),
-			mkLogFile(2, 1, 1500, "ARCHIVED"),
-			mkLogFile(2, 2, 2500, logStatusCurrent),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, logStatusCurrent, testRedoLogSize),
+			mkLogFile(2, 1, 500, 1500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 2, 1500, 2500, logStatusCurrent, testRedoLogSize),
 		}
 
-		selected, endSCN, capped, err := s.selectForSession(files, []int{1, 2}, 9000)
+		selected, endSCN, capped, err := s.selectForSession(files, []int{1, 2}, 9000, testRedoLogSize)
 
 		require.NoError(t, err)
 		assert.ElementsMatch(t, files, selected)
@@ -291,15 +322,15 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
 			// thread 1: caught up, ends on its genuinely open current log.
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, logStatusCurrent),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, logStatusCurrent, testRedoLogSize),
 			// thread 2: falls behind budget, ends capped on an archived file.
-			mkLogFile(2, 1, 1500, "ARCHIVED"),
-			mkLogFile(2, 2, 2500, "ARCHIVED"),
-			mkLogFile(2, 3, 3500, logStatusCurrent),
+			mkLogFile(2, 1, 500, 1500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 2, 1500, 2500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 3, 2500, 3500, logStatusCurrent, testRedoLogSize),
 		}
 
-		selected, endSCN, capped, err := s.selectForSession(files, []int{1, 2}, 9000)
+		selected, endSCN, capped, err := s.selectForSession(files, []int{1, 2}, 9000, testRedoLogSize)
 
 		require.NoError(t, err)
 		require.Len(t, selected, 4, "thread 1's 2 files plus thread 2's budgeted 2 files")
@@ -311,16 +342,16 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
 			// thread 1: capped, last selected NextSCN 2000 -> boundary 1999.
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, "ARCHIVED"),
-			mkLogFile(1, 3, 3000, logStatusCurrent),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 2000, 3000, logStatusCurrent, testRedoLogSize),
 			// thread 2: capped, last selected NextSCN 2500 -> boundary 2499 (smaller).
-			mkLogFile(2, 1, 1500, "ARCHIVED"),
-			mkLogFile(2, 2, 2500, "ARCHIVED"),
-			mkLogFile(2, 3, 3500, logStatusCurrent),
+			mkLogFile(2, 1, 500, 1500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 2, 1500, 2500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 3, 2500, 3500, logStatusCurrent, testRedoLogSize),
 		}
 
-		selected, endSCN, capped, err := s.selectForSession(files, []int{1, 2}, 9000)
+		selected, endSCN, capped, err := s.selectForSession(files, []int{1, 2}, 9000, testRedoLogSize)
 
 		require.NoError(t, err)
 		require.Len(t, selected, 4)
@@ -331,11 +362,11 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("open thread with zero matching files returns an error", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, logStatusCurrent),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, logStatusCurrent, testRedoLogSize),
 		}
 
-		selected, _, _, err := s.selectForSession(files, []int{1, 2}, 9000)
+		selected, _, _, err := s.selectForSession(files, []int{1, 2}, 9000, testRedoLogSize)
 
 		require.Error(t, err)
 		assert.Nil(t, selected)
@@ -345,14 +376,14 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("a closed thread with sparse files does not error and is still included", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, logStatusCurrent),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, logStatusCurrent, testRedoLogSize),
 			// thread 2 is closed (not in openThreads) but still has a leftover archived log
 			// overlapping this SCN range from before it was shut down.
-			mkLogFile(2, 1, 1500, "ARCHIVED"),
+			mkLogFile(2, 1, 500, 1500, "ARCHIVED", testRedoLogSize),
 		}
 
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 
 		require.NoError(t, err)
 		assert.ElementsMatch(t, files, selected)
@@ -363,11 +394,11 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("a closed thread with zero files does not error", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, logStatusCurrent),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, logStatusCurrent, testRedoLogSize),
 		}
 
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 
 		require.NoError(t, err)
 		assert.Equal(t, files, selected)
@@ -378,23 +409,23 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("stall detection compares the combined multi-thread selection, not a single thread", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, "ARCHIVED"),
-			mkLogFile(1, 3, 3000, "ARCHIVED"),
-			mkLogFile(2, 1, 1500, "ARCHIVED"),
-			mkLogFile(2, 2, 2500, "ARCHIVED"),
-			mkLogFile(2, 3, 3500, "ARCHIVED"),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 2000, 3000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 1, 500, 1500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 2, 1500, 2500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 3, 2500, 3500, "ARCHIVED", testRedoLogSize),
 		}
 
 		// Cycle 1: budget starts at minCount (2) for each thread, both capped.
-		selected, _, capped, err := s.selectForSession(files, []int{1, 2}, 9000)
+		selected, _, capped, err := s.selectForSession(files, []int{1, 2}, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 4)
 		assert.True(t, capped)
 		assert.Equal(t, 2, s.count)
 
 		// Cycle 2: identical combined selection across both threads -> stall, budget grows to 3.
-		selected, _, capped, err = s.selectForSession(files, []int{1, 2}, 9000)
+		selected, _, capped, err = s.selectForSession(files, []int{1, 2}, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 6, "growth to 3 now covers every file in both threads")
 		assert.False(t, capped)
@@ -404,32 +435,32 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 	t.Run("growth does not falsely trigger when only one thread's selection coincides", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		firstFiles := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, "ARCHIVED"),
-			mkLogFile(1, 3, 3000, "ARCHIVED"),
-			mkLogFile(2, 1, 1500, "ARCHIVED"),
-			mkLogFile(2, 2, 2500, "ARCHIVED"),
-			mkLogFile(2, 3, 3500, "ARCHIVED"),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 2000, 3000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 1, 500, 1500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 2, 1500, 2500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 3, 2500, 3500, "ARCHIVED", testRedoLogSize),
 		}
 		// Thread 1's files are identical to the first cycle; thread 2's are entirely
 		// different (real forward progress on that thread). The combined selection
 		// therefore differs cycle-to-cycle and must not be mistaken for a stall.
 		secondFiles := []*LogFile{
-			mkLogFile(1, 1, 1000, "ARCHIVED"),
-			mkLogFile(1, 2, 2000, "ARCHIVED"),
-			mkLogFile(1, 3, 3000, "ARCHIVED"),
-			mkLogFile(2, 4, 4500, "ARCHIVED"),
-			mkLogFile(2, 5, 5500, "ARCHIVED"),
-			mkLogFile(2, 6, 6500, "ARCHIVED"),
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 2000, 3000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 4, 3500, 4500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 5, 4500, 5500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 6, 5500, 6500, "ARCHIVED", testRedoLogSize),
 		}
 
-		selected, _, capped, err := s.selectForSession(firstFiles, []int{1, 2}, 9000)
+		selected, _, capped, err := s.selectForSession(firstFiles, []int{1, 2}, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 4)
 		assert.True(t, capped)
 		assert.Equal(t, 2, s.count)
 
-		selected, _, capped, err = s.selectForSession(secondFiles, []int{1, 2}, 9000)
+		selected, _, capped, err = s.selectForSession(secondFiles, []int{1, 2}, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.Len(t, selected, 4)
 		assert.True(t, capped)
@@ -443,18 +474,18 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 
 		// Thread 1 (open) is fully caught up on its own genuinely open current log.
 		openThreadFiles := []*LogFile{
-			mkLogFile(1, 1, 100, "ARCHIVED"),
-			mkLogFile(1, 2, 200, logStatusCurrent),
+			mkLogFile(1, 1, 0, 100, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 100, 200, logStatusCurrent, testRedoLogSize),
 		}
 		// Thread 2 (closed) has a substantial backlog of small archived files, far
 		// exceeding the shared budget of 2 (and, deliberately, exceeding growthMax
 		// too - see the plateau at cycle 3/4 below).
 		closedThreadBacklog := []*LogFile{
-			mkLogFile(2, 1, 1100, "ARCHIVED"),
-			mkLogFile(2, 2, 1200, "ARCHIVED"),
-			mkLogFile(2, 3, 1300, "ARCHIVED"),
-			mkLogFile(2, 4, 1400, "ARCHIVED"),
-			mkLogFile(2, 5, 1500, "ARCHIVED"),
+			mkLogFile(2, 1, 1000, 1100, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 2, 1100, 1200, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 3, 1200, 1300, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 4, 1300, 1400, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 5, 1400, 1500, "ARCHIVED", testRedoLogSize),
 		}
 		files := append(append([]*LogFile{}, openThreadFiles...), closedThreadBacklog...)
 
@@ -464,7 +495,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		// previously, a truncated closed thread never influenced endSCN, so
 		// currentSCN could jump straight to dbCurrentSCN leaving files #3-#5
 		// permanently unreachable once the next cycle's SCN range moved past them.
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		assert.True(t, capped, "thread 2's untightened backlog must cap the session")
 		assert.Equal(t, uint64(1199), endSCN, "endSCN tightened to thread 2's 2nd (budgeted) file's NextSCN minus 1")
@@ -473,8 +504,9 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 
 		// Cycle 2: same inputs (thread 2 produced nothing new since it's closed).
 		// The identical selection stalls, growing the shared budget to 3 - thread 2
-		// now gets 3 files, tightening endSCN further out.
-		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000)
+		// now gets 3 files, tightening endSCN further out. Every file here is
+		// exactly 1 redo-log-size, so the derived jump agrees with the plain +1 step.
+		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		assert.True(t, capped)
 		assert.Equal(t, uint64(1299), endSCN)
@@ -482,7 +514,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.Equal(t, 3, s.count)
 
 		// Cycle 3: stalled again, budget grows to 4 - the growthMax ceiling.
-		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000)
+		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		assert.True(t, capped)
 		assert.Equal(t, uint64(1399), endSCN)
@@ -497,7 +529,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		// pushes the boundary past it. See the next test for the case where the
 		// boundary is already established before the backlog is even considered,
 		// which does sweep it up in one shot via extension rather than growth.
-		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000)
+		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		assert.True(t, capped)
 		assert.Equal(t, uint64(1399), endSCN, "plateaued - growth cannot exceed growthMax, and nothing else pushes the boundary further")
@@ -514,10 +546,10 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		// thread 2's backlog is even in the picture (e.g. thread 2's shutdown and
 		// this connector noticing its stale backlog happen independently).
 		openThreadFiles := []*LogFile{
-			mkLogFile(1, 1, 100, "ARCHIVED"),
-			mkLogFile(1, 2, 200, logStatusCurrent),
+			mkLogFile(1, 1, 0, 100, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 100, 200, logStatusCurrent, testRedoLogSize),
 		}
-		_, endSCN, capped, err := s.selectForSession(openThreadFiles, openThread1, 9000)
+		_, endSCN, capped, err := s.selectForSession(openThreadFiles, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.False(t, capped)
 		require.Equal(t, uint64(9000), endSCN)
@@ -530,15 +562,15 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		// far faster than growing the budget one file per stalled cycle, and not
 		// limited by growthMax (see extendThreadPastBoundary's doc comment).
 		closedThreadBacklog := []*LogFile{
-			mkLogFile(2, 1, 1100, "ARCHIVED"),
-			mkLogFile(2, 2, 1200, "ARCHIVED"),
-			mkLogFile(2, 3, 1300, "ARCHIVED"),
-			mkLogFile(2, 4, 1400, "ARCHIVED"),
-			mkLogFile(2, 5, 1500, "ARCHIVED"),
+			mkLogFile(2, 1, 1000, 1100, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 2, 1100, 1200, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 3, 1200, 1300, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 4, 1300, 1400, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 5, 1400, 1500, "ARCHIVED", testRedoLogSize),
 		}
 		files := append(append([]*LogFile{}, openThreadFiles...), closedThreadBacklog...)
 
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		assert.False(t, capped, "the fully-extended closed thread has nothing left to tighten endSCN against")
 		assert.Equal(t, uint64(9000), endSCN)
@@ -553,8 +585,8 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 
 		// Cycle 1: a single open thread, already on its genuinely open current log -
 		// uncapped, committing the ratchet forward to dbCurrentSCN (9000).
-		firstCycleFiles := []*LogFile{mkLogFile(1, 1, 500, logStatusCurrent)}
-		_, endSCN, capped, err := s.selectForSession(firstCycleFiles, openThread1, 9000)
+		firstCycleFiles := []*LogFile{mkLogFile(1, 1, 0, 500, logStatusCurrent, testRedoLogSize)}
+		_, endSCN, capped, err := s.selectForSession(firstCycleFiles, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.False(t, capped)
 		require.Equal(t, uint64(9000), endSCN)
@@ -564,12 +596,12 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		// current log isn't even in this collected range), so this cycle legitimately
 		// caps well below the previously committed boundary of 9000.
 		secondCycleFiles := []*LogFile{
-			mkLogFile(1, 2, 300, "ARCHIVED"),
-			mkLogFile(1, 3, 500, "ARCHIVED"),
-			mkLogFile(1, 4, 700, "ARCHIVED"),
-			mkLogFile(1, 5, 900, "ARCHIVED"),
+			mkLogFile(1, 2, 100, 300, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 300, 500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 4, 500, 700, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 5, 700, 900, "ARCHIVED", testRedoLogSize),
 		}
-		_, endSCN, capped, err = s.selectForSession(secondCycleFiles, openThread1, 9500)
+		_, endSCN, capped, err = s.selectForSession(secondCycleFiles, openThread1, 9500, testRedoLogSize)
 		require.NoError(t, err)
 		require.True(t, capped)
 		require.Less(t, endSCN, uint64(9000), "this cycle's own boundary is legitimately lower than what was previously committed")
@@ -583,17 +615,17 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		require.Zero(t, s.prevUpperBoundSCN)
 
 		openThreadFiles := []*LogFile{
-			mkLogFile(1, 1, 100, "ARCHIVED"),
-			mkLogFile(1, 2, 200, logStatusCurrent),
+			mkLogFile(1, 1, 0, 100, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 100, 200, logStatusCurrent, testRedoLogSize),
 		}
 		closedThreadBacklog := []*LogFile{
-			mkLogFile(2, 1, 1100, "ARCHIVED"),
-			mkLogFile(2, 2, 1200, "ARCHIVED"),
-			mkLogFile(2, 3, 1300, "ARCHIVED"),
+			mkLogFile(2, 1, 1000, 1100, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 2, 1100, 1200, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 3, 1200, 1300, "ARCHIVED", testRedoLogSize),
 		}
 		files := append(append([]*LogFile{}, openThreadFiles...), closedThreadBacklog...)
 
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 
 		require.NoError(t, err)
 		require.Len(t, selected, 4, "with no boundary to ratchet against, thread 2 is still limited to its budgeted 2 files - behaviour unchanged from before this feature existed")
@@ -608,10 +640,10 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		// Cycle 1: establish a large previous boundary via an unrelated closed thread
 		// reaching all the way to dbCurrentSCN.
 		seedFiles := []*LogFile{
-			mkLogFile(1, 1, 100, "ARCHIVED"),
-			mkLogFile(1, 2, 200, logStatusCurrent),
+			mkLogFile(1, 1, 0, 100, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 100, 200, logStatusCurrent, testRedoLogSize),
 		}
-		_, endSCN, capped, err := s.selectForSession(seedFiles, openThread1, 9000)
+		_, endSCN, capped, err := s.selectForSession(seedFiles, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
 		require.False(t, capped)
 		require.Equal(t, uint64(9000), s.prevUpperBoundSCN)
@@ -622,16 +654,105 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		// boundary of 9000 - extension must land on it and stop there, rather than
 		// erroring or trying to walk past a thread's own last file.
 		files := []*LogFile{
-			mkLogFile(1, 3, 300, "ARCHIVED"),
-			mkLogFile(1, 4, 500, "ARCHIVED"),
-			mkLogFile(1, 5, 600, logStatusCurrent),
+			mkLogFile(1, 3, 200, 300, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 4, 300, 500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 5, 500, 600, logStatusCurrent, testRedoLogSize),
 		}
 
-		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9500)
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 9500, testRedoLogSize)
 
 		require.NoError(t, err)
 		assert.False(t, capped, "landing on the genuinely open current log makes the thread caught up")
 		assert.Equal(t, uint64(9500), endSCN)
 		assert.Equal(t, files, selected, "extension must include exactly this thread's files, stopping at its current log without error")
+	})
+
+	// --- derived-jump growth (byte-budget-specific) scenarios ---
+
+	// derivedJumpBacklogFiles returns a single-thread, single-redo-log-size-per-file
+	// backlog of 6 archived files plus a genuinely open current log, used by the
+	// two tests below to exercise deriveGrowthCount. Cycle 1 seeds a small
+	// boundary; cycle 2's extension reaches partway into the backlog (up to
+	// arc5, whose NextSCN of 1100 is the first to exceed that boundary); cycle 3
+	// then stalls with 5 redo-log-sized units of backlog sitting below the
+	// boundary, which is what deriveGrowthCount must recover as its jump size.
+	derivedJumpBacklogFiles := func() []*LogFile {
+		return []*LogFile{
+			mkLogFile(1, 1, 100, 300, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 300, 500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 3, 500, 700, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 4, 700, 900, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 5, 900, 1100, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 6, 1100, 1300, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 7, 1300, 1400, logStatusCurrent, testRedoLogSize),
+		}
+	}
+
+	t.Run("a stall whose derived jump exceeds +1 grows the budget to that size in a single step", func(t *testing.T) {
+		s := &logFileSelector{minCount: 1, growthMax: 16}
+
+		// Cycle 1 (seed): a tiny, unrelated selection that commits a boundary of
+		// 1000 without ever truncating (both files fit budget 1), so growth
+		// starts from a clean slate on the next call.
+		seedFiles := []*LogFile{
+			mkLogFile(1, 1, 0, 50, "ARCHIVED", testRedoLogSize/2),
+			mkLogFile(1, 2, 50, 100, logStatusCurrent, testRedoLogSize),
+		}
+		_, _, capped, err := s.selectForSession(seedFiles, openThread1, 1000, testRedoLogSize)
+		require.NoError(t, err)
+		require.False(t, capped)
+		require.Equal(t, 1, s.count)
+		require.Equal(t, uint64(1000), s.prevUpperBoundSCN)
+
+		files := derivedJumpBacklogFiles()
+
+		// Cycle 2: budget of 1 truncates to just arc#1, but extension (bounded by
+		// the cycle-1 boundary of 1000) pulls in arc#2-#5 too, landing on arc#5
+		// (NextSCN 1100 > 1000). Not yet a stall - this is the first time this
+		// backlog has been seen.
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 2000, testRedoLogSize)
+		require.NoError(t, err)
+		require.True(t, capped)
+		require.Len(t, selected, 5)
+		require.Equal(t, uint64(1099), endSCN)
+		require.Equal(t, 1, s.count, "no stall yet - budget must not have grown")
+		require.Equal(t, uint64(1099), s.prevUpperBoundSCN)
+
+		// Cycle 3: identical inputs -> stall. 5 redo-log-sized units (arc#1-#5, all
+		// with FirstSCN below the 1099 boundary) sit unconsumed by the budget, so
+		// the derived jump takes count straight from 1 to 5 - a flat +1 step would
+		// only have reached 2.
+		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 2000, testRedoLogSize)
+		require.NoError(t, err)
+		assert.True(t, capped)
+		assert.Equal(t, uint64(1099), endSCN)
+		assert.Len(t, selected, 5)
+		assert.Equal(t, 5, s.count, "the derived jump must land directly on 5, not climb to 2")
+	})
+
+	t.Run("growth ceiling still clamps a derived jump that would otherwise exceed it", func(t *testing.T) {
+		s := &logFileSelector{minCount: 1, growthMax: 3}
+
+		seedFiles := []*LogFile{
+			mkLogFile(1, 1, 0, 50, "ARCHIVED", testRedoLogSize/2),
+			mkLogFile(1, 2, 50, 100, logStatusCurrent, testRedoLogSize),
+		}
+		_, _, capped, err := s.selectForSession(seedFiles, openThread1, 1000, testRedoLogSize)
+		require.NoError(t, err)
+		require.False(t, capped)
+		require.Equal(t, 1, s.count)
+
+		files := derivedJumpBacklogFiles()
+
+		_, _, _, err = s.selectForSession(files, openThread1, 2000, testRedoLogSize)
+		require.NoError(t, err)
+		require.Equal(t, 1, s.count, "no stall yet on the first sighting of this backlog")
+
+		// Stall: the derived jump (5) exceeds growthMax (3), so it must clamp to 3
+		// rather than reaching the uncapped derived size.
+		_, _, capped, err = s.selectForSession(files, openThread1, 2000, testRedoLogSize)
+		require.NoError(t, err)
+		assert.True(t, capped)
+		assert.Equal(t, 3, s.count, "growthMax must clamp the derived jump, not just a flat +1 step")
 	})
 }
