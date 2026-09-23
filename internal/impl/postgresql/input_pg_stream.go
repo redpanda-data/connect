@@ -457,11 +457,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
-	incSnapshot, err := parseIncrementalSnapshotCfg(conf, heartbeatInterval, signalTableName, streamSnapshot)
-	if err != nil {
-		return nil, err
-	}
-
 	pgConnConfig, err := pgconn.ParseConfigWithOptions(dsn, pgconn.ParseConfigOptions{
 		// Don't support dynamic reading of password
 		GetSSLPassword: func(context.Context) string { return "" },
@@ -511,7 +506,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
 			SignalTableName:          signalTableName,
-			IncrementalSnapshot:      incSnapshot.cfg,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,
@@ -524,9 +518,14 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		stopSig:         shutdown.NewSignaller(),
 
 		iamAuthEnabled: iamAuthEnabled,
+	}
 
-		incSnapshotCheckpointCache:    incSnapshot.cache,
-		incSnapshotCheckpointCacheKey: incSnapshot.cacheKey,
+	if incSnapshot, err := parseIncrementalSnapshotCfg(conf, heartbeatInterval, signalTableName, streamSnapshot); err != nil {
+		return nil, err
+	} else {
+		i.streamConfig.IncrementalSnapshot = incSnapshot.cfg
+		i.incSnapshotCheckpointCache = incSnapshot.cache
+		i.incSnapshotCheckpointCacheKey = incSnapshot.cacheKey
 	}
 
 	if i.controlSig, err = newControlSignaller(schema, signalTableName, logger); err != nil {
