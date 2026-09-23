@@ -41,6 +41,7 @@ aws_bedrock_embeddings:
   model: amazon.titan-embed-text-v1 # No default (required)
   text: "" # No default (optional)
   input_type: "" # No default (optional)
+  dimensions: 0 # No default (optional)
 ```
 
 --
@@ -72,6 +73,7 @@ aws_bedrock_embeddings:
   model: amazon.titan-embed-text-v1 # No default (required)
   text: "" # No default (optional)
   input_type: "" # No default (optional)
+  dimensions: 0 # No default (optional)
 ```
 
 --
@@ -317,5 +319,13 @@ Specifies the type of input passed to the model. Required by Cohere embedding mo
 | Used for embeddings of search queries run against a vector DB to find relevant documents.
 
 |===
+
+=== `dimensions`
+
+The number of dimensions of the output embedding. Only supported by Titan Text Embeddings V2 (`amazon.titan-embed-text-v2:0`), where valid values are 256, 512 and 1024. When unset the model default of 1024 dimensions is used.
+
+
+*Type*: `int`
+
 
 
