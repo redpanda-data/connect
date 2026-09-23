@@ -33,9 +33,10 @@ import (
 )
 
 const (
-	bedepFieldModel     = "model"
-	bedepFieldText      = "text"
-	bedepFieldInputType = "input_type"
+	bedepFieldModel      = "model"
+	bedepFieldText       = "text"
+	bedepFieldInputType  = "input_type"
+	bedepFieldDimensions = "dimensions"
 )
 
 func init() {
@@ -65,6 +66,12 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 		}).
 			Description("Specifies the type of input passed to the model. Required by Cohere embedding models; ignored by Amazon Titan models.").
 			Optional()).
+		Field(service.NewIntField(bedepFieldDimensions).
+			Description("The number of dimensions of the output embedding. Only supported by Titan Text Embeddings V2 (`amazon.titan-embed-text-v2:0`), where valid values are 256, 512 and 1024. When unset the model default of 1024 dimensions is used.").
+			ShortDescription("The number of dimensions for output embeddings. Only supported by Titan V2.").
+			LintRule(`root = if ![256, 512, 1024].contains(this) { [ "`+bedepFieldDimensions+` must be one of 256, 512 or 1024" ] }`).
+			Optional()).
+		LintRule(`root = if this.exists("`+bedepFieldDimensions+`") && !this.`+bedepFieldModel+`.or("").contains("titan-embed-text-v2") { [ "`+bedepFieldDimensions+` is only supported when `+bedepFieldModel+` targets Titan Text Embeddings V2" ] }`).
 		Example(
 			"Store embedding vectors in Clickhouse",
 			"Compute embeddings for some generated data and store it within https://clickhouse.com/[Clickhouse^]",
@@ -124,6 +131,21 @@ func newBedrockEmbeddingsProcessor(conf *service.ParsedConfig, _ *service.Resour
 	if isCohereModel(model) && p.inputType == "" {
 		return nil, fmt.Errorf("%s is required when %s targets a Cohere embedding model", bedepFieldInputType, bedepFieldModel)
 	}
+	if conf.Contains(bedepFieldDimensions) {
+		dims, err := conf.FieldInt(bedepFieldDimensions)
+		if err != nil {
+			return nil, err
+		}
+		if dims != 256 && dims != 512 && dims != 1024 {
+			return nil, fmt.Errorf("invalid %s: %d, must be one of 256, 512 or 1024", bedepFieldDimensions, dims)
+		}
+		// Only Titan Text Embeddings V2 accepts a dimensions parameter, so
+		// fail at config parse rather than per message at runtime.
+		if !isTitanV2Model(model) {
+			return nil, fmt.Errorf("%s is only supported when %s targets Titan Text Embeddings V2", bedepFieldDimensions, bedepFieldModel)
+		}
+		p.dimensions = &dims
+	}
 	return p, nil
 }
 
@@ -131,8 +153,9 @@ type bedrockEmbeddingsProcessor struct {
 	client *bedrockruntime.Client
 	model  string
 
-	text      *service.InterpolatedString
-	inputType string
+	text       *service.InterpolatedString
+	inputType  string
+	dimensions *int
 }
 
 // isCohereModel reports whether the model ID targets a Cohere embedding model
@@ -143,7 +166,13 @@ func isCohereModel(model string) bool {
 	return strings.Contains(model, "cohere")
 }
 
-func buildEmbeddingsRequest(model, text, inputType string) ([]byte, error) {
+// isTitanV2Model reports whether the model ID targets Titan Text Embeddings
+// V2 on Bedrock, the only Titan model that accepts a dimensions parameter.
+func isTitanV2Model(model string) bool {
+	return strings.Contains(model, "titan-embed-text-v2")
+}
+
+func buildEmbeddingsRequest(model, text, inputType string, dimensions *int) ([]byte, error) {
 	if isCohereModel(model) {
 		req := map[string]any{
 			"texts":           []string{text},
@@ -154,7 +183,11 @@ func buildEmbeddingsRequest(model, text, inputType string) ([]byte, error) {
 		}
 		return json.Marshal(req)
 	}
-	return json.Marshal(map[string]any{"inputText": text})
+	req := map[string]any{"inputText": text}
+	if dimensions != nil {
+		req["dimensions"] = *dimensions
+	}
+	return json.Marshal(req)
 }
 
 func parseEmbeddingsResponse(model string, body []byte) ([]float64, error) {
@@ -220,7 +253,7 @@ func (b *bedrockEmbeddingsProcessor) Process(ctx context.Context, msg *service.M
 	if err != nil {
 		return nil, err
 	}
-	payloadBytes, err := buildEmbeddingsRequest(b.model, prompt, b.inputType)
+	payloadBytes, err := buildEmbeddingsRequest(b.model, prompt, b.inputType, b.dimensions)
 	if err != nil {
 		return nil, err
 	}

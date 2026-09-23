@@ -16,6 +16,7 @@ package bedrock
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,17 +27,25 @@ import (
 
 func TestBuildEmbeddingsRequest(t *testing.T) {
 	tests := []struct {
-		name      string
-		model     string
-		text      string
-		inputType string
-		want      map[string]any
+		name       string
+		model      string
+		text       string
+		inputType  string
+		dimensions *int
+		want       map[string]any
 	}{
 		{
 			name:  "titan request uses inputText",
 			model: "amazon.titan-embed-text-v2:0",
 			text:  "hello world",
 			want:  map[string]any{"inputText": "hello world"},
+		},
+		{
+			name:       "titan v2 request includes dimensions when set",
+			model:      "amazon.titan-embed-text-v2:0",
+			text:       "hello world",
+			dimensions: new(512),
+			want:       map[string]any{"inputText": "hello world", "dimensions": float64(512)},
 		},
 		{
 			name:  "titan ignores input_type",
@@ -77,10 +86,22 @@ func TestBuildEmbeddingsRequest(t *testing.T) {
 				"embedding_types": []any{"float"},
 			},
 		},
+		{
+			name:       "cohere ignores dimensions",
+			model:      "cohere.embed-english-v3",
+			text:       "hello world",
+			inputType:  "search_document",
+			dimensions: new(512),
+			want: map[string]any{
+				"texts":           []any{"hello world"},
+				"input_type":      "search_document",
+				"embedding_types": []any{"float"},
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := buildEmbeddingsRequest(tc.model, tc.text, tc.inputType)
+			got, err := buildEmbeddingsRequest(tc.model, tc.text, tc.inputType, tc.dimensions)
 			require.NoError(t, err)
 			var asMap map[string]any
 			require.NoError(t, json.Unmarshal(got, &asMap))
@@ -184,4 +205,140 @@ credentials: {id: test, secret: test}
 model: amazon.titan-embed-text-v1
 `))
 	})
+}
+
+func TestNewProcessor_DimensionsValidation(t *testing.T) {
+	parseAndBuild := func(t *testing.T, yaml string) error {
+		t.Helper()
+		conf, err := newBedrockEmbeddingsConfigSpec().ParseYAML(yaml, nil)
+		require.NoError(t, err)
+		_, err = newBedrockEmbeddingsProcessor(conf, service.MockResources())
+		return err
+	}
+
+	t.Run("titan v2 with valid dimensions builds", func(t *testing.T) {
+		for _, dims := range []int{256, 512, 1024} {
+			require.NoError(t, parseAndBuild(t, fmt.Sprintf(`
+region: us-east-1
+credentials: {id: test, secret: test}
+model: amazon.titan-embed-text-v2:0
+dimensions: %d
+`, dims)))
+		}
+	})
+
+	t.Run("titan v2 with invalid dimensions fails at parse time", func(t *testing.T) {
+		err := parseAndBuild(t, `
+region: us-east-1
+credentials: {id: test, secret: test}
+model: amazon.titan-embed-text-v2:0
+dimensions: 100
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "dimensions")
+	})
+
+	t.Run("titan v1 with dimensions fails at parse time", func(t *testing.T) {
+		err := parseAndBuild(t, `
+region: us-east-1
+credentials: {id: test, secret: test}
+model: amazon.titan-embed-text-v1
+dimensions: 512
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "dimensions")
+	})
+
+	t.Run("cohere with dimensions fails at parse time", func(t *testing.T) {
+		err := parseAndBuild(t, `
+region: us-east-1
+credentials: {id: test, secret: test}
+model: cohere.embed-english-v3
+input_type: search_document
+dimensions: 512
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "dimensions")
+	})
+
+	t.Run("titan v2 without dimensions builds", func(t *testing.T) {
+		require.NoError(t, parseAndBuild(t, `
+region: us-east-1
+credentials: {id: test, secret: test}
+model: amazon.titan-embed-text-v2:0
+`))
+	})
+}
+
+func TestBedrockEmbeddingsConfigLinting(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      string
+		errContains string
+	}{
+		{
+			name: "titan v2 with valid dimensions",
+			config: `
+aws_bedrock_embeddings:
+  model: amazon.titan-embed-text-v2:0
+  dimensions: 512
+`,
+		},
+		{
+			name: "titan v2 regional inference profile with dimensions",
+			config: `
+aws_bedrock_embeddings:
+  model: us.amazon.titan-embed-text-v2:0
+  dimensions: 256
+`,
+		},
+		{
+			name: "titan v2 without dimensions",
+			config: `
+aws_bedrock_embeddings:
+  model: amazon.titan-embed-text-v2:0
+`,
+		},
+		{
+			name: "titan v2 with invalid dimensions",
+			config: `
+aws_bedrock_embeddings:
+  model: amazon.titan-embed-text-v2:0
+  dimensions: 100
+`,
+			errContains: "dimensions must be one of 256, 512 or 1024",
+		},
+		{
+			name: "titan v1 with dimensions",
+			config: `
+aws_bedrock_embeddings:
+  model: amazon.titan-embed-text-v1
+  dimensions: 512
+`,
+			errContains: "dimensions is only supported when model targets Titan Text Embeddings V2",
+		},
+		{
+			name: "cohere with dimensions",
+			config: `
+aws_bedrock_embeddings:
+  model: cohere.embed-english-v3
+  input_type: search_document
+  dimensions: 512
+`,
+			errContains: "dimensions is only supported when model targets Titan Text Embeddings V2",
+		},
+	}
+
+	env := service.NewEnvironment()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := env.NewStreamBuilder().AddProcessorYAML(tc.config)
+			if tc.errContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errContains)
+			}
+		})
+	}
 }
