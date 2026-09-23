@@ -129,7 +129,7 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 	c.queueChanged = false
 
 	// Baseline: nothing fetched yet. planNextChunk advances past it.
-	c.commitLiveState()
+	c.captureLiveState()
 
 	// Once only, so the stream has a known position for the first watermark.
 	// See Deps.Prepare for why not per watermark.
@@ -142,9 +142,9 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 	return c.planNextChunk(ctx)
 }
 
-// commitLiveState snapshots the live fields into the committed ones. Call
+// captureLiveState snapshots the live fields into the committed ones. Call
 // only once everything fetched so far has been flushed.
-func (c *Coordinator[P, W]) commitLiveState() {
+func (c *Coordinator[P, W]) captureLiveState() {
 	c.committedRemaining = slices.Clone(c.remaining)
 	c.committedCurrent = c.current
 	c.committedMaxPK = c.maxPK
@@ -285,7 +285,7 @@ func (c *Coordinator[P, W]) releaseWindow(emit EmitFunc) error {
 	wasOpened := c.windowOpened
 
 	c.windowOpened = false
-	c.commitLiveState()
+	c.captureLiveState()
 
 	if err := emit(rows); err != nil {
 		c.restoreCommitted(undo)
