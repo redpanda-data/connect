@@ -22,7 +22,7 @@ import (
 )
 
 // ReceivedMessages is a thread-safe accessor for messages collected by the
-// consumer func startSignallingStream registers.
+// consumer func startTestStream registers.
 type ReceivedMessages struct {
 	mu   sync.Mutex
 	msgs []any
