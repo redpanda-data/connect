@@ -1401,9 +1401,7 @@ postgres_cdc:
 `, databaseURL, slotName, heartbeatInterval)
 	}
 	heartbeatMsgs, _ := startTestStream(t, inputYAML(heartbeatSlot, "200ms"))
-	// A heartbeat_interval of 0s makes the input fail to connect (NewMonitor examines the wrong field).
-	// Thus use an interval that does not tick during the test.
-	noHeartbeatMsgs, _ := startTestStream(t, inputYAML(noHeartbeatSlot, "1h"))
+	noHeartbeatMsgs, _ := startTestStream(t, inputYAML(noHeartbeatSlot, "0s"))
 
 	require.Eventually(t, func() bool {
 		var count int
