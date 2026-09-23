@@ -61,8 +61,8 @@ func (h *heartbeat) Stop() error {
 	return h.db.Close()
 }
 
-func effectiveHeartbeatInterval(configured time.Duration, incSnapshot *incsnapshot.Cfg) time.Duration {
-	if !incSnapshot.IsEnabled() || incSnapshot.HeartbeatInterval <= 0 {
+func effectiveHeartbeatInterval(configured time.Duration, incSnapshot incsnapshot.Cfg) time.Duration {
+	if !incSnapshot.Enabled || incSnapshot.HeartbeatInterval <= 0 {
 		return configured
 	}
 	return min(configured, incSnapshot.HeartbeatInterval)

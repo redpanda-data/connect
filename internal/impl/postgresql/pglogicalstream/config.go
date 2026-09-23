@@ -55,15 +55,16 @@ type Config struct {
 	UnchangedToastValue any
 	// The interval to send logical messages
 	HeartbeatInterval time.Duration
-	// IncrementalSnapshot holds the incremental snapshot configuration.
-	IncrementalSnapshot *incrementalsnapshot.Cfg
+	// IncrementalSnapshot holds the incremental snapshot configuration. Its
+	// zero value is a disabled incremental snapshot.
+	IncrementalSnapshot incrementalsnapshot.Cfg
 }
 
-// IncrementalSnapshotCfg returns the incremental snapshot configuration. It
-// returns nil when the snapshot is disabled.
-func (c *Config) IncrementalSnapshotCfg() *incrementalsnapshot.Cfg {
-	if c != nil && c.IncrementalSnapshot != nil {
-		return c.IncrementalSnapshot
+// IncrementalSnapshotCfg returns the incremental snapshot configuration. A
+// disabled snapshot is the zero value, so there is no nil case.
+func (c *Config) IncrementalSnapshotCfg() incrementalsnapshot.Cfg {
+	if c == nil {
+		return incrementalsnapshot.Cfg{}
 	}
-	return nil
+	return c.IncrementalSnapshot
 }

@@ -33,8 +33,3 @@ type Cfg struct {
 	HeartbeatInterval time.Duration
 	ResumeState       *incrementalsnapshot.State
 }
-
-// IsEnabled reports whether the snapshot is enabled.
-func (c *Cfg) IsEnabled() bool {
-	return c != nil && c.Enabled
-}

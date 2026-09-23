@@ -608,11 +608,12 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		}
 	}
 
-	if p.streamConfig.IncrementalSnapshotCfg().IsEnabled() {
+	if p.streamConfig.IncrementalSnapshotCfg().Enabled {
 		state, err := p.loadCachedIncSnapshotState(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to load incremental snapshot checkpoint: %w", err)
 		}
+		// IncrementalSnapshot is a value, so must be written through p.streamConfig
 		p.streamConfig.IncrementalSnapshot.ResumeState = state
 		if state == nil {
 			p.logger.Debugf("Incremental snapshot: no checkpoint found, will start fresh")

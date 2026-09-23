@@ -49,7 +49,7 @@ type incrementalSnapshot struct {
 
 func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) error {
 	incSnapshotCfg := config.IncrementalSnapshotCfg()
-	if !incSnapshotCfg.IsEnabled() {
+	if !incSnapshotCfg.Enabled {
 		return nil
 	}
 

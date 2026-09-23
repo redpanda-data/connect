@@ -19,7 +19,7 @@ import (
 )
 
 type incSnapshotCfg struct {
-	cfg      *incrementalsnapshot.Cfg
+	cfg      incrementalsnapshot.Cfg
 	cache    string
 	cacheKey string
 }
@@ -27,14 +27,12 @@ type incSnapshotCfg struct {
 func newDefaultIncSnapshotCfg() *incSnapshotCfg {
 	return &incSnapshotCfg{
 		cacheKey: incrementalsnapshot.DefaultIncSnapshotCheckpointKey,
-		cfg:      &incrementalsnapshot.Cfg{Enabled: false},
+		// The zero Cfg is a disabled snapshot.
 	}
 }
 
 func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, heartbeatInterval time.Duration, signalTableName string, streamSnapshot bool) (*incSnapshotCfg, error) {
-	var (
-		snapConf = conf.Namespace(fieldIncSnapshot)
-	)
+	snapConf := conf.Namespace(fieldIncSnapshot)
 
 	if enabled, err := snapConf.FieldBool(fieldIncSnapshotEnabled); err != nil {
 		return nil, err
@@ -60,7 +58,7 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, heartbeatInterval t
 
 	var (
 		out = newDefaultIncSnapshotCfg()
-		cfg = &incrementalsnapshot.Cfg{Enabled: true}
+		cfg = incrementalsnapshot.Cfg{Enabled: true}
 		err error
 	)
 
