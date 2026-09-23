@@ -43,12 +43,13 @@ type Deps[W any] interface {
 	// ResolveWatermark reads a fresh watermark.
 	ResolveWatermark(ctx context.Context) (W, error)
 
-	// ForceFreshTransaction assigns the connection a real transaction id, so
-	// the stream has a known position for the first watermark.
+	// Prepare readies the connection before the first watermark is taken,
+	// giving the stream a known position to compare watermarks against. The
+	// Postgres implementation assigns the connection a real transaction id.
 	//
 	// Start calls it once. Calling it per watermark would make every chunk's
 	// two watermarks differ, which disables the drain entirely.
-	ForceFreshTransaction(ctx context.Context) error
+	Prepare(ctx context.Context) error
 
 	// FetchChunk returns up to limit rows in key order, covering the keys
 	// after lower up to and including upper. A nil lower means the table's

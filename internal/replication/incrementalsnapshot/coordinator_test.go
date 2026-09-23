@@ -438,7 +438,7 @@ func TestCoordinatorWrapsDepsErrors(t *testing.T) {
 		method string
 		want   string
 	}{
-		{"ForceFreshTransaction", "forcing fresh transaction"},
+		{"Prepare", "preparing snapshot connection"},
 		{"ResolvePrimaryKey", "resolving primary key columns for table public.a"},
 		{"ResolveMaxKey", "resolving max key for table public.a"},
 		{"ResolveWatermark", "resolving watermark"},
@@ -1088,8 +1088,8 @@ func (m *scriptedMockDeps) ResolveWatermark(context.Context) (testWatermark, err
 	return m.watermarks[idx], nil
 }
 
-func (m *scriptedMockDeps) ForceFreshTransaction(context.Context) error {
-	if err := m.check("ForceFreshTransaction"); err != nil {
+func (m *scriptedMockDeps) Prepare(context.Context) error {
+	if err := m.check("Prepare"); err != nil {
 		return err
 	}
 	m.forceFreshCalls++
@@ -1151,8 +1151,8 @@ func (d *refetchMockDeps) ResolveMaxKey(context.Context, TableID, []string) (Pri
 	return d.maxPK, nil
 }
 
-func (d *refetchMockDeps) ForceFreshTransaction(context.Context) error {
-	return d.check("ForceFreshTransaction")
+func (d *refetchMockDeps) Prepare(context.Context) error {
+	return d.check("Prepare")
 }
 
 func (d *refetchMockDeps) ResolveWatermark(context.Context) (testWatermark, error) {

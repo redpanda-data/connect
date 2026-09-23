@@ -143,9 +143,9 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 	c.commitLiveState()
 
 	// Once only, so the stream has a known position for the first watermark.
-	// See Deps.ForceFreshTransaction for why not per watermark.
-	if err := c.cfg.Deps.ForceFreshTransaction(ctx); err != nil {
-		return fmt.Errorf("forcing fresh transaction: %w", err)
+	// See Deps.Prepare for why not per watermark.
+	if err := c.cfg.Deps.Prepare(ctx); err != nil {
+		return fmt.Errorf("preparing snapshot connection: %w", err)
 	}
 
 	// State never captures an unflushed chunk, so resuming always means

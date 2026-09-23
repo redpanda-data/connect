@@ -71,8 +71,8 @@ func (d *interruptDeps) ResolveWatermark(context.Context) (testWatermark, error)
 	return d.watermark, nil
 }
 
-func (d *interruptDeps) ForceFreshTransaction(context.Context) error {
-	return d.check("ForceFreshTransaction")
+func (d *interruptDeps) Prepare(context.Context) error {
+	return d.check("Prepare")
 }
 
 func (d *interruptDeps) FetchChunk(_ context.Context, table TableID, _ []string, lower, _ PrimaryKey, limit int) ([]Row, error) {

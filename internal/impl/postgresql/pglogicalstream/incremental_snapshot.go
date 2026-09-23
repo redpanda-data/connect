@@ -390,7 +390,7 @@ func (d incrementalSnapshotDeps) ResolveWatermark(ctx context.Context) (incsnaps
 	return d.stream.resolveIncrementalWatermark(ctx)
 }
 
-func (d incrementalSnapshotDeps) ForceFreshTransaction(ctx context.Context) error {
+func (d incrementalSnapshotDeps) Prepare(ctx context.Context) error {
 	return d.stream.forceFreshIncrementalTransaction(ctx)
 }
 
@@ -501,7 +501,7 @@ func (s *Stream) resolveIncrementalWatermark(ctx context.Context) (incsnapshot.W
 	return wm, nil
 }
 
-// forceFreshIncrementalTransaction backs Deps.ForceFreshTransaction.
+// forceFreshIncrementalTransaction backs Deps.Prepare.
 func (s *Stream) forceFreshIncrementalTransaction(ctx context.Context) error {
 	var txid uint64
 	if err := s.incSnapshot.conn.QueryRowContext(ctx, "SELECT txid_current()").Scan(&txid); err != nil {
