@@ -286,7 +286,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	var (
 		endSCN   uint64
-		selected []*LogFile
+		logFiles []*LogFile
 		hitCap   bool
 		capped   bool
 	)
@@ -312,7 +312,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		if err != nil {
 			return false, fmt.Errorf("collecting open redo threads for logminer: %w", err)
 		}
-		if selected, endSCN, capped, err = lm.logSelector.selectForSession(files, openThreads, dbCurrentSCN, lm.maxRedoLogSizeInBytes); err != nil {
+		if logFiles, endSCN, capped, err = lm.logSelector.selectForSession(files, openThreads, dbCurrentSCN, lm.maxRedoLogSizeInBytes); err != nil {
 			return false, fmt.Errorf("selecting log files for session: %w", err)
 		}
 	default:
@@ -323,7 +323,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		}
 	}
 
-	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN, selected); err != nil {
+	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN, logFiles); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeMissingLogFile {
 			//nolint:staticcheck

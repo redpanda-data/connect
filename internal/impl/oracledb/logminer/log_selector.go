@@ -55,7 +55,7 @@ type logKey struct {
 // prevUpperBoundSCN is the endSCN this selector last returned (0 means none
 // yet, following the same "0 is never a real SCN" convention used elsewhere
 // in this package, e.g. LogMiner.getCurrentSCN's zero check). It only ever
-// ratchets forward (see recordUpperBoundSCN) and is used by
+// ratchets forward (see selectForSession) and is used by
 // extendThreadPastBoundary to stop a thread's backlog - open or closed -
 // from being permanently skipped once currentSCN advances past a boundary
 // that thread's own budget-capped selection never reached.
@@ -129,19 +129,15 @@ func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, 
 		s.prevKeys = nil
 	}
 
-	s.recordUpperBoundSCN(endSCN)
-
-	return selected, endSCN, capped, nil
-}
-
-// recordUpperBoundSCN ratchets prevUpperBoundSCN forward only, never letting
-// it regress - it becomes the floor the next call's extension must reach
-// past (see extendThreadPastBoundary), and a lower boundary would let a
-// thread's backlog fall behind again.
-func (s *logFileSelector) recordUpperBoundSCN(endSCN uint64) {
+	// Ratchet prevUpperBoundSCN forward only, never letting it regress - it
+	// becomes the floor the next call's extension must reach past (see
+	// extendThreadPastBoundary), and a lower boundary would let a thread's
+	// backlog fall behind again.
 	if endSCN > s.prevUpperBoundSCN {
 		s.prevUpperBoundSCN = endSCN
 	}
+
+	return selected, endSCN, capped, nil
 }
 
 // deriveGrowthCount computes the count-equivalent budget that would clear,
