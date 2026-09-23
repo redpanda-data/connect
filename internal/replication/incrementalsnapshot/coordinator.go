@@ -32,12 +32,6 @@ import (
 // window opens and closes. Refer to Watermark for the contract, including
 // that implementations must be comparable.
 //
-// Both are pinned once per connector rather than threaded through call sites.
-// Postgres does this with aliases in
-// internal/impl/postgresql/incrementalsnapshot, binding P to uint32 and W to
-// its own Watermark, so the rest of that connector names an unparameterised
-// Coordinator.
-//
 // Not safe for concurrent use: call OnStreamedRow and OnCommit from one
 // goroutine, in stream order. OnCommit's chunk read blocks on I/O by design.
 type Coordinator[P any, W Watermark[P]] struct {
