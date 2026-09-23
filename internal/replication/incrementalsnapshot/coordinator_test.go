@@ -747,10 +747,10 @@ func TestCoordinatorAddTablesCheckpointFailureRetries(t *testing.T) {
 	assert.Empty(t, chunks[0])
 }
 
-// TestCoordinatorAddTablesBeforeStartOnResume: Start replaces the queue
-// from the checkpoint, so anything seeded beforehand is re-applied behind
-// it. AddTables reported those tables as queued; dropping them would strand
-// them silently.
+// TestCoordinatorAddTablesBeforeStartOnResume: NewCoordinator seeds the
+// queue from the checkpoint, so anything AddTables queues before Start lands
+// behind it. AddTables reported those tables as queued; dropping them would
+// strand them silently.
 func TestCoordinatorAddTablesBeforeStartOnResume(t *testing.T) {
 	tableA := TableID{Schema: "public", Table: "a"}
 	tableB := TableID{Schema: "public", Table: "b"}

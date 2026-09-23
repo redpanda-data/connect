@@ -37,10 +37,6 @@ import (
 type Coordinator[P any, W Watermark[P]] struct {
 	cfg CoordinatorConfig[P, W]
 
-	// resume holds the state given to NewCoordinator; nil once Start has
-	// consumed it.
-	resume *State
-
 	remaining []TableID
 	current   *TableID
 	// currentExhausted marks current's last chunk as fetched, so the next
@@ -82,9 +78,9 @@ type Coordinator[P any, W Watermark[P]] struct {
 	knownTables []TableID
 }
 
-// NewCoordinator builds a Coordinator. A non-nil resume makes Start continue
-// from that state; otherwise it starts with an empty queue, which AddTables
-// fills. P and W are documented on Coordinator.
+// NewCoordinator builds a Coordinator. A non-nil resume continues from that
+// state; otherwise it starts with an empty queue, which AddTables fills. P
+// and W are documented on Coordinator.
 func NewCoordinator[P any, W Watermark[P]](cfg CoordinatorConfig[P, W], resume *State) (*Coordinator[P, W], error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -93,12 +89,24 @@ func NewCoordinator[P any, W Watermark[P]](cfg CoordinatorConfig[P, W], resume *
 		cfg.MaxDrainChunks = DefaultMaxDrainChunks
 	}
 
-	return &Coordinator[P, W]{
+	c := &Coordinator[P, W]{
 		cfg:    cfg,
-		resume: resume.Clone(),
 		pkCols: make(map[string][]string),
 		window: NewWindowBuffer(),
-	}, nil
+	}
+
+	// The checkpoint seeds the queue, so tables AddTables queues before
+	// Start land behind it, and one the checkpoint already covers is
+	// skipped rather than re-read. Cloned because State is the caller's.
+	if resume := resume.Clone(); resume != nil {
+		c.current = resume.CurrentTable
+		c.lastSentPK = resume.LastSentPK
+		c.maxPK = resume.MaxPK
+		c.remaining = resume.RemainingTables
+		c.knownTables = resume.Tables
+	}
+
+	return c, nil
 }
 
 // EmitFunc receives one chunk's rows as the coordinator releases them, after
@@ -116,25 +124,6 @@ type EmitFunc func(rows []Row) error
 // their downstream is consuming. With nothing queued it goes idle and waits
 // for AddTables.
 func (c *Coordinator[P, W]) Start(ctx context.Context) error {
-	resume := c.resume
-	c.resume = nil
-
-	if resume != nil {
-		// The checkpoint replaces the queue, so anything AddTables queued
-		// before Start is re-applied behind it rather than dropped.
-		seeded := c.remaining
-
-		c.current = resume.CurrentTable
-		c.lastSentPK = resume.LastSentPK
-		c.maxPK = resume.MaxPK
-		c.remaining = resume.RemainingTables
-		c.knownTables = resume.Tables
-
-		// Through AddTables, so a table the checkpoint covers is skipped and
-		// a resume cannot re-read a finished one.
-		c.AddTables(seeded)
-	}
-
 	// Anything seeded before now owes no checkpoint: the caller has
 	// acknowledged nothing yet, so there is no request that could be lost.
 	c.queueChanged = false
