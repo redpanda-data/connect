@@ -80,6 +80,9 @@ func (r *typeResolver) resolveTypeForAddColumn(
 		inferredType = mappedType
 	}
 
+	if err := rejectNanosecondTimestamps(inferredType, field.FullPath()); err != nil {
+		return nil, err
+	}
 	return inferredType, nil
 }
 
@@ -127,7 +130,56 @@ func (r *typeResolver) resolveTypeForCreateTable(
 		inferredType = mappedType
 	}
 
+	if err := rejectNanosecondTimestamps(inferredType, path); err != nil {
+		return nil, err
+	}
 	return inferredType, nil
+}
+
+// errNanosecondTimestamp marks a column whose fully resolved type contains
+// timestamp_ns or timestamptz_ns. Those are Iceberg format-version-3 types,
+// while tables created by this output are format version 2, and the parquet
+// schema, stats and partition paths have no case for them: admitting one
+// would create or evolve a table that every subsequent write fails against.
+// Callers must fail rather than fall back to another column type.
+var errNanosecondTimestamp = errors.New("nanosecond timestamps require Iceberg format version 3, which the iceberg output does not support")
+
+// rejectNanosecondTimestamps returns an errNanosecondTimestamp-wrapped error
+// naming the offending column if t is, or contains, a nanosecond timestamp.
+// It runs after all three resolution stages so that a new_column_type_mapping
+// downcast is honored. The mapping only applies to leaf columns, so the
+// remediation it suggests depends on whether the nanosecond type is the
+// resolved column itself or nested inside it.
+func rejectNanosecondTimestamps(t iceberg.Type, path icebergx.Path) error {
+	return rejectNanosecondTimestampsRec(t, path, false)
+}
+
+func rejectNanosecondTimestampsRec(t iceberg.Type, path icebergx.Path, nested bool) error {
+	switch t := t.(type) {
+	case iceberg.TimestampNsType, iceberg.TimestampTzNsType:
+		remedy := "map it to timestamp or timestamptz with new_column_type_mapping, or cast it to a millisecond or microsecond timestamp upstream"
+		if nested {
+			remedy = "cast it to a millisecond or microsecond timestamp upstream"
+		}
+		return fmt.Errorf("column %v has type %s: %w; %s", path, t, errNanosecondTimestamp, remedy)
+	case *iceberg.StructType:
+		for _, f := range t.FieldList {
+			if err := rejectNanosecondTimestampsRec(f.Type, appendPath(path, icebergx.PathSegment{Kind: icebergx.PathField, Name: f.Name}), true); err != nil {
+				return err
+			}
+		}
+	case *iceberg.ListType:
+		return rejectNanosecondTimestampsRec(t.Element, appendPath(path, icebergx.PathSegment{Kind: icebergx.PathListElement}), true)
+	case *iceberg.MapType:
+		return rejectNanosecondTimestampsRec(t.ValueType, appendPath(path, icebergx.PathSegment{Kind: icebergx.PathMapEntry}), true)
+	}
+	return nil
+}
+
+// appendPath returns path extended by seg without aliasing path's backing
+// array, so sibling branches of a walk never overwrite each other.
+func appendPath(path icebergx.Path, seg icebergx.PathSegment) icebergx.Path {
+	return append(path[:len(path):len(path)], seg)
 }
 
 // parseSchemaMetadata reads the schema.Common from message metadata. Returns
@@ -241,10 +293,10 @@ func commonTypeToIcebergTypeRec(c *schema.Common, ti *typeInferrer) (iceberg.Typ
 		// Pick an Iceberg variant per the schema's declared unit/UTC-adjust.
 		// Legacy Timestamps (nil Logical) fall through to the millis/UTC
 		// default via EffectiveTimestamp(), preserving today's behavior of
-		// "always TimestampTzType". Schemas that explicitly say nanos use
-		// the V3 *NsType variants (catalog must support spec V3 to read
-		// these — that's surfaced as a write-time error from iceberg-go,
-		// not silently downcast here).
+		// "always TimestampTzType". Schemas that explicitly say nanos map to
+		// the V3 *NsType variants here so that new_column_type_mapping can
+		// still downcast them; rejectNanosecondTimestamps refuses whatever
+		// survives the full resolution pipeline.
 		p := c.EffectiveTimestamp()
 		switch {
 		case p.Unit == schema.TimeUnitNanos && p.AdjustToUTC:
@@ -436,7 +488,8 @@ var (
 
 // parseIcebergTypeString parses an Iceberg type string into an iceberg.Type.
 // Supports: boolean, int, long, float, double, string, binary, date, time,
-// timestamp, timestamptz, uuid, decimal(p,s), fixed[n].
+// timestamp, timestamptz, timestamp_ns, timestamptz_ns, uuid, decimal(p,s),
+// fixed[n]. The _ns types parse but are rejected by the resolver afterwards.
 func parseIcebergTypeString(s string) (iceberg.Type, error) {
 	s = strings.TrimSpace(s)
 	lower := strings.ToLower(s)
@@ -464,6 +517,14 @@ func parseIcebergTypeString(s string) (iceberg.Type, error) {
 		return iceberg.TimestampType{}, nil
 	case "timestamptz":
 		return iceberg.TimestampTzType{}, nil
+	case "timestamp_ns":
+		// Accepted so that a mapping passing through inferred_type for a
+		// nanosecond column reaches rejectNanosecondTimestamps, which fails
+		// with errNanosecondTimestamp, instead of failing here with a
+		// generic error that schema evolution would downgrade to string.
+		return iceberg.TimestampNsType{}, nil
+	case "timestamptz_ns":
+		return iceberg.TimestampTzNsType{}, nil
 	case "uuid":
 		return iceberg.UUIDType{}, nil
 	}

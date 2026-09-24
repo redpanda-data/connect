@@ -688,43 +688,68 @@ func (r *Router) evolveSchema(ctx context.Context, key tableKey, schemaErr *Batc
 		return fmt.Errorf("loading table: %w", err)
 	}
 
-	// Group new fields by parent path for efficient updates
-	groups := schemaErr.GroupByParentPath()
+	// Resolve every new column's type before touching the table, so a column
+	// that must not be added fails the evolution without committing the rest.
+	columns, err := r.resolveNewColumns(schemaErr, batch[0], key)
+	if err != nil {
+		return err
+	}
 
 	// Update schema with new columns
-	added := 0
 	_, err = client.UpdateSchema(ctx, tbl, r.caseSensitive, func(us *table.UpdateSchema) {
-		for _, fields := range groups {
-			for _, field := range fields {
-				// Resolve type using the three-stage pipeline
-				fieldType, err := r.resolver.resolveTypeForAddColumn(field, batch[0], key.namespace, key.table)
-				if err != nil {
-					r.logger.Warnf("Failed to resolve type for field %q: %v, using string", field.FieldName(), err)
-					fieldType = iceberg.StringType{}
-				}
-
-				// Build column path
-				path := field.FullPath()
-				colPath := make([]string, len(path))
-				for i, seg := range path {
-					colPath[i] = seg.Name
-				}
-
-				// Add column (all new columns are optional)
-				us.AddColumn(colPath, fieldType, "", false, nil)
-				added++
-			}
+		for _, col := range columns {
+			// Add column (all new columns are optional)
+			us.AddColumn(col.path, col.fieldType, "", false, nil)
 		}
 	})
 	if err != nil {
 		return fmt.Errorf("updating schema: %w", err)
 	}
 
-	r.logger.Infof("Evolved schema for %s.%s: added %d columns", key.namespace, key.table, added)
+	r.logger.Infof("Evolved schema for %s.%s: added %d columns", key.namespace, key.table, len(columns))
 
 	// Invalidate cached writer so it gets recreated with the new schema
 	r.closeWriter(entry)
 	return nil
+}
+
+// newColumn is a column to add during schema evolution with its resolved type.
+type newColumn struct {
+	path      []string
+	fieldType iceberg.Type
+}
+
+// resolveNewColumns resolves the Iceberg type of every field in schemaErr
+// using the three-stage pipeline. A field whose type cannot be resolved falls
+// back to a string column, except for nanosecond timestamps: those are
+// returned as an error, because a string fallback would permanently widen a
+// timestamp column that cannot be narrowed back later.
+func (r *Router) resolveNewColumns(schemaErr *BatchSchemaEvolutionError, msg *service.Message, key tableKey) ([]newColumn, error) {
+	// Group new fields by parent path for efficient updates
+	groups := schemaErr.GroupByParentPath()
+
+	var columns []newColumn
+	for _, fields := range groups {
+		for _, field := range fields {
+			fieldType, err := r.resolver.resolveTypeForAddColumn(field, msg, key.namespace, key.table)
+			if errors.Is(err, errNanosecondTimestamp) {
+				return nil, fmt.Errorf("resolving type for field %v: %w", field.FullPath(), err)
+			}
+			if err != nil {
+				r.logger.Warnf("Failed to resolve type for field %q: %v, using string", field.FieldName(), err)
+				fieldType = iceberg.StringType{}
+			}
+
+			// Build column path
+			path := field.FullPath()
+			colPath := make([]string, len(path))
+			for i, seg := range path {
+				colPath[i] = seg.Name
+			}
+			columns = append(columns, newColumn{path: colPath, fieldType: fieldType})
+		}
+	}
+	return columns, nil
 }
 
 // makeColumnOptional changes a required column to optional in the table schema.
