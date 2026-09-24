@@ -1,0 +1,127 @@
+# STREAMING config tuning @ 4 vCPU — does ANY config lever lift the plateau?
+#
+# The canonical orders-cdc sweep plateaus at ~81-85 MB/s broker p50 from
+# 4 vCPU onward. The pg_recvlogical drain diagnostic (2026-08-20) proved that
+# plateau is CLIENT-side: a trivial C client drained the same publication at
+# 167 MB/s on identical infra, ~2x what Connect consumes. The implicated code
+# is the reader goroutine in pglogicalstream/logical_stream.go, which does
+# pgoutput parse + text tuple decode inline and then sends a ONE-ELEMENT slice
+# per row into an UNBUFFERED channel (filed as CON-198).
+#
+# Every knob exposed by postgres_cdc sits DOWNSTREAM of that channel, so the
+# predicted result is that all four arms land within noise of each other.
+# That is the point of this run: it converts "tuning probably won't help" into
+# a measured statement, so support/sales can answer "how do I tune this?" with
+# evidence instead of a guess. A flat result here is a RESULT, not a failure.
+#
+# The one arm with a plausible mechanism is t2: GOMAXPROCS is independent of
+# the taskset core pin (matrix.go:565), and Connect counts licensed cores off
+# the machine CPU rather than GOMAXPROCS, so oversubscribing is free. If the
+# read loop blocks on the wire, extra Ps can let decode + producer progress
+# concurrently. Precedent: aws_kinesis moved 1.75x on a batch-once change, and
+# pinning GOMAXPROCS to core count there was catastrophic (476x at 1 core).
+#
+# 4 arms x 1 cpu_point = 4 sweep points, inside the framework's cap of 8.
+
+name: postgres-orders-cdc-tune
+description: |
+  Connect-only config-lever A/B/C/D for postgres_cdc STREAMING at 4 vCPU on
+  the canonical orders-cdc rig. Arms: deployed default, checkpoint_limit
+  16384, GOMAXPROCS 8 oversubscribed, and all three combined. Establishes
+  whether the ~85 MB/s streaming plateau is reachable/liftable by config
+  before the 1/2/4/8 sweep commits to one config.
+
+connector: postgres_cdc
+stack: postgres
+
+infra:
+  source:
+    instance_class: db.r6g.4xlarge
+    storage_gb: 800
+    iops: 24000
+    storage_throughput: 1000
+    parameters:
+      rds.logical_replication: "1"
+      max_wal_senders: "20"
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0          # live-load scenario; TRUNCATE between points keeps
+                           # table size bounded. ensureTable still CREATEs it.
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-postgres
+
+workload:
+  write_rate_per_sec: 150000   # ~180 MB/s of WAL: offered load must exceed the
+                               # connector ceiling at every arm or we measure
+                               # the producer, not postgres_cdc.
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  # Base input is shared by every arm. Safe here because all four arms use the
+  # same postgres_cdc block and differ only in SCALAR values — mergePipeline
+  # recurses into maps and replaces scalars, so nothing leaks between arms.
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      tls:
+        skip_cert_verify: true   # RDS-internal CA isn't in the runner image;
+                                  # postgres_cdc uses NewTLSField (no `enabled`).
+      stream_snapshot: false
+      schema: public
+      tables: [orders]
+      slot_name: bench_slot
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [4]
+  arms:
+    # t0 — deployed default: checkpoint_limit 1024 (the field default), batch
+    # 5000/1s, GOMAXPROCS omitted so it equals the 4-vCPU pin. Reproduces the
+    # published 2026-08-12 4-vCPU point (81.2 MB/s broker p50) through this
+    # scenario's own plumbing, making it the in-run baseline for t1-t3 rather
+    # than a cross-run comparison.
+    - id: t0-default
+
+    # t1 — checkpoint_limit 16384 (16x the default). This is the in-flight
+    # message budget: more unacked messages allow deeper output-side batching
+    # and parallelism. Tests the "the plateau is ack-latency-bound" hypothesis.
+    - id: t1-ckpt-16k
+      pipeline:
+        input:
+          postgres_cdc:
+            checkpoint_limit: 16384
+
+    # t2 — GOMAXPROCS 8 at the same 4-core taskset pin. The only arm whose
+    # mechanism is upstream-adjacent to the read loop (see header).
+    - id: t2-gomaxprocs-8
+      gomaxprocs: 8
+
+    # t3 — all three levers at once. If t1 and t2 are individually flat but t3
+    # moves, the levers only pay off in combination; if t3 is also flat, the
+    # config surface is exhausted and CON-198's code fix is the only path.
+    - id: t3-combo
+      gomaxprocs: 8
+      pipeline:
+        input:
+          postgres_cdc:
+            checkpoint_limit: 16384
+            batching:
+              count: 25000
+
+reset:
+  # Drop BOTH engines' slots and truncate between points. The slot drop frees
+  # the WAL cursor so each arm starts at the current position instead of
+  # replaying the previous arm's backlog; bench_slot_tmp is the snapshot-path
+  # temporary slot (harmless here since stream_snapshot is false, dropped for
+  # symmetry with the snapshot scenario); kc_bench_slot is what the Debezium
+  # registry entry pins and must go even on a Connect-only run.
+  - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
+  - sql: "SELECT pg_drop_replication_slot('bench_slot_tmp') FROM pg_replication_slots WHERE slot_name='bench_slot_tmp'"
+  - sql: "SELECT pg_drop_replication_slot('kc_bench_slot') FROM pg_replication_slots WHERE slot_name='kc_bench_slot'"
+  - sql: "TRUNCATE TABLE orders"

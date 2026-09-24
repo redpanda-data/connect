@@ -1,0 +1,145 @@
+# SNAPSHOT config tuning @ 4 vCPU — max_parallel_snapshot_tables is the lever.
+#
+# `max_parallel_snapshot_tables` is MISNAMED: it is intra-TABLE, not per-table.
+# In pglogicalstream/logical_stream.go it drives three things off one knob:
+#   - :650  numSamples = min(mpst, 256) * 32  -> keyspace sample count
+#   - :665  chunkSize  = len(splits)/mpst     -> a SINGLE table is split into
+#           that many primary-key ranges (hence the BIGSERIAL PK requirement)
+#   - :705  wg.SetLimit(mpst)                 -> errgroup concurrency
+#   - snapshotter.go:61 pool.NewCapped(mpst)  -> reader transaction pool size
+# At the default of 1, chunkSize == len(splits) so exactly one range is
+# produced and the whole table is scanned SEQUENTIALLY by one goroutine.
+#
+# This is why postgres should NOT reproduce the mysql snapshot result (flat
+# 20-21.6 MB/s across 1-8 vCPU, a genuinely serial per-row path): here the
+# serialism is a CONFIG DEFAULT, not a code constraint. Expectation: s0 lands
+# near the mysql-ish sequential figure and the mpst arms scale with it.
+#
+# GOMAXPROCS is deliberately left at the default (= the vCPU pin) on EVERY
+# arm, so mpst is the only variable and s0 is a true deployed-default baseline
+# comparable to the published streaming sweeps. If the best arm's mpst lands
+# at or above the core count, GOMAXPROCS x mpst is the follow-up A/B.
+#
+# 5 arms x 1 cpu_point = 5 sweep points, inside the framework's cap of 8.
+#
+# DATASET SIZING: bounded-dataset validation requires
+# (rows*row_size/1e6)/expected_peak_mb_s >= 15m, i.e. the dataset must be too
+# big for the FASTEST arm to drain inside the window — otherwise the point
+# goes idle and the median measures the idle tail, not the snapshot. 100M rows
+# x 1200B = 120 GB tolerates arms up to 133 MB/s. That ceiling estimate is
+# deliberately generous: oracledb_cdc's fixed snapshot path already measured
+# ~92 MB/s (30M rows in 6.5 min with prefetch), and no bench has yet pushed
+# this 3-broker im4gn.2xlarge cluster past ~121 MB/s. If an arm DOES complete
+# in-window, its rate comes from the per-second samples up to the
+# drop-to-idle transition (the approach validated on oracle/orders-snapshot),
+# and gets flagged as such in the write-up.
+
+name: postgres-orders-snapshot
+description: |
+  Connect-only config A/B for postgres_cdc SNAPSHOT at 4 vCPU over a
+  pre-seeded 100M-row (120 GB) orders table. Arms sweep
+  max_parallel_snapshot_tables 1/4/8/16 plus a snapshot_batch_size 10000
+  variant, to find the optimal snapshot config before the 1/2/4/8 sweep.
+
+connector: postgres_cdc
+stack: postgres
+
+infra:
+  source:
+    instance_class: db.r6g.4xlarge
+    storage_gb: 800                  # 120 GB table + PK index + WAL headroom
+    iops: 24000
+    storage_throughput: 1000         # gp3 MiB/s: parallel range scans are the
+                                      # whole point here, so storage must not
+                                      # be the confound that caps them.
+    parameters:
+      # postgres_cdc creates a temporary EXPORT_SNAPSHOT slot even for a
+      # snapshot-only run, then promotes it — logical replication is required
+      # regardless of stream_snapshot.
+      rds.logical_replication: "1"
+      max_wal_senders: "20"
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 100000000  # seeded ONCE before the sweep; every arm
+                           # re-snapshots the same table from scratch.
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-postgres
+  expected_peak_mb_s: 133  # see DATASET SIZING in the header
+
+# No workload: — bounded-dataset mode (warmup 0, fixed 15m window per point).
+# A live writer would add WAL-decode work on top of the snapshot scan and
+# confound the thing being measured.
+
+pipeline:
+  # Shared base input; arms differ only in scalar values, which mergePipeline
+  # replaces without leaking between arms.
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      tls:
+        skip_cert_verify: true
+      stream_snapshot: true    # the whole point of this scenario
+      schema: public
+      tables: [orders]
+      slot_name: bench_slot
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [4]
+  arms:
+    # s0 — deployed default: max_parallel_snapshot_tables 1 (field default,
+    # one sequential scan) and snapshot_batch_size 1000 (field default).
+    # This is what every postgres_cdc user gets today without tuning.
+    - id: s0-default
+
+    # s1 — mpst 4, matching the vCPU pin: 4 PK ranges, 4 reader txns.
+    - id: s1-mpst-4
+      pipeline:
+        input:
+          postgres_cdc:
+            max_parallel_snapshot_tables: 4
+
+    # s2 — mpst 8, 2x the pin. Range scans block on storage round-trips, so
+    # oversubscribing readers past the core count should still overlap I/O.
+    - id: s2-mpst-8
+      pipeline:
+        input:
+          postgres_cdc:
+            max_parallel_snapshot_tables: 8
+
+    # s3 — mpst 16, 4x the pin. Finds the point where added readers stop
+    # paying (storage queue depth, reader-txn contention, or the broker).
+    - id: s3-mpst-16
+      pipeline:
+        input:
+          postgres_cdc:
+            max_parallel_snapshot_tables: 16
+
+    # s4 — mpst 8 plus snapshot_batch_size 10000 (10x default): 10x fewer
+    # round-trips per range. Paired with the mid mpst arm so the batch effect
+    # is read against s2 rather than against the sequential baseline.
+    - id: s4-mpst-8-batch-10k
+      pipeline:
+        input:
+          postgres_cdc:
+            max_parallel_snapshot_tables: 8
+            snapshot_batch_size: 10000
+
+reset:
+  # CRITICAL: no TRUNCATE. Every arm must re-snapshot the SAME 100M rows, and
+  # re-seeding between points would cost ~20 min each.
+  #
+  # The slot drops are what FORCE a fresh snapshot. logical_stream.go:210-234
+  # checks pg_replication_slots for slot_name first and, if a row exists,
+  # marks the snapshot complete and streams from confirmed_flush_lsn —
+  # skipping the snapshot entirely. A leftover slot would make every arm after
+  # s0 measure an idle stream instead of a snapshot, silently. bench_slot_tmp
+  # is the EXPORT_SNAPSHOT slot the snapshot path creates and promotes; the
+  # connector drops stale ones itself but it is dropped here for safety.
+  - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
+  - sql: "SELECT pg_drop_replication_slot('bench_slot_tmp') FROM pg_replication_slots WHERE slot_name='bench_slot_tmp'"
