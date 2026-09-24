@@ -331,7 +331,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 			// processed again, as the query may have stopped part way through them.
 			startSCN := lm.currentSCN
 			if lastSCN > startSCN {
-				lm.currentSCN = lastSCN - 1
+				lm.currentSCN = lastSCN - 1 // last row may have stopped part way through
 			}
 			lm.log.Warnf("ORA-01368: redo log sequence recycled mid-query (SCN range %d–%d); retrying from SCN %d — archived log will be used on next cycle", startSCN, endSCN, lm.currentSCN)
 			return false, nil
