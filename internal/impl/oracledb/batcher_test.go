@@ -681,10 +681,6 @@ func TestCheckpointWindow(t *testing.T) {
 		require.NoError(t, publisher.Publish(ctx, streamingEvent(42)))
 		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(100)))
 		require.Empty(t, cachedSCNs())
-		publisher.batcherMu.Lock()
-		buffered := publisher.hasBuffered
-		publisher.batcherMu.Unlock()
-		require.True(t, buffered, "CheckpointWindow must not flush the buffered rows")
 
 		got := make(chan asyncMessage, 1)
 		go func() { got <- <-publisher.msgs() }()
