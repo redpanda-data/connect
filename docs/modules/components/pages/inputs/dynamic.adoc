@@ -23,16 +23,41 @@
 component_type_dropdown::[]
 
 
-A special broker type where the inputs are identified by unique labels and can be created, changed and removed during runtime via a REST HTTP interface.
+A special broker type where the inputs are identified by unique labels and can be created, changed and removed during runtime via a REST HTTP interface, which is disabled by default and enabled with the `bind_http` field.
+
+
+[tabs]
+======
+Common::
++
+--
 
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 input:
   label: ""
   dynamic:
     inputs: {}
     prefix: ""
 ```
+
+--
+Advanced::
++
+--
+
+```yml
+# All config fields, showing default values
+input:
+  label: ""
+  dynamic:
+    inputs: {}
+    prefix: ""
+    bind_http: false
+```
+
+--
+======
 
 == Fields
 
@@ -53,6 +78,15 @@ A path prefix for HTTP endpoints that are registered.
 *Type*: `string`
 
 *Default*: `""`
+
+=== `bind_http`
+
+Whether to register the REST HTTP endpoints (`/inputs`, `/inputs/{id}`, and so on) for creating, updating and removing inputs at runtime. These endpoints are served on the service-wide HTTP server and accept input configuration over HTTP, so they are disabled by default. Enable them only when that server is secured appropriately, for example bound to a trusted interface or protected with `http.basic_auth`.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 == Endpoints
 

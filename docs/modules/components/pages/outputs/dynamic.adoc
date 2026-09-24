@@ -23,16 +23,41 @@
 component_type_dropdown::[]
 
 
-A special broker type where the outputs are identified by unique labels and can be created, changed and removed during runtime via a REST API.
+A special broker type where the outputs are identified by unique labels and can be created, changed and removed during runtime via a REST API, which is disabled by default and enabled with the `bind_http` field.
+
+
+[tabs]
+======
+Common::
++
+--
 
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 output:
   label: ""
   dynamic:
     outputs: {}
     prefix: ""
 ```
+
+--
+Advanced::
++
+--
+
+```yml
+# All config fields, showing default values
+output:
+  label: ""
+  dynamic:
+    outputs: {}
+    prefix: ""
+    bind_http: false
+```
+
+--
+======
 
 The broker pattern used is always `fan_out`, meaning each message will be delivered to each dynamic output.
 
@@ -55,6 +80,15 @@ A path prefix for HTTP endpoints that are registered.
 *Type*: `string`
 
 *Default*: `""`
+
+=== `bind_http`
+
+Whether to register the REST HTTP endpoints (`/outputs`, `/outputs/{id}`, and so on) for creating, updating and removing outputs at runtime. These endpoints are served on the service-wide HTTP server and accept output configuration over HTTP, so they are disabled by default. Enable them only when that server is secured appropriately, for example bound to a trusted interface or protected with `http.basic_auth`.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 == Endpoints
 
