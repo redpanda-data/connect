@@ -27,6 +27,7 @@ const (
 	walletKey         = "WALLET"
 	walletPasswordKey = "WALLET PASSWORD"
 	sslKey            = "SSL"
+	prefetchRowsKey   = "PREFETCH_ROWS"
 )
 
 // buildConnectionString parses connStr (oracle://user:password@host:port/service) supporting
@@ -100,6 +101,41 @@ func parseWalletConfig(conf *service.ParsedConfig, overrides map[string]string) 
 		}
 	}
 
+	return nil
+}
+
+// parsePrefetchRowsConfig constructs a query-param override for go-ora's
+// PREFETCH_ROWS setting, which controls how many rows the driver fetches per
+// network round-trip. A PREFETCH_ROWS query parameter already present in
+// connection_string takes precedence, so no override is added.
+func parsePrefetchRowsConfig(conf *service.ParsedConfig, overrides map[string]string, log *service.Logger) error {
+	prefetchRows, err := conf.FieldInt(ociFieldPrefetchRows)
+	if err != nil {
+		return err
+	}
+	if prefetchRows <= 0 {
+		return fmt.Errorf("%s must be greater than 0, got %d", ociFieldPrefetchRows, prefetchRows)
+	}
+
+	connStr, err := conf.FieldString(ociFieldConnectionString)
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse(connStr)
+	if err != nil {
+		return fmt.Errorf("parsing %s: %w", ociFieldConnectionString, err)
+	}
+	for key, vals := range u.Query() {
+		// go-ora matches option names case-insensitively.
+		if strings.EqualFold(key, prefetchRowsKey) {
+			log.Debugf("Using %s value of %s from %s; %s configuration is ignored", prefetchRowsKey, vals[0], ociFieldConnectionString, ociFieldPrefetchRows)
+			return nil
+		}
+	}
+
+	log.Debugf("Using %s value of %d from configuration", prefetchRowsKey, prefetchRows)
+
+	overrides[prefetchRowsKey] = strconv.Itoa(prefetchRows)
 	return nil
 }
 
