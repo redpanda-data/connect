@@ -1,0 +1,95 @@
+1.392900 # command-line-arguments
+1.393843 ld: warning: ignoring duplicate libraries: '-ldl'
+2.046017 time="2026-09-24T13:55:58+01:00" level=info msg="Running main config from specified file" @service=redpanda-connect benthos_version="" path=./benchmark_config.yaml
+2.047428 time="2026-09-24T13:55:58+01:00" level=info msg="Listening for HTTP requests at: http://0.0.0.0:4195" @service=redpanda-connect
+2.047806 time="2026-09-24T13:55:58+01:00" level=info msg="Successfully loaded Redpanda license" @service=redpanda-connect expires_at="2026-12-10T09:33:10Z" license_org="Redpanda Data" license_type=enterprise
+2.049333 time="2026-09-24T13:55:58+01:00" level=info msg="Launching a Redpanda Connect instance, use CTRL+C to close" @service=redpanda-connect
+2.049705 time="2026-09-24T13:55:58+01:00" level=info msg="Output type file is now active" @service=redpanda-connect label="" path=root.output
+2.127349 time="2026-09-24T13:55:58+01:00" level=info msg="Connected to Oracle container: CDB$ROOT" @service=redpanda-connect label="" path=root.input
+2.127397 time="2026-09-24T13:55:58+01:00" level=info msg="CDB-mode: will use ALTER SESSION SET CONTAINER = TESTPDB for catalog queries" @service=redpanda-connect label="" path=root.input
+2.204432 time="2026-09-24T13:55:58+01:00" level=info msg="Found existing checkpoint cache table 'C##RPCN.CDC_CHECKPOINT_TESTPDB'" @service=redpanda-connect label="" path=root.input
+2.333084 time="2026-09-24T13:55:58+01:00" level=info msg="Found user table 'TESTDB.CART'" @service=redpanda-connect label="" path=root.input
+2.333349 time="2026-09-24T13:55:58+01:00" level=info msg="Found user table 'TESTDB.PRODUCTS'" @service=redpanda-connect label="" path=root.input
+2.333397 time="2026-09-24T13:55:58+01:00" level=info msg="Found user table 'TESTDB.USERS'" @service=redpanda-connect label="" path=root.input
+2.416366 time="2026-09-24T13:55:58+01:00" level=info msg="Resuming from cached SCN value: 5111271" @service=redpanda-connect label="" path=root.input
+2.416550 time="2026-09-24T13:55:58+01:00" level=info msg="Snapshotting disabled, skipping..." @service=redpanda-connect label="" path=root.input
+2.416647 time="2026-09-24T13:55:58+01:00" level=info msg="Input type oracledb_cdc is now active" @service=redpanda-connect label="" path=root.input
+2.539568 time="2026-09-24T13:55:58+01:00" level=info msg="Starting streaming change events for 3 table(s) beginning from SCN: 5111271" @service=redpanda-connect label="" path=root.input
+3.048933 time="2026-09-24T13:55:59+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+4.048695 time="2026-09-24T13:56:00+01:00" level=info msg="rolling stats: 12000 msg/sec, 3.1 MB/sec" @service=redpanda-connect bytes/sec=3.075735e+06 label="" msg/sec=12000 path=root.pipeline.processors.0
+5.053118 time="2026-09-24T13:56:01+01:00" level=info msg="rolling stats: 56703 msg/sec, 15 MB/sec" @service=redpanda-connect bytes/sec=1.4777542e+07 label="" msg/sec=56703 path=root.pipeline.processors.0
+6.048918 time="2026-09-24T13:56:02+01:00" level=info msg="rolling stats: 53297 msg/sec, 14 MB/sec" @service=redpanda-connect bytes/sec=1.3981362e+07 label="" msg/sec=53297 path=root.pipeline.processors.0
+7.048655 time="2026-09-24T13:56:03+01:00" level=info msg="rolling stats: 60000 msg/sec, 16 MB/sec" @service=redpanda-connect bytes/sec=1.58874e+07 label="" msg/sec=60000 path=root.pipeline.processors.0
+8.049564 time="2026-09-24T13:56:04+01:00" level=info msg="rolling stats: 60000 msg/sec, 16 MB/sec" @service=redpanda-connect bytes/sec=1.58874e+07 label="" msg/sec=60000 path=root.pipeline.processors.0
+9.049022 time="2026-09-24T13:56:05+01:00" level=info msg="rolling stats: 60000 msg/sec, 16 MB/sec" @service=redpanda-connect bytes/sec=1.58774e+07 label="" msg/sec=60000 path=root.pipeline.processors.0
+10.048711 time="2026-09-24T13:56:06+01:00" level=info msg="rolling stats: 58786 msg/sec, 16 MB/sec" @service=redpanda-connect bytes/sec=1.5565923e+07 label="" msg/sec=58786 path=root.pipeline.processors.0
+11.048704 time="2026-09-24T13:56:07+01:00" level=info msg="rolling stats: 51215 msg/sec, 14 MB/sec" @service=redpanda-connect bytes/sec=1.3551239e+07 label="" msg/sec=51215 path=root.pipeline.processors.0
+12.048883 time="2026-09-24T13:56:08+01:00" level=info msg="rolling stats: 59999 msg/sec, 16 MB/sec" @service=redpanda-connect bytes/sec=1.5887138e+07 label="" msg/sec=59999 path=root.pipeline.processors.0
+13.048679 time="2026-09-24T13:56:09+01:00" level=info msg="rolling stats: 60000 msg/sec, 16 MB/sec" @service=redpanda-connect bytes/sec=1.58874e+07 label="" msg/sec=60000 path=root.pipeline.processors.0
+14.053341 time="2026-09-24T13:56:10+01:00" level=info msg="rolling stats: 60000 msg/sec, 16 MB/sec" @service=redpanda-connect bytes/sec=1.58874e+07 label="" msg/sec=60000 path=root.pipeline.processors.0
+15.049279 time="2026-09-24T13:56:11+01:00" level=info msg="rolling stats: 60000 msg/sec, 16 MB/sec" @service=redpanda-connect bytes/sec=1.58874e+07 label="" msg/sec=60000 path=root.pipeline.processors.0
+16.048702 time="2026-09-24T13:56:12+01:00" level=info msg="rolling stats: 60000 msg/sec, 16 MB/sec" @service=redpanda-connect bytes/sec=1.58874e+07 label="" msg/sec=60000 path=root.pipeline.processors.0
+17.048917 time="2026-09-24T13:56:13+01:00" level=info msg="rolling stats: 59951 msg/sec, 16 MB/sec" @service=redpanda-connect bytes/sec=1.5864418e+07 label="" msg/sec=59951 path=root.pipeline.processors.0
+18.048728 time="2026-09-24T13:56:14+01:00" level=info msg="rolling stats: 50049 msg/sec, 13 MB/sec" @service=redpanda-connect bytes/sec=1.3252482e+07 label="" msg/sec=50049 path=root.pipeline.processors.0
+19.048693 time="2026-09-24T13:56:15+01:00" level=info msg="rolling stats: 50000 msg/sec, 13 MB/sec" @service=redpanda-connect bytes/sec=1.32395e+07 label="" msg/sec=50000 path=root.pipeline.processors.0
+20.051002 time="2026-09-24T13:56:16+01:00" level=info msg="rolling stats: 52646 msg/sec, 14 MB/sec" @service=redpanda-connect bytes/sec=1.3920093e+07 label="" msg/sec=52646 path=root.pipeline.processors.0
+21.049746 time="2026-09-24T13:56:17+01:00" level=info msg="rolling stats: 59392 msg/sec, 16 MB/sec" @service=redpanda-connect bytes/sec=1.5726401e+07 label="" msg/sec=59392 path=root.pipeline.processors.0
+22.049412 time="2026-09-24T13:56:18+01:00" level=info msg="rolling stats: 15962 msg/sec, 4.2 MB/sec" @service=redpanda-connect bytes/sec=4.226627e+06 label="" msg/sec=15962 path=root.pipeline.processors.0
+23.048970 time="2026-09-24T13:56:19+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+24.048818 time="2026-09-24T13:56:20+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+25.048775 time="2026-09-24T13:56:21+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+26.049771 time="2026-09-24T13:56:22+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+27.049567 time="2026-09-24T13:56:23+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+28.049751 time="2026-09-24T13:56:24+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+29.049839 time="2026-09-24T13:56:25+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+30.049872 time="2026-09-24T13:56:26+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+31.049870 time="2026-09-24T13:56:27+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+32.049877 time="2026-09-24T13:56:28+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+33.049865 time="2026-09-24T13:56:29+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+34.049492 time="2026-09-24T13:56:30+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+35.049833 time="2026-09-24T13:56:31+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+36.049827 time="2026-09-24T13:56:32+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+37.049151 time="2026-09-24T13:56:33+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+38.049871 time="2026-09-24T13:56:34+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+39.049861 time="2026-09-24T13:56:35+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+40.049927 time="2026-09-24T13:56:36+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+41.049695 time="2026-09-24T13:56:37+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+42.049452 time="2026-09-24T13:56:38+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+43.049881 time="2026-09-24T13:56:39+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+44.049933 time="2026-09-24T13:56:40+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+45.049502 time="2026-09-24T13:56:41+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+46.049504 time="2026-09-24T13:56:42+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+47.049829 time="2026-09-24T13:56:43+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+48.049815 time="2026-09-24T13:56:44+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+49.049900 time="2026-09-24T13:56:45+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+50.049687 time="2026-09-24T13:56:46+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+51.049737 time="2026-09-24T13:56:47+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+52.049848 time="2026-09-24T13:56:48+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+53.049894 time="2026-09-24T13:56:49+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+54.049022 time="2026-09-24T13:56:50+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+55.049752 time="2026-09-24T13:56:51+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+56.049870 time="2026-09-24T13:56:52+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+57.049746 time="2026-09-24T13:56:53+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+58.049146 time="2026-09-24T13:56:54+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+59.049534 time="2026-09-24T13:56:55+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+60.049039 time="2026-09-24T13:56:56+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+61.049763 time="2026-09-24T13:56:57+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+62.048913 time="2026-09-24T13:56:58+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+63.049515 time="2026-09-24T13:56:59+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+64.049115 time="2026-09-24T13:57:00+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+65.049883 time="2026-09-24T13:57:01+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+66.049834 time="2026-09-24T13:57:02+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+67.049830 time="2026-09-24T13:57:03+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+68.049865 time="2026-09-24T13:57:04+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+69.048761 time="2026-09-24T13:57:05+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+70.049573 time="2026-09-24T13:57:06+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+71.049624 time="2026-09-24T13:57:07+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+72.049424 time="2026-09-24T13:57:08+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+73.049854 time="2026-09-24T13:57:09+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+74.049272 time="2026-09-24T13:57:10+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+75.049920 time="2026-09-24T13:57:11+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+76.049517 time="2026-09-24T13:57:12+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+77.049863 time="2026-09-24T13:57:13+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+78.049905 time="2026-09-24T13:57:14+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+79.049730 time="2026-09-24T13:57:15+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
+80.049850 time="2026-09-24T13:57:16+01:00" level=info msg="rolling stats: 0 msg/sec, 0 B/sec" @service=redpanda-connect bytes/sec=0 label="" msg/sec=0 path=root.pipeline.processors.0
