@@ -37,7 +37,13 @@ type Result struct {
 }
 
 type ResultInfra struct {
-	RunnerInstanceType  string `json:"runner_instance_type"`
+	RunnerInstanceType string `json:"runner_instance_type"`
+	// LoadGenInstanceType always records the instance type that actually
+	// generated the load, even when the scenario leaves infra.load_gen
+	// unset -- see effectiveLoadGenInstanceType in main.go. A missing or
+	// empty value here is what let the load generator's EC2 network
+	// shaping go undiagnosed across three benchmarking sessions.
+	LoadGenInstanceType string `json:"load_gen_instance_type"`
 	SourceInstanceClass string `json:"source_instance_class"`
 	SourceStorageGB     int    `json:"source_storage_gb"`
 	Region              string `json:"region"`

@@ -26,6 +26,23 @@ func TestLoadScenario_Valid(t *testing.T) {
 	require.Equal(t, []int{1, 2, 4, 8}, s.Matrix.CPUPoints)
 }
 
+func TestLoadScenario_ParsesLoadGenOverride(t *testing.T) {
+	s, err := LoadScenario("testdata/valid-orders-cdc-with-load-gen.yaml")
+	require.NoError(t, err)
+	require.Equal(t, "c8g.4xlarge", s.Infra.LoadGen.InstanceType)
+}
+
+// TestLoadScenario_LoadGenOverrideOmitted is the regression this override
+// exists to prevent: a scenario that never mentions infra.load_gen must
+// parse with InstanceType left as the zero value, not defaulted to
+// something that would get passed to Terraform as an empty -var and
+// override its own default.
+func TestLoadScenario_LoadGenOverrideOmitted(t *testing.T) {
+	s, err := LoadScenario("testdata/valid-orders-cdc.yaml")
+	require.NoError(t, err)
+	require.Empty(t, s.Infra.LoadGen.InstanceType)
+}
+
 func TestLoadScenario_RejectsShortDuration(t *testing.T) {
 	_, err := LoadScenario("testdata/invalid-short-duration.yaml")
 	require.Error(t, err)

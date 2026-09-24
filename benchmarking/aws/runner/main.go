@@ -185,6 +185,9 @@ func runBench(opts benchOpts) (errOut error) {
 		"runner_instance_type": s.Infra.Runner.InstanceType,
 		"bench_session_id":     sessionID,
 	}
+	for k, v := range loadGenTFVars(s) {
+		sharedVars[k] = v
+	}
 	stackVars := translateInfraSource(s.Infra.Source, opts.region)
 
 	// Register destroy BEFORE any apply, so a partial apply still gets torn
@@ -362,6 +365,7 @@ func runBench(opts benchOpts) (errOut error) {
 		FinishedAt:   time.Now().UTC(),
 		Infra: ResultInfra{
 			RunnerInstanceType:  s.Infra.Runner.InstanceType,
+			LoadGenInstanceType: effectiveLoadGenInstanceType(s),
 			SourceInstanceClass: asString(s.Infra.Source["instance_class"]),
 			SourceStorageGB:     asInt(s.Infra.Source["storage_gb"]),
 			Region:              opts.region,
@@ -492,10 +496,14 @@ func downCmd(args []string) error {
 	if err := stack.Destroy(translateInfraSource(s.Infra.Source, *region)); err != nil {
 		return err
 	}
-	return shared.Destroy(map[string]string{
+	destroyVars := map[string]string{
 		"region":               *region,
 		"runner_instance_type": s.Infra.Runner.InstanceType,
-	})
+	}
+	for k, v := range loadGenTFVars(s) {
+		destroyVars[k] = v
+	}
+	return shared.Destroy(destroyVars)
 }
 
 func costCheckCmd(args []string) error {
@@ -560,6 +568,32 @@ func translateInfraSource(src map[string]any, region string) map[string]string {
 		}
 	}
 	return out
+}
+
+// loadGenTFVars returns the shared stack's load_gen_instance_type terraform
+// var, or an empty map when the scenario doesn't override it. Omitting the
+// key entirely (rather than passing "") is deliberate: an empty -var string
+// would override Terraform's own "c8g.large" default with an empty string
+// instead of leaving it alone. Both runBench and downCmd call this so a
+// scenario's effective load generator instance type can never diverge
+// between apply and destroy -- a divergence there would make Terraform try
+// to replace the instance during teardown.
+func loadGenTFVars(s *Scenario) map[string]string {
+	if s.Infra.LoadGen.InstanceType == "" {
+		return map[string]string{}
+	}
+	return map[string]string{"load_gen_instance_type": s.Infra.LoadGen.InstanceType}
+}
+
+// effectiveLoadGenInstanceType returns the load generator instance type
+// that actually ran, whether or not the scenario overrides Terraform's
+// default -- so a results JSON always states which load generator produced
+// it (see ResultInfra.LoadGenInstanceType).
+func effectiveLoadGenInstanceType(s *Scenario) string {
+	if s.Infra.LoadGen.InstanceType != "" {
+		return s.Infra.LoadGen.InstanceType
+	}
+	return defaultLoadGenInstanceType
 }
 
 func asString(v any) string { s, _ := v.(string); return s }

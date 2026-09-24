@@ -46,6 +46,13 @@ const (
 	// test) still needs a ceiling so a careless scenario can't silently
 	// commit to a day-long run.
 	maxArmSweepPoints = 8
+	// defaultLoadGenInstanceType mirrors terraform/shared/variables.tf's
+	// load_gen_instance_type default. Used only to record the effective
+	// instance type in results JSON when a scenario doesn't override it
+	// (see effectiveLoadGenInstanceType in main.go) -- it must never be
+	// passed to Terraform as a var value, since that would defeat the
+	// intent of leaving Terraform's own default in control.
+	defaultLoadGenInstanceType = "c8g.large"
 )
 
 // armIDRe constrains arm ids to what is safe in a filename and an S3 key.
@@ -109,11 +116,25 @@ type Scenario struct {
 }
 
 type InfraSpec struct {
-	Source map[string]any `yaml:"source"`
-	Runner RunnerSpec     `yaml:"runner"`
+	Source  map[string]any `yaml:"source"`
+	Runner  RunnerSpec     `yaml:"runner"`
+	LoadGen LoadGenSpec    `yaml:"load_gen"`
 }
 
 type RunnerSpec struct {
+	InstanceType string `yaml:"instance_type"`
+}
+
+// LoadGenSpec overrides the shared stack's load generator instance type.
+// InstanceType empty (the default for every scenario that omits load_gen:)
+// leaves Terraform's own default (c8g.large) in place -- see main.go's
+// loadGenTFVars, which omits the terraform var entirely rather than passing
+// "". Only scenarios whose target byte rate approaches or exceeds
+// c8g.large's sustained network baseline (0.937 Gbps / 117 MB/s) need to set
+// this; see s3/orders-live.yaml, whose 360 MB/s target is 3.07x that
+// baseline and was silently network-shaped by EC2 burst credits until this
+// override existed.
+type LoadGenSpec struct {
 	InstanceType string `yaml:"instance_type"`
 }
 
