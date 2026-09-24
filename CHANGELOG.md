@@ -3,6 +3,27 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.111.0 - 2026-09-24
+
+### Added
+
+- mssqlserver_cdc: Change messages now expose seqval and command_id metadata alongside lsn for more precise ordering of changes within transactions. ([@Leward](https://github.com/Leward), [#4831](https://github.com/redpanda-data/connect/pull/4831))
+- websocket: WebSocket input and output components are now available in Redpanda Cloud distributions. ([@prakhargarg105](https://github.com/prakhargarg105), [#4708](https://github.com/redpanda-data/connect/pull/4708))
+
+### Fixed
+
+- oracledb_cdc: Fixed redelivery issue where ORA-01368 errors caused the connector to re-publish previously delivered transactions, and enabled prefetch_rows configuration option. ([@josephwoodward](https://github.com/josephwoodward), [#4698](https://github.com/redpanda-data/connect/pull/4698))
+- oracledb_cdc: Fixed redelivery issue where ORA-01368 errors caused the connector to re-publish previously delivered transactions. ([@josephwoodward](https://github.com/josephwoodward), [#4850](https://github.com/redpanda-data/connect/pull/4850))
+- postgres_cdc: Fixed validation of heartbeat_interval and wal_monitor_interval configuration to allow 0s for disabling features without causing connection errors or panics. ([@Leward](https://github.com/Leward), [#4846](https://github.com/redpanda-data/connect/pull/4846))
+- redpanda_migrator: Eliminated O(N²) schema registry fan-out requests during ID translation sync, reducing peak concurrency and preventing registry overload with heavily shared schema bodies. ([@prakhargarg105](https://github.com/prakhargarg105), [#4734](https://github.com/redpanda-data/connect/pull/4734))
+- sftp: Fixed SSH channel leak on write failures by properly closing the SFTP client and cached handle when writes fail. ([@brokenjacobs](https://github.com/brokenjacobs), [#4839](https://github.com/redpanda-data/connect/pull/4839))
+
+### Changed
+
+- crypto: Replaced realistic sample JWTs in sign_jwt method documentation with placeholders to avoid triggering secret-scanner rules. ([@josephwoodward](https://github.com/josephwoodward), [#4836](https://github.com/redpanda-data/connect/pull/4836))
+- postgres_cdc: Improved heartbeat test to verify that heartbeats properly advance the replication slot. ([@Leward](https://github.com/Leward), [#4845](https://github.com/redpanda-data/connect/pull/4845))
+- postgres_cdc: Updated heartbeat test to use 0s for disabling heartbeats instead of workaround value, leveraging the fix from PR #4846. ([@Leward](https://github.com/Leward), [#4849](https://github.com/redpanda-data/connect/pull/4849))
+
 ## 4.110.0 - 2026-09-17
 
 ### Added
