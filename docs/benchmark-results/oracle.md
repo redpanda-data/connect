@@ -585,3 +585,26 @@ partially cache-assisted — a fresh-instance cold run would put a floor under t
 pipeline, not Oracle. Bench code for these runs: benchmarking @77022a2f4 with
 `3abe4c374` merged in a throwaway worktree (deliberately NOT kept on this branch
 so future benches don't run unreviewed connector code).
+
+
+## AWS — orders-streaming-prefetch — 2026-09-03
+
+**Scenario:** LogMiner streaming prefetch A/B: go-ora's default PrefetchRows=25 vs
+PREFETCH_ROWS=1000, both mining all 5 loaded tables against the same
+~35 MB/s offered load as orders-5table-split's b-5tables arm.
+
+**Git SHA:** [`125eb74c8`](https://github.com/redpanda-data/connect/commit/125eb74c88fb46c6ef13b5fa4efe8500e1c2a1e1)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r5.2xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 8          | p0-prefetch-default | connect       |           19 |       19.070 |        15,623 |           19 |          16 |           24 |        15,489 |                    |
+| 4    | 8          | p1-prefetch-1000 | connect       |           26 |       26.673 |        21,856 |           27 |          23 |           31 |        21,649 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/oracle/orders-streaming-prefetch/2026-09-03T16-16-01Z.json`](results/oracle/orders-streaming-prefetch/2026-09-03T16-16-01Z.json)

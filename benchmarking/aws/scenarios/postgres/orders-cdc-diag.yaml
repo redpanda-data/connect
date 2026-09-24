@@ -1,0 +1,57 @@
+name: postgres-orders-cdc-diag
+description: |
+  Diagnostic run for the postgres_cdc ~81 MB/s single-slot ceiling: one
+  Connect point at 4 vCPU (shortened window) to re-anchor the baseline,
+  run with --keep so the infra stays up for a manual pg_recvlogical drain
+  test against the same publication. The drain test answers whether the
+  ceiling is server-side (walsender/pgoutput) or client-side (Connect's
+  read loop). Same instance classes as orders-cdc so the ceiling
+  conditions reproduce.
+
+connector: postgres_cdc
+stack: postgres
+
+infra:
+  source:
+    instance_class: db.r6g.4xlarge
+    storage_gb: 800
+    iops: 24000
+    storage_throughput: 1000
+    parameters:
+      rds.logical_replication: "1"
+      max_wal_senders: "20"
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-postgres
+
+workload:
+  write_rate_per_sec: 150000
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      tls:
+        skip_cert_verify: true
+      stream_snapshot: false
+      schema: public
+      tables: [orders]
+      slot_name: bench_slot
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [4]
+
+reset:
+  - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
+  - sql: "SELECT pg_drop_replication_slot('kc_bench_slot') FROM pg_replication_slots WHERE slot_name='kc_bench_slot'"
+  - sql: "TRUNCATE TABLE orders"

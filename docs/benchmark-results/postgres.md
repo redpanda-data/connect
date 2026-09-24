@@ -231,3 +231,33 @@ Observations:
 - Caveat: the engines ran in separate windows ~10h apart; offered load between
   windows was not groundtruth-audited in this run (the postgres seeder does not
   yet log `[groundtruth]` row counts the way the sqlserver one does).
+
+
+## AWS — orders-cdc-diag — 2026-08-20
+
+**Scenario:** Diagnostic run for the postgres_cdc ~81 MB/s single-slot ceiling: one
+Connect point at 4 vCPU (shortened window) to re-anchor the baseline,
+run with --keep so the infra stays up for a manual pg_recvlogical drain
+test against the same publication. The drain test answers whether the
+ceiling is server-side (walsender/pgoutput) or client-side (Connect's
+read loop). Same instance classes as orders-cdc so the ceiling
+conditions reproduce.
+
+**Git SHA:** [`674ec9953`](https://github.com/redpanda-data/connect/commit/674ec9953d8eba496e0063bf9529996799e8b519)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r6g.4xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 4          |                | connect       |           84 |       78.450 |        64,339 |           85 |          41 |           96 |        69,299 |                    |
+
+
+> ⚠ At 4 vCPU: 75s dip to 0.14× median MB/sec from t=824s — investigate before publishing.
+
+
+
+Raw samples + Prometheus snapshots: [`results/postgres/orders-cdc-diag/2026-08-20T16-57-42Z.json`](results/postgres/orders-cdc-diag/2026-08-20T16-57-42Z.json)
