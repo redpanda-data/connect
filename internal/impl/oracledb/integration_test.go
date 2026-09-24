@@ -26,7 +26,6 @@ import (
 	_ "github.com/sijms/go-ora/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
 	tcexec "github.com/testcontainers/testcontainers-go/exec"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
@@ -579,22 +578,6 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCResetlogsSurfacesGuidedError(t *testing.T) {
 	integration.CheckSkip(t)
 
-	mustExecInContainer := func(t *testing.T, ctx context.Context, ctr testcontainers.Container, script string, opts ...tcexec.ProcessOption) string {
-		t.Helper()
-
-		opts = append(opts, tcexec.Multiplexed())
-		code, reader, err := ctr.Exec(ctx, []string{"bash", "-c", script}, opts...)
-		require.NoError(t, err)
-
-		outBytes, err := io.ReadAll(reader)
-		require.NoError(t, err)
-		out := string(outBytes)
-
-		t.Logf("container exec %q exited with code %d, output:\n%s", script, code, out)
-		require.Zero(t, code, "container exec failed (%q): %s", script, out)
-		return out
-	}
-
 	ctx := t.Context()
 	connStr, db, ctr := oracledbtest.SetupTestWithOracleDBVersionAndContainer(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, "testdb.resetlogs_probe",
@@ -683,7 +666,7 @@ oracledb_cdc:
 	// so its checkpoint stays close to "now" right up to the incident - the condition that
 	// makes the pre-reset archived log stale rather than simply out of retention.
 	t.Log("Enabling Flashback Database and the Fast Recovery Area...")
-	mustExecInContainer(t, ctx, ctr, "mkdir -p /opt/oracle/oradata/fra && chown -R oracle:oinstall /opt/oracle/oradata/fra")
+	oracledbtest.MustExecInContainer(t, ctx, ctr, "mkdir -p /opt/oracle/oradata/fra && chown -R oracle:oinstall /opt/oracle/oradata/fra")
 	db.MustExec("ALTER SYSTEM SET db_recovery_file_dest_size=5G SCOPE=BOTH")
 	db.MustExec("ALTER SYSTEM SET db_recovery_file_dest='/opt/oracle/oradata/fra' SCOPE=BOTH")
 	db.MustExec("ALTER DATABASE FLASHBACK ON")
@@ -691,7 +674,7 @@ oracledb_cdc:
 	t.Log("Creating a guaranteed restore point and generating changes to be flashed back away...")
 	// Requires SYSDBA (ORA-01031 over the "system" connection), so this goes through
 	// the SYSDBA SQL*Plus session rather than db.MustExec.
-	restorePointOut := mustExecInContainer(t, ctx, ctr,
+	restorePointOut := oracledbtest.MustExecInContainer(t, ctx, ctr,
 		`echo -e "CREATE RESTORE POINT before_reset GUARANTEE FLASHBACK DATABASE;\nexit;" | sqlplus -S / as sysdba`,
 		tcexec.WithUser("oracle"))
 	require.NotContains(t, restorePointOut, "ORA-", "unexpected Oracle error creating restore point")
@@ -712,7 +695,7 @@ oracledb_cdc:
 	// they need an OS-authenticated SYSDBA session; SQL*Plus reconnects automatically
 	// across the shutdown/startup within one piped script.
 	resetlogsScript := `echo -e "SHUTDOWN IMMEDIATE;\nSTARTUP MOUNT;\nFLASHBACK DATABASE TO RESTORE POINT before_reset;\nALTER DATABASE OPEN RESETLOGS;\nexit;" | sqlplus -S / as sysdba`
-	out := mustExecInContainer(t, ctx, ctr, resetlogsScript, tcexec.WithUser("oracle"))
+	out := oracledbtest.MustExecInContainer(t, ctx, ctr, resetlogsScript, tcexec.WithUser("oracle"))
 	require.NotContains(t, out, "ORA-", "unexpected Oracle error during flashback/resetlogs")
 
 	t.Log("Waiting for the database to become reachable again after OPEN RESETLOGS...")
@@ -2936,4 +2919,201 @@ oracledb_cdc:
 
 	assert.Equal(t, "café 😀", got, "NVARCHAR2 value should be decoded from UNISTR to correct UTF-8")
 	_ = stream.StopWithin(10 * time.Second)
+}
+
+// TestIntegrationOracleDBCDCOnlineLogRecycledMidQuery verifies that a query
+// failing with ORA-01368, because Oracle reused an online redo log before the
+// query reached it, is retried from near where it stopped rather than from the
+// start of its window. It pauses the query by blocking the consumer, reuses the
+// log, and asserts every row is delivered with only a few redelivered.
+func TestIntegrationOracleDBCDCOnlineLogRecycledMidQuery(t *testing.T) {
+	integration.CheckSkip(t)
+
+	ctx := t.Context()
+	connStr, db, ctr := oracledbtest.SetupTestWithOracleDBVersionAndContainer(t)
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, "testdb.log_recycle",
+		"CREATE TABLE testdb.log_recycle (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, note VARCHAR2(64))"))
+
+	// Without ARCHIVELOG mode a reused online log's redo is gone for good, so
+	// there would be nothing for the retry to recover from.
+	var logMode string
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT LOG_MODE FROM V$DATABASE").Scan(&logMode))
+	if logMode != "ARCHIVELOG" {
+		t.Log("Enabling ARCHIVELOG mode via a SYSDBA SQL*Plus session...")
+		out := oracledbtest.MustExecInContainer(t, ctx, ctr,
+			`echo -e "SHUTDOWN IMMEDIATE;\nSTARTUP MOUNT;\nALTER DATABASE ARCHIVELOG;\nALTER DATABASE OPEN;\nexit;" | sqlplus -S / as sysdba`,
+			tcexec.WithUser("oracle"))
+		require.NotContains(t, out, "ORA-", "unexpected Oracle error enabling ARCHIVELOG mode")
+		require.Eventually(t, func() bool {
+			pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			return db.PingContext(pingCtx) == nil
+		}, time.Minute*5, time.Second*3, "database did not become reachable again after enabling ARCHIVELOG mode")
+	}
+
+	cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  snapshot_mode: none
+  logminer:
+    scn_window_size: 1000000
+    max_scn_window_size: 1000000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["TESTDB.LOG_RECYCLE"]
+  batching:
+    count: 100
+    period: 500ms`
+
+	var (
+		outMu sync.Mutex
+		ids   = map[string]int{} // delivery count per row ID
+		total int
+	)
+	var (
+		blockOnce sync.Once
+		blocked   = make(chan struct{})
+		release   = make(chan struct{})
+	)
+	gate := false // when true, the consumer blocks on its first batch until release is closed
+	consume := func(ctx context.Context, mb service.MessageBatch) error {
+		outMu.Lock()
+		for _, msg := range mb {
+			b, err := msg.AsBytes()
+			require.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(b, &row))
+			ids[fmt.Sprint(row["ID"])]++
+			total++
+		}
+		shouldBlock := gate
+		outMu.Unlock()
+
+		if shouldBlock {
+			blockOnce.Do(func() { close(blocked) })
+			select {
+			case <-release:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	}
+	delivered := func() (distinct, all int) {
+		outMu.Lock()
+		defer outMu.Unlock()
+		return len(ids), total
+	}
+
+	runStream := func(logOut io.Writer) *service.Stream {
+		streamBuilder := service.NewStreamBuilder()
+		streamBuilder.SetLogger(slog.New(slog.NewTextHandler(logOut, &slog.HandlerOptions{Level: slog.LevelInfo})))
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(consume))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		return stream
+	}
+
+	t.Log("Launching component to establish a checkpoint before the test data...")
+	stream := runStream(os.Stdout)
+	time.Sleep(5 * time.Second)
+	db.MustExec("INSERT INTO testdb.log_recycle (note) VALUES ('warmup')")
+	db.MustExec("COMMIT")
+	require.Eventually(t, func() bool {
+		_, all := delivered()
+		return all == 1
+	}, time.Minute*2, time.Millisecond*500, "warmup row was not delivered")
+	require.NoError(t, stream.StopWithin(time.Second*10))
+
+	// Many small transactions in archived redo put a long run of commits
+	// between where the blocked query pauses and the online log at the end of
+	// the window, so neither the driver's fetch buffer nor LogMiner has
+	// reached the online log by the time it is reused.
+	const (
+		archivedTxns = 200
+		rowsPerTxn   = 100
+		onlineRows   = 2000
+		expectedRows = 1 + archivedTxns*rowsPerTxn + onlineRows
+	)
+	t.Log("Generating transactions in archived redo...")
+	db.MustExec(fmt.Sprintf(`
+	BEGIN
+		FOR t IN 1..%d LOOP
+			FOR i IN 1..%d LOOP
+				INSERT INTO testdb.log_recycle (note) VALUES ('archived');
+			END LOOP;
+			COMMIT;
+		END LOOP;
+	END;`, archivedTxns, rowsPerTxn))
+	db.MustExec("ALTER SYSTEM ARCHIVE LOG CURRENT")
+
+	t.Log("Generating a transaction left in the current online redo log...")
+	db.MustExec(fmt.Sprintf(`
+	BEGIN
+		FOR i IN 1..%d LOOP
+			INSERT INTO testdb.log_recycle (note) VALUES ('online');
+		END LOOP;
+		COMMIT;
+	END;`, onlineRows))
+	var onlineSeq, groups int64
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT SEQUENCE# FROM V$LOG WHERE STATUS = 'CURRENT'").Scan(&onlineSeq))
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM V$LOG").Scan(&groups))
+
+	t.Log("Relaunching component with a consumer that blocks mid-window...")
+	outMu.Lock()
+	gate = true
+	outMu.Unlock()
+	var logBuf oracledbtest.SyncBuffer
+	stream = runStream(io.MultiWriter(os.Stdout, &logBuf))
+
+	select {
+	case <-blocked:
+	case <-time.After(time.Minute * 2):
+		t.Fatal("consumer never received a batch from the resumed pipeline")
+	}
+	// Let the mining loop run into the blocked consumer and stop fetching.
+	time.Sleep(2 * time.Second)
+
+	t.Logf("Reusing online redo log sequence %d (%d groups) while the query is paused...", onlineSeq, groups)
+	for range groups + 1 {
+		db.MustExec("ALTER SYSTEM ARCHIVE LOG CURRENT")
+		db.MustExec("ALTER SYSTEM CHECKPOINT")
+	}
+	var stillOnline int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM V$LOG WHERE SEQUENCE# = :1", onlineSeq).Scan(&stillOnline))
+	require.Zero(t, stillOnline, "online log sequence %d must have been reused before the query reaches it", onlineSeq)
+
+	outMu.Lock()
+	gate = false
+	outMu.Unlock()
+	close(release)
+
+	require.Eventually(t, func() bool {
+		distinct, all := delivered()
+		t.Logf("Delivered %d rows (%d distinct) of %d...", all, distinct, expectedRows)
+		return distinct == expectedRows
+	}, time.Minute*3, time.Second, "not every row was delivered after the log recycle")
+
+	// The retry re-reads the rows at the SCN the query stopped at, so a few
+	// redeliveries are expected. Retrying from the start of the window would
+	// redeliver all archivedTxns*rowsPerTxn rows, and may never stop.
+	time.Sleep(10 * time.Second)
+	distinct, all := delivered()
+	assert.Equal(t, expectedRows, distinct)
+	assert.LessOrEqual(t, all-distinct, 10*rowsPerTxn, "the retry must resume near where the query stopped, not replay the window")
+
+	require.Contains(t, logBuf.String(), "ORA-01368",
+		"the query must hit ORA-01368 for this test to exercise the retry; if it did not, the online log was not reused before the query reached it")
+	assert.Contains(t, logBuf.String(), "retrying from SCN")
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
 }

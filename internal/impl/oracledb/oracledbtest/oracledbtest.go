@@ -13,6 +13,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ import (
 	"github.com/moby/moby/api/types/network"
 	_ "github.com/sijms/go-ora/v2"
 	"github.com/testcontainers/testcontainers-go"
+	tcexec "github.com/testcontainers/testcontainers-go/exec"
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
@@ -76,6 +78,23 @@ func (db *TestDB) MustExec(query string, args ...any) {
 func (db *TestDB) MustExecContext(ctx context.Context, query string, args ...any) {
 	_, err := db.ExecContext(ctx, query, args...)
 	require.NoError(db.T, err)
+}
+
+// MustExecInContainer enables executing SQL against the running contanier.
+func MustExecInContainer(t *testing.T, ctx context.Context, ctr testcontainers.Container, script string, opts ...tcexec.ProcessOption) string {
+	t.Helper()
+
+	opts = append(opts, tcexec.Multiplexed())
+	code, reader, err := ctr.Exec(ctx, []string{"bash", "-c", script}, opts...)
+	require.NoError(t, err)
+
+	outBytes, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	out := string(outBytes)
+
+	t.Logf("container exec %q exited with code %d, output:\n%s", script, code, out)
+	require.Zero(t, code, "container exec failed (%q): %s", script, out)
+	return out
 }
 
 // MustEnableSupplementalLogging enables supplemental logging on the specified table.
