@@ -1,0 +1,1719 @@
+{
+  "scenario": "s3/orders-sink",
+  "scenario_hash": "sha256:668dbc7cfe835c9effdd9fe77ba67ecc6e51ee783136856be38e54d0a765b623",
+  "git_sha": "125eb74c88fb46c6ef13b5fa4efe8500e1c2a1e1",
+  "started_at": "2026-09-04T20:44:43.798491Z",
+  "finished_at": "2026-09-04T21:44:43.798491Z",
+  "infra": {
+    "runner_instance_type": "c8g.4xlarge",
+    "source_instance_class": "",
+    "source_storage_gb": 0,
+    "region": "us-east-2"
+  },
+  "dataset": {
+    "rows": 340000000,
+    "row_size_bytes": 1200,
+    "total_bytes": 408000000000
+  },
+  "points": [
+    {
+      "vcpu": 1,
+      "engine": "kafka_connect",
+      "samples": null,
+      "summary": {
+        "median_mb_s": 0,
+        "p5_mb_s": 0,
+        "p95_mb_s": 4.625942309090903,
+        "peak_mb_s": 13.361468833333333,
+        "mean_mb_s": 0.572565394308943,
+        "median_msg_s": 0,
+        "p5_msg_s": 0,
+        "p95_msg_s": 0,
+        "peak_msg_s": 0,
+        "mean_msg_s": 0
+      },
+      "gomaxprocs": 1,
+      "streams": 1,
+      "broker_series": [
+        {
+          "t": 11,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 23,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 34,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 46,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 57,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 68,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 80,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 91,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 103,
+          "mb_per_sec": 0.0243755,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 114,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 126,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 137,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 149,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 160,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 172,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 183,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 194,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 206,
+          "mb_per_sec": 4.17251225,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 217,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 229,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 240,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 252,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 263,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 275,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 286,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 298,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 309,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 320,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 332,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 343,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 355,
+          "mb_per_sec": 11.64471675,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 366,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 378,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 389,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 401,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 412,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 423,
+          "mb_per_sec": 5.0501914545454545,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 435,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 446,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 458,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 469,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 481,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 492,
+          "mb_per_sec": 4.343109545454546,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 503,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 515,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 526,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 538,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 549,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 561,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 572,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 584,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 595,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 606,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 618,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 629,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 641,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 652,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 664,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 675,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 686,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 698,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 709,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 721,
+          "mb_per_sec": 13.361468833333333,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 732,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 744,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 755,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 766,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 778,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 789,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 801,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 812,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 824,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 835,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 846,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 858,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 869,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 881,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 892,
+          "mb_per_sec": 8.353988,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 904,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 915,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 927,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 938,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        }
+      ]
+    },
+    {
+      "vcpu": 2,
+      "engine": "kafka_connect",
+      "samples": null,
+      "summary": {
+        "median_mb_s": 0,
+        "p5_mb_s": 0,
+        "p95_mb_s": 0,
+        "peak_mb_s": 8.57449925,
+        "mean_mb_s": 0.10585801543209877,
+        "median_msg_s": 0,
+        "p5_msg_s": 0,
+        "p95_msg_s": 0,
+        "peak_msg_s": 0,
+        "mean_msg_s": 0
+      },
+      "gomaxprocs": 2,
+      "streams": 1,
+      "broker_series": [
+        {
+          "t": 11,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 22,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 34,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 45,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 57,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 68,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 80,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 91,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 103,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 114,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 126,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 137,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 148,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 160,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 171,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 183,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 194,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 206,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 217,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 229,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 240,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 252,
+          "mb_per_sec": 8.57449925,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 263,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 275,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 286,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 298,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 309,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 321,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 332,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 343,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 355,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 366,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 378,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 389,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 401,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 412,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 424,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 435,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 446,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 458,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 469,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 481,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 492,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 504,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 515,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 526,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 538,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 549,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 561,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 572,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 584,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 595,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 607,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 618,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 629,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 641,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 652,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 664,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 675,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 687,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 698,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 709,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 721,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 732,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 744,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 755,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 767,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 778,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 789,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 801,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 812,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 824,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 835,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 847,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 858,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 870,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 881,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 893,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 904,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 915,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 927,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        }
+      ]
+    },
+    {
+      "vcpu": 4,
+      "engine": "kafka_connect",
+      "samples": null,
+      "summary": {
+        "median_mb_s": 0,
+        "p5_mb_s": 0,
+        "p95_mb_s": 15.68547584469697,
+        "peak_mb_s": 42.285883636363636,
+        "mean_mb_s": 2.0503657387310605,
+        "median_msg_s": 0,
+        "p5_msg_s": 0,
+        "p95_msg_s": 0,
+        "peak_msg_s": 0,
+        "mean_msg_s": 0
+      },
+      "gomaxprocs": 4,
+      "streams": 1,
+      "broker_series": [
+        {
+          "t": 12,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 23,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 35,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 46,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 58,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 69,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 81,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 92,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 104,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 115,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 127,
+          "mb_per_sec": 12.938289,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 138,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 149,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 161,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 172,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 184,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 195,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 207,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 218,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 230,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 241,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 253,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 264,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 276,
+          "mb_per_sec": 36.28298366666667,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 287,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 299,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 310,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 321,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 333,
+          "mb_per_sec": 11.223073833333334,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 344,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 356,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 367,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 379,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 390,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 402,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 413,
+          "mb_per_sec": 16.939663272727273,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 425,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 436,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 447,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 459,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 470,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 482,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 493,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 505,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 516,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 528,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 539,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 550,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 562,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 573,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 585,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 596,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 608,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 619,
+          "mb_per_sec": 42.285883636363636,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 631,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 642,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 653,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 665,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 676,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 688,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 699,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 711,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 722,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 734,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 745,
+          "mb_per_sec": 29.928077272727272,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 757,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 768,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 779,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 791,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 802,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 814,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 825,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 837,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 848,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 860,
+          "mb_per_sec": 14.431288416666666,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 871,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 882,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 894,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 905,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 917,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        }
+      ]
+    },
+    {
+      "vcpu": 8,
+      "engine": "kafka_connect",
+      "samples": null,
+      "summary": {
+        "median_mb_s": 0,
+        "p5_mb_s": 0,
+        "p95_mb_s": 14.261049291666666,
+        "peak_mb_s": 41.44394881818182,
+        "mean_mb_s": 1.534103540435606,
+        "median_msg_s": 0,
+        "p5_msg_s": 0,
+        "p95_msg_s": 0,
+        "peak_msg_s": 0,
+        "mean_msg_s": 0
+      },
+      "gomaxprocs": 8,
+      "streams": 1,
+      "broker_series": [
+        {
+          "t": 11,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 22,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 34,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 45,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 57,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 68,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 80,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 91,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 103,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 114,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 126,
+          "mb_per_sec": 13.546230333333334,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 137,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 149,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 160,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 172,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 183,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 195,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 206,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 218,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 229,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 241,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 252,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 264,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 275,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 287,
+          "mb_per_sec": 36.812605,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 298,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 309,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 321,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 332,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 344,
+          "mb_per_sec": 15.949630833333334,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 355,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 367,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 378,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 390,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 401,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 413,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 424,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 436,
+          "mb_per_sec": 14.97586825,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 447,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 459,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 470,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 482,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 493,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 505,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 516,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 527,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 539,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 550,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 562,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 573,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 585,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 596,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 608,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 619,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 631,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 642,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 654,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 665,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 676,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 688,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 699,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 711,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 722,
+          "mb_per_sec": 41.44394881818182,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 734,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 745,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 757,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 768,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 780,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 791,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 803,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 814,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 825,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 837,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 848,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 860,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 871,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 883,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 894,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 906,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        },
+        {
+          "t": 917,
+          "mb_per_sec": 0,
+          "msg_per_sec": 0
+        }
+      ]
+    }
+  ]
+}

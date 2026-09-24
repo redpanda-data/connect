@@ -1,0 +1,5857 @@
+{
+  "scenario": "postgres/orders-cdc-diag",
+  "scenario_hash": "sha256:7d71c5e0ecc8d30998671857a4b8c6a3dfd8cc86bf474242e7f2f959944004be",
+  "git_sha": "674ec9953d8eba496e0063bf9529996799e8b519",
+  "started_at": "2026-08-20T16:57:42.334829Z",
+  "finished_at": "2026-08-20T17:14:42.334829Z",
+  "infra": {
+    "runner_instance_type": "c8g.4xlarge",
+    "source_instance_class": "db.r6g.4xlarge",
+    "source_storage_gb": 800,
+    "region": "us-east-2"
+  },
+  "dataset": {
+    "rows": 0,
+    "row_size_bytes": 1200,
+    "total_bytes": 0
+  },
+  "points": [
+    {
+      "vcpu": 4,
+      "engine": "connect",
+      "samples": [
+        {
+          "t": 0,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 1,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 2,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 3,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 4,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 5,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 6,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 7,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 8,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 9,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 10,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 11,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 12,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 13,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 14,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 15,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 16,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 17,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 18,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 19,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 20,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 21,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 22,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 23,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 24,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 25,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 26,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 27,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 28,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 29,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 30,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 31,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 32,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 33,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 34,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 35,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 36,
+          "msg_per_sec": 1096,
+          "mb_per_sec": 1.4
+        },
+        {
+          "t": 37,
+          "msg_per_sec": 35001,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 38,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 39,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 40,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 41,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 42,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 43,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 44,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 45,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 46,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 47,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 48,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 49,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 50,
+          "msg_per_sec": 78726,
+          "mb_per_sec": 100
+        },
+        {
+          "t": 51,
+          "msg_per_sec": 76274,
+          "mb_per_sec": 97
+        },
+        {
+          "t": 52,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 53,
+          "msg_per_sec": 79747,
+          "mb_per_sec": 101
+        },
+        {
+          "t": 54,
+          "msg_per_sec": 75253,
+          "mb_per_sec": 96
+        },
+        {
+          "t": 55,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 56,
+          "msg_per_sec": 31161,
+          "mb_per_sec": 40
+        },
+        {
+          "t": 57,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 58,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 59,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 60,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 61,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 62,
+          "msg_per_sec": 78084,
+          "mb_per_sec": 99
+        },
+        {
+          "t": 63,
+          "msg_per_sec": 76916,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 64,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 65,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 66,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 67,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 68,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 69,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 70,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 71,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 72,
+          "msg_per_sec": 42502,
+          "mb_per_sec": 54
+        },
+        {
+          "t": 73,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 74,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 75,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 76,
+          "msg_per_sec": 76685,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 77,
+          "msg_per_sec": 78315,
+          "mb_per_sec": 100
+        },
+        {
+          "t": 78,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 79,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 80,
+          "msg_per_sec": 36594,
+          "mb_per_sec": 46
+        },
+        {
+          "t": 81,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 82,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 83,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 84,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 85,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 86,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 87,
+          "msg_per_sec": 78819,
+          "mb_per_sec": 100
+        },
+        {
+          "t": 88,
+          "msg_per_sec": 76181,
+          "mb_per_sec": 97
+        },
+        {
+          "t": 89,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 90,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 91,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 92,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 93,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 94,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 95,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 96,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 97,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 98,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 99,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 100,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 101,
+          "msg_per_sec": 22286,
+          "mb_per_sec": 28
+        },
+        {
+          "t": 102,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 103,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 104,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 105,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 106,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 107,
+          "msg_per_sec": 77705,
+          "mb_per_sec": 99
+        },
+        {
+          "t": 108,
+          "msg_per_sec": 77295,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 109,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 110,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 111,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 112,
+          "msg_per_sec": 78086,
+          "mb_per_sec": 99
+        },
+        {
+          "t": 113,
+          "msg_per_sec": 76914,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 114,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 115,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 116,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 117,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 118,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 119,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 120,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 121,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 122,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 123,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 124,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 125,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 126,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 127,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 128,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 129,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 130,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 131,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 132,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 133,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 134,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 135,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 136,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 137,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 138,
+          "msg_per_sec": 76025,
+          "mb_per_sec": 97
+        },
+        {
+          "t": 139,
+          "msg_per_sec": 78975,
+          "mb_per_sec": 100
+        },
+        {
+          "t": 140,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 141,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 142,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 143,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 144,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 145,
+          "msg_per_sec": 4807,
+          "mb_per_sec": 6.1
+        },
+        {
+          "t": 146,
+          "msg_per_sec": 45001,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 147,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 148,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 149,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 150,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 151,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 152,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 153,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 154,
+          "msg_per_sec": 78618,
+          "mb_per_sec": 100
+        },
+        {
+          "t": 155,
+          "msg_per_sec": 76382,
+          "mb_per_sec": 97
+        },
+        {
+          "t": 156,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 157,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 158,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 159,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 160,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 161,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 162,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 163,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 164,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 165,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 166,
+          "msg_per_sec": 5000,
+          "mb_per_sec": 6.4
+        },
+        {
+          "t": 167,
+          "msg_per_sec": 4183,
+          "mb_per_sec": 5.3
+        },
+        {
+          "t": 168,
+          "msg_per_sec": 55001,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 169,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 170,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 171,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 172,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 173,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 174,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 175,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 176,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 177,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 178,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 179,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 180,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 181,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 182,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 183,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 184,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 185,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 186,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 187,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 188,
+          "msg_per_sec": 77811,
+          "mb_per_sec": 99
+        },
+        {
+          "t": 189,
+          "msg_per_sec": 77189,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 190,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 191,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 192,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 193,
+          "msg_per_sec": 2763,
+          "mb_per_sec": 3.5
+        },
+        {
+          "t": 194,
+          "msg_per_sec": 0,
+          "mb_per_sec": 0
+        },
+        {
+          "t": 195,
+          "msg_per_sec": 25001,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 196,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 197,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 198,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 199,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 200,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 201,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 202,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 203,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 204,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 205,
+          "msg_per_sec": 79934,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 206,
+          "msg_per_sec": 65066,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 207,
+          "msg_per_sec": 3283,
+          "mb_per_sec": 4.2
+        },
+        {
+          "t": 208,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 209,
+          "msg_per_sec": 76915,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 210,
+          "msg_per_sec": 78085,
+          "mb_per_sec": 99
+        },
+        {
+          "t": 211,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 212,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 213,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 214,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 215,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 216,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 217,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 218,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 219,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 220,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 221,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 222,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 223,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 224,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 225,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 226,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 227,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 228,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 229,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 230,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 231,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 232,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 233,
+          "msg_per_sec": 78262,
+          "mb_per_sec": 100
+        },
+        {
+          "t": 234,
+          "msg_per_sec": 76738,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 235,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 236,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 237,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 238,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 239,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 240,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 241,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 242,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 243,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 244,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 245,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 246,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 247,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 248,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 249,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 250,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 251,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 252,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 253,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 254,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 255,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 256,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 257,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 258,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 259,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 260,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 261,
+          "msg_per_sec": 3833,
+          "mb_per_sec": 4.9
+        },
+        {
+          "t": 262,
+          "msg_per_sec": 0,
+          "mb_per_sec": 0
+        },
+        {
+          "t": 263,
+          "msg_per_sec": 65001,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 264,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 265,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 266,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 267,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 268,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 269,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 270,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 271,
+          "msg_per_sec": 76687,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 272,
+          "msg_per_sec": 78313,
+          "mb_per_sec": 100
+        },
+        {
+          "t": 273,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 274,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 275,
+          "msg_per_sec": 76376,
+          "mb_per_sec": 97
+        },
+        {
+          "t": 276,
+          "msg_per_sec": 78624,
+          "mb_per_sec": 100
+        },
+        {
+          "t": 277,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 278,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 279,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 280,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 281,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 282,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 283,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 284,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 285,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 286,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 287,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 288,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 289,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 290,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 291,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 292,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 293,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 294,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 295,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 296,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 297,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 298,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 299,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 300,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 301,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 302,
+          "msg_per_sec": 3383,
+          "mb_per_sec": 4.3
+        },
+        {
+          "t": 303,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 304,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 305,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 306,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 307,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 308,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 309,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 310,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 311,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 312,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 313,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 314,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 315,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 316,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 317,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 318,
+          "msg_per_sec": 75088,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 319,
+          "msg_per_sec": 79912,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 320,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 321,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 322,
+          "msg_per_sec": 77991,
+          "mb_per_sec": 99
+        },
+        {
+          "t": 323,
+          "msg_per_sec": 77009,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 324,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 325,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 326,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 327,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 328,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 329,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 330,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 331,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 332,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 333,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 334,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 335,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 336,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 337,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 338,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 339,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 340,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 341,
+          "msg_per_sec": 33795,
+          "mb_per_sec": 43
+        },
+        {
+          "t": 342,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 343,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 344,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 345,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 346,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 347,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 348,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 349,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 350,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 351,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 352,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 353,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 354,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 355,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 356,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 357,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 358,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 359,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 360,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 361,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 362,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 363,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 364,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 365,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 366,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 367,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 368,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 369,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 370,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 371,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 372,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 373,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 374,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 375,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 376,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 377,
+          "msg_per_sec": 10000,
+          "mb_per_sec": 13
+        },
+        {
+          "t": 378,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 379,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 380,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 381,
+          "msg_per_sec": 2815,
+          "mb_per_sec": 3.6
+        },
+        {
+          "t": 382,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 383,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 384,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 385,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 386,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 387,
+          "msg_per_sec": 2627,
+          "mb_per_sec": 3.3
+        },
+        {
+          "t": 388,
+          "msg_per_sec": 68273,
+          "mb_per_sec": 87
+        },
+        {
+          "t": 389,
+          "msg_per_sec": 76727,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 390,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 391,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 392,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 393,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 394,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 395,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 396,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 397,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 398,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 399,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 400,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 401,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 402,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 403,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 404,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 405,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 406,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 407,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 408,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 409,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 410,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 411,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 412,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 413,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 414,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 415,
+          "msg_per_sec": 78111,
+          "mb_per_sec": 99
+        },
+        {
+          "t": 416,
+          "msg_per_sec": 76889,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 417,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 418,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 419,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 420,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 421,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 422,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 423,
+          "msg_per_sec": 20768,
+          "mb_per_sec": 26
+        },
+        {
+          "t": 424,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 425,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 426,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 427,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 428,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 429,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 430,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 431,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 432,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 433,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 434,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 435,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 436,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 437,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 438,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 439,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 440,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 441,
+          "msg_per_sec": 77530,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 442,
+          "msg_per_sec": 77470,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 443,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 444,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 445,
+          "msg_per_sec": 75231,
+          "mb_per_sec": 96
+        },
+        {
+          "t": 446,
+          "msg_per_sec": 79769,
+          "mb_per_sec": 101
+        },
+        {
+          "t": 447,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 448,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 449,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 450,
+          "msg_per_sec": 58835,
+          "mb_per_sec": 75
+        },
+        {
+          "t": 451,
+          "msg_per_sec": 76165,
+          "mb_per_sec": 97
+        },
+        {
+          "t": 452,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 453,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 454,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 455,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 456,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 457,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 458,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 459,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 460,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 461,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 462,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 463,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 464,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 465,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 466,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 467,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 468,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 469,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 470,
+          "msg_per_sec": 1291,
+          "mb_per_sec": 1.6
+        },
+        {
+          "t": 471,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 472,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 473,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 474,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 475,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 476,
+          "msg_per_sec": 8903,
+          "mb_per_sec": 11
+        },
+        {
+          "t": 477,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 478,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 479,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 480,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 481,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 482,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 483,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 484,
+          "msg_per_sec": 10000,
+          "mb_per_sec": 13
+        },
+        {
+          "t": 485,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 486,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 487,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 488,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 489,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 490,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 491,
+          "msg_per_sec": 10000,
+          "mb_per_sec": 13
+        },
+        {
+          "t": 492,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 493,
+          "msg_per_sec": 10000,
+          "mb_per_sec": 13
+        },
+        {
+          "t": 494,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 495,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 496,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 497,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 498,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 499,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 500,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 501,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 502,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 503,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 504,
+          "msg_per_sec": 7251,
+          "mb_per_sec": 9.2
+        },
+        {
+          "t": 505,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 506,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 507,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 508,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 509,
+          "msg_per_sec": 1463,
+          "mb_per_sec": 1.9
+        },
+        {
+          "t": 510,
+          "msg_per_sec": 34529,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 511,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 512,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 513,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 514,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 515,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 516,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 517,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 518,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 519,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 520,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 521,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 522,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 523,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 524,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 525,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 526,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 527,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 528,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 529,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 530,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 531,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 532,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 533,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 534,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 535,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 536,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 537,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 538,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 539,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 540,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 541,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 542,
+          "msg_per_sec": 79401,
+          "mb_per_sec": 101
+        },
+        {
+          "t": 543,
+          "msg_per_sec": 75599,
+          "mb_per_sec": 96
+        },
+        {
+          "t": 544,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 545,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 546,
+          "msg_per_sec": 1906,
+          "mb_per_sec": 2.4
+        },
+        {
+          "t": 547,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 548,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 549,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 550,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 551,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 552,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 553,
+          "msg_per_sec": 46098,
+          "mb_per_sec": 59
+        },
+        {
+          "t": 554,
+          "msg_per_sec": 78902,
+          "mb_per_sec": 100
+        },
+        {
+          "t": 555,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 556,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 557,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 558,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 559,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 560,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 561,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 562,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 563,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 564,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 565,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 566,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 567,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 568,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 569,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 570,
+          "msg_per_sec": 3853,
+          "mb_per_sec": 4.9
+        },
+        {
+          "t": 571,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 572,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 573,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 574,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 575,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 576,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 577,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 578,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 579,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 580,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 581,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 582,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 583,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 584,
+          "msg_per_sec": 12718,
+          "mb_per_sec": 16
+        },
+        {
+          "t": 585,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 586,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 587,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 588,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 589,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 590,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 591,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 592,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 593,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 594,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 595,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 596,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 597,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 598,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 599,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 600,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 601,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 602,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 603,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 604,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 605,
+          "msg_per_sec": 3941,
+          "mb_per_sec": 5
+        },
+        {
+          "t": 606,
+          "msg_per_sec": 0,
+          "mb_per_sec": 0
+        },
+        {
+          "t": 607,
+          "msg_per_sec": 60001,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 608,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 609,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 610,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 611,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 612,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 613,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 614,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 615,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 616,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 617,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 618,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 619,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 620,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 621,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 622,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 623,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 624,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 625,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 626,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 627,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 628,
+          "msg_per_sec": 78262,
+          "mb_per_sec": 100
+        },
+        {
+          "t": 629,
+          "msg_per_sec": 76738,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 630,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 631,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 632,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 633,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 634,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 635,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 636,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 637,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 638,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 639,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 640,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 641,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 642,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 643,
+          "msg_per_sec": 77781,
+          "mb_per_sec": 99
+        },
+        {
+          "t": 644,
+          "msg_per_sec": 77219,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 645,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 646,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 647,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 648,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 649,
+          "msg_per_sec": 78022,
+          "mb_per_sec": 99
+        },
+        {
+          "t": 650,
+          "msg_per_sec": 76978,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 651,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 652,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 653,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 654,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 655,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 656,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 657,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 658,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 659,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 660,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 661,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 662,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 663,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 664,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 665,
+          "msg_per_sec": 5000,
+          "mb_per_sec": 6.4
+        },
+        {
+          "t": 666,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 667,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 668,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 669,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 670,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 671,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 672,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 673,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 674,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 675,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 676,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 677,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 678,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 679,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 680,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 681,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 682,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 683,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 684,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 685,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 686,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 687,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 688,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 689,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 690,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 691,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 692,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 693,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 694,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 695,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 696,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 697,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 698,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 699,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 700,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 701,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 702,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 703,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 704,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 705,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 706,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 707,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 708,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 709,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 710,
+          "msg_per_sec": 2496,
+          "mb_per_sec": 3.2
+        },
+        {
+          "t": 711,
+          "msg_per_sec": 0,
+          "mb_per_sec": 0
+        },
+        {
+          "t": 712,
+          "msg_per_sec": 50001,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 713,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 714,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 715,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 716,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 717,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 718,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 719,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 720,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 721,
+          "msg_per_sec": 77228,
+          "mb_per_sec": 98
+        },
+        {
+          "t": 722,
+          "msg_per_sec": 77772,
+          "mb_per_sec": 99
+        },
+        {
+          "t": 723,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 724,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 725,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 726,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 727,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 728,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 729,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 730,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 731,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 732,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 733,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 734,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 735,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 736,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 737,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 738,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 739,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 740,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 741,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 742,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 743,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 744,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 745,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 746,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 747,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 748,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 749,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 750,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 751,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 752,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 753,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 754,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 755,
+          "msg_per_sec": 29950,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 756,
+          "msg_per_sec": 15050,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 757,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 758,
+          "msg_per_sec": 10000,
+          "mb_per_sec": 13
+        },
+        {
+          "t": 759,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 760,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 761,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 762,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 763,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 764,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 765,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 766,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 767,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 768,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 769,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 770,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 771,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 772,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 773,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 774,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 775,
+          "msg_per_sec": 18575,
+          "mb_per_sec": 24
+        },
+        {
+          "t": 776,
+          "msg_per_sec": 36425,
+          "mb_per_sec": 46
+        },
+        {
+          "t": 777,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 778,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 779,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 780,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 781,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 782,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 783,
+          "msg_per_sec": 75000,
+          "mb_per_sec": 95
+        },
+        {
+          "t": 784,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 785,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 786,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 787,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 788,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 789,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 790,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 791,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 792,
+          "msg_per_sec": 70000,
+          "mb_per_sec": 89
+        },
+        {
+          "t": 793,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 794,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 795,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 796,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 797,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 798,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 799,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 800,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 801,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 802,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 803,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 804,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 805,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 806,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 807,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 808,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 809,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 810,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 811,
+          "msg_per_sec": 65000,
+          "mb_per_sec": 83
+        },
+        {
+          "t": 812,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 813,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 814,
+          "msg_per_sec": 60000,
+          "mb_per_sec": 76
+        },
+        {
+          "t": 815,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 816,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 817,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 818,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 819,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 820,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 821,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 822,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 823,
+          "msg_per_sec": 80000,
+          "mb_per_sec": 102
+        },
+        {
+          "t": 824,
+          "msg_per_sec": 55000,
+          "mb_per_sec": 70
+        },
+        {
+          "t": 825,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 826,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 827,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 828,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 829,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 830,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 831,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 832,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 833,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 834,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 835,
+          "msg_per_sec": 10000,
+          "mb_per_sec": 13
+        },
+        {
+          "t": 836,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 837,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 838,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 839,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 840,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 841,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 842,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 843,
+          "msg_per_sec": 16968,
+          "mb_per_sec": 22
+        },
+        {
+          "t": 844,
+          "msg_per_sec": 28032,
+          "mb_per_sec": 36
+        },
+        {
+          "t": 845,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 846,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 847,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 848,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 849,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 850,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 851,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 852,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 853,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 854,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 855,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 856,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 857,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 858,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 859,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 860,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 861,
+          "msg_per_sec": 15000,
+          "mb_per_sec": 19
+        },
+        {
+          "t": 862,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 863,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 864,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 865,
+          "msg_per_sec": 10000,
+          "mb_per_sec": 13
+        },
+        {
+          "t": 866,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 867,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 868,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 869,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 870,
+          "msg_per_sec": 20000,
+          "mb_per_sec": 25
+        },
+        {
+          "t": 871,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 872,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 873,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 874,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 875,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 876,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 877,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 878,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 879,
+          "msg_per_sec": 35293,
+          "mb_per_sec": 45
+        },
+        {
+          "t": 880,
+          "msg_per_sec": 39707,
+          "mb_per_sec": 50
+        },
+        {
+          "t": 881,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 882,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 883,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 884,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 885,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 886,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 887,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 888,
+          "msg_per_sec": 34741,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 889,
+          "msg_per_sec": 40259,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 890,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 891,
+          "msg_per_sec": 30000,
+          "mb_per_sec": 38
+        },
+        {
+          "t": 892,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 893,
+          "msg_per_sec": 50000,
+          "mb_per_sec": 64
+        },
+        {
+          "t": 894,
+          "msg_per_sec": 40000,
+          "mb_per_sec": 51
+        },
+        {
+          "t": 895,
+          "msg_per_sec": 45000,
+          "mb_per_sec": 57
+        },
+        {
+          "t": 896,
+          "msg_per_sec": 35000,
+          "mb_per_sec": 44
+        },
+        {
+          "t": 897,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        },
+        {
+          "t": 898,
+          "msg_per_sec": 25000,
+          "mb_per_sec": 32
+        }
+      ],
+      "summary": {
+        "median_mb_s": 84.49541855,
+        "p5_mb_s": 41.46127095,
+        "p95_mb_s": 96.0614842,
+        "peak_mb_s": 96.326055,
+        "mean_mb_s": 78.449509864,
+        "median_msg_s": 69299.3,
+        "p5_msg_s": 34004.55,
+        "p95_msg_s": 78784.9,
+        "peak_msg_s": 79000,
+        "mean_msg_s": 64339.88136363635
+      },
+      "anomalies": [
+        {
+          "start_t": 824,
+          "duration_s": 75,
+          "min_ratio": 0.1368421052631579,
+          "note": "MB/sec dropped below threshold — investigate before publishing",
+          "goroutines_at_start": 317,
+          "heap_in_use_mb_at_start": 95.649792
+        }
+      ],
+      "prom": [
+        {
+          "t": 0,
+          "goroutines": 320,
+          "heap_in_use_mb": 79.822848,
+          "bytes_total": 0,
+          "cpu_seconds": 20.55,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 10,
+          "goroutines": 317,
+          "heap_in_use_mb": 72.654848,
+          "bytes_total": 0,
+          "cpu_seconds": 43.69,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 20,
+          "goroutines": 322,
+          "heap_in_use_mb": 73.465856,
+          "bytes_total": 0,
+          "cpu_seconds": 66.42,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 30,
+          "goroutines": 319,
+          "heap_in_use_mb": 98.525184,
+          "bytes_total": 0,
+          "cpu_seconds": 89.79,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 40,
+          "goroutines": 319,
+          "heap_in_use_mb": 82.485248,
+          "bytes_total": 0,
+          "cpu_seconds": 112.35,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 50,
+          "goroutines": 322,
+          "heap_in_use_mb": 89.407488,
+          "bytes_total": 0,
+          "cpu_seconds": 134.57,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 60,
+          "goroutines": 319,
+          "heap_in_use_mb": 95.862784,
+          "bytes_total": 0,
+          "cpu_seconds": 157.39,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 70,
+          "goroutines": 323,
+          "heap_in_use_mb": 81.666048,
+          "bytes_total": 0,
+          "cpu_seconds": 180.23,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 80,
+          "goroutines": 318,
+          "heap_in_use_mb": 78.06976,
+          "bytes_total": 0,
+          "cpu_seconds": 200.18,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 90,
+          "goroutines": 323,
+          "heap_in_use_mb": 82.944,
+          "bytes_total": 0,
+          "cpu_seconds": 223.93,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 100,
+          "goroutines": 323,
+          "heap_in_use_mb": 92.299264,
+          "bytes_total": 0,
+          "cpu_seconds": 247.76,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 110,
+          "goroutines": 317,
+          "heap_in_use_mb": 101.883904,
+          "bytes_total": 0,
+          "cpu_seconds": 266.82,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 120,
+          "goroutines": 322,
+          "heap_in_use_mb": 89.677824,
+          "bytes_total": 0,
+          "cpu_seconds": 289.21,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 130,
+          "goroutines": 318,
+          "heap_in_use_mb": 85.327872,
+          "bytes_total": 0,
+          "cpu_seconds": 312.31,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 140,
+          "goroutines": 320,
+          "heap_in_use_mb": 89.030656,
+          "bytes_total": 0,
+          "cpu_seconds": 335.21,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 150,
+          "goroutines": 323,
+          "heap_in_use_mb": 90.128384,
+          "bytes_total": 0,
+          "cpu_seconds": 353.64,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 160,
+          "goroutines": 324,
+          "heap_in_use_mb": 85.368832,
+          "bytes_total": 0,
+          "cpu_seconds": 375.43,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 170,
+          "goroutines": 320,
+          "heap_in_use_mb": 88.10496,
+          "bytes_total": 0,
+          "cpu_seconds": 396.68,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 180,
+          "goroutines": 322,
+          "heap_in_use_mb": 87.891968,
+          "bytes_total": 0,
+          "cpu_seconds": 420.7,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 190,
+          "goroutines": 317,
+          "heap_in_use_mb": 87.465984,
+          "bytes_total": 0,
+          "cpu_seconds": 440.51,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 200,
+          "goroutines": 319,
+          "heap_in_use_mb": 87.212032,
+          "bytes_total": 0,
+          "cpu_seconds": 463.07,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 210,
+          "goroutines": 323,
+          "heap_in_use_mb": 88.948736,
+          "bytes_total": 0,
+          "cpu_seconds": 487.08,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 220,
+          "goroutines": 319,
+          "heap_in_use_mb": 100.63872,
+          "bytes_total": 0,
+          "cpu_seconds": 508.04,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 230,
+          "goroutines": 318,
+          "heap_in_use_mb": 89.202688,
+          "bytes_total": 0,
+          "cpu_seconds": 532.07,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 240,
+          "goroutines": 318,
+          "heap_in_use_mb": 92.372992,
+          "bytes_total": 0,
+          "cpu_seconds": 554.86,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 250,
+          "goroutines": 316,
+          "heap_in_use_mb": 86.155264,
+          "bytes_total": 0,
+          "cpu_seconds": 578.97,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 260,
+          "goroutines": 324,
+          "heap_in_use_mb": 88.743936,
+          "bytes_total": 0,
+          "cpu_seconds": 598.16,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 270,
+          "goroutines": 319,
+          "heap_in_use_mb": 91.521024,
+          "bytes_total": 0,
+          "cpu_seconds": 621.88,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 280,
+          "goroutines": 320,
+          "heap_in_use_mb": 99.483648,
+          "bytes_total": 0,
+          "cpu_seconds": 640.77,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 290,
+          "goroutines": 319,
+          "heap_in_use_mb": 93.609984,
+          "bytes_total": 0,
+          "cpu_seconds": 663.57,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 300,
+          "goroutines": 318,
+          "heap_in_use_mb": 74.579968,
+          "bytes_total": 0,
+          "cpu_seconds": 687.52,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 310,
+          "goroutines": 318,
+          "heap_in_use_mb": 96.82944,
+          "bytes_total": 0,
+          "cpu_seconds": 703.81,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 320,
+          "goroutines": 318,
+          "heap_in_use_mb": 83.738624,
+          "bytes_total": 0,
+          "cpu_seconds": 723.47,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 330,
+          "goroutines": 318,
+          "heap_in_use_mb": 98.320384,
+          "bytes_total": 0,
+          "cpu_seconds": 747.39,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 340,
+          "goroutines": 324,
+          "heap_in_use_mb": 92.93824,
+          "bytes_total": 0,
+          "cpu_seconds": 769.39,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 350,
+          "goroutines": 320,
+          "heap_in_use_mb": 95.494144,
+          "bytes_total": 0,
+          "cpu_seconds": 792.63,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 360,
+          "goroutines": 318,
+          "heap_in_use_mb": 91.144192,
+          "bytes_total": 0,
+          "cpu_seconds": 816.65,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 370,
+          "goroutines": 319,
+          "heap_in_use_mb": 98.500608,
+          "bytes_total": 0,
+          "cpu_seconds": 840.76,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 380,
+          "goroutines": 324,
+          "heap_in_use_mb": 88.342528,
+          "bytes_total": 0,
+          "cpu_seconds": 858,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 390,
+          "goroutines": 317,
+          "heap_in_use_mb": 101.695488,
+          "bytes_total": 0,
+          "cpu_seconds": 881.64,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 400,
+          "goroutines": 325,
+          "heap_in_use_mb": 98.566144,
+          "bytes_total": 0,
+          "cpu_seconds": 905.42,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 410,
+          "goroutines": 318,
+          "heap_in_use_mb": 84.04992,
+          "bytes_total": 0,
+          "cpu_seconds": 929.44,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 420,
+          "goroutines": 321,
+          "heap_in_use_mb": 87.089152,
+          "bytes_total": 0,
+          "cpu_seconds": 949.67,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 430,
+          "goroutines": 319,
+          "heap_in_use_mb": 88.35072,
+          "bytes_total": 0,
+          "cpu_seconds": 973.72,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 440,
+          "goroutines": 318,
+          "heap_in_use_mb": 90.537984,
+          "bytes_total": 0,
+          "cpu_seconds": 997.07,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 450,
+          "goroutines": 318,
+          "heap_in_use_mb": 85.434368,
+          "bytes_total": 0,
+          "cpu_seconds": 1020.52,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 460,
+          "goroutines": 319,
+          "heap_in_use_mb": 88.981504,
+          "bytes_total": 0,
+          "cpu_seconds": 1041.58,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 470,
+          "goroutines": 323,
+          "heap_in_use_mb": 93.282304,
+          "bytes_total": 0,
+          "cpu_seconds": 1063.83,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 480,
+          "goroutines": 319,
+          "heap_in_use_mb": 76.865536,
+          "bytes_total": 0,
+          "cpu_seconds": 1081.11,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 490,
+          "goroutines": 318,
+          "heap_in_use_mb": 84.492288,
+          "bytes_total": 0,
+          "cpu_seconds": 1090.86,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 500,
+          "goroutines": 325,
+          "heap_in_use_mb": 82.796544,
+          "bytes_total": 0,
+          "cpu_seconds": 1108.41,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 510,
+          "goroutines": 324,
+          "heap_in_use_mb": 85.97504,
+          "bytes_total": 0,
+          "cpu_seconds": 1132.41,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 520,
+          "goroutines": 324,
+          "heap_in_use_mb": 86.663168,
+          "bytes_total": 0,
+          "cpu_seconds": 1155.06,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 530,
+          "goroutines": 320,
+          "heap_in_use_mb": 81.698816,
+          "bytes_total": 0,
+          "cpu_seconds": 1177.85,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 540,
+          "goroutines": 318,
+          "heap_in_use_mb": 84.402176,
+          "bytes_total": 0,
+          "cpu_seconds": 1197.19,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 550,
+          "goroutines": 317,
+          "heap_in_use_mb": 97.148928,
+          "bytes_total": 0,
+          "cpu_seconds": 1219.36,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 560,
+          "goroutines": 319,
+          "heap_in_use_mb": 88.383488,
+          "bytes_total": 0,
+          "cpu_seconds": 1243.34,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 570,
+          "goroutines": 320,
+          "heap_in_use_mb": 82.41152,
+          "bytes_total": 0,
+          "cpu_seconds": 1266.74,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 580,
+          "goroutines": 317,
+          "heap_in_use_mb": 83.337216,
+          "bytes_total": 0,
+          "cpu_seconds": 1290.06,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 590,
+          "goroutines": 319,
+          "heap_in_use_mb": 84.852736,
+          "bytes_total": 0,
+          "cpu_seconds": 1305.94,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 600,
+          "goroutines": 323,
+          "heap_in_use_mb": 79.429632,
+          "bytes_total": 0,
+          "cpu_seconds": 1317.83,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 610,
+          "goroutines": 319,
+          "heap_in_use_mb": 80.453632,
+          "bytes_total": 0,
+          "cpu_seconds": 1327.56,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 620,
+          "goroutines": 317,
+          "heap_in_use_mb": 60.178432,
+          "bytes_total": 0,
+          "cpu_seconds": 1337.63,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 630,
+          "goroutines": 318,
+          "heap_in_use_mb": 86.54848,
+          "bytes_total": 0,
+          "cpu_seconds": 1360.88,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 640,
+          "goroutines": 320,
+          "heap_in_use_mb": 80.125952,
+          "bytes_total": 0,
+          "cpu_seconds": 1384.62,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 650,
+          "goroutines": 317,
+          "heap_in_use_mb": 79.085568,
+          "bytes_total": 0,
+          "cpu_seconds": 1404.27,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 660,
+          "goroutines": 317,
+          "heap_in_use_mb": 83.976192,
+          "bytes_total": 0,
+          "cpu_seconds": 1422.96,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 670,
+          "goroutines": 323,
+          "heap_in_use_mb": 80.297984,
+          "bytes_total": 0,
+          "cpu_seconds": 1443.83,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 680,
+          "goroutines": 317,
+          "heap_in_use_mb": 102.367232,
+          "bytes_total": 0,
+          "cpu_seconds": 1464.43,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 690,
+          "goroutines": 319,
+          "heap_in_use_mb": 93.331456,
+          "bytes_total": 0,
+          "cpu_seconds": 1480.07,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 700,
+          "goroutines": 320,
+          "heap_in_use_mb": 100.007936,
+          "bytes_total": 0,
+          "cpu_seconds": 1500.54,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 710,
+          "goroutines": 320,
+          "heap_in_use_mb": 95.797248,
+          "bytes_total": 0,
+          "cpu_seconds": 1519.28,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 720,
+          "goroutines": 318,
+          "heap_in_use_mb": 84.721664,
+          "bytes_total": 0,
+          "cpu_seconds": 1537.87,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 730,
+          "goroutines": 320,
+          "heap_in_use_mb": 89.014272,
+          "bytes_total": 0,
+          "cpu_seconds": 1556.82,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 740,
+          "goroutines": 321,
+          "heap_in_use_mb": 95.698944,
+          "bytes_total": 0,
+          "cpu_seconds": 1576.89,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 750,
+          "goroutines": 318,
+          "heap_in_use_mb": 81.977344,
+          "bytes_total": 0,
+          "cpu_seconds": 1598.45,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 760,
+          "goroutines": 319,
+          "heap_in_use_mb": 93.110272,
+          "bytes_total": 0,
+          "cpu_seconds": 1619.95,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 770,
+          "goroutines": 318,
+          "heap_in_use_mb": 85.07392,
+          "bytes_total": 0,
+          "cpu_seconds": 1643.97,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 780,
+          "goroutines": 321,
+          "heap_in_use_mb": 83.68128,
+          "bytes_total": 0,
+          "cpu_seconds": 1662.78,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 790,
+          "goroutines": 320,
+          "heap_in_use_mb": 71.671808,
+          "bytes_total": 0,
+          "cpu_seconds": 1680.03,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 800,
+          "goroutines": 319,
+          "heap_in_use_mb": 80.494592,
+          "bytes_total": 0,
+          "cpu_seconds": 1697.86,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 810,
+          "goroutines": 317,
+          "heap_in_use_mb": 81.281024,
+          "bytes_total": 0,
+          "cpu_seconds": 1712.99,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 820,
+          "goroutines": 317,
+          "heap_in_use_mb": 95.649792,
+          "bytes_total": 0,
+          "cpu_seconds": 1728.48,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 830,
+          "goroutines": 319,
+          "heap_in_use_mb": 95.141888,
+          "bytes_total": 0,
+          "cpu_seconds": 1744.33,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 840,
+          "goroutines": 318,
+          "heap_in_use_mb": 75.972608,
+          "bytes_total": 0,
+          "cpu_seconds": 1768.35,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 850,
+          "goroutines": 319,
+          "heap_in_use_mb": 82.034688,
+          "bytes_total": 0,
+          "cpu_seconds": 1792.31,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 860,
+          "goroutines": 321,
+          "heap_in_use_mb": 69.025792,
+          "bytes_total": 0,
+          "cpu_seconds": 1816.06,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 870,
+          "goroutines": 317,
+          "heap_in_use_mb": 74.194944,
+          "bytes_total": 0,
+          "cpu_seconds": 1826.86,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 880,
+          "goroutines": 318,
+          "heap_in_use_mb": 75.587584,
+          "bytes_total": 0,
+          "cpu_seconds": 1841.95,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 890,
+          "goroutines": 319,
+          "heap_in_use_mb": 99.16416,
+          "bytes_total": 0,
+          "cpu_seconds": 1855.36,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 900,
+          "goroutines": 322,
+          "heap_in_use_mb": 79.601664,
+          "bytes_total": 0,
+          "cpu_seconds": 1874.16,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 910,
+          "goroutines": 319,
+          "heap_in_use_mb": 84.959232,
+          "bytes_total": 0,
+          "cpu_seconds": 1893.81,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 920,
+          "goroutines": 325,
+          "heap_in_use_mb": 82.444288,
+          "bytes_total": 0,
+          "cpu_seconds": 1908.47,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 930,
+          "goroutines": 322,
+          "heap_in_use_mb": 98.041856,
+          "bytes_total": 0,
+          "cpu_seconds": 1924.06,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 940,
+          "goroutines": 321,
+          "heap_in_use_mb": 95.870976,
+          "bytes_total": 0,
+          "cpu_seconds": 1938.28,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 950,
+          "goroutines": 318,
+          "heap_in_use_mb": 87.8592,
+          "bytes_total": 0,
+          "cpu_seconds": 1947.74,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 960,
+          "goroutines": 321,
+          "heap_in_use_mb": 74.924032,
+          "bytes_total": 0,
+          "cpu_seconds": 1956.89,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 970,
+          "goroutines": 317,
+          "heap_in_use_mb": 78.331904,
+          "bytes_total": 0,
+          "cpu_seconds": 1968.51,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 980,
+          "goroutines": 319,
+          "heap_in_use_mb": 85.180416,
+          "bytes_total": 0,
+          "cpu_seconds": 1977.07,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 990,
+          "goroutines": 319,
+          "heap_in_use_mb": 74.09664,
+          "bytes_total": 0,
+          "cpu_seconds": 1988.18,
+          "gc_pause_total_ns": 0
+        },
+        {
+          "t": 1000,
+          "goroutines": 316,
+          "heap_in_use_mb": 83.39456,
+          "bytes_total": 0,
+          "cpu_seconds": 2000.2,
+          "gc_pause_total_ns": 0
+        }
+      ],
+      "gomaxprocs": 4,
+      "streams": 1,
+      "broker_series": [
+        {
+          "t": 20,
+          "mb_per_sec": 91.4477692,
+          "msg_per_sec": 75000
+        },
+        {
+          "t": 30,
+          "mb_per_sec": 89.23631859999999,
+          "msg_per_sec": 73186.1
+        },
+        {
+          "t": 40,
+          "mb_per_sec": 91.8303291,
+          "msg_per_sec": 75313.9
+        },
+        {
+          "t": 50,
+          "mb_per_sec": 88.3995967,
+          "msg_per_sec": 72500
+        },
+        {
+          "t": 60,
+          "mb_per_sec": 87.1803758,
+          "msg_per_sec": 71500
+        },
+        {
+          "t": 70,
+          "mb_per_sec": 89.0097335,
+          "msg_per_sec": 73000
+        },
+        {
+          "t": 80,
+          "mb_per_sec": 89.4284519,
+          "msg_per_sec": 73342.6
+        },
+        {
+          "t": 90,
+          "mb_per_sec": 78.2283634,
+          "msg_per_sec": 64157.4
+        },
+        {
+          "t": 100,
+          "mb_per_sec": 93.8883041,
+          "msg_per_sec": 77000
+        },
+        {
+          "t": 110,
+          "mb_per_sec": 93.8869295,
+          "msg_per_sec": 77000
+        },
+        {
+          "t": 120,
+          "mb_per_sec": 74.3742206,
+          "msg_per_sec": 60996.6
+        },
+        {
+          "t": 130,
+          "mb_per_sec": 89.6182776,
+          "msg_per_sec": 73500
+        },
+        {
+          "t": 140,
+          "mb_per_sec": 90.83508520000001,
+          "msg_per_sec": 74500
+        },
+        {
+          "t": 150,
+          "mb_per_sec": 91.44754420000001,
+          "msg_per_sec": 75000
+        },
+        {
+          "t": 160,
+          "mb_per_sec": 73.5220026,
+          "msg_per_sec": 60300.4
+        },
+        {
+          "t": 170,
+          "mb_per_sec": 87.32034920000001,
+          "msg_per_sec": 71614.4
+        },
+        {
+          "t": 180,
+          "mb_per_sec": 84.7958275,
+          "msg_per_sec": 69545.8
+        },
+        {
+          "t": 190,
+          "mb_per_sec": 96.0371585,
+          "msg_per_sec": 78765.2
+        },
+        {
+          "t": 200,
+          "mb_per_sec": 76.7064661,
+          "msg_per_sec": 62909.6
+        },
+        {
+          "t": 210,
+          "mb_per_sec": 92.057357,
+          "msg_per_sec": 75500
+        },
+        {
+          "t": 220,
+          "mb_per_sec": 95.7138858,
+          "msg_per_sec": 78500
+        },
+        {
+          "t": 230,
+          "mb_per_sec": 83.704506,
+          "msg_per_sec": 68649.2
+        },
+        {
+          "t": 240,
+          "mb_per_sec": 95.8111514,
+          "msg_per_sec": 78579.4
+        },
+        {
+          "t": 250,
+          "mb_per_sec": 90.8359258,
+          "msg_per_sec": 74500
+        },
+        {
+          "t": 260,
+          "mb_per_sec": 95.71373340000001,
+          "msg_per_sec": 78500
+        },
+        {
+          "t": 270,
+          "mb_per_sec": 76.1771375,
+          "msg_per_sec": 62476.2
+        },
+        {
+          "t": 280,
+          "mb_per_sec": 94.1516059,
+          "msg_per_sec": 77218.3
+        },
+        {
+          "t": 290,
+          "mb_per_sec": 75.235117,
+          "msg_per_sec": 61704.7
+        },
+        {
+          "t": 300,
+          "mb_per_sec": 90.2270562,
+          "msg_per_sec": 74000
+        },
+        {
+          "t": 310,
+          "mb_per_sec": 95.2058443,
+          "msg_per_sec": 78081.8
+        },
+        {
+          "t": 320,
+          "mb_per_sec": 64.8608454,
+          "msg_per_sec": 53194.6
+        },
+        {
+          "t": 331,
+          "mb_per_sec": 70.68738572727274,
+          "msg_per_sec": 57975
+        },
+        {
+          "t": 341,
+          "mb_per_sec": 94.5640182,
+          "msg_per_sec": 77555.8
+        },
+        {
+          "t": 351,
+          "mb_per_sec": 87.7096943,
+          "msg_per_sec": 71934.8
+        },
+        {
+          "t": 361,
+          "mb_per_sec": 92.1364771,
+          "msg_per_sec": 75565.2
+        },
+        {
+          "t": 371,
+          "mb_per_sec": 96.326055,
+          "msg_per_sec": 79000
+        },
+        {
+          "t": 381,
+          "mb_per_sec": 93.2771129,
+          "msg_per_sec": 76500
+        },
+        {
+          "t": 391,
+          "mb_per_sec": 69.96866,
+          "msg_per_sec": 57383.4
+        },
+        {
+          "t": 401,
+          "mb_per_sec": 95.7149505,
+          "msg_per_sec": 78500
+        },
+        {
+          "t": 411,
+          "mb_per_sec": 95.1057555,
+          "msg_per_sec": 78000
+        },
+        {
+          "t": 421,
+          "mb_per_sec": 95.7156259,
+          "msg_per_sec": 78500
+        },
+        {
+          "t": 431,
+          "mb_per_sec": 81.19402290000001,
+          "msg_per_sec": 66588.5
+        },
+        {
+          "t": 441,
+          "mb_per_sec": 96.0219315,
+          "msg_per_sec": 78749.8
+        },
+        {
+          "t": 451,
+          "mb_per_sec": 92.664581,
+          "msg_per_sec": 76000
+        },
+        {
+          "t": 461,
+          "mb_per_sec": 89.61964490000001,
+          "msg_per_sec": 73500
+        },
+        {
+          "t": 471,
+          "mb_per_sec": 88.18652759999999,
+          "msg_per_sec": 72326.7
+        },
+        {
+          "t": 481,
+          "mb_per_sec": 84.19500959999999,
+          "msg_per_sec": 69052.8
+        },
+        {
+          "t": 491,
+          "mb_per_sec": 68.2788202,
+          "msg_per_sec": 56000
+        },
+        {
+          "t": 501,
+          "mb_per_sec": 43.087792799999995,
+          "msg_per_sec": 35338.2
+        },
+        {
+          "t": 511,
+          "mb_per_sec": 69.7506401,
+          "msg_per_sec": 57206
+        },
+        {
+          "t": 521,
+          "mb_per_sec": 96.2291694,
+          "msg_per_sec": 78921.4
+        },
+        {
+          "t": 531,
+          "mb_per_sec": 90.32299,
+          "msg_per_sec": 74078.6
+        },
+        {
+          "t": 541,
+          "mb_per_sec": 90.8375008,
+          "msg_per_sec": 74500
+        },
+        {
+          "t": 551,
+          "mb_per_sec": 77.5211866,
+          "msg_per_sec": 63576.8
+        },
+        {
+          "t": 561,
+          "mb_per_sec": 88.39716,
+          "msg_per_sec": 72500
+        },
+        {
+          "t": 571,
+          "mb_per_sec": 93.2734477,
+          "msg_per_sec": 76500
+        },
+        {
+          "t": 581,
+          "mb_per_sec": 95.71702520000001,
+          "msg_per_sec": 78500
+        },
+        {
+          "t": 591,
+          "mb_per_sec": 85.510852,
+          "msg_per_sec": 70129.1
+        },
+        {
+          "t": 601,
+          "mb_per_sec": 69.356343,
+          "msg_per_sec": 56881.2
+        },
+        {
+          "t": 611,
+          "mb_per_sec": 41.4662985,
+          "msg_per_sec": 34009.1
+        },
+        {
+          "t": 621,
+          "mb_per_sec": 44.5053117,
+          "msg_per_sec": 36500
+        },
+        {
+          "t": 631,
+          "mb_per_sec": 37.0736129,
+          "msg_per_sec": 30406.1
+        },
+        {
+          "t": 641,
+          "mb_per_sec": 96.2271473,
+          "msg_per_sec": 78918.2
+        },
+        {
+          "t": 651,
+          "mb_per_sec": 94.4963401,
+          "msg_per_sec": 77500
+        },
+        {
+          "t": 661,
+          "mb_per_sec": 73.15563709999999,
+          "msg_per_sec": 60000
+        },
+        {
+          "t": 671,
+          "mb_per_sec": 79.1303304,
+          "msg_per_sec": 64899.3
+        },
+        {
+          "t": 681,
+          "mb_per_sec": 83.87808740000001,
+          "msg_per_sec": 68791.3
+        },
+        {
+          "t": 691,
+          "mb_per_sec": 73.62819359999999,
+          "msg_per_sec": 60385.3
+        },
+        {
+          "t": 701,
+          "mb_per_sec": 70.7183009,
+          "msg_per_sec": 58000
+        },
+        {
+          "t": 711,
+          "mb_per_sec": 82.4867404,
+          "msg_per_sec": 67652.6
+        },
+        {
+          "t": 721,
+          "mb_per_sec": 74.5210739,
+          "msg_per_sec": 61119.2
+        },
+        {
+          "t": 731,
+          "mb_per_sec": 74.2474469,
+          "msg_per_sec": 60894.2
+        },
+        {
+          "t": 741,
+          "mb_per_sec": 75.5152803,
+          "msg_per_sec": 61933.4
+        },
+        {
+          "t": 751,
+          "mb_per_sec": 79.3363077,
+          "msg_per_sec": 65066.6
+        },
+        {
+          "t": 761,
+          "mb_per_sec": 85.9616872,
+          "msg_per_sec": 70500
+        },
+        {
+          "t": 771,
+          "mb_per_sec": 87.1805712,
+          "msg_per_sec": 71500
+        },
+        {
+          "t": 781,
+          "mb_per_sec": 96.3245334,
+          "msg_per_sec": 79000
+        },
+        {
+          "t": 791,
+          "mb_per_sec": 71.90014020000001,
+          "msg_per_sec": 58967.8
+        },
+        {
+          "t": 801,
+          "mb_per_sec": 69.5390683,
+          "msg_per_sec": 57032.2
+        },
+        {
+          "t": 812,
+          "mb_per_sec": 62.62847827272727,
+          "msg_per_sec": 51363.63636363636
+        },
+        {
+          "t": 822,
+          "mb_per_sec": 58.528195,
+          "msg_per_sec": 48000
+        },
+        {
+          "t": 832,
+          "mb_per_sec": 54.564119299999994,
+          "msg_per_sec": 44749.6
+        },
+        {
+          "t": 842,
+          "mb_per_sec": 74.3784035,
+          "msg_per_sec": 61000.1
+        },
+        {
+          "t": 852,
+          "mb_per_sec": 96.0858099,
+          "msg_per_sec": 78804.6
+        },
+        {
+          "t": 862,
+          "mb_per_sec": 95.9520392,
+          "msg_per_sec": 78695.4
+        },
+        {
+          "t": 872,
+          "mb_per_sec": 85.3493086,
+          "msg_per_sec": 70000
+        },
+        {
+          "t": 882,
+          "mb_per_sec": 45.1145589,
+          "msg_per_sec": 37000
+        },
+        {
+          "t": 892,
+          "mb_per_sec": 56.6971293,
+          "msg_per_sec": 46500
+        },
+        {
+          "t": 902,
+          "mb_per_sec": 56.088078100000004,
+          "msg_per_sec": 46000
+        },
+        {
+          "t": 912,
+          "mb_per_sec": 82.067562,
+          "msg_per_sec": 67309
+        },
+        {
+          "t": 922,
+          "mb_per_sec": 75.8305355,
+          "msg_per_sec": 62191
+        },
+        {
+          "t": 932,
+          "mb_per_sec": 60.3529647,
+          "msg_per_sec": 49500
+        },
+        {
+          "t": 942,
+          "mb_per_sec": 57.3057411,
+          "msg_per_sec": 47000
+        },
+        {
+          "t": 952,
+          "mb_per_sec": 50.5996722,
+          "msg_per_sec": 41500
+        },
+        {
+          "t": 962,
+          "mb_per_sec": 39.627078700000006,
+          "msg_per_sec": 32500
+        },
+        {
+          "t": 972,
+          "mb_per_sec": 35.361180399999995,
+          "msg_per_sec": 29000
+        },
+        {
+          "t": 982,
+          "mb_per_sec": 41.4562434,
+          "msg_per_sec": 34000
+        },
+        {
+          "t": 992,
+          "mb_per_sec": 36.5778815,
+          "msg_per_sec": 30000
+        },
+        {
+          "t": 1002,
+          "mb_per_sec": 44.5034019,
+          "msg_per_sec": 36500
+        },
+        {
+          "t": 1012,
+          "mb_per_sec": 46.332846100000005,
+          "msg_per_sec": 38000
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,17 @@
-# Local results — raw JSON is uploaded to S3 anyway. .gitkeep is the marker.
-results/*.json
-results/**/*.json
+# Result JSONs ARE tracked. They used to be ignored on the grounds that "raw JSON is
+# uploaded to S3 anyway" — that was never true in a way that survives: the results
+# bucket is created by the shared stack and DESTROYED at teardown, so the S3 copy dies
+# with the run and the local file was the only copy. Consequences, both hit for real:
+#
+#   - `runner summary` rebuilds SUMMARY.md's table from whatever result files exist
+#     locally, so a scenario whose JSON is gone silently loses its row. The mysql and
+#     snowflake JSONs were purged from a worktree by the /tmp cleaner and their four
+#     published rows disappeared on the next refresh.
+#   - the sizing page cites a run file per entry for provenance; with the files absent,
+#     nobody can audit a quoted number back to its run.
+#
+# They are ~100-350 KB each. Trim old runs deliberately (keep the latest per scenario,
+# plus anything a doc or the sizing page cites) rather than by letting them be ignored.
 
 # Terraform local state — never commit
 .terraform/
