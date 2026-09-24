@@ -431,4 +431,6 @@ func (p *publisherStub) Publish(_ context.Context, msg *replication.MessageEvent
 	return nil
 }
 
+func (*publisherStub) CheckpointWindow(context.Context, replication.SCN) error { return nil }
+
 func (*publisherStub) Close() {}

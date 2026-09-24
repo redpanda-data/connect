@@ -632,6 +632,92 @@ func TestFailedSendPoisonsPublisher(t *testing.T) {
 		"a failed send orphans its tracker slot; the publisher must be marked for rebuild")
 }
 
+// TestCheckpointWindow regression-tests CON-583: a quiet table set must still
+// move the checkpoint forward.
+func TestCheckpointWindow(t *testing.T) {
+	t.Run("persists at once when all prior batches are acked", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisher(t)
+
+		am := publishAndReceive(t, ctx, publisher, streamingEvent(42))
+		require.NoError(t, am.ackFn(ctx, nil))
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(100)))
+
+		require.Equal(t, []replication.SCN{42, 100}, cachedSCNs())
+	})
+
+	t.Run("a failed save does not stop the stream", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisher(t)
+		saveOK := publisher.cacheSCN
+		publisher.cacheSCN = func(context.Context, replication.SCN) error {
+			return errors.New("checkpoint cache unavailable")
+		}
+
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(100)))
+		require.Empty(t, cachedSCNs())
+
+		publisher.cacheSCN = saveOK
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(101)))
+		require.Equal(t, []replication.SCN{101}, cachedSCNs())
+	})
+
+	t.Run("waits for outstanding acks", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisher(t)
+
+		am := publishAndReceive(t, ctx, publisher, streamingEvent(42))
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(100)))
+		require.Empty(t, cachedSCNs(), "the marker must not persist while an earlier batch is unacked")
+
+		require.NoError(t, am.ackFn(ctx, nil))
+		require.Equal(t, []replication.SCN{100}, cachedSCNs())
+	})
+
+	t.Run("no-op while rows are buffered", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisherWithCount(t, 100)
+
+		require.NoError(t, publisher.Publish(ctx, streamingEvent(42)))
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(100)))
+		require.Empty(t, cachedSCNs())
+		publisher.batcherMu.Lock()
+		buffered := publisher.hasBuffered
+		publisher.batcherMu.Unlock()
+		require.True(t, buffered, "CheckpointWindow must not flush the buffered rows")
+
+		got := make(chan asyncMessage, 1)
+		go func() { got <- <-publisher.msgs() }()
+		require.NoError(t, publisher.flushCurrent(ctx))
+		var am asyncMessage
+		select {
+		case am = <-got:
+		case <-time.After(5 * time.Second):
+			t.Fatal("flushCurrent did not deliver the buffered event")
+		}
+		require.NoError(t, am.ackFn(ctx, nil))
+
+		require.Equal(t, []replication.SCN{42}, cachedSCNs(), "the buffered batch saves its own SCN, not the marker SCN")
+	})
+
+	t.Run("timed flush clears hasBuffered", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisherWithPolicy(t, service.BatchPolicy{Count: 100, Period: "20ms"})
+
+		require.NoError(t, publisher.Publish(ctx, streamingEvent(42)))
+		var am asyncMessage
+		select {
+		case am = <-publisher.msgs():
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed flush did not deliver the buffered event")
+		}
+		require.NoError(t, am.ackFn(ctx, nil))
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(100)))
+
+		require.Equal(t, []replication.SCN{42, 100}, cachedSCNs())
+	})
+}
+
 // newTestBatchPublisher builds a publisher whose batcher flushes on every
 // published event (count=1), so tests drive the production
 // Publish->trackBatch->sendTracked path directly.
@@ -642,11 +728,16 @@ func newTestBatchPublisher(t *testing.T) (*batchPublisher, func() []replication.
 
 func newTestBatchPublisherWithCount(t *testing.T, count int) (*batchPublisher, func() []replication.SCN) {
 	t.Helper()
+	return newTestBatchPublisherWithPolicy(t, service.BatchPolicy{Count: count})
+}
+
+func newTestBatchPublisherWithPolicy(t *testing.T, policy service.BatchPolicy) (*batchPublisher, func() []replication.SCN) {
+	t.Helper()
 
 	logger := service.NewLoggerFromSlog(slog.Default())
 	cp := checkpoint.NewCapped[replication.SCN](100)
 
-	batcher, err := (service.BatchPolicy{Count: count}).NewBatcher(service.MockResources())
+	batcher, err := policy.NewBatcher(service.MockResources())
 	require.NoError(t, err)
 
 	publisher := newBatchPublisher(batcher, cp, logger)

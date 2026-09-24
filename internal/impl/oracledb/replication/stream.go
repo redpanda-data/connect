@@ -28,6 +28,10 @@ type DBQuerier interface {
 // ChangePublisher is responsible for handling and processing of a replication.MessageEvent.
 type ChangePublisher interface {
 	Publish(ctx context.Context, msg *MessageEvent) error
+	// CheckpointWindow records that every change up to scn is published, also
+	// when there were no rows for the monitored tables. scn becomes the resume
+	// position when every batch published before the call is acked.
+	CheckpointWindow(ctx context.Context, scn SCN) error
 	Close()
 }
 
