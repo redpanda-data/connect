@@ -10,6 +10,10 @@ package ticket
 
 import (
 	"context"
+	"math/rand/v2"
+	"runtime"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -37,13 +41,16 @@ func requireResult(t *testing.T, ch <-chan error) error {
 	}
 }
 
-func requireBlocked(t *testing.T, ch <-chan error) {
+// waitParked waits until exactly n Acquire calls are parked. A parked call
+// returns only after a Release or a Seal wakes it, or after its context is
+// cancelled.
+func waitParked(t *testing.T, l *Lock, n int) {
 	t.Helper()
-	select {
-	case err := <-ch:
-		require.FailNow(t, "Acquire returned before its turn", "err: %v", err)
-	case <-time.After(20 * time.Millisecond):
-	}
+	require.Eventually(t, func() bool {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		return len(l.waiters) == n
+	}, waitTimeout, time.Millisecond)
 }
 
 func TestTakeIsSequential(t *testing.T) {
@@ -60,15 +67,13 @@ func TestAcquireFIFO(t *testing.T) {
 	// Start the later tickets first: the order of arrival must not matter.
 	r2 := acquireAsync(t.Context(), &l, t2, false)
 	r1 := acquireAsync(t.Context(), &l, t1, false)
-	requireBlocked(t, r1)
-	requireBlocked(t, r2)
+	waitParked(t, &l, 2)
 
 	require.NoError(t, l.Acquire(t.Context(), t0, false))
-	requireBlocked(t, r1)
 	l.Release()
 
 	require.NoError(t, requireResult(t, r1))
-	requireBlocked(t, r2)
+	waitParked(t, &l, 1)
 	l.Release()
 
 	require.NoError(t, requireResult(t, r2))
@@ -83,7 +88,7 @@ func TestReleaseSkipsAbandonedTicket(t *testing.T) {
 	ctx1, cancel1 := context.WithCancel(t.Context())
 	r1 := acquireAsync(ctx1, &l, t1, false)
 	r2 := acquireAsync(t.Context(), &l, t2, false)
-	requireBlocked(t, r1)
+	waitParked(t, &l, 2)
 	cancel1()
 	require.ErrorIs(t, requireResult(t, r1), context.Canceled)
 	assert.False(t, l.Sealed(), "an abandon without sealOnAbandon must not seal")
@@ -101,7 +106,7 @@ func TestAbandonSeals(t *testing.T) {
 	r2 := acquireAsync(t.Context(), &l, t2, false)
 	ctx1, cancel1 := context.WithCancel(t.Context())
 	r1 := acquireAsync(ctx1, &l, t1, true)
-	requireBlocked(t, r1)
+	waitParked(t, &l, 2)
 	cancel1()
 	require.ErrorIs(t, requireResult(t, r1), context.Canceled)
 	assert.True(t, l.Sealed())
@@ -121,9 +126,7 @@ func TestSealWakesEveryWaiter(t *testing.T) {
 	for i := range results {
 		results[i] = acquireAsync(t.Context(), &l, l.Take(), false)
 	}
-	for _, r := range results {
-		requireBlocked(t, r)
-	}
+	waitParked(t, &l, len(results))
 
 	l.Seal()
 	for _, r := range results {
@@ -155,4 +158,124 @@ func TestAcquireCancelledAfterWake(t *testing.T) {
 	t1 := l.Take()
 	require.NoError(t, l.Acquire(t.Context(), t1, false))
 	l.Release()
+}
+
+func TestReleaseSkipsConsecutiveAbandonedTickets(t *testing.T) {
+	var l Lock
+	t0 := l.Take()
+	require.NoError(t, l.Acquire(t.Context(), t0, false))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	abandoned := make([]<-chan error, 3)
+	for i := range abandoned {
+		abandoned[i] = acquireAsync(ctx, &l, l.Take(), false)
+	}
+	last := acquireAsync(t.Context(), &l, l.Take(), false)
+	waitParked(t, &l, 4)
+
+	cancel()
+	for _, r := range abandoned {
+		require.ErrorIs(t, requireResult(t, r), context.Canceled)
+	}
+	waitParked(t, &l, 1)
+
+	l.Release()
+	require.NoError(t, requireResult(t, last), "one Release must skip every abandoned ticket in a row")
+	l.mu.Lock()
+	assert.Empty(t, l.abandoned, "skipped tickets must be removed")
+	l.mu.Unlock()
+	l.Release()
+}
+
+func TestSealWhileHolding(t *testing.T) {
+	// The holder seals, then releases: the publisher does this when Track
+	// fails after the turn was given.
+	var l Lock
+	t0 := l.Take()
+	require.NoError(t, l.Acquire(t.Context(), t0, false))
+	next := acquireAsync(t.Context(), &l, l.Take(), false)
+	waitParked(t, &l, 1)
+
+	l.Seal()
+	require.ErrorIs(t, requireResult(t, next), ErrSealed)
+	l.Release()
+
+	require.ErrorIs(t, l.Acquire(t.Context(), l.Take(), false), ErrSealed,
+		"a ticket taken after the seal must be refused")
+}
+
+// TestAcquireConcurrent runs many takers with random cancellation. It checks
+// that only one goroutine has the turn at a time, that turns come in ticket
+// order, and that the sequence never stops. It also exercises the race where
+// a cancellation and a wake happen at the same time.
+func TestAcquireConcurrent(t *testing.T) {
+	const (
+		rounds = 20
+		takers = 32
+	)
+	for range rounds {
+		var (
+			l       Lock
+			holders atomic.Int32
+			orderMu sync.Mutex
+			order   []uint64
+			wg      sync.WaitGroup
+		)
+		results := make([]error, takers)
+		cancellable := make([]bool, takers)
+		cancels := make([]context.CancelFunc, takers)
+		for i := range takers {
+			ctx, cancel := context.WithCancel(t.Context())
+			cancels[i] = cancel
+			if rand.N(3) == 0 {
+				cancellable[i] = true
+				go func() {
+					time.Sleep(rand.N(200 * time.Microsecond))
+					cancel()
+				}()
+			}
+			tk := l.Take()
+			wg.Go(func() {
+				err := l.Acquire(ctx, tk, false)
+				results[i] = err
+				if err != nil {
+					return
+				}
+				if n := holders.Add(1); n != 1 {
+					t.Errorf("ticket %d: %d holders at the same time", tk, n)
+				}
+				orderMu.Lock()
+				order = append(order, tk)
+				orderMu.Unlock()
+				runtime.Gosched()
+				holders.Add(-1)
+				l.Release()
+			})
+		}
+
+		done := make(chan struct{})
+		go func() { wg.Wait(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(waitTimeout):
+			require.FailNow(t, "the ticket sequence stopped")
+		}
+		for _, cancel := range cancels {
+			cancel()
+		}
+
+		for i, err := range results {
+			if !cancellable[i] {
+				require.NoError(t, err, "ticket %d was never cancelled", i)
+			} else if err != nil {
+				require.ErrorIs(t, err, context.Canceled)
+			}
+		}
+		require.IsIncreasing(t, order, "turns must come in ticket order")
+		l.mu.Lock()
+		assert.Equal(t, uint64(takers), l.serving)
+		assert.Empty(t, l.waiters)
+		assert.Empty(t, l.abandoned)
+		l.mu.Unlock()
+	}
 }
