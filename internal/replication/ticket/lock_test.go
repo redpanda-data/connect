@@ -209,73 +209,101 @@ func TestSealWhileHolding(t *testing.T) {
 // order, and that the sequence never stops. It also exercises the race where
 // a cancellation and a wake happen at the same time.
 func TestAcquireConcurrent(t *testing.T) {
-	const (
-		rounds = 20
-		takers = 32
+	for range 20 {
+		runConcurrentRound(t, 32)
+	}
+}
+
+// taker is one goroutine of runConcurrentRound.
+type taker struct {
+	ticket      uint64
+	cancellable bool  // a cancel at a random time is scheduled
+	err         error // result of Acquire
+}
+
+// turnLog records the turns in the order they happen.
+type turnLog struct {
+	holders atomic.Int32
+	mu      sync.Mutex
+	order   []uint64
+}
+
+// hold records a turn. It fails the test if another taker has the turn at
+// the same time.
+func (r *turnLog) hold(t *testing.T, ticket uint64) {
+	if n := r.holders.Add(1); n != 1 {
+		t.Errorf("ticket %d: %d holders at the same time", ticket, n)
+	}
+	r.mu.Lock()
+	r.order = append(r.order, ticket)
+	r.mu.Unlock()
+	runtime.Gosched() // Let the other takers run while we have the turn.
+	r.holders.Add(-1)
+}
+
+func runConcurrentRound(t *testing.T, n int) {
+	t.Helper()
+	var (
+		l     Lock
+		turns turnLog
+		wg    sync.WaitGroup
 	)
-	for range rounds {
-		var (
-			l       Lock
-			holders atomic.Int32
-			orderMu sync.Mutex
-			order   []uint64
-			wg      sync.WaitGroup
-		)
-		results := make([]error, takers)
-		cancellable := make([]bool, takers)
-		cancels := make([]context.CancelFunc, takers)
-		for i := range takers {
-			ctx, cancel := context.WithCancel(t.Context())
-			cancels[i] = cancel
-			if rand.N(3) == 0 {
-				cancellable[i] = true
-				go func() {
-					time.Sleep(rand.N(200 * time.Microsecond))
-					cancel()
-				}()
-			}
-			tk := l.Take()
-			wg.Go(func() {
-				err := l.Acquire(ctx, tk, false)
-				results[i] = err
-				if err != nil {
-					return
-				}
-				if n := holders.Add(1); n != 1 {
-					t.Errorf("ticket %d: %d holders at the same time", tk, n)
-				}
-				orderMu.Lock()
-				order = append(order, tk)
-				orderMu.Unlock()
-				runtime.Gosched()
-				holders.Add(-1)
-				l.Release()
-			})
-		}
 
-		done := make(chan struct{})
-		go func() { wg.Wait(); close(done) }()
-		select {
-		case <-done:
-		case <-time.After(waitTimeout):
-			require.FailNow(t, "the ticket sequence stopped")
+	// Start the takers. About one in three is cancelled at a random time.
+	takers := make([]taker, n)
+	for i := range takers {
+		tk := &takers[i]
+		tk.ticket = l.Take()
+		ctx, cancel := context.WithCancel(t.Context())
+		if rand.N(3) == 0 {
+			tk.cancellable = true
+			go func() {
+				time.Sleep(rand.N(200 * time.Microsecond))
+				cancel()
+			}()
 		}
-		for _, cancel := range cancels {
-			cancel()
-		}
-
-		for i, err := range results {
-			if !cancellable[i] {
-				require.NoError(t, err, "ticket %d was never cancelled", i)
-			} else if err != nil {
-				require.ErrorIs(t, err, context.Canceled)
+		wg.Go(func() {
+			defer cancel()
+			if tk.err = l.Acquire(ctx, tk.ticket, false); tk.err != nil {
+				return
 			}
+			turns.hold(t, tk.ticket)
+			l.Release()
+		})
+	}
+	requireWait(t, &wg, "the ticket sequence stopped")
+
+	// A taker that was not cancelled must get its turn. A cancelled taker
+	// can get its turn or abandon it.
+	for _, tk := range takers {
+		switch {
+		case !tk.cancellable:
+			require.NoError(t, tk.err, "ticket %d was never cancelled", tk.ticket)
+		case tk.err != nil:
+			require.ErrorIs(t, tk.err, context.Canceled)
 		}
-		require.IsIncreasing(t, order, "turns must come in ticket order")
-		l.mu.Lock()
-		assert.Equal(t, uint64(takers), l.serving)
-		assert.Empty(t, l.waiters)
-		assert.Empty(t, l.abandoned)
-		l.mu.Unlock()
+	}
+	require.IsIncreasing(t, turns.order, "turns must come in ticket order")
+
+	// Every ticket was served or skipped, and nothing is left behind.
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	assert.Equal(t, uint64(n), l.serving)
+	assert.Empty(t, l.waiters)
+	assert.Empty(t, l.abandoned)
+}
+
+// requireWait waits for wg, and fails the test after waitTimeout.
+func requireWait(t *testing.T, wg *sync.WaitGroup, msg string) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(waitTimeout):
+		require.FailNow(t, msg)
 	}
 }
