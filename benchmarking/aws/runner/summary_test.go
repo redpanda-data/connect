@@ -8,6 +8,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -292,4 +294,201 @@ func TestRefreshSummary_DualEngineRow(t *testing.T) {
 	require.Contains(t, s, "72")
 	require.Contains(t, s, "-10,000 msg/s (-10%)")
 	require.NotContains(t, s, "+28 MB/s", "gap must not be byte-based")
+}
+
+// tableRowLine renders one existing-table row the same way a real refresh
+// would have, so tests exercise the same parsing path production traffic
+// does.
+func tableRowLine(cells [summaryColumnCount]string) string {
+	return fmt.Sprintf("| %s | %s | %s | %s | %s | %s |",
+		alignLeft(cells[0], colScenarioWidth),
+		alignRight(cells[1], colVCPUWidth),
+		alignRight(cells[2], colConnectWidth),
+		alignRight(cells[3], colKCWidth),
+		alignLeft(cells[4], colGapWidth),
+		alignLeft(cells[5], colLastRunWidth))
+}
+
+func existingTableHeader() string {
+	return "| Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |\n" +
+		"|-----------------------|-----------|--------------|---------|--------------------|-------------|"
+}
+
+// captureStderr redirects os.Stderr for the duration of fn and returns
+// whatever was written to it.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stderr
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stderr = w
+	defer func() { os.Stderr = old }()
+
+	fn()
+
+	require.NoError(t, w.Close())
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
+	return buf.String()
+}
+
+func TestRefreshSummary_RetainsScenarioMissingFromDisk(t *testing.T) {
+	resultsRoot := t.TempDir()
+	// Only postgres has a result JSON on disk; mysql's was purged.
+	writeResult(t, resultsRoot, "postgres", "orders-cdc", "2026-05-21T00-00-00Z", &Result{
+		Scenario:   "postgres/orders-cdc",
+		FinishedAt: time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC),
+		Points:     []PointResult{{VCPU: 4, Summary: Summary{PeakMBPerSec: 102, MedianMBPerSec: 99}}},
+	})
+
+	mysqlCells := [summaryColumnCount]string{"mysql / orders-snapshot", "4", "22", "—", "—", "2026-08-17"}
+	existing := existingTableHeader() + "\n" + tableRowLine(mysqlCells) + "\n"
+	contents := SummaryMarkerStart + "\n" + existing + SummaryMarkerEnd + "\n"
+	summaryPath := writeSummaryFile(t, contents)
+
+	require.NoError(t, RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)))
+
+	raw, err := os.ReadFile(summaryPath)
+	require.NoError(t, err)
+	out := string(raw)
+
+	// The retained row's cells (besides Last Run) must be byte-identical to
+	// what was already published — nothing about it was re-derived.
+	require.Contains(t, out, "mysql / orders-snapshot")
+	require.Contains(t, out, "22")
+	require.Contains(t, out, "2026-08-17 †")
+	require.Contains(t, out, retainedFootnote)
+
+	// The fresh postgres row must come from the new derivation, and must
+	// not carry a retained marker.
+	require.Contains(t, out, "postgres / orders-cdc")
+	require.Contains(t, out, "99")
+
+	lines := strings.Split(out, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "postgres / orders-cdc") {
+			require.NotContains(t, line, "†", "fresh row must not carry the retained marker")
+		}
+	}
+}
+
+func TestRefreshSummary_FreshRowSupersedesRetained(t *testing.T) {
+	resultsRoot := t.TempDir()
+	writeResult(t, resultsRoot, "postgres", "orders-cdc", "2026-05-21T00-00-00Z", &Result{
+		Scenario:   "postgres/orders-cdc",
+		FinishedAt: time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC),
+		Points:     []PointResult{{VCPU: 4, Summary: Summary{PeakMBPerSec: 102, MedianMBPerSec: 99}}},
+	})
+
+	// The existing table has a stale row for the SAME scenario; it must be
+	// replaced by the fresh derivation, not retained.
+	staleCells := [summaryColumnCount]string{"postgres / orders-cdc", "1", "5", "—", "—", "2026-01-01"}
+	existing := existingTableHeader() + "\n" + tableRowLine(staleCells) + "\n"
+	contents := SummaryMarkerStart + "\n" + existing + SummaryMarkerEnd + "\n"
+	summaryPath := writeSummaryFile(t, contents)
+
+	require.NoError(t, RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)))
+
+	raw, err := os.ReadFile(summaryPath)
+	require.NoError(t, err)
+	out := string(raw)
+
+	require.Contains(t, out, "99")
+	require.Contains(t, out, "2026-05-21")
+	require.NotContains(t, out, "2026-01-01", "stale row must not survive when a fresh row exists")
+	require.NotContains(t, out, "†", "superseded row must not be marked retained")
+	require.NotContains(t, out, retainedFootnote, "footnote must not appear when nothing was retained")
+}
+
+func TestRefreshSummary_MergedOutputStaysSorted(t *testing.T) {
+	resultsRoot := t.TempDir()
+	writeResult(t, resultsRoot, "zebra", "orders-cdc", "2026-05-21T00-00-00Z", &Result{
+		Scenario:   "zebra/orders-cdc",
+		FinishedAt: time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC),
+		Points:     []PointResult{{VCPU: 1, Summary: Summary{PeakMBPerSec: 10, MedianMBPerSec: 9}}},
+	})
+
+	aardvarkCells := [summaryColumnCount]string{"aardvark / orders-snapshot", "4", "22", "—", "—", "2026-08-17"}
+	mysqlCells := [summaryColumnCount]string{"mysql / orders-snapshot", "4", "22", "—", "—", "2026-08-17"}
+	existing := existingTableHeader() + "\n" + tableRowLine(aardvarkCells) + "\n" + tableRowLine(mysqlCells) + "\n"
+	contents := SummaryMarkerStart + "\n" + existing + SummaryMarkerEnd + "\n"
+	summaryPath := writeSummaryFile(t, contents)
+
+	require.NoError(t, RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)))
+
+	raw, err := os.ReadFile(summaryPath)
+	require.NoError(t, err)
+	out := string(raw)
+
+	idxAardvark := strings.Index(out, "aardvark / orders-snapshot")
+	idxMysql := strings.Index(out, "mysql / orders-snapshot")
+	idxZebra := strings.Index(out, "zebra / orders-cdc")
+	require.True(t, idxAardvark >= 0 && idxMysql >= 0 && idxZebra >= 0, "all rows must be present")
+	require.Less(t, idxAardvark, idxMysql, "merged rows must stay alphabetically sorted")
+	require.Less(t, idxMysql, idxZebra, "merged rows must stay alphabetically sorted")
+}
+
+func TestRefreshSummary_NoRetentionMeansNoFootnote(t *testing.T) {
+	resultsRoot := t.TempDir()
+	writeResult(t, resultsRoot, "postgres", "orders-cdc", "2026-05-21T00-00-00Z", &Result{
+		Scenario:   "postgres/orders-cdc",
+		FinishedAt: time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC),
+		Points:     []PointResult{{VCPU: 4, Summary: Summary{PeakMBPerSec: 102, MedianMBPerSec: 99}}},
+	})
+
+	contents := SummaryMarkerStart + "\n" + existingTableHeader() + "\n" + SummaryMarkerEnd + "\n"
+	summaryPath := writeSummaryFile(t, contents)
+
+	require.NoError(t, RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)))
+
+	raw, err := os.ReadFile(summaryPath)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), retainedFootnote)
+}
+
+func TestRefreshSummary_DuplicateStartMarkersErrorsAndLeavesFileUnmodified(t *testing.T) {
+	resultsRoot := t.TempDir()
+	block := SummaryMarkerStart + "\n" + existingTableHeader() + "\n" + SummaryMarkerEnd + "\n"
+	contents := "# Doc\n\n" + block + "\nMore prose.\n\n" + block
+	summaryPath := writeSummaryFile(t, contents)
+
+	err := RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "start marker at line")
+	// Both occurrences must be named.
+	require.Equal(t, 2, strings.Count(err.Error(), "start marker at line"))
+
+	raw, readErr := os.ReadFile(summaryPath)
+	require.NoError(t, readErr)
+	require.Equal(t, contents, string(raw), "file must be left unmodified when markers are duplicated")
+}
+
+func TestRefreshSummary_SkipsMalformedExistingRowWithWarning(t *testing.T) {
+	resultsRoot := t.TempDir()
+	writeResult(t, resultsRoot, "postgres", "orders-cdc", "2026-05-21T00-00-00Z", &Result{
+		Scenario:   "postgres/orders-cdc",
+		FinishedAt: time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC),
+		Points:     []PointResult{{VCPU: 4, Summary: Summary{PeakMBPerSec: 102, MedianMBPerSec: 99}}},
+	})
+
+	// A row from the old 4-column schema — wrong column count for today's
+	// 6-column schema.
+	malformed := "| stale / old-schema    |         1 |            2 | 2026-01-01  |"
+	existing := existingTableHeader() + "\n" + malformed + "\n"
+	contents := SummaryMarkerStart + "\n" + existing + SummaryMarkerEnd + "\n"
+	summaryPath := writeSummaryFile(t, contents)
+
+	var refreshErr error
+	stderr := captureStderr(t, func() {
+		refreshErr = RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC))
+	})
+	require.NoError(t, refreshErr)
+	require.Contains(t, stderr, "skipping existing row")
+
+	raw, err := os.ReadFile(summaryPath)
+	require.NoError(t, err)
+	out := string(raw)
+	require.Contains(t, out, "postgres / orders-cdc")
+	require.NotContains(t, out, "stale / old-schema", "malformed row must not be carried forward")
 }

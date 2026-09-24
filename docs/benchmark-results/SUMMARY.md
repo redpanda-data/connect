@@ -26,14 +26,30 @@ Last updated: 2026-03-16
 <!-- Copyright 2025 Redpanda Data, Inc. -->
 ## AWS Bench Results
 
-Last refreshed: 2026-08-18
+Last refreshed: 2026-09-24
 
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
-| mysql / orders-snapshot |         4 |           22 |      —    |                   —  | 2026-08-17  |
-| mysql / orders-snapshot-sweep |         4 |           21 |      —    |                   —  | 2026-08-18  |
-| snowflake / orders-sink |         8 |           71 |      —    |                   —  | 2026-08-18  |
-| snowflake / orders-sink-smoke |         1 |           15 |      —    |                   —  | 2026-08-18  |
+| iceberg / orders-sink-output-tuning |         8 |          164 |       — | —                  | 2026-08-21  |
+| iceberg / orders-upsert |         4 |           24 |       — | —                  | 2026-08-22  |
+| iceberg / orders-upsert-cow |         4 |           46 |       — | —                  | 2026-08-25  |
+| iceberg / orders-upsert-cow-clustered |         4 |           48 |       — | —                  | 2026-08-25  |
+| mysql / orders-snapshot |         4 |           22 |       — | —                  | 2026-08-17 † |
+| mysql / orders-snapshot-sweep |         4 |           21 |       — | —                  | 2026-08-18 † |
+| oracle / orders-streaming-prefetch |         4 |           26 |       — | —                  | 2026-09-03  |
+| postgres / orders-cdc-diag |         4 |           84 |       — | —                  | 2026-08-20  |
+| s3 / orders-live      |         8 |           55 |       — | —                  | 2026-09-24  |
+| s3 / orders-live-diag |         1 |           13 |       — | —                  | 2026-09-21  |
+| s3 / orders-live-diag2 |         — |            — |       — | —                  | 2026-09-21  |
+| s3 / orders-live-smoke |         — |            — |       — | —                  | 2026-09-05  |
+| s3 / orders-sink      |         — |            — |       — | —                  | 2026-09-05  |
+| s3 / orders-sink-diag |         1 |           32 |       — | —                  | 2026-09-03  |
+| s3 / orders-sink-smoke |         — |            — |       — | —                  | 2026-09-04  |
+| s3 / orders-sink-smoke-2vcpu |         — |            — |       — | —                  | 2026-09-05  |
+| snowflake / orders-sink |         8 |           71 |       — | —                  | 2026-08-18 † |
+| snowflake / orders-sink-smoke |         1 |           15 |       — | —                  | 2026-08-18 † |
+
+† Retained from an earlier refresh — this scenario's result JSON is no longer on disk, so the row could not be re-derived.
 
 Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
 
@@ -55,22 +71,6 @@ For full methodology, raw output, environment details, and bottleneck analysis, 
 - [SQL Server CDC](mssqlserver-cdc.md)
 - [Oracle CDC](oracledb-cdc.md)
 - [DynamoDB CDC](dynamodb-cdc.md)
-
-<!-- bench:aws:start - auto-generated, do not edit by hand -->
-<!-- Copyright 2025 Redpanda Data, Inc. -->
-## AWS Bench Results
-
-Last refreshed: 2026-08-20
-
-| Connector / Scenario  | Best vCPU | Connect MB/s | Last Run    |
-|-----------------------|-----------|--------------|-------------|
-| *(no AWS runs yet)*   |        —  |          —   | —           |
-
-Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
-
-To regenerate without running a bench: `task aws:summary`
-
-<!-- bench:aws:end -->
 
 ## How Benchmarks Are Run
 
