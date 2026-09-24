@@ -112,21 +112,15 @@ func TestStateUnmarshalRejectsMalformedJSON(t *testing.T) {
 	require.Error(t, json.Unmarshal([]byte(`{"version":`), &got))
 }
 
-// TestStateUnmarshalVersions: every supported layout must load, or an
-// upgrade would restart the backfills in progress, and anything outside the
-// range must be refused rather than half-read. Version 1 predates Tables
-// and version 2 carried the removed Done flag; both still decode.
 func TestStateUnmarshalVersions(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		raw     string
 		wantErr bool
 	}{
-		{name: "version 1", raw: `{"version":1,"last_sent_pk":[42]}`},
-		{name: "version 2", raw: `{"version":2,"done":true,"last_sent_pk":[42]}`},
 		{name: "current version", raw: fmt.Sprintf(`{"version":%d,"last_sent_pk":[42]}`, CurrentStateVersion)},
-		{name: "newer than current", raw: `{"version":4,"last_sent_pk":[42]}`, wantErr: true},
-		{name: "older than supported", raw: `{"version":0,"last_sent_pk":[42]}`, wantErr: true},
+		{name: "one newer than current", raw: fmt.Sprintf(`{"version":%d,"last_sent_pk":[42]}`, CurrentStateVersion+1), wantErr: true},
+		{name: "far newer than current", raw: `{"version":99,"last_sent_pk":[42]}`, wantErr: true},
 		{name: "version absent", raw: `{"last_sent_pk":[42]}`, wantErr: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -142,11 +136,9 @@ func TestStateUnmarshalVersions(t *testing.T) {
 	}
 }
 
-// TestStateUnmarshalVersion1CarriesNoTables: version 1 has no table set, so
-// a resumed coordinator knows only what its queue names.
-func TestStateUnmarshalVersion1CarriesNoTables(t *testing.T) {
+func TestStateUnmarshalOmittedTablesIsNil(t *testing.T) {
 	var got State
-	require.NoError(t, json.Unmarshal([]byte(`{"version":1,"remaining_tables":[{"schema":"public","table":"b"}]}`), &got))
+	require.NoError(t, json.Unmarshal(fmt.Appendf(nil, `{"version":%d,"remaining_tables":[{"schema":"public","table":"b"}]}`, CurrentStateVersion), &got))
 
 	assert.Nil(t, got.Tables)
 	assert.Equal(t, []TableID{{Schema: "public", Table: "b"}}, got.RemainingTables)

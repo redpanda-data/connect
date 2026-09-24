@@ -16,13 +16,7 @@ import (
 )
 
 // CurrentStateVersion contains the version of the state.
-const CurrentStateVersion = 3
-
-// minSupportedStateVersion is the oldest layout a checkpoint may use.
-// Version 3 dropped Done, because an empty queue is now idle rather than
-// complete. Older checkpoints still decode: the ignored flag costs nothing,
-// and any queue that outlived it is in RemainingTables.
-const minSupportedStateVersion = 1
+const CurrentStateVersion = 1
 
 // ErrUnsupportedStateVersion reports a checkpoint written by a build using a
 // different State layout.
@@ -38,8 +32,7 @@ type State struct {
 	MaxPK           PrimaryKey `json:"max_pk,omitempty"`
 	RemainingTables []TableID  `json:"remaining_tables,omitempty"`
 	// Tables is every table this run covers, the finished ones included, so
-	// a table requested later is recognisable as new. Version 1 checkpoints
-	// omit it.
+	// a table requested later is recognisable as new.
 	Tables []TableID `json:"tables,omitempty"`
 }
 
@@ -70,8 +63,11 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	narrowPrimaryKey(s.LastSentPK)
 	narrowPrimaryKey(s.MaxPK)
 
-	if s.Version < minSupportedStateVersion || s.Version > CurrentStateVersion {
-		return fmt.Errorf("%w: got %d, want %d..%d", ErrUnsupportedStateVersion, s.Version, minSupportedStateVersion, CurrentStateVersion)
+	// Exactly one layout is accepted. The snapshot has not shipped, so no
+	// older checkpoint exists in the wild, and a newer one could carry
+	// fields this build would drop on the next write.
+	if s.Version != CurrentStateVersion {
+		return fmt.Errorf("%w: got %d, want %d", ErrUnsupportedStateVersion, s.Version, CurrentStateVersion)
 	}
 	return nil
 }
