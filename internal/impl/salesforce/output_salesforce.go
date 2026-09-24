@@ -129,7 +129,7 @@ func newSalesforceSinkConfigSpec() *service.ConfigSpec {
 		service.NewStringField(sfsTMFieldTopic).
 			Description("topic name to match against the message's 'topic' field"),
 		service.NewStringField(sfsTMFieldSObject).
-			Description("Salesforce SObject API name (e.g., Account, Contact, MyObject__c)"),
+			Description("Salesforce SObject API name (for example, Account, Contact, MyObject__c)"),
 		service.NewStringField(sfsTMFieldOperation).
 			Description("Write operation: insert, update, upsert, or delete").
 			Default("upsert"),

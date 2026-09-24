@@ -17,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1377,92 +1376,66 @@ postgres_cdc:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
-func TestIntegrationHeartbeat(t *testing.T) {
+// TestIntegrationHeartbeatAdvancesSlotOnQuietTables makes sure that heartbeats move the slot forward when the
+// subscribed tables are quiet and other tables write to the WAL. Without heartbeats the slot gets no messages to
+// acknowledge, so confirmed_flush_lsn does not move and Postgres keeps all the WAL.
+func TestIntegrationHeartbeatAdvancesSlotOnQuietTables(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	require.NoError(t, err)
-
-	template := fmt.Sprintf(`
+	const (
+		heartbeatSlot   = "test_slot_heartbeat"
+		noHeartbeatSlot = "test_slot_no_heartbeat"
+	)
+	inputYAML := func(slotName, heartbeatInterval string) string {
+		return fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
-    slot_name: test_slot_native_decoder
+    slot_name: %s
     schema: public
-    heartbeat_interval: 1s
-    pg_standby_timeout: 1s
+    heartbeat_interval: %s
+    pg_standby_timeout: 200ms
     tables:
       - seq
-`, databaseURL)
-
-	writer := asyncroutine.NewPeriodic(time.Millisecond, func() {
-		_, err := db.Exec("INSERT INTO seq DEFAULT VALUES")
-		require.NoError(t, err)
-	})
-	writer.Start()
-	t.Cleanup(writer.Stop)
-
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
-	recvCount := &atomic.Int64{}
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(context.Context, service.MessageBatch) error {
-		recvCount.Add(1)
-		return nil
-	}))
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
-	go func() {
-		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
-
-	// Wait for replication slot to be created
-	t.Log("Waiting for replication slot to be created")
-	require.Eventually(t, func() bool {
-		rows, err := db.Query("SELECT slot_name FROM pg_replication_slots WHERE slot_name = 'test_slot_native_decoder'")
-		if err != nil {
-			t.Logf("Error querying replication slots: %v", err)
-			return false
-		}
-		defer rows.Close()
-		require.NoError(t, rows.Err())
-
-		exists := rows.Next()
-		if exists {
-			t.Log("Replication slot 'test_slot_native_decoder' has been created")
-		}
-		return exists
-	}, 10*time.Second, 500*time.Millisecond, "replication slot was not created in time")
-
-	getRestartLSN := func() string {
-		rows, err := db.Query("SELECT confirmed_flush_lsn FROM pg_replication_slots WHERE slot_name = 'test_slot_native_decoder'")
-		require.NoError(t, err)
-		defer rows.Close()
-
-		for rows.Next() {
-			var lsn string
-			require.NoError(t, rows.Scan(&lsn))
-			return lsn
-		}
-		require.NoError(t, rows.Err())
-		require.FailNow(t, "unable to get replication slot position")
-		return ""
+`, databaseURL, slotName, heartbeatInterval)
 	}
+	heartbeatMsgs, _ := startTestStream(t, inputYAML(heartbeatSlot, "200ms"))
+	// A heartbeat_interval of 0s makes the input fail to connect (NewMonitor examines the wrong field).
+	// Thus use an interval that does not tick during the test.
+	noHeartbeatMsgs, _ := startTestStream(t, inputYAML(noHeartbeatSlot, "1h"))
 
-	// Make sure the LSN advances even when no messages are being emitted (via heartbeat)
-	startLSN := getRestartLSN()
-	t.Logf("Initial confirmed_flush_lsn: %s", startLSN)
 	require.Eventually(t, func() bool {
-		currentLSN := getRestartLSN()
-		t.Logf("Current confirmed_flush_lsn: %s, start: %s", currentLSN, startLSN)
-		return currentLSN > startLSN
-	}, 10*time.Second, 500*time.Millisecond, "LSN did not advance within timeout")
+		var count int
+		err := db.QueryRow("SELECT count(*) FROM pg_replication_slots WHERE slot_name IN ($1, $2)", heartbeatSlot, noHeartbeatSlot).Scan(&count)
+		return err == nil && count == 2
+	}, 10*time.Second, 50*time.Millisecond, "replication slots were not created in time")
 
-	t.Log("LSN successfully advanced, stopping stream")
-	require.NoError(t, streamOut.StopWithin(time.Second*10))
+	// Write only to a table that the inputs do not subscribe to.
+	for range 5 {
+		_, err := db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ('quiet', now())")
+		require.NoError(t, err)
+	}
+	var targetLSN string
+	require.NoError(t, db.QueryRow("SELECT pg_current_wal_lsn()::text").Scan(&targetLSN))
+
+	require.Eventually(t, func() bool { return slotPassedLSN(t, db, heartbeatSlot, targetLSN) }, 10*time.Second, 50*time.Millisecond,
+		"confirmed_flush_lsn of the heartbeat slot did not pass %s", targetLSN)
+	// The slot without heartbeats must not move: today the input acks only messages it receives.
+	// If this fails because the input now acks keepalives, heartbeats may no longer be needed. Update this test.
+	assert.False(t, slotPassedLSN(t, db, noHeartbeatSlot, targetLSN), "confirmed_flush_lsn of the slot without heartbeats passed %s", targetLSN)
+	assert.Zero(t, heartbeatMsgs.Len(), "input with heartbeats emitted messages, but the subscribed table is quiet")
+	assert.Zero(t, noHeartbeatMsgs.Len(), "input without heartbeats emitted messages, but the subscribed table is quiet")
+}
+
+// slotPassedLSN returns true if the confirmed_flush_lsn of the slot is after lsn.
+func slotPassedLSN(t *testing.T, db *pgtest.TestDB, slotName, lsn string) bool {
+	t.Helper()
+	var passed bool
+	query := "SELECT pg_wal_lsn_diff(confirmed_flush_lsn, $2) > 0 FROM pg_replication_slots WHERE slot_name = $1"
+	err := db.QueryRow(query, slotName, lsn).Scan(&passed)
+	assert.NoError(t, err)
+	return passed
 }
 
 func TestIntegrationPostgresCDCSchemaMetadata(t *testing.T) {

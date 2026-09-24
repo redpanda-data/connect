@@ -70,7 +70,6 @@
 | github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue | Apache-2.0 |
 | github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression | Apache-2.0 |
 | github.com/aws/aws-sdk-go-v2/feature/ec2/imds | Apache-2.0 |
-| github.com/aws/aws-sdk-go-v2/feature/s3/manager | Apache-2.0 |
 | github.com/aws/aws-sdk-go-v2/internal/configsources | Apache-2.0 |
 | github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 | Apache-2.0 |
 | github.com/aws/aws-sdk-go-v2/internal/ini | Apache-2.0 |
@@ -302,7 +301,7 @@
 | github.com/sijms/go-ora/v2 | MIT |
 | github.com/sirupsen/logrus | MIT |
 | github.com/smira/go-statsd | MIT |
-| github.com/snowflakedb/gosnowflake | Apache-2.0 |
+| github.com/snowflakedb/gosnowflake/v2 | Apache-2.0 |
 | github.com/sourcegraph/conc | MIT |
 | github.com/spaolacci/murmur3 | BSD-3-Clause |
 | github.com/stretchr/testify | MIT |

@@ -160,7 +160,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			Description("Error on unknown schema IDs. Only relevant when translate_ids is true. " +
 				"When false (default), unknown schema IDs are passed through unchanged, " +
 				"allowing migration of topics with mixed message formats. " +
-				"Note: messages with 0-byte prefixes (e.g., protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
+				"Note: messages with 0-byte prefixes (for example, protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
 			ShortDescription("Error on unknown schema IDs. Only relevant when translate_ids is true.").
 			Default(false),
 		service.NewIntField(srFieldMaxParallelHTTPRequest).
@@ -365,14 +365,6 @@ type schemaInfo struct {
 	Subject string
 	Version int
 	ID      int
-}
-
-func schemaInfoFromSubjectSchema(ss sr.SubjectSchema) schemaInfo {
-	return schemaInfo{
-		Subject: ss.Subject,
-		Version: ss.Version,
-		ID:      ss.ID,
-	}
 }
 
 // schemaRegistryMigrator coordinates migration between a source and destination
@@ -797,19 +789,35 @@ func (m *schemaRegistryMigrator) syncSubjectSchema(ctx context.Context, ss sr.Su
 	var info schemaInfo
 	t0 := time.Now()
 	if m.conf.TranslateIDs {
-		// If the schema already exists (and is identical), this returns
-		// the existing schema
-		dss, err := m.dst.CreateSchema(ctx, dstSubject, sch)
+		// Register with a registry-assigned ID. If the schema is already
+		// registered (and identical), this returns the existing ID without
+		// creating a new version.
+		//
+		// RegisterSchema is used instead of CreateSchema because CreateSchema
+		// additionally resolves the returned ID via SchemaUsagesByID, which
+		// fetches every subject-version sharing that ID using one unbounded
+		// goroutine per usage. Identical schema bodies deduplicate to a single
+		// ID, so syncing N such subjects costs O(N^2) destination requests,
+		// none of them bounded by MaxParallelHTTPRequests.
+		const autoAssign = -1
+		id, err := m.dst.RegisterSchema(ctx, dstSubject, sch, autoAssign, autoAssign)
 		if err != nil {
 			m.metrics.IncSchemaCreateErrors()
 			return schemaInfo{}, fmt.Errorf("create schema: %w", err)
 		}
 
-		info = schemaInfoFromSubjectSchema(dss)
-		m.log.Infof("Schema migration: schema created with translated id: subject=%s version=%d id=%d => subject=%s version=%d id=%d",
-			ss.Subject, ss.Version, ss.ID, info.Subject, info.Version, info.ID)
+		// The destination version is left unset: the registration response
+		// carries only the ID, which is also the only field of schemaInfo
+		// with a functional consumer.
+		info = schemaInfo{Subject: dstSubject, ID: id}
+		m.log.Infof("Schema migration: schema created with translated id: subject=%s version=%d id=%d => subject=%s id=%d",
+			ss.Subject, ss.Version, ss.ID, info.Subject, info.ID)
 	} else {
-		dss, err := m.dst.CreateSchemaWithIDAndVersion(ctx, dstSubject, sch, ss.ID, ss.Version)
+		// RegisterSchema instead of CreateSchemaWithIDAndVersion for the same
+		// reason as above: the latter resolves the registered ID through the
+		// unbounded SchemaUsagesByID fan-out, and the ID and version are
+		// already known here.
+		id, err := m.dst.RegisterSchema(ctx, dstSubject, sch, ss.ID, ss.Version)
 		if err != nil {
 			const conflictPattern = `Schema already registered with id \d+ instead of input id \d+`
 			if ok, _ := regexp.MatchString(conflictPattern, err.Error()); ok {
@@ -832,11 +840,10 @@ func (m *schemaRegistryMigrator) syncSubjectSchema(ctx context.Context, ss sr.Su
 			m.log.Warnf("Schema migration: schema subject=%s version=%d id=%d could not be created (server error: %s) - using existing schema with the same ID, if this is not the desired behavior, try enabling translate-ids",
 				ss.Subject, ss.Version, ss.ID, err.Error())
 
-			dss = ss
-			dss.Subject = dstSubject
+			id = ss.ID
 		}
 
-		info = schemaInfoFromSubjectSchema(dss)
+		info = schemaInfo{Subject: dstSubject, Version: ss.Version, ID: id}
 		m.log.Infof("Schema migration: schema created with fixed id: subject=%s version=%d id=%d",
 			info.Subject, info.Version, info.ID)
 	}

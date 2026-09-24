@@ -151,11 +151,11 @@ input:
 
 Subscribes to one or more Salesforce Pub/Sub topics in parallel and emits a message per event. Topics may be:
 
-- `/data/<sObject>ChangeEvent` — per-sObject CDC channel.
-- `/data/ChangeEvents` — CDC firehose (every CDC-enabled sObject).
-- `/event/<EventName>__e` — custom Platform Event.
-- `/event/<StandardEventName>` — standard Platform Event (e.g. `LoginEventStream`).
-- A bare sObject name (e.g. `Account`) is shorthand for `/data/AccountChangeEvent`.
+- `/data/<sObject>ChangeEvent`: per-sObject CDC channel.
+- `/data/ChangeEvents`: CDC firehose (every CDC-enabled sObject).
+- `/event/<EventName>__e`: custom Platform Event.
+- `/event/<StandardEventName>`: standard Platform Event (for example `LoginEventStream`).
+- A bare sObject name (for example, `Account`) is shorthand for `/data/AccountChangeEvent`.
 
 Optionally runs a REST snapshot for the CDC sObjects before opening the streaming subscriptions, so the pipeline sees the current state plus continuous changes. Per-topic replay state persists in a cache resource so each subscription resumes across restarts independently.
 
@@ -169,20 +169,20 @@ Use `salesforce_cdc` for:
 
 Use a different Salesforce input instead if:
 
-- You only need a one-off extract or periodic SOQL query — use xref:components:inputs/salesforce.adoc[`salesforce`].
-- You need a GraphQL query (cross-object in one request) — use xref:components:inputs/salesforce_graphql.adoc[`salesforce_graphql`].
+- You only need a one-off extract or periodic SOQL query: use xref:components:inputs/salesforce.adoc[`salesforce`].
+- You need a GraphQL query (cross-object in one request): use xref:components:inputs/salesforce_graphql.adoc[`salesforce_graphql`].
 
 == Metadata
 
 Every emitted message has:
 
-- `topic`: The full Pub/Sub topic path (e.g. "/event/Order__e").
+- `topic`: The full Pub/Sub topic path (for example, "/event/Order__e").
 - `replay_id`: The Pub/Sub replay ID in hex (streaming events only).
 
 CDC events also carry:
 
 - `operation`: "read" for snapshot rows; "create", "update", "delete", or "undelete" for CDC events.
-- `sobject`: The sObject API name (e.g. "Account").
+- `sobject`: The sObject API name (for example, "Account").
 - `record_ids`: Comma-separated record IDs affected by the event (when present).
 
 Platform Events also carry:
@@ -270,7 +270,7 @@ Platform Events only::
 +
 --
 
-Stream a custom event and a standard login stream — snapshot is skipped automatically:
+Stream a custom event and a standard login stream: snapshot is skipped automatically:
 
 ```yaml
 input:
@@ -316,7 +316,7 @@ Consumer Key of the Salesforce Connected App authorized for the OAuth Client Cre
 
 === `client_secret`
 
-Consumer Secret of the Salesforce Connected App, paired with `client_id`. Sensitive — prefer environment variable interpolation (`${SALESFORCE_CLIENT_SECRET}`) over inlining.
+Consumer Secret of the Salesforce Connected App, paired with `client_id`. Sensitive; prefer environment variable interpolation (`${SALESFORCE_CLIENT_SECRET}`) over inlining.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
@@ -329,7 +329,7 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 === `api_version`
 
-Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/{api_version}/...`) and available fields/objects. Must be supported by your org — check Setup → Company Information. Older versions may lack recent fields.
+Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/{api_version}/...`) and available fields/objects. Must be supported by your org; check Setup → Company Information. Older versions may lack recent fields.
 
 
 *Type*: `string`
@@ -374,7 +374,7 @@ topics:
 
 === `stream_snapshot`
 
-When true (default), paginate a full REST snapshot of every CDC sObject in `topics` before opening any streaming subscription. When false, skip the snapshot and start streaming immediately. Platform Event topics (`/event/...`) are always skipped — they have no REST equivalent.
+When true (default), paginate a full REST snapshot of every CDC sObject in `topics` before opening any streaming subscription. When false, skip the snapshot and start streaming immediately. Platform Event topics (`/event/...`) are always skipped; they have no REST equivalent.
 
 
 *Type*: `bool`
@@ -400,7 +400,7 @@ Options:
 
 === `snapshot_max_batch_size`
 
-Page size for the REST snapshot query — records per `/query` response. Must be between 200 and 2000 per Salesforce REST API limits. Larger pages reduce HTTP round trips; smaller pages reduce peak memory per fetch.
+Page size for the REST snapshot query; records per `/query` response. Must be between 200 and 2000 per Salesforce REST API limits. Larger pages reduce HTTP round trips; smaller pages reduce peak memory per fetch.
 
 
 *Type*: `int`
@@ -434,7 +434,7 @@ stream_batch_size: 500
 
 === `max_parallel_snapshot_objects`
 
-Number of sObjects snapshotted concurrently during the REST snapshot phase. Each in-flight snapshot consumes one HTTP connection and Salesforce API call quota. Default 1 serializes the work — raise when snapshotting many sObjects and your API limits permit.
+Number of sObjects snapshotted concurrently during the REST snapshot phase. Each in-flight snapshot consumes one HTTP connection and Salesforce API call quota. Default 1 serializes the work; raise when snapshotting many sObjects and your API limits permit.
 
 
 *Type*: `int`

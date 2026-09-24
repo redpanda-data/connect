@@ -155,7 +155,7 @@ require (
 	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/slack-go/slack v0.23.1
 	github.com/smira/go-statsd v1.3.4
-	github.com/snowflakedb/gosnowflake v1.19.0
+	github.com/snowflakedb/gosnowflake/v2 v2.2.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/azure v0.42.0
@@ -230,7 +230,6 @@ require (
 	github.com/RoaringBitmap/roaring/v2 v2.24.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apache/arrow/go/v12 v12.0.1 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.5.4 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
