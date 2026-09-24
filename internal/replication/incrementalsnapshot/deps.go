@@ -62,6 +62,13 @@ type Deps[W any] interface {
 // such as one with no primary key, or one dropped after it was queued.
 var ErrTableUnusable = errors.New("table cannot be backfilled")
 
+// ErrRetryable reports a transient failure reading the database, such as a
+// lock wait that timed out. Wrap it and the coordinator abandons the plan
+// and tries again on a later commit, rather than failing the caller's
+// stream: a lock held on the table being backfilled then stalls the
+// backfill instead of stopping replication.
+var ErrRetryable = errors.New("transient read failure")
+
 // CoordinatorConfig configures a Coordinator. P and W are documented on
 // Coordinator.
 type CoordinatorConfig[P any, W Watermark[P]] struct {
@@ -79,6 +86,11 @@ type CoordinatorConfig[P any, W Watermark[P]] struct {
 	// coordinator has no logger, so this is how the caller logs it.
 	// Optional.
 	OnTableDropped func(table TableID, err error)
+
+	// OnPlanDeferred reports a chunk read abandoned after a retryable
+	// failure, for logging. The read is retried on a later commit.
+	// Optional.
+	OnPlanDeferred func(err error)
 }
 
 // DefaultMaxDrainChunks applies when CoordinatorConfig.MaxDrainChunks is

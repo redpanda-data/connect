@@ -996,6 +996,12 @@ type depsFaults struct {
 	errs  map[string]error
 	after map[string]int
 	calls map[string]int
+	// heal records the last call at which a method still fails, keyed the
+	// same as after. The retry tests need a failure that clears on its own
+	// -- a lock wait timing out and then not -- unlike after's, which once
+	// past its allowance fires forever. Left unset, a method behaves exactly
+	// as failAfter left it, so every existing test is unaffected.
+	heal map[string]int
 }
 
 // failOn makes method fail on its first call.
@@ -1013,8 +1019,23 @@ func (f *depsFaults) failAfter(method string, after int, err error) {
 	f.after[method] = after
 }
 
+// failUntilHealed makes method fail for count calls once it has served
+// after calls, then serve normally again forever -- the shape of the
+// transient failure the retry support exists for, such as a lock_timeout
+// that clears once the blocking transaction commits. Unlike failAfter,
+// whose injected error never stops, this lets a test prove the coordinator
+// actually recovers once retried, rather than merely deferring forever.
+func (f *depsFaults) failUntilHealed(method string, after, count int, err error) {
+	f.failAfter(method, after, err)
+	if f.heal == nil {
+		f.heal = map[string]int{}
+	}
+	f.heal[method] = after + count
+}
+
 // check counts a call to method and returns the injected error once that
-// method is past its allowance.
+// method is past its allowance, unless healed has already covered this
+// call.
 func (f *depsFaults) check(method string) error {
 	if f.calls == nil {
 		f.calls = map[string]int{}
@@ -1022,6 +1043,9 @@ func (f *depsFaults) check(method string) error {
 	f.calls[method]++
 	err, injected := f.errs[method]
 	if !injected || f.calls[method] <= f.after[method] {
+		return nil
+	}
+	if until, healing := f.heal[method]; healing && f.calls[method] > until {
 		return nil
 	}
 	return err
@@ -1529,4 +1553,270 @@ func TestCoordinatorSnapshotting(t *testing.T) {
 
 	assert.False(t, idle.Snapshotting(tableA), "a finished table must not be gated in")
 	assert.False(t, idle.Snapshotting(tableB))
+}
+
+// TestCoordinatorRetryableFetchChunkRecovers pins the point of the retry
+// support: a lock held on the table being backfilled (Postgres reports it
+// as SQLSTATE 55P03) must stall the backfill without failing the
+// replication stream, and the abandoned read must be re-read rather than
+// skipped once the lock clears -- so no row is lost or delivered twice.
+func TestCoordinatorRetryableFetchChunkRecovers(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+	rows := []Row{rowFor(table, 1), rowFor(table, 2), rowFor(table, 3)}
+
+	const chunkSize = 2
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		table.String(): {pkCols: []string{"id"}, rows: rows, maxPK: PrimaryKey{3}},
+	}, chunkSize)
+	// One quiesced pair, repeated for every read -- refer to refetchMockDeps
+	// for why this keeps every chunk undisturbed, so the drain moves chunk
+	// to chunk on its own rather than needing a commit per table.
+	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100})
+
+	retryable := fmt.Errorf("%w: lock not available", ErrRetryable)
+	// Chunk 1's fetch (call 1) succeeds; the drain's first attempt at chunk
+	// 2 (call 2) fails; call 3 onward succeeds, as if the lock had cleared.
+	mock.failUntilHealed("FetchChunk", 1, 1, retryable)
+
+	var deferred []error
+	coord, err := NewCoordinator(testConfig{
+		ChunkSize:      chunkSize,
+		Deps:           mock,
+		OnPlanDeferred: func(err error) { deferred = append(deferred, err) },
+	}, nil)
+	require.NoError(t, err)
+	coord.AddTables([]TableID{table})
+	require.NoError(t, coord.Start(t.Context())) // buffers chunk 1: rows 1, 2.
+
+	// Closing chunk 1's window also drives the drain's attempt at chunk 2,
+	// which is the read that fails. The failure must not reach the caller.
+	var chunks1 [][]Row
+	changed, err := coord.OnCommit(t.Context(), 101, collect(&chunks1))
+	require.NoError(t, err, "a retryable read failure must not fail OnCommit")
+	assert.True(t, changed)
+	require.Len(t, chunks1, 1, "chunk 1 is released; the failed chunk 2 attempt releases nothing")
+	assert.Equal(t, []Row{rows[0], rows[1]}, chunks1[0])
+
+	require.Len(t, deferred, 1, "OnPlanDeferred must fire exactly once, for the abandoned chunk 2 read")
+	assert.ErrorIs(t, deferred[0], ErrRetryable)
+
+	// The next commit is the one immediately following the deferral. With
+	// the plan deferred it must re-plan rather than judge itself against
+	// the window left over from the chunk already flushed -- releasing here
+	// would be a spurious checkpoint against those stale bounds.
+	var chunks2 [][]Row
+	changed, err = coord.OnCommit(t.Context(), 102, collect(&chunks2))
+	require.NoError(t, err)
+	assert.True(t, changed, "the retry succeeding is itself a change worth checkpointing")
+	assert.Empty(t, chunks2, "a retried plan must only buffer; only a later commit may release it")
+
+	// Chunk 2 (row 3, a short chunk) is now buffered but its window has not
+	// closed. One more commit closes it, and the table's only chunk pair is
+	// then exhausted.
+	var chunks3 [][]Row
+	changed, err = coord.OnCommit(t.Context(), 103, collect(&chunks3))
+	require.NoError(t, err)
+	assert.True(t, changed)
+	require.Len(t, chunks3, 1)
+	assert.Equal(t, []Row{rows[2]}, chunks3[0])
+	assert.True(t, coord.Idle())
+
+	// The most important assertion: every row the table held is emitted, in
+	// primary-key order, exactly once. The abandoned read must be re-read,
+	// not skipped, and nothing already flushed may be re-sent.
+	var all []Row
+	for _, batch := range [][][]Row{chunks1, chunks2, chunks3} {
+		for _, chunk := range batch {
+			all = append(all, chunk...)
+		}
+	}
+	require.Len(t, all, len(rows))
+	for i, row := range rows {
+		assert.Equal(t, row.PK, all[i].PK)
+	}
+}
+
+// TestCoordinatorPlanDeferredFreezesCheckpoint pins that the checkpoint
+// stays put for as long as a plan is deferred: a restart taken while a lock
+// blocks the backfill must land on the exact range that failed, not one
+// commit later, or the abandoned read would be skipped instead of retried.
+func TestCoordinatorPlanDeferredFreezesCheckpoint(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+	rows := []Row{rowFor(table, 1), rowFor(table, 2), rowFor(table, 3)}
+
+	const chunkSize = 2
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		table.String(): {pkCols: []string{"id"}, rows: rows, maxPK: PrimaryKey{3}},
+	}, chunkSize)
+	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100})
+
+	retryable := fmt.Errorf("%w: lock not available", ErrRetryable)
+	// Chunk 1 (call 1) succeeds; chunk 2 then fails on three consecutive
+	// attempts (calls 2-4) before healing, so the test can drive several
+	// commits while the plan stays deferred throughout.
+	mock.failUntilHealed("FetchChunk", 1, 3, retryable)
+
+	var deferred int
+	coord, err := NewCoordinator(testConfig{
+		ChunkSize:      chunkSize,
+		Deps:           mock,
+		OnPlanDeferred: func(error) { deferred++ },
+	}, nil)
+	require.NoError(t, err)
+	coord.AddTables([]TableID{table})
+	require.NoError(t, coord.Start(t.Context()))
+
+	// Closing chunk 1's window is the only commit allowed to move the
+	// checkpoint here: it releases a chunk that was actually read.
+	var chunks [][]Row
+	_, err = coord.OnCommit(t.Context(), 101, collect(&chunks))
+	require.NoError(t, err)
+	require.Len(t, chunks, 1)
+	require.Equal(t, 1, deferred, "chunk 2's first attempt must have deferred")
+
+	frozen := coord.State()
+
+	// Two more commits, each retrying the still-failing plan. Neither reads
+	// a row nor releases anything, so neither may move the checkpoint.
+	for pos := uint64(102); pos < 104; pos++ {
+		var chunks [][]Row
+		changed, err := coord.OnCommit(t.Context(), pos, collect(&chunks))
+		require.NoError(t, err)
+		assert.True(t, changed, "the retry attempt is itself a change worth checkpointing")
+		assert.Empty(t, chunks, "a deferred retry must release nothing")
+
+		state := coord.State()
+		assert.Equal(t, frozen.LastSentPK, state.LastSentPK, "no chunk was read; the checkpoint must not move")
+		assert.Equal(t, frozen.CurrentTable, state.CurrentTable)
+		assert.Equal(t, frozen.RemainingTables, state.RemainingTables)
+	}
+	assert.Equal(t, 3, deferred, "each failing attempt must defer again")
+}
+
+// TestCoordinatorRetryableStartFailureDefers pins that a lock already held
+// when the backfill first starts is absorbed the same way a mid-run one is:
+// Start must not fail the caller, and the first commit afterwards is what
+// retries the plan.
+func TestCoordinatorRetryableStartFailureDefers(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+	rows := []Row{rowFor(table, 1)}
+
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		table.String(): {pkCols: []string{"id"}, rows: rows, maxPK: PrimaryKey{1}},
+	}, 1)
+	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100})
+
+	retryable := fmt.Errorf("%w: lock not available", ErrRetryable)
+	// Fails Start's own plan (call 1); healed by the time OnCommit retries.
+	mock.failUntilHealed("FetchChunk", 0, 1, retryable)
+
+	var deferred []error
+	coord, err := NewCoordinator(testConfig{
+		ChunkSize:      1,
+		Deps:           mock,
+		OnPlanDeferred: func(err error) { deferred = append(deferred, err) },
+	}, nil)
+	require.NoError(t, err)
+	coord.AddTables([]TableID{table})
+
+	require.NoError(t, coord.Start(t.Context()), "a retryable failure must not fail Start")
+	require.Len(t, deferred, 1)
+	assert.ErrorIs(t, deferred[0], ErrRetryable)
+	assert.Zero(t, coord.window.Len(), "nothing was read, so nothing is buffered")
+
+	// The retried plan only buffers; it does not judge itself against this
+	// commit, so nothing is released yet.
+	var chunks [][]Row
+	changed, err := coord.OnCommit(t.Context(), 101, collect(&chunks))
+	require.NoError(t, err)
+	assert.True(t, changed)
+	assert.Empty(t, chunks)
+
+	// A later commit closes the window the retry opened.
+	var chunks2 [][]Row
+	changed, err = coord.OnCommit(t.Context(), 102, collect(&chunks2))
+	require.NoError(t, err)
+	assert.True(t, changed)
+	require.Len(t, chunks2, 1)
+	assert.Equal(t, rows, chunks2[0])
+}
+
+// TestCoordinatorRetryableResolveMaxKeyDefers pins that ResolveMaxKey gets
+// the same treatment as FetchChunk: it is the other Deps method that scans
+// the user's table, so a lock wait there must also stall the backfill
+// rather than fail the stream.
+func TestCoordinatorRetryableResolveMaxKeyDefers(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+	rows := []Row{rowFor(table, 1)}
+
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		table.String(): {pkCols: []string{"id"}, rows: rows, maxPK: PrimaryKey{1}},
+	}, 1)
+	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100})
+
+	retryable := fmt.Errorf("%w: lock not available", ErrRetryable)
+	mock.failUntilHealed("ResolveMaxKey", 0, 1, retryable)
+
+	var deferred []error
+	coord, err := NewCoordinator(testConfig{
+		ChunkSize:      1,
+		Deps:           mock,
+		OnPlanDeferred: func(err error) { deferred = append(deferred, err) },
+	}, nil)
+	require.NoError(t, err)
+	coord.AddTables([]TableID{table})
+
+	require.NoError(t, coord.Start(t.Context()), "a retryable failure must not fail Start")
+	require.Len(t, deferred, 1)
+	assert.ErrorIs(t, deferred[0], ErrRetryable)
+	assert.Nil(t, coord.maxPK, "the max key was never resolved, so nothing was fetched either")
+
+	var chunks [][]Row
+	_, err = coord.OnCommit(t.Context(), 101, collect(&chunks))
+	require.NoError(t, err)
+	assert.Empty(t, chunks, "the retried plan only buffers")
+
+	var chunks2 [][]Row
+	_, err = coord.OnCommit(t.Context(), 102, collect(&chunks2))
+	require.NoError(t, err)
+	require.Len(t, chunks2, 1)
+	assert.Equal(t, rows, chunks2[0])
+}
+
+// TestCoordinatorNonRetryableFetchChunkFailsOnCommit is a regression guard
+// for the retry support above: only an error wrapping ErrRetryable is
+// absorbed. An ordinary FetchChunk failure -- a dropped connection, say --
+// must still reach the caller through OnCommit, exactly as
+// TestCoordinatorWrapsDepsErrors pins for Start; this only guards that the
+// new retry path does not also swallow it.
+func TestCoordinatorNonRetryableFetchChunkFailsOnCommit(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+	rows := []Row{rowFor(table, 1), rowFor(table, 2), rowFor(table, 3)}
+
+	const chunkSize = 2
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		table.String(): {pkCols: []string{"id"}, rows: rows, maxPK: PrimaryKey{3}},
+	}, chunkSize)
+	mock.pushWatermark(testWatermark{Xmin: 100, Xmax: 100})
+
+	sentinel := errors.New("connection reset")
+	// Chunk 1 (call 1) succeeds; chunk 2's fetch (call 2) fails and never
+	// heals.
+	mock.failAfter("FetchChunk", 1, sentinel)
+
+	var deferred int
+	coord, err := NewCoordinator(testConfig{
+		ChunkSize:      chunkSize,
+		Deps:           mock,
+		OnPlanDeferred: func(error) { deferred++ },
+	}, nil)
+	require.NoError(t, err)
+	coord.AddTables([]TableID{table})
+	require.NoError(t, coord.Start(t.Context()))
+
+	var chunks [][]Row
+	_, err = coord.OnCommit(t.Context(), 101, collect(&chunks))
+	require.ErrorIs(t, err, sentinel, "an ordinary failure must reach the caller, not be absorbed as a retry")
+	assert.NotErrorIs(t, err, ErrRetryable)
+	assert.Zero(t, deferred, "OnPlanDeferred must not fire for a non-retryable failure")
 }

@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pgtest"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -890,6 +892,237 @@ postgres_cdc:
 		require.Positive(t, firstStreamed, "no products change was observed")
 		assert.Less(t, firstStreamed, lastRead,
 			"a products change must arrive before the cart backfill completes; if it does not, replication was paused for the backfill")
+	})
+
+	t.Run("Keeps Streaming While The Snapshotted Table Is Locked", func(t *testing.T) {
+		const (
+			// More rows than one commit can drain, so the backfill is still
+			// running when the lock is taken -- refer to "Streams Other
+			// Tables During Backfill".
+			backfillRows = 500
+			chunkSize    = 5
+			streamedRows = 10
+			// Several times incSnapshotLockTimeout (5s), so the lock outlasts
+			// more than one blocked chunk read.
+			lockHold = 20 * time.Second
+		)
+
+		// The 30s default would idle the backfill for ~10s past the lock on
+		// every run; unit tests cover the cooldown itself. Setting the
+		// package var is safe because this subtest is serial: the parallel
+		// QuietTable/PG* siblings resume only after the cleanup below.
+		defaultCooldown := pglogicalstream.IncSnapshotRetryCooldown
+		pglogicalstream.IncSnapshotRetryCooldown = 3 * time.Second
+		t.Cleanup(func() { pglogicalstream.IncSnapshotRetryCooldown = defaultCooldown })
+
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		for _, stmt := range []string{
+			`CREATE TABLE cart (id bigint PRIMARY KEY, name text)`,
+			`CREATE TABLE products (id bigint PRIMARY KEY, name text)`,
+		} {
+			_, err := db.Exec(stmt)
+			require.NoError(t, err, stmt)
+		}
+		// Committed before the slot exists, so only a backfill can deliver them.
+		for i := 1; i <= backfillRows; i++ {
+			_, err := db.Exec(`INSERT INTO cart (id, name) VALUES ($1, 'pre')`, i)
+			require.NoError(t, err)
+		}
+
+		type event struct {
+			op    string
+			table string
+			id    int64
+		}
+		var (
+			mu       sync.Mutex
+			observed []event
+		)
+
+		// Asserted on below, so the retry path is observed rather than
+		// inferred from the backfill finishing.
+		logs := pgtest.NewTestLogCapture()
+
+		stop := runIncSnapshotStream(t, incSnapshotStream{
+			logs: logs,
+			inputYAML: fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_backfill_locked
+    schema: public
+    heartbeat_interval: 500ms
+    tables:
+      - cart
+      - products
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: %d
+        heartbeat_interval: 500ms
+        checkpoint_cache: snap_cache
+`, databaseURL, chunkSize),
+			consume: func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					table, _ := msg.MetaGet("table")
+					if table != "cart" && table != "products" {
+						continue
+					}
+					op, _ := msg.MetaGet("operation")
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					row, ok := data.(map[string]any)
+					if !ok {
+						continue
+					}
+					num, ok := row["id"].(json.Number)
+					if !ok {
+						continue
+					}
+					id, err := num.Int64()
+					if err != nil {
+						return err
+					}
+					observed = append(observed, event{op: op, table: table, id: id})
+				}
+				return nil
+			},
+		})
+
+		// Only cart is backfilled. products is replicated so this test can
+		// tell whether CDC still flows while cart is locked.
+		signalIncrementalSnapshot(t, db, "test_slot_backfill_locked", "cart")
+
+		snapshot := func() []event {
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]event(nil), observed...)
+		}
+		countOf := func(evs []event, op, table string) int {
+			var n int
+			for _, e := range evs {
+				if e.op == op && e.table == table {
+					n++
+				}
+			}
+			return n
+		}
+
+		// Under way but unfinished, so the lock lands while cart is still
+		// being read.
+		require.Eventually(t, func() bool {
+			evs := snapshot()
+			reads := countOf(evs, "read", "cart")
+			return reads >= chunkSize && reads < backfillRows
+		}, 60*time.Second, 20*time.Millisecond,
+			"the cart backfill never reached a partially complete state")
+
+		// The lock VACUUM FULL and most ALTER TABLE statements take, from a
+		// separate connection. lockHeld brackets the granted window, so the
+		// assertions below can tell they landed inside it.
+		var lockHeld atomic.Bool
+		lockAcquired := make(chan error, 1)
+		lockDone := make(chan struct{})
+		go func() {
+			defer close(lockDone)
+			tx, err := db.BeginTx(t.Context(), nil)
+			if err != nil {
+				lockAcquired <- err
+				return
+			}
+			if _, err := tx.ExecContext(t.Context(), `LOCK TABLE cart IN ACCESS EXCLUSIVE MODE`); err != nil {
+				_ = tx.Rollback()
+				lockAcquired <- err
+				return
+			}
+			lockHeld.Store(true)
+			lockAcquired <- nil
+			time.Sleep(lockHold)
+			lockHeld.Store(false)
+			_ = tx.Rollback()
+		}()
+		// A failed require would otherwise leave the holding transaction
+		// open and hang every later test.
+		t.Cleanup(func() {
+			<-lockDone
+		})
+		require.NoError(t, <-lockAcquired, "failed to acquire the ACCESS EXCLUSIVE lock on cart")
+		require.True(t, lockHeld.Load(), "lock should be reported held immediately after acquisition")
+
+		// One statement, so one commit: Coordinator.OnCommit retries the
+		// deferred plan per commit, and separate inserts would each cost
+		// their own blocked read.
+		var values strings.Builder
+		args := make([]any, 0, streamedRows*2)
+		for i := 1; i <= streamedRows; i++ {
+			if i > 1 {
+				values.WriteString(", ")
+			}
+			fmt.Fprintf(&values, "($%d, $%d)", i*2-1, i*2)
+			args = append(args, i, "live")
+		}
+		_, err = db.Exec(fmt.Sprintf(`INSERT INTO products (id, name) VALUES %s`, values.String()), args...)
+		require.NoError(t, err)
+
+		// The discriminating assertion. Before the fix the reader blocked on
+		// the locked cart SELECT for the whole hold, so products could not
+		// arrive until afterwards -- waiting for products without the
+		// lockHeld check would pass against that bug too. 12s sits inside
+		// the 20s hold, and the worst case is one 5s blocked read.
+		require.Eventually(t, func() bool {
+			evs := snapshot()
+			return countOf(evs, "insert", "products") >= streamedRows
+		}, 12*time.Second, 50*time.Millisecond,
+			"products was not streamed while cart was locked; replication may have been blocked by the lock")
+		assert.True(t, lockHeld.Load(),
+			"products arrived only after the lock was released, not while it was held; this does not distinguish the fix from the bug")
+
+		// The coordinator deferred the plan rather than treating the blocked
+		// read as fatal. A substring of the OnPlanDeferred warning, so the
+		// wrapped error text can change.
+		require.Eventually(t, func() bool {
+			for _, m := range logs.Messages() {
+				if strings.Contains(m, "will retry the backfill on a later commit") {
+					return true
+				}
+			}
+			return false
+		}, 12*time.Second, 50*time.Millisecond,
+			"expected a deferred-plan warning once the lock blocked a chunk read")
+
+		// The backfill must still complete once the lock clears. Nothing
+		// writes to cart, so every delivery is a backfill read.
+		require.Eventually(t, func() bool {
+			evs := snapshot()
+			return countOf(evs, "read", "cart") >= backfillRows
+		}, time.Minute, 100*time.Millisecond,
+			"the cart backfill did not complete after the lock was released")
+
+		evs := snapshot()
+		seen := make(map[int64]int, backfillRows)
+		for _, e := range evs {
+			if e.table != "cart" {
+				continue
+			}
+			assert.Equal(t, "read", e.op, "cart was never written to during the test, so every delivery should be a backfill read")
+			seen[e.id]++
+		}
+		assert.Len(t, seen, backfillRows, "expected exactly %d distinct cart ids", backfillRows)
+		for id, count := range seen {
+			assert.Equal(t, 1, count, "cart row id %d observed %d times, expected exactly once", id, count)
+		}
+		for id := int64(1); id <= backfillRows; id++ {
+			assert.Contains(t, seen, id, "cart row id %d was never observed", id)
+		}
+
+		// The other half of the bug: stop reports a run error, which a
+		// dropped replication connection would have caused.
+		stop()
 	})
 }
 

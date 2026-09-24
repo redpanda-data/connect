@@ -62,7 +62,12 @@ type Coordinator[P any, W Watermark[P]] struct {
 	// no window bounds. The next OnCommit plans first: the bounds left from
 	// going idle would close an empty window and checkpoint no rows.
 	needsPlan bool
-	window    *WindowBuffer
+	// planDeferred marks a plan abandoned after a retryable read failure.
+	// The window bounds still describe the chunk already flushed, so the
+	// next OnCommit must plan again before it judges any commit against
+	// them.
+	planDeferred bool
+	window       *WindowBuffer
 
 	// committed mirrors remaining/current/maxPK/lastSentPK but only advances
 	// after a flush. State reports these, so a crash before a flush re-reads
@@ -139,7 +144,7 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 
 	// State never captures an unflushed chunk, so resuming always means
 	// planning the next one. Watermarks are always re-derived.
-	return c.planNextChunk(ctx)
+	return c.plan(ctx)
 }
 
 // captureLiveState snapshots the live fields into the committed ones. Call
@@ -250,11 +255,21 @@ func (c *Coordinator[P, W]) OnCommit(ctx context.Context, pos P, emit EmitFunc) 
 			// The queue was empty, so buffer a chunk and let the following
 			// commit close its window, the normal cadence.
 			c.needsPlan = false
-			return true, c.planNextChunk(ctx)
+			return true, c.plan(ctx)
 		}
 		// A backfill is running: fall through so this commit is still judged
 		// against its window. The checkpoint counts as a change regardless.
 		changed = true
+	}
+
+	if c.planDeferred {
+		// The bounds still describe the chunk already flushed, so they must
+		// not judge this commit. Plan again and let a later commit close the
+		// new window.
+		if err := c.plan(ctx); err != nil {
+			return changed, err
+		}
+		return true, nil
 	}
 
 	if !c.windowOpened && c.low.OpensAt(pos) {
@@ -334,17 +349,17 @@ func (c *Coordinator[P, W]) restoreCommitted(s committedState) {
 // unbounded drain risks the server dropping the connection.
 func (c *Coordinator[P, W]) planAndDrain(ctx context.Context, emit EmitFunc) error {
 	for range c.cfg.MaxDrainChunks {
-		if err := c.planNextChunk(ctx); err != nil {
+		if err := c.plan(ctx); err != nil {
 			return err
 		}
-		if c.idle || !c.readUndisturbed() {
+		if c.planDeferred || c.idle || !c.readUndisturbed() {
 			return nil
 		}
 		if err := c.releaseWindow(emit); err != nil {
 			return err
 		}
 	}
-	return c.planNextChunk(ctx)
+	return c.plan(ctx)
 }
 
 // readUndisturbed reports whether the buffered chunk's watermarks prove a
@@ -387,6 +402,23 @@ func (c *Coordinator[P, W]) dropUnusable(table TableID, err error) bool {
 	c.lastSentPK = nil
 	c.maxPK = nil
 	return true
+}
+
+// plan buffers the next chunk, absorbing a retryable failure: the read is
+// abandoned and retried on a later commit instead of failing the stream.
+// Nothing is lost -- the window buffer is empty at every call site and
+// lastSentPK is untouched, so the retry re-reads the same range.
+func (c *Coordinator[P, W]) plan(ctx context.Context) error {
+	c.planDeferred = false
+	err := c.planNextChunk(ctx)
+	if err != nil && errors.Is(err, ErrRetryable) {
+		c.planDeferred = true
+		if c.cfg.OnPlanDeferred != nil {
+			c.cfg.OnPlanDeferred(err)
+		}
+		return nil
+	}
+	return err
 }
 
 // planNextChunk buffers the current table's next chunk, advancing tables

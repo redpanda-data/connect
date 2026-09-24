@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -30,7 +31,34 @@ import (
 var (
 	errSignalRejected   = errors.New("rejected")
 	errSnapshotDisabled = errors.New("a " + replication.SnapshotSignalType + " signal needs incremental_snapshot.enabled set to true, so no backfill was queued for it")
+	// errIncSnapshotHeldOff marks a retryable error returned without issuing
+	// SQL, because a cooldown from an earlier failure is still in force. The
+	// log reports it at debug: the warning belongs to the read that actually
+	// failed, not to every commit that follows it.
+	errIncSnapshotHeldOff = errors.New("read held off after an earlier failed read")
 )
+
+// incSnapshotLockTimeout bounds how long a chunk read waits for a lock on
+// the table being backfilled. The read runs on the replication loop, which
+// owes the server standby keepalives, so a longer wait risks
+// wal_sender_timeout dropping the replication connection -- 30s on RDS.
+const incSnapshotLockTimeout = 5 * time.Second
+
+// incSnapshotReadTimeout bounds a single chunk read, as a backstop for a
+// slow read rather than a locked one -- lock_timeout covers locks. It must
+// stay under wal_sender_timeout for the same reason.
+const incSnapshotReadTimeout = 15 * time.Second
+
+// IncSnapshotRetryCooldown holds off table reads after a retryable failure.
+// The coordinator retries a deferred plan on every commit, and each attempt
+// costs a full incSnapshotLockTimeout on the replication loop, so retrying
+// straight away keeps CDC degraded for as long as the lock is held. Six
+// times the lock timeout: long enough that the repeated stalls stop
+// mattering, short enough that a backfill does not visibly crawl.
+//
+// A var so an integration test can shorten it rather than waiting the whole
+// cooldown out. Nothing writes it at runtime.
+var IncSnapshotRetryCooldown = 30 * time.Second
 
 type incrementalSnapshot struct {
 	coordinator *incsnapshot.Coordinator
@@ -45,6 +73,14 @@ type incrementalSnapshot struct {
 	replicated map[incrementalsnapshot.TableID]struct{}
 	// backfilling tells the heartbeat whether it still owes transaction ids.
 	backfilling atomic.Bool
+	// retryNotBefore holds table reads off until this time after a retryable
+	// failure -- refer to IncSnapshotRetryCooldown. Zero means no cooldown.
+	// Only the stream goroutine touches it, as with pkCache, so it needs no
+	// synchronisation: backfilling is atomic only because the heartbeat reads
+	// it.
+	retryNotBefore time.Time
+	// now is time.Now, replaced in tests so a cooldown needs no sleep.
+	now func() time.Time
 }
 
 func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) error {
@@ -53,7 +89,9 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 		return nil
 	}
 
-	db, err := openPgConnectionFromConfig(config)
+	db, err := openPgConnectionWithParams(config, map[string]string{
+		"lock_timeout": strconv.Itoa(int(incSnapshotLockTimeout.Milliseconds())),
+	})
 	if err != nil {
 		return fmt.Errorf("opening incremental snapshot connection: %w", err)
 	}
@@ -78,6 +116,7 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 
 	s.incSnapshot.conn = db
 	s.incSnapshot.pkCache = make(map[string][]string)
+	s.incSnapshot.now = time.Now
 
 	// Nothing is queued at first: tables are requested by signal. A resumed
 	// checkpoint brings back what the last run covered.
@@ -88,6 +127,13 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 			// Accepted by checkBackfillable, then dropped or its key
 			// removed before it was planned.
 			s.logger.Warnf("Incremental snapshot: dropped table %s from the queue, it can no longer be backfilled: %s", table, err)
+		},
+		OnPlanDeferred: func(err error) {
+			if errors.Is(err, errIncSnapshotHeldOff) {
+				s.logger.Debugf("Incremental snapshot: %s", err)
+				return
+			}
+			s.logger.Warnf("Incremental snapshot: chunk read failed, will retry the backfill on a later commit; replication is unaffected: %s", err)
 		},
 	}, incSnapshotCfg.ResumeState)
 	if err != nil {
@@ -368,6 +414,76 @@ func errIsPermanent(err error) bool {
 	return false
 }
 
+const (
+	// pgErrLockNotAvailable is SQLSTATE 55P03, which lock_timeout raises.
+	pgErrLockNotAvailable = "55P03"
+	// pgErrQueryCanceled is SQLSTATE 57014, raised by statement_timeout and
+	// by pg_cancel_backend.
+	pgErrQueryCanceled = "57014"
+)
+
+// retryableReadErr marks err retryable when it reports a lock wait or a
+// cancelled statement rather than a broken connection or bad query. deadline
+// is the context bounding the read: its expiry is our own timeout firing,
+// not a shutdown, so that is retryable too. parent is the caller's context;
+// deadline is derived from it, so checking parent is what tells our timeout
+// apart from a shutdown that cancelled both.
+func retryableReadErr(err error, deadline, parent context.Context) error {
+	if err == nil {
+		return nil
+	}
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case pgErrLockNotAvailable, pgErrQueryCanceled:
+			return fmt.Errorf("%w: %w", incrementalsnapshot.ErrRetryable, err)
+		}
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) && deadline.Err() != nil && parent.Err() == nil {
+		return fmt.Errorf("%w: %w", incrementalsnapshot.ErrRetryable, err)
+	}
+
+	return err
+}
+
+// incSnapshotNow reports the current time, defaulting to time.Now so a
+// Stream built without one still works.
+func (s *Stream) incSnapshotNow() time.Time {
+	if s.incSnapshot.now == nil {
+		return time.Now()
+	}
+	return s.incSnapshot.now()
+}
+
+// incSnapshotReadHeldOff reports a cooldown still in force, so the caller
+// must not issue SQL. The error wraps both ErrRetryable, so the coordinator
+// defers the plan as it would for a real failure, and errIncSnapshotHeldOff,
+// so the log stays quiet.
+func (s *Stream) incSnapshotReadHeldOff() error {
+	notBefore := s.incSnapshot.retryNotBefore
+	now := s.incSnapshotNow()
+	if notBefore.IsZero() || !now.Before(notBefore) {
+		return nil
+	}
+	return fmt.Errorf("%w: %w: cooldown has %s left", incrementalsnapshot.ErrRetryable, errIncSnapshotHeldOff, notBefore.Sub(now))
+}
+
+// incSnapshotNoteRead records a table read's outcome: a retryable failure
+// starts a cooldown, and any success clears one. It returns err unchanged
+// so callers can return it directly.
+func (s *Stream) incSnapshotNoteRead(err error) error {
+	if err == nil {
+		s.incSnapshot.retryNotBefore = time.Time{}
+		return nil
+	}
+	if errors.Is(err, incrementalsnapshot.ErrRetryable) {
+		s.incSnapshot.retryNotBefore = s.incSnapshotNow().Add(IncSnapshotRetryCooldown)
+	}
+	return err
+}
+
 type incrementalSnapshotDeps struct {
 	stream *Stream
 }
@@ -379,11 +495,17 @@ func (d incrementalSnapshotDeps) ResolvePrimaryKey(ctx context.Context, table in
 }
 
 func (d incrementalSnapshotDeps) ResolveMaxKey(ctx context.Context, table incrementalsnapshot.TableID, pkColumnsUnquoted []string) (incrementalsnapshot.PrimaryKey, error) {
+	if err := d.stream.incSnapshotReadHeldOff(); err != nil {
+		return nil, err
+	}
 	query, err := incsnapshot.BuildMaxKeyQuery(table, pkColumnsUnquoted)
 	if err != nil {
 		return nil, err
 	}
-	return d.stream.resolveIncrementalMaxKey(ctx, table, pkColumnsUnquoted, query)
+	readCtx, cancel := context.WithTimeout(ctx, incSnapshotReadTimeout)
+	defer cancel()
+	pk, err := d.stream.resolveIncrementalMaxKey(readCtx, table, pkColumnsUnquoted, query)
+	return pk, d.stream.incSnapshotNoteRead(retryableReadErr(err, readCtx, ctx))
 }
 
 func (d incrementalSnapshotDeps) ResolveWatermark(ctx context.Context) (incsnapshot.Watermark, error) {
@@ -395,11 +517,17 @@ func (d incrementalSnapshotDeps) Prepare(ctx context.Context) error {
 }
 
 func (d incrementalSnapshotDeps) FetchChunk(ctx context.Context, table incrementalsnapshot.TableID, pkColumnsUnquoted []string, lower, upper incrementalsnapshot.PrimaryKey, limit int) ([]incrementalsnapshot.Row, error) {
+	if err := d.stream.incSnapshotReadHeldOff(); err != nil {
+		return nil, err
+	}
 	query, args, err := incsnapshot.BuildChunkQuery(table, pkColumnsUnquoted, lower, upper, limit)
 	if err != nil {
 		return nil, err
 	}
-	return d.stream.fetchIncrementalChunk(ctx, table, pkColumnsUnquoted, query, args)
+	readCtx, cancel := context.WithTimeout(ctx, incSnapshotReadTimeout)
+	defer cancel()
+	rows, err := d.stream.fetchIncrementalChunk(readCtx, table, pkColumnsUnquoted, query, args)
+	return rows, d.stream.incSnapshotNoteRead(retryableReadErr(err, readCtx, ctx))
 }
 
 // resolveIncrementalPK backs Deps.ResolvePrimaryKey.

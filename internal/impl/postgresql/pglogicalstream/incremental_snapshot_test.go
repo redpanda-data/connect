@@ -9,6 +9,7 @@
 package pglogicalstream
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -859,5 +860,259 @@ func TestCanonicalizePKValueNormalisesTimestampZone(t *testing.T) {
 			fmt.Sprintf("%v", canonicalizePKValue(instant)),
 			fmt.Sprintf("%v", canonicalizePKValue(later)),
 			"normalising the zone must not collapse different instants")
+	})
+}
+
+// TestRetryableReadErr pins which failures the incremental snapshot's
+// backfill treats as transient -- and so hands to the coordinator wrapped
+// in incrementalsnapshot.ErrRetryable to stall and retry -- versus which
+// are left alone to fail the stream. No database is involved: this only
+// exercises the classification, not the query that produced the error.
+func TestRetryableReadErr(t *testing.T) {
+	t.Run("nil error returns nil", func(t *testing.T) {
+		assert.NoError(t, retryableReadErr(nil, t.Context(), t.Context()))
+	})
+
+	t.Run("pgconn error codes", func(t *testing.T) {
+		for _, test := range []struct {
+			name      string
+			code      string
+			retryable bool
+		}{
+			{name: "lock_timeout reports 55P03, which is retryable", code: pgErrLockNotAvailable, retryable: true},
+			{name: "statement_timeout reports 57014, which is retryable", code: pgErrQueryCanceled, retryable: true},
+			{name: "undefined_table is not a lock wait and must not be retried", code: "42P01"},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				pgErr := &pgconn.PgError{Code: test.code}
+				got := retryableReadErr(pgErr, t.Context(), t.Context())
+
+				if !test.retryable {
+					assert.Same(t, pgErr, got, "an error that is not retryable must be returned unchanged")
+					return
+				}
+
+				require.ErrorIs(t, got, incrementalsnapshot.ErrRetryable)
+				require.ErrorIs(t, got, pgErr, "the original PgError must stay reachable")
+				var extracted *pgconn.PgError
+				require.ErrorAs(t, got, &extracted)
+				assert.Equal(t, test.code, extracted.Code)
+			})
+		}
+	})
+
+	t.Run("a PgError wrapped by the driver is still matched via errors.As", func(t *testing.T) {
+		pgErr := &pgconn.PgError{Code: pgErrLockNotAvailable}
+		wrapped := fmt.Errorf("query failed: %w", pgErr)
+
+		got := retryableReadErr(wrapped, t.Context(), t.Context())
+
+		require.ErrorIs(t, got, incrementalsnapshot.ErrRetryable)
+		require.ErrorIs(t, got, wrapped, "the wrapped original must stay reachable")
+		var extracted *pgconn.PgError
+		require.ErrorAs(t, got, &extracted, "errors.As must traverse through the driver's wrapping to the PgError")
+		assert.Equal(t, pgErrLockNotAvailable, extracted.Code)
+	})
+
+	t.Run("a deadline exceeded on our own read timeout, with a live parent, is retryable", func(t *testing.T) {
+		// deadline is our own read timeout, derived from parent; letting it
+		// actually expire is what proves this is our own timer firing, not
+		// a fabricated Err().
+		parent := t.Context()
+		deadline, cancel := context.WithTimeout(parent, time.Millisecond)
+		defer cancel()
+		<-deadline.Done()
+
+		require.ErrorIs(t, deadline.Err(), context.DeadlineExceeded)
+		require.NoError(t, parent.Err(), "the parent must still be live for this case")
+
+		got := retryableReadErr(context.DeadlineExceeded, deadline, parent)
+
+		require.ErrorIs(t, got, incrementalsnapshot.ErrRetryable)
+		require.ErrorIs(t, got, context.DeadlineExceeded)
+	})
+
+	t.Run("a deadline exceeded with a cancelled parent is not retryable", func(t *testing.T) {
+		// A cancelled parent is the shutdown case: mistaking it for our own
+		// read timeout would make the coordinator retry forever during a
+		// clean stop instead of ever returning.
+		parent, cancelParent := context.WithCancel(context.Background())
+		deadline, cancel := context.WithTimeout(parent, time.Minute)
+		defer cancel()
+		cancelParent()
+		<-deadline.Done()
+
+		require.Error(t, parent.Err(), "the parent must actually be cancelled for this case")
+
+		got := retryableReadErr(context.DeadlineExceeded, deadline, parent)
+
+		assert.NotErrorIs(t, got, incrementalsnapshot.ErrRetryable)
+		assert.Equal(t, context.DeadlineExceeded, got, "a non-retryable error must be returned unchanged")
+	})
+
+	t.Run("a plain error is unchanged", func(t *testing.T) {
+		sentinel := errors.New("connection reset by peer")
+
+		got := retryableReadErr(sentinel, t.Context(), t.Context())
+
+		assert.Same(t, sentinel, got)
+		assert.NotErrorIs(t, got, incrementalsnapshot.ErrRetryable)
+	})
+}
+
+// TestIncSnapshotReadHeldOffDefaultsToOpen pins that a fresh Stream, with no
+// failure yet recorded, reads immediately. retryNotBefore is the zero Time
+// in that state, and the zero Time must not be mistaken for "the cooldown
+// ends at the epoch" -- it means there never was one.
+func TestIncSnapshotReadHeldOffDefaultsToOpen(t *testing.T) {
+	s := &Stream{}
+	require.NoError(t, s.incSnapshotReadHeldOff())
+}
+
+// TestIncSnapshotNoteReadStartsCooldownOnRetryableFailure pins what a
+// retryable read failure does: incSnapshotNoteRead must hand the error back
+// unchanged, so the caller still returns it to the coordinator, and it must
+// start a cooldown that a later incSnapshotReadHeldOff reports as an error
+// wrapping both incrementalsnapshot.ErrRetryable -- so the coordinator defers
+// the plan exactly as it would for a real failure -- and errIncSnapshotHeldOff
+// -- so the log for every subsequent commit stays at debug rather than
+// repeating the original warning.
+func TestIncSnapshotNoteReadStartsCooldownOnRetryableFailure(t *testing.T) {
+	fixed := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	s := &Stream{}
+	s.incSnapshot.now = func() time.Time { return fixed }
+
+	sentinel := fmt.Errorf("%w: lock not available", incrementalsnapshot.ErrRetryable)
+	got := s.incSnapshotNoteRead(sentinel)
+	assert.ErrorIs(t, got, sentinel, "the caller must still see the original failure")
+
+	heldOff := s.incSnapshotReadHeldOff()
+	require.Error(t, heldOff)
+	assert.ErrorIs(t, heldOff, incrementalsnapshot.ErrRetryable,
+		"the coordinator must defer the plan just as it would for the original failure")
+	assert.ErrorIs(t, heldOff, errIncSnapshotHeldOff,
+		"the log must be able to tell this apart from a fresh failure and stay at debug")
+}
+
+// TestIncSnapshotReadHeldOffCooldownBoundary pins the exact instant a
+// cooldown releases. The gate is !now.Before(notBefore), so the boundary
+// itself, and every instant after it, must allow the read; only strictly
+// before it may the read stay held off. An off-by-one here would either hold
+// reads off forever (if it also blocked exactly at notBefore) or expire the
+// cooldown a tick early (if it blocked one instant later than intended).
+func TestIncSnapshotReadHeldOffCooldownBoundary(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	notBefore := start.Add(IncSnapshotRetryCooldown)
+
+	for _, test := range []struct {
+		name    string
+		clock   time.Time
+		heldOff bool
+	}{
+		{name: "just before the boundary is still held off", clock: notBefore.Add(-time.Nanosecond), heldOff: true},
+		{name: "exactly at the boundary is allowed", clock: notBefore, heldOff: false},
+		{name: "past the boundary is allowed", clock: notBefore.Add(time.Nanosecond), heldOff: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			clock := test.clock
+			s := &Stream{}
+			s.incSnapshot.now = func() time.Time { return clock }
+			s.incSnapshot.retryNotBefore = notBefore
+
+			err := s.incSnapshotReadHeldOff()
+			if test.heldOff {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, errIncSnapshotHeldOff)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestIncSnapshotNoteReadSuccessClearsCooldown pins that a successful read
+// clears any cooldown left by an earlier failure, so the next failure starts
+// a fresh cooldown of its own length rather than extending the old one.
+func TestIncSnapshotNoteReadSuccessClearsCooldown(t *testing.T) {
+	fixed := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	s := &Stream{}
+	s.incSnapshot.now = func() time.Time { return fixed }
+	s.incSnapshot.retryNotBefore = fixed.Add(time.Hour)
+
+	require.NoError(t, s.incSnapshotNoteRead(nil))
+	assert.True(t, s.incSnapshot.retryNotBefore.IsZero(), "a success must clear the cooldown outright")
+	require.NoError(t, s.incSnapshotReadHeldOff())
+}
+
+// TestIncSnapshotNoteReadNonRetryableLeavesCooldownUntouched pins that a
+// non-retryable error neither starts nor clears a cooldown. A permanent
+// failure -- for example a table that no longer exists -- says nothing about
+// whether a lock reported earlier is still held, so the existing cooldown
+// must survive it unchanged.
+func TestIncSnapshotNoteReadNonRetryableLeavesCooldownUntouched(t *testing.T) {
+	fixed := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	notBefore := fixed.Add(20 * time.Second)
+	s := &Stream{}
+	s.incSnapshot.now = func() time.Time { return fixed }
+	s.incSnapshot.retryNotBefore = notBefore
+
+	plain := errors.New("relation does not exist")
+	got := s.incSnapshotNoteRead(plain)
+	assert.Same(t, plain, got)
+	assert.Equal(t, notBefore, s.incSnapshot.retryNotBefore, "an unrelated error must not disturb the existing cooldown")
+}
+
+// TestIncSnapshotNowFallsBackToRealClock pins that a Stream built without
+// setupIncrementalSnapshot -- which is where incSnapshot.now is normally set
+// to time.Now -- still works rather than panicking on a nil func.
+func TestIncSnapshotNowFallsBackToRealClock(t *testing.T) {
+	s := &Stream{}
+	before := time.Now()
+	got := s.incSnapshotNow()
+	after := time.Now()
+
+	assert.False(t, got.Before(before), "must not report a time before the call")
+	assert.False(t, got.After(after), "must not report a time after the call")
+}
+
+// TestIncSnapshotDepsGateShortCircuitBeforeSQL pins the most important
+// property of the cooldown: while it is in force, ResolveMaxKey and
+// FetchChunk must return the held-off error before building or issuing any
+// query. The gate is proven by leaving incSnapshot.conn nil -- if the check
+// were missing, or ordered after the query is built and sent, this would
+// panic on the nil *sql.DB rather than return errIncSnapshotHeldOff.
+func TestIncSnapshotDepsGateShortCircuitBeforeSQL(t *testing.T) {
+	fixed := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	table := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
+	pkCols := []string{"id"}
+
+	newHeldOffStream := func() *Stream {
+		s := &Stream{}
+		s.incSnapshot.now = func() time.Time { return fixed }
+		s.incSnapshot.retryNotBefore = fixed.Add(time.Minute)
+		return s
+	}
+
+	t.Run("ResolveMaxKey", func(t *testing.T) {
+		s := newHeldOffStream()
+		require.Nil(t, s.incSnapshot.conn, "a nil connection proves no query could have been issued")
+		deps := incrementalSnapshotDeps{stream: s}
+
+		pk, err := deps.ResolveMaxKey(t.Context(), table, pkCols)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, errIncSnapshotHeldOff)
+		assert.Nil(t, pk)
+	})
+
+	t.Run("FetchChunk", func(t *testing.T) {
+		s := newHeldOffStream()
+		require.Nil(t, s.incSnapshot.conn, "a nil connection proves no query could have been issued")
+		deps := incrementalSnapshotDeps{stream: s}
+
+		var lower, upper incrementalsnapshot.PrimaryKey
+		rows, err := deps.FetchChunk(t.Context(), table, pkCols, lower, upper, 100)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, errIncSnapshotHeldOff)
+		assert.Nil(t, rows)
 	})
 }
