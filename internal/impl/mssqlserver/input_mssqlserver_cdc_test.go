@@ -180,10 +180,9 @@ func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
 		// tracked, undelivered, and its owner's context is live.
 		flushed := make(chan error, 1)
 		go func() { flushed <- pub.Publish(t.Context(), streamingEvent("00000010", "00000010")) }()
+		// Ticket 0 is admitted once its batch of 1 is tracked.
 		require.Eventually(t, func() bool {
-			pub.batcherMu.Lock()
-			defer pub.batcherMu.Unlock()
-			return pub.nextTicket == 1
+			return pub.checkpoint.Pending() == 1
 		}, 5*time.Second, time.Millisecond)
 
 		// Deliberate, non-poisoned stop (input Close): the loop exits.
