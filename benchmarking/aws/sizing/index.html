@@ -108,6 +108,7 @@ export const OUTPUTS = {
   redpanda: 'Redpanda topic',
   iceberg: 'Apache Iceberg (iceberg)',
   snowflake: 'Snowflake (snowflake_streaming)',
+  s3: 'Amazon S3 (aws_s3)',
   sqlserver_insert: 'SQL Server (sql_insert)',
 }
 
@@ -247,6 +248,35 @@ export const CONNECTORS = {
       'These figures require the benchmarked recipe: a memory buffer between the Redpanda ' +
       'input and the output. Without it the input acks chain to Snowpipe commit latency and ' +
       'throughput collapses to 0.04 MB/s — measured on the same rig, not hypothetical.',
+  },
+  s3_sink: {
+    input: 'redpanda', output: 's3',
+    label: 'S3 sink (aws_s3 output)',
+    // CURVE UNIT NOTE, read before changing these numbers. This run's own
+    // `mean_mb_s` is GZIP-COMPRESSED S3-written bytes (31.3 / 44.1 / 52.1 / 55.5),
+    // which is the storage-cost axis, not the sizing axis. The curve below is the
+    // records the pipeline actually consumed (mean_msg_s x 1200 B), because that is
+    // what a customer's stated input volume means and what benchedEventBytes anchors
+    // the events/sec view to. Storing the compressed figure against a 1200 B event
+    // size would make the two linked views disagree by the compression ratio and
+    // over-provision a stated input volume by ~45%.
+    curve: { 1: 45.5, 2: 63.9, 4: 75.7, 8: 80.6 },
+    benchedEventBytes: 1200,
+    peakHeapMB: 1010,
+    run: { path: 's3/orders-live/2026-09-23T21-46-03Z.json', date: '2026-09-23', sha: '125eb74c8' },
+    curveUnit: 'MB',
+    ceiling: {
+      reason: 'the sink\'s own S3 write path, not the feed — the producer sustained ~360 MB/s throughout, roughly 4.5x what the sink drew at 8 vCPU, so the pipeline was never starved',
+      fix: 'Cores past 8 buy little: the curve gains only ~6% from 4 to 8 vCPU. The untested levers are batching size/period and max_in_flight on the aws_s3 output.',
+    },
+    sourceKind: 'sink',
+    confidence: 'high',
+    pipelineNote:
+      'These figures require the benchmarked recipe: unordered_processing with a ' +
+      'checkpoint_limit above the batch count, and an aws_s3 output batching 20,000 ' +
+      'records or 5 s with archive + gzip. Objects land gzip-compressed, so S3-written ' +
+      'bytes run about 0.69x the input volume this curve is stated in — size storage ' +
+      'from that, not from this curve.',
   },
   oracle_to_sqlserver: {
     input: 'oracledb_cdc', output: 'sqlserver_insert',

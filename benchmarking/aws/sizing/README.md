@@ -23,10 +23,44 @@ smokes).
 Design spec (why every decision below was made, including why median over p5 and why
 no charts): `docs/superpowers/specs/2026-08-06-sales-compute-sizing-tool-design.md`.
 
-Published URL: https://claude.ai/code/artifact/febb2295-eb57-4115-b2ab-94c1717f761e
-(private until shared from the page's share menu). To update it, republish this same
+Published URL: https://claude.ai/artifact/3cUYMpdyFRuc8cbDJcFrbV
+(private until shared from the page's Share menu). To update it, republish this same
 file path and pass that URL as `url` — a fresh conversation that skips the `url` mints a
 new link, which strands anyone who bookmarked the old one.
+
+**The previous URL (`claude.ai/code/artifact/febb2295-…`) is dead** — the artifact was gone
+by 2026-09-24 (absent from the owner's artifact list), so the S3 refresh had to be
+published as a new link rather than an update. Anyone holding the old bookmark needs the
+one above. The artifact's `<title>` tag names it, not the publish `title` parameter, so
+rename by editing the tag.
+
+## 2026-09-24 data refresh — S3 sink added
+
+- **`redpanda` → `s3` (aws_s3 output) added**, from the live-stream sweep
+  `s3/orders-live/2026-09-23T21-46-03Z.json` (SHA `125eb74c8`). Curve 45.5 / 63.9 / 75.7 /
+  80.6 MB/s at 1/2/4/8 vCPU, peak heap 1010 MB, high confidence: all four Connect points
+  ran the full measurement window, and the curve agrees within ~4% with the independent
+  bounded-backlog-drain run of the same pipeline.
+
+- **The curve is the records the pipeline consumed, NOT the run's own `mean_mb_s`.** That
+  field holds gzip-compressed S3-written bytes (31.3 / 44.1 / 52.1 / 55.5), which is the
+  storage-cost axis. The page anchors its events/sec view to `benchedEventBytes` (1200 B),
+  so storing compressed bytes against an uncompressed event size would make the two linked
+  views disagree by the compression ratio and over-provision a stated input volume by
+  roughly 45%. The entry carries a comment saying so; do not "correct" it back.
+
+- **Storage sizing is a separate question.** Objects land gzip-compressed at about 0.69x
+  the input volume this curve is stated in. The entry's pipeline note says this, because a
+  rep asked "how much S3 will this write" would otherwise read it off the wrong axis.
+
+- **The recipe matters.** These numbers require `unordered_processing` with a
+  `checkpoint_limit` above the batch count, and an `aws_s3` output batching 20,000 records
+  or 5 s with archive + gzip. The note rides along on every answer, not just refusals.
+
+- **Kafka Connect comparison figures are deliberately NOT on this page.** It sizes Connect;
+  the head-to-head lives in `docs/benchmark-results/s3.md`, which carries its own validity
+  notice. Two of that run's four Kafka Connect points are unmeasured anyway (the worker
+  stopped ~2 min into a 25-minute window).
 
 ## 2026-08-18 data refresh — what changed and why
 
@@ -81,13 +115,13 @@ same shape; `sizeFor` picks up the reader path from its presence alone.
 
 ## The hard boundary
 
-Only nine pipelines have a number: `postgres_cdc`, `mysql_cdc`, `mongodb_cdc`,
-`sqlserver_cdc`, `snowflake_sink`, `oracle_to_sqlserver`,
+Only ten pipelines have a number: `postgres_cdc`, `mysql_cdc`, `mongodb_cdc`,
+`sqlserver_cdc`, `snowflake_sink`, `s3_sink`, `oracle_to_sqlserver`,
 `dynamodb_cdc`, `oracledb_cdc`, and the `iceberg` sink. Anything else — including
 `kinesis`, which has tuning runs but no throughput sweep — renders "not benchmarked,
 ask the perf team" and no number. This is deliberate: every figure on the page must be
 defensible back to a specific run, and one plausible-looking guess for an unbenched
-pipeline would destroy that guarantee for all nine real ones. Do not add a tenth
+pipeline would destroy that guarantee for all ten real ones. Do not add an eleventh
 row by analogy or interpolation.
 
 ## Testing
@@ -96,7 +130,7 @@ row by analogy or interpolation.
 node --test benchmarking/aws/sizing/sizing.test.mjs
 ```
 
-36 tests cover the calculation core: unit conversion in both directions, rate/throughput
+48 tests cover the calculation core: unit conversion in both directions, rate/throughput
 round-tripping without drift across all four input units, the "smallest clearing point" rule, headroom semantics, ceiling
 refusals, the no-answer guard on blank/negative/non-finite input, event-size caveats, and
 per-connector provenance. Run them after any change to the data or the calculation.

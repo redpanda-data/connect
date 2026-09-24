@@ -278,6 +278,20 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
       sourceKind: 'sink',
       confidence: 'high',
     },
+    s3_sink: {
+      input: 'redpanda',
+      output: 's3',
+      curve: [45.5, 63.9, 75.7, 80.6],
+      benchedEventBytes: 1200,
+      peakHeapMB: 1010,
+      runPath: 's3/orders-live/2026-09-23T21-46-03Z.json',
+      runDate: '2026-09-23',
+      runSha: '125eb74c8',
+      curveUnit: 'MB',
+      hasCeiling: true,
+      sourceKind: 'sink',
+      confidence: 'high',
+    },
     oracle_to_sqlserver: {
       input: 'oracledb_cdc',
       output: 'sqlserver_insert',
@@ -341,10 +355,10 @@ test('every connector reports provenance and a peak heap figure', () => {
   }
 })
 
-test('the nine blessed pipelines are present and kinesis is not', () => {
+test('the ten blessed pipelines are present and kinesis is not', () => {
   assert.deepEqual(Object.keys(core.CONNECTORS).sort(), [
     'dynamodb_cdc', 'iceberg_sink', 'mongodb_cdc', 'mysql_cdc', 'oracle_to_sqlserver',
-    'oracledb_cdc', 'postgres_cdc', 'snowflake_sink', 'sqlserver_cdc',
+    'oracledb_cdc', 'postgres_cdc', 's3_sink', 'snowflake_sink', 'sqlserver_cdc',
   ])
 })
 
@@ -669,6 +683,36 @@ test('acceptance: redpanda → snowflake sizes at 2 cores for 40k/s of 1200 B ev
   assert.ok(r.warnings.some((w) => /memory buffer/.test(w)), 'buffer-recipe caveat missing')
 })
 
+test('acceptance: redpanda → S3 sizes off consumed records, not compressed S3 bytes', () => {
+  // 50 MB/s + 20% headroom = 60, cleared by the 63.9 MB/s point at 2 vCPU. Sizing off
+  // this run's compressed mean_mb_s (44.1 at 2 vCPU) would have failed the same target
+  // and pushed the answer to 4 cores, over-provisioning by a full point.
+  const r = core.sizeFor({
+    connector: 's3_sink', eventsPerSec: 41_667, eventBytes: 1200,
+    tax: 'passthrough', headroomPct: 20,
+  })
+  assert.equal(r.status, 'ok')
+  assert.equal(r.cores, 2)
+  assert.equal(r.measuredRate, 63.9)
+  assert.equal(r.unit, 'MB')
+  // The gzip note must ride along, so nobody sizes S3 storage off an input-volume curve.
+  assert.ok(r.warnings.some((w) => /gzip-compressed/.test(w)), 'gzip storage caveat missing')
+})
+
+test('S3 refusals blame the sink write path, not an under-fed pipeline', () => {
+  const r = core.sizeFor({
+    connector: 's3_sink', eventsPerSec: 200_000, eventBytes: 1200,
+    tax: 'passthrough', headroomPct: 0,
+  })
+  assert.equal(r.status, 'ceiling')
+  assert.equal(r.measuredCeilingRate, 80.6)
+  assert.match(r.ceiling.reason, /write path/)
+  // The producer ran ~4.5x the sink's draw, so the refusal must say the pipeline was
+  // never starved — otherwise a reader could dismiss the ceiling as a rig artifact.
+  assert.match(r.ceiling.reason, /never starved/)
+  assert.match(r.ceiling.fix, /max_in_flight/)
+})
+
 test('snowflake refusals blame the commit path and not cores', () => {
   const r = core.sizeFor({
     connector: 'snowflake_sink', eventsPerSec: 80_000, eventBytes: 1200,
@@ -717,11 +761,12 @@ test('sqlserver answers carry the means-not-medians caveat', () => {
 test('partnersFor lists exactly the tested endpoints for each side', () => {
   assert.deepEqual(core.partnersFor('input', 'postgres_cdc'), ['redpanda'])
   assert.deepEqual(core.partnersFor('input', 'oracledb_cdc').sort(), ['redpanda', 'sqlserver_insert'])
-  assert.deepEqual(core.partnersFor('input', 'redpanda').sort(), ['iceberg', 'snowflake'])
+  assert.deepEqual(core.partnersFor('input', 'redpanda').sort(), ['iceberg', 's3', 'snowflake'])
   assert.deepEqual(core.partnersFor('output', 'redpanda').sort(), [
     'dynamodb_cdc', 'mongodb_cdc', 'mysql_cdc', 'oracledb_cdc', 'postgres_cdc', 'sqlserver_cdc',
   ])
   assert.deepEqual(core.partnersFor('output', 'snowflake'), ['redpanda'])
+  assert.deepEqual(core.partnersFor('output', 's3'), ['redpanda'])
   assert.deepEqual(core.partnersFor('output', 'sqlserver_insert'), ['oracledb_cdc'])
   assert.deepEqual(core.partnersFor('input', 'nope'), [])
 })
