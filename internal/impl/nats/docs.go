@@ -46,13 +46,18 @@ func outputTracingDocs() *service.ConfigField {
 	return service.NewInjectTracingSpanMappingField().Version(tracingVersion)
 }
 
-func kvDocs(extraFields ...*service.ConfigField) []*service.ConfigField {
+func Docs(natsComponentType string, extraFields ...*service.ConfigField) []*service.ConfigField {
 	// TODO: Use `slices.Concat()` after switching to Go 1.22
+	bucketName := "my_bucket"
+	if natsComponentType == "KV" {
+		bucketName = "my_kv_bucket"
+	}
+
 	fields := append(
 		connectionHeadFields(),
 		[]*service.ConfigField{
 			service.NewStringField(kvFieldBucket).
-				Description("The name of the KV bucket.").Example("my_kv_bucket"),
+				Description("The name of the " + natsComponentType + " bucket.").Example(bucketName),
 		}...,
 	)
 	fields = append(fields, extraFields...)
