@@ -87,6 +87,7 @@ func (l *Lock) Take() uint64 {
 // sealOnAbandon (for example, a barrier ticket with no batch), an abandoned
 // ticket is skipped and the sequence continues.
 func (l *Lock) Acquire(ctx context.Context, t uint64, sealOnAbandon bool) error {
+	// Fast path: refuse a sealed lock, or return at once if it is our turn.
 	l.mu.Lock()
 	if l.sealed {
 		l.mu.Unlock()
@@ -96,6 +97,7 @@ func (l *Lock) Acquire(ctx context.Context, t uint64, sealOnAbandon bool) error 
 		l.mu.Unlock()
 		return nil
 	}
+	// Park: register a channel that Release (our turn) or Seal closes.
 	if l.waiters == nil {
 		l.waiters = make(map[uint64]chan struct{})
 	}
@@ -105,6 +107,7 @@ func (l *Lock) Acquire(ctx context.Context, t uint64, sealOnAbandon bool) error 
 
 	select {
 	case <-ch:
+		// Woken: it is our turn, or the lock is sealed.
 		l.mu.Lock()
 		defer l.mu.Unlock()
 		if l.sealed {
@@ -112,6 +115,8 @@ func (l *Lock) Acquire(ctx context.Context, t uint64, sealOnAbandon bool) error 
 		}
 		return nil
 	case <-ctx.Done():
+		// Cancelled: a Release or a Seal can close ch at the same time, so
+		// check ch again under the lock before we abandon.
 		l.mu.Lock()
 		defer l.mu.Unlock()
 		select {
@@ -124,6 +129,8 @@ func (l *Lock) Acquire(ctx context.Context, t uint64, sealOnAbandon bool) error 
 			return nil
 		default:
 		}
+		// Abandon: Release skips t from now on. Seal in this same critical
+		// section if the caller asked (see the doc comment).
 		delete(l.waiters, t)
 		if l.abandoned == nil {
 			l.abandoned = make(map[uint64]struct{})
