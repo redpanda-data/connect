@@ -1,0 +1,73 @@
+name: s3-orders-sink-smoke
+description: |
+  1-vCPU smoke for the s3 sink bench (Connect + Kafka Connect/Aiven S3 Sink
+  counterpart). Drains a pre-seeded Redpanda topic into batched, gzip'd
+  NDJSON objects in the shared results bucket via the aws_s3 output — the
+  same shape as a Kafka Connect S3 Sink connector, standing in for one in
+  this sizing exercise. Use this to validate the bucket/region wiring and
+  the object-listing sidecar before committing to the full sweep.
+
+direction: sink
+connector: s3
+stack: s3
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  # A plain S3 PUT-per-batch sink has none of Iceberg's Glue-commit or
+  # Snowpipe-streaming overhead, so even a conservative 1-vCPU estimate is
+  # much higher than those sinks' ~15 MB/s: 100 MB/s. 90M rows at 1200 B/row
+  # = 108,000,000,000 B = 108,000 MB -> ~1080 s at 100 MB/s, comfortably
+  # above the 15-minute (900 s) floor.
+  initial_rows: 90000000
+  row_size_bytes: 1200
+  seeder: json-orders
+  expected_peak_mb_s: 100
+
+pipeline:
+  # sinkTopology injects the redpanda INPUT (the pre-seeded topic) and the
+  # aws_s3 bucket/region/path-prefix (sinkspec_s3.go's DecorateOutput);
+  # everything below is scenario-owned tuning, validated locally against a
+  # real aws_s3 output. Each batch is archived into one NDJSON blob then
+  # gzip'd, mirroring a Kafka Connect S3 Sink connector's own batched,
+  # compressed object shape.
+  #
+  # unordered_processing is an OBJECT field on the redpanda input (enabled +
+  # checkpoint_limit + batching — see franz_reader_toggled.go), not a bool
+  # toggle with a sibling checkpoint_limit field; checkpoint_limit must live
+  # nested inside it. It must also exceed output.batching.count, or the
+  # input can never have enough unacked messages in flight for a batch to
+  # actually fill to 20000 before the 5s period forces an undersized flush
+  # (the same checkpoint_limit-vs-batching.count trap documented for the
+  # iceberg sink's Recipe B). 40000 gives 2x headroom.
+  input_options:
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 40000
+  output:
+    aws_s3:
+      path: '${!uuid_v4()}.ndjson.gz'
+      content_type: application/x-ndjson
+      content_encoding: gzip
+      max_in_flight: 32
+      batching:
+        count: 20000
+        period: 5s
+        processors:
+          - archive:
+              format: lines
+          - compress:
+              algorithm: gzip
+
+matrix:
+  # Default go_mem_limit_per_vcpu (2 GiB) gives the KC worker's JVM only
+  # floor(0.75 * 2 * vCPU) = 1 GiB heap at 1 vCPU (see kcscript.go) — too
+  # small for the Aiven S3 connector: confirmed live OOM
+  # (java.lang.OutOfMemoryError: Java heap space) in the main consumer poll's
+  # record deserialization (CompletedFetch.fetchRecords), even after
+  # bounding consumer.override.max.partition.fetch.bytes. 8 GiB/vCPU gives a
+  # 6 GiB heap at 1 vCPU — comfortable headroom on the c8g.4xlarge runner.
+  go_mem_limit_per_vcpu: 8
+  cpu_points: [1]

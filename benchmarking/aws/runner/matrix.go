@@ -225,13 +225,27 @@ func (m *MatrixRunner) Run(
 				// every KC point past the first produced 0 MB/s with
 				// "redo log is no longer available" warnings.
 				vcpuConnectorName := fmt.Sprintf("%s_v%d", m.KCConnectorName, n)
+				// s3's PropsTemplate leaves tasks.max as a sentinel (see
+				// kcconnectors.go) because KC config is rendered once per
+				// scenario, before any per-point vCPU value exists. Patch it
+				// in here so KC actually scales tasks with the sweep point
+				// instead of running every point with a single task. This is
+				// a no-op replace for every other connector (no sentinel
+				// present).
+				configJSON := strings.Replace(m.KCConnectorConfigJSON, `"__TASKS_MAX__"`, fmt.Sprintf(`"%d"`, n), 1)
+				// Same reasoning, second sentinel: s3's offset.flush.interval.ms
+				// must shrink as tasks.max grows so buffered-but-unflushed record
+				// volume (aggregate throughput x flush interval) stays roughly
+				// constant across the sweep instead of OOMing the KC worker's
+				// heap at higher vCPU/task counts. No-op for every other connector.
+				configJSON = strings.Replace(configJSON, `"__FLUSH_INTERVAL_MS__"`, fmt.Sprintf(`"%d"`, 10000/n), 1)
 				script = renderKCBenchScript(kcBenchScriptArgs{
 					VCPU:                     n,
 					MemLimitGiB:              memLimitPerVCPU * n,
 					WarmupSec:                int(warmup.Seconds()),
 					DurationSec:              int(duration.Seconds()),
 					ConnectorName:            vcpuConnectorName,
-					ConnectorConfigJSON:      m.KCConnectorConfigJSON,
+					ConnectorConfigJSON:      configJSON,
 					Bucket:                   m.Bucket,
 					SessionID:                m.SessionID,
 					RedpandaMetricsEndpoint:  m.RedpandaMetricsEndpoint,

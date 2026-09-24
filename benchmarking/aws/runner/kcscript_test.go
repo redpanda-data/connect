@@ -274,3 +274,28 @@ func TestRenderKCBenchScript_HeapFloor(t *testing.T) {
 		t.Errorf("expected -Xmx1g when MemLimitGiB=1 (3/4 floors to 1); got:\n%s", script)
 	}
 }
+
+func TestRenderKCBenchScript_HeapCeiling(t *testing.T) {
+	// Regression: on a c8g.4xlarge (16 vCPU / 32 GiB RAM) at the 8-vCPU
+	// point with go_mem_limit_per_vcpu=8, MemLimitGiB=64 -> uncapped
+	// kcHeapGiB=48, a heap larger than the box's physical RAM. Confirmed
+	// live: the JVM was OOM-killed by the OS ~46s after start. The heap
+	// must be capped well below the smallest runner's RAM, not scaled
+	// linearly with vCPU count forever.
+	script := renderKCBenchScript(kcBenchScriptArgs{
+		VCPU:                8,
+		MemLimitGiB:         64, // memLimitPerVCPU=8 * n=8
+		WarmupSec:           60,
+		DurationSec:         600,
+		ConnectorName:       "bench_s3_v8",
+		ConnectorConfigJSON: `{}`,
+		Bucket:              "results-bucket",
+		SessionID:           "sess-x",
+	})
+	if strings.Contains(script, "-Xmx48g") {
+		t.Errorf("uncapped -Xmx48g heap must not be requested on a 32 GiB-RAM runner; got:\n%s", script)
+	}
+	if !strings.Contains(script, "-Xmx20g") {
+		t.Errorf("expected heap capped at -Xmx20g; got:\n%s", script)
+	}
+}

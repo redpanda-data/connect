@@ -10,11 +10,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: json-orders seed [flags]")
+		fmt.Fprintln(os.Stderr, "usage: json-orders {seed|workload} [flags]")
 		os.Exit(2)
 	}
 	switch os.Args[1] {
@@ -33,6 +34,17 @@ func main() {
 		}
 		if err := seed(context.Background(), *topic, *rows, *rowSize, *partitions, *keySpace, *keyOrder); err != nil {
 			fmt.Fprintln(os.Stderr, "seed:", err)
+			os.Exit(1)
+		}
+	case "workload":
+		fs := flag.NewFlagSet("workload", flag.ExitOnError)
+		topic := fs.String("topic", "bench-orders", "destination topic")
+		rate := fs.Int("rate", 5000, "writes per second total")
+		rowSize := fs.Int("row-size", 1200, "approximate record size in bytes")
+		dur := fs.Duration("duration", 15*time.Minute, "total duration")
+		_ = fs.Parse(os.Args[2:])
+		if err := workload(context.Background(), *topic, *rate, *rowSize, *dur); err != nil {
+			fmt.Fprintln(os.Stderr, "workload:", err)
 			os.Exit(1)
 		}
 	default:

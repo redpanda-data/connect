@@ -30,6 +30,18 @@ resource "aws_iam_role_policy" "bench_host_extra" {
           "s3:PutObject",
           "s3:GetObject",
           "s3:ListBucket",
+          # s3ResetScript wipes each engine's prefix between sweep points
+          # (aws s3 rm --recursive) so the sidecar's byte-growth measurement
+          # never carries over the previous point's objects.
+          "s3:DeleteObject",
+          # Required by the Aiven S3 Sink connector's multipart upload path
+          # (see its README's Authorization section): AbortMultipartUpload
+          # cleans up failed/aborted uploads, and the ListMultipartUploadParts/
+          # ListBucketMultipartUploads pair lets it resume/verify in-progress
+          # ones.
+          "s3:AbortMultipartUpload",
+          "s3:ListMultipartUploadParts",
+          "s3:ListBucketMultipartUploads",
           "secretsmanager:GetSecretValue",
           "glue:*",
           # DynamoDB: source-table read/write for the seeder, Streams read for

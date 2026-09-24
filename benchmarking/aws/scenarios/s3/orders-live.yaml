@@ -1,0 +1,114 @@
+name: s3-orders-live
+description: |
+  Continuous-production counterpart to orders-sink.yaml. That scenario seeds
+  a huge fixed backlog once, then re-drains the SAME static topic from the
+  beginning at every sweep point (bounded-backlog-drain). It found that
+  Kafka Connect's (Aiven S3 Sink) mean throughput sits far below its burst
+  peak (see docs/benchmark-results/s3.md: kafka_connect's own reported mean
+  MB/s stays in the single digits even at 8 vCPU) — but it's unproven
+  whether that's an artifact of the bounded-drain design itself (KC batches
+  writes then idles waiting for the next flush-interval tick against a
+  backlog that's just sitting there) or a real characteristic that would
+  also show up against a live, continuously-produced feed.
+
+  This scenario answers that by keeping a producer running against
+  dataset.initial_rows: 0 (an empty topic) for the whole warmup+duration
+  window at every sweep point, via workload.write_rate_per_sec, instead of
+  a one-time seed. The sink is always draining a live feed, never a static
+  backlog. Same aws_s3 pipeline recipe as orders-sink.yaml — only the load
+  pattern differs, so any throughput-shape difference between the two runs
+  isolates the drain-vs-live variable rather than a pipeline change.
+
+  Run orders-live-smoke.yaml first on a fresh setup.
+
+direction: sink
+connector: s3
+stack: s3
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+  # The 360 MB/s target below is 3.07x c8g.large's 0.937 Gbps (117 MB/s)
+  # *sustained* network baseline, so the default load generator instance is
+  # EC2-network-shaped once its burst credits drain, silently capping the
+  # producer at ~40% of target with no error or log line. c8g.4xlarge's
+  # 937.5 MB/s baseline clears the target with headroom. Burst credits let a
+  # short smoke run pass anyway (see orders-live-smoke.yaml), which is why a
+  # smoke cannot validate this override.
+  load_gen:
+    instance_type: c8g.4xlarge
+
+dataset:
+  # Continuously fed by workload below rather than pre-seeded: the topic
+  # starts empty. --rows=0 is safe (confirmed by reading json-orders' seed():
+  # it still creates the topic with the right partition count, the produce
+  # loop is a no-op, and Flush on an empty producer succeeds), but seed is
+  # never even invoked here in the sense that matters — the workload script
+  # is what feeds this topic. No expected_peak_mb_s: Validate skips that
+  # check whenever workload: is set (see scenario.go Validate).
+  initial_rows: 0
+  row_size_bytes: 1200
+  seeder: json-orders
+
+# Same recipe orders-sink.yaml validates; see orders-sink-smoke.yaml for the
+# batching/compression rationale, including why checkpoint_limit must nest
+# inside unordered_processing (an object field, not a bool) and why it must
+# exceed batching.count. This is testing the same sink recipe — only the
+# load pattern (live vs bounded-backlog-drain) differs.
+pipeline:
+  input_options:
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 40000
+  output:
+    aws_s3:
+      path: '${!uuid_v4()}.ndjson.gz'
+      content_type: application/x-ndjson
+      content_encoding: gzip
+      max_in_flight: 32
+      batching:
+        count: 20000
+        period: 5s
+        processors:
+          - archive:
+              format: lines
+          - compress:
+              algorithm: gzip
+
+workload:
+  # 300,000 rows/sec x 1200 B/row ~= 360 MB/s — deliberately well above any
+  # peak burst either engine showed in the bounded-backlog-drain run
+  # (orders-sink.yaml; see docs/benchmark-results/s3.md), so the producer
+  # itself can never become the bottleneck the sink is measured against.
+  write_rate_per_sec: 300000
+  # warmup: 10m is carried over from orders-sink.yaml for the same reason
+  # documented there: at tasks.max > 1, the Aiven connector's consumer group
+  # takes several minutes to start moving data after a reset, and without a
+  # warmup that cold-start stall gets averaged into the reported mean. Both
+  # engines still consume/write throughout warmup+duration; warmup only trims
+  # leading samples from the summary stats.
+  duration: 15m
+  warmup: 10m
+
+matrix:
+  # Same reasoning as orders-sink.yaml: the default go_mem_limit_per_vcpu
+  # (2 GiB) gives the KC worker's JVM only a 1 GiB heap at the 1-vCPU point —
+  # confirmed live OOM in the Aiven S3 connector's consumer poll.
+  #
+  # Raised from 8 to 20 for THIS scenario specifically. Heap is
+  # go_mem_limit_per_vcpu * vCPU * 3/4, capped at 20 GiB (kcscript.go), so 8
+  # gave the 1-vCPU point only a 6 GiB heap. Under this scenario's continuous
+  # ~360 MB/s feed the Aiven connector buffers a full offset.flush.interval.ms
+  # (10000/n ms, so 10 s at n=1) before writing — roughly 3.6 GB — and the
+  # JVM died with 13 cascading OutOfMemoryErrors ~7 min into the 1-vCPU KC
+  # point, abandoning its consumer group. The 2/4/8-vCPU points survive
+  # because they get 12/20/20 GiB heaps AND flush 2-8x more often.
+  #
+  # 20 gives heaps of 15/20/20/20 GiB across the sweep, all within the
+  # existing ceiling and the runner's 32 GiB. Deliberately provisioning
+  # RESOURCE rather than retuning behaviour: the flush interval determines
+  # KC's object size and throughput profile, which is the thing being
+  # measured, so it is left alone. Connect is unaffected in practice — it
+  # peaks around 250 MB RSS, far below either limit.
+  go_mem_limit_per_vcpu: 20
+  cpu_points: [1, 2, 4, 8]

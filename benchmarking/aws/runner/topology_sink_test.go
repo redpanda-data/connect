@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func sinkOuts() map[string]string {
@@ -312,6 +313,86 @@ func TestSinkTopology_WorkloadScript_Empty(t *testing.T) {
 	got, err := (sinkTopology{}).WorkloadScript(&Scenario{Connector: "iceberg"}, sinkOuts(), newBenchNames("sess", "iceberg"))
 	if err != nil || got != "" {
 		t.Fatalf("bounded sink has no workload: got %q err %v", got, err)
+	}
+}
+
+// TestSinkTopology_WorkloadScript_ZeroRateStaysEmpty covers orders-sink.yaml's
+// real shape: a workload: block that sets duration/warmup only (to carry the
+// KC-cold-start warmup trim into main.go) with no write_rate_per_sec. This
+// must NOT start a live producer on top of the bounded, pre-seeded backlog
+// that scenario drains — the case most likely to get broken by an
+// off-by-one condition on s.Workload's nil-ness alone.
+func TestSinkTopology_WorkloadScript_ZeroRateStaysEmpty(t *testing.T) {
+	s := &Scenario{
+		Connector: "s3",
+		Dataset:   DatasetSpec{Seeder: "json-orders", RowSizeBytes: 1200},
+		Workload:  &WorkloadSpec{Duration: 15 * time.Minute, Warmup: 10 * time.Minute},
+	}
+	got, err := (sinkTopology{}).WorkloadScript(s, sinkOuts(), newBenchNames("sess", "s3"))
+	if err != nil || got != "" {
+		t.Fatalf("write_rate_per_sec: 0 must render no workload script: got %q err %v", got, err)
+	}
+}
+
+// TestSinkTopology_WorkloadScript_RendersLiveInvocation covers the new
+// live-stream case: a positive write_rate_per_sec must render an actual
+// seeder `workload` invocation carrying the topic, rate, and total duration
+// (warmup+duration).
+func TestSinkTopology_WorkloadScript_RendersLiveInvocation(t *testing.T) {
+	s := &Scenario{
+		Connector: "s3",
+		Dataset:   DatasetSpec{Seeder: "json-orders", RowSizeBytes: 1200},
+		Workload:  &WorkloadSpec{WriteRatePerSec: 300000, Duration: 15 * time.Minute, Warmup: 10 * time.Minute},
+	}
+	got, err := (sinkTopology{}).WorkloadScript(s, sinkOuts(), newBenchNames("sess", "s3"))
+	if err != nil {
+		t.Fatalf("WorkloadScript: %v", err)
+	}
+	if got == "" {
+		t.Fatal("write_rate_per_sec > 0 must render a non-empty workload script")
+	}
+	if !strings.Contains(got, "/opt/bench/json-orders workload") {
+		t.Errorf("script must invoke the staged seeder's workload subcommand:\n%s", got)
+	}
+	if !strings.Contains(got, "--topic=bench_sess_s3_src") {
+		t.Errorf("script must target the pre-seeded source topic:\n%s", got)
+	}
+	if !strings.Contains(got, "--rate=300000") {
+		t.Errorf("script must carry the configured write rate:\n%s", got)
+	}
+	// totalSec = warmup (10m) + duration (15m) = 1500s.
+	if !strings.Contains(got, "--duration=1500s") {
+		t.Errorf("script must carry warmup+duration as the total window:\n%s", got)
+	}
+	if !strings.Contains(got, `REDPANDA_BROKERS="10.0.0.1:9092"`) {
+		t.Errorf("script must set REDPANDA_BROKERS from the terraform output:\n%s", got)
+	}
+}
+
+func TestSinkTopology_WorkloadScript_MultiTopicSplitsRate(t *testing.T) {
+	s := &Scenario{
+		Connector: "s3",
+		Dataset:   DatasetSpec{Seeder: "json-orders", RowSizeBytes: 1200, Topics: 3},
+		Workload:  &WorkloadSpec{WriteRatePerSec: 300000, Duration: 15 * time.Minute, Warmup: 10 * time.Minute},
+	}
+	got, err := (sinkTopology{}).WorkloadScript(s, sinkOuts(), newBenchNames("sess", "s3"))
+	if err != nil {
+		t.Fatalf("WorkloadScript: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		topic := fmt.Sprintf("--topic=bench_sess_s3_src_t%d", i)
+		if !strings.Contains(got, topic) {
+			t.Errorf("missing topic %d invocation %q:\n%s", i, topic, got)
+		}
+	}
+	if !strings.Contains(got, "--rate=100000") {
+		t.Errorf("rate must split evenly across 3 topics (300000/3=100000):\n%s", got)
+	}
+	if n := strings.Count(got, "workload \\"); n != 3 {
+		t.Errorf("expected 3 backgrounded workload invocations, got %d:\n%s", n, got)
+	}
+	if !strings.Contains(got, "wait\n") {
+		t.Errorf("multi-topic script must wait on all backgrounded invocations:\n%s", got)
 	}
 }
 

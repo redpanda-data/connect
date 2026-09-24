@@ -365,6 +365,56 @@ func TestRenderKCConfig_Iceberg(t *testing.T) {
 	}
 }
 
+// TestRenderKCConfig_S3FileNameTemplate is a byte-for-byte check on the
+// rendered file.name.template value. file.name.prefix looked correct in
+// review but is silently ignored by Kafka Connect at runtime (it is not a
+// real Aiven S3 Sink property), so file.name.template is the only field
+// that actually scopes where objects land — and its value is built by
+// escaping the Aiven connector's own {{topic}}/{{partition}}/{{start_offset}}
+// placeholders through Go template string-literal actions ({{"{{"}} /
+// {{"}}"}}) so they survive renderKCConfig's own text/template pass
+// unchanged. A subtle escaping mistake here would silently render garbage
+// or fail to parse, so the exact rendered string must be verified, not just
+// its presence.
+func TestRenderKCConfig_S3FileNameTemplate(t *testing.T) {
+	s := &Scenario{Connector: "s3", Direction: DirectionSink}
+	in := kcRenderInputs{
+		Bucket:        "rpcn-bench-results",
+		Region:        "us-east-2",
+		Prefix:        "raw/mytopic/kafka_connect/",
+		Topic:         "mytopic",
+		ConsumerGroup: "bench_mytopic_kafka_connect",
+	}
+	cfg, err := renderKCConfig(s, in)
+	if err != nil {
+		t.Fatalf("renderKCConfig: %v", err)
+	}
+	const want = "raw/mytopic/kafka_connect/{{topic}}-{{partition}}-{{start_offset}}"
+	if got := cfg["file.name.template"]; got != want {
+		t.Errorf("file.name.template = %q, want %q", got, want)
+	}
+	if _, present := cfg["file.name.prefix"]; present {
+		t.Error("file.name.prefix must not be set: it is not a real connector property and is silently ignored by Kafka Connect")
+	}
+	// The consumer.override.* bounds guard two different failure modes seen
+	// live against a large pre-seeded backlog: an unbounded fetch/buffer
+	// window OOMing the worker, and an unbounded per-poll record count
+	// letting put() run past max.poll.interval.ms and self-evict the
+	// consumer (rebalance, throughput collapse). Both must stay set.
+	if cfg["consumer.override.max.partition.fetch.bytes"] != "1048576" {
+		t.Errorf("consumer.override.max.partition.fetch.bytes = %v, want 1048576", cfg["consumer.override.max.partition.fetch.bytes"])
+	}
+	if cfg["consumer.override.session.timeout.ms"] != "300000" {
+		t.Errorf("consumer.override.session.timeout.ms = %v, want 300000", cfg["consumer.override.session.timeout.ms"])
+	}
+	if cfg["consumer.override.max.poll.interval.ms"] != "300000" {
+		t.Errorf("consumer.override.max.poll.interval.ms = %v, want 300000", cfg["consumer.override.max.poll.interval.ms"])
+	}
+	if cfg["consumer.override.max.poll.records"] != "2000" {
+		t.Errorf("consumer.override.max.poll.records = %v, want 2000", cfg["consumer.override.max.poll.records"])
+	}
+}
+
 func TestRenderKCConfig_UnknownConnector(t *testing.T) {
 	s := &Scenario{Connector: "does_not_exist"}
 	_, err := renderKCConfig(s, kcRenderInputs{})

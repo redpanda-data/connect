@@ -49,6 +49,7 @@ type sinkSpec struct {
 var sinkSpecs = map[string]sinkSpec{
 	"iceberg":   icebergSinkSpec,
 	"snowflake": snowflakeSinkSpec,
+	"s3":        s3SinkSpec,
 }
 
 func sinkSpecFor(connector string) (sinkSpec, bool) {

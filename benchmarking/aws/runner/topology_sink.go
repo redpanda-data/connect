@@ -101,8 +101,50 @@ func (sinkTopology) SeedScript(s *Scenario, outs map[string]string, n BenchNames
 	return sb.String(), nil
 }
 
+// WorkloadScript renders the load-gen host script that keeps feeding
+// SourceTopic for the whole sweep point instead of relying on a static,
+// pre-seeded backlog (see json-orders' "workload" subcommand). It only ever
+// renders something when the scenario opts into a live rate:
+//
+//   - s.Workload == nil: the classic bounded-backlog-drain scenarios
+//     (iceberg, snowflake, and s3's own orders-sink.yaml before this) never
+//     set workload: at all.
+//   - s.Workload.WriteRatePerSec <= 0: orders-sink.yaml's own workload: block
+//     sets duration/warmup ONLY so main.go picks up the KC-cold-start warmup
+//     trim (see its `warmup = s.Workload.Warmup` wiring) — it must NOT start
+//     a live producer on top of the fixed backlog that scenario drains.
+//
+// Only WriteRatePerSec > 0 renders an actual seeder `workload` invocation,
+// mirroring SeedScript's shell shape (the seeder binary is already staged at
+// /opt/bench/<seeder> by SeedScript earlier in the same run) and totalSec's
+// warmup+duration pattern from renderWorkloadScript.
 func (sinkTopology) WorkloadScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
-	return "", nil
+	if s.Workload == nil || s.Workload.WriteRatePerSec <= 0 {
+		return "", nil
+	}
+	brokers := outs["redpanda_broker_endpoints"]
+	totalSec := int((s.Workload.Warmup + s.Workload.Duration).Seconds())
+
+	var sb strings.Builder
+	sb.WriteString("set -euo pipefail\n")
+	if s.Dataset.Topics <= 1 {
+		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s workload \\\n  --topic=%s --rate=%d --row-size=%d --duration=%ds\n",
+			brokers, s.Dataset.Seeder, n.SourceTopic(), s.Workload.WriteRatePerSec, s.Dataset.RowSizeBytes, totalSec)
+		return sb.String(), nil
+	}
+
+	// Multi-topic: split the total rate evenly across topics (mirroring
+	// SeedScript's InitialRows split) and run one workload invocation per
+	// topic, backgrounded so every topic is fed concurrently for the same
+	// window.
+	ratePerTopic := s.Workload.WriteRatePerSec / s.Dataset.Topics
+	scoped := n.WithTopics(s.Dataset.Topics)
+	for i := 0; i < s.Dataset.Topics; i++ {
+		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s workload \\\n  --topic=%s --rate=%d --row-size=%d --duration=%ds &\n",
+			brokers, s.Dataset.Seeder, scoped.WithTopic(i).SourceTopic(), ratePerTopic, s.Dataset.RowSizeBytes, totalSec)
+	}
+	sb.WriteString("wait\n")
+	return sb.String(), nil
 }
 
 func (sinkTopology) ResetScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {

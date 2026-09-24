@@ -104,6 +104,14 @@ runcmd:
   - unzip -q /tmp/iceberg-kc.zip -d /opt/kafka-connect/plugins/
   - rm -f /tmp/iceberg-kc.zip
 
+  # Aiven's open-source S3 Sink Connector for Apache Kafka; ships class
+  # io.aiven.kafka.connect.s3.AivenKafkaConnectS3SinkConnector — see
+  # kcConnectorSpecs["s3"]. This release asset is a plain uncompressed tar
+  # (no gzip), unlike the other plugin archives above.
+  - curl -sSL -o /tmp/s3-sink.tar https://github.com/Aiven-Open/cloud-storage-connectors-for-apache-kafka/releases/download/v3.4.2/s3-sink-connector-for-apache-kafka-3.4.2.tar
+  - tar -xf /tmp/s3-sink.tar -C /opt/kafka-connect/plugins/
+  - rm -f /tmp/s3-sink.tar
+
   # Enable + start the worker. systemd retries on failure if Redpanda isn't yet
   # reachable (which is fine — the bench start waits for the runner anyway).
   - systemctl daemon-reload

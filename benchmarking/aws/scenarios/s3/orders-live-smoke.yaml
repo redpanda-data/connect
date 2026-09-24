@@ -1,0 +1,64 @@
+name: s3-orders-live-smoke
+description: |
+  1-vCPU smoke for the live-stream s3 sink bench (see orders-live.yaml).
+  Validates the continuous-workload wiring (empty topic + a live producer
+  feeding it for the whole window) cheaply before committing to the full
+  4-point sweep.
+
+  Note: scenario.go's Validate enforces minWarmup (2m) / minDuration (15m)
+  as hard floors on ANY workload: block, so even this smoke still costs
+  ~17 real minutes once run on AWS — it's only "cheap" relative to the full
+  sweep, not free. The point here is the small write_rate_per_sec: low
+  enough that the producer/network are never stressed while validating that
+  the topic gets created, fed, and drained correctly end to end.
+
+direction: sink
+connector: s3
+stack: s3
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+  # No load_gen override needed here: 50,000 rows/s x 1200 B ~= 60 MB/s is
+  # under c8g.large's 117 MB/s sustained network baseline, so this smoke run
+  # cannot validate the full sweep's load_gen instance-type sizing (see
+  # orders-live.yaml's load_gen override and its comment).
+
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  seeder: json-orders
+
+# Same recipe orders-live.yaml uses; see orders-sink-smoke.yaml for the
+# batching/compression rationale.
+pipeline:
+  input_options:
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 40000
+  output:
+    aws_s3:
+      path: '${!uuid_v4()}.ndjson.gz'
+      content_type: application/x-ndjson
+      content_encoding: gzip
+      max_in_flight: 32
+      batching:
+        count: 20000
+        period: 5s
+        processors:
+          - archive:
+              format: lines
+          - compress:
+              algorithm: gzip
+
+workload:
+  # 50,000 rows/sec x 1200 B/row ~= 60 MB/s: modest, just enough to validate
+  # the wiring without stressing the producer or network.
+  write_rate_per_sec: 50000
+  duration: 15m
+  warmup: 2m
+
+matrix:
+  # Same JVM-heap-sizing reasoning as orders-sink-smoke.yaml.
+  go_mem_limit_per_vcpu: 8
+  cpu_points: [1]

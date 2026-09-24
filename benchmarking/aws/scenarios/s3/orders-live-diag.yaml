@@ -1,0 +1,64 @@
+name: s3-orders-live-diag
+description: |
+  Root-cause diagnostic scenario, NOT a real capacity/comparison run — do not
+  use these numbers for the customer-facing sizing story. Two points
+  (1, 2 vCPU), Connect-only (run with `engines=connect`), at the SAME real
+  target rate as orders-live.yaml (300K rows/sec) so it reproduces the
+  point-1-to-point-2 producer throttling seen in two independent full
+  sweeps (see bench-s3-sink-kc-comparison memory): point 1 hits ~100% of
+  target, every point after plateaus at ~37-40%, even after fixing
+  s3ResetScript to delete+recreate the topic between points (no effect).
+  Load-gen and broker CPU/network both drop well below their own point-1
+  ceiling for point 2+ (confirmed via CloudWatch, not saturated), which
+  rules out load-gen/broker CPU or network exhaustion as the direct cause.
+  This run exists purely to cross the same transition cheaply (2 points,
+  Connect-only, minimum warmup) while manually polling broker disk I/O via
+  SSM (`/proc/diskstats`, not exposed by default EC2 CloudWatch metrics) to
+  test whether background segment cleanup/compaction after point 1's ~540GB
+  write burst is contending for disk I/O with point 2's produce path.
+
+direction: sink
+connector: s3
+stack: s3
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  seeder: json-orders
+
+pipeline:
+  input_options:
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 40000
+  output:
+    aws_s3:
+      path: '${!uuid_v4()}.ndjson.gz'
+      content_type: application/x-ndjson
+      content_encoding: gzip
+      max_in_flight: 32
+      batching:
+        count: 20000
+        period: 5s
+        processors:
+          - archive:
+              format: lines
+          - compress:
+              algorithm: gzip
+
+workload:
+  # Same rate as the real orders-live.yaml sweep — the whole point is to
+  # reproduce the same producer throttling, not a smaller/easier version of
+  # it. Minimum warmup (2m) since we don't need KC's cold-start trim here
+  # (Connect-only run).
+  write_rate_per_sec: 300000
+  duration: 15m
+  warmup: 2m
+
+matrix:
+  go_mem_limit_per_vcpu: 8
+  cpu_points: [1, 2]

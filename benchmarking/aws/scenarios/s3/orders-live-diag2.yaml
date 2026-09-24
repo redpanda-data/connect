@@ -1,0 +1,58 @@
+name: s3-orders-live-diag2
+description: |
+  Root-cause diagnostic scenario, NOT a real capacity/comparison run — do not
+  use these numbers for the customer-facing sizing story. ONE vCPU point,
+  BOTH engines (default order: connect then kafka_connect) at the SAME real
+  target rate as orders-live.yaml (300K rows/sec), to isolate the exact
+  connect-to-kafka_connect transition cheaply.
+
+  Companion to orders-live-diag.yaml (which ran connect-only across 2 vCPU
+  points and found point 2 stayed healthy at ~89% of target — much better
+  than the ~37-40% plateau every point after the first showed in the full
+  2-engine sweeps). That result reframes the mystery: it's not "any second
+  point degrades," it's specifically tied to Kafka Connect having run at
+  least once. This scenario reproduces exactly that connect->kafka_connect
+  transition in the cheapest possible shape (a single vCPU point) while
+  polling broker disk I/O via SSM during both windows.
+
+direction: sink
+connector: s3
+stack: s3
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  seeder: json-orders
+
+pipeline:
+  input_options:
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 40000
+  output:
+    aws_s3:
+      path: '${!uuid_v4()}.ndjson.gz'
+      content_type: application/x-ndjson
+      content_encoding: gzip
+      max_in_flight: 32
+      batching:
+        count: 20000
+        period: 5s
+        processors:
+          - archive:
+              format: lines
+          - compress:
+              algorithm: gzip
+
+workload:
+  write_rate_per_sec: 300000
+  duration: 15m
+  warmup: 2m
+
+matrix:
+  go_mem_limit_per_vcpu: 8
+  cpu_points: [1]

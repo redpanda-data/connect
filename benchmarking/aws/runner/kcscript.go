@@ -60,6 +60,21 @@ func renderKCBenchScript(a kcBenchScriptArgs) string {
 	if kcHeapGiB < 1 {
 		kcHeapGiB = 1
 	}
+	// MemLimitGiB scales linearly with vCPU count (matrix.go:
+	// memLimitPerVCPU * n), which has no relationship to the runner
+	// instance's actual physical RAM. That's fine at low vCPU counts, but
+	// at the high end it can request a heap far larger than the box has:
+	// confirmed live on a c8g.4xlarge (16 vCPU / 32 GiB RAM) at the
+	// 8-vCPU sweep point with go_mem_limit_per_vcpu=8, MemLimitGiB=64 ->
+	// kcHeapGiB=48, a 48 GiB heap on a 32 GiB-RAM machine. The JVM was
+	// OOM-killed by the OS ~46s after start. Cap the heap at a ceiling
+	// that leaves headroom for the OS plus JVM non-heap overhead
+	// (Metaspace, code cache, direct buffers) on the smallest runner
+	// instance we currently use for KC sweeps.
+	const kcHeapCeilingGiB = 20
+	if kcHeapGiB > kcHeapCeilingGiB {
+		kcHeapGiB = kcHeapCeilingGiB
+	}
 	// Escape single quotes inside the JSON body for the heredoc.
 	cfgJSON := strings.ReplaceAll(a.ConnectorConfigJSON, "'", `'"'"'`)
 
@@ -140,6 +155,28 @@ done`,
 		`for i in $(seq 1 180); do
   if curl -fsS http://localhost:8083/ >/dev/null 2>&1; then echo "[kc] worker REST API up after ${i}s"; break; fi
   if ! kill -0 "$PID" 2>/dev/null; then echo "[kc] JVM died before REST API came up; see kc-log on S3"; exit 1; fi
+  sleep 1
+done`,
+		// Kafka Connect persists connector configs in its internal config
+		// topic, not in this JVM's heap. A prior sweep point's connector
+		// that wasn't cleanly deleted before its JVM was killed (or whose
+		// own ResetScript deleted a mismatched name) stays registered in
+		// that topic and gets resurrected by every subsequent point's
+		// fresh JVM, running concurrently with the new point's connector.
+		// Confirmed live: an OOM whose heartbeat thread names referenced
+		// both "connect-bench_s3_v2" and "connect-bench_s3_v8" at once.
+		// This worker belongs to a fresh, session-scoped cluster for this
+		// one sweep point, so anything already registered on it is stale —
+		// wipe it before submitting ours.
+		`echo "[kc] clearing any stale connectors left over from prior sweep points..."
+for c in $(curl -fsS http://localhost:8083/connectors 2>/dev/null | jq -r '.[]' 2>/dev/null); do
+  echo "[kc] deleting stale connector: $c"
+  curl -fsS -X DELETE "http://localhost:8083/connectors/$c" 2>/dev/null || true
+done
+for i in $(seq 1 30); do
+  REMAINING=$(curl -fsS http://localhost:8083/connectors 2>/dev/null | jq -r 'length' 2>/dev/null || echo "0")
+  if [ "$REMAINING" = "0" ] || [ -z "$REMAINING" ]; then echo "[kc] no stale connectors remain"; break; fi
+  echo "[kc] waiting for $REMAINING stale connector(s) to clear (${i}s)..."
   sleep 1
 done`,
 		// Submit the connector. Body comes from the heredoc below.

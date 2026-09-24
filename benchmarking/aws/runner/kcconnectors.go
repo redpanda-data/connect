@@ -243,6 +243,93 @@ var kcConnectorSpecs = map[string]kcConnectorSpec{
 }`,
 		RequiredPlugins: []string{"iceberg-kafka-connect*"},
 	},
+	"s3": {
+		Class:     "io.aiven.kafka.connect.s3.AivenKafkaConnectS3SinkConnector",
+		Direction: kcSink,
+		// Aiven's open-source S3 Sink Connector for Apache Kafka. Leaving
+		// aws.access.key.id/aws.secret.access.key unset falls back to the AWS
+		// default credential provider chain, which on the runner EC2 instance
+		// resolves to its IAM instance profile — do not set explicit
+		// credentials. file.name.prefix is NOT a real, currently-valid
+		// connector property (verified against the connector's own README:
+		// it only appears inside the deprecation note for the old
+		// aws.s3.prefix property, never in the "List of new configuration
+		// parameters" section) — Kafka Connect silently ignores unknown
+		// connector-specific properties, so setting it was a silent no-op
+		// that let every object land at the bucket root under the
+		// connector's default filename (observed live). file.name.template
+		// is the only real way to add a path prefix. Its own
+		// {{topic}}/{{partition}}/{{start_offset}} placeholders use the
+		// exact same {{ }} delimiters this PropsTemplate is rendered
+		// through (renderKCConfig via text/template), so they're escaped
+		// below via Go template string-literal actions ({{"{{"}} / {{"}}"}})
+		// that print the two characters verbatim instead of being
+		// reinterpreted — the net rendered value after this template
+		// executes once is still the literal string
+		// "<prefix>{{topic}}-{{partition}}-{{start_offset}}" for the Aiven
+		// connector's own template engine to interpret when it runs.
+		// format.output.type=jsonl and format.output.fields=value are the
+		// closest fair match to the Connect side's gzip'd NDJSON output
+		// (payload-only, no key/offset/timestamp envelope).
+		// consumer.override.session/poll timeouts and
+		// max.partition.fetch.bytes mirror the iceberg sink's same settings
+		// below: with a large pre-seeded backlog and
+		// auto.offset.reset=earliest, an unbounded fetch plus Aiven's
+		// record-grouping buffer (which by default only flushes every
+		// offset.flush.interval.ms, 60s) let in-memory buffering grow
+		// until the worker's heap OOMs (observed live: OutOfMemoryError in
+		// NetworkReceive.readFrom). Bounding the fetch size and shortening
+		// offset.flush.interval.ms — the generic Connect-framework property
+		// controlling how often the framework triggers a flush/offset
+		// commit — keeps that buffered window small.
+		// consumer.override.max.poll.records bounds the other axis: a sink
+		// task's poll() call synchronously hands every record it returns to
+		// the connector's put() (Aiven's own buffering/compression/S3-upload
+		// work) before the next poll() happens. Against this bench's
+		// pre-seeded backlog (unlike a trickling CDC source, the topic is
+		// already full), an unbounded record count per cycle let a single
+		// poll's processing run past max.poll.interval.ms, so the consumer
+		// self-evicted ("consumer poll timeout has expired"), triggering a
+		// group rebalance and collapsing throughput (observed live in the
+		// worker log). This is exactly the fix the Kafka Connect framework's
+		// own warning names: reduce the max batch size returned by poll().
+		// tasks.max is left as the __TASKS_MAX__ sentinel below: renderKCConfig
+		// renders this template once per scenario, before the per-vCPU-point
+		// sweep loop runs, so no vCPU value is known yet. matrix.go patches the
+		// sentinel to the current sweep point vCPU count before use.
+		// offset.flush.interval.ms is likewise left as the __FLUSH_INTERVAL_MS__
+		// sentinel, patched by matrix.go alongside __TASKS_MAX__. Per the Aiven
+		// S3 connector README's "Record grouping" section, this connector has no
+		// record-count-based file rotation — it only flushes grouped, buffered
+		// records per offset.flush.interval.ms. Buffered-but-unflushed volume
+		// therefore scales with (aggregate throughput) x (flush interval), and
+		// aggregate throughput now scales with tasks.max, so the interval must
+		// scale inversely (10000/n ms) to keep buffered memory roughly bounded
+		// across the vCPU sweep instead of growing with task count and OOMing
+		// the JVM heap (observed live at vCPU=2 before this fix).
+		PropsTemplate: `{
+  "connector.class": "io.aiven.kafka.connect.s3.AivenKafkaConnectS3SinkConnector",
+  "tasks.max": "__TASKS_MAX__",
+  "topics": "{{.Topic}}",
+  "aws.s3.bucket.name": "{{.Bucket}}",
+  "aws.s3.region": "{{.Region}}",
+  "file.name.template": "{{.Prefix}}{{"{{"}}topic{{"}}"}}-{{"{{"}}partition{{"}}"}}-{{"{{"}}start_offset{{"}}"}}",
+  "file.compression.type": "gzip",
+  "format.output.type": "jsonl",
+  "format.output.fields": "value",
+  "consumer.override.auto.offset.reset": "earliest",
+  "consumer.override.session.timeout.ms": "300000",
+  "consumer.override.max.poll.interval.ms": "300000",
+  "consumer.override.max.partition.fetch.bytes": "1048576",
+  "consumer.override.max.poll.records": "2000",
+  "offset.flush.interval.ms": "__FLUSH_INTERVAL_MS__",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter.schemas.enable": "false",
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "false"
+}`,
+		RequiredPlugins: []string{"s3-sink-connector-for-apache-kafka*"},
+	},
 }
 
 func kcConnectorSpecFor(connector string) (kcConnectorSpec, bool) {
@@ -278,6 +365,11 @@ type kcRenderInputs struct {
 	Table         string
 	Topic         string
 	ConsumerGroup string
+
+	// Sink (s3) render inputs. Empty for source connectors and for the
+	// iceberg sink (Region/Topic/ConsumerGroup above are shared).
+	Bucket string
+	Prefix string
 }
 
 // renderKCConfig produces the JSON config map ready to POST to the KC REST

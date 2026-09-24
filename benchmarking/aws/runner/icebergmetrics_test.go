@@ -119,6 +119,43 @@ func TestParseIcebergSeries_IgnoresPerTableLines(t *testing.T) {
 	}
 }
 
+// TestParseIcebergSeries_MissingBytesLineAlsoDropsRecords documents a
+// pre-existing coupling relevant to the s3 sidecar's total_files_size_bytes
+// omission (see s3SidecarSetup's SIZE_OK handling): a frame that omits the
+// total_files_size_bytes line entirely (e.g. because the size for that poll
+// interval was genuinely unavailable) is not just excluded from MBPerSec —
+// it drops the WHOLE point, including MsgPerSec, for every interval that
+// touches it. ParseIcebergSeries gates on hasB before it even looks at
+// records, so a records-only frame is never emitted. This is intentionally
+// NOT changed by the total_files_size_bytes-omission fix: decoupling
+// MsgPerSec from bytes availability is a larger change than that fix and is
+// tracked separately (see s3SidecarSetup's doc comment).
+func TestParseIcebergSeries_MissingBytesLineAlsoDropsRecords(t *testing.T) {
+	dump := strings.Join([]string{
+		"###timestamp=1000",
+		"total_files_size_bytes 0",
+		"total_records 0",
+		"###timestamp=1010",
+		// total_files_size_bytes intentionally omitted: simulates a poll
+		// whose aws s3api call failed, per the s3 sidecar's SIZE_OK fix.
+		"total_records 1000000",
+		"###timestamp=1020",
+		"total_files_size_bytes 104857600",
+		"total_records 2000000",
+	}, "\n")
+	pts, err := ParseIcebergSeries(strings.NewReader(dump))
+	if err != nil {
+		t.Fatalf("ParseIcebergSeries: %v", err)
+	}
+	// Both the [1000,1010] and [1010,1020] intervals touch the frame
+	// missing its bytes line, so both are dropped entirely -- not just
+	// their MBPerSec, their MsgPerSec too -- leaving zero points from a
+	// three-frame dump.
+	if len(pts) != 0 {
+		t.Errorf("a frame missing total_files_size_bytes must drop every interval touching it (including MsgPerSec), got %#v", pts)
+	}
+}
+
 func TestParseIcebergSeries_Empty(t *testing.T) {
 	pts, err := ParseIcebergSeries(strings.NewReader(""))
 	if err != nil {

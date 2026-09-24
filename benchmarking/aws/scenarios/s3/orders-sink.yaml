@@ -1,0 +1,87 @@
+name: s3-orders-sink
+description: |
+  Drain a pre-seeded Redpanda topic of flat JSON records into batched,
+  gzip'd NDJSON objects in S3 via the aws_s3 output, across a vCPU sweep.
+  This benches a plain Kafka(Redpanda)-topic -> raw-S3-object sink
+  (Connect-only, no Kafka Connect counterpart is wired) as a stand-in for a
+  Kafka Connect S3 Sink connector replacement sizing exercise. Throughput is
+  server-side committed truth: the sidecar polls
+  `aws s3api list-objects-v2` for the run's object prefix (summed size and
+  object count) every 10s. Bounded dataset (no sustained workload): the
+  topic is the fixed input; each sweep point re-reads it from the beginning
+  against a freshly emptied prefix.
+
+  Run the smoke scenario (orders-sink-smoke.yaml) first on a fresh setup.
+
+direction: sink
+connector: s3
+stack: s3
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  # Sized so the FASTEST point cannot drain the topic inside its full
+  # warmup+duration window (25 min = 1500 s, see workload below — 15 min
+  # measured plus a 10-min KC cold-start lead-in that's discarded from the
+  # summary but still consumes/writes the whole time). A plain S3
+  # PUT-per-batch sink has none of Iceberg's Glue-commit or
+  # Snowpipe-streaming overhead, so assume a generous upper bound of
+  # ~400 MB/s at 8 vCPU. 340M rows at 1200 B/row = 408,000,000,000 B =
+  # 408,000 MB -> ~1020 s at 400 MB/s, still under the 1500 s window even
+  # at that conservative ceiling; real observed rates (≤~55 MB/s Connect,
+  # lower for KC) drain the topic in ~2 hours, nowhere close.
+  # Extra data costs only seed time; every point re-reads the same topic
+  # from offset 0.
+  initial_rows: 340000000
+  row_size_bytes: 1200
+  seeder: json-orders
+  expected_peak_mb_s: 400
+
+pipeline:
+  # Same recipe the smoke validates; see orders-sink-smoke.yaml for the
+  # batching/compression rationale, including why checkpoint_limit must
+  # nest inside unordered_processing (an object field, not a bool) and why
+  # it must exceed batching.count.
+  input_options:
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 40000
+  output:
+    aws_s3:
+      path: '${!uuid_v4()}.ndjson.gz'
+      content_type: application/x-ndjson
+      content_encoding: gzip
+      max_in_flight: 32
+      batching:
+        count: 20000
+        period: 5s
+        processors:
+          - archive:
+              format: lines
+          - compress:
+              algorithm: gzip
+
+workload:
+  # KC-specific: at tasks.max > 1, the Aiven connector's consumer group
+  # takes several minutes to actually start moving data after the reset —
+  # confirmed live at 2 vCPU (2 tasks): the committed-truth series read 0
+  # MB/s for the first ~590s of a 900s window, then ran healthy bursts of
+  # 13-27 MB/s for the remainder. Without a warmup, that cold-start stall
+  # gets averaged into the reported mean, understating KC's real
+  # steady-state throughput. warmup: 10m discards that stall from the
+  # summary stats (both engines still consume/write throughout warmup+
+  # duration — warmup only trims leading samples) before the 15m
+  # steady-state window is measured. duration stays 15m so the actual
+  # measured window is unchanged; only the discarded lead-in grew.
+  duration: 15m
+  warmup: 10m
+
+matrix:
+  # See orders-sink-smoke.yaml: default go_mem_limit_per_vcpu (2 GiB) gives
+  # the KC worker's JVM only a 1 GiB heap at the 1-vCPU point — confirmed
+  # live OOM in the Aiven S3 connector's consumer poll. 8 GiB/vCPU is safe
+  # headroom across the whole sweep on the c8g.4xlarge runner.
+  go_mem_limit_per_vcpu: 8
+  cpu_points: [1, 2, 4, 8]
