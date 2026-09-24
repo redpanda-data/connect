@@ -108,14 +108,16 @@ oracledb_cdc:
 		}
 	}()
 
-	// Poll until the migration renames default 'max_scn' to config checkpoint_cache_key value, then immediately
-	// assert the SCN value is unchanged — the migration must only rename the key.
+	// Poll until the migration renames default 'max_scn' to config checkpoint_cache_key value.
+	// The rename must not roll the SCN back. The mined checkpoint can move it forward before
+	// the poll sees the new key, so the pre-migration SCN is a lower bound.
 	var actualSCN []byte
 	q := fmt.Sprintf(`SELECT cache_val FROM %s WHERE cache_key = :1`, cacheTableName)
 	assert.Eventually(t, func() bool {
 		return cdbDB.QueryRowContext(t.Context(), q, "oracledb_cdc").Scan(&actualSCN) == nil
 	}, time.Minute, time.Second, "expected migration to rename 'max_scn' to 'oracledb_cdc'")
-	assert.Equal(t, expectedSCN, actualSCN, "expected migration to leave SCN value unchanged")
+	assert.GreaterOrEqual(t, binary.LittleEndian.Uint64(actualSCN), binary.LittleEndian.Uint64(expectedSCN),
+		"expected migration to keep or advance the pre-migration SCN, never roll it back")
 
 	t.Log("Verifying streaming changes...")
 	{
