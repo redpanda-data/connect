@@ -323,8 +323,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	var lastSCN uint64
-	if err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, &lastSCN, lm.processRedoEvent); err != nil {
+	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, lm.processRedoEvent); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
 			// Resume just before the last processed SCN rather than from the start
@@ -974,11 +973,12 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 	return false
 }
 
-// queryLogMinerContents streams the rows in (startSCN, endSCN] to processEvent,
-// setting lastSCN to the SCN of each event once it has been processed.
-func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, lastSCN *uint64, processEvent func(context.Context, *sqlredo.RedoEvent) error) error {
+// queryLogMinerContents streams the rows in (startSCN, endSCN] to processEvent.
+// lastSCN is the SCN of the last event processed, and is returned alongside
+// any error so a caller can resume from where the query stopped.
+func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, processEvent func(context.Context, *sqlredo.RedoEvent) error) (lastSCN uint64, err error) {
 	if len(lm.tables) == 0 {
-		return nil
+		return lastSCN, nil
 	}
 
 	// Use the pre-built query from initialization
@@ -986,14 +986,14 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	if lm.contentStmt == nil {
 		stmt, err := conn.PrepareContext(ctx, lm.logMinerQuery)
 		if err != nil {
-			return fmt.Errorf("preparing logminer contents query: %w", err)
+			return lastSCN, fmt.Errorf("preparing logminer contents query: %w", err)
 		}
 		lm.contentStmt = stmt
 	}
 	queryStart := time.Now()
 	rows, err := lm.contentStmt.QueryContext(ctx, startSCN, endSCN)
 	if err != nil {
-		return fmt.Errorf("querying logminer: %w", err)
+		return lastSCN, fmt.Errorf("querying logminer: %w", err)
 	}
 	defer rows.Close()
 
@@ -1026,7 +1026,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			&csf,
 			&event.Username,
 		); err != nil {
-			return err
+			return lastSCN, err
 		}
 
 		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
@@ -1040,10 +1040,10 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			if csf == 0 {
 				// Final fragment — emit the accumulated event.
 				if err := processEvent(ctx, pending); err != nil {
-					return fmt.Errorf("processing redo event: %w", err)
+					return lastSCN, fmt.Errorf("processing redo event: %w", err)
 				}
 				// The first fragment's SCN, so a retry re-reads the whole statement.
-				*lastSCN = pending.SCN
+				lastSCN = pending.SCN
 				pending = nil
 			}
 			// If csf == 1, continue accumulating.
@@ -1057,13 +1057,13 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 		}
 
 		if err := processEvent(ctx, event); err != nil {
-			return fmt.Errorf("processing redo event: %w", err)
+			return lastSCN, fmt.Errorf("processing redo event: %w", err)
 		}
-		*lastSCN = event.SCN
+		lastSCN = event.SCN
 	}
 
 	if err := rows.Err(); err != nil {
-		return err
+		return lastSCN, err
 	}
 
 	// capture timings if 0 rows
@@ -1077,11 +1077,11 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	if pending != nil {
 		lm.log.Warnf("Incomplete CSF SQL sequence at end of result set (scn=%d, op=%s, txn=%s)", pending.SCN, pending.Operation, pending.TransactionID)
 		if err := processEvent(ctx, pending); err != nil {
-			return fmt.Errorf("processing redo event: %w", err)
+			return lastSCN, fmt.Errorf("processing redo event: %w", err)
 		}
 	}
 
-	return nil
+	return lastSCN, nil
 }
 
 // LogFile represents a redo or archive log file
