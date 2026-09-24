@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -327,6 +328,61 @@ func TestShouldDeferMiningCycle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := deferMiningCycle(tt.currentSCN, tt.dbSCN, tt.minWindowSize)
 			assert.Equal(t, tt.shouldDefer, got)
+		})
+	}
+}
+
+// TestMinedCheckpointSCN regression-tests CON-583: a mining cycle with no rows
+// for the monitored tables must still give a checkpoint position.
+func TestMinedCheckpointSCN(t *testing.T) {
+	tests := []struct {
+		name         string
+		currentSCN   uint64
+		lowWatermark uint64
+		lobInFlight  bool
+		wantSCN      uint64
+		wantOK       bool
+	}{
+		{
+			name:         "no open transaction checkpoints the mined position",
+			currentSCN:   1000,
+			lowWatermark: math.MaxUint64,
+			wantSCN:      1000,
+			wantOK:       true,
+		},
+		{
+			name:         "open transaction below current SCN caps the checkpoint",
+			currentSCN:   1000,
+			lowWatermark: 900,
+			wantSCN:      899,
+			wantOK:       true,
+		},
+		{
+			name:         "open transaction above current SCN does not cap it",
+			currentSCN:   1000,
+			lowWatermark: 1500,
+			wantSCN:      1000,
+			wantOK:       true,
+		},
+		{
+			name:         "lob in flight skips the checkpoint",
+			currentSCN:   1000,
+			lowWatermark: math.MaxUint64,
+			lobInFlight:  true,
+		},
+		{
+			name:         "low watermark of 1 gives 0 and is skipped",
+			currentSCN:   1000,
+			lowWatermark: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSCN, gotOK := minedCheckpointSCN(tt.currentSCN, tt.lowWatermark, tt.lobInFlight)
+			assert.Equal(t, tt.wantOK, gotOK)
+			if tt.wantOK {
+				assert.Equal(t, tt.wantSCN, gotSCN)
+			}
 		})
 	}
 }
