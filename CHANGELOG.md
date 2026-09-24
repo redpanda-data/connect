@@ -3,6 +3,21 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.111.0 - 2026-09-24
+
+### Added
+
+- mssqlserver_cdc: Exposed seqval and command_id metadata fields alongside lsn to enable proper ordering of changes within transactions. ([@Leward](https://github.com/Leward), [#4831](https://github.com/redpanda-data/connect/pull/4831))
+- oracledb_cdc: Added prefetch_rows configuration option to optimize LogMiner query performance. ([@josephwoodward](https://github.com/josephwoodward), [#4698](https://github.com/redpanda-data/connect/pull/4698))
+- websocket: Enabled websocket input and output components for cloud distributions. ([@prakhargarg105](https://github.com/prakhargarg105), [#4708](https://github.com/redpanda-data/connect/pull/4708))
+
+### Fixed
+
+- oracledb_cdc: Fixed redelivery issue where ORA-01368 errors caused by reused online redo logs resulted in duplicate transaction publication. ([@josephwoodward](https://github.com/josephwoodward), [#4850](https://github.com/redpanda-data/connect/pull/4850))
+- postgres_cdc: Fixed validation to allow heartbeat_interval and pg_wal_monitor_interval to be set to 0s as documented to disable these features. ([@Leward](https://github.com/Leward), [#4846](https://github.com/redpanda-data/connect/pull/4846))
+- redpanda_migrator: Reduced schema registry fan-out from O(N²) to O(N) requests during translate_ids sync by using RegisterSchema instead of CreateSchema, preventing request bursts that overwhelmed single-node registries. ([@prakhargarg105](https://github.com/prakhargarg105), [#4734](https://github.com/redpanda-data/connect/pull/4734))
+- sftp: Fixed SSH channel leak on write failures that exhausted the server's channel limit and prevented reconnection. ([@brokenjacobs](https://github.com/brokenjacobs), [#4839](https://github.com/redpanda-data/connect/pull/4839))
+
 ## 4.110.0 - 2026-09-17
 
 ### Added
