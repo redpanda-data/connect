@@ -21,6 +21,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
+	"github.com/redpanda-data/connect/v4/internal/replication/ticket"
 )
 
 func TestPublishBatch(t *testing.T) {
@@ -448,10 +449,9 @@ func TestAdmitEscapesOnContextCancel(t *testing.T) {
 			return publisher.Publish(ctx, streamingEvent(101))
 		}()
 	}()
+	// Ticket 0 is admitted once its batch of 2 is tracked.
 	require.Eventually(t, func() bool {
-		publisher.batcherMu.Lock()
-		defer publisher.batcherMu.Unlock()
-		return publisher.nextTicket == 1
+		return cp.Pending() == 2
 	}, 5*time.Second, time.Millisecond)
 
 	// The handoff's flushCurrent queues behind it with a cancellable context
@@ -528,10 +528,9 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 			return publisher.Publish(ctx, streamingEvent(101))
 		}()
 	}()
+	// Ticket 0 is admitted once its batch of 2 is tracked.
 	require.Eventually(t, func() bool {
-		publisher.batcherMu.Lock()
-		defer publisher.batcherMu.Unlock()
-		return publisher.nextTicket == 1
+		return cp.Pending() == 2
 	}, 5*time.Second, time.Millisecond)
 
 	// A flusher with ROWS (ticket 1) queues behind it and is cancelled: its
@@ -561,7 +560,7 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 		}
 		return publisher.Publish(ctx, streamingEvent(301))
 	}()
-	require.ErrorIs(t, laterErr, errQueueSealed,
+	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
 }
 
@@ -613,7 +612,7 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 		}
 		return publisher.Publish(ctx, streamingEvent(301))
 	}()
-	require.ErrorIs(t, laterErr, errQueueSealed,
+	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
 }
 
