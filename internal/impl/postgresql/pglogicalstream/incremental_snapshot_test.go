@@ -981,6 +981,8 @@ func TestIncSnapshotNoteReadStartsCooldownOnRetryableFailure(t *testing.T) {
 	fixed := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	s := &Stream{}
 	s.incSnapshot.now = func() time.Time { return fixed }
+	// The cooldown is configured, so a zero value would hold nothing off.
+	s.incSnapshot.retryCooldown = 30 * time.Second
 
 	sentinel := fmt.Errorf("%w: lock not available", incrementalsnapshot.ErrRetryable)
 	got := s.incSnapshotNoteRead(sentinel)
@@ -1001,8 +1003,9 @@ func TestIncSnapshotNoteReadStartsCooldownOnRetryableFailure(t *testing.T) {
 // reads off forever (if it also blocked exactly at notBefore) or expire the
 // cooldown a tick early (if it blocked one instant later than intended).
 func TestIncSnapshotReadHeldOffCooldownBoundary(t *testing.T) {
+	const testRetryCooldown = 30 * time.Second
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	notBefore := start.Add(IncSnapshotRetryCooldown)
+	notBefore := start.Add(testRetryCooldown)
 
 	for _, test := range []struct {
 		name    string
@@ -1017,6 +1020,7 @@ func TestIncSnapshotReadHeldOffCooldownBoundary(t *testing.T) {
 			clock := test.clock
 			s := &Stream{}
 			s.incSnapshot.now = func() time.Time { return clock }
+			s.incSnapshot.retryCooldown = testRetryCooldown
 			s.incSnapshot.retryNotBefore = notBefore
 
 			err := s.incSnapshotReadHeldOff()

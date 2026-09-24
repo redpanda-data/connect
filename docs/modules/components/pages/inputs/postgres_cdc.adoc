@@ -104,6 +104,7 @@ input:
       enabled: false
       chunk_size: 1024
       heartbeat_interval: 1s
+      retry_cooldown: 30s
       checkpoint_cache: "" # No default (optional)
       checkpoint_cache_key: postgres_cdc_incremental_snapshot
     auto_replay_nacks: true
@@ -708,6 +709,17 @@ Whichever of this and the top-level `heartbeat_interval` is more frequent wins, 
 *Type*: `string`
 
 *Default*: `"1s"`
+
+=== `incremental_snapshot.retry_cooldown`
+
+How long the backfill waits before retrying a chunk read that failed transiently, usually because of a conflicting lock on the table being backfilled, such as `VACUUM FULL` or most `ALTER TABLE` statements.
+
+The snapshot's chunk read shares the goroutine that reads the replication stream, so each retry that blocks on the lock delays replication for every table. Retrying on every streamed transaction would repeat that delay for as long as the lock is held. Raise it to protect replication latency during a long migration, or lower it to resume the backfill sooner after a brief lock. Setting it to `0s` disables the cooldown, retrying on the next streamed transaction.
+
+
+*Type*: `string`
+
+*Default*: `"30s"`
 
 === `incremental_snapshot.checkpoint_cache`
 

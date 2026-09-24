@@ -26,7 +26,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pgtest"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -907,14 +906,6 @@ postgres_cdc:
 			lockHold = 20 * time.Second
 		)
 
-		// The 30s default would idle the backfill for ~10s past the lock on
-		// every run; unit tests cover the cooldown itself. Setting the
-		// package var is safe because this subtest is serial: the parallel
-		// QuietTable/PG* siblings resume only after the cleanup below.
-		defaultCooldown := pglogicalstream.IncSnapshotRetryCooldown
-		pglogicalstream.IncSnapshotRetryCooldown = 3 * time.Second
-		t.Cleanup(func() { pglogicalstream.IncSnapshotRetryCooldown = defaultCooldown })
-
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)
 
@@ -962,6 +953,9 @@ postgres_cdc:
         chunk_size: %d
         heartbeat_interval: 500ms
         checkpoint_cache: snap_cache
+        # Shorter than the 30s default, which would idle the backfill well
+        # past the lock on every run. Unit tests cover the cooldown itself.
+        retry_cooldown: 3s
 `, databaseURL, chunkSize),
 			consume: func(_ context.Context, batch service.MessageBatch) error {
 				mu.Lock()

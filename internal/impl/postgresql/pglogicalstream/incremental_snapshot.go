@@ -49,17 +49,6 @@ const incSnapshotLockTimeout = 5 * time.Second
 // stay under wal_sender_timeout for the same reason.
 const incSnapshotReadTimeout = 15 * time.Second
 
-// IncSnapshotRetryCooldown holds off table reads after a retryable failure.
-// The coordinator retries a deferred plan on every commit, and each attempt
-// costs a full incSnapshotLockTimeout on the replication loop, so retrying
-// straight away keeps CDC degraded for as long as the lock is held. Six
-// times the lock timeout: long enough that the repeated stalls stop
-// mattering, short enough that a backfill does not visibly crawl.
-//
-// A var so an integration test can shorten it rather than waiting the whole
-// cooldown out. Nothing writes it at runtime.
-var IncSnapshotRetryCooldown = 30 * time.Second
-
 type incrementalSnapshot struct {
 	coordinator *incsnapshot.Coordinator
 	// conn is a plain query connection. The snapshot must never use
@@ -74,11 +63,17 @@ type incrementalSnapshot struct {
 	// backfilling tells the heartbeat whether it still owes transaction ids.
 	backfilling atomic.Bool
 	// retryNotBefore holds table reads off until this time after a retryable
-	// failure -- refer to IncSnapshotRetryCooldown. Zero means no cooldown.
-	// Only the stream goroutine touches it, as with pkCache, so it needs no
+	// failure -- refer to retryCooldown. Zero means no cooldown. Only the
+	// stream goroutine touches it, as with pkCache, so it needs no
 	// synchronisation: backfilling is atomic only because the heartbeat reads
 	// it.
 	retryNotBefore time.Time
+	// retryCooldown holds off table reads after a retryable failure. The
+	// coordinator retries a deferred plan on every commit, and each attempt
+	// costs a full incSnapshotLockTimeout on the replication loop, so
+	// retrying straight away keeps CDC degraded for as long as the lock is
+	// held.
+	retryCooldown time.Duration
 	// now is time.Now, replaced in tests so a cooldown needs no sleep.
 	now func() time.Time
 }
@@ -117,6 +112,7 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 	s.incSnapshot.conn = db
 	s.incSnapshot.pkCache = make(map[string][]string)
 	s.incSnapshot.now = time.Now
+	s.incSnapshot.retryCooldown = incSnapshotCfg.RetryCooldown
 
 	// Nothing is queued at first: tables are requested by signal. A resumed
 	// checkpoint brings back what the last run covered.
@@ -479,7 +475,10 @@ func (s *Stream) incSnapshotNoteRead(err error) error {
 		return nil
 	}
 	if errors.Is(err, incrementalsnapshot.ErrRetryable) {
-		s.incSnapshot.retryNotBefore = s.incSnapshotNow().Add(IncSnapshotRetryCooldown)
+		// A zero cooldown sets retryNotBefore to exactly now, and
+		// incSnapshotReadHeldOff's !now.Before(notBefore) check allows the
+		// next read at that instant, so zero needs no special case here.
+		s.incSnapshot.retryNotBefore = s.incSnapshotNow().Add(s.incSnapshot.retryCooldown)
 	}
 	return err
 }

@@ -74,6 +74,14 @@ func parseIncrementalSnapshotCfg(conf *service.ParsedConfig, heartbeatInterval t
 		return nil, fmt.Errorf("%s.%s must be > 0, got %d", fieldIncSnapshot, fieldIncrementalSnapshotChunkSize, cfg.ChunkSize)
 	}
 
+	// Zero is legal: it means retry on the next streamed transaction rather
+	// than holding reads off at all.
+	if cfg.RetryCooldown, err = snapConf.FieldDuration(fieldIncSnapshotRetryCooldown); err != nil {
+		return nil, err
+	} else if cfg.RetryCooldown < 0 {
+		return nil, fmt.Errorf("%s.%s must be >= 0, got %s", fieldIncSnapshot, fieldIncSnapshotRetryCooldown, cfg.RetryCooldown)
+	}
+
 	// The snapshot moves forward only on a streamed commit. On a table with
 	// no writes the heartbeat makes the only such commit. Without a heartbeat
 	// the snapshot reads the first chunk and then stops for ever, and it

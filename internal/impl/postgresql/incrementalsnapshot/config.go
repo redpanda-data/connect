@@ -24,6 +24,10 @@ var (
 	// DefaultIncSnapshotHeartbeatInterval is frequent enough that the
 	// backfill is bound by chunk reads rather than by the heartbeat.
 	DefaultIncSnapshotHeartbeatInterval = time.Second
+	// DefaultIncSnapshotRetryCooldown is long enough that a lock held for a
+	// migration stops mattering, short enough that a backfill does not
+	// visibly crawl.
+	DefaultIncSnapshotRetryCooldown = 30 * time.Second
 )
 
 // Cfg holds the incremental snapshot configuration.
@@ -31,5 +35,6 @@ type Cfg struct {
 	Enabled           bool
 	ChunkSize         int
 	HeartbeatInterval time.Duration
+	RetryCooldown     time.Duration
 	ResumeState       *incrementalsnapshot.State
 }

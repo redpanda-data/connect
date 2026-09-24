@@ -64,6 +64,7 @@ const (
 	fieldIncSnapshotCheckpointCache    = "checkpoint_cache"
 	fieldIncSnapshotCheckpointCacheKey = "checkpoint_cache_key"
 	fieldIncSnapshotHeartbeatInterval  = "heartbeat_interval"
+	fieldIncSnapshotRetryCooldown      = "retry_cooldown"
 )
 
 func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *pgconn.Config, _ *service.Logger) (TokenBuilder, error) {
@@ -324,6 +325,10 @@ set for the backfill and reverted afterwards; it takes a brief lock but rewrites
 				Description("How often to heartbeat while `"+fieldIncSnapshotEnabled+"` is `true`. The snapshot only advances on a streamed transaction, so on quiet tables this paces it. Raise it to reduce write load at the cost of a slower backfill.\n\nWhichever of this and the top-level `"+fieldHeartbeatInterval+"` is more frequent wins, and applies for the life of the input: it is fixed at startup, and stays in force between backfills as well as during them. Heartbeats are transactional only while a backfill is in progress, since that is the only time the snapshot needs a transaction id from one; between backfills they cost nothing extra.").
 				ShortDescription("How often to heartbeat while incremental snapshotting is enabled, which paces it on quiet tables.").
 				Default(incsnapshot.DefaultIncSnapshotHeartbeatInterval.String()),
+			service.NewDurationField(fieldIncSnapshotRetryCooldown).
+				Description("How long the backfill waits before retrying a chunk read that failed transiently, usually because of a conflicting lock on the table being backfilled, such as `VACUUM FULL` or most `ALTER TABLE` statements.\n\nThe snapshot's chunk read shares the goroutine that reads the replication stream, so each retry that blocks on the lock delays replication for every table. Retrying on every streamed transaction would repeat that delay for as long as the lock is held. Raise it to protect replication latency during a long migration, or lower it to resume the backfill sooner after a brief lock. Setting it to `0s` disables the cooldown, retrying on the next streamed transaction.").
+				ShortDescription("How long the backfill waits before retrying a chunk read that failed transiently, such as from a lock conflict.").
+				Default(incsnapshot.DefaultIncSnapshotRetryCooldown.String()),
 			service.NewStringField(fieldIncSnapshotCheckpointCache).
 				Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] storing the snapshot's progress, so a restart resumes instead of starting over. Required when `"+fieldIncSnapshotEnabled+"` is `true`.").
 				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
