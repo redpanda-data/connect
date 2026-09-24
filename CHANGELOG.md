@@ -3,6 +3,25 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.111.0 - 2026-09-24
+
+### Added
+
+- mssqlserver_cdc: MSSQL Server CDC now exposes seqval and command_id metadata alongside lsn for more precise change ordering within transactions. ([@Leward](https://github.com/Leward), [#4831](https://github.com/redpanda-data/connect/pull/4831))
+
+### Fixed
+
+- postgres_cdc: PostgreSQL CDC now correctly validates heartbeat_interval and wal_monitor_interval settings before opening connections, allowing 0s to properly disable heartbeats. ([@Leward](https://github.com/Leward), [#4846](https://github.com/redpanda-data/connect/pull/4846))
+- redpanda: Redpanda migrator with translate_ids enabled now registers schemas efficiently in O(N) time instead of O(N²), preventing request bursts that overload schema registries. ([@prakhargarg105](https://github.com/prakhargarg105), [#4734](https://github.com/redpanda-data/connect/pull/4734))
+- sftp: SFTP output now properly closes the SSH channel on write failures, preventing channel leaks that exhausted server connection limits. ([@brokenjacobs](https://github.com/brokenjacobs), [#4839](https://github.com/redpanda-data/connect/pull/4839))
+
+### Changed
+
+- crypto: JWT examples in sign_jwt_* documentation now use placeholders instead of realistic tokens to avoid triggering secret scanner detection. ([@josephwoodward](https://github.com/josephwoodward), [#4836](https://github.com/redpanda-data/connect/pull/4836))
+- postgres_cdc: PostgreSQL CDC heartbeat test now properly validates that heartbeats advance the replication slot when no regular writes occur. ([@Leward](https://github.com/Leward), [#4845](https://github.com/redpanda-data/connect/pull/4845))
+- postgres_cdc: PostgreSQL CDC heartbeat test now uses the correct 0s value to disable heartbeats instead of a workaround duration. ([@Leward](https://github.com/Leward), [#4849](https://github.com/redpanda-data/connect/pull/4849))
+- websocket: Websocket input and output components are now enabled for cloud deployments, making them available in the cloud distribution. ([@prakhargarg105](https://github.com/prakhargarg105), [#4708](https://github.com/redpanda-data/connect/pull/4708))
+
 ## 4.110.0 - 2026-09-17
 
 ### Added
