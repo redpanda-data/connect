@@ -45,6 +45,7 @@ type LogMiner struct {
 	logCollector *LogFileCollector
 	currentSCN   uint64
 	windowSize   int
+	redoVolume   *redoVolumeStrategy
 	sessionMgr   *SessionManager
 	db           *sql.DB
 	dmlParser    *sqlredo.Parser
@@ -123,6 +124,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
 		windowSize:       cfg.SCNWindowSize,
+		redoVolume:       newRedoVolumeStrategy(cfg.RedoVolumeMin, cfg.RedoVolumeGrowthMax),
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -219,6 +221,10 @@ func (lm *LogMiner) Close() error {
 		errs = append(errs, fmt.Errorf("closing log file collector statements: %w", err))
 	}
 
+	if err := lm.redoVolume.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("closing redo_volume statements: %w", err))
+	}
+
 	if err := lm.sessionMgr.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("closing session manager statements: %w", err))
 	}
@@ -274,20 +280,36 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		return true, nil
 	}
 
-	endSCN := dbCurrentSCN
-	hitCap := false
-	if maxRange := uint64(lm.windowSize); lm.currentSCN+maxRange < dbCurrentSCN {
-		endSCN = lm.currentSCN + maxRange
-		hitCap = true
+	var (
+		endSCN   uint64
+		logFiles []*LogFile
+
+		hitCap bool // scn_window specific
+	)
+
+	switch lm.cfg.WindowStrategy {
+	case WindowStrategyRedoVolume:
+		if logFiles, endSCN, err = lm.redoVolume.selectSession(ctx, conn, lm.logCollector, lm.currentSCN, dbCurrentSCN); err != nil {
+			return false, err
+		}
+	default:
+		endSCN = dbCurrentSCN
+		if maxRange := uint64(lm.windowSize); lm.currentSCN+maxRange < dbCurrentSCN {
+			endSCN = lm.currentSCN + maxRange
+			hitCap = true
+		}
 	}
 
-	// Restart the session on every cycle with explicit SCN bounds. Oracle's START_LOGMNR
-	// with ENDSCN=0 freezes the session's view at session start time, making events written
-	// after session start invisible. Per-window restart with explicit endSCN ensures all
-	// events in [currentSCN, endSCN] are visible.
-	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN); err != nil {
+	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN, logFiles); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeMissingLogFile {
+			var reduceWindowHint string
+			switch lm.cfg.WindowStrategy {
+			case WindowStrategyRedoVolume:
+				reduceWindowHint = fmt.Sprintf("Reduce logminer.redo_volume_min / logminer.redo_volume_growth_max (current budget: %d x %d bytes per thread)", lm.redoVolume.selector.count, lm.redoVolume.maxRedoLogSizeInBytes)
+			default:
+				reduceWindowHint = fmt.Sprintf("Reduce logminer.scn_window_size (current: %d SCN units)", lm.cfg.SCNWindowSize)
+			}
 			//nolint:staticcheck
 			return false, fmt.Errorf("preparing logs and starting session at position %d: %w\n\n"+
 				"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
@@ -300,7 +322,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"1. Increase Oracle's archived log retention using RMAN:\n"+
 				"   CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;\n\n"+
 				"2. Improve processing performance:\n"+
-				"   - Reduce logminer.scn_window_size (current: %d SCN units) to process smaller windows per cycle\n"+
+				"   - %s to process smaller windows per cycle\n"+
 				"   - Decrease logminer.backoff_interval (current: %v)\n"+
 				"   - Increase input batching.count for better throughput\n"+
 				"   - Use faster output (e.g., drop: {} for benchmarking)\n\n"+
@@ -312,7 +334,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"   - This loses events between the last checkpoint and the restart. To avoid that, delete the\n"+
 				"     checkpoint and set snapshot_mode to snapshot_and_stream at the same time — snapshot_mode\n"+
 				"     alone has no effect, since a checkpoint that is still present skips snapshotting entirely.",
-				lm.currentSCN, err, lm.cfg.SCNWindowSize, lm.cfg.MiningBackoffInterval)
+				lm.currentSCN, err, reduceWindowHint, lm.cfg.MiningBackoffInterval)
 		}
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
 			lm.log.Debugf("ORA-01368: redo log sequence recycled before session could start (SCN range %d–%d); the log will be available as an archived log on next cycle", lm.currentSCN, endSCN)
@@ -323,7 +345,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, lm.processRedoEvent); err != nil {
+	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, len(logFiles), lm.processRedoEvent); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
 			// Resume just before the last processed SCN rather than from the start
@@ -339,7 +361,12 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
 
-	lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
+	switch lm.cfg.WindowStrategy {
+	case WindowStrategyRedoVolume:
+		lm.redoVolume.resetIfUncapped()
+	default:
+		lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
+	}
 	lm.currentSCN = endSCN
 	return endSCN >= dbCurrentSCN, nil
 }
@@ -975,14 +1002,21 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 
 // queryLogMinerContents streams the rows in (startSCN, endSCN] to processEvent.
 // lastSCN is the SCN of the last event processed, and is returned alongside
-// any error so a caller can resume from where the query stopped.
-func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, processEvent func(context.Context, *sqlredo.RedoEvent) error) (lastSCN uint64, err error) {
+// any error so a caller can resume from where the query stopped. selectedFileCount
+// is only used for logging, under WindowStrategyRedoVolume.
+func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, selectedFileCount int, processEvent func(context.Context, *sqlredo.RedoEvent) error) (lastSCN uint64, err error) {
 	if len(lm.tables) == 0 {
 		return lastSCN, nil
 	}
 
 	// Use the pre-built query from initialization
-	lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
+	switch lm.cfg.WindowStrategy {
+	case WindowStrategyRedoVolume:
+		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d, redo_volume budget=%d x %d bytes per thread, %d files selected)",
+			startSCN, endSCN, lm.redoVolume.selector.count, lm.redoVolume.maxRedoLogSizeInBytes, selectedFileCount)
+	default:
+		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
+	}
 	if lm.contentStmt == nil {
 		stmt, err := conn.PrepareContext(ctx, lm.logMinerQuery)
 		if err != nil {
@@ -1084,6 +1118,16 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	return lastSCN, nil
 }
 
+const (
+	// logStatusArchived is the Status value GetLogsBySCNRange hardcodes for
+	// every archive log record (see the query below). Oracle's V$LOG.STATUS
+	// values (CURRENT/ACTIVE/INACTIVE/...) never take this value, so it
+	// reliably distinguishes a fully-archived, immutable copy from an online
+	// (still mutable) one, without depending on the Type/IsCurrent fields.
+	logStatusArchived = "ARCHIVED"
+	logStatusCurrent  = "CURRENT"
+)
+
 // LogFile represents a redo or archive log file
 type LogFile struct {
 	FileName  string
@@ -1093,6 +1137,25 @@ type LogFile struct {
 	Type      string // "ONLINE" or "ARCHIVED"
 	IsCurrent bool
 	Thread    int
+	Status    string
+	// SizeBytes is the file's on-disk size, budgeted by redo_volume
+	// instead of a flat file count (see logFileSelector).
+	SizeBytes uint64
+}
+
+// IsOpenCurrent reports whether this is the single open current redo log
+// (see logStatusCurrent) - the only file whose NextSCN keeps advancing.
+// Unlike IsCurrent, it is false for ACTIVE/INACTIVE logs that have already
+// switched away.
+func (lf *LogFile) IsOpenCurrent() bool {
+	return lf.Status == logStatusCurrent
+}
+
+// IsArchived reports whether this is a fully-archived, immutable log copy,
+// as opposed to an online one (CURRENT, ACTIVE, or INACTIVE) that Oracle
+// could still be writing to or hasn't archived yet.
+func (lf *LogFile) IsArchived() bool {
+	return lf.Status == logStatusArchived
 }
 
 // LogFileCollector finds relevant log files to mine
@@ -1109,7 +1172,7 @@ func NewLogFileCollector() *LogFileCollector {
 // GetLogsBySCNRange collects log files whose SCN range overlaps [startSCN, endSCN].
 func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
 	query := `
-		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD
+		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD, STATUS, BYTES
 		FROM (
 
 			-- Online redo logs that overlap [startSCN, endSCN]
@@ -1119,12 +1182,14 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 				L.NEXT_CHANGE# NEXT_CHANGE,
 				L.SEQUENCE# AS SEQ,
 				'ONLINE' AS TYPE,
-				L.THREAD# AS THREAD
+				L.THREAD# AS THREAD,
+				L.STATUS AS STATUS,
+				L.BYTES AS BYTES
 			FROM V$LOGFILE F, V$LOG L
 			WHERE (L.STATUS = 'CURRENT' OR L.NEXT_CHANGE# >= :1)
 			AND L.FIRST_CHANGE# <= :2
 			AND F.GROUP# = L.GROUP#
-			GROUP BY L.FIRST_CHANGE#, L.NEXT_CHANGE#, L.SEQUENCE#, L.THREAD#
+			GROUP BY L.FIRST_CHANGE#, L.NEXT_CHANGE#, L.SEQUENCE#, L.THREAD#, L.STATUS, L.BYTES
 
 			UNION
 
@@ -1135,7 +1200,9 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 				A.NEXT_CHANGE# NEXT_CHANGE,
 				A.SEQUENCE# AS SEQ,
 				'ARCHIVED' AS TYPE,
-				A.THREAD# AS THREAD
+				A.THREAD# AS THREAD,
+				'ARCHIVED' AS STATUS,
+				A.BLOCKS * A.BLOCK_SIZE AS BYTES
 			FROM V$ARCHIVED_LOG A, V$DATABASE D
 			WHERE A.NAME IS NOT NULL
 			AND A.ARCHIVED = 'YES'
@@ -1169,7 +1236,7 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 	var archived, online []*LogFile
 	for rows.Next() {
 		lf := &LogFile{}
-		if err := rows.Scan(&lf.FileName, &lf.FirstSCN, &lf.NextSCN, &lf.Sequence, &lf.Type, &lf.Thread); err != nil {
+		if err := rows.Scan(&lf.FileName, &lf.FirstSCN, &lf.NextSCN, &lf.Sequence, &lf.Type, &lf.Thread, &lf.Status, &lf.SizeBytes); err != nil {
 			return nil, fmt.Errorf("scanning logs row: %w", err)
 		}
 		lf.IsCurrent = lf.Type == "ONLINE"
@@ -1187,12 +1254,14 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 
 // Close releases the prepared GetLogsBySCNRange statement, if any.
 func (c *LogFileCollector) Close() error {
-	if c.stmt == nil {
-		return nil
+	var errs []error
+	if c.stmt != nil {
+		if err := c.stmt.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		c.stmt = nil
 	}
-	err := c.stmt.Close()
-	c.stmt = nil
-	return err
+	return errors.Join(errs...)
 }
 
 // deduplicateLogs merges archive and online log lists, preferring the archive
@@ -1225,10 +1294,13 @@ func deduplicateLogs(archived, online []*LogFile) []*LogFile {
 // starts (or restarts) a LogMiner session with explicit SCN bounds. Files are only reloaded
 // (via ADD_LOGFILE) when the required set of logs that contain SCN range changes - so the session is kept
 // open across consecutive windows that cover the same log files.
-func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) error {
-	logFiles, err := lm.logCollector.GetLogsBySCNRange(ctx, conn, startSCN, endSCN)
-	if err != nil {
-		return fmt.Errorf("collecting redo logs for logminer: %w", err)
+func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, preSelected []*LogFile) error {
+	logFiles := preSelected
+	if logFiles == nil {
+		var err error
+		if logFiles, err = lm.logCollector.GetLogsBySCNRange(ctx, conn, startSCN, endSCN); err != nil {
+			return fmt.Errorf("collecting redo logs for logminer: %w", err)
+		}
 	}
 	types := make([]string, len(logFiles))
 	for i, f := range logFiles {

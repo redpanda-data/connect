@@ -895,21 +895,6 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 		stream *service.Stream
 	)
 
-	// collectMessages reads messages from channel ready for assertion
-	collectMessages := func(t *testing.T, c chan *service.Message, want int) []*service.Message {
-		t.Helper()
-		msgs := make([]*service.Message, 0, want)
-		for msg := range c {
-			msgs = append(msgs, msg)
-			if len(msgs) == want {
-				break
-			}
-			require.LessOrEqualf(t, len(msgs), want, "received too many messages")
-		}
-		require.Lenf(t, msgs, want, "channel closed before receiving %d messages, got %d", want, len(msgs))
-		return msgs
-	}
-
 	mustAssertMetadata := func(t *testing.T, operation string, msgs []*service.Message) {
 		t.Helper()
 		results := make(map[string][]*service.Message)
@@ -1025,7 +1010,7 @@ oracledb_cdc:
 		}
 
 		t.Run("Streaming insert changes...", func(t *testing.T) {
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "insert", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1049,7 +1034,7 @@ oracledb_cdc:
 			db.MustExec("UPDATE testdb.foo2 SET val = 2")
 			db.MustExec("UPDATE testdb2.bar SET val = 2")
 
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "update", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1066,7 +1051,7 @@ oracledb_cdc:
 			db.MustExec("DELETE FROM testdb.foo2")
 			db.MustExec("DELETE FROM testdb2.bar")
 
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "delete", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1147,7 +1132,7 @@ file:
 		}
 
 		t.Run("Streaming insert changes...", func(t *testing.T) {
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "insert", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1164,7 +1149,7 @@ file:
 			db.MustExec("UPDATE testdb.foo2 SET val = 2")
 			db.MustExec("UPDATE testdb2.bar SET val = 2")
 
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "update", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1181,7 +1166,7 @@ file:
 			db.MustExec("DELETE FROM testdb.foo2")
 			db.MustExec("DELETE FROM testdb2.bar")
 
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "delete", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1195,6 +1180,129 @@ file:
 
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
+}
+
+func TestIntegrationOracleDBCDCRedoVolumeWindowStrategy(t *testing.T) {
+	integration.CheckSkip(t)
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.logcount", "CREATE TABLE testdb.logcount (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+
+	msgChan := make(chan *service.Message, 1)
+
+	// min_scn_window_size: 0 (mirroring the scn_window-strategy tests in this
+	// file) confirms redo_volume mines DML promptly regardless of SCN backlog size.
+	cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  snapshot_mode: none
+  logminer:
+    window_strategy: redo_volume
+    redo_volume_min: 2
+    redo_volume_growth_max: 4
+    backoff_interval: 1s
+    min_scn_window_size: 0
+  include: ["TESTDB.LOGCOUNT"]
+  batching:
+    count: 10`
+
+	var (
+		err    error
+		stream *service.Stream
+	)
+
+	t.Log("Launching component...")
+	{
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			for _, msg := range mb {
+				msgChan <- msg
+			}
+			return nil
+		}))
+
+		stream, err = streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		go func() {
+			<-t.Context().Done()
+			close(msgChan)
+		}()
+	}
+
+	// Give the connector time to establish its first LogMiner session before
+	// generating redo.
+	time.Sleep(10 * time.Second)
+
+	assertOperation := func(t *testing.T, operation string, msgs []*service.Message) {
+		t.Helper()
+		for i, msg := range msgs {
+			op, ok := msg.MetaGet("operation")
+			require.Truef(t, ok, "message %d missing 'operation' metadata", i)
+			assert.Equalf(t, operation, op, "message %d: expected operation '%s', got %q", i, operation, op)
+
+			table, ok := msg.MetaGet("table_name")
+			require.Truef(t, ok, "message %d missing 'table_name' metadata", i)
+			assert.Equalf(t, "LOGCOUNT", table, "message %d: unexpected table_name %q", i, table)
+		}
+	}
+
+	const want = 5000
+
+	t.Run("Streaming insert changes across a forced log switch", func(t *testing.T) {
+		for range want / 2 {
+			db.MustExec("INSERT INTO testdb.logcount (val) VALUES (1)")
+		}
+
+		// Force a log switch mid-scenario so a later cycle must select across
+		// more than one archived log file, not just the open current log.
+		db.MustExec("ALTER SYSTEM SWITCH LOGFILE")
+
+		for range want / 2 {
+			db.MustExec("INSERT INTO testdb.logcount (val) VALUES (1)")
+		}
+
+		msgs := oracledbtest.CollectMessages(t, msgChan, want)
+		assertOperation(t, "insert", msgs)
+
+		content, err := msgs[0].AsBytes()
+		require.NoError(t, err)
+		var row map[string]any
+		require.NoError(t, json.Unmarshal(content, &row))
+		assert.Contains(t, row, "ID")
+		assert.EqualValues(t, "1", row["VAL"])
+	})
+
+	t.Run("Streaming update changes", func(t *testing.T) {
+		db.MustExec("UPDATE testdb.logcount SET val = 2")
+
+		msgs := oracledbtest.CollectMessages(t, msgChan, want)
+		assertOperation(t, "update", msgs)
+
+		content, err := msgs[0].AsBytes()
+		require.NoError(t, err)
+		var row map[string]any
+		require.NoError(t, json.Unmarshal(content, &row))
+		assert.EqualValues(t, "2", row["VAL"])
+	})
+
+	t.Run("Streaming delete changes across another forced log switch", func(t *testing.T) {
+		db.MustExec("ALTER SYSTEM SWITCH LOGFILE")
+		db.MustExec("DELETE FROM testdb.logcount")
+
+		msgs := oracledbtest.CollectMessages(t, msgChan, want)
+		assertOperation(t, "delete", msgs)
+	})
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
 func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
