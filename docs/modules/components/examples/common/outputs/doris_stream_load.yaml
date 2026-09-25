@@ -1,0 +1,21 @@
+outputs:
+  label: ""
+  doris_stream_load:
+    fe_urls: []
+    database: "" # No default (required)
+    table: "" # No default (required)
+    username: "" # No default (required)
+    password: "" # No default (required)
+    format: json
+    read_json_by_line: true
+    strip_outer_array: false
+    columns: []
+    label_prefix: redpanda_connect
+    timeout: 30s
+    max_in_flight: 8
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

@@ -1,0 +1,13 @@
+outputs:
+  label: ""
+  aws_dynamodb:
+    table: "" # No default (required)
+    string_columns: {}
+    json_map_columns: {}
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

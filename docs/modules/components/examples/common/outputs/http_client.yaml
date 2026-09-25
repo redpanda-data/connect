@@ -1,0 +1,15 @@
+outputs:
+  label: ""
+  http_client:
+    url: "" # No default (required)
+    verb: POST
+    headers: {}
+    rate_limit: "" # No default (optional)
+    timeout: 5s
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

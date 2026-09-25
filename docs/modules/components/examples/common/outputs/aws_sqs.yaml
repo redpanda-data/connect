@@ -1,0 +1,16 @@
+outputs:
+  label: ""
+  aws_sqs:
+    url: "" # No default (required)
+    message_group_id: "" # No default (optional)
+    message_deduplication_id: "" # No default (optional)
+    delay_seconds: "" # No default (optional)
+    max_in_flight: 64
+    metadata:
+      exclude_prefixes: []
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

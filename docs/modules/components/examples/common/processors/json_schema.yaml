@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  json_schema:
+    schema: "" # No default (optional)
+    schema_path: "" # No default (optional)

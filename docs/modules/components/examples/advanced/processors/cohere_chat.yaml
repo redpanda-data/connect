@@ -1,0 +1,45 @@
+processors:
+  label: ""
+  cohere_chat:
+    base_url: https://api.cohere.com
+    api_key: "" # No default (required)
+    model: "" # No default (required)
+    prompt: "" # No default (optional)
+    system_prompt: "" # No default (optional)
+    max_tokens: "" # No default (optional)
+    temperature: "" # No default (optional)
+    response_format: text
+    json_schema: "" # No default (optional)
+    schema_registry:
+      url: "" # No default (required)
+      subject: "" # No default (required)
+      refresh_interval: "" # No default (optional)
+      tls:
+        skip_cert_verify: false
+        enable_renegotiation: false
+        root_cas: ""
+        root_cas_file: ""
+        client_certs: []
+      oauth:
+        enabled: false
+        consumer_key: ""
+        consumer_secret: ""
+        access_token: ""
+        access_token_secret: ""
+      basic_auth:
+        enabled: false
+        username: ""
+        password: ""
+      jwt:
+        enabled: false
+        private_key_file: ""
+        signing_method: ""
+        claims: {}
+        headers: {}
+    top_p: "" # No default (optional)
+    frequency_penalty: "" # No default (optional)
+    presence_penalty: "" # No default (optional)
+    seed: "" # No default (optional)
+    stop: [] # No default (optional)
+    max_tool_calls: 10
+    tools: []

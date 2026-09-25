@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  command:
+    name: "" # No default (required)
+    args_mapping: "" # No default (optional)

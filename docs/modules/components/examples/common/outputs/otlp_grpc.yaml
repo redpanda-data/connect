@@ -1,0 +1,5 @@
+outputs:
+  label: ""
+  otlp_grpc:
+    endpoint: "" # No default (required)
+    max_in_flight: 64

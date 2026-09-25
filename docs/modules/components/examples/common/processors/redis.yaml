@@ -1,0 +1,6 @@
+processors:
+  label: ""
+  redis:
+    url: "" # No default (required)
+    command: "" # No default (optional)
+    args_mapping: "" # No default (optional)

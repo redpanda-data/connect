@@ -1,0 +1,8 @@
+inputs:
+  label: ""
+  file:
+    paths: [] # No default (required)
+    scanner:
+      lines: {}
+    delete_on_finish: false
+    auto_replay_nacks: true

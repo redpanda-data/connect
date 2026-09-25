@@ -1,0 +1,8 @@
+caches:
+  sql:
+    driver: "" # No default (required)
+    dsn: "" # No default (required)
+    table: "" # No default (required)
+    key_column: "" # No default (required)
+    value_column: "" # No default (required)
+    set_suffix: "" # No default (optional)

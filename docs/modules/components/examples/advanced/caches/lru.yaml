@@ -1,0 +1,8 @@
+caches:
+  lru:
+    cap: 1000
+    init_values: {}
+    algorithm: standard
+    two_queues_recent_ratio: 0.25
+    two_queues_ghost_ratio: 0.5
+    optimistic: false

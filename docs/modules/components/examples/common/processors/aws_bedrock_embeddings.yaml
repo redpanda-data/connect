@@ -1,0 +1,6 @@
+processors:
+  label: ""
+  aws_bedrock_embeddings:
+    model: "" # No default (required)
+    text: "" # No default (optional)
+    input_type: "" # No default (optional)

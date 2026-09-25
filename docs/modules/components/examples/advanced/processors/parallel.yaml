@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  parallel:
+    cap: 0
+    processors: [] # No default (required)

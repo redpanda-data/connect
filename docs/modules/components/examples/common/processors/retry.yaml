@@ -1,0 +1,10 @@
+processors:
+  label: ""
+  retry:
+    backoff:
+      initial_interval: 500ms
+      max_interval: 10s
+      max_elapsed_time: 1m
+    processors: [] # No default (required)
+    parallel: false
+    max_retries: 0

@@ -1,0 +1,51 @@
+processors:
+  label: ""
+  openai_chat_completion:
+    server_address: https://api.openai.com/v1
+    api_key: "" # No default (required)
+    model: "" # No default (required)
+    prompt: "" # No default (optional)
+    system_prompt: "" # No default (optional)
+    history: "" # No default (optional)
+    image: "" # No default (optional)
+    max_tokens: "" # No default (optional)
+    temperature: "" # No default (optional)
+    user: "" # No default (optional)
+    response_format: text
+    json_schema:
+      name: "" # No default (required)
+      description: "" # No default (optional)
+      schema: "" # No default (required)
+    schema_registry:
+      url: "" # No default (required)
+      name_prefix: schema_registry_id_
+      subject: "" # No default (required)
+      refresh_interval: "" # No default (optional)
+      tls:
+        skip_cert_verify: false
+        enable_renegotiation: false
+        root_cas: ""
+        root_cas_file: ""
+        client_certs: []
+      oauth:
+        enabled: false
+        consumer_key: ""
+        consumer_secret: ""
+        access_token: ""
+        access_token_secret: ""
+      basic_auth:
+        enabled: false
+        username: ""
+        password: ""
+      jwt:
+        enabled: false
+        private_key_file: ""
+        signing_method: ""
+        claims: {}
+        headers: {}
+    top_p: "" # No default (optional)
+    frequency_penalty: "" # No default (optional)
+    presence_penalty: "" # No default (optional)
+    seed: "" # No default (optional)
+    stop: [] # No default (optional)
+    tools: [] # No default (required)

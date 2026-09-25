@@ -1,0 +1,7 @@
+processors:
+  label: ""
+  nats_kv:
+    urls: [] # No default (required)
+    bucket: "" # No default (required)
+    operation: "" # No default (required)
+    key: "" # No default (required)

@@ -1,0 +1,16 @@
+outputs:
+  label: ""
+  aws_s3:
+    bucket: "" # No default (required)
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
+    tags: {}
+    content_type: application/octet-stream
+    metadata:
+      exclude_prefixes: []
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

@@ -1,0 +1,6 @@
+inputs:
+  label: ""
+  slack_users:
+    bot_token: "" # No default (required)
+    team_id: ""
+    auto_replay_nacks: true

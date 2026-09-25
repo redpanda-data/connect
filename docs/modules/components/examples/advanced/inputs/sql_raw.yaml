@@ -1,0 +1,14 @@
+inputs:
+  label: ""
+  sql_raw:
+    driver: "" # No default (required)
+    dsn: "" # No default (required)
+    query: "" # No default (required)
+    args_mapping: "" # No default (optional)
+    auto_replay_nacks: true
+    init_files: [] # No default (optional)
+    init_statement: "" # No default (optional)
+    conn_max_idle_time: "" # No default (optional)
+    conn_max_life_time: "" # No default (optional)
+    conn_max_idle: 2
+    conn_max_open: "" # No default (optional)

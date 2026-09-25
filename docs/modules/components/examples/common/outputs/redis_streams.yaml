@@ -1,0 +1,17 @@
+outputs:
+  label: ""
+  redis_streams:
+    url: "" # No default (required)
+    stream: "" # No default (required)
+    id: *
+    body_key: body
+    max_length: 0
+    max_in_flight: 64
+    metadata:
+      exclude_prefixes: []
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

@@ -1,0 +1,43 @@
+inputs:
+  label: ""
+  kafka:
+    addresses: [] # No default (required)
+    topics: [] # No default (required)
+    target_version: "" # No default (optional)
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    sasl:
+      mechanism: none
+      user: ""
+      password: ""
+      access_token: ""
+      token_cache: ""
+      token_key: ""
+    consumer_group: ""
+    client_id: benthos
+    instance_id: "" # No default (optional)
+    rack_id: ""
+    start_from_oldest: true
+    checkpoint_limit: 1024
+    auto_replay_nacks: true
+    timely_nacks_maximum_wait: "" # No default (optional)
+    commit_period: 1s
+    max_processing_period: 100ms
+    extract_tracing_map: "" # No default (optional)
+    group:
+      session_timeout: 10s
+      heartbeat_interval: 3s
+      rebalance_timeout: 60s
+    fetch_buffer_cap: 256
+    multi_header: false
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

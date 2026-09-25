@@ -1,0 +1,10 @@
+inputs:
+  label: ""
+  batched:
+    child: "" # No default (required)
+    policy:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

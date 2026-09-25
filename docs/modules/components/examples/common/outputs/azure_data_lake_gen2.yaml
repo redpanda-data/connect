@@ -1,0 +1,10 @@
+outputs:
+  label: ""
+  azure_data_lake_gen2:
+    storage_account: ""
+    storage_access_key: ""
+    storage_connection_string: ""
+    storage_sas_token: ""
+    filesystem: "" # No default (required)
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
+    max_in_flight: 64

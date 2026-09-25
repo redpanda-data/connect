@@ -1,0 +1,6 @@
+processors:
+  label: ""
+  parquet_encode:
+    schema: [] # No default (optional)
+    schema_metadata: ""
+    default_compression: uncompressed

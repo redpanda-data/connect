@@ -1,0 +1,4 @@
+caches:
+  lru:
+    cap: 1000
+    init_values: {}

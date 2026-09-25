@@ -1,0 +1,6 @@
+processors:
+  label: ""
+  jq:
+    query: "" # No default (required)
+    raw: false
+    output_raw: false

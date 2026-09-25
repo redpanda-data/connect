@@ -1,0 +1,18 @@
+processors:
+  label: ""
+  qdrant:
+    grpc_host: "" # No default (required)
+    api_token: ""
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    collection_name: "" # No default (required)
+    vector_mapping: "" # No default (required)
+    filter: "" # No default (optional)
+    payload_fields: []
+    payload_filter: include
+    limit: 10

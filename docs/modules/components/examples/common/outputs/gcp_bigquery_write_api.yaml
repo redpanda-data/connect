@@ -1,0 +1,18 @@
+outputs:
+  label: ""
+  gcp_bigquery_write_api:
+    project: ""
+    dataset: "" # No default (required)
+    table: "" # No default (required)
+    message_format: json
+    change_type: "" # No default (optional)
+    change_sequence_number: "" # No default (optional)
+    primary_keys: [] # No default (optional)
+    max_in_flight: 4
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    credentials_json: ""

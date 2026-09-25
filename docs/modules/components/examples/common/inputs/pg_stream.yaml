@@ -1,0 +1,22 @@
+inputs:
+  label: ""
+  pg_stream:
+    dsn: "" # No default (required)
+    include_transaction_markers: false
+    stream_snapshot: false
+    snapshot_batch_size: 1000
+    schema: "" # No default (required)
+    tables: [] # No default (required)
+    checkpoint_limit: 1024
+    temporary_slot: false
+    slot_name: "" # No default (required)
+    pg_standby_timeout: 10s
+    pg_wal_monitor_interval: 3s
+    max_parallel_snapshot_tables: 1
+    auto_replay_nacks: true
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

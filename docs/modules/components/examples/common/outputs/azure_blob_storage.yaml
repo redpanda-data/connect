@@ -1,0 +1,10 @@
+outputs:
+  label: ""
+  azure_blob_storage:
+    storage_account: ""
+    storage_access_key: ""
+    storage_connection_string: ""
+    storage_sas_token: ""
+    container: "" # No default (required)
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
+    max_in_flight: 64

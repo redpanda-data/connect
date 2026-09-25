@@ -1,0 +1,8 @@
+processors:
+  label: ""
+  aws_bedrock_chat:
+    model: "" # No default (required)
+    prompt: "" # No default (optional)
+    system_prompt: "" # No default (optional)
+    max_tokens: "" # No default (optional)
+    temperature: "" # No default (optional)

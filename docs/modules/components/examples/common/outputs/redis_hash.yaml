@@ -1,0 +1,9 @@
+outputs:
+  label: ""
+  redis_hash:
+    url: "" # No default (required)
+    key: "" # No default (required)
+    walk_metadata: false
+    walk_json_object: false
+    fields: {}
+    max_in_flight: 64

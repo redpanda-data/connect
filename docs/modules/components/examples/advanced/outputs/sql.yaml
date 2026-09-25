@@ -1,0 +1,14 @@
+outputs:
+  label: ""
+  sql:
+    driver: "" # No default (required)
+    data_source_name: "" # No default (required)
+    query: "" # No default (required)
+    args_mapping: "" # No default (optional)
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

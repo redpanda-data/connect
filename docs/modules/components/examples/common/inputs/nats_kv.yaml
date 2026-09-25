@@ -1,0 +1,7 @@
+inputs:
+  label: ""
+  nats_kv:
+    urls: [] # No default (required)
+    bucket: "" # No default (required)
+    key: >
+    auto_replay_nacks: true

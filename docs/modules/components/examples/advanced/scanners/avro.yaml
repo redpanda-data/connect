@@ -1,0 +1,4 @@
+scanners:
+  avro:
+    raw_json: false
+    max_decompressed_block_bytes: 16777216

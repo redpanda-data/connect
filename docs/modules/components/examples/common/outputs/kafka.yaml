@@ -1,0 +1,19 @@
+outputs:
+  label: ""
+  kafka:
+    addresses: [] # No default (required)
+    topic: "" # No default (required)
+    target_version: "" # No default (optional)
+    key: ""
+    partitioner: fnv1a_hash
+    compression: none
+    static_headers: "" # No default (optional)
+    metadata:
+      exclude_prefixes: []
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

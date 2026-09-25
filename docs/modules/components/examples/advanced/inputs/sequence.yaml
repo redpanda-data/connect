@@ -1,0 +1,9 @@
+inputs:
+  label: ""
+  sequence:
+    sharded_join:
+      type: none
+      id_path: ""
+      iterations: 1
+      merge_strategy: array
+    inputs: [] # No default (required)

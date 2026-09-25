@@ -1,0 +1,17 @@
+outputs:
+  label: ""
+  pusher:
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    channel: "" # No default (required)
+    event: "" # No default (required)
+    appId: "" # No default (required)
+    key: "" # No default (required)
+    secret: "" # No default (required)
+    cluster: "" # No default (required)
+    secure: true
+    max_in_flight: 1

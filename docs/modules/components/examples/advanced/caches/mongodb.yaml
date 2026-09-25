@@ -1,0 +1,20 @@
+caches:
+  mongodb:
+    url: "" # No default (required)
+    database: "" # No default (required)
+    username: ""
+    password: ""
+    app_name: benthos
+    aws:
+      enabled: false
+      region: "" # No default (optional)
+      session_duration: 1h
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
+      role: "" # No default (optional)
+      role_external_id: "" # No default (optional)
+      roles: [] # No default (optional)
+    collection: "" # No default (required)
+    key_field: "" # No default (required)
+    value_field: "" # No default (required)

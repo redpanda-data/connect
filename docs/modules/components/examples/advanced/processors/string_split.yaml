@@ -1,0 +1,7 @@
+processors:
+  label: ""
+  string_split:
+    delimiter: 
+
+    emit_bytes: false
+    empty_as_null: false

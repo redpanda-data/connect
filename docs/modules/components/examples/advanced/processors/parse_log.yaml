@@ -1,0 +1,8 @@
+processors:
+  label: ""
+  parse_log:
+    format: "" # No default (required)
+    best_effort: true
+    allow_rfc3339: true
+    default_year: current
+    default_timezone: UTC

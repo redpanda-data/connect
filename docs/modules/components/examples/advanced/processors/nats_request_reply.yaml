@@ -1,0 +1,29 @@
+processors:
+  label: ""
+  nats_request_reply:
+    urls: [] # No default (required)
+    max_reconnects: "" # No default (optional)
+    subject: "" # No default (required)
+    inbox_prefix: "" # No default (optional)
+    headers: {}
+    metadata:
+      include_prefixes: []
+      include_patterns: []
+    timeout: 3s
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    tls_handshake_first: false
+    auth:
+      nkey_file: "" # No default (optional)
+      nkey: "" # No default (optional)
+      user_credentials_file: "" # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
+      user: "" # No default (optional)
+      password: "" # No default (optional)
+      token: "" # No default (optional)

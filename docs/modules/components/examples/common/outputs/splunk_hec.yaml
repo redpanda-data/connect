@@ -1,0 +1,17 @@
+outputs:
+  label: ""
+  splunk_hec:
+    url: "" # No default (required)
+    token: "" # No default (required)
+    gzip: false
+    event_host: "" # No default (optional)
+    event_source: "" # No default (optional)
+    event_sourcetype: "" # No default (optional)
+    event_index: "" # No default (optional)
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

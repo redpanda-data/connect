@@ -1,0 +1,17 @@
+processors:
+  label: ""
+  sql_select:
+    driver: "" # No default (required)
+    dsn: "" # No default (required)
+    table: "" # No default (required)
+    columns: [] # No default (required)
+    where: "" # No default (optional)
+    args_mapping: "" # No default (optional)
+    prefix: "" # No default (optional)
+    suffix: "" # No default (optional)
+    init_files: [] # No default (optional)
+    init_statement: "" # No default (optional)
+    conn_max_idle_time: "" # No default (optional)
+    conn_max_life_time: "" # No default (optional)
+    conn_max_idle: 2
+    conn_max_open: "" # No default (optional)

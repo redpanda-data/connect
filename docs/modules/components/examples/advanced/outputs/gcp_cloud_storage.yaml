@@ -1,0 +1,18 @@
+outputs:
+  label: ""
+  gcp_cloud_storage:
+    bucket: "" # No default (required)
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
+    content_type: application/octet-stream
+    content_encoding: ""
+    collision_mode: overwrite
+    chunk_size: 16777216
+    timeout: 3s
+    credentials_json: ""
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

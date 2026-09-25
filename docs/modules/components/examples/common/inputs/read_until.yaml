@@ -1,0 +1,7 @@
+inputs:
+  label: ""
+  read_until:
+    input: "" # No default (required)
+    check: "" # No default (optional)
+    idle_timeout: "" # No default (optional)
+    restart_input: false

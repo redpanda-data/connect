@@ -1,0 +1,10 @@
+inputs:
+  label: ""
+  azure_queue_storage:
+    storage_account: ""
+    storage_access_key: ""
+    storage_connection_string: ""
+    queue_name: "" # No default (required)
+    dequeue_visibility_timeout: 30s
+    max_in_flight: 10
+    track_properties: false

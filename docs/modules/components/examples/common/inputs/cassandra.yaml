@@ -1,0 +1,8 @@
+inputs:
+  label: ""
+  cassandra:
+    addresses: [] # No default (required)
+    timeout: 600ms
+    reconnect_interval: 60s
+    query: "" # No default (required)
+    auto_replay_nacks: true

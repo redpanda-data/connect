@@ -1,0 +1,5 @@
+inputs:
+  label: ""
+  schema_registry:
+    url: "" # No default (required)
+    auto_replay_nacks: true

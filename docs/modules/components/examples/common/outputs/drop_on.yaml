@@ -1,0 +1,7 @@
+outputs:
+  label: ""
+  drop_on:
+    error: false
+    error_patterns: [] # No default (optional)
+    back_pressure: "" # No default (optional)
+    output: "" # No default (required)

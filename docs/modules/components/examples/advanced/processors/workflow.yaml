@@ -1,0 +1,10 @@
+processors:
+  label: ""
+  workflow:
+    meta_path: meta.workflow
+    order: []
+    branch_resources: []
+    branches:
+      request_map: ""
+      processors: [] # No default (required)
+      result_map: ""

@@ -1,0 +1,4 @@
+inputs:
+  label: ""
+  beanstalkd:
+    address: "" # No default (required)

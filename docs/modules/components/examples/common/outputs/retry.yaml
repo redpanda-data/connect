@@ -1,0 +1,4 @@
+outputs:
+  label: ""
+  retry:
+    output: "" # No default (required)

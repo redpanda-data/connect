@@ -1,0 +1,5 @@
+outputs:
+  label: ""
+  discord:
+    channel_id: "" # No default (required)
+    bot_token: "" # No default (required)

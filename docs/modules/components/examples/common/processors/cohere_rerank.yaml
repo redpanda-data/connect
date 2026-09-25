@@ -1,0 +1,10 @@
+processors:
+  label: ""
+  cohere_rerank:
+    base_url: https://api.cohere.com
+    api_key: "" # No default (required)
+    model: "" # No default (required)
+    query: "" # No default (required)
+    documents: "" # No default (required)
+    top_n: 0
+    max_tokens_per_doc: 4096

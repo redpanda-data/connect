@@ -1,0 +1,8 @@
+processors:
+  label: ""
+  sql:
+    driver: "" # No default (required)
+    data_source_name: "" # No default (required)
+    query: "" # No default (required)
+    args_mapping: "" # No default (optional)
+    result_codec: none

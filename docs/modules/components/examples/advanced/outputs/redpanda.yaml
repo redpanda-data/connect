@@ -1,0 +1,51 @@
+outputs:
+  label: ""
+  redpanda:
+    seed_brokers: [] # No default (optional)
+    client_id: redpanda-connect
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    sasl: [] # No default (optional)
+    metadata_max_age: 1m
+    request_timeout_overhead: 10s
+    conn_idle_timeout: 20s
+    tcp:
+      connect_timeout: 0s
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
+    topic: "" # No default (required)
+    key: "" # No default (optional)
+    partition: "" # No default (optional)
+    metadata:
+      include_prefixes: []
+      include_patterns: []
+    timestamp_ms: "" # No default (optional)
+    max_in_flight: 256
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    inject_tracing_map: "" # No default (optional)
+    partitioner: "" # No default (optional)
+    idempotent_write: true
+    acks: all
+    compression: "" # No default (optional)
+    allow_auto_topic_creation: true
+    timeout: 10s
+    max_message_bytes: 1MiB
+    broker_write_max_bytes: 100MiB
+    max_buffered_records: 10000
+    max_buffered_bytes: 0
+    max_in_flight_requests: 1
+    record_retries: 0
+    record_delivery_timeout: 0s

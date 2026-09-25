@@ -1,0 +1,10 @@
+outputs:
+  label: ""
+  aws_sns:
+    topic_arn: "" # No default (required)
+    message_group_id: "" # No default (optional)
+    message_deduplication_id: "" # No default (optional)
+    subject: "" # No default (optional)
+    max_in_flight: 64
+    metadata:
+      exclude_prefixes: []

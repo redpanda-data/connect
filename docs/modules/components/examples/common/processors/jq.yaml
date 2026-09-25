@@ -1,0 +1,4 @@
+processors:
+  label: ""
+  jq:
+    query: "" # No default (required)

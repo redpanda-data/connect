@@ -1,0 +1,12 @@
+inputs:
+  label: ""
+  azure_cosmosdb:
+    endpoint: "" # No default (optional)
+    account_key: "" # No default (optional)
+    connection_string: "" # No default (optional)
+    database: "" # No default (required)
+    container: "" # No default (required)
+    partition_keys_map: "" # No default (required)
+    query: "" # No default (required)
+    args_mapping: "" # No default (optional)
+    auto_replay_nacks: true

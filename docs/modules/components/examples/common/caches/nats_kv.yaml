@@ -1,0 +1,4 @@
+caches:
+  nats_kv:
+    urls: [] # No default (required)
+    bucket: "" # No default (required)

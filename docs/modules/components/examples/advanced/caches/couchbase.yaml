@@ -1,0 +1,11 @@
+caches:
+  couchbase:
+    url: "" # No default (required)
+    username: "" # No default (optional)
+    password: "" # No default (optional)
+    bucket: "" # No default (required)
+    collection: "" # No default (optional)
+    scope: "" # No default (optional)
+    transcoder: legacy
+    timeout: 15s
+    default_ttl: "" # No default (optional)

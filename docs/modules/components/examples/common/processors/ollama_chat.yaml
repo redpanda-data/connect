@@ -1,0 +1,19 @@
+processors:
+  label: ""
+  ollama_chat:
+    model: "" # No default (required)
+    prompt: "" # No default (optional)
+    image: "" # No default (optional)
+    response_format: text
+    max_tokens: "" # No default (optional)
+    temperature: "" # No default (optional)
+    save_prompt_metadata: false
+    history: "" # No default (optional)
+    tools: []
+    runner:
+      context_size: "" # No default (optional)
+      batch_size: "" # No default (optional)
+      gpu_layers: "" # No default (optional)
+      threads: "" # No default (optional)
+      use_mmap: "" # No default (optional)
+    server_address: "" # No default (optional)

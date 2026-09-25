@@ -1,0 +1,5 @@
+metrics:
+  statsd:
+    address: "" # No default (required)
+    flush_period: 100ms
+    tag_format: none

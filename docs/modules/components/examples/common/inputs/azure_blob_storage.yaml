@@ -1,0 +1,12 @@
+inputs:
+  label: ""
+  azure_blob_storage:
+    storage_account: ""
+    storage_access_key: ""
+    storage_connection_string: ""
+    storage_sas_token: ""
+    container: "" # No default (required)
+    prefix: ""
+    scanner:
+      to_the_end: {}
+    targets_input: "" # No default (optional)

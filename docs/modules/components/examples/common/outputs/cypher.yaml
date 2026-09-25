@@ -1,0 +1,19 @@
+outputs:
+  label: ""
+  cypher:
+    uri: "" # No default (required)
+    cypher: "" # No default (required)
+    database_name: ""
+    args_mapping: "" # No default (optional)
+    basic_auth:
+      enabled: false
+      username: ""
+      password: ""
+      realm: ""
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    max_in_flight: 64

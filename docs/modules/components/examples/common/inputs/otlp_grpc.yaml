@@ -1,0 +1,6 @@
+inputs:
+  label: ""
+  otlp_grpc:
+    encoding: json
+    address: 0.0.0.0:4317
+    rate_limit: ""

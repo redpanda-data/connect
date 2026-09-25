@@ -1,0 +1,8 @@
+processors:
+  label: ""
+  parquet_encode:
+    schema: [] # No default (optional)
+    schema_metadata: ""
+    default_compression: uncompressed
+    default_encoding: DELTA_LENGTH_BYTE_ARRAY
+    default_timestamp_unit: NANOSECOND

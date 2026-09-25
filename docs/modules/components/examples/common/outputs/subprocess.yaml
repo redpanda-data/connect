@@ -1,0 +1,6 @@
+outputs:
+  label: ""
+  subprocess:
+    name: "" # No default (required)
+    args: []
+    codec: lines

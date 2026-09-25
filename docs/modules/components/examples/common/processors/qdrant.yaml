@@ -1,0 +1,11 @@
+processors:
+  label: ""
+  qdrant:
+    grpc_host: "" # No default (required)
+    api_token: ""
+    collection_name: "" # No default (required)
+    vector_mapping: "" # No default (required)
+    filter: "" # No default (optional)
+    payload_fields: []
+    payload_filter: include
+    limit: 10

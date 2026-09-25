@@ -1,0 +1,14 @@
+processors:
+  label: ""
+  cohere_chat:
+    base_url: https://api.cohere.com
+    api_key: "" # No default (required)
+    model: "" # No default (required)
+    prompt: "" # No default (optional)
+    system_prompt: "" # No default (optional)
+    max_tokens: "" # No default (optional)
+    temperature: "" # No default (optional)
+    response_format: text
+    json_schema: "" # No default (optional)
+    max_tool_calls: 10
+    tools: []

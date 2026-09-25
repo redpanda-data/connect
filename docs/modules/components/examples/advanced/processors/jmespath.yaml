@@ -1,0 +1,4 @@
+processors:
+  label: ""
+  jmespath:
+    query: "" # No default (required)

@@ -1,0 +1,40 @@
+outputs:
+  label: ""
+  doris_stream_load:
+    url: "" # No default (optional)
+    fe_urls: []
+    database: "" # No default (required)
+    table: "" # No default (required)
+    username: "" # No default (required)
+    password: "" # No default (required)
+    query_port: 9030
+    format: json
+    read_json_by_line: true
+    strip_outer_array: false
+    jsonpaths: ""
+    json_root: ""
+    columns: []
+    where: ""
+    column_separator: ,
+    line_delimiter: 
+
+    group_commit: ""
+    max_filter_ratio: 0
+    partitions: []
+    temporary_partitions: []
+    skip_lines: 0
+    empty_field_as_null: false
+    trim_double_quotes: false
+    num_as_string: false
+    fuzzy_parse: false
+    label_prefix: redpanda_connect
+    headers: {}
+    strict_mode: false
+    timeout: 30s
+    max_in_flight: 8
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

@@ -1,0 +1,54 @@
+inputs:
+  label: ""
+  redpanda:
+    seed_brokers: [] # No default (optional)
+    client_id: redpanda-connect
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    sasl: [] # No default (optional)
+    metadata_max_age: 1m
+    request_timeout_overhead: 10s
+    conn_idle_timeout: 20s
+    tcp:
+      connect_timeout: 0s
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
+    topics: [] # No default (optional)
+    regexp_topics_include: [] # No default (optional)
+    regexp_topics_exclude: [] # No default (optional)
+    rack_id: ""
+    instance_id: ""
+    rebalance_timeout: 45s
+    session_timeout: 1m
+    heartbeat_interval: 3s
+    start_offset: earliest
+    fetch_max_bytes: 50MiB
+    fetch_max_wait: 5s
+    fetch_min_bytes: 1B
+    fetch_max_partition_bytes: 1MiB
+    transaction_isolation_level: read_uncommitted
+    consumer_group: "" # No default (optional)
+    commit_period: 5s
+    partition_buffer_bytes: 1MB
+    topic_lag_refresh_period: 5s
+    max_yield_batch_bytes: 32KB
+    unordered_processing:
+      enabled: false
+      checkpoint_limit: 1024
+      batching:
+        count: 0
+        byte_size: 0
+        period: ""
+        check: ""
+        processors: [] # No default (optional)
+    auto_replay_nacks: true
+    timely_nacks_maximum_wait: "" # No default (optional)
+    extract_tracing_map: "" # No default (optional)

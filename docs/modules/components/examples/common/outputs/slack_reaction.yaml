@@ -1,0 +1,9 @@
+outputs:
+  label: ""
+  slack_reaction:
+    bot_token: "" # No default (required)
+    channel_id: "" # No default (required)
+    timestamp: "" # No default (required)
+    emoji: "" # No default (required)
+    action: add
+    max_in_flight: 64

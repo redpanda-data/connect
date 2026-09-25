@@ -1,0 +1,9 @@
+processors:
+  label: ""
+  sql_raw:
+    driver: "" # No default (required)
+    dsn: "" # No default (required)
+    query: "" # No default (optional)
+    args_mapping: "" # No default (optional)
+    exec_only: "" # No default (optional)
+    queries: [] # No default (optional)

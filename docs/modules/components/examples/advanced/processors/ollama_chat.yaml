@@ -1,0 +1,31 @@
+processors:
+  label: ""
+  ollama_chat:
+    model: "" # No default (required)
+    prompt: "" # No default (optional)
+    system_prompt: "" # No default (optional)
+    image: "" # No default (optional)
+    response_format: text
+    max_tokens: "" # No default (optional)
+    temperature: "" # No default (optional)
+    num_keep: "" # No default (optional)
+    seed: "" # No default (optional)
+    top_k: "" # No default (optional)
+    top_p: "" # No default (optional)
+    repeat_penalty: "" # No default (optional)
+    presence_penalty: "" # No default (optional)
+    frequency_penalty: "" # No default (optional)
+    stop: [] # No default (optional)
+    save_prompt_metadata: false
+    history: "" # No default (optional)
+    max_tool_calls: 3
+    tools: []
+    runner:
+      context_size: "" # No default (optional)
+      batch_size: "" # No default (optional)
+      gpu_layers: "" # No default (optional)
+      threads: "" # No default (optional)
+      use_mmap: "" # No default (optional)
+    server_address: "" # No default (optional)
+    cache_directory: "" # No default (optional)
+    download_url: "" # No default (optional)
