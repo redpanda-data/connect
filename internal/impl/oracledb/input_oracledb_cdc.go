@@ -488,7 +488,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 // new session resumes from the last durable SCN.
 func (o *oracleDBCDCInput) rebuildPublisherIfPoisoned() (*batchPublisher, error) {
 	publisher := o.publisher.Load()
-	if !publisher.poisoned.Load() {
+	if !publisher.poisoned() {
 		return publisher, nil
 	}
 	o.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
@@ -511,7 +511,8 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	)
 
 	// A failed batch send leaves an unresolvable slot in the ordered tracker
-	// (see sendTracked), so a poisoned publisher can never checkpoint again.
+	// (see sendTracked), and a sealed flush queue refuses every later batch
+	// (see batchPublisher.queue), so a poisoned publisher can never checkpoint again.
 	// Rebuild it with a fresh tracker: the new session resumes from the last
 	// durable SCN, which is necessarily before the orphaned rows, and the old
 	// session's late acks resolve into the abandoned tracker (cacheSCN's
@@ -843,7 +844,7 @@ func (o *oracleDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 		case m := <-pub.msgs():
 			return m.msg, m.ackFn, nil
 		case <-pubStopped:
-			if pub.poisoned.Load() {
+			if pub.poisoned() {
 				// Fatal flush-loop exit: tear the session down BEFORE handing
 				// control to Connect - the session goroutine may still be
 				// alive and holds o.db and o.stopSig, which Connect replaces.

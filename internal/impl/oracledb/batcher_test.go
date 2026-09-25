@@ -21,6 +21,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
+	"github.com/redpanda-data/connect/v4/internal/replication/ticket"
 )
 
 func TestPublishBatch(t *testing.T) {
@@ -448,10 +449,9 @@ func TestAdmitEscapesOnContextCancel(t *testing.T) {
 			return publisher.Publish(ctx, streamingEvent(101))
 		}()
 	}()
+	// Ticket 0 is admitted once its batch of 2 is tracked.
 	require.Eventually(t, func() bool {
-		publisher.batcherMu.Lock()
-		defer publisher.batcherMu.Unlock()
-		return publisher.nextTicket == 1
+		return cp.Pending() == 2
 	}, 5*time.Second, time.Millisecond)
 
 	// The handoff's flushCurrent queues behind it with a cancellable context
@@ -528,10 +528,9 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 			return publisher.Publish(ctx, streamingEvent(101))
 		}()
 	}()
+	// Ticket 0 is admitted once its batch of 2 is tracked.
 	require.Eventually(t, func() bool {
-		publisher.batcherMu.Lock()
-		defer publisher.batcherMu.Unlock()
-		return publisher.nextTicket == 1
+		return cp.Pending() == 2
 	}, 5*time.Second, time.Millisecond)
 
 	// A flusher with ROWS (ticket 1) queues behind it and is cancelled: its
@@ -553,7 +552,7 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 	// The abandon dropped SCN 200-201 rows: the queue must be sealed and the
 	// publisher poisoned so nothing can ever be tracked (and persisted) past
 	// them from this generation.
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"abandoning a flushed-but-untracked batch must poison the publisher")
 	laterErr := func() error {
 		if err := publisher.Publish(ctx, streamingEvent(300)); err != nil {
@@ -561,7 +560,7 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 		}
 		return publisher.Publish(ctx, streamingEvent(301))
 	}()
-	require.ErrorIs(t, laterErr, errQueueSealed,
+	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
 }
 
@@ -605,7 +604,7 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 	cancelTrack()
 	require.Error(t, <-parked)
 
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"a failed Track stranded flushed-but-untracked rows; the publisher must be marked for rebuild")
 	laterErr := func() error {
 		if err := publisher.Publish(ctx, streamingEvent(300)); err != nil {
@@ -613,7 +612,7 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 		}
 		return publisher.Publish(ctx, streamingEvent(301))
 	}()
-	require.ErrorIs(t, laterErr, errQueueSealed,
+	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
 }
 
@@ -629,7 +628,7 @@ func TestFailedSendPoisonsPublisher(t *testing.T) {
 
 	err := publisher.Publish(sendCtx, streamingEvent(100))
 	require.ErrorIs(t, err, context.Canceled)
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"a failed send orphans its tracker slot; the publisher must be marked for rebuild")
 }
 

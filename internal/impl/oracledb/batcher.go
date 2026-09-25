@@ -23,6 +23,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
+	"github.com/redpanda-data/connect/v4/internal/replication/ticket"
 )
 
 // batchPublisher is responsible processing individual events into a batch and flushing
@@ -41,17 +42,13 @@ type batchPublisher struct {
 	// UntilNext. Admission is cancellable: an abandoned ticket is skipped
 	// when its turn comes, so a graceful stop unwinds queued flushers
 	// instead of wedging them behind a send parked under hardStopCtx.
-	ticketMu   sync.Mutex
-	nextTicket uint64                   // next ticket to hand out; guarded by batcherMu
-	admitted   uint64                   // next ticket allowed to Track+send; guarded by ticketMu
-	waiters    map[uint64]chan struct{} // parked admit calls; guarded by ticketMu
-	abandoned  map[uint64]struct{}      // cancelled tickets to skip; guarded by ticketMu
-	// sealed refuses all further admissions (guarded by ticketMu): set when
-	// an abandoned ticket owned a flushed batch. Admission is strictly
-	// ordered, so at that moment nothing after the dropped rows has been
-	// tracked - sealing guarantees nothing ever is, so no ack can persist an
-	// SCN past them before Connect rebuilds the poisoned publisher.
-	sealed bool
+	// A ticket that owns a flushed batch seals the queue when it is
+	// abandoned. Admission is strictly ordered, so at that moment nothing
+	// after the dropped rows has been tracked. The seal guarantees nothing
+	// ever is, so no ack can persist an SCN past them before Connect
+	// rebuilds the poisoned publisher (see poisoned). A drop path (a failed
+	// Flush or trackBatch) also seals the queue, for the same reason.
+	queue ticket.Lock
 	// closed marks the batcher as torn down (guarded by batcherMu): Close's
 	// batcher.Close races in-flight Publish calls otherwise, and the batcher
 	// is not goroutine-safe.
@@ -62,10 +59,9 @@ type batchPublisher struct {
 	// pipeline is meant to be live (warn) - the publisher's own shutSig is
 	// triggered too late on the streaming path to make that call.
 	stopping atomic.Bool
-	// poisoned is set when a tracked batch could not be handed to ReadBatch:
-	// its checkpoint slot can never resolve, so this publisher can never
-	// checkpoint past it. Connect rebuilds a poisoned publisher.
-	poisoned atomic.Bool
+	// sendFailed is set when a tracked batch could not be handed to
+	// ReadBatch: its checkpoint slot can never resolve.
+	sendFailed atomic.Bool
 
 	checkpoint *checkpoint.Capped[replication.SCN]
 	msgChan    chan asyncMessage
@@ -89,130 +85,16 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 		log:        logger,
 		shutSig:    shutdown.NewSignaller(),
 	}
-	b.waiters = make(map[uint64]chan struct{})
-	b.abandoned = make(map[uint64]struct{})
 	go b.loop()
 	return b
 }
 
-// takeTicketLocked hands out the next flush ticket. MUST be called with
-// batcherMu held, atomically with the Flush that produced the batch, so
-// ticket order is exactly flush order.
-func (b *batchPublisher) takeTicketLocked() uint64 {
-	t := b.nextTicket
-	b.nextTicket++
-	return t
-}
-
-// errQueueSealed refuses admission after an abandoned ticket dropped a
-// flushed batch: nothing may be tracked past that gap until Connect rebuilds
-// the poisoned publisher.
-var errQueueSealed = errors.New("publisher flush queue sealed after an abandoned batch; reconnecting rebuilds the publisher")
-
-// admit blocks until it is ticket's turn to Track+send, or ctx is cancelled.
-// On success, pair with release. On cancellation the ticket is marked
-// abandoned - release skips it when its turn comes - and the caller must NOT
-// release it. ownsRows declares whether the ticket holds a non-empty flushed
-// batch: such an abandon seals and poisons IN THE SAME critical section that
-// records the abandonment, because the moment abandoned[ticket] is visible,
-// a release from the previous holder may skip it and admit the next ticket -
-// sealing any later would let that ticket track, deliver, and ack past the
-// dropped rows before the seal lands. Row-less abandons (barrier tickets,
-// window markers) skip benignly.
-func (b *batchPublisher) admit(ctx context.Context, ticket uint64, ownsRows bool) error {
-	b.ticketMu.Lock()
-	if b.sealed {
-		b.ticketMu.Unlock()
-		return errQueueSealed
-	}
-	if b.admitted == ticket {
-		b.ticketMu.Unlock()
-		return nil
-	}
-	ch := make(chan struct{})
-	b.waiters[ticket] = ch
-	b.ticketMu.Unlock()
-
-	wake := func() error {
-		b.ticketMu.Lock()
-		defer b.ticketMu.Unlock()
-		if b.sealed {
-			return errQueueSealed
-		}
-		return nil
-	}
-
-	select {
-	case <-ch:
-		return wake()
-	case <-ctx.Done():
-		b.ticketMu.Lock()
-		select {
-		case <-ch:
-			// Woken between cancellation and the lock: either admitted
-			// normally (caller owns the release) or the queue was sealed.
-			sealed := b.sealed
-			b.ticketMu.Unlock()
-			if sealed {
-				return errQueueSealed
-			}
-			return nil
-		default:
-		}
-		delete(b.waiters, ticket)
-		b.abandoned[ticket] = struct{}{}
-		if ownsRows {
-			b.sealLocked()
-		}
-		b.ticketMu.Unlock()
-		if ownsRows {
-			b.poisoned.Store(true)
-		}
-		return ctx.Err()
-	}
-}
-
-// sealLocked marks the queue sealed and wakes every waiter (they observe the
-// seal and refuse). Caller must hold ticketMu.
-func (b *batchPublisher) sealLocked() {
-	b.sealed = true
-	for t, ch := range b.waiters {
-		close(ch)
-		delete(b.waiters, t)
-	}
-}
-
-// sealQueue permanently refuses further admissions and poisons the publisher:
-// called when flushed-but-untracked rows were dropped (a failed Flush or
-// trackBatch), so no later batch can be tracked (and therefore no ack can
-// persist a position) past the dropped rows before Connect rebuilds. Safe to
-// call while holding batcherMu: the established order is batcherMu before
-// ticketMu, never the reverse.
-func (b *batchPublisher) sealQueue() {
-	b.ticketMu.Lock()
-	b.sealLocked()
-	b.ticketMu.Unlock()
-	b.poisoned.Store(true)
-}
-
-// release passes the sequence to the next live ticket, skipping abandoned
-// ones. Every ADMITTED ticket must be released exactly once, error paths
-// included, or the sequence wedges.
-func (b *batchPublisher) release() {
-	b.ticketMu.Lock()
-	b.admitted++
-	for {
-		if _, ok := b.abandoned[b.admitted]; !ok {
-			break
-		}
-		delete(b.abandoned, b.admitted)
-		b.admitted++
-	}
-	if ch, ok := b.waiters[b.admitted]; ok {
-		close(ch)
-		delete(b.waiters, b.admitted)
-	}
-	b.ticketMu.Unlock()
+// poisoned reports whether this publisher can never checkpoint again, so
+// Connect must rebuild it. This is true when rows were dropped (the flush
+// queue is sealed) or when a checkpoint slot can never resolve (a failed
+// send).
+func (b *batchPublisher) poisoned() bool {
+	return b.queue.Sealed() || b.sendFailed.Load()
 }
 
 // loop creates a long-running process that periodically flushes batches by configured interval.
@@ -276,7 +158,7 @@ func (p *batchPublisher) loop() {
 				sendBatch, flushErr := p.batcher.Flush(hardStopCtx)
 				var ticket uint64
 				if flushErr == nil && len(sendBatch) > 0 {
-					ticket = p.takeTicketLocked()
+					ticket = p.queue.Take()
 				}
 				if flushErr != nil {
 					// Defensive: the current benthos Batcher.Flush never
@@ -287,7 +169,7 @@ func (p *batchPublisher) loop() {
 					// tracked. Seal BEFORE releasing batcherMu: in the gap
 					// after the unlock another flusher could take the next
 					// ticket and be admitted past the dropped rows.
-					p.sealQueue()
+					p.queue.Seal()
 				}
 				p.batcherMu.Unlock()
 				if flushErr != nil {
@@ -408,7 +290,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	}
 	if b.batcher.Add(msg) {
 		if flushedBatch, err = b.batcher.Flush(ctx); err == nil && len(flushedBatch) > 0 {
-			ticket = b.takeTicketLocked()
+			ticket = b.queue.Take()
 		}
 	}
 	if err != nil {
@@ -416,7 +298,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		// releasing batcherMu: in the gap after the unlock another flusher
 		// could flush, take the next ticket, and be admitted past the
 		// dropped rows.
-		b.sealQueue()
+		b.queue.Seal()
 	}
 	b.batcherMu.Unlock()
 	if err != nil {
@@ -438,15 +320,18 @@ type trackedBatch struct {
 
 // dispatch admits the flush ticket, tracks the batch, and hands it to
 // ReadBatch, applying the shared failure actions: a cancelled rows-owning
-// admission seals inside admit itself, and a track failure seals here since
+// admission seals inside queue.Acquire itself, and a track failure seals here since
 // the rows already left the batcher while the deferred release lets later
 // tickets proceed. A ticket with no batch (flushCurrent's barrier) passes
 // through the empty skip after admission.
-func (b *batchPublisher) dispatch(ctx context.Context, ticket uint64, batch service.MessageBatch) error {
-	if err := b.admit(ctx, ticket, len(batch) > 0); err != nil {
+func (b *batchPublisher) dispatch(ctx context.Context, tkt uint64, batch service.MessageBatch) error {
+	if err := b.queue.Acquire(ctx, tkt, len(batch) > 0); err != nil {
+		if errors.Is(err, ticket.ErrSealed) {
+			return fmt.Errorf("publisher flush queue sealed after an abandoned batch; reconnecting rebuilds the publisher: %w", err)
+		}
 		return err
 	}
-	defer b.release()
+	defer b.queue.Release()
 	if len(batch) == 0 {
 		return nil
 	}
@@ -455,7 +340,7 @@ func (b *batchPublisher) dispatch(ctx context.Context, ticket uint64, batch serv
 		// The rows left the batcher but were never tracked, and the deferred
 		// release lets later tickets proceed: seal so nothing can be tracked
 		// (and persisted) past the gap.
-		b.sealQueue()
+		b.queue.Seal()
 		return err
 	}
 	return b.sendTracked(ctx, tracked)
@@ -533,8 +418,8 @@ func (b *batchPublisher) trackBatch(ctx context.Context, batch service.MessageBa
 
 // sendTracked hands a tracked batch to ReadBatch. Must be called by the
 // admitted ticket holder, never under batcherMu: the send blocks until
-// consumed. A failed send releases the batch's snapshot-gate slot and poisons
-// the publisher.
+// consumed. A failed send releases the batch's snapshot-gate slot and sets
+// sendFailed, which poisons the publisher.
 func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch) error {
 	select {
 	case b.msgChan <- tracked.msgs:
@@ -544,8 +429,8 @@ func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch)
 			b.snapshotAckWG.Done()
 		}
 		// The batch's checkpoint slot is registered but its ackFn will never
-		// run, so the tracker is permanently pinned before this batch: mark
-		// the publisher poisoned so Connect rebuilds it with a fresh tracker.
+		// run, so the tracker is permanently pinned before this batch: set
+		// sendFailed so Connect rebuilds the publisher with a fresh tracker.
 		// Resolving the slot here instead would be unsafe - another flusher
 		// may already have delivered a later-tracked batch, and its ack would
 		// then persist an SCN past these undelivered rows.
@@ -556,7 +441,7 @@ func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch)
 		} else {
 			b.log.Warnf("Batch of %d messages could not be handed to the pipeline; the publisher is marked for rebuild and its rows re-read from the last durable SCN on reconnect", len(tracked.msgs.msg))
 		}
-		b.poisoned.Store(true)
+		b.sendFailed.Store(true)
 		return ctx.Err()
 	}
 }
@@ -619,18 +504,18 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 	// gate. Being admitted proves every earlier flush has finished
 	// trackBatch+send, so once flushCurrent returns the gate counts every
 	// published snapshot batch and waitSnapshotAcks cannot release early.
-	ticket := b.takeTicketLocked()
+	ticket := b.queue.Take()
 	if err != nil {
 		// The failed Flush may have drained rows that were never tracked.
 		// Seal BEFORE releasing batcherMu: in the gap after the unlock
 		// another flusher could flush, take the next ticket, and be admitted
 		// past the dropped rows.
-		b.sealQueue()
+		b.queue.Seal()
 	}
 	b.batcherMu.Unlock()
 	if err != nil {
 		// The seal is already applied under batcherMu; return the real flush
-		// error rather than letting admit's sealed refusal mask it (the
+		// error rather than letting the sealed refusal of Acquire mask it (the
 		// operator needs the batching.processors failure, not the seal).
 		return err
 	}
