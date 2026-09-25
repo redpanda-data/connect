@@ -4,7 +4,7 @@ inputs:
     urls: [] # No default (required)
     max_reconnects: "" # No default (optional)
     bucket: "" # No default (required)
-    key: >
+    key: ">"
     auto_replay_nacks: true
     ignore_deletes: false
     include_history: false

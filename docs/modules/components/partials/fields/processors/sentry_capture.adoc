@@ -11,7 +11,7 @@ A mapping that must evaluate to an object-of-objects or `deleted()`. If this map
 [source,yaml]
 ----
 # Examples:
-context: root = {"order": {"product_id": "P93174", "quantity": 5}}
+context: 'root = {"order": {"product_id": "P93174", "quantity": 5}}'
 
 # ---
 
@@ -83,7 +83,7 @@ message: webhook event received
 
 # ---
 
-message: failed to find product in database: ${! error() }
+message: "failed to find product in database: ${! error() }"
 ----
 
 === `release`

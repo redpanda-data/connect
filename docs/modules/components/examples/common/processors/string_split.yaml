@@ -1,6 +1,6 @@
 processors:
   label: ""
   string_split:
-    delimiter: 
-
+    delimiter: |+
+      
     empty_as_null: false

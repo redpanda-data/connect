@@ -518,7 +518,7 @@ row_operation: ${! metadata("op") }
 
 # ---
 
-row_operation: ${! this.op == "d" ? "delete" : "upsert" }
+row_operation: '${! this.op == "d" ? "delete" : "upsert" }'
 ----
 
 === `schema_evolution`

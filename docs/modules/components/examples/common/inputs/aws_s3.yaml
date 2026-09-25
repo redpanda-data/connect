@@ -7,12 +7,7 @@ inputs:
       to_the_end: {}
     sqs:
       url: ""
-      endpoint: ""
       key_path: Records.*.s3.object.key
       bucket_path: Records.*.s3.bucket.name
       envelope_path: ""
-      delay_period: ""
-      max_messages: 10
-      wait_time_seconds: 0
       nack_visibility_timeout: 0
-      zero_key_warn_interval: 30s

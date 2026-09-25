@@ -187,7 +187,7 @@ func renderFieldExamples(f fieldSpec) string {
 					b.WriteString(f.Name + ": |-\n")
 					b.WriteString(indentLines(t, "  ") + "\n")
 				} else {
-					b.WriteString(f.Name + ": " + t + "\n")
+					b.WriteString(f.Name + ": " + yamlScalar(t, "  ") + "\n")
 				}
 			default:
 				b.WriteString(f.Name + ": " + jsString(t) + "\n")
@@ -303,7 +303,7 @@ func buildConfigYAML(key, name string, fields []fieldSpec, includeAdvanced bool)
 		case f.Kind == "array" && f.Type == "object" && f.Children != nil:
 			lines = append(lines, configLeaf(f, 4))
 		case f.Type == "object" && f.Children != nil:
-			lines = append(lines, configObject(f, 4)...)
+			lines = append(lines, configObject(f, 4, includeAdvanced)...)
 		default:
 			lines = append(lines, configLeaf(f, 4))
 		}
@@ -338,17 +338,17 @@ func buildValueConfigYAML(key, name string, conf fieldSpec) string {
 	return strings.Join(lines, "\n")
 }
 
-func configObject(f fieldSpec, indent int) []string {
+func configObject(f fieldSpec, indent int, includeAdvanced bool) []string {
 	lines := []string{strings.Repeat(" ", indent) + f.Name + ":"}
 	for _, c := range f.Children {
-		if c.IsDeprecated {
+		if c.IsDeprecated || (!includeAdvanced && c.IsAdvanced) {
 			continue
 		}
 		switch {
 		case c.Kind == "array" && c.Type == "object" && c.Children != nil:
 			lines = append(lines, configLeaf(c, indent+2))
 		case len(c.Children) > 0:
-			lines = append(lines, configObject(c, indent+2)...)
+			lines = append(lines, configObject(c, indent+2, includeAdvanced)...)
 		default:
 			lines = append(lines, configLeaf(c, indent+2))
 		}
@@ -381,7 +381,7 @@ func configLeaf(f fieldSpec, indent int) string {
 		if t == "" {
 			return pad + f.Name + `: ""`
 		}
-		return pad + f.Name + ": " + t
+		return pad + f.Name + ": " + yamlScalar(t, strings.Repeat(" ", indent+2))
 	case nil:
 	default:
 		return pad + f.Name + ": " + jsString(t)

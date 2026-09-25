@@ -184,7 +184,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 [source,yaml]
 ----
 # Examples:
-priority: 0
+priority: "0"
 
 # ---
 

@@ -1,7 +1,7 @@
 processors:
   label: ""
   string_split:
-    delimiter: 
-
+    delimiter: |+
+      
     emit_bytes: false
     empty_as_null: false

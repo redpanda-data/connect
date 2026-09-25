@@ -16,7 +16,7 @@ outputs:
     credentials_json: ""
     csv:
       header: []
-      field_delimiter: ,
+      field_delimiter: ","
       allow_jagged_rows: false
       allow_quoted_newlines: false
       encoding: UTF-8

@@ -14,12 +14,9 @@ outputs:
     init_statement: "" # No default (optional)
     schema_evolution:
       enabled: "" # No default (required)
-      ignore_nulls: true
-      processors: [] # No default (optional)
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: [] # No default (optional)
     max_in_flight: 4

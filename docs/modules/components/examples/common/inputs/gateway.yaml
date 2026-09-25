@@ -4,7 +4,7 @@ inputs:
     path: /
     rate_limit: ""
     sync_response:
-      status: 200
+      status: "200"
       headers:
         Content-Type: "application/octet-stream"
       metadata_headers:

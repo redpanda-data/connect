@@ -45,7 +45,7 @@ endif::[]
 [source,yaml]
 ----
 # Examples:
-image: root = this.image.decode("base64") # decode base64 encoded image
+image: 'root = this.image.decode("base64") # decode base64 encoded image'
 ----
 
 === `max_tokens`

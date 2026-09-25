@@ -49,7 +49,7 @@ interval: 1h
 
 # ---
 
-interval: @every 1s
+interval: "@every 1s"
 
 # ---
 

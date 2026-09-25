@@ -3,40 +3,18 @@ outputs:
   ockam_kafka:
     kafka:
       seed_brokers: [] # No default (optional)
-      tls:
-        enabled: false
-        skip_cert_verify: false
-        enable_renegotiation: false
-        root_cas: ""
-        root_cas_file: ""
-        client_certs: []
       max_in_flight: 10
       batching:
         count: 0
         byte_size: 0
         period: ""
         check: ""
-        processors: [] # No default (optional)
-      partitioner: "" # No default (optional)
-      idempotent_write: true
-      acks: all
-      compression: "" # No default (optional)
-      allow_auto_topic_creation: true
-      timeout: 10s
-      max_message_bytes: 1MiB
-      broker_write_max_bytes: 100MiB
-      max_buffered_records: 10000
-      max_buffered_bytes: 0
-      max_in_flight_requests: 1
-      record_retries: 0
-      record_delivery_timeout: 0s
       topic: "" # No default (required)
       key: "" # No default (optional)
       partition: "" # No default (optional)
       metadata:
         include_prefixes: []
         include_patterns: []
-      timestamp_ms: "" # No default (optional)
     disable_content_encryption: false
     enrollment_ticket: "" # No default (optional)
     identity_name: "" # No default (optional)

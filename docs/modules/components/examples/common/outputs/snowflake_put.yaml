@@ -25,5 +25,4 @@ outputs:
       byte_size: 0
       period: ""
       check: ""
-      processors: [] # No default (optional)
     max_in_flight: 1

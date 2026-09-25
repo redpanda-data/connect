@@ -5,7 +5,6 @@ processors:
       raw_unions: "" # No default (optional)
       preserve_logical_types: false
       translate_kafka_connect_types: false
-      mapping: "" # No default (optional)
       store_schema_metadata: "" # No default (optional)
     protobuf:
       use_proto_names: false

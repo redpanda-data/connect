@@ -435,7 +435,7 @@ An optional Bloblang mapping to extract tags from each message. Only used in `ro
 [source,yaml]
 ----
 # Examples:
-tags_mapping: root = {"host": this.hostname, "region": this.region}
+tags_mapping: 'root = {"host": this.hostname, "region": this.region}'
 ----
 
 === `tcp`

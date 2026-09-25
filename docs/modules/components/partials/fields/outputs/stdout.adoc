@@ -39,7 +39,7 @@ codec: lines
 
 # ---
 
-codec: delim:	
+codec: "delim:\t"
 
 # ---
 

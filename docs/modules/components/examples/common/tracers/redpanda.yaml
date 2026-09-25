@@ -5,35 +5,6 @@ tracers:
     format: json
     schema_registry:
       url: "" # No default (optional)
-      tls:
-        skip_cert_verify: false
-        enable_renegotiation: false
-        root_cas: ""
-        root_cas_file: ""
-        client_certs: []
-      oauth2:
-        enabled: false
-        client_key: ""
-        client_secret: ""
-        token_url: ""
-        scopes: []
-        endpoint_params: {}
-      oauth:
-        enabled: false
-        consumer_key: ""
-        consumer_secret: ""
-        access_token: ""
-        access_token_secret: ""
-      basic_auth:
-        enabled: false
-        username: ""
-        password: ""
-      jwt:
-        enabled: false
-        private_key_file: ""
-        signing_method: ""
-        claims: {}
-        headers: {}
     service: redpanda-connect
     sampling:
       enabled: false

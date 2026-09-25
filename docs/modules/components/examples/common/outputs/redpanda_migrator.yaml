@@ -5,29 +5,6 @@ outputs:
     schema_registry:
       url: "" # No default (required)
       timeout: 5s
-      tls:
-        enabled: false
-        skip_cert_verify: false
-        enable_renegotiation: false
-        root_cas: ""
-        root_cas_file: ""
-        client_certs: []
-      oauth:
-        enabled: false
-        consumer_key: ""
-        consumer_secret: ""
-        access_token: ""
-        access_token_secret: ""
-      basic_auth:
-        enabled: false
-        username: ""
-        password: ""
-      jwt:
-        enabled: false
-        private_key_file: ""
-        signing_method: ""
-        claims: {}
-        headers: {}
       enabled: true
       interval: 5m
       include: [] # No default (optional)

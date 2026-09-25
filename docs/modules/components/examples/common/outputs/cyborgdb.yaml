@@ -7,7 +7,6 @@ outputs:
       byte_size: 0
       period: ""
       check: ""
-      processors: [] # No default (optional)
     host: "" # No default (required)
     api_key: "" # No default (required)
     index_name: redpanda-vectors

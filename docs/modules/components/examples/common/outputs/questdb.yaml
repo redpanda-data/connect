@@ -7,7 +7,6 @@ outputs:
       byte_size: 0
       period: ""
       check: ""
-      processors: [] # No default (optional)
     address: "" # No default (required)
     username: "" # No default (optional)
     password: "" # No default (optional)

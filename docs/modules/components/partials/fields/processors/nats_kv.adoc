@@ -186,7 +186,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 [source,yaml]
 ----
 # Examples:
-revision: 42
+revision: "42"
 
 # ---
 
