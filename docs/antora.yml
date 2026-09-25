@@ -1,3 +1,4 @@
-name: redpanda-connect
-title: Redpanda Connect
+# Merged with rp-connect-docs into one Antora component. Keep this file to
+# name and version only. See README.md.
+name: connect
 version: ~
