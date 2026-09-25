@@ -118,6 +118,6 @@ cache_resources:
 
 ## References
 
-- [Cache Processor Documentation](https://github.com/redpanda-data/connect/blob/main/docs/modules/components/pages/processors/cache.adoc)
-- [Memory Cache Documentation](https://github.com/redpanda-data/connect/blob/main/docs/modules/components/pages/caches/memory.adoc)
-- [Branch Processor Documentation](https://github.com/redpanda-data/connect/blob/main/docs/modules/components/pages/processors/branch.adoc)
+- [Cache Processor Documentation](https://docs.redpanda.com/redpanda-connect/components/processors/cache/)
+- [Memory Cache Documentation](https://docs.redpanda.com/redpanda-connect/components/caches/memory/)
+- [Branch Processor Documentation](https://docs.redpanda.com/redpanda-connect/components/processors/branch/)

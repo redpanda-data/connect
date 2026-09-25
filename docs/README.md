@@ -2,7 +2,13 @@
 
 This directory is an Antora content source. The docs site build merges it with [rp-connect-docs](https://github.com/redpanda-data/rp-connect-docs) into one Antora component, `connect`, which is published at https://docs.redpanda.com/redpanda-connect/.
 
-Everything under `modules/` is generated from the component specs by `task docs`. Don't edit these files by hand. To change what a field or component page says, edit the spec in `internal/impl/` and run `task docs`.
+Everything under `modules/` is generated from the component specs. Don't edit these files by hand. To change what a field or component page says, edit the spec in `internal/impl/` (or the shared field helpers in benthos) and regenerate with the same command CI runs:
+
+```bash
+CGO_ENABLED=1 TAGS=x_benthos_extra task docs
+```
+
+The `x_benthos_extra` tag includes the components that need external C libraries, such as zmq4 (install `libzmq` first). Without it, the generator keeps existing files instead of clearing its directories, so docs for removed components aren't pruned locally. CI fails the PR if the committed output differs from a full run.
 
 ## What lives where
 
@@ -19,6 +25,6 @@ Redpanda Cloud docs reuse the same pages, so the generated partials wrap self-ma
 
 ## Rules for this directory
 
-- Keep `modules/` limited to `partials/` and `examples/`. Don't add `pages/`. A page here with the same path as a page in rp-connect-docs fails the site build with a `Duplicate page` error.
+- Keep `modules/` limited to `partials/` and `examples/`. The docs build ignores anything else from this directory, so a page added here never publishes.
 - Keep `antora.yml` to `name` and `version` only. Antora merges this file with the rp-connect-docs one, and a `title` set here replaces the title on every page of the published component.
 - Hand-written guides, such as migration guides, belong in rp-connect-docs.

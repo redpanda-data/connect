@@ -41,6 +41,12 @@ const (
 		"//   body:   include::...[tag=body]   (renders the summary and description)"
 )
 
+const (
+	emptyMetadataPartial    = bannerPrefix + " The component description has no Metadata section, so this partial is empty.\n"
+	emptyDescriptionPartial = bannerPrefix + " The component has no summary or description, so this partial is empty.\n" +
+		"\n// tag::meta[]\n// end::meta[]\n\n// tag::body[]\n// end::body[]\n"
+)
+
 // generatedDirs are the directories under the components module that this
 // tool owns. They are emptied before every run so that a component removed
 // from the code also disappears from the docs.
@@ -75,10 +81,17 @@ func main() {
 		panic(err)
 	}
 
-	for _, d := range generatedDirs {
-		if err := os.RemoveAll(filepath.Join(root, d)); err != nil {
-			panic(err)
+	// Only a build with every component can tell which files are stale.
+	// Without x_benthos_extra the cgo-only components (zmq4, ffi) are missing,
+	// so clearing would delete their committed docs.
+	if builtWithAllComponents {
+		for _, d := range generatedDirs {
+			if err := os.RemoveAll(filepath.Join(root, d)); err != nil {
+				panic(err)
+			}
 		}
+	} else {
+		fmt.Fprintln(os.Stderr, "Built without x_benthos_extra: keeping existing files, so docs for removed components are not pruned. CI runs `CGO_ENABLED=1 TAGS=x_benthos_extra task docs`.")
 	}
 
 	w := writer{root: root}
@@ -136,11 +149,18 @@ func (w *writer) component(key string, c componentSpec) {
 		w.write(filepath.Join("partials/examples", key, file),
 			generatedBanner+"\n\n== Examples\n\n"+examples+"\n")
 	}
+	// The metadata and description partials are always written, empty when
+	// the component has no such content, so a page that includes them keeps
+	// building after upstream removes a Metadata section or a description.
 	if md := normalizeMetadata(extractMetadata(c.Description)); md != "" {
 		w.write(filepath.Join("partials/metadata", typeDir, file), metadataBanner+"\n\n"+md+"\n")
+	} else {
+		w.write(filepath.Join("partials/metadata", typeDir, file), emptyMetadataPartial)
 	}
 	if c.Summary != "" || c.Description != "" || c.Version != "" {
 		w.write(filepath.Join("partials/descriptions", typeDir, file), renderDescriptionPartial(c, typeDir))
+	} else {
+		w.write(filepath.Join("partials/descriptions", typeDir, file), emptyDescriptionPartial)
 	}
 	base := filepath.Join(key, c.Name+".yaml")
 	if c.Config.Children != nil {

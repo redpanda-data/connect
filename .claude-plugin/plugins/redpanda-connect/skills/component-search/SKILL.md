@@ -92,13 +92,13 @@ Links to official documentation for detailed component reference.
 
 ```
 # URL pattern:
-https://github.com/redpanda-data/connect/blob/v{version}/docs/modules/components/pages/{category}/{component}.adoc
+https://docs.redpanda.com/redpanda-connect/components/{category}/{component}/
 
 # Examples:
-https://github.com/redpanda-data/connect/blob/v4.70.0/docs/modules/components/pages/inputs/kafka_franz.adoc
-https://github.com/redpanda-data/connect/blob/v4.70.0/docs/modules/components/pages/outputs/postgres.adoc
+https://docs.redpanda.com/redpanda-connect/components/inputs/kafka_franz/
+https://docs.redpanda.com/redpanda-connect/components/outputs/sql_insert/
 ```
-- `{version}` - Connect version from rpk-version.sh (e.g., "4.70.0")
+The published docs always describe the latest release. For the exact fields of the installed version, use `rpk connect list --format json-full` or the component's `--help`.
 - `{category}` - Component category (inputs, outputs, processors, etc.)
 - `{component}` - Component name with underscores (e.g., "kafka_franz")
 
