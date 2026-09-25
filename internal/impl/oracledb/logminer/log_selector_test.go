@@ -755,4 +755,26 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.True(t, capped)
 		assert.Equal(t, 3, s.count, "growthMax must clamp the derived jump, not just a flat +1 step")
 	})
+
+	t.Run("a sequence missing from the archived branch does not get skipped when a later sequence is already archived", func(t *testing.T) {
+		s := &logFileSelector{minCount: 1, growthMax: 1}
+
+		// Simulates deduplicateLogs' output when sequence 10 failed to
+		// register on the archive destination (still only present as an
+		// ACTIVE online copy) while sequence 11 archived normally: all
+		// archived files come first, then uncovered online files, producing
+		// [#11, #10, #12] - descending where it should be ascending.
+		seq10 := mkLogFile(1, 10, 1000, 2000, "ACTIVE", testRedoLogSize)
+		seq11 := mkLogFile(1, 11, 2000, 3000, "ARCHIVED", testRedoLogSize)
+		seq12 := mkLogFile(1, 12, 3000, 4000, logStatusCurrent, testRedoLogSize)
+		files := []*LogFile{seq11, seq10, seq12}
+
+		selected, endSCN, capped, err := s.selectForSession(files, openThread1, 4000, testRedoLogSize)
+
+		require.NoError(t, err)
+		require.True(t, capped)
+		assert.Equal(t, []*LogFile{seq10}, selected, "sequence 10 must be selected first despite arriving out of order")
+		assert.Equal(t, uint64(1999), endSCN, "endSCN must stop at seq 10's boundary, not skip ahead to seq 11's")
+		assert.NotEqual(t, seq11.NextSCN-1, endSCN, "endSCN must not jump straight to seq 11, leaving seq 10 unmined and unreachable next cycle")
+	})
 }

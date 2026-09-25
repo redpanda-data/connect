@@ -9,6 +9,7 @@
 package logminer
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"slices"
@@ -272,6 +273,11 @@ func groupFilesByThread(files []*LogFile) map[int][]*LogFile {
 	groups := make(map[int][]*LogFile)
 	for _, f := range files {
 		groups[f.Thread] = append(groups[f.Thread], f)
+	}
+	for _, group := range groups {
+		slices.SortFunc(group, func(a, b *LogFile) int {
+			return cmp.Compare(a.Sequence, b.Sequence)
+		})
 	}
 	return groups
 }
