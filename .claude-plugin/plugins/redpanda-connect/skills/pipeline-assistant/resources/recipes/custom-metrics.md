@@ -182,6 +182,6 @@ Combine multiple metrics for comprehensive observability.
 
 ## References
 
-- [Metric Processor Documentation](https://github.com/redpanda-data/connect/blob/main/docs/modules/components/pages/processors/metric.adoc)
-- [Prometheus Metrics Documentation](https://github.com/redpanda-data/connect/blob/main/docs/modules/components/pages/metrics/prometheus.adoc)
+- [Metric Processor Documentation](https://docs.redpanda.com/redpanda-connect/components/processors/metric/)
+- [Prometheus Metrics Documentation](https://docs.redpanda.com/redpanda-connect/components/metrics/prometheus/)
 - [Prometheus Best Practices](https://prometheus.io/docs/practices/naming/)

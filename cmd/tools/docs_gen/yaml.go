@@ -74,7 +74,8 @@ func (e yamlEmitter) mapping(m map[string]any, indent string) string {
 	for _, k := range objectKeys(m) {
 		v := m[k]
 		sb.WriteString(indent)
-		sb.WriteString(e.str(k, indent, true))
+		// Keys get the child indent, as in npm yaml's stringifyPair.
+		sb.WriteString(e.str(k, indent+"  ", true))
 		sb.WriteString(":")
 		switch {
 		case isNonEmptyCollection(v):
@@ -174,8 +175,12 @@ func yamlPlainString(s, indent string, implicitKey bool) string {
 	if !implicitKey && strings.Contains(s, "\n") {
 		return yamlBlockString(s, indent, implicitKey)
 	}
-	if yamlDocumentMarker.MatchString(s) && indent == "" {
-		return yamlBlockString(s, "  ", implicitKey)
+	if yamlDocumentMarker.MatchString(s) {
+		if indent == "" {
+			return yamlBlockString(s, "  ", implicitKey)
+		} else if implicitKey && indent == "  " {
+			return yamlQuotedString(s, indent, implicitKey)
+		}
 	}
 	for _, re := range yamlNonStringScalars {
 		if re.MatchString(s) {
