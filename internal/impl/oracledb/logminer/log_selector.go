@@ -74,7 +74,7 @@ func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, 
 
 	// Stall detection compares the pre-extension budget selection, not the
 	// extended one - extension is real progress, not a stall.
-	if truncated && logKeysEqual(budgetKeys, s.prevKeys) {
+	if truncated && slices.Equal(budgetKeys, s.prevKeys) {
 		// Same selection again with no progress - grow the budget. Rather
 		// than a flat +1 (slow to clear a large backlog), derive the jump
 		// that would clear it in one step when that's bigger than +1.
@@ -282,10 +282,6 @@ func logKeysOf(files []*LogFile) []logKey {
 		keys[i] = logKey{thread: f.Thread, sequence: f.Sequence}
 	}
 	return keys
-}
-
-func logKeysEqual(a, b []logKey) bool {
-	return slices.Equal(a, b)
 }
 
 // ceilDiv rounds numerator/denominator up, so a partially-filled unit of
