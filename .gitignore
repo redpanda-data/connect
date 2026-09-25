@@ -20,3 +20,11 @@ test_output.txt
 benchmark_results.json
 # Enterprise license files must never reach the (public) repo.
 *.license
+
+# Real Snowflake integration-test credentials (see internal/impl/snowflake/README.md).
+# Not the same as internal/impl/snowflake/resources/ssh_keys/snowflake_rsa_key.p8, which
+# is a throwaway fixture key deliberately committed elsewhere -- these are root-level
+# working-tree filenames only, and won't hide anything already tracked.
+/rsa_key.p8
+/rsa_key.pub
+/testing.env
