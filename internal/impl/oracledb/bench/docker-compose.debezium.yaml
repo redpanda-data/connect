@@ -1,0 +1,53 @@
+# Prerequisites:
+#   - Oracle DB already running (task oracledb:up)
+#   - Oracle JDBC driver at bench/debezium-drivers/ojdbc8.jar
+#
+# Usage:
+#   docker-compose -f docker-compose.debezium.yaml up -d
+#   docker-compose -f docker-compose.debezium.yaml down -v
+
+services:
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  debezium-server:
+    image: quay.io/debezium/server:2.7
+    container_name: debezium-server
+    # Allows debezium-server to reach the Oracle container published on the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # application.properties — Debezium Server reads this at startup
+      - ./debezium-conf:/debezium/conf:ro
+      # Oracle JDBC driver — place ojdbc8.jar in bench/debezium-drivers/ first
+      - ./debezium-drivers:/debezium/lib/oracle:ro
+      # Persistent offset storage so restarts resume from the last position
+      # - debezium-data:/debezium/data
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+# volumes:
+  # debezium-data:

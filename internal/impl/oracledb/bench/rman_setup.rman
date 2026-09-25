@@ -1,0 +1,9 @@
+# RMAN setup script for Oracle CDC local development
+# Configures archive log retention so LogMiner has logs available to mine.
+# Run via: task rman:setup
+
+# Keep archive logs needed to recover from any point in the last 24 hours.
+# This prevents RMAN from marking logs as obsolete before LogMiner can read them.
+CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 1 DAYS;
+
+EXIT;
