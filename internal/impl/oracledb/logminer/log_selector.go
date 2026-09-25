@@ -74,7 +74,10 @@ func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, 
 	return selected, endSCN, capped, nil
 }
 
-// deriveGrowthCount computes, in one step, the count that would clear the largest backlog any thread has below prevUpperBoundSCN (using FirstSCN rather than NextSCN so the files closest to the boundary still count), returning minCount - so selectForSession's flat +1 fallback applies instead - when prevUpperBoundSCN is 0 and there's nothing to derive from.
+// deriveGrowthCount computes, in one step, the count that would clear the
+// largest backlog any thread has below prevUpperBoundSCN (via FirstSCN, not
+// NextSCN, so boundary-adjacent files still count), or minCount if there's
+// no boundary yet to derive from.
 func (s *logFileSelector) deriveGrowthCount(files []*LogFile, maxRedoLogSizeInBytes uint64) int {
 	if s.prevUpperBoundSCN == 0 {
 		return s.minCount
@@ -95,7 +98,10 @@ func (s *logFileSelector) deriveGrowthCount(files []*LogFile, maxRedoLogSizeInBy
 	return max(s.minCount, ceilDiv(maxThreadBytes, maxRedoLogSizeInBytes))
 }
 
-// budgetPerThread applies the shared byte budget per thread, extends past prevUpperBoundSCN, and combines the results, reporting via truncated (compared through the pre-extension budgetKeys) whether the budget alone cut any thread's files, since extension catching a thread up counts as progress rather than a stall.
+// budgetPerThread applies the shared byte budget per thread, extends past
+// prevUpperBoundSCN, and combines the results; truncated (via the
+// pre-extension budgetKeys) reports whether the budget alone cut any
+// thread's files, since extension is progress, not a stall.
 func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, dbCurrentSCN, maxRedoLogSizeInBytes uint64) (selected []*LogFile, endSCN uint64, capped, truncated bool, budgetKeys []logKey, err error) {
 	byThread := groupFilesByThread(files)
 
@@ -145,7 +151,9 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 		extended := extendThreadPastBoundary(threadFiles, budgetCapped, s.prevUpperBoundSCN)
 		combined = append(combined, extended...)
 
-		// A closed thread is complete once fully covered and an open thread once it reaches its current log (more may still be coming), and an incomplete thread tightens endSCN so its tail can't drop out later.
+		// A closed thread completes once fully covered, an open thread once
+		// it reaches its current log (more may still be coming); an
+		// incomplete thread tightens endSCN so its tail can't drop out later.
 		last := extended[len(extended)-1]
 		_, open := openSet[t]
 		var caughtUp bool
@@ -177,7 +185,9 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 	return combined, tightestEndSCN, true, true, budgetKeys, nil
 }
 
-// extendThreadPastBoundary extends a thread's capped selection past prevUpperBoundSCN (a no-op when that's still 0, i.e. nothing committed yet) so a thread whose backlog exceeds the budget doesn't have its tail drop out of a future window, even past growthMax, since re-covering already-committed ground is unsafe to skip while exceeding the growth ceiling only costs extra files for one cycle.
+// extendThreadPastBoundary extends past prevUpperBoundSCN (a no-op at 0)
+// so a thread's tail can't drop out of a future window, even past
+// growthMax, since re-covering committed ground is unsafe to skip.
 func extendThreadPastBoundary(threadFiles, budgetCapped []*LogFile, prevUpperBoundSCN uint64) []*LogFile {
 	if prevUpperBoundSCN == 0 {
 		return budgetCapped

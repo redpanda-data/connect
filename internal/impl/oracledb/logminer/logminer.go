@@ -1138,7 +1138,8 @@ type LogFile struct {
 	IsCurrent bool
 	Thread    int
 	Status    string
-	// SizeBytes is the file's on-disk size, budgeted by redo_volume instead of a flat file count (see logFileSelector).
+	// SizeBytes is the file's on-disk size, budgeted by redo_volume
+	// instead of a flat file count (see logFileSelector).
 	SizeBytes uint64
 }
 
