@@ -26,7 +26,7 @@ Last updated: 2026-03-16
 <!-- Copyright 2025 Redpanda Data, Inc. -->
 ## AWS Bench Results
 
-Last refreshed: 2026-09-24
+Last refreshed: 2026-09-25
 
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
@@ -38,6 +38,8 @@ Last refreshed: 2026-09-24
 | mysql / orders-snapshot-sweep |         4 |           21 |       — | —                  | 2026-08-18 † |
 | oracle / orders-streaming-prefetch |         4 |           26 |       — | —                  | 2026-09-03  |
 | postgres / orders-cdc-diag |         4 |           84 |       — | —                  | 2026-08-20  |
+| postgres / orders-cdc-tune |         4 |           87 |       — | —                  | 2026-09-25  |
+| postgres / orders-snapshot |         4 |          116 |       — | —                  | 2026-09-25  |
 | s3 / orders-live      |         8 |           55 |       — | —                  | 2026-09-24  |
 | s3 / orders-live-diag |         1 |           13 |       — | —                  | 2026-09-21  |
 | s3 / orders-live-diag2 |         — |            — |       — | —                  | 2026-09-21  |

@@ -1,0 +1,126 @@
+# SNAPSHOT batch-size x parallelism 2x2 FACTORIAL @ 4 vCPU.
+#
+# orders-snapshot found that snapshot_batch_size, not
+# max_parallel_snapshot_tables, is the dominant snapshot lever. Isolated
+# effect at mpst=8 (its s2 vs s4 arms differed in nothing else):
+#   batch 1000 -> 104.24 MB/s
+#   batch 10000 -> 115.95 MB/s   (+11.2%, z=+20.0)
+# while mpst alone moved only +2 to +5% and non-monotonically
+# (4: +2.2% z=2.60, 8: +0.8% ns, 16: +4.8% z=5.56).
+#
+# That left the actual optimum unexplored: the two winning levers were never
+# combined, and batch size was never pushed past 10000. This run closes both
+# gaps as a 2x2 factorial in (mpst, snapshot_batch_size), which yields both
+# main effects AND their interaction from 4 points:
+#
+#                 batch 10000        batch 50000
+#   mpst 8        b0 (anchor)        b2
+#   mpst 16       b1                 b3
+#
+# b0 REPEATS orders-snapshot's s4 exactly. It is the in-run anchor: if it
+# reproduces ~116 MB/s, cross-run comparison against that scenario's other
+# arms is validated rather than assumed, and the mpst-16 rows can be read
+# against its batch-1000 numbers directly.
+#
+# WHY BATCH STOPS AT 50000: GOMEMLIMIT is vCPU-derived at 2 GiB/vCPU
+# (defaultGoMemPerVCPU, scenario.go:21) = 8 GiB at this 4-vCPU pin, and it is
+# constant across arms so it cannot confound them. 50000 rows x 1200B = 60 MB
+# raw per in-flight scanner batch; at mpst 16 that is ~960 MB raw, and decoded
+# StreamMessage objects run several times their raw byte size, so the working
+# set lands in the low GiB against that 8 GiB ceiling. 100000 would risk GC
+# thrash or OOM and confound throughput with memory pressure.
+
+name: postgres-orders-snapshot-batch
+description: |
+  Connect-only 2x2 factorial over postgres_cdc snapshot's two real levers at
+  4 vCPU: max_parallel_snapshot_tables (8, 16) x snapshot_batch_size (10000,
+  50000), on the same pre-seeded 100M-row (120 GB) table. Includes an in-run
+  anchor repeating orders-snapshot's best arm. Determines the optimal snapshot
+  config before the 1/2/4/8 sizing sweep commits to one.
+
+connector: postgres_cdc
+stack: postgres
+
+infra:
+  source:
+    instance_class: db.r6g.4xlarge
+    storage_gb: 800
+    iops: 24000
+    storage_throughput: 1000
+    parameters:
+      rds.logical_replication: "1"
+      max_wal_senders: "20"
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 100000000  # identical to orders-snapshot so the anchor arm is
+                           # a true repeat and all numbers stay comparable
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-postgres
+  expected_peak_mb_s: 133  # 120000 MB / 133 = 902s >= 15m minimum. Measured
+                           # best so far is ~116 (peak 118), so even a further
+                           # gain here cannot drain the dataset in-window.
+
+# No workload: — bounded-dataset mode, matching orders-snapshot.
+
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      tls:
+        skip_cert_verify: true
+      stream_snapshot: true
+      schema: public
+      tables: [orders]
+      slot_name: bench_slot
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [4]
+  arms:
+    # b0 — anchor: exact repeat of orders-snapshot s4 (mpst 8, batch 10000).
+    # Expected ~115.95 MB/s. Validates cross-run comparability.
+    - id: b0-mpst-8-batch-10k
+      pipeline:
+        input:
+          postgres_cdc:
+            max_parallel_snapshot_tables: 8
+            snapshot_batch_size: 10000
+
+    # b1 — both winning levers combined, never tested together.
+    - id: b1-mpst-16-batch-10k
+      pipeline:
+        input:
+          postgres_cdc:
+            max_parallel_snapshot_tables: 16
+            snapshot_batch_size: 10000
+
+    # b2 — batch ladder step at the anchor's parallelism: does batch size keep
+    # paying past 10000, or has it saturated?
+    - id: b2-mpst-8-batch-50k
+      pipeline:
+        input:
+          postgres_cdc:
+            max_parallel_snapshot_tables: 8
+            snapshot_batch_size: 50000
+
+    # b3 — maximal cell. If the levers are additive this is the optimum; if it
+    # underperforms b1/b2 they interact negatively (e.g. 16 x 60 MB of
+    # in-flight batches provoking GC pressure inside the 8 GiB limit).
+    - id: b3-mpst-16-batch-50k
+      pipeline:
+        input:
+          postgres_cdc:
+            max_parallel_snapshot_tables: 16
+            snapshot_batch_size: 50000
+
+reset:
+  # No TRUNCATE — every arm re-snapshots the same 100M rows. The slot drops are
+  # what force the re-snapshot (logical_stream.go:210-234 streams from
+  # confirmed_flush_lsn instead of snapshotting if a slot row survives).
+  - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
+  - sql: "SELECT pg_drop_replication_slot('bench_slot_tmp') FROM pg_replication_slots WHERE slot_name='bench_slot_tmp'"

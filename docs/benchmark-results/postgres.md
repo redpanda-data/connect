@@ -261,3 +261,61 @@ conditions reproduce.
 
 
 Raw samples + Prometheus snapshots: [`results/postgres/orders-cdc-diag/2026-08-20T16-57-42Z.json`](results/postgres/orders-cdc-diag/2026-08-20T16-57-42Z.json)
+
+
+## AWS — orders-cdc-tune — 2026-09-24
+
+**Scenario:** Connect-only config-lever A/B/C/D for postgres_cdc STREAMING at 4 vCPU on
+the canonical orders-cdc rig. Arms: deployed default, checkpoint_limit
+16384, GOMAXPROCS 8 oversubscribed, and all three combined. Establishes
+whether the ~85 MB/s streaming plateau is reachable/liftable by config
+before the 1/2/4/8 sweep commits to one config.
+
+**Git SHA:** [`ee5d3df4c`](https://github.com/redpanda-data/connect/commit/ee5d3df4c86a37a41d1a054308f80734749deb9d)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r6g.4xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 4          | t0-default     | connect       |           81 |       76.934 |        63,095 |           81 |          47 |           96 |        66,301 |                    |
+| 4    | 4          | t1-ckpt-16k    | connect       |           87 |       81.603 |        66,927 |           88 |          42 |           98 |        71,729 |                    |
+| 4    | 8          | t2-gomaxprocs-8 | connect       |           86 |       79.291 |        65,030 |           86 |          41 |           95 |        70,477 |                    |
+| 4    | 8          | t3-combo       | connect       |           80 |       75.884 |        62,234 |           81 |          42 |           97 |        65,792 |                    |
+
+
+> ⚠ At 4 vCPU: 64s dip to 0.00× median MB/sec from t=749s — investigate before publishing.
+
+
+
+Raw samples + Prometheus snapshots: [`results/postgres/orders-cdc-tune/2026-09-24T23-02-49Z.json`](results/postgres/orders-cdc-tune/2026-09-24T23-02-49Z.json)
+
+
+## AWS — orders-snapshot — 2026-09-25
+
+**Scenario:** Connect-only config A/B for postgres_cdc SNAPSHOT at 4 vCPU over a
+pre-seeded 100M-row (120 GB) orders table. Arms sweep
+max_parallel_snapshot_tables 1/4/8/16 plus a snapshot_batch_size 10000
+variant, to find the optimal snapshot config before the 1/2/4/8 sweep.
+
+**Git SHA:** [`ee5d3df4c`](https://github.com/redpanda-data/connect/commit/ee5d3df4c86a37a41d1a054308f80734749deb9d)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r6g.4xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 100,000,000 rows × 1200 B = ~111 GB
+
+### Throughput
+
+| vCPU | GOMAXPROCS | arm            | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------|------------|----------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 4    | 4          | s0-default     | connect       |          103 |      100.230 |        84,475 |          104 |          84 |          106 |        87,815 |                    |
+| 4    | 4          | s1-mpst-4      | connect       |          106 |      105.490 |        89,161 |          106 |         104 |          107 |        89,455 |                    |
+| 4    | 4          | s2-mpst-8      | connect       |          104 |      103.987 |        87,871 |          104 |         103 |          105 |        88,000 |                    |
+| 4    | 4          | s3-mpst-16     | connect       |          108 |      108.178 |        91,355 |          108 |         107 |          109 |        91,500 |                    |
+| 4    | 4          | s4-mpst-8-batch-10k | connect       |          116 |      114.992 |        97,176 |          116 |         106 |          118 |        98,000 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/postgres/orders-snapshot/2026-09-25T00-50-22Z.json`](results/postgres/orders-snapshot/2026-09-25T00-50-22Z.json)
