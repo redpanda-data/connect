@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  bounds_check:
+    max_part_size: 1073741824
+    min_part_size: 1

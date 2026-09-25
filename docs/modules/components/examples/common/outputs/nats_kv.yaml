@@ -1,0 +1,7 @@
+outputs:
+  label: ""
+  nats_kv:
+    urls: [] # No default (required)
+    bucket: "" # No default (required)
+    key: "" # No default (required)
+    max_in_flight: 1024

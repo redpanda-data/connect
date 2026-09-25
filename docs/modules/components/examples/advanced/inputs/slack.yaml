@@ -1,0 +1,6 @@
+inputs:
+  label: ""
+  slack:
+    app_token: "" # No default (required)
+    bot_token: "" # No default (required)
+    auto_replay_nacks: true

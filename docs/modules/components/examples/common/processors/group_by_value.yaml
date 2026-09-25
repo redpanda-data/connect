@@ -1,0 +1,4 @@
+processors:
+  label: ""
+  group_by_value:
+    value: "" # No default (required)

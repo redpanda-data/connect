@@ -1,0 +1,36 @@
+outputs:
+  label: ""
+  schema_registry:
+    url: "" # No default (required)
+    subject: "" # No default (required)
+    subject_compatibility_level: "" # No default (optional)
+    backfill_dependencies: true
+    translate_ids: false
+    normalize: true
+    remove_metadata: true
+    remove_rule_set: true
+    input_resource: schema_registry_input
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    max_in_flight: 64
+    oauth:
+      enabled: false
+      consumer_key: ""
+      consumer_secret: ""
+      access_token: ""
+      access_token_secret: ""
+    basic_auth:
+      enabled: false
+      username: ""
+      password: ""
+    jwt:
+      enabled: false
+      private_key_file: ""
+      signing_method: ""
+      claims: {}
+      headers: {}

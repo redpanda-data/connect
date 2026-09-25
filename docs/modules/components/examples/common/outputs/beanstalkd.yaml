@@ -1,0 +1,5 @@
+outputs:
+  label: ""
+  beanstalkd:
+    address: "" # No default (required)
+    max_in_flight: 64

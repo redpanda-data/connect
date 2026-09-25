@@ -1,0 +1,3 @@
+caches:
+  ristretto:
+    default_ttl: ""

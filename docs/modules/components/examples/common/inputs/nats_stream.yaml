@@ -1,0 +1,10 @@
+inputs:
+  label: ""
+  nats_stream:
+    urls: [] # No default (required)
+    cluster_id: "" # No default (required)
+    client_id: ""
+    queue: ""
+    subject: ""
+    durable_name: ""
+    unsubscribe_on_close: false

@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  wasm:
+    module_path: "" # No default (required)
+    function: process

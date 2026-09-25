@@ -1,0 +1,9 @@
+inputs:
+  label: ""
+  socket:
+    network: "" # No default (required)
+    address: "" # No default (required)
+    auto_replay_nacks: true
+    open_message_mapping: "" # No default (optional)
+    scanner:
+      lines: {}

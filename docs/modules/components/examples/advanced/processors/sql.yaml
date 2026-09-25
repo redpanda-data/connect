@@ -1,0 +1,9 @@
+processors:
+  label: ""
+  sql:
+    driver: "" # No default (required)
+    data_source_name: "" # No default (required)
+    query: "" # No default (required)
+    unsafe_dynamic_query: false
+    args_mapping: "" # No default (optional)
+    result_codec: none

@@ -1,0 +1,4 @@
+processors:
+  label: ""
+  msgpack:
+    operator: "" # No default (required)

@@ -1,0 +1,6 @@
+processors:
+  label: ""
+  slack_thread:
+    bot_token: "" # No default (required)
+    channel_id: "" # No default (required)
+    thread_ts: "" # No default (required)

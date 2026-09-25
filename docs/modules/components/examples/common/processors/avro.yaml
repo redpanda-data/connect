@@ -1,0 +1,7 @@
+processors:
+  label: ""
+  avro:
+    operator: "" # No default (required)
+    encoding: textual
+    schema: ""
+    schema_path: ""

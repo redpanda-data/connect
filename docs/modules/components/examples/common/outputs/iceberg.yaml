@@ -1,0 +1,38 @@
+outputs:
+  label: ""
+  iceberg:
+    catalog:
+      url: "" # No default (required)
+      warehouse: "" # No default (optional)
+      auth:
+        oauth2:
+          server_uri: /v1/oauth/tokens
+          client_id: "" # No default (required)
+          client_secret: "" # No default (required)
+          scope: "" # No default (optional)
+        bearer: "" # No default (optional)
+        aws_sigv4:
+    namespace: "" # No default (required)
+    table: "" # No default (required)
+    storage:
+      aws_s3:
+        bucket: "" # No default (required)
+        region: "" # No default (optional)
+        endpoint: "" # No default (optional)
+      gcp_cloud_storage:
+        bucket: "" # No default (required)
+        credentials_type: "" # No default (optional)
+        credentials_file: "" # No default (optional)
+        credentials_json: "" # No default (optional)
+      azure_blob_storage:
+        storage_account: "" # No default (required)
+        container: "" # No default (required)
+        storage_sas_token: "" # No default (optional)
+        storage_connection_string: "" # No default (optional)
+        storage_access_key: "" # No default (optional)
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+    max_in_flight: 4

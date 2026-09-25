@@ -1,0 +1,11 @@
+processors:
+  label: ""
+  azure_cosmosdb:
+    endpoint: "" # No default (optional)
+    account_key: "" # No default (optional)
+    connection_string: "" # No default (optional)
+    database: "" # No default (required)
+    container: "" # No default (required)
+    partition_keys_map: "" # No default (required)
+    operation: Create
+    item_id: "" # No default (optional)

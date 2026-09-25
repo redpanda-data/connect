@@ -1,0 +1,10 @@
+inputs:
+  label: ""
+  gcp_pubsub:
+    project: "" # No default (required)
+    credentials_json: ""
+    subscription: "" # No default (required)
+    endpoint: ""
+    sync: false
+    max_outstanding_messages: 1000
+    max_outstanding_bytes: 1000000000

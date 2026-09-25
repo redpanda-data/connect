@@ -1,0 +1,6 @@
+outputs:
+  label: ""
+  zmq4:
+    urls: [] # No default (required)
+    bind: true
+    socket_type: "" # No default (required)

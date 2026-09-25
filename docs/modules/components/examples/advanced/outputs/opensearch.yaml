@@ -1,0 +1,46 @@
+outputs:
+  label: ""
+  opensearch:
+    urls: [] # No default (required)
+    index: "" # No default (required)
+    action: "" # No default (required)
+    id: "" # No default (required)
+    pipeline: ""
+    routing: ""
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    max_in_flight: 64
+    basic_auth:
+      enabled: false
+      username: ""
+      password: ""
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    aws:
+      enabled: false
+      region: "" # No default (optional)
+      endpoint: "" # No default (optional)
+      tcp:
+        connect_timeout: 0s
+        keep_alive:
+          idle: 15s
+          interval: 15s
+          count: 9
+        tcp_user_timeout: 0s
+      credentials:
+        profile: "" # No default (optional)
+        id: "" # No default (optional)
+        secret: "" # No default (optional)
+        token: "" # No default (optional)
+        from_ec2_role: "" # No default (optional)
+        role: "" # No default (optional)
+        role_external_id: "" # No default (optional)

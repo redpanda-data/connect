@@ -1,0 +1,17 @@
+inputs:
+  label: ""
+  aws_kinesis:
+    streams: [] # No default (required)
+    dynamodb:
+      table: ""
+      create: false
+    checkpoint_limit: 1024
+    auto_replay_nacks: true
+    commit_period: 5s
+    steal_grace_period: 2s
+    start_from_oldest: true
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""

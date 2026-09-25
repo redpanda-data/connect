@@ -1,0 +1,10 @@
+inputs:
+  label: ""
+  redis_streams:
+    url: "" # No default (required)
+    body_key: body
+    streams: [] # No default (required)
+    auto_replay_nacks: true
+    limit: 10
+    client_id: ""
+    consumer_group: ""

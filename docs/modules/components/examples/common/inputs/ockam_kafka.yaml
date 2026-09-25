@@ -1,0 +1,19 @@
+inputs:
+  label: ""
+  ockam_kafka:
+    kafka:
+      seed_brokers: [] # No default (optional)
+      topics: [] # No default (optional)
+      regexp_topics_include: [] # No default (optional)
+      regexp_topics_exclude: [] # No default (optional)
+      transaction_isolation_level: read_uncommitted
+      consumer_group: "" # No default (optional)
+    disable_content_encryption: false
+    enrollment_ticket: "" # No default (optional)
+    identity_name: "" # No default (optional)
+    allow: self
+    route_to_kafka_outlet: self
+    allow_producer: self
+    relay: "" # No default (optional)
+    node_address: 127.0.0.1:6262
+    encrypted_fields: []

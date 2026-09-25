@@ -1,0 +1,16 @@
+processors:
+  label: ""
+  sql_raw:
+    driver: "" # No default (required)
+    dsn: "" # No default (required)
+    query: "" # No default (optional)
+    unsafe_dynamic_query: false
+    args_mapping: "" # No default (optional)
+    exec_only: "" # No default (optional)
+    queries: [] # No default (optional)
+    init_files: [] # No default (optional)
+    init_statement: "" # No default (optional)
+    conn_max_idle_time: "" # No default (optional)
+    conn_max_life_time: "" # No default (optional)
+    conn_max_idle: 2
+    conn_max_open: "" # No default (optional)

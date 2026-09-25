@@ -1,0 +1,9 @@
+processors:
+  label: ""
+  http:
+    url: "" # No default (required)
+    verb: POST
+    headers: {}
+    rate_limit: "" # No default (optional)
+    timeout: 5s
+    parallel: false

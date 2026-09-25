@@ -1,0 +1,10 @@
+processors:
+  label: ""
+  ffi:
+    library_path: "" # No default (required)
+    function_name: "" # No default (required)
+    args_mapping: "" # No default (required)
+    signature:
+      return:
+        type: "" # No default (required)
+      parameters: [] # No default (required)

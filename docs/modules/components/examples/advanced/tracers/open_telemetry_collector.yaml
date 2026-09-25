@@ -1,0 +1,9 @@
+tracers:
+  open_telemetry_collector:
+    service: benthos
+    http: [] # No default (required)
+    grpc: [] # No default (required)
+    tags: {}
+    sampling:
+      enabled: false
+      ratio: "" # No default (optional)

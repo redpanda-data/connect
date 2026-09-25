@@ -1,0 +1,7 @@
+inputs:
+  label: ""
+  azure_queue_storage:
+    storage_account: ""
+    storage_access_key: ""
+    storage_connection_string: ""
+    queue_name: "" # No default (required)

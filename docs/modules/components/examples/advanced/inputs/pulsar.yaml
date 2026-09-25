@@ -1,0 +1,21 @@
+inputs:
+  label: ""
+  pulsar:
+    url: "" # No default (required)
+    topics: [] # No default (optional)
+    topics_pattern: "" # No default (optional)
+    subscription_name: "" # No default (required)
+    subscription_type: shared
+    subscription_initial_position: latest
+    tls:
+      root_cas_file: ""
+    auth:
+      oauth2:
+        enabled: false
+        audience: ""
+        issuer_url: ""
+        scope: ""
+        private_key_file: ""
+      token:
+        enabled: false
+        token: ""

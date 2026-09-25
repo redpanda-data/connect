@@ -1,0 +1,9 @@
+inputs:
+  label: ""
+  gcp_cloud_storage:
+    bucket: "" # No default (required)
+    prefix: ""
+    credentials_json: ""
+    scanner:
+      to_the_end: {}
+    delete_objects: false

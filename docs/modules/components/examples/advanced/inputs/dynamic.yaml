@@ -1,0 +1,6 @@
+inputs:
+  label: ""
+  dynamic:
+    inputs: {}
+    prefix: ""
+    bind_http: false

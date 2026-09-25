@@ -1,0 +1,9 @@
+inputs:
+  label: ""
+  timeplus:
+    query: "" # No default (required)
+    url: tcp://localhost:8463
+    workspace: "" # No default (optional)
+    apikey: "" # No default (optional)
+    username: "" # No default (optional)
+    password: "" # No default (optional)

@@ -1,0 +1,10 @@
+inputs:
+  label: ""
+  salesforce_graphql:
+    org_url: "" # No default (required)
+    client_id: "" # No default (required)
+    client_secret: "" # No default (required)
+    api_version: v65.0
+    query: "" # No default (required)
+    variables: "" # No default (optional)
+    auto_replay_nacks: true

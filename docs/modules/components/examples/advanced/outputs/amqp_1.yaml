@@ -1,0 +1,34 @@
+outputs:
+  label: ""
+  amqp_1:
+    urls: [] # No default (optional)
+    target_address: ""
+    max_in_flight: 64
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    application_properties_map: "" # No default (optional)
+    sasl:
+      mechanism: none
+      user: ""
+      password: ""
+    metadata:
+      exclude_prefixes: []
+    content_type: opaque_binary
+    persistent: false
+    target_capabilities: [] # No default (optional)
+    message_properties_to: "" # No default (optional)
+    message_properties_message_id: "" # No default (optional)
+    message_properties_correlation_id: "" # No default (optional)
+    message_properties_subject: "" # No default (optional)
+    message_properties_reply_to: "" # No default (optional)
+    message_properties_group_id: "" # No default (optional)
+    message_properties_group_sequence: "" # No default (optional)
+    message_properties_reply_to_group_id: "" # No default (optional)
+    message_properties_user_id: "" # No default (optional)
+    message_properties_content_type: "" # No default (optional)
+    message_properties_content_encoding: "" # No default (optional)

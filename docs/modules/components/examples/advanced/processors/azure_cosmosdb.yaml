@@ -1,0 +1,15 @@
+processors:
+  label: ""
+  azure_cosmosdb:
+    endpoint: "" # No default (optional)
+    account_key: "" # No default (optional)
+    connection_string: "" # No default (optional)
+    database: "" # No default (required)
+    container: "" # No default (required)
+    partition_keys_map: "" # No default (required)
+    operation: Create
+    patch_operations: [] # No default (optional)
+    patch_condition: "" # No default (optional)
+    auto_id: true
+    item_id: "" # No default (optional)
+    enable_content_response_on_write: true

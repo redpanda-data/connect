@@ -1,0 +1,6 @@
+inputs:
+  label: ""
+  stdin:
+    scanner:
+      lines: {}
+    auto_replay_nacks: true

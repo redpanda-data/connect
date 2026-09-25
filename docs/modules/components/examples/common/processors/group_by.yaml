@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  group_by:
+    check: "" # No default (required)
+    processors: []

@@ -1,0 +1,7 @@
+processors:
+  label: ""
+  while:
+    at_least_once: false
+    max_loops: 0
+    check: ""
+    processors: [] # No default (required)

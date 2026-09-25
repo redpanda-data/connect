@@ -1,0 +1,7 @@
+processors:
+  label: ""
+  openai_image_generation:
+    server_address: https://api.openai.com/v1
+    api_key: "" # No default (required)
+    model: "" # No default (required)
+    prompt: "" # No default (optional)

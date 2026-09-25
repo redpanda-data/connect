@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  split:
+    size: 1
+    byte_size: 0

@@ -1,0 +1,16 @@
+inputs:
+  label: ""
+  redis_scan:
+    url: "" # No default (required)
+    kind: simple
+    master: ""
+    client_name: redpanda-connect
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    auto_replay_nacks: true
+    match: ""

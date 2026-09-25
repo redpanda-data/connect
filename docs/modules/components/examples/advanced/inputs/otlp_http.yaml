@@ -1,0 +1,54 @@
+inputs:
+  label: ""
+  otlp_http:
+    encoding: json
+    address: 0.0.0.0:4318
+    tls:
+      enabled: false
+      cert_file: ""
+      key_file: ""
+    auth_token: ""
+    read_timeout: 10s
+    write_timeout: 10s
+    max_body_size: 4194304
+    rate_limit: ""
+    tcp:
+      reuse_addr: false
+      reuse_port: false
+    schema_registry:
+      url: "" # No default (required)
+      timeout: 5s
+      tls:
+        enabled: false
+        skip_cert_verify: false
+        enable_renegotiation: false
+        root_cas: ""
+        root_cas_file: ""
+        client_certs: []
+      oauth2:
+        enabled: false
+        client_key: ""
+        client_secret: ""
+        token_url: ""
+        scopes: []
+        endpoint_params: {}
+      oauth:
+        enabled: false
+        consumer_key: ""
+        consumer_secret: ""
+        access_token: ""
+        access_token_secret: ""
+      basic_auth:
+        enabled: false
+        username: ""
+        password: ""
+      jwt:
+        enabled: false
+        private_key_file: ""
+        signing_method: ""
+        claims: {}
+        headers: {}
+      common_subject: ""
+      trace_subject: ""
+      log_subject: ""
+      metric_subject: ""

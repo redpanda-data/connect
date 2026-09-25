@@ -1,0 +1,8 @@
+processors:
+  label: ""
+  cached:
+    cache: "" # No default (required)
+    skip_on: "" # No default (optional)
+    key: "" # No default (required)
+    ttl: "" # No default (optional)
+    processors: [] # No default (required)

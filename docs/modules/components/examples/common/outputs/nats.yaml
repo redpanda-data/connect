@@ -1,0 +1,10 @@
+outputs:
+  label: ""
+  nats:
+    urls: [] # No default (required)
+    subject: "" # No default (required)
+    headers: {}
+    metadata:
+      include_prefixes: []
+      include_patterns: []
+    max_in_flight: 64

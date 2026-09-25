@@ -1,0 +1,13 @@
+outputs:
+  label: ""
+  salesforce_sink:
+    org_url: "" # No default (required)
+    client_id: "" # No default (required)
+    client_secret: "" # No default (required)
+    api_version: v65.0
+    bulk_batch_size: 1000
+    max_concurrent_bulk_jobs: 10
+    bulk_poll_interval: 5s
+    batch_period: 5s
+    max_in_flight: 1
+    topic_mappings: [] # No default (required)

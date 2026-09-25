@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  compress:
+    algorithm: "" # No default (required)
+    level: -1

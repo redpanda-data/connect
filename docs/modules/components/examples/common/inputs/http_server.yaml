@@ -1,0 +1,10 @@
+inputs:
+  label: ""
+  http_server:
+    address: ""
+    path: /post
+    ws_path: /post/ws
+    allowed_verbs:
+      - "POST"
+    timeout: 5s
+    rate_limit: ""

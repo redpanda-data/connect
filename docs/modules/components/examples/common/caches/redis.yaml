@@ -1,0 +1,4 @@
+caches:
+  redis:
+    url: "" # No default (required)
+    prefix: "" # No default (optional)

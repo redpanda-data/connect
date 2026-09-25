@@ -1,0 +1,9 @@
+processors:
+  label: ""
+  cohere_embeddings:
+    base_url: https://api.cohere.com
+    api_key: "" # No default (required)
+    model: "" # No default (required)
+    text_mapping: "" # No default (optional)
+    input_type: search_document
+    dimensions: "" # No default (optional)

@@ -1,0 +1,33 @@
+inputs:
+  label: ""
+  mongodb_cdc:
+    url: "" # No default (required)
+    database: "" # No default (required)
+    username: ""
+    password: ""
+    aws:
+      enabled: false
+      region: "" # No default (optional)
+      session_duration: 1h
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
+      role: "" # No default (optional)
+      role_external_id: "" # No default (optional)
+      roles: [] # No default (optional)
+    collections: [] # No default (required)
+    checkpoint_key: mongodb_cdc_checkpoint
+    checkpoint_cache: "" # No default (required)
+    checkpoint_interval: 5s
+    checkpoint_limit: 1000
+    checkpoint_write_timeout: 10s
+    on_unresumable_position: fail
+    read_batch_size: 1000
+    read_max_wait: 1s
+    stream_snapshot: false
+    snapshot_parallelism: 1
+    snapshot_auto_bucket_sharding: false
+    document_mode: update_lookup
+    json_marshal_mode: canonical
+    app_name: benthos
+    auto_replay_nacks: true

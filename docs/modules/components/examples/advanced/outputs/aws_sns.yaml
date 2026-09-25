@@ -1,0 +1,28 @@
+outputs:
+  label: ""
+  aws_sns:
+    topic_arn: "" # No default (required)
+    message_group_id: "" # No default (optional)
+    message_deduplication_id: "" # No default (optional)
+    subject: "" # No default (optional)
+    max_in_flight: 64
+    metadata:
+      exclude_prefixes: []
+    timeout: 5s
+    region: "" # No default (optional)
+    endpoint: "" # No default (optional)
+    tcp:
+      connect_timeout: 0s
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
+    credentials:
+      profile: "" # No default (optional)
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
+      from_ec2_role: "" # No default (optional)
+      role: "" # No default (optional)
+      role_external_id: "" # No default (optional)

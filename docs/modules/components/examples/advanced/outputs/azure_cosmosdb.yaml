@@ -1,0 +1,21 @@
+outputs:
+  label: ""
+  azure_cosmosdb:
+    endpoint: "" # No default (optional)
+    account_key: "" # No default (optional)
+    connection_string: "" # No default (optional)
+    database: "" # No default (required)
+    container: "" # No default (required)
+    partition_keys_map: "" # No default (required)
+    operation: Create
+    patch_operations: [] # No default (optional)
+    patch_condition: "" # No default (optional)
+    auto_id: true
+    item_id: "" # No default (optional)
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    max_in_flight: 64

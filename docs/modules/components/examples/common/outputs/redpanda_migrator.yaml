@@ -1,0 +1,30 @@
+outputs:
+  label: ""
+  redpanda_migrator:
+    seed_brokers: [] # No default (required)
+    schema_registry:
+      url: "" # No default (required)
+      timeout: 5s
+      enabled: true
+      interval: 5m
+      include: [] # No default (optional)
+      exclude: [] # No default (optional)
+      subject: "" # No default (optional)
+      versions: all
+      include_deleted: false
+      translate_ids: false
+      normalize: false
+      strict: false
+      max_parallel_http_requests: 10
+    consumer_groups:
+      enabled: true
+      interval: 1m
+      fetch_timeout: 10s
+      include: [] # No default (optional)
+      exclude: [] # No default (optional)
+      only_empty: false
+    topic: ${! @kafka_topic }
+    topic_replication_factor: "" # No default (optional)
+    sync_topic_acls: false
+    headers: "" # No default (optional)
+    max_in_flight: 10

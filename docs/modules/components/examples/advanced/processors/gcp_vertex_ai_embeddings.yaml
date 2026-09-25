@@ -1,0 +1,10 @@
+processors:
+  label: ""
+  gcp_vertex_ai_embeddings:
+    project: "" # No default (required)
+    credentials_json: "" # No default (optional)
+    location: us-central1
+    model: "" # No default (required)
+    task_type: RETRIEVAL_DOCUMENT
+    text: "" # No default (optional)
+    output_dimensions: "" # No default (optional)

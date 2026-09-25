@@ -1,0 +1,22 @@
+outputs:
+  label: ""
+  sql_raw:
+    driver: "" # No default (required)
+    dsn: "" # No default (required)
+    query: "" # No default (optional)
+    unsafe_dynamic_query: false
+    args_mapping: "" # No default (optional)
+    queries: [] # No default (optional)
+    max_in_flight: 64
+    init_files: [] # No default (optional)
+    init_statement: "" # No default (optional)
+    conn_max_idle_time: "" # No default (optional)
+    conn_max_life_time: "" # No default (optional)
+    conn_max_idle: 2
+    conn_max_open: "" # No default (optional)
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

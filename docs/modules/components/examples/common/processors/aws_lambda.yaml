@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  aws_lambda:
+    parallel: false
+    function: "" # No default (required)

@@ -1,0 +1,7 @@
+processors:
+  label: ""
+  redis_script:
+    url: "" # No default (required)
+    script: "" # No default (required)
+    args_mapping: "" # No default (required)
+    keys_mapping: "" # No default (required)

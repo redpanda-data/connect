@@ -1,0 +1,6 @@
+processors:
+  label: ""
+  dedupe:
+    cache: "" # No default (required)
+    key: "" # No default (required)
+    drop_on_err: true

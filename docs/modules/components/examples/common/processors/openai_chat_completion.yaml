@@ -1,0 +1,18 @@
+processors:
+  label: ""
+  openai_chat_completion:
+    server_address: https://api.openai.com/v1
+    api_key: "" # No default (required)
+    model: "" # No default (required)
+    prompt: "" # No default (optional)
+    system_prompt: "" # No default (optional)
+    history: "" # No default (optional)
+    image: "" # No default (optional)
+    max_tokens: "" # No default (optional)
+    temperature: "" # No default (optional)
+    user: "" # No default (optional)
+    response_format: text
+    json_schema:
+      name: "" # No default (required)
+      schema: "" # No default (required)
+    tools: [] # No default (required)

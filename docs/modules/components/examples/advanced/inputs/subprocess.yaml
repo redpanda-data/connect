@@ -1,0 +1,8 @@
+inputs:
+  label: ""
+  subprocess:
+    name: "" # No default (required)
+    args: []
+    codec: lines
+    restart_on_exit: false
+    max_buffer: 65536

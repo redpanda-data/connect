@@ -1,0 +1,6 @@
+outputs:
+  label: ""
+  cache:
+    target: "" # No default (required)
+    key: ${!count("items")}-${!timestamp_unix_nano()}
+    max_in_flight: 64

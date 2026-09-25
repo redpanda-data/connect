@@ -1,0 +1,4 @@
+processors:
+  label: ""
+  decompress:
+    algorithm: "" # No default (required)

@@ -1,0 +1,4 @@
+processors:
+  label: ""
+  parse_log:
+    format: "" # No default (required)

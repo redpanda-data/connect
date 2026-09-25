@@ -1,0 +1,29 @@
+outputs:
+  label: ""
+  mqtt:
+    urls: [] # No default (required)
+    client_id: ""
+    dynamic_client_id_suffix: "" # No default (optional)
+    connect_timeout: 30s
+    will:
+      enabled: false
+      qos: 0
+      retained: false
+      topic: ""
+      payload: ""
+    user: ""
+    password: ""
+    keepalive: 30
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    topic: "" # No default (required)
+    qos: 1
+    write_timeout: 3s
+    retained: false
+    retained_interpolated: "" # No default (optional)
+    max_in_flight: 64

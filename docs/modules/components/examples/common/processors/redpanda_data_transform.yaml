@@ -1,0 +1,12 @@
+processors:
+  label: ""
+  redpanda_data_transform:
+    module_path: "" # No default (required)
+    input_key: "" # No default (optional)
+    output_key: "" # No default (optional)
+    input_headers:
+      include_prefixes: []
+      include_patterns: []
+    output_metadata:
+      include_prefixes: []
+      include_patterns: []

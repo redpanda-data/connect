@@ -1,0 +1,6 @@
+tracers:
+  gcp_cloudtrace:
+    project: "" # No default (required)
+    sampling_ratio: 1
+    tags: {}
+    flush_interval: "" # No default (optional)

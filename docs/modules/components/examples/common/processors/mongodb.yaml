@@ -1,0 +1,17 @@
+processors:
+  label: ""
+  mongodb:
+    url: "" # No default (required)
+    database: "" # No default (required)
+    username: ""
+    password: ""
+    collection: "" # No default (required)
+    operation: insert-one
+    write_concern:
+      w: majority
+      j: false
+      w_timeout: ""
+    document_map: ""
+    filter_map: ""
+    hint_map: ""
+    upsert: false

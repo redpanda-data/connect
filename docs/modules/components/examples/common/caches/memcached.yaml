@@ -1,0 +1,5 @@
+caches:
+  memcached:
+    addresses: [] # No default (required)
+    prefix: "" # No default (optional)
+    default_ttl: 300s

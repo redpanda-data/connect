@@ -1,0 +1,4 @@
+outputs:
+  label: ""
+  stdout:
+    codec: lines

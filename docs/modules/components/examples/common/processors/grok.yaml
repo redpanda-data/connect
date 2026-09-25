@@ -1,0 +1,6 @@
+processors:
+  label: ""
+  grok:
+    expressions: [] # No default (required)
+    pattern_definitions: {}
+    pattern_paths: []

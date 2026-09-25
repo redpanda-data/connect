@@ -104,5 +104,5 @@ output:
 
 ## References
 
-- [Kafka Franz Input Documentation](https://github.com/redpanda-data/connect/blob/main/docs/modules/components/pages/inputs/kafka_franz.adoc)
-- [Manual Partitioner](https://github.com/redpanda-data/connect/blob/main/docs/modules/components/pages/outputs/kafka_franz.adoc#partitioner)
+- [Kafka Franz Input Documentation](https://docs.redpanda.com/redpanda-connect/components/inputs/kafka_franz.md)
+- [Manual Partitioner](https://docs.redpanda.com/redpanda-connect/components/outputs/kafka_franz.md#partitioner)

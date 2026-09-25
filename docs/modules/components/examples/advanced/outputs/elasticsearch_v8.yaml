@@ -1,0 +1,29 @@
+outputs:
+  label: ""
+  elasticsearch_v8:
+    urls: [] # No default (required)
+    index: "" # No default (required)
+    action: "" # No default (required)
+    id: "" # No default (required)
+    pipeline: ""
+    routing: ""
+    retry_on_conflict: 0
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    max_in_flight: 64
+    api_key: ""
+    basic_auth:
+      enabled: false
+      username: ""
+      password: ""
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

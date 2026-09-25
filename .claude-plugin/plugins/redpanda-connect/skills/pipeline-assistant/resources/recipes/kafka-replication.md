@@ -69,5 +69,5 @@ rpk connect run kafka-replication.yaml
 
 ## References
 
-- [Fallback Output](https://github.com/redpanda-data/connect/blob/main/docs/modules/components/pages/outputs/fallback.adoc)
-- [Retry Output](https://github.com/redpanda-data/connect/blob/main/docs/modules/components/pages/outputs/retry.adoc)
+- [Fallback Output](https://docs.redpanda.com/redpanda-connect/components/outputs/fallback.md)
+- [Retry Output](https://docs.redpanda.com/redpanda-connect/components/outputs/retry.md)

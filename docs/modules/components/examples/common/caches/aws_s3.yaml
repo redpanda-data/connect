@@ -1,0 +1,4 @@
+caches:
+  aws_s3:
+    bucket: "" # No default (required)
+    content_type: application/octet-stream

@@ -1,0 +1,8 @@
+processors:
+  label: ""
+  subprocess:
+    name: "" # No default (required)
+    args: []
+    max_buffer: 65536
+    codec_send: lines
+    codec_recv: lines

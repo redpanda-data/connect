@@ -1,0 +1,6 @@
+outputs:
+  label: ""
+  socket:
+    network: "" # No default (required)
+    address: "" # No default (required)
+    codec: lines

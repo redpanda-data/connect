@@ -1,0 +1,12 @@
+outputs:
+  label: ""
+  slack_post:
+    bot_token: "" # No default (required)
+    channel_id: "" # No default (required)
+    thread_ts: ""
+    text: ""
+    blocks: "" # No default (optional)
+    markdown: true
+    unfurl_links: false
+    unfurl_media: true
+    link_names: false

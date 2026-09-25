@@ -1,0 +1,8 @@
+outputs:
+  label: ""
+  nats_stream:
+    urls: [] # No default (required)
+    cluster_id: "" # No default (required)
+    subject: "" # No default (required)
+    client_id: ""
+    max_in_flight: 64

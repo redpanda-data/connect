@@ -1,0 +1,13 @@
+processors:
+  label: ""
+  google_drive_download:
+    credentials_json: "" # No default (optional)
+    file_id: "" # No default (required)
+    mime_type: "" # No default (required)
+    export_mime_types:
+      application/vnd.google-apps.document: "text/markdown"
+      application/vnd.google-apps.drawing: "image/png"
+      application/vnd.google-apps.presentation: "application/pdf"
+      application/vnd.google-apps.script: "application/vnd.google-apps.script+json"
+      application/vnd.google-apps.spreadsheet: "text/csv"
+    shared_drives: false
