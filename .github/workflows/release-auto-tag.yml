@@ -28,7 +28,7 @@ jobs:
           parse-json-secrets: true
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           token: ${{ env.ACTIONS_BOT_TOKEN }}
 
