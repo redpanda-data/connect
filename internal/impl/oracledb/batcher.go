@@ -68,6 +68,13 @@ type batchPublisher struct {
 	cacheSCN   func(ctx context.Context, scn replication.SCN) error
 	schemas    *schemaCache
 
+	// hasBuffered is true while the batcher holds messages that Publish added
+	// and no Flush has taken out yet. Publish sets it when batcher.Add does not
+	// trigger a flush. Any successful Flush clears it (see flushLocked). A
+	// failed Flush leaves it set, so CheckpointWindow stays conservative.
+	// Guarded by batcherMu.
+	hasBuffered bool
+
 	// snapshotAckWG counts published snapshot batches that have not yet been
 	// acknowledged downstream. The snapshot->streaming handoff blocks on it so
 	// the post-snapshot SCN is never persisted while snapshot rows are in flight.
@@ -87,6 +94,16 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 	}
 	go b.loop()
 	return b
+}
+
+// flushLocked flushes the batcher and clears hasBuffered on success. Caller
+// holds batcherMu.
+func (b *batchPublisher) flushLocked(ctx context.Context) (service.MessageBatch, error) {
+	batch, err := b.batcher.Flush(ctx)
+	if err == nil {
+		b.hasBuffered = false
+	}
+	return batch, err
 }
 
 // poisoned reports whether this publisher can never checkpoint again, so
@@ -155,7 +172,7 @@ func (p *batchPublisher) loop() {
 					p.batcherMu.Unlock()
 					return nil
 				}
-				sendBatch, flushErr := p.batcher.Flush(hardStopCtx)
+				sendBatch, flushErr := p.flushLocked(hardStopCtx)
 				var ticket uint64
 				if flushErr == nil && len(sendBatch) > 0 {
 					ticket = p.queue.Take()
@@ -289,9 +306,11 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		return context.Canceled
 	}
 	if b.batcher.Add(msg) {
-		if flushedBatch, err = b.batcher.Flush(ctx); err == nil && len(flushedBatch) > 0 {
+		if flushedBatch, err = b.flushLocked(ctx); err == nil && len(flushedBatch) > 0 {
 			ticket = b.queue.Take()
 		}
+	} else {
+		b.hasBuffered = true
 	}
 	if err != nil {
 		// The failed Flush drained rows that were never tracked. Seal BEFORE
@@ -483,6 +502,60 @@ func (b *batchPublisher) msgs() <-chan asyncMessage {
 	return b.msgChan
 }
 
+// CheckpointWindow records that every change up to scn is published. It adds
+// a marker slot to the checkpoint sequence, so scn persists when every batch
+// published before it is acked.
+//
+// If the batcher still holds rows, it does nothing: a marker must not resolve
+// ahead of those rows. The next call marks again after they flush. With
+// count-only batching (no period), buffered rows can block markers until more
+// rows arrive.
+//
+// This exists for idle periods (CON-583). Without it, only an acked batch
+// moves the checkpoint. When the monitored tables are quiet, the checkpoint
+// stays behind while the database ages out the archive logs it points to, and
+// a restart fails with ORA-01291.
+func (b *batchPublisher) CheckpointWindow(ctx context.Context, scn replication.SCN) error {
+	tkt, ok, err := b.takeTicketIfDrained()
+	if !ok {
+		return err
+	}
+	// The marker owns no rows, so an abandoned marker needs no seal.
+	if err := b.queue.Acquire(ctx, tkt, false); err != nil {
+		return err
+	}
+	defer b.queue.Release()
+
+	resolveFn, err := b.checkpoint.Track(ctx, scn, 1)
+	if err != nil {
+		return fmt.Errorf("tracking window checkpoint: %w", err)
+	}
+	// Resolve at once: if all earlier batches are acked, this persists scn.
+	// Otherwise the last outstanding ack persists it.
+	if resolved := resolveFn(); resolved != nil && resolved.IsValid() {
+		// Best effort: the next call retries.
+		if err := b.cacheSCN(ctx, *resolved); err != nil {
+			b.log.Warnf("Unable to save window checkpoint SCN %s, retrying on the next call: %v", *resolved, err)
+		}
+	}
+	return nil
+}
+
+// takeTicketIfDrained takes a ticket only if the publisher is open and the
+// batcher holds no rows. ok is false if the publisher is closed
+// (context.Canceled) or rows are still buffered (nil error).
+func (b *batchPublisher) takeTicketIfDrained() (tkt uint64, ok bool, err error) {
+	b.batcherMu.Lock()
+	defer b.batcherMu.Unlock()
+	if b.closed {
+		return 0, false, context.Canceled
+	}
+	if b.hasBuffered {
+		return 0, false, nil
+	}
+	return b.queue.Take(), true, nil
+}
+
 // flushCurrent flushes any partial batch still held by the batcher and
 // publishes it, leaving the publisher loop running. Used at the
 // snapshot->streaming handoff so every snapshot row is published (and can be
@@ -496,7 +569,7 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 		b.batcherMu.Unlock()
 		return context.Canceled
 	}
-	remaining, err := b.batcher.Flush(ctx)
+	remaining, err := b.flushLocked(ctx)
 	// The ticket is taken unconditionally - even when the batcher is empty -
 	// so that admission below doubles as a sequence barrier: another flusher
 	// (the timed loop) may already hold the final snapshot rows while parked
