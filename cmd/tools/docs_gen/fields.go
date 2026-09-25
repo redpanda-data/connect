@@ -311,6 +311,26 @@ func buildConfigYAML(key, name string, fields []fieldSpec, includeAdvanced bool)
 	return strings.Join(lines, "\n")
 }
 
+// buildValueConfigYAML renders the config snippet for a component whose config
+// is not an object with fields: a scalar such as `resource: ""`, a list such
+// as `fallback: []`, or an empty object such as `drop: {}`.
+func buildValueConfigYAML(key, name string, conf fieldSpec) string {
+	lines := []string{key + ":"}
+	if typesWithLabel[key] {
+		lines = append(lines, `  label: ""`)
+	}
+	switch {
+	case conf.Kind == "array" || conf.Kind == "2darray":
+		lines = append(lines, "  "+name+": []")
+	case conf.Type == "object" || conf.Kind == "map":
+		lines = append(lines, "  "+name+": {}")
+	default:
+		conf.Name = name
+		lines = append(lines, configLeaf(conf, 2))
+	}
+	return strings.Join(lines, "\n")
+}
+
 func configObject(f fieldSpec, indent int) []string {
 	lines := []string{strings.Repeat(" ", indent) + f.Name + ":"}
 	for _, c := range f.Children {

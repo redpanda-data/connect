@@ -1,0 +1,3 @@
+processors:
+  label: ""
+  crash: "" # No default (required)
