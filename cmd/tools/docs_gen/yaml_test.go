@@ -52,6 +52,10 @@ func TestYAMLStringifyMatchesNPMYAML(t *testing.T) {
 		{name: "integer keys QUOTE_DOUBLE", style: yamlDoubleQuoted, json: `{"2":3,"10":2,"a":4,"b":1}`, want: "\"2\": 3\n\"10\": 2\na: 4\nb: 1\n"},
 		{name: "scalar null PLAIN", style: yamlPlain, json: `null`, want: "null\n"},
 		{name: "scalar null QUOTE_DOUBLE", style: yamlDoubleQuoted, json: `null`, want: "null\n"},
+		{name: "document marker key PLAIN", style: yamlPlain, json: `{"---":123.456}`, want: "\"---\": 123.456\n"},
+		{name: "document marker key QUOTE_DOUBLE", style: yamlDoubleQuoted, json: `{"---":123.456}`, want: "\"---\": 123.456\n"},
+		{name: "nested document marker key PLAIN", style: yamlPlain, json: `{"a":{"---":1}}`, want: "a:\n  ---: 1\n"},
+		{name: "dots key QUOTE_DOUBLE", style: yamlDoubleQuoted, json: `{"...x":"y"}`, want: "\"...x\": \"y\"\n"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

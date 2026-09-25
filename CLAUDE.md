@@ -93,7 +93,7 @@ task build:clean                  # Clean build artifacts
 task docs                         # Generate documentation and validate examples
 ```
 
-Generated reference docs land in `docs/modules/`, which the docs site merges with rp-connect-docs. Never edit them by hand; see `docs/README.md`.
+Generated reference docs land in `docs/modules/`, which the docs site merges with rp-connect-docs. Never edit them by hand. Regenerate with `CGO_ENABLED=1 TAGS=x_benthos_extra task docs`, as CI does; see `docs/README.md`.
 
 ### Running Locally
 ```bash

@@ -311,6 +311,13 @@ func buildConfigYAML(key, name string, fields []fieldSpec, includeAdvanced bool)
 	return strings.Join(lines, "\n")
 }
 
+// componentTypes are config types whose value is itself a component config,
+// such as reject_errored, which wraps an output.
+var componentTypes = map[string]bool{
+	"input": true, "output": true, "processor": true, "cache": true, "rate_limit": true,
+	"buffer": true, "metrics": true, "tracer": true, "scanner": true,
+}
+
 // buildValueConfigYAML renders the config snippet for a component whose config
 // is not an object with fields: a scalar such as `resource: ""`, a list such
 // as `fallback: []`, or an empty object such as `drop: {}`.
@@ -322,7 +329,7 @@ func buildValueConfigYAML(key, name string, conf fieldSpec) string {
 	switch {
 	case conf.Kind == "array" || conf.Kind == "2darray":
 		lines = append(lines, "  "+name+": []")
-	case conf.Type == "object" || conf.Kind == "map":
+	case conf.Type == "object" || conf.Kind == "map" || componentTypes[conf.Type]:
 		lines = append(lines, "  "+name+": {}")
 	default:
 		conf.Name = name
