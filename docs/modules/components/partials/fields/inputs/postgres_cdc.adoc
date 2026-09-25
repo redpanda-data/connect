@@ -295,7 +295,7 @@ schema: public
 
 # ---
 
-schema: "MyCaseSensitiveSchemaNeedingQuotes"
+schema: '"MyCaseSensitiveSchemaNeedingQuotes"'
 ----
 
 === `signal_table_name`

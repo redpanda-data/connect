@@ -254,7 +254,7 @@ target_address: topic:/baz
 
 # ---
 
-target_address: 
+target_address: ""
 ----
 
 === `target_capabilities[]`

@@ -159,7 +159,7 @@ metadata_mapping: root = metadata()
 
 # ---
 
-metadata_mapping: root = {"summary": this.summary, "foo": this.other_field}
+metadata_mapping: 'root = {"summary": this.summary, "foo": this.other_field}'
 ----
 
 === `namespace`

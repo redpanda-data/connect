@@ -13,7 +13,7 @@ outputs:
       root_cas_file: ""
       client_certs: []
     stream: "" # No default (required)
-    id: *
+    id: "*"
     body_key: body
     max_length: 0
     max_in_flight: 64

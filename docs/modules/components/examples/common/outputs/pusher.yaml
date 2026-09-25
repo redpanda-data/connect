@@ -6,7 +6,6 @@ outputs:
       byte_size: 0
       period: ""
       check: ""
-      processors: [] # No default (optional)
     channel: "" # No default (required)
     event: "" # No default (required)
     appId: "" # No default (required)

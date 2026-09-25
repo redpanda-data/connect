@@ -14,6 +14,5 @@ processors:
     response_format: text
     json_schema:
       name: "" # No default (required)
-      description: "" # No default (optional)
       schema: "" # No default (required)
     tools: [] # No default (required)

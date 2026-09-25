@@ -15,9 +15,9 @@ outputs:
     json_root: ""
     columns: []
     where: ""
-    column_separator: ,
-    line_delimiter: 
-
+    column_separator: ","
+    line_delimiter: |+
+      
     group_commit: ""
     max_filter_ratio: 0
     partitions: []

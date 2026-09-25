@@ -19,7 +19,7 @@ check: this.contents.urls.contains("https://benthos.dev/")
 
 # ---
 
-check: true
+check: "true"
 ----
 
 === `processors[]`

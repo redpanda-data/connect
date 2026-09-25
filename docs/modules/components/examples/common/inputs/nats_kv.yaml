@@ -3,5 +3,5 @@ inputs:
   nats_kv:
     urls: [] # No default (required)
     bucket: "" # No default (required)
-    key: >
+    key: ">"
     auto_replay_nacks: true

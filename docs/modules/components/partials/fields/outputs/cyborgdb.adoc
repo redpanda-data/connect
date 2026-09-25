@@ -199,7 +199,7 @@ metadata_mapping: root = metadata()
 
 # ---
 
-metadata_mapping: root = {"summary": this.summary, "category": this.category}
+metadata_mapping: 'root = {"summary": this.summary, "category": this.category}'
 ----
 
 === `operation`

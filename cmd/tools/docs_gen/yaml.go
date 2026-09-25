@@ -39,6 +39,13 @@ const (
 	yamlDoubleQuoted
 )
 
+// yamlScalar renders a string as the value of a mapping entry, quoting it
+// when YAML would otherwise read it as another type or as syntax (for
+// example `*`, `true`, or `a: b`). indent is used for any continuation lines.
+func yamlScalar(s, indent string) string {
+	return yamlEmitter{style: yamlPlain}.str(s, indent, false)
+}
+
 // yamlStringify renders v as a YAML document, including the trailing newline.
 func yamlStringify(v any, style yamlStringStyle) string {
 	e := yamlEmitter{style: style}

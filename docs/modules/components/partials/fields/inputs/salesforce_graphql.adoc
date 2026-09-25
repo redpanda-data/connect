@@ -553,7 +553,7 @@ query: query Accounts { uiapi { query { Account { edges { node { Id { value } Na
 
 # ---
 
-query: query Accounts($first: Int) { uiapi { query { Account(first: $first) { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } }
+query: "query Accounts($first: Int) { uiapi { query { Account(first: $first) { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } }"
 ----
 
 === `variables`
@@ -565,11 +565,11 @@ Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be 
 [source,yaml]
 ----
 # Examples:
-variables: root = {"first": 100}
+variables: 'root = {"first": 100}'
 
 # ---
 
-variables: root = {"since": now().ts_format("2006-01-02T15:04:05Z"), "limit": 500}
+variables: 'root = {"since": now().ts_format("2006-01-02T15:04:05Z"), "limit": 500}'
 ----
 
 

@@ -15,7 +15,7 @@ endif::[]
 [source,yaml]
 ----
 # Examples:
-attachment: root = this.image.decode("base64") # decode base64 encoded image
+attachment: 'root = this.image.decode("base64") # decode base64 encoded image'
 ----
 
 === `credentials_json`

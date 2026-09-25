@@ -87,7 +87,7 @@ An optional CloudWatch Logs filter pattern to apply when querying log events. Se
 [source,yaml]
 ----
 # Examples:
-filter_pattern: [ERROR]
+filter_pattern: "[ERROR]"
 ----
 
 === `limit`

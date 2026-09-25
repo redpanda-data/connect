@@ -57,7 +57,7 @@ Iterates only elements matching the optional glob-style pattern. By default, it 
 [source,yaml]
 ----
 # Examples:
-match: *
+match: "*"
 
 # ---
 
@@ -73,7 +73,7 @@ match: foo
 
 # ---
 
-match: *4*
+match: "*4*"
 ----
 
 === `tls`

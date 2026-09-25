@@ -11,7 +11,7 @@ An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when specifi
 [source,yaml]
 ----
 # Examples:
-args_mapping: [ "-c", this.script_path ]
+args_mapping: '[ "-c", this.script_path ]'
 ----
 
 === `name`

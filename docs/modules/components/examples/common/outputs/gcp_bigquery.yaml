@@ -11,14 +11,9 @@ outputs:
     credentials_json: ""
     csv:
       header: []
-      field_delimiter: ,
-      allow_jagged_rows: false
-      allow_quoted_newlines: false
-      encoding: UTF-8
-      skip_leading_rows: 1
+      field_delimiter: ","
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: [] # No default (optional)

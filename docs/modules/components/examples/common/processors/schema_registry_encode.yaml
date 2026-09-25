@@ -8,6 +8,5 @@ processors:
     format: "" # No default (optional)
     avro:
       raw_json: "" # No default (optional)
-      input_encoding: auto
       record_name: ""
       namespace: ""

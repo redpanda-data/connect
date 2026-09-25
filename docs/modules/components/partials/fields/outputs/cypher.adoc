@@ -15,7 +15,7 @@ args_mapping: root.name = this.displayName
 
 # ---
 
-args_mapping: root = {"orgId": this.org.id, "name": this.user.name}
+args_mapping: 'root = {"orgId": this.org.id, "name": this.user.name}'
 ----
 
 === `basic_auth`
@@ -177,7 +177,7 @@ The cypher expression to execute against the graph database.
 [source,yaml]
 ----
 # Examples:
-cypher: MERGE (p:Person {name: $name})
+cypher: "MERGE (p:Person {name: $name})"
 
 # ---
 

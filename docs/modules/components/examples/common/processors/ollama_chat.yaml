@@ -13,7 +13,4 @@ processors:
     runner:
       context_size: "" # No default (optional)
       batch_size: "" # No default (optional)
-      gpu_layers: "" # No default (optional)
-      threads: "" # No default (optional)
-      use_mmap: "" # No default (optional)
     server_address: "" # No default (optional)
