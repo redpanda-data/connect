@@ -107,6 +107,40 @@ func escapePlaceholderBraces(body string) string {
 	return joinLines(lines)
 }
 
+var (
+	// Doubled characters that Asciidoctor treats as unconstrained emphasis,
+	// bold, and highlight markers. They apply inside a backtick code span and
+	// pair up across spans, so `__c` and `__b` on one line render with <em>
+	// between them, and a glob like `'**/*.md'` renders as <strong>.
+	unconstrainedMarkers = regexp.MustCompile(`__|\*\*|##`)
+	codeSpan             = regexp.MustCompile("`([^`\n]+)`")
+	passthroughEdge      = regexp.MustCompile(`^\+|\+$`)
+	whitespaceEdge       = regexp.MustCompile(`^\s|\s$`)
+)
+
+// protectCodeSpans wraps code spans that contain unconstrained formatting
+// markers in a +...+ passthrough so they render literally. It runs after
+// escapePlaceholderBraces and removes the \{ escapes inside such spans, since
+// a passthrough applies no attribute substitution. Verbatim blocks, existing
+// passthroughs, and spans with whitespace at either edge (backticks that
+// don't pair up as a code span) are left alone.
+func protectCodeSpans(body string) string {
+	lines := annotateLines(body)
+	for i, l := range lines {
+		if l.verbatim {
+			continue
+		}
+		lines[i].text = codeSpan.ReplaceAllStringFunc(l.text, func(span string) string {
+			content := span[1 : len(span)-1]
+			if !unconstrainedMarkers.MatchString(content) || passthroughEdge.MatchString(content) || whitespaceEdge.MatchString(content) {
+				return span
+			}
+			return "`+" + strings.ReplaceAll(content, `\{`, "{") + "+`"
+		})
+	}
+	return joinLines(lines)
+}
+
 // ensureHeadingSeparation puts a blank line before every heading so that a
 // heading directly under a paragraph isn't rendered as part of it.
 func ensureHeadingSeparation(body string) string {
@@ -175,13 +209,16 @@ func renderDescriptionBody(description, typeDir, name string) string {
 	if body == "" {
 		return ""
 	}
-	return escapePlaceholderBraces(ensureHeadingSeparation(body))
+	return protectCodeSpans(escapePlaceholderBraces(ensureHeadingSeparation(body)))
 }
 
 var (
-	fenceOpen   = regexp.MustCompile("^(\\s*)(```|~~~)(.*)$")
-	bulletLine  = regexp.MustCompile(`^(\s*[-*]\s+)(.*)$`)
-	fieldBullet = regexp.MustCompile(`(?s)^([a-z][a-z0-9_]*)((?:\s*\([^)]*\))?(?:\s*(?::|-)\s.*)?)$`)
+	fenceOpen  = regexp.MustCompile("^(\\s*)(```|~~~)(.*)$")
+	bulletLine = regexp.MustCompile(`^(\s*[-*]\s+)(.*)$`)
+	// A parenthetical description may nest its own parentheses, for example
+	// "lsn (... Not present on snapshot (`read`) messages.)".
+	fieldBullet = regexp.MustCompile(`(?s)^([a-z][a-z0-9_]*)((?:\s*\(.*\))?(?:\s*(?::|-)\s.*)?)$`)
+	listStart   = regexp.MustCompile(`^[=/+]`)
 )
 
 func normalizeBullet(prefix, content string) string {
@@ -222,14 +259,35 @@ func isFieldListFence(info string, content []string) bool {
 	return anyField
 }
 
-// normalizeMetadata puts metadata field names in inline code and unwraps
-// field lists that upstream descriptions put in code fences.
+// normalizeMetadata puts metadata field names in inline code, unwraps field
+// lists that upstream descriptions put in code fences, and adds the blank line
+// a list needs when it directly follows a paragraph.
 func normalizeMetadata(block string) string {
 	if block == "" {
 		return block
 	}
 	lines := strings.Split(block, "\n")
 	var out []string
+	// True while the lines since the last blank line belong to a list, so a
+	// bullet after a wrapped bullet line continues the list.
+	inList := false
+	pushBullet := func(text string) {
+		prev := ""
+		if len(out) > 0 {
+			prev = out[len(out)-1]
+		}
+		if !inList && strings.TrimSpace(prev) != "" && !listStart.MatchString(prev) {
+			out = append(out, "")
+		}
+		inList = true
+		out = append(out, text)
+	}
+	pushLine := func(text string) {
+		if strings.TrimSpace(text) == "" {
+			inList = false
+		}
+		out = append(out, text)
+	}
 	for i := 0; i < len(lines); i++ {
 		if blockDelimiter.MatchString(lines[i]) {
 			out = append(out, lines[i])
@@ -258,9 +316,9 @@ func normalizeMetadata(block string) string {
 			if closed && isFieldListFence(fence[3], content) {
 				for _, c := range content {
 					if b := bulletLine.FindStringSubmatch(c); b != nil {
-						out = append(out, normalizeBullet(b[1], b[2]))
+						pushBullet(normalizeBullet(b[1], b[2]))
 					} else {
-						out = append(out, c)
+						pushLine(c)
 					}
 				}
 			} else {
@@ -278,9 +336,9 @@ func normalizeMetadata(block string) string {
 			continue
 		}
 		if b := bulletLine.FindStringSubmatch(lines[i]); b != nil {
-			out = append(out, normalizeBullet(b[1], b[2]))
+			pushBullet(normalizeBullet(b[1], b[2]))
 		} else {
-			out = append(out, lines[i])
+			pushLine(lines[i])
 		}
 	}
 	return strings.Join(out, "\n")

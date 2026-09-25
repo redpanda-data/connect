@@ -3,6 +3,7 @@
 == Metadata
 
 This component adds the following metadata fields to each message:
+
 - `activity_id`
 - `request_charge`
 

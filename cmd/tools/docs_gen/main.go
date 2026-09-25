@@ -152,7 +152,7 @@ func (w *writer) component(key string, c componentSpec) {
 	// The metadata and description partials are always written, empty when
 	// the component has no such content, so a page that includes them keeps
 	// building after upstream removes a Metadata section or a description.
-	if md := normalizeMetadata(extractMetadata(c.Description)); md != "" {
+	if md := protectCodeSpans(normalizeMetadata(extractMetadata(c.Description))); md != "" {
 		w.write(filepath.Join("partials/metadata", typeDir, file), metadataBanner+"\n\n"+md+"\n")
 	} else {
 		w.write(filepath.Join("partials/metadata", typeDir, file), emptyMetadataPartial)

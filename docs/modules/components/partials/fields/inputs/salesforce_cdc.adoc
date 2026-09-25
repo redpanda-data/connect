@@ -791,7 +791,7 @@ When true (default), paginate a full REST snapshot of every CDC sObject in `topi
 
 === `topics[]`
 
-Pub/Sub topics to subscribe to. Each entry is one of: a bare sObject name (`Account` → `/data/AccountChangeEvent`), an explicit CDC channel (`/data/AccountChangeEvent`), the CDC firehose (`/data/ChangeEvents`), or a Platform Event topic (`/event/Order__e`, `/event/LoginEventStream`). Each topic gets its own gRPC subscription with an independent replay cursor.
+Pub/Sub topics to subscribe to. Each entry is one of: a bare sObject name (`Account` → `/data/AccountChangeEvent`), an explicit CDC channel (`/data/AccountChangeEvent`), the CDC firehose (`/data/ChangeEvents`), or a Platform Event topic (`+/event/Order__e+`, `/event/LoginEventStream`). Each topic gets its own gRPC subscription with an independent replay cursor.
 
 *Type*: `array<string>`
 

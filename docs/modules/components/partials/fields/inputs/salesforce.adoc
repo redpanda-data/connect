@@ -60,7 +60,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `columns[]`
 
-Ordered list of field API names to retrieve. SOQL does not accept `*`; every field must be listed explicitly. Standard fields use their documented names; custom fields end with `__c`. Relationship fields traverse parents via dot notation (`Account.Name`, `Owner.Manager.Email`) up to 5 levels deep. Requesting a non-existent or non-queryable field fails at Connect time with a SOQL compile error.
+Ordered list of field API names to retrieve. SOQL does not accept `*`; every field must be listed explicitly. Standard fields use their documented names; custom fields end with `+__c+`. Relationship fields traverse parents via dot notation (`Account.Name`, `Owner.Manager.Email`) up to 5 levels deep. Requesting a non-existent or non-queryable field fails at Connect time with a SOQL compile error.
 
 *Type*: `array<string>`
 
@@ -570,7 +570,7 @@ Rate limit in requests per second. 0 disables rate limiting.
 
 === `object`
 
-The sObject API name to SELECT from. Case-sensitive; uses the API name, not the display label. Standard objects use the noun (`Account`, `Opportunity`); custom objects end with `__c`; Big Objects end with `__b`; External Objects end with `__x`. Confirm the exact API name in Setup → Object Manager.
+The sObject API name to SELECT from. Case-sensitive; uses the API name, not the display label. Standard objects use the noun (`Account`, `Opportunity`); custom objects end with `+__c+`; Big Objects end with `+__b+`; External Objects end with `+__x+`. Confirm the exact API name in Setup → Object Manager.
 
 *Type*: `string`
 
