@@ -1109,14 +1109,16 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	return lastSCN, nil
 }
 
-const logStatusCurrent = "CURRENT"
+const (
+	logStatusCurrent = "CURRENT"
 
-// logStatusArchived is the Status value GetLogsBySCNRange hardcodes for
-// every archive log record (see the query below). Oracle's V$LOG.STATUS
-// values (CURRENT/ACTIVE/INACTIVE/...) never take this value, so it
-// reliably distinguishes a fully-archived, immutable copy from an online
-// (still mutable) one, without depending on the Type/IsCurrent fields.
-const logStatusArchived = "ARCHIVED"
+	// logStatusArchived is the Status value GetLogsBySCNRange hardcodes for
+	// every archive log record (see the query below). Oracle's V$LOG.STATUS
+	// values (CURRENT/ACTIVE/INACTIVE/...) never take this value, so it
+	// reliably distinguishes a fully-archived, immutable copy from an online
+	// (still mutable) one, without depending on the Type/IsCurrent fields.
+	logStatusArchived = "ARCHIVED"
+)
 
 // LogFile represents a redo or archive log file
 type LogFile struct {
@@ -1126,15 +1128,10 @@ type LogFile struct {
 	Sequence  int64
 	Type      string // "ONLINE" or "ARCHIVED"
 	IsCurrent bool
-	Status    string
 	Thread    int
-	// Bytes is the file's on-disk size, used by the log_count window
-	// strategy's byte budget (see logFileSelector) rather than a flat file
-	// count - archived log sizes in practice vary enormously (small,
-	// frequent commits produce tiny files; quiet periods still get one file
-	// per switch), so a fixed number of files is a poor proxy for how much
-	// real redo a cycle actually covers.
-	Bytes uint64
+	Status    string
+	// SizeBytes is the file's on-disk size, budgeted by log_count instead of a flat file count (see logFileSelector).
+	SizeBytes uint64
 }
 
 // IsOpenCurrent reports whether this is the single open current redo log
@@ -1230,7 +1227,7 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 	var archived, online []*LogFile
 	for rows.Next() {
 		lf := &LogFile{}
-		if err := rows.Scan(&lf.FileName, &lf.FirstSCN, &lf.NextSCN, &lf.Sequence, &lf.Type, &lf.Thread, &lf.Status, &lf.Bytes); err != nil {
+		if err := rows.Scan(&lf.FileName, &lf.FirstSCN, &lf.NextSCN, &lf.Sequence, &lf.Type, &lf.Thread, &lf.Status, &lf.SizeBytes); err != nil {
 			return nil, fmt.Errorf("scanning logs row: %w", err)
 		}
 		lf.IsCurrent = lf.Type == "ONLINE"
@@ -1288,11 +1285,6 @@ func deduplicateLogs(archived, online []*LogFile) []*LogFile {
 // starts (or restarts) a LogMiner session with explicit SCN bounds. Files are only reloaded
 // (via ADD_LOGFILE) when the required set of logs that contain SCN range changes - so the session is kept
 // open across consecutive windows that cover the same log files.
-//
-// preSelected, when non-nil, is the log_count strategy's already-chosen file
-// set (which also derived endSCN from it) and is used as-is instead of
-// collecting via GetLogsBySCNRange. Pass nil for the scn_window strategy,
-// which still collects logs for [startSCN, endSCN].
 func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, preSelected []*LogFile) error {
 	logFiles := preSelected
 	if logFiles == nil {

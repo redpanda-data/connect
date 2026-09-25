@@ -32,13 +32,13 @@ const testRedoLogSize = 1_000_000
 // the file's SCN range and bytes its on-disk size - see testRedoLogSize.
 func mkLogFile(thread int, sequence int64, firstSCN, nextSCN uint64, status string, bytes uint64) *LogFile {
 	return &LogFile{
-		FileName: fmt.Sprintf("log_t%d_%d.arc", thread, sequence),
-		FirstSCN: firstSCN,
-		NextSCN:  nextSCN,
-		Sequence: sequence,
-		Status:   status,
-		Thread:   thread,
-		Bytes:    bytes,
+		FileName:  fmt.Sprintf("log_t%d_%d.arc", thread, sequence),
+		FirstSCN:  firstSCN,
+		NextSCN:   nextSCN,
+		Sequence:  sequence,
+		Status:    status,
+		Thread:    thread,
+		SizeBytes: bytes,
 	}
 }
 

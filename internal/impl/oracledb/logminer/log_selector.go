@@ -21,27 +21,22 @@ type logKey struct {
 }
 
 // logFileSelector implements the log_count window strategy's file budget.
-// count is a file-count value at the config layer, but internally denotes a
-// number of online-redo-log-sized bytes (count * maxRedoLogSizeInBytes,
-// passed into every call) rather than a literal file count - archived log
-// sizes vary wildly in practice, so a flat file count makes "how much redo a
-// cycle covers" unpredictable and often far too small.
+// count is a config-level file count, but denotes online-redo-log-sized
+// bytes internally (count * maxRedoLogSizeInBytes) - archived log sizes vary
+// too much for a flat file count to give a predictable amount of redo per
+// cycle.
 //
-// count is applied to each thread's file list independently (so bytes/cycle
-// scales with open thread count on RAC), but is a single value shared across
-// threads rather than one grown per thread: this keeps one thread's backlog
-// from starving the others, and keeps the config surface (log_count_min /
-// log_count_growth_max) one knob rather than one per thread on a topology
-// that changes over time.
+// count is shared across threads rather than grown per thread, so one
+// thread's backlog can't starve the others, and the config stays a single
+// knob rather than one per thread on a topology that changes over time.
 //
-// Known follow-up: seed count from a previously-committed checkpoint SCN
-// across a restart, rather than rediscovering it via stall/growth each time.
+// Follow-up: seed count from a checkpointed SCN across restarts instead of
+// rediscovering it via stall/growth each time.
 //
-// prevUpperBoundSCN is the endSCN this selector last returned (0 = none yet,
-// same convention as LogMiner.getCurrentSCN). It only ratchets forward (see
-// selectForSession) and is used by extendThreadPastBoundary to stop a
-// thread's backlog from being permanently skipped once currentSCN advances
-// past a boundary its own budget never reached.
+// prevUpperBoundSCN is the last endSCN returned (0 = none yet). It only
+// ratchets forward and is used by extendThreadPastBoundary to stop a
+// thread's backlog being skipped once currentSCN passes a boundary its own
+// budget never reached.
 type logFileSelector struct {
 	minCount          int
 	growthMax         int
@@ -51,18 +46,15 @@ type logFileSelector struct {
 }
 
 // selectForSession picks the redo/archive log files to mine next. files is
-// the SCN-overlap-filtered candidate set across all threads (see
-// GetLogsBySCNRange); openThreads are the threads Oracle reports OPEN (see
-// GetOpenThreads); maxRedoLogSizeInBytes is what the shared budget (s.count)
-// is denominated in - the per-thread threshold is s.count * maxRedoLogSizeInBytes.
+// the candidate set across all threads (GetLogsBySCNRange); openThreads are
+// Oracle's OPEN threads (GetOpenThreads); maxRedoLogSizeInBytes sizes the
+// per-thread threshold (s.count * maxRedoLogSizeInBytes).
 //
-// An open thread with no files is an error, not a skip - it means the
-// collector missed that thread's logs. A thread is complete once an open
-// thread lands on its genuinely open current log (more may still be coming)
-// or a closed thread covers everything available (it produces no more). The
-// session is capped unless every thread is complete; when capped, endSCN is
-// the smallest per-thread tightened boundary, so no thread's mined range
-// outruns what was actually selected for it.
+// An open thread with no files is an error, not a skip. A thread is
+// complete once an open thread reaches its genuinely open current log, or a
+// closed thread covers everything available. The session is capped unless
+// every thread is complete; endSCN is then the smallest per-thread
+// tightened boundary.
 func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, dbCurrentSCN, maxRedoLogSizeInBytes uint64) (selected []*LogFile, endSCN uint64, capped bool, err error) {
 	if s.count == 0 {
 		s.count = s.minCount
@@ -73,12 +65,11 @@ func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, 
 		return nil, 0, false, err
 	}
 
-	// Stall detection compares the pre-extension budget selection, not the
-	// extended one - extension is real progress, not a stall.
+	// Compare the pre-extension selection, not the extended one - extension
+	// is progress, not a stall.
 	if truncated && slices.Equal(budgetKeys, s.prevKeys) {
-		// Same selection again with no progress - grow the budget. Rather
-		// than a flat +1 (slow to clear a large backlog), derive the jump
-		// that would clear it in one step when that's bigger than +1.
+		// No progress - grow the budget. Derive the jump that would clear
+		// the backlog in one step, rather than a flat +1.
 		derived := s.deriveGrowthCount(files, maxRedoLogSizeInBytes)
 		growTo := max(derived, s.count+1)
 		if ceiling := max(s.growthMax, s.minCount); growTo > ceiling {
@@ -97,8 +88,7 @@ func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, 
 		s.prevKeys = nil
 	}
 
-	// Ratchet prevUpperBoundSCN forward only - it's the floor the next
-	// call's extension must reach past (see extendThreadPastBoundary).
+	// Ratchet forward only - the floor extendThreadPastBoundary must clear.
 	if endSCN > s.prevUpperBoundSCN {
 		s.prevUpperBoundSCN = endSCN
 	}
@@ -106,18 +96,15 @@ func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, 
 	return selected, endSCN, capped, nil
 }
 
-// deriveGrowthCount computes the count-equivalent budget that would clear,
-// in one step, the largest backlog any thread has below prevUpperBoundSCN -
-// so a stall doesn't take one increment per cycle to work through.
+// deriveGrowthCount computes the count that would clear, in one step, the
+// largest backlog any thread has below prevUpperBoundSCN.
 //
-// FirstSCN, not NextSCN, decides whether a file counts toward that backlog:
-// the question is whether the file lies within ground already committed to
-// (the same question extendThreadPastBoundary asks), and comparing NextSCN
-// would exclude exactly the files closest to the boundary that matter most.
+// FirstSCN decides whether a file counts, not NextSCN - the question is
+// whether the file lies within already-committed ground, and NextSCN would
+// exclude the files closest to the boundary.
 //
-// prevUpperBoundSCN == 0 means there's nothing to derive a jump from;
-// returning minCount just lets selectForSession's own max() fall back to
-// the flat +1 step.
+// prevUpperBoundSCN == 0 means nothing to derive; minCount lets the flat +1
+// fallback apply instead.
 func (s *logFileSelector) deriveGrowthCount(files []*LogFile, maxRedoLogSizeInBytes uint64) int {
 	if s.prevUpperBoundSCN == 0 {
 		return s.minCount
@@ -130,7 +117,7 @@ func (s *logFileSelector) deriveGrowthCount(files []*LogFile, maxRedoLogSizeInBy
 			if f.FirstSCN >= s.prevUpperBoundSCN {
 				break
 			}
-			threadBytes += f.Bytes
+			threadBytes += f.SizeBytes
 		}
 		maxThreadBytes = max(maxThreadBytes, threadBytes)
 	}
@@ -138,19 +125,16 @@ func (s *logFileSelector) deriveGrowthCount(files []*LogFile, maxRedoLogSizeInBy
 	return max(s.minCount, ceilDiv(maxThreadBytes, maxRedoLogSizeInBytes))
 }
 
-// budgetPerThread applies the shared byte budget (s.count *
-// maxRedoLogSizeInBytes) per thread, extends past prevUpperBoundSCN (see
-// extendThreadPastBoundary), then combines the results. truncated reports
-// whether the budget alone (before extension) cut any thread's files,
-// regardless of whether the session ends up capped - this, via the
-// pre-extension budgetKeys, is what stall detection compares against in
-// selectForSession, since extension catching a thread up is progress, not a
-// stall.
+// budgetPerThread applies the shared byte budget per thread, extends past
+// prevUpperBoundSCN, then combines the results. truncated reports whether
+// the budget alone cut any thread's files - via the pre-extension
+// budgetKeys, this is what stall detection compares against, since
+// extension catching a thread up is progress, not a stall.
 func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, dbCurrentSCN, maxRedoLogSizeInBytes uint64) (selected []*LogFile, endSCN uint64, capped, truncated bool, budgetKeys []logKey, err error) {
 	byThread := groupFilesByThread(files)
 
-	// An open thread with zero files means the collector missed its logs -
-	// mining an incomplete view silently would be worse than erroring.
+	// A missing thread here means the collector missed its logs - erroring
+	// beats mining an incomplete view silently.
 	for _, t := range openThreads {
 		if len(byThread[t]) == 0 {
 			return nil, 0, false, false, nil, fmt.Errorf("open redo thread %d has no log files in the collected SCN range", t)
@@ -174,13 +158,12 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 	for _, t := range slices.Sorted(maps.Keys(byThread)) {
 		threadFiles := byThread[t]
 
-		// Accumulate bytes in order, stopping once the running total reaches
-		// the threshold - inclusive of the crossing file, so one oversized
-		// file still selects itself rather than nothing.
+		// Stop once bytes reach the threshold, inclusive of the crossing
+		// file, so one oversized file still selects itself.
 		var accumulated uint64
 		stopIdx := len(threadFiles)
 		for i, f := range threadFiles {
-			accumulated += f.Bytes
+			accumulated += f.SizeBytes
 			if accumulated >= threshold {
 				stopIdx = i + 1
 				break
@@ -196,11 +179,9 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 		extended := extendThreadPastBoundary(threadFiles, budgetCapped, s.prevUpperBoundSCN)
 		combined = append(combined, extended...)
 
-		// A closed thread is complete once it covers everything available;
-		// an open thread needs its genuinely open current log, since more
-		// redo may still be coming. An incomplete thread must tighten
-		// endSCN, or its unselected tail could drop out of a future
-		// GetLogsBySCNRange window.
+		// A closed thread is complete once fully covered; an open thread
+		// needs its current log, since more may be coming. Incomplete
+		// threads tighten endSCN so their tail can't drop out later.
 		last := extended[len(extended)-1]
 		_, open := openSet[t]
 		var caughtUp bool
@@ -223,8 +204,7 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 	budgetKeys = logKeysOf(budgetCombined)
 
 	if !truncated {
-		// Nothing to cap - every thread fits within budget (extension is
-		// then a no-op too).
+		// Nothing to cap - everyone fits (extension is then a no-op too).
 		return files, dbCurrentSCN, false, false, budgetKeys, nil
 	}
 	if allCaughtUp {
@@ -233,17 +213,14 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 	return combined, tightestEndSCN, true, true, budgetKeys, nil
 }
 
-// extendThreadPastBoundary extends a thread's capped selection once a prior
-// cycle has committed to mining up through prevUpperBoundSCN, so a thread
-// whose backlog exceeds the budget doesn't have its unselected tail
-// permanently drop out of a future GetLogsBySCNRange window.
+// extendThreadPastBoundary extends a thread's capped selection past
+// prevUpperBoundSCN, so a thread whose backlog exceeds the budget doesn't
+// have its tail drop out of a future window.
 //
-// This can push a selection past growthMax: re-covering committed ground is
-// unsafe to skip, whereas exceeding the growth ceiling only costs extra
-// files for one cycle. growthMax bounds automatic growth, not the total.
+// Can exceed growthMax: re-covering committed ground is unsafe to skip,
+// while exceeding the ceiling only costs extra files for one cycle.
 //
-// prevUpperBoundSCN == 0 means no boundary committed yet (first call), so
-// there's nothing to extend past.
+// prevUpperBoundSCN == 0 means nothing committed yet, so nothing to extend.
 func extendThreadPastBoundary(threadFiles, budgetCapped []*LogFile, prevUpperBoundSCN uint64) []*LogFile {
 	if prevUpperBoundSCN == 0 {
 		return budgetCapped
@@ -260,8 +237,7 @@ func extendThreadPastBoundary(threadFiles, budgetCapped []*LogFile, prevUpperBou
 		nextIndex++
 	}
 
-	// A non-archived last file (still online, still mutable) isn't a safe
-	// stopping point - pull in the rest of this thread's files too.
+	// A non-archived (still mutable) last file isn't safe to stop at.
 	if last := extended[len(extended)-1]; !last.IsArchived() {
 		extended = append(extended, threadFiles[nextIndex:]...)
 	}
@@ -269,6 +245,10 @@ func extendThreadPastBoundary(threadFiles, budgetCapped []*LogFile, prevUpperBou
 	return extended
 }
 
+// groupFilesByThread buckets files by thread, sorted by Sequence - the logic
+// above assumes an ordered prefix per thread, which files alone doesn't
+// guarantee (deduplicateLogs can interleave sequences when one is missing
+// from the archived branch).
 func groupFilesByThread(files []*LogFile) map[int][]*LogFile {
 	groups := make(map[int][]*LogFile)
 	for _, f := range files {
@@ -290,8 +270,7 @@ func logKeysOf(files []*LogFile) []logKey {
 	return keys
 }
 
-// ceilDiv rounds numerator/denominator up, so a partially-filled unit of
-// backlog still counts as needing a whole extra unit of budget.
+// ceilDiv rounds up, so a partial unit of backlog still needs a whole unit.
 func ceilDiv(numerator, denominator uint64) int {
 	if denominator == 0 {
 		return 0

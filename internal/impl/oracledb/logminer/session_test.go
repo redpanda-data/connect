@@ -589,7 +589,7 @@ func (r *fakeRows) Next(dest []driver.Value) error {
 	dest[4] = f.Type
 	dest[5] = int64(f.Thread)
 	dest[6] = f.Status
-	dest[7] = int64(f.Bytes)
+	dest[7] = int64(f.SizeBytes)
 	r.idx++
 	return nil
 }

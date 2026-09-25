@@ -73,7 +73,7 @@ func (lc *logCountStrategy) resetIfUncapped(capped bool) {
 // bytes, across every redo group. The log_count window strategy uses this as
 // the unit its file-count budget is denominated in (N x this size) rather
 // than a literal file count, since online redo log groups are always
-// provisioned to a uniform size, unlike archived log files (see LogFile.Bytes).
+// provisioned to a uniform size, unlike archived log files (see LogFile.SizeBytes).
 func (lc *logCountStrategy) GetMaxRedoLogSize(ctx context.Context, conn *sql.Conn) (uint64, error) {
 	if lc.maxRedoSizeStmt == nil {
 		stmt, err := conn.PrepareContext(ctx, "SELECT MAX(BYTES) FROM V$LOG")
