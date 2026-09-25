@@ -27,7 +27,7 @@ The number of acknowledgements the leader broker must receive from ISR brokers b
 
 === `allow_auto_topic_creation`
 
-Enables topics to be auto created if they do not exist when fetching their metadata.
+Enables topics to be auto created if they do not exist when fetching their metadata. If set to `false`, the topic must already exist.
 
 *Type*: `bool`
 
@@ -35,7 +35,7 @@ Enables topics to be auto created if they do not exist when fetching their metad
 
 === `broker_write_max_bytes`
 
-The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.
+The maximum number of bytes this output can write to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.
 
 *Type*: `string`
 
@@ -53,7 +53,7 @@ broker_write_max_bytes: 50mib
 
 === `client_id`
 
-An identifier for the client connection.
+An identifier for the client connection. This identifier appears in broker logs and metrics, which helps you identify the Redpanda Connect instance that is connecting.
 
 *Type*: `string`
 
@@ -61,7 +61,7 @@ An identifier for the client connection.
 
 === `compression`
 
-Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.
+Set an explicit compression type (optional). By default, the client uses `snappy` when the broker supports it, and falls back to `none` if not.
 
 *Type*: `string`
 
@@ -69,7 +69,7 @@ Optionally set an explicit compression type. The default preference is to use sn
 
 === `conn_idle_timeout`
 
-The rough amount of time to allow connections to idle before they are closed.
+The approximate maximum duration that connections can remain idle before they are automatically closed. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.
 
 *Type*: `string`
 
@@ -103,7 +103,7 @@ The serialization format for individual spans in the topic.
 
 === `idempotent_write`
 
-Enable the idempotent write producer option. When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition (no duplicates on retries). This requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. If your cluster does not grant this permission or uses ACLs restrictively, disable this option. Note: Idempotent writes are strictly a win for data integrity but may be unavailable in restricted environments (for example, some managed Kafka services, Redpanda with strict ACLs). Disabling this option is safe and only affects retry behavior: duplicates may occur on producer retries, but the pipeline will continue to function normally.
+Enable the idempotent write producer option. When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition, so retries do not produce duplicates. This option requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. Disable this option if the `IDEMPOTENT_WRITE` permission is unavailable, for example in some managed Kafka services or Redpanda clusters with strict ACLs. Disabling this option only affects retry behavior: duplicates may occur on producer retries, but the pipeline continues to function normally.
 
 *Type*: `bool`
 
@@ -163,7 +163,11 @@ max_message_bytes: 50mib
 
 === `metadata_max_age`
 
-The maximum age of metadata before it is refreshed. This interval also controls how frequently regex topic patterns are re-evaluated to discover new matching topics.
+The maximum period of time after which metadata is refreshed. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.
+
+Lower values provide more responsive topic and partition discovery but may increase broker load. Higher values reduce broker queries but can delay detection of topology changes.
+
+This interval also controls how frequently regex topic patterns are re-evaluated to discover new matching topics.
 
 *Type*: `string`
 
@@ -211,7 +215,9 @@ The maximum number of times a record produce is retried on failure before the re
 
 === `request_timeout_overhead`
 
-The request time overhead. Uses the given time as overhead while deadlining requests. Roughly equivalent to request.timeout.ms, but grants additional time to requests that have timeout fields.
+Additional time to apply as overhead when calculating request deadlines. For most requests, the deadline is this overhead alone. For requests that define their own timeout field, the overhead is added on top of that timeout, which helps prevent premature timeouts.
+
+This field is roughly equivalent to Apache Kafka's `request.timeout.ms` parameter, but grants extra time to requests that have timeout fields.
 
 *Type*: `string`
 
@@ -219,13 +225,13 @@ The request time overhead. Uses the given time as overhead while deadlining requ
 
 === `sampling`
 
-Settings for trace sampling. Sampling is recommended for high-volume production workloads.
+Configure trace sampling to control the volume of trace data. Sampling is recommended for high-volume production workloads to prevent trace data from overwhelming your observability infrastructure.
 
 *Type*: `object`
 
 === `sampling.enabled`
 
-Whether to enable sampling.
+Whether to enable trace sampling. When disabled, all traces are exported. When enabled, traces are sampled according to the configured ratio.
 
 *Type*: `bool`
 
@@ -233,7 +239,7 @@ Whether to enable sampling.
 
 === `sampling.ratio`
 
-Sets the ratio of traces to sample.
+The sampling ratio as a decimal between 0 and 1. For example, `0.1` samples 10% of traces, `0.01` samples 1%. Lower ratios reduce trace volume and overhead. For high-throughput production systems, start with 0.01-0.1 and adjust based on your needs.
 
 *Type*: `float`
 
@@ -253,7 +259,7 @@ ratio: 0.5
 
 === `sasl[]`
 
-Specify one or more methods of SASL authentication. SASL is tried in order; if the broker supports the first mechanism, all connections will use that mechanism. If the first mechanism fails, the client will pick the first supported mechanism. If the broker does not support any client mechanisms, connections will fail.
+Specify one or more methods or mechanisms of SASL authentication. They are tried in order. If the broker supports the first SASL mechanism, all connections use it. If the first mechanism fails, the client picks the first supported mechanism. If the broker does not support any client mechanisms, all connections fail.
 
 *Type*: `array<object>`
 
@@ -269,7 +275,7 @@ sasl:
 
 === `sasl[].aws`
 
-Contains AWS specific fields for when the `mechanism` is set to `AWS_MSK_IAM`.
+Contains AWS-specific fields for when `sasl.mechanism` is set to `AWS_MSK_IAM`.
 
 *Type*: `object`
 
@@ -399,7 +405,7 @@ Key/value pairs to add to OAUTHBEARER authentication requests.
 
 === `sasl[].mechanism`
 
-The SASL mechanism to use.
+The SASL mechanism to use for authentication.
 
 *Type*: `string`
 
@@ -432,7 +438,7 @@ The SASL mechanism to use.
 
 === `sasl[].password`
 
-A password to provide for PLAIN or SCRAM-* authentication.
+The password to use for PLAIN or SCRAM-* authentication.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -450,7 +456,7 @@ The token to use for a single session's OAUTHBEARER authentication.
 
 === `sasl[].username`
 
-A username to provide for PLAIN or SCRAM-* authentication.
+The username to use for PLAIN or SCRAM-* authentication.
 
 *Type*: `string`
 
@@ -806,7 +812,7 @@ The base URL of the schema registry service.
 
 === `seed_brokers[]`
 
-A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.
+A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas, it is expanded into multiple addresses.
 
 *Type*: `array<string>`
 
@@ -830,7 +836,7 @@ seed_brokers:
 
 === `service`
 
-The name of the service in traces.
+The service name to identify this Redpanda Connect instance in traces. This appears in trace visualizations and helps correlate traces across distributed systems. Use descriptive names like `order-processor` or `analytics-pipeline`.
 
 *Type*: `string`
 
@@ -838,7 +844,7 @@ The name of the service in traces.
 
 === `tags`
 
-A map of tags to add to all tracing spans.
+Custom key-value tags to attach to all traces from this instance. Use tags to add metadata like environment (`production`, `staging`), region, version, or instance identifiers. Tags appear as resource attributes in OpenTelemetry traces.
 
 *Type*: `object`
 
@@ -898,7 +904,7 @@ Maximum time to wait for acknowledgment of transmitted data before killing the c
 
 === `timeout`
 
-The maximum period of time to wait for message sends before abandoning the request and retrying
+The maximum period of time to wait for message sends before abandoning the request and retrying.
 
 *Type*: `string`
 
@@ -1054,7 +1060,7 @@ Whether to skip server side certificate verification.
 
 === `topic`
 
-The name of the topic to emit spans to
+The Redpanda topic where trace data is written. This topic should be dedicated to traces and configured with appropriate retention policies. Default: `otel-traces`
 
 *Type*: `string`
 

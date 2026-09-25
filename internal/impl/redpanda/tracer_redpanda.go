@@ -41,13 +41,103 @@ import (
 
 func tracerSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Send tracing events to a Redpanda Message Broker.").
+		Summary("Send tracing events to a Redpanda topic in OpenTelemetry format for distributed tracing and observability.").
+		Description(`
+The Redpanda tracer exports distributed tracing data to a Redpanda topic, enabling you to monitor and debug your Redpanda Connect pipelines. Traces are exported in OpenTelemetry format, as JSON by default, allowing integration with observability platforms like Jaeger, Grafana Tempo, or custom trace consumers. Use the `+"`format`"+` field to emit spans as protobuf, or to publish schemas to a Schema Registry alongside the data.
+
+This tracer automatically captures trace spans as messages flow through your pipeline, recording timing information, component metadata, and error details. Use this tracer to:
+
+- *Track message flow* through complex pipelines with multiple processors
+- *Identify performance bottlenecks* by analyzing span durations
+- *Debug failures* by examining trace context and error details
+- *Monitor pipeline health* across distributed Redpanda Connect instances
+- *Correlate activity* across multiple services using trace IDs
+
+The tracer writes to a dedicated Redpanda topic (default: `+"`otel-traces`"+`) that trace analysis tools can consume. Configure sampling to control trace volume in high-throughput environments.`).
+		Example(
+			"Basic tracing setup",
+			"Enable tracing for a pipeline, sending all trace data to a local Redpanda cluster.",
+			`
+input:
+  redpanda:
+    seed_brokers: [ "localhost:9092" ]
+    topics: [ "orders" ]
+    consumer_group: order-processor
+
+pipeline:
+  processors:
+    - mapping: |
+        root = this
+        root.processed_at = now()
+
+output:
+  redpanda:
+    seed_brokers: [ "localhost:9092" ]
+    topic: processed_orders
+
+tracer:
+  redpanda:
+    seed_brokers: [ "localhost:9092" ]
+    topic: otel-traces
+    service: order-processor
+`).
+		Example(
+			"Production tracing with sampling",
+			"Configure tracing for a production environment with sampling to reduce trace volume, and with TLS and SASL authentication.",
+			`
+input:
+  redpanda:
+    seed_brokers: [ "redpanda-prod:9092" ]
+    topics: [ "events" ]
+    consumer_group: event-processor
+
+pipeline:
+  processors:
+    - branch:
+        request_map: 'root = this'
+        processors:
+          - mapping: 'root.enriched = true'
+
+output:
+  redpanda:
+    seed_brokers: [ "redpanda-prod:9092" ]
+    topic: processed_events
+
+tracer:
+  redpanda:
+    seed_brokers: [ "redpanda-prod:9092" ]
+    topic: otel-traces
+    service: event-processor-prod
+    sampling:
+      enabled: true
+      ratio: 0.1 # Sample 10% of traces
+    tls:
+      enabled: true
+    sasl:
+      - mechanism: SCRAM-SHA-512
+        username: tracer-user
+        password: ${TRACER_PASSWORD}
+`).
+		Example(
+			"Multi-instance tracing",
+			"Configure tracing for multiple Redpanda Connect instances with unique service names for correlation. Each instance writes to the same topic and sets its own `service` name and `instance` tag. This configuration is for an ingestion service. A processing service uses the same configuration with `service: processing-service` and `instance: processing-01`.",
+			`
+tracer:
+  redpanda:
+    seed_brokers: [ "redpanda:9092" ]
+    topic: otel-traces
+    service: ingestion-service
+    tags:
+      environment: production
+      region: us-west-2
+      instance: ingestion-01
+`).
 		Fields(kafka.FranzConnectionFields()...).
 		Fields(kafka.FranzProducerFields()...).
 		Fields(
 			service.NewStringField("topic").
 				Default("otel-traces").
-				Description("The name of the topic to emit spans to"),
+				Description("The Redpanda topic where trace data is written. This topic should be dedicated to traces and configured with appropriate retention policies. Default: `otel-traces`"),
 			service.NewStringAnnotatedEnumField("format", map[string]string{
 				exporter.SerializationFormatJSON.String():                   "Emit in JSON Format",
 				exporter.SerializationFormatProtobuf.String():               "Emit in Protobuf Format",
@@ -68,20 +158,20 @@ func tracerSpec() *service.ConfigSpec {
 			).Description("Schema registry information to publish schemas for tracing data along with the data."),
 			service.NewStringField("service").
 				Default("redpanda-connect").
-				Description("The name of the service in traces."),
+				Description("The service name to identify this Redpanda Connect instance in traces. This appears in trace visualizations and helps correlate traces across distributed systems. Use descriptive names like `order-processor` or `analytics-pipeline`."),
 			service.NewStringMapField("tags").
-				Description("A map of tags to add to all tracing spans.").
+				Description("Custom key-value tags to attach to all traces from this instance. Use tags to add metadata like environment (`production`, `staging`), region, version, or instance identifiers. Tags appear as resource attributes in OpenTelemetry traces.").
 				Default(map[string]any{}).
 				Advanced(),
 			service.NewObjectField("sampling",
 				service.NewBoolField("enabled").
-					Description("Whether to enable sampling.").
+					Description("Whether to enable trace sampling. When disabled, all traces are exported. When enabled, traces are sampled according to the configured ratio.").
 					Default(false),
 				service.NewFloatField("ratio").
-					Description("Sets the ratio of traces to sample.").
+					Description("The sampling ratio as a decimal between 0 and 1. For example, `0.1` samples 10% of traces, `0.01` samples 1%. Lower ratios reduce trace volume and overhead. For high-throughput production systems, start with 0.01-0.1 and adjust based on your needs.").
 					Examples(0.05, 0.85, 0.5).
 					Optional()).
-				Description("Settings for trace sampling. Sampling is recommended for high-volume production workloads."),
+				Description("Configure trace sampling to control the volume of trace data. Sampling is recommended for high-volume production workloads to prevent trace data from overwhelming your observability infrastructure."),
 		)
 }
 

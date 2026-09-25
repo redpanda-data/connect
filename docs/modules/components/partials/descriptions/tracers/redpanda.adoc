@@ -5,11 +5,21 @@
 //   body:   include::...[tag=body]   (renders the summary and description)
 
 // tag::meta[]
-:description: Send tracing events to a Redpanda Message Broker.
+:description: Send tracing events to a Redpanda topic in OpenTelemetry format for distributed tracing and observability.
 // end::meta[]
 
 // tag::body[]
-Send tracing events to a Redpanda Message Broker.
+Send tracing events to a Redpanda topic in OpenTelemetry format for distributed tracing and observability.
 
+The Redpanda tracer exports distributed tracing data to a Redpanda topic, enabling you to monitor and debug your Redpanda Connect pipelines. Traces are exported in OpenTelemetry format, as JSON by default, allowing integration with observability platforms like Jaeger, Grafana Tempo, or custom trace consumers. Use the `format` field to emit spans as protobuf, or to publish schemas to a Schema Registry alongside the data.
 
+This tracer automatically captures trace spans as messages flow through your pipeline, recording timing information, component metadata, and error details. Use this tracer to:
+
+- *Track message flow* through complex pipelines with multiple processors
+- *Identify performance bottlenecks* by analyzing span durations
+- *Debug failures* by examining trace context and error details
+- *Monitor pipeline health* across distributed Redpanda Connect instances
+- *Correlate activity* across multiple services using trace IDs
+
+The tracer writes to a dedicated Redpanda topic (default: `otel-traces`) that trace analysis tools can consume. Configure sampling to control trace volume in high-throughput environments.
 // end::body[]

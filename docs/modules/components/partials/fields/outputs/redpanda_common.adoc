@@ -130,7 +130,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 === `metadata`
 
-Determine which (if any) metadata values should be added to messages as headers.
+Determines which metadata values are added to messages as headers.
 
 *Type*: `object`
 
@@ -196,7 +196,7 @@ partition: ${! meta("partition") }
 
 === `timestamp_ms`
 
-An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.
+An optional timestamp to set for each message, in milliseconds since the Unix epoch. When left empty, the current timestamp is used. You cannot set both `timestamp` and `timestamp_ms`.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
