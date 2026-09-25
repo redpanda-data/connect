@@ -142,11 +142,18 @@ func (w *writer) component(key string, c componentSpec) {
 	if c.Summary != "" || c.Description != "" || c.Version != "" {
 		w.write(filepath.Join("partials/descriptions", typeDir, file), renderDescriptionPartial(c, typeDir))
 	}
+	base := filepath.Join(key, c.Name+".yaml")
 	if c.Config.Children != nil {
-		base := filepath.Join(key, c.Name+".yaml")
 		w.write(filepath.Join("examples/common", base), buildConfigYAML(key, c.Name, c.Config.Children, false))
 		w.write(filepath.Join("examples/advanced", base), buildConfigYAML(key, c.Name, c.Config.Children, true))
+		return
 	}
+	// Components whose config is a single value, a list, or an object with no
+	// fields (such as resource, fallback, and drop) have no Common or Advanced
+	// split, so both snippets show the same line.
+	snippet := buildValueConfigYAML(key, c.Name, c.Config)
+	w.write(filepath.Join("examples/common", base), snippet)
+	w.write(filepath.Join("examples/advanced", base), snippet)
 }
 
 func renderDescriptionPartial(c componentSpec, typeDir string) string {
