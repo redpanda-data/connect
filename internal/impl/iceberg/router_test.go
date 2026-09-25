@@ -429,10 +429,10 @@ func TestBuildSchemaWithResolverMetadataOnlyFieldOrdering(t *testing.T) {
 
 // TestBuildSchemaWithResolverRejectsNanosecondTimestamps guards CON-521:
 // schema metadata declaring a nanosecond timestamp (Avro timestamp-nanos,
-// Debezium NanoTimestamp) used to resolve to the format-version-3
-// timestamp_ns/timestamptz_ns types. The table was created as format version
-// 2 and every write to it then failed. Schema construction must now fail
-// before the table is created, naming the field and the remediation.
+// Debezium NanoTimestamp) used to resolve to timestamp_ns/timestamptz_ns,
+// which the output's write path does not support. The table was created and
+// every write to it then failed. Schema construction must now fail before
+// the table is created, naming the field and the remediation.
 func TestBuildSchemaWithResolverRejectsNanosecondTimestamps(t *testing.T) {
 	nanos := func(name string, utc bool) schema.Common {
 		return schema.Common{
@@ -493,7 +493,7 @@ func TestBuildSchemaWithResolverRejectsNanosecondTimestamps(t *testing.T) {
 			require.ErrorIs(t, err, errNanosecondTimestamp)
 			assert.Contains(t, err.Error(), tt.wantField)
 			assert.Contains(t, err.Error(), "nanosecond")
-			assert.Contains(t, err.Error(), "format version 3")
+			assert.Contains(t, err.Error(), "not supported by the iceberg output")
 			assert.Contains(t, err.Error(), "upstream")
 		})
 	}

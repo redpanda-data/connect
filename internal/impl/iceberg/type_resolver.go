@@ -137,12 +137,14 @@ func (r *typeResolver) resolveTypeForCreateTable(
 }
 
 // errNanosecondTimestamp marks a column whose fully resolved type contains
-// timestamp_ns or timestamptz_ns. Those are Iceberg format-version-3 types,
-// while tables created by this output are format version 2, and the parquet
-// schema, stats and partition paths have no case for them: admitting one
-// would create or evolve a table that every subsequent write fails against.
-// Callers must fail rather than fall back to another column type.
-var errNanosecondTimestamp = errors.New("nanosecond timestamps require Iceberg format version 3, which the iceberg output does not support")
+// timestamp_ns or timestamptz_ns. The output's write path does not support
+// those types at all: the parquet schema builder, partition-key and stats
+// code only handle microsecond timestamps, so a table with such a column
+// fails every write regardless of its format version. (They are also
+// format-version-3 types, and tables created here are format version 2.)
+// Admitting one would create or evolve a table the output cannot write to,
+// so callers must fail rather than fall back to another column type.
+var errNanosecondTimestamp = errors.New("nanosecond timestamps (timestamp_ns, timestamptz_ns) are not supported by the iceberg output")
 
 // rejectNanosecondTimestamps returns an errNanosecondTimestamp-wrapped error
 // naming the offending column if t is, or contains, a nanosecond timestamp.
@@ -294,9 +296,10 @@ func commonTypeToIcebergTypeRec(c *schema.Common, ti *typeInferrer) (iceberg.Typ
 		// Legacy Timestamps (nil Logical) fall through to the millis/UTC
 		// default via EffectiveTimestamp(), preserving today's behavior of
 		// "always TimestampTzType". Schemas that explicitly say nanos map to
-		// the V3 *NsType variants here so that new_column_type_mapping can
+		// the *NsType variants here so that new_column_type_mapping can
 		// still downcast them; rejectNanosecondTimestamps refuses whatever
-		// survives the full resolution pipeline.
+		// survives the full resolution pipeline, since the write path has
+		// no nanosecond support.
 		p := c.EffectiveTimestamp()
 		switch {
 		case p.Unit == schema.TimeUnitNanos && p.AdjustToUTC:

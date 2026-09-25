@@ -719,11 +719,18 @@ type newColumn struct {
 	fieldType iceberg.Type
 }
 
-// resolveNewColumns resolves the Iceberg type of every field in schemaErr
-// using the three-stage pipeline. A field whose type cannot be resolved falls
-// back to a string column, except for nanosecond timestamps: those are
-// returned as an error, because a string fallback would permanently widen a
-// timestamp column that cannot be narrowed back later.
+// resolveNewColumns resolves the Iceberg type of each field in schemaErr with
+// resolveTypeForAddColumn. If the type cannot be resolved, the column falls
+// back to string. Nanosecond timestamps are the exception: they return an
+// error (see errNanosecondTimestamp).
+//
+// The asymmetry with create-table (where every resolve error fails) is
+// deliberate and narrow. For the other rejected types (time-of-day with
+// nanos or UTC adjustment, BigDecimal, Union) the string fallback is
+// long-standing behavior that running pipelines can depend on, so turning it
+// into a hard failure would stall them. Nanosecond timestamps previously
+// evolved into a column every write then failed against, so no working
+// pipeline relies on them and failing loudly breaks nothing.
 func (r *Router) resolveNewColumns(schemaErr *BatchSchemaEvolutionError, msg *service.Message, key tableKey) ([]newColumn, error) {
 	// Group new fields by parent path for efficient updates
 	groups := schemaErr.GroupByParentPath()
