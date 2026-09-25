@@ -39,27 +39,44 @@ const (
 	kroFieldMaxYieldBatchBytes    = "max_yield_batch_bytes"
 )
 
+// franzConsumerGroupField returns the consumer group field shared by the
+// ordered and unordered franz-go readers.
+func franzConsumerGroupField(name string) *service.ConfigField {
+	return service.NewStringField(name).
+		Description(`An optional consumer group. When you specify this value:
+
+- The partitions of any topics specified in the ` + "`topics`" + ` field are automatically distributed across consumers that share the consumer group.
+- Partition offsets are automatically committed and resumed under this name.
+
+Consumer groups are not supported when you specify explicit partitions to consume from in the ` + "`topics`" + ` field.`).
+		ShortDescription("An optional consumer group to consume as. Partitions and offsets are managed automatically across the group.").
+		Optional()
+}
+
+// franzTopicLagRefreshPeriodField returns the consumer lag refresh interval
+// field shared by the ordered and unordered franz-go readers.
+func franzTopicLagRefreshPeriodField(name string) *service.ConfigField {
+	return service.NewDurationField(name).
+		Description("The interval between consumer lag refreshes. During each cycle, this input asks the brokers for the consumer group's committed offsets and the partition end offsets, and records the difference (the number of unread messages) for each topic partition in the consumer lag metric and the `kafka_lag` metadata field. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
+		Default("5s").
+		Advanced()
+}
+
 // FranzReaderOrderedConfigFields returns config fields for customising the
 // behaviour of kafka reader with strict ordering using the franz-go library.
 func FranzReaderOrderedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
-		service.NewStringField(kroFieldConsumerGroup).
-			Description("An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.").
-			ShortDescription("An optional consumer group to consume as. Partitions and offsets are managed automatically across the group.").
-			Optional(),
+		franzConsumerGroupField(kroFieldConsumerGroup),
 		service.NewDurationField(kroFieldCommitPeriod).
 			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
 			Default("5s").
 			Advanced(),
 		service.NewStringField(kroFieldPartitionBuffer).
-			Description("A buffer size (in bytes) for each consumed partition, allowing records to be queued internally before flushing. Increasing this may improve throughput at the cost of higher memory utilisation. Note that each buffer can grow slightly beyond this value.").
+			Description("A buffer size (in bytes) for each consumed partition, which allows the internal queuing of records before they are flushed. Increasing this value may improve throughput but results in higher memory utilization.\n\nEach buffer can grow slightly beyond this value.").
 			ShortDescription("Buffer size in bytes for each consumed partition, queueing records before they are flushed.").
 			Default("1MB").
 			Advanced(),
-		service.NewDurationField(kroFieldTopicLagRefreshPeriod).
-			Description("The period of time between each topic lag refresh cycle.").
-			Default("5s").
-			Advanced(),
+		franzTopicLagRefreshPeriodField(kroFieldTopicLagRefreshPeriod),
 		service.NewStringField(kroFieldMaxYieldBatchBytes).
 			Description("The maximum size (in bytes) for each batch yielded by this input. " +
 				"This value must be less than or equal to the `partition_buffer_bytes`. " +

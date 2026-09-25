@@ -5,11 +5,11 @@
 //   body:   include::...[tag=body]   (renders the summary and description)
 
 // tag::meta[]
-:description: Ockam
+:description: Uses Ockam to decrypt and read end-to-end encrypted messages from Kafka topics.
 // end::meta[]
 
 // tag::body[]
-Ockam
+Uses Ockam to decrypt and read end-to-end encrypted messages from Kafka topics.
 
 
 // end::body[]

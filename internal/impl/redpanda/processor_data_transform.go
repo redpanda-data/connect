@@ -67,8 +67,8 @@ You can find out about how transforms work here: https://docs.redpanda.com/curre
 			Description("Determine which (if any) message headers should be added to the output as metadata.").
 			Optional()).
 		Field(service.NewInterpolatedStringField(dtpFieldTimestamp).
-			Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
-			Example(`${! timestamp_unix() }`).
+			Description("An optional timestamp to set for each message, in milliseconds since the Unix epoch. When left empty, the current timestamp is used.").
+			Example(`${! timestamp_unix_milli() }`).
 			Example(`${! metadata("kafka_timestamp_ms") }`).
 			Optional().
 			Advanced()).

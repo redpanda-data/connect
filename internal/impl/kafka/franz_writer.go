@@ -54,7 +54,7 @@ const (
 func FranzProducerLimitsFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewDurationField(kfwFieldTimeout).
-			Description("The maximum period of time to wait for message sends before abandoning the request and retrying").
+			Description(kafkaOutputTimeoutDescription).
 			Default("10s").
 			Advanced(),
 		service.NewStringField(kfwFieldMaxMessageBytes).
@@ -69,7 +69,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 			Example("100MB").
 			Example("50mib"),
 		service.NewStringField(kfwFieldBrokerWriteMaxBytes).
-			Description("The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.").
+			Description("The maximum number of bytes this output can write to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.").
 			ShortDescription("Upper bound on bytes written to a broker connection in a single write.").
 			Advanced().
 			Default("100MiB").
@@ -135,13 +135,7 @@ func FranzProducerFields() []*service.ConfigField {
 				Description("Override the default murmur2 hashing partitioner.").
 				Advanced().Optional(),
 			service.NewBoolField(kfwFieldIdempotentWrite).
-				Description("Enable the idempotent write producer option. " +
-					"When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition (no duplicates on retries). " +
-					"This requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. " +
-					"If your cluster does not grant this permission or uses ACLs restrictively, disable this option. " +
-					"Note: Idempotent writes are strictly a win for data integrity but may be unavailable in restricted environments " +
-					"(for example, some managed Kafka services, Redpanda with strict ACLs). " +
-					"Disabling this option is safe and only affects retry behavior: duplicates may occur on producer retries, but the pipeline will continue to function normally.").
+				Description("Enable the idempotent write producer option. When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition, so retries do not produce duplicates. This option requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. Disable this option if the `IDEMPOTENT_WRITE` permission is unavailable, for example in some managed Kafka services or Redpanda clusters with strict ACLs. Disabling this option only affects retry behavior: duplicates may occur on producer retries, but the pipeline continues to function normally.").
 				ShortDescription("Enable the idempotent write producer option for exactly-once semantics per partition. Requires the IDEMPOTENT_WRITE permission on CLUSTER.").
 				Default(true).
 				Advanced(),
@@ -156,12 +150,12 @@ func FranzProducerFields() []*service.ConfigField {
 				Default("all").
 				Advanced(),
 			service.NewStringEnumField(kfwFieldCompression, "lz4", "snappy", "gzip", "none", "zstd").
-				Description("Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.").
+				Description("Set an explicit compression type (optional). By default, the client uses `snappy` when the broker supports it, and falls back to `none` if not.").
 				ShortDescription("Explicit compression type. Defaults to snappy when the broker supports it, otherwise none.").
 				Optional().
 				Advanced(),
 			service.NewBoolField(kfwFieldAllowAutoTopicCreation).
-				Description("Enables topics to be auto created if they do not exist when fetching their metadata.").
+				Description("Enables topics to be auto created if they do not exist when fetching their metadata. If set to `false`, the topic must already exist.").
 				Default(true).
 				Advanced(),
 		},
@@ -384,6 +378,15 @@ const (
 	kfwFieldTimestampMs = "timestamp_ms"
 )
 
+// Descriptions shared by the fields of the franz-go and Sarama based Kafka
+// outputs.
+const (
+	kafkaOutputKeyDescription         = "An optional key to populate for each message."
+	kafkaOutputTimeoutDescription     = "The maximum period of time to wait for message sends before abandoning the request and retrying."
+	kafkaOutputTimestampDescription   = "An optional timestamp to set for each message, in seconds since the Unix epoch. When left empty, the current timestamp is used."
+	kafkaOutputTimestampMsDescription = "An optional timestamp to set for each message, in milliseconds since the Unix epoch. When left empty, the current timestamp is used. You cannot set both `timestamp` and `timestamp_ms`."
+)
+
 // FranzWriterConfigFields returns a slice of config fields specifically for
 // customising data written to a Kafka broker.
 func FranzWriterConfigFields() []*service.ConfigField {
@@ -391,24 +394,24 @@ func FranzWriterConfigFields() []*service.ConfigField {
 		service.NewInterpolatedStringField(kfwFieldTopic).
 			Description("A topic to write messages to."),
 		service.NewInterpolatedStringField(kfwFieldKey).
-			Description("An optional key to populate for each message.").Optional(),
+			Description(kafkaOutputKeyDescription).Optional(),
 		service.NewInterpolatedStringField(kfwFieldPartition).
 			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").
 			ShortDescription("An explicit partition for each message. Only relevant when partitioner is set to manual.").
 			Example(`${! meta("partition") }`).
 			Optional(),
 		service.NewMetadataFilterField(kfwFieldMetadata).
-			Description("Determine which (if any) metadata values should be added to messages as headers.").
+			Description("Determines which metadata values are added to messages as headers.").
 			Optional(),
 		service.NewInterpolatedStringField(kfwFieldTimestamp).
-			Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
+			Description(kafkaOutputTimestampDescription).
 			Example(`${! timestamp_unix() }`).
 			Example(`${! metadata("kafka_timestamp_unix") }`).
 			Optional().
 			Advanced().
 			Deprecated(),
 		service.NewInterpolatedStringField(kfwFieldTimestampMs).
-			Description("An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.").
+			Description(kafkaOutputTimestampMsDescription).
 			Example(`${! timestamp_unix_milli() }`).
 			Example(`${! metadata("kafka_timestamp_ms") }`).
 			Optional().

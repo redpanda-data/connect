@@ -4,7 +4,7 @@
 
 === `backfill_dependencies`
 
-Backfill schema references and previous versions.
+Backfill missing schema references and previous schema versions. If set to `true`, you must also configure a xref:components:inputs/schema_registry.adoc[`schema_registry`] input to read source schemas.
 
 *Type*: `bool`
 
@@ -44,7 +44,7 @@ A username to authenticate as.
 
 === `input_resource`
 
-The label of the schema_registry input from which to read source schemas.
+The label of the xref:components:inputs/schema_registry.adoc[`schema_registry` input] from which to read source schemas.
 
 *Type*: `string`
 
@@ -110,6 +110,10 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Normalize schemas.
 
+ifndef::env-cloud[]
+Requires version 4.61.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `true`
@@ -166,7 +170,7 @@ Whether to use OAuth version 1 in requests.
 
 === `remove_metadata`
 
-Remove metadata from schemas.
+Removes metadata fields from schema output. Use this to produce leaner schema definitions for downstream consumers or when metadata is not required.
 
 *Type*: `bool`
 
@@ -174,7 +178,7 @@ Remove metadata from schemas.
 
 === `remove_rule_set`
 
-Remove rule set from schemas.
+Removes rule set definitions from schema output. Useful for simplifying schemas when rule sets are not required by consumers or applications.
 
 *Type*: `bool`
 
@@ -182,7 +186,7 @@ Remove rule set from schemas.
 
 === `subject`
 
-Subject.
+The subject name.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -190,7 +194,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `subject_compatibility_level`
 
-The compatibility level for the subject. Can be one of BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE.
+The compatibility level for the subject. Can be one of `BACKWARD`, `BACKWARD_TRANSITIVE`, `FORWARD`, `FORWARD_TRANSITIVE`, `FULL`, `FULL_TRANSITIVE`, `NONE`.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -346,7 +350,7 @@ Whether to skip server side certificate verification.
 
 === `translate_ids`
 
-Translate schema IDs.
+When set to `true`, this field automatically translates the schema ID in each message to match the corresponding schema in the destination schema registry. The updated message is then written to the destination schema registry.
 
 *Type*: `bool`
 

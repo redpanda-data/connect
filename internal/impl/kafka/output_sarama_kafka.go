@@ -90,37 +90,26 @@ If you're seeing issues writing to or reading from Kafka with this component the
 
 Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tlsenabled, enabled TLS>> if applicable.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
-			service.NewStringListField(oskFieldAddresses).
-				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").
-				ShortDescription("A list of broker addresses to connect to. Items containing commas are expanded into multiple addresses.").
-				Examples(
-					[]string{"localhost:9092"},
-					[]string{"localhost:9041,localhost:9042"},
-					[]string{"localhost:9041", "localhost:9042"},
-				),
+			saramaAddressesField(oskFieldAddresses),
 			service.NewTLSToggledField(oskFieldTLS),
 			SaramaSASLField(),
 			service.NewInterpolatedStringField(oskFieldTopic).
-				Description("The topic to publish messages to."),
+				Description(`The topic to publish messages to.`),
 			service.NewStringField(oskFieldClientID).
 				Description("An identifier for the client connection.").
 				Advanced().Default("benthos"),
-			service.NewStringField(oskFieldTargetVersion).
-				Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
-				ShortDescription("The version of the Kafka protocol to use. Ideally matches the version of your brokers.").
-				Examples(sarama.DefaultVersion.String(), "3.1.0").
-				Optional(),
+			saramaTargetVersionField(oskFieldTargetVersion),
 			service.NewStringField(oskFieldRackID).
 				Description("A rack identifier for this client.").
 				Advanced().Default(""),
 			service.NewInterpolatedStringField(oskFieldKey).
-				Description("The key to publish messages with.").
+				Description(kafkaOutputKeyDescription).
 				Default(""),
 			service.NewStringEnumField(oskFieldPartitioner, "fnv1a_hash", "murmur2_hash", "random", "round_robin", "manual").
 				Description("The partitioning algorithm to use.").
 				Default("fnv1a_hash"),
 			service.NewInterpolatedStringField(oskFieldPartition).
-				Description("The manually-specified partition to publish messages to, relevant only when the field `partitioner` is set to `manual`. Must be able to parse as a 32-bit integer.").
+				Description(`The manually-specified partition to publish messages to, relevant only when the field `+"`"+`partitioner`+"`"+` is set to `+"`"+`manual`+"`"+`. Must be able to parse as a 32-bit integer.`).
 				ShortDescription("The partition to publish messages to. Only relevant when partitioner is set to manual.").
 				Advanced().Default(""),
 			service.NewObjectField(oskFieldCustomTopic,
@@ -159,7 +148,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("The maximum size in bytes of messages sent to the target topic.").
 				Advanced().Default(1000000),
 			service.NewDurationField(oskFieldTimeout).
-				Description("The maximum period of time to wait for message sends before abandoning the request and retrying.").
+				Description(kafkaOutputTimeoutDescription).
 				Advanced().Default("5s"),
 			service.NewBoolField(oskFieldRetryAsBatch).
 				Description("When enabled forces an entire batch of messages to be retried if any individual message fails on a send, otherwise only the individual messages that failed are retried. Disabling this helps to reduce message duplicates during intermittent errors, but also makes it impossible to guarantee strict ordering of messages.").
@@ -175,14 +164,14 @@ Unfortunately this error message will appear for a wide range of connection prob
 				MaxElapsedTime:  time.Second * 30,
 			}).Description("Control time intervals between retry attempts.").Advanced(),
 			service.NewInterpolatedStringField(oskFieldTimestamp).
-				Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
+				Description(kafkaOutputTimestampDescription).
 				Example(`${! timestamp_unix() }`).
 				Example(`${! metadata("kafka_timestamp_unix") }`).
 				Optional().
 				Advanced().
 				Deprecated(),
 			service.NewInterpolatedStringField(oskFieldTimestampMs).
-				Description("An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.").
+				Description(kafkaOutputTimestampMsDescription).
 				Example(`${! timestamp_unix_milli() }`).
 				Example(`${! metadata("kafka_timestamp_ms") }`).
 				Optional().

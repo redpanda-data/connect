@@ -144,7 +144,7 @@ The maximum period of time for a message to be processed
 
 === `timestamp`
 
-An optional timestamp to set for each message. When left empty, the current timestamp is used.
+An optional timestamp to set for each message, in milliseconds since the Unix epoch. When left empty, the current timestamp is used.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -153,7 +153,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 [source,yaml]
 ----
 # Examples:
-timestamp: ${! timestamp_unix() }
+timestamp: ${! timestamp_unix_milli() }
 
 # ---
 

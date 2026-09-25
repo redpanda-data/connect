@@ -37,7 +37,7 @@ const (
 	kfcFieldRequestTimeoutOverhead = "request_timeout_overhead"
 	kfcFieldConnIdleTimeout        = "conn_idle_timeout"
 
-	kfcFieldSeedBrokersDescription = "A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses."
+	kfcFieldSeedBrokersDescription = "A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas, it is expanded into multiple addresses."
 )
 
 // FranzConnectionOptionalFields returns a slice of connection fields but
@@ -45,8 +45,8 @@ const (
 func FranzConnectionOptionalFields() []*service.ConfigField {
 	fields := FranzConnectionFields()
 	fields[0] = fields[0].
-		Description(kfcFieldSeedBrokersDescription + " When this field is omitted the global `redpanda` block will be referenced for connection details.").
-		ShortDescription("Broker addresses used to establish connections. Omit to use the global redpanda block.").
+		Description(kfcFieldSeedBrokersDescription + "\n\nIf you omit this field, this component takes its entire connection configuration, including TLS and SASL settings, from the top-level `redpanda` block, and ignores the connection fields set on this component.").
+		ShortDescription("Broker addresses used to establish connections. If omitted, the whole connection comes from the top-level redpanda block.").
 		Optional()
 	return fields
 }
@@ -62,23 +62,25 @@ func FranzConnectionFields() []*service.ConfigField {
 			Example([]string{"foo:9092", "bar:9092"}).
 			Example([]string{"foo:9092,bar:9092"}),
 		service.NewStringField(kfcFieldClientID).
-			Description("An identifier for the client connection.").
+			Description("An identifier for the client connection. This identifier appears in broker logs and metrics, which helps you identify the Redpanda Connect instance that is connecting.").
 			Default("redpanda-connect").
 			Advanced(),
 		service.NewTLSToggledField(kfcFieldTLS),
 		SASLFields(),
 		service.NewDurationField(kfcFieldMetadataMaxAge).
-			Description("The maximum age of metadata before it is refreshed. This interval also controls how frequently regex topic patterns are re-evaluated to discover new matching topics.").
+			Description("The maximum period of time after which metadata is refreshed. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.\n\nLower values provide more responsive topic and partition discovery but may increase broker load. Higher values reduce broker queries but can delay detection of topology changes.\n\nThis interval also controls how frequently regex topic patterns are re-evaluated to discover new matching topics.").
 			ShortDescription("Maximum age of metadata before it is refreshed. Also controls how often regex topic patterns are re-evaluated.").
 			Default("1m").
 			Advanced(),
 		service.NewDurationField(kfcFieldRequestTimeoutOverhead).
-			Description("The request time overhead. Uses the given time as overhead while deadlining requests. Roughly equivalent to request.timeout.ms, but grants additional time to requests that have timeout fields.").
+			Description(`Additional time to apply as overhead when calculating request deadlines. For most requests, the deadline is this overhead alone. For requests that define their own timeout field, the overhead is added on top of that timeout, which helps prevent premature timeouts.
+
+This field is roughly equivalent to Apache Kafka's ` + "`" + `request.timeout.ms` + "`" + ` parameter, but grants extra time to requests that have timeout fields.`).
 			ShortDescription("Additional time granted when deadlining requests. Roughly equivalent to request.timeout.ms.").
 			Default("10s").
 			Advanced(),
 		service.NewDurationField(kfcFieldConnIdleTimeout).
-			Description("The rough amount of time to allow connections to idle before they are closed.").
+			Description("The approximate maximum duration that connections can remain idle before they are automatically closed. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
 			Default("20s").
 			Advanced(),
 		netutil.DialerConfigSpec(),
