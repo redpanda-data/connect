@@ -48,7 +48,7 @@ type batchPublisher struct {
 	// abandoned. Admission is strictly ordered, so at that moment nothing
 	// after the dropped rows has been tracked. The seal guarantees nothing
 	// ever is, so no ack can persist an LSN past them before Connect
-	// rebuilds the poisoned publisher.
+	// rebuilds the poisoned publisher (see poisoned).
 	queue ticket.Lock
 	// stopping is set by the input's Close BEFORE any cancellation
 	// propagates, so sendTracked can distinguish the expected
@@ -60,10 +60,9 @@ type batchPublisher struct {
 	// flush loop's deferred batcher.Close races in-flight Publish calls
 	// otherwise, and the batcher is not goroutine-safe.
 	closed bool
-	// poisoned is set when a tracked batch could not be handed to ReadBatch:
-	// its checkpoint slot can never resolve, so this publisher can never
-	// checkpoint past it. Connect rebuilds a poisoned publisher.
-	poisoned atomic.Bool
+	// sendFailed is set when a tracked batch could not be handed to
+	// ReadBatch: its checkpoint slot can never resolve.
+	sendFailed atomic.Bool
 
 	// tableSchemas caches the computed common schema for each table. No
 	// invalidation is needed because MSSQL CDC capture instances are immutable:
@@ -115,15 +114,23 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 	return b
 }
 
-// sealQueue permanently refuses further admissions and poisons the publisher:
-// called when flushed-but-untracked rows were dropped (a failed Flush or
-// trackBatch), so no later batch can be tracked (and therefore no ack can
-// persist a position) past the dropped rows before Connect rebuilds. Safe to
-// call while holding batcherMu: the established order is batcherMu before
-// the queue lock, never the reverse.
+// sealQueue permanently refuses further admissions: called when
+// flushed-but-untracked rows were dropped (a failed Flush or trackBatch), so
+// no later batch can be tracked (and therefore no ack can persist a position)
+// past the dropped rows before Connect rebuilds. The seal also makes
+// poisoned true, so a drop path does not set a separate flag. Safe to call
+// while holding batcherMu: the established order is batcherMu before the
+// queue lock, never the reverse.
 func (b *batchPublisher) sealQueue() {
 	b.queue.Seal()
-	b.poisoned.Store(true)
+}
+
+// poisoned reports whether this publisher can never checkpoint again, so
+// Connect must rebuild it. This is true when rows were dropped (the flush
+// queue is sealed) or when a checkpoint slot can never resolve (a failed
+// send).
+func (b *batchPublisher) poisoned() bool {
+	return b.queue.Sealed() || b.sendFailed.Load()
 }
 
 // loop creates a long-running process that periodically flushes batches by configured interval.
@@ -359,12 +366,6 @@ type trackedBatch struct {
 // through the empty skip after admission.
 func (b *batchPublisher) dispatch(ctx context.Context, tkt uint64, batch service.MessageBatch, checkpointLSN []byte) error {
 	if err := b.queue.Acquire(ctx, tkt, len(batch) > 0); err != nil {
-		if len(batch) > 0 {
-			// These rows are dropped: either the abandon sealed the queue, or
-			// an earlier seal refused them. Nothing can be tracked past them,
-			// so Connect must rebuild.
-			b.poisoned.Store(true)
-		}
 		if errors.Is(err, ticket.ErrSealed) {
 			return fmt.Errorf("publisher flush queue sealed after an abandoned batch; reconnecting rebuilds the publisher: %w", err)
 		}
@@ -442,8 +443,8 @@ func (b *batchPublisher) trackBatch(ctx context.Context, batch service.MessageBa
 
 // sendTracked hands a tracked batch to ReadBatch. Must be called by the
 // admitted ticket holder, never under batcherMu: the send blocks until
-// consumed. A failed send releases the batch's snapshot-gate slot and poisons
-// the publisher.
+// consumed. A failed send releases the batch's snapshot-gate slot and sets
+// sendFailed, which poisons the publisher.
 func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch) error {
 	select {
 	case b.msgChan <- tracked.msgs:
@@ -453,8 +454,8 @@ func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch)
 			b.snapshotAckWG.Done()
 		}
 		// The batch's checkpoint slot is registered but its ackFn will never
-		// run, so the tracker is permanently pinned before this batch: mark
-		// the publisher poisoned so Connect rebuilds it with a fresh tracker.
+		// run, so the tracker is permanently pinned before this batch: set
+		// sendFailed so Connect rebuilds the publisher with a fresh tracker.
 		// Resolving the slot here instead would be unsafe - another flusher
 		// may already have delivered a later-tracked batch, and its ack would
 		// then persist an LSN past these undelivered rows.
@@ -465,7 +466,7 @@ func (b *batchPublisher) sendTracked(ctx context.Context, tracked *trackedBatch)
 		} else {
 			b.log.Warnf("Batch of %d messages could not be handed to the pipeline; the publisher is marked for rebuild and its rows re-read from the last durable LSN on reconnect", len(tracked.msgs.msg))
 		}
-		b.poisoned.Store(true)
+		b.sendFailed.Store(true)
 		return ctx.Err()
 	}
 }

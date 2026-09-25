@@ -722,7 +722,7 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 	// The abandon dropped rows: the queue must be sealed and the publisher
 	// poisoned so nothing can ever be tracked (and persisted) past them from
 	// this generation.
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"abandoning a flushed-but-untracked batch must poison the publisher")
 	laterErr := func() error {
 		if err := publisher.Publish(ctx, streamingEvent("00000005", "00000005")); err != nil {
@@ -774,7 +774,7 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 	cancelTrack()
 	require.Error(t, <-parked)
 
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"a failed Track stranded flushed-but-untracked rows; the publisher must be marked for rebuild")
 	laterErr := func() error {
 		if err := publisher.Publish(ctx, streamingEvent("00000005", "00000005")); err != nil {
@@ -860,7 +860,7 @@ func TestFailedSendPoisonsPublisher(t *testing.T) {
 
 	err := publisher.Publish(sendCtx, streamingEvent("00000001", "00000001"))
 	require.ErrorIs(t, err, context.Canceled)
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"a failed send orphans its tracker slot; the publisher must be marked for rebuild")
 }
 
