@@ -338,7 +338,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, lm.processRedoEvent); err != nil {
+	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, len(logFiles), lm.processRedoEvent); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
 			// Resume just before the last processed SCN rather than from the start
@@ -995,8 +995,9 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 
 // queryLogMinerContents streams the rows in (startSCN, endSCN] to processEvent.
 // lastSCN is the SCN of the last event processed, and is returned alongside
-// any error so a caller can resume from where the query stopped.
-func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, processEvent func(context.Context, *sqlredo.RedoEvent) error) (lastSCN uint64, err error) {
+// any error so a caller can resume from where the query stopped. selectedFileCount
+// is only used for logging, under WindowStrategyRedoVolume.
+func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, selectedFileCount int, processEvent func(context.Context, *sqlredo.RedoEvent) error) (lastSCN uint64, err error) {
 	if len(lm.tables) == 0 {
 		return lastSCN, nil
 	}
@@ -1004,7 +1005,8 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	// Use the pre-built query from initialization
 	switch lm.cfg.WindowStrategy {
 	case WindowStrategyRedoVolume:
-		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d, redo_volume budget=%d files)", startSCN, endSCN, lm.redoVolume.selector.count)
+		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d, redo_volume budget=%d x %d bytes per thread, %d files selected)",
+			startSCN, endSCN, lm.redoVolume.selector.count, lm.redoVolume.maxRedoLogSizeInBytes, selectedFileCount)
 	default:
 		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
 	}
