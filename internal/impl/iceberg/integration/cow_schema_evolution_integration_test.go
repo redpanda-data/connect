@@ -38,8 +38,9 @@ import (
 //   - zero delete files and the mutation committed as an overwrite.
 func TestCOWSchemaEvolutionIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const ns, tbl = "cow_evo_ns", "cow_evo_test"
 	infra.CreateNamespace(t, ns)
