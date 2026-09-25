@@ -303,6 +303,13 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN, logFiles); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeMissingLogFile {
+			var reduceWindowHint string
+			switch lm.cfg.WindowStrategy {
+			case WindowStrategyRedoVolume:
+				reduceWindowHint = fmt.Sprintf("Reduce logminer.redo_volume_min / logminer.redo_volume_growth_max (current budget: %d x %d bytes per thread)", lm.redoVolume.selector.count, lm.redoVolume.maxRedoLogSizeInBytes)
+			default:
+				reduceWindowHint = fmt.Sprintf("Reduce logminer.scn_window_size (current: %d SCN units)", lm.cfg.SCNWindowSize)
+			}
 			//nolint:staticcheck
 			return false, fmt.Errorf("preparing logs and starting session at position %d: %w\n\n"+
 				"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
@@ -315,7 +322,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"1. Increase Oracle's archived log retention using RMAN:\n"+
 				"   CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;\n\n"+
 				"2. Improve processing performance:\n"+
-				"   - Reduce logminer.scn_window_size (current: %d SCN units) to process smaller windows per cycle\n"+
+				"   - %s to process smaller windows per cycle\n"+
 				"   - Decrease logminer.backoff_interval (current: %v)\n"+
 				"   - Increase input batching.count for better throughput\n"+
 				"   - Use faster output (e.g., drop: {} for benchmarking)\n\n"+
@@ -327,7 +334,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"   - This loses events between the last checkpoint and the restart. To avoid that, delete the\n"+
 				"     checkpoint and set snapshot_mode to snapshot_and_stream at the same time — snapshot_mode\n"+
 				"     alone has no effect, since a checkpoint that is still present skips snapshotting entirely.",
-				lm.currentSCN, err, lm.cfg.SCNWindowSize, lm.cfg.MiningBackoffInterval)
+				lm.currentSCN, err, reduceWindowHint, lm.cfg.MiningBackoffInterval)
 		}
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
 			lm.log.Debugf("ORA-01368: redo log sequence recycled before session could start (SCN range %d–%d); the log will be available as an archived log on next cycle", lm.currentSCN, endSCN)
