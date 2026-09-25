@@ -109,7 +109,7 @@ func TestRebuildPublisherIfPoisoned(t *testing.T) {
 	require.NoError(t, <-oldPublished)
 
 	// Poison and rebuild.
-	old.poisoned.Store(true)
+	old.sendFailed.Store(true)
 	rebuilt, err := i.rebuildPublisherIfPoisoned()
 	require.NoError(t, err)
 	require.NotSame(t, old, rebuilt, "a poisoned publisher must be replaced")
@@ -137,6 +137,19 @@ func TestRebuildPublisherIfPoisoned(t *testing.T) {
 	}
 }
 
+// TestRebuildPublisherIfSealed proves that a sealed flush queue alone makes
+// the publisher poisoned. A seal means that rows were dropped, so a drop path
+// must not also have to set a poisoned flag.
+func TestRebuildPublisherIfSealed(t *testing.T) {
+	i, _ := newTestInput(t)
+	old := i.publisher.Load()
+
+	old.queue.Seal()
+	rebuilt, err := i.rebuildPublisherIfPoisoned()
+	require.NoError(t, err)
+	require.NotSame(t, old, rebuilt, "a publisher with a sealed flush queue must be replaced")
+}
+
 // TestReadBatchReconnectsOnPoisonedLoopDeath encodes the silent-stall
 // finding: with period-only batching the timed-flush loop is the only
 // flusher, and when it dies after poisoning the publisher nothing else can
@@ -153,7 +166,7 @@ func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
 			i.stopSig.TriggerHasStopped()
 		}()
 		pub := i.publisher.Load()
-		pub.poisoned.Store(true)
+		pub.sendFailed.Store(true)
 		pub.shutSig.TriggerSoftStop()
 		require.Eventually(t, func() bool {
 			select {
@@ -180,10 +193,9 @@ func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
 		// tracked, undelivered, and its owner's context is live.
 		flushed := make(chan error, 1)
 		go func() { flushed <- pub.Publish(t.Context(), streamingEvent("00000010", "00000010")) }()
+		// Ticket 0 is admitted once its batch of 1 is tracked.
 		require.Eventually(t, func() bool {
-			pub.batcherMu.Lock()
-			defer pub.batcherMu.Unlock()
-			return pub.nextTicket == 1
+			return pub.checkpoint.Pending() == 1
 		}, 5*time.Second, time.Millisecond)
 
 		// Deliberate, non-poisoned stop (input Close): the loop exits.
