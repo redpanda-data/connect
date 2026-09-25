@@ -21,16 +21,10 @@ import (
 // the currently open redo threads.
 type logCountStrategy struct {
 	selector *logFileSelector
-
-	// maxRedoLogSizeInBytes is the online redo log size the log_count window
-	// strategy's byte budget is denominated in (see logFileSelector). Fetched
-	// once, lazily, on first use - 0 means "not yet fetched" (this value can
-	// never legitimately be 0 on a running database, mirroring the same "0 is
-	// never real" convention as logFileSelector.prevUpperBoundSCN).
+	// maxRedoLogSizeInBytes is fetched once, lazily; 0 means "not yet fetched" (never legitimately 0 on a running database).
 	maxRedoLogSizeInBytes uint64
-
-	maxRedoSizeStmt *sql.Stmt
-	openThreadsStmt *sql.Stmt
+	maxRedoSizeStmt       *sql.Stmt
+	openThreadsStmt       *sql.Stmt
 }
 
 func newLogCountStrategy(minCount, growthMax int) *logCountStrategy {

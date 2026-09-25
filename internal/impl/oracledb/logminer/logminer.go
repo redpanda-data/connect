@@ -1110,14 +1110,13 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 }
 
 const (
-	logStatusCurrent = "CURRENT"
-
 	// logStatusArchived is the Status value GetLogsBySCNRange hardcodes for
 	// every archive log record (see the query below). Oracle's V$LOG.STATUS
 	// values (CURRENT/ACTIVE/INACTIVE/...) never take this value, so it
 	// reliably distinguishes a fully-archived, immutable copy from an online
 	// (still mutable) one, without depending on the Type/IsCurrent fields.
 	logStatusArchived = "ARCHIVED"
+	logStatusCurrent  = "CURRENT"
 )
 
 // LogFile represents a redo or archive log file
