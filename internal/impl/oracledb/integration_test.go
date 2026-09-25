@@ -1255,7 +1255,7 @@ oracledb_cdc:
 		}
 	}
 
-	const want = 50
+	const want = 5000
 
 	t.Run("Streaming insert changes across a forced log switch", func(t *testing.T) {
 		for range want / 2 {
