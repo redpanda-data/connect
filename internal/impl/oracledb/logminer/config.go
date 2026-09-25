@@ -48,6 +48,13 @@ var (
 	// budget can grow to under the WindowStrategyRedoVolume window strategy,
 	// once forward progress stalls.
 	DefaultRedoVolumeGrowthMax = 4
+	// MinRedoVolumeGrowthCeiling is the smallest growth ceiling that avoids a
+	// permanent stall: a budget of 1 file always reselects its own single
+	// file forever, since that file's own boundary re-qualifies it next
+	// cycle, so growth is its only way to make progress. Enforced both by
+	// config validation (RedoVolumeGrowthMax) and by logFileSelector's own
+	// ceiling floor, so the two can't drift apart.
+	MinRedoVolumeGrowthCeiling = 2
 )
 
 // WindowStrategy selects how the SCN range mined per LogMiner cycle is sized.

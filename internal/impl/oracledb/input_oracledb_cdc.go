@@ -991,8 +991,8 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 			if cfg.RedoVolumeGrowthMax < cfg.RedoVolumeMin {
 				return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldRedoVolumeGrowthMax, cfg.RedoVolumeGrowthMax, ociFieldRedoVolumeMin, cfg.RedoVolumeMin)
 			}
-			if cfg.RedoVolumeGrowthMax < 2 {
-				return nil, fmt.Errorf("logminer.%s (%d) must be at least 2, since 1 can never grow past a single reselected file, permanently stalling progress", ociFieldRedoVolumeGrowthMax, cfg.RedoVolumeGrowthMax)
+			if cfg.RedoVolumeGrowthMax < logminer.MinRedoVolumeGrowthCeiling {
+				return nil, fmt.Errorf("logminer.%s (%d) must be at least %d, since 1 can never grow past a single reselected file, permanently stalling progress", ociFieldRedoVolumeGrowthMax, cfg.RedoVolumeGrowthMax, logminer.MinRedoVolumeGrowthCeiling)
 			}
 			// ensure scn_window configs aren't set
 			if scnWindowSize, err := lmConf.FieldInt(ociFieldSCNWindowSize); err != nil {
