@@ -961,7 +961,7 @@ oracledb_cdc:
   connection_string: ` + connStr + `
   snapshot_mode: none
   logminer:
-	scn_window_size: 20000
+    scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
     max_session_age: 5s
