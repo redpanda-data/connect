@@ -1,0 +1,19 @@
+outputs:
+  label: ""
+  gcp_pubsub:
+    project: "" # No default (required)
+    credentials_json: ""
+    topic: "" # No default (required)
+    endpoint: ""
+    max_in_flight: 64
+    count_threshold: 100
+    delay_threshold: 10ms
+    byte_threshold: 1000000
+    metadata:
+      exclude_prefixes: []
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

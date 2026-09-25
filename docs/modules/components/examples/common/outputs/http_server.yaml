@@ -1,0 +1,9 @@
+outputs:
+  label: ""
+  http_server:
+    address: ""
+    path: /get
+    stream_path: /get/stream
+    ws_path: /get/ws
+    allowed_verbs:
+      - "GET"

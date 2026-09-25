@@ -1,0 +1,19 @@
+inputs:
+  label: ""
+  redis_list:
+    url: "" # No default (required)
+    kind: simple
+    master: ""
+    client_name: redpanda-connect
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    key: "" # No default (required)
+    auto_replay_nacks: true
+    max_in_flight: 0
+    timeout: 5s
+    command: blpop

@@ -1,0 +1,12 @@
+inputs:
+  label: ""
+  salesforce:
+    org_url: "" # No default (required)
+    client_id: "" # No default (required)
+    client_secret: "" # No default (required)
+    api_version: v65.0
+    object: "" # No default (required)
+    columns: [] # No default (required)
+    where: "" # No default (optional)
+    args_mapping: "" # No default (optional)
+    auto_replay_nacks: true

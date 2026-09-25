@@ -1,0 +1,18 @@
+outputs:
+  label: ""
+  arc:
+    base_url: "" # No default (required)
+    timeout: 5s
+    token: "" # No default (optional)
+    database: default
+    measurement: "" # No default (required)
+    format: columnar
+    tags_mapping: "" # No default (optional)
+    compression: zstd
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

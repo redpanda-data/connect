@@ -1,0 +1,4 @@
+outputs:
+  label: ""
+  websocket:
+    url: "" # No default (required)

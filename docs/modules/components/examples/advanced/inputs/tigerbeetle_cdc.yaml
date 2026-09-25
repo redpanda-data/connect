@@ -1,0 +1,12 @@
+inputs:
+  label: ""
+  tigerbeetle_cdc:
+    cluster_id: "" # No default (required)
+    addresses: [] # No default (required)
+    progress_cache: "" # No default (required)
+    rate_limit: ""
+    event_count_max: 2730
+    idle_interval_ms: 1000
+    timestamp_initial: ""
+    timeout_seconds: 15
+    auto_replay_nacks: true

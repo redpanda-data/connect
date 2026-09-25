@@ -1,0 +1,4 @@
+processors:
+  label: ""
+  unarchive:
+    format: "" # No default (required)

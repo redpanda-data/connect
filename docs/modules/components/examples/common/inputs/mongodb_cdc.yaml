@@ -1,0 +1,17 @@
+inputs:
+  label: ""
+  mongodb_cdc:
+    url: "" # No default (required)
+    database: "" # No default (required)
+    username: ""
+    password: ""
+    collections: [] # No default (required)
+    checkpoint_key: mongodb_cdc_checkpoint
+    checkpoint_cache: "" # No default (required)
+    checkpoint_interval: 5s
+    checkpoint_limit: 1000
+    read_batch_size: 1000
+    read_max_wait: 1s
+    stream_snapshot: false
+    snapshot_parallelism: 1
+    auto_replay_nacks: true

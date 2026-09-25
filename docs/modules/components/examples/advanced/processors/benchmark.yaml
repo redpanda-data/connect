@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  benchmark:
+    interval: 5s
+    count_bytes: true

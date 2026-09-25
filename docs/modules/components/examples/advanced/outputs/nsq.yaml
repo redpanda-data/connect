@@ -1,0 +1,14 @@
+outputs:
+  label: ""
+  nsq:
+    nsqd_tcp_address: "" # No default (required)
+    topic: "" # No default (required)
+    user_agent: "" # No default (optional)
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    max_in_flight: 64

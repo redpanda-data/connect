@@ -1,0 +1,13 @@
+inputs:
+  label: ""
+  mongodb:
+    url: "" # No default (required)
+    database: "" # No default (required)
+    username: ""
+    password: ""
+    collection: "" # No default (required)
+    query: "" # No default (required)
+    auto_replay_nacks: true
+    batch_size: "" # No default (optional)
+    sort: "" # No default (optional)
+    limit: "" # No default (optional)

@@ -1,0 +1,10 @@
+inputs:
+  label: ""
+  nsq:
+    nsqd_tcp_addresses: [] # No default (required)
+    lookupd_http_addresses: [] # No default (required)
+    topic: "" # No default (required)
+    channel: "" # No default (required)
+    user_agent: "" # No default (optional)
+    max_in_flight: 100
+    max_attempts: 5

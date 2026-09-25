@@ -1,0 +1,10 @@
+outputs:
+  label: ""
+  amqp_0_9:
+    urls: [] # No default (required)
+    exchange: "" # No default (required)
+    key: ""
+    type: ""
+    metadata:
+      exclude_prefixes: []
+    max_in_flight: 64

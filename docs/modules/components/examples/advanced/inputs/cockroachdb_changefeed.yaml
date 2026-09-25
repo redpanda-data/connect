@@ -1,0 +1,14 @@
+inputs:
+  label: ""
+  cockroachdb_changefeed:
+    dsn: "" # No default (required)
+    tls:
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    tables: [] # No default (required)
+    cursor_cache: "" # No default (optional)
+    options: [] # No default (optional)
+    auto_replay_nacks: true

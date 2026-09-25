@@ -1,0 +1,20 @@
+outputs:
+  label: ""
+  azure_table_storage:
+    storage_account: ""
+    storage_access_key: ""
+    storage_connection_string: ""
+    storage_sas_token: ""
+    table_name: "" # No default (required)
+    partition_key: ""
+    row_key: ""
+    properties: {}
+    transaction_type: INSERT
+    max_in_flight: 64
+    timeout: 5s
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

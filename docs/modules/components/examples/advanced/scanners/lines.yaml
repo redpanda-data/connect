@@ -1,0 +1,5 @@
+scanners:
+  lines:
+    custom_delimiter: "" # No default (optional)
+    max_buffer_size: 65536
+    omit_empty: false

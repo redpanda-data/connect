@@ -1,0 +1,9 @@
+processors:
+  label: ""
+  grok:
+    expressions: [] # No default (required)
+    pattern_definitions: {}
+    pattern_paths: []
+    named_captures_only: true
+    use_default_patterns: true
+    remove_empty_values: true

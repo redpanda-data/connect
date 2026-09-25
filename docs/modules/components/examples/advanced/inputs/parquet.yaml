@@ -1,0 +1,6 @@
+inputs:
+  label: ""
+  parquet:
+    paths: [] # No default (required)
+    batch_count: 1
+    auto_replay_nacks: true

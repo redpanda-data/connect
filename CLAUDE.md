@@ -93,6 +93,8 @@ task build:clean                  # Clean build artifacts
 task docs                         # Generate documentation and validate examples
 ```
 
+Generated reference docs land in `docs/modules/`, which the docs site merges with rp-connect-docs. Never edit them by hand; see `docs/README.md`.
+
 ### Running Locally
 ```bash
 task run                          # Run with default config (config/dev.yaml)

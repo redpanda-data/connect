@@ -1,0 +1,16 @@
+outputs:
+  label: ""
+  sftp:
+    address: "" # No default (required)
+    connection_timeout: 30s
+    credentials:
+      username: ""
+      password: ""
+      host_public_key_file: "" # No default (optional)
+      host_public_key: "" # No default (optional)
+      private_key_file: "" # No default (optional)
+      private_key: "" # No default (optional)
+      private_key_pass: ""
+    path: "" # No default (required)
+    codec: all-bytes
+    max_in_flight: 64

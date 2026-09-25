@@ -1,0 +1,41 @@
+inputs:
+  label: ""
+  aws_dynamodb_cdc:
+    tables: []
+    table_discovery_mode: single
+    table_tag_filter: ""
+    table_discovery_interval: 5m
+    checkpoint_table: redpanda_dynamodb_checkpoints
+    checkpoint_namespace: ""
+    global_table: false
+    global_table_replicas: []
+    batch_size: 1000
+    poll_interval: 1s
+    start_from: trim_horizon
+    checkpoint_limit: 1000
+    max_tracked_shards: 10000
+    auto_replay_nacks: true
+    throttle_backoff: 100ms
+    snapshot_mode: none
+    snapshot_segments: 1
+    snapshot_batch_size: 100
+    snapshot_throttle: 100ms
+    snapshot_deduplicate: true
+    snapshot_buffer_size: 100000
+    region: "" # No default (optional)
+    endpoint: "" # No default (optional)
+    tcp:
+      connect_timeout: 0s
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
+    credentials:
+      profile: "" # No default (optional)
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
+      from_ec2_role: "" # No default (optional)
+      role: "" # No default (optional)
+      role_external_id: "" # No default (optional)

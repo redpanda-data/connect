@@ -1,0 +1,23 @@
+inputs:
+  label: ""
+  salesforce_cdc:
+    org_url: "" # No default (required)
+    client_id: "" # No default (required)
+    client_secret: "" # No default (required)
+    api_version: v65.0
+    topics: [] # No default (required)
+    stream_snapshot: true
+    replay_preset: latest
+    snapshot_max_batch_size: 2000
+    stream_batch_size: 100
+    max_parallel_snapshot_objects: 1
+    checkpoint_cache: "" # No default (required)
+    checkpoint_cache_key: salesforce_cdc
+    checkpoint_limit: 1024
+    auto_replay_nacks: true
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

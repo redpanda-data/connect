@@ -1,0 +1,3 @@
+scanners:
+  chunker:
+    size: "" # No default (required)

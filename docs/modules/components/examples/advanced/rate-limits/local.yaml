@@ -1,0 +1,4 @@
+rate-limits:
+  local:
+    count: 1000
+    interval: 1s

@@ -1,0 +1,6 @@
+inputs:
+  label: ""
+  otlp_http:
+    encoding: json
+    address: 0.0.0.0:4318
+    rate_limit: ""

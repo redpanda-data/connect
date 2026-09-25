@@ -1,0 +1,18 @@
+processors:
+  label: ""
+  text_chunker:
+    strategy: "" # No default (required)
+    chunk_size: 512
+    chunk_overlap: 100
+    separators:
+      - "\n\n"
+      - "\n"
+      - " "
+      - ""
+    length_measure: runes
+    token_encoding: "" # No default (optional)
+    allowed_special: []
+    disallowed_special:
+      - "all"
+    include_code_blocks: false
+    keep_reference_links: false

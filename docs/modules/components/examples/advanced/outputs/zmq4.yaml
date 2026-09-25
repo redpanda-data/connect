@@ -1,0 +1,8 @@
+outputs:
+  label: ""
+  zmq4:
+    urls: [] # No default (required)
+    bind: true
+    socket_type: "" # No default (required)
+    high_water_mark: 0
+    poll_timeout: 5s

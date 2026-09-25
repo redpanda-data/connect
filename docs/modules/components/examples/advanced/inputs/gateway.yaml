@@ -1,0 +1,15 @@
+inputs:
+  label: ""
+  gateway:
+    path: /
+    rate_limit: ""
+    sync_response:
+      status: 200
+      headers:
+        Content-Type: "application/octet-stream"
+      metadata_headers:
+        include_prefixes: []
+        include_patterns: []
+    tcp:
+      reuse_addr: false
+      reuse_port: false

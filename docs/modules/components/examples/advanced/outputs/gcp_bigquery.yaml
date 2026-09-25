@@ -1,0 +1,29 @@
+outputs:
+  label: ""
+  gcp_bigquery:
+    project: ""
+    job_project: ""
+    dataset: "" # No default (required)
+    table: "" # No default (required)
+    format: NEWLINE_DELIMITED_JSON
+    max_in_flight: 64
+    write_disposition: WRITE_APPEND
+    create_disposition: CREATE_IF_NEEDED
+    ignore_unknown_values: false
+    max_bad_records: 0
+    auto_detect: false
+    job_labels: {}
+    credentials_json: ""
+    csv:
+      header: []
+      field_delimiter: ,
+      allow_jagged_rows: false
+      allow_quoted_newlines: false
+      encoding: UTF-8
+      skip_leading_rows: 1
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  awk:
+    codec: "" # No default (required)
+    program: "" # No default (required)

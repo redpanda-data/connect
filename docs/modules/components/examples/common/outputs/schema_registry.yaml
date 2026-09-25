@@ -1,0 +1,6 @@
+outputs:
+  label: ""
+  schema_registry:
+    url: "" # No default (required)
+    subject: "" # No default (required)
+    max_in_flight: 64

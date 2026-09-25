@@ -1,0 +1,24 @@
+outputs:
+  label: ""
+  mongodb:
+    url: "" # No default (required)
+    database: "" # No default (required)
+    username: ""
+    password: ""
+    collection: "" # No default (required)
+    operation: update-one
+    write_concern:
+      w: majority
+      j: false
+      w_timeout: ""
+    document_map: ""
+    filter_map: ""
+    hint_map: ""
+    upsert: false
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

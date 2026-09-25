@@ -1,0 +1,24 @@
+inputs:
+  label: ""
+  redpanda_common:
+    topics: [] # No default (optional)
+    regexp_topics_include: [] # No default (optional)
+    regexp_topics_exclude: [] # No default (optional)
+    rack_id: ""
+    instance_id: ""
+    rebalance_timeout: 45s
+    session_timeout: 1m
+    heartbeat_interval: 3s
+    start_offset: earliest
+    fetch_max_bytes: 50MiB
+    fetch_max_wait: 5s
+    fetch_min_bytes: 1B
+    fetch_max_partition_bytes: 1MiB
+    transaction_isolation_level: read_uncommitted
+    consumer_group: "" # No default (optional)
+    commit_period: 5s
+    partition_buffer_bytes: 1MB
+    topic_lag_refresh_period: 5s
+    max_yield_batch_bytes: 32KB
+    auto_replay_nacks: true
+    timely_nacks_maximum_wait: "" # No default (optional)

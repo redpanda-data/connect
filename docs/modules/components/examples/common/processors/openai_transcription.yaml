@@ -1,0 +1,7 @@
+processors:
+  label: ""
+  openai_transcription:
+    server_address: https://api.openai.com/v1
+    api_key: "" # No default (required)
+    model: "" # No default (required)
+    file: "" # No default (required)

@@ -1,0 +1,8 @@
+inputs:
+  label: ""
+  csv:
+    paths: [] # No default (required)
+    parse_header_row: true
+    delimiter: ,
+    lazy_quotes: false
+    auto_replay_nacks: true

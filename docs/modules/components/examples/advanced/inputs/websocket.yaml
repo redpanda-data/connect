@@ -1,0 +1,34 @@
+inputs:
+  label: ""
+  websocket:
+    url: "" # No default (required)
+    proxy_url: "" # No default (optional)
+    open_message: "" # No default (optional)
+    open_message_type: binary
+    max_message_size: 33554432
+    auto_replay_nacks: true
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    connection:
+      max_retries: "" # No default (optional)
+    oauth:
+      enabled: false
+      consumer_key: ""
+      consumer_secret: ""
+      access_token: ""
+      access_token_secret: ""
+    basic_auth:
+      enabled: false
+      username: ""
+      password: ""
+    jwt:
+      enabled: false
+      private_key_file: ""
+      signing_method: ""
+      claims: {}
+      headers: {}

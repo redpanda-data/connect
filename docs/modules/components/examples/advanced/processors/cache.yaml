@@ -1,0 +1,8 @@
+processors:
+  label: ""
+  cache:
+    resource: "" # No default (required)
+    operator: "" # No default (required)
+    key: "" # No default (required)
+    value: "" # No default (optional)
+    ttl: "" # No default (optional)

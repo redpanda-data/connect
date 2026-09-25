@@ -1,0 +1,6 @@
+outputs:
+  label: ""
+  dynamic:
+    outputs: {}
+    prefix: ""
+    bind_http: false

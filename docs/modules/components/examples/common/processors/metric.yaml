@@ -1,0 +1,7 @@
+processors:
+  label: ""
+  metric:
+    type: "" # No default (required)
+    name: "" # No default (required)
+    labels: "" # No default (optional)
+    value: ""

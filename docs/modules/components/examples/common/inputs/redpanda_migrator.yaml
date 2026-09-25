@@ -1,0 +1,36 @@
+inputs:
+  label: ""
+  redpanda_migrator:
+    seed_brokers: [] # No default (required)
+    topics: [] # No default (optional)
+    regexp_topics_include: [] # No default (optional)
+    regexp_topics_exclude: [] # No default (optional)
+    transaction_isolation_level: read_uncommitted
+    consumer_group: "" # No default (optional)
+    schema_registry:
+      url: "" # No default (required)
+      timeout: 5s
+      tls:
+        enabled: false
+        skip_cert_verify: false
+        enable_renegotiation: false
+        root_cas: ""
+        root_cas_file: ""
+        client_certs: []
+      oauth:
+        enabled: false
+        consumer_key: ""
+        consumer_secret: ""
+        access_token: ""
+        access_token_secret: ""
+      basic_auth:
+        enabled: false
+        username: ""
+        password: ""
+      jwt:
+        enabled: false
+        private_key_file: ""
+        signing_method: ""
+        claims: {}
+        headers: {}
+    auto_replay_nacks: true

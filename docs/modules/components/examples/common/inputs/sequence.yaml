@@ -1,0 +1,4 @@
+inputs:
+  label: ""
+  sequence:
+    inputs: [] # No default (required)

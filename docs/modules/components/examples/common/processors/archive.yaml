@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  archive:
+    format: "" # No default (required)
+    path: ""

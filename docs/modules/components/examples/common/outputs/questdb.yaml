@@ -1,0 +1,22 @@
+outputs:
+  label: ""
+  questdb:
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    address: "" # No default (required)
+    username: "" # No default (optional)
+    password: "" # No default (optional)
+    token: "" # No default (optional)
+    table: "" # No default (required)
+    designated_timestamp_field: "" # No default (optional)
+    designated_timestamp_unit: auto
+    timestamp_string_fields: [] # No default (optional)
+    timestamp_string_format: Jan _2 15:04:05.000000Z0700
+    symbols: [] # No default (optional)
+    doubles: [] # No default (optional)
+    error_on_empty_messages: false

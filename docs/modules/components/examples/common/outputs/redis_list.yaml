@@ -1,0 +1,12 @@
+outputs:
+  label: ""
+  redis_list:
+    url: "" # No default (required)
+    key: "" # No default (required)
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

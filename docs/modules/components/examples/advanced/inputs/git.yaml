@@ -1,0 +1,22 @@
+inputs:
+  label: ""
+  git:
+    repository_url: "" # No default (required)
+    branch: main
+    poll_interval: 10s
+    include_patterns: []
+    exclude_patterns: []
+    max_file_size: 10485760
+    checkpoint_cache: "" # No default (optional)
+    checkpoint_key: git_last_commit
+    auth:
+      basic:
+        username: ""
+        password: ""
+      ssh_key:
+        private_key_path: ""
+        private_key: ""
+        passphrase: ""
+      token:
+        value: ""
+    auto_replay_nacks: true

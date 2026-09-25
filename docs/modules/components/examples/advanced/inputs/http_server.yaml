@@ -1,0 +1,27 @@
+inputs:
+  label: ""
+  http_server:
+    address: ""
+    path: /post
+    ws_path: /post/ws
+    ws_welcome_message: ""
+    ws_rate_limit_message: ""
+    allowed_verbs:
+      - "POST"
+    timeout: 5s
+    rate_limit: ""
+    cert_file: ""
+    key_file: ""
+    cors:
+      enabled: false
+      allowed_origins: []
+    sync_response:
+      status: 200
+      headers:
+        Content-Type: "application/octet-stream"
+      metadata_headers:
+        include_prefixes: []
+        include_patterns: []
+    tcp:
+      reuse_addr: false
+      reuse_port: false

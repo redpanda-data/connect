@@ -1,0 +1,14 @@
+processors:
+  label: ""
+  ollama_embeddings:
+    model: "" # No default (required)
+    text: "" # No default (optional)
+    runner:
+      context_size: "" # No default (optional)
+      batch_size: "" # No default (optional)
+      gpu_layers: "" # No default (optional)
+      threads: "" # No default (optional)
+      use_mmap: "" # No default (optional)
+    server_address: "" # No default (optional)
+    cache_directory: "" # No default (optional)
+    download_url: "" # No default (optional)

@@ -1,0 +1,8 @@
+processors:
+  label: ""
+  jira:
+    username: "" # No default (required)
+    api_token: "" # No default (required)
+    max_results_per_page: 50
+    base_url: "" # No default (required)
+    timeout: 5s

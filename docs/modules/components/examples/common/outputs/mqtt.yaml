@@ -1,0 +1,11 @@
+outputs:
+  label: ""
+  mqtt:
+    urls: [] # No default (required)
+    client_id: ""
+    connect_timeout: 30s
+    topic: "" # No default (required)
+    qos: 1
+    write_timeout: 3s
+    retained: false
+    max_in_flight: 64

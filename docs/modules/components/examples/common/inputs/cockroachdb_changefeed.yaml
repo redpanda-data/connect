@@ -1,0 +1,7 @@
+inputs:
+  label: ""
+  cockroachdb_changefeed:
+    dsn: "" # No default (required)
+    tables: [] # No default (required)
+    cursor_cache: "" # No default (optional)
+    auto_replay_nacks: true

@@ -1,0 +1,21 @@
+inputs:
+  label: ""
+  sftp:
+    address: "" # No default (required)
+    credentials:
+      username: ""
+      password: ""
+      host_public_key_file: "" # No default (optional)
+      host_public_key: "" # No default (optional)
+      private_key_file: "" # No default (optional)
+      private_key: "" # No default (optional)
+      private_key_pass: ""
+    paths: [] # No default (required)
+    auto_replay_nacks: true
+    scanner:
+      to_the_end: {}
+    watcher:
+      enabled: false
+      minimum_age: 1s
+      poll_interval: 1s
+      cache: ""

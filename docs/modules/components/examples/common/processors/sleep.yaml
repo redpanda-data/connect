@@ -1,0 +1,4 @@
+processors:
+  label: ""
+  sleep:
+    duration: "" # No default (required)

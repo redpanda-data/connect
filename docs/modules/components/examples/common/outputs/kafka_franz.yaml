@@ -1,0 +1,17 @@
+outputs:
+  label: ""
+  kafka_franz:
+    seed_brokers: [] # No default (required)
+    topic: "" # No default (required)
+    key: "" # No default (optional)
+    partition: "" # No default (optional)
+    metadata:
+      include_prefixes: []
+      include_patterns: []
+    max_in_flight: 10
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

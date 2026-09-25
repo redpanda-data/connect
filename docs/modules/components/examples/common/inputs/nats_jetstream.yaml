@@ -1,0 +1,10 @@
+inputs:
+  label: ""
+  nats_jetstream:
+    urls: [] # No default (required)
+    queue: "" # No default (optional)
+    subject: "" # No default (optional)
+    durable: "" # No default (optional)
+    stream: "" # No default (optional)
+    bind: "" # No default (optional)
+    deliver: all

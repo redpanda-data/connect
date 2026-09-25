@@ -1,0 +1,15 @@
+outputs:
+  label: ""
+  azure_queue_storage:
+    storage_account: ""
+    storage_access_key: ""
+    storage_connection_string: ""
+    storage_sas_token: ""
+    queue_name: "" # No default (required)
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

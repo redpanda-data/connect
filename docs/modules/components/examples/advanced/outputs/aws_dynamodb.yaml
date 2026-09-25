@@ -1,0 +1,37 @@
+outputs:
+  label: ""
+  aws_dynamodb:
+    table: "" # No default (required)
+    string_columns: {}
+    json_map_columns: {}
+    ttl: ""
+    ttl_key: ""
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    region: "" # No default (optional)
+    endpoint: "" # No default (optional)
+    tcp:
+      connect_timeout: 0s
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
+    credentials:
+      profile: "" # No default (optional)
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
+      from_ec2_role: "" # No default (optional)
+      role: "" # No default (optional)
+      role_external_id: "" # No default (optional)
+    max_retries: 3
+    backoff:
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s

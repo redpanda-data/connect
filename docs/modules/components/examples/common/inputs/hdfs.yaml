@@ -1,0 +1,6 @@
+inputs:
+  label: ""
+  hdfs:
+    hosts: [] # No default (required)
+    user: ""
+    directory: "" # No default (required)

@@ -1,0 +1,32 @@
+inputs:
+  label: ""
+  nats_stream:
+    urls: [] # No default (required)
+    max_reconnects: "" # No default (optional)
+    cluster_id: "" # No default (required)
+    client_id: ""
+    queue: ""
+    subject: ""
+    durable_name: ""
+    unsubscribe_on_close: false
+    start_from_oldest: true
+    max_inflight: 1024
+    ack_wait: 30s
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    tls_handshake_first: false
+    auth:
+      nkey_file: "" # No default (optional)
+      nkey: "" # No default (optional)
+      user_credentials_file: "" # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
+      user: "" # No default (optional)
+      password: "" # No default (optional)
+      token: "" # No default (optional)
+    extract_tracing_map: "" # No default (optional)

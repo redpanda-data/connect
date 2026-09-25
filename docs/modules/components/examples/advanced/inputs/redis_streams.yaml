@@ -1,0 +1,24 @@
+inputs:
+  label: ""
+  redis_streams:
+    url: "" # No default (required)
+    kind: simple
+    master: ""
+    client_name: redpanda-connect
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    body_key: body
+    streams: [] # No default (required)
+    auto_replay_nacks: true
+    limit: 10
+    client_id: ""
+    consumer_group: ""
+    create_streams: true
+    start_from_oldest: true
+    commit_period: 1s
+    timeout: 1s

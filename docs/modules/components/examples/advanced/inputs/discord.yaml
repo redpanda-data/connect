@@ -1,0 +1,8 @@
+inputs:
+  label: ""
+  discord:
+    channel_id: "" # No default (required)
+    bot_token: "" # No default (required)
+    cache: "" # No default (required)
+    cache_key: last_message_id
+    auto_replay_nacks: true

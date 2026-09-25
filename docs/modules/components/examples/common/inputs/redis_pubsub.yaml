@@ -1,0 +1,7 @@
+inputs:
+  label: ""
+  redis_pubsub:
+    url: "" # No default (required)
+    channels: [] # No default (required)
+    use_patterns: false
+    auto_replay_nacks: true

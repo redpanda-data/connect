@@ -1,0 +1,7 @@
+buffers:
+  system_window:
+    timestamp_mapping: root = now()
+    size: "" # No default (required)
+    slide: ""
+    offset: ""
+    allowed_lateness: ""

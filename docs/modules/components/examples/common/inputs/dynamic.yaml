@@ -1,0 +1,5 @@
+inputs:
+  label: ""
+  dynamic:
+    inputs: {}
+    prefix: ""

@@ -1,0 +1,42 @@
+processors:
+  label: ""
+  schema_registry_decode:
+    avro:
+      raw_unions: "" # No default (optional)
+      preserve_logical_types: false
+      translate_kafka_connect_types: false
+      mapping: "" # No default (optional)
+      store_schema_metadata: "" # No default (optional)
+    protobuf:
+      use_proto_names: false
+      use_enum_numbers: false
+      emit_unpopulated: false
+      emit_default_values: false
+      serialize_to_json: true
+    json:
+      coerce_data: false
+    cache_duration: 10m
+    url: "" # No default (required)
+    default_schema_id: "" # No default (optional)
+    oauth:
+      enabled: false
+      consumer_key: ""
+      consumer_secret: ""
+      access_token: ""
+      access_token_secret: ""
+    basic_auth:
+      enabled: false
+      username: ""
+      password: ""
+    jwt:
+      enabled: false
+      private_key_file: ""
+      signing_method: ""
+      claims: {}
+      headers: {}
+    tls:
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []

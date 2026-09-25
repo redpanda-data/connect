@@ -1,0 +1,66 @@
+outputs:
+  label: ""
+  iceberg:
+    catalog:
+      url: "" # No default (required)
+      warehouse: "" # No default (optional)
+      auth:
+        oauth2:
+          server_uri: /v1/oauth/tokens
+          client_id: "" # No default (required)
+          client_secret: "" # No default (required)
+          scope: "" # No default (optional)
+        bearer: "" # No default (optional)
+        aws_sigv4:
+          region: "" # No default (optional)
+          endpoint: "" # No default (optional)
+          tcp:
+            connect_timeout: 0s
+            keep_alive:
+              idle: 15s
+              interval: 15s
+              count: 9
+            tcp_user_timeout: 0s
+          credentials:
+            profile: "" # No default (optional)
+            id: "" # No default (optional)
+            secret: "" # No default (optional)
+            token: "" # No default (optional)
+            from_ec2_role: "" # No default (optional)
+            role: "" # No default (optional)
+            role_external_id: "" # No default (optional)
+          service: "" # No default (optional)
+      headers: "" # No default (optional)
+      tls_skip_verify: false
+    namespace: "" # No default (required)
+    table: "" # No default (required)
+    storage:
+      aws_s3:
+        bucket: "" # No default (required)
+        region: "" # No default (optional)
+        endpoint: "" # No default (optional)
+        force_path_style_urls: false
+        credentials:
+          id: "" # No default (optional)
+          secret: "" # No default (optional)
+          token: "" # No default (optional)
+      gcp_cloud_storage:
+        bucket: "" # No default (required)
+        endpoint: "" # No default (optional)
+        credentials_type: "" # No default (optional)
+        credentials_file: "" # No default (optional)
+        credentials_json: "" # No default (optional)
+      azure_blob_storage:
+        storage_account: "" # No default (required)
+        container: "" # No default (required)
+        endpoint: "" # No default (optional)
+        storage_sas_token: "" # No default (optional)
+        storage_connection_string: "" # No default (optional)
+        storage_access_key: "" # No default (optional)
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    max_in_flight: 4

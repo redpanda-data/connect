@@ -1,0 +1,10 @@
+inputs:
+  label: ""
+  aws_cloudwatch_logs:
+    log_group_name: "" # No default (required)
+    log_stream_names: [] # No default (optional)
+    log_stream_prefix: "" # No default (optional)
+    filter_pattern: "" # No default (optional)
+    start_time: "" # No default (optional)
+    poll_interval: 5s
+    auto_replay_nacks: true

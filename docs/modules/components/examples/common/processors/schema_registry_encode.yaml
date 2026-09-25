@@ -1,0 +1,13 @@
+processors:
+  label: ""
+  schema_registry_encode:
+    url: "" # No default (required)
+    subject: "" # No default (required)
+    refresh_period: 10m
+    schema_metadata: ""
+    format: "" # No default (optional)
+    avro:
+      raw_json: "" # No default (optional)
+      input_encoding: auto
+      record_name: ""
+      namespace: ""

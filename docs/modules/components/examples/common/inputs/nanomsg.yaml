@@ -1,0 +1,8 @@
+inputs:
+  label: ""
+  nanomsg:
+    urls: [] # No default (required)
+    bind: true
+    socket_type: PULL
+    auto_replay_nacks: true
+    sub_filters: []

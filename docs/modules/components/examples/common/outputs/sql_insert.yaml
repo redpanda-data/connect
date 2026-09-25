@@ -1,0 +1,15 @@
+outputs:
+  label: ""
+  sql_insert:
+    driver: "" # No default (required)
+    dsn: "" # No default (required)
+    table: "" # No default (required)
+    columns: [] # No default (required)
+    args_mapping: "" # No default (required)
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

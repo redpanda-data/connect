@@ -1,0 +1,27 @@
+outputs:
+  label: ""
+  otlp_grpc:
+    endpoint: "" # No default (required)
+    headers: {}
+    timeout: 30s
+    compression: gzip
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      cert_file: ""
+      key_file: ""
+    tcp:
+      connect_timeout: 0s
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
+    oauth2:
+      enabled: false
+      client_key: ""
+      client_secret: ""
+      token_url: ""
+      scopes: []
+      endpoint_params: {}
+    max_in_flight: 64

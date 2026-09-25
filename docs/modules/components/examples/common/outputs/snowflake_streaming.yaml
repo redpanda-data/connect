@@ -1,0 +1,25 @@
+outputs:
+  label: ""
+  snowflake_streaming:
+    account: "" # No default (required)
+    user: "" # No default (required)
+    role: "" # No default (required)
+    database: "" # No default (required)
+    schema: "" # No default (required)
+    table: "" # No default (required)
+    private_key: "" # No default (optional)
+    private_key_file: "" # No default (optional)
+    private_key_pass: "" # No default (optional)
+    mapping: "" # No default (optional)
+    init_statement: "" # No default (optional)
+    schema_evolution:
+      enabled: "" # No default (required)
+      ignore_nulls: true
+      processors: [] # No default (optional)
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    max_in_flight: 4

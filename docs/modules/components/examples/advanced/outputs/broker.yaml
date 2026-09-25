@@ -1,0 +1,12 @@
+outputs:
+  label: ""
+  broker:
+    copies: 1
+    pattern: fan_out
+    outputs: [] # No default (required)
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

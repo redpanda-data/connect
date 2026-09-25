@@ -1,0 +1,19 @@
+inputs:
+  label: ""
+  mysql_cdc:
+    flavor: mysql
+    dsn: "" # No default (required)
+    tables: [] # No default (required)
+    checkpoint_cache: "" # No default (required)
+    checkpoint_key: mysql_binlog_position
+    snapshot_max_batch_size: 1000
+    stream_snapshot: "" # No default (required)
+    max_parallel_snapshot_tables: 1
+    auto_replay_nacks: true
+    checkpoint_limit: 1024
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

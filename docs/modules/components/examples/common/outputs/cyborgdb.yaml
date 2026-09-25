@@ -1,0 +1,18 @@
+outputs:
+  label: ""
+  cyborgdb:
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    host: "" # No default (required)
+    api_key: "" # No default (required)
+    index_name: redpanda-vectors
+    index_key: "" # No default (required)
+    operation: upsert
+    id: "" # No default (required)
+    vector_mapping: "" # No default (optional)
+    metadata_mapping: "" # No default (optional)

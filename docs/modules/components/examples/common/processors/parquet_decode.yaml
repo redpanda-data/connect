@@ -1,0 +1,4 @@
+processors:
+  label: ""
+  parquet_decode:
+    handle_logical_types: v1

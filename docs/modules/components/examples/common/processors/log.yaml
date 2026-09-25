@@ -1,0 +1,6 @@
+processors:
+  label: ""
+  log:
+    level: INFO
+    fields_mapping: "" # No default (optional)
+    message: ""

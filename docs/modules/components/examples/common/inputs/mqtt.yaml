@@ -1,0 +1,8 @@
+inputs:
+  label: ""
+  mqtt:
+    urls: [] # No default (required)
+    client_id: ""
+    connect_timeout: 30s
+    topics: [] # No default (required)
+    auto_replay_nacks: true

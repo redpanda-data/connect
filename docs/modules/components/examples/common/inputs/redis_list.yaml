@@ -1,0 +1,6 @@
+inputs:
+  label: ""
+  redis_list:
+    url: "" # No default (required)
+    key: "" # No default (required)
+    auto_replay_nacks: true
