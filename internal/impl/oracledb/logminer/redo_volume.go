@@ -17,11 +17,14 @@ import (
 
 type redoVolumeStrategy struct {
 	selector *logFileSelector
-	// maxRedoLogSizeInBytes is fetched once, lazily; 0 means "not yet fetched" (never legitimately 0 on a running database).
+	// maxRedoLogSizeInBytes is fetched once, lazily; 0 means "not yet
+	// fetched" (never legitimately 0 on a running database).
 	maxRedoLogSizeInBytes uint64
 	maxRedoSizeStmt       *sql.Stmt
 	openThreadsStmt       *sql.Stmt
-	// lastCapped is what selectSession's most recent call returned, read back by resetIfUncapped so miningCycle doesn't need to carry it as a local between the two calls.
+	// lastCapped is what selectSession's most recent call returned, read
+	// back by resetIfUncapped so miningCycle doesn't need to carry it as
+	// a local between the two calls.
 	lastCapped bool
 }
 
