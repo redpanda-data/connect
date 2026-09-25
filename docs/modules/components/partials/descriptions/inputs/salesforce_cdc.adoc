@@ -15,7 +15,7 @@ Subscribes to one or more Salesforce Pub/Sub topics in parallel and emits a mess
 
 - `/data/<sObject>ChangeEvent`: per-sObject CDC channel.
 - `/data/ChangeEvents`: CDC firehose (every CDC-enabled sObject).
-- `/event/<EventName>__e`: custom Platform Event.
+- `+/event/<EventName>__e+`: custom Platform Event.
 - `/event/<StandardEventName>`: standard Platform Event (for example `LoginEventStream`).
 - A bare sObject name (for example, `Account`) is shorthand for `/data/AccountChangeEvent`.
 

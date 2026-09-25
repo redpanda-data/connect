@@ -74,7 +74,7 @@ func renderFields(fields []fieldSpec, prefix string) string {
 		var b strings.Builder
 		b.WriteString("=== `" + path + "`\n\n")
 
-		desc := escapePlaceholderBraces(f.Description)
+		desc := protectCodeSpans(escapePlaceholderBraces(f.Description))
 		if betaPrefix.MatchString(f.Description) {
 			desc = "badge::[label=Beta, size=large, tooltip={page-beta-text}]\n\n" + betaPrefix.ReplaceAllString(desc, "")
 		}
