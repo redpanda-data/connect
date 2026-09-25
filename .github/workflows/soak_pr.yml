@@ -139,26 +139,34 @@ jobs:
           # built above ("the only variable being the binary").
           git checkout --detach "${BASE_SHA}"
 
-      - name: Compose "Soak running" comment
+      - name: Post "Soak running" comment
         # Runs only if the gate, the head pin, and the build passed. The
-        # workspace is on the BASE tree, so the local action is not
-        # PR-controlled. The final step overwrites this comment.
+        # final step overwrites this comment with the verdict.
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           SCENARIO: ${{ steps.parse.outputs.scenario }}
         run: |
+          MARKER="<!-- rpcn-soak-comparison -->"
+          BODY_FILE="$RUNNER_TEMP/comment.md"
           {
-            echo "<!-- rpcn-soak-comparison -->"
+            echo "$MARKER"
             echo "## Soak running"
             echo "Scenario \`$SCENARIO\`. The comparison lands here when the run ends (about 1h)."
             echo ""
             echo "_base: \`${{ steps.build.outputs.base_sha }}\` · pr: \`${{ steps.build.outputs.pr_sha }}\` · [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
-          } > "$RUNNER_TEMP/comment.md"
-
-      - name: Post "Soak running" comment
-        uses: ./.github/actions/soak-sticky-comment
-        with:
-          body-file: ${{ runner.temp }}/comment.md
+          } > "$BODY_FILE"
+          # Same find-or-create block as "Post comparison comment" below, which
+          # explains the author filter and the awk. Kept inline in both steps
+          # on purpose: a local action is read from the workspace, and the
+          # final step runs under always(), when the workspace may still be
+          # on the PR tree (build failed after the merge-ref checkout).
+          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" --paginate --jq ".[] | select((.body | startswith(\"$MARKER\")) and .user.login == \"github-actions[bot]\") | .id" | awk 'NR==1')
+          if [ -n "$EXISTING" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$EXISTING" -F body=@"$BODY_FILE" >/dev/null
+          else
+            gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" -F body=@"$BODY_FILE" >/dev/null
+          fi
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
@@ -189,13 +197,15 @@ jobs:
             extra_flags="--binary base=$RUNNER_TEMP/rc-base --binary pr=$RUNNER_TEMP/rc-pr" \
             2>&1 | tee "$RUNNER_TEMP/soak-pr.log"
 
-      - name: Compose comparison comment
+      - name: Post comparison comment
         # Gated on the permission check AND the head pin: a bare always()
         # would run even after either failed, letting an unauthorized /soak —
         # or an authorized one whose PR head moved after authorization —
         # overwrite a genuine earlier comparison with a spurious "failed"
         # sticky comment.
         if: always() && steps.gate.outcome == 'success' && steps.headpin.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           MARKER="<!-- rpcn-soak-comparison -->"
@@ -221,13 +231,22 @@ jobs:
             echo ""
             echo "_base: \`${{ steps.build.outputs.base_sha }}\` · pr: \`${{ steps.build.outputs.pr_sha }}\` · [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
           } > "$BODY_FILE"
-
-      - name: Post comparison comment
-        # Same gate as above. Overwrites the early "Soak running" comment.
-        if: always() && steps.gate.outcome == 'success' && steps.headpin.outcome == 'success'
-        uses: ./.github/actions/soak-sticky-comment
-        with:
-          body-file: ${{ runner.temp }}/comment.md
+          # Sticky: update the existing marker comment if present, else create.
+          # awk, not `head -1`: head closes the pipe after one line, and on a
+          # multi-page comment list gh is still writing when that happens —
+          # SIGPIPE (141), which pipefail turns into a step failure exactly
+          # when the marker comment exists on a busy PR. Same fix as the
+          # nightly change gate.
+          # Filter on author too: without it, anyone can pre-plant a comment
+          # starting with the marker (GitHub returns oldest-first, awk NR==1
+          # picks it), capturing the sticky comparison into an attacker-owned
+          # comment they retain edit rights over.
+          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" --paginate --jq ".[] | select((.body | startswith(\"$MARKER\")) and .user.login == \"github-actions[bot]\") | .id" | awk 'NR==1')
+          if [ -n "$EXISTING" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$EXISTING" -F body=@"$BODY_FILE" >/dev/null
+          else
+            gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" -F body=@"$BODY_FILE" >/dev/null
+          fi
 
       - name: Verify teardown actually completed
         if: always() && steps.gate.outcome == 'success' && steps.headpin.outcome == 'success'
