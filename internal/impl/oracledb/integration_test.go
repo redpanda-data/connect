@@ -895,21 +895,6 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 		stream *service.Stream
 	)
 
-	// collectMessages reads messages from channel ready for assertion
-	collectMessages := func(t *testing.T, c chan *service.Message, want int) []*service.Message {
-		t.Helper()
-		msgs := make([]*service.Message, 0, want)
-		for msg := range c {
-			msgs = append(msgs, msg)
-			if len(msgs) == want {
-				break
-			}
-			require.LessOrEqualf(t, len(msgs), want, "received too many messages")
-		}
-		require.Lenf(t, msgs, want, "channel closed before receiving %d messages, got %d", want, len(msgs))
-		return msgs
-	}
-
 	mustAssertMetadata := func(t *testing.T, operation string, msgs []*service.Message) {
 		t.Helper()
 		results := make(map[string][]*service.Message)
@@ -976,7 +961,9 @@ oracledb_cdc:
   connection_string: ` + connStr + `
   snapshot_mode: none
   logminer:
-    scn_window_size: 20000
+	window_strategy: scn_window
+	log_count_min: 2
+    log_count_growth_max: 4
     min_scn_window_size: 0
     backoff_interval: 1s
     max_session_age: 5s
@@ -1025,7 +1012,7 @@ oracledb_cdc:
 		}
 
 		t.Run("Streaming insert changes...", func(t *testing.T) {
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "insert", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1049,7 +1036,7 @@ oracledb_cdc:
 			db.MustExec("UPDATE testdb.foo2 SET val = 2")
 			db.MustExec("UPDATE testdb2.bar SET val = 2")
 
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "update", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1066,7 +1053,7 @@ oracledb_cdc:
 			db.MustExec("DELETE FROM testdb.foo2")
 			db.MustExec("DELETE FROM testdb2.bar")
 
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "delete", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1147,7 +1134,7 @@ file:
 		}
 
 		t.Run("Streaming insert changes...", func(t *testing.T) {
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "insert", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1164,7 +1151,7 @@ file:
 			db.MustExec("UPDATE testdb.foo2 SET val = 2")
 			db.MustExec("UPDATE testdb2.bar SET val = 2")
 
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "update", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1181,7 +1168,7 @@ file:
 			db.MustExec("DELETE FROM testdb.foo2")
 			db.MustExec("DELETE FROM testdb2.bar")
 
-			msgs := collectMessages(t, msgChan, want)
+			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "delete", msgs)
 
 			content, err := msgs[0].AsBytes()
@@ -1197,16 +1184,6 @@ file:
 	})
 }
 
-// TestIntegrationOracleDBCDCLogCountWindowStrategy exercises the opt-in
-// window_strategy: log_count LogMiner sizing strategy end-to-end, mirroring
-// TestIntegrationOracleDBCDCStreaming's insert/update/delete scenario but
-// sizing the mining window by redo log file count instead of an SCN delta.
-//
-// Log switches are forced mid-test via ALTER SYSTEM SWITCH LOGFILE so the
-// selector must choose across multiple archived log files, not just one.
-//
-// min_scn_window_size: 0 (mirroring the scn_window-strategy tests in this
-// file) confirms log_count mines DML promptly regardless of SCN backlog size.
 func TestIntegrationOracleDBCDCLogCountWindowStrategy(t *testing.T) {
 	integration.CheckSkip(t)
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -1215,6 +1192,8 @@ func TestIntegrationOracleDBCDCLogCountWindowStrategy(t *testing.T) {
 
 	msgChan := make(chan *service.Message, 1)
 
+	// min_scn_window_size: 0 (mirroring the scn_window-strategy tests in this
+	// file) confirms log_count mines DML promptly regardless of SCN backlog size.
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
@@ -1237,7 +1216,7 @@ oracledb_cdc:
 	t.Log("Launching component...")
 	{
 		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 		require.NoError(t, streamBuilder.AddInputYAML(cfg))
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
@@ -1264,20 +1243,6 @@ oracledb_cdc:
 	// Give the connector time to establish its first LogMiner session before
 	// generating redo.
 	time.Sleep(10 * time.Second)
-
-	collectMessages := func(t *testing.T, c chan *service.Message, want int) []*service.Message {
-		t.Helper()
-		msgs := make([]*service.Message, 0, want)
-		for msg := range c {
-			msgs = append(msgs, msg)
-			if len(msgs) == want {
-				break
-			}
-			require.LessOrEqualf(t, len(msgs), want, "received too many messages")
-		}
-		require.Lenf(t, msgs, want, "channel closed before receiving %d messages, got %d", want, len(msgs))
-		return msgs
-	}
 
 	assertOperation := func(t *testing.T, operation string, msgs []*service.Message) {
 		t.Helper()
@@ -1307,7 +1272,7 @@ oracledb_cdc:
 			db.MustExec("INSERT INTO testdb.logcount (val) VALUES (1)")
 		}
 
-		msgs := collectMessages(t, msgChan, want)
+		msgs := oracledbtest.CollectMessages(t, msgChan, want)
 		assertOperation(t, "insert", msgs)
 
 		content, err := msgs[0].AsBytes()
@@ -1321,7 +1286,7 @@ oracledb_cdc:
 	t.Run("Streaming update changes", func(t *testing.T) {
 		db.MustExec("UPDATE testdb.logcount SET val = 2")
 
-		msgs := collectMessages(t, msgChan, want)
+		msgs := oracledbtest.CollectMessages(t, msgChan, want)
 		assertOperation(t, "update", msgs)
 
 		content, err := msgs[0].AsBytes()
@@ -1335,7 +1300,7 @@ oracledb_cdc:
 		db.MustExec("ALTER SYSTEM SWITCH LOGFILE")
 		db.MustExec("DELETE FROM testdb.logcount")
 
-		msgs := collectMessages(t, msgChan, want)
+		msgs := oracledbtest.CollectMessages(t, msgChan, want)
 		assertOperation(t, "delete", msgs)
 	})
 
