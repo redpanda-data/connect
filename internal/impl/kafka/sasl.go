@@ -51,12 +51,12 @@ func SASLFields() *service.ConfigField {
 			"AWS_MSK_IAM":                    "AWS IAM based authentication as specified by the 'aws-msk-iam-auth' java library.",
 			"REDPANDA_CLOUD_SERVICE_ACCOUNT": "Redpanda Cloud Service Account authentication when running in Redpanda Cloud.",
 		}).
-			Description("The SASL mechanism to use."),
+			Description("The SASL mechanism to use for authentication."),
 		service.NewStringField("username").
-			Description("A username to provide for PLAIN or SCRAM-* authentication.").
+			Description("The username to use for PLAIN or SCRAM-* authentication.").
 			Default(""),
 		service.NewStringField("password").
-			Description("A password to provide for PLAIN or SCRAM-* authentication.").
+			Description("The password to use for PLAIN or SCRAM-* authentication.").
 			Default("").Secret(),
 		service.NewStringField("token").
 			Description("The token to use for a single session's OAUTHBEARER authentication.").
@@ -65,11 +65,11 @@ func SASLFields() *service.ConfigField {
 			Description("Key/value pairs to add to OAUTHBEARER authentication requests.").
 			Optional(),
 		service.NewObjectField("aws", config.SessionFields()...).
-			Description("Contains AWS specific fields for when the `mechanism` is set to `AWS_MSK_IAM`.").
+			Description("Contains AWS-specific fields for when `sasl.mechanism` is set to `AWS_MSK_IAM`.").
 			ShortDescription("AWS specific fields, used when the mechanism is AWS_MSK_IAM.").
 			Optional(),
 	).
-		Description("Specify one or more methods of SASL authentication. SASL is tried in order; if the broker supports the first mechanism, all connections will use that mechanism. If the first mechanism fails, the client will pick the first supported mechanism. If the broker does not support any client mechanisms, connections will fail.").
+		Description("Specify one or more methods or mechanisms of SASL authentication. They are tried in order. If the broker supports the first SASL mechanism, all connections use it. If the first mechanism fails, the client picks the first supported mechanism. If the broker does not support any client mechanisms, all connections fail.").
 		ShortDescription("One or more SASL authentication methods, tried in order until the broker supports one.").
 		Advanced().Optional().
 		Example(

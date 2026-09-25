@@ -49,36 +49,34 @@ func init() {
 
 func ockamKafkaOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Ockam").
+		Summary("Uses Ockam to encrypt and write end-to-end encrypted messages to a Kafka topic.").
 		Categories("Services").
 		Field(service.NewObjectField("kafka", slices.Concat(
 			[]*service.ConfigField{
-				service.NewStringListField("seed_brokers").Optional().
-					Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
-					ShortDescription("Broker addresses used to establish connections. Items containing commas are expanded.").
-					Example([]string{"localhost:9092"}).
-					Example([]string{"foo:9092", "bar:9092"}).
-					Example([]string{"foo:9092,bar:9092"}),
+				seedBrokersField(),
 				service.NewTLSToggledField("tls"),
 				service.NewIntField("max_in_flight").
-					Description("The maximum number of batches to be sending in parallel at any given time.").
+					Description(kafka.FranzMaxInFlightDescription).
 					Default(10),
 				service.NewBatchPolicyField("batching"),
 			},
 			kafka.FranzProducerFields(),
 			kafka.FranzWriterConfigFields(),
 		)...)).
-		Field(service.NewBoolField("disable_content_encryption").Default(false)).
-		Field(service.NewStringField("enrollment_ticket").Optional()).
-		Field(service.NewStringField("identity_name").Optional()).
-		Field(service.NewStringField("allow").Default("self").Optional()).
-		Field(service.NewStringField("route_to_kafka_outlet").Default("self")).
-		Field(service.NewStringField("allow_consumer").Default("self")).
-		Field(service.NewStringField("route_to_consumer").Default("/ip4/127.0.0.1/tcp/6262")).
-		Field(service.NewStringListField("encrypted_fields").
-			Description("The fields to encrypt in the kafka messages, assuming the record is a valid JSON map. By default, the whole record is encrypted.").
-			ShortDescription("Fields to encrypt within JSON records. The whole record is encrypted by default.").
-			Default([]string{}))
+		Field(disableContentEncryptionField()).
+		Field(enrollmentTicketField()).
+		Field(identityNameField()).
+		Field(allowField().Optional()).
+		Field(routeToKafkaOutletField()).
+		Field(service.NewStringField("allow_consumer").
+			Description(`Specify an access control policy for consumers.
+
+For example, setting this value to ` + "`orders_consumer`" + ` forces the consumer to present an Ockam credential, which confirms that the consumer has the attribute ` + "`orders_consumer=true`" + `.`).
+			Default("self")).
+		Field(service.NewStringField("route_to_consumer").
+			Description("The route to the Kafka consumer. For example, `/project/default/service/forward_to_orders_consumer/secure/api` connects to a consumer exposed through a relay named `orders_consumer`.").
+			Default("/ip4/127.0.0.1/tcp/6262")).
+		Field(encryptedFieldsField())
 }
 
 //------------------------------------------------------------------------------

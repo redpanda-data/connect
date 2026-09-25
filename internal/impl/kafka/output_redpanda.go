@@ -39,7 +39,7 @@ Writes a batch of messages to Kafka brokers and waits for acknowledgement before
 `).
 		Fields(redpandaOutputConfigFields()...).
 		LintRule(FranzWriterConfigLints()).
-		Example("Simple Common Output", "Data is generated and written to a topic bar, targeting the cluster configured within the redpanda block at the bottom. This is useful as it allows us to configure TLS and SASL only once for potentially multiple inputs and outputs.", `
+		Example("Simple Common Output", "Data is generated and written to a topic `bar`, targeting the cluster configured within the `redpanda` block at the bottom. This lets you configure TLS and SASL once and share them across multiple inputs and outputs.", `
 input:
   generate:
     interval: 1s
@@ -73,7 +73,7 @@ func redpandaOutputConfigFields() []*service.ConfigField {
 		FranzWriterConfigFields(),
 		[]*service.ConfigField{
 			service.NewIntField(roFieldMaxInFlight).
-				Description("The maximum number of batches to be sending in parallel at any given time.").
+				Description(FranzMaxInFlightDescription + " Increase this number to improve throughput until performance plateaus.").
 				Default(256),
 			service.NewBatchPolicyField(roFieldBatching).
 				Description("Optional explicit batching policy for the output. Note that when batches are formed at the input level they can be expanded by this policy, but not contracted. When consuming data from a Redpanda input it is recommended to tune batches from the input config via the `max_yield_batch_bytes` field, or the `unordered_processing.batching` field if appropriate.").
