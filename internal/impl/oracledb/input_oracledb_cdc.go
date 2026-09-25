@@ -512,7 +512,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	// A failed batch send leaves an unresolvable slot in the ordered tracker
 	// (see sendTracked), and a sealed flush queue refuses every later batch
-	// (see sealQueue), so a poisoned publisher can never checkpoint again.
+	// (see batchPublisher.queue), so a poisoned publisher can never checkpoint again.
 	// Rebuild it with a fresh tracker: the new session resumes from the last
 	// durable SCN, which is necessarily before the orphaned rows, and the old
 	// session's late acks resolve into the abandoned tracker (cacheSCN's

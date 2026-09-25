@@ -46,7 +46,8 @@ type batchPublisher struct {
 	// abandoned. Admission is strictly ordered, so at that moment nothing
 	// after the dropped rows has been tracked. The seal guarantees nothing
 	// ever is, so no ack can persist an SCN past them before Connect
-	// rebuilds the poisoned publisher (see poisoned).
+	// rebuilds the poisoned publisher (see poisoned). A drop path (a failed
+	// Flush or trackBatch) also seals the queue, for the same reason.
 	queue ticket.Lock
 	// closed marks the batcher as torn down (guarded by batcherMu): Close's
 	// batcher.Close races in-flight Publish calls otherwise, and the batcher
@@ -86,17 +87,6 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 	}
 	go b.loop()
 	return b
-}
-
-// sealQueue permanently refuses further admissions: called when
-// flushed-but-untracked rows were dropped (a failed Flush or trackBatch), so
-// no later batch can be tracked (and therefore no ack can persist a position)
-// past the dropped rows before Connect rebuilds. The seal also makes
-// poisoned true, so a drop path does not set a separate flag. Safe to call
-// while holding batcherMu: the established order is batcherMu before the
-// queue lock, never the reverse.
-func (b *batchPublisher) sealQueue() {
-	b.queue.Seal()
 }
 
 // poisoned reports whether this publisher can never checkpoint again, so
@@ -179,7 +169,7 @@ func (p *batchPublisher) loop() {
 					// tracked. Seal BEFORE releasing batcherMu: in the gap
 					// after the unlock another flusher could take the next
 					// ticket and be admitted past the dropped rows.
-					p.sealQueue()
+					p.queue.Seal()
 				}
 				p.batcherMu.Unlock()
 				if flushErr != nil {
@@ -308,7 +298,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		// releasing batcherMu: in the gap after the unlock another flusher
 		// could flush, take the next ticket, and be admitted past the
 		// dropped rows.
-		b.sealQueue()
+		b.queue.Seal()
 	}
 	b.batcherMu.Unlock()
 	if err != nil {
@@ -350,7 +340,7 @@ func (b *batchPublisher) dispatch(ctx context.Context, tkt uint64, batch service
 		// The rows left the batcher but were never tracked, and the deferred
 		// release lets later tickets proceed: seal so nothing can be tracked
 		// (and persisted) past the gap.
-		b.sealQueue()
+		b.queue.Seal()
 		return err
 	}
 	return b.sendTracked(ctx, tracked)
@@ -520,7 +510,7 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 		// Seal BEFORE releasing batcherMu: in the gap after the unlock
 		// another flusher could flush, take the next ticket, and be admitted
 		// past the dropped rows.
-		b.sealQueue()
+		b.queue.Seal()
 	}
 	b.batcherMu.Unlock()
 	if err != nil {
