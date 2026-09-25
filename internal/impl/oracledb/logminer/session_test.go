@@ -82,6 +82,7 @@ func TestSessionManager(t *testing.T) {
 			cfg:          cfg,
 			sessionMgr:   NewSessionManager(cfg, logger),
 			logCollector: NewLogFileCollector(),
+			logCount:     newLogCountStrategy(cfg.LogCountMin, cfg.LogCountGrowthMax),
 			log:          logger,
 		}
 

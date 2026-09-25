@@ -45,18 +45,10 @@ type LogMiner struct {
 	logCollector *LogFileCollector
 	currentSCN   uint64
 	windowSize   int
-	logSelector  *logFileSelector
+	logCount     *logCountStrategy
 	sessionMgr   *SessionManager
 	db           *sql.DB
 	dmlParser    *sqlredo.Parser
-
-	// maxRedoLogSizeInBytes is the online redo log size the log_count window
-	// strategy's byte budget is denominated in (see logFileSelector). Fetched
-	// once, lazily, on first use under WindowStrategyLogCount - 0 means "not
-	// yet fetched" (this value can never legitimately be 0 on a running
-	// database, mirroring the same "0 is never real" convention as
-	// logFileSelector.prevUpperBoundSCN).
-	maxRedoLogSizeInBytes uint64
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
@@ -132,7 +124,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
 		windowSize:       cfg.SCNWindowSize,
-		logSelector:      &logFileSelector{minCount: cfg.LogCountMin, growthMax: cfg.LogCountGrowthMax},
+		logCount:         newLogCountStrategy(cfg.LogCountMin, cfg.LogCountGrowthMax),
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -229,6 +221,10 @@ func (lm *LogMiner) Close() error {
 		errs = append(errs, fmt.Errorf("closing log file collector statements: %w", err))
 	}
 
+	if err := lm.logCount.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("closing log_count statements: %w", err))
+	}
+
 	if err := lm.sessionMgr.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("closing session manager statements: %w", err))
 	}
@@ -293,27 +289,8 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	switch lm.cfg.WindowStrategy {
 	case WindowStrategyLogCount:
-		if lm.maxRedoLogSizeInBytes == 0 {
-			size, err := lm.logCollector.GetMaxRedoLogSize(ctx, conn)
-			if err != nil {
-				return false, fmt.Errorf("fetching max redo log size for logminer: %w", err)
-			}
-			if size == 0 {
-				return false, errors.New("database reported a max redo log size of 0 bytes across V$LOG - cannot size the log_count byte budget")
-			}
-			lm.maxRedoLogSizeInBytes = size
-		}
-
-		files, err := lm.logCollector.GetLogsBySCNRange(ctx, conn, lm.currentSCN, dbCurrentSCN)
-		if err != nil {
-			return false, fmt.Errorf("collecting redo logs for logminer: %w", err)
-		}
-		openThreads, err := lm.logCollector.GetOpenThreads(ctx, conn)
-		if err != nil {
-			return false, fmt.Errorf("collecting open redo threads for logminer: %w", err)
-		}
-		if logFiles, endSCN, capped, err = lm.logSelector.selectForSession(files, openThreads, dbCurrentSCN, lm.maxRedoLogSizeInBytes); err != nil {
-			return false, fmt.Errorf("selecting log files for session: %w", err)
+		if logFiles, endSCN, capped, err = lm.logCount.selectSession(ctx, conn, lm.logCollector, lm.currentSCN, dbCurrentSCN); err != nil {
+			return false, err
 		}
 	default:
 		endSCN = dbCurrentSCN
@@ -379,11 +356,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	switch lm.cfg.WindowStrategy {
 	case WindowStrategyLogCount:
-		if !capped {
-			// Caught up within the file budget - reset to the minimum rather
-			// than staying grown from an earlier stalled cycle.
-			lm.logSelector.count = lm.cfg.LogCountMin
-		}
+		lm.logCount.resetIfUncapped(capped)
 	default:
 		lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
 	}
@@ -1031,7 +1004,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	// Use the pre-built query from initialization
 	switch lm.cfg.WindowStrategy {
 	case WindowStrategyLogCount:
-		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d, log_count budget=%d files)", startSCN, endSCN, lm.logSelector.count)
+		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d, log_count budget=%d files)", startSCN, endSCN, lm.logCount.selector.count)
 	default:
 		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
 	}
@@ -1181,9 +1154,7 @@ func (lf *LogFile) IsArchived() bool {
 
 // LogFileCollector finds relevant log files to mine
 type LogFileCollector struct {
-	stmt            *sql.Stmt
-	maxRedoSizeStmt *sql.Stmt
-	openThreadsStmt *sql.Stmt
+	stmt *sql.Stmt
 }
 
 // NewLogFileCollector creates a new *LogFileCollector which is responsible for
@@ -1275,8 +1246,7 @@ func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn
 	return deduplicateLogs(archived, online), nil
 }
 
-// Close releases the prepared GetLogsBySCNRange, GetMaxRedoLogSize, and
-// GetOpenThreads statements, if any.
+// Close releases the prepared GetLogsBySCNRange statement, if any.
 func (c *LogFileCollector) Close() error {
 	var errs []error
 	if c.stmt != nil {
@@ -1285,74 +1255,7 @@ func (c *LogFileCollector) Close() error {
 		}
 		c.stmt = nil
 	}
-	if c.maxRedoSizeStmt != nil {
-		if err := c.maxRedoSizeStmt.Close(); err != nil {
-			errs = append(errs, err)
-		}
-		c.maxRedoSizeStmt = nil
-	}
-	if c.openThreadsStmt != nil {
-		if err := c.openThreadsStmt.Close(); err != nil {
-			errs = append(errs, err)
-		}
-		c.openThreadsStmt = nil
-	}
 	return errors.Join(errs...)
-}
-
-// GetMaxRedoLogSize returns the largest configured online redo log size, in
-// bytes, across every redo group. The log_count window strategy uses this as
-// the unit its file-count budget is denominated in (N x this size) rather
-// than a literal file count, since online redo log groups are always
-// provisioned to a uniform size, unlike archived log files (see LogFile.Bytes).
-func (c *LogFileCollector) GetMaxRedoLogSize(ctx context.Context, conn *sql.Conn) (uint64, error) {
-	if c.maxRedoSizeStmt == nil {
-		stmt, err := conn.PrepareContext(ctx, "SELECT MAX(BYTES) FROM V$LOG")
-		if err != nil {
-			return 0, fmt.Errorf("preparing max redo log size query: %w", err)
-		}
-		c.maxRedoSizeStmt = stmt
-	}
-
-	var maxBytes uint64
-	if err := c.maxRedoSizeStmt.QueryRowContext(ctx).Scan(&maxBytes); err != nil {
-		return 0, fmt.Errorf("querying max redo log size: %w", err)
-	}
-	return maxBytes, nil
-}
-
-// GetOpenThreads returns the redo thread numbers Oracle currently reports as
-// OPEN. The log_count window strategy uses this on RAC databases to check
-// that every open thread actually has log files in a GetLogsBySCNRange
-// result - an open thread with none means the collector query missed
-// something, not that the thread has nothing to mine.
-func (c *LogFileCollector) GetOpenThreads(ctx context.Context, conn *sql.Conn) ([]int, error) {
-	if c.openThreadsStmt == nil {
-		stmt, err := conn.PrepareContext(ctx, `SELECT THREAD# FROM V$THREAD WHERE STATUS = 'OPEN'`)
-		if err != nil {
-			return nil, fmt.Errorf("preparing open redo threads query: %w", err)
-		}
-		c.openThreadsStmt = stmt
-	}
-
-	rows, err := c.openThreadsStmt.QueryContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("querying open redo threads: %w", err)
-	}
-	defer rows.Close()
-
-	var threads []int
-	for rows.Next() {
-		var thread int
-		if err := rows.Scan(&thread); err != nil {
-			return nil, fmt.Errorf("scanning open redo thread row: %w", err)
-		}
-		threads = append(threads, thread)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return threads, nil
 }
 
 // deduplicateLogs merges archive and online log lists, preferring the archive

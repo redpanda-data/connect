@@ -21,7 +21,7 @@ import (
 var openThread1 = []int{1}
 
 // testRedoLogSize is the fixed maxRedoLogSizeInBytes used throughout this
-// file, standing in for LogFileCollector.GetMaxRedoLogSize's real result.
+// file, standing in for logCountStrategy.GetMaxRedoLogSize's real result.
 // Most test files below are sized to exactly one testRedoLogSize each, so a
 // budget of N (log_count_min/log_count_growth_max) behaves like "N files" -
 // the same shape the pre-byte-budget tests exercised - unless a test
