@@ -110,7 +110,7 @@ func TestRebuildPublisherIfPoisoned(t *testing.T) {
 	require.NoError(t, <-oldPublished)
 
 	// Poison and rebuild.
-	old.poisoned.Store(true)
+	old.sendFailed.Store(true)
 	rebuilt, err := o.rebuildPublisherIfPoisoned()
 	require.NoError(t, err)
 	require.NotSame(t, old, rebuilt, "a poisoned publisher must be replaced")
@@ -136,6 +136,19 @@ func TestRebuildPublisherIfPoisoned(t *testing.T) {
 	require.Equal(t, replication.SCN(30).Bytes(), got[len(got)-1], "a late ack from the abandoned generation must not regress the cache")
 }
 
+// TestRebuildPublisherIfSealed proves that a sealed flush queue alone makes
+// the publisher poisoned. A seal means that rows were dropped, so a drop path
+// must not also have to set a poisoned flag.
+func TestRebuildPublisherIfSealed(t *testing.T) {
+	o, _ := newTestInput(t)
+	old := o.publisher.Load()
+
+	old.queue.Seal()
+	rebuilt, err := o.rebuildPublisherIfPoisoned()
+	require.NoError(t, err)
+	require.NotSame(t, old, rebuilt, "a publisher with a sealed flush queue must be replaced")
+}
+
 // TestReadBatchReconnectsOnPoisonedLoopDeath encodes the silent-stall
 // finding: with period-only batching the timed-flush loop is the only
 // flusher, and when it dies after poisoning the publisher nothing else can
@@ -154,7 +167,7 @@ func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
 			o.stopSig.TriggerHasStopped()
 		}()
 		pub := o.publisher.Load()
-		pub.poisoned.Store(true)
+		pub.sendFailed.Store(true)
 		pub.shutSig.TriggerSoftStop()
 		require.Eventually(t, func() bool {
 			select {
