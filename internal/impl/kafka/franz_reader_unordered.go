@@ -47,31 +47,21 @@ const (
 // Deprecated: Use the franz_reader_toggled variant instead.
 func FranzReaderUnorderedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
-		service.NewStringField(kruFieldConsumerGroup).
-			Description("An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.").
-			ShortDescription("An optional consumer group to consume as. Partitions and offsets are managed automatically across the group.").
-			Optional(),
-		service.NewIntField(kruFieldCheckpointLimit).
-			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
-			ShortDescription("How many messages of the same partition may be processed in parallel before back pressure is applied.").
-			Default(1024).
-			Advanced(),
+		franzConsumerGroupField(kruFieldConsumerGroup),
+		franzCheckpointLimitField(kruFieldCheckpointLimit).Advanced(),
 		service.NewDurationField(kruFieldCommitPeriod).
 			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
 			Default("5s").
 			Advanced(),
 		service.NewBoolField(kruFieldMultiHeader).
-			Description("Decode headers into lists to allow handling of multiple values with the same key").
+			Description("Decode headers into lists to allow the handling of multiple values with the same key.").
 			Default(false).
 			Advanced(),
 		service.NewBatchPolicyField(kruFieldBatching).
-			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
+			Description("Configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions, so that the input batches messages together before flushing them for processing. Batching can improve performance and is useful for windowed processing. Batching this way preserves the ordering of topic partitions.").
 			ShortDescription("Batching policy applied per topic partition, grouping messages before they are flushed for processing.").
 			Advanced(),
-		service.NewDurationField(kruFieldTopicLagRefreshPeriod).
-			Description("The period of time between each topic lag refresh cycle.").
-			Default("5s").
-			Advanced(),
+		franzTopicLagRefreshPeriodField(kruFieldTopicLagRefreshPeriod),
 	}
 }
 

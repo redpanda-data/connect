@@ -12,7 +12,7 @@ Ensure that messages have been copied across all replicas before acknowledging r
 
 === `addresses[]`
 
-A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.
+A list of broker addresses to connect to. List items that contain commas are expanded into multiple addresses.
 
 *Type*: `array<string>`
 
@@ -282,7 +282,7 @@ inject_tracing_map: root.meta.span = this
 
 === `key`
 
-The key to publish messages with.
+An optional key to populate for each message.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -493,7 +493,7 @@ The maximum period of time to wait for message sends before abandoning the reque
 
 === `timestamp_ms`
 
-An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.
+An optional timestamp to set for each message, in milliseconds since the Unix epoch. When left empty, the current timestamp is used. You cannot set both `timestamp` and `timestamp_ms`.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 

@@ -31,6 +31,10 @@ const (
 	kfoFieldRackID = "rack_id"
 )
 
+// FranzMaxInFlightDescription is the description of the max_in_flight field of
+// outputs that write to Kafka using the franz-go library.
+const FranzMaxInFlightDescription = "The maximum number of message batches to send in parallel at any given time."
+
 func franzKafkaOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
@@ -54,7 +58,7 @@ func FranzKafkaOutputConfigFields() []*service.ConfigField {
 		FranzWriterConfigFields(),
 		[]*service.ConfigField{
 			service.NewIntField(kfoFieldMaxInFlight).
-				Description("The maximum number of batches to be sending in parallel at any given time.").
+				Description(FranzMaxInFlightDescription).
 				Default(10),
 			service.NewBatchPolicyField(kfoFieldBatching),
 

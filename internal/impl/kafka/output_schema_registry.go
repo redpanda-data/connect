@@ -84,19 +84,19 @@ output:
 func schemaRegistryOutputConfigFields() []*service.ConfigField {
 	return append([]*service.ConfigField{
 		service.NewStringField(sroFieldURL).Description("The base URL of the schema registry service."),
-		service.NewInterpolatedStringField(sroFieldSubject).Description("Subject."),
+		service.NewInterpolatedStringField(sroFieldSubject).Description(`The subject name.`),
 		service.NewInterpolatedStringField(sroFieldSubjectCompatibilityLevel).
-			Description("The compatibility level for the subject. Can be one of BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE.").
+			Description("The compatibility level for the subject. Can be one of `BACKWARD`, `BACKWARD_TRANSITIVE`, `FORWARD`, `FORWARD_TRANSITIVE`, `FULL`, `FULL_TRANSITIVE`, `NONE`.").
 			ShortDescription("The compatibility level for the subject.").
 			Optional().
 			Advanced(),
-		service.NewBoolField(sroFieldBackfillDependencies).Description("Backfill schema references and previous versions.").Default(true).Advanced(),
-		service.NewBoolField(sroFieldTranslateIDs).Description("Translate schema IDs.").Default(false).Advanced(),
-		service.NewBoolField(sroFieldNormalize).Description("Normalize schemas.").Default(true).Advanced(),
-		service.NewBoolField(sroFieldRemoveMetadata).Description("Remove metadata from schemas.").Default(true).Advanced(),
-		service.NewBoolField(sroFieldRemoveRuleSet).Description("Remove rule set from schemas.").Default(true).Advanced(),
+		service.NewBoolField(sroFieldBackfillDependencies).Description("Backfill missing schema references and previous schema versions. If set to `true`, you must also configure a xref:components:inputs/schema_registry.adoc[`schema_registry`] input to read source schemas.").Default(true).Advanced(),
+		service.NewBoolField(sroFieldTranslateIDs).Description("When set to `true`, this field automatically translates the schema ID in each message to match the corresponding schema in the destination schema registry. The updated message is then written to the destination schema registry.").Default(false).Advanced(),
+		service.NewBoolField(sroFieldNormalize).Description("Normalize schemas.").Default(true).Advanced().Version("4.61.0"),
+		service.NewBoolField(sroFieldRemoveMetadata).Description("Removes metadata fields from schema output. Use this to produce leaner schema definitions for downstream consumers or when metadata is not required.").Default(true).Advanced(),
+		service.NewBoolField(sroFieldRemoveRuleSet).Description("Removes rule set definitions from schema output. Useful for simplifying schemas when rule sets are not required by consumers or applications.").Default(true).Advanced(),
 		service.NewStringField(sroFieldInputResource).
-			Description("The label of the schema_registry input from which to read source schemas.").
+			Description("The label of the xref:components:inputs/schema_registry.adoc[`schema_registry` input] from which to read source schemas.").
 			Default(sriResourceDefaultLabel).
 			Advanced(),
 		service.NewTLSToggledField(sroFieldTLS),
