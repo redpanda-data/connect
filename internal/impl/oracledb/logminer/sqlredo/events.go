@@ -164,6 +164,11 @@ type DMLEvent struct {
 	Timestamp     time.Time
 	TransactionID TransactionID
 	Username      string
+	// RSID and SSN identify the redo record and the row change inside it
+	// (V$LOGMNR_CONTENTS.RS_ID and SSN). Empty RSID means unknown: snapshot
+	// rows, synthetic LOB-only updates, or events cached before this field existed.
+	RSID string
+	SSN  int64
 }
 
 // RedoEvent represents a redo log row from V$LOGMNR_CONTENTS
@@ -177,4 +182,6 @@ type RedoEvent struct {
 	Timestamp     time.Time
 	TransactionID TransactionID
 	Username      sql.NullString
+	RSID          sql.NullString
+	SSN           sql.NullInt64
 }
