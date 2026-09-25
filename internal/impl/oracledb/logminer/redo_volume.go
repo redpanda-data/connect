@@ -15,10 +15,6 @@ import (
 	"fmt"
 )
 
-// redoVolumeStrategy owns the state and DB-glue methods for the redo_volume
-// window strategy: the byte-budget file selector, the max redo log size it's
-// denominated in, and the prepared statements used to fetch that size and
-// the currently open redo threads.
 type redoVolumeStrategy struct {
 	selector *logFileSelector
 	// maxRedoLogSizeInBytes is fetched once, lazily; 0 means "not yet fetched" (never legitimately 0 on a running database).
