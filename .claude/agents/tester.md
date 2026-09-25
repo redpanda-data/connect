@@ -592,6 +592,29 @@ t.Cleanup(func() {
 - Do not use `tc := tc` in loop bodies. Go 1.22+ fixed loop variable scoping.
 - Use `t.Context()` for test contexts. Exception: in `t.Cleanup()` functions, use `context.Background()` because `t.Context()` is already canceled during cleanup.
 
+# Goroutine Leak Detection (goleak)
+
+Connector packages opt in to goroutine-leak detection by wiring `go.uber.org/goleak` into a package-level `TestMain` (one `TestMain` per package — check for an existing one first). See `internal/impl/protobuf` and `internal/impl/sql` for reference.
+
+```go
+// main_test.go (with the package's usual license header)
+func TestMain(m *testing.M) {
+    goleak.VerifyTestMain(m,
+        goleak.IgnoreCurrent(),
+        // Narrow, commented ignores for known-benign goroutines only, e.g.:
+        // database/sql keeps a connection-pool opener alive per *sql.DB.
+        goleak.IgnoreTopFunction("database/sql.(*DB).connectionOpener"),
+    )
+}
+```
+
+Adding it to a new package:
+
+1. Create `main_test.go` with the pattern above and the package's license header.
+2. Run `go test -count=1 ./internal/impl/<pkg>/...` at least twice. For every goleak failure, decide: real leak in the component (fix it) or a benign third-party goroutine (add a narrow `goleak.IgnoreTopFunction` with a comment naming the library).
+3. `VerifyTestMain` also runs after the package's integration tests in nightly CI, so verify those too (or tune ignores) before merging — the package must be green on a clean baseline, never aspirationally.
+4. Prefer `IgnoreTopFunction` over broad ignores; an ignore list that swallows everything defeats the check.
+
 # Running Tests
 
 ```bash
