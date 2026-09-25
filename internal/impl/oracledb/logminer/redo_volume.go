@@ -25,40 +25,47 @@ type redoVolumeStrategy struct {
 	maxRedoLogSizeInBytes uint64
 	maxRedoSizeStmt       *sql.Stmt
 	openThreadsStmt       *sql.Stmt
+	// lastCapped is what selectSession's most recent call returned, read back by resetIfUncapped so miningCycle doesn't need to carry it as a local between the two calls.
+	lastCapped bool
 }
 
 func newRedoVolumeStrategy(minCount, growthMax int) *redoVolumeStrategy {
 	return &redoVolumeStrategy{selector: &logFileSelector{minCount: minCount, growthMax: growthMax}}
 }
 
-func (rv *redoVolumeStrategy) selectSession(ctx context.Context, conn *sql.Conn, logCollector *LogFileCollector, currentSCN, dbCurrentSCN uint64) (files []*LogFile, endSCN uint64, capped bool, err error) {
+func (rv *redoVolumeStrategy) selectSession(ctx context.Context, conn *sql.Conn, logCollector *LogFileCollector, currentSCN, dbCurrentSCN uint64) (files []*LogFile, endSCN uint64, err error) {
 	if rv.maxRedoLogSizeInBytes == 0 {
 		size, err := rv.GetMaxRedoLogSize(ctx, conn)
 		if err != nil {
-			return nil, 0, false, fmt.Errorf("fetching max redo log size for logminer: %w", err)
+			return nil, 0, fmt.Errorf("fetching max redo log size for logminer: %w", err)
 		}
 		if size == 0 {
-			return nil, 0, false, errors.New("database reported a max redo log size of 0 bytes across V$LOG - cannot size the redo_volume byte budget")
+			return nil, 0, errors.New("database reported a max redo log size of 0 bytes across V$LOG - cannot size the redo_volume byte budget")
 		}
 		rv.maxRedoLogSizeInBytes = size
 	}
 
 	candidates, err := logCollector.GetLogsBySCNRange(ctx, conn, currentSCN, dbCurrentSCN)
 	if err != nil {
-		return nil, 0, false, fmt.Errorf("collecting redo logs for logminer: %w", err)
+		return nil, 0, fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
 	openThreads, err := rv.GetOpenThreads(ctx, conn)
 	if err != nil {
-		return nil, 0, false, fmt.Errorf("collecting open redo threads for logminer: %w", err)
+		return nil, 0, fmt.Errorf("collecting open redo threads for logminer: %w", err)
 	}
+	var capped bool
 	if files, endSCN, capped, err = rv.selector.selectForSession(candidates, openThreads, dbCurrentSCN, rv.maxRedoLogSizeInBytes); err != nil {
-		return nil, 0, false, fmt.Errorf("selecting log files for session: %w", err)
+		return nil, 0, fmt.Errorf("selecting log files for session: %w", err)
 	}
-	return files, endSCN, capped, nil
+	rv.lastCapped = capped
+	return files, endSCN, nil
 }
 
-func (rv *redoVolumeStrategy) resetIfUncapped(capped bool) {
-	if !capped {
+// resetIfUncapped resets the budget to its minimum once selectSession's most
+// recent call catches up within it, rather than staying grown from an
+// earlier stalled cycle.
+func (rv *redoVolumeStrategy) resetIfUncapped() {
+	if !rv.lastCapped {
 		rv.selector.count = rv.selector.minCount
 	}
 }

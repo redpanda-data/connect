@@ -283,13 +283,13 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	var (
 		endSCN   uint64
 		logFiles []*LogFile
-		hitCap   bool
-		capped   bool
+
+		hitCap bool // scn_window specific
 	)
 
 	switch lm.cfg.WindowStrategy {
 	case WindowStrategyRedoVolume:
-		if logFiles, endSCN, capped, err = lm.redoVolume.selectSession(ctx, conn, lm.logCollector, lm.currentSCN, dbCurrentSCN); err != nil {
+		if logFiles, endSCN, err = lm.redoVolume.selectSession(ctx, conn, lm.logCollector, lm.currentSCN, dbCurrentSCN); err != nil {
 			return false, err
 		}
 	default:
@@ -356,7 +356,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	switch lm.cfg.WindowStrategy {
 	case WindowStrategyRedoVolume:
-		lm.redoVolume.resetIfUncapped(capped)
+		lm.redoVolume.resetIfUncapped()
 	default:
 		lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
 	}
