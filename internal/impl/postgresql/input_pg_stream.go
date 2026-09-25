@@ -987,16 +987,23 @@ func (p *pgStreamInput) flushBatch(
 		return nil
 	}
 
-	// Snapshot rows have no LSN, and they share this batcher with change
-	// rows that have an LSN. Therefore a batch can end with a snapshot row.
-	// Search backwards for the last message that has an LSN. Do not use the
-	// last message of the batch.
 	var lsn *string
-	for i := len(batch) - 1; i >= 0; i-- {
-		if lsnStr, ok := batch[i].MetaGet("lsn"); ok {
-			lsn = &lsnStr
-			break
+	if p.streamConfig.IncrementalSnapshotCfg().Enabled {
+		// Incremental snapshot shares this batcher with change rows for
+		// the life of the stream, so a batch can end with a snapshot row which carries no LSN.
+		for i := len(batch) - 1; i >= 0; i-- {
+			if lsnStr, ok := batch[i].MetaGet("lsn"); ok {
+				lsn = &lsnStr
+				break
+			}
 		}
+	} else if lsnStr, ok := batch[len(batch)-1].MetaGet("lsn"); ok {
+		// Without one, no batch mixes the two: a blocking snapshot drains
+		// the batcher and waits for its acknowledgements before streaming
+		// starts, so every batch holds only snapshot rows or only change
+		// rows. The search above would read every message of every snapshot
+		// batch to reach the same answer.
+		lsn = &lsnStr
 	}
 	offset := checkpointOffset{lsn: lsn, incSnapshotState: incSnapshotState}
 	resolveFn, err := checkpointer.Track(ctx, offset, int64(len(batch)))
