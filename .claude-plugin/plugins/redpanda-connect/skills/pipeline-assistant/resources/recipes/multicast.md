@@ -150,5 +150,5 @@ Fan out to different systems simultaneously.
 
 ## References
 
-- [Broker Output Documentation](https://docs.redpanda.com/redpanda-connect/components/outputs/broker/)
+- [Broker Output Documentation](https://docs.redpanda.com/redpanda-connect/components/outputs/broker.md)
 - [Fan-Out Pattern](https://www.enterpriseintegrationpatterns.com/patterns/messaging/Broadcast.html)
