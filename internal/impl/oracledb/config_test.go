@@ -391,59 +391,151 @@ oracledb_cdc:
 	}
 }
 
-func TestWindowStrategyConfigLinting(t *testing.T) {
-	const minimalOracleCDCYAML = `
-oracledb_cdc:
-  connection_string: oracle://user:pass@host:1521/svc
-  include:
-    - SCHEMA.TABLE
-  logminer:
+func TestParseLogMinerConfigWindowStrategyCrossFields(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+logminer:
 `
-	linter := service.NewEnvironment().NewComponentConfigLinter()
-
 	tests := []struct {
 		name    string
-		conf    string
-		lintErr string
+		yaml    string
+		wantErr string
 	}{
 		{
 			name: "redo_volume with scn_window fields left unset does not false-positive",
-			conf: minimalOracleCDCYAML + `    window_strategy: redo_volume
-    redo_volume_min: 2
-    redo_volume_growth_max: 4
+			yaml: minimalOracleCDCYAML + `  window_strategy: redo_volume
+  redo_volume_min: 2
+  redo_volume_growth_max: 4
 `,
 		},
 		{
 			name: "scn_window with redo_volume fields left unset does not false-positive",
-			conf: minimalOracleCDCYAML + `    window_strategy: scn_window
-    scn_window_size: 20000
-    max_scn_window_size: 100000
+			yaml: minimalOracleCDCYAML + `  window_strategy: scn_window
+  scn_window_size: 20000
+  max_scn_window_size: 100000
 `,
 		},
 		{
-			name: "redo_volume with an scn_window field explicitly overridden warns",
-			conf: minimalOracleCDCYAML + `    window_strategy: redo_volume
-    scn_window_size: 5000
-`,
-			lintErr: "(7,1) scn_window_size and max_scn_window_size have no effect when window_strategy is \"redo_volume\"",
+			name:    "redo_volume with scn_window_size overridden is rejected",
+			yaml:    minimalOracleCDCYAML + "  window_strategy: redo_volume\n  scn_window_size: 5000\n",
+			wantErr: "scn_window_size has no effect when logminer.window_strategy is \"redo_volume\"",
 		},
 		{
-			name: "window_strategy left unset (defaults to scn_window) with a redo_volume field overridden warns",
-			conf: minimalOracleCDCYAML + `    redo_volume_min: 99
-`,
-			lintErr: "(7,1) redo_volume_min and redo_volume_growth_max have no effect when window_strategy is \"scn_window\"",
+			name:    "redo_volume with max_scn_window_size overridden is rejected",
+			yaml:    minimalOracleCDCYAML + "  window_strategy: redo_volume\n  max_scn_window_size: 200000\n",
+			wantErr: "max_scn_window_size has no effect when logminer.window_strategy is \"redo_volume\"",
+		},
+		{
+			name:    "window_strategy left unset (defaults to scn_window) with redo_volume_min overridden is rejected",
+			yaml:    minimalOracleCDCYAML + "  redo_volume_min: 99\n",
+			wantErr: "redo_volume_min has no effect when logminer.window_strategy is \"scn_window\"",
+		},
+		{
+			name:    "scn_window with redo_volume_growth_max overridden is rejected",
+			yaml:    minimalOracleCDCYAML + "  window_strategy: scn_window\n  redo_volume_growth_max: 8\n",
+			wantErr: "redo_volume_growth_max has no effect when logminer.window_strategy is \"scn_window\"",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lints, err := linter.LintInputYAML([]byte(tt.conf))
+			conf, err := oracleDBStreamConfigSpec.ParseYAML(tt.yaml, nil)
 			require.NoError(t, err)
-			if tt.lintErr != "" {
-				require.Len(t, lints, 1)
-				assert.Equal(t, tt.lintErr, lints[0].Error())
-			} else {
-				assert.Empty(t, lints)
+
+			_, err = parseLogMinerConfig(conf)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
 			}
+			require.Error(t, err)
+			assert.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestParseLogMinerConfigMinSCNWindowSize(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+logminer:
+`
+	tests := []struct {
+		name    string
+		yaml    string
+		want    int
+		wantErr string
+	}{
+		{
+			name: "honored under scn_window (the default strategy)",
+			yaml: minimalOracleCDCYAML + "  min_scn_window_size: 500\n",
+			want: 500,
+		},
+		{
+			name: "honored under redo_volume too, not just scn_window",
+			yaml: minimalOracleCDCYAML + "  window_strategy: redo_volume\n  min_scn_window_size: 500\n",
+			want: 500,
+		},
+		{
+			name:    "negative value rejected regardless of strategy",
+			yaml:    minimalOracleCDCYAML + "  window_strategy: redo_volume\n  min_scn_window_size: -1\n",
+			wantErr: "min_scn_window_size must be 0 or greater",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := oracleDBStreamConfigSpec.ParseYAML(tt.yaml, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseLogMinerConfig(conf)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, cfg.MinSCNWindowSize)
+		})
+	}
+}
+
+func TestParseLogMinerConfigRedoVolumeGrowthMax(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+logminer:
+  window_strategy: redo_volume
+`
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr string
+	}{
+		{
+			name:    "min 1, growth_max 1 is rejected: it can never grow past a single reselected file",
+			yaml:    minimalOracleCDCYAML + "  redo_volume_min: 1\n  redo_volume_growth_max: 1\n",
+			wantErr: "must be at least 2",
+		},
+		{
+			name: "min 1, growth_max 2 is accepted",
+			yaml: minimalOracleCDCYAML + "  redo_volume_min: 1\n  redo_volume_growth_max: 2\n",
+		},
+		{
+			name: "min 2, growth_max 4 (the defaults) is accepted",
+			yaml: minimalOracleCDCYAML + "  redo_volume_min: 2\n  redo_volume_growth_max: 4\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := oracleDBStreamConfigSpec.ParseYAML(tt.yaml, nil)
+			require.NoError(t, err)
+
+			_, err = parseLogMinerConfig(conf)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.ErrorContains(t, err, tt.wantErr)
 		})
 	}
 }
