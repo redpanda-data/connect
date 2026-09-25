@@ -257,12 +257,24 @@ jobs:
             ,sdlc/prod/github/actions_bot_token
           parse-json-secrets: true
       - name: Trigger docs updates
+        # Best-effort notifications: a docs dispatch failure must never fail
+        # update-downstream (notify-slack declares needs on this job, so a
+        # failure here would silence the release notification).
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
         run: |
           gh api repos/redpanda-data/docs-ui/dispatches -f event_type=update-go-mod
           gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=generate-rpcn-docs
           gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=test-cookbook-examples
+          # Regenerate the rpk connect plugin docs in redpanda-data/docs. The
+          # docs workflow (update-rpk-plugin-docs.yml) refreshes only the
+          # connect subtree of its rpk command snapshot and opens a PR per
+          # eligible docs branch.
+          gh api repos/redpanda-data/docs/dispatches \
+            -f event_type=update-rpk-plugin-docs \
+            -f 'client_payload[plugin]=connect' \
+            -f "client_payload[version]=${GITHUB_REF_NAME#v}"
       - name: Update helm chart and create PR
         id: helm
         env:
