@@ -126,6 +126,6 @@ output:
 
 ## References
 
-- [Postgres CDC Input Documentation](https://docs.redpanda.com/redpanda-connect/components/inputs/postgres_cdc/)
-- [SQL Raw Output Documentation](https://docs.redpanda.com/redpanda-connect/components/outputs/sql_raw/)
+- [Postgres CDC Input Documentation](https://docs.redpanda.com/redpanda-connect/components/inputs/postgres_cdc.md)
+- [SQL Raw Output Documentation](https://docs.redpanda.com/redpanda-connect/components/outputs/sql_raw.md)
 - [Postgres Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html)

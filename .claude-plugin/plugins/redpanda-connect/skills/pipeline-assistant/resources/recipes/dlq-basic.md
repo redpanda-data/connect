@@ -150,6 +150,6 @@ This implements both absolute and percentage-based error tolerance.
 
 ## References
 
-- [Switch Output Documentation](https://docs.redpanda.com/redpanda-connect/components/outputs/switch/)
-- [File Output Documentation](https://docs.redpanda.com/redpanda-connect/components/outputs/file/)
-- [Bloblang parse_json Method](https://docs.redpanda.com/redpanda-connect/guides/bloblang/methods/#parse_json)
+- [Switch Output Documentation](https://docs.redpanda.com/redpanda-connect/components/outputs/switch.md)
+- [File Output Documentation](https://docs.redpanda.com/redpanda-connect/components/outputs/file.md)
+- [Bloblang parse_json Method](https://docs.redpanda.com/redpanda-connect/guides/bloblang/methods.md#parse_json)
