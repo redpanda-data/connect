@@ -259,7 +259,7 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.True(t, capped)
 		assert.Equal(t, 3, s.count)
 
-		// miningCycle resets count to LogCountMin on an uncapped cycle; simulate that directly (no exported method exists).
+		// miningCycle resets count to RedoVolumeMin on an uncapped cycle; simulate that directly (no exported method exists).
 		s.count = s.minCount
 
 		// prevUpperBoundSCN is untouched by the reset above, so the ratchet must keep 3 files' coverage rather than silently dropping back to 2.

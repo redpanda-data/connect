@@ -45,7 +45,7 @@ type LogMiner struct {
 	logCollector *LogFileCollector
 	currentSCN   uint64
 	windowSize   int
-	logCount     *logCountStrategy
+	redoVolume   *redoVolumeStrategy
 	sessionMgr   *SessionManager
 	db           *sql.DB
 	dmlParser    *sqlredo.Parser
@@ -124,7 +124,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
 		windowSize:       cfg.SCNWindowSize,
-		logCount:         newLogCountStrategy(cfg.LogCountMin, cfg.LogCountGrowthMax),
+		redoVolume:       newRedoVolumeStrategy(cfg.RedoVolumeMin, cfg.RedoVolumeGrowthMax),
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -221,8 +221,8 @@ func (lm *LogMiner) Close() error {
 		errs = append(errs, fmt.Errorf("closing log file collector statements: %w", err))
 	}
 
-	if err := lm.logCount.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("closing log_count statements: %w", err))
+	if err := lm.redoVolume.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("closing redo_volume statements: %w", err))
 	}
 
 	if err := lm.sessionMgr.Close(); err != nil {
@@ -288,8 +288,8 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	)
 
 	switch lm.cfg.WindowStrategy {
-	case WindowStrategyLogCount:
-		if logFiles, endSCN, capped, err = lm.logCount.selectSession(ctx, conn, lm.logCollector, lm.currentSCN, dbCurrentSCN); err != nil {
+	case WindowStrategyRedoVolume:
+		if logFiles, endSCN, capped, err = lm.redoVolume.selectSession(ctx, conn, lm.logCollector, lm.currentSCN, dbCurrentSCN); err != nil {
 			return false, err
 		}
 	default:
@@ -355,8 +355,8 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	}
 
 	switch lm.cfg.WindowStrategy {
-	case WindowStrategyLogCount:
-		lm.logCount.resetIfUncapped(capped)
+	case WindowStrategyRedoVolume:
+		lm.redoVolume.resetIfUncapped(capped)
 	default:
 		lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
 	}
@@ -1003,8 +1003,8 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 
 	// Use the pre-built query from initialization
 	switch lm.cfg.WindowStrategy {
-	case WindowStrategyLogCount:
-		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d, log_count budget=%d files)", startSCN, endSCN, lm.logCount.selector.count)
+	case WindowStrategyRedoVolume:
+		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d, redo_volume budget=%d files)", startSCN, endSCN, lm.redoVolume.selector.count)
 	default:
 		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
 	}
@@ -1129,7 +1129,7 @@ type LogFile struct {
 	IsCurrent bool
 	Thread    int
 	Status    string
-	// SizeBytes is the file's on-disk size, budgeted by log_count instead of a flat file count (see logFileSelector).
+	// SizeBytes is the file's on-disk size, budgeted by redo_volume instead of a flat file count (see logFileSelector).
 	SizeBytes uint64
 }
 

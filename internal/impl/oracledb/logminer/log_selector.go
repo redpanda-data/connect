@@ -20,7 +20,7 @@ type logKey struct {
 	sequence int64
 }
 
-// logFileSelector implements the log_count window strategy's file budget.
+// logFileSelector implements the redo_volume window strategy's file budget.
 // count is a config-level file count, but denotes online-redo-log-sized
 // bytes internally (count * maxRedoLogSizeInBytes) - archived log sizes vary
 // too much for a flat file count to give a predictable amount of redo per

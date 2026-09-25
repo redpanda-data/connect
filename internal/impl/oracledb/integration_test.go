@@ -1182,7 +1182,7 @@ file:
 	})
 }
 
-func TestIntegrationOracleDBCDCLogCountWindowStrategy(t *testing.T) {
+func TestIntegrationOracleDBCDCRedoVolumeWindowStrategy(t *testing.T) {
 	integration.CheckSkip(t)
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
@@ -1191,15 +1191,15 @@ func TestIntegrationOracleDBCDCLogCountWindowStrategy(t *testing.T) {
 	msgChan := make(chan *service.Message, 1)
 
 	// min_scn_window_size: 0 (mirroring the scn_window-strategy tests in this
-	// file) confirms log_count mines DML promptly regardless of SCN backlog size.
+	// file) confirms redo_volume mines DML promptly regardless of SCN backlog size.
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
   snapshot_mode: none
   logminer:
-    window_strategy: log_count
-    log_count_min: 2
-    log_count_growth_max: 4
+    window_strategy: redo_volume
+    redo_volume_min: 2
+    redo_volume_growth_max: 4
     backoff_interval: 1s
     min_scn_window_size: 0
   include: ["TESTDB.LOGCOUNT"]

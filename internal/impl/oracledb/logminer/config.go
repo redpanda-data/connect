@@ -40,17 +40,14 @@ var (
 	// before being forcibly restarted, independent of redo log switches. 0 disables this,
 	// restarting only on log switches (the previous, and still default, behaviour).
 	DefaultMaxSessionAge = 0 * time.Second
-	// DefaultLogCountMin is the minimum number of redo log files mined per cycle,
-	// per redo thread, under the WindowStrategyLogCount window strategy. This is
-	// applied internally as file-size-equivalent bytes (this many multiples of
-	// the online redo log's configured size), not a literal file count - see
-	// logFileSelector.
-	DefaultLogCountMin = 2
-	// DefaultLogCountGrowthMax is the ceiling the per-thread log file budget can
-	// grow to under the WindowStrategyLogCount window strategy, once forward
-	// progress stalls. Like DefaultLogCountMin, this is a file-size-equivalent
-	// byte multiplier internally, not a literal file count.
-	DefaultLogCountGrowthMax = 4
+	// DefaultRedoVolumeMin is the minimum redo volume budget mined per cycle,
+	// per redo thread, under the WindowStrategyRedoVolume window strategy,
+	// expressed in multiples of the online redo log's configured size.
+	DefaultRedoVolumeMin = 2
+	// DefaultRedoVolumeGrowthMax is the ceiling the per-thread redo volume
+	// budget can grow to under the WindowStrategyRedoVolume window strategy,
+	// once forward progress stalls.
+	DefaultRedoVolumeGrowthMax = 4
 )
 
 // WindowStrategy selects how the SCN range mined per LogMiner cycle is sized.
@@ -60,9 +57,9 @@ const (
 	// WindowStrategySCNWindow sizes the mined range by growing/shrinking a fixed
 	// SCN-count window each cycle.
 	WindowStrategySCNWindow WindowStrategy = "scn_window"
-	// WindowStrategyLogCount sizes the mined range by a bounded number of redo
-	// log files per cycle, per redo thread.
-	WindowStrategyLogCount WindowStrategy = "log_count"
+	// WindowStrategyRedoVolume sizes the mined range by a bounded redo volume
+	// budget per cycle, per redo thread.
+	WindowStrategyRedoVolume WindowStrategy = "redo_volume"
 )
 
 // MiningStrategy defines how LogMiner accesses dictionary information
@@ -94,8 +91,8 @@ type Config struct {
 	TransactionCacheConfig TransactionCacheConfig
 	MaxSessionAge          time.Duration
 	WindowStrategy         WindowStrategy
-	LogCountMin            int
-	LogCountGrowthMax      int
+	RedoVolumeMin          int
+	RedoVolumeGrowthMax    int
 }
 
 // NewDefaultConfig returns a Config with default values
@@ -111,7 +108,7 @@ func NewDefaultConfig() *Config {
 		LOBEnabled:            DefaultLOBEnabled,
 		MaxSessionAge:         DefaultMaxSessionAge,
 		WindowStrategy:        WindowStrategySCNWindow,
-		LogCountMin:           DefaultLogCountMin,
-		LogCountGrowthMax:     DefaultLogCountGrowthMax,
+		RedoVolumeMin:         DefaultRedoVolumeMin,
+		RedoVolumeGrowthMax:   DefaultRedoVolumeGrowthMax,
 	}
 }

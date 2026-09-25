@@ -66,8 +66,8 @@ const (
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
 	ociFieldMaxSessionAge        = "max_session_age"
 	ociFieldWindowStrategy       = "window_strategy"
-	ociFieldLogCountMin          = "log_count_min"
-	ociFieldLogCountGrowthMax    = "log_count_growth_max"
+	ociFieldRedoVolumeMin        = "redo_volume_min"
+	ociFieldRedoVolumeGrowthMax  = "redo_volume_growth_max"
 
 	//-- snapshot specific
 	ociFieldSnapshotFilters = "snapshot_filters"
@@ -171,20 +171,20 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		service.NewIntField(ociFieldMaxSCNWindowSize).
 			Description(`The maximum SCN range that can be mined in a single cycle. The window starts at `+ociFieldSCNWindowSize+` and grows by `+ociFieldSCNWindowSize+` each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.`).
 			Default(logminer.DefaultMaxSCNWindowSize),
-		service.NewStringEnumField(ociFieldWindowStrategy, string(logminer.WindowStrategySCNWindow), string(logminer.WindowStrategyLogCount)).
-			Description("Controls how the SCN range mined per cycle is sized. `"+string(logminer.WindowStrategySCNWindow)+"` (default) grows/shrinks the mined SCN range by a fixed increment ("+ociFieldSCNWindowSize+") based on backlog, bounded by "+ociFieldMinSCNWindowSize+"/"+ociFieldMaxSCNWindowSize+". `"+string(logminer.WindowStrategyLogCount)+"` instead bounds the range by a fixed number of redo log files ("+ociFieldLogCountMin+"/"+ociFieldLogCountGrowthMax+"), decoupling session cost from raw SCN movement. Use `"+string(logminer.WindowStrategyLogCount)+"` when the database's current SCN can advance independently of real transaction volume against the monitored tables - for example a CDB-shared SCN advanced by another PDB, or Oracle's automatic maintenance window generating many small internal commits - since "+string(logminer.WindowStrategySCNWindow)+" would otherwise burn many cycles ramping the window up to its ceiling, paying LogMiner's fixed per-cycle overhead on ranges that are mostly empty of real changes, whereas "+string(logminer.WindowStrategyLogCount)+" absorbs the same event in however many log files it actually touches. On multi-thread (RAC) databases, "+string(logminer.WindowStrategyLogCount)+" applies its file budget independently to each open redo thread, so the effective number of files mined per cycle scales with the number of open threads.").
-			ShortDescription("How the mined SCN range per cycle is sized: by a growing/shrinking SCN window, or by a fixed count of redo log files.").
+		service.NewStringEnumField(ociFieldWindowStrategy, string(logminer.WindowStrategySCNWindow), string(logminer.WindowStrategyRedoVolume)).
+			Description("Controls how the SCN range mined per cycle is sized. `"+string(logminer.WindowStrategySCNWindow)+"` (default) grows/shrinks the mined SCN range by a fixed increment ("+ociFieldSCNWindowSize+") based on backlog, bounded by "+ociFieldMinSCNWindowSize+"/"+ociFieldMaxSCNWindowSize+". `"+string(logminer.WindowStrategyRedoVolume)+"` instead bounds the range by a fixed redo-volume budget ("+ociFieldRedoVolumeMin+"/"+ociFieldRedoVolumeGrowthMax+"), decoupling session cost from raw SCN movement. Use `"+string(logminer.WindowStrategyRedoVolume)+"` when the database's current SCN can advance independently of real transaction volume against the monitored tables - for example a CDB-shared SCN advanced by another PDB, or Oracle's automatic maintenance window generating many small internal commits - since "+string(logminer.WindowStrategySCNWindow)+" would otherwise burn many cycles ramping the window up to its ceiling, paying LogMiner's fixed per-cycle overhead on ranges that are mostly empty of real changes, whereas "+string(logminer.WindowStrategyRedoVolume)+" absorbs the same event in however much redo it actually touches. On multi-thread (RAC) databases, "+string(logminer.WindowStrategyRedoVolume)+" applies its budget independently to each open redo thread, so the effective volume mined per cycle scales with the number of open threads.").
+			ShortDescription("How the mined SCN range per cycle is sized: by a growing/shrinking SCN window, or by a fixed redo-volume budget.").
 			Default(string(logminer.WindowStrategySCNWindow)).
 			Advanced(),
-		service.NewIntField(ociFieldLogCountMin).
-			Description("The minimum number of redo log files mined per cycle, applied independently to each open redo thread - on a multi-thread (RAC) database the total number of files mined per cycle scales with the number of open threads. This budget is not applied as a literal file count: internally it is interpreted as this many multiples of the online redo log's configured size, in bytes, and a thread's file list is truncated once its accumulated file sizes reach that byte threshold - not once a fixed number of files has been selected. This matters because archived log file sizes vary enormously in practice (a quiet period between log switches still produces one small file, while a busy one fills a file to the full online redo log size), so a literal file count is an unpredictable proxy for how much real redo a cycle actually covers, whereas a byte budget targets that directly. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyLogCount)+"`.").
-			ShortDescription("The minimum number of redo log files (interpreted as file-size-equivalent bytes) mined per cycle per redo thread, under the "+string(logminer.WindowStrategyLogCount)+" window strategy.").
-			Default(logminer.DefaultLogCountMin).
+		service.NewIntField(ociFieldRedoVolumeMin).
+			Description("The minimum redo volume mined per cycle, in multiples of the online redo log's configured size, applied independently to each open redo thread - on a multi-thread (RAC) database the total volume mined per cycle scales with the number of open threads. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
+			ShortDescription("The minimum redo volume, in multiples of the online redo log size, mined per cycle per redo thread, under the "+string(logminer.WindowStrategyRedoVolume)+" window strategy.").
+			Default(logminer.DefaultRedoVolumeMin).
 			Advanced(),
-		service.NewIntField(ociFieldLogCountGrowthMax).
-			Description("The maximum number of redo log files the per-thread budget automatically grows to; like `"+ociFieldLogCountMin+"`, this is applied independently to each open redo thread, so the total number of files mined per cycle scales with the number of open threads on a multi-thread (RAC) database, and like `"+ociFieldLogCountMin+"` it is interpreted internally as file-size-equivalent bytes (this many multiples of the online redo log's configured size) rather than a literal file count. The budget starts at `"+ociFieldLogCountMin+"` and grows each cycle in which a thread reselects the same set of files as the previous cycle (typically caused by a mining cycle retrying without making progress, such as after an ORA-01368 redo log recycle) - normally by one unit, or in a single larger jump when a thread's backlog below the already-mined boundary is large enough that a bigger jump would clear it outright - up to this limit. This bounds automatic growth only, not the number of files a thread can end up with: once a cycle has committed to mining up to some SCN, a thread's selection can still be extended past this limit on a later cycle to avoid leaving a gap in that already-committed range. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyLogCount)+"`.").
-			ShortDescription("The maximum number of redo log files the per-thread budget grows to, under the "+string(logminer.WindowStrategyLogCount)+" window strategy (may be exceeded when re-covering already-committed ground).").
-			Default(logminer.DefaultLogCountGrowthMax).
+		service.NewIntField(ociFieldRedoVolumeGrowthMax).
+			Description("The maximum redo volume the per-thread budget automatically grows to, in multiples of the online redo log's configured size; like `"+ociFieldRedoVolumeMin+"`, this is applied independently to each open redo thread. The budget starts at `"+ociFieldRedoVolumeMin+"` and grows each cycle in which a thread reselects the same set of files as the previous cycle (typically caused by a mining cycle retrying without making progress, such as after an ORA-01368 redo log recycle) - normally by one unit, or in a single larger jump when a thread's backlog below the already-mined boundary is large enough that a bigger jump would clear it outright - up to this limit. This bounds automatic growth only: once a cycle has committed to mining up to some SCN, a thread's selection can still be extended past this limit on a later cycle to avoid leaving a gap in that already-committed range. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
+			ShortDescription("The maximum redo volume the per-thread budget grows to, under the "+string(logminer.WindowStrategyRedoVolume)+" window strategy (may be exceeded when re-covering already-committed ground).").
+			Default(logminer.DefaultRedoVolumeGrowthMax).
 			Advanced(),
 		service.NewDurationField(ociFieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
@@ -231,16 +231,16 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 		// These fields always default-fill (they carry Default()), so this.exists()
 		// would always be true; compare against the known defaults instead to catch
 		// a meaningful override.
-		LintRule(`root = if this.` + ociFieldWindowStrategy + ` == "` + string(logminer.WindowStrategyLogCount) + `" && (
+		LintRule(`root = if this.` + ociFieldWindowStrategy + ` == "` + string(logminer.WindowStrategyRedoVolume) + `" && (
   this.` + ociFieldSCNWindowSize + ` != ` + strconv.Itoa(logminer.DefaultSCNWindowSize) + ` ||
   this.` + ociFieldMaxSCNWindowSize + ` != ` + strconv.Itoa(logminer.DefaultMaxSCNWindowSize) + `
 ) {
-  [ "` + ociFieldSCNWindowSize + ` and ` + ociFieldMaxSCNWindowSize + ` have no effect when ` + ociFieldWindowStrategy + ` is \"` + string(logminer.WindowStrategyLogCount) + `\"" ]
+  [ "` + ociFieldSCNWindowSize + ` and ` + ociFieldMaxSCNWindowSize + ` have no effect when ` + ociFieldWindowStrategy + ` is \"` + string(logminer.WindowStrategyRedoVolume) + `\"" ]
 } else if this.` + ociFieldWindowStrategy + ` == "` + string(logminer.WindowStrategySCNWindow) + `" && (
-  this.` + ociFieldLogCountMin + ` != ` + strconv.Itoa(logminer.DefaultLogCountMin) + ` ||
-  this.` + ociFieldLogCountGrowthMax + ` != ` + strconv.Itoa(logminer.DefaultLogCountGrowthMax) + `
+  this.` + ociFieldRedoVolumeMin + ` != ` + strconv.Itoa(logminer.DefaultRedoVolumeMin) + ` ||
+  this.` + ociFieldRedoVolumeGrowthMax + ` != ` + strconv.Itoa(logminer.DefaultRedoVolumeGrowthMax) + `
 ) {
-  [ "` + ociFieldLogCountMin + ` and ` + ociFieldLogCountGrowthMax + ` have no effect when ` + ociFieldWindowStrategy + ` is \"` + string(logminer.WindowStrategySCNWindow) + `\"" ]
+  [ "` + ociFieldRedoVolumeMin + ` and ` + ociFieldRedoVolumeGrowthMax + ` have no effect when ` + ociFieldWindowStrategy + ` is \"` + string(logminer.WindowStrategySCNWindow) + `\"" ]
 }`),
 	).
 	Field(service.NewStringMapField(ociFieldSnapshotFilters).
@@ -1006,17 +1006,17 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		} else {
 			cfg.WindowStrategy = logminer.WindowStrategy(strategy)
 		}
-		if cfg.LogCountMin, err = lmConf.FieldInt(ociFieldLogCountMin); err != nil {
+		if cfg.RedoVolumeMin, err = lmConf.FieldInt(ociFieldRedoVolumeMin); err != nil {
 			return nil, err
 		}
-		if cfg.LogCountMin <= 0 {
-			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldLogCountMin, cfg.LogCountMin)
+		if cfg.RedoVolumeMin <= 0 {
+			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldRedoVolumeMin, cfg.RedoVolumeMin)
 		}
-		if cfg.LogCountGrowthMax, err = lmConf.FieldInt(ociFieldLogCountGrowthMax); err != nil {
+		if cfg.RedoVolumeGrowthMax, err = lmConf.FieldInt(ociFieldRedoVolumeGrowthMax); err != nil {
 			return nil, err
 		}
-		if cfg.LogCountGrowthMax < cfg.LogCountMin {
-			return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldLogCountGrowthMax, cfg.LogCountGrowthMax, ociFieldLogCountMin, cfg.LogCountMin)
+		if cfg.RedoVolumeGrowthMax < cfg.RedoVolumeMin {
+			return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldRedoVolumeGrowthMax, cfg.RedoVolumeGrowthMax, ociFieldRedoVolumeMin, cfg.RedoVolumeMin)
 		}
 		if cfg.MiningBackoffInterval, err = lmConf.FieldDuration(ociFieldBackoffInterval); err != nil {
 			return nil, err

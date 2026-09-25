@@ -407,31 +407,31 @@ oracledb_cdc:
 		lintErr string
 	}{
 		{
-			name: "log_count with scn_window fields left unset does not false-positive",
-			conf: minimalOracleCDCYAML + `    window_strategy: log_count
-    log_count_min: 2
-    log_count_growth_max: 4
+			name: "redo_volume with scn_window fields left unset does not false-positive",
+			conf: minimalOracleCDCYAML + `    window_strategy: redo_volume
+    redo_volume_min: 2
+    redo_volume_growth_max: 4
 `,
 		},
 		{
-			name: "scn_window with log_count fields left unset does not false-positive",
+			name: "scn_window with redo_volume fields left unset does not false-positive",
 			conf: minimalOracleCDCYAML + `    window_strategy: scn_window
     scn_window_size: 20000
     max_scn_window_size: 100000
 `,
 		},
 		{
-			name: "log_count with an scn_window field explicitly overridden warns",
-			conf: minimalOracleCDCYAML + `    window_strategy: log_count
+			name: "redo_volume with an scn_window field explicitly overridden warns",
+			conf: minimalOracleCDCYAML + `    window_strategy: redo_volume
     scn_window_size: 5000
 `,
-			lintErr: "(7,1) scn_window_size and max_scn_window_size have no effect when window_strategy is \"log_count\"",
+			lintErr: "(7,1) scn_window_size and max_scn_window_size have no effect when window_strategy is \"redo_volume\"",
 		},
 		{
-			name: "window_strategy left unset (defaults to scn_window) with a log_count field overridden warns",
-			conf: minimalOracleCDCYAML + `    log_count_min: 99
+			name: "window_strategy left unset (defaults to scn_window) with a redo_volume field overridden warns",
+			conf: minimalOracleCDCYAML + `    redo_volume_min: 99
 `,
-			lintErr: "(7,1) log_count_min and log_count_growth_max have no effect when window_strategy is \"scn_window\"",
+			lintErr: "(7,1) redo_volume_min and redo_volume_growth_max have no effect when window_strategy is \"scn_window\"",
 		},
 	}
 	for _, tt := range tests {

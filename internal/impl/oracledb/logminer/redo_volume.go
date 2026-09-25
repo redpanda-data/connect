@@ -15,11 +15,11 @@ import (
 	"fmt"
 )
 
-// logCountStrategy owns the state and DB-glue methods for the log_count
+// redoVolumeStrategy owns the state and DB-glue methods for the redo_volume
 // window strategy: the byte-budget file selector, the max redo log size it's
 // denominated in, and the prepared statements used to fetch that size and
 // the currently open redo threads.
-type logCountStrategy struct {
+type redoVolumeStrategy struct {
 	selector *logFileSelector
 	// maxRedoLogSizeInBytes is fetched once, lazily; 0 means "not yet fetched" (never legitimately 0 on a running database).
 	maxRedoLogSizeInBytes uint64
@@ -27,78 +27,78 @@ type logCountStrategy struct {
 	openThreadsStmt       *sql.Stmt
 }
 
-func newLogCountStrategy(minCount, growthMax int) *logCountStrategy {
-	return &logCountStrategy{selector: &logFileSelector{minCount: minCount, growthMax: growthMax}}
+func newRedoVolumeStrategy(minCount, growthMax int) *redoVolumeStrategy {
+	return &redoVolumeStrategy{selector: &logFileSelector{minCount: minCount, growthMax: growthMax}}
 }
 
-func (lc *logCountStrategy) selectSession(ctx context.Context, conn *sql.Conn, logCollector *LogFileCollector, currentSCN, dbCurrentSCN uint64) (files []*LogFile, endSCN uint64, capped bool, err error) {
-	if lc.maxRedoLogSizeInBytes == 0 {
-		size, err := lc.GetMaxRedoLogSize(ctx, conn)
+func (rv *redoVolumeStrategy) selectSession(ctx context.Context, conn *sql.Conn, logCollector *LogFileCollector, currentSCN, dbCurrentSCN uint64) (files []*LogFile, endSCN uint64, capped bool, err error) {
+	if rv.maxRedoLogSizeInBytes == 0 {
+		size, err := rv.GetMaxRedoLogSize(ctx, conn)
 		if err != nil {
 			return nil, 0, false, fmt.Errorf("fetching max redo log size for logminer: %w", err)
 		}
 		if size == 0 {
-			return nil, 0, false, errors.New("database reported a max redo log size of 0 bytes across V$LOG - cannot size the log_count byte budget")
+			return nil, 0, false, errors.New("database reported a max redo log size of 0 bytes across V$LOG - cannot size the redo_volume byte budget")
 		}
-		lc.maxRedoLogSizeInBytes = size
+		rv.maxRedoLogSizeInBytes = size
 	}
 
 	candidates, err := logCollector.GetLogsBySCNRange(ctx, conn, currentSCN, dbCurrentSCN)
 	if err != nil {
 		return nil, 0, false, fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
-	openThreads, err := lc.GetOpenThreads(ctx, conn)
+	openThreads, err := rv.GetOpenThreads(ctx, conn)
 	if err != nil {
 		return nil, 0, false, fmt.Errorf("collecting open redo threads for logminer: %w", err)
 	}
-	if files, endSCN, capped, err = lc.selector.selectForSession(candidates, openThreads, dbCurrentSCN, lc.maxRedoLogSizeInBytes); err != nil {
+	if files, endSCN, capped, err = rv.selector.selectForSession(candidates, openThreads, dbCurrentSCN, rv.maxRedoLogSizeInBytes); err != nil {
 		return nil, 0, false, fmt.Errorf("selecting log files for session: %w", err)
 	}
 	return files, endSCN, capped, nil
 }
 
-func (lc *logCountStrategy) resetIfUncapped(capped bool) {
+func (rv *redoVolumeStrategy) resetIfUncapped(capped bool) {
 	if !capped {
-		lc.selector.count = lc.selector.minCount
+		rv.selector.count = rv.selector.minCount
 	}
 }
 
 // GetMaxRedoLogSize returns the largest configured online redo log size, in
-// bytes, across every redo group. The log_count window strategy uses this as
-// the unit its file-count budget is denominated in (N x this size) rather
-// than a literal file count, since online redo log groups are always
-// provisioned to a uniform size, unlike archived log files (see LogFile.SizeBytes).
-func (lc *logCountStrategy) GetMaxRedoLogSize(ctx context.Context, conn *sql.Conn) (uint64, error) {
-	if lc.maxRedoSizeStmt == nil {
+// bytes, across every redo group. The redo_volume window strategy uses this
+// as the unit its byte budget is denominated in (N x this size), since
+// online redo log groups are always provisioned to a uniform size, unlike
+// archived log files (see LogFile.SizeBytes).
+func (rv *redoVolumeStrategy) GetMaxRedoLogSize(ctx context.Context, conn *sql.Conn) (uint64, error) {
+	if rv.maxRedoSizeStmt == nil {
 		stmt, err := conn.PrepareContext(ctx, "SELECT MAX(BYTES) FROM V$LOG")
 		if err != nil {
 			return 0, fmt.Errorf("preparing max redo log size query: %w", err)
 		}
-		lc.maxRedoSizeStmt = stmt
+		rv.maxRedoSizeStmt = stmt
 	}
 
 	var maxBytes uint64
-	if err := lc.maxRedoSizeStmt.QueryRowContext(ctx).Scan(&maxBytes); err != nil {
+	if err := rv.maxRedoSizeStmt.QueryRowContext(ctx).Scan(&maxBytes); err != nil {
 		return 0, fmt.Errorf("querying max redo log size: %w", err)
 	}
 	return maxBytes, nil
 }
 
 // GetOpenThreads returns the redo thread numbers Oracle currently reports as
-// OPEN. The log_count window strategy uses this on RAC databases to check
+// OPEN. The redo_volume window strategy uses this on RAC databases to check
 // that every open thread actually has log files in a GetLogsBySCNRange
 // result - an open thread with none means the collector query missed
 // something, not that the thread has nothing to mine.
-func (lc *logCountStrategy) GetOpenThreads(ctx context.Context, conn *sql.Conn) ([]int, error) {
-	if lc.openThreadsStmt == nil {
+func (rv *redoVolumeStrategy) GetOpenThreads(ctx context.Context, conn *sql.Conn) ([]int, error) {
+	if rv.openThreadsStmt == nil {
 		stmt, err := conn.PrepareContext(ctx, `SELECT THREAD# FROM V$THREAD WHERE STATUS = 'OPEN'`)
 		if err != nil {
 			return nil, fmt.Errorf("preparing open redo threads query: %w", err)
 		}
-		lc.openThreadsStmt = stmt
+		rv.openThreadsStmt = stmt
 	}
 
-	rows, err := lc.openThreadsStmt.QueryContext(ctx)
+	rows, err := rv.openThreadsStmt.QueryContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("querying open redo threads: %w", err)
 	}
@@ -119,19 +119,19 @@ func (lc *logCountStrategy) GetOpenThreads(ctx context.Context, conn *sql.Conn) 
 }
 
 // Close releases the prepared GetMaxRedoLogSize and GetOpenThreads statements, if any.
-func (lc *logCountStrategy) Close() error {
+func (rv *redoVolumeStrategy) Close() error {
 	var errs []error
-	if lc.maxRedoSizeStmt != nil {
-		if err := lc.maxRedoSizeStmt.Close(); err != nil {
+	if rv.maxRedoSizeStmt != nil {
+		if err := rv.maxRedoSizeStmt.Close(); err != nil {
 			errs = append(errs, err)
 		}
-		lc.maxRedoSizeStmt = nil
+		rv.maxRedoSizeStmt = nil
 	}
-	if lc.openThreadsStmt != nil {
-		if err := lc.openThreadsStmt.Close(); err != nil {
+	if rv.openThreadsStmt != nil {
+		if err := rv.openThreadsStmt.Close(); err != nil {
 			errs = append(errs, err)
 		}
-		lc.openThreadsStmt = nil
+		rv.openThreadsStmt = nil
 	}
 	return errors.Join(errs...)
 }
