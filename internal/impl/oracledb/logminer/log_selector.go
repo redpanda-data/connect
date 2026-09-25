@@ -52,7 +52,11 @@ func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, 
 		// No progress - grow via the derived jump instead of a flat +1.
 		derived := s.deriveGrowthCount(files, maxRedoLogSizeInBytes)
 		growTo := max(derived, s.count+1)
-		if ceiling := max(s.growthMax, s.minCount); growTo > ceiling {
+		// The floor of 2 guards against a permanent stall: a budget of 1
+		// always reselects its own single file forever (its NextSCN-1
+		// boundary re-qualifies it next cycle), so it can only ever escape
+		// via growth - clamping the ceiling to 1 as well would trap it.
+		if ceiling := max(s.growthMax, s.minCount, 2); growTo > ceiling {
 			growTo = ceiling
 		}
 		s.count = growTo

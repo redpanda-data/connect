@@ -704,4 +704,42 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.Equal(t, uint64(1999), endSCN, "endSCN must stop at seq 10's boundary, not skip ahead to seq 11's")
 		assert.NotEqual(t, seq11.NextSCN-1, endSCN, "endSCN must not jump straight to seq 11, leaving seq 10 unmined and unreachable next cycle")
 	})
+
+	t.Run("minCount 1, growthMax 1 still makes forward progress across repeated cycles", func(t *testing.T) {
+		// A single cycle can't tell a real cap (endSCN tightened, but moving)
+		// from a livelock (endSCN stuck): growthMax 1 alone can never grow
+		// the budget past its own reselected file, so this only proves the
+		// selector's own floor - not config validation - keeps it moving.
+		s := &logFileSelector{minCount: 1, growthMax: 1}
+
+		const dbCurrentSCN = 10000
+		files := make([]*LogFile, 0, 10)
+		for seq := int64(1); seq <= 9; seq++ {
+			files = append(files, mkLogFile(1, seq, uint64(seq-1)*1000, uint64(seq)*1000, "ARCHIVED", testRedoLogSize))
+		}
+		files = append(files, mkLogFile(1, 10, 9000, dbCurrentSCN, logStatusCurrent, testRedoLogSize))
+
+		var currentSCN uint64
+		capped := true
+		for cycle := 0; capped; cycle++ {
+			require.Less(t, cycle, 20, "must catch up well within a generous cycle budget, not just eventually")
+
+			var candidates []*LogFile
+			for _, f := range files {
+				if f.NextSCN >= currentSCN {
+					candidates = append(candidates, f)
+				}
+			}
+
+			selected, endSCN, gotCapped, err := s.selectForSession(candidates, openThread1, dbCurrentSCN, testRedoLogSize)
+			require.NoError(t, err)
+			require.NotEmpty(t, selected)
+			require.Greater(t, endSCN, currentSCN, "cycle %d must move past the prior boundary, not reselect it forever", cycle)
+
+			currentSCN = endSCN
+			capped = gotCapped
+		}
+
+		assert.Equal(t, uint64(dbCurrentSCN), currentSCN, "must eventually catch all the way up to dbCurrentSCN")
+	})
 }
