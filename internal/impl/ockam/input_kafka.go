@@ -41,6 +41,7 @@ func init() {
 
 func ockamKafkaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.33.0").
 		Summary("Uses Ockam to decrypt and read end-to-end encrypted messages from Kafka topics.").
 		Description(`For more information about Ockam, see the https://docs.ockam.io/[Ockam documentation^]. You can write encrypted messages using the ` + "`ockam_kafka`" + ` output or by https://command.ockam.io/manual/ockam-kafka-inlet-create.html[creating a Kafka Portal Inlet^] using Ockam Command.
 

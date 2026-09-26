@@ -49,7 +49,7 @@ func FranzReaderUnorderedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		franzConsumerGroupField(kruFieldConsumerGroup),
 		franzCheckpointLimitField(kruFieldCheckpointLimit).Advanced(),
-		commitPeriodField(kruFieldCommitPeriod).
+		commitPeriodField(kruFieldCommitPeriod).Version("4.3.0").
 			Default("5s").
 			Advanced(),
 		service.NewBoolField(kruFieldMultiHeader).
@@ -60,7 +60,7 @@ func FranzReaderUnorderedConfigFields() []*service.ConfigField {
 			Description("Configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions, so that the input batches messages together before flushing them for processing. Batching can improve performance and is useful for windowed processing. Batching this way preserves the ordering of topic partitions.").Version("4.15.0").
 			ShortDescription("Batching policy applied per topic partition, grouping messages before they are flushed for processing.").
 			Advanced(),
-		franzTopicLagRefreshPeriodField(kruFieldTopicLagRefreshPeriod),
+		franzTopicLagRefreshPeriodField(kruFieldTopicLagRefreshPeriod).Version("4.54.1"),
 	}
 }
 

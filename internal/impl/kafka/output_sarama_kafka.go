@@ -172,7 +172,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Advanced().
 				Deprecated(),
 			service.NewInterpolatedStringField(oskFieldTimestampMs).
-				Description(kafkaOutputTimestampMsDescription).
+				Description(kafkaOutputTimestampMsDescription).Version("4.40.0").
 				Example(`${! timestamp_unix_milli() }`).
 				Example(`${! metadata("kafka_timestamp_ms") }`).
 				Optional().

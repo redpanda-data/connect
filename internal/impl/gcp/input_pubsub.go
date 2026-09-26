@@ -124,7 +124,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			service.NewStringField(pbiFieldProjectID).
 				Description("The project ID of the target subscription."),
 			service.NewStringField(pbiFieldCredentialsJSON).
-				Description(credentialsJSONDescription).
+				Description(credentialsJSONDescription).Version("4.33.0").
 				Default("").
 				Secret(),
 			service.NewStringField(pbiFieldSubscriptionID).

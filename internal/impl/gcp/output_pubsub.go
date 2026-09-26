@@ -60,7 +60,7 @@ pipeline:
 		Fields(
 			service.NewStringField("project").Description("The project ID of the topic to publish to."),
 			service.NewStringField("credentials_json").
-				Description(credentialsJSONDescription).
+				Description(credentialsJSONDescription).Version("4.33.0").
 				Default("").
 				Secret(),
 			service.NewInterpolatedStringField("topic").Description("The topic to publish to."),

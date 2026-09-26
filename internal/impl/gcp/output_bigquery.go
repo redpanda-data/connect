@@ -272,7 +272,7 @@ CAUTION: This field delegates schema detection to the GCP BigQuery service. For 
 			ShortDescription("Automatically infer options and schema for CSV and JSON sources.").
 			Advanced().
 			Default(false)).
-		Field(bqJobLabelsField("load")).
+		Field(bqJobLabelsField("load").Version("4.1.0")).
 		Field(service.NewStringField("credentials_json").Description(`Sets the https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account[Google Service Account Credentials JSON^] (optional).
 
 WARNING: When using xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] to populate this field, wrap the function in single quotes, not double quotes. For example, use ` + "`" + `'${secrets.GCP_CREDENTIALS_JSON}'` + "`" + ` instead of ` + "`" + `"${secrets.GCP_CREDENTIALS_JSON}"` + "`" + `. Double quotes cause JSON parsing errors because the credentials already contain JSON content.`).Version("4.33.0").Secret().Default("")).

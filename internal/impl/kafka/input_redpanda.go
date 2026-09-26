@@ -80,6 +80,7 @@ This input adds the following metadata fields to each message:
 
 func redpandaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.39.0").
 		Stable().
 		Version("4.39.0").
 		Categories("Services").

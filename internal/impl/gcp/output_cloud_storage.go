@@ -178,7 +178,7 @@ output:
 				Example("500ms").
 				Default("3s"),
 			service.NewInterpolatedStringField(csoFieldCredentialsJSON).
-				Description(credentialsJSONDescription).
+				Description(credentialsJSONDescription).Version("4.33.0").
 				Default("").
 				Secret(),
 			service.NewOutputMaxInFlightField().

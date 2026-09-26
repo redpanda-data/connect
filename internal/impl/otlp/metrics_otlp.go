@@ -25,6 +25,7 @@ import (
 
 func otlpMetricsSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.88.0").
 		Summary("Sends metrics to one or more OpenTelemetry Collector endpoints.").
 		Description(`Exports Redpanda Connect metrics to one or more https://opentelemetry.io/docs/collector/[OpenTelemetry Collector^] endpoints, encoded with the OpenTelemetry metrics protocol (OTLP). Any collector endpoint that supports OTLP can receive them.
 

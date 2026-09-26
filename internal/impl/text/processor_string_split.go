@@ -35,6 +35,7 @@ func init() {
 
 func stringSplitSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.86.0").
 		Categories("Parsing").
 		Summary("Splits a string by a delimiter into an array. Generally, using bloblang's `split` method is preferred. In some high performance use cases this processor can be faster than the equivalent bloblang if there is no additional logic.").
 		Fields(

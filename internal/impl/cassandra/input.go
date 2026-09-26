@@ -29,6 +29,7 @@ const (
 
 func inputConfigSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
+		Version("4.10.0").
 		Categories("Services").
 		Summary("Executes a find query and creates a message for each row received.").
 		Fields(clientFields()...).
