@@ -31,7 +31,7 @@ func TestIntegrationMigrateCheckpointCache(t *testing.T) {
 	integration.CheckSkip(t)
 
 	cdbConnStr, pdbDB, pdbName := oracledbtest.SetupCDBTestWithPDB(t)
-	require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.mtfoo", "CREATE TABLE testdb.mtfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), pdbDB.Schema+".mtfoo", "CREATE TABLE "+pdbDB.Schema+".mtfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
 	cdbDB, err := sql.Open("oracle", cdbConnStr)
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ oracledb_cdc:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.MTFOO"]
+  include: ["` + pdbDB.Schema + `.MTFOO"]
   batching:
     count: 500`
 
@@ -98,7 +98,7 @@ oracledb_cdc:
 		_, err = pdbDB.Exec(`
 BEGIN
 	FOR i IN 1..1000 LOOP
-		INSERT INTO testdb.mtfoo (id) VALUES (DEFAULT);
+		INSERT INTO ` + pdbDB.Schema + `.mtfoo (id) VALUES (DEFAULT);
 	END LOOP;
 	COMMIT;
 END;`)
