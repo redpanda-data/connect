@@ -47,7 +47,7 @@ func pusherOutputConfig() *service.ConfigSpec {
 			Description("Enable SSL encryption").
 			Default(true)).
 		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of parallel message batches to have in flight at any given time.").
+			Description("The maximum number of message batches to publish to Pusher in parallel. Each batch is sent as one trigger batch request.").
 			Default(1))
 }
 

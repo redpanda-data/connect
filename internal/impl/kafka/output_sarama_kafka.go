@@ -30,6 +30,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/retries"
 )
 
 const (
@@ -155,13 +157,13 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Advanced().Default(false),
 			service.NewBatchPolicyField(oskFieldBatching),
 			service.NewIntField(oskFieldMaxRetries).
-				Description("The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.").
+				Description(retries.MaxRetriesDescription).
 				Advanced().Default(0),
 			service.NewBackOffField(oskFieldBackoff, true, &backoff.ExponentialBackOff{
 				InitialInterval: time.Second * 3,
 				MaxInterval:     time.Second * 10,
 				MaxElapsedTime:  time.Second * 30,
-			}).Description("Control time intervals between retry attempts.").Advanced(),
+			}).Description("The exponential backoff between attempts to resend messages that failed to send.").Advanced(),
 			service.NewInterpolatedStringField(oskFieldTimestamp).
 				Description(kafkaOutputTimestampDescription).
 				Example(`${! timestamp_unix() }`).
