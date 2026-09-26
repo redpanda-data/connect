@@ -26,6 +26,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/llm"
 )
 
 const (
@@ -81,11 +83,9 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 		Version("4.32.0").
 		Fields(
 			modelField("llama3.1", "gemma2", "qwen2", "phi3"),
-			service.NewInterpolatedStringField(ocpFieldUserPrompt).
-				Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
+			llm.PromptField(ocpFieldUserPrompt).
 				Optional(),
-			service.NewInterpolatedStringField(ocpFieldSystemPrompt).
-				Description(`The system prompt to submit to the Ollama LLM.`).
+			llm.SystemPromptField(ocpFieldSystemPrompt).
 				Advanced().
 				Optional(),
 			service.NewBloblangField(ocpFieldImage).
@@ -135,13 +135,13 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 			service.NewFloatField(ocpFieldPresencePenalty).
 				Optional().
 				Advanced().
-				Description(`A number between `+"`"+`-2.0`+"`"+` and `+"`"+`2.0`+"`"+`. Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.`).
+				Description("A number between `-2.0` and `2.0` that the processor sends to the Ollama server as the `presence_penalty` model option. Positive values penalize every token that has already appeared in the text, regardless of how often, which makes the model more likely to move on to new topics. A value of `0` is not sent, so the server's default applies.").
 				ShortDescription("Between -2.0 and 2.0. Positive values penalise tokens that already appear, encouraging new topics.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewFloatField(ocpFieldFrequencyPenalty).
 				Optional().
 				Advanced().
-				Description(`A number between `+"`"+`-2.0`+"`"+` and `+"`"+`2.0`+"`"+`. Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.`).
+				Description("A number between `-2.0` and `2.0` that the processor sends to the Ollama server as the `frequency_penalty` model option. Positive values penalize each token in proportion to how often it has already appeared in the text, which makes the model less likely to repeat the same line verbatim. A value of `0` is not sent, so the server's default applies.").
 				ShortDescription("Between -2.0 and 2.0. Positive values penalise tokens by how often they already appear, reducing verbatim repetition.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewStringListField(ocpFieldStop).
@@ -167,19 +167,7 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				LintRule(`root = if this <= 0 { ["field must be greater than zero"] }`),
 			service.NewObjectListField(
 				ocpFieldTool,
-				service.NewStringField(ocpToolFieldName).Description("The name of this tool."),
-				service.NewStringField(ocpToolFieldDesc).Description("A description of this tool, the LLM uses this to decide if the tool should be used."),
-				service.NewObjectField(
-					ocpToolFieldParams,
-					service.NewStringListField(ocpToolParamFieldRequired).Default([]string{}).Description("The required parameters for this pipeline."),
-					service.NewObjectMapField(
-						ocpToolParamFieldProps,
-						service.NewStringField(ocpToolParamPropFieldType).Description("The type of this parameter."),
-						service.NewStringField(ocpToolParamPropFieldDescription).Description("A description of this parameter."),
-						service.NewStringListField(ocpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that this parameter is an enum and only these specific values should be used."),
-					).Description("The properties for the processor's input data"),
-				).Description("The parameters the LLM needs to provide to invoke this tool."),
-				service.NewProcessorListField(ocpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
+				llm.ToolFields(llm.ToolParametersField())...,
 			).Description("The external tools the LLM can invoke, such as functions, APIs, or web browsing. You can build subpipelines of processors that include definitions of these tools, and the specified LLM can choose when to invoke them to help answer a prompt.").
 				ShortDescription("The tools the LLM may invoke, allowing subpipelines to be called for agentic actions.").
 				Default([]any{}),
