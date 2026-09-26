@@ -116,10 +116,10 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 		Fields(
 			service.NewInterpolatedStringField(sqsoFieldURL).Description("The URL of the target SQS queue."),
 			service.NewInterpolatedStringField(sqsoFieldMessageGroupID).
-				Description("An optional group ID to set for messages.").
+				Description("An optional message group ID. Required when sending to an SQS FIFO queue, where messages that share a group ID are received in the order they were sent.").
 				Optional(),
 			service.NewInterpolatedStringField(sqsoFieldMessageDedupeID).
-				Description("An optional deduplication ID to set for messages.").
+				Description("An optional deduplication ID for messages sent to an SQS FIFO queue. SQS accepts only the first message with a given deduplication ID within the five-minute deduplication interval. Not required when the queue has content-based deduplication enabled.").
 				Optional(),
 			service.NewInterpolatedStringField(sqsoFieldDelaySeconds).
 				Description("An optional delay time in seconds for messages. The value must be between `0` and `900`.").
@@ -127,7 +127,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 			service.NewOutputMaxInFlightField().
 				Description("The maximum number of parallel message batches to have in flight at any given time."),
 			service.NewMetadataExcludeFilterField(sqsoFieldMetadata).
-				Description("Specify criteria for which metadata values are sent as headers."),
+				Description("Specify which metadata values are sent as SQS message attributes of type `String`. SQS allows at most 10 attributes per message, so only the first 10 matching keys in sorted order are sent. Keys that are not valid SQS attribute names are skipped."),
 			service.NewBatchPolicyField(sqsoFieldBatching),
 			service.NewIntField(sqsoFieldMaxRecordsCount).
 				Description("The maximum number of records delivered in a single SQS request. Enter a value from `1` to `10`.").

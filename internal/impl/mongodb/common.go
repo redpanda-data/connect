@@ -29,6 +29,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	awsconfig "github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
 
 // JSONMarshalMode represents the way in which BSON should be marshalled to JSON.
@@ -115,7 +117,7 @@ const awsSessionDurationDescription = "The duration of the STS session requested
 func AWSIAMAuthField(sessionDurationNotes ...string) *service.ConfigField {
 	sessionDuration := strings.Join(append([]string{awsSessionDurationDescription}, sessionDurationNotes...), " ")
 
-	return service.NewObjectField(FieldAWSIAMAuth,
+	fields := []*service.ConfigField{
 		service.NewBoolField(FieldAWSIAMAuthEnabled).
 			Description("Enable AWS IAM authentication using the driver-native `MONGODB-AWS` mechanism. The MongoDB Atlas database user must be created with the AWS IAM authentication type, and connections require TLS. When no static credentials or roles are configured, the ambient AWS credential chain (environment variables, EC2 instance profile, EKS pod role) is used and expiring credentials are refreshed automatically.").
 			ShortDescription("Enable AWS IAM authentication using the MONGODB-AWS mechanism.").
@@ -129,36 +131,11 @@ func AWSIAMAuthField(sessionDurationNotes ...string) *service.ConfigField {
 			ShortDescription("STS session duration when assuming roles. AWS requires at least 15m and caps role chaining at 1h.").
 			Default("1h").
 			Advanced(),
-		service.NewStringField(FieldAWSIAMAuthID).
-			Description("The ID of credentials to use.").
-			Optional().Advanced(),
-		service.NewStringField(FieldAWSIAMAuthSecret).
-			Description("The secret for the credentials being used.").
-			Optional().Advanced().Secret(),
-		service.NewStringField(FieldAWSIAMAuthToken).
-			Description("The token for the credentials being used, required when using short term credentials.").
-			Optional().Advanced(),
-		service.NewStringField(FieldAWSIAMAuthRole).
-			Description("Optional AWS IAM role ARN to assume for authentication. Cannot be combined with `roles`; use the `roles` array instead when chaining multiple roles.").
-			ShortDescription("Optional AWS IAM role ARN to assume for authentication. Cannot be combined with roles.").
-			Optional(),
-		service.NewStringField(FieldAWSIAMAuthRoleExternalID).
-			Description("Optional external ID for the role assumption. Only used with the `role` field, which cannot be combined with `roles`.").
-			ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
-			Optional(),
-		service.NewObjectListField(FieldAWSIAMAuthRoles,
-			service.NewStringField(FieldAWSIAMAuthRole).
-				Default("").
-				Description("AWS IAM role ARN to assume."),
-			service.NewStringField(FieldAWSIAMAuthRoleExternalID).
-				Description("Optional external ID for the role assumption.").
-				Default("").
-				Optional(),
-		).
-			Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID. Cannot be combined with `role`.").
-			ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
-			Optional(),
-	).
+	}
+	fields = append(fields, awsconfig.IAMAuthStaticCredentialFields()...)
+	fields = append(fields, awsconfig.IAMAuthRoleFields(true)...)
+
+	return service.NewObjectField(FieldAWSIAMAuth, fields...).
 		Description("AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against MongoDB Atlas. When enabled, IAM credentials are used instead of a static username and password. Role-derived session credentials are resolved when the component connects and are re-resolved whenever it reconnects. The `mongodb` processor and cache establish their client once at creation and cannot refresh expiring session credentials, so `role`, `roles` and session tokens are rejected for those components; use the ambient credential chain or long-lived access keys with them. For long-running pipelines, prefer the ambient credential chain (leave keys and roles unset), which the driver refreshes automatically.").
 		ShortDescription("AWS IAM authentication configuration (MONGODB-AWS).").
 		Advanced().

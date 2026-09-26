@@ -67,7 +67,7 @@ const (
 // urlsFieldSpec returns the urls field shared by the input and output.
 func urlsFieldSpec() *service.ConfigField {
 	return service.NewURLListField(urlsField).
-		Description(`A list of URLs to connect to. Each URL in the list is tried in order until a connection is established, and that URL is then used until the connection is closed.
+		Description(`A list of AMQP 0.9.1 broker URLs to connect to, in the form ` + "`amqp://user:password@host:port/vhost`" + `. Each URL is tried in order until a connection is established, and that URL is then used until the connection is closed. When ` + "`tls`" + ` is enabled and a URL has no user credentials, the connection authenticates with the SASL ` + "`EXTERNAL`" + ` mechanism using the client certificate.
 
 If an item in the list contains commas, it is split into multiple URLs.`).
 		ShortDescription("URLs to connect to. The first to connect successfully is used until the connection closes.").

@@ -65,6 +65,13 @@ func saramaAddressesField(name string) *service.ConfigField {
 
 // saramaTargetVersionField returns the Kafka protocol version field shared by
 // the Sarama based Kafka input and output.
+// saramaClientIDField returns the client_id field of the Sarama-based kafka
+// input and output.
+func saramaClientIDField(name string) *service.ConfigField {
+	return service.NewStringField(name).
+		Description("The client ID sent to brokers with every request, which lets brokers attribute requests to this client in their logs, metrics, and client quotas.")
+}
+
 func saramaTargetVersionField(name string) *service.ConfigField {
 	return service.NewStringField(name).
 		Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
@@ -136,8 +143,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions.").
 				ShortDescription("An identifier for the consumer group of the connection. Leave empty to disable stored offsets.").
 				Default(""),
-			service.NewStringField(iskFieldClientID).
-				Description("An identifier for the client connection.").
+			saramaClientIDField(iskFieldClientID).
 				Advanced().Default("benthos"),
 			service.NewStringField(iskFieldInstanceID).
 				Description("When you specify a `consumer_group`, assign a unique value to `instance_id` for each input so that brokers can identify it across restarts of this process and avoid unnecessary rebalances.").
@@ -157,8 +163,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Version("3.33.0").Default(1024),
 			service.NewAutoRetryNacksToggleField(),
 			service.NewForceTimelyNacksField(),
-			service.NewDurationField(iskFieldCommitPeriod).
-				Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
+			commitPeriodField(iskFieldCommitPeriod).
 				Advanced().Default("1s"),
 			service.NewDurationField(iskFieldMaxProcessingPeriod).
 				Description("A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization.").

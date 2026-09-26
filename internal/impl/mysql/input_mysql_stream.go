@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +33,9 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	awsconfig "github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	cdcreplication "github.com/redpanda-data/connect/v4/internal/replication"
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
@@ -139,52 +142,18 @@ This input adds the following metadata fields to each message:
 			Default(1).
 			LintRule(`root = if this < 1 { [ "`+fieldMaxParallelSnapshotTables+` must be at least 1" ] }`),
 		service.NewAutoRetryNacksToggleField(),
-		service.NewIntField(fieldCheckpointLimit).
-			Description("The maximum number of messages that this input can process at a given time. Increasing this limit enables parallel processing, and batching at the output level. To preserve at-least-once guarantees, any given binlog position is not acknowledged until all messages under that offset are delivered.").
-			ShortDescription("The maximum number of messages that can be processed at a given time.").
-			Default(1024),
+		cdcreplication.CheckpointLimitField("binlog position"),
 		service.NewTLSField("tls").
-			Description("Using this field overrides the SSL/TLS settings in the environment and DSN.").
+			Description("Custom TLS settings for the MySQL connection. When `enabled` is `true`, these settings replace any `tls` parameter in the `dsn`, and the server name is set to the host from the DSN.").
 			Optional(),
-		service.NewObjectField(fieldAWSIAMAuth,
+		service.NewObjectField(fieldAWSIAMAuth, slices.Concat([]*service.ConfigField{
 			service.NewBoolField(FieldAWSIAMAuthEnabled).
-				Description("Enable AWS IAM authentication for MySQL. When enabled, an IAM authentication token is generated and used as the password. When using IAM authentication ensure `"+fieldMaxReconnectAttempts+"` is set to a low value to ensure it can refresh credentials.").
+				Description("Enable AWS IAM authentication for MySQL. When enabled, an IAM authentication token is generated and used as the password. When using IAM authentication ensure `" + fieldMaxReconnectAttempts + "` is set to a low value to ensure it can refresh credentials.").
 				Default(false),
-			service.NewStringField("region").
-				Description("The AWS region where the MySQL instance is located. If no region is specified then the environment default will be used.").
-				Optional(),
+			awsconfig.IAMAuthRegionField("MySQL"),
 			service.NewStringField("endpoint").
 				Description("The MySQL endpoint hostname (for example, mydb.abc123.us-east-1.rds.amazonaws.com)."),
-			service.NewStringField("id").
-				Description("The ID of credentials to use.").
-				Optional().Advanced(),
-			service.NewStringField("secret").
-				Description("The secret for the credentials being used.").
-				Optional().Advanced().Secret(),
-			service.NewStringField("token").
-				Description("The token for the credentials being used, required when using short term credentials.").
-				Optional().Advanced(),
-			service.NewStringField("role").
-				Description("Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.").
-				ShortDescription("Optional AWS IAM role ARN to assume for authentication.").
-				Optional(),
-			service.NewStringField("role_external_id").
-				Description("Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.").
-				ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
-				Optional(),
-			service.NewObjectListField("roles",
-				service.NewStringField("role").
-					Default("").
-					Description("AWS IAM role ARN to assume."),
-				service.NewStringField("role_external_id").
-					Description("Optional external ID for the role assumption.").
-					Default("").
-					Optional(),
-			).
-				Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.").
-				ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
-				Optional(),
-		).
+		}, awsconfig.IAMAuthStaticCredentialFields(), awsconfig.IAMAuthRoleFields(false))...).
 			Description("AWS IAM authentication configuration for MySQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
 			ShortDescription("AWS IAM authentication configuration for MySQL instances.").
 			Advanced().

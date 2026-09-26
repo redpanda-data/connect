@@ -27,6 +27,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/confx"
 	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	cdcreplication "github.com/redpanda-data/connect/v4/internal/replication"
 )
 
 const (
@@ -102,9 +103,7 @@ Operational notes:
 		Example(true).
 		Default(false),
 	).
-	Field(service.NewIntField(fieldMaxParallelSnapshotTables).
-		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
-		Default(1)).
+	Field(cdcreplication.MaxParallelSnapshotTablesField()).
 	Field(service.NewIntField(fieldSnapshotMaxBatchSize).
 		Description("The maximum number of rows to stream in a single batch during the initial snapshot phase. Larger batch sizes can improve throughput for initial data loads but may increase memory usage. This setting only applies when `stream_snapshot` is enabled.").
 		Default(1000),

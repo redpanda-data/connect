@@ -38,12 +38,8 @@ func natsOutputConfig() *service.ConfigSpec {
 			Description(`The subject to publish to.`).
 			Example("foo.bar.baz")).
 		Field(headersField()).
-		Field(service.NewMetadataFilterField("metadata").
-			Description("Determine which (if any) metadata values should be added to messages as headers.").
-			Optional()).
-		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
-			Default(64)).
+		Field(metadataField()).
+		Field(service.NewOutputMaxInFlightField()).
 		Fields(connectionTailFields()...).
 		Field(outputTracingDocs())
 }

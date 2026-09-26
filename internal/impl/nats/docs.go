@@ -53,6 +53,14 @@ func headersField() *service.ConfigField {
 		})
 }
 
+// metadataField returns the metadata filter field shared by the components
+// that publish NATS messages.
+func metadataField() *service.ConfigField {
+	return service.NewMetadataFilterField("metadata").
+		Description("Specify which metadata values are added to messages as NATS headers, alongside any explicit `headers`.").
+		Optional()
+}
+
 func inputTracingDocs() *service.ConfigField {
 	return service.NewExtractTracingSpanMappingField().Version(tracingVersion)
 }
