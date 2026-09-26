@@ -64,7 +64,7 @@ Strong read consistency can be enabled using the ` + "`consistent_read`" + ` con
 			Optional().
 			Advanced()).
 		Field(service.NewStringField("ttl_key").
-			Description("The column key to place the TTL value within.").
+			Description(ttlKeyDescription).
 			Optional().
 			Advanced()).
 		Field(service.NewBackOffField("retries", false, retriesDefaults).

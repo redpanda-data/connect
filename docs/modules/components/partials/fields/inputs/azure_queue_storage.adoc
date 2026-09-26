@@ -42,7 +42,7 @@ queue_name: ${! env("MESSAGE_TYPE").lowercase() }
 
 === `storage_access_key`
 
-The storage account access key. This field is ignored if `storage_connection_string` is set.
+The access key for the storage account. Use this field along with `storage_account` for authentication. This field is ignored when the `storage_connection_string` field is populated.
 
 *Type*: `string`
 
@@ -50,7 +50,7 @@ The storage account access key. This field is ignored if `storage_connection_str
 
 === `storage_account`
 
-The storage account to access. This field is ignored if `storage_connection_string` is set.
+The storage account to access. This field is ignored when the `storage_connection_string` field is populated, unless the connection string does not contain the `AccountName` parameter.
 
 *Type*: `string`
 
@@ -58,7 +58,9 @@ The storage account to access. This field is ignored if `storage_connection_stri
 
 === `storage_connection_string`
 
-A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
+The connection string for the storage account. This field is required if `storage_account` is not set.
+
+NOTE: If the `storage_connection_string` field does not contain the `AccountName` parameter value, specify it in the `storage_account` field.
 
 *Type*: `string`
 

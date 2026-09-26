@@ -11,5 +11,5 @@
 // tag::body[]
 Use a Google Cloud Storage bucket as a cache.
 
-It is not possible to atomically upload cloud storage objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.
+This cache implements the `add` operation as an existence check followed by a separate upload, so the operation is not atomic and concurrent writers can both succeed. Therefore, this cache is not suitable for deduplication.
 // end::body[]

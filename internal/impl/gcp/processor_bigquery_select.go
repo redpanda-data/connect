@@ -95,18 +95,12 @@ func newBigQuerySelectProcessorConfig() *service.ConfigSpec {
 		Version("3.64.0").
 		Categories("Integration").
 		Summary("Executes a `SELECT` query against BigQuery and replaces messages with the rows returned.").
-		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
-		Field(service.NewStringField("credentials_json").Description("An optional field to set Google Service Account Credentials json.").Secret().Default("")).
-		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).
+		Field(bqSelectProjectField()).
+		Field(service.NewStringField("credentials_json").Description(credentialsJSONDescription).Secret().Default("")).
+		Field(bqSelectTableField()).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
-		Field(service.NewStringField("where").
-			Description("An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Placeholders should always be question marks (`?`).").
-			ShortDescription("An optional where clause. Placeholders must be question marks, populated from args_mapping.").
-			Example("type = ? and created_at > ?").
-			Example("user_id = ?").
-			Optional(),
-		).
-		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the query job.").Default(map[string]any{})).
+		Field(bqSelectWhereField()).
+		Field(bqJobLabelsField("query")).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
 			ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").

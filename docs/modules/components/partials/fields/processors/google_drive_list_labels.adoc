@@ -4,7 +4,7 @@
 
 === `credentials_json`
 
-A service account credentials JSON file. If left unset then the application default credentials are used.
+The JSON key for your service account (optional). If left empty, Application Default Credentials are used.
 
 include::connect:components:partial$secret_warning.adoc[]
 

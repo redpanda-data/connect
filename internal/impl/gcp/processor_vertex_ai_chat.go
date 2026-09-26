@@ -71,6 +71,16 @@ func init() {
 	)
 }
 
+// vertexAIModelField returns the model field shared by the Vertex AI
+// processors. The modelKind names the kind of model the processor calls, such
+// as "LLM" or "embedding model".
+func vertexAIModelField(name, modelKind string, examples ...any) *service.ConfigField {
+	return service.NewStringField(name).
+		Description("The name of the " + modelKind + " to use. For a full list of models, see the https://console.cloud.google.com/vertex-ai/model-garden[Vertex AI Model Garden^].").
+		ShortDescription("The name of the " + modelKind + " to use.").
+		Examples(examples...)
+}
+
 func newVertexAIProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
@@ -81,18 +91,15 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 		Version("4.34.0").
 		Fields(
 			service.NewStringField(vaicpFieldProject).
-				Description("GCP project ID to use"),
+				Description("The GCP project ID to use."),
 			service.NewStringField(vaicpFieldCredentialsJSON).
-				Description("An optional field to set google Service Account Credentials json.").
+				Description("An optional field to set a Google Service Account Credentials JSON.").
 				Secret().
 				Optional(),
 			service.NewStringField(vaicpFieldLocation).
-				Description("The location of the model if using a fined tune model. For base models this can be omitted").
+				Description("Specify the location of a fine tuned model. For base models, you can omit this field.").
 				Examples("us-central1"),
-			service.NewStringField(vaicpFieldModel).
-				Description("The name of the LLM to use. For a full list of models, see the https://console.cloud.google.com/vertex-ai/model-garden[Vertex AI Model Garden].").
-				ShortDescription("The name of the LLM to use.").
-				Examples("gemini-1.5-pro-001", "gemini-1.5-flash-001"),
+			vertexAIModelField(vaicpFieldModel, "LLM", "gemini-1.5-pro-001", "gemini-1.5-flash-001"),
 			service.NewInterpolatedStringField(vaicpFieldPrompt).
 				Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
 				Optional(),
@@ -111,32 +118,32 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				Example(`root = this.image.decode("base64") # decode base64 encoded image`).
 				Optional(),
 			service.NewFloatField(vaicpFieldTemp).
-				Description("Controls the randomness of predications.").
+				Description("Controls the randomness of predictions.").
 				Optional().
 				LintRule(`root = if this < 0 || this > 2 { ["field must be between 0.0-2.0"] }`),
 			service.NewIntField(vaicpFieldMaxTokens).
 				Description("The maximum number of output tokens to generate per message.").
 				Optional(),
 			service.NewStringEnumField(vaicpFieldResponseFormat, "text", "json").
-				Description("The response format of generated type, the model must also be prompted to output the appropriate response type.").
+				Description("The format of the generated response. You must also prompt the model to output the appropriate response type.").
 				Default("text"),
 			service.NewFloatField(vaicpFieldTopP).
 				Advanced().
-				Description("If specified, nucleus sampling will be used.").
+				Description("Enables nucleus sampling (optional).").
 				Optional().
 				LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`),
 			service.NewFloatField(vaicpFieldTopK).
 				Advanced().
-				Description("If specified top-k sampling will be used.").
+				Description("Enables top-k sampling (optional).").
 				Optional().
 				LintRule(`root = if this < 1 || this > 40 { ["field must be between 1-40"] }`),
 			service.NewStringListField(vaicpFieldStop).
 				Advanced().
-				Description("Stop sequences to when the model will stop generating further tokens.").
+				Description("Sets the stop sequences to use. When the model encounters one of these sequences, it stops generating text and returns the final response.").
 				Optional(),
 			service.NewFloatField(vaicpFieldPresencePenalty).
 				Advanced().
-				Description("Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.").
+				Description("Positive values penalize new tokens if they appear in the text already, increasing the model's likelihood to include new topics.").
 				ShortDescription("Penalise tokens that already appear, encouraging the model to raise new topics.").
 				Optional().
 				LintRule(`root = if this < -2 || this > 2 { ["field must be greater than -2.0 and less than 2.0"] }`),

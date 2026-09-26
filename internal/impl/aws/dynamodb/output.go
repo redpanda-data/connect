@@ -48,6 +48,10 @@ const (
 	ddboFieldBatching       = "batching"
 )
 
+// ttlKeyDescription describes the ttl_key field of the aws_dynamodb output and
+// cache.
+const ttlKeyDescription = "The column key to place the TTL value within. The value is the expiry time as a Unix timestamp in seconds, stored as a number attribute, which is the format that DynamoDB TTL requires. A TTL value is only written when both this field and a TTL duration are set."
+
 type ddboConfig struct {
 	Table          string
 	StringColumns  map[string]*service.InterpolatedString
@@ -156,7 +160,7 @@ This output benefits from sending messages as a batch for improved performance. 
 				Default("").
 				Advanced(),
 			service.NewStringField(ddboFieldTTLKey).
-				Description("The column key to place the TTL value within.").
+				Description(ttlKeyDescription).
 				Default("").
 				Advanced(),
 			service.NewOutputMaxInFlightField(),

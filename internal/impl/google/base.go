@@ -46,7 +46,7 @@ In order for a service account to access files in Google Drive either files need
 func commonFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(baseFieldCredentialsJSON).
-			Description("A service account credentials JSON file. If left unset then the application default credentials are used.").
+			Description("The JSON key for your service account (optional). If left empty, Application Default Credentials are used.").
 			Optional().
 			Secret(),
 	}
