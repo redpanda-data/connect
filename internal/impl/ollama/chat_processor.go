@@ -80,23 +80,21 @@ By default, the processor starts and runs a locally installed Ollama server. Alt
 For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^].`).
 		Version("4.32.0").
 		Fields(
-			service.NewStringField(bopFieldModel).
-				Description("The name of the Ollama LLM to use. For a full list of models, see the https://ollama.com/models[Ollama website].").
-				Examples("llama3.1", "gemma2", "qwen2", "phi3"),
+			modelField("llama3.1", "gemma2", "qwen2", "phi3"),
 			service.NewInterpolatedStringField(ocpFieldUserPrompt).
 				Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
 				Optional(),
 			service.NewInterpolatedStringField(ocpFieldSystemPrompt).
-				Description("The system prompt to submit to the Ollama LLM.").
+				Description(`The system prompt to submit to the Ollama LLM.`).
 				Advanced().
 				Optional(),
 			service.NewBloblangField(ocpFieldImage).
-				Description("The image to submit along with the prompt to the model. The result should be a byte array.").
+				Description("An optional image to submit along with the `prompt` value. The result should be a byte array.").
 				Version("4.38.0").
 				Optional().
 				Example(`root = this.image.decode("base64") # decode base64 encoded image`),
 			service.NewStringEnumField(ocpFieldResponseFormat, "text", "json").
-				Description("The format of the response that the Ollama model generates. If specifying JSON output, then the `"+ocpFieldUserPrompt+"` should specify that the output should be in JSON as well.").
+				Description("The format of the response the Ollama model generates. If specifying JSON output, then the `"+ocpFieldUserPrompt+"` should specify that the output should be in JSON as well.").
 				Default("text"),
 			service.NewIntField(ocpFieldMaxTokens).
 				Optional().
@@ -137,32 +135,35 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 			service.NewFloatField(ocpFieldPresencePenalty).
 				Optional().
 				Advanced().
-				Description(`Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.`).
-				ShortDescription("Positive values penalise tokens that already appear, encouraging new topics.").
+				Description(`A number between `+"`"+`-2.0`+"`"+` and `+"`"+`2.0`+"`"+`. Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.`).
+				ShortDescription("Between -2.0 and 2.0. Positive values penalise tokens that already appear, encouraging new topics.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewFloatField(ocpFieldFrequencyPenalty).
 				Optional().
 				Advanced().
-				Description(`Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.`).
-				ShortDescription("Positive values penalise tokens by how often they already appear, reducing verbatim repetition.").
+				Description(`A number between `+"`"+`-2.0`+"`"+` and `+"`"+`2.0`+"`"+`. Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.`).
+				ShortDescription("Between -2.0 and 2.0. Positive values penalise tokens by how often they already appear, reducing verbatim repetition.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewStringListField(ocpFieldStop).
 				Optional().
 				Advanced().
-				Description(`Sets the stop sequences to use. When this pattern is encountered the LLM stops generating text and returns the final response.`).
+				Description(`Sets the stop sequences to use. When this pattern is encountered, the LLM stops generating text and returns the final response.`).
 				ShortDescription("Stop sequences. When one is encountered the LLM stops generating and returns its response."),
 			service.NewBoolField(ocpFieldEmitPromptMetadata).
 				Default(false).
-				Description(`If enabled the prompt is saved as @prompt metadata on the output message. If system_prompt is used it's also saved as @system_prompt`).
+				Description(`Set to `+"`"+`true`+"`"+` to save the prompt value to a metadata field (`+"`"+`@prompt`+"`"+`) on the corresponding output message. If you use the `+"`"+`system_prompt`+"`"+` field, its value is also saved to an `+"`"+`@system_prompt`+"`"+` metadata field on each output message.`).
 				ShortDescription("Save the prompt as @prompt metadata on the output message, and system_prompt as @system_prompt."),
 			service.NewBloblangField(ocpFieldHistory).
 				Optional().
-				Description(`Historical messages to include in the chat request. The result of the bloblang query should be an array of objects of the form of [{"role": "", "content":""}].`).
+				Description(`Include historical messages in a chat request. You must use a Bloblang query to create an array of objects in the form of `+"`"+`[{"role": "", "content":""}]`+"`"+` where:
+
+- `+"`"+`role`+"`"+` is the sender of the original messages, either `+"`"+`system`+"`"+`, `+"`"+`user`+"`"+`, `+"`"+`assistant`+"`"+`, or `+"`"+`tool`+"`"+`.
+- `+"`"+`content`+"`"+` is the text of the original messages.`).
 				ShortDescription("Historical messages to include in the chat request, as an array of role and content objects."),
 			service.NewIntField(ocpFieldMaxToolCalls).
 				Default(3).
 				Advanced().
-				Description(`The maximum number of sequential tool calls.`).
+				Description(`The maximum number of sequential calls you can make to external tools to retrieve additional information to answer a prompt.`).
 				LintRule(`root = if this <= 0 { ["field must be greater than zero"] }`),
 			service.NewObjectListField(
 				ocpFieldTool,
@@ -179,7 +180,7 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 					).Description("The properties for the processor's input data"),
 				).Description("The parameters the LLM needs to provide to invoke this tool."),
 				service.NewProcessorListField(ocpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
-			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.").
+			).Description("The external tools the LLM can invoke, such as functions, APIs, or web browsing. You can build subpipelines of processors that include definitions of these tools, and the specified LLM can choose when to invoke them to help answer a prompt.").
 				ShortDescription("The tools the LLM may invoke, allowing subpipelines to be called for agentic actions.").
 				Default([]any{}),
 		).Fields(commonFields()...).

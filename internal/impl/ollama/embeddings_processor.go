@@ -45,11 +45,9 @@ By default, the processor starts and runs a locally installed Ollama server. Alt
 For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^].`).
 		Version("4.32.0").
 		Fields(
-			service.NewStringField(bopFieldModel).
-				Description("The name of the Ollama LLM to use. For a full list of models, see the https://ollama.com/models[Ollama website].").
-				Examples("nomic-embed-text", "mxbai-embed-large", "snowflake-artic-embed", "all-minilm"),
+			modelField("nomic-embed-text", "mxbai-embed-large", "snowflake-artic-embed", "all-minilm"),
 			service.NewInterpolatedStringField(oepFieldText).
-				Description("The text you want to create vector embeddings for. By default, the processor submits the entire payload as a string.").
+				Description(`The text you want to create vector embeddings for. By default, the processor submits the entire payload as a string.`).
 				Optional(),
 		).Fields(commonFields()...).
 		Example(

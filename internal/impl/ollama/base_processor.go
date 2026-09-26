@@ -51,13 +51,21 @@ const (
 	bopFieldUseMMap     = "use_mmap"
 )
 
+// modelField returns the field that names the Ollama model a processor uses,
+// with examples suited to that processor.
+func modelField(examples ...any) *service.ConfigField {
+	return service.NewStringField(bopFieldModel).
+		Description("The name of the Ollama model to use. For a full list of models, see the https://ollama.com/models[Ollama website^].").
+		Examples(examples...)
+}
+
 func commonFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewObjectField(
 			bopFieldRunner,
 			service.NewIntField(bopFieldContextSize).
 				Optional().
-				Description("Sets the size of the context window used to generate the next token. Using a larger context window uses more memory and takes longer to processor.").
+				Description("Sets the size of the context window used to generate the next token. Using a larger context window uses more memory and takes longer to process.").
 				ShortDescription("Size of the context window used to generate the next token. Larger windows cost memory and time."),
 			service.NewIntField(bopFieldBatchSize).
 				Optional().
@@ -65,31 +73,31 @@ func commonFields() []*service.ConfigField {
 			service.NewIntField(bopFieldGPULayers).
 				Optional().
 				Advanced().
-				Description("This option allows offloading some layers to the GPU for computation. This generally results in increased performance. By default, the runtime decides the number of layers dynamically.").
+				Description("Sets the number of layers to offload to the GPU for computation. This generally results in increased performance. By default, the runtime decides the number of layers dynamically.").
 				ShortDescription("Number of layers to offload to the GPU, which generally improves performance."),
 			service.NewIntField(bopFieldThreads).
 				Optional().
 				Advanced().
-				Description("Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has. By default, the runtime decides the optimal number of threads.").
+				Description("Sets the number of threads to use during response generation. For optimal performance, set this value to the number of physical CPU cores your system has. By default, the runtime decides the optimal number of threads.").
 				ShortDescription("Number of threads to use during generation. Best set to the number of physical CPU cores."),
 			service.NewBoolField(bopFieldUseMMap).
 				Optional().
 				Advanced().
-				Description("Map the model into memory. This is only support on unix systems and allows loading only the necessary parts of the model as needed.").
+				Description("Map the model into memory. Set to `true` to load only the necessary parts of the model into memory. This setting is only supported on Unix systems.").
 				ShortDescription("Map the model into memory, loading only the parts needed. Unix systems only."),
 		).Optional().Description(`Options for the model runner that are used when the model is first loaded into memory.`),
 		service.NewStringField(bopFieldServerAddress).
-			Description("The address of the Ollama server to use. Leave the field blank and the processor starts and runs a local Ollama server or specify the address of your own local or remote server.").
+			Description("The address of the Ollama server to use. Leave this field blank and the processor starts and runs a local Ollama server, or specify the address of your own local or remote server.").
 			ShortDescription("The address of the Ollama server. Leave blank to start and run a local server.").
 			Example("http://127.0.0.1:11434").
 			Optional(),
 		service.NewStringField(bopFieldCacheDirectory).
-			Description("If `" + bopFieldServerAddress + "` is not set - the directory to download the ollama binary and use as a model cache.").
+			Description("If `" + bopFieldServerAddress + "` is not set, download the Ollama binary to this directory and use it as a model cache.").
 			Example("/opt/cache/connect/ollama").
 			Advanced().
 			Optional(),
 		service.NewStringField(bopFieldDownloadURL).
-			Description("If `" + bopFieldServerAddress + "` is not set - the URL to download the ollama binary from. Defaults to the official Ollama GitHub release for this platform.").
+			Description("If `" + bopFieldServerAddress + "` is not set, download the Ollama binary from this URL. The default value is the official Ollama GitHub release for this platform.").
 			Advanced().
 			Optional(),
 	}
