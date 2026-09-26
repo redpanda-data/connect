@@ -190,7 +190,7 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 						[ "field '`+fieldTimestampInitial+`' must be a valid integer" ]
 					}`),
 			service.NewIntField(fieldTimeoutSeconds).
-				Description("The timeout in seconds, for querying the TigerBeetle cluster.").
+				Description("The timeout in seconds, for querying the TigerBeetle cluster.").Version("4.82.0").
 				Default(timeoutSecondsDefault).
 				LintRule(`root = if this <= 0 {
 						[ "field '`+fieldTimeoutSeconds+`' must be greater than 0" ]

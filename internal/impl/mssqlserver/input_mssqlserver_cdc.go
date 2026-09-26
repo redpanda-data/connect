@@ -122,18 +122,18 @@ Operational notes:
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheTableName).
-		Description("The multipart identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed Log Sequence Number (LSN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.").
+		Description("The multipart identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed Log Sequence Number (LSN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.").Version("4.67.0").
 		Default(defaultCheckpointCache).
 		Example("dbo.checkpoint_cache").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheConnectionString).
-		Description("An optional connection string for a remote Microsoft SQL Server to use for the checkpoint cache. When set, this creates the checkpoint cache table on the remote server instead of the source database. If `" + fieldCheckpointCache + "` is also set, that takes precedence.").
+		Description("An optional connection string for a remote Microsoft SQL Server to use for the checkpoint cache. When set, this creates the checkpoint cache table on the remote server instead of the source database. If `" + fieldCheckpointCache + "` is also set, that takes precedence.").Version("4.87.0").
 		Example("sqlserver://username:password@remotehost/instance?param1=value&param2=value").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheKey).
-		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
+		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").Version("4.67.0").
 		Default("microsoft_sql_server_cdc").
 		Optional(),
 	).

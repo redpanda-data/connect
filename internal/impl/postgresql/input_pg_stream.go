@@ -172,7 +172,7 @@ To avoid granting the replication user permission to create publications, you ca
 			ShortDescription("Number of tables to snapshot in parallel.").
 			Default(1)).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
-			Description("Specify the value to emit when unchanged TOAST values appear in the message stream. Unchanged values occur for data updates and deletes when `REPLICA IDENTITY` is not set to `FULL`.\n\nPrefer a distinctive sentinel over the `null` default. A `null` can't be told apart from a column that is genuinely null, so a consumer can't skip the field instead of overwriting a good value with it. This matters most alongside `" + fieldIncSnapshot + "`, where a backfilled row can be the only delivery that carries a large column's real value. See `" + fieldSignalTableName + "`.").
+			Description("Specify the value to emit when unchanged TOAST values appear in the message stream. Unchanged values occur for data updates and deletes when `REPLICA IDENTITY` is not set to `FULL`.\n\nPrefer a distinctive sentinel over the `null` default. A `null` can't be told apart from a column that is genuinely null, so a consumer can't skip the field instead of overwriting a good value with it. This matters most alongside `" + fieldIncSnapshot + "`, where a backfilled row can be the only delivery that carries a large column's real value. See `" + fieldSignalTableName + "`.").Version("4.46.0").
 			ShortDescription("The value to emit when TOAST values are unchanged in the stream.").
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
@@ -182,14 +182,14 @@ To avoid granting the replication user permission to create publications, you ca
 			Description("The interval between heartbeat messages, which Redpanda Connect writes to the write-ahead log (WAL) using the `pg_logical_emit_message` function.\n\n" +
 				"Heartbeat messages are useful when you subscribe to data changes from tables with low activity, while other tables in the database have higher-frequency updates. Without new messages to acknowledge, PostgreSQL cannot reclaim the WAL, which can exhaust the local disk. Heartbeat messages allow Redpanda Connect to periodically acknowledge new messages even when no data updates occur. Each acknowledgement advances the committed point in the WAL, which ensures that PostgreSQL can safely reclaim older log segments.\n\n" +
 				"Set `heartbeat_interval` to `0s` to disable heartbeats.\n\n" +
-				"Heartbeats also pace `" + fieldIncSnapshot + "`. On a quiet table they're the only thing that advances the snapshot. This interval keeps the slot current, and `" + fieldIncSnapshot + "." + fieldIncSnapshotHeartbeatInterval + "` applies alongside it: the more frequent of the two wins for the life of the input. A non-zero value is still required here.").
+				"Heartbeats also pace `" + fieldIncSnapshot + "`. On a quiet table they're the only thing that advances the snapshot. This interval keeps the slot current, and `" + fieldIncSnapshot + "." + fieldIncSnapshotHeartbeatInterval + "` applies alongside it: the more frequent of the two wins for the life of the input. A non-zero value is still required here.").Version("4.48.0").
 			ShortDescription("Interval at which to write heartbeat messages, keeping the replication slot current on low-traffic tables.").
 			Default("1h").
 			Example("0s").
 			Example("24h").
 			Advanced()).
 		Field(service.NewTLSField("tls").
-			Description("Custom TLS settings for the PostgreSQL connection. When `enabled` is `true`, these settings replace the TLS settings derived from the `dsn` and from `PG*` environment variables such as `PGSSLMODE`, and the server name is set to the host from the DSN.")).
+			Description("Custom TLS settings for the PostgreSQL connection. When `enabled` is `true`, these settings replace the TLS settings derived from the `dsn` and from `PG*` environment variables such as `PGSSLMODE`, and the server name is set to the host from the DSN.").Version("4.70.0")).
 		Field(service.NewObjectField(fieldAWSIAMAuth, slices.Concat([]*service.ConfigField{
 			service.NewBoolField(FieldAWSIAMAuthEnabled).
 				Description("Enable AWS IAM authentication for PostgreSQL. When enabled, an IAM authentication token is generated and used as the password.").
@@ -203,7 +203,7 @@ To avoid granting the replication user permission to create publications, you ca
 
 This is useful for connecting to Amazon RDS or Aurora PostgreSQL instances with IAM database authentication enabled. The generated tokens are valid for 15 minutes and are automatically refreshed.
 
-For more information about AWS credentials configuration, see the xref:guides:cloud/aws.adoc[credentials for AWS] guide.`).
+For more information about AWS credentials configuration, see the xref:guides:cloud/aws.adoc[credentials for AWS] guide.`).Version("4.71.0").
 			ShortDescription("AWS IAM authentication configuration for PostgreSQL instances.").
 			Advanced().
 			Optional()).
@@ -287,7 +287,7 @@ under the default replica identity there is nothing in the message to recover it
 buffered, the backfilled copy that held the real value is dropped as a duplicate, leaving the
 placeholder as the only value the destination ever receives for it. ` + "`REPLICA IDENTITY FULL`" + `
 makes PostgreSQL send the previous row, which the connector reads the real value from. It can be
-set for the backfill and reverted afterwards; it takes a brief lock but rewrites nothing.`).
+set for the backfill and reverted afterwards; it takes a brief lock but rewrites nothing.`).Version("4.105.0").
 			Example("rpcn_signal_table").
 			Default("").
 			Advanced()).

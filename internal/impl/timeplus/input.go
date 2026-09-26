@@ -38,7 +38,7 @@ func init() {
 This input can execute a query on Timeplus Enterprise Cloud, Timeplus Enterprise (self-hosted) or Timeplusd. A structured message will be created
 from each row received.
 
-If it is a streaming query, this input will keep running until the query is terminated. If it is a table query, this input will shut down once the rows from the query are exhausted.`).
+If it is a streaming query, this input will keep running until the query is terminated. If it is a table query, this input will shut down once the rows from the query are exhausted.`).Version("4.39.0").
 		Example(
 			"From Timeplus Enterprise Cloud via HTTP",
 			"Create an API key in the Timeplus Enterprise Cloud web console, then set it in the `apikey` field.",

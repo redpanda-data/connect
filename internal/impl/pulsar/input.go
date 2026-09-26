@@ -74,7 +74,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 			Description("A list of topics to subscribe to. This or topics_pattern must be set.").
 			Optional()).
 		Field(service.NewStringField("topics_pattern").
-			Description("A regular expression matching the topics to subscribe to. This or topics must be set.").
+			Description("A regular expression matching the topics to subscribe to. This or topics must be set.").Version("4.19.0").
 			Optional()).
 		Field(service.NewStringField("subscription_name").
 			Description("Specify the subscription name for this consumer.")).
@@ -83,7 +83,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 			ShortDescription("The subscription type for this consumer. key_shared allows out-of-order delivery.").
 			Default(defaultSubscriptionType)).
 		Field(service.NewStringEnumField("subscription_initial_position", "latest", "earliest").
-			Description("Specify the subscription initial position for this consumer.").
+			Description("Specify the subscription initial position for this consumer.").Version("4.29.0").
 			Default(defaultSubscriptionInitialPosition)).
 		Field(tlsField()).
 		Field(authField())

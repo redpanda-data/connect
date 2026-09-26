@@ -147,9 +147,9 @@ Types that are currently translated:
 
 |===
 
-`).
+`).Version("4.55.0").
 					ShortDescription("Decode Kafka Connect types into their Bloblang equivalents. Only valid when preserve_logical_types is true.").Default(false),
-				service.NewBloblangField("mapping").Description(`Define a custom mapping to apply to the JSON representation of Avro schemas. You can use mappings to convert custom types emitted by other tools, such as Debezium, into standard Avro types.`).
+				service.NewBloblangField("mapping").Description(`Define a custom mapping to apply to the JSON representation of Avro schemas. You can use mappings to convert custom types emitted by other tools, such as Debezium, into standard Avro types.`).Version("4.47.0").
 					ShortDescription("A custom mapping applied to the JSON representation of Avro schemas.").
 					Optional().
 					Advanced().Example(`
@@ -169,10 +169,10 @@ map debeziumTimestampToAvroTimestamp {
 root = this.apply("debeziumTimestampToAvroTimestamp")
 `),
 				service.NewStringField("store_schema_metadata").
-					Description("Optionally store the schema used to decode messages as a metadata field under the given name. This field can later be referenced in other components such as a `parquet_encode` processor in order to automatically infer their schema.").
+					Description("Optionally store the schema used to decode messages as a metadata field under the given name. This field can later be referenced in other components such as a `parquet_encode` processor in order to automatically infer their schema.").Version("4.62.0").
 					ShortDescription("Store the schema used to decode messages as a metadata field under this name.").
 					Optional(),
-			).Description("Configuration for how to decode schemas that are of type AVRO."),
+			).Description("Configuration for how to decode schemas that are of type AVRO.").Version("4.46.0"),
 		).
 		Fields(
 			service.NewObjectField(
@@ -191,10 +191,10 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 					ShortDescription("Emit default-valued primitive fields, empty lists and maps. emit_unpopulated takes precedence.").
 					Default(false),
 				service.NewBoolField("serialize_to_json").
-					Description("If messages should be serialized to JSON bytes. If false then the message is kept in decoded form, which means that 64 bit integers are not converted to strings and types for bytes and google.protobuf.Timestamp are preserved (as they are not serialized to JSON strings).").
+					Description("If messages should be serialized to JSON bytes. If false then the message is kept in decoded form, which means that 64 bit integers are not converted to strings and types for bytes and google.protobuf.Timestamp are preserved (as they are not serialized to JSON strings).").Version("4.69.0").
 					ShortDescription("Serialize messages to JSON bytes, rather than keeping them in decoded form.").
 					Default(true),
-			).Description("Configuration for how to decode schemas that are of type PROTOBUF."),
+			).Description("Configuration for how to decode schemas that are of type PROTOBUF.").Version("4.57.0"),
 		).
 		Fields(
 			service.NewObjectField(
@@ -204,11 +204,11 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 					ShortDescription("Coerce decoded values to match the types declared in the JSON Schema, rather than only validating.").
 					Default(false).
 					Version("4.97.0"),
-			).Description("Configuration for how to decode schemas that are of type JSON."),
+			).Description("Configuration for how to decode schemas that are of type JSON.").Version("4.97.0"),
 		).
 		Field(
 			service.NewDurationField("cache_duration").
-				Description("The duration after which a cached schema is considered stale and is removed from the cache.").
+				Description("The duration after which a cached schema is considered stale and is removed from the cache.").Version("4.54.0").
 				Default("10m").Example("1h").Example("5m"),
 		).
 		Field(service.NewURLField("url").Description(schemaregistry.URLFieldDescription)).
@@ -217,7 +217,7 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 
 This configuration does not work with protobuf schemas.
 
-TIP: You can also use the xref:guides:bloblang/functions.adoc#with_schema_registry_header[` + "`" + `with_schema_registry_header` + "`" + `] bloblang function to add a schema ID to messages.`).
+TIP: You can also use the xref:guides:bloblang/functions.adoc#with_schema_registry_header[` + "`" + `with_schema_registry_header` + "`" + `] bloblang function to add a schema ID to messages.`).Version("4.64.0").
 			ShortDescription("Schema ID to use when a message's schema header cannot be read. Header errors are returned if unset.").
 			Optional())
 

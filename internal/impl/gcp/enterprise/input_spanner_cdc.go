@@ -177,7 +177,7 @@ Supported time units are ` + "`" + `ns` + "`" + `, ` + "`" + `us` + "`" + `, ` +
 			ShortDescription("Modification types to process: INSERT, UPDATE, DELETE. All are processed if unset.").Example([]string{"INSERT", "UPDATE", "DELETE"})).
 		Field(service.NewBatchPolicyField(siFieldBatchPolicy)).
 		Field(service.NewIntField(siFieldCheckpointLimit).
-			Description("The maximum number of messages that can be processed at a given time per partition. Increasing this limit enables parallel processing and batching at the output level. Any given partition watermark will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			Description("The maximum number of messages that can be processed at a given time per partition. Increasing this limit enables parallel processing and batching at the output level. Any given partition watermark will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").Version("4.107.0").
 			ShortDescription("The maximum number of in-flight messages per partition.").
 			Default(defaultCheckpointLimit)).
 		Field(service.NewAutoRetryNacksToggleField())

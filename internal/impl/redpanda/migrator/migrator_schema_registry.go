@@ -97,7 +97,7 @@ func schemaRegistryField(extraFields ...*service.ConfigField) *service.ConfigFie
 				Example("http://localhost:8081").
 				Example("https://schema-registry.example.com:8081"),
 			service.NewDurationField(srFieldTimeout).
-				Description("HTTP client timeout for schema registry requests.").
+				Description("HTTP client timeout for schema registry requests.").Version("4.72.0").
 				Default("5s").
 				Optional(),
 			service.NewTLSToggledField(srFieldTLS),
@@ -164,7 +164,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			ShortDescription("Error on unknown schema IDs. Only relevant when translate_ids is true.").
 			Default(false),
 		service.NewIntField(srFieldMaxParallelHTTPRequest).
-			Description("Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.").
+			Description("Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.").Version("4.80.0").
 			Default(10).
 			LintRule(`root = if this < 1 { "max_parallel_http_requests must be at least 1" }`),
 	}

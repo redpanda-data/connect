@@ -29,7 +29,7 @@ const (
 
 func reactionSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Description(`Adds or removes an emoji reaction on a Slack message using the https://api.slack.com/methods/reactions.add[`+"`reactions.add`"+`^] and https://api.slack.com/methods/reactions.remove[`+"`reactions.remove`"+`^] API methods.`).
+		Description(`Adds or removes an emoji reaction on a Slack message using the https://api.slack.com/methods/reactions.add[`+"`reactions.add`"+`^] and https://api.slack.com/methods/reactions.remove[`+"`reactions.remove`"+`^] API methods.`).Version("4.58.0").
 		Fields(
 			service.NewStringField(oFieldBotToken).
 				Description("Your Slack bot user's OAuth token, which must have the https://api.slack.com/scopes/reactions:write[`reactions:write` scope^]. The token starts with `xoxb-`.").

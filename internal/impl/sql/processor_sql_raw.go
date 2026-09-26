@@ -56,7 +56,7 @@ func RawProcessorConfig() *service.ConfigSpec {
 			rawQueryArgsMappingField(),
 			rawQueryExecOnly(),
 		).
-			Description("A list of database statements to run in addition to your main `query`. If you specify multiple statements, they are executed within a single transaction. The output of the processor is always the result of the last query that runs, unless `exec_only` is used.").
+			Description("A list of database statements to run in addition to your main `query`. If you specify multiple statements, they are executed within a single transaction. The output of the processor is always the result of the last query that runs, unless `exec_only` is used.").Version("4.45.0").
 			ShortDescription("Statements to run in addition to query, all executed within a transaction.").
 			Optional()).
 		Fields(connFields()...).

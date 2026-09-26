@@ -74,7 +74,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Description("Whether the declared queue is durable.").
 				Default(true),
 			service.NewBoolField(queueDeclareAutoDeleteField).
-				Description("Whether the declared queue auto-deletes when there are no active consumers.").
+				Description("Whether the declared queue auto-deletes when there are no active consumers.").Version("4.5.0").
 				Default(false),
 			service.NewStringMapField(queueDeclareArgumentsField).
 				Description(`Arguments for server-specific implementations of the queue (optional). You can use arguments to configure additional parameters for queue types that require them. For more information about available arguments, see the https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c85e8dc431/types.go#L282-L362[RabbitMQ Client Library^].
@@ -127,7 +127,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 | When set to `+"`"+`true`+"`"+`, a single consumer receives messages from the queue even when multiple consumers are subscribed to it.
 | A boolean.
 
-|===`).
+|===`).Version("4.46.0").
 				ShortDescription("Optional arguments specific to the server's queue implementation, for queue types needing extra parameters.").
 				Advanced().
 				Optional().

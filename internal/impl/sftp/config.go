@@ -45,17 +45,17 @@ func connectionFields() []*service.ConfigField {
 		service.NewStringField(sFieldAddress).
 			Description("The address (hostname or IP address) of the SFTP server to connect to."),
 		service.NewDurationField(sFieldConnectionTimeout).
-			Description("The connection timeout to use when connecting to the target server.").
+			Description("The connection timeout to use when connecting to the target server.").Version("4.59.0").
 			Default("30s").
 			Advanced(),
 		service.NewObjectField(sFieldCredentials,
 			[]*service.ConfigField{
 				service.NewStringField(sFieldCredentialsUsername).Description("The username required to authenticate with the SFTP server.").Default(""),
 				service.NewStringField(sFieldCredentialsPassword).Description("The password to use for authentication. Used together with `username` for basic authentication or with encrypted private keys for secure access.").Secret().Default(""),
-				service.NewStringField(sFieldCredentialsHostPublicKeyFile).Description("The path to the SFTP server's public key file, used for host key verification.").Optional(),
-				service.NewStringField(sFieldCredentialsHostPublicKey).Description("The raw contents of the SFTP server's public key, used for host key verification.").Optional(),
+				service.NewStringField(sFieldCredentialsHostPublicKeyFile).Description("The path to the SFTP server's public key file, used for host key verification.").Version("4.59.0").Optional(),
+				service.NewStringField(sFieldCredentialsHostPublicKey).Description("The raw contents of the SFTP server's public key, used for host key verification.").Version("4.59.0").Optional(),
 				service.NewStringField(sFieldCredentialsPrivateKeyFile).Description("The path to a private key file used to authenticate with the SFTP server. You can also provide a private key using the `private_key` field.").Optional(),
-				service.NewStringField(sFieldCredentialsPrivateKey).Description("The raw contents of the private key used to authenticate with the SFTP server. This field provides an alternative to `private_key_file`.").Optional().Secret(),
+				service.NewStringField(sFieldCredentialsPrivateKey).Description("The raw contents of the private key used to authenticate with the SFTP server. This field provides an alternative to `private_key_file`.").Version("4.51.0").Optional().Secret(),
 				service.NewStringField(sFieldCredentialsPrivateKeyPass).Description("An optional passphrase for decrypting the private key, if it is encrypted.").Secret().Default(""),
 			}...,
 		).Description("The credentials required to log in to the SFTP server. This can include a username and password, or a private key for secure access.").

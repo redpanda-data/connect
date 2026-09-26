@@ -57,7 +57,7 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 					Description("Whether the declared exchange is durable.").
 					Default(true),
 				service.NewStringMapField(exchangeDeclareArgumentsField).
-					Description("Arguments for server-specific implementations of the exchange (optional). You can use arguments to configure additional parameters for exchange types that require them.").
+					Description("Arguments for server-specific implementations of the exchange (optional). You can use arguments to configure additional parameters for exchange types that require them.").Version("4.46.0").
 					ShortDescription("Optional arguments specific to the server's exchange implementation, for types needing extra parameters.").
 					Advanced().
 					Optional().
@@ -83,28 +83,28 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(correlationIDField).
-				Description("Set a unique correlation ID for each message using a dynamic interpolated expression to help match messages to responses.").
+				Description("Set a unique correlation ID for each message using a dynamic interpolated expression to help match messages to responses.").Version("4.22.0").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(replyToField).
-				Description("Set the name of the queue to which responses are sent using a dynamic interpolated expression.").
+				Description("Set the name of the queue to which responses are sent using a dynamic interpolated expression.").Version("4.22.0").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(expirationField).
-				Description("Set the TTL of each message in milliseconds.").
+				Description("Set the TTL of each message in milliseconds.").Version("4.22.0").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(messageIDField).
-				Description("Set a message ID for each message using a dynamic interpolated expression.").
+				Description("Set a message ID for each message using a dynamic interpolated expression.").Version("4.22.0").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(userIDField).
-				Description("Set the user ID to the name of the publisher. If this property is set by a publisher, its value must match the name of the user that opened the connection.").
+				Description("Set the user ID to the name of the publisher. If this property is set by a publisher, its value must match the name of the user that opened the connection.").Version("4.22.0").
 				ShortDescription("The user ID of the publisher. Must equal the user that opened the connection.").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(appIDField).
-				Description("Set an application ID for each message using a dynamic interpolated expression.").
+				Description("Set an application ID for each message using a dynamic interpolated expression.").Version("4.22.0").
 				Advanced().
 				Default(""),
 			service.NewMetadataExcludeFilterField(metadataFilterField).
@@ -132,7 +132,7 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 				Advanced().
 				Default(false),
 			service.NewDurationField(timeoutField).
-				Description("The maximum period to wait for a message acknowledgment before abandoning it and attempting a resend. If this value is not set, the system waits indefinitely.").
+				Description("The maximum period to wait for a message acknowledgment before abandoning it and attempting a resend. If this value is not set, the system waits indefinitely.").Version("4.5.0").
 				Advanced().
 				Default(""),
 			service.NewTLSToggledField(tlsField),

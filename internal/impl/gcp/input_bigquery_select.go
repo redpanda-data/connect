@@ -113,7 +113,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Field(bqSelectWhereField()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(bqJobLabelsField("query")).
-		Field(service.NewStringField("priority").Description("The priority with which to schedule the query.").Default("")).
+		Field(service.NewStringField("priority").Description("The priority with which to schedule the query.").Version("4.7.0").Default("")).
 		Field(bqSelectArgsMappingField()).
 		Field(bqSelectPrefixField()).
 		Field(bqSelectSuffixField()).

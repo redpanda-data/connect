@@ -88,22 +88,22 @@ func authFieldSpec() *service.ConfigField {
 			Example("./user.creds").
 			Optional(),
 		service.NewStringField("user_jwt").
-			Description("An optional plaintext user JWT to use along with the corresponding user NKey seed.").
+			Description("An optional plaintext user JWT to use along with the corresponding user NKey seed.").Version("4.16.0").
 			Secret().
 			Optional(),
 		service.NewStringField("user_nkey_seed").
-			Description("An optional plaintext user NKey seed to use along with the corresponding user JWT.").
+			Description("An optional plaintext user NKey seed to use along with the corresponding user JWT.").Version("4.16.0").
 			Secret().
 			Optional(),
 		service.NewStringField("user").
-			Description("An optional plain text user name (given along with the corresponding user password).").
+			Description("An optional plain text user name (given along with the corresponding user password).").Version("4.84.0").
 			Optional(),
 		service.NewStringField("password").
-			Description("An optional plain text password (given along with the corresponding user name).").
+			Description("An optional plain text password (given along with the corresponding user name).").Version("4.84.0").
 			Secret().
 			Optional(),
 		service.NewStringField("token").
-			Description("An optional plain text token.").
+			Description("An optional plain text token.").Version("4.84.0").
 			Secret().
 			Optional(),
 	).Description("Optional configuration of NATS authentication parameters.").

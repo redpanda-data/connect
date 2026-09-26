@@ -120,7 +120,7 @@ This processor adds the following metadata fields to each message, depending on 
 				Optional().
 				Advanced(),
 			service.NewDurationField(kvpFieldTimeout).
-				Description("The maximum period to wait on an operation before aborting and returning an error.").
+				Description("The maximum period to wait on an operation before aborting and returning an error.").Version("4.27.0").
 				Advanced().Default("5s"),
 		}...)...).
 		LintRule(`root = match {

@@ -163,11 +163,11 @@ To learn more about chat completion, see the https://docs.cohere.com/docs/chat-a
 				Optional().
 				Advanced().
 				Description("Specify up to four sequences to stop the API from generating further tokens."),
-			service.NewIntField(ccpFieldMaxToolCalls).Description("The maximum number of tool calls the model can perform.").Default(10),
+			service.NewIntField(ccpFieldMaxToolCalls).Description("The maximum number of tool calls the model can perform.").Version("4.53.0").Default(10),
 			service.NewObjectListField(
 				ccpFieldTools,
 				llm.ToolFields(llm.ToolParametersField())...,
-			).Description("External tools that the model can invoke, such as functions, APIs, or web browsing. You can define subpipelines of processors that implement these tools, enabling the model to use agent-like behavior to decide when and how to invoke them to enhance response generation.").
+			).Description("External tools that the model can invoke, such as functions, APIs, or web browsing. You can define subpipelines of processors that implement these tools, enabling the model to use agent-like behavior to decide when and how to invoke them to enhance response generation.").Version("4.53.0").
 				ShortDescription("The tools the LLM may invoke, allowing subpipelines to be called for agentic actions.").Default([]any{}),
 		).LintRule(`
       root = match {

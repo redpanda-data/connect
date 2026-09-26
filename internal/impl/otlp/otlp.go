@@ -50,7 +50,7 @@ func collectorListFields() []*service.ConfigField {
 				Deprecated().
 				Default("localhost:4318"),
 			service.NewBoolField("secure").
-				Description("Connect to the collector over HTTPS").
+				Description("Connect to the collector over HTTPS").Version("4.20.0").
 				Default(false),
 		).Description("A list of http collectors."),
 		service.NewObjectListField(otFieldGRPC,
@@ -63,7 +63,7 @@ func collectorListFields() []*service.ConfigField {
 				Deprecated().
 				Default("localhost:4317"),
 			service.NewBoolField("secure").
-				Description("Connect to the collector with client transport security").
+				Description("Connect to the collector with client transport security").Version("4.20.0").
 				Default(false),
 		).Description("A list of grpc collectors."),
 	}

@@ -36,13 +36,13 @@ func IAMAuthRegionField(product string) *service.ConfigField {
 func IAMAuthStaticCredentialFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField("id").
-			Description("The AWS access key ID to authenticate with. When empty, the default AWS credential chain is used.").
+			Description("The AWS access key ID to authenticate with. When empty, the default AWS credential chain is used.").Version("4.72.0").
 			Optional().Advanced(),
 		service.NewStringField("secret").
-			Description("The AWS secret access key that pairs with `id`.").
+			Description("The AWS secret access key that pairs with `id`.").Version("4.72.0").
 			Optional().Advanced().Secret(),
 		service.NewStringField("token").
-			Description("The AWS session token to use with `id` and `secret`. Required only when using short-term credentials.").
+			Description("The AWS session token to use with `id` and `secret`. Required only when using short-term credentials.").Version("4.72.0").
 			Optional().Advanced(),
 	}
 }
@@ -83,7 +83,7 @@ func IAMAuthRoleFields(exclusive bool) []*service.ConfigField {
 	return []*service.ConfigField{
 		role,
 		service.NewStringField("role_external_id").
-			Description("Optional external ID to use when assuming the role set in `role`. Each entry in `roles` sets its own external ID.").
+			Description("Optional external ID to use when assuming the role set in `role`. Each entry in `roles` sets its own external ID.").Version("4.72.0").
 			ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
 			Optional(),
 		roles,
