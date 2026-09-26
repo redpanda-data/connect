@@ -29,12 +29,13 @@ const (
 
 func usersInputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Description(`Reads all users in a slack organization (optionally filtered by a team ID).`).
+		Summary("Returns the full profile of all users in your Slack organization using the users.list API method. You can filter the returned users by team ID.").
+		Description(`This input reads users with the https://api.slack.com/methods/users.list[`+"`users.list`"+`^] Slack API method and emits each user profile as a separate message. To return only the users of one team, set `+"`team_id`"+`.`).
 		Fields(
-			service.NewStringField(iFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
+			service.NewStringField(iFieldBotToken).Description("Your https://api.slack.com/concepts/token-types[Slack bot user's OAuth token^], which must have the https://api.slack.com/scopes/users:read[`users.read` scope^] to access your Slack organization.").LintRule(`
         root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
       `),
-			service.NewStringField(iFieldTeamID).Description("The team ID to filter by").Default(""),
+			service.NewStringField(iFieldTeamID).Description("The encoded ID of a Slack team by which to filter the list of returned users, which you can get from the https://api.slack.com/methods/team.info[`team.info` Slack API method^]. If `team_id` is left empty, users from all teams within the organization are returned.").Default(""),
 			service.NewAutoRetryNacksToggleField(),
 		)
 }

@@ -58,31 +58,41 @@ You can access these metadata fields using function interpolation.`
 				Description("The URL of the Git repository to clone.").
 				Example("https://github.com/username/repo.git"),
 			service.NewStringField("branch").
-				Description("The branch to check out.").
+				Description("The repository branch to check out.").
 				Default("main"),
 			service.NewDurationField("poll_interval").
-				Description("Duration between polling attempts").
+				Description("How frequently this input polls the Git repository for changes, as a duration between polling attempts.").
 				Default("10s").
 				Example("10s"),
 			service.NewStringListField("include_patterns").
-				Description("A list of file patterns to include (for example, '**/*.md', 'configs/*.yaml'). If empty, all files will be included. "+
-					"Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.").
+				Description(`A list of file patterns to read from. For example, you could read content from only Markdown and YAML files: `+"`"+`'**/*.md', 'configs/*.yaml'`+"`"+`.
+
+The following patterns are supported:
+
+- Glob patterns: `+"`"+`*`+"`"+`, `+"`"+`/**/`+"`"+`, `+"`"+`?`+"`"+`
+- Character ranges: `+"`"+`[a-z]`+"`"+`. Escape any character with a special meaning using a backslash.
+
+If this field is left empty, all files are read.`).
 				ShortDescription("Glob patterns for files to include. All files are included if empty.").
 				Default([]any{}).
 				Optional(),
 			service.NewStringListField("exclude_patterns").
-				Description("A list of file patterns to exclude (for example, '.git/**', '**/*.png'). These patterns take precedence over include_patterns. "+
-					"Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.").
+				Description(`A list of file patterns to exclude. For example, you could choose not to read content from certain Git directories or image files: `+"`"+`'.git/**', '**/*.png'`+"`"+`. These patterns take precedence over `+"`"+`include_patterns`+"`"+`.
+
+The following patterns are supported:
+
+- Glob patterns: `+"`"+`*`+"`"+`, `+"`"+`/**/`+"`"+`, `+"`"+`?`+"`"+`
+- Character ranges: `+"`"+`[a-z]`+"`"+`. Escape any character with a special meaning using a backslash.`).
 				ShortDescription("Glob patterns for files to exclude. These take precedence over include_patterns.").
 				Default([]any{}).
 				Optional(),
 			service.NewIntField("max_file_size").
-				Description("The maximum size of files to include in bytes. Files larger than this will be skipped. Set to 0 for no limit.").
+				Description("The maximum size of files to read from (in bytes). Files that exceed this limit are skipped. Set to `0` for unlimited file sizes.").
 				Default(10*1024*1024), // 10MB default
 
 			// Checkpoint caching settings
 			service.NewStringField("checkpoint_cache").
-				Description("A cache resource to store the last processed commit hash, allowing the input to resume from where it left off after a restart.").
+				Description("Specify a xref:components:caches/about.adoc[`cache`] resource to store the last processed commit hash. After a restart, Redpanda Connect can then continue processing changes from where it left off, avoiding the need to reprocess all detected updates.").
 				ShortDescription("Cache resource storing the last processed commit hash, so the input resumes after a restart.").
 				Optional(),
 			service.NewStringField("checkpoint_key").
@@ -95,48 +105,48 @@ You can access these metadata fields using function interpolation.`
 				// HTTP Basic Auth
 				service.NewObjectField("basic",
 					service.NewStringField("username").
-						Description("Username for basic authentication").
+						Description("The username to use for authentication.").
 						Default("").
 						Optional(),
 					service.NewStringField("password").
-						Description("Password for basic authentication").
+						Description("A password to authenticate with.").
 						Default("").
 						Secret().
 						Optional(),
 				).
-					Description("Basic authentication credentials").
+					Description("Allows you to specify basic authentication.").
 					Optional(),
 				// SSH key authentication (file or contents)
 				service.NewObjectField("ssh_key",
 					service.NewStringField("private_key_path").
-						Description("Path to SSH private key file").
+						Description("The path to your private SSH key file. When using encrypted keys, you must also set a value for `passphrase`.").
 						Default("").
 						Optional(),
 					service.NewStringField("private_key").
-						Description("SSH private key content").
+						Description("Your private SSH key content. When using encrypted keys, you must also set a value for `passphrase`.").
 						Default("").
 						Secret().
 						Optional(),
 					service.NewStringField("passphrase").
-						Description("Passphrase for the SSH private key").
+						Description("The passphrase for your SSH private key.").
 						Default("").
 						Secret().
 						Optional(),
 				).
-					Description("SSH key authentication").
+					Description("Allows you to specify SSH key authentication.").
 					Optional(),
 				// Token-based authentication
 				service.NewObjectField("token",
 					service.NewStringField("value").
-						Description("Token value for token-based authentication").
+						Description("The token value to use for token-based authentication.").
 						Default("").
 						Secret().
 						Optional(),
 				).
-					Description("Token-based authentication").
+					Description("Allows you to specify token-based authentication.").
 					Optional(),
 			).
-				Description("Authentication options for the Git repository").
+				Description("Options for authenticating with your Git repository.").
 				Optional(),
 			service.NewAutoRetryNacksToggleField(),
 		)

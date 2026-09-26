@@ -75,20 +75,30 @@ schema_id: the ID of the schema in the schema registry that was associated with 
 		Fields(
 			service.NewObjectField(
 				"avro",
-				service.NewBoolField("raw_unions").Description(`Whether avro messages should be decoded into normal JSON ("json that meets the expectations of regular internet json") rather than https://avro.apache.org/docs/current/specification/#json-encoding[JSON as specified in the Avro Spec^].
+				service.NewBoolField("raw_unions").Description(`Whether Avro messages should be decoded into normal JSON (JSON that meets the expectations of regular internet JSON) rather than https://avro.apache.org/docs/current/specification/#json-encoding[Avro JSON^].
 
-For example, if there is a union schema `+"`"+`["null", "string", "Foo"]`+"`"+` where `+"`Foo`"+` is a record name, with raw_unions as false (the default) you get:
-- `+"`null` as `null`"+`;
-- the string `+"`\"a\"` as `{\"string\": \"a\"}`"+`; and
-- a `+"`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
+If set to `+"`"+`false`+"`"+` (default), Avro messages are decoded as Avro JSON.
 
-When raw_unions is set to true then the above union schema is decoded as the following:
-- `+"`null` as `null`"+`;
-- the string `+"`\"a\"` as `\"a\"`"+`; and
-- a `+"`Foo` instance as `{...}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
-`).
+For example, the union schema `+"`"+`["null","string","Transaction"]`+"`"+`, where `+"`"+`Transaction`+"`"+` is a record name, would be decoded as:
+
+- A `+"`"+`null`+"`"+` as a JSON `+"`"+`null`+"`"+`
+- The string `+"`"+`"a"`+"`"+` as `+"`"+`{"string": "a"}`+"`"+`
+- A `+"`"+`Transaction`+"`"+` instance as `+"`"+`{"Transaction": {...}}`+"`"+`, where `+"`"+`{...}`+"`"+` indicates the JSON encoding of a `+"`"+`Transaction`+"`"+` instance.
+
+If set to `+"`"+`true`+"`"+`, Avro messages are decoded as standard JSON.
+
+For example, the same union schema `+"`"+`["null","string","Transaction"]`+"`"+` is decoded as:
+
+- A `+"`"+`null`+"`"+` as JSON `+"`"+`null`+"`"+`
+- The string `+"`"+`"a"`+"`"+` as `+"`"+`"a"`+"`"+`
+- A `+"`"+`Transaction`+"`"+` instance as `+"`"+`{...}`+"`"+`, where `+"`"+`{...}`+"`"+` indicates the JSON encoding of a `+"`"+`Transaction`+"`"+` instance.`).
 					ShortDescription("Decode Avro messages into plain JSON rather than the Avro spec's JSON encoding.").Optional(),
-				service.NewBoolField("preserve_logical_types").Description(`Whether logical types should be preserved or transformed back into their primitive type. By default, decimals are decoded as raw bytes and timestamps are decoded as plain integers. Setting this field to true keeps decimal types as numbers in bloblang and timestamps as time values.`).
+				service.NewBoolField("preserve_logical_types").Description(`Choose whether to:
+
+- Transform logical types into their primitive type (default). For example, decimals become raw bytes and timestamps become plain integers.
+- Preserve logical types.
+
+Set to `+"`"+`true`+"`"+` to preserve logical types, which keeps decimal types as numbers in Bloblang and timestamps as time values.`).
 					ShortDescription("Preserve logical types rather than transforming them back into their primitive type.").Default(false),
 				service.NewBoolField("translate_kafka_connect_types").Description(`Only valid if preserve_logical_types is true. This decodes various Kafka Connect types into their bloblang equivalents when not representable by standard logical types according to the Avro standard.
 
@@ -138,7 +148,7 @@ Types that are currently translated:
 
 `).
 					ShortDescription("Decode Kafka Connect types into their Bloblang equivalents. Only valid when preserve_logical_types is true.").Default(false),
-				service.NewBloblangField("mapping").Description(`A custom mapping to apply to Avro schemas JSON representation. This is useful to transform custom types emitted by other tools into standard avro.`).
+				service.NewBloblangField("mapping").Description(`Define a custom mapping to apply to the JSON representation of Avro schemas. You can use mappings to convert custom types emitted by other tools, such as Debezium, into standard Avro types.`).
 					ShortDescription("A custom mapping applied to the JSON representation of Avro schemas.").
 					Optional().
 					Advanced().Example(`
@@ -189,7 +199,7 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 			service.NewObjectField(
 				"json",
 				service.NewBoolField("coerce_data").
-					Description("Whether decoded values should be coerced to match the types declared in the JSON Schema. By default JSON Schema decoding only validates the message and leaves it untouched, which means numbers are later interpreted as floating point (`double`) and date-time values as strings. When set to `true` the decoder rebuilds the message so that values match the schema: `integer` fields become 64-bit integers, `number` fields stay floating point, `string` fields with `format: date-time` become timestamps, and any `default` values declared in the schema are applied to absent fields. This is useful for downstream components that infer their schema from the decoded values, such as the `iceberg` outputs, which will then create `bigint` columns for integer fields rather than `double`. Note that, unlike the default behaviour, this is no longer a read-only operation: the message contents are transformed. Because coercion is stricter than validation, a message that passes validation may still fail coercion (for example an integer that overflows a 64-bit value, or a `date-time` string that is not valid RFC 3339), in which case the error can be caught using xref:configuration:error_handling.adoc[error handling methods].").
+					Description("Whether decoded values should be coerced to match the types declared in the JSON Schema. By default JSON Schema decoding only validates the message and leaves it untouched, which means numbers are later interpreted as floating point (`double`) and date-time values as strings. When set to `true` the decoder rebuilds the message so that values match the schema: `integer` fields become 64-bit integers, `number` fields stay floating point, `string` fields with `format: date-time` become timestamps, and any `default` values declared in the schema are applied to absent fields. This is useful for downstream components that infer their schema from the decoded values, such as the `iceberg` outputs, which will then create `bigint` columns for integer fields rather than `double`. Note that, unlike the default behavior, this is no longer a read-only operation: the message contents are transformed. Because coercion is stricter than validation, a message that passes validation may still fail coercion (for example an integer that overflows a 64-bit value, or a `date-time` string that is not valid RFC 3339), in which case the error can be caught using xref:configuration:error_handling.adoc[error handling methods].").
 					ShortDescription("Coerce decoded values to match the types declared in the JSON Schema, rather than only validating.").
 					Default(false).
 					Version("4.97.0"),
@@ -197,12 +207,16 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 		).
 		Field(
 			service.NewDurationField("cache_duration").
-				Description("The duration after which a schema is considered stale and will be removed from the cache.").
+				Description("The duration after which a cached schema is considered stale and is removed from the cache.").
 				Default("10m").Example("1h").Example("5m"),
 		).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewIntField("default_schema_id").
-			Description("If set, this schema ID will be used when a message's schema header cannot be read (ErrBadHeader). If not set, schema header errors will be returned. WARNING: This is configuration does not work with PROTOBUF schemas. You may also use `with_schema_registry_header` bloblang function to add a schema ID to messages.").
+			Description(`This schema ID is used when a message's schema header cannot be read (` + "`" + `ErrBadHeader` + "`" + `). If this value is not set, schema header errors are returned.
+
+This configuration does not work with protobuf schemas.
+
+TIP: You can also use the xref:guides:bloblang/functions.adoc#with_schema_registry_header[` + "`" + `with_schema_registry_header` + "`" + `] bloblang function to add a schema ID to messages.`).
 			ShortDescription("Schema ID to use when a message's schema header cannot be read. Header errors are returned if unset.").
 			Optional())
 
