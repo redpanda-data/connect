@@ -401,9 +401,9 @@ Maximum age of snapshots to retain for time-travel queries. Set to zero to disab
 
 === `identifier_fields[]`
 
-The columns forming the row identity (the Iceberg identifier fields / equality-delete key) used by `upsert` and `delete`. Required when `row_operation` can evaluate to `upsert` or `delete`, and must reference existing table columns of a primitive, non-floating-point type.
+The columns forming the row identity (the Iceberg identifier fields, or equality-delete key) used by `upsert` and `delete`. Required when `row_operation` can evaluate to `upsert` or `delete`, and must reference existing table columns of a primitive, non-floating-point type.
 
-See the <<row-level-operations,Row-level operations>> section above for the full constraints, including the temporal-type and partitioning rules and when the requirement is enforced.
+See the Row-level operations section above for the full constraints, including the temporal-type and partitioning rules and when the requirement is enforced.
 
 *Type*: `array<string>`
 
@@ -497,9 +497,9 @@ The encoding to use for string and binary columns. Use `plain` for compatibility
 
 === `row_operation`
 
-The row-level operation to apply for each message: `insert` (append), `upsert` (replace rows matching `identifier_fields`, then append), or `delete` (remove rows matching `identifier_fields`). Supports interpolation so the operation can be driven by the data; for example, a change-data-capture stream's operation field. Defaults to `insert`, preserving the original append-only behaviour.
+The row-level operation to apply for each message: `insert` (append), `upsert` (replace rows matching `identifier_fields`, then append), or `delete` (remove rows matching `identifier_fields`). Supports interpolation so the operation can be driven by the data, such as a change-data-capture stream's operation field. Defaults to `insert`, preserving the original append-only behavior.
 
-See the <<row-level-operations,Row-level operations>> section above for the full semantics, the format-version-2 upgrade, batching behaviour, and important caveats.
+See the Row-level operations section above for the full semantics, the format-version-2 upgrade, batching behavior, and important caveats.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -543,7 +543,7 @@ An optional Bloblang mapping to customize column types during schema evolution. 
 
 === `schema_evolution.partition_spec`
 
-A bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an iceberg partition spec in the same string format as the https://docs.redpanda.com/current/manage/iceberg/about-iceberg-topics/#use-custom-partitioning[^Redpanda Streaming Topic Property]
+A Bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an Iceberg partition spec in the same string format as the https://docs.redpanda.com/current/manage/iceberg/about-iceberg-topics/#use-custom-partitioning[Redpanda Streaming topic property^].
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -599,7 +599,7 @@ The name of a message metadata field containing a schema definition. When set, t
 
 === `schema_evolution.table_location`
 
-A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived as `\{prefix}\{namespace}/\{table}`.
+A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived by appending the namespace and table name to the prefix, in the form `<prefix><namespace>/<table>`.
 
 *Type*: `string`
 
@@ -803,7 +803,9 @@ Custom endpoint for GCS-compatible storage.
 
 === `table`
 
-The Iceberg table name. Supports interpolation functions for dynamic table names.
+The destination Iceberg table name.
+
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 *Type*: `string`
 

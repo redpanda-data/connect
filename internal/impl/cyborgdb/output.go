@@ -60,37 +60,40 @@ data privacy. The encryption key never leaves your infrastructure.
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(poFieldBatching),
 			service.NewStringField(poFieldHost).
-				Description("The host for the CyborgDB instance.").
+				Description("The host URL for the CyborgDB instance, including the port number if required. The scheme is optional: if the value does not start with `http://` or `https://`, this output uses `https://`.").
 				Example("api.cyborg.com").
 				Example("localhost:8000"),
 			service.NewStringField(poFieldAPIKey).
 				Secret().
-				Description("The CyborgDB API key for authentication."),
+				Description("The API key for authenticating with the CyborgDB service. This key identifies your account and provides access to your CyborgDB indexes. Keep this key secure and avoid exposing it in logs or version control."),
 			service.NewStringField(poFieldIndexName).
 				Default("redpanda-vectors").
-				Description("The name of the index to write to."),
+				Description("The name of the CyborgDB index to write vectors to. If the index doesn't exist and `create_if_missing` is enabled, CyborgDB will create it automatically with optimized settings based on your data."),
 			service.NewStringField(poFieldIndexKey).
 				Secret().
-				Description("The base64-encoded encryption key for the index. Must be exactly 32 bytes when decoded.").
+				Description("The base64-encoded encryption key for the CyborgDB index. This key must be exactly 32 bytes when decoded from base64. All vector data is encrypted client-side using this key before transmission, ensuring complete data privacy. Store this key securely as it cannot be recovered if lost.").
 				Example("your-base64-encoded-32-byte-key"),
 			service.NewBoolField(poFieldCreateIfMissing).
 				Default(false).
 				Advanced().
-				Description("If true, create the index if it doesn't exist. CyborgDB will auto-detect dimension and optimize the index."),
+				Description("Whether to create the index if it doesn't exist. When enabled, CyborgDB automatically detects the vector dimensions from your data and optimizes the index configuration for performance. This is useful for development and testing environments."),
 			service.NewStringEnumField(poFieldOp, "upsert", "delete").
 				Default("upsert").
-				Description("The operation to perform against the CyborgDB index."),
+				Description(`The operation to perform against the CyborgDB index. Supported operations:
+
+- `+"`"+`upsert`+"`"+`: Insert new vectors or update existing ones (requires `+"`"+`vector_mapping`+"`"+`)
+- `+"`"+`delete`+"`"+`: Remove vectors from the index by `+"`"+`id`+"`"+``),
 			service.NewInterpolatedStringField(poFieldID).
-				Description("The ID for the vector entry in CyborgDB."),
+				Description("The unique identifier for each vector entry, for example `${! json(\"id\") }`. This ID is used to update existing vectors during upsert operations or to specify which vectors to delete."),
 			service.NewBloblangField(poFieldVectorMapping).
 				Optional().
-				Description("The mapping to extract out the vector from the document. The result must be a floating point array. Required for upsert operations.").
+				Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that extracts the vector from the message. The result must be an array of floating-point numbers representing the vector embeddings. This field is required for the `upsert` operation.").
 				ShortDescription("Mapping extracting the vector from the document, returning a float array. Required for upserts.").
 				Example("root = this.embeddings_vector").
 				Example("root = [1.2, 0.5, 0.76]"),
 			service.NewBloblangField(poFieldMetadataMapping).
 				Optional().
-				Description("An optional mapping of message to metadata for the vector entry.").
+				Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that extracts metadata to associate with the vector entry. The metadata can contain any JSON-serializable data that helps identify or categorize the vector. This data is stored encrypted alongside the vector.").
 				Example(`root = @`).
 				Example(`root = metadata()`).
 				Example(`root = {"summary": this.summary, "category": this.category}`),

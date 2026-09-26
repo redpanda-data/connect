@@ -5,11 +5,11 @@
 //   body:   include::...[tag=body]   (renders the summary and description)
 
 // tag::meta[]
-:description: Enables MySQL streaming for RedPanda Connect.
+:description: Enables MySQL streaming for Redpanda Connect.
 // end::meta[]
 
 // tag::body[]
-Enables MySQL streaming for RedPanda Connect.
+Enables MySQL streaming for Redpanda Connect.
 
 ifndef::env-cloud[]
 Introduced in version 4.45.0.

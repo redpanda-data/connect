@@ -27,7 +27,8 @@ import (
 
 func redisRatelimitConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
-		Summary(`A rate limit implementation using Redis. It works by using a simple token bucket algorithm to limit the number of requests to a given count within a given time period. The rate limit is shared across all instances of Redpanda Connect that use the same Redis instance, which must all have a consistent count and interval.`).
+		Summary(`A token bucket rate limit backed by Redis, shared across all Redpanda Connect instances that use the same Redis instance.`).
+		Description(`This rate limit uses a token bucket algorithm to limit the number of requests to a given ` + "`count`" + ` within a given ` + "`interval`" + `. The rate limit is shared across all instances of Redpanda Connect that use the same Redis instance, which must all have a consistent ` + "`count`" + ` and ` + "`interval`" + `.`).
 		Version("4.12.0")
 
 	for _, f := range clientFields() {

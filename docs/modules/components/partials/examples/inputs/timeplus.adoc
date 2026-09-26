@@ -4,7 +4,7 @@
 
 === From Timeplus Enterprise Cloud via HTTP
 
-You will need to create API Key on Timeplus Enterprise Cloud Web console first and then set the `apikey` field.
+Create an API key in the Timeplus Enterprise Cloud web console, then set it in the `apikey` field.
 
 [source,yaml]
 ----
@@ -18,7 +18,7 @@ input:
 
 === From Timeplus Enterprise (self-hosted) via HTTP
 
-For self-housted Timeplus Enterprise, you will need to specify the username and password as well as the URL of the App server
+For self-hosted Timeplus Enterprise, specify the username and password as well as the URL of the app server.
 
 [source,yaml]
 ----
@@ -33,7 +33,7 @@ input:
 
 === From Timeplus Enterprise (self-hosted) via TCP
 
-Make sure the the schema of url is tcp
+Make sure the scheme of the `url` is `tcp`.
 
 [source,yaml]
 ----

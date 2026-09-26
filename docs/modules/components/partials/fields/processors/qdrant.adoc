@@ -4,7 +4,7 @@
 
 === `api_token`
 
-The Qdrant API token for authentication. Defaults to an empty string.
+The Qdrant API token to use for authentication, which defaults to an empty string.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -14,7 +14,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `collection_name`
 
-The name of the collection in Qdrant.
+The name of the Qdrant collection you want to query.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -22,7 +22,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `filter`
 
-Additional filtering to perform on the results. The mapping should return a valid filter (using the proto3 encoded form) in qdrant. See the https://qdrant.tech/documentation/concepts/filtering/[^Qdrant documentation] for examples.
+Specify additional filtering to perform on returned results. Mappings must return a valid Qdrant filter using the proto3-encoded form. For examples, see the https://qdrant.tech/documentation/concepts/filtering/[Qdrant documentation^].
 
 *Type*: `string`
 
@@ -68,7 +68,7 @@ grpc_host: xyz-example.eu-central.aws.cloud.qdrant.io:6334
 
 === `limit`
 
-The maximum number of points to return.
+The maximum number of points to return from the collection.
 
 *Type*: `int`
 
@@ -76,7 +76,7 @@ The maximum number of points to return.
 
 === `payload_fields[]`
 
-The fields to include or exclude in returned result based on the `payload_filter`.
+The fields to include or exclude in returned results. Use this field in combination with `payload_filter`.
 
 *Type*: `array<string>`
 
@@ -84,7 +84,7 @@ The fields to include or exclude in returned result based on the `payload_filter
 
 === `payload_filter`
 
-The way the fields in `payload_fields` are filtered in the result.
+Whether to include or exclude the fields specified in `payload_fields` from the returned results.
 
 *Type*: `string`
 
@@ -104,7 +104,7 @@ The way the fields in `payload_fields` are filtered in the result.
 
 === `tls`
 
-TLS(HTTPS) config to use when connecting
+Custom TLS settings can be used to override system defaults.
 
 *Type*: `object`
 
@@ -252,7 +252,7 @@ Whether to skip server side certificate verification.
 
 === `vector_mapping`
 
-The mapping to extract the search vector from the document.
+A mapping to extract search vectors from the returned document.
 
 *Type*: `string`
 

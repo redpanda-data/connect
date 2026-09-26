@@ -139,24 +139,27 @@ func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
 func elasticsearchConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
+		Version("4.77.0").
 		Categories("Services").
 		Summary(`Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.`).
 		Description(`
 Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringListField(esFieldURLs).
-				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
+				Description("A list of URLs to connect to. If an item in the list contains commas, it is split into multiple URLs.").
 				Example([]string{"http://localhost:9200"}),
 			service.NewInterpolatedStringField(esFieldIndex).
-				Description("The index to place messages."),
+				Description("The Elasticsearch index where messages are published."),
 			service.NewInterpolatedStringField(esFieldAction).
-				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update`, `delete`, `create` or `upsert`. See the `Updating Documents` example for more on how the `update` action works and the `Create Documents` and `Upserting Documents` examples for how to use the `create` and `upsert` actions respectively.").
+				Description(`The action to perform on each document. This field must resolve to one of the following action types: `+"`"+`index`+"`"+`, `+"`"+`update`+"`"+`, `+"`"+`delete`+"`"+`, `+"`"+`create`+"`"+`, or `+"`"+`upsert`+"`"+`.
+
+For more information on how the `+"`"+`update`+"`"+` action works, see the `+"`"+`Updating Documents`+"`"+` example. For examples of how to use the `+"`"+`create`+"`"+` and `+"`"+`upsert`+"`"+` actions, see the `+"`"+`Create Documents`+"`"+` and `+"`"+`Upserting Documents`+"`"+` examples.`).
 				ShortDescription("The action to take on the document: index, update, delete, create or upsert."),
 			service.NewInterpolatedStringField(esFieldID).
-				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
+				Description(`Define the ID for indexed messages. Use xref:configuration:interpolation.adoc#bloblang-queries[function interpolations] to dynamically create a unique ID for each message.`).
 				Example(`${!counter()}-${!timestamp_unix()}`),
 			service.NewInterpolatedStringField(esFieldPipeline).
-				Description("An optional pipeline id to preprocess incoming documents.").
+				Description("The ID of an optional pipeline to preprocess incoming documents before they are published.").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(esFieldRouting).
@@ -164,7 +167,7 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 				Advanced().
 				Default(""),
 			service.NewIntField(esFieldRetryOnConflict).
-				Description("Specify how many times should an update operation be retried when a conflict occurs").
+				Description("The number of times to retry an update operation when a version conflict occurs.").
 				Advanced().
 				Default(0),
 			service.NewTLSToggledField(esFieldTLS),
@@ -184,7 +187,7 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 				service.NewStringField(esFieldAuthPassword).
 					Description("A password to authenticate with.").
 					Default("").Secret(),
-			).Description("Allows you to specify basic authentication.").
+			).Description("Configure basic authentication credentials for connecting to Elasticsearch. When enabled, these credentials are sent with each request to authenticate with the cluster.").
 				Advanced().
 				Optional(),
 			service.NewBatchPolicyField(esFieldBatching),

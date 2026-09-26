@@ -14,7 +14,7 @@ The default compression type to use for fields.
 
 === `default_encoding`
 
-The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY` and is therefore best left unset where possible.
+The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY`.
 
 ifndef::env-cloud[]
 Requires version 4.11.0 or later.

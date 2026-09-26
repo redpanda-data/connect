@@ -96,15 +96,15 @@ This input adds the following metadata fields to each message:
 A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finite floating point values such as NaN or Infinity) is published with its error set and a plain-text rendering of the row as the payload, rather than stalling the stream or silently dropping the row. Such messages can be inspected with the ` + "`errored()`" + ` Bloblang function and routed with error-handling components (for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + `, or a dead-letter queue); if not handled they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
 		`).
 		Field(service.NewStringField(fieldDSN).
-			Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
+			Description("The data source name (DSN) of the PostgreSQL database from which you want to stream updates. Use the format `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. PostgreSQL enforces SSL by default. To disable SSL, for example in a secure environment, add `sslmode=disable` to the connection string.").
 			ShortDescription("The Data Source Name for the PostgreSQL database, in postgres:// URL form.").
 			Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")).
 		Field(service.NewBoolField(fieldIncludeTxnMarkers).
-			Description(`When set to true, empty messages with operation types BEGIN and COMMIT are generated for the beginning and end of each transaction. Messages with operation metadata set to "begin" or "commit" will have null message payloads.`).
+			Description(`When set to ` + "`" + `true` + "`" + `, creates empty messages for the ` + "`" + `BEGIN` + "`" + ` and ` + "`" + `COMMIT` + "`" + ` operations that start and complete each transaction. Messages with the ` + "`" + `operation` + "`" + ` metadata field set to ` + "`" + `begin` + "`" + ` or ` + "`" + `commit` + "`" + ` have null message payloads.`).
 			ShortDescription("Emit empty BEGIN and COMMIT messages at the start and end of each transaction.").
 			Default(false)).
 		Field(service.NewBoolField(fieldStreamSnapshot).
-			Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `" + fieldTables + "` is left empty, since the snapshot is only planned for tables listed there.").
+			Description("When set to `true`, this input streams a snapshot of all existing data in the source database before streaming data changes. To use this setting, all database tables that you want to replicate _must_ have a primary key, which allows the input to read each table in parallel. This setting has no effect if `" + fieldTables + "` is left empty, since the snapshot is only planned for tables listed there.").
 			ShortDescription("Stream a snapshot of all existing data before streaming changes. Snapshot tables must have a primary key.").
 			Example(true).
 			Default(false)).
@@ -115,7 +115,9 @@ A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finit
 			Default(1).
 			Deprecated()).
 		Field(service.NewIntField(fieldSnapshotBatchSize).
-			Description("The number of rows to fetch in each batch when querying the snapshot.").
+			Description(`The number of table rows to fetch in each batch when querying the snapshot.
+
+This option is only available when ` + "`" + `stream_snapshot` + "`" + ` is set to ` + "`" + `true` + "`" + `.`).
 			Example(10000).
 			Default(1000)).
 		Field(service.NewStringField(fieldSchema).
@@ -123,52 +125,59 @@ A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finit
 			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`),
 		).
 		Field(service.NewStringListField(fieldTables).
-			Description(`A list of table names to include in the logical replication. Each table should be specified as a separate item.
+			Description(`A list of database table names to include in the snapshot and logical replication. Specify each table name as a separate item.
 
 If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(service.NewIntField(fieldCheckpointLimit).
-			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			Description("The maximum number of messages that this input can process at a given time. Increasing this limit enables parallel processing, and batching at the output level. To preserve at-least-once guarantees, any given log sequence number (LSN) is not acknowledged until all messages under that offset are delivered.").
 			ShortDescription("The maximum number of messages that can be processed at a given time.").
 			Default(1024)).
 		Field(service.NewBoolField(fieldTemporarySlot).
-			Description("If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.").
+			Description(`If set to ` + "`" + `true` + "`" + `, the input creates a temporary replication slot that is automatically dropped when the connection to your source database is closed. You might use this option to:
+
+- Avoid data accumulating in the replication slot when a pipeline is paused or stopped.
+- Test the connector.
+
+If the pipeline is restarted and ` + "`" + `stream_snapshot` + "`" + ` is enabled, another data snapshot is taken before data updates are streamed.`).
 			Default(false)).
 		Field(service.NewStringField(fieldSlotName).
-			Description(`The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.
+			Description(`The name of the PostgreSQL logical replication slot to use. If the slot does not exist, the input creates it. You can also create the slot manually before starting replication.
 
-Note: To avoid needing to grant the replication user permission to create publications, you can manually create the publications ahead of time.
-This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name>`" + `, so be sure to create them using this convention.
-			`).
-			ShortDescription("The name of the PostgreSQL logical replication slot to use. A random name is generated if not provided.").
+To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern ` + "`" + `pglog_stream_<replication_slot_name>` + "`" + `, so create publications using this convention.`).
+			ShortDescription("The name of the PostgreSQL logical replication slot to use. The input creates the slot if it does not exist.").
 			Example("my_test_slot")).
 		Field(service.NewDurationField(fieldPgStandbyTimeout).
-			Description("Specify the standby timeout before refreshing an idle connection.").
+			Description("Specify the standby timeout after which an idle connection is refreshed to keep the connection alive.").
 			Example("30s").
 			Default("10s")).
 		Field(service.NewDurationField(fieldWalMonitorInterval).
-			Description("How often to report changes to the replication lag.").
+			Description("How often to report changes to the replication lag and write them to Redpanda Connect metrics.").
 			Example("6s").
 			Default("3s")).
 		Field(service.NewIntField(fieldMaxParallelSnapshotTables).
-			Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage").
+			Description("Specify the maximum number of tables that are processed in parallel when the initial snapshot of the source database is taken.").
 			Default(1)).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
-			Description("The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.").
+			Description("Specify the value to emit when unchanged TOAST values appear in the message stream. Unchanged values occur for data updates and deletes when `REPLICA IDENTITY` is not set to `FULL`.").
 			ShortDescription("The value to emit when TOAST values are unchanged in the stream.").
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
 			Optional().
 			Advanced()).
 		Field(service.NewDurationField(fieldHeartbeatInterval).
-			Description("The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.").
+			Description(`The interval between heartbeat messages, which Redpanda Connect writes to the write-ahead log (WAL) using the ` + "`" + `pg_logical_emit_message` + "`" + ` function.
+
+Heartbeat messages are useful when you subscribe to data changes from tables with low activity, while other tables in the database have higher-frequency updates. Without new messages to acknowledge, PostgreSQL cannot reclaim the WAL, which can exhaust the local disk. Heartbeat messages allow Redpanda Connect to periodically acknowledge new messages even when no data updates occur. Each acknowledgement advances the committed point in the WAL, which ensures that PostgreSQL can safely reclaim older log segments.
+
+Set ` + "`" + `heartbeat_interval` + "`" + ` to ` + "`" + `0s` + "`" + ` to disable heartbeats.`).
 			ShortDescription("Interval at which to write heartbeat messages, keeping the replication slot current on low-traffic tables.").
 			Default("1h").
 			Example("0s").
 			Example("24h").
 			Advanced()).
-		Field(service.NewTLSField("tls")).
-		Description("Using this field overrides the SSL/TLS settings in the environment and DSN.").
+		Field(service.NewTLSField("tls").
+			Description("Using this field overrides the SSL/TLS settings in the environment and DSN.")).
 		Field(service.NewObjectField(fieldAWSIAMAuth,
 			service.NewBoolField(FieldAWSIAMAuthEnabled).
 				Description("Enable AWS IAM authentication for PostgreSQL. When enabled, an IAM authentication token is generated and used as the password.").
@@ -210,7 +219,11 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 				ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
 				Optional(),
 		).
-			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
+			Description(`AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.
+
+This is useful for connecting to Amazon RDS or Aurora PostgreSQL instances with IAM database authentication enabled. The generated tokens are valid for 15 minutes and are automatically refreshed.
+
+For more information about AWS credentials configuration, see the xref:guides:cloud/aws.adoc[credentials for AWS] guide.`).
 			ShortDescription("AWS IAM authentication configuration for PostgreSQL instances.").
 			Advanced().
 			Optional()).

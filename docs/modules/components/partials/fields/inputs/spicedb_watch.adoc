@@ -4,7 +4,7 @@
 
 === `bearer_token`
 
-The SpiceDB Bearer token used to authenticate against the SpiceDB instance.
+The SpiceDB bearer token to use to authenticate with your SpiceDB instance.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -20,13 +20,13 @@ bearer_token: t_your_token_here_1234567deadbeef
 
 === `cache`
 
-A cache resource to use for performing unread message backfills, the ID of the last message received will be stored in this cache and used for subsequent requests.
+The cache resource that you must configure to store the ZedToken (ID) of the last message processed. The input uses the stored ZedToken in subsequent requests to backfill unread messages. The ZedToken is stored in the cache within the `ACK` function of the message. This means that a ZedToken is only stored when a message is successfully routed through all processors and outputs in the data pipeline.
 
 *Type*: `string`
 
 === `cache_key`
 
-The key identifier used when storing the ID of the last message received.
+The key identifier to use when storing the ZedToken (ID) of the last message received.
 
 *Type*: `string`
 
@@ -34,7 +34,7 @@ The key identifier used when storing the ID of the last message received.
 
 === `endpoint`
 
-The SpiceDB endpoint.
+The endpoint of your SpiceDB instance.
 
 *Type*: `string`
 
@@ -46,7 +46,7 @@ endpoint: grpc.authzed.com:443
 
 === `max_receive_message_bytes`
 
-Maximum message size in bytes the SpiceDB client can receive.
+The maximum message size (in bytes) this input can receive. If a message exceeds this limit, an `rpc error` is written to the Redpanda Connect logs.
 
 *Type*: `string`
 

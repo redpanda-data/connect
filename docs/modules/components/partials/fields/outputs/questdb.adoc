@@ -4,7 +4,7 @@
 
 === `address`
 
-Address of the QuestDB server's HTTP port (excluding protocol)
+The host and port of the QuestDB server's HTTP endpoint, excluding the protocol.
 
 *Type*: `string`
 
@@ -126,13 +126,13 @@ processors:
 
 === `designated_timestamp_field`
 
-Name of the designated timestamp field
+The name of the designated timestamp field in QuestDB.
 
 *Type*: `string`
 
 === `designated_timestamp_unit`
 
-Designated timestamp field units
+Units used for the designated timestamp field in QuestDB.
 
 *Type*: `string`
 
@@ -140,13 +140,13 @@ Designated timestamp field units
 
 === `doubles[]`
 
-Columns that should be double type, (int is default)
+Columns that must be the `double` type, with `int` as the default.
 
 *Type*: `array<string>`
 
 === `error_on_empty_messages`
 
-Mark a message as errored if it is empty after field validation
+Mark a message as an error if it is empty after field validation.
 
 *Type*: `bool`
 
@@ -162,7 +162,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 === `password`
 
-Password for HTTP basic auth
+The password to use for basic authentication.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -170,31 +170,31 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `request_min_throughput`
 
-Minimum expected throughput in bytes per second for HTTP requests. If the throughput is lower than this value, the connection will time out. This is used to calculate an additional timeout on top of request_timeout. This is useful for large requests. You can set this value to 0 to disable this logic.
+The minimum expected throughput in bytes per second for HTTP requests. If the throughput is lower than this value, the connection times out. This output uses this value to calculate an additional timeout on top of the `request_timeout`. This setting is useful for large requests. Set it to `0` to disable this logic.
 
 *Type*: `int`
 
 === `request_timeout`
 
-The time to wait for a response from the server. This is in addition to the calculation derived from the request_min_throughput parameter.
+The period of time to wait for a response from the QuestDB server, in addition to the timeout calculated from the `request_min_throughput` field.
 
 *Type*: `string`
 
 === `retry_timeout`
 
-The time to continue retrying after a failed HTTP request. The interval between retries is an exponential backoff starting at 10ms and doubling after each failed attempt up to a maximum of 1 second.
+The period of time to continue retrying after a failed HTTP request. The interval between retries is an exponential backoff starting at 10 ms, and doubling after each failed attempt up to a maximum of 1 second.
 
 *Type*: `string`
 
 === `symbols[]`
 
-Columns that should be the SYMBOL type (string values default to STRING)
+Columns that must be the `symbol` type. String values default to `string` types.
 
 *Type*: `array<string>`
 
 === `table`
 
-Destination table
+The destination table in QuestDB.
 
 *Type*: `string`
 
@@ -206,13 +206,13 @@ table: trades
 
 === `timestamp_string_fields[]`
 
-String fields with textual timestamps
+String fields with textual timestamps.
 
 *Type*: `array<string>`
 
 === `timestamp_string_format`
 
-Timestamp format, used when parsing timestamp string fields. Specified in golang's time.Parse layout
+The timestamp format used when parsing timestamp string fields, specified as a layout for Go's `time.Parse` function.
 
 *Type*: `string`
 
@@ -368,7 +368,7 @@ Whether to skip server side certificate verification.
 
 === `token`
 
-Bearer token for HTTP auth (takes precedence over basic auth username & password)
+The bearer token to use for authentication, which takes precedence over the basic authentication username and password.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -376,7 +376,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `username`
 
-Username for HTTP basic auth
+The username to use for basic authentication.
 
 include::connect:components:partial$secret_warning.adoc[]
 

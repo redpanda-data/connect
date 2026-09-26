@@ -4,7 +4,7 @@
 
 === `api_key`
 
-The Pinecone api key.
+The Pinecone API key.
 
 include::connect:components:partial$secret_warning.adoc[]
 

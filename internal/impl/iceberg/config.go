@@ -330,7 +330,7 @@ array:list
 				Example("production"),
 
 			service.NewInterpolatedStringField(ioFieldTable).
-				Description("The Iceberg table name. Supports interpolation functions for dynamic table names.").
+				Description("The destination Iceberg table name.").
 				Example("user_events").
 				Example(`events_${!meta("topic")}`),
 
@@ -342,7 +342,9 @@ array:list
 
 			// Row-level operation mapping (insert / upsert / delete).
 			service.NewInterpolatedStringField(ioFieldRowOperation).
-				Description("The row-level operation to apply for each message: `insert` (append), `upsert` (replace rows matching `identifier_fields`, then append), or `delete` (remove rows matching `identifier_fields`). Supports interpolation so the operation can be driven by the data; for example, a change-data-capture stream's operation field. Defaults to `insert`, preserving the original append-only behaviour.\n\nSee the <<row-level-operations,Row-level operations>> section above for the full semantics, the format-version-2 upgrade, batching behaviour, and important caveats.").
+				Description(`The row-level operation to apply for each message: `+"`"+`insert`+"`"+` (append), `+"`"+`upsert`+"`"+` (replace rows matching `+"`"+`identifier_fields`+"`"+`, then append), or `+"`"+`delete`+"`"+` (remove rows matching `+"`"+`identifier_fields`+"`"+`). Supports interpolation so the operation can be driven by the data, such as a change-data-capture stream's operation field. Defaults to `+"`"+`insert`+"`"+`, preserving the original append-only behavior.
+
+See the Row-level operations section above for the full semantics, the format-version-2 upgrade, batching behavior, and important caveats.`).
 				ShortDescription("The row-level operation per message: insert, upsert or delete.").
 				Example("insert").
 				Example(`${! metadata("op") }`).
@@ -351,7 +353,9 @@ array:list
 				Advanced(),
 
 			service.NewStringListField(ioFieldIdentifierFields).
-				Description("The columns forming the row identity (the Iceberg identifier fields / equality-delete key) used by `upsert` and `delete`. Required when `row_operation` can evaluate to `upsert` or `delete`, and must reference existing table columns of a primitive, non-floating-point type.\n\nSee the <<row-level-operations,Row-level operations>> section above for the full constraints, including the temporal-type and partitioning rules and when the requirement is enforced.").
+				Description(`The columns forming the row identity (the Iceberg identifier fields, or equality-delete key) used by `+"`"+`upsert`+"`"+` and `+"`"+`delete`+"`"+`. Required when `+"`"+`row_operation`+"`"+` can evaluate to `+"`"+`upsert`+"`"+` or `+"`"+`delete`+"`"+`, and must reference existing table columns of a primitive, non-floating-point type.
+
+See the Row-level operations section above for the full constraints, including the temporal-type and partitioning rules and when the requirement is enforced.`).
 				ShortDescription("Columns forming the row identity, used by upsert and delete. Required when either can be evaluated.").
 				Example([]string{"id"}).
 				Example([]string{"tenant_id", "user_id"}).
@@ -459,7 +463,7 @@ array:list
 					Description("Enable automatic schema evolution. When enabled, new columns will be automatically added to the table.").
 					Default(false),
 				service.NewInterpolatedStringField(ioFieldSchemaEvolutionPartitionSpec).
-					Description("A bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an iceberg partition spec in the same string format as the https://docs.redpanda.com/current/manage/iceberg/about-iceberg-topics/#use-custom-partitioning[^Redpanda Streaming Topic Property]").
+					Description("A Bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an Iceberg partition spec in the same string format as the https://docs.redpanda.com/current/manage/iceberg/about-iceberg-topics/#use-custom-partitioning[Redpanda Streaming topic property^].").
 					ShortDescription("A Bloblang expression evaluated on table creation to determine the table's Iceberg partition spec.").
 					Example(`(col1)`).
 					Example(`(nested.col)`).
@@ -470,7 +474,7 @@ array:list
 					Example("(day(my_ts_col), void(`non.nested column.with.dots`), identity(nested.column))").
 					Default("()"),
 				service.NewStringField(ioFieldSchemaEvolutionTableLoc).
-					Description("A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived as `{prefix}{namespace}/{table}`.").
+					Description("A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived by appending the namespace and table name to the prefix, in the form `<prefix><namespace>/<table>`.").
 					ShortDescription("A location prefix for new tables, for catalogs such as AWS Glue that require one explicitly.").
 					Example("s3://my-iceberg-bucket/").
 					Optional(),

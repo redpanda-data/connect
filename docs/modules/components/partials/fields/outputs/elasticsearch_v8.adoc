@@ -4,7 +4,9 @@
 
 === `action`
 
-The action to take on the document. This field must resolve to one of the following action types: `index`, `update`, `delete`, `create` or `upsert`. See the `Updating Documents` example for more on how the `update` action works and the `Create Documents` and `Upserting Documents` examples for how to use the `create` and `upsert` actions respectively.
+The action to perform on each document. This field must resolve to one of the following action types: `index`, `update`, `delete`, `create`, or `upsert`.
+
+For more information on how the `update` action works, see the `Updating Documents` example. For examples of how to use the `create` and `upsert` actions, see the `Create Documents` and `Upserting Documents` examples.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -22,7 +24,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `basic_auth`
 
-Allows you to specify basic authentication.
+Configure basic authentication credentials for connecting to Elasticsearch. When enabled, these credentials are sent with each request to authenticate with the cluster.
 
 *Type*: `object`
 
@@ -164,7 +166,7 @@ processors:
 
 === `id`
 
-The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.
+Define the ID for indexed messages. Use xref:configuration:interpolation.adoc#bloblang-queries[function interpolations] to dynamically create a unique ID for each message.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -178,7 +180,7 @@ id: ${!counter()}-${!timestamp_unix()}
 
 === `index`
 
-The index to place messages.
+The Elasticsearch index where messages are published.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -194,7 +196,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 === `pipeline`
 
-An optional pipeline id to preprocess incoming documents.
+The ID of an optional pipeline to preprocess incoming documents before they are published.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -204,7 +206,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `retry_on_conflict`
 
-Specify how many times should an update operation be retried when a conflict occurs
+The number of times to retry an update operation when a version conflict occurs.
 
 *Type*: `int`
 
@@ -370,7 +372,7 @@ Whether to skip server side certificate verification.
 
 === `urls[]`
 
-A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. If an item in the list contains commas, it is split into multiple URLs.
 
 *Type*: `array<string>`
 

@@ -4,7 +4,7 @@
 
 === `args_mapping`
 
-An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that includes the same number of values in an array as the placeholder arguments in the `query` field.
 
 *Type*: `string`
 
@@ -34,21 +34,46 @@ A database <<drivers, driver>> to use.
 
 === `query`
 
-The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2` and so on). The style to use is outlined in this table:
+The query to execute.
 
-| Driver | Placeholder Style |
-|---|---|
-| `clickhouse` | Dollar sign |
-| `mysql` | Question mark |
-| `postgres` | Dollar sign |
-| `pgx` | Dollar sign |
-| `mssql` | Question mark |
-| `sqlite` | Question mark |
-| `oracle` | Colon |
-| `snowflake` | Question mark |
-| `trino` | Question mark |
-| `gocosmos` | Colon |
+You must include the correct placeholders for the specified database driver. Some drivers use question marks (`?`), whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2`, and so on). The following table shows the placeholder style for each driver:
 
+|===
+| Driver | Placeholder style
+
+| `clickhouse`
+| Dollar sign (`$`)
+
+| `gocosmos`
+| Colon (`:`)
+
+| `mssql`
+| Question mark (`?`)
+
+| `mysql`
+| Question mark (`?`)
+
+| `oracle`
+| Colon (`:`)
+
+| `pgx`
+| Dollar sign (`$`)
+
+| `postgres`
+| Dollar sign (`$`)
+
+| `snowflake`
+| Question mark (`?`)
+
+| `spanner`
+| Question mark (`?`)
+
+| `sqlite`
+| Question mark (`?`)
+
+| `trino`
+| Question mark (`?`)
+|===
 
 *Type*: `string`
 
@@ -68,7 +93,7 @@ Result codec.
 
 === `unsafe_dynamic_query`
 
-Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Great care should be made to ensure your queries are defended against injection attacks.
+Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Make sure your queries are defended against injection attacks.
 
 *Type*: `bool`
 

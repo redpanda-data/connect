@@ -31,6 +31,10 @@ const (
 	pFieldHandleLogicalTypes = "handle_logical_types"
 )
 
+// experimentalLibraryDescription is the component description shared by the
+// parquet_decode and parquet_encode processors.
+const experimentalLibraryDescription = "This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. As a result, how this processor functions can change outside of major version releases."
+
 func parquetDecodeProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
@@ -46,12 +50,15 @@ func parquetDecodeProcessorConfig() *service.ConfigSpec {
 - TIMESTAMP - decodes as an RFC3339 string describing the time. If the ` + "`isAdjustedToUTC`" + ` flag is set to true in the parquet file, the time zone will be set to UTC. If it is set to false the time zone will be set to local time.
 - UUID - decodes as a string, i.e. ` + "`00112233-4455-6677-8899-aabbccddeeff`" + `.`,
 		}).
-			Description("Whether to be smart about decoding logical types. In the Parquet format, logical types are stored as one of the standard physical types with some additional metadata describing the logical type. For example, UUIDs are stored in a FIXED_LEN_BYTE_ARRAY physical type, but there is metadata in the schema denoting that it is a UUID. By default, this logical type metadata will be ignored and values will be decoded directly from the physical type, which isn't always desirable. By enabling this option, logical types will be given special treatment and will decode into more useful values. The value for this field specifies a version, i.e. v0, v1... Any given version enables the logical type handling for that version and all versions below it, which allows the handling of new logical types to be introduced without breaking existing pipelines. We recommend enabling the newest version available of this feature when creating new pipelines.").
+			Description(`Set to `+"`"+`v2`+"`"+` to enable enhanced decoding of logical types, or keep the default value (`+"`"+`v1`+"`"+`) to ignore logical type metadata when decoding values.
+
+In Parquet format, logical types are represented using standard physical types along with metadata that provides additional context. For example, UUIDs are stored as a `+"`"+`FIXED_LEN_BYTE_ARRAY`+"`"+` physical type, but the schema metadata identifies them as UUIDs. By enabling `+"`"+`v2`+"`"+`, this processor uses the metadata descriptions of logical types to produce more meaningful values during decoding.
+
+NOTE: Each version enables the logical type handling for that version and all earlier versions, which allows handling of new logical types to be introduced without breaking existing pipelines. When creating new pipelines, Redpanda recommends that you use the newest available version.`).
 			ShortDescription("Decode logical types into their logical form rather than the underlying physical type.").
 			Example("v2").
 			Default("v1")). // TODO: V5 bump this to the latest version
-		Description(`
-This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.`).
+		Description(experimentalLibraryDescription).
 		Version("4.4.0").
 		Example("Reading Parquet Files from AWS S3",
 			"In this example we consume files from AWS S3 as they're written by listening onto an SQS queue for upload events. We make sure to use the `to_the_end` scanner which means files are read into memory in full, which then allows us to use a `parquet_decode` processor to expand each file into a batch of messages. Finally, we write the data out to local files as newline delimited JSON.",

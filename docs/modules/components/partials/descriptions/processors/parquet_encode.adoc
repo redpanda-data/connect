@@ -15,5 +15,5 @@ ifndef::env-cloud[]
 Introduced in version 4.4.0.
 endif::[]
 
-This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. As a result, how this processor functions can change outside of major version releases.
 // end::body[]
