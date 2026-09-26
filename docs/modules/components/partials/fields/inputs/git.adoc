@@ -4,19 +4,19 @@
 
 === `auth`
 
-Authentication options for the Git repository
+Options for authenticating with your Git repository.
 
 *Type*: `object`
 
 === `auth.basic`
 
-Basic authentication credentials
+Allows you to specify basic authentication.
 
 *Type*: `object`
 
 === `auth.basic.password`
 
-Password for basic authentication
+A password to authenticate with.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -26,7 +26,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `auth.basic.username`
 
-Username for basic authentication
+The username to use for authentication.
 
 *Type*: `string`
 
@@ -34,13 +34,13 @@ Username for basic authentication
 
 === `auth.ssh_key`
 
-SSH key authentication
+Allows you to specify SSH key authentication.
 
 *Type*: `object`
 
 === `auth.ssh_key.passphrase`
 
-Passphrase for the SSH private key
+The passphrase for your SSH private key.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -50,7 +50,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `auth.ssh_key.private_key`
 
-SSH private key content
+Your private SSH key content. When using encrypted keys, you must also set a value for `passphrase`.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -60,7 +60,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `auth.ssh_key.private_key_path`
 
-Path to SSH private key file
+The path to your private SSH key file. When using encrypted keys, you must also set a value for `passphrase`.
 
 *Type*: `string`
 
@@ -68,13 +68,13 @@ Path to SSH private key file
 
 === `auth.token`
 
-Token-based authentication
+Allows you to specify token-based authentication.
 
 *Type*: `object`
 
 === `auth.token.value`
 
-Token value for token-based authentication
+The token value to use for token-based authentication.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -92,7 +92,7 @@ Whether messages that are rejected (nacked) at the output level should be automa
 
 === `branch`
 
-The branch to check out.
+The repository branch to check out.
 
 *Type*: `string`
 
@@ -100,7 +100,7 @@ The branch to check out.
 
 === `checkpoint_cache`
 
-A cache resource to store the last processed commit hash, allowing the input to resume from where it left off after a restart.
+Specify a xref:components:caches/about.adoc[`cache`] resource to store the last processed commit hash. After a restart, Redpanda Connect can then continue processing changes from where it left off, avoiding the need to reprocess all detected updates.
 
 *Type*: `string`
 
@@ -114,7 +114,12 @@ The key to use when storing the last processed commit hash in the cache.
 
 === `exclude_patterns[]`
 
-A list of file patterns to exclude (for example, '.git/**', '**/*.png'). These patterns take precedence over include_patterns. Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.
+A list of file patterns to exclude. For example, you could choose not to read content from certain Git directories or image files: `+'.git/**', '**/*.png'+`. These patterns take precedence over `include_patterns`.
+
+The following patterns are supported:
+
+- Glob patterns: `*`, `+/**/+`, `?`
+- Character ranges: `[a-z]`. Escape any character with a special meaning using a backslash.
 
 *Type*: `array<string>`
 
@@ -122,7 +127,14 @@ A list of file patterns to exclude (for example, '.git/**', '**/*.png'). These p
 
 === `include_patterns[]`
 
-A list of file patterns to include (for example, '**/*.md', 'configs/*.yaml'). If empty, all files will be included. Supports glob patterns: *, /**/, ?, and character ranges [a-z]. Any character with a special meaning can be escaped with a backslash.
+A list of file patterns to read from. For example, you could read content from only Markdown and YAML files: `+'**/*.md', 'configs/*.yaml'+`.
+
+The following patterns are supported:
+
+- Glob patterns: `*`, `+/**/+`, `?`
+- Character ranges: `[a-z]`. Escape any character with a special meaning using a backslash.
+
+If this field is left empty, all files are read.
 
 *Type*: `array<string>`
 
@@ -130,7 +142,7 @@ A list of file patterns to include (for example, '**/*.md', 'configs/*.yaml'). I
 
 === `max_file_size`
 
-The maximum size of files to include in bytes. Files larger than this will be skipped. Set to 0 for no limit.
+The maximum size of files to read from (in bytes). Files that exceed this limit are skipped. Set to `0` for unlimited file sizes.
 
 *Type*: `int`
 
@@ -138,7 +150,7 @@ The maximum size of files to include in bytes. Files larger than this will be sk
 
 === `poll_interval`
 
-Duration between polling attempts
+How frequently this input polls the Git repository for changes, as a duration between polling attempts.
 
 *Type*: `string`
 

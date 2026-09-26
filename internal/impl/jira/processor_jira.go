@@ -92,12 +92,12 @@ pipeline:
         timeout: "30s"
 `).
 		Field(service.NewStringField("username").
-			Description("Jira instance account username/email")).
+			Description("The username or email address of the Jira account.")).
 		Field(service.NewStringField("api_token").
-			Description("Jira API token for the specified account").
+			Description("The Jira API token for the specified account. You can generate an API token from your https://id.atlassian.com/manage-profile/security/api-tokens[Atlassian account settings^].").
 			Secret()).
 		Field(service.NewIntField("max_results_per_page").
-			Description("Maximum number of results to return per page when calling JIRA API").
+			Description("The maximum number of results to return per page when calling the Jira API. https://docs.atlassian.com/software/jira/docs/api/REST/9.17.0/#pagination[Pagination^] in the Jira API is zero-based, so the first page starts at `0`.").
 			Default(50))
 
 	spec.Fields(httpclient.FieldsWithBaseURL("")...)

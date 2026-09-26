@@ -29,21 +29,21 @@ const (
 
 func reactionSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Description(`Add or remove an emoji reaction to a Slack message using https://api.slack.com/methods/reactions.add[^reactions.add] and https://api.slack.com/methods/reactions.remove[^reactions.remove]`).
+		Description(`Adds or removes an emoji reaction on a Slack message using the https://api.slack.com/methods/reactions.add[`+"`reactions.add`"+`^] and https://api.slack.com/methods/reactions.remove[`+"`reactions.remove`"+`^] API methods.`).
 		Fields(
 			service.NewStringField(oFieldBotToken).
-				Description("The Slack Bot User OAuth token to use.").
+				Description("Your Slack bot user's OAuth token, which must have the https://api.slack.com/scopes/reactions:write[`reactions:write` scope^]. The token starts with `xoxb-`.").
 				LintRule(`
         root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
       `),
 			service.NewInterpolatedStringField(oFieldChannelID).
-				Description("The channel ID containing the message to react to."),
+				Description("The encoded ID of the Slack channel that contains the target message."),
 			service.NewInterpolatedStringField(orFieldTimestamp).
-				Description("The timestamp of the message to react to."),
+				Description("The timestamp of the message to react to. This is a unique identifier for the message, usually obtained from a previous Slack API call (such as `chat.postMessage` or `conversations.history`). It typically looks like a Unix timestamp with a decimal."),
 			service.NewInterpolatedStringField(orFieldEmoji).
-				Description("The name of the emoji to react with (without colons)."),
+				Description("The name of the emoji to be added or removed, without surrounding colons. Use the plain emoji name, such as `thumbsup` or `tada`."),
 			service.NewStringEnumField(orFieldAction, "add", "remove").
-				Description("Whether to add or remove the reaction.").
+				Description("Whether to add or remove the reaction. When set to `add`, the specified emoji reaction is applied to the target message. When set to `remove`, the emoji reaction is removed from the target message.").
 				Default("add"),
 			service.NewOutputMaxInFlightField(),
 		)

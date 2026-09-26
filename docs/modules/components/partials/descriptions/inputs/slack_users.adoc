@@ -5,8 +5,11 @@
 //   body:   include::...[tag=body]   (renders the summary and description)
 
 // tag::meta[]
+:description: Returns the full profile of all users in your Slack organization using the users.list API method. You can filter the returned users by team ID.
 // end::meta[]
 
 // tag::body[]
-Reads all users in a slack organization (optionally filtered by a team ID).
+Returns the full profile of all users in your Slack organization using the users.list API method. You can filter the returned users by team ID.
+
+This input reads users with the https://api.slack.com/methods/users.list[`users.list`^] Slack API method and emits each user profile as a separate message. To return only the users of one team, set `team_id`.
 // end::body[]

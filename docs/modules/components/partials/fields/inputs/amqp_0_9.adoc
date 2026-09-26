@@ -4,7 +4,7 @@
 
 === `auto_ack`
 
-Acknowledge messages automatically as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from blocking but at the cost of eliminating delivery guarantees.
+Set to `true` to automatically acknowledge messages as soon as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from becoming blocked, but delivery guarantees are lost.
 
 *Type*: `bool`
 
@@ -12,7 +12,7 @@ Acknowledge messages automatically as they are consumed rather than waiting for 
 
 === `bindings_declare[]`
 
-Allows you to passively declare bindings for the target queue.
+Declares the bindings of the target queue to make sure they exist and are configured correctly.
 
 *Type*: `array<object>`
 
@@ -43,7 +43,7 @@ The key of the declared binding.
 
 === `consumer_tag`
 
-A consumer tag.
+A consumer tag to uniquely identify the consumer.
 
 *Type*: `string`
 
@@ -51,7 +51,9 @@ A consumer tag.
 
 === `nack_reject_patterns[]`
 
-A list of regular expression patterns whereby if a message that has failed to be delivered by Redpanda Connect has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.
+A list of regular expression patterns to match against errors in messages that Redpanda Connect fails to deliver. When a message has an error that matches a pattern, it is dropped or delivered to a dead-letter queue (if a queue has been configured).
+
+By default, failed messages are negatively acknowledged (nacked) and requeued.
 
 ifndef::env-cloud[]
 Requires version 3.64.0 or later.
@@ -70,7 +72,7 @@ nack_reject_patterns:
 
 === `prefetch_count`
 
-The maximum number of pending messages to have consumed at a time.
+The maximum number of pending messages at a given time.
 
 *Type*: `int`
 
@@ -78,7 +80,7 @@ The maximum number of pending messages to have consumed at a time.
 
 === `prefetch_size`
 
-The maximum amount of pending messages measured in bytes to have consumed at a time.
+The maximum size (in bytes) of pending messages to have consumed at a time.
 
 *Type*: `int`
 
@@ -92,62 +94,63 @@ An AMQP queue to consume from.
 
 === `queue_declare`
 
-Allows you to passively declare the target queue. If the queue already exists then the declaration passively verifies that they match the target fields.
+Declares the target queue (`queue`) to make sure a queue with the specified name exists and is configured correctly. If the queue does not exist, it is created. If the queue already exists, the declaration verifies that the fields specified in this object match its properties.
 
 *Type*: `object`
 
 === `queue_declare.arguments`
 
+Arguments for server-specific implementations of the queue (optional). You can use arguments to configure additional parameters for queue types that require them. For more information about available arguments, see the https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c85e8dc431/types.go#L282-L362[RabbitMQ Client Library^].
 
-Optional arguments specific to the server's implementation of the queue that can be sent for queue types which require extra parameters.
+[cols="1,2,2"]
+|===
+| Argument | Description | Accepted values
 
-== Arguments
+| `x-queue-type`
+| Declares the type of queue.
+| Options: `classic` (default), `quorum`, and `stream`.
 
-- x-queue-type
+| `x-max-length`
+| The maximum number of messages in the queue.
+| A non-negative integer.
 
-Is used to declare quorum and stream queues. Accepted values are: 'classic' (default), 'quorum', 'stream', 'drop-head', 'reject-publish' and 'reject-publish-dlx'.
+| `x-max-length-bytes`
+| The maximum size of messages (in bytes) in the queue.
+| A non-negative integer.
 
-- x-max-length
+| `x-overflow`
+| Sets the queue's overflow behavior.
+| Options: `drop-head` (default), `reject-publish`, `reject-publish-dlx`.
 
-Maximum number of messages, is a non-negative integer value.
+| `x-message-ttl`
+| The duration (in milliseconds) that messages remain in the queue before they expire and are discarded.
+| A string that represents the number of milliseconds. For example, `60000` retains messages for one minute.
 
-- x-max-length-bytes
+| `x-expires`
+| The duration (in milliseconds) after which the queue automatically expires.
+| A positive integer that represents the number of milliseconds.
 
-Maximum number of messages, is a non-negative integer value.
+| `x-max-age`
+| The duration (in configurable units) that streamed messages are retained on disk before they are discarded.
+| Options: `Y`, `M`, `D`, `h`, `m`, `s`. For example, `7D` retains messages for a week.
 
-- x-overflow
+| `x-stream-max-segment-size-bytes`
+| The maximum size (in bytes) of the segment files held on disk.
+| A positive integer. Default: `500000000` (approximately 500 MB).
 
-Sets overflow behaviour. Possible values are: 'drop-head' (default), 'reject-publish', 'reject-publish-dlx'.
+| `x-queue-version`
+| The version of the classic queue to use.
+| Options: `1` or `2`.
 
-- x-message-ttl
+| `x-consumer-timeout`
+| The duration (in milliseconds) that a consumer can remain idle before it is automatically canceled.
+| A positive integer that represents the number of milliseconds. For example, `60000` sets a timeout duration of one minute.
 
-TTL period in milliseconds. Must be a string representation of the number.
+| `x-single-active-consumer`
+| When set to `true`, a single consumer receives messages from the queue even when multiple consumers are subscribed to it.
+| A boolean.
 
-- x-expires
-
-Expiration policy, describes the expiration period in milliseconds. Must be a positive integer.
-
-- x-max-age
-
-Controls the retention of a stream. Must be a string, valid units: (Y, M, D, h, m, s), for example, '7D' for a week.
-
-- x-stream-max-segment-size-bytes
-
-Controls the size of the segment files on disk (default 500000000). Must be a positive integer.
-
-- x-queue-version
-
-declares the Classic Queue version to use. Expects an integer, either 1 or 2.
-
-- x-consumer-timeout
-
-Integer specified in milliseconds.
-
-- x-single-active-consumer
-
-Enables Single Active Consumer, Expects a Boolean.
-
-See https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c85e8dc431/types.go#L282-L362 for more information on available arguments.
+|===
 
 *Type*: `object`
 
@@ -162,7 +165,7 @@ arguments:
 
 === `queue_declare.auto_delete`
 
-Whether the declared queue will auto-delete.
+Whether the declared queue auto-deletes when there are no active consumers.
 
 *Type*: `bool`
 
@@ -334,7 +337,9 @@ Whether to skip server side certificate verification.
 
 === `urls[]`
 
-A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. Each URL in the list is tried in order until a connection is established, and that URL is then used until the connection is closed.
+
+If an item in the list contains commas, it is split into multiple URLs.
 
 ifndef::env-cloud[]
 Requires version 3.58.0 or later.

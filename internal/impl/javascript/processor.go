@@ -74,13 +74,13 @@ Although technically possible, it is recommended that you do not rely on the glo
 `+description.String()+`
 `).
 		Field(service.NewStringField(codeField).
-			Description("An inline JavaScript program to run. One of `"+codeField+"` or `"+fileField+"` must be defined.").
+			Description("An inline JavaScript program to run. You must specify a value for either the `"+codeField+"` or `"+fileField+"` field.").
 			Optional()).
 		Field(service.NewStringField(fileField).
-			Description("A file containing a JavaScript program to run. One of `"+codeField+"` or `"+fileField+"` must be defined.").
+			Description("A file containing a JavaScript program to run. You must specify a value for either the `"+codeField+"` or `"+fileField+"` field.").
 			Optional()).
 		Field(service.NewStringListField(includeField).
-			Description("List of folders that will be used to load modules from if the requested JS module is not found elsewhere.").
+			Description("A list of directories to load modules from if the requested JavaScript module is not found elsewhere.").
 			Default([]string{})).
 		LintRule(fmt.Sprintf(`
 let codeLen = (this.%v | "").length()

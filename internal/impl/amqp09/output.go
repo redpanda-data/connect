@@ -43,27 +43,21 @@ TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom settings ca
 
 The fields 'key', 'exchange' and 'type' can be dynamically set using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations].`).
 		Fields(
-			service.NewURLListField(urlsField).
-				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
-				ShortDescription("URLs to connect to. The first to connect successfully is used until the connection closes.").
-				Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
-				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
-				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
-				Version("3.58.0"),
+			urlsFieldSpec(),
 			service.NewInterpolatedStringField(exchangeField).
-				Description("An AMQP exchange to publish to."),
+				Description("The AMQP exchange to publish messages to."),
 			service.NewObjectField(exchangeDeclareField,
 				service.NewBoolField(exchangeDeclareEnabledField).
-					Description("Whether to declare the exchange.").
+					Description("Whether to enable exchange declaration.").
 					Default(false),
 				service.NewStringEnumField(exchangeDeclareTypeField, "direct", "fanout", "topic", "headers", "x-custom").
-					Description("The type of the exchange.").
+					Description(`The type of the exchange, which determines how messages are routed to queues. For `+"`"+`topic`+"`"+` exchanges, routing keys are matched as lists of words separated by dots (`+"`"+`.`+"`"+`).`).
 					Default("direct"),
 				service.NewBoolField(exchangeDeclareDurableField).
-					Description("Whether the exchange should be durable.").
+					Description("Whether the declared exchange is durable.").
 					Default(true),
 				service.NewStringMapField(exchangeDeclareArgumentsField).
-					Description("Optional arguments specific to the server's implementation of the exchange that can be sent for exchange types which require extra parameters.").
+					Description("Arguments for server-specific implementations of the exchange (optional). You can use arguments to configure additional parameters for exchange types that require them.").
 					ShortDescription("Optional arguments specific to the server's exchange implementation, for types needing extra parameters.").
 					Advanced().
 					Optional().
@@ -71,52 +65,52 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 						"alternate-exchange": "my-ae",
 					}),
 			).
-				Description(`Optionally declare the target exchange (passive).`).
+				Description(`Declares the target exchange (`+"`"+`exchange`+"`"+`) to check whether an exchange with the specified name exists and is configured correctly. If the exchange exists, the declaration verifies that the fields specified in this object match its properties. If the target exchange does not exist, this output creates it.`).
 				Advanced().
 				Optional(),
 			service.NewInterpolatedStringField(keyField).
 				Description("The binding key to set for each message.").
 				Default(""),
 			service.NewInterpolatedStringField(typeField).
-				Description("The type property to set for each message.").
+				Description("A custom message type to set for each message.").
 				Default(""),
 			service.NewInterpolatedStringField(contentTypeField).
-				Description("The content type attribute to set for each message.").
+				Description("The MIME type of each message.").
 				Advanced().
 				Default("application/octet-stream"),
 			service.NewInterpolatedStringField(contentEncodingField).
-				Description("The content encoding attribute to set for each message.").
+				Description("The content encoding attribute of each message.").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(correlationIDField).
-				Description("Set the correlation ID of each message with a dynamic interpolated expression.").
+				Description("Set a unique correlation ID for each message using a dynamic interpolated expression to help match messages to responses.").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(replyToField).
-				Description("Carries response queue name - set with a dynamic interpolated expression.").
+				Description("Set the name of the queue to which responses are sent using a dynamic interpolated expression.").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(expirationField).
-				Description("Set the per-message TTL").
+				Description("Set the TTL of each message in milliseconds.").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(messageIDField).
-				Description("Set the message ID of each message with a dynamic interpolated expression.").
+				Description("Set a message ID for each message using a dynamic interpolated expression.").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(userIDField).
-				Description("Set the user ID to the name of the publisher.  If this property is set by a publisher, its value must be equal to the name of the user used to open the connection.").
+				Description("Set the user ID to the name of the publisher. If this property is set by a publisher, its value must match the name of the user that opened the connection.").
 				ShortDescription("The user ID of the publisher. Must equal the user that opened the connection.").
 				Advanced().
 				Default(""),
 			service.NewInterpolatedStringField(appIDField).
-				Description("Set the application ID of each message with a dynamic interpolated expression.").
+				Description("Set an application ID for each message using a dynamic interpolated expression.").
 				Advanced().
 				Default(""),
 			service.NewMetadataExcludeFilterField(metadataFilterField).
-				Description("Specify criteria for which metadata values are attached to messages as headers."),
+				Description("Configure which metadata values are added to messages as headers. This allows you to pass additional context information along with your messages."),
 			service.NewInterpolatedStringField(priorityField).
-				Description("Set the priority of each message with a dynamic interpolated expression.").
+				Description("Set the priority of each message using a dynamic interpolated expression.").
 				Advanced().
 				Example("0").
 				Example(`${! meta("amqp_priority") }`).
@@ -124,21 +118,21 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 				Default(""),
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(persistentField).
-				Description("Whether message delivery should be persistent (transient by default).").
+				Description("Whether to store delivered messages on disk. By default, message delivery is transient.").
 				Advanced().
 				Default(false),
 			service.NewBoolField(mandatoryField).
-				Description("Whether to set the mandatory flag on published messages. When set if a published message is routed to zero queues it is returned.").
+				Description("Whether to set the mandatory flag on published messages. When set to `true`, a published message that cannot be routed to any queues is returned to the sender.").
 				ShortDescription("Set the mandatory flag, returning messages that route to zero queues.").
 				Advanced().
 				Default(false),
 			service.NewBoolField(immediateField).
-				Description("Whether to set the immediate flag on published messages. When set if there are no ready consumers of a queue then the message is dropped instead of waiting.").
+				Description("Whether to set the immediate flag on published messages. When set to `true`, if there are no active consumers for a queue, the message is dropped instead of waiting.").
 				ShortDescription("Set the immediate flag, dropping messages when a queue has no ready consumers.").
 				Advanced().
 				Default(false),
 			service.NewDurationField(timeoutField).
-				Description("The maximum period to wait before abandoning it and reattempting. If not set, wait indefinitely.").
+				Description("The maximum period to wait for a message acknowledgment before abandoning it and attempting a resend. If this value is not set, the system waits indefinitely.").
 				Advanced().
 				Default(""),
 			service.NewTLSToggledField(tlsField),

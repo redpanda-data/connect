@@ -44,7 +44,7 @@ Version to retrieve from the Buf Schema Registry, leave blank for latest.
 
 === `discard_unknown`
 
-If `true`, the `from_json` operator discards fields that are unknown to the schema.
+When set to `true`, the `from_json` operator discards fields that are unknown to the schema.
 
 *Type*: `bool`
 
@@ -52,7 +52,7 @@ If `true`, the `from_json` operator discards fields that are unknown to the sche
 
 === `import_paths[]`
 
-A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported. Either this field or `bsr` must be populated.
+A list of directories that contain `.proto` files, including all definitions required for parsing the target message. If left empty, the current directory is used. This processor walks each listed directory and imports all `.proto` files it finds. Either this field or `bsr` must be populated.
 
 *Type*: `array<string>`
 
@@ -60,13 +60,13 @@ A list of directories containing .proto files, including all definitions require
 
 === `message`
 
-The fully qualified name of the protobuf message to convert to/from.
+The fully-qualified name of the protobuf message to convert from or to JSON.
 
 *Type*: `string`
 
 === `operator`
 
-The [operator](#operators) to execute
+The operator to execute.
 
 *Type*: `string`
 
@@ -74,7 +74,7 @@ The [operator](#operators) to execute
 
 === `use_enum_numbers`
 
-If `true`, the `to_json` or `decode` operator deserializes enums as numerical values instead of string names.
+When set to `true`, the `to_json` or `decode` operator deserializes enumeration fields as their numerical values instead of their string names. For example, an enum field with a value of `ENUM_VALUE_ONE` is represented as `1` in the JSON output.
 
 *Type*: `bool`
 
@@ -82,7 +82,7 @@ If `true`, the `to_json` or `decode` operator deserializes enums as numerical va
 
 === `use_proto_names`
 
-If `true`, the `to_json` or `decode` operator deserializes fields exactly as named in schema file.
+When set to `true`, the `to_json` or `decode` operator deserializes fields exactly as named in the schema file.
 
 *Type*: `bool`
 

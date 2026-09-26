@@ -22,7 +22,7 @@ Log level for HTTP request/response logging. Empty disables logging.
 
 === `api_token`
 
-Jira API token for the specified account
+The Jira API token for the specified account. You can generate an API token from your https://id.atlassian.com/manage-profile/security/api-tokens[Atlassian account settings^].
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -60,7 +60,7 @@ Maximum number of retries on 429 responses.
 
 === `base_url`
 
-Base URL of the target service (e.g., https://api.example.com). TLS is enabled automatically for https URLs.
+The base URL of the target service (for example, `https://api.example.com`). TLS is enabled automatically for `https` URLs.
 
 *Type*: `string`
 
@@ -262,7 +262,7 @@ Size in bytes of the per-connection write buffer.
 
 === `max_results_per_page`
 
-Maximum number of results to return per page when calling JIRA API
+The maximum number of results to return per page when calling the Jira API. https://docs.atlassian.com/software/jira/docs/api/REST/9.17.0/#pagination[Pagination^] in the Jira API is zero-based, so the first page starts at `0`.
 
 *Type*: `int`
 
@@ -502,7 +502,7 @@ Rate limit in requests per second. 0 disables rate limiting.
 
 === `username`
 
-Jira instance account username/email
+The username or email address of the Jira account.
 
 *Type*: `string`
 

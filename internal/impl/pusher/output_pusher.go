@@ -30,7 +30,7 @@ func pusherOutputConfig() *service.ConfigSpec {
 		Field(service.NewBatchPolicyField("batching").
 			Description("maximum batch size is 10 (limit of the pusher library)")).
 		Field(service.NewInterpolatedStringField("channel").
-			Description("Pusher channel to publish to. Interpolation functions can also be used").
+			Description(`Pusher channel to publish to. Interpolation functions can also be used`).
 			Example("my_channel").
 			Example("${!json(\"id\")}")).
 		Field(service.NewStringField("event").

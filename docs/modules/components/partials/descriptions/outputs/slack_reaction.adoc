@@ -8,5 +8,5 @@
 // end::meta[]
 
 // tag::body[]
-Add or remove an emoji reaction to a Slack message using https://api.slack.com/methods/reactions.add[^reactions.add] and https://api.slack.com/methods/reactions.remove[^reactions.remove]
+Adds or removes an emoji reaction on a Slack message using the https://api.slack.com/methods/reactions.add[`reactions.add`^] and https://api.slack.com/methods/reactions.remove[`reactions.remove`^] API methods.
 // end::body[]

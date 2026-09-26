@@ -47,9 +47,12 @@ var (
 
 func ffiProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Invoke a function within a shared library as a processing step.").
-		Description("A processor that allows for dlopen'ing (or platform equivalent) and invoking functions dynamically at runtime. "+
-			"The result from this processor is an array, where the first element is the return type if not void, and then each `out` parameter in parameter order.").
+		Summary("Invoke functions from shared libraries using Foreign Function Interface (FFI).").
+		Description(`The `+"`"+`ffi`+"`"+` processor allows you to dynamically load shared libraries (.so, .dylib, or .dll files) and invoke their functions as a processing step. This enables integration with external C/C++ libraries without requiring custom Go code or rebuilding Redpanda Connect.
+
+The processor uses `+"`"+`dlopen`+"`"+` (or platform equivalent) to load the specified library at runtime, looks up the function by name, and invokes it with arguments provided through Bloblang mapping. Function signatures are defined using the `+"`"+`signature`+"`"+` field, specifying parameter and return types.
+
+Results are returned as an array, where the first element is the return value (if not void), followed by any output parameters in their declaration order.`).
 		Fields(
 			service.NewStringField("library_path").
 				Description("The path to the shared library (.so, .dylib or .dll) file to load dynamically.").
@@ -76,12 +79,12 @@ func ffiProcessorConfig() *service.ConfigSpec {
 			).Description("The signature of the function."),
 		).Example(
 		"Call a libc function",
-		"This is an example of loading libc.so and calling a function on linux.",
+		"This is an example of loading libc.so.6 and calling a function on Linux.",
 		`
 pipeline:
   processors:
     - ffi:
-        library_path: libc.6.so
+        library_path: libc.so.6
         function_name: memcmp
         args_mapping: 'root = ["foo", "bar", 3]'
         signature:

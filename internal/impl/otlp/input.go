@@ -34,6 +34,31 @@ const (
 	fieldRateLimit = "rate_limit"
 )
 
+// inputEncodingField returns the encoding field shared by the HTTP and gRPC
+// inputs.
+func inputEncodingField() *service.ConfigField {
+	return service.NewStringEnumField(fieldEncoding, "protobuf", "json").
+		Description("The encoding format for messages in each batch, either `protobuf` or `json`.").
+		Default(string(EncodingJSON))
+}
+
+// inputRateLimitField returns the rate limit field shared by the HTTP and gRPC
+// inputs.
+func inputRateLimitField() *service.ConfigField {
+	return service.NewStringField(fieldRateLimit).
+		Description("The name of an optional rate limit resource to throttle incoming requests.").
+		Default("")
+}
+
+// inputSchemaRegistryField returns the Schema Registry field shared by the HTTP
+// and gRPC inputs.
+func inputSchemaRegistryField() *service.ConfigField {
+	return service.NewObjectField(schemaRegistryField, schemaRegistryConfigFields()...).
+		Description("Optional Schema Registry configuration. When set, the input registers the OTLP schemas for each signal type and prepends the Schema Registry wire format header to each message.").
+		Optional().
+		Advanced()
+}
+
 type asyncMessage struct {
 	msg   service.MessageBatch
 	ackFn service.AckFunc

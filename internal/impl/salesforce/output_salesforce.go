@@ -127,22 +127,22 @@ func init() {
 func newSalesforceSinkConfigSpec() *service.ConfigSpec {
 	topicMappingSpec := service.NewObjectListField(sfsFieldTopicMappings,
 		service.NewStringField(sfsTMFieldTopic).
-			Description("topic name to match against the message's 'topic' field"),
+			Description("The topic name to match against the message's `topic` field."),
 		service.NewStringField(sfsTMFieldSObject).
-			Description("Salesforce SObject API name (for example, Account, Contact, MyObject__c)"),
+			Description("Salesforce sObject API name (for example, Account, Contact, MyObject__c)."),
 		service.NewStringField(sfsTMFieldOperation).
-			Description("Write operation: insert, update, upsert, or delete").
+			Description("Write operation: insert, update, upsert, or delete.").
 			Default("upsert"),
 		service.NewStringField(sfsTMFieldExternalIDField).
-			Description("External ID field name, required for upsert").
+			Description("External ID field name. Required for upsert operations.").
 			Default(""),
 		service.NewStringField(sfsTMFieldMode).
-			Description("Write mode: realtime (sObject Collections API) or bulk (Bulk API 2.0)").
+			Description("Write mode: `realtime` (sObject Collections API) or `bulk` (Bulk API 2.0).").
 			Default(sinkModeRealtime),
 		service.NewBoolField(sfsTMFieldAllOrNone).
-			Description("Realtime only: roll back the entire batch if any record fails").
+			Description("Real-time only: rolls back the entire batch if any record fails.").
 			Default(false),
-	).Description("Per-topic Salesforce write configuration. Each entry maps a topic to an SObject and write settings.")
+	).Description("Per-topic Salesforce write configuration. Each entry maps a topic to an sObject and write settings.")
 
 	spec := service.NewConfigSpec().
 		Summary("Writes messages to Salesforce, routing each topic to its own SObject configuration.").
@@ -199,7 +199,7 @@ output:
 			Description("Number of records per bulk job. Also controls the output batch size.").
 			Default(defaultBulkBatchSize)).
 		Field(service.NewIntField(sfsFieldMaxConcurrentBulkJobs).
-			Description("Maximum number of bulk jobs polling concurrently in the background. Each in-flight job buffers its CSV payload in memory; lower this value if memory usage is a concern.").
+			Description("Maximum number of bulk jobs polling concurrently in the background. Each in-flight job buffers its CSV payload in memory. Lower this value if memory usage is a concern.").
 			ShortDescription("Maximum bulk jobs polling concurrently. Each in-flight job buffers its CSV payload in memory.").
 			Default(defaultMaxBulkJobs)).
 		Field(service.NewDurationField(sfsFieldBulkPollInterval).
@@ -209,7 +209,7 @@ output:
 			Description("Maximum period to wait before flushing an incomplete batch.").
 			Default("5s")).
 		Field(service.NewIntField(sfsFieldMaxInFlight).
-			Description("Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.").
+			Description("Maximum number of batches to send concurrently. Increasing this value improves real-time write throughput.").
 			Default(1)).
 		Field(topicMappingSpec).
 		Field(httpFieldSpec())

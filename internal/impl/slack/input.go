@@ -31,12 +31,13 @@ const (
 
 func inputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Description(`Connects to Slack using https://api.slack.com/apis/socket-mode[^Socket Mode]. This allows for receiving events, interactions and slash commands. Each message emitted from this input has a @type metadata of the event type "events_api", "interactions" or "slash_commands".`).
+		Summary("Connects to Slack using Socket Mode and receives events, interactions, and slash commands.").
+		Description(`This input connects to Slack using https://api.slack.com/apis/socket-mode[Socket Mode^]. Each message emitted from this input has a `+"`type`"+` metadata field that contains the event type: `+"`events_api`"+`, `+"`interactive`"+`, or `+"`slash_commands`"+`.`).
 		Fields(
-			service.NewStringField(iFieldAppToken).Description("The Slack App token to use.").LintRule(`
+			service.NewStringField(iFieldAppToken).Description("The app-level token to use to authenticate and connect to Slack.").LintRule(`
         root = if !this.has_prefix("xapp-") { [ "field must start with xapp-" ] }
       `),
-			service.NewStringField(iFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
+			service.NewStringField(iFieldBotToken).Description("Your Slack bot user's OAuth token, which must have the https://api.slack.com/scopes/connections:write[`connections.write` scope^] to access your Slack app's https://api.slack.com/methods/apps.connections.open[Socket Mode WebSocket URL^].").LintRule(`
         root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
       `),
 			service.NewAutoRetryNacksToggleField(),

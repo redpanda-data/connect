@@ -28,6 +28,11 @@ const (
 	otExporterTimeout = 30 * time.Second
 )
 
+const (
+	collectorAddressDescription = "The endpoint of a collector to send events to."
+	collectorURLDescription     = "The URL of a collector to send events to. Deprecated in favor of `address`, and used only when `address` is empty."
+)
+
 type collector struct {
 	address string
 	secure  bool
@@ -37,11 +42,11 @@ func collectorListFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewObjectListField(otFieldHTTP,
 			service.NewStringField("address").
-				Description("The endpoint of a collector to send events to.").
+				Description(collectorAddressDescription).
 				Optional().
 				Example("localhost:4318"),
 			service.NewStringField("url").
-				Description("The URL of a collector to send events to.").
+				Description(collectorURLDescription).
 				Deprecated().
 				Default("localhost:4318"),
 			service.NewBoolField("secure").
@@ -50,11 +55,11 @@ func collectorListFields() []*service.ConfigField {
 		).Description("A list of http collectors."),
 		service.NewObjectListField(otFieldGRPC,
 			service.NewURLField("address").
-				Description("The endpoint of a collector to send events to.").
+				Description(collectorAddressDescription).
 				Optional().
 				Example("localhost:4317"),
 			service.NewURLField("url").
-				Description("The URL of a collector to send events to.").
+				Description(collectorURLDescription).
 				Deprecated().
 				Default("localhost:4317"),
 			service.NewBoolField("secure").
