@@ -38,6 +38,8 @@ import (
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/elasticsearch/esoutput"
 )
 
 const (
@@ -147,51 +149,19 @@ This output uses the https://github.com/elastic/go-elasticsearch[go-elasticsearc
 
 Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
-			service.NewStringListField(esFieldURLs).
-				Description("A list of URLs to connect to. If an item in the list contains commas, it is split into multiple URLs.").
-				Example([]string{"http://localhost:9200"}),
-			service.NewInterpolatedStringField(esFieldIndex).
-				Description("The Elasticsearch index where messages are published."),
-			service.NewInterpolatedStringField(esFieldAction).
-				Description(`The action to perform on each document. This field must resolve to one of the following action types: `+"`"+`index`+"`"+`, `+"`"+`update`+"`"+`, `+"`"+`delete`+"`"+`, `+"`"+`create`+"`"+`, or `+"`"+`upsert`+"`"+`.
-
-For more information on how the `+"`"+`update`+"`"+` action works, see the `+"`"+`Updating Documents`+"`"+` example. For examples of how to use the `+"`"+`create`+"`"+` and `+"`"+`upsert`+"`"+` actions, see the `+"`"+`Create Documents`+"`"+` and `+"`"+`Upserting Documents`+"`"+` examples.`).
-				ShortDescription("The action to take on the document: index, update, delete, create or upsert."),
-			service.NewInterpolatedStringField(esFieldID).
-				Description(`Define the ID for indexed messages. Use xref:configuration:interpolation.adoc#bloblang-queries[function interpolations] to dynamically create a unique ID for each message.`).
-				Example(`${!counter()}-${!timestamp_unix()}`),
-			service.NewInterpolatedStringField(esFieldPipeline).
-				Description("The ID of an optional pipeline to preprocess incoming documents before they are published.").
-				Advanced().
-				Default(""),
-			service.NewInterpolatedStringField(esFieldRouting).
-				Description("The routing key to use for the document.").
-				Advanced().
-				Default(""),
-			service.NewIntField(esFieldRetryOnConflict).
-				Description("The number of times to retry an update operation when a version conflict occurs.").
-				Advanced().
-				Default(0),
+			esoutput.URLsField(),
+			esoutput.IndexField("Elasticsearch"),
+			esoutput.ActionField(),
+			esoutput.IDField(),
+			esoutput.PipelineField(),
+			esoutput.RoutingField(),
+			esoutput.RetryOnConflictField(),
 			service.NewTLSToggledField(esFieldTLS),
 			service.NewOutputMaxInFlightField(),
-			service.NewStringField(esFieldAPIKey).
-				Description("An API key to authenticate with. If set, it supersedes basic authentication.").
-				Default("").Secret(),
+			esoutput.APIKeyField(),
 		).
 		Fields(
-			service.NewObjectField(esFieldAuth,
-				service.NewBoolField(esFieldAuthEnabled).
-					Description("Whether to use basic authentication in requests.").
-					Default(false),
-				service.NewStringField(esFieldAuthUsername).
-					Description("A username to authenticate as.").
-					Default(""),
-				service.NewStringField(esFieldAuthPassword).
-					Description("A password to authenticate with.").
-					Default("").Secret(),
-			).Description("Configure basic authentication credentials for connecting to Elasticsearch. When enabled, these credentials are sent with each request to authenticate with the cluster.").
-				Advanced().
-				Optional(),
+			esoutput.BasicAuthField("Elasticsearch"),
 			service.NewBatchPolicyField(esFieldBatching),
 		).
 		Example("Updating Documents", "When updating documents, the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors. `doc` updates using a partial document, `script` performs an update using a scripting language such as the built in Painless language, and `upsert` updates an existing document or inserts a new one if it doesn’t exist. For more information on the structures and behaviors of these fields, please see the https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html[Elasticsearch Update API^]", `

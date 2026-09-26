@@ -271,10 +271,10 @@ output:
 					"Timestamp": `${!meta("Timestamp")}`,
 				}),
 			service.NewInterpolatedStringField(s3oFieldContentType).
-				Description("The content type to set for each object.").
+				Description("The MIME type to store as the `Content-Type` of each uploaded S3 object.").
 				Default("application/octet-stream"),
 			service.NewInterpolatedStringField(s3oFieldContentEncoding).
-				Description("An optional content encoding to set for each object.").
+				Description("An optional `Content-Encoding` value, such as `gzip`, to store with each uploaded S3 object. When empty, S3 stores the object without a content encoding.").
 				Default("").
 				Advanced(),
 			service.NewInterpolatedStringField(s3oFieldCacheControl).
@@ -294,7 +294,7 @@ output:
 				Default("").
 				Advanced(),
 			service.NewMetadataExcludeFilterField(s3oFieldMetadata).
-				Description("Specify criteria for which metadata values are attached to objects as headers."),
+				Description("Specify which message metadata keys are stored as user-defined metadata on each S3 object, which S3 returns as `x-amz-meta-*` headers."),
 			service.NewInterpolatedStringEnumField(s3oFieldStorageClass,
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
 			).
@@ -322,7 +322,7 @@ output:
 				Default(false),
 			service.NewOutputMaxInFlightField(),
 			service.NewDurationField(s3oFieldTimeout).
-				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
+				Description("The maximum period to wait for every object in a message batch to upload to S3. When the timeout is reached, the batch upload is abandoned and reattempted.").
 				Advanced().
 				Default("5s"),
 			service.NewStringEnumField(s3oFieldObjectCannedACL,

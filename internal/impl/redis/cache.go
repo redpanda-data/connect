@@ -42,10 +42,10 @@ func redisCacheConfig() *service.ConfigSpec {
 
 	spec = spec.
 		Field(service.NewStringField("prefix").
-			Description("An optional string to prefix item keys with in order to prevent collisions with similar services.").
+			Description("An optional string added to the start of every key that this cache reads, writes, or deletes, which keeps its keys separate from other data in the same Redis database.").
 			Optional()).
 		Field(service.NewDurationField("default_ttl").
-			Description("An optional default TTL to set for items, calculated from the moment the item is cached.").
+			Description("An optional expiration applied to keys that are written without a TTL of their own. When unset or zero, such keys never expire.").
 			Optional().
 			Advanced()).
 		Field(service.NewBackOffField("retries", false, retriesDefaults).

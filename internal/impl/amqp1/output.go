@@ -71,7 +71,7 @@ This output benefits from sending multiple messages in flight in parallel for im
 				Advanced(),
 			saslFieldSpec(),
 			service.NewMetadataExcludeFilterField(metaFilterField).
-				Description("Specify criteria for which metadata values are attached to messages as headers."),
+				Description("Specify which message metadata keys are added to each AMQP 1.0 message as message annotations."),
 			service.NewStringEnumField(contentTypeField,
 				string(amqpContentTypeOpaqueBinary), string(amqpContentTypeString)).
 				Description(`The content type of the message body.

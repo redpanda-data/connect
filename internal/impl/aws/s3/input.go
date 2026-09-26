@@ -202,7 +202,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Default(false).
 				Advanced(),
 			service.NewBoolField(s3iFieldDeleteObjects).
-				Description("Whether to delete downloaded objects from the bucket once they are processed.").
+				Description("Whether to delete each object from its S3 bucket after all of its messages are acknowledged successfully. Objects whose messages fail to process are left in the bucket.").
 				Default(false).
 				Advanced(),
 		).

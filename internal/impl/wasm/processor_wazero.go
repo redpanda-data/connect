@@ -45,7 +45,7 @@ These examples, as well as the processor itself, is a work in progress.
 It's not currently possible to execute a single WASM runtime across parallel threads with this processor. Therefore, in order to support parallel processing this processor implements pooling of module runtimes. Ideally your WASM module shouldn't depend on any global state, but if it does then you need to ensure the processor xref:configuration:processing_pipelines.adoc[is only run on a single thread].
 `).
 		Field(service.NewStringField("module_path").
-			Description("The path of the target WASM module to execute.")).
+			Description("The path of the WASM module file to load, which must export the function named in `function`. The file is read once, when the processor is created.")).
 		Field(service.NewStringField("function").
 			Default("process").
 			Description("The name of the function exported by the target WASM module to run for each message.")).
