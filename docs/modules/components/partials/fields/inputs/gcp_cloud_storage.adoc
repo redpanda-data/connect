@@ -10,7 +10,7 @@ The name of the bucket from which to download objects.
 
 === `credentials_json`
 
-An optional field to set Google Service Account Credentials json.
+The Google Service Account credentials in JSON format (optional). Provide the contents of the credentials file as plain JSON, not Base64-encoded. Use this field to authenticate with Google Cloud services. If this field is empty, the component uses https://cloud.google.com/docs/authentication/application-default-credentials[Application Default Credentials^]. For more information about creating service account credentials, see https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account[Google's service account documentation^].
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -28,7 +28,7 @@ Whether to delete downloaded objects from the bucket once they are processed.
 
 === `prefix`
 
-An optional path prefix, if set only objects with the prefix are consumed.
+Optional path prefix, if set only objects with the prefix are consumed.
 
 *Type*: `string`
 

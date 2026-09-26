@@ -58,13 +58,13 @@ Polls CloudWatch Log Groups for log events. Supports filtering by log streams, C
 
 Each log event becomes a separate message with metadata including the log group name, log stream name, timestamp, and ingestion time.
 
-IMPORTANT: This input tracks its position in memory only. If the process restarts, it will resume from the configured start_time (or the beginning if not set). For exactly-once processing, you should configure an appropriate start_time or implement idempotent downstream processing.
+IMPORTANT: This input tracks its position in memory only. If the process restarts, it resumes from the configured `+"`start_time`"+` (or the beginning if not set). For exactly-once processing, configure an appropriate `+"`start_time`"+` or implement idempotent downstream processing.
 
-## Credentials
+== Credentials
 
-By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].
+By default, Redpanda Connect uses a shared credentials file when connecting to AWS services. You can also set credentials explicitly at the component level, which allows you to transfer data across accounts. For more information, see xref:guides:cloud/aws.adoc[].
 
-## Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -90,7 +90,7 @@ You can access these metadata fields using xref:guides:bloblang/about.adoc[Blobl
 				Optional().
 				Example("prod-"),
 			service.NewStringField(cwlFieldFilterPattern).
-				Description("An optional CloudWatch Logs filter pattern to apply when querying log events. See AWS documentation for filter pattern syntax.").
+				Description("An optional CloudWatch Logs filter pattern to apply when querying log events. For syntax details, see the https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html[CloudWatch Logs filter and pattern syntax^] documentation.").
 				ShortDescription("An optional CloudWatch Logs filter pattern to apply when querying log events.").
 				Optional().
 				Example("[ERROR]"),
@@ -109,7 +109,7 @@ You can access these metadata fields using xref:guides:bloblang/about.adoc[Blobl
 				LintRule(`root = if this < 1 || this > 10000 { ["limit must be between 1 and 10000"] }`).
 				Advanced(),
 			service.NewBoolField(cwlFieldStructuredLog).
-				Description("Whether to output log events as structured JSON objects with all metadata fields, or as plain text messages with metadata in message metadata.").
+				Description("Whether to output log events as structured JSON objects with all metadata fields, or as plain text messages with metadata stored in Redpanda Connect message metadata.").
 				ShortDescription("Emit log events as structured JSON objects rather than plain text messages.").
 				Default(true).
 				Advanced(),

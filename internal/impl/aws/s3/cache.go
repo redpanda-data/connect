@@ -42,14 +42,14 @@ func s3CacheConfig() *service.ConfigSpec {
 		Stable().
 		Version("3.36.0").
 		Summary(`Stores each item in an S3 bucket as a file, where an item ID is the path of the item within the bucket.`).
-		Description(`It is not possible to atomically upload S3 objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.`).
+		Description(`This cache implements the ` + "`add`" + ` operation as an existence check followed by a separate upload, so the operation is not atomic and concurrent writers can both succeed. Therefore, this cache is not suitable for deduplication.`).
 		Field(service.NewStringField("bucket").
 			Description("The S3 bucket to store items in.")).
 		Field(service.NewStringField("content_type").
 			Description("The content type to set for each item.").
 			Default("application/octet-stream")).
 		Field(service.NewBoolField("force_path_style_urls").
-			Description("Forces the client API to use path style URLs, which helps when connecting to custom endpoints.").
+			Description(forcePathStyleURLsDescription).
 			Advanced().
 			Default(false)).
 		Field(service.NewBackOffField("retries", false, retriesDefaults).

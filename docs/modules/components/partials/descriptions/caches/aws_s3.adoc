@@ -15,5 +15,5 @@ ifndef::env-cloud[]
 Introduced in version 3.36.0.
 endif::[]
 
-It is not possible to atomically upload S3 objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.
+This cache implements the `add` operation as an existence check followed by a separate upload, so the operation is not atomic and concurrent writers can both succeed. Therefore, this cache is not suitable for deduplication.
 // end::body[]

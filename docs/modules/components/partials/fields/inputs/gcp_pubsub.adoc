@@ -26,7 +26,7 @@ Defines the topic that the subscription should be vinculated to.
 
 === `credentials_json`
 
-An optional field to set Google Service Account Credentials json.
+The Google Service Account credentials in JSON format (optional). Provide the contents of the credentials file as plain JSON, not Base64-encoded. Use this field to authenticate with Google Cloud services. If this field is empty, the component uses https://cloud.google.com/docs/authentication/application-default-credentials[Application Default Credentials^]. For more information about creating service account credentials, see https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account[Google's service account documentation^].
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -36,7 +36,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `endpoint`
 
-An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document^].
+An optional endpoint that overrides the default of `pubsub.googleapis.com:443`. Use this field to connect to a region-specific Pub/Sub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[Pub/Sub regional endpoints^].
 
 *Type*: `string`
 

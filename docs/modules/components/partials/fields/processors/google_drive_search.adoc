@@ -4,7 +4,7 @@
 
 === `credentials_json`
 
-A service account credentials JSON file. If left unset then the application default credentials are used.
+The JSON key for your service account (optional). If left empty, Application Default Credentials are used.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -12,7 +12,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `include_label_ids`
 
-A comma delimited list of label IDs to include in the result
+A comma delimited list of label IDs to include in the Google Drive search result.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -22,7 +22,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `max_results`
 
-The maximum number of results to return.
+The maximum number of search results to return.
 
 *Type*: `int`
 
@@ -30,7 +30,7 @@ The maximum number of results to return.
 
 === `projection[]`
 
-The partial fields to include in the result.
+Partial fields to include in the Google Drive search result.
 
 *Type*: `array<string>`
 
@@ -46,9 +46,10 @@ The partial fields to include in the result.
 
 === `query`
 
-The search query to use for finding files in Google Drive. Supports the same query format as the Google Drive UI.
+Specify a search query to locate matching files in Google Drive. This field supports:
 
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+- The same query syntax as the Google Drive UI
+- xref:configuration:interpolation.adoc#bloblang-queries[Bloblang interpolation functions] for dynamic query generation
 
 *Type*: `string`
 

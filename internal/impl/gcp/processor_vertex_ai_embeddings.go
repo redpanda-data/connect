@@ -58,18 +58,15 @@ For more information, see the https://cloud.google.com/vertex-ai/generative-ai/d
 		Version("4.37.0").
 		Fields(
 			service.NewStringField(vaiepFieldProject).
-				Description("GCP project ID to use"),
+				Description("The ID of your Google Cloud project."),
 			service.NewStringField(vaiepFieldCredentialsJSON).
-				Description("An optional field to set google Service Account Credentials json.").
+				Description("Set your Google Service Account Credentials as JSON (optional).").
 				Secret().
 				Optional(),
 			service.NewStringField(vaiepFieldLocation).
-				Description("The location of the model.").
+				Description("The location of the Vertex AI model that you want to use.").
 				Default("us-central1"),
-			service.NewStringField(vaiepFieldModel).
-				Description("The name of the LLM to use. For a full list of models, see the https://console.cloud.google.com/vertex-ai/model-garden[Vertex AI Model Garden].").
-				ShortDescription("The name of the LLM to use.").
-				Examples("text-embedding-004", "text-multilingual-embedding-002"),
+			vertexAIModelField(vaiepFieldModel, "embedding model", "text-embedding-004", "text-multilingual-embedding-002"),
 			service.NewStringAnnotatedEnumField(vaiepFieldTaskType, map[string]string{
 				"SEMANTIC_SIMILARITY": "optimize for text similarity",
 				"CLASSIFICATION":      "optimize for being able classify texts according to preset labels",
@@ -80,12 +77,12 @@ For more information, see the https://cloud.google.com/vertex-ai/generative-ai/d
 				"FACT_VERIFICATION":   `optimize for queries that are proving or disproving a fact such as "apples grow underground"`,
 			}).
 				Default("RETRIEVAL_DOCUMENT").
-				Description("The way to optimize embeddings that the model generates for specific use cases."),
+				Description("Use the following options to optimize embeddings that the model generates for specific use cases."),
 			service.NewInterpolatedStringField(vaiepFieldText).
-				Description("The text you want to compute vector embeddings for. By default, the processor submits the entire payload as a string.").
+				Description("The text you want to generate vector embeddings for. By default, the processor submits the entire payload as a string.").
 				Optional(),
 			service.NewIntField(vaiepFieldDims).
-				Description("The maximum length for the output embedding size. If set, the output embeddings will be truncated to this size.").
+				Description("The maximum length of a generated vector embedding. If this value is set, generated embeddings are truncated to this size.").
 				Optional(),
 		)
 }

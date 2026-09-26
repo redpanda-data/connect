@@ -136,7 +136,7 @@ func spannerCDCInputSpec() *service.ConfigSpec {
 		Summary("Creates an input that consumes from a spanner change stream.").
 		Description(`
 Consumes change records from a Google Cloud Spanner change stream. This input allows
-you to track and process database changes in real-time, making it useful for data
+you to track and process database changes in real time, making it useful for data
 replication, event-driven architectures, and maintaining derived data stores.
 
 The input reads from a specified change stream within a Spanner database and converts
@@ -145,21 +145,34 @@ JSON format, and metadata is added with details about the Spanner instance, data
 and stream.
 
 Change streams provide a way to track mutations to your Spanner database tables. For
-more information about Spanner change streams, refer to the Google Cloud documentation:
-https://cloud.google.com/spanner/docs/change-streams
+more information about Spanner change streams, refer to the link:https://cloud.google.com/spanner/docs/change-streams[Google Cloud documentation^].
 `).
-		Field(service.NewStringField(siFieldCredentialsJSON).Optional().Description("Base64 encoded GCP service account JSON credentials file for authentication. If not provided, Application Default Credentials (ADC) will be used.").
+		Field(service.NewStringField(siFieldCredentialsJSON).Optional().Description(`Base64-encoded JSON credentials file for authenticating to GCP with a service account. If not provided, Application Default Credentials (ADC) is used.
+
+For more information about how to create a service account and obtain the credentials JSON, see the link:https://cloud.google.com/docs/authentication/getting-started[Google Cloud documentation^].`).
 			ShortDescription("Base64 encoded GCP service account JSON credentials. Application Default Credentials are used if unset.").Default("")).
-		Field(service.NewStringField(siFieldProjectID).Description("GCP project ID containing the Spanner instance")).
-		Field(service.NewStringField(siFieldInstanceID).Description("Spanner instance ID")).
-		Field(service.NewStringField(siFieldDatabaseID).Description("Spanner database ID")).
-		Field(service.NewStringField(siFieldStreamID).Description("The name of the change stream to track, the stream must exist in the database. To create a change stream, see https://cloud.google.com/spanner/docs/change-streams/manage.").
+		Field(service.NewStringField(siFieldProjectID).Description(`The ID of the GCP project that contains the Spanner instance and database. This is the name of the project as it appears in the GCP console or API.
+
+For more information about how to create a GCP project, see the link:https://cloud.google.com/resource-manager/docs/creating-managing-projects[Google Cloud documentation^].`)).
+		Field(service.NewStringField(siFieldInstanceID).Description(`The ID of the Spanner instance to read from. This is the name of the instance as it appears in the Spanner console or API.
+
+For more information about how to create a Spanner instance, see the link:https://cloud.google.com/spanner/docs/create-manage-instances[Google Cloud documentation^].`)).
+		Field(service.NewStringField(siFieldDatabaseID).Description(`The ID of the Spanner database to read from. This is the name of the database as it appears in the Spanner console or API.
+
+For more information about how to create a Spanner database, see the link:https://cloud.google.com/spanner/docs/create-manage-databases[Google Cloud documentation^].`)).
+		Field(service.NewStringField(siFieldStreamID).Description("The name of the change stream to track. The stream must exist in the Spanner database. To create a change stream, follow the link:https://cloud.google.com/spanner/docs/change-streams/manage[Google Cloud documentation^].").
 			ShortDescription("The name of the change stream to track. The stream must already exist in the database.")).
-		Field(service.NewStringField(siFieldStartTimestamp).Optional().Description("RFC3339 formatted inclusive timestamp to start reading from the change stream (default: current time)").Example("2022-01-01T00:00:00Z").Default("")).
-		Field(service.NewStringField(siFieldEndTimestamp).Optional().Description("RFC3339 formatted exclusive timestamp to stop reading at (default: no end time)").Example("2022-01-01T00:00:00Z").Default("")).
-		Field(service.NewStringField(siFieldHeartbeatInterval).Advanced().Description("Duration string for heartbeat interval").Default("10s")).
-		Field(service.NewStringField(siFieldMetadataTable).Advanced().Optional().Description("The table to store metadata in (default: cdc_metadata_<stream_id>)").Default("")).
-		Field(service.NewStringField(siFieldMinWatermarkCacheTTL).Advanced().Description("Duration string for frequency of querying Spanner for minimum watermark.").Default("5s")).
+		Field(service.NewStringField(siFieldStartTimestamp).Optional().Description(`The timestamp at which to start reading change records from the change stream. This optional field lets you limit the range of change records processed by the input. The timestamp is inclusive.
+
+The timestamp must be in RFC3339 format, such as ` + "`" + `2023-10-01T00:00:00Z` + "`" + `. If not set, the input starts reading from the current time.`).Example("2022-01-01T00:00:00Z").Default("")).
+		Field(service.NewStringField(siFieldEndTimestamp).Optional().Description(`The timestamp at which to stop reading change records from the change stream. This optional field lets you limit the range of change records processed by the input. The timestamp is exclusive.
+
+The timestamp must be in RFC3339 format, such as ` + "`" + `2023-10-01T00:00:00Z` + "`" + `. If not set, the input streams change records indefinitely.`).Example("2022-01-01T00:00:00Z").Default("")).
+		Field(service.NewStringField(siFieldHeartbeatInterval).Advanced().Description(`The interval at which Spanner emits heartbeat records on the change stream when a partition has no data changes. The input uses heartbeat records to advance partition watermarks. Heartbeat records are not emitted as messages.
+
+Supported time units are ` + "`" + `ns` + "`" + `, ` + "`" + `us` + "`" + `, ` + "`" + `ms` + "`" + `, ` + "`" + `s` + "`" + `, ` + "`" + `m` + "`" + `, and ` + "`" + `h` + "`" + `. For example, ` + "`" + `1s` + "`" + ` requests a heartbeat record every second.`).Default("10s")).
+		Field(service.NewStringField(siFieldMetadataTable).Advanced().Optional().Description("The table to store metadata in (default: `cdc_metadata_<stream_id>`).").Default("")).
+		Field(service.NewStringField(siFieldMinWatermarkCacheTTL).Advanced().Description("How frequently to query Spanner for the minimum watermark, as a duration string.").Default("5s")).
 		Field(service.NewStringListField(siFieldAllowedModTypes).Advanced().Optional().Description("List of modification types to process. If not specified, all modification types are processed. Allowed values: INSERT, UPDATE, DELETE").
 			ShortDescription("Modification types to process: INSERT, UPDATE, DELETE. All are processed if unset.").Example([]string{"INSERT", "UPDATE", "DELETE"})).
 		Field(service.NewBatchPolicyField(siFieldBatchPolicy)).

@@ -12,7 +12,7 @@ A xref:guides:bloblang/about.adoc[Bloblang mapping] that, for each message, crea
 
 === `credentials`
 
-Optional manual configuration of AWS credentials to use. More information can be found in xref:guides:cloud/aws.adoc[].
+Manually configure the AWS credentials to use (optional). For more information, see the xref:guides:cloud/aws.adoc[Amazon Web Services guide].
 
 *Type*: `object`
 
@@ -28,31 +28,31 @@ endif::[]
 
 === `credentials.id`
 
-The ID of credentials to use.
+The ID of the AWS credentials to use.
 
 *Type*: `string`
 
 === `credentials.profile`
 
-A profile from `~/.aws/credentials` to use.
+The profile from `~/.aws/credentials` to use.
 
 *Type*: `string`
 
 === `credentials.role`
 
-A role ARN to assume.
+The ARN of the role to assume.
 
 *Type*: `string`
 
 === `credentials.role_external_id`
 
-An external ID to provide when assuming a role.
+An external ID to use when assuming a role.
 
 *Type*: `string`
 
 === `credentials.secret`
 
-The secret for the credentials being used.
+The secret for the AWS credentials in use.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -60,13 +60,13 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `credentials.token`
 
-The token for the credentials being used, required when using short term credentials.
+The token for the AWS credentials in use. Required only when using short-term credentials.
 
 *Type*: `string`
 
 === `endpoint`
 
-Allows you to specify a custom endpoint for the AWS API.
+A custom endpoint URL for AWS API requests. Use this to connect to AWS-compatible services or local testing environments instead of the standard AWS endpoints.
 
 *Type*: `string`
 
@@ -78,7 +78,7 @@ A PartiQL query to execute for each message.
 
 === `region`
 
-The AWS region to target.
+The AWS region in which your resources are hosted.
 
 *Type*: `string`
 
@@ -144,7 +144,7 @@ Whether to enable dynamic queries that support interpolation functions.
 
 === `use_batch`
 
-Whether to execute all messages in a batch as a single `BatchExecuteStatement` call. Set this to `false` to execute one `ExecuteStatement` call per message instead, which is required for PartiQL `SELECT` queries against a global secondary index (GSI); `BatchExecuteStatement` does not support querying a GSI. Only the first result row is used when a query returns multiple items.
+Whether to execute all messages in a batch as a single `BatchExecuteStatement` call. Set this to `false` to execute one `ExecuteStatement` call per message instead, which is required for PartiQL `SELECT` queries against a global secondary index (GSI), because `BatchExecuteStatement` does not support querying a GSI. Only the first result row is used when a query returns multiple items.
 
 *Type*: `bool`
 

@@ -46,9 +46,9 @@ Can download a file from Google Drive based on a file ID.
 		Fields(commonFields()...).
 		Fields(
 			service.NewInterpolatedStringField(driveDownloadFieldFileID).
-				Description("The file ID of the file to download."),
+				Description("The ID of the file to download from Google Drive."),
 			service.NewInterpolatedStringField(driveDownloadFieldMimeType).
-				Description("The mime type of the file in drive."),
+				Description("The https://developers.google.com/workspace/drive/api/guides/mime-types[MIME type^] of the file for download."),
 			service.NewStringMapField(driveDownloadFieldExportMimeTypes).
 				Default(map[string]string{
 					// Bias towards textual formats for exports because they are easier to work with in Connect.
@@ -58,7 +58,7 @@ Can download a file from Google Drive based on a file ID.
 					"application/vnd.google-apps.drawing":      "image/png",
 					"application/vnd.google-apps.script":       "application/vnd.google-apps.script+json",
 				}).
-				Description("A map of Google Drive MIME types to their export formats. The key is the MIME type, and the value is the export format. See https://developers.google.com/workspace/drive/api/guides/ref-export-formats[^Google Drive API Documentation] for a list of supported export types").
+				Description("Maps Google Drive MIME types to https://developers.google.com/workspace/drive/api/guides/ref-export-formats[supported file export formats^]. The MIME type is the key, and the export format is the value.").
 				ShortDescription("A map of Google Drive MIME types to the export format each should use.").
 				Example(map[string]string{
 					"application/vnd.google-apps.document":     "application/pdf",

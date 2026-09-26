@@ -89,6 +89,17 @@ func pbiConfigFromParsed(pConf *service.ParsedConfig) (conf pbiConfig, err error
 	return
 }
 
+// pubsubEndpointField returns the endpoint field shared by the gcp_pubsub
+// input and output.
+func pubsubEndpointField(name string) *service.ConfigField {
+	return service.NewStringField(name).
+		Description("An optional endpoint that overrides the default of `pubsub.googleapis.com:443`. Use this field to connect to a region-specific Pub/Sub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[Pub/Sub regional endpoints^].").
+		ShortDescription("Optional endpoint overriding the default pubsub.googleapis.com:443, for region-specific endpoints.").
+		Example("us-central1-pubsub.googleapis.com:443").
+		Example("us-west3-pubsub.googleapis.com:443").
+		Default("")
+}
+
 func pbiSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
@@ -113,17 +124,12 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			service.NewStringField(pbiFieldProjectID).
 				Description("The project ID of the target subscription."),
 			service.NewStringField(pbiFieldCredentialsJSON).
-				Description("An optional field to set Google Service Account Credentials json.").
+				Description(credentialsJSONDescription).
 				Default("").
 				Secret(),
 			service.NewStringField(pbiFieldSubscriptionID).
 				Description("The target subscription ID."),
-			service.NewStringField(pbiFieldEndpoint).
-				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document^].").
-				ShortDescription("Optional endpoint overriding the default pubsub.googleapis.com:443, for region-specific endpoints.").
-				Example("us-central1-pubsub.googleapis.com:443").
-				Example("us-west3-pubsub.googleapis.com:443").
-				Default(""),
+			pubsubEndpointField(pbiFieldEndpoint),
 			service.NewBoolField(pbiFieldSync).
 				Description("Enable synchronous pull mode.").
 				Default(false),
