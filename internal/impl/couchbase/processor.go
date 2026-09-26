@@ -43,7 +43,7 @@ func ProcessorConfig() *service.ConfigSpec {
 		Categories("Integration").
 		Summary("Performs operations against Couchbase for each message, allowing you to store or retrieve data within message payloads.").
 		Description("When inserting, replacing or upserting documents, each must have the `content` property set.").
-		Field(service.NewInterpolatedStringField("id").Description("Document id.").Example(`${! json("id") }`)).
+		Field(service.NewInterpolatedStringField("id").Description(`Document id.`).Example(`${! json("id") }`)).
 		Field(service.NewBloblangField("content").Description("Document content.").Optional()).
 		Field(service.NewDurationField("ttl").Description("An optional TTL to set for items.").Optional().Advanced()).
 		Field(service.NewStringAnnotatedEnumField("operation", map[string]string{

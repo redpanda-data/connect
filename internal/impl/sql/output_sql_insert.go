@@ -36,34 +36,8 @@ func sqlInsertOutputConfig() *service.ConfigSpec {
 		Description(``).
 		Field(driverField).
 		Field(dsnField).
-		Field(service.NewStringField("table").
-			Description("The table to insert to.").
-			Example("foo")).
-		Field(service.NewStringListField("columns").
-			Description("A list of columns to insert.").
-			Example([]string{"foo", "bar", "baz"})).
-		Field(service.NewBloblangField("args_mapping").
-			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of columns specified.").
-			ShortDescription("A Bloblang mapping evaluating to an array of values matching the number of columns specified.").
-			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`)).
-		Field(service.NewStringField("prefix").
-			Description("An optional prefix to prepend to the insert query (before INSERT).").
-			Optional().
-			Advanced()).
-		Field(service.NewStringField("suffix").
-			Description("An optional suffix to append to the insert query.").
-			Optional().
-			Advanced().
-			Example("ON CONFLICT (name) DO NOTHING")).
-		Field(service.NewStringListField("options").
-			Description("A list of keyword options to add before the INTO clause of the query.").
-			Optional().
-			Advanced().
-			Example([]string{"DELAYED", "IGNORE"})).
-		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of inserts to run in parallel.").
-			Default(64))
+		Fields(insertFields()...).
+		Field(batchMaxInFlightField())
 
 	for _, f := range connFields() {
 		spec = spec.Field(f)

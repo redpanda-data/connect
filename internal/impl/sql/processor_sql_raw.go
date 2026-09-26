@@ -30,7 +30,7 @@ import (
 func RawProcessorConfig() *service.ConfigSpec {
 	rawQueryExecOnly := func() *service.ConfigField {
 		return service.NewBoolField("exec_only").
-			Description("Whether the query result should be discarded. When set to `true` the message contents will remain unchanged, which is useful in cases where you are executing inserts, updates, etc. By default this is true for the last query, and previous queries don't change the results. If set to true for any query but the last one, the subsequent `args_mappings` input is overwritten.").
+			Description("Whether to discard the `query` result. Set to `true` to leave the message contents unchanged, which is useful when you are executing inserts, updates, and so on. By default, this is `false` for the last query and `true` for all previous queries, so only the last query's result replaces the message contents. If you set this to `false` for a query other than the last, its result replaces the message contents and the `args_mapping` of each subsequent query runs against that result.").
 			ShortDescription("Discard the query result, leaving message contents unchanged. Useful for inserts and updates.").
 			Optional()
 	}
@@ -40,19 +40,14 @@ func RawProcessorConfig() *service.ConfigSpec {
 		Version("3.65.0").
 		Categories("Integration").
 		Summary("Runs an arbitrary SQL query against a database and (optionally) returns the result as an array of objects, one for each row returned.").
-		Description(`
-If the query fails to execute then the message will remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].`).
+		Description(queryFailureDescription).
 		Field(driverField).
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);").
 			Example("SELECT * FROM footable WHERE user_id = $1;").
 			Optional()).
-		Field(service.NewBoolField("unsafe_dynamic_query").
-			Description("Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Great care should be made to ensure your queries are defended against injection attacks.").
-			ShortDescription("Enable interpolation functions in the query. Take care to defend against injection attacks.").
-			Advanced().
-			Default(false)).
+		Field(unsafeDynamicQueryField()).
 		Field(rawQueryArgsMappingField()).
 		Field(rawQueryExecOnly()).
 		Field(service.NewObjectListField(
@@ -61,7 +56,7 @@ If the query fails to execute then the message will remain unchanged and the err
 			rawQueryArgsMappingField(),
 			rawQueryExecOnly(),
 		).
-			Description("A list of statements to run in addition to `query`. When specifying multiple statements, they are all executed within a transaction. The output of the processor is always the last query that runs, unless `exec_only` is used.").
+			Description("A list of database statements to run in addition to your main `query`. If you specify multiple statements, they are executed within a single transaction. The output of the processor is always the result of the last query that runs, unless `exec_only` is used.").
 			ShortDescription("Statements to run in addition to query, all executed within a transaction.").
 			Optional()).
 		Fields(connFields()...).
