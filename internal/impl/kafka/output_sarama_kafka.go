@@ -95,8 +95,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			SaramaSASLField(),
 			service.NewInterpolatedStringField(oskFieldTopic).
 				Description(`The topic to publish messages to.`),
-			service.NewStringField(oskFieldClientID).
-				Description("An identifier for the client connection.").
+			saramaClientIDField(oskFieldClientID).
 				Advanced().Default("benthos"),
 			saramaTargetVersionField(oskFieldTargetVersion),
 			service.NewStringField(oskFieldRackID).
@@ -133,7 +132,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Example(map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}).
 				Optional(),
 			service.NewMetadataExcludeFilterField(oskFieldMetadata).
-				Description("Specify criteria for which metadata values are sent with messages as headers."),
+				Description("Specify which metadata values are added to each record as Kafka headers. Headers are only sent when `target_version` is `0.11.0` or later."),
 			service.NewInjectTracingSpanMappingField(),
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(oskFieldIdempotentWrite).

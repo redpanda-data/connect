@@ -236,7 +236,7 @@ The maximum number of retries before giving up on the request. If set to zero th
 
 === `message_deduplication_id`
 
-An optional deduplication ID to set for messages.
+An optional deduplication ID for messages sent to an SQS FIFO queue. SQS accepts only the first message with a given deduplication ID within the five-minute deduplication interval. Not required when the queue has content-based deduplication enabled.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -244,7 +244,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `message_group_id`
 
-An optional group ID to set for messages.
+An optional message group ID. Required when sending to an SQS FIFO queue, where messages that share a group ID are received in the order they were sent.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -252,7 +252,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `metadata`
 
-Specify criteria for which metadata values are sent as headers.
+Specify which metadata values are sent as SQS message attributes of type `String`. SQS allows at most 10 attributes per message, so only the first 10 matching keys in sorted order are sent. Keys that are not valid SQS attribute names are skipped.
 
 *Type*: `object`
 

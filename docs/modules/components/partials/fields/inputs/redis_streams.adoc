@@ -20,7 +20,7 @@ The field key to extract the raw message from. All other keys will be stored in 
 
 === `client_id`
 
-An identifier for the client connection.
+The consumer name used within `consumer_group` when reading with `XREADGROUP`. Redis tracks pending messages for each consumer name.
 
 *Type*: `string`
 
@@ -40,7 +40,7 @@ endif::[]
 
 === `commit_period`
 
-The period of time between each commit of the current offset. Offsets are always committed during shutdown.
+The period of time between each batch of `XACK` calls that acknowledge delivered message IDs to the consumer group. Pending acknowledgements are also sent during shutdown.
 
 *Type*: `string`
 

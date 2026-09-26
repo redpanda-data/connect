@@ -100,11 +100,11 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 			service.NewInterpolatedStringField(snsoFieldTopicARN).
 				Description("The topic to publish to."),
 			service.NewInterpolatedStringField(snsoFieldMessageGroupID).
-				Description("An optional group ID to set for messages.").
+				Description("An optional message group ID. Required when publishing to an SNS FIFO topic, which delivers messages that share a group ID in order.").
 				Version("3.60.0").
 				Optional(),
 			service.NewInterpolatedStringField(snsoFieldMessageDedupeID).
-				Description("An optional deduplication ID to set for messages.").
+				Description("An optional deduplication ID for messages published to an SNS FIFO topic. SNS discards a message whose deduplication ID it has already accepted within the deduplication interval. Not required when the topic has content-based deduplication enabled.").
 				Version("3.60.0").
 				Optional(),
 			service.NewInterpolatedStringField(snsoFieldSubject).
@@ -112,7 +112,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 				Optional(),
 			service.NewOutputMaxInFlightField(),
 			service.NewMetadataExcludeFilterField(snsoFieldMetadata).
-				Description("Specify criteria for which metadata values are sent as headers.").
+				Description("Specify which metadata values are sent as SNS message attributes of type `String`. Metadata keys that are not valid SNS attribute names are skipped.").
 				Version("3.60.0"),
 			service.NewDurationField(snsoFieldTimeout).
 				Description("The maximum period to wait on a publish request before abandoning it and reattempting.").

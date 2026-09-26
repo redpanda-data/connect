@@ -20,7 +20,7 @@ An identifier for the client connection. This identifier appears in broker logs 
 
 === `commit_period`
 
-The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.
+The period of time between each commit of the current partition offsets to the consumer group. Offsets are always committed during shutdown.
 
 *Type*: `string`
 

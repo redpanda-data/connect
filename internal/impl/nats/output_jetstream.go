@@ -42,9 +42,7 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 			Example(`${! meta("kafka_topic") }`).
 			Example(`foo.${! json("meta.type") }`)).
 		Field(headersField().Version("4.1.0")).
-		Field(service.NewMetadataFilterField("metadata").
-			Description("Determine which (if any) metadata values should be added to messages as headers.").
-			Optional()).
+		Field(metadataField()).
 		Field(service.NewOutputMaxInFlightField().Default(1024)).
 		Fields(connectionTailFields()...).
 		Field(outputTracingDocs())

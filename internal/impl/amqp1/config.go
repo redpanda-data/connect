@@ -133,7 +133,7 @@ func urlFieldSpec() *service.ConfigField {
 // urlsFieldSpec returns the urls field shared by the input and output.
 func urlsFieldSpec() *service.ConfigField {
 	return service.NewURLListField(urlsField).
-		Description(`A list of URLs to connect to. Each URL in the list is tried in order until a connection is established, and that URL is then used until the connection is closed.
+		Description(`A list of AMQP 1.0 broker URLs to connect to. Each URL is tried in order until a connection is established, and that URL is then used until the connection is closed. This field replaces the deprecated ` + "`url`" + ` field, which is only read when ` + "`urls`" + ` is empty.
 
 If an item in the list contains commas, it is split into multiple URLs.`).
 		ShortDescription("URLs to connect to. The first to connect successfully is used until the connection closes.").

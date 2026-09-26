@@ -4,7 +4,7 @@
 
 === `args_mapping`
 
-An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that evaluates to an array of values, one for each placeholder in the `where` field, in order. The values are passed to the driver as query arguments.
 
 *Type*: `string`
 
@@ -211,13 +211,13 @@ init_statement: |-
 
 === `prefix`
 
-An optional prefix to prepend to the query (before SELECT).
+Optional SQL text to add before the `SELECT` keyword, such as a `WITH` clause.
 
 *Type*: `string`
 
 === `suffix`
 
-An optional suffix to append to the select query.
+Optional SQL text to append after the generated `SELECT` statement, such as an `ORDER BY`, `LIMIT`, or locking clause.
 
 *Type*: `string`
 

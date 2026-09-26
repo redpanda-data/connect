@@ -4,7 +4,7 @@
 
 === `client_id`
 
-An identifier for the client connection.
+The client identifier sent to the MQTT broker when connecting, which the broker uses to identify the client session. Use `dynamic_client_id_suffix` to give each run of the pipeline a unique identifier.
 
 *Type*: `string`
 

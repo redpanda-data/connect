@@ -240,6 +240,31 @@ func selectWhereField() *service.ConfigField {
 		Optional()
 }
 
+// selectArgsMappingField is the args_mapping field of the sql_select input and
+// processor.
+func selectArgsMappingField() *service.ConfigField {
+	return service.NewBloblangField("args_mapping").
+		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that evaluates to an array of values, one for each placeholder in the `where` field, in order. The values are passed to the driver as query arguments.").
+		ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").
+		Optional()
+}
+
+// selectPrefixField is the prefix field of the sql_select input and processor.
+func selectPrefixField() *service.ConfigField {
+	return service.NewStringField("prefix").
+		Description("Optional SQL text to add before the `SELECT` keyword, such as a `WITH` clause.").
+		Optional().
+		Advanced()
+}
+
+// selectSuffixField is the suffix field of the sql_select input and processor.
+func selectSuffixField() *service.ConfigField {
+	return service.NewStringField("suffix").
+		Description("Optional SQL text to append after the generated `SELECT` statement, such as an `ORDER BY`, `LIMIT`, or locking clause.").
+		Optional().
+		Advanced()
+}
+
 // insertFields returns the table and query-building fields shared by the
 // sql_insert output and processor.
 func insertFields() []*service.ConfigField {

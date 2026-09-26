@@ -72,7 +72,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 === `message_deduplication_id`
 
-An optional deduplication ID to set for messages.
+An optional deduplication ID for messages published to an SNS FIFO topic. SNS discards a message whose deduplication ID it has already accepted within the deduplication interval. Not required when the topic has content-based deduplication enabled.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -84,7 +84,7 @@ endif::[]
 
 === `message_group_id`
 
-An optional group ID to set for messages.
+An optional message group ID. Required when publishing to an SNS FIFO topic, which delivers messages that share a group ID in order.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -96,7 +96,7 @@ endif::[]
 
 === `metadata`
 
-Specify criteria for which metadata values are sent as headers.
+Specify which metadata values are sent as SNS message attributes of type `String`. Metadata keys that are not valid SNS attribute names are skipped.
 
 ifndef::env-cloud[]
 Requires version 3.60.0 or later.
