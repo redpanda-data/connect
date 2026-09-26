@@ -53,14 +53,7 @@ In order to merge the result into the original message compose this processor wi
 			ShortDescription("A Bloblang mapping evaluating to an array of keys matching the arguments the Redis script requires.").
 			Example("root = [ this.key ]").
 			Example(`root = [ meta("kafka_key"), this.count ]`)).
-		Field(service.NewIntField("retries").
-			Description("The maximum number of retries before abandoning a request.").
-			Default(3).
-			Advanced()).
-		Field(service.NewDurationField("retry_period").
-			Description("The time to wait before consecutive retry attempts.").
-			Default("500ms").
-			Advanced()).
+		Fields(retryFields()...).
 		Example("Running a script",
 			`The following example will use a script execution to get next element from a sorted set and set its score with timestamp unix nano value.`,
 			`

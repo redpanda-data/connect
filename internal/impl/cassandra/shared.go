@@ -83,7 +83,7 @@ func clientFields() []*service.ConfigField {
 			Default(3),
 		service.NewObjectField(cFieldBackoff,
 			service.NewDurationField(cFieldBackoffInitInterval).
-				Description("The initial period to wait between retry attempts.").
+				Description("The initial period to wait between retry attempts. The retry interval increases for each failed attempt, up to the `backoff.max_interval` value. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
 				Default("1s"),
 			service.NewDurationField(cFieldBackoffMaxInterval).
 				Description("The maximum period to wait between retry attempts.").
@@ -96,22 +96,18 @@ func clientFields() []*service.ConfigField {
 			Default("600ms"),
 		service.NewObjectField(cFieldHostSelectionPolicy,
 			service.NewStringField(cFieldHostSelectionPolicyLocalDC).
-				Description("The local DC to use, enables DC aware policy.").
+				Description("The name of the local datacenter to prioritize for query routing. Enables DC-aware host selection, ensuring queries are sent to nodes within this datacenter whenever possible. Recommended for clusters spanning multiple datacenters to minimize cross-DC traffic.").
 				Optional(),
 			service.NewStringField(cFieldHostSelectionPolicyLocalRack).
-				Description("The local rack to use, requires local_dc to be set, enables rack aware policy.").
+				Description("The name of the local rack to prioritize for query routing. Requires `local_dc` to be set. Enables rack-aware host selection, further optimizing query placement within the specified datacenter. Useful for deployments with multiple racks per datacenter to improve resilience and reduce intra-DC latency.").
 				Optional(),
 		).
-			Description("Optional host selection policy configurations. " +
-				"Highly recommended in deployments with multiple DCs. " +
-				"Host selection is always token aware if the token can be calculated from query. " +
-				"By default the underlying policy is round robin over all nodes. " +
-				"Users can specify a local DC and rack to use for the DC Aware & Rack Aware policies. ").
+			Description("Advanced host selection policy settings for Cassandra clusters, highly recommended in multi-datacenter (DC) deployments. Use these options to optimize query routing in multi-DC and multi-rack deployments. By specifying a local DC and rack, you can use the DC-aware and rack-aware policies to direct queries to the closest nodes, reducing latency and improving fault tolerance. If not set, the default policy is round-robin across all available nodes. Host selection is always token-aware if the token can be calculated from the query.").
 			ShortDescription("Host selection policy, strongly recommended in deployments spanning multiple data centres.").
 			LintRule(`root = if this.local_rack != "" && (!this.exists("local_dc") || this.local_dc == "") { "local_dc must be set if local_rack is set" }`).
 			Advanced(),
 		service.NewDurationField(cFieldReconnectInterval).
-			Description("Attempts to reconnect known DOWN nodes in every ReconnectInterval.").
+			Description("The interval at which Redpanda Connect attempts to reconnect to Cassandra nodes that are marked as DOWN. This setting helps maintain connectivity in unstable network conditions or during node maintenance. Use Go duration format such as `30s`, `1m`, or `5m`. Setting this too low may create unnecessary connection attempts, while setting it too high may delay recovery from network issues.").
 			Default("60s"),
 		service.NewObjectField(cFieldExponentialReconnectionPolicy,
 			service.NewIntField(cFieldExponentialReconnectionPolicyMaxRetries).
@@ -124,7 +120,7 @@ func clientFields() []*service.ConfigField {
 				Description("The maximum period to wait between retry attempts.").
 				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.max_interval must be a positive duration"}`),
 		).
-			Description("Optional exponential reconnection policy, this replaces the default constant policy of the driver.").
+			Description("Configure exponential backoff for reconnection attempts to DOWN nodes. When enabled, this replaces the driver's default constant reconnection policy with an exponential backoff strategy that gradually increases the delay between reconnection attempts. This reduces connection storm scenarios during widespread outages while ensuring eventual recovery.").
 			Optional().
 			Advanced(),
 	}
