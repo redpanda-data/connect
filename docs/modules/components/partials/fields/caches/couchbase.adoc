@@ -16,7 +16,7 @@ The name of the collection within the bucket to access.
 
 === `default_ttl`
 
-An optional default TTL to set for items, calculated from the moment the item is cached.
+An optional expiry applied to documents that are written without a TTL of their own, counted from the moment the document is written. When unset, such documents never expire.
 
 *Type*: `string`
 

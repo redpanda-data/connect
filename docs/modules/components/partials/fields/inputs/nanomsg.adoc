@@ -38,7 +38,7 @@ The socket type to use.
 
 === `sub_filters[]`
 
-A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.
+A list of topic prefixes to subscribe to when `socket_type` is `SUB`. A message is received only when its body starts with one of the prefixes, so a single empty filter (`''`) subscribes to everything. A SUB socket requires at least one filter.
 
 *Type*: `array<string>`
 
@@ -46,7 +46,7 @@ A list of subscription topic filters to use when consuming from a SUB socket. Sp
 
 === `urls[]`
 
-A list of URLs to connect to (or as). If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to, or to listen on when `bind` is `true`. If an item in the list contains commas, it is split into multiple URLs. A `*` host, such as `tcp://*:5555`, is replaced with `0.0.0.0`.
 
 *Type*: `array<string>`
 

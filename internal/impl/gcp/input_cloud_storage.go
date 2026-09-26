@@ -105,7 +105,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 		Fields(codec.DeprecatedCodecFields("to_the_end")...).
 		Fields(
 			service.NewBoolField(csiFieldDeleteObjects).
-				Description("Whether to delete downloaded objects from the bucket once they are processed.").
+				Description("Whether to remove objects from the Cloud Storage bucket once the messages read from them are delivered without error. An object is kept if delivery fails.").
 				Advanced().
 				Default(false),
 		)

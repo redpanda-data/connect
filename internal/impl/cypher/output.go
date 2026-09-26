@@ -43,7 +43,7 @@ const (
 func basicAuthField() *service.ConfigField {
 	return service.NewObjectField(coFieldBasicAuth,
 		service.NewBoolField(coFieldBasicAuthEnabled).
-			Description("Whether to use basic authentication in requests.").
+			Description("Whether to authenticate with the graph database using `username`, `password`, and `realm`. When `false`, the connection is made without authentication.").
 			Default(false),
 		service.NewStringField(coFieldBasicAuthUsername).
 			Default("").

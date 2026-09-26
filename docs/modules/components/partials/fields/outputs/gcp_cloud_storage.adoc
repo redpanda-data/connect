@@ -146,7 +146,7 @@ endif::[]
 
 === `content_encoding`
 
-An optional content encoding to set for each object.
+An optional value for the `contentEncoding` metadata of each Cloud Storage object, such as `gzip` for objects that are stored compressed.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -156,7 +156,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `content_type`
 
-The content type to set for each object.
+The MIME type stored in the `contentType` metadata of each Cloud Storage object, which is returned as the `Content-Type` header when the object is downloaded.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -210,7 +210,7 @@ path: ${!json("doc.namespace")}/${!json("doc.id")}.json
 
 === `timeout`
 
-The maximum period to wait on an upload before abandoning it and reattempting.
+The maximum period to wait for a message batch to be written to Cloud Storage, including any collision checks and appends. When the timeout is reached, the write is abandoned and reattempted.
 
 *Type*: `string`
 

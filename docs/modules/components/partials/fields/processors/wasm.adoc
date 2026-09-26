@@ -12,7 +12,7 @@ The name of the function exported by the target WASM module to run for each mess
 
 === `module_path`
 
-The path of the target WASM module to execute.
+The path of the WASM module file to load, which must export the function named in `function`. The file is read once, when the processor is created.
 
 *Type*: `string`
 

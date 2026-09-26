@@ -83,7 +83,7 @@ func clientFields() []*service.ConfigField {
 			Default(3),
 		service.NewObjectField(cFieldBackoff,
 			service.NewDurationField(cFieldBackoffInitInterval).
-				Description("The initial period to wait between retry attempts. The retry interval increases for each failed attempt, up to the `backoff.max_interval` value. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
+				Description("The period to wait before the first retry of a failed query. Each later retry doubles the previous wait, with random jitter of up to half this value, until `backoff.max_interval` is reached.").
 				Default("1s"),
 			service.NewDurationField(cFieldBackoffMaxInterval).
 				Description("The maximum period to wait between retry attempts.").

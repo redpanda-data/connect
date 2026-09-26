@@ -38,7 +38,7 @@ The socket type to send with.
 
 === `urls[]`
 
-A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to, or to listen on when `bind` is `true`. If an item in the list contains commas, it is split into multiple URLs. A `*` host, such as `tcp://*:5555`, is replaced with `0.0.0.0`.
 
 *Type*: `array<string>`
 

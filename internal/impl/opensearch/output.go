@@ -31,6 +31,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	"github.com/redpanda-data/connect/v4/internal/impl/elasticsearch/esoutput"
 )
 
 const (
@@ -154,42 +155,19 @@ func OutputSpec() *service.ConfigSpec {
 		Description(`
 Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
-			service.NewStringListField(esoFieldURLs).
-				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-				Example([]string{"http://localhost:9200"}),
-			service.NewInterpolatedStringField(esoFieldIndex).
-				Description("The index to place messages."),
+			esoutput.URLsField(),
+			esoutput.IndexField("OpenSearch"),
 			service.NewInterpolatedStringField(esoFieldAction).
 				Description(`The action to take on the document. This field must resolve to one of the following action types: `+"`"+`index`+"`"+`, `+"`"+`update`+"`"+` or `+"`"+`delete`+"`"+`.`).
 				ShortDescription("The action to take on the document: index, update or delete."),
-			service.NewInterpolatedStringField(esoFieldID).
-				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
-				Example(`${!counter()}-${!timestamp_unix()}`),
-			service.NewInterpolatedStringField(esoFieldPipeline).
-				Description("An optional pipeline id to preprocess incoming documents.").
-				Advanced().
-				Default(""),
-			service.NewInterpolatedStringField(esoFieldRouting).
-				Description("The routing key to use for the document.").
-				Advanced().
-				Default(""),
+			esoutput.IDField(),
+			esoutput.PipelineField(),
+			esoutput.RoutingField(),
 			service.NewTLSToggledField(esoFieldTLS),
 			service.NewOutputMaxInFlightField(),
 		).
 		Fields(
-			service.NewObjectField(esoFieldAuth,
-				service.NewBoolField(esoFieldAuthEnabled).
-					Description("Whether to use basic authentication in requests.").
-					Default(false),
-				service.NewStringField(esoFieldAuthUsername).
-					Description("A username to authenticate as.").
-					Default(""),
-				service.NewStringField(esoFieldAuthPassword).
-					Description("A password to authenticate with.").
-					Default("").Secret(),
-			).Description("Allows you to specify basic authentication.").
-				Advanced().
-				Optional(),
+			esoutput.BasicAuthField("OpenSearch"),
 			service.NewBatchPolicyField(esoFieldBatching),
 			AWSField(),
 		).

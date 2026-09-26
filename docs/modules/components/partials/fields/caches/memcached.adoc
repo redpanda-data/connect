@@ -10,7 +10,7 @@ A list of addresses of memcached servers to use.
 
 === `default_ttl`
 
-A default TTL to set for items, calculated from the moment the item is cached.
+The expiration applied to items that are written without a TTL of their own. Memcached expirations have a resolution of one second, so any fraction of a second is dropped.
 
 *Type*: `string`
 
@@ -18,7 +18,7 @@ A default TTL to set for items, calculated from the moment the item is cached.
 
 === `prefix`
 
-An optional string to prefix item keys with in order to prevent collisions with similar services.
+An optional string prepended to every item key, so that multiple caches can share one memcached cluster under different namespaces.
 
 *Type*: `string`
 

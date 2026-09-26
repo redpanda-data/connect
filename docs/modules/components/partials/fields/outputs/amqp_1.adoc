@@ -154,7 +154,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `metadata`
 
-Specify criteria for which metadata values are attached to messages as headers.
+Specify which message metadata keys are added to each AMQP 1.0 message as message annotations.
 
 *Type*: `object`
 
