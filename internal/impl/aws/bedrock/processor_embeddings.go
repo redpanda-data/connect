@@ -52,10 +52,10 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 		Fields(config.SessionFields()...).
 		Field(service.NewStringField(bedepFieldModel).
 			Examples("amazon.titan-embed-text-v1", "amazon.titan-embed-text-v2:0", "cohere.embed-english-v3", "cohere.embed-multilingual-v3", "cohere.embed-v4:0").
-			Description("The model ID to use. For a full list see the https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html[AWS Bedrock documentation^].").
+			Description("The ID of the model that you want to use to generate vector embeddings. For a full list, see the https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html[AWS Bedrock documentation^].").
 			ShortDescription("The model ID to use.")).
 		Field(service.NewStringField(bedepFieldText).
-			Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
+			Description("The prompt you want to generate a vector embedding for. By default, the processor submits the entire payload as a string.").
 			Optional()).
 		Field(service.NewStringAnnotatedEnumField(bedepFieldInputType, map[string]string{
 			"search_document": "Used for embeddings stored in a vector database for search use-cases.",

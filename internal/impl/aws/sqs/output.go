@@ -122,7 +122,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 				Description("An optional deduplication ID to set for messages.").
 				Optional(),
 			service.NewInterpolatedStringField(sqsoFieldDelaySeconds).
-				Description("An optional delay time in seconds for message. Value between 0 and 900").
+				Description("An optional delay time in seconds for messages. The value must be between `0` and `900`.").
 				Optional(),
 			service.NewOutputMaxInFlightField().
 				Description("The maximum number of parallel message batches to have in flight at any given time."),
@@ -130,7 +130,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 				Description("Specify criteria for which metadata values are sent as headers."),
 			service.NewBatchPolicyField(sqsoFieldBatching),
 			service.NewIntField(sqsoFieldMaxRecordsCount).
-				Description("Customize the maximum number of records delivered in a single SQS request. This value must be greater than 0 but no greater than 10.").
+				Description("The maximum number of records delivered in a single SQS request. Enter a value from `1` to `10`.").
 				ShortDescription("Maximum records delivered in a single SQS request. Must be between 1 and 10.").
 				Default(10).
 				LintRule(`if this <= 0 || this > 10 { "this field must be >0 and <=10" } `).

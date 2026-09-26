@@ -59,6 +59,10 @@ const (
 	s3oFieldBatching                = "batching"
 )
 
+// forcePathStyleURLsDescription describes the force_path_style_urls field of
+// the aws_s3 output and cache.
+const forcePathStyleURLsDescription = "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."
+
 type s3TagPair struct {
 	key   string
 	value *service.InterpolatedString
@@ -281,22 +285,22 @@ output:
 				Default("STANDARD").
 				Advanced(),
 			service.NewStringField(s3oFieldKMSKeyID).
-				Description("An optional server side encryption key.").
+				Description("An optional server-side encryption key.").
 				Default("").
 				Advanced(),
 			service.NewStringEnumField(s3oFieldChecksumAlgorithm,
 				"CRC32", "CRC32C", "SHA1", "SHA256",
 			).
-				Description("The algorithm used to create the checksum for each object.").
+				Description("The algorithm used to create the checksum for each object, which Amazon S3 uses to validate the object during upload.").
 				Default("").
 				Advanced(),
 			service.NewStringField(s3oFieldServerSideEncryption).
-				Description("An optional server side encryption algorithm.").
+				Description("An optional server-side encryption algorithm.").
 				Version("3.63.0").
 				Default("").
 				Advanced(),
 			service.NewBoolField(s3oFieldForcePathStyleURLs).
-				Description("Forces the client API to use path style URLs, which helps when connecting to custom endpoints.").
+				Description(forcePathStyleURLsDescription).
 				Advanced().
 				Default(false),
 			service.NewOutputMaxInFlightField(),

@@ -95,10 +95,10 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 			service.NewStringField(csiFieldBucket).
 				Description("The name of the bucket from which to download objects."),
 			service.NewStringField(csiFieldPrefix).
-				Description("An optional path prefix, if set only objects with the prefix are consumed.").
+				Description("Optional path prefix, if set only objects with the prefix are consumed.").
 				Default(""),
 			service.NewStringField(csiFieldCredentialsJSON).
-				Description("An optional field to set Google Service Account Credentials json.").
+				Description(credentialsJSONDescription).
 				Default("").
 				Secret(),
 		).
