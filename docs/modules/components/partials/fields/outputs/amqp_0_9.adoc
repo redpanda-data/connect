@@ -4,7 +4,7 @@
 
 === `app_id`
 
-Set the application ID of each message with a dynamic interpolated expression.
+Set an application ID for each message using a dynamic interpolated expression.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -14,7 +14,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `content_encoding`
 
-The content encoding attribute to set for each message.
+The content encoding attribute of each message.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -24,7 +24,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `content_type`
 
-The content type attribute to set for each message.
+The MIME type of each message.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -34,7 +34,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `correlation_id`
 
-Set the correlation ID of each message with a dynamic interpolated expression.
+Set a unique correlation ID for each message using a dynamic interpolated expression to help match messages to responses.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -44,7 +44,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `exchange`
 
-An AMQP exchange to publish to.
+The AMQP exchange to publish messages to.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -52,13 +52,13 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `exchange_declare`
 
-Optionally declare the target exchange (passive).
+Declares the target exchange (`exchange`) to check whether an exchange with the specified name exists and is configured correctly. If the exchange exists, the declaration verifies that the fields specified in this object match its properties. If the target exchange does not exist, this output creates it.
 
 *Type*: `object`
 
 === `exchange_declare.arguments`
 
-Optional arguments specific to the server's implementation of the exchange that can be sent for exchange types which require extra parameters.
+Arguments for server-specific implementations of the exchange (optional). You can use arguments to configure additional parameters for exchange types that require them.
 
 *Type*: `object`
 
@@ -71,7 +71,7 @@ arguments:
 
 === `exchange_declare.durable`
 
-Whether the exchange should be durable.
+Whether the declared exchange is durable.
 
 *Type*: `bool`
 
@@ -79,7 +79,7 @@ Whether the exchange should be durable.
 
 === `exchange_declare.enabled`
 
-Whether to declare the exchange.
+Whether to enable exchange declaration.
 
 *Type*: `bool`
 
@@ -87,7 +87,7 @@ Whether to declare the exchange.
 
 === `exchange_declare.type`
 
-The type of the exchange.
+The type of the exchange, which determines how messages are routed to queues. For `topic` exchanges, routing keys are matched as lists of words separated by dots (`.`).
 
 *Type*: `string`
 
@@ -97,7 +97,7 @@ The type of the exchange.
 
 === `expiration`
 
-Set the per-message TTL
+Set the TTL of each message in milliseconds.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -107,7 +107,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `immediate`
 
-Whether to set the immediate flag on published messages. When set if there are no ready consumers of a queue then the message is dropped instead of waiting.
+Whether to set the immediate flag on published messages. When set to `true`, if there are no active consumers for a queue, the message is dropped instead of waiting.
 
 *Type*: `bool`
 
@@ -125,7 +125,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `mandatory`
 
-Whether to set the mandatory flag on published messages. When set if a published message is routed to zero queues it is returned.
+Whether to set the mandatory flag on published messages. When set to `true`, a published message that cannot be routed to any queues is returned to the sender.
 
 *Type*: `bool`
 
@@ -141,7 +141,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 === `message_id`
 
-Set the message ID of each message with a dynamic interpolated expression.
+Set a message ID for each message using a dynamic interpolated expression.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -151,7 +151,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `metadata`
 
-Specify criteria for which metadata values are attached to messages as headers.
+Configure which metadata values are added to messages as headers. This allows you to pass additional context information along with your messages.
 
 *Type*: `object`
 
@@ -165,7 +165,7 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 
 === `persistent`
 
-Whether message delivery should be persistent (transient by default).
+Whether to store delivered messages on disk. By default, message delivery is transient.
 
 *Type*: `bool`
 
@@ -173,7 +173,7 @@ Whether message delivery should be persistent (transient by default).
 
 === `priority`
 
-Set the priority of each message with a dynamic interpolated expression.
+Set the priority of each message using a dynamic interpolated expression.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -197,7 +197,7 @@ priority: ${! json("doc.priority") }
 
 === `reply_to`
 
-Carries response queue name - set with a dynamic interpolated expression.
+Set the name of the queue to which responses are sent using a dynamic interpolated expression.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -207,7 +207,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `timeout`
 
-The maximum period to wait before abandoning it and reattempting. If not set, wait indefinitely.
+The maximum period to wait for a message acknowledgment before abandoning it and attempting a resend. If this value is not set, the system waits indefinitely.
 
 *Type*: `string`
 
@@ -363,7 +363,7 @@ Whether to skip server side certificate verification.
 
 === `type`
 
-The type property to set for each message.
+A custom message type to set for each message.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -373,7 +373,9 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `urls[]`
 
-A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. Each URL in the list is tried in order until a connection is established, and that URL is then used until the connection is closed.
+
+If an item in the list contains commas, it is split into multiple URLs.
 
 ifndef::env-cloud[]
 Requires version 3.58.0 or later.
@@ -401,7 +403,7 @@ urls:
 
 === `user_id`
 
-Set the user ID to the name of the publisher.  If this property is set by a publisher, its value must be equal to the name of the user used to open the connection.
+Set the user ID to the name of the publisher. If this property is set by a publisher, its value must match the name of the user that opened the connection.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 

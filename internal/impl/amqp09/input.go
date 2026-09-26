@@ -63,13 +63,7 @@ This input adds the following metadata fields to each message:
 - All existing message headers, including nested headers prefixed with the key of their respective parent.
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations].`).Fields(
-		service.NewURLListField(urlsField).
-			Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
-			ShortDescription("URLs to connect to. The first to connect successfully is used until the connection closes.").
-			Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
-			Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
-			Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
-			Version("3.58.0"),
+		urlsFieldSpec(),
 		service.NewStringField(queueField).
 			Description("An AMQP queue to consume from."),
 		service.NewObjectField(queueDeclareField,
@@ -80,59 +74,60 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Description("Whether the declared queue is durable.").
 				Default(true),
 			service.NewBoolField(queueDeclareAutoDeleteField).
-				Description("Whether the declared queue will auto-delete.").
+				Description("Whether the declared queue auto-deletes when there are no active consumers.").
 				Default(false),
 			service.NewStringMapField(queueDeclareArgumentsField).
-				Description(`
-Optional arguments specific to the server's implementation of the queue that can be sent for queue types which require extra parameters.
+				Description(`Arguments for server-specific implementations of the queue (optional). You can use arguments to configure additional parameters for queue types that require them. For more information about available arguments, see the https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c85e8dc431/types.go#L282-L362[RabbitMQ Client Library^].
 
-== Arguments
+[cols="1,2,2"]
+|===
+| Argument | Description | Accepted values
 
-- x-queue-type
+| `+"`"+`x-queue-type`+"`"+`
+| Declares the type of queue.
+| Options: `+"`"+`classic`+"`"+` (default), `+"`"+`quorum`+"`"+`, and `+"`"+`stream`+"`"+`.
 
-Is used to declare quorum and stream queues. Accepted values are: 'classic' (default), 'quorum', 'stream', 'drop-head', 'reject-publish' and 'reject-publish-dlx'.
+| `+"`"+`x-max-length`+"`"+`
+| The maximum number of messages in the queue.
+| A non-negative integer.
 
-- x-max-length
+| `+"`"+`x-max-length-bytes`+"`"+`
+| The maximum size of messages (in bytes) in the queue.
+| A non-negative integer.
 
-Maximum number of messages, is a non-negative integer value.
+| `+"`"+`x-overflow`+"`"+`
+| Sets the queue's overflow behavior.
+| Options: `+"`"+`drop-head`+"`"+` (default), `+"`"+`reject-publish`+"`"+`, `+"`"+`reject-publish-dlx`+"`"+`.
 
-- x-max-length-bytes
+| `+"`"+`x-message-ttl`+"`"+`
+| The duration (in milliseconds) that messages remain in the queue before they expire and are discarded.
+| A string that represents the number of milliseconds. For example, `+"`"+`60000`+"`"+` retains messages for one minute.
 
-Maximum number of messages, is a non-negative integer value.
+| `+"`"+`x-expires`+"`"+`
+| The duration (in milliseconds) after which the queue automatically expires.
+| A positive integer that represents the number of milliseconds.
 
-- x-overflow
+| `+"`"+`x-max-age`+"`"+`
+| The duration (in configurable units) that streamed messages are retained on disk before they are discarded.
+| Options: `+"`"+`Y`+"`"+`, `+"`"+`M`+"`"+`, `+"`"+`D`+"`"+`, `+"`"+`h`+"`"+`, `+"`"+`m`+"`"+`, `+"`"+`s`+"`"+`. For example, `+"`"+`7D`+"`"+` retains messages for a week.
 
-Sets overflow behaviour. Possible values are: 'drop-head' (default), 'reject-publish', 'reject-publish-dlx'.
+| `+"`"+`x-stream-max-segment-size-bytes`+"`"+`
+| The maximum size (in bytes) of the segment files held on disk.
+| A positive integer. Default: `+"`"+`500000000`+"`"+` (approximately 500 MB).
 
-- x-message-ttl
+| `+"`"+`x-queue-version`+"`"+`
+| The version of the classic queue to use.
+| Options: `+"`"+`1`+"`"+` or `+"`"+`2`+"`"+`.
 
-TTL period in milliseconds. Must be a string representation of the number.
+| `+"`"+`x-consumer-timeout`+"`"+`
+| The duration (in milliseconds) that a consumer can remain idle before it is automatically canceled.
+| A positive integer that represents the number of milliseconds. For example, `+"`"+`60000`+"`"+` sets a timeout duration of one minute.
 
-- x-expires
+| `+"`"+`x-single-active-consumer`+"`"+`
+| When set to `+"`"+`true`+"`"+`, a single consumer receives messages from the queue even when multiple consumers are subscribed to it.
+| A boolean.
 
-Expiration policy, describes the expiration period in milliseconds. Must be a positive integer.
-
-- x-max-age
-
-Controls the retention of a stream. Must be a string, valid units: (Y, M, D, h, m, s), for example, '7D' for a week.
-
-- x-stream-max-segment-size-bytes
-
-Controls the size of the segment files on disk (default 500000000). Must be a positive integer.
-
-- x-queue-version
-
-declares the Classic Queue version to use. Expects an integer, either 1 or 2.
-
-- x-consumer-timeout
-
-Integer specified in milliseconds.
-
-- x-single-active-consumer
-
-Enables Single Active Consumer, Expects a Boolean.
-
-See https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c85e8dc431/types.go#L282-L362 for more information on available arguments.`).
+|===`).
 				ShortDescription("Optional arguments specific to the server's queue implementation, for queue types needing extra parameters.").
 				Advanced().
 				Optional().
@@ -142,8 +137,8 @@ See https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c8
 					"x-max-length-bytes": 4096,
 				}),
 		).
-			Description(`Allows you to passively declare the target queue. If the queue already exists then the declaration passively verifies that they match the target fields.`).
-			ShortDescription("Passively declare the target queue, verifying an existing queue matches the target fields.").
+			Description(`Declares the target queue (`+"`"+`queue`+"`"+`) to make sure a queue with the specified name exists and is configured correctly. If the queue does not exist, it is created. If the queue already exists, the declaration verifies that the fields specified in this object match its properties.`).
+			ShortDescription("Declare the target queue, creating it if missing and verifying an existing queue matches the target fields.").
 			Advanced().
 			Optional(),
 		service.NewObjectListField(bindingsDeclareField,
@@ -154,7 +149,7 @@ See https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c8
 				Description("The key of the declared binding.").
 				Default(""),
 		).
-			Description(`Allows you to passively declare bindings for the target queue.`).
+			Description(`Declares the bindings of the target queue to make sure they exist and are configured correctly.`).
 			Advanced().
 			Optional().
 			Example([]any{
@@ -164,25 +159,27 @@ See https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c8
 				},
 			}),
 		service.NewStringField(consumerTagField).
-			Description("A consumer tag.").
+			Description("A consumer tag to uniquely identify the consumer.").
 			Default(""),
 		service.NewBoolField(autoAckField).
-			Description("Acknowledge messages automatically as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from blocking but at the cost of eliminating delivery guarantees.").
+			Description("Set to `true` to automatically acknowledge messages as soon as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from becoming blocked, but delivery guarantees are lost.").
 			ShortDescription("Acknowledge messages as they are consumed rather than waiting for downstream acknowledgements.").
 			Default(false).
 			Advanced(),
 		service.NewStringListField(nackRejectPattensField).
-			Description("A list of regular expression patterns whereby if a message that has failed to be delivered by Redpanda Connect has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.").
+			Description(`A list of regular expression patterns to match against errors in messages that Redpanda Connect fails to deliver. When a message has an error that matches a pattern, it is dropped or delivered to a dead-letter queue (if a queue has been configured).
+
+By default, failed messages are negatively acknowledged (nacked) and requeued.`).
 			ShortDescription("Regular expressions matching delivery errors that should be dropped rather than retried.").
 			Example([]string{"^reject me please:.+$"}).
 			Advanced().
 			Version("3.64.0").
 			Default([]any{}),
 		service.NewIntField(prefetchCountField).
-			Description("The maximum number of pending messages to have consumed at a time.").
+			Description("The maximum number of pending messages at a given time.").
 			Default(10),
 		service.NewIntField(prefetchSizeField).
-			Description("The maximum amount of pending messages measured in bytes to have consumed at a time.").
+			Description("The maximum size (in bytes) of pending messages to have consumed at a time.").
 			Default(0).
 			Advanced(),
 		service.NewTLSToggledField(tlsField),

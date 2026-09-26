@@ -111,28 +111,51 @@ func InputSpec() *service.ConfigSpec {
 		Categories("Network").
 		Summary(`Receive messages delivered over HTTP.`).
 		Description(`
-The field `+"`rate_limit`"+` allows you to specify an optional `+"xref:components:rate_limits/about.adoc[`rate_limit` resource]"+`, which will be applied to each HTTP request made and each websocket payload received.
+The `+"`gateway`"+` input is a Cloud-only component that receives messages over HTTP and injects them into a running Redpanda Connect pipeline.
 
-When the rate limit is breached HTTP requests will have a 429 response returned with a Retry-After header.
+Use this input to:
+
+- Receive webhook events from third-party services
+- Accept real-time telemetry or sensor data over HTTP
+- Build lightweight ingest endpoints for client apps
+
+For on-premises or self-managed deployments, use the xref:components:inputs/http_server.adoc[`+"`http_server`"+`] input instead.
+
+This component is fully managed and available in the following Redpanda Cloud deployment types:
+
+- *Serverless*
+- *Dedicated*
+- *Bring Your Own Cloud (BYOC)*
+
+When you deploy a pipeline with a `+"`gateway`"+` input, Redpanda Cloud provisions a secure URL that you can use to send HTTP requests. You can post raw payloads, JSON messages, or stream events in real time.
+
+Authentication and access control use standard Redpanda Cloud API tokens. For more information, see link:https://docs.redpanda.com/api/doc/cloud-controlplane/authentication[Redpanda Cloud API authentication^].
+
+Network access depends on the cluster type:
+
+- On *public clusters* (Serverless and Dedicated), the gateway URL is accessible over the public internet.
+- On *private clusters* (BYOC), the gateway is accessible only from within your configured VPC.
+
+== Rate limiting
+
+The `+"`rate_limit`"+` field lets you specify an optional xref:components:rate_limits/about.adoc[rate limit resource], which is applied to each HTTP request received. When the rate limit is breached, the input returns a 429 response with a `+"`Retry-After`"+` header.
 
 == Responses
 
-It's possible to return a response for each message received using xref:guides:sync_responses.adoc[synchronous responses]. When doing so you can customize headers with the `+"`sync_response` field `headers`"+`, which can also use xref:configuration:interpolation.adoc#bloblang-queries[function interpolation] in the value based on the response message contents.
+You can return a response for each message received using xref:guides:sync_responses.adoc[synchronous responses]. When doing so, you can customize headers using the `+"`sync_response.headers`"+` field, which supports xref:configuration:interpolation.adoc#bloblang-queries[function interpolation] in the value based on the response message contents.
 
 == Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"```text"+`
-- http_server_user_agent
-- http_server_request_path
-- http_server_verb
-- http_server_remote_ip
+- `+"`http_server_user_agent`"+`
+- `+"`http_server_request_path`"+`
+- `+"`http_server_verb`"+`
+- `+"`http_server_remote_ip`"+`
 - All headers (only first values are taken)
 - All query parameters
 - All path parameters
 - All cookies
-`+"```"+`
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
@@ -156,11 +179,11 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					}),
 				service.NewMetadataFilterField(hsiFieldResponseExtractMetadata).
 					Description("Specify criteria for which metadata values are added to the response as headers."),
-			),
-			netutil.ListenerConfigSpec().
-				Description("Customize messages returned via xref:guides:sync_responses.adoc[synchronous responses].").
-				ShortDescription("Customize messages returned via synchronous responses.").
+			).
+				Description("Customize messages returned using xref:guides:sync_responses.adoc[synchronous responses].").
+				ShortDescription("Customize messages returned using synchronous responses.").
 				Advanced(),
+			netutil.ListenerConfigSpec(),
 		)
 }
 

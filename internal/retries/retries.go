@@ -44,7 +44,7 @@ func CommonRetryBackOffFields(
 			Advanced(),
 		service.NewObjectField(crboFieldBackOff,
 			service.NewDurationField(crboFieldInitInterval).
-				Description("The initial period to wait between retry attempts.").
+				Description("The initial period to wait between retry attempts. The retry interval increases for each failed attempt, up to the `backoff.max_interval` value. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
 				Default(defaultInitInterval),
 			service.NewDurationField(crboFieldMaxInterval).
 				Description("The maximum period to wait between retry attempts.").

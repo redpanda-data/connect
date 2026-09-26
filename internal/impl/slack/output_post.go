@@ -37,23 +37,28 @@ const (
 
 func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Description(`Post a new message to a Slack channel using https://api.slack.com/methods/chat.postMessage[^chat.postMessage]`).
+		Summary("Posts a new message to a Slack channel using the Slack API method chat.postMessage.").
+		Description(`This output calls the https://api.slack.com/methods/chat.postMessage[`+"`chat.postMessage`"+`^] Slack API method once for each message.`).
 		Fields(
-			service.NewStringField(oFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
+			service.NewStringField(oFieldBotToken).Description("Your Slack bot user's OAuth token, which must have the correct permissions to post messages to the target Slack channel.").LintRule(`
         root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
       `),
-			service.NewInterpolatedStringField(oFieldChannelID).Description("The channel ID to post messages to."),
-			service.NewInterpolatedStringField(oFieldThreadTS).Description("Optional thread timestamp to post messages to.").Default(slack.DEFAULT_MESSAGE_THREAD_TIMESTAMP),
-			service.NewInterpolatedStringField(oFieldText).Description("The text content of the message. Mutually exclusive with `blocks`.").
+			service.NewInterpolatedStringField(oFieldChannelID).Description("The encoded ID of the target Slack channel."),
+			service.NewInterpolatedStringField(oFieldThreadTS).Description("Specify the thread timestamp (`ts` value) of another message to post a reply within the same thread.").Default(slack.DEFAULT_MESSAGE_THREAD_TIMESTAMP),
+			service.NewInterpolatedStringField(oFieldText).Description(`The text content of the message.
+
+You can either specify message content in the `+"`"+`text`+"`"+` or `+"`"+`blocks`+"`"+` fields, but not both.`).
 				ShortDescription("The text content of the message. Mutually exclusive with blocks.").
 				Default(""),
-			service.NewBloblangField(oFieldBlocks).Description("A Bloblang query that should return a JSON array of Slack blocks (see https://api.slack.com/reference/block-kit/blocks[Blocks in Slack documentation]). Mutually exclusive with `text`.").
+			service.NewBloblangField(oFieldBlocks).Description(`A Bloblang query that should return a JSON array of https://api.slack.com/reference/block-kit/blocks[Slack blocks^].
+
+You can either specify message content in the `+"`"+`text`+"`"+` or `+"`"+`blocks`+"`"+` fields, but not both.`).
 				ShortDescription("A Bloblang query returning a JSON array of Slack blocks. Mutually exclusive with text.").
 				Optional(),
-			service.NewBoolField(oFieldMarkdown).Description("Enable markdown formatting in the message.").Default(slack.DEFAULT_MESSAGE_MARKDOWN),
-			service.NewBoolField(oFieldUnfurlLinks).Description("Enable link unfurling in the message.").Default(slack.DEFAULT_MESSAGE_UNFURL_LINKS),
-			service.NewBoolField(oFieldUnfurlMedia).Description("Enable media unfurling in the message.").Default(slack.DEFAULT_MESSAGE_UNFURL_MEDIA),
-			service.NewBoolField(oFieldLinkNames).Description("Enable link names in the message.").Default(false),
+			service.NewBoolField(oFieldMarkdown).Description("When set to `true`, this output accepts message content in Markdown format and applies Markdown formatting to the message.").Default(slack.DEFAULT_MESSAGE_MARKDOWN),
+			service.NewBoolField(oFieldUnfurlLinks).Description("When set to `true`, this output provides previews of linked content in Slack messages. For more information about unfurling links, see the https://api.slack.com/reference/messaging/link-unfurling[Slack documentation^].").Default(slack.DEFAULT_MESSAGE_UNFURL_LINKS),
+			service.NewBoolField(oFieldUnfurlMedia).Description("When set to `true`, this output enables media unfurling, which provides previews of rich content in Slack messages, such as videos or embedded tweets.").Default(slack.DEFAULT_MESSAGE_UNFURL_MEDIA),
+			service.NewBoolField(oFieldLinkNames).Description("When set to `true`, this output finds and links to https://api.slack.com/reference/surfaces/formatting#mentioning-groups[user groups^] mentioned in Slack messages.").Default(false),
 		).
 		Example(echobotExample())
 }

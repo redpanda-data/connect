@@ -12,13 +12,13 @@ Whether messages that are rejected (nacked) at the output level should be automa
 
 === `bot_token`
 
-The Slack Bot User OAuth token to use.
+Your https://api.slack.com/concepts/token-types[Slack bot user's OAuth token^], which must have the https://api.slack.com/scopes/users:read[`users.read` scope^] to access your Slack organization.
 
 *Type*: `string`
 
 === `team_id`
 
-The team ID to filter by
+The encoded ID of a Slack team by which to filter the list of returned users, which you can get from the https://api.slack.com/methods/team.info[`team.info` Slack API method^]. If `team_id` is left empty, users from all teams within the organization are returned.
 
 *Type*: `string`
 

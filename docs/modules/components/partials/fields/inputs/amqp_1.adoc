@@ -267,7 +267,9 @@ Whether to skip server side certificate verification.
 
 === `urls[]`
 
-A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. Each URL in the list is tried in order until a connection is established, and that URL is then used until the connection is closed.
+
+If an item in the list contains commas, it is split into multiple URLs.
 
 ifndef::env-cloud[]
 Requires version 4.23.0 or later.

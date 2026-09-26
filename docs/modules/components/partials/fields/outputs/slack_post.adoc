@@ -4,19 +4,21 @@
 
 === `blocks`
 
-A Bloblang query that should return a JSON array of Slack blocks (see https://api.slack.com/reference/block-kit/blocks[Blocks in Slack documentation]). Mutually exclusive with `text`.
+A Bloblang query that should return a JSON array of https://api.slack.com/reference/block-kit/blocks[Slack blocks^].
+
+You can either specify message content in the `text` or `blocks` fields, but not both.
 
 *Type*: `string`
 
 === `bot_token`
 
-The Slack Bot User OAuth token to use.
+Your Slack bot user's OAuth token, which must have the correct permissions to post messages to the target Slack channel.
 
 *Type*: `string`
 
 === `channel_id`
 
-The channel ID to post messages to.
+The encoded ID of the target Slack channel.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -24,7 +26,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `link_names`
 
-Enable link names in the message.
+When set to `true`, this output finds and links to https://api.slack.com/reference/surfaces/formatting#mentioning-groups[user groups^] mentioned in Slack messages.
 
 *Type*: `bool`
 
@@ -32,7 +34,7 @@ Enable link names in the message.
 
 === `markdown`
 
-Enable markdown formatting in the message.
+When set to `true`, this output accepts message content in Markdown format and applies Markdown formatting to the message.
 
 *Type*: `bool`
 
@@ -40,7 +42,9 @@ Enable markdown formatting in the message.
 
 === `text`
 
-The text content of the message. Mutually exclusive with `blocks`.
+The text content of the message.
+
+You can either specify message content in the `text` or `blocks` fields, but not both.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -50,7 +54,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `thread_ts`
 
-Optional thread timestamp to post messages to.
+Specify the thread timestamp (`ts` value) of another message to post a reply within the same thread.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -60,7 +64,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `unfurl_links`
 
-Enable link unfurling in the message.
+When set to `true`, this output provides previews of linked content in Slack messages. For more information about unfurling links, see the https://api.slack.com/reference/messaging/link-unfurling[Slack documentation^].
 
 *Type*: `bool`
 
@@ -68,7 +72,7 @@ Enable link unfurling in the message.
 
 === `unfurl_media`
 
-Enable media unfurling in the message.
+When set to `true`, this output enables media unfurling, which provides previews of rich content in Slack messages, such as videos or embedded tweets.
 
 *Type*: `bool`
 

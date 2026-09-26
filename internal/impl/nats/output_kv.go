@@ -44,7 +44,7 @@ you to create a unique key for each message.
 ` + connectionNameDescription() + authDescription()).
 		Fields(kvDocs([]*service.ConfigField{
 			service.NewInterpolatedStringField(kvoFieldKey).
-				Description("The key for each message.").
+				Description(`The key for each message.`).
 				Example("foo").
 				Example("foo.bar.baz").
 				Example(`foo.${! json("meta.type") }`),

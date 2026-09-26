@@ -88,7 +88,7 @@ This scanner also emits the canonical Avro schema as `+"`@avro_schema`"+` metada
 `).
 		Fields(
 			service.NewBoolField(sFieldRawJSON).
-				Description("Whether messages should be decoded into normal JSON rather than https://avro.apache.org/docs/current/specification/#json-encoding[Avro JSON^]. When true, union values are unwrapped (bare values instead of {\"type\": value} wrappers).").
+				Description("Whether to decode messages into normal JSON rather than https://avro.apache.org/docs/1.12.0/specification/#json-encoding[Avro JSON^]. When true, this unwraps union values (bare values instead of {\"type\": value} wrappers).").
 				Advanced().
 				Default(false),
 			service.NewIntField(sFieldMaxDecompressedBlockBytes).

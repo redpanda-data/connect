@@ -4,7 +4,7 @@
 
 === `address`
 
-The address of the server to connect to.
+The address (hostname or IP address) of the SFTP server to connect to.
 
 *Type*: `string`
 
@@ -58,7 +58,7 @@ The connection timeout to use when connecting to the target server.
 
 === `credentials`
 
-The credentials to use to log into the target server.
+The credentials required to log in to the SFTP server. This can include a username and password, or a private key for secure access.
 
 *Type*: `object`
 
@@ -76,7 +76,7 @@ The path to the SFTP server's public key file, used for host key verification.
 
 === `credentials.password`
 
-The password for the specified username to connect to the SFTP server.
+The password to use for authentication. Used together with `username` for basic authentication or with encrypted private keys for secure access.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -86,7 +86,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `credentials.private_key`
 
-The raw contents of the private key, used for authenticating the username.
+The raw contents of the private key used to authenticate with the SFTP server. This field provides an alternative to `private_key_file`.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -94,13 +94,13 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `credentials.private_key_file`
 
-The path to the private key file, used for authenticating the username.
+The path to a private key file used to authenticate with the SFTP server. You can also provide a private key using the `private_key` field.
 
 *Type*: `string`
 
 === `credentials.private_key_pass`
 
-Optional passphrase for decrypting the private key, if it's encrypted.
+An optional passphrase for decrypting the private key, if it is encrypted.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -110,7 +110,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `credentials.username`
 
-The username to authenticate with the SFTP server.
+The username required to authenticate with the SFTP server.
 
 *Type*: `string`
 
@@ -126,7 +126,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 === `path`
 
-The file to save the messages to on the server.
+The file to save the messages to on the SFTP server.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 

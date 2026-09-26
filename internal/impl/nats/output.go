@@ -35,15 +35,9 @@ func natsOutputConfig() *service.ConfigSpec {
 ` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewInterpolatedStringField("subject").
-			Description("The subject to publish to.").
+			Description(`The subject to publish to.`).
 			Example("foo.bar.baz")).
-		Field(service.NewInterpolatedStringMapField("headers").
-			Description("Explicit message headers to add to messages.").
-			Default(map[string]any{}).
-			Example(map[string]any{
-				"Content-Type": "application/json",
-				"Timestamp":    `${!meta("Timestamp")}`,
-			})).
+		Field(headersField()).
 		Field(service.NewMetadataFilterField("metadata").
 			Description("Determine which (if any) metadata values should be added to messages as headers.").
 			Optional()).

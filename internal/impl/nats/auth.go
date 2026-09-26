@@ -78,21 +78,21 @@ func authFieldSpec() *service.ConfigField {
 			Example("./seed.nk").
 			Optional(),
 		service.NewStringField("nkey").
-			Description("The NKey seed.").
+			Description("Your NKey seed (private key) for NATS authentication. NKeys provide cryptographic authentication without passwords.").
 			Secret().
 			Optional().
 			Version("4.38.0").
 			Example("UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4"), // don't worry, this sample seed is from Nats official doc
 		service.NewStringField("user_credentials_file").
-			Description("An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.").
+			Description("An optional file containing user credentials which consist of a user JWT and corresponding NKey seed.").
 			Example("./user.creds").
 			Optional(),
 		service.NewStringField("user_jwt").
-			Description("An optional plain text user JWT (given along with the corresponding user NKey Seed).").
+			Description("An optional plaintext user JWT to use along with the corresponding user NKey seed.").
 			Secret().
 			Optional(),
 		service.NewStringField("user_nkey_seed").
-			Description("An optional plain text user NKey Seed (given along with the corresponding user JWT).").
+			Description("An optional plaintext user NKey seed to use along with the corresponding user JWT.").
 			Secret().
 			Optional(),
 		service.NewStringField("user").

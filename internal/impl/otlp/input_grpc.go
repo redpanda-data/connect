@@ -70,28 +70,31 @@ Exposes an OpenTelemetry Collector gRPC receiver that accepts traces, logs, and 
 Telemetry data is received in OTLP protobuf format and converted to individual Redpanda OTEL v1 messages.
 Each signal (span, log record, or metric) becomes a separate message with embedded Resource and Scope metadata.
 
-## Protocols
+== Protocols
 
 This input supports OTLP/gRPC on the default port 4317 using the standard OTLP protobuf format for all signal types (traces, logs, metrics).
 
-## Output Format
+== Output format
 
 Each OTLP export request is unbatched into individual messages:
-- **Traces**: One message per span
-- **Logs**: One message per log record
-- **Metrics**: One message per metric
 
-Messages are encoded in Redpanda OTEL v1 format (protobuf or JSON, configurable via `+"`encoding`"+` field).
+- *Traces*: One message per span
+- *Logs*: One message per log record
+- *Metrics*: One message per metric
+
+Messages are encoded in Redpanda OTEL v1 format (protobuf or JSON, configurable using the `+"`encoding`"+` field).
 
 Each message includes the following metadata:
-- `+"`otel_signal_type`"+`: The signal type - "trace", "log", or "metric"
-- `+"`otel_encoding`"+` : The message encoding - "json" or "protobuf"
 
-## Authentication
+- `+"`otel_signal_type`"+`: The signal type (`+"`trace`"+`, `+"`log`"+`, or `+"`metric`"+`)
+- `+"`otel_encoding`"+`: The message encoding (`+"`json`"+` or `+"`protobuf`"+`)
+
+== Authentication
 
 When `+"`auth_token`"+` is configured, clients must include the token in the gRPC metadata:
 
-**Go Client Example:**
+*Go client example:*
+
 `+"```go"+`
 import (
     "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -106,19 +109,18 @@ exporter, err := otlptracegrpc.New(ctx,
 )
 `+"```"+`
 
-**Environment Variable:**
+*Environment variable:*
+
 `+"```bash"+`
 export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer your-token-here"
 `+"```"+`
 
-## Rate Limiting
+== Rate limiting
 
-An optional rate limit resource can be specified to throttle incoming requests. When the rate limit is breached, requests will receive a ResourceExhausted gRPC status code.
+You can specify an optional rate limit resource using the `+"`rate_limit`"+` field to throttle incoming requests. When the rate limit is reached, the input delays processing each request until the rate limit resource grants access.
 `).
 		Fields(
-			service.NewStringEnumField(fieldEncoding, "protobuf", "json").
-				Description("Encoding format for messages in the batch. Options: 'protobuf' or 'json'.").
-				Default(string(EncodingJSON)),
+			inputEncodingField(),
 			service.NewStringField(giFieldAddress).
 				Description("The address to listen on for gRPC connections.").
 				Default(defaultGRPCAddress),
@@ -135,14 +137,9 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 				Description("Maximum size of gRPC messages to receive in bytes.").
 				Default(defaultMaxRecvMsgSize).
 				Advanced(),
-			service.NewStringField(fieldRateLimit).
-				Description("An optional rate limit resource to throttle requests.").
-				Default(""),
+			inputRateLimitField(),
 			netutil.ListenerConfigSpec(),
-			service.NewObjectField(schemaRegistryField, schemaRegistryConfigFields()...).
-				Description("Optional Schema Registry configuration for adding Schema Registry wire format headers to messages.").
-				Optional().
-				Advanced(),
+			inputSchemaRegistryField(),
 		)
 }
 

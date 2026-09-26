@@ -101,24 +101,24 @@ This differs from `+"`to_json`"+` in the following ways:
 This operator is also considerably faster in scenario where you manipulate the data as the data does not need to be serialized then deserialized like with the `+"`to_json`"+` operator.
 `).Fields(
 		service.NewStringEnumField(fieldOperator, "to_json", "from_json", "decode").
-			Description("The [operator](#operators) to execute").
+			Description("The operator to execute.").
 			ShortDescription("The operator to execute."),
 		service.NewStringField(fieldMessage).
-			Description("The fully qualified name of the protobuf message to convert to/from."),
+			Description("The fully-qualified name of the protobuf message to convert from or to JSON."),
 		service.NewBoolField(fieldDiscardUnknown).
-			Description("If `true`, the `from_json` operator discards fields that are unknown to the schema.").
+			Description("When set to `true`, the `from_json` operator discards fields that are unknown to the schema.").
 			ShortDescription("Discard fields that are unknown to the schema.").
 			Default(false),
 		service.NewBoolField(fieldUseProtoNames).
-			Description("If `true`, the `to_json` or `decode` operator deserializes fields exactly as named in schema file.").
+			Description("When set to `true`, the `to_json` or `decode` operator deserializes fields exactly as named in the schema file.").
 			ShortDescription("Deserialize fields exactly as named in the schema file.").
 			Default(false),
 		service.NewStringListField(fieldImportPaths).
-			Description("A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported. Either this field or `bsr` must be populated.").
+			Description("A list of directories that contain `.proto` files, including all definitions required for parsing the target message. If left empty, the current directory is used. This processor walks each listed directory and imports all `.proto` files it finds. Either this field or `bsr` must be populated.").
 			ShortDescription("Directories containing the .proto files needed to parse the target message. Defaults to the current directory.").
 			Default([]string{}),
 		service.NewBoolField(fieldUseEnumNumbers).
-			Description("If `true`, the `to_json` or `decode` operator deserializes enums as numerical values instead of string names.").
+			Description("When set to `true`, the `to_json` or `decode` operator deserializes enumeration fields as their numerical values instead of their string names. For example, an enum field with a value of `ENUM_VALUE_ONE` is represented as `1` in the JSON output.").
 			ShortDescription("Deserialize enums as numeric values rather than string names.").
 			Default(false),
 		service.NewObjectListField(fieldBSRConfig,

@@ -44,7 +44,7 @@ func sftpOutputSpec() *service.ConfigSpec {
 		Fields(connectionFields()...).
 		Fields(
 			service.NewInterpolatedStringField(soFieldPath).
-				Description("The file to save the messages to on the server."),
+				Description("The file to save the messages to on the SFTP server."),
 			service.NewStringAnnotatedEnumField(soFieldCodec, map[string]string{
 				"all-bytes": "Only applicable to file based outputs. Writes each message to a file in full, if the file already exists the old content is deleted.",
 				"append":    "Append each message to the output stream without any delimiter or special encoding.",

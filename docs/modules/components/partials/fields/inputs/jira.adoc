@@ -80,7 +80,7 @@ Maximum number of retries on 429 responses.
 
 === `base_url`
 
-Base URL of the target service (e.g., https://api.example.com). TLS is enabled automatically for https URLs.
+The base URL of the target service (for example, `https://api.example.com`). TLS is enabled automatically for `https` URLs.
 
 *Type*: `string`
 

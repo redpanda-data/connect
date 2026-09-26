@@ -75,36 +75,40 @@ Exposes an OpenTelemetry Collector HTTP receiver that accepts traces, logs, and 
 Telemetry data is received in OTLP format (protobuf or JSON) and converted to individual Redpanda OTEL v1 messages.
 Each signal (span, log record, or metric) becomes a separate message with embedded Resource and Scope metadata.
 
-## Endpoints
+== Endpoints
 
-- `+"`/v1/traces`"+` - OpenTelemetry traces
-- `+"`/v1/logs`"+` - OpenTelemetry logs
-- `+"`/v1/metrics`"+` - OpenTelemetry metrics
+- `+"`/v1/traces`"+`: OpenTelemetry traces
+- `+"`/v1/logs`"+`: OpenTelemetry logs
+- `+"`/v1/metrics`"+`: OpenTelemetry metrics
 
-## Protocols
+== Protocols
 
 This input supports OTLP/HTTP on the default port 4318. It accepts both:
-- `+"`application/x-protobuf`"+` - OTLP protobuf format
-- `+"`application/json`"+` - OTLP JSON format
 
-## Output Format
+- `+"`application/x-protobuf`"+`: OTLP protobuf format
+- `+"`application/json`"+`: OTLP JSON format
+
+== Output format
 
 Each OTLP export request is unbatched into individual messages:
-- **Traces**: One message per span
-- **Logs**: One message per log record
-- **Metrics**: One message per metric
 
-Messages are encoded in Redpanda OTEL v1 format (protobuf or JSON, configurable via `+"`encoding`"+` field).
+- *Traces*: One message per span
+- *Logs*: One message per log record
+- *Metrics*: One message per metric
+
+Messages are encoded in Redpanda OTEL v1 format (protobuf or JSON, configurable using the `+"`encoding`"+` field).
 
 Each message includes the following metadata:
-- `+"`otel_signal_type`"+`: The signal type - "trace", "log", or "metric"
-- `+"`otel_encoding`"+` : The message encoding - "json" or "protobuf"
 
-## Authentication
+- `+"`otel_signal_type`"+`: The signal type (`+"`trace`"+`, `+"`log`"+`, or `+"`metric`"+`)
+- `+"`otel_encoding`"+`: The message encoding (`+"`json`"+` or `+"`protobuf`"+`)
 
-When `+"`auth_token`"+` is configured, clients must include the token in the HTTP Authorization header:
+== Authentication
 
-**Go Client Example:**
+When `+"`auth_token`"+` is configured, clients must include the token in the HTTP `+"`Authorization`"+` header:
+
+*Go client example:*
+
 `+"```go"+`
 import (
     "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -119,7 +123,8 @@ exporter, err := otlptracehttp.New(ctx,
 )
 `+"```"+`
 
-**cURL Example:**
+*cURL example:*
+
 `+"```bash"+`
 curl -X POST http://localhost:4318/v1/traces \
   -H "Content-Type: application/x-protobuf" \
@@ -127,19 +132,18 @@ curl -X POST http://localhost:4318/v1/traces \
   --data-binary @traces.pb
 `+"```"+`
 
-**Environment Variable:**
+*Environment variable:*
+
 `+"```bash"+`
 export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer your-token-here"
 `+"```"+`
 
-## Rate Limiting
+== Rate limiting
 
-An optional rate limit resource can be specified to throttle incoming requests. When the rate limit is breached, requests will receive a 429 (Too Many Requests) response.
+You can specify an optional rate limit resource using the `+"`rate_limit`"+` field to throttle incoming requests. When the rate limit is reached, the input delays processing each request until the rate limit resource grants access.
 `).
 		Fields(
-			service.NewStringEnumField(fieldEncoding, "protobuf", "json").
-				Description("Encoding format for messages in the batch. Options: 'protobuf' or 'json'.").
-				Default(string(EncodingJSON)),
+			inputEncodingField(),
 			service.NewStringField(hiFieldAddress).
 				Description("The address to listen on for HTTP connections.").
 				Default(defaultHTTPAddress),
@@ -164,14 +168,9 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 				Description("Maximum size of HTTP request body in bytes.").
 				Default(defaultHTTPMaxBodySize).
 				Advanced(),
-			service.NewStringField(fieldRateLimit).
-				Description("An optional rate limit resource to throttle requests.").
-				Default(""),
+			inputRateLimitField(),
 			netutil.ListenerConfigSpec(),
-			service.NewObjectField(schemaRegistryField, schemaRegistryConfigFields()...).
-				Description("Optional Schema Registry configuration for adding Schema Registry wire format headers to messages.").
-				Optional().
-				Advanced(),
+			inputSchemaRegistryField(),
 		)
 }
 
