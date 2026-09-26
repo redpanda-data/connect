@@ -183,7 +183,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Description("Customize messages returned using xref:guides:sync_responses.adoc[synchronous responses].").
 				ShortDescription("Customize messages returned using synchronous responses.").
 				Advanced(),
-			netutil.ListenerConfigSpec(),
+			netutil.ListenerConfigSpec().Version("4.72.0"),
 		)
 }
 

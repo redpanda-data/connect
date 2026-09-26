@@ -51,7 +51,7 @@ func IAMAuthStaticCredentialFields() []*service.ConfigField {
 // IAM authentication block. When exclusive is true, role and roles cannot both
 // be set; otherwise role is assumed first, followed by each entry of roles.
 func IAMAuthRoleFields(exclusive bool) []*service.ConfigField {
-	role := service.NewStringField("role").Optional()
+	role := service.NewStringField("role").Optional().Version("4.72.0")
 	roles := service.NewObjectListField("roles",
 		service.NewStringField("role").
 			Default("").
@@ -62,7 +62,7 @@ func IAMAuthRoleFields(exclusive bool) []*service.ConfigField {
 			Optional(),
 	).
 		ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
-		Optional()
+		Optional().Version("4.72.0")
 
 	const (
 		roleDesc  = "Optional AWS IAM role ARN to assume for authentication."

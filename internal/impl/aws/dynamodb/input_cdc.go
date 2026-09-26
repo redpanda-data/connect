@@ -257,7 +257,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Description("Maximum number of shards to track simultaneously. Prevents memory issues with extremely large tables.").
 				Default(10000).
 				Advanced(),
-			service.NewAutoRetryNacksToggleField(),
+			service.NewAutoRetryNacksToggleField().Version("4.106.0"),
 			service.NewDurationField(dciFieldThrottleBackoff).
 				Description("Time to wait when applying backpressure due to too many in-flight messages.").
 				Default(defaultDynamoDBThrottleBackoff).

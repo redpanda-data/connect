@@ -75,6 +75,7 @@ This input adds the following metadata fields to each message:
 
 func redpandaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.39.0").
 		Stable().
 		Categories("Services").
 		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).

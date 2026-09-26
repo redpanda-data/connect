@@ -24,6 +24,7 @@ import (
 
 func otlpTracerSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.5.0").
 		Summary("Send tracing events to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].").
 		Fields(
 			service.NewStringField(otFieldService).

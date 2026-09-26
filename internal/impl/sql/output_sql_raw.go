@@ -38,7 +38,7 @@ func sqlRawOutputConfig() *service.ConfigSpec {
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);").Optional()).
-		Field(unsafeDynamicQueryField()).
+		Field(unsafeDynamicQueryField().Version("4.8.0")).
 		Field(rawQueryArgsMappingField()).
 		Field(service.NewObjectListField(
 			"queries",

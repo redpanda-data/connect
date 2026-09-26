@@ -198,7 +198,7 @@ func Fields() []*service.ConfigField {
 			Description("HTTP request timeout.").Version("4.83.0").
 			Default("5s"),
 
-		service.NewTLSToggledField(cFieldTLS),
+		service.NewTLSToggledField(cFieldTLS).Version("4.83.0"),
 
 		service.NewStringField(cFieldProxyURL).
 			Description("HTTP proxy URL. Empty string disables proxying.").Version("4.83.0").
@@ -234,7 +234,7 @@ func Fields() []*service.ConfigField {
 				Default(3),
 		).Description("Adaptive backoff configuration for 429 (Too Many Requests) responses. Always active.").Version("4.83.0").
 			Advanced(),
-		netutil.DialerConfigSpec(),
+		netutil.DialerConfigSpec().Version("4.83.0"),
 		httpTransportFieldSpec(),
 
 		service.NewStringEnumField(cFieldAccessLogLevel, "",

@@ -54,7 +54,7 @@ const (
 func FranzProducerLimitsFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewDurationField(kfwFieldTimeout).
-			Description(kafkaOutputTimeoutDescription).
+			Description(kafkaOutputTimeoutDescription).Version("4.3.0").
 			Default("10s").
 			Advanced(),
 		service.NewStringField(kfwFieldMaxMessageBytes).
@@ -411,7 +411,7 @@ func FranzWriterConfigFields() []*service.ConfigField {
 			Advanced().
 			Deprecated(),
 		service.NewInterpolatedStringField(kfwFieldTimestampMs).
-			Description(kafkaOutputTimestampMsDescription).
+			Description(kafkaOutputTimestampMsDescription).Version("4.40.0").
 			Example(`${! timestamp_unix_milli() }`).
 			Example(`${! metadata("kafka_timestamp_ms") }`).
 			Optional().

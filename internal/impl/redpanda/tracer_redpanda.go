@@ -152,7 +152,7 @@ tracer:
 					[]*service.ConfigField{
 						service.NewURLField("url").Description(schemaregistry.URLFieldDescription).Optional(),
 						service.NewTLSField("tls"),
-						oauth2.FieldSpec(),
+						oauth2.FieldSpec().Version("4.74.0"),
 					},
 					service.NewHTTPRequestAuthSignerFields(),
 				)...,

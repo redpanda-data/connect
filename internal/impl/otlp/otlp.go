@@ -42,7 +42,7 @@ func collectorListFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewObjectListField(otFieldHTTP,
 			service.NewStringField("address").
-				Description(collectorAddressDescription).
+				Description(collectorAddressDescription).Version("4.26.0").
 				Optional().
 				Example("localhost:4318"),
 			service.NewStringField("url").
@@ -55,7 +55,7 @@ func collectorListFields() []*service.ConfigField {
 		).Description("A list of http collectors."),
 		service.NewObjectListField(otFieldGRPC,
 			service.NewURLField("address").
-				Description(collectorAddressDescription).
+				Description(collectorAddressDescription).Version("4.26.0").
 				Optional().
 				Example("localhost:4317"),
 			service.NewURLField("url").

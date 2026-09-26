@@ -98,7 +98,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 				Description("Optional path prefix, if set only objects with the prefix are consumed.").
 				Default(""),
 			service.NewStringField(csiFieldCredentialsJSON).
-				Description(credentialsJSONDescription).
+				Description(credentialsJSONDescription).Version("4.33.0").
 				Default("").
 				Secret(),
 		).

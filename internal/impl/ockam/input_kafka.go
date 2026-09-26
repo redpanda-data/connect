@@ -41,6 +41,7 @@ func init() {
 
 func ockamKafkaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.33.0").
 		Summary("Uses Ockam to decrypt and read end-to-end encrypted messages from Kafka topics.").
 		Categories("Services").
 		Field(service.NewObjectField("kafka", slices.Concat(
