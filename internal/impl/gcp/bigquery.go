@@ -168,3 +168,33 @@ func parseQueryPriority(config *service.ParsedConfig, fieldName string) (bigquer
 		return "", fmt.Errorf("unrecognised query priority: %s", rawPriority)
 	}
 }
+
+// Fields shared by the gcp_bigquery_select input and processor.
+
+func bqSelectProjectField() *service.ConfigField {
+	return service.NewStringField("project").
+		Description("The GCP project where the query job runs.")
+}
+
+func bqSelectTableField() *service.ConfigField {
+	return service.NewStringField("table").
+		Description("The fully-qualified name of the BigQuery table to query.").
+		Example("bigquery-public-data.samples.shakespeare")
+}
+
+func bqSelectWhereField() *service.ConfigField {
+	return service.NewStringField("where").
+		Description("An optional `WHERE` clause to add to the query. The `args_mapping` field populates the placeholder arguments. Placeholders must always be question marks (`?`).").
+		ShortDescription("An optional where clause. Placeholders must be question marks, populated from args_mapping.").
+		Example("type = ? and created_at > ?").
+		Example("user_id = ?").
+		Optional()
+}
+
+// bqJobLabelsField returns the job_labels field for a component that runs
+// BigQuery jobs of the given kind, such as "query" or "load".
+func bqJobLabelsField(jobKind string) *service.ConfigField {
+	return service.NewStringMapField("job_labels").
+		Description("A map of labels to add to the " + jobKind + " job.").
+		Default(map[string]any{})
+}

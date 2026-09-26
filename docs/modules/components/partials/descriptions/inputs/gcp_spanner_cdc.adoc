@@ -16,7 +16,7 @@ Introduced in version 4.56.0.
 endif::[]
 
 Consumes change records from a Google Cloud Spanner change stream. This input allows
-you to track and process database changes in real-time, making it useful for data
+you to track and process database changes in real time, making it useful for data
 replication, event-driven architectures, and maintaining derived data stores.
 
 The input reads from a specified change stream within a Spanner database and converts
@@ -25,6 +25,5 @@ JSON format, and metadata is added with details about the Spanner instance, data
 and stream.
 
 Change streams provide a way to track mutations to your Spanner database tables. For
-more information about Spanner change streams, refer to the Google Cloud documentation:
-https://cloud.google.com/spanner/docs/change-streams
+more information about Spanner change streams, refer to the link:https://cloud.google.com/spanner/docs/change-streams[Google Cloud documentation^].
 // end::body[]

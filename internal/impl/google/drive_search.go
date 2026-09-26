@@ -51,15 +51,18 @@ Search results are emitted as message batch, where each message is a https://dev
 		Fields(commonFields()...).
 		Fields(
 			service.NewInterpolatedStringField(driveSearchFieldQuery).
-				Description("The search query to use for finding files in Google Drive. Supports the same query format as the Google Drive UI."),
+				Description(`Specify a search query to locate matching files in Google Drive. This field supports:
+
+- The same query syntax as the Google Drive UI
+- xref:configuration:interpolation.adoc#bloblang-queries[Bloblang interpolation functions] for dynamic query generation`),
 			service.NewStringListField(driveSearchFieldProjection).
-				Description("The partial fields to include in the result.").
+				Description("Partial fields to include in the Google Drive search result.").
 				Default([]any{"id", "name", "mimeType", "size", "labelInfo"}),
 			service.NewInterpolatedStringField(driveSearchFieldLabels).
-				Description("A comma delimited list of label IDs to include in the result").
+				Description("A comma delimited list of label IDs to include in the Google Drive search result.").
 				Default(""),
 			service.NewIntField(driveSearchFieldMaxResults).
-				Description("The maximum number of results to return.").
+				Description("The maximum number of search results to return.").
 				Default(64),
 			service.NewBoolField(driveSearchFieldSupportSharedDrives).
 				Description("Whether or not to include shared drives in the result.").

@@ -192,16 +192,16 @@ For the CSV format when the field ` + "`csv.header`" + ` is specified a header r
 For parquet, the data can be encoded using the ` + "`parquet_encode`" + ` processor and each message that is sent to the output must be a full parquet message.
 
 ` + service.OutputPerformanceDocs(true, true)).
-		Field(service.NewStringField("project").Description("The project ID of the dataset to insert data to. If not set, it will be inferred from the credentials or read from the GOOGLE_CLOUD_PROJECT environment variable.").
+		Field(service.NewStringField("project").Description("Specify the project ID of the dataset to insert data into. If not set, the project ID is inferred from the project linked to the service account or read from the `GOOGLE_CLOUD_PROJECT` environment variable.").
 			ShortDescription("The project ID of the dataset to insert into. Inferred from credentials or GOOGLE_CLOUD_PROJECT if unset.").Default("")).
-		Field(service.NewStringField("job_project").Description("The project ID in which jobs will be executed. If not set, project will be used.").Default("")).
+		Field(service.NewStringField("job_project").Description("Specify the project ID in which jobs are executed. If not set, the `project` value is used.").Default("")).
 		Field(service.NewStringField("dataset").Description("The BigQuery Dataset ID.")).
-		Field(service.NewStringField("table").Description("The table to insert messages to.")).
+		Field(service.NewStringField("table").Description("The table to insert messages into.")).
 		Field(service.NewStringEnumField("format", string(bigquery.JSON), string(bigquery.CSV), string(bigquery.Parquet)).
 			Description("The format of each incoming message.").
 			Default(string(bigquery.JSON))).
 		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of message batches to have in flight at a given time. Increase this to improve throughput.").
+			Description("The maximum number of message batches to have in flight at a given time. Increase this value to improve throughput.").
 			Default(64)). // TODO: Tune this default
 		Field(service.NewStringEnumField("write_disposition",
 			string(bigquery.WriteAppend), string(bigquery.WriteEmpty), string(bigquery.WriteTruncate)).
@@ -209,52 +209,66 @@ For parquet, the data can be encoded using the ` + "`parquet_encode`" + ` proces
 			Advanced().
 			Default(string(bigquery.WriteAppend))).
 		Field(service.NewStringEnumField("create_disposition", string(bigquery.CreateIfNeeded), string(bigquery.CreateNever)).
-			Description("Specifies the circumstances under which destination table will be created. If CREATE_IF_NEEDED is used the GCP BigQuery will create the table if it does not already exist and tables are created atomically on successful completion of a job. The CREATE_NEVER option ensures the table must already exist and will not be automatically created.").
+			Description(`Specifies the circumstances under which a destination table is created.
+
+* Use ` + "`" + `CREATE_IF_NEEDED` + "`" + ` to create the destination table if it does not already exist. Tables are created atomically on successful completion of a job.
+* Use ` + "`" + `CREATE_NEVER` + "`" + ` if the destination table must already exist. Tables are not created automatically.`).
 			ShortDescription("When the destination table should be created, such as CREATE_IF_NEEDED.").
 			Advanced().
 			Default(string(bigquery.CreateIfNeeded))).
 		Field(service.NewBoolField("ignore_unknown_values").
-			Description("Causes values not matching the schema to be tolerated. Unknown values are ignored. For CSV this ignores extra values at the end of a line. For JSON this ignores named values that do not match any column name. If this field is set to false (the default value), records containing unknown values are treated as bad records. The max_bad_records field can be used to customize how bad records are handled.").
+			Description(`Set this value to ` + "`" + `true` + "`" + ` to tolerate values that do not match the schema. Unknown values are ignored:
+
+* For the ` + "`" + `CSV` + "`" + ` format, extra values at the end of a line are ignored.
+* For the ` + "`" + `NEWLINE_DELIMITED_JSON` + "`" + ` format, values that do not match any column name are ignored.
+
+By default, this value is set to ` + "`" + `false` + "`" + `, and records containing unknown values are treated as bad records. Use the ` + "`" + `max_bad_records` + "`" + ` field to customize how bad records are handled.`).
 			ShortDescription("Tolerate values that do not match the schema, ignoring them rather than failing the write.").
 			Advanced().
 			Default(false)).
 		Field(service.NewIntField("max_bad_records").
-			Description("The maximum number of bad records that will be ignored when reading data.").
+			Description("The maximum number of bad records that BigQuery ignores when reading data. This includes records with unknown values when `ignore_unknown_values` is `false`. If the number of bad records exceeds this value, the load job fails.").
 			Advanced().
 			Default(0)).
 		Field(service.NewBoolField("auto_detect").
-			Description("Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exist and this field is set to `false` the output may not be able to insert data and will throw insertion error. Be careful using this field since it delegates to the GCP BigQuery service the schema detection and values like `\"no\"` may be treated as booleans for the CSV format.").
+			Description(`Whether this component automatically infers the options and schema for ` + "`" + `CSV` + "`" + ` and ` + "`" + `NEWLINE_DELIMITED_JSON` + "`" + ` sources.
+
+If this value is set to ` + "`" + `false` + "`" + ` and the destination table doesn't exist, the output throws an insertion error as it is unable to insert data.
+
+CAUTION: This field delegates schema detection to the GCP BigQuery service. For the ` + "`" + `CSV` + "`" + ` format, values like ` + "`" + `no` + "`" + ` may be treated as booleans.`).
 			ShortDescription("Automatically infer options and schema for CSV and JSON sources.").
 			Advanced().
 			Default(false)).
-		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the load job.").Default(map[string]any{})).
-		Field(service.NewStringField("credentials_json").Description("An optional field to set Google Service Account Credentials json.").Secret().Default("")).
+		Field(bqJobLabelsField("load")).
+		Field(service.NewStringField("credentials_json").Description(`Sets the https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account[Google Service Account Credentials JSON^] (optional).
+
+WARNING: When using xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] to populate this field, wrap the function in single quotes, not double quotes. For example, use ` + "`" + `'${secrets.GCP_CREDENTIALS_JSON}'` + "`" + ` instead of ` + "`" + `"${secrets.GCP_CREDENTIALS_JSON}"` + "`" + `. Double quotes cause JSON parsing errors because the credentials already contain JSON content.`).Secret().Default("")).
 		Field(service.NewObjectField("csv",
 			service.NewStringListField("header").
-				Description("A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header.").
+				Description("A list of values to use as the header for each batch of messages. If not specified, the first line of each message is used as the header.").
 				ShortDescription("Values to use as the header for each batch. The first line of each message is used if unset.").
 				Default([]any{}),
 			service.NewStringField("field_delimiter").
-				Description("The separator for fields in a CSV file, used when reading or exporting data.").
+				Description("The separator for fields in a CSV file. The output uses this value when reading or exporting data.").
 				Default(","),
 			service.NewBoolField("allow_jagged_rows").
-				Description("Causes missing trailing optional columns to be tolerated when reading CSV data. Missing values are treated as nulls.").
+				Description("Set to `true` to tolerate missing trailing optional columns in CSV data. Missing values are treated as nulls.").
 				Advanced().
 				Default(false),
 			service.NewBoolField("allow_quoted_newlines").
-				Description("Sets whether quoted data sections containing newlines are allowed when reading CSV data.").
+				Description("Whether quoted data sections containing new lines are allowed when reading CSV data.").
 				Advanced().
 				Default(false),
 			service.NewStringEnumField("encoding", string(bigquery.UTF_8), string(bigquery.ISO_8859_1)).
-				Description("Encoding is the character encoding of data to be read.").
+				Description("The character encoding of CSV data.").
 				Advanced().
 				Default(string(bigquery.UTF_8)),
 			service.NewIntField("skip_leading_rows").
-				Description("The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is 1 since Redpanda Connect will add the specified header in the first line of each batch sent to BigQuery.").
+				Description("The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is `1`, which allows Redpanda Connect to add the specified header in the first line of each batch sent to BigQuery.").
 				ShortDescription("Number of rows at the top of a CSV file that BigQuery skips when reading.").
 				Advanced().
 				Default(1),
-		).Description("Specify how CSV data should be interpreted.")).
+		).Description("Specify how CSV data is interpreted.")).
 		Field(service.NewBatchPolicyField("batching"))
 }
 

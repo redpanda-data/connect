@@ -28,7 +28,7 @@ Maximum number of unacknowledged messages before forcing a checkpoint update. Lo
 
 === `checkpoint_namespace`
 
-An optional namespace for checkpoints, allowing multiple independent pipelines (for example one per developer or environment) to share a single checkpoint table without overwriting each other's positions. Checkpoints written under one namespace are invisible to pipelines using a different namespace (or none), so changing this value causes the pipeline to restart from `start_from`. Must not contain `#`.
+Isolates this pipeline's checkpoints within a shared `checkpoint_table` by prefixing the namespace to the checkpoint key. Use this so that multiple pipelines reading the same stream can share one checkpoint table without overwriting each other's positions, for example per-developer or per-environment test pipelines. Leave empty (the default) to keep the original checkpoint keys unchanged. A namespace isolates readers but does not coordinate them: pipelines that share the same namespace still collide. Changing or removing the namespace changes the checkpoint key. If no checkpoints exist yet under the new key, the pipeline starts from `start_from`. Switching back to a previously used namespace resumes from that namespace's last checkpoints. The value cannot contain a `#` character.
 
 *Type*: `string`
 
@@ -44,7 +44,7 @@ DynamoDB table name for storing checkpoints. Will be created if it doesn't exist
 
 === `credentials`
 
-Optional manual configuration of AWS credentials to use. More information can be found in xref:guides:cloud/aws.adoc[].
+Manually configure the AWS credentials to use (optional). For more information, see the xref:guides:cloud/aws.adoc[Amazon Web Services guide].
 
 *Type*: `object`
 
@@ -60,31 +60,31 @@ endif::[]
 
 === `credentials.id`
 
-The ID of credentials to use.
+The ID of the AWS credentials to use.
 
 *Type*: `string`
 
 === `credentials.profile`
 
-A profile from `~/.aws/credentials` to use.
+The profile from `~/.aws/credentials` to use.
 
 *Type*: `string`
 
 === `credentials.role`
 
-A role ARN to assume.
+The ARN of the role to assume.
 
 *Type*: `string`
 
 === `credentials.role_external_id`
 
-An external ID to provide when assuming a role.
+An external ID to use when assuming a role.
 
 *Type*: `string`
 
 === `credentials.secret`
 
-The secret for the credentials being used.
+The secret for the AWS credentials in use.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -92,19 +92,23 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `credentials.token`
 
-The token for the credentials being used, required when using short term credentials.
+The token for the AWS credentials in use. Required only when using short-term credentials.
 
 *Type*: `string`
 
 === `endpoint`
 
-Allows you to specify a custom endpoint for the AWS API.
+A custom endpoint URL for AWS API requests. Use this to connect to AWS-compatible services or local testing environments instead of the standard AWS endpoints.
 
 *Type*: `string`
 
 === `global_table`
 
-Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. When the table is auto-created it is created as a global table; when it already exists, its replicas are reconciled (missing regions are added via `UpdateTable`). The existing table must have been created in global mode (`TableId` hash key); enabling this against a pre-existing non-global checkpoint table fails fast with a clear error.
+Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. When the table is auto-created it is created as a global table; when it already exists, its replicas are reconciled (missing regions are added by calling `UpdateTable`). The existing table must have been created in global mode (`TableId` hash key). Enabling this against a pre-existing non-global checkpoint table fails fast with a clear error.
+
+ifndef::env-cloud[]
+Requires version 4.99.0 or later.
+endif::[]
 
 *Type*: `bool`
 
@@ -113,6 +117,10 @@ Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints re
 === `global_table_replicas[]`
 
 Regions other than this pipeline's own region to replicate the checkpoint table to. The pipeline's own region is always included. Required when `global_table` is true. Applied both when the checkpoint table is created and, for an existing global table, when reconciling replicas (missing regions are added; this list is not used to remove regions).
+
+ifndef::env-cloud[]
+Requires version 4.99.0 or later.
+endif::[]
 
 *Type*: `array<string>`
 
@@ -136,7 +144,7 @@ Time to wait between polling attempts when no records are available.
 
 === `region`
 
-The AWS region to target.
+The AWS region in which your resources are hosted.
 
 *Type*: `string`
 
@@ -166,7 +174,7 @@ Deduplicate records that appear in both snapshot and CDC stream. Requires buffer
 
 === `snapshot_mode`
 
-Snapshot behavior. `none`: CDC only (default). `snapshot_only`: one-time table scan, no streaming. `snapshot_and_cdc`: scan entire table then stream changes.
+`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes.
 
 *Type*: `string`
 
@@ -176,7 +184,7 @@ Snapshot behavior. `none`: CDC only (default). `snapshot_only`: one-time table s
 
 === `snapshot_segments`
 
-Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more RCUs. Start with 1 for safety.
+Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more Read Capacity Units (RCUs). A lower value is safer to start with.
 
 *Type*: `int`
 
@@ -184,7 +192,7 @@ Number of parallel scan segments (1-10). Higher parallelism scans faster but con
 
 === `snapshot_throttle`
 
-Minimum time between scan requests per segment. Use this to limit RCU consumption during snapshot.
+Minimum time between scan requests per segment. Use this to limit Read Capacity Unit (RCU) consumption during snapshot.
 
 *Type*: `string`
 
@@ -212,7 +220,7 @@ Interval for rescanning and discovering new tables when using `tag` or `includel
 
 === `table_discovery_mode`
 
-Table discovery mode. `single`: stream from tables specified in `tables` list. `tag`: auto-discover tables by tags (ignores `tables` field). `includelist`: stream from tables in `tables` list (alias for `single`, kept for compatibility).
+`single`: Streams from tables specified in the `tables` list. `tag`: Auto-discovers tables by tags (ignores the `tables` field). `includelist`: Streams from tables in the `tables` list. Use `single` instead; `includelist` is kept for backward compatibility.
 
 *Type*: `string`
 
@@ -222,7 +230,7 @@ Table discovery mode. `single`: stream from tables specified in `tables` list. `
 
 === `table_tag_filter`
 
-Multi-tag filter: 'key1:v1,v2;key2:v3,v4'. Matches tables with (key1=v1 OR key1=v2) AND (key2=v3 OR key2=v4). Required when `table_discovery_mode` is `tag`.
+Multi-tag filter in the format `key1:v1,v2;key2:v3,v4`. Matches tables where (key1=v1 OR key1=v2) AND (key2=v3 OR key2=v4). Required when `table_discovery_mode` is `tag`.
 
 *Type*: `string`
 

@@ -18,7 +18,7 @@ account_key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZ
 
 === `args_mapping`
 
-A xref:guides:bloblang/about.adoc[Bloblang mapping] that, for each message, creates a list of arguments to use with the query.
+A xref:guides:bloblang/about.adoc[Bloblang mapping] that creates the list of parameters to use with the query. Each parameter is an object with a `Name` field, which matches a named parameter in the query such as `@name`, and a `Value` field. The input evaluates this mapping once, when the input is created, so the mapping cannot reference message contents or metadata.
 
 *Type*: `string`
 

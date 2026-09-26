@@ -4,7 +4,7 @@
 
 === `credentials_json`
 
-A service account credentials JSON file. If left unset then the application default credentials are used.
+The JSON key for your service account (optional). If left empty, Application Default Credentials are used.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -12,7 +12,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `export_mime_types`
 
-A map of Google Drive MIME types to their export formats. The key is the MIME type, and the value is the export format. See https://developers.google.com/workspace/drive/api/guides/ref-export-formats[^Google Drive API Documentation] for a list of supported export types
+Maps Google Drive MIME types to https://developers.google.com/workspace/drive/api/guides/ref-export-formats[supported file export formats^]. The MIME type is the key, and the export format is the value.
 
 *Type*: `object`
 
@@ -46,7 +46,7 @@ export_mime_types:
 
 === `file_id`
 
-The file ID of the file to download.
+The ID of the file to download from Google Drive.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -54,7 +54,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `mime_type`
 
-The mime type of the file in drive.
+The https://developers.google.com/workspace/drive/api/guides/mime-types[MIME type^] of the file for download.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 

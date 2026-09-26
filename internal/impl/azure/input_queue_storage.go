@@ -78,7 +78,7 @@ This input adds the following metadata fields to each message:
 Only one authentication method is required, `+"`storage_connection_string`"+` or `+"`storage_account` and `storage_access_key`"+`. If both are set then the `+"`storage_connection_string`"+` is given priority.`).
 		Fields(
 			service.NewInterpolatedStringField(qsiFieldQueueName).
-				Description("The name of the source storage queue.").
+				Description(`The name of the source storage queue.`).
 				Example("foo_queue").
 				Example(`${! env("MESSAGE_TYPE").lowercase() }`),
 			service.NewDurationField(qsiFieldDequeueVisibilityTimeout).

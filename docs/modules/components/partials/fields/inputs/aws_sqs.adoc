@@ -4,7 +4,7 @@
 
 === `credentials`
 
-Optional manual configuration of AWS credentials to use. More information can be found in xref:guides:cloud/aws.adoc[].
+Manually configure the AWS credentials to use (optional). For more information, see the xref:guides:cloud/aws.adoc[Amazon Web Services guide].
 
 *Type*: `object`
 
@@ -20,31 +20,31 @@ endif::[]
 
 === `credentials.id`
 
-The ID of credentials to use.
+The ID of the AWS credentials to use.
 
 *Type*: `string`
 
 === `credentials.profile`
 
-A profile from `~/.aws/credentials` to use.
+The profile from `~/.aws/credentials` to use.
 
 *Type*: `string`
 
 === `credentials.role`
 
-A role ARN to assume.
+The ARN of the role to assume.
 
 *Type*: `string`
 
 === `credentials.role_external_id`
 
-An external ID to provide when assuming a role.
+An external ID to use when assuming a role.
 
 *Type*: `string`
 
 === `credentials.secret`
 
-The secret for the credentials being used.
+The secret for the AWS credentials in use.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -52,13 +52,13 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `credentials.token`
 
-The token for the credentials being used, required when using short term credentials.
+The token for the AWS credentials in use. Required only when using short-term credentials.
 
 *Type*: `string`
 
 === `delete_message`
 
-Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.
+Whether to delete the consumed message when it's acknowledged. Set to `false` to handle the deletion using a different mechanism.
 
 *Type*: `bool`
 
@@ -66,13 +66,13 @@ Whether to delete the consumed message once it is acked. Disabling allows you to
 
 === `endpoint`
 
-Allows you to specify a custom endpoint for the AWS API.
+A custom endpoint URL for AWS API requests. Use this to connect to AWS-compatible services or local testing environments instead of the standard AWS endpoints.
 
 *Type*: `string`
 
 === `max_number_of_messages`
 
-The maximum number of messages to return on one poll. Valid values: 1 to 10.
+The maximum number of messages that Redpanda Connect can return each time it polls the SQS queue. Enter a value from `1` to `10`.
 
 *Type*: `int`
 
@@ -80,7 +80,7 @@ The maximum number of messages to return on one poll. Valid values: 1 to 10.
 
 === `max_outstanding_messages`
 
-The maximum number of outstanding pending messages to be consumed at a given time.
+The maximum number of pending messages that Redpanda Connect can have in flight at the same time.
 
 *Type*: `int`
 
@@ -88,7 +88,7 @@ The maximum number of outstanding pending messages to be consumed at a given tim
 
 === `message_timeout`
 
-The time to process messages before needing to refresh the receipt handle. Messages will be eligible for refresh when half of the timeout has elapsed. This sets MessageVisibility for each received message.
+The maximum time allowed to process a received message before Redpanda Connect must refresh its https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-queue-message-identifiers.html[receipt handle^]. If the handle is not refreshed in time, the message becomes visible in the queue again. Redpanda Connect attempts to refresh the receipt handle after half of the timeout has elapsed. This value sets the visibility timeout for each received message.
 
 *Type*: `string`
 
@@ -96,13 +96,13 @@ The time to process messages before needing to refresh the receipt handle. Messa
 
 === `region`
 
-The AWS region to target.
+The AWS region in which your resources are hosted.
 
 *Type*: `string`
 
 === `reset_visibility`
 
-Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.
+Whether to set the visibility timeout of the consumed message to zero when Redpanda Connect receives a negative acknowledgement, which releases the message immediately for reprocessing. Set to `false` to honor the https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html[queue's visibility timeout^] instead.
 
 ifndef::env-cloud[]
 Requires version 3.58.0 or later.
@@ -172,7 +172,7 @@ The SQS URL to consume from.
 
 === `wait_time_seconds`
 
-Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.
+The wait time, in seconds, for each receive request. Valid values are `0` to `20`. Set a value from `1` to `20` to enable https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html[long polling^] for queued messages.
 
 *Type*: `int`
 
