@@ -235,7 +235,7 @@ table: foo
 
 === `where`
 
-An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Placeholders should always be question marks, and will automatically be converted to dollar syntax when the postgres or clickhouse drivers are used.
+An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Always use question marks for placeholders. They are converted to dollar syntax (`$1`) when the `postgres`, `pgx`, or `clickhouse` driver is used, and to colon syntax (`:1`) when the `oracle` or `gocosmos` driver is used.
 
 *Type*: `string`
 

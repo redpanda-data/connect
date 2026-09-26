@@ -4,7 +4,11 @@
 
 === `handle_logical_types`
 
-Whether to be smart about decoding logical types. In the Parquet format, logical types are stored as one of the standard physical types with some additional metadata describing the logical type. For example, UUIDs are stored in a FIXED_LEN_BYTE_ARRAY physical type, but there is metadata in the schema denoting that it is a UUID. By default, this logical type metadata will be ignored and values will be decoded directly from the physical type, which isn't always desirable. By enabling this option, logical types will be given special treatment and will decode into more useful values. The value for this field specifies a version, i.e. v0, v1... Any given version enables the logical type handling for that version and all versions below it, which allows the handling of new logical types to be introduced without breaking existing pipelines. We recommend enabling the newest version available of this feature when creating new pipelines.
+Set to `v2` to enable enhanced decoding of logical types, or keep the default value (`v1`) to ignore logical type metadata when decoding values.
+
+In Parquet format, logical types are represented using standard physical types along with metadata that provides additional context. For example, UUIDs are stored as a `FIXED_LEN_BYTE_ARRAY` physical type, but the schema metadata identifies them as UUIDs. By enabling `v2`, this processor uses the metadata descriptions of logical types to produce more meaningful values during decoding.
+
+NOTE: Each version enables the logical type handling for that version and all earlier versions, which allows handling of new logical types to be introduced without breaking existing pipelines. When creating new pipelines, Redpanda recommends that you use the newest available version.
 
 *Type*: `string`
 

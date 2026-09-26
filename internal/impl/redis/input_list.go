@@ -44,7 +44,7 @@ func redisListInputConfig() *service.ConfigSpec {
 			service.NewAutoRetryNacksToggleField(),
 			service.NewInputMaxInFlightField().Version("4.9.0"),
 			service.NewDurationField("timeout").
-				Description("The length of time to poll for new messages before reattempting.").
+				Description(pollTimeoutDescription).
 				Default("5s").
 				Advanced(),
 			service.NewStringEnumField("command", string(bLPop), string(bRPop)).
@@ -54,6 +54,10 @@ func redisListInputConfig() *service.ConfigSpec {
 				Version("4.22.0"),
 		)
 }
+
+// pollTimeoutDescription describes the timeout field of the redis_list and
+// redis_streams inputs, which bounds each blocking read.
+const pollTimeoutDescription = "The length of time to poll for new messages before reattempting."
 
 func init() {
 	service.MustRegisterInput(

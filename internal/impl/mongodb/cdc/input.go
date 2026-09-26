@@ -230,27 +230,27 @@ Schema metadata is discovered using a two-tier strategy:
 				Description("The URL of the target MongoDB server.").
 				Example("mongodb://localhost:27017"),
 			service.NewStringField(fieldClientDatabase).
-				Description("The name of the target MongoDB database."),
+				Description("The name of the MongoDB database to stream changes from."),
 			service.NewStringField(fieldClientUsername).
-				Description("The username to connect to the database.").
+				Description(mongodb.ClientUsernameDescription).
 				Default(""),
 			service.NewStringField(fieldClientPassword).
-				Description("The password to connect to the database.").
+				Description(mongodb.ClientPasswordDescription).
 				Default("").
 				Secret(),
 			mongodb.AWSIAMAuthField(awsSessionDurationSnapshotNote),
 			service.NewStringListField(fieldCollections).
-				Description("The collections to stream changes from."),
+				Description("A list of collections to stream changes from. Specify each collection name as a separate item."),
 			service.NewStringField(fieldCheckpointKey).
-				Description("Checkpoint cache key name.").
+				Description("The key identifier used to store the stream's resume position in `checkpoint_cache`. If you have multiple `mongodb_cdc` inputs sharing the same cache, you can provide an alternative key.").
 				Default("mongodb_cdc_checkpoint"),
 			service.NewStringField(fieldCheckpointCache).
-				Description("Checkpoint cache name."),
+				Description("Specify a xref:components:caches/about.adoc[`cache` resource] to store the oplog position for the most recent data update streamed to Redpanda Connect. After a restart, Redpanda Connect can continue processing changes from this position, avoiding the need to reprocess all collection updates."),
 			service.NewDurationField(fieldCheckpointInterval).
 				Description("The interval between writing checkpoints to the cache.").
 				Default("5s"),
 			service.NewIntField(fieldCheckpointLimit).
-				Description("The maximum number of messages that can be in flight at a given time. Increasing this limit enables parallel processing and batching at the output level. The stream's resume position is only checkpointed once all messages before it are delivered, preserving at least once delivery guarantees.").
+				Description("The maximum number of in-flight messages emitted from this input. Increasing this limit enables parallel processing, and batching at the output level. To preserve at-least-once guarantees, the stream's resume position is only checkpointed once all messages before it are delivered.").
 				ShortDescription("The maximum number of messages that can be in flight at a given time.").
 				Default(1000),
 			service.NewDurationField(fieldCheckpointWriteTimeout).
@@ -264,23 +264,31 @@ Schema metadata is discovered using a two-tier strategy:
 				Default(onUnresumablePositionFail).
 				Advanced(),
 			service.NewIntField(fieldReadBatchSize).
-				Description("The batch size of documents for MongoDB to return.").
+				Description("The number of documents to fetch in each message batch from MongoDB.").
 				Default(1000),
 			service.NewDurationField(fieldReadMaxWait).
-				Description("The maximum time MongoDB waits to fulfill `read_batch_size` on the change stream before returning documents.").
+				Description("The maximum duration MongoDB waits to accumulate `read_batch_size` documents on a change stream before returning the batch to Redpanda Connect.").
 				ShortDescription("Maximum time MongoDB waits to fill read_batch_size on the change stream before returning.").
 				Default("1s"),
 			service.NewBoolField(fieldStreamSnapshot).
-				Description("If to read initial snapshot before streaming changes.").
+				Description("When set to `true`, this input streams a snapshot of all existing data in the source collections before streaming data changes.").
 				Default(false),
 			service.NewIntField(fieldSnapshotParallelism).
-				Description("Parallelism for snapshot phase.").
+				Description(`Specifies the number of connections to use when reading the initial snapshot from one or more collections. Increase this number to enable parallel processing of the snapshot.
+
+This feature uses the `+"`"+`$splitVector`+"`"+` command to split snapshot data into chunks for more efficient processing.
+
+This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"+`true`+"`"+`.`).
 				Default(1).
 				LintRule(`match {
   this < 1 => ["field snapshot_parallelism must be greater or equal to 1."],
 }`),
 			service.NewBoolField(fieldBucketSharding).
-				Description("If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `splitVector` command. This allows parallel collection reading in environments where privileged access to the MongoDB cluster is not allowed such as MongoDB Atlas.").
+				Description(`If set to `+"`"+`true`+"`"+`, uses the https://www.mongodb.com/docs/manual/reference/operator/aggregation/bucketAuto/[`+"`"+`$bucketAuto`+"`"+`^] aggregation stage instead of the default `+"`"+`splitVector`+"`"+` command to split the snapshot data into chunks for processing. This allows parallel collection reading in environments where privileged access to the MongoDB cluster is not allowed, such as MongoDB Atlas, where the `+"`"+`splitVector`+"`"+` command is not available. To enable parallel processing in these environments:
+
+- Set this field to `+"`"+`true`+"`"+`.
+- Set `+"`"+`stream_snapshot`+"`"+` to `+"`"+`true`+"`"+`.
+- Increase `+"`"+`snapshot_parallelism`+"`"+` to a value greater than `+"`"+`1`+"`"+`.`).
 				ShortDescription("Use $bucketAuto rather than splitVector to determine parallel snapshot chunks, avoiding privileged access.").
 				Default(false).
 				Advanced(),
@@ -304,7 +312,7 @@ Schema metadata is discovered using a two-tier strategy:
       }
       `,
 			}).
-				Description("The mode in which to emit documents, specifically updates and deletes.").
+				Description("The mode in which MongoDB emits document changes to Redpanda Connect, specifically updates and deletes.").
 				Default("update_lookup").
 				Advanced(),
 			service.NewStringAnnotatedEnumField(fieldJSONMarshalMode, map[string]string{
@@ -313,7 +321,7 @@ Schema metadata is discovered using a two-tier strategy:
 				marshalModeRelaxed: "A string format that emphasizes readability and interoperability at the expense of type preservation." +
 					"That is, conversion from relaxed format to BSON can lose type information.",
 			}).
-				Description("The json_marshal_mode setting is optional and controls the format of the output message.").
+				Description("Controls the format used to convert a message from BSON to JSON when it is received by Redpanda Connect.").
 				Default(marshalModeCanonical).
 				Advanced(),
 			service.NewStringField(fieldClientAppName).

@@ -4,13 +4,13 @@
 
 === `bucket`
 
-Couchbase bucket.
+The name of the Couchbase bucket to access.
 
 *Type*: `string`
 
 === `collection`
 
-Bucket collection.
+The name of the collection within the bucket to access.
 
 *Type*: `string`
 
@@ -22,7 +22,7 @@ An optional default TTL to set for items, calculated from the moment the item is
 
 === `password`
 
-Password to connect to the cluster.
+A password to authenticate with the Couchbase cluster.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -36,7 +36,7 @@ Bucket scope.
 
 === `timeout`
 
-Operation timeout.
+The timeout for Couchbase operations, including connecting to the cluster and waiting for the bucket to become ready.
 
 *Type*: `string`
 
@@ -44,7 +44,7 @@ Operation timeout.
 
 === `transcoder`
 
-Couchbase transcoder to use.
+The Couchbase transcoder to use for converting the data format of documents written to and read from Couchbase.
 
 *Type*: `string`
 
@@ -73,7 +73,7 @@ Couchbase transcoder to use.
 
 === `url`
 
-Couchbase connection string.
+The Couchbase connection string.
 
 *Type*: `string`
 
@@ -85,7 +85,7 @@ url: couchbase://localhost:11210
 
 === `username`
 
-Username to connect to the cluster.
+A username to authenticate with the Couchbase cluster.
 
 *Type*: `string`
 

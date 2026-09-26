@@ -116,7 +116,7 @@ The field in the document that is used as the key.
 
 === `password`
 
-The password to connect to the database.
+The password to use for authentication. Used together with `username` for basic authentication.
 
 include::connect:components:partial$secret_warning.adoc[]
 

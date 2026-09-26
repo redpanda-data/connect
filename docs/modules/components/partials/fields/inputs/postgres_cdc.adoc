@@ -14,6 +14,10 @@ Whether messages that are rejected (nacked) at the output level should be automa
 
 AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.
 
+This is useful for connecting to Amazon RDS or Aurora PostgreSQL instances with IAM database authentication enabled. The generated tokens are valid for 15 minutes and are automatically refreshed.
+
+For more information about AWS credentials configuration, see the xref:guides:cloud/aws.adoc[credentials for AWS] guide.
+
 *Type*: `object`
 
 === `aws.enabled`
@@ -202,7 +206,7 @@ processors:
 
 === `checkpoint_limit`
 
-The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.
+The maximum number of messages that this input can process at a given time. Increasing this limit enables parallel processing, and batching at the output level. To preserve at-least-once guarantees, any given log sequence number (LSN) is not acknowledged until all messages under that offset are delivered.
 
 *Type*: `int`
 
@@ -210,7 +214,7 @@ The maximum number of messages that can be processed at a given time. Increasing
 
 === `dsn`
 
-The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
+The data source name (DSN) of the PostgreSQL database from which you want to stream updates. Use the format `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. PostgreSQL enforces SSL by default. To disable SSL, for example in a secure environment, add `sslmode=disable` to the connection string.
 
 *Type*: `string`
 
@@ -222,7 +226,11 @@ dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
 
 === `heartbeat_interval`
 
-The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.
+The interval between heartbeat messages, which Redpanda Connect writes to the write-ahead log (WAL) using the `pg_logical_emit_message` function.
+
+Heartbeat messages are useful when you subscribe to data changes from tables with low activity, while other tables in the database have higher-frequency updates. Without new messages to acknowledge, PostgreSQL cannot reclaim the WAL, which can exhaust the local disk. Heartbeat messages allow Redpanda Connect to periodically acknowledge new messages even when no data updates occur. Each acknowledgement advances the committed point in the WAL, which ensures that PostgreSQL can safely reclaim older log segments.
+
+Set `heartbeat_interval` to `0s` to disable heartbeats.
 
 *Type*: `string`
 
@@ -240,7 +248,7 @@ heartbeat_interval: 24h
 
 === `include_transaction_markers`
 
-When set to true, empty messages with operation types BEGIN and COMMIT are generated for the beginning and end of each transaction. Messages with operation metadata set to "begin" or "commit" will have null message payloads.
+When set to `true`, creates empty messages for the `BEGIN` and `COMMIT` operations that start and complete each transaction. Messages with the `operation` metadata field set to `begin` or `commit` have null message payloads.
 
 *Type*: `bool`
 
@@ -248,7 +256,7 @@ When set to true, empty messages with operation types BEGIN and COMMIT are gener
 
 === `max_parallel_snapshot_tables`
 
-Int specifies a number of tables that will be processed in parallel during the snapshot processing stage
+Specify the maximum number of tables that are processed in parallel when the initial snapshot of the source database is taken.
 
 *Type*: `int`
 
@@ -256,7 +264,7 @@ Int specifies a number of tables that will be processed in parallel during the s
 
 === `pg_standby_timeout`
 
-Specify the standby timeout before refreshing an idle connection.
+Specify the standby timeout after which an idle connection is refreshed to keep the connection alive.
 
 *Type*: `string`
 
@@ -270,7 +278,7 @@ pg_standby_timeout: 30s
 
 === `pg_wal_monitor_interval`
 
-How often to report changes to the replication lag.
+How often to report changes to the replication lag and write them to Redpanda Connect metrics.
 
 *Type*: `string`
 
@@ -353,11 +361,9 @@ signal_table_name: rpcn_signal_table
 
 === `slot_name`
 
-The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.
+The name of the PostgreSQL logical replication slot to use. If the slot does not exist, the input creates it. You can also create the slot manually before starting replication.
 
-Note: To avoid needing to grant the replication user permission to create publications, you can manually create the publications ahead of time.
-This connector uses the naming pattern `pglog_stream_<replication_slot_name>`, so be sure to create them using this convention.
-			
+To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern `pglog_stream_<replication_slot_name>`, so create publications using this convention.
 
 *Type*: `string`
 
@@ -369,7 +375,9 @@ slot_name: my_test_slot
 
 === `snapshot_batch_size`
 
-The number of rows to fetch in each batch when querying the snapshot.
+The number of table rows to fetch in each batch when querying the snapshot.
+
+This option is only available when `stream_snapshot` is set to `true`.
 
 *Type*: `int`
 
@@ -383,7 +391,7 @@ snapshot_batch_size: 10000
 
 === `stream_snapshot`
 
-When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `tables` is left empty, since the snapshot is only planned for tables listed there.
+When set to `true`, this input streams a snapshot of all existing data in the source database before streaming data changes. To use this setting, all database tables that you want to replicate _must_ have a primary key, which allows the input to read each table in parallel. This setting has no effect if `tables` is left empty, since the snapshot is only planned for tables listed there.
 
 *Type*: `bool`
 
@@ -397,7 +405,7 @@ stream_snapshot: true
 
 === `tables[]`
 
-A list of table names to include in the logical replication. Each table should be specified as a separate item.
+A list of database table names to include in the snapshot and logical replication. Specify each table name as a separate item.
 
 If left empty, the underlying PostgreSQL publication is created `FOR ALL TABLES`, which replicates every table in every schema of the database, ignoring `schema`. This also disables `stream_snapshot`, since the initial snapshot is only planned for tables listed here.
 
@@ -413,7 +421,12 @@ tables:
 
 === `temporary_slot`
 
-If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.
+If set to `true`, the input creates a temporary replication slot that is automatically dropped when the connection to your source database is closed. You might use this option to:
+
+- Avoid data accumulating in the replication slot when a pipeline is paused or stopped.
+- Test the connector.
+
+If the pipeline is restarted and `stream_snapshot` is enabled, another data snapshot is taken before data updates are streamed.
 
 *Type*: `bool`
 
@@ -421,7 +434,7 @@ If set to true, creates a temporary replication slot that is automatically dropp
 
 === `tls`
 
-Custom TLS settings can be used to override system defaults.
+Using this field overrides the SSL/TLS settings in the environment and DSN.
 
 *Type*: `object`
 
@@ -561,7 +574,7 @@ Whether to skip server side certificate verification.
 
 === `unchanged_toast_value`
 
-The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.
+Specify the value to emit when unchanged TOAST values appear in the message stream. Unchanged values occur for data updates and deletes when `REPLICA IDENTITY` is not set to `FULL`.
 
 *Type*: `unknown`
 

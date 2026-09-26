@@ -4,7 +4,7 @@
 
 === `args_mapping`
 
-The mapping from the message to the data that is passed in as parameters to the cypher expression. Must be an object. By default the entire payload is used.
+The mapping from the message to the data that is passed in as parameters to the cypher expression. The mapping must return an object. By default, the entire payload is used.
 
 *Type*: `string`
 
@@ -20,7 +20,7 @@ args_mapping: 'root = {"orgId": this.org.id, "name": this.user.name}'
 
 === `basic_auth`
 
-Allows you to specify basic authentication.
+Configure basic authentication for requests to your graph database.
 
 *Type*: `object`
 
@@ -34,7 +34,7 @@ Whether to use basic authentication in requests.
 
 === `basic_auth.password`
 
-A password to authenticate with.
+The password to use for authentication. Used together with `username` for basic authentication.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -44,7 +44,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `basic_auth.realm`
 
-The realm for authentication challenges.
+The realm or process for authentication challenges.
 
 *Type*: `string`
 
@@ -52,7 +52,7 @@ The realm for authentication challenges.
 
 === `basic_auth.username`
 
-A username to authenticate as.
+The username of the account credentials to authenticate as. Used together with `password` for basic authentication.
 
 *Type*: `string`
 
@@ -189,7 +189,7 @@ cypher: |-
 
 === `database_name`
 
-Set the target database for which expressions are evaluated against.
+Set the target database against which expressions are evaluated.
 
 *Type*: `string`
 
@@ -345,8 +345,7 @@ Whether to skip server side certificate verification.
 
 === `uri`
 
-The connection URI to connect to.
-See https://neo4j.com/docs/go-manual/current/connect-advanced/[Neo4j's documentation^] for more information. 
+The connection URI for your graphing database. For more information, see https://neo4j.com/docs/go-manual/current/connect-advanced/[Neo4j's documentation^].
 
 *Type*: `string`
 

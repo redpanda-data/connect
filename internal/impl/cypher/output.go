@@ -47,16 +47,16 @@ func basicAuthField() *service.ConfigField {
 			Default(false),
 		service.NewStringField(coFieldBasicAuthUsername).
 			Default("").
-			Description("A username to authenticate as."),
+			Description("The username of the account credentials to authenticate as. Used together with `password` for basic authentication."),
 		service.NewStringField(coFieldBasicAuthPassword).
-			Description("A password to authenticate with.").
+			Description("The password to use for authentication. Used together with `username` for basic authentication.").
 			Default("").
 			Secret(),
 		service.NewStringField(coFieldBasicAuthRealm).
 			Advanced().
 			Default("").
-			Description("The realm for authentication challenges."),
-	).Description("Allows you to specify basic authentication.").
+			Description("The realm or process for authentication challenges."),
+	).Description("Configure basic authentication for requests to your graph database.").
 		Optional()
 }
 
@@ -86,13 +86,13 @@ func extractAuth(conf *service.ParsedConfig) (neo4j.AuthToken, error) {
 
 func outputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Summary("Writes batches of messages to any graph database that supports the Neo4j and Bolt URI schemes, using operations written in the Cypher query language.").
 		Description("The cypher output type writes a batch of messages to any graph database that supports the Neo4j or Bolt protocols.").
 		Categories("Services").
 		Version("4.37.0").
 		Fields(
 			service.NewStringField(coFieldURI).
-				Description(`The connection URI to connect to.
-See https://neo4j.com/docs/go-manual/current/connect-advanced/[Neo4j's documentation^] for more information. `).
+				Description(`The connection URI for your graphing database. For more information, see https://neo4j.com/docs/go-manual/current/connect-advanced/[Neo4j's documentation^].`).
 				ShortDescription("The connection URI to connect to.").
 				Examples(
 					"neo4j://demo.neo4jlabs.com",
@@ -111,10 +111,10 @@ MATCH (p:Person {name: $name})
 MERGE (p)-[:WORKS_FOR]->(o)`,
 				),
 			service.NewStringField(coFieldDatabase).
-				Description("Set the target database for which expressions are evaluated against.").
+				Description("Set the target database against which expressions are evaluated.").
 				Default(""),
 			service.NewBloblangField(coFieldArgsMapping).
-				Description(`The mapping from the message to the data that is passed in as parameters to the cypher expression. Must be an object. By default the entire payload is used.`).
+				Description(`The mapping from the message to the data that is passed in as parameters to the cypher expression. The mapping must return an object. By default, the entire payload is used.`).
 				ShortDescription("Mapping from the message to the parameters passed to the cypher expression. Must be an object.").
 				Examples(
 					`root.name = this.displayName`,

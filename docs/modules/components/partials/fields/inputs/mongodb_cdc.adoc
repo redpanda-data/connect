@@ -106,7 +106,7 @@ The token for the credentials being used, required when using short term credent
 
 === `checkpoint_cache`
 
-Checkpoint cache name.
+Specify a xref:components:caches/about.adoc[`cache` resource] to store the oplog position for the most recent data update streamed to Redpanda Connect. After a restart, Redpanda Connect can continue processing changes from this position, avoiding the need to reprocess all collection updates.
 
 *Type*: `string`
 
@@ -120,7 +120,7 @@ The interval between writing checkpoints to the cache.
 
 === `checkpoint_key`
 
-Checkpoint cache key name.
+The key identifier used to store the stream's resume position in `checkpoint_cache`. If you have multiple `mongodb_cdc` inputs sharing the same cache, you can provide an alternative key.
 
 *Type*: `string`
 
@@ -128,7 +128,7 @@ Checkpoint cache key name.
 
 === `checkpoint_limit`
 
-The maximum number of messages that can be in flight at a given time. Increasing this limit enables parallel processing and batching at the output level. The stream's resume position is only checkpointed once all messages before it are delivered, preserving at least once delivery guarantees.
+The maximum number of in-flight messages emitted from this input. Increasing this limit enables parallel processing, and batching at the output level. To preserve at-least-once guarantees, the stream's resume position is only checkpointed once all messages before it are delivered.
 
 *Type*: `int`
 
@@ -144,19 +144,19 @@ Bounds the checkpoint writes that run outside the normal read loop - storing the
 
 === `collections[]`
 
-The collections to stream changes from.
+A list of collections to stream changes from. Specify each collection name as a separate item.
 
 *Type*: `array<string>`
 
 === `database`
 
-The name of the target MongoDB database.
+The name of the MongoDB database to stream changes from.
 
 *Type*: `string`
 
 === `document_mode`
 
-The mode in which to emit documents, specifically updates and deletes.
+The mode in which MongoDB emits document changes to Redpanda Connect, specifically updates and deletes.
 
 *Type*: `string`
 
@@ -194,7 +194,7 @@ The mode in which to emit documents, specifically updates and deletes.
 
 === `json_marshal_mode`
 
-The json_marshal_mode setting is optional and controls the format of the output message.
+Controls the format used to convert a message from BSON to JSON when it is received by Redpanda Connect.
 
 *Type*: `string`
 
@@ -224,7 +224,7 @@ What to do when the stored stream position can no longer be resumed from (for ex
 
 === `password`
 
-The password to connect to the database.
+The password to use for authentication. Used together with `username` for basic authentication.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -234,7 +234,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `read_batch_size`
 
-The batch size of documents for MongoDB to return.
+The number of documents to fetch in each message batch from MongoDB.
 
 *Type*: `int`
 
@@ -242,7 +242,7 @@ The batch size of documents for MongoDB to return.
 
 === `read_max_wait`
 
-The maximum time MongoDB waits to fulfill `read_batch_size` on the change stream before returning documents.
+The maximum duration MongoDB waits to accumulate `read_batch_size` documents on a change stream before returning the batch to Redpanda Connect.
 
 *Type*: `string`
 
@@ -250,7 +250,11 @@ The maximum time MongoDB waits to fulfill `read_batch_size` on the change stream
 
 === `snapshot_auto_bucket_sharding`
 
-If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `splitVector` command. This allows parallel collection reading in environments where privileged access to the MongoDB cluster is not allowed such as MongoDB Atlas.
+If set to `true`, uses the https://www.mongodb.com/docs/manual/reference/operator/aggregation/bucketAuto/[`$bucketAuto`^] aggregation stage instead of the default `splitVector` command to split the snapshot data into chunks for processing. This allows parallel collection reading in environments where privileged access to the MongoDB cluster is not allowed, such as MongoDB Atlas, where the `splitVector` command is not available. To enable parallel processing in these environments:
+
+- Set this field to `true`.
+- Set `stream_snapshot` to `true`.
+- Increase `snapshot_parallelism` to a value greater than `1`.
 
 *Type*: `bool`
 
@@ -258,7 +262,11 @@ If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `
 
 === `snapshot_parallelism`
 
-Parallelism for snapshot phase.
+Specifies the number of connections to use when reading the initial snapshot from one or more collections. Increase this number to enable parallel processing of the snapshot.
+
+This feature uses the `$splitVector` command to split snapshot data into chunks for more efficient processing.
+
+This field is only applicable when `stream_snapshot` is set to `true`.
 
 *Type*: `int`
 
@@ -266,7 +274,7 @@ Parallelism for snapshot phase.
 
 === `stream_snapshot`
 
-If to read initial snapshot before streaming changes.
+When set to `true`, this input streams a snapshot of all existing data in the source collections before streaming data changes.
 
 *Type*: `bool`
 

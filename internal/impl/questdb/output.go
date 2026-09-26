@@ -39,65 +39,61 @@ func questdbOutputConfig() *service.ConfigSpec {
 			service.NewBatchPolicyField("batching"),
 			service.NewTLSToggledField("tls"),
 			service.NewStringField("address").
-				Description("Address of the QuestDB server's HTTP port (excluding protocol)").
+				Description("The host and port of the QuestDB server's HTTP endpoint, excluding the protocol.").
 				Example("localhost:9000"),
 			service.NewStringField("username").
-				Description("Username for HTTP basic auth").
+				Description("The username to use for basic authentication.").
 				Optional().
 				Secret(),
 			service.NewStringField("password").
-				Description("Password for HTTP basic auth").
+				Description("The password to use for basic authentication.").
 				Optional().
 				Secret(),
 			service.NewStringField("token").
-				Description("Bearer token for HTTP auth (takes precedence over basic auth username & password)").
+				Description("The bearer token to use for authentication, which takes precedence over the basic authentication username and password.").
 				Optional().
 				Secret(),
 			service.NewDurationField("retry_timeout").
-				Description("The time to continue retrying after a failed HTTP request. The interval between retries is an exponential "+
-					"backoff starting at 10ms and doubling after each failed attempt up to a maximum of 1 second.").
+				Description("The period of time to continue retrying after a failed HTTP request. The interval between retries is an exponential backoff starting at 10 ms, and doubling after each failed attempt up to a maximum of 1 second.").
 				ShortDescription("How long to keep retrying after a failed HTTP request, with exponential backoff.").
 				Optional().
 				Advanced(),
 			service.NewDurationField("request_timeout").
-				Description("The time to wait for a response from the server. This is in addition to the calculation "+
-					"derived from the request_min_throughput parameter.").
+				Description("The period of time to wait for a response from the QuestDB server, in addition to the timeout calculated from the `request_min_throughput` field.").
 				ShortDescription("How long to wait for a response from the server, in addition to the request_min_throughput allowance.").
 				Optional().
 				Advanced(),
 			service.NewIntField("request_min_throughput").
-				Description("Minimum expected throughput in bytes per second for HTTP requests. If the throughput is lower than this value, "+
-					"the connection will time out. This is used to calculate an additional timeout on top of request_timeout. This is useful for large requests. "+
-					"You can set this value to 0 to disable this logic.").
+				Description("The minimum expected throughput in bytes per second for HTTP requests. If the throughput is lower than this value, the connection times out. This output uses this value to calculate an additional timeout on top of the `request_timeout`. This setting is useful for large requests. Set it to `0` to disable this logic.").
 				ShortDescription("Minimum expected request throughput in bytes per second. Slower connections time out.").
 				Optional().
 				Advanced(),
 			service.NewStringField("table").
-				Description("Destination table").
+				Description("The destination table in QuestDB.").
 				Example("trades"),
 			service.NewStringField("designated_timestamp_field").
-				Description("Name of the designated timestamp field").
+				Description("The name of the designated timestamp field in QuestDB.").
 				Optional(),
 			service.NewStringField("designated_timestamp_unit").
-				Description("Designated timestamp field units").
+				Description("Units used for the designated timestamp field in QuestDB.").
 				Default("auto").
 				LintRule(`root = if ["nanos","micros","millis","seconds","auto"].contains(this) != true { [ "valid options are \"nanos\", \"micros\", \"millis\", \"seconds\", \"auto\"" ] }`).
 				Optional(),
 			service.NewStringListField("timestamp_string_fields").
-				Description("String fields with textual timestamps").
+				Description("String fields with textual timestamps.").
 				Optional(),
 			service.NewStringField("timestamp_string_format").
-				Description("Timestamp format, used when parsing timestamp string fields. Specified in golang's time.Parse layout").
+				Description("The timestamp format used when parsing timestamp string fields, specified as a layout for Go's `time.Parse` function.").
 				Default(time.StampMicro+"Z0700").
 				Optional(),
 			service.NewStringListField("symbols").
-				Description("Columns that should be the SYMBOL type (string values default to STRING)").
+				Description("Columns that must be the `symbol` type. String values default to `string` types.").
 				Optional(),
 			service.NewStringListField("doubles").
-				Description("Columns that should be double type, (int is default)").
+				Description("Columns that must be the `double` type, with `int` as the default.").
 				Optional(),
 			service.NewBoolField("error_on_empty_messages").
-				Description("Mark a message as errored if it is empty after field validation").
+				Description("Mark a message as an error if it is empty after field validation.").
 				Optional().
 				Default(false),
 		)
