@@ -9,10 +9,8 @@
 package oracledb_test
 
 import (
-	"context"
 	"database/sql"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -24,10 +22,8 @@ import (
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	oracledbtest "github.com/redpanda-data/connect/v4/internal/impl/oracledb/oracledbtest"
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // TestIntegrationMigrateCheckpointCache can be deleted once we're happy customers have migrated.
@@ -85,28 +81,7 @@ oracledb_cdc:
   batching:
     count: 500`
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, cdbConnStr, pdbName)))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		batch.Lock()
-		defer batch.Unlock()
-		for _, msg := range mb {
-			msgBytes, err := msg.AsBytes()
-			assert.NoError(t, err)
-			batch.Msgs = append(batch.Msgs, string(msgBytes))
-		}
-		return nil
-	}))
-
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+	stream := oracledbtest.StartPipeline(t, fmt.Sprintf(cfg, cdbConnStr, pdbName), batch.Consumer(t))
 
 	// Poll until the migration renames default 'max_scn' to config checkpoint_cache_key value, then immediately
 	// assert the SCN value is unchanged — the migration must only rename the key.
@@ -129,12 +104,7 @@ BEGIN
 END;`)
 		require.NoError(t, err)
 
-		var got int
-		assert.Eventually(t, func() bool {
-			got = batch.Count()
-			return got >= want
-		}, time.Minute*1, time.Second*1)
-		assert.Equalf(t, want, got, "Wanted %d streaming messages but got %d", want, got)
+		oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*1)
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
