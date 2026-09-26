@@ -22,6 +22,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/llm"
+
 	aiplatform "cloud.google.com/go/aiplatform/apiv1"
 	"cloud.google.com/go/aiplatform/apiv1/aiplatformpb"
 
@@ -78,8 +80,7 @@ For more information, see the https://cloud.google.com/vertex-ai/generative-ai/d
 			}).
 				Default("RETRIEVAL_DOCUMENT").
 				Description("Use the following options to optimize embeddings that the model generates for specific use cases."),
-			service.NewInterpolatedStringField(vaiepFieldText).
-				Description("The text you want to generate vector embeddings for. By default, the processor submits the entire payload as a string.").
+			llm.EmbeddingTextField(vaiepFieldText).
 				Optional(),
 			service.NewIntField(vaiepFieldDims).
 				Description("The maximum length of a generated vector embedding. If this value is set, generated embeddings are truncated to this size.").

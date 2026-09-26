@@ -31,6 +31,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 )
 
 func schemaRegistryDecoderConfig() *service.ConfigSpec {
@@ -210,7 +211,7 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 				Description("The duration after which a cached schema is considered stale and is removed from the cache.").
 				Default("10m").Example("1h").Example("5m"),
 		).
-		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
+		Field(service.NewURLField("url").Description(schemaregistry.URLFieldDescription)).
 		Field(service.NewIntField("default_schema_id").
 			Description(`This schema ID is used when a message's schema header cannot be read (` + "`" + `ErrBadHeader` + "`" + `). If this value is not set, schema header errors are returned.
 

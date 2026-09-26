@@ -30,6 +30,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/llm"
 )
 
 const (
@@ -100,11 +102,9 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				Description("Specify the location of a fine tuned model. For base models, you can omit this field.").
 				Examples("us-central1"),
 			vertexAIModelField(vaicpFieldModel, "LLM", "gemini-1.5-pro-001", "gemini-1.5-flash-001"),
-			service.NewInterpolatedStringField(vaicpFieldPrompt).
-				Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
+			llm.PromptField(vaicpFieldPrompt).
 				Optional(),
-			service.NewInterpolatedStringField(vaicpFieldSystemPrompt).
-				Description("The system prompt to submit to the Vertex AI LLM.").
+			llm.SystemPromptField(vaicpFieldSystemPrompt).
 				Advanced().
 				Optional(),
 			service.NewBloblangField(vaicpFieldHistory).
@@ -160,19 +160,7 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				LintRule(`root = if this <= 0 { ["field must be greater than zero"] }`),
 			service.NewObjectListField(
 				vaicpFieldTool,
-				service.NewStringField(vaicpToolFieldName).Description("The name of this tool."),
-				service.NewStringField(vaicpToolFieldDesc).Description("A description of this tool, the LLM uses this to decide if the tool should be used."),
-				service.NewObjectField(
-					vaicpToolFieldParams,
-					service.NewStringListField(vaicpToolParamFieldRequired).Default([]string{}).Description("The required parameters for this pipeline."),
-					service.NewObjectMapField(
-						vaicpToolParamFieldProps,
-						service.NewStringField(vaicpToolParamPropFieldType).Description("The type of this parameter."),
-						service.NewStringField(vaicpToolParamPropFieldDescription).Description("A description of this parameter."),
-						service.NewStringListField(vaicpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that this parameter is an enum and only these specific values should be used."),
-					).Description("The properties for the processor's input data"),
-				).Description("The parameters the LLM needs to provide to invoke this tool."),
-				service.NewProcessorListField(vaicpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
+				llm.ToolFields(llm.ToolParametersField())...,
 			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.").
 				ShortDescription("The tools the LLM may invoke, allowing subpipelines to be called for agentic actions.").
 				Default([]any{}),

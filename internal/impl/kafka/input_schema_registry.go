@@ -31,6 +31,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 )
 
 const (
@@ -79,7 +80,7 @@ input:
 
 func schemaRegistryInputConfigFields() []*service.ConfigField {
 	return append([]*service.ConfigField{
-		service.NewStringField(sriFieldURL).Description("The base URL of the schema registry service."),
+		service.NewStringField(sriFieldURL).Description(schemaregistry.URLFieldDescription),
 		service.NewBoolField(sriFieldIncludeDeleted).Description("Include deleted entities.").Default(false).Advanced(),
 		service.NewStringField(sriFieldSubjectFilter).Description("Include only subjects which match the regular expression filter, or leave this field value blank to select all subjects.").Default("").Advanced(),
 		service.NewBoolField(sriFieldFetchInOrder).Description("Indicate whether to fetch all schemas from the schema registry service and sort them by ID. Set this value to `true` if you use schemas that refer to other schemas (schema references).").

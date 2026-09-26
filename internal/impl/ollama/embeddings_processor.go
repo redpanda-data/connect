@@ -20,6 +20,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/llm"
 )
 
 const (
@@ -46,8 +48,7 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 		Version("4.32.0").
 		Fields(
 			modelField("nomic-embed-text", "mxbai-embed-large", "snowflake-artic-embed", "all-minilm"),
-			service.NewInterpolatedStringField(oepFieldText).
-				Description(`The text you want to create vector embeddings for. By default, the processor submits the entire payload as a string.`).
+			llm.EmbeddingTextField(oepFieldText).
 				Optional(),
 		).Fields(commonFields()...).
 		Example(
