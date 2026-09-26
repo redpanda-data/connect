@@ -41,20 +41,8 @@ func amqp1InputSpec() *service.ConfigSpec {
 		Summary("Reads messages from an AMQP (1.0) server.").
 		Description(inputDescription).
 		Fields(
-			service.NewURLField(urlField).
-				Description("A URL to connect to.").
-				Example("amqp://localhost:5672/").
-				Example("amqps://guest:guest@localhost:5672/").
-				Deprecated().
-				Optional(),
-			service.NewURLListField(urlsField).
-				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
-				ShortDescription("URLs to connect to. The first to connect successfully is used until the connection closes.").
-				Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
-				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
-				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
-				Optional().
-				Version("4.23.0"),
+			urlFieldSpec(),
+			urlsFieldSpec(),
 			service.NewStringField(sourceAddrField).
 				Description("The source address to consume from.").
 				Example("/foo").

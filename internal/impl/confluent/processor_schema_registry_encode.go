@@ -90,7 +90,7 @@ When a target subject presents a protobuf schema that contains multiple messages
 We will be considering alternative approaches in future so please https://redpanda.com/slack[get in touch^] with thoughts and feedback.
 `).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
-		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
+		Field(service.NewInterpolatedStringField("subject").Description(`The schema subject to derive schemas from.`).
 			Example("foo").
 			Example(`${! meta("kafka_topic") }`)).
 		Field(service.NewStringField("refresh_period").

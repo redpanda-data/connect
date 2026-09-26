@@ -30,13 +30,14 @@ const (
 
 func threadProcessorSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Description(`Read a thread using the https://api.slack.com/methods/conversations.replies[^Slack API]`).
+		Summary("Reads a Slack thread using the Slack API method conversations.replies.").
+		Description(`This processor calls the https://api.slack.com/methods/conversations.replies[`+"`conversations.replies`"+`^] Slack API method and replaces the message content with a JSON array of all messages in the thread.`).
 		Fields(
-			service.NewStringField(pFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
+			service.NewStringField(pFieldBotToken).Description("Your Slack bot user's OAuth token, which must have the correct permissions to read messages from the Slack channel specified in `channel_id`.").LintRule(`
         root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
       `),
-			service.NewInterpolatedStringField(pFieldChannelID).Description("The channel ID to read messages from."),
-			service.NewInterpolatedStringField(pFieldThreadTS).Description("The thread timestamp to read the full thread of."),
+			service.NewInterpolatedStringField(pFieldChannelID).Description("The encoded ID of the Slack channel from which to read threads."),
+			service.NewInterpolatedStringField(pFieldThreadTS).Description("The timestamp of the parent message of the thread you want to read."),
 		)
 }
 

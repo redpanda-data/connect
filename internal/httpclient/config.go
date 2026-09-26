@@ -182,7 +182,7 @@ type Config struct {
 // field; otherwise the field is required (no default).
 func FieldsWithBaseURL(baseURL string) []*service.ConfigField {
 	baseURLField := service.NewStringField(cFieldBaseURL).
-		Description("Base URL of the target service (e.g., https://api.example.com). TLS is enabled automatically for https URLs.")
+		Description("The base URL of the target service (for example, `https://api.example.com`). TLS is enabled automatically for `https` URLs.")
 	if baseURL != "" {
 		baseURLField = baseURLField.Default(baseURL)
 	}
