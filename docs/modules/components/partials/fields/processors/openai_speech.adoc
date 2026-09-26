@@ -4,7 +4,7 @@
 
 === `api_key`
 
-The API key for OpenAI API.
+The API secret key for OpenAI API.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -68,7 +68,7 @@ response_format: pcm
 
 === `server_address`
 
-The Open API endpoint that the processor sends requests to. Update the default value to use another OpenAI compatible service.
+The OpenAI API endpoint to which the processor sends requests. Update the default value to use a different OpenAI-compatible service.
 
 *Type*: `string`
 

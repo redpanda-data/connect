@@ -4,7 +4,7 @@
 
 === `api_key`
 
-The API key for the Cohere API.
+Your API key for the Cohere API.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -20,13 +20,16 @@ The base URL to use for API requests.
 
 === `documents`
 
-A list of texts that will be compared to the query. For optimal performance Cohere recommends against sending more than 1000 documents in a single request. NOTE: structured data should be formatted as YAML for best performance.
+A list of text strings that are compared to the specified query. For optimal performance, Cohere recommends that you:
+
+- Send fewer than 1000 documents in a single request.
+- Send structured data in YAML format.
 
 *Type*: `string`
 
 === `max_tokens_per_doc`
 
-Long documents will be automatically truncated to the specified number of tokens.
+This processor automatically truncates long documents to the specified number of tokens.
 
 *Type*: `int`
 
@@ -34,7 +37,7 @@ Long documents will be automatically truncated to the specified number of tokens
 
 === `model`
 
-The name of the Cohere model to use.
+The name of the Cohere model you want to use.
 
 *Type*: `string`
 
@@ -46,7 +49,7 @@ model: rerank-v3.5
 
 === `query`
 
-The search query
+The search query you want to execute.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -54,7 +57,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `top_n`
 
-The number of documents to return, if 0 all documents are returned.
+The number of documents to return when the query is executed. If set to `0`, all documents are returned.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 

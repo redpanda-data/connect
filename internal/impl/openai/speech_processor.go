@@ -59,10 +59,10 @@ To learn more about turning text into spoken audio, see the https://platform.ope
 				Description("A text description of the audio you want to generate. The `"+ospFieldInput+"` field accepts a maximum of 4096 characters.").
 				Optional(),
 			service.NewInterpolatedStringField(ospFieldVoice).
-				Description("The type of voice to use when generating the audio.").
+				Description(`The type of voice to use when generating the audio.`).
 				Examples("alloy", "echo", "fable", "onyx", "nova", "shimmer"),
 			service.NewInterpolatedStringField(ospFieldResponseFormat).
-				Description("The format to generate audio in. Default is `mp3`.").
+				Description(`The format to generate audio in. Default is `+"`"+`mp3`+"`"+`.`).
 				ShortDescription("The audio format to generate.").
 				Examples("mp3", "opus", "aac", "flac", "wav", "pcm").
 				Advanced().
