@@ -4,7 +4,7 @@
 
 === `api_key`
 
-The CyborgDB API key for authentication.
+The API key for authenticating with the CyborgDB service. This key identifies your account and provides access to your CyborgDB indexes. Keep this key secure and avoid exposing it in logs or version control.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -122,7 +122,7 @@ processors:
 
 === `create_if_missing`
 
-If true, create the index if it doesn't exist. CyborgDB will auto-detect dimension and optimize the index.
+Whether to create the index if it doesn't exist. When enabled, CyborgDB automatically detects the vector dimensions from your data and optimizes the index configuration for performance. This is useful for development and testing environments.
 
 *Type*: `bool`
 
@@ -130,7 +130,7 @@ If true, create the index if it doesn't exist. CyborgDB will auto-detect dimensi
 
 === `host`
 
-The host for the CyborgDB instance.
+The host URL for the CyborgDB instance, including the port number if required. The scheme is optional: if the value does not start with `http://` or `https://`, this output uses `https://`.
 
 *Type*: `string`
 
@@ -146,7 +146,7 @@ host: localhost:8000
 
 === `id`
 
-The ID for the vector entry in CyborgDB.
+The unique identifier for each vector entry, for example `${! json("id") }`. This ID is used to update existing vectors during upsert operations or to specify which vectors to delete.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -154,7 +154,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `index_key`
 
-The base64-encoded encryption key for the index. Must be exactly 32 bytes when decoded.
+The base64-encoded encryption key for the CyborgDB index. This key must be exactly 32 bytes when decoded from base64. All vector data is encrypted client-side using this key before transmission, ensuring complete data privacy. Store this key securely as it cannot be recovered if lost.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -168,7 +168,7 @@ index_key: your-base64-encoded-32-byte-key
 
 === `index_name`
 
-The name of the index to write to.
+The name of the CyborgDB index to write vectors to. If the index doesn't exist and `create_if_missing` is enabled, CyborgDB will create it automatically with optimized settings based on your data.
 
 *Type*: `string`
 
@@ -184,7 +184,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 === `metadata_mapping`
 
-An optional mapping of message to metadata for the vector entry.
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that extracts metadata to associate with the vector entry. The metadata can contain any JSON-serializable data that helps identify or categorize the vector. This data is stored encrypted alongside the vector.
 
 *Type*: `string`
 
@@ -204,7 +204,10 @@ metadata_mapping: 'root = {"summary": this.summary, "category": this.category}'
 
 === `operation`
 
-The operation to perform against the CyborgDB index.
+The operation to perform against the CyborgDB index. Supported operations:
+
+- `upsert`: Insert new vectors or update existing ones (requires `vector_mapping`)
+- `delete`: Remove vectors from the index by `id`
 
 *Type*: `string`
 
@@ -214,7 +217,7 @@ The operation to perform against the CyborgDB index.
 
 === `vector_mapping`
 
-The mapping to extract out the vector from the document. The result must be a floating point array. Required for upsert operations.
+A xref:guides:bloblang/about.adoc[Bloblang mapping] that extracts the vector from the message. The result must be an array of floating-point numbers representing the vector embeddings. This field is required for the `upsert` operation.
 
 *Type*: `string`
 

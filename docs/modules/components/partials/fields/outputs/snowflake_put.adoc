@@ -258,7 +258,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `private_key`
 
-The private SSH key. `private_key_pass` is required when using encrypted keys.
+Your private SSH key. When using encrypted keys, you must also set a value for `private_key_pass`.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -266,13 +266,13 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `private_key_file`
 
-The path to a file containing the private SSH key. `private_key_pass` is required when using encrypted keys.
+The path to a file containing your private SSH key. When using encrypted keys, you must also set a value for `private_key_pass`.
 
 *Type*: `string`
 
 === `private_key_pass`
 
-An optional private SSH key passphrase.
+The passphrase for your private SSH key.
 
 include::connect:components:partial$secret_warning.adoc[]
 

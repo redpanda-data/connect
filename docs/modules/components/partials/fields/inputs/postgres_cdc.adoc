@@ -14,6 +14,10 @@ Whether messages that are rejected (nacked) at the output level should be automa
 
 AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.
 
+This is useful for connecting to Amazon RDS or Aurora PostgreSQL instances with IAM database authentication enabled. The generated tokens are valid for 15 minutes and are automatically refreshed.
+
+For more information about AWS credentials configuration, see the xref:guides:cloud/aws.adoc[credentials for AWS] guide.
+
 *Type*: `object`
 
 === `aws.enabled`
@@ -202,7 +206,7 @@ processors:
 
 === `checkpoint_limit`
 
-The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.
+The maximum number of messages that this input can process at a given time. Increasing this limit enables parallel processing, and batching at the output level. To preserve at-least-once guarantees, any given log sequence number (LSN) is not acknowledged until all messages under that offset are delivered.
 
 *Type*: `int`
 
@@ -210,7 +214,7 @@ The maximum number of messages that can be processed at a given time. Increasing
 
 === `dsn`
 
-The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
+The data source name (DSN) of the PostgreSQL database from which you want to stream updates. Use the format `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. PostgreSQL enforces SSL by default. To disable SSL, for example in a secure environment, add `sslmode=disable` to the connection string.
 
 *Type*: `string`
 
@@ -222,9 +226,11 @@ dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
 
 === `heartbeat_interval`
 
-The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.
+The interval between heartbeat messages, which Redpanda Connect writes to the write-ahead log (WAL) using the `pg_logical_emit_message` function.
 
-Heartbeats also pace `incremental_snapshot`: on a quiet table they are the only thing advancing the snapshot. This interval just keeps the slot current, so `incremental_snapshot.heartbeat_interval` applies alongside it and the more frequent wins for the life of the input. A non-zero value is still required here.
+Heartbeat messages are useful when you subscribe to data changes from tables with low activity, while other tables in the database have higher-frequency updates. Without new messages to acknowledge, PostgreSQL cannot reclaim the WAL, which can exhaust the local disk. Heartbeat messages allow Redpanda Connect to periodically acknowledge new messages even when no data updates occur. Each acknowledgement advances the committed point in the WAL, which ensures that PostgreSQL can safely reclaim older log segments.
+
+Set `heartbeat_interval` to `0s` to disable heartbeats.
 
 *Type*: `string`
 
@@ -242,79 +248,15 @@ heartbeat_interval: 24h
 
 === `include_transaction_markers`
 
-When set to true, empty messages with operation types BEGIN and COMMIT are generated for the beginning and end of each transaction. Messages with operation metadata set to "begin" or "commit" will have null message payloads.
+When set to `true`, creates empty messages for the `BEGIN` and `COMMIT` operations that start and complete each transaction. Messages with the `operation` metadata field set to `begin` or `commit` have null message payloads.
 
 *Type*: `bool`
 
 *Default*: `false`
-
-=== `incremental_snapshot`
-
-Configures chunked snapshotting that runs alongside replication streaming.
-
-*Type*: `object`
-
-=== `incremental_snapshot.checkpoint_cache`
-
-A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] storing the snapshot's progress, so a restart resumes instead of starting over. Required when `enabled` is `true`.
-
-*Type*: `string`
-
-=== `incremental_snapshot.checkpoint_cache_key`
-
-The key used to store the incremental snapshot progress in `checkpoint_cache`. Use a different key if multiple incremental snapshots share the same cache.
-
-Changing or clearing this key discards the record of which tables have been backfilled, so a `snapshot-execute` signal reads a table again.
-
-*Type*: `string`
-
-*Default*: `postgres_cdc_incremental_snapshot`
-
-=== `incremental_snapshot.chunk_size`
-
-The number of rows to read per chunk while incrementally snapshotting a table.
-
-*Type*: `int`
-
-*Default*: `1024`
-
-=== `incremental_snapshot.enabled`
-
-Backfills tables in chunks alongside replication, on request. Tables are not configured here: insert a `snapshot-execute` row into `signal_table_name` to ask for one, so a backfill can be started at any time without a config change. A signal table is therefore required. Unlike `stream_snapshot` this needs no up-front snapshot phase and does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.
-
-Progress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `heartbeat_interval`.
-
-A row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.
-
-The following primary keys are currently not supported and a signal naming such a table is rejected and logged rather than started: `bytea`, `interval`, `bit`, `bit varying`, and any range or multirange type. Every other key type is supported, composite keys included.
-
-*Type*: `bool`
-
-*Default*: `false`
-
-=== `incremental_snapshot.heartbeat_interval`
-
-How often to heartbeat while `enabled` is `true`. The snapshot only advances on a streamed transaction, so on quiet tables this paces it. Raise it to reduce write load at the cost of a slower backfill.
-
-Whichever of this and the top-level `heartbeat_interval` is more frequent wins, and applies for the life of the input: it is fixed at startup, and stays in force between backfills as well as during them. Heartbeats are transactional only while a backfill is in progress, since that is the only time the snapshot needs a transaction id from one; between backfills they cost nothing extra.
-
-*Type*: `string`
-
-*Default*: `1s`
-
-=== `incremental_snapshot.retry_cooldown`
-
-How long the backfill waits before retrying a chunk read that failed transiently, usually because of a conflicting lock on the table being backfilled, such as `VACUUM FULL` or most `ALTER TABLE` statements.
-
-The snapshot's chunk read shares the goroutine that reads the replication stream, so each retry that blocks on the lock delays replication for every table. Retrying on every streamed transaction would repeat that delay for as long as the lock is held. Raise it to protect replication latency during a long migration, or lower it to resume the backfill sooner after a brief lock. Setting it to `0s` disables the cooldown, retrying on the next streamed transaction.
-
-*Type*: `string`
-
-*Default*: `30s`
 
 === `max_parallel_snapshot_tables`
 
-Int specifies a number of tables that will be processed in parallel during the initial snapshot processing stage.
+Specify the maximum number of tables that are processed in parallel when the initial snapshot of the source database is taken.
 
 *Type*: `int`
 
@@ -322,7 +264,7 @@ Int specifies a number of tables that will be processed in parallel during the i
 
 === `pg_standby_timeout`
 
-Specify the standby timeout before refreshing an idle connection.
+Specify the standby timeout after which an idle connection is refreshed to keep the connection alive.
 
 *Type*: `string`
 
@@ -336,7 +278,7 @@ pg_standby_timeout: 30s
 
 === `pg_wal_monitor_interval`
 
-How often to report changes to the replication lag.
+How often to report changes to the replication lag and write them to Redpanda Connect metrics.
 
 *Type*: `string`
 
@@ -374,8 +316,8 @@ column names only, not types, so a wrong column type (for example `data JSONB` i
 is only caught at runtime, on the first signal row read:
 
 - **id**: any type representable as a string (for example `SERIAL`, `BIGSERIAL`, `UUID`, `VARCHAR`)
-- **type**: should be `VARCHAR` or another string type (the signal type, see supported signals below)
-- **data**: should be `TEXT`, a JSON object containing signal parameters
+- **type**: should be `VARCHAR` or another string type: the signal type (see supported signals below)
+- **data**: should be `TEXT`: a JSON object containing signal parameters
 
 Create the table with:
 
@@ -407,46 +349,6 @@ a JSON object with a `message` key, whose value is written to the connector's lo
 INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message": "Signal message"}');
 ```
 
-**`snapshot-execute`** — backfills the named tables incrementally, alongside streaming. Requires
-`incremental_snapshot.enabled`. The `data` column must contain a JSON object
-with a `tables` key listing table names in the configured `schema`, excluding the schema itself:
-
-```sql
-INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('snapshot-execute', '{"tables": ["orders", "customers"]}');
-```
-
-Each table must appear in `tables` (or that list must be empty, replicating everything):
-an unreplicated table has no live changes to deduplicate its backfill against, so a write landing
-after its chunk is read would be lost. Each must also have a primary key, which the backfill pages
-by — a table replicated under `REPLICA IDENTITY FULL` without one cannot be snapshotted. That key
-may not be `bytea`: its value is read back and bound as the next chunk's bound, and raw bytes
-survive neither that nor the checkpoint.
-
-**Partitioned Tables**
-
-Partitioned tables are not yet supported in incremental snapshotting unless their publication sets
-`publish_via_partition_root = true`. PostgreSQL otherwise publishes their changes under the
-individual partitions' names while the snapshot backfill reads the parent, so updates to
-already-read snapshot rows cannot be detected.
-
-A signal naming a table with partitions is rejected and logged, and it is left to replication alone. If a check cannot be run at all - a
-connection reset, say - the stream restarts and the signal is read again, so the request is not lost.
-
-Each table joins the back of the backfill queue. A table this run already covers is skipped and
-logged, so a repeated signal does not re-read it. To read one again, point
-`incremental_snapshot.checkpoint_cache_key` at a fresh key.
-
-**Tables with large (TOASTed) column values**
-
-Set `REPLICA IDENTITY FULL` on a table with large (TOASTed) column values before backfilling using incremental snapshotting. PostgreSQL
-omits an unchanged TOAST value from an `UPDATE`, sending a marker instead, and
-under the default replica identity there is nothing in the message to recover it from — so
-`unchanged_toast_value` is emitted for that column. For a row updated while its chunk is
-buffered, the backfilled copy that held the real value is dropped as a duplicate, leaving the
-placeholder as the only value the destination ever receives for it. `REPLICA IDENTITY FULL`
-makes PostgreSQL send the previous row, which the connector reads the real value from. It can be
-set for the backfill and reverted afterwards; it takes a brief lock but rewrites nothing.
-
 *Type*: `string`
 
 *Default*: `""`
@@ -459,11 +361,9 @@ signal_table_name: rpcn_signal_table
 
 === `slot_name`
 
-The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.
+The name of the PostgreSQL logical replication slot to use. If the slot does not exist, the input creates it. You can also create the slot manually before starting replication.
 
-Note: To avoid needing to grant the replication user permission to create publications, you can manually create the publications ahead of time.
-This connector uses the naming pattern `pglog_stream_<replication_slot_name>`, so be sure to create them using this convention.
-			
+To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern `pglog_stream_<replication_slot_name>`, so create publications using this convention.
 
 *Type*: `string`
 
@@ -475,7 +375,9 @@ slot_name: my_test_slot
 
 === `snapshot_batch_size`
 
-The number of rows to fetch in each batch when querying the snapshot.
+The number of table rows to fetch in each batch when querying the snapshot.
+
+This option is only available when `stream_snapshot` is set to `true`.
 
 *Type*: `int`
 
@@ -489,7 +391,7 @@ snapshot_batch_size: 10000
 
 === `stream_snapshot`
 
-When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `tables` is left empty, since the snapshot is only planned for tables listed there.
+When set to `true`, this input streams a snapshot of all existing data in the source database before streaming data changes. To use this setting, all database tables that you want to replicate _must_ have a primary key, which allows the input to read each table in parallel. This setting has no effect if `tables` is left empty, since the snapshot is only planned for tables listed there.
 
 *Type*: `bool`
 
@@ -503,7 +405,7 @@ stream_snapshot: true
 
 === `tables[]`
 
-A list of table names to include in the logical replication. Each table should be specified as a separate item.
+A list of database table names to include in the snapshot and logical replication. Specify each table name as a separate item.
 
 If left empty, the underlying PostgreSQL publication is created `FOR ALL TABLES`, which replicates every table in every schema of the database, ignoring `schema`. This also disables `stream_snapshot`, since the initial snapshot is only planned for tables listed here.
 
@@ -519,7 +421,12 @@ tables:
 
 === `temporary_slot`
 
-If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.
+If set to `true`, the input creates a temporary replication slot that is automatically dropped when the connection to your source database is closed. You might use this option to:
+
+- Avoid data accumulating in the replication slot when a pipeline is paused or stopped.
+- Test the connector.
+
+If the pipeline is restarted and `stream_snapshot` is enabled, another data snapshot is taken before data updates are streamed.
 
 *Type*: `bool`
 
@@ -527,7 +434,7 @@ If set to true, creates a temporary replication slot that is automatically dropp
 
 === `tls`
 
-Custom TLS settings can be used to override system defaults.
+Using this field overrides the SSL/TLS settings in the environment and DSN.
 
 *Type*: `object`
 
@@ -667,9 +574,7 @@ Whether to skip server side certificate verification.
 
 === `unchanged_toast_value`
 
-The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.
-
-Prefer a distinctive sentinel over the `null` default: `null` cannot be told apart from a column that is genuinely null, so a consumer cannot skip the field rather than overwrite a good value with it. This matters most alongside `incremental_snapshot`, where a backfilled row can be the only delivery carrying a large column's real value — see `signal_table_name`.
+Specify the value to emit when unchanged TOAST values appear in the message stream. Unchanged values occur for data updates and deletes when `REPLICA IDENTITY` is not set to `FULL`.
 
 *Type*: `unknown`
 

@@ -202,13 +202,13 @@ processors:
 
 === `checkpoint_cache`
 
-A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table.
+A xref:components:caches/about.adoc[cache resource] to store the binlog position of the most recent data update delivered by Redpanda Connect. After a restart, Redpanda Connect can continue processing changes from this last known position, avoiding the need to reprocess all table updates.
 
 *Type*: `string`
 
 === `checkpoint_key`
 
-The key to use to store the snapshot position in `checkpoint_cache`. An alternative key can be provided if multiple CDC inputs share the same cache.
+The key identifier used to store the binlog position in `checkpoint_cache`. If you have multiple `mysql_cdc` inputs sharing the same cache, you can provide an alternative key.
 
 *Type*: `string`
 
@@ -216,7 +216,7 @@ The key to use to store the snapshot position in `checkpoint_cache`. An alternat
 
 === `checkpoint_limit`
 
-The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.
+The maximum number of messages that this input can process at a given time. Increasing this limit enables parallel processing, and batching at the output level. To preserve at-least-once guarantees, any given binlog position is not acknowledged until all messages under that offset are delivered.
 
 *Type*: `int`
 
@@ -224,7 +224,7 @@ The maximum number of messages that can be processed at a given time. Increasing
 
 === `dsn`
 
-The DSN of the MySQL database to connect to.
+The data source name (DSN) of the MySQL database from which you want to stream updates. Use the format `user:password@tcp(localhost:3306)/database`.
 
 *Type*: `string`
 
@@ -272,7 +272,7 @@ The maximum number of attempts the MySQL driver will try to re-establish a broke
 
 === `snapshot_max_batch_size`
 
-The maximum number of rows to be streamed in a single batch when taking a snapshot.
+The maximum number of table rows to fetch in each batch when taking a snapshot. This option is only available when `stream_snapshot` is set to `true`.
 
 *Type*: `int`
 
@@ -280,13 +280,13 @@ The maximum number of rows to be streamed in a single batch when taking a snapsh
 
 === `stream_snapshot`
 
-If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current binlog position.
+When set to `true`, this input streams a snapshot of all existing data in the source database before streaming data changes. To use this setting, all database tables that you want to replicate _must_ have a primary key. When set to `false`, the input starts streaming from the current binlog position.
 
 *Type*: `bool`
 
 === `tables[]`
 
-A list of tables to stream from the database.
+A list of the database table names to stream changes from. Specify each table name as a separate item.
 
 *Type*: `array<string>`
 

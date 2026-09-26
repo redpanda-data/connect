@@ -77,7 +77,7 @@ func redisStreamsInputConfig() *service.ConfigSpec {
 				Advanced().
 				Default("1s"),
 			service.NewDurationField(siFieldTimeout).
-				Description("The length of time to poll for new messages before reattempting.").
+				Description(pollTimeoutDescription).
 				Advanced().
 				Default("1s"),
 		)

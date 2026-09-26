@@ -34,8 +34,7 @@ func SelectProcessorConfig() *service.ConfigSpec {
 		Stable().
 		Categories("Integration").
 		Summary("Runs an SQL select query against a database and returns the result as an array of objects, one for each row returned, containing a key for each column queried and its value.").
-		Description(`
-If the query fails to execute then the message will remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].`).
+		Description(queryFailureDescription).
 		Field(driverField).
 		Field(dsnField).
 		Field(service.NewStringField("table").
@@ -45,12 +44,9 @@ If the query fails to execute then the message will remain unchanged and the err
 			Description("A list of columns to query.").
 			Example([]string{"*"}).
 			Example([]string{"foo", "bar", "baz"})).
-		Field(service.NewStringField("where").
-			Description("An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Placeholders should always be question marks, and will automatically be converted to dollar syntax when the postgres or clickhouse drivers are used.").
-			ShortDescription("An optional where clause. Placeholders must be question marks, populated from args_mapping.").
+		Field(selectWhereField().
 			Example("meow = ? and woof = ?").
-			Example("user_id = ?").
-			Optional()).
+			Example("user_id = ?")).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
 			ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").

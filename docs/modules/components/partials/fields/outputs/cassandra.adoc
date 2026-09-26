@@ -44,7 +44,7 @@ Control time intervals between retry attempts.
 
 === `backoff.initial_interval`
 
-The initial period to wait between retry attempts.
+The initial period to wait between retry attempts. The retry interval increases for each failed attempt, up to the `backoff.max_interval` value. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.
 
 *Type*: `string`
 
@@ -188,7 +188,7 @@ If enabled the driver will not attempt to get host info from the system.peers ta
 
 === `exponential_reconnection`
 
-Optional exponential reconnection policy, this replaces the default constant policy of the driver.
+Configure exponential backoff for reconnection attempts to DOWN nodes. When enabled, this replaces the driver's default constant reconnection policy with an exponential backoff strategy that gradually increases the delay between reconnection attempts. This reduces connection storm scenarios during widespread outages while ensuring eventual recovery.
 
 *Type*: `object`
 
@@ -212,19 +212,19 @@ The maximum number of retry attempts.
 
 === `host_selection_policy`
 
-Optional host selection policy configurations. Highly recommended in deployments with multiple DCs. Host selection is always token aware if the token can be calculated from query. By default the underlying policy is round robin over all nodes. Users can specify a local DC and rack to use for the DC Aware & Rack Aware policies. 
+Advanced host selection policy settings for Cassandra clusters, highly recommended in multi-datacenter (DC) deployments. Use these options to optimize query routing in multi-DC and multi-rack deployments. By specifying a local DC and rack, you can use the DC-aware and rack-aware policies to direct queries to the closest nodes, reducing latency and improving fault tolerance. If not set, the default policy is round-robin across all available nodes. Host selection is always token-aware if the token can be calculated from the query.
 
 *Type*: `object`
 
 === `host_selection_policy.local_dc`
 
-The local DC to use, enables DC aware policy.
+The name of the local datacenter to prioritize for query routing. Enables DC-aware host selection, ensuring queries are sent to nodes within this datacenter whenever possible. Recommended for clusters spanning multiple datacenters to minimize cross-DC traffic.
 
 *Type*: `string`
 
 === `host_selection_policy.local_rack`
 
-The local rack to use, requires local_dc to be set, enables rack aware policy.
+The name of the local rack to prioritize for query routing. Requires `local_dc` to be set. Enables rack-aware host selection, further optimizing query placement within the specified datacenter. Useful for deployments with multiple racks per datacenter to improve resilience and reduce intra-DC latency.
 
 *Type*: `string`
 
@@ -292,7 +292,7 @@ A query to execute for each message.
 
 === `reconnect_interval`
 
-Attempts to reconnect known DOWN nodes in every ReconnectInterval.
+The interval at which Redpanda Connect attempts to reconnect to Cassandra nodes that are marked as DOWN. This setting helps maintain connectivity in unstable network conditions or during node maintenance. Use Go duration format such as `30s`, `1m`, or `5m`. Setting this too low may create unnecessary connection attempts, while setting it too high may delay recovery from network issues.
 
 *Type*: `string`
 

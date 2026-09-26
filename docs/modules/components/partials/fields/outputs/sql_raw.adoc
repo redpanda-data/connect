@@ -4,7 +4,7 @@
 
 === `args_mapping`
 
-An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that includes the same number of values in an array as the placeholder arguments in the `query` field.
 
 *Type*: `string`
 
@@ -301,7 +301,7 @@ init_statement: |-
 
 === `max_in_flight`
 
-The maximum number of batches to be sending in parallel at any given time.
+The maximum number of batches to send in parallel at any given time. When multiple queries are configured and you consume from Redpanda or Kafka, messages are ordered by partition within each transaction, so you can keep this above `1` to parallelize writes across partitions while preserving consume order within each partition. Messages without a `kafka_partition` metadata field are treated as partition `0`.
 
 *Type*: `int`
 
@@ -309,13 +309,13 @@ The maximum number of batches to be sending in parallel at any given time.
 
 === `queries[]`
 
-A list of query statements. When a `when` condition is specified on entries, the first query whose condition evaluates to `true` (or that has no condition) is executed for each message. When no `when` conditions are present, all queries execute for each message within a transaction. When specifying multiple statements without conditions, they are all executed within a transaction.
+A list of database statements to run in addition to the main `query`. When a `when` condition is specified on entries, the first query whose condition evaluates to `true` (or that has no condition) is executed for each message. When no `when` conditions are present, all queries are executed for each message within a single transaction.
 
 *Type*: `array<object>`
 
 === `queries[].args_mapping`
 
-An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that includes the same number of values in an array as the placeholder arguments in the `query` field.
 
 *Type*: `string`
 
@@ -331,27 +331,52 @@ args_mapping: root = [ meta("user.id") ]
 
 === `queries[].query`
 
-The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2` and so on). The style to use is outlined in this table:
+The query to execute.
 
-| Driver | Placeholder Style |
-|---|---|
-| `clickhouse` | Dollar sign |
-| `mysql` | Question mark |
-| `postgres` | Dollar sign |
-| `pgx` | Dollar sign |
-| `mssql` | Question mark |
-| `sqlite` | Question mark |
-| `oracle` | Colon |
-| `snowflake` | Question mark |
-| `trino` | Question mark |
-| `gocosmos` | Colon |
+You must include the correct placeholders for the specified database driver. Some drivers use question marks (`?`), whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2`, and so on). The following table shows the placeholder style for each driver:
 
+|===
+| Driver | Placeholder style
+
+| `clickhouse`
+| Dollar sign (`$`)
+
+| `gocosmos`
+| Colon (`:`)
+
+| `mssql`
+| Question mark (`?`)
+
+| `mysql`
+| Question mark (`?`)
+
+| `oracle`
+| Colon (`:`)
+
+| `pgx`
+| Dollar sign (`$`)
+
+| `postgres`
+| Dollar sign (`$`)
+
+| `snowflake`
+| Question mark (`?`)
+
+| `spanner`
+| Question mark (`?`)
+
+| `sqlite`
+| Question mark (`?`)
+
+| `trino`
+| Question mark (`?`)
+|===
 
 *Type*: `string`
 
 === `queries[].when`
 
-An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether this query should be executed. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is the one that executes. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether to execute this query. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is executed. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.
 
 *Type*: `string`
 
@@ -367,21 +392,46 @@ when: root = this.operation == "delete"
 
 === `query`
 
-The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2` and so on). The style to use is outlined in this table:
+The query to execute.
 
-| Driver | Placeholder Style |
-|---|---|
-| `clickhouse` | Dollar sign |
-| `mysql` | Question mark |
-| `postgres` | Dollar sign |
-| `pgx` | Dollar sign |
-| `mssql` | Question mark |
-| `sqlite` | Question mark |
-| `oracle` | Colon |
-| `snowflake` | Question mark |
-| `trino` | Question mark |
-| `gocosmos` | Colon |
+You must include the correct placeholders for the specified database driver. Some drivers use question marks (`?`), whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2`, and so on). The following table shows the placeholder style for each driver:
 
+|===
+| Driver | Placeholder style
+
+| `clickhouse`
+| Dollar sign (`$`)
+
+| `gocosmos`
+| Colon (`:`)
+
+| `mssql`
+| Question mark (`?`)
+
+| `mysql`
+| Question mark (`?`)
+
+| `oracle`
+| Colon (`:`)
+
+| `pgx`
+| Dollar sign (`$`)
+
+| `postgres`
+| Dollar sign (`$`)
+
+| `snowflake`
+| Question mark (`?`)
+
+| `spanner`
+| Question mark (`?`)
+
+| `sqlite`
+| Question mark (`?`)
+
+| `trino`
+| Question mark (`?`)
+|===
 
 *Type*: `string`
 
@@ -393,7 +443,7 @@ query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
 
 === `unsafe_dynamic_query`
 
-Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Great care should be made to ensure your queries are defended against injection attacks.
+Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Make sure your queries are defended against injection attacks.
 
 *Type*: `bool`
 

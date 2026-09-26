@@ -15,7 +15,7 @@ ifndef::env-cloud[]
 Introduced in version 4.96.0.
 endif::[]
 
-Each output batch is encoded into a single Doris Stream Load request. The sink first contacts FE and follows the Stream Load redirect to BE before uploading the batch body. The batch is only acknowledged when Doris reports success.
+Each output batch is encoded into a single Doris Stream Load request. The output first contacts a Doris frontend (FE) node and follows the Stream Load redirect to BE (a backend node) before uploading the batch body. A batch is only acknowledged when Doris reports success.
 
 == Performance
 

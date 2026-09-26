@@ -49,12 +49,12 @@ func processorSpec() *service.ConfigSpec {
 				Example("xyz-example.eu-central.aws.cloud.qdrant.io:6334"),
 			service.NewStringField(qpFieldAPIToken).
 				Secret().
-				Description("The Qdrant API token for authentication. Defaults to an empty string.").Default(""),
-			service.NewTLSToggledField(qpFieldTLS).Description("TLS(HTTPS) config to use when connecting"),
+				Description("The Qdrant API token to use for authentication, which defaults to an empty string.").Default(""),
+			service.NewTLSToggledField(qpFieldTLS),
 			service.NewInterpolatedStringField(qpFieldCollectionName).
-				Description("The name of the collection in Qdrant."),
+				Description("The name of the Qdrant collection you want to query."),
 			service.NewBloblangField(qpFieldVectorMapping).
-				Description("The mapping to extract the search vector from the document.").
+				Description("A mapping to extract search vectors from the returned document.").
 				Example(`root = [1.2, 0.5, 0.76]`).
 				Example(`root = this.vector`).
 				Example(`root = [[0.352,0.532,0.532,0.234],[0.352,0.532,0.532,0.234]]`).
@@ -63,7 +63,7 @@ func processorSpec() *service.ConfigSpec {
 				Example(`root = {"some_dense": [0.352,0.532,0.532,0.234]}`),
 			service.NewBloblangField(qpFieldFilter).
 				Optional().
-				Description("Additional filtering to perform on the results. The mapping should return a valid filter (using the proto3 encoded form) in qdrant. See the https://qdrant.tech/documentation/concepts/filtering/[^Qdrant documentation] for examples.").
+				Description("Specify additional filtering to perform on returned results. Mappings must return a valid Qdrant filter using the proto3-encoded form. For examples, see the https://qdrant.tech/documentation/concepts/filtering/[Qdrant documentation^].").
 				ShortDescription("Additional filtering applied to results. Must return a valid qdrant filter in proto3 encoded form.").
 				Example(`
 root.must = [
@@ -80,18 +80,18 @@ root.must_not = [
 `),
 			service.NewStringListField(qpFieldPayloadFields).
 				Default([]any{}).
-				Description("The fields to include or exclude in returned result based on the `payload_filter`.").
+				Description("The fields to include or exclude in returned results. Use this field in combination with `payload_filter`.").
 				ShortDescription("The fields to include or exclude in the result, based on payload_filter."),
 			service.NewStringAnnotatedEnumField(qpFieldPayloadFilter, map[string]string{
 				"include": "Include the payload fields specified in `payload_fields`.",
 				"exclude": "Exclude the payload fields specified in `payload_fields`.",
 			}).
 				Default("include").
-				Description("The way the fields in `payload_fields` are filtered in the result.").
+				Description("Whether to include or exclude the fields specified in `payload_fields` from the returned results.").
 				ShortDescription("How the fields in payload_fields are filtered in the result."),
 			service.NewIntField(qpFieldLimit).
 				Default(10).
-				Description("The maximum number of points to return."),
+				Description("The maximum number of points to return from the collection."),
 		)
 }
 

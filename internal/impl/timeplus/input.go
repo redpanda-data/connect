@@ -41,17 +41,18 @@ from each row received.
 If it is a streaming query, this input will keep running until the query is terminated. If it is a table query, this input will shut down once the rows from the query are exhausted.`).
 		Example(
 			"From Timeplus Enterprise Cloud via HTTP",
-			"You will need to create API Key on Timeplus Enterprise Cloud Web console first and then set the `apikey` field.",
+			"Create an API key in the Timeplus Enterprise Cloud web console, then set it in the `apikey` field.",
 			`
 input:
   timeplus:
     url: https://us-west-2.timeplus.cloud
     workspace: my_workspace_id
     query: select * from iot
-    apikey: <Your API Key>`).
+    apikey: <Your API Key>
+`).
 		Example(
 			"From Timeplus Enterprise (self-hosted) via HTTP",
-			"For self-housted Timeplus Enterprise, you will need to specify the username and password as well as the URL of the App server",
+			"For self-hosted Timeplus Enterprise, specify the username and password as well as the URL of the app server.",
 			`
 input:
   timeplus:
@@ -59,25 +60,27 @@ input:
     workspace: my_workspace_id
     query: select * from iot
     username: username
-    password: pw`).
+    password: pw
+`).
 		Example(
 			"From Timeplus Enterprise (self-hosted) via TCP",
-			"Make sure the the schema of url is tcp",
+			"Make sure the scheme of the `url` is `tcp`.",
 			`
 input:
   timeplus:
     url: tcp://localhost:8463
     query: select * from iot
     username: timeplus
-    password: timeplus`)
+    password: timeplus
+`)
 
 	inputConfigSpec.
-		Field(service.NewStringField("query").Description("The query to run").Examples("select * from iot", "select count(*) from table(iot)")).
-		Field(service.NewURLField("url").Description("The url should always include schema and host.").Default("tcp://localhost:8463")).
-		Field(service.NewStringField("workspace").Optional().Description("ID of the workspace. Required when reads from Timeplus Enterprise.")).
-		Field(service.NewStringField("apikey").Secret().Optional().Description("The API key. Required when reads from Timeplus Enterprise Cloud")).
-		Field(service.NewStringField("username").Optional().Description("The username. Required when reads from Timeplus Enterprise (self-hosted) or Timeplusd")).
-		Field(service.NewStringField("password").Secret().Optional().Description("The password. Required when reads from Timeplus Enterprise (self-hosted) or Timeplusd"))
+		Field(service.NewStringField("query").Description("The query to execute on Timeplus Enterprise (Cloud or Self-Hosted) or `timeplusd`.").Examples("select * from iot", "select count(*) from table(iot)")).
+		Field(service.NewURLField("url").Description("The URL of your Timeplus instance, which should always include the schema and host.").Default("tcp://localhost:8463")).
+		Field(service.NewStringField("workspace").Optional().Description("The ID of the workspace you want to read messages from. This field is required if you are connecting to Timeplus Enterprise (Cloud or Self-Hosted) using HTTP.")).
+		Field(service.NewStringField("apikey").Secret().Optional().Description("The API key for the Timeplus Enterprise REST API. You need to generate the key in the web console of Timeplus Enterprise (Cloud). This field is required if you are reading messages from Timeplus Enterprise (Cloud).")).
+		Field(service.NewStringField("username").Optional().Description("The username for the Timeplus application server. This field is required if you are reading messages from Timeplus Enterprise (Self-Hosted) or `timeplusd`.")).
+		Field(service.NewStringField("password").Secret().Optional().Description("The password for the Timeplus application server. This field is required if you are reading messages from Timeplus Enterprise (Self-Hosted) or `timeplusd`."))
 	service.MustRegisterInput(
 		"timeplus", inputConfigSpec, newTimeplusInput)
 }

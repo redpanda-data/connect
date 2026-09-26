@@ -5,9 +5,12 @@
 //   body:   include::...[tag=body]   (renders the summary and description)
 
 // tag::meta[]
+:description: Writes batches of messages to any graph database that supports the Neo4j and Bolt URI schemes, using operations written in the Cypher query language.
 // end::meta[]
 
 // tag::body[]
+Writes batches of messages to any graph database that supports the Neo4j and Bolt URI schemes, using operations written in the Cypher query language.
+
 ifndef::env-cloud[]
 Introduced in version 4.37.0.
 endif::[]

@@ -55,7 +55,7 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 				Description("CSV of tables to be included in the changefeed").
 				Example([]string{"table1", "table2"}),
 			service.NewStringField("cursor_cache").
-				Description("A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest cursor that has been successfully delivered, this allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.").
+				Description("A xref:components:caches/about.adoc[cache resource] to use for storing the latest cursor that has been successfully delivered. This allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.").
 				ShortDescription("Cache resource storing the last delivered cursor, so restarts resume instead of re-reading the table.").
 				Optional(),
 			service.NewStringListField("options").
