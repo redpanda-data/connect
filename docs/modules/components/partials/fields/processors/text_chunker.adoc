@@ -4,7 +4,7 @@
 
 === `allowed_special[]`
 
-A list of special tokens that are allowed in the output.
+A list of special tokens to include in the output from this processor.
 
 *Type*: `array<string>`
 
@@ -12,7 +12,7 @@ A list of special tokens that are allowed in the output.
 
 === `chunk_overlap`
 
-The number of characters to overlap between chunks.
+The number of characters duplicated in adjacent chunks of text.
 
 *Type*: `int`
 
@@ -20,7 +20,7 @@ The number of characters to overlap between chunks.
 
 === `chunk_size`
 
-The maximum size of each chunk.
+The maximum size of each chunk, using the selected `length_measure`.
 
 *Type*: `int`
 
@@ -28,7 +28,7 @@ The maximum size of each chunk.
 
 === `disallowed_special[]`
 
-A list of special tokens that are disallowed in the output.
+A list of special tokens to exclude from the output of this processor.
 
 *Type*: `array<string>`
 
@@ -40,7 +40,7 @@ A list of special tokens that are disallowed in the output.
 
 === `include_code_blocks`
 
-Whether to include code blocks in the output.
+When set to `true`, this processor includes code blocks in the output.
 
 *Type*: `bool`
 
@@ -48,7 +48,7 @@ Whether to include code blocks in the output.
 
 === `keep_reference_links`
 
-Whether to keep reference links in the output.
+When set to `true`, this processor includes reference links in the output.
 
 *Type*: `bool`
 
@@ -56,7 +56,7 @@ Whether to keep reference links in the output.
 
 === `length_measure`
 
-The method for measuring the length of a string.
+Choose a method to measure the length of a string.
 
 *Type*: `string`
 
@@ -82,7 +82,9 @@ The method for measuring the length of a string.
 
 === `separators[]`
 
-A list of strings that should be considered as separators between chunks.
+A list of strings to use as separators between chunks when the `strategy` field is set to `recursive_character`.
+
+By default, the following separators are tried in turn: double newlines (`\n\n`), single newlines (`\n`), spaces (`" "`), and the empty string (`""`).
 
 *Type*: `array<string>`
 
@@ -96,6 +98,8 @@ A list of strings that should be considered as separators between chunks.
 ----
 
 === `strategy`
+
+Choose a strategy for breaking content down into chunks.
 
 *Type*: `string`
 
@@ -116,7 +120,7 @@ A list of strings that should be considered as separators between chunks.
 
 === `token_encoding`
 
-The encoding to use for tokenization.
+The type of encoding to use for tokenization.
 
 *Type*: `string`
 

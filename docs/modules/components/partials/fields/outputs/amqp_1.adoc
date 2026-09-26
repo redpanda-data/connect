@@ -10,7 +10,9 @@ An optional Bloblang mapping that can be defined in order to set the `applicatio
 
 === `content_type`
 
-Specify the message body content type. The option `string` will transfer the message as an AMQP value of type string. Consider choosing the option `string` if your intention is to transfer UTF-8 string messages (like JSON messages) to the destination.
+The content type of the message body.
+
+Set this field value to `string` to transfer each message as an AMQP string. Consider using the `string` option if you want to write UTF-8 string messages, such as JSON messages, to your data destination.
 
 *Type*: `string`
 
@@ -431,7 +433,9 @@ Whether to skip server side certificate verification.
 
 === `urls[]`
 
-A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. Each URL in the list is tried in order until a connection is established, and that URL is then used until the connection is closed.
+
+If an item in the list contains commas, it is split into multiple URLs.
 
 ifndef::env-cloud[]
 Requires version 4.23.0 or later.

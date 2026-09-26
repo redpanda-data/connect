@@ -82,7 +82,7 @@ func pruneSeen(seen map[string]time.Time, cur time.Time, overlap time.Duration) 
 func newJiraInputConfigSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Categories("Services").
-		Version("4.96.0").
+		Version("4.100.0").
 		Summary("Streams Jira issues, comments, or changelog entries via JQL with incremental polling.").
 		Description(`Periodically queries Jira's REST API using a JQL filter and emits one message per resource. The cursor (max issue ` + "`updated`" + ` timestamp, plus the set of issue versions already emitted at the boundary) is persisted via the configured cache resource after every fully-acknowledged page, so progress survives restarts (including mid-backfill), and boundary issues are not re-emitted on every poll.
 

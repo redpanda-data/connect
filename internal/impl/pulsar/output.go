@@ -52,18 +52,12 @@ func outputConfigSpec() *service.ConfigSpec {
 			Example("pulsar+ssl://pulsar.us-west.example.com:6651")).
 		Field(service.NewStringField("topic").
 			Description("The topic to publish to.")).
-		Field(service.NewObjectField("tls",
-			service.NewStringField("root_cas_file").
-				Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").
-				ShortDescription("An optional path to a root certificate authority file, often a .pem containing a certificate chain.").
-				Default("").
-				Example("./root_cas.pem")).
-			Description("Specify the path to a custom CA certificate to trust broker TLS service.")).
+		Field(tlsField()).
 		Field(service.NewInterpolatedStringField("key").
-			Description("The key to publish messages with.").
+			Description("An optional key to populate for each message.").
 			Default("")).
 		Field(service.NewInterpolatedStringField("ordering_key").
-			Description("The ordering key to publish messages with.").
+			Description(`The ordering key to publish messages with.`).
 			Default("")).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").

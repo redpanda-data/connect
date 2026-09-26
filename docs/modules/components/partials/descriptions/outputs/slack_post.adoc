@@ -5,8 +5,11 @@
 //   body:   include::...[tag=body]   (renders the summary and description)
 
 // tag::meta[]
+:description: Posts a new message to a Slack channel using the Slack API method chat.postMessage.
 // end::meta[]
 
 // tag::body[]
-Post a new message to a Slack channel using https://api.slack.com/methods/chat.postMessage[^chat.postMessage]
+Posts a new message to a Slack channel using the Slack API method chat.postMessage.
+
+This output calls the https://api.slack.com/methods/chat.postMessage[`chat.postMessage`^] Slack API method once for each message.
 // end::body[]

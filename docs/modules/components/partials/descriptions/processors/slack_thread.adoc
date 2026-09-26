@@ -5,8 +5,11 @@
 //   body:   include::...[tag=body]   (renders the summary and description)
 
 // tag::meta[]
+:description: Reads a Slack thread using the Slack API method conversations.replies.
 // end::meta[]
 
 // tag::body[]
-Read a thread using the https://api.slack.com/methods/conversations.replies[^Slack API]
+Reads a Slack thread using the Slack API method conversations.replies.
+
+This processor calls the https://api.slack.com/methods/conversations.replies[`conversations.replies`^] Slack API method and replaces the message content with a JSON array of all messages in the thread.
 // end::body[]

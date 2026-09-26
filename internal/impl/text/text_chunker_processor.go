@@ -59,15 +59,18 @@ func newTextChunkerSpec() *service.ConfigSpec {
 				"recursive_character": "Split text recursively by characters (defined in `separators`).",
 				"markdown":            "Split text by markdown headers.",
 				"token":               "Split text by tokens.",
-			}),
+			}).
+				Description("Choose a strategy for breaking content down into chunks."),
 			service.NewIntField(tcpFieldChunkSize).
-				Description("The maximum size of each chunk.").
+				Description("The maximum size of each chunk, using the selected `length_measure`.").
 				Default(textsplitter.DefaultOptions().ChunkSize),
 			service.NewIntField(tcpFieldChunkOverlap).
-				Description("The number of characters to overlap between chunks.").
+				Description("The number of characters duplicated in adjacent chunks of text.").
 				Default(textsplitter.DefaultOptions().ChunkOverlap),
 			service.NewStringListField(tcpFieldSeparators).
-				Description("A list of strings that should be considered as separators between chunks.").
+				Description(`A list of strings to use as separators between chunks when the `+"`"+`strategy`+"`"+` field is set to `+"`"+`recursive_character`+"`"+`.
+
+By default, the following separators are tried in turn: double newlines (`+"`"+`\n\n`+"`"+`), single newlines (`+"`"+`\n`+"`"+`), spaces (`+"`"+`" "`+"`"+`), and the empty string (`+"`"+`""`+"`"+`).`).
 				Default(textsplitter.DefaultOptions().Separators),
 			service.NewStringAnnotatedEnumField(tcpFieldWithLenFunc, map[string]string{
 				"utf8":      "Determine the length of text using the number of utf8 bytes.",
@@ -75,28 +78,28 @@ func newTextChunkerSpec() *service.ConfigSpec {
 				"token":     "Use the number of tokens (using the `token_encoding` tokenizer) to determine the length of a string.",
 				"graphemes": "Use unicode graphemes to determine the length of a string.",
 			}).
-				Description("The method for measuring the length of a string.").
+				Description("Choose a method to measure the length of a string.").
 				Default("runes"),
 			service.NewStringField(tcpFieldTokenEncoding).
 				Optional().
 				Advanced().
-				Description("The encoding to use for tokenization.").
+				Description("The type of encoding to use for tokenization.").
 				Example("cl100k_base").
 				Example("r50k_base"),
 			service.NewStringListField(tcpFieldAllowedSpecial).
 				Advanced().
 				Default(textsplitter.DefaultOptions().AllowedSpecial).
-				Description("A list of special tokens that are allowed in the output."),
+				Description("A list of special tokens to include in the output from this processor."),
 			service.NewStringListField(tcpFieldDisallowedSpecial).
 				Advanced().
 				Default(textsplitter.DefaultOptions().DisallowedSpecial).
-				Description("A list of special tokens that are disallowed in the output."),
+				Description("A list of special tokens to exclude from the output of this processor."),
 			service.NewBoolField(tcpFieldIncludeCodeBlocks).
 				Default(textsplitter.DefaultOptions().CodeBlocks).
-				Description("Whether to include code blocks in the output."),
+				Description("When set to `true`, this processor includes code blocks in the output."),
 			service.NewBoolField(tcpFieldReferenceLinks).
 				Default(textsplitter.DefaultOptions().ReferenceLinks).
-				Description("Whether to keep reference links in the output."),
+				Description("When set to `true`, this processor includes reference links in the output."),
 		)
 }
 

@@ -4,7 +4,7 @@
 
 === `app_token`
 
-The Slack App token to use.
+The app-level token to use to authenticate and connect to Slack.
 
 *Type*: `string`
 
@@ -18,7 +18,7 @@ Whether messages that are rejected (nacked) at the output level should be automa
 
 === `bot_token`
 
-The Slack Bot User OAuth token to use.
+Your Slack bot user's OAuth token, which must have the https://api.slack.com/scopes/connections:write[`connections.write` scope^] to access your Slack app's https://api.slack.com/methods/apps.connections.open[Socket Mode WebSocket URL^].
 
 *Type*: `string`
 
