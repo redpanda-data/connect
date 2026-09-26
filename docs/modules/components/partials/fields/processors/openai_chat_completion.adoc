@@ -4,7 +4,7 @@
 
 === `api_key`
 
-The API key for OpenAI API.
+The API secret key for OpenAI API.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -12,19 +12,22 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `frequency_penalty`
 
-Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
+Specify a number between `-2.0` and `2.0`. Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.
 
 *Type*: `float`
 
 === `history`
 
-The history of the prior conversation. A bloblang query that should result in an array of objects of the form: [{"role": "user", "content": "<text>"}, {"role":"assistant", "content":"<text>"}]
+Include messages from a prior conversation. You must use a Bloblang query to create an array of objects in the form of `[{"role": "user", "content": "<text>"}, {"role":"assistant", "content":"<text>"}]` where:
+
+- `role` is the sender of the original messages, either `system`, `user`, or `assistant`.
+- `content` is the text of the original messages.
 
 *Type*: `string`
 
 === `image`
 
-An image to send along with the prompt. The mapping result must be a byte array.
+An optional image to submit along with the prompt. The result of the Bloblang mapping must be a byte array.
 
 ifndef::env-cloud[]
 Requires version 4.38.0 or later.
@@ -40,31 +43,31 @@ image: 'root = this.image.decode("base64") # decode base64 encoded image'
 
 === `json_schema`
 
-The JSON schema to use when responding in `json_schema` format. To learn more about what JSON schema is supported see the https://platform.openai.com/docs/guides/structured-outputs[OpenAI documentation^].
+The JSON schema used by the model when generating responses in `json_schema` format. To learn more about supported JSON schema features, see the https://platform.openai.com/docs/guides/structured-outputs#supported-schemas[OpenAI documentation^].
 
 *Type*: `object`
 
 === `json_schema.description`
 
-Additional description of the schema for the LLM.
+An optional description, which helps the model understand the schema's purpose.
 
 *Type*: `string`
 
 === `json_schema.name`
 
-The name of the schema.
+The name of the JSON schema to use.
 
 *Type*: `string`
 
 === `json_schema.schema`
 
-The JSON schema for the LLM to use when generating the output.
+The JSON schema for the model to use when generating the output.
 
 *Type*: `string`
 
 === `max_tokens`
 
-The maximum number of tokens that can be generated in the chat completion.
+The maximum number of tokens to generate for chat completion.
 
 *Type*: `int`
 
@@ -94,7 +97,7 @@ model: gpt4-turbo
 
 === `presence_penalty`
 
-Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.
+Specify a number between `-2.0` and `2.0`. Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.
 
 *Type*: `float`
 
@@ -108,7 +111,9 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `response_format`
 
-Specify the model's output format. If `json_schema` is specified, then additionally a `json_schema` or `schema_registry` must be configured.
+Specify the output format of the configured `model`.
+
+If you choose the `json_schema` option, you must also configure a `json_schema` or `schema_registry`.
 
 *Type*: `string`
 
@@ -118,7 +123,7 @@ Specify the model's output format. If `json_schema` is specified, then additiona
 
 === `schema_registry`
 
-The schema registry to dynamically load schemas from when responding in `json_schema` format. Schemas themselves must be in JSON format. To learn more about what JSON schema is supported see the https://platform.openai.com/docs/guides/structured-outputs[OpenAI documentation^].
+The schema registry to dynamically load schemas for model responses in `json_schema` format. Schemas must be in JSON format. To learn more about supported JSON schema features, see the https://platform.openai.com/docs/guides/structured-outputs#supported-schemas[OpenAI documentation^].
 
 *Type*: `object`
 
@@ -204,7 +209,7 @@ A method used to sign the token such as RS256, RS384, RS512 or EdDSA.
 
 === `schema_registry.name_prefix`
 
-The prefix of the name for this schema, the schema ID is used as a suffix.
+A prefix to add to the schema registry name. To form the complete schema registry name, the schema ID is appended as a suffix.
 
 *Type*: `string`
 
@@ -262,13 +267,13 @@ Whether to use OAuth version 1 in requests.
 
 === `schema_registry.refresh_interval`
 
-The refresh rate for getting the latest schema. If not specified the schema does not refresh.
+How frequently to poll the schema registry for the latest schema. If not specified, the schema does not refresh.
 
 *Type*: `string`
 
 === `schema_registry.subject`
 
-The subject name to fetch the schema for.
+The subject name used to fetch the schema from the schema registry.
 
 *Type*: `string`
 
@@ -420,13 +425,13 @@ The base URL of the schema registry service.
 
 === `seed`
 
-If specified, our system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed.
+When set to a specific number, the model makes a best effort to generate consistent responses for requests that use the same prompt, seed, and parameters. Determinism is not guaranteed.
 
 *Type*: `int`
 
 === `server_address`
 
-The Open API endpoint that the processor sends requests to. Update the default value to use another OpenAI compatible service.
+The OpenAI API endpoint to which the processor sends requests. Update the default value to use a different OpenAI-compatible service.
 
 *Type*: `string`
 
@@ -434,7 +439,7 @@ The Open API endpoint that the processor sends requests to. Update the default v
 
 === `stop[]`
 
-Up to 4 sequences where the API will stop generating further tokens.
+Specify up to four stop sequences to use. When the model encounters a stop pattern, it stops generating text and returns the final response.
 
 *Type*: `array<string>`
 
@@ -448,15 +453,20 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `temperature`
 
-What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
+Choose a sampling temperature between `0` and `2`:
 
-We generally recommend altering this or top_p but not both.
+* Higher values, such as `0.8` make the output more random.
+* Lower values, such as `0.2` make the output more focused and deterministic.
+
+Redpanda recommends adding a value for this field or `top_p`, but not both.
 
 *Type*: `float`
 
 === `tools[]`
 
-The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.
+External tools the model can invoke, such as functions, APIs, or web browsing. You can build subpipelines of processors that include definitions of these tools, and the specified model can choose when to invoke them to help answer a prompt.
+
+NOTE: If you don't want to use external tools, enter an empty array `tools:[]`.
 
 *Type*: `array<object>`
 
@@ -522,15 +532,15 @@ The pipeline to execute when the LLM uses this tool.
 
 === `top_p`
 
-An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.
+An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. For example, a `top_p` of `0.1` means only the tokens comprising the top 10% probability mass are sampled.
 
-We generally recommend altering this or temperature but not both.
+Redpanda recommends adding a value for this field or `temperature`, but not both.
 
 *Type*: `float`
 
 === `user`
 
-A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
+A unique identifier that represents the end-user generating the prompt. This value can help OpenAI monitor and detect https://openai.com/policies/usage-policies/[platform abuse^].
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
