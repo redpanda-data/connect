@@ -37,7 +37,7 @@ func redpandaOutputConfig() *service.ConfigSpec {
 		Summary("A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
-`).
+`).Version("4.39.0").
 		Fields(redpandaOutputConfigFields()...).
 		LintRule(FranzWriterConfigLints()).
 		Example("Simple Common Output", "Data is generated and written to a topic `bar`, targeting the cluster configured within the `redpanda` block at the bottom. This lets you configure TLS and SASL once and share them across multiple inputs and outputs.", `
@@ -77,7 +77,7 @@ func redpandaOutputConfigFields() []*service.ConfigField {
 				Description(FranzMaxInFlightDescription + " Increase this number to improve throughput until performance plateaus.").
 				Default(256),
 			service.NewBatchPolicyField(roFieldBatching).
-				Description("Optional explicit batching policy for the output. Note that when batches are formed at the input level they can be expanded by this policy, but not contracted. When consuming data from a Redpanda input it is recommended to tune batches from the input config via the `max_yield_batch_bytes` field, or the `unordered_processing.batching` field if appropriate.").
+				Description("Optional explicit batching policy for the output. Note that when batches are formed at the input level they can be expanded by this policy, but not contracted. When consuming data from a Redpanda input it is recommended to tune batches from the input config via the `max_yield_batch_bytes` field, or the `unordered_processing.batching` field if appropriate.").Version("4.75.0").
 				ShortDescription("Optional explicit batching policy for the output. Input-level batches can be expanded by this policy but not contracted."),
 			service.NewInjectTracingSpanMappingField(),
 		},

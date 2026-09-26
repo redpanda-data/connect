@@ -235,7 +235,7 @@ Schema metadata is discovered using a two-tier strategy:
 *Fields with null values, unknown BSON types, or mixed-type arrays* are mapped to the `+"`Any`"+` schema type. The `+"`parquet_encode`"+` processor does not support `+"`Any`"+` and will error if it encounters one. Add an upstream processor (for example, `+"`mapping`"+`) to convert or remove these fields before `+"`parquet_encode`"+`.
 
 *Schema stability:* MongoDB collections may contain documents with varying field sets. When this occurs, the schema updates on each structural change, which can cause frequent schema version bumps in schema registries with compatibility modes. For schema registry targets, configuring a `+"`$jsonSchema`"+` validator on the collection is strongly recommended.
-    `).
+    `).Version("4.48.0").
 		Fields(
 			service.NewStringField(fieldClientURL).
 				Description("The URL of the target MongoDB server.").
@@ -265,12 +265,12 @@ Schema metadata is discovered using a two-tier strategy:
 				ShortDescription("The maximum number of messages that can be in flight at a given time.").
 				Default(1000),
 			service.NewDurationField(fieldCheckpointWriteTimeout).
-				Description("Bounds the checkpoint writes that run outside the normal read loop - storing the position a completed snapshot reached, and clearing a position that can no longer be resumed from - so that a shutdown racing either of them is not extended indefinitely by a slow cache. Raise this for slow remote caches (for example `redis` or `dynamodb`), where losing the post-snapshot write costs a full re-snapshot on the next start.").
+				Description("Bounds the checkpoint writes that run outside the normal read loop - storing the position a completed snapshot reached, and clearing a position that can no longer be resumed from - so that a shutdown racing either of them is not extended indefinitely by a slow cache. Raise this for slow remote caches (for example `redis` or `dynamodb`), where losing the post-snapshot write costs a full re-snapshot on the next start.").Version("4.106.0").
 				ShortDescription("Bounds the detached checkpoint writes so a slow cache cannot extend shutdown indefinitely.").
 				Default(defaultCheckpointWriteTimeout.String()).
 				Advanced(),
 			service.NewStringEnumField(fieldOnUnresumablePosition, onUnresumablePositionFail, onUnresumablePositionReset).
-				Description("What to do when the stored stream position can no longer be resumed from (for example it has aged out of the oplog) and `stream_snapshot` is disabled, so there is no snapshot to recover with: `fail` stops the input with an error, preserving the checkpoint for inspection; `reset` clears the checkpoint and restarts streaming from the current oplog position, skipping the changes between the lost position and now. When `stream_snapshot` is enabled this field has no effect: recovery re-runs the snapshot, which loses nothing.").
+				Description("What to do when the stored stream position can no longer be resumed from (for example it has aged out of the oplog) and `stream_snapshot` is disabled, so there is no snapshot to recover with: `fail` stops the input with an error, preserving the checkpoint for inspection; `reset` clears the checkpoint and restarts streaming from the current oplog position, skipping the changes between the lost position and now. When `stream_snapshot` is enabled this field has no effect: recovery re-runs the snapshot, which loses nothing.").Version("4.106.0").
 				ShortDescription("What to do when the stored position is unresumable and there is no snapshot to recover with.").
 				Default(onUnresumablePositionFail).
 				Advanced(),

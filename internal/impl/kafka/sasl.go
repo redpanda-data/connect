@@ -65,7 +65,7 @@ func SASLFields() *service.ConfigField {
 			Description("Key/value pairs to add to OAUTHBEARER authentication requests.").
 			Optional(),
 		service.NewObjectField("aws", config.SessionFields()...).
-			Description("Contains AWS-specific fields for when `sasl.mechanism` is set to `AWS_MSK_IAM`.").
+			Description("Contains AWS-specific fields for when `sasl.mechanism` is set to `AWS_MSK_IAM`.").Version("4.3.0").
 			ShortDescription("AWS specific fields, used when the mechanism is AWS_MSK_IAM.").
 			Optional(),
 	).

@@ -55,7 +55,7 @@ end-to-end encrypted vector storage with automatic dimension detection and index
 
 All vector data is encrypted client-side before being sent to the server, ensuring complete
 data privacy. The encryption key never leaves your infrastructure.
-`).
+`).Version("4.66.0").
 		Fields(
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(poFieldBatching),

@@ -82,7 +82,7 @@ func authFieldSpecs() []*service.ConfigField {
 			ShortDescription("Consumer Secret of the Salesforce Connected App, paired with client_id.").
 			Secret(),
 		service.NewStringField(sfFieldAPIVersion).
-			Description("Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/{api_version}/...`) and available fields/objects. Must be supported by your org; check Setup → Company Information. Older versions may lack recent fields.").
+			Description("Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/{api_version}/...`) and available fields/objects. Must be supported by your org; check Setup → Company Information. Older versions may lack recent fields.").Version("4.90.3").
 			ShortDescription("Salesforce REST API version to target, prefixed with v.").
 			Default("v65.0").
 			Example("v65.0").
@@ -119,7 +119,7 @@ func NewCheckpointConfigFromParsed(pConf *service.ParsedConfig) (CheckpointConfi
 // construction time (see newHTTPConfigFromParsed).
 func httpFieldSpec() *service.ConfigField {
 	return service.NewObjectField(sfFieldHTTP, httpclient.Fields()...).
-		Description("HTTP client configuration for Salesforce REST calls (OAuth token endpoint and, where applicable, data queries).").
+		Description("HTTP client configuration for Salesforce REST calls (OAuth token endpoint and, where applicable, data queries).").Version("4.90.3").
 		Advanced()
 }
 

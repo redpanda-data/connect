@@ -157,7 +157,7 @@ This input adds the following metadata fields to each message:
 - All path parameters
 - All cookies
 
-You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).Version("4.51.0").
 		Fields(
 			service.NewStringField(hsiFieldPath).
 				Description("The endpoint path to listen for data delivery requests.").

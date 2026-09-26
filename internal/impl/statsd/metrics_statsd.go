@@ -46,7 +46,7 @@ func statsdSpec() *service.ConfigSpec {
 				Description("Metrics tagging is supported in a variety of formats.").
 				Default("none"),
 			service.NewStringMapField(smFieldTags).
-				Description("Global tags added to each metric.").
+				Description("Global tags added to each metric.").Version("4.76.0").
 				Advanced().
 				Example(map[string]string{
 					"hostname": "localhost",

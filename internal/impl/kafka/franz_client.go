@@ -62,7 +62,7 @@ func FranzConnectionFields() []*service.ConfigField {
 			Example([]string{"foo:9092", "bar:9092"}).
 			Example([]string{"foo:9092,bar:9092"}),
 		service.NewStringField(kfcFieldClientID).
-			Description("An identifier for the client connection. This identifier appears in broker logs and metrics, which helps you identify the Redpanda Connect instance that is connecting.").
+			Description("An identifier for the client connection. This identifier appears in broker logs and metrics, which helps you identify the Redpanda Connect instance that is connecting.").Version("4.21.0").
 			Default("redpanda-connect").
 			Advanced(),
 		service.NewTLSToggledField(kfcFieldTLS),
@@ -75,12 +75,12 @@ func FranzConnectionFields() []*service.ConfigField {
 		service.NewDurationField(kfcFieldRequestTimeoutOverhead).
 			Description(`Additional time to apply as overhead when calculating request deadlines. For most requests, the deadline is this overhead alone. For requests that define their own timeout field, the overhead is added on top of that timeout, which helps prevent premature timeouts.
 
-This field is roughly equivalent to Apache Kafka's ` + "`" + `request.timeout.ms` + "`" + ` parameter, but grants extra time to requests that have timeout fields.`).
+This field is roughly equivalent to Apache Kafka's ` + "`" + `request.timeout.ms` + "`" + ` parameter, but grants extra time to requests that have timeout fields.`).Version("4.53.0").
 			ShortDescription("Additional time granted when deadlining requests. Roughly equivalent to request.timeout.ms.").
 			Default("10s").
 			Advanced(),
 		service.NewDurationField(kfcFieldConnIdleTimeout).
-			Description("The approximate amount of time that connections can remain idle before they are closed. In the worst case, a connection can stay idle for up to twice this value. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
+			Description("The approximate amount of time that connections can remain idle before they are closed. In the worst case, a connection can stay idle for up to twice this value. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").Version("4.53.0").
 			Default("20s").
 			Advanced(),
 		netutil.DialerConfigSpec(),

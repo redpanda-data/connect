@@ -55,7 +55,7 @@ You need to provide the endpoint of your SpiceDB instance and a Bearer token for
 
 The zed token of the newest update consumed and acked is stored in a cache in order to start reading from it each time the input is initialised.
 Ideally this cache should be persisted across restarts.
-`).
+`).Version("4.39.0").
 		Fields(
 			service.NewURLField("endpoint").
 				Description("The endpoint of your SpiceDB instance.").

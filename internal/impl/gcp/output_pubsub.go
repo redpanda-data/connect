@@ -72,13 +72,13 @@ pipeline:
 			service.NewIntField("max_in_flight").Default(64).Description("The maximum number of messages to have in flight at a given time. Increasing this may improve throughput."),
 			service.NewIntField("count_threshold").
 				Default(defaults.CountThreshold).
-				Description("Publish a pubsub buffer when it has this many messages"),
+				Description("Publish a pubsub buffer when it has this many messages").Version("4.16.0"),
 			service.NewDurationField("delay_threshold").
 				Default(defaults.DelayThreshold.String()).
-				Description("Publish a non-empty pubsub buffer after this delay has passed."),
+				Description("Publish a non-empty pubsub buffer after this delay has passed.").Version("4.16.0"),
 			service.NewIntField("byte_threshold").
 				Default(defaults.ByteThreshold).
-				Description("Publish a batch when its size in bytes reaches this value."),
+				Description("Publish a batch when its size in bytes reaches this value.").Version("4.16.0"),
 			service.NewDurationField("publish_timeout").
 				Default(defaults.Timeout.String()).
 				Example("10s").
@@ -87,7 +87,7 @@ pipeline:
 				Description("The maximum length of time to wait before abandoning a publish attempt for a message.").
 				Advanced(),
 			service.NewBoolField("validate_topic").
-				Description("Whether to validate the existence of the topic before publishing. If set to false and the topic does not exist, messages will be lost.").
+				Description("Whether to validate the existence of the topic before publishing. If set to false and the topic does not exist, messages will be lost.").Version("4.59.0").
 				ShortDescription("Validate that the topic exists before publishing. Messages are lost if disabled and it does not.").
 				Default(true).
 				Advanced(),
@@ -107,10 +107,10 @@ pipeline:
 					Description("Configures the behavior when trying to publish additional messages while the flow controller is full. The available options are block (default), ignore (disable), and signal_error (publish results will return an error).").
 					ShortDescription("What to do when publishing while the flow controller is full: block, ignore or signal_error."),
 			).
-				Description("For a given topic, configures the PubSub client's internal buffer for messages to be published.").
+				Description("For a given topic, configures the PubSub client's internal buffer for messages to be published.").Version("4.12.0").
 				Advanced(),
 			service.NewBatchPolicyField("batching").
-				Description("Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can further trade-off some latency for throughput.").
+				Description("Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can further trade-off some latency for throughput.").Version("4.16.0").
 				ShortDescription("Batching policy for this output. Larger batches trade latency for throughput."),
 		)
 }

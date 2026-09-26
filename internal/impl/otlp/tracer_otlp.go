@@ -29,7 +29,7 @@ func otlpTracerSpec() *service.ConfigSpec {
 		Fields(
 			service.NewStringField(otFieldService).
 				Default("benthos").
-				Description("The name of the service in traces."),
+				Description("The name of the service in traces.").Version("4.54.0"),
 		).
 		Fields(collectorListFields()...).
 		Fields(

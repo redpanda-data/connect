@@ -192,7 +192,7 @@ output:
         operation: upsert
         external_id_field: External_Id__c
         mode: bulk
-` + "```")
+` + "```").Version("4.85.0")
 
 	spec = spec.Fields(authFieldSpecs()...).
 		Field(service.NewIntField(sfsFieldBulkBatchSize).

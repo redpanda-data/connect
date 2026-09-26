@@ -31,7 +31,7 @@ const (
 func threadProcessorSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Summary("Reads a Slack thread using the Slack API method conversations.replies.").
-		Description(`This processor calls the https://api.slack.com/methods/conversations.replies[`+"`conversations.replies`"+`^] Slack API method and replaces the message content with a JSON array of all messages in the thread.`).
+		Description(`This processor calls the https://api.slack.com/methods/conversations.replies[`+"`conversations.replies`"+`^] Slack API method and replaces the message content with a JSON array of all messages in the thread.`).Version("4.52.0").
 		Fields(
 			service.NewStringField(pFieldBotToken).Description("Your Slack bot user's OAuth token, which must have the correct permissions to read messages from the Slack channel specified in `channel_id`.").LintRule(`
         root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }

@@ -39,7 +39,7 @@ func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Version("4.52.0").
 		Summary("Posts a new message to a Slack channel using the Slack API method chat.postMessage.").
-		Description(`This output calls the https://api.slack.com/methods/chat.postMessage[`+"`chat.postMessage`"+`^] Slack API method once for each message.`).
+		Description(`This output calls the https://api.slack.com/methods/chat.postMessage[`+"`chat.postMessage`"+`^] Slack API method once for each message.`).Version("4.52.0").
 		Fields(
 			service.NewStringField(oFieldBotToken).Description("Your Slack bot user's OAuth token, which must have the correct permissions to post messages to the target Slack channel.").LintRule(`
         root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }

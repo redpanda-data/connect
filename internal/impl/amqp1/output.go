@@ -65,7 +65,7 @@ This output benefits from sending multiple messages in flight in parallel for im
 			service.NewOutputMaxInFlightField(),
 			service.NewTLSToggledField(tlsField),
 			service.NewBloblangField(appPropsMapField).
-				Description("An optional Bloblang mapping that can be defined in order to set the `application-properties` on output messages.").
+				Description("An optional Bloblang mapping that can be defined in order to set the `application-properties` on output messages.").Version("4.11.0").
 				ShortDescription("An optional Bloblang mapping setting application-properties on output messages.").
 				Optional().
 				Advanced(),
@@ -76,17 +76,17 @@ This output benefits from sending multiple messages in flight in parallel for im
 				string(amqpContentTypeOpaqueBinary), string(amqpContentTypeString)).
 				Description(`The content type of the message body.
 
-Set this field value to `+"`"+`string`+"`"+` to transfer each message as an AMQP string. Consider using the `+"`"+`string`+"`"+` option if you want to write UTF-8 string messages, such as JSON messages, to your data destination.`).
+Set this field value to `+"`"+`string`+"`"+` to transfer each message as an AMQP string. Consider using the `+"`"+`string`+"`"+` option if you want to write UTF-8 string messages, such as JSON messages, to your data destination.`).Version("4.45.0").
 				ShortDescription("The message body content type. Choose string to transfer UTF-8 strings as an AMQP string value.").
 				Advanced().
 				Default(string(amqpContentTypeOpaqueBinary)),
 			service.NewBoolField(persistentField).
-				Description("If set to true, the message will be marked as persistent, ensuring it is stored durably and not lost if an intermediary (such as a broker) restarts. By default, messages are not durable.").
+				Description("If set to true, the message will be marked as persistent, ensuring it is stored durably and not lost if an intermediary (such as a broker) restarts. By default, messages are not durable.").Version("4.70.0").
 				ShortDescription("Mark the message as persistent so it is stored durably and survives a broker restart.").
 				Advanced().
 				Default(false),
 			service.NewStringListField(targetCapsField).
-				Description("Lists the extension capabilities the sender desires from the target, such as support for queues, topics, durability, sharing, or temporary destinations.").
+				Description("Lists the extension capabilities the sender desires from the target, such as support for queues, topics, durability, sharing, or temporary destinations.").Version("4.70.0").
 				ShortDescription("Extension capabilities the sender desires from the target, such as queues, topics or durability.").
 				Optional().
 				Advanced().
@@ -94,58 +94,58 @@ Set this field value to `+"`"+`string`+"`"+` to transfer each message as an AMQP
 				Example([]string{"topic"}).
 				Example([]string{"queue", "topic"}),
 			service.NewInterpolatedStringField(messagePropsTo).
-				Description("The field specifies the node that is the intended destination of the message, which may differ from the node currently receiving the transfer. This field supports Bloblang interpolation.").
+				Description("The field specifies the node that is the intended destination of the message, which may differ from the node currently receiving the transfer. This field supports Bloblang interpolation.").Version("4.70.0").
 				ShortDescription("The node that is the intended destination of the message, which may differ from the receiving node.").
 				Optional().
 				Advanced().
 				Example("amqp://localhost:5672/").
 				Example(`${! meta("target_address") }`),
 			service.NewInterpolatedStringField(messagePropsMsgID).
-				Description(`Set the message-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.`).
+				Description(`Set the message-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.`).Version("4.87.0").
 				ShortDescription("Set the message-id property on outgoing messages, auto-detected as UUID, uint64 or string.").
 				Optional().
 				Advanced().
 				Example(`${! uuid_v4() }`).
 				Example(`${! meta("amqp_message_id") }`),
 			service.NewInterpolatedStringField(messagePropsCorrelID).
-				Description(`Set the correlation-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.`).
+				Description(`Set the correlation-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.`).Version("4.87.0").
 				ShortDescription("Set the correlation-id property on outgoing messages, auto-detected as UUID, uint64 or string.").
 				Optional().
 				Advanced().
 				Example(`${! meta("amqp_correlation_id") }`),
 			service.NewInterpolatedStringField(messagePropsSubject).
-				Description(`Set the subject property on outgoing AMQP messages. This field supports Bloblang interpolation.`).
+				Description(`Set the subject property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsReplyTo).
-				Description(`Set the reply-to property on outgoing AMQP messages. This field supports Bloblang interpolation.`).
+				Description(`Set the reply-to property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsGroupID).
-				Description(`Set the group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.`).
+				Description(`Set the group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsGroupSeq).
-				Description(`Set the group-sequence property on outgoing AMQP messages. Must be a valid uint32 value. This field supports Bloblang interpolation.`).
+				Description(`Set the group-sequence property on outgoing AMQP messages. Must be a valid uint32 value. This field supports Bloblang interpolation.`).Version("4.87.0").
 				ShortDescription("Set the group-sequence property on outgoing messages. Must be a valid uint32.").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsReplyToGrpID).
-				Description(`Set the reply-to-group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.`).
+				Description(`Set the reply-to-group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsUserID).
-				Description(`Set the user-id property on outgoing AMQP messages. This field supports Bloblang interpolation.`).
+				Description(`Set the user-id property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsContentType).
-				Description(`Set the content-type property on outgoing AMQP messages. This field supports Bloblang interpolation.`).
+				Description(`Set the content-type property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced().
 				Example("application/json").
 				Example("text/plain; charset=utf-8"),
 			service.NewInterpolatedStringField(messagePropsContentEnc).
-				Description(`Set the content-encoding property on outgoing AMQP messages. This field supports Bloblang interpolation.`).
+				Description(`Set the content-encoding property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 		).LintRule(`

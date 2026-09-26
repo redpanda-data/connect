@@ -54,7 +54,7 @@ This tracer automatically captures trace spans as messages flow through your pip
 - *Monitor pipeline health* across distributed Redpanda Connect instances
 - *Correlate activity* across multiple services using trace IDs
 
-The tracer writes to a dedicated Redpanda topic (default: `+"`otel-traces`"+`) that trace analysis tools can consume. Configure sampling to control trace volume in high-throughput environments.`).
+The tracer writes to a dedicated Redpanda topic (default: `+"`otel-traces`"+`) that trace analysis tools can consume. Configure sampling to control trace volume in high-throughput environments.`).Version("4.71.0").
 		Example(
 			"Basic tracing setup",
 			"Enable tracing for a pipeline, sending all trace data to a local Redpanda cluster.",
@@ -156,7 +156,7 @@ tracer:
 					},
 					service.NewHTTPRequestAuthSignerFields(),
 				)...,
-			).Description("Schema registry information to publish schemas for tracing data along with the data."),
+			).Description("Schema registry information to publish schemas for tracing data along with the data.").Version("4.73.0"),
 			service.NewStringField("service").
 				Default("redpanda-connect").
 				Description("The service name to identify this Redpanda Connect instance in traces. This appears in trace visualizations and helps correlate traces across distributed systems. Use descriptive names like `order-processor` or `analytics-pipeline`."),

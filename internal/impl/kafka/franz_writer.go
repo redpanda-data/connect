@@ -69,7 +69,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 			Example("100MB").
 			Example("50mib"),
 		service.NewStringField(kfwFieldBrokerWriteMaxBytes).
-			Description("The maximum number of bytes this output can write to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.").
+			Description("The maximum number of bytes this output can write to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.").Version("4.35.0").
 			ShortDescription("Upper bound on bytes written to a broker connection in a single write.").
 			Advanced().
 			Default("100MiB").
@@ -78,7 +78,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 		service.NewIntField(kfwFieldMaxBufferedRecords).
 			Description("The maximum number of records the client will buffer in memory before blocking. " +
 				"When this limit is reached, `Produce()` calls will block until buffered records are delivered and space frees up. " +
-				"Increase this value for high-throughput pipelines to avoid back-pressure stalls.").
+				"Increase this value for high-throughput pipelines to avoid back-pressure stalls.").Version("4.92.0").
 			ShortDescription("Maximum records buffered in memory before producing blocks.").
 			Advanced().
 			Default(10000),
@@ -86,7 +86,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 			Description("The maximum number of bytes the client will buffer in memory before blocking. " +
 				"When this limit is reached, `Produce()` calls will block until buffered records are delivered. " +
 				"Set to `0` to disable the byte-level limit (only `max_buffered_records` applies). " +
-				"This limit is checked after `max_buffered_records`.").
+				"This limit is checked after `max_buffered_records`.").Version("4.92.0").
 			ShortDescription("Maximum bytes buffered in memory before producing blocks. Set to 0 to disable the byte limit.").
 			Advanced().
 			Default("0").
@@ -97,7 +97,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 				"While `idempotent_write` is enabled (the default) this must be `1`, as the client relies on a single in-flight request per broker to guarantee ordering. " +
 				"To use higher values you must set `idempotent_write` to `false`, which allows requests to be pipelined for throughput but may cause duplicate and out-of-order delivery on retries. " +
 				"Note that this is distinct from the output's `max_in_flight` field, which counts message batches being written in parallel rather than produce requests on the wire. " +
-				"A value of `1` is not a throughput ceiling: records from concurrent writes are coalesced into fewer, larger produce requests.").
+				"A value of `1` is not a throughput ceiling: records from concurrent writes are coalesced into fewer, larger produce requests.").Version("4.92.0").
 			ShortDescription("Maximum produce requests in flight per broker connection. Must be 1 while idempotent_write is enabled.").
 			Advanced().
 			Default(1),
@@ -105,7 +105,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 			Description("The maximum number of times a record produce is retried on failure before the record is failed. " +
 				"When a record fails, all records buffered in the same partition are also failed to preserve gapless ordering. " +
 				"Set to `0` for unlimited retries (the default). " +
-				"With `idempotent_write` enabled, retries are only enforced when safe to do so without creating invalid sequence numbers.").
+				"With `idempotent_write` enabled, retries are only enforced when safe to do so without creating invalid sequence numbers.").Version("4.92.0").
 			ShortDescription("Maximum number of times a record produce is retried before the record fails.").
 			Advanced().
 			Default(0),
@@ -114,7 +114,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 				"This is evaluated before writing a request or after a produce response. " +
 				"When a record times out, all records in the same partition are also failed. " +
 				"Set to `0s` for no timeout (the default). " +
-				"With `idempotent_write` enabled, timeouts are only enforced when safe to do so without creating invalid sequence numbers.").
+				"With `idempotent_write` enabled, timeouts are only enforced when safe to do so without creating invalid sequence numbers.").Version("4.92.0").
 			ShortDescription("Maximum time a record may sit in the producer buffer before failing. Equivalent to Kafka's delivery.timeout.ms.").
 			Advanced().
 			Default("0s"),
@@ -135,7 +135,7 @@ func FranzProducerFields() []*service.ConfigField {
 				Description("Override the default murmur2 hashing partitioner.").
 				Advanced().Optional(),
 			service.NewBoolField(kfwFieldIdempotentWrite).
-				Description("Enable the idempotent write producer option. When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition, so retries do not produce duplicates. This option requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. Disable this option if the `IDEMPOTENT_WRITE` permission is unavailable, for example in some managed Kafka services or Redpanda clusters with strict ACLs. Disabling this option only affects retry behavior: duplicates may occur on producer retries, but the pipeline continues to function normally.").
+				Description("Enable the idempotent write producer option. When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition, so retries do not produce duplicates. This option requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. Disable this option if the `IDEMPOTENT_WRITE` permission is unavailable, for example in some managed Kafka services or Redpanda clusters with strict ACLs. Disabling this option only affects retry behavior: duplicates may occur on producer retries, but the pipeline continues to function normally.").Version("4.24.0").
 				ShortDescription("Enable the idempotent write producer option for exactly-once semantics per partition. Requires the IDEMPOTENT_WRITE permission on CLUSTER.").
 				Default(true).
 				Advanced(),
@@ -145,7 +145,7 @@ func FranzProducerFields() []*service.ConfigField {
 				"leader": "Wait for the leader broker to acknowledge (acks=1). Messages are lost if the leader fails before replication.",
 			}).
 				Description("The number of acknowledgements the leader broker must receive from ISR brokers before responding to the produce request. " +
-					"When `idempotent_write` is enabled this must be set to `all`.").
+					"When `idempotent_write` is enabled this must be set to `all`.").Version("4.92.0").
 				ShortDescription("Acknowledgements the leader must receive from ISR brokers before responding. Must be all when idempotent_write is enabled.").
 				Default("all").
 				Advanced(),
@@ -155,7 +155,7 @@ func FranzProducerFields() []*service.ConfigField {
 				Optional().
 				Advanced(),
 			service.NewBoolField(kfwFieldAllowAutoTopicCreation).
-				Description("Enables topics to be auto created if they do not exist when fetching their metadata. If set to `false`, the topic must already exist.").
+				Description("Enables topics to be auto created if they do not exist when fetching their metadata. If set to `false`, the topic must already exist.").Version("4.58.0").
 				Default(true).
 				Advanced(),
 		},
@@ -396,7 +396,7 @@ func FranzWriterConfigFields() []*service.ConfigField {
 		service.NewInterpolatedStringField(kfwFieldKey).
 			Description(kafkaOutputKeyDescription).Optional(),
 		service.NewInterpolatedStringField(kfwFieldPartition).
-			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").
+			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").Version("4.13.0").
 			ShortDescription("An explicit partition for each message. Only relevant when partitioner is set to manual.").
 			Example(`${! meta("partition") }`).
 			Optional(),

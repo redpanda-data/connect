@@ -53,7 +53,7 @@ func newTextChunkerSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
 		Summary("Breaks text-based message content into chunks using a configurable strategy, typically to create vector embeddings of large documents.").
-		Description(`A processor allowing splitting text into chunks based on several different strategies.`).
+		Description(`A processor allowing splitting text into chunks based on several different strategies.`).Version("4.51.0").
 		Fields(
 			service.NewStringAnnotatedEnumField(tcpFieldStrategy, map[string]string{
 				"recursive_character": "Split text recursively by characters (defined in `separators`).",

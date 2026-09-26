@@ -93,7 +93,7 @@ func pbiConfigFromParsed(pConf *service.ParsedConfig) (conf pbiConfig, err error
 // input and output.
 func pubsubEndpointField(name string) *service.ConfigField {
 	return service.NewStringField(name).
-		Description("An optional endpoint that overrides the default of `pubsub.googleapis.com:443`. Use this field to connect to a region-specific Pub/Sub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[Pub/Sub regional endpoints^].").
+		Description("An optional endpoint that overrides the default of `pubsub.googleapis.com:443`. Use this field to connect to a region-specific Pub/Sub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[Pub/Sub regional endpoints^].").Version("4.12.0").
 		ShortDescription("Optional endpoint overriding the default pubsub.googleapis.com:443, for region-specific endpoints.").
 		Example("us-central1-pubsub.googleapis.com:443").
 		Example("us-west3-pubsub.googleapis.com:443").
@@ -146,7 +146,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Description("Defines the topic that the subscription should be vinculated to.").
 					Default(""),
 			).
-				Description("Allows you to configure the input subscription and creates if it doesn't exist.").
+				Description("Allows you to configure the input subscription and creates if it doesn't exist.").Version("4.11.0").
 				Advanced(),
 		)
 }
