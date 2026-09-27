@@ -30,8 +30,6 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-
-	"github.com/redpanda-data/connect/v4/internal/retries"
 )
 
 const (
@@ -157,7 +155,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Advanced().Default(false),
 			service.NewBatchPolicyField(oskFieldBatching),
 			service.NewIntField(oskFieldMaxRetries).
-				Description(retries.MaxRetriesDescription).
+				Description(service.RetryMaxRetriesDescription).
 				Advanced().Default(0),
 			service.NewBackOffField(oskFieldBackoff, true, &backoff.ExponentialBackOff{
 				InitialInterval: time.Second * 3,

@@ -39,28 +39,24 @@ func CommonRetryBackOffFields(
 ) []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewIntField(crboFieldMaxRetries).
-			Description(MaxRetriesDescription).
+			Description(service.RetryMaxRetriesDescription).
 			Default(defaultMaxRetries).
 			Advanced(),
 		service.NewObjectField(crboFieldBackOff,
 			service.NewDurationField(crboFieldInitInterval).
-				Description("The initial period to wait between retry attempts. The retry interval increases for each failed attempt, up to the `backoff.max_interval` value. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
+				Description(service.RetryInitialIntervalDescription).
 				Default(defaultInitInterval),
 			service.NewDurationField(crboFieldMaxInterval).
-				Description("The maximum period to wait between retry attempts.").
+				Description(service.RetryMaxIntervalDescription).
 				Default(defaultMaxInterval),
 			service.NewDurationField(crboFieldMaxElapsedTime).
-				Description("The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.").
+				Description(service.RetryMaxElapsedTimeDescription).
 				Default(defaultMaxElapsed),
 		).
-			Description("The exponential backoff between retry attempts. The wait starts at `initial_interval` and grows with each failed attempt, up to `max_interval`.").
+			Description(service.RetryBackOffDescription).
 			Advanced(),
 	}
 }
-
-// MaxRetriesDescription describes a max_retries field whose zero value means
-// retry without a limit.
-const MaxRetriesDescription = "The maximum number of retries before giving up on the request. If set to zero there is no discrete limit."
 
 func fieldDurationOrEmptyStr(pConf *service.ParsedConfig, path ...string) (time.Duration, error) {
 	if dStr, err := pConf.FieldString(path...); err == nil && dStr == "" {

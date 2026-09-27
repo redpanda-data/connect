@@ -35,10 +35,11 @@ import (
 // helper: a fix to one copy then reaches every component that uses it.
 //
 // It compares `.Description(...)` string literals of at least 40 characters on
-// fields with the same name, in this repo and in the public packages of
-// benthos, and reports pairs whose words are at least 90% the same. A copy of
-// benthos text can only be shared once benthos exports it, so benthos's
-// internal packages are out of scope.
+// fields with the same name, in this repo and in the `public` and `internal`
+// packages of benthos, and reports pairs whose words are at least 90% the
+// same. Pairs where both copies are in benthos are left to benthos. A copy of
+// benthos text is shared by using what benthos exports from `public/service`,
+// because this repo cannot import benthos's internal packages.
 func TestFieldDescriptionsAreNotCopied(t *testing.T) {
 	roots := []string{"../../../internal"}
 	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/redpanda-data/benthos/v4").Output()
@@ -46,7 +47,7 @@ func TestFieldDescriptionsAreNotCopied(t *testing.T) {
 		t.Fatalf("locating the benthos module: %v", err)
 	}
 	benthos := strings.TrimSpace(string(out))
-	roots = append(roots, filepath.Join(benthos, "public"))
+	roots = append(roots, filepath.Join(benthos, "public"), filepath.Join(benthos, "internal"))
 
 	var lits []descLiteral
 	for _, r := range roots {

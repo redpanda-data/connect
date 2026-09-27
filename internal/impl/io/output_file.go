@@ -45,7 +45,7 @@ func fileOutputSpec() *service.ConfigSpec {
 		Description(`Messages can be written to different files by using xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the path field. However, only one file is ever open at a given time, and therefore when the path changes the previously open file is closed.`).
 		Fields(
 			service.NewInterpolatedStringField(foFieldPath).
-				Description("The file to write to, if the file does not yet exist it will be created.").
+				Description("The path of the file to write to. The output creates the file and any missing parent directories. A write fails when the file name contains a NUL byte, or a character that the host operating system does not allow in file names, such as `:` on macOS and Windows.").
 				Examples(
 					"/tmp/data.txt",
 					"/tmp/${! timestamp_unix() }.txt",
