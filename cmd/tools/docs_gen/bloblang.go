@@ -154,6 +154,9 @@ func renderBloblangSpec(spec bloblangSpec, kind string) string {
 	if spec.Description != "" {
 		b.WriteString("\n" + ensurePeriod(spec.Description) + "\n")
 	}
+	if spec.Version != "" {
+		b.WriteString("\nifndef::env-cloud[]\nIntroduced in version " + htmlEscaper.Replace(spec.Version) + ".\nendif::[]\n")
+	}
 	b.WriteString("\n")
 	if spec.Params != nil && len(spec.Params.Named) > 0 {
 		b.WriteString("\n== Parameters\n\n[cols=\"1,1,3\"]\n|===\n| Name | Type | Description\n\n")
