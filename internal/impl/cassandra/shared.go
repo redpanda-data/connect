@@ -122,7 +122,7 @@ func clientFields(tlsVersion string) []*service.ConfigField {
 				Description("The maximum number of retry attempts.").
 				LintRule(`root = if this < 1 { "reconnection.max_retries must be greater than or equal to 1" }`),
 			service.NewDurationField(cFieldExponentialReconnectionInitialInterval).
-				Description("The initial period to wait between retry attempts.").
+				Description("The period to wait before the first reconnection attempt to a node marked as DOWN. Each later attempt doubles the previous wait, with random jitter of up to half this value, until `max_interval` is reached.").
 				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.initial_interval must be a positive duration"}`),
 			service.NewDurationField(cFieldExponentialReconnectionMaxInterval).
 				Description("The longest wait between reconnection attempts to a node marked as DOWN.").

@@ -47,28 +47,28 @@ type Config struct {
 func FieldSpec() *service.ConfigField {
 	return service.NewObjectField("oauth2",
 		service.NewBoolField(fieldEnabled).
-			Description("Whether to use OAuth version 2 in requests.").
+			Description(service.OAuth2EnabledDescription).
 			Default(false),
 
 		service.NewStringField(fieldClientKey).
-			Description("A value used to identify the client to the token provider.").
+			Description(service.OAuth2ClientKeyDescription).
 			Default(""),
 
 		service.NewStringField(fieldClientSecret).
-			Description("A secret used to establish ownership of the client key.").
+			Description(service.OAuth2ClientSecretDescription).
 			Default("").Secret(),
 
 		service.NewURLField(fieldTokenURL).
-			Description("The URL of the token provider.").
+			Description(service.OAuth2TokenURLDescription).
 			Default(""),
 
 		service.NewStringListField(fieldScopes).
-			Description("A list of optional requested permissions.").
+			Description(service.OAuth2ScopesDescription).
 			Default([]any{}).
 			Advanced(),
 
 		service.NewAnyMapField(fieldEndpointParams).
-			Description("A list of optional endpoint parameters, values should be arrays of strings.").
+			Description(service.OAuth2EndpointParamsDescription).
 			Advanced().
 			Example(map[string]any{
 				"audience": []string{"https://example.com"},
@@ -89,7 +89,7 @@ root = if this.type() == "object" {
 }
 `),
 	).
-		Description("Allows you to specify open authentication via OAuth version 2 using the client credentials token flow.").
+		Description(service.OAuth2Description).
 		Optional().Advanced()
 }
 

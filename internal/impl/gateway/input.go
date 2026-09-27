@@ -163,22 +163,22 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Description("The endpoint path to listen for data delivery requests.").
 				Default("/"),
 			service.NewStringField(hsiFieldRateLimit).
-				Description("An optional xref:components:rate_limits/about.adoc[rate limit] to throttle requests by.").
-				ShortDescription("An optional rate limit resource to throttle requests by.").
+				Description("The name of an optional xref:components:rate_limits/about.adoc[rate limit resource] that the gateway applies to each request it receives. When the rate limit is reached, the gateway rejects the request with a `429` response and a `Retry-After` header.").
+				ShortDescription("An optional rate limit resource that the gateway applies to each request.").
 				Default(""),
 			service.NewObjectField(hsiFieldResponse,
 				service.NewInterpolatedStringField(hsiFieldResponseStatus).
-					Description("Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.").
-					ShortDescription("The status code returned with synchronous responses.").
+					Description("The HTTP status code that the gateway returns when the pipeline produces a synchronous response. The value is interpolated against the first response message, so the code can depend on its contents and metadata.").
+					ShortDescription("The HTTP status code the gateway returns with synchronous responses.").
 					Examples(`${! json("status") }`, `${! meta("status") }`).
 					Default("200"),
 				service.NewInterpolatedStringMapField(hsiFieldResponseHeaders).
-					Description("Specify headers to return with synchronous responses.").
+					Description("The headers that the gateway adds to synchronous responses. Header values are interpolated against the first response message.").
 					Default(map[string]any{
 						"Content-Type": "application/octet-stream",
 					}),
 				service.NewMetadataFilterField(hsiFieldResponseExtractMetadata).
-					Description("Specify criteria for which metadata values are added to the response as headers."),
+					Description("Selects which metadata values of the response messages the gateway adds to the synchronous response as headers."),
 			).
 				Description("Customize messages returned using xref:guides:sync_responses.adoc[synchronous responses].").
 				ShortDescription("Customize messages returned using synchronous responses.").

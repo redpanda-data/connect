@@ -36,7 +36,7 @@ func redisRatelimitConfig() *service.ConfigSpec {
 	}
 
 	spec.Field(service.NewIntField("count").
-		Description("The maximum number of messages to allow for a given period of time.").
+		Description("The maximum number of requests allowed in each `interval`. Requests are counted in Redis under `key`, so every Redpanda Connect instance that uses the same key shares this limit. The value must be greater than zero.").
 		Default(1000).LintRule(`root = if this <= 0 { [ "count must be larger than zero" ] }`)).
 		Field(service.NewDurationField("interval").
 			Description("The time window to limit requests by.").
