@@ -19,6 +19,9 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          # TestNewSpecsHaveVersions reads the previous release tag.
+          fetch-depth: 0
       - name: Install Go
         uses: actions/setup-go@v6
         with:
