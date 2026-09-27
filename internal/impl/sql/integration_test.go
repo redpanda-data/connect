@@ -726,8 +726,9 @@ sql_insert:
 	})
 }
 
-func runClickhouseTest(t *testing.T, dsnScheme string) {
-	t.Parallel()
+// startClickhouse starts one Clickhouse container and returns its mapped native port.
+func startClickhouse(t *testing.T) string {
+	t.Helper()
 
 	pwd, err := os.Getwd()
 	require.NoError(t, err)
@@ -751,8 +752,14 @@ func runClickhouseTest(t *testing.T, dsnScheme string) {
 
 	mappedPort, err := ctr.MappedPort(t.Context(), "9000/tcp")
 	require.NoError(t, err)
+	return mappedPort.Port()
+}
+
+func runClickhouseTest(t *testing.T, dsnScheme, port string) {
+	t.Parallel()
 
 	var db *sql.DB
+	var err error
 	t.Cleanup(func() {
 		if db != nil {
 			db.Close()
@@ -768,7 +775,7 @@ func runClickhouseTest(t *testing.T, dsnScheme string) {
 		return name, err
 	}
 
-	dsn := fmt.Sprintf("%s://localhost:%s/", dsnScheme, mappedPort.Port())
+	dsn := fmt.Sprintf("%s://localhost:%s/", dsnScheme, port)
 	require.Eventually(t, func() bool {
 		if db != nil {
 			db.Close()
@@ -782,7 +789,7 @@ func runClickhouseTest(t *testing.T, dsnScheme string) {
 			db = nil
 			return false
 		}
-		if _, err := createTable("footable"); err != nil {
+		if _, err := createTable("footable_" + dsnScheme); err != nil {
 			db.Close()
 			db = nil
 			return false
@@ -796,6 +803,10 @@ func runClickhouseTest(t *testing.T, dsnScheme string) {
 
 func TestIntegrationClickhouse(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
+
+	// Both DSN schemes use the same container. Each subtest creates tables with unique names.
+	port := startClickhouse(t)
 
 	tests := []struct {
 		name      string
@@ -813,31 +824,16 @@ func TestIntegrationClickhouse(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			runClickhouseTest(t, test.dsnScheme)
+			runClickhouseTest(t, test.dsnScheme, port)
 		})
 	}
 }
 
 func TestIntegrationPostgres(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
-	ctr, err := testcontainers.Run(t.Context(), "postgres:latest",
-		testcontainers.WithExposedPorts("5432/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			"POSTGRES_USER":     "testuser",
-			"POSTGRES_PASSWORD": "testpass",
-			"POSTGRES_DB":       "testdb",
-		}),
-		testcontainers.WithWaitStrategy(
-			wait.ForListeningPort("5432/tcp").WithStartupTimeout(3*time.Minute),
-		),
-	)
-	testcontainers.CleanupContainer(t, ctr)
-	require.NoError(t, err)
-
-	mp, err := ctr.MappedPort(t.Context(), "5432/tcp")
-	require.NoError(t, err)
-	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", mp.Port())
+	dsn := sharedPostgres(t)
 
 	for _, driver := range []string{
 		"postgres",
@@ -887,6 +883,7 @@ func TestIntegrationPostgres(t *testing.T) {
 
 func TestIntegrationPostgresVector(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "pgvector/pgvector:pg16",
 		testcontainers.WithExposedPorts("5432/tcp"),
@@ -1007,6 +1004,7 @@ suffix: ORDER BY embedding <-> '[3,1,2]' LIMIT 1
 
 func TestIntegrationMySQL(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "mysql:latest",
 		testcontainers.WithExposedPorts("3306/tcp"),
@@ -1070,6 +1068,7 @@ func TestIntegrationMySQL(t *testing.T) {
 
 func TestIntegrationMSSQL(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	testPassword := "ins4n3lyStrongP4ssword"
 	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:2025-latest",
@@ -1079,7 +1078,9 @@ func TestIntegrationMSSQL(t *testing.T) {
 			"ACCEPT_EULA": "Y",
 			"SA_PASSWORD": testPassword,
 		}),
-		testcontainers.WithWaitStrategy(
+		// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, SQL Server can need more time to start
+		// when it runs in parallel with the other tests, so set the deadline explicitly.
+		testcontainers.WithWaitStrategyAndDeadline(3*time.Minute,
 			wait.ForListeningPort("1433/tcp").WithStartupTimeout(3*time.Minute),
 		),
 	)
@@ -1133,6 +1134,7 @@ func TestIntegrationMSSQL(t *testing.T) {
 
 func TestIntegrationSQLite(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	var db *sql.DB
 	var err error
@@ -1175,6 +1177,7 @@ func TestIntegrationSQLite(t *testing.T) {
 
 func TestIntegrationOracle(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "gvenzl/oracle-free:slim-faststart",
 		testcontainers.WithExposedPorts("1521/tcp"),
@@ -1241,6 +1244,7 @@ func TestIntegrationOracle(t *testing.T) {
 
 func TestIntegrationTrino(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	testPassword := ""
 	ctr, err := testcontainers.Run(t.Context(), "trinodb/trino:latest",
@@ -1312,6 +1316,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		// This is a third-party bug we cannot fix; skip until gjrc is patched.
 		t.Skip("skipping: gjrc v0.2.2 has a known data race in GjrcResponse.Body")
 	}
+	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
 		testcontainers.WithImagePlatform("linux/amd64"),
@@ -1321,7 +1326,9 @@ func TestIntegrationCosmosDB(t *testing.T) {
 			"AZURE_COSMOS_EMULATOR_PARTITION_COUNT":         "2",
 			"AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE": "false",
 		}),
-		testcontainers.WithWaitStrategy(
+		// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, the emulator can need more time to start
+		// when it runs in parallel with the other tests, so set the deadline explicitly.
+		testcontainers.WithWaitStrategyAndDeadline(3*time.Minute,
 			wait.ForListeningPort("8081/tcp").WithStartupTimeout(3*time.Minute),
 		),
 	)
