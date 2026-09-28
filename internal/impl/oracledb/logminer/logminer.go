@@ -177,18 +177,19 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		wait := lm.cfg.MiningInterval
-		if caughtUp, err := lm.miningCycle(ctx, conn); err != nil {
+		caughtUp, err := lm.miningCycle(ctx, conn)
+		if err != nil {
 			return fmt.Errorf("mining logs: %w", err)
-		} else if caughtUp {
-			if !lm.caughtUpLogged {
-				lm.log.Debugf("Caught up with redo logs, backing off for %s...", lm.cfg.MiningBackoffInterval)
-				lm.caughtUpLogged = true
-			}
-			wait = lm.cfg.MiningBackoffInterval
-		} else {
-			lm.caughtUpLogged = false
 		}
+
+		wait := lm.cfg.MiningInterval
+		if caughtUp {
+			wait = lm.cfg.MiningBackoffInterval
+			if !lm.caughtUpLogged {
+				lm.log.Debugf("Caught up with redo logs, backing off for %s...", wait)
+			}
+		}
+		lm.caughtUpLogged = caughtUp
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
