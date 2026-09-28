@@ -81,6 +81,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Default(false),
 				service.NewDurationField(siFieldWatcherMinimumAge).
 					Description("The minimum period of time since a file was last updated before attempting to consume it. Increasing this period decreases the likelihood that a file will be consumed whilst it is still being written to.").
+					ShortDescription("How long since a file was last updated before it is consumed, avoiding partially written files.").
 					Default("1s").
 					Examples("10s", "1m", "10m"),
 				service.NewDurationField(siFieldWatcherPollInterval).
@@ -89,8 +90,10 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Examples("100ms", "1s"),
 				service.NewStringField(siFieldWatcherCache).
 					Description("A xref:components:caches/about.adoc[cache resource] for storing the paths of files already consumed.").
+					ShortDescription("A cache resource storing the paths of files already consumed.").
 					Default(""),
 			).Description("An experimental mode whereby the input will periodically scan the target paths for new files and consume them, when all files are consumed the input will continue polling for new files.").
+				ShortDescription("An experimental mode that periodically rescans the target paths for new files to consume.").
 				Version("3.42.0"),
 		)
 }
@@ -306,43 +309,60 @@ func (s *sftpReader) Close(ctx context.Context) error {
 	return nil
 }
 
+// tryReadBatch reads the next batch from the current file. When the current
+// file is done it opens the next file and continues, so that a file boundary
+// is never reported to the caller as a lost connection. It returns
+// service.ErrEndOfInput when the path provider has no more files.
 func (s *sftpReader) tryReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	scanner, err := s.initScanner(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
+	for {
+		// A shutdown must interrupt the rotation between files.
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
 
-	parts, codecAckFn, err := scanner.NextBatch(ctx)
-	if err != nil {
+		scanner, err := s.initScanner(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		parts, codecAckFn, err := scanner.NextBatch(ctx)
+		if err == nil {
+			for _, part := range parts {
+				part.MetaSetMut("sftp_path", s.currentFileInfo.path)
+				part.MetaSetMut("sftp_mod_time", s.currentFileInfo.modTime)
+			}
+			return parts, codecAckFn, nil
+		}
+
 		if ctx.Err() != nil {
 			return nil, nil, ctx.Err()
 		}
-		s.stateLock.Lock()
-		scanner = s.scanner
-		s.stateLock.Unlock()
-
-		if scanner != nil {
-			if err := scanner.Close(ctx); err != nil {
-				s.log.With("error", err).Error("Failed to close scanner")
-			}
-
-			s.stateLock.Lock()
-			s.scanner = nil
-			s.stateLock.Unlock()
-		}
+		s.closeScanner(ctx)
 
 		if errors.Is(err, io.EOF) {
-			err = service.ErrNotConnected
+			// The current file is done. Move on to the next file.
+			continue
 		}
 		return nil, nil, err
 	}
+}
 
-	for _, part := range parts {
-		part.MetaSetMut("sftp_path", s.currentFileInfo.path)
-		part.MetaSetMut("sftp_mod_time", s.currentFileInfo.modTime)
+// closeScanner closes the current file scanner, if any, and clears it.
+func (s *sftpReader) closeScanner(ctx context.Context) {
+	s.stateLock.Lock()
+	scanner := s.scanner
+	s.stateLock.Unlock()
+
+	if scanner == nil {
+		return
+	}
+	if err := scanner.Close(ctx); err != nil {
+		s.log.With("error", err).Error("Failed to close scanner")
 	}
 
-	return parts, codecAckFn, nil
+	s.stateLock.Lock()
+	s.scanner = nil
+	s.stateLock.Unlock()
 }
 
 type sftpFile struct {

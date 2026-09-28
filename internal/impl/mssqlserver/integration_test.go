@@ -11,9 +11,11 @@ package mssqlserver_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -429,6 +431,241 @@ microsoft_sql_server_cdc:
 	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
+// TestIntegration_MicrosoftSQLServerCDC_SnapshotAckBarrier verifies that a
+// crash during the snapshot->streaming handoff (after snapshot rows are
+// emitted but before they are acknowledged) does not lose data: because the
+// post-snapshot LSN is only persisted once every snapshot batch is acked, the
+// snapshot must re-run on restart. See CON-504.
+func TestIntegration_MicrosoftSQLServerCDC_SnapshotAckBarrier(t *testing.T) {
+	integration.CheckSkip(t)
+
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
+	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.barrier", "CREATE TABLE dbo.barrier (id INT IDENTITY(1,1) PRIMARY KEY);"))
+
+	const rowCount = 5
+	for range rowCount {
+		db.MustExec("INSERT INTO dbo.barrier DEFAULT VALUES")
+	}
+	db.WaitForCDCChanges(t.Context(), rowCount, "dbo.barrier")
+
+	// batching.count == rowCount forces all snapshot rows into a single output
+	// batch, so the run-1 consumer receives them all at once and can then block
+	// without acking - reproducing the "emitted but not yet acked" handoff state.
+	cfg := fmt.Sprintf(`
+microsoft_sql_server_cdc:
+  connection_string: %s
+  stream_snapshot: true
+  checkpoint_cache: ""
+  include: ["dbo.barrier"]
+  batching:
+    count: %d
+    period: 1h`, connStr, rowCount)
+
+	// Run 1: receive the snapshot rows but never acknowledge them, then
+	// simulate a crash by cancelling the run before the LSN can be persisted.
+	t.Log("Launching run 1 (blocked consumer, simulated crash)...")
+	received := make(chan struct{}, 1)
+	run1Builder := service.NewStreamBuilder()
+	require.NoError(t, run1Builder.AddInputYAML(cfg))
+	require.NoError(t, run1Builder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, run1Builder.AddBatchConsumerFunc(func(ctx context.Context, _ service.MessageBatch) error {
+		select {
+		case received <- struct{}{}:
+		default:
+		}
+		// Block without acking until the simulated crash cancels our context.
+		<-ctx.Done()
+		return ctx.Err()
+	}))
+	run1, err := run1Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run1.Resources())
+
+	run1Ctx, crash := context.WithCancel(t.Context())
+	run1Done := make(chan struct{})
+	go func() {
+		defer close(run1Done)
+		_ = run1.Run(run1Ctx)
+	}()
+
+	select {
+	case <-received:
+	case <-time.After(5 * time.Minute):
+		t.Fatal("snapshot rows were never delivered to the run-1 output")
+	}
+	// Give the input time to reach the ack barrier (and, in the buggy version,
+	// to persist the post-snapshot LSN) before we crash.
+	time.Sleep(5 * time.Second)
+	crash()
+	select {
+	case <-run1Done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("run 1 did not stop after the simulated crash")
+	}
+
+	// The barrier must have prevented the post-snapshot LSN from being
+	// persisted, since the snapshot rows were never acknowledged. Without it a
+	// cached LSN would exist here and the snapshot would be skipped on
+	// restart, silently losing the un-acked rows.
+	var checkpoints int
+	require.NoError(t, db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM rpcn.CdcCheckpointCache").Scan(&checkpoints))
+	require.Zero(t, checkpoints, "post-snapshot LSN must not be persisted before snapshot rows are acknowledged")
+
+	// Run 2: restart against the same checkpoint cache. Since run 1 never
+	// acked the snapshot, no LSN was cached, so the snapshot re-runs and every
+	// row is delivered again.
+	t.Log("Launching run 2 (verifying the snapshot re-runs)...")
+	var (
+		readsMu sync.Mutex
+		reads   int
+	)
+	run2Builder := service.NewStreamBuilder()
+	require.NoError(t, run2Builder.AddInputYAML(cfg))
+	require.NoError(t, run2Builder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, run2Builder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		readsMu.Lock()
+		defer readsMu.Unlock()
+		for _, msg := range mb {
+			if op, _ := msg.MetaGet("operation"); op == "read" {
+				reads++
+			}
+		}
+		return nil
+	}))
+	run2, err := run2Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run2.Resources())
+	go func() {
+		if err := run2.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		readsMu.Lock()
+		defer readsMu.Unlock()
+		assert.Equal(c, rowCount, reads, "snapshot should have re-run and re-delivered every row after the crash")
+	}, 5*time.Minute, 500*time.Millisecond)
+	require.NoError(t, run2.StopWithin(time.Second*30))
+}
+
+// TestIntegration_MicrosoftSQLServerCDC_TransactionSplitAcrossBatches verifies
+// that acking a batch which ends mid-transaction never persists that
+// transaction's own start LSN: all rows of a transaction share a start LSN and
+// resume is exclusive (> lsn), so doing so would skip the transaction's
+// remaining rows after a crash. The checkpoint may only advance to the last
+// fully-published transaction boundary. See CON-504.
+func TestIntegration_MicrosoftSQLServerCDC_TransactionSplitAcrossBatches(t *testing.T) {
+	integration.CheckSkip(t)
+
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
+	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.splittx", "CREATE TABLE dbo.splittx (id INT IDENTITY(1,1) PRIMARY KEY, val INT NOT NULL);"))
+
+	// T1: a single-row transaction, establishing a prior transaction boundary.
+	// T2: four rows committed in ONE transaction - they all share a start LSN.
+	db.MustExec("INSERT INTO dbo.splittx (val) VALUES (101)")
+	db.MustExec("BEGIN TRAN; INSERT INTO dbo.splittx (val) VALUES (102); INSERT INTO dbo.splittx (val) VALUES (103); INSERT INTO dbo.splittx (val) VALUES (104); INSERT INTO dbo.splittx (val) VALUES (105); COMMIT")
+	db.WaitForCDCChanges(t.Context(), 5, "dbo.splittx")
+
+	// batching.count = 2 splits T2 across batches: [T1r1, T2r1], [T2r2, T2r3], ...
+	cfg := fmt.Sprintf(`
+microsoft_sql_server_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  checkpoint_cache: ""
+  include: ["dbo.splittx"]
+  batching:
+    count: 2
+    period: 1h`, connStr)
+
+	// Run 1: ack ONLY the first batch (which ends on T2's first row), block on
+	// everything after it, then crash once the ack's checkpoint write lands.
+	t.Log("Launching run 1 (ack first batch only, simulated crash)...")
+	var firstBatch atomic.Bool
+	firstBatch.Store(true)
+	run1Builder := service.NewStreamBuilder()
+	require.NoError(t, run1Builder.AddInputYAML(cfg))
+	require.NoError(t, run1Builder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, run1Builder.AddBatchConsumerFunc(func(ctx context.Context, _ service.MessageBatch) error {
+		if firstBatch.CompareAndSwap(true, false) {
+			return nil // ack the first batch
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}))
+	run1, err := run1Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run1.Resources())
+
+	run1Ctx, crash := context.WithCancel(t.Context())
+	run1Done := make(chan struct{})
+	go func() {
+		defer close(run1Done)
+		_ = run1.Run(run1Ctx)
+	}()
+
+	// Wait for the first batch's ack to persist a checkpoint, then crash.
+	require.Eventually(t, func() bool {
+		var checkpoints int
+		if err := db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM rpcn.CdcCheckpointCache").Scan(&checkpoints); err != nil {
+			return false
+		}
+		return checkpoints == 1
+	}, 5*time.Minute, 500*time.Millisecond, "the first batch's ack never persisted a checkpoint")
+	crash()
+	select {
+	case <-run1Done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("run 1 did not stop after the simulated crash")
+	}
+
+	// Run 2: restart. The checkpoint must point at the T1/T2 boundary, so all
+	// of T2 is redelivered - especially rows 102-105's tail (103, 104, 105),
+	// which the pre-fix code skipped by persisting T2's own start LSN.
+	t.Log("Launching run 2 (verifying the split transaction replays in full)...")
+	var (
+		seenMu sync.Mutex
+		seen   = map[int]bool{}
+	)
+	run2Builder := service.NewStreamBuilder()
+	require.NoError(t, run2Builder.AddInputYAML(cfg))
+	require.NoError(t, run2Builder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, run2Builder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		seenMu.Lock()
+		defer seenMu.Unlock()
+		for _, msg := range mb {
+			var row struct {
+				Val int `json:"val"`
+			}
+			b, err := msg.AsBytes()
+			if err != nil {
+				return err
+			}
+			if err := json.Unmarshal(b, &row); err == nil && row.Val != 0 {
+				seen[row.Val] = true
+			}
+		}
+		return nil
+	}))
+	run2, err := run2Builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(run2.Resources())
+	go func() {
+		if err := run2.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		seenMu.Lock()
+		defer seenMu.Unlock()
+		for _, val := range []int{102, 103, 104, 105} {
+			assert.Truef(c, seen[val], "row val=%d from the split transaction was never redelivered (checkpoint advanced past a partially-delivered transaction)", val)
+		}
+	}, 5*time.Minute, 500*time.Millisecond)
+	require.NoError(t, run2.StopWithin(time.Second*30))
+}
+
 func TestIntegration_MicrosoftSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -839,7 +1076,11 @@ microsoft_sql_server_cdc:
 	}
 }
 
-func TestIntegration_MicrosoftSQLServerCDC_SchemaMetadata(t *testing.T) {
+// TestIntegration_MicrosoftSQLServerCDC_MessageMetadata checks the `schema` metadata on
+// every message, and the `lsn`, `seqval` and `command_id` metadata on change messages
+// and their absence on snapshot messages. One transaction updates two rows, so four
+// change rows share one commit LSN.
+func TestIntegration_MicrosoftSQLServerCDC_MessageMetadata(t *testing.T) {
 	integration.CheckSkip(t)
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -852,14 +1093,22 @@ func TestIntegration_MicrosoftSQLServerCDC_SchemaMetadata(t *testing.T) {
 			created DATETIME2    NOT NULL
 		);`))
 
-	// Disable CDC so the first row becomes a snapshot row, then re-enable CDC.
+	// Disable CDC so the seed rows become snapshot rows, then re-enable CDC.
 	db.MustDisableCDC(t.Context(), "dbo.schema_meta_test")
-	db.MustExecContext(t.Context(), `INSERT INTO dbo.schema_meta_test VALUES (1, N'snapshot', 1, 3.14, SYSDATETIME())`)
+	db.MustExecContext(t.Context(), `INSERT INTO dbo.schema_meta_test VALUES
+		(1, N'snapshot', 1, 3.14, SYSDATETIME()),
+		(2, N'snapshot', 0, 2.71, SYSDATETIME())`)
 	db.MustEnableCDC(t.Context(), "dbo.schema_meta_test")
 
 	type msgMeta struct {
-		schema any
-		op     string
+		schema    any
+		op        string
+		lsn       string
+		seqval    string
+		commandID string
+		hasLSN    bool
+		hasSeqval bool
+		hasCmdID  bool
 	}
 	var received []msgMeta
 	var receivedMu sync.Mutex
@@ -874,10 +1123,14 @@ microsoft_sql_server_cdc:
 	require.NoError(t, streamBuilder.AddInputYAML(cfg))
 	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
-			s, _ := msg.MetaGetMut("schema")
-			op, _ := msg.MetaGet("operation")
+			var m msgMeta
+			m.schema, _ = msg.MetaGetMut("schema")
+			m.op, _ = msg.MetaGet("operation")
+			m.lsn, m.hasLSN = msg.MetaGet("lsn")
+			m.seqval, m.hasSeqval = msg.MetaGet("seqval")
+			m.commandID, m.hasCmdID = msg.MetaGet("command_id")
 			receivedMu.Lock()
-			received = append(received, msgMeta{schema: s, op: op})
+			received = append(received, m)
 			receivedMu.Unlock()
 		}
 		return nil
@@ -893,37 +1146,35 @@ microsoft_sql_server_cdc:
 		}
 	}()
 
-	// Wait for the snapshot row to arrive.
-	assert.Eventually(t, func() bool {
+	countOp := func(op string) int {
 		receivedMu.Lock()
 		defer receivedMu.Unlock()
+		n := 0
 		for _, m := range received {
-			if m.op == "read" {
-				return true
+			if m.op == op {
+				n++
 			}
 		}
-		return false
-	}, time.Second*30, time.Millisecond*100)
+		return n
+	}
 
-	// Insert a CDC row and wait for it to arrive.
-	db.MustExecContext(t.Context(), `INSERT INTO dbo.schema_meta_test VALUES (2, N'cdc', 0, 2.71, SYSDATETIME())`)
-	assert.Eventually(t, func() bool {
-		receivedMu.Lock()
-		defer receivedMu.Unlock()
-		for _, m := range received {
-			if m.op == "insert" {
-				return true
-			}
-		}
-		return false
-	}, time.Second*30, time.Millisecond*100)
+	// Wait for both snapshot rows.
+	assert.Eventually(t, func() bool { return countOp("read") == 2 }, time.Second*30, time.Millisecond*100)
+
+	// One transaction, two updates: four change rows with one commit LSN.
+	db.MustExecContext(t.Context(), `
+		BEGIN TRANSACTION;
+		UPDATE dbo.schema_meta_test SET label = N'cdc' WHERE id = 1;
+		UPDATE dbo.schema_meta_test SET label = N'cdc' WHERE id = 2;
+		COMMIT TRANSACTION;`)
+	assert.Eventually(t, func() bool { return countOp("update_after") == 2 }, time.Second*30, time.Millisecond*100)
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
 
 	receivedMu.Lock()
 	defer receivedMu.Unlock()
 
-	require.Len(t, received, 2, "expected 1 snapshot message and 1 CDC message")
+	require.Len(t, received, 6, "expected 2 snapshot messages and 4 change messages")
 
 	// Expected column name → benthos common type string for dbo.schema_meta_test.
 	expectedCols := map[string]string{
@@ -961,6 +1212,32 @@ microsoft_sql_server_cdc:
 			assert.Truef(t, optional, "message %d column %q should be optional", i, name)
 		}
 	}
+
+	var changes []msgMeta
+	for _, m := range received {
+		if m.op == "read" {
+			assert.False(t, m.hasLSN, "snapshot message must not carry lsn")
+			assert.False(t, m.hasSeqval, "snapshot message must not carry seqval")
+			assert.False(t, m.hasCmdID, "snapshot message must not carry command_id")
+			continue
+		}
+		changes = append(changes, m)
+	}
+	require.Len(t, changes, 4)
+
+	for i, m := range changes {
+		require.True(t, m.hasLSN && m.hasSeqval && m.hasCmdID, "change %d is missing ordering metadata", i)
+		assert.Equal(t, changes[0].lsn, m.lsn, "all rows of one transaction share the commit lsn")
+	}
+	// Each UPDATE is one command that produces an update_before and an update_after row.
+	// Both rows share (__$start_lsn, __$seqval, __$command_id).
+	for i := 0; i < 4; i += 2 {
+		assert.Equal(t, "update_before", changes[i].op)
+		assert.Equal(t, "update_after", changes[i+1].op)
+		assert.Equal(t, changes[i].commandID, changes[i+1].commandID, "both rows of one update share a command_id")
+		assert.Equal(t, changes[i].seqval, changes[i+1].seqval, "both rows of one update share a seqval")
+	}
+	assert.NotEqual(t, changes[0].commandID, changes[2].commandID, "two statements give two distinct command_id values")
 }
 
 // Test_ManualTesting_AddTestDataWithUniqueLSN adds data to an existing table and ensures each change has its own LSN

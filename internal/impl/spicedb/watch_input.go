@@ -71,7 +71,8 @@ Ideally this cache should be persisted across restarts.
 				Example("100MB").
 				Example("50mib"),
 			service.NewStringField("cache").
-				Description("A cache resource to use for performing unread message backfills, the ID of the last message received will be stored in this cache and used for subsequent requests."),
+				Description("A cache resource to use for performing unread message backfills, the ID of the last message received will be stored in this cache and used for subsequent requests.").
+				ShortDescription("Cache resource for unread message backfills, storing the ID of the last message received."),
 			service.NewStringField("cache_key").
 				Description("The key identifier used when storing the ID of the last message received.").
 				Default("authzed.com/spicedb/watch/last_zed_token").

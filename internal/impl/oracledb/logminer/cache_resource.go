@@ -438,6 +438,7 @@ type serializedDMLEvent struct {
 	OldValues     serializedMap         `json:"old"`
 	Timestamp     time.Time             `json:"ts"`
 	TransactionID sqlredo.TransactionID `json:"txn_id"`
+	Username      string                `json:"username"`
 }
 
 type serializedTransactionMetadata struct {
@@ -464,6 +465,7 @@ func marshalEvent(ev *sqlredo.DMLEvent) ([]byte, error) {
 		OldValues:     encodeMap(ev.OldValues),
 		Timestamp:     ev.Timestamp,
 		TransactionID: ev.TransactionID,
+		Username:      ev.Username,
 	}
 	return json.Marshal(se)
 }
@@ -490,5 +492,6 @@ func unmarshalEvent(data []byte) (*sqlredo.DMLEvent, error) {
 		OldValues:     oldMap,
 		Timestamp:     se.Timestamp,
 		TransactionID: se.TransactionID,
+		Username:      se.Username,
 	}, nil
 }

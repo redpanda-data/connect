@@ -101,10 +101,12 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewInterpolatedStringEnumField(bsoFieldBlobType, "BLOCK", "APPEND").
 				Description("Block and Append blobs are comprized of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`BLOCK`\"+`.`").
+				ShortDescription("Block and Append blobs are made up of blocks, and each blob supports up to 50,000 blocks.").
 				Advanced().
 				Default("BLOCK"),
 			service.NewInterpolatedStringEnumField(bsoFieldPublicAccessLevel, "PRIVATE", "BLOB", "CONTAINER").
 				Description(`The container's public access level. The default value is `+"`PRIVATE`"+`.`).
+				ShortDescription("The container's public access level.").
 				Advanced().
 				Default("PRIVATE"),
 			service.NewOutputMaxInFlightField(),

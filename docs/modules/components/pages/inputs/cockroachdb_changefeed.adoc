@@ -275,7 +275,7 @@ A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resou
 
 A list of options to be included in the changefeed (WITH X, Y...).
 
-NOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Redpanda Connect in this case.
+NOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Redpanda Connect in this case. A RESOLVED option is also added (unless one is supplied here): the stored cursor only ever advances to resolved timestamps whose rows have all been acknowledged downstream, so a restart redelivers at most the changes since the last resolved timestamp (bounded by the `changefeed.min_checkpoint_frequency` cluster setting) and never skips data. Resolved records are internal cursor bookkeeping and are never emitted as messages; without a `cursor_cache` they are discarded.
 
 
 *Type*: `array`

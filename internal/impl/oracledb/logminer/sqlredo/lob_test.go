@@ -9,9 +9,11 @@
 package sqlredo
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMergeInlineLOBValues(t *testing.T) {
@@ -112,4 +114,101 @@ func TestMergeInlineLOBValues(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAssembleOffsetValidation(t *testing.T) {
+	t.Run("valid 1-based offsets assemble correctly", func(t *testing.T) {
+		acc := &LobAccumulator{IsBinary: true}
+		acc.AddFragment(1, []byte{0x41, 0x42})
+		acc.AddFragment(3, []byte{0x43})
+		assert.Equal(t, []byte{0x41, 0x42, 0x43}, acc.Assemble())
+	})
+
+	t.Run("offset < 1 is skipped, does not panic", func(t *testing.T) {
+		acc := &LobAccumulator{IsBinary: true}
+		acc.AddFragment(0, []byte{0x41, 0x42}) // invalid: Oracle offsets are 1-based
+		acc.AddFragment(1, []byte{0x58})
+		assert.NotPanics(t, func() {
+			assert.Equal(t, []byte{0x58}, acc.Assemble())
+		})
+	})
+
+	t.Run("overflowing offset is skipped, does not panic", func(t *testing.T) {
+		acc := &LobAccumulator{IsBinary: true}
+		acc.AddFragment(math.MaxInt64, []byte{0x41, 0x42}) // corrupt: (offset-1)+len overflows int64
+		acc.AddFragment(1, []byte{0x58})
+		assert.NotPanics(t, func() {
+			assert.Equal(t, []byte{0x58}, acc.Assemble())
+		})
+	})
+
+	t.Run("CLOB gaps are space-filled", func(t *testing.T) {
+		acc := &LobAccumulator{IsBinary: false}
+		acc.AddFragment(1, []byte("ab"))
+		acc.AddFragment(5, []byte("z"))
+		assert.Equal(t, "ab  z", acc.Assemble())
+	})
+}
+
+func TestPkMatches(t *testing.T) {
+	t.Run("empty pkValues does not vacuously match", func(t *testing.T) {
+		assert.False(t, pkMatches(map[string]any{"ID": "1", "VAL": "x"}, map[string]any{}))
+	})
+	t.Run("subset match", func(t *testing.T) {
+		assert.True(t, pkMatches(map[string]any{"ID": "1", "VAL": "x"}, map[string]any{"ID": "1"}))
+	})
+	t.Run("value mismatch", func(t *testing.T) {
+		assert.False(t, pkMatches(map[string]any{"ID": "2"}, map[string]any{"ID": "1"}))
+	})
+	t.Run("missing key", func(t *testing.T) {
+		assert.False(t, pkMatches(map[string]any{"OTHER": "1"}, map[string]any{"ID": "1"}))
+	})
+}
+
+// TestMergeLOBsEmptyPKNoMisroute verifies that a ROWID-only SELECT_LOB_LOCATOR
+// (which yields an empty PK set) does NOT get merged into an arbitrary INSERT.
+// Previously the empty PK matched the first event vacuously; now, with two
+// candidate rows for the table, the accumulator is left unmerged (Pass 3 cannot
+// disambiguate) so the caller synthesizes a separate event instead of corrupting
+// the wrong row.
+func TestMergeLOBsEmptyPKNoMisroute(t *testing.T) {
+	state := NewTxnLOBState()
+	key := LobKey{Schema: "S", Table: "T", Column: "DOC"}
+	acc := &LobAccumulator{Schema: "S", Table: "T", Column: "DOC", IsBinary: false, PKValues: map[string]any{}}
+	acc.AddFragment(1, []byte("hello"))
+	state.Accumulators[key] = acc
+
+	events := []*DMLEvent{
+		{Operation: OpInsert, Schema: "S", Table: "T", Data: map[string]any{"ID": "1"}},
+		{Operation: OpInsert, Schema: "S", Table: "T", Data: map[string]any{"ID": "2"}},
+	}
+
+	unmerged := MergeLOBsIntoDMLEvents(state, events, nil)
+
+	// Neither INSERT should have had the LOB written into it.
+	for _, ev := range events {
+		_, has := ev.Data["DOC"]
+		assert.Falsef(t, has, "LOB must not be misrouted into row ID=%v", ev.Data["ID"])
+	}
+	// The accumulator is returned as unmerged for the caller to synthesize.
+	require.Len(t, unmerged, 1)
+	assert.Equal(t, "DOC", unmerged[0].Column)
+}
+
+// TestMergeLOBsEmptyPKSingleCandidate confirms the Pass-3 single-candidate path
+// still merges correctly when there is exactly one row for the table.
+func TestMergeLOBsEmptyPKSingleCandidate(t *testing.T) {
+	state := NewTxnLOBState()
+	key := LobKey{Schema: "S", Table: "T", Column: "DOC"}
+	acc := &LobAccumulator{Schema: "S", Table: "T", Column: "DOC", IsBinary: false, PKValues: map[string]any{}}
+	acc.AddFragment(1, []byte("hello"))
+	state.Accumulators[key] = acc
+
+	events := []*DMLEvent{
+		{Operation: OpInsert, Schema: "S", Table: "T", Data: map[string]any{"ID": "1"}},
+	}
+
+	unmerged := MergeLOBsIntoDMLEvents(state, events, nil)
+	assert.Empty(t, unmerged)
+	assert.Equal(t, "hello", events[0].Data["DOC"])
 }

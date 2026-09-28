@@ -11,6 +11,9 @@ builds:
     goarch: [amd64]
     tags:
       - x_benthos_extra
+      # Embed the IANA tz database so time.LoadLocation works in minimal
+      # runtimes without system tzdata (matches the other distributions).
+      - timetzdata
     env:
       - CGO_ENABLED=1
     ldflags: >

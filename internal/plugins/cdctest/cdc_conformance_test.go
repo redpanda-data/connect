@@ -76,7 +76,6 @@ var knownNonConformant = map[string]map[string]string{
 	},
 	"gcp_spanner_cdc": {
 		"checkpoint_cache":             "not yet exposed under the canonical name",
-		"checkpoint_limit":             "not yet exposed under the canonical name",
 		"snapshot_max_batch_size":      "not yet exposed under the canonical name",
 		"max_parallel_snapshot_tables": "not yet exposed under the canonical name",
 		"stream_snapshot":              "not yet exposed under the canonical name",

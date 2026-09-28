@@ -57,25 +57,30 @@ func commonFields() []*service.ConfigField {
 			bopFieldRunner,
 			service.NewIntField(bopFieldContextSize).
 				Optional().
-				Description("Sets the size of the context window used to generate the next token. Using a larger context window uses more memory and takes longer to processor."),
+				Description("Sets the size of the context window used to generate the next token. Using a larger context window uses more memory and takes longer to processor.").
+				ShortDescription("Size of the context window used to generate the next token. Larger windows cost memory and time."),
 			service.NewIntField(bopFieldBatchSize).
 				Optional().
 				Description("The maximum number of requests to process in parallel."),
 			service.NewIntField(bopFieldGPULayers).
 				Optional().
 				Advanced().
-				Description("This option allows offloading some layers to the GPU for computation. This generally results in increased performance. By default, the runtime decides the number of layers dynamically."),
+				Description("This option allows offloading some layers to the GPU for computation. This generally results in increased performance. By default, the runtime decides the number of layers dynamically.").
+				ShortDescription("Number of layers to offload to the GPU, which generally improves performance."),
 			service.NewIntField(bopFieldThreads).
 				Optional().
 				Advanced().
-				Description("Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has. By default, the runtime decides the optimal number of threads."),
+				Description("Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has. By default, the runtime decides the optimal number of threads.").
+				ShortDescription("Number of threads to use during generation. Best set to the number of physical CPU cores."),
 			service.NewBoolField(bopFieldUseMMap).
 				Optional().
 				Advanced().
-				Description("Map the model into memory. This is only support on unix systems and allows loading only the necessary parts of the model as needed."),
+				Description("Map the model into memory. This is only support on unix systems and allows loading only the necessary parts of the model as needed.").
+				ShortDescription("Map the model into memory, loading only the parts needed. Unix systems only."),
 		).Optional().Description(`Options for the model runner that are used when the model is first loaded into memory.`),
 		service.NewStringField(bopFieldServerAddress).
 			Description("The address of the Ollama server to use. Leave the field blank and the processor starts and runs a local Ollama server or specify the address of your own local or remote server.").
+			ShortDescription("The address of the Ollama server. Leave blank to start and run a local server.").
 			Example("http://127.0.0.1:11434").
 			Optional(),
 		service.NewStringField(bopFieldCacheDirectory).

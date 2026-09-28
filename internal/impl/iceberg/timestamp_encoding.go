@@ -1,0 +1,257 @@
+// Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+
+package iceberg
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/apache/iceberg-go"
+	iceio "github.com/apache/iceberg-go/io"
+	"github.com/apache/iceberg-go/table"
+	"github.com/parquet-go/parquet-go"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
+)
+
+// resolveTimestampEncoding determines how no-timezone `timestamp` columns must
+// be annotated in the parquet files written to tbl, guaranteeing an existing
+// table never sees its encoding change or become mixed (a released connector
+// version wrote the spec-incorrect isAdjustedToUTC=true "legacy" annotation).
+//
+// Resolution order:
+//
+//  1. Table property redpanda-connect.timestamp-encoding present → use it.
+//     An unknown value is a hard error (guessing risks a mixed table).
+//  2. Property absent → bootstrap by probing the table's own files
+//     (probeTimestampEncoding), then STAMP the resolved value onto the table
+//     as a SetProperties commit so the decision is permanent and visible to
+//     every future writer.
+//
+// reload re-loads the table from the catalog; it is used to resolve a stamp
+// race (two writers bootstrapping the same table concurrently). The returned
+// table is tbl with the stamp applied when one was committed, otherwise tbl
+// unchanged, so callers keep working with fresh metadata.
+func resolveTimestampEncoding(ctx context.Context, tbl *table.Table, reload func(context.Context) (*table.Table, error), logger *service.Logger) (icebergx.TimestampEncoding, *table.Table, error) {
+	if v, ok := tbl.Properties()[icebergx.TimestampEncodingProperty]; ok {
+		enc, err := icebergx.ParseTimestampEncoding(v)
+		if err != nil {
+			return 0, nil, fmt.Errorf("table %v: %w", tbl.Identifier(), err)
+		}
+		return enc, tbl, nil
+	}
+
+	enc, err := probeTimestampEncoding(ctx, tbl)
+	if err != nil {
+		return 0, nil, fmt.Errorf("resolving timestamp encoding for table %v: %w", tbl.Identifier(), err)
+	}
+
+	stamped, err := stampTimestampEncoding(ctx, tbl, enc, reload)
+	if err != nil {
+		return 0, nil, fmt.Errorf("stamping timestamp encoding %q on table %v: %w", enc, tbl.Identifier(), err)
+	}
+	if logger != nil {
+		logger.Infof("Pinned table %v to timestamp encoding %q (table property %s)", tbl.Identifier(), enc, icebergx.TimestampEncodingProperty)
+	}
+	return enc, stamped, nil
+}
+
+// maxProbedFiles bounds how many parquet footers probeTimestampEncoding opens
+// before failing the write (see the bound's comment inside). A variable only
+// so tests can exercise the bound without seeding a thousand files; production
+// code must treat it as a constant. The number is quoted in the docs
+// (rowOperationDocs' timestamp-encoding section, config.go) — keep them in
+// sync when changing it.
+var maxProbedFiles = 1000
+
+// errTimestampProbeBoundExceeded marks the probe giving up after
+// maxProbedFiles non-deciding footers. It is deterministic for a given table
+// snapshot (the scan inspects only committed files), which is what lets the
+// router negative-cache it per snapshot instead of re-paying the full scan on
+// every retried write.
+var errTimestampProbeBoundExceeded = errors.New("timestamp-encoding probe bound exceeded")
+
+// probeTimestampEncoding bootstraps the encoding for a table that predates the
+// pinning property, by inspecting what the table actually contains:
+//
+//   - schema has no no-tz `timestamp` column → spec. There is nothing the two
+//     encodings disagree on, and it is correct for any timestamp column added
+//     later by schema evolution, since no existing file can carry that column.
+//   - no data files (empty table / no snapshot) → spec.
+//   - otherwise → open a current-snapshot data file's parquet footer and read
+//     the isAdjustedToUTC annotation off a no-tz timestamp column:
+//     true → legacy, false → spec. Files that don't carry any such column
+//     (e.g. written before the column was evolved in) are skipped; if an
+//     EXHAUSTIVE scan finds no parquet file carrying one, resolve spec for
+//     the same reason as the no-column case. Any read/parse failure is a hard
+//     error, and so is exceeding the maxProbedFiles bound before any footer
+//     decides (errTimestampProbeBoundExceeded) — guessing from a failed or
+//     truncated scan could silently mix annotations within the table.
+func probeTimestampEncoding(ctx context.Context, tbl *table.Table) (icebergx.TimestampEncoding, error) {
+	schema := tbl.Schema()
+	if !icebergx.SchemaHasNoTZTimestamp(schema) {
+		return icebergx.TimestampEncodingSpec, nil
+	}
+	snap := tbl.CurrentSnapshot()
+	if snap == nil {
+		return icebergx.TimestampEncodingSpec, nil
+	}
+	fsys, err := tbl.FS(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("getting table filesystem: %w", err)
+	}
+	manifests, err := snap.Manifests(fsys)
+	if err != nil {
+		return 0, fmt.Errorf("listing current-snapshot manifests: %w", err)
+	}
+	// The scan is bounded: each probe is an object-store Open plus footer
+	// reads, executed serially while the router holds the table entry's lock,
+	// so an unbounded loop over a large table whose no-tz timestamp column was
+	// evolved in after its current files were written (no footer ever decides)
+	// would stall the first write behind hundreds of thousands of reads.
+	// Hitting the bound FAILS the write rather than resolving spec: manifest
+	// entries carry no useful ordering, so a legacy-annotated file may sit
+	// beyond the cap while the first thousand all predate the column, and
+	// stamping spec from that absence of evidence would permanently mix
+	// annotations within the table — the exact outcome every other failure in
+	// this path refuses to risk. The error names the escape hatch: set the
+	// pinning property on the table explicitly and the probe never runs.
+	probed := 0
+	for _, m := range manifests {
+		if m.ManifestContent() != iceberg.ManifestContentData {
+			continue
+		}
+		for entry, err := range m.Entries(fsys, true) {
+			if err != nil {
+				return 0, fmt.Errorf("reading manifest entries: %w", err)
+			}
+			if err := ctx.Err(); err != nil {
+				return 0, fmt.Errorf("probing timestamp encoding: %w", err)
+			}
+			df := entry.DataFile()
+			if df.FileFormat() != iceberg.ParquetFile {
+				// A non-parquet data file was never written by this connector,
+				// so it cannot carry the legacy encoding; skip it.
+				continue
+			}
+			if probed >= maxProbedFiles {
+				return 0, fmt.Errorf(
+					"%w: probed %d parquet data files without finding a no-timezone timestamp column to read the table's existing encoding from; "+
+						"refusing to guess, because a legacy-encoded file beyond the probe bound would then be silently mixed with differently-encoded new files: "+
+						"set the table property %s to \"spec\" (files written with the Iceberg-spec encoding, isAdjustedToUTC=false) or \"legacy\" (isAdjustedToUTC=true) "+
+						"to pin the encoding explicitly and skip the probe",
+					errTimestampProbeBoundExceeded, maxProbedFiles, icebergx.TimestampEncodingProperty)
+			}
+			probed++
+			enc, found, err := probeParquetFooterEncoding(fsys, df.FilePath(), schema)
+			if err != nil {
+				return 0, fmt.Errorf("probing parquet footer of %s: %w", df.FilePath(), err)
+			}
+			if found {
+				return enc, nil
+			}
+			// The file has no no-tz timestamp leaf (it predates the column);
+			// keep scanning. In the common case the very first file decides.
+		}
+	}
+	// Data files exist but none carries a no-tz timestamp column: the column
+	// was added by evolution after every current file was written, so there is
+	// no legacy-annotated file to stay consistent with.
+	return icebergx.TimestampEncodingSpec, nil
+}
+
+// probeParquetFooterEncoding opens one parquet file's footer via the table's
+// filesystem and inspects the logical-type annotation of the first leaf that
+// is a no-tz `timestamp` column in the iceberg schema (matched by field ID).
+// found is false when the file carries no such leaf.
+func probeParquetFooterEncoding(fsys iceio.IO, path string, schema *iceberg.Schema) (enc icebergx.TimestampEncoding, found bool, err error) {
+	f, err := fsys.Open(path)
+	if err != nil {
+		return 0, false, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return 0, false, err
+	}
+	// Only the footer is needed: skip the page-index and bloom-filter
+	// sections so the probe stays a couple of small ranged reads.
+	pf, err := parquet.OpenFile(f, info.Size(), parquet.SkipPageIndex(true), parquet.SkipBloomFilters(true))
+	if err != nil {
+		return 0, false, err
+	}
+	for _, el := range pf.Metadata().Schema {
+		lt, ok := el.LogicalType.Get()
+		if !ok || lt.Timestamp == nil {
+			continue
+		}
+		field, ok := schema.FindFieldByID(int(el.FieldID))
+		if !ok {
+			continue
+		}
+		if _, noTZ := field.Type.(iceberg.TimestampType); !noTZ {
+			continue
+		}
+		if lt.Timestamp.IsAdjustedToUTC {
+			return icebergx.TimestampEncodingLegacy, true, nil
+		}
+		return icebergx.TimestampEncodingSpec, true, nil
+	}
+	return 0, false, nil
+}
+
+// stampTimestampEncoding commits the resolved encoding onto the table as the
+// redpanda-connect.timestamp-encoding property, making the bootstrap decision
+// permanent and visible. Two writers may race to stamp the same table; the
+// invariant that keeps that safe is that two new-version writers probing the
+// same snapshot always resolve the SAME encoding, so whichever stamp lands,
+// every writer agrees with it. The failure-path check below (reload and
+// compare a concurrently-appeared value) is a best-effort guard for
+// CAS-style catalogs whose commits actually fail on concurrent writes: on
+// REST catalogs a SetProperties-only commit carries only an AssertTableUUID
+// requirement, so it rarely fails and the last writer simply wins — benign,
+// because agreeing writers write identical values. A DIFFERENT value can
+// therefore only be detected when the commit does fail; it means something
+// is genuinely wrong (e.g. mixed connector versions probing differently) and
+// writing could mix annotations, so it is a hard error.
+//
+// This commit goes through the table's own catalog binding, NOT through a
+// committer's propertyStrippingCatalog: the transaction stages only the
+// single redpanda-connect.* property, which the stripper refuses to strip
+// anyway (reservedTablePropertyPrefix), so prohibited-key stripping
+// intentionally does not apply here — a catalog that prohibits
+// redpanda-connect.* keys fails this path with the raw catalog error by
+// design.
+func stampTimestampEncoding(ctx context.Context, tbl *table.Table, enc icebergx.TimestampEncoding, reload func(context.Context) (*table.Table, error)) (*table.Table, error) {
+	txn := tbl.NewTransaction()
+	if err := txn.SetProperties(iceberg.Properties{icebergx.TimestampEncodingProperty: enc.String()}); err != nil {
+		return nil, err
+	}
+	stamped, commitErr := txn.Commit(ctx)
+	if commitErr == nil {
+		return stamped, nil
+	}
+	// The commit can fail because a concurrent writer stamped first (or wrote
+	// anything else to the table). Reload and check whether the property is
+	// now present and agrees with our resolution.
+	if reload != nil {
+		reloaded, reloadErr := reload(ctx)
+		if reloadErr == nil {
+			if v, ok := reloaded.Properties()[icebergx.TimestampEncodingProperty]; ok {
+				if v == enc.String() {
+					return reloaded, nil
+				}
+				return nil, fmt.Errorf("concurrent writer pinned %s=%q but this writer resolved %q (commit error: %v)", icebergx.TimestampEncodingProperty, v, enc, commitErr)
+			}
+		}
+	}
+	return nil, commitErr
+}

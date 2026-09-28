@@ -147,6 +147,7 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 			service.NewStringListField(fieldAddresses).
 				Description("A list of IP addresses of all the TigerBeetle replicas in the cluster. "+
 					"The order of addresses must correspond to the order of replicas.").
+				ShortDescription("IP addresses of all TigerBeetle replicas, in the same order as the replicas.").
 				LintRule(`root = if this.length() == 0 {
 				 		[ "field '`+fieldAddresses+`' must contain at least one address" ]
 					}`),
@@ -154,14 +155,17 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 				Description("A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] "+
 					"used to track progress by storing the last acknowledged timestamp.\n"+
 					"This allows Redpanda Connect to resume from the latest delivered event "+
-					"upon restart."),
+					"upon restart.").
+				ShortDescription("Cache resource tracking progress by storing the last acknowledged timestamp."),
 			service.NewStringField(fieldRateLimit).
 				Description("An optional https://docs.redpanda.com/redpanda-connect/components/rate_limits/about/[rate limit^] "+
 					"to throttle the number of **requests** made to TigerBeetle.").
+				ShortDescription("An optional rate limit resource to throttle requests made to TigerBeetle.").
 				Default(""),
 			service.NewIntField(fieldEventCountMax).
 				Description("The maximum number of events fetched from TigerBeetle per **request**.\n"+
 					"Must be greater than zero.").
+				ShortDescription("Maximum events fetched from TigerBeetle per request. Must be greater than zero.").
 				Default(eventCountDefault).
 				LintRule(`root = if this <= 0 {
 						[ "field '`+fieldEventCountMax+`' must be greater than 0" ]
@@ -170,6 +174,7 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 				Description("The time interval in milliseconds to wait before querying again when "+
 					"the last request returned no events.\n"+
 					"Must be greater than zero.").
+				ShortDescription("Milliseconds to wait before querying again when the last request returned no events.").
 				Default(idleIntervalDefault).
 				LintRule(`root = if this <= 0 {
 						[ "field '`+fieldIdleInterval+`' must be greater than 0" ]
@@ -179,6 +184,7 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 					"If not defined, all events since the beginning will be included.\n"+
 					"Ignored if a more recent timestamp has already been acknowledged.\n"+
 					"This is a TigerBeetle timestamp with nanosecond precision.").
+				ShortDescription("The initial timestamp to start extracting events from. All events are included if unset.").
 				Default("").
 				LintRule(`root = if this.length() > 0 && !this.re_match("^[0-9]+$") {
 						[ "field '`+fieldTimestampInitial+`' must be a valid integer" ]

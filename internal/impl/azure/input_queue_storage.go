@@ -92,6 +92,7 @@ Only one authentication method is required, `+"`storage_connection_string`"+` or
 				Advanced(),
 			service.NewBoolField(qsiFieldTrackProperties).
 				Description("If set to `true` the queue is polled on each read request for information such as the queue message lag. These properties are added to consumed messages as metadata, but will also have a negative performance impact.").
+				ShortDescription("Poll the queue on each read for properties such as message lag, at a performance cost.").
 				Default(false).
 				Advanced(),
 			service.NewStringField(bscFieldStorageSASToken).Deprecated().Default(""), // This field was never implemented

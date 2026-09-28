@@ -82,7 +82,8 @@ func schemaRegistryInputConfigFields() []*service.ConfigField {
 		service.NewStringField(sriFieldURL).Description("The base URL of the schema registry service."),
 		service.NewBoolField(sriFieldIncludeDeleted).Description("Include deleted entities.").Default(false).Advanced(),
 		service.NewStringField(sriFieldSubjectFilter).Description("Include only subjects which match the regular expression filter. All subjects are selected when not set.").Default("").Advanced(),
-		service.NewBoolField(sriFieldFetchInOrder).Description("Fetch all schemas on connect and sort them by ID. Should be set to `true` when schema references are used.").Default(true).Advanced().Version("4.37.0"),
+		service.NewBoolField(sriFieldFetchInOrder).Description("Fetch all schemas on connect and sort them by ID. Should be set to `true` when schema references are used.").
+			ShortDescription("Fetch all schemas on connect and sort them by ID. Set to true when schema references are used.").Default(true).Advanced().Version("4.37.0"),
 		service.NewTLSToggledField(sriFieldTLS),
 		service.NewAutoRetryNacksToggleField(),
 	},

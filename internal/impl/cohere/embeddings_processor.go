@@ -70,7 +70,8 @@ To learn more about vector embeddings, see the https://docs.cohere.com/docs/embe
 				Default("search_document"),
 			service.NewIntField(oepFieldDimensions).
 				Optional().
-				Description("The number of dimensions of the output embedding. This is only available for embed-v4 and newer models. Possible values are 256, 512, 1024, and 1536."),
+				Description("The number of dimensions of the output embedding. This is only available for embed-v4 and newer models. Possible values are 256, 512, 1024, and 1536.").
+				ShortDescription("The number of dimensions of the output embedding. Only available for embed-v4 and newer."),
 		).
 		Example(
 			"Store embedding vectors in Qdrant",

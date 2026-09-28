@@ -586,6 +586,108 @@ func TestCoerceTemporalRejectedInStrictMode(t *testing.T) {
 	})
 }
 
+// TestNumericTemporalToTimeMatchesConvert is the anti-drift guard tying the
+// copy-on-write numeric->time.Time helper (NumericTemporalToTime) to the insert
+// path's numeric->parquet conversion (convertDate/convertTime/convertTimestamp).
+// For every temporal type and unit, the time.Time the helper returns must encode
+// to exactly the same iceberg-internal integer the insert path stores. If a
+// future change scales one path differently from the other — the divergence that
+// caused the year-50000 corruption — this test fails.
+func TestNumericTemporalToTimeMatchesConvert(t *testing.T) {
+	daysOf := func(tm time.Time) int64 {
+		secs := tm.UTC().Unix()
+		d := secs / secondsPerDay
+		if secs < 0 && secs%secondsPerDay != 0 {
+			d--
+		}
+		return d
+	}
+
+	t.Run("timestamp all units", func(t *testing.T) {
+		const n = int64(1_730_000_000_000)
+		for _, u := range []schema.TimeUnit{schema.TimeUnitSeconds, schema.TimeUnitMillis, schema.TimeUnitMicros, schema.TimeUnitNanos} {
+			common := tsCommon(u, true)
+			pq, err := convertTimestamp(n, common, false, false)
+			require.NoError(t, err)
+			tm, ok, err := NumericTemporalToTime(n, iceberg.TimestampTzType{}, common, false)
+			require.NoError(t, err)
+			require.True(t, ok)
+			assert.Equal(t, pq.Int64(), tm.UnixMicro(), "timestamp unit %v must agree between insert and copy-on-write", u)
+		}
+	})
+
+	t.Run("time all units", func(t *testing.T) {
+		// 12:34:56 expressed in each unit, so every case is a valid
+		// time-of-day AFTER scaling. Out-of-range values are pinned below.
+		perUnit := map[schema.TimeUnit]int64{
+			schema.TimeUnitSeconds: 45_296,
+			schema.TimeUnitMillis:  45_296_000,
+			schema.TimeUnitMicros:  45_296_000_000,
+			schema.TimeUnitNanos:   45_296_000_000_000,
+		}
+		for u, n := range perUnit {
+			common := todCommon(u)
+			pq, err := convertTime(n, common, false)
+			require.NoError(t, err)
+			tm, ok, err := NumericTemporalToTime(n, iceberg.TimeType{}, common, false)
+			require.NoError(t, err)
+			require.True(t, ok)
+			// time.UnixMicro round-trips the micros-of-day the insert path stores.
+			assert.Equal(t, pq.Int64(), tm.UnixMicro(), "time unit %v must agree between insert and copy-on-write", u)
+		}
+	})
+
+	t.Run("time out of range rejected after scaling", func(t *testing.T) {
+		// A numeric TIME value outside [0, 24h) POST-scaling has no wall-clock
+		// text: the mutation paths reject it loudly (deliberate divergence —
+		// the insert path stores the raw, spec-invalid microseconds, and
+		// silently wrapping the mutation-side value would match nothing).
+		for _, tc := range []struct {
+			unit schema.TimeUnit
+			n    int64
+		}{
+			{schema.TimeUnitSeconds, 86_400},         // exactly 24h in seconds
+			{schema.TimeUnitMillis, 86_400_000},      // 24h in millis
+			{schema.TimeUnitMicros, 86_400_000_000},  // 24h in micros
+			{schema.TimeUnitMicros, -1},              // negative
+			{schema.TimeUnitSeconds, 45_296_000_000}, // the old wrap case
+		} {
+			_, _, err := NumericTemporalToTime(tc.n, iceberg.TimeType{}, todCommon(tc.unit), false)
+			require.Error(t, err, "unit %v value %d must be rejected", tc.unit, tc.n)
+			assert.Contains(t, err.Error(), "time-of-day range")
+		}
+	})
+
+	t.Run("date is days since epoch", func(t *testing.T) {
+		const days = int64(20289) // 2025-07-15
+		common := &schema.Common{Type: schema.Date}
+		pq, err := convertDate(days, common, false)
+		require.NoError(t, err)
+		tm, ok, err := NumericTemporalToTime(days, iceberg.DateType{}, common, false)
+		require.NoError(t, err)
+		require.True(t, ok)
+		assert.Equal(t, int64(pq.Int32()), daysOf(tm), "date must agree between insert and copy-on-write")
+	})
+
+	t.Run("non-numeric and non-temporal return ok=false", func(t *testing.T) {
+		_, ok, err := NumericTemporalToTime("not-a-number", iceberg.TimestampType{}, nil, false)
+		require.NoError(t, err)
+		assert.False(t, ok, "a non-numeric temporal value is left for the caller's time.Time handling")
+
+		_, ok, err = NumericTemporalToTime(int64(5), iceberg.StringType{}, nil, false)
+		require.NoError(t, err)
+		assert.False(t, ok, "a non-temporal type is not handled here")
+	})
+
+	t.Run("strict rejects numeric without metadata like the insert path", func(t *testing.T) {
+		for _, typ := range []iceberg.Type{iceberg.DateType{}, iceberg.TimeType{}, iceberg.TimestampType{}, iceberg.TimestampTzType{}} {
+			_, _, err := NumericTemporalToTime(int64(1_730_000_000_000), typ, nil, true)
+			require.Error(t, err, "strict mode must reject a numeric temporal lacking metadata for %s", typ)
+			assert.Contains(t, err.Error(), "require_schema_metadata=true")
+		}
+	})
+}
+
 func tsCommon(u schema.TimeUnit, utc bool) *schema.Common {
 	return &schema.Common{
 		Type:    schema.Timestamp,

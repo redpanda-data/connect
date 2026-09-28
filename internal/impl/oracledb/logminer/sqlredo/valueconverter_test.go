@@ -189,6 +189,13 @@ func TestConvertRawValue(t *testing.T) {
 			input:   "48656C6C6F",
 			wantStr: "48656C6C6F",
 		},
+		{
+			// Regression: odd-length hex must not panic (previously sliced out of
+			// range). Malformed input is returned untouched.
+			name:    "HEXTORAW odd-length hex is returned untouched, no panic",
+			input:   "HEXTORAW('123')",
+			wantStr: "HEXTORAW('123')",
+		},
 	}
 
 	for _, tt := range tests {
@@ -199,6 +206,65 @@ func TestConvertRawValue(t *testing.T) {
 			} else {
 				assert.Equal(t, tt.wantStr, result)
 			}
+		})
+	}
+}
+
+func TestConvertUnistrValue(t *testing.T) {
+	converter := NewOracleValueConverter(time.UTC)
+
+	tests := []struct {
+		name  string
+		input string
+		want  any
+	}{
+		{
+			name:  "UNISTR with unicode escape",
+			input: `UNISTR('caf\00e9')`,
+			want:  "café",
+		},
+		{
+			name:  "UNISTR pure ASCII",
+			input: `UNISTR('hello')`,
+			want:  "hello",
+		},
+		{
+			name:  "UNISTR concatenation via ||",
+			input: `UNISTR('caf\00e9') || UNISTR(' \2603')`, // é then snowman
+			want:  "café ☃",
+		},
+		{
+			name:  "UNISTR surrogate pair (U+1F600)",
+			input: `UNISTR('\d83d\de00')`,
+			want:  "😀",
+		},
+		{
+			name:  "UNISTR escaped backslash",
+			input: `UNISTR('a\\b')`,
+			want:  `a\b`,
+		},
+		{
+			name:  "not a UNISTR call returns nil",
+			input: "TO_DATE('2020-01-15','YYYY-MM-DD')",
+			want:  nil,
+		},
+		{
+			// A mixed expression is rejected (nil) rather than silently dropping
+			// the plain literal — the caller keeps the raw value untouched.
+			name:  "mixed UNISTR and plain literal returns nil (no silent drop)",
+			input: `UNISTR('a') || 'plain' || UNISTR('b')`,
+			want:  nil,
+		},
+		{
+			name:  "value merely containing UNISTR is not decoded",
+			input: `MYUNISTR('x')`,
+			want:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, converter.convertUnistrValue(tt.input))
 		})
 	}
 }

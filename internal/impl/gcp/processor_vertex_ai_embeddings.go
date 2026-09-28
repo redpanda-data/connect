@@ -68,6 +68,7 @@ For more information, see the https://cloud.google.com/vertex-ai/generative-ai/d
 				Default("us-central1"),
 			service.NewStringField(vaiepFieldModel).
 				Description("The name of the LLM to use. For a full list of models, see the https://console.cloud.google.com/vertex-ai/model-garden[Vertex AI Model Garden].").
+				ShortDescription("The name of the LLM to use.").
 				Examples("text-embedding-004", "text-multilingual-embedding-002"),
 			service.NewStringAnnotatedEnumField(vaiepFieldTaskType, map[string]string{
 				"SEMANTIC_SIMILARITY": "optimize for text similarity",

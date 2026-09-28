@@ -64,17 +64,20 @@ func mongoConfigSpec() *service.ConfigSpec {
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewIntField("batch_size").
 			Description("A explicit number of documents to batch up before flushing them for processing. Must be greater than `0`. Operations: `find`, `aggregate`").
+			ShortDescription("Number of documents to batch before flushing for processing. Operations: find, aggregate.").
 			Optional().
 			Example(1000).
 			Version("4.26.0")).
 		Field(service.NewIntMapField("sort").
 			Description("An object specifying fields to sort by, and the respective sort order (`1` ascending, `-1` descending). Note: The driver currently appears to support only one sorting key. Operations: `find`").
+			ShortDescription("Fields to sort by and their order, 1 ascending or -1 descending. Operations: find.").
 			Optional().
 			Example(map[string]int{"name": 1}).
 			Example(map[string]int{"age": -1}).
 			Version("4.26.0")).
 		Field(service.NewIntField("limit").
 			Description("An explicit maximum number of documents to return. Operations: `find`").
+			ShortDescription("Maximum number of documents to return. Operations: find.").
 			Optional().
 			Version("4.26.0"))
 }
@@ -93,7 +96,7 @@ func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.
 		sort             map[string]int
 	)
 
-	mClient, database, err := getClient(conf)
+	cc, err := ClientConfigFromParsed(conf, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -137,8 +140,7 @@ func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.
 	return service.AutoRetryNacksBatchedToggled(conf, &mongoInput{
 		query:        query,
 		collection:   collection,
-		client:       mClient,
-		database:     database,
+		cc:           cc,
 		operation:    operation,
 		marshalCanon: marshalMode == string(JSONMarshalModeCanonical),
 		batchSize:    int32(batchSize),
@@ -150,8 +152,11 @@ func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.
 }
 
 type mongoInput struct {
-	query        any
-	collection   string
+	query      any
+	collection string
+	cc         *ClientConfig
+	// client and database are established lazily on Connect so that any
+	// credentials are resolved fresh on every (re)connection attempt.
 	client       *mongo.Client
 	database     *mongo.Database
 	cursor       *mongo.Cursor
@@ -168,8 +173,14 @@ type mongoInput struct {
 // without actually consuming data. The connection, if successful, is then
 // closed.
 func (m *mongoInput) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
-	err := m.client.Ping(ctx, nil)
+	client, _, err := m.cc.Connect(ctx)
 	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer func() {
+		_ = client.Disconnect(ctx)
+	}()
+	if err := client.Ping(ctx, nil); err != nil {
 		return service.ConnectionTestFailed(fmt.Errorf("ping failed: %w", err)).AsList()
 	}
 	return service.ConnectionTestSucceeded().AsList()
@@ -180,8 +191,22 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	err := m.client.Ping(ctx, nil)
-	if err != nil {
+	if m.client != nil && m.cc.AssumesRole() {
+		_ = m.client.Disconnect(ctx)
+		m.client = nil
+	}
+
+	if m.client == nil {
+		client, database, err := m.cc.Connect(ctx)
+		if err != nil {
+			return err
+		}
+		m.client, m.database = client, database
+	}
+
+	if err := m.client.Ping(ctx, nil); err != nil {
+		_ = m.client.Disconnect(ctx)
+		m.client = nil
 		return fmt.Errorf("ping failed: %v", err)
 	}
 
@@ -205,6 +230,7 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 	}
 	if opErr != nil {
 		_ = m.client.Disconnect(ctx)
+		m.client = nil
 		return opErr
 	}
 	return nil
@@ -241,15 +267,41 @@ func (m *mongoInput) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 			}, nil
 		}
 	}
+	// The loop can only fall through here with an empty batch: it continues only
+	// while RemainingBatchLength() > 0, and in that case the driver serves the
+	// next document from the buffered batch without I/O, so Next cannot fail.
+	if err := m.cursor.Err(); err != nil && ctx.Err() == nil {
+		// The cursor died mid-read (e.g. an expired credential broke the
+		// connection pool, or the client-side operation timeout elapsed waiting
+		// on a getMore). Tear down so the next Connect rebuilds the client
+		// — re-resolving IAM credentials when roles are used — and re-runs
+		// the query from the start (at-least-once delivery). A detached
+		// context lets the driver finish its endSessions handshake even when
+		// the read context is already gone. The condition tests our own
+		// context rather than the error value: an ordinary shutdown cancels it
+		// and must fall through to ErrEndOfInput, while a driver deadline with
+		// a live read context is a real failure that must not be mistaken for
+		// the end of the result set.
+		tearCtx := context.WithoutCancel(ctx)
+		_ = m.cursor.Close(tearCtx)
+		m.cursor = nil
+		_ = m.client.Disconnect(tearCtx)
+		m.client = nil
+		return nil, nil, fmt.Errorf("mongodb cursor failure: %w", err)
+	}
 	return nil, nil, service.ErrEndOfInput
 }
 
 func (m *mongoInput) Close(ctx context.Context) error {
-	if m.cursor != nil && m.client != nil {
+	if m.cursor != nil {
 		m.logger.Debugf("Got %d documents from '%s' collection", m.count, m.collection)
-		return m.client.Disconnect(ctx)
 	}
-	return nil
+	if m.client == nil {
+		return nil
+	}
+	client := m.client
+	m.client = nil
+	return client.Disconnect(ctx)
 }
 
 func (m *mongoInput) getFindOptions() (*options.FindOptionsBuilder, error) {

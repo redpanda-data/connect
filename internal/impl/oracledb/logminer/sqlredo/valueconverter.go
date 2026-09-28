@@ -9,12 +9,15 @@
 package sqlredo
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"math"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // OracleValueConverter handles conversion of Oracle function calls and special values
@@ -47,6 +50,12 @@ var (
 
 	// EMPTY_CLOB() or EMPTY_BLOB()
 	emptyLobPattern = regexp.MustCompile(`(?i)EMPTY_(CLOB|BLOB)\(\)`)
+
+	// UNISTR('caf\00e9') — national-character literal with \XXXX UTF-16 escapes.
+	uniStrPattern = regexp.MustCompile(`(?i)UNISTR\('((?:[^']|'')*)'\)`)
+	// Whole-value form: one or more UNISTR('...') segments joined by ||. Used to
+	// reject mixed expressions so non-UNISTR text is never silently dropped.
+	uniStrExprPattern = regexp.MustCompile(`(?i)^UNISTR\('(?:[^']|'')*'\)(?:\s*\|\|\s*UNISTR\('(?:[^']|'')*'\))*$`)
 )
 
 // ConvertValue converts an Oracle value (potentially a function call) to its proper Go type.
@@ -72,6 +81,9 @@ func (c *OracleValueConverter) ConvertValue(value any) any {
 	}
 	if emptyLobPattern.MatchString(str) {
 		return c.convertLobValue(str)
+	}
+	if result := c.convertUnistrValue(str); result != nil {
+		return result
 	}
 
 	// Bare numeric literal: try integer first, then floating-point.
@@ -183,18 +195,78 @@ func (*OracleValueConverter) convertRawValue(value string) any {
 		return value
 	}
 
-	hexStr := matches[1]
-	bytes := make([]byte, len(hexStr)/2)
+	decoded, err := hex.DecodeString(matches[1])
+	if err != nil {
+		// Malformed hex (e.g. odd length). Oracle emits even-length hex for
+		// RAW/BLOB, so this is defensive: leave the value untouched rather than
+		// panicking and taking down the whole connector.
+		return value
+	}
+	return decoded
+}
 
-	for i := 0; i < len(hexStr); i += 2 {
-		b, err := strconv.ParseUint(hexStr[i:i+2], 16, 8)
-		if err != nil {
-			return value
-		}
-		bytes[i/2] = byte(b)
+// convertUnistrValue decodes an Oracle UNISTR('...') national-character literal to
+// a Go string. UNISTR encodes characters as \XXXX UTF-16 code units (with \\ for a
+// literal backslash), and LogMiner may concatenate several UNISTR calls with ||.
+// Returns nil when value is not a UNISTR expression so ConvertValue can fall
+// through to its other branches.
+func (*OracleValueConverter) convertUnistrValue(value string) any {
+	// Fast, allocation-free reject for the hot path: only values that begin with
+	// UNISTR( can be UNISTR expressions. EqualFold avoids the strings.ToUpper
+	// allocation on every bare value the converter inspects.
+	const prefix = "UNISTR("
+	v := strings.TrimSpace(value)
+	if len(v) < len(prefix) || !strings.EqualFold(v[:len(prefix)], prefix) {
+		return nil
+	}
+	// Only decode when the WHOLE value is UNISTR('...') segments joined by || .
+	// A mixed expression (e.g. UNISTR('a') || 'plain' || UNISTR('b')) would
+	// otherwise have its non-UNISTR parts silently dropped — safer to leave the
+	// value untouched than to corrupt it. (Genuine LogMiner output never
+	// interleaves plain literals with UNISTR segments.)
+	if !uniStrExprPattern.MatchString(v) {
+		return nil
+	}
+	segments := uniStrPattern.FindAllStringSubmatch(v, -1)
+	if segments == nil {
+		return nil
 	}
 
-	return bytes
+	var units []uint16
+	for _, seg := range segments {
+		inner := strings.ReplaceAll(seg[1], "''", "'")
+		for i := 0; i < len(inner); {
+			if inner[i] == '\\' {
+				// \\ is a literal backslash.
+				if i+1 < len(inner) && inner[i+1] == '\\' {
+					units = append(units, uint16('\\'))
+					i += 2
+					continue
+				}
+				// \XXXX is a single UTF-16 code unit (surrogate halves combine).
+				if i+5 <= len(inner) {
+					if v, err := strconv.ParseUint(inner[i+1:i+5], 16, 16); err == nil {
+						units = append(units, uint16(v))
+						i += 5
+						continue
+					}
+				}
+				// Not a valid escape — treat the backslash literally.
+				units = append(units, uint16('\\'))
+				i++
+				continue
+			}
+			r, size := utf8.DecodeRuneInString(inner[i:])
+			if r == utf8.RuneError && size <= 1 {
+				units = append(units, uint16(inner[i]))
+				i++
+				continue
+			}
+			units = append(units, utf16.Encode([]rune{r})...)
+			i += size
+		}
+	}
+	return string(utf16.Decode(units))
 }
 
 // convertLobValue handles EMPTY_CLOB() and EMPTY_BLOB()

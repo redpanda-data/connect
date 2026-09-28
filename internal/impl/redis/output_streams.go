@@ -48,6 +48,7 @@ Redis stream entries are key/value pairs, as such it is necessary to specify the
 				Description("The stream to add messages to."),
 			service.NewInterpolatedStringField(soFieldID).
 				Description("The entry ID for the stream message. Allows function interpolations. When set to `*` (the default), Redis auto-generates a unique ID based on the current time. Set a custom ID to control message ordering, for example to replay messages in upstream order.").
+				ShortDescription("The entry ID for the stream message. Defaults to *, letting Redis generate a time-based unique ID.").
 				Examples("*", "${! @redis_stream }", "${! this.id }", "${! counter() }-0").
 				Default("*"),
 			service.NewStringField(soFieldBodyKey).

@@ -37,10 +37,12 @@ For basic inserts or select queries use either the ` + "xref:components:processo
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
 		Field(service.NewBoolField("unsafe_dynamic_query").
 			Description("Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Great care should be made to ensure your queries are defended against injection attacks.").
+			ShortDescription("Enable interpolation functions in the query. Take care to defend against injection attacks.").
 			Advanced().
 			Default(false)).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
+			ShortDescription("An optional Bloblang mapping evaluating to an array of values matching the placeholders in query.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).

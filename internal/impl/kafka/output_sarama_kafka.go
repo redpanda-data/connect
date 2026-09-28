@@ -92,6 +92,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 		Fields(
 			service.NewStringListField(oskFieldAddresses).
 				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").
+				ShortDescription("A list of broker addresses to connect to. Items containing commas are expanded into multiple addresses.").
 				Examples(
 					[]string{"localhost:9092"},
 					[]string{"localhost:9041,localhost:9042"},
@@ -106,6 +107,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Advanced().Default("benthos"),
 			service.NewStringField(oskFieldTargetVersion).
 				Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
+				ShortDescription("The version of the Kafka protocol to use. Ideally matches the version of your brokers.").
 				Examples(sarama.DefaultVersion.String(), "3.1.0").
 				Optional(),
 			service.NewStringField(oskFieldRackID).
@@ -119,6 +121,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Default("fnv1a_hash"),
 			service.NewInterpolatedStringField(oskFieldPartition).
 				Description("The manually-specified partition to publish messages to, relevant only when the field `partitioner` is set to `manual`. Must be able to parse as a 32-bit integer.").
+				ShortDescription("The partition to publish messages to. Only relevant when partitioner is set to manual.").
 				Advanced().Default(""),
 			service.NewObjectField(oskFieldCustomTopic,
 				service.NewBoolField(oskFieldCustomTopicEnabled).
@@ -128,8 +131,10 @@ Unfortunately this error message will appear for a wide range of connection prob
 					Default(-1),
 				service.NewIntField(oskFieldCustomTopicReplicationFactor).
 					Description("The replication factor to use for new topics. Leave at -1 to use the broker configured default. Must be an odd number, and less then or equal to the number of brokers.").
+					ShortDescription("Replication factor for new topics. Leave at -1 for the broker default. Must be an odd number.").
 					Default(-1),
 			).Description("If enabled, topics will be created with the specified number of partitions and replication factor if they do not already exist.").
+				ShortDescription("Create topics with the specified partition count and replication factor if they do not exist.").
 				Advanced().Optional(),
 			service.NewStringEnumField(oskFieldCompression, "none", "snappy", "lz4", "gzip", "zstd").
 				Description("The compression algorithm to use.").
@@ -144,6 +149,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(oskFieldIdempotentWrite).
 				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
+				ShortDescription("Enable the idempotent write producer option. Requires the IDEMPOTENT_WRITE permission on CLUSTER.").
 				Default(false).
 				Advanced(),
 			service.NewBoolField(oskFieldAckReplicas).
@@ -157,6 +163,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Advanced().Default("5s"),
 			service.NewBoolField(oskFieldRetryAsBatch).
 				Description("When enabled forces an entire batch of messages to be retried if any individual message fails on a send, otherwise only the individual messages that failed are retried. Disabling this helps to reduce message duplicates during intermittent errors, but also makes it impossible to guarantee strict ordering of messages.").
+				ShortDescription("Retry the entire batch when any message fails to send, rather than only the failed messages.").
 				Advanced().Default(false),
 			service.NewBatchPolicyField(oskFieldBatching),
 			service.NewIntField(oskFieldMaxRetries).

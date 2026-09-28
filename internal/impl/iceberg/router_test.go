@@ -426,3 +426,20 @@ func TestBuildSchemaWithResolverMetadataOnlyFieldOrdering(t *testing.T) {
 	assert.Equal(t, "a", fields[1].Name)
 	assert.Equal(t, "extra", fields[2].Name) // record-only field last
 }
+
+func TestTableLocationFor(t *testing.T) {
+	nsParts := []string{"shop", "cdc"}
+
+	// A prefix works identically with and without a trailing slash. Bare
+	// concatenation used to require the slash: `s3://bucket` yielded
+	// `s3://bucketshop/...` and CreateTable failed on a nonexistent bucket.
+	assert.Equal(t, "s3://bucket/shop/cdc/orders", tableLocationFor("s3://bucket/", nsParts, "orders"))
+	assert.Equal(t, "s3://bucket/shop/cdc/orders", tableLocationFor("s3://bucket", nsParts, "orders"))
+
+	// Deeper warehouse prefixes keep working, slash or not.
+	assert.Equal(t, "s3://bucket/warehouse/shop/cdc/orders", tableLocationFor("s3://bucket/warehouse/", nsParts, "orders"))
+	assert.Equal(t, "s3://bucket/warehouse/shop/cdc/orders", tableLocationFor("s3://bucket/warehouse", nsParts, "orders"))
+
+	// Single-level namespace.
+	assert.Equal(t, "s3://bucket/db/t", tableLocationFor("s3://bucket", []string{"db"}, "t"))
+}

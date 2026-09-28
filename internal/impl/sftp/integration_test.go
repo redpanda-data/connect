@@ -206,10 +206,108 @@ cache_resources:
 	}, time.Second*10, time.Millisecond*100)
 }
 
+// TestIntegrationSFTPOutputRecoversFromRepeatedWriteFailures reproduces
+// https://github.com/redpanda-data/connect/issues/3584: an SFTP output that
+// fails to open a remote file (e.g. a permissions error) used to leave a
+// stale SFTP client, and its underlying SSH channel, attached to the writer.
+// Every retry then leaked another channel until the server's per-connection
+// channel limit was exhausted, at which point the output could never
+// reconnect and required a restart. Writes must fail cleanly instead, and
+// the connection must remain usable afterwards.
+func TestIntegrationSFTPOutputRecoversFromRepeatedWriteFailures(t *testing.T) {
+	integration.CheckSkip(t)
+
+	emu := runEmulator(t)
+	require.NoError(t, emu.client.MkdirAll("/upload"))
+
+	// A regular file where the writer will try to create a directory, so
+	// every write below it fails deterministically without relying on
+	// permission configuration.
+	writeSFTPFile(t, emu.client, "/upload/blocked", "not-a-directory")
+
+	conf := fmt.Sprintf(`
+address: %s
+path: /upload/blocked/file.txt
+credentials:
+  username: %s
+  password: %s
+  host_public_key: %s
+codec: all-bytes
+`, emu.address, sftpUsername, sftpPassword, emu.hostKey)
+
+	parsed, err := sftpOutputSpec().ParseYAML(conf, nil)
+	require.NoError(t, err)
+
+	writer, err := newWriterFromParsed(parsed, service.MockResources())
+	require.NoError(t, err)
+	require.NoError(t, writer.Connect(t.Context()))
+	t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+
+	// Sessions the server already has open, including the emulator's own
+	// client. sftpgo has no per-connection channel cap, so the leak shows up
+	// as a growing session count rather than as a failure to connect.
+	baseline, err := emu.openConnections()
+	require.NoError(t, err)
+
+	// More attempts than a typical SSH server's default per-connection
+	// channel limit (OpenSSH defaults to 10), so a channel leak on failure
+	// would eventually surface as a connection-level error on such a server.
+	for range 20 {
+		err := writer.Write(t.Context(), service.NewMessage([]byte("payload")))
+		require.Error(t, err)
+		require.NotErrorIs(t, err, service.ErrNotConnected)
+		assert.Nil(t, writer.sftpClient, "a failed write must not leave a stale SFTP client behind")
+		assert.Nil(t, writer.handle, "a failed write must not leave a stale file handle behind")
+	}
+
+	// The server must agree that nothing was left behind. sftpgo drops a
+	// session as soon as its channel closes, but don't rely on that being
+	// synchronous with the client-side Close.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		open, err := emu.openConnections()
+		assert.NoError(c, err)
+		assert.LessOrEqual(c, open, baseline, "failed writes must not leave SFTP channels open on the server")
+	}, time.Second*10, time.Millisecond*100)
+
+	// The underlying SSH connection must still be healthy.
+	writer.path, err = service.NewInterpolatedString("/upload/ok.txt")
+	require.NoError(t, err)
+	require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("payload"))))
+}
+
 type emulator struct {
 	client  *sftp.Client
 	address string
 	hostKey string
+
+	// httpAddr and adminToken address the sftpgo admin REST API, which
+	// reports the sessions the server currently has open.
+	httpAddr   string
+	adminToken string
+}
+
+// openConnections returns the number of sessions sftpgo currently has open.
+// The server tracks each SFTP channel as its own connection, so this counts
+// live sftp.Client instances rather than SSH connections.
+func (e emulator) openConnections() (int, error) {
+	req, err := http.NewRequest(http.MethodGet, "http://"+e.httpAddr+"/api/v2/connections", nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+e.adminToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("listing connections: unexpected status %d", resp.StatusCode)
+	}
+	var conns []struct{}
+	if err := json.NewDecoder(resp.Body).Decode(&conns); err != nil {
+		return 0, err
+	}
+	return len(conns), nil
 }
 
 func runEmulator(t *testing.T) emulator {
@@ -305,17 +403,263 @@ func runEmulator(t *testing.T) emulator {
 	})
 
 	return emulator{
-		client:  client,
-		address: address,
-		hostKey: hostPubKey,
+		client:     client,
+		address:    address,
+		hostKey:    hostPubKey,
+		httpAddr:   httpAddr,
+		adminToken: tokenResponse.AccessToken,
 	}
 }
 
+// writeSFTPFile writes data to a temporary name and then renames it into place.
+// The file appears atomically at its full size, so a watcher poll can never
+// observe a partially written file.
 func writeSFTPFile(t *testing.T, client *sftp.Client, path, data string) {
 	t.Helper()
-	file, err := client.Create(path)
+	tmpPath := path + ".tmp"
+	file, err := client.Create(tmpPath)
 	require.NoError(t, err, "creating file")
-	defer file.Close()
-	_, err = fmt.Fprint(file, data, "writing file contents")
+	_, err = fmt.Fprint(file, data)
+	require.NoError(t, err, "writing file contents")
+	require.NoError(t, file.Close(), "closing file")
+	require.NoError(t, client.Rename(tmpPath, path), "renaming file into place")
+}
+
+// readSFTPInput builds an sftp input for the emulator and connects it.
+func readSFTPInput(t *testing.T, emu emulator, path, scanner string, watcher bool) *sftpReader {
+	t.Helper()
+	conf := fmt.Sprintf(`
+address: %s
+paths:
+  - %s
+credentials:
+  username: %s
+  password: %s
+  host_public_key: %s
+scanner:
+  %s: {}
+watcher:
+  enabled: %t
+  minimum_age: 0s
+  poll_interval: 100ms
+  cache: files_memory
+`, emu.address, path, sftpUsername, sftpPassword, emu.hostKey, scanner, watcher)
+
+	parsed, err := sftpInputSpec().ParseYAML(conf, nil)
 	require.NoError(t, err)
+
+	reader, err := newSFTPReaderFromParsed(parsed, service.MockResources(service.MockResourcesOptAddCache("files_memory")))
+	require.NoError(t, err)
+	require.NoError(t, reader.Connect(t.Context()))
+	t.Cleanup(func() { require.NoError(t, reader.Close(context.Background())) })
+	return reader
+}
+
+// readOneFile reads one batch of exactly one message and acks it.
+// It has no testing.T, so it is safe to be called from the application code/goroutine.
+// Assert on the result from the test goroutine, or use mustReadOneFile.
+func readOneFile(ctx context.Context, reader *sftpReader) (string, error) {
+	batch, ackFn, err := reader.ReadBatch(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(batch) != 1 {
+		return "", fmt.Errorf("expected a batch of 1 message, got %d", len(batch))
+	}
+	content, err := batch[0].AsBytes()
+	if err != nil {
+		return "", err
+	}
+	if err := ackFn(ctx, nil); err != nil {
+		return "", err
+	}
+	return string(content), nil
+}
+
+// mustReadOneFile reads one file on the test goroutine and fails the test on
+// any error.
+func mustReadOneFile(t *testing.T, ctx context.Context, reader *sftpReader) string {
+	t.Helper()
+	content, err := readOneFile(ctx, reader)
+	require.NoError(t, err, "file boundary must not be reported as a lost connection")
+	return content
+}
+
+func TestIntegrationSFTPReadBatchRotatesFiles(t *testing.T) {
+	integration.CheckSkip(t)
+
+	emu := runEmulator(t)
+	require.NoError(t, emu.client.MkdirAll("/upload"))
+
+	t.Run("static paths", func(t *testing.T) {
+		dir := "/upload/static"
+		require.NoError(t, emu.client.MkdirAll(dir))
+		writeSFTPFile(t, emu.client, dir+"/1.txt", "data-1")
+		writeSFTPFile(t, emu.client, dir+"/2.txt", "data-2")
+		writeSFTPFile(t, emu.client, dir+"/3.txt", "data-3")
+
+		reader := readSFTPInput(t, emu, dir+"/*.txt", "to_the_end", false)
+		ctx := t.Context()
+
+		// A cancelled context must stop the rotation before a file is opened.
+		cancelledCtx, cancel := context.WithCancel(ctx)
+		cancel()
+		_, _, err := reader.ReadBatch(cancelledCtx)
+		require.ErrorIs(t, err, context.Canceled)
+
+		var contents []string
+		for range 3 {
+			contents = append(contents, mustReadOneFile(t, ctx, reader))
+		}
+		// The SFTP server does not sort glob results, so only the set is checked.
+		assert.ElementsMatch(t, []string{"data-1", "data-2", "data-3"}, contents)
+
+		_, _, err = reader.ReadBatch(ctx)
+		require.ErrorIs(t, err, service.ErrEndOfInput)
+	})
+
+	t.Run("empty files", func(t *testing.T) {
+		// With the lines scanner an empty file yields EOF at once. The reader
+		// must skip it inside one ReadBatch call, and an empty last file must
+		// end the input instead of returning an empty batch.
+		dir := "/upload/empty"
+		require.NoError(t, emu.client.MkdirAll(dir))
+		writeSFTPFile(t, emu.client, dir+"/1.txt", "data-1\n")
+		writeSFTPFile(t, emu.client, dir+"/2.txt", "")
+		writeSFTPFile(t, emu.client, dir+"/3.txt", "data-3\n")
+		writeSFTPFile(t, emu.client, dir+"/4.txt", "")
+
+		// Fix the order so the empty files sit where the test expects.
+		// Needed because we want to test that the reader skips empty files, so the order matters.
+		reader := readSFTPInput(t, emu, dir+"/*.txt", "lines", false)
+		reader.pathProvider = &staticPathProvider{expandedPaths: []string{
+			dir + "/1.txt", dir + "/2.txt", dir + "/3.txt", dir + "/4.txt",
+		}}
+		ctx := t.Context()
+
+		var contents []string
+		for {
+			batch, ackFn, err := reader.ReadBatch(ctx)
+			if errors.Is(err, service.ErrEndOfInput) {
+				break
+			}
+			require.NotErrorIs(t, err, service.ErrNotConnected)
+			require.NoError(t, err)
+			require.NotEmpty(t, batch, "ReadBatch must not return an empty batch")
+			for _, msg := range batch {
+				content, err := msg.AsBytes()
+				require.NoError(t, err)
+				contents = append(contents, string(content))
+			}
+			require.NoError(t, ackFn(ctx, nil))
+		}
+		assert.Equal(t, []string{"data-1", "data-3"}, contents)
+	})
+
+	t.Run("cancel mid rotation", func(t *testing.T) {
+		// A shutdown while the reader works through a run of empty files
+		// must stop the rotation at once, not drain the remaining files.
+		dir := "/upload/cancel"
+		require.NoError(t, emu.client.MkdirAll(dir))
+		writeSFTPFile(t, emu.client, dir+"/empty.txt", "")
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		const (
+			totalFiles   = 10
+			cancelAtFile = 3
+		)
+		provider := &countingPathProvider{path: dir + "/empty.txt", total: totalFiles}
+		provider.onNext = func(calls int) {
+			if calls == cancelAtFile {
+				cancel()
+			}
+		}
+
+		reader := readSFTPInput(t, emu, dir+"/*.txt", "lines", false)
+		reader.pathProvider = provider
+
+		_, _, err := reader.ReadBatch(ctx)
+		require.ErrorIs(t, err, context.Canceled)
+		assert.Equal(t, cancelAtFile, provider.calls)
+	})
+
+	t.Run("watcher", func(t *testing.T) {
+		dir := "/upload/watcher"
+		require.NoError(t, emu.client.MkdirAll(dir))
+		writeSFTPFile(t, emu.client, dir+"/1.txt", "data-1")
+		writeSFTPFile(t, emu.client, dir+"/2.txt", "data-2")
+
+		reader := readSFTPInput(t, emu, dir+"/*.txt", "to_the_end", true)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		var contents []string
+		for range 2 {
+			contents = append(contents, mustReadOneFile(t, ctx, reader))
+		}
+		assert.ElementsMatch(t, []string{"data-1", "data-2"}, contents)
+
+		// The watcher waits for a new file. It must not end the input.
+		type readResult struct {
+			content string
+			err     error
+		}
+		results := make(chan readResult, 1)
+		go func() {
+			content, err := readOneFile(ctx, reader)
+			results <- readResult{content: content, err: err}
+		}()
+		select {
+		case res := <-results:
+			t.Fatalf("watcher returned (%q, %v) before a new file was written", res.content, res.err)
+		case <-time.After(500 * time.Millisecond):
+		}
+
+		writeSFTPFile(t, emu.client, dir+"/3.txt", "data-3")
+		select {
+		case res := <-results:
+			require.NoError(t, res.err, "file boundary must not be reported as a lost connection")
+			assert.Equal(t, "data-3", res.content)
+		case <-time.After(5 * time.Second):
+			t.Fatal("watcher did not pick up the new file")
+		}
+
+		// A shutdown must unblock the waiting watcher.
+		errs := make(chan error, 1)
+		go func() {
+			_, _, err := reader.ReadBatch(ctx)
+			errs <- err
+		}()
+		cancel()
+		select {
+		case err := <-errs:
+			require.ErrorIs(t, err, context.Canceled)
+		case <-time.After(5 * time.Second):
+			t.Fatal("watcher did not stop on context cancel")
+		}
+	})
+}
+
+// countingPathProvider returns the same path a fixed number of times and
+// counts the calls. It caps the run so a test cannot loop for ever.
+type countingPathProvider struct {
+	path   string
+	total  int
+	calls  int
+	onNext func(calls int)
+}
+
+func (c *countingPathProvider) Next(context.Context) (string, bool, error) {
+	if c.calls >= c.total {
+		return "", false, nil
+	}
+	c.calls++
+	c.onNext(c.calls)
+	return c.path, true, nil
+}
+
+func (*countingPathProvider) Ack(context.Context, string, error) error {
+	return nil
 }

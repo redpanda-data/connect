@@ -51,12 +51,12 @@ func NewMonitor(
 	tables []TableFQN,
 	slotName string,
 ) (*Monitor, error) {
+	if config.WalMonitorInterval <= 0 {
+		return nil, fmt.Errorf("invalid monitoring interval: %s", config.WalMonitorInterval.String())
+	}
 	dbConn, err := openPgConnectionFromConfig(config)
 	if err != nil {
 		return nil, err
-	}
-	if config.HeartbeatInterval <= 0 {
-		return nil, fmt.Errorf("invalid monitoring interval: %s", config.WalMonitorInterval.String())
 	}
 
 	m := &Monitor{

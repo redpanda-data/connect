@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -42,6 +43,10 @@ type capturedMessage struct {
 	// path is sensitive to.
 	body   map[string]any
 	schema schema.Common
+	// operation is the message's "operation" metadata ("read" for snapshot
+	// rows, "insert"/"update"/"delete" for streamed rows) — used to assert a
+	// phase actually exercised the code path it claims to.
+	operation string
 }
 
 // decodeWithNumber mirrors how benthos parses message bytes downstream (via
@@ -76,6 +81,8 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 		num_38_2    NUMBER(38,2),
 		num_10_2    NUMBER(10,2),
 		num_5_0     NUMBER(5,0),
+		num_star_2  NUMBER(*,2),
+		num_neg     NUMBER(5,-2),
 		num_int     INTEGER,
 		flt         FLOAT,
 		bin_float   BINARY_FLOAT,
@@ -94,7 +101,7 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 	// LogMiner SQL_REDO reports. Used once before launch (snapshot) and once
 	// after launch (streaming).
 	insertSQL := `INSERT INTO testdb.all_types
-		(num_plain, num_38, num_38_0, num_38_2, num_10_2, num_5_0, num_int, flt, bin_float, bin_double, vc, ch, nvc, dt, ts, ts_tz, rw)
+		(num_plain, num_38, num_38_0, num_38_2, num_10_2, num_5_0, num_star_2, num_neg, num_int, flt, bin_float, bin_double, vc, ch, nvc, dt, ts, ts_tz, rw)
 		VALUES (
 			12345.678,
 			123456789012345678901234567890,
@@ -102,6 +109,8 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 			12.34,
 			56.78,
 			42,
+			78.91,
+			1234,
 			99,
 			3.5,
 			1.5,
@@ -124,6 +133,8 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 		num_38_2   = 5,
 		num_10_2   = -7,
 		num_5_0    = -42,
+		num_star_2 = 3,
+		num_neg    = 8765,
 		num_int    = 0,
 		flt        = 9,
 		vc         = 'updated'`
@@ -144,26 +155,48 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 		for _, msg := range mb {
 			b, aErr := msg.AsBytes()
 			assert.NoError(t, aErr)
+			op, _ := msg.MetaGet("operation")
 			captured = append(captured, capturedMessage{
-				body:   decodeWithNumber(t, string(b)),
-				schema: oracledbtest.ExtractSchema(t, msg),
+				body:      decodeWithNumber(t, string(b)),
+				schema:    oracledbtest.ExtractSchema(t, msg),
+				operation: op,
 			})
 		}
 		return nil
 	}
 
-	waitForMessage := func() capturedMessage {
+	// waitForOperation drains captured messages until one with the wanted
+	// operation arrives, discarding others (checkpointing is at-least-once, so
+	// a restarted stream may redeliver earlier events first). Capturing an
+	// operation in forbidden fails immediately: each phase must prove it
+	// exercised the code path it claims to — e.g. the post-restart leg forbids
+	// "read", because a re-run snapshot would make it silently re-test the
+	// snapshot-seeded path instead of the catalog-derived one.
+	waitForOperation := func(want string, forbidden ...string) capturedMessage {
 		t.Helper()
-		assert.Eventually(t, func() bool {
+		var (
+			msg   capturedMessage
+			badOp string
+		)
+		require.Eventually(t, func() bool {
 			mu.Lock()
 			defer mu.Unlock()
-			return len(captured) >= 1
-		}, time.Minute*5, time.Second)
-		mu.Lock()
-		defer mu.Unlock()
-		require.GreaterOrEqual(t, len(captured), 1)
-		msg := captured[0]
-		captured = nil
+			for len(captured) > 0 {
+				m := captured[0]
+				captured = captured[1:]
+				if slices.Contains(forbidden, m.operation) {
+					badOp = m.operation
+					return true
+				}
+				if m.operation == want {
+					msg = m
+					captured = nil
+					return true
+				}
+			}
+			return false
+		}, time.Minute*5, time.Second, "waiting for a %q message", want)
+		require.Emptyf(t, badOp, "captured forbidden operation %q while waiting for %q", badOp, want)
 		return msg
 	}
 
@@ -195,23 +228,66 @@ oracledb_cdc:
 		}()
 	}
 
-	// Capture one message per phase: snapshot read, streaming INSERT, streaming UPDATE.
+	// Capture one message per phase: snapshot read, streaming INSERT, streaming
+	// UPDATE — each pinned to its operation so a duplicate delivery of an
+	// earlier event can't silently substitute for the phase under test.
 	phases := map[string]capturedMessage{}
-	phases["snapshot"] = waitForMessage()
+	phases["snapshot"] = waitForOperation("read")
 
 	db.MustExec(insertSQL)
-	phases["stream-insert"] = waitForMessage()
+	phases["stream-insert"] = waitForOperation("insert")
 
 	db.MustExec(updateSQL)
-	phases["stream-update"] = waitForMessage()
+	phases["stream-update"] = waitForOperation("update")
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
 
-	phaseNames := []string{"snapshot", "stream-insert", "stream-update"}
+	// Restart leg: rebuild an identical stream, which resumes from the
+	// persisted SCN checkpoint and therefore SKIPS the snapshot. With no
+	// snapshot to seed the schema cache from driver column metadata, every
+	// message now carries the schema derived from ALL_TAB_COLUMNS — exactly
+	// what happens on a real connector restart. A divergence between the two
+	// schema sources (e.g. catalog "TIMESTAMP(6)" vs driver "TimeStampDTY")
+	// only surfaces on this leg: within a single process lifetime streaming
+	// reuses the snapshot-seeded schema and the catalog mapping never appears
+	// in any published message.
+	mu.Lock()
+	captured = nil
+	mu.Unlock()
+
+	{
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(collect))
+
+		stream, err = streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			if rErr := stream.Run(t.Context()); rErr != nil && !errors.Is(rErr, context.Canceled) {
+				t.Error(rErr)
+			}
+		}()
+	}
+
+	// The post-restart phase must capture the fresh INSERT and must never see
+	// a snapshot read: if the checkpoint wasn't persisted or resumed, the
+	// second stream re-runs the snapshot and this leg silently degrades into a
+	// duplicate of the snapshot phase — passing every schema assertion below
+	// without exercising the catalog-derived schema path it exists to cover.
+	// Redelivered streaming events (at-least-once) are drained and discarded.
+	db.MustExec(insertSQL)
+	phases["stream-post-restart"] = waitForOperation("insert", "read")
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
+
+	phaseNames := []string{"snapshot", "stream-insert", "stream-update", "stream-post-restart"}
 
 	// Use the snapshot schema as the reference for column types; assert all
 	// phases that carry a schema agree with it.
-	refSchema := childTypeMap(phases["snapshot"].schema)
+	refSchema := childSchemaMap(phases["snapshot"].schema)
 	require.NotEmpty(t, refSchema, "snapshot message carried no schema")
 
 	// Gather the union of columns observed across every phase.
@@ -238,7 +314,7 @@ oracledb_cdc:
 	}
 	for _, col := range sortedCols {
 		var b strings.Builder
-		fmt.Fprintf(&b, "%-14s | %-12s", col, refSchema[col].String())
+		fmt.Fprintf(&b, "%-14s | %-14s", col, describeColumnSchema(refSchema[col]))
 		for _, p := range phaseNames {
 			v, ok := phases[p].body[col]
 			if !ok {
@@ -252,14 +328,20 @@ oracledb_cdc:
 
 	for _, col := range sortedCols {
 		t.Run(col, func(t *testing.T) {
-			// Schema for the column must agree across all phases that carry one.
+			// The FULL column schema — type, optionality, and logical decimal
+			// precision/scale — must agree across all phases that carry one.
+			// Comparing only the CommonType would let a Decimal(38,2) vs
+			// Decimal(22,2) flip between the snapshot-seeded and
+			// catalog-derived paths pass unnoticed, even though Avro decimal
+			// precision/scale are part of the type and such a flip is exactly
+			// the Schema Registry incompatibility this test exists to catch.
 			for _, p := range phaseNames {
-				ps := childTypeMap(phases[p].schema)
+				ps := childSchemaMap(phases[p].schema)
 				if len(ps) == 0 {
 					continue
 				}
 				assert.Equalf(t, refSchema[col], ps[col],
-					"schema type for %q in phase %q differs from snapshot", col, p)
+					"schema for %q in phase %q differs from snapshot", col, p)
 			}
 
 			// Establish the reference Go type from the snapshot value, then
@@ -280,7 +362,7 @@ oracledb_cdc:
 			// bare JSON number (json.Number) — in EVERY phase. This is the bug
 			// under test: a leaked json.Number breaks downstream Avro encoding
 			// into string-typed fields.
-			if ct := refSchema[col]; ct == schema.Decimal || ct == schema.BigDecimal {
+			if ct := refSchema[col].Type; ct == schema.Decimal || ct == schema.BigDecimal {
 				for _, p := range phaseNames {
 					v, ok := phases[p].body[col]
 					if !ok || v == nil {
@@ -290,15 +372,45 @@ oracledb_cdc:
 					assert.Truef(t, isStr, "decimal column %q in phase %q is %T, want string", col, p, v)
 				}
 			}
+
+			// Timestamp columns must render as RFC 3339 in EVERY phase.
+			// Matching Go types (%T == string) alone would let the streaming
+			// coercion leave a raw redo rendering ("2024-01-15 10:30:00") in
+			// place, which downstream Avro timestamp encoding rejects.
+			if refSchema[col].Type == schema.Timestamp {
+				for _, p := range phaseNames {
+					v, ok := phases[p].body[col]
+					if !ok || v == nil {
+						continue
+					}
+					s, isStr := v.(string)
+					if assert.Truef(t, isStr, "timestamp column %q in phase %q is %T, want string", col, p, v) {
+						_, perr := time.Parse(time.RFC3339, s)
+						assert.NoErrorf(t, perr, "timestamp column %q in phase %q is not RFC 3339: %q", col, p, s)
+					}
+				}
+			}
 		})
 	}
 }
 
-// childTypeMap indexes a record schema's children by name → CommonType.
-func childTypeMap(c schema.Common) map[string]schema.CommonType {
-	out := map[string]schema.CommonType{}
+// childSchemaMap indexes a record schema's children by name, keeping the FULL
+// schema.Common per column (type, optionality, logical decimal
+// precision/scale) so cross-phase comparisons catch flips in any of them —
+// not just in the CommonType.
+func childSchemaMap(c schema.Common) map[string]schema.Common {
+	out := map[string]schema.Common{}
 	for i := range c.Children {
-		out[c.Children[i].Name] = c.Children[i].Type
+		out[c.Children[i].Name] = c.Children[i]
 	}
 	return out
+}
+
+// describeColumnSchema renders a column schema for the diagnostic table,
+// including decimal precision/scale when present (e.g. "DECIMAL(38,2)").
+func describeColumnSchema(c schema.Common) string {
+	if c.Logical != nil && c.Logical.Decimal != nil {
+		return fmt.Sprintf("%s(%d,%d)", c.Type.String(), c.Logical.Decimal.Precision, c.Logical.Decimal.Scale)
+	}
+	return c.Type.String()
 }

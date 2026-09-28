@@ -1,0 +1,47 @@
+name: postgres-orders-arms-ab
+description: arms x cpu_points product within the maxArmSweepPoints guard (previously rejected outright)
+connector: postgres_cdc
+stack: postgres
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+  source:
+    instance_class: db.r6g.2xlarge
+    storage_gb: 400
+
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-postgres
+
+workload:
+  write_rate_per_sec: 5000
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      tables: [orders]
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  # 2 cpu_points x 3 arms = 6 sweep points, within the maxArmSweepPoints (8) guard.
+  cpu_points: [1, 2]
+  arms:
+    - id: a0-gmp2
+      gomaxprocs: 2
+    - id: a1-gmp4
+      gomaxprocs: 4
+    - id: b-gmp8
+      gomaxprocs: 8
+      pipeline:
+        input:
+          postgres_cdc:
+            batching:
+              count: 10000

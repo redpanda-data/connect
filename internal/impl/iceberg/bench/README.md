@@ -47,6 +47,17 @@ task bench:mif CORES=4 BATCH=10000 MIF=32 COUNT=1000000
 |-----------|---------|-------------|
 | `MIF`     | 4 | `max_in_flight` |
 
+### Shredder micro-benchmark
+
+Needs no infrastructure — it exercises the shredder directly:
+
+```bash
+task bench:shredder            # GOMAXPROCS=1, -count=8
+```
+
+Results are recorded in
+[`docs/benchmark-results/iceberg.md`](../../../../docs/benchmark-results/iceberg.md).
+
 ### Clean run
 
 ```bash

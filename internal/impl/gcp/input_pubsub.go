@@ -120,6 +120,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Description("The target subscription ID."),
 			service.NewStringField(pbiFieldEndpoint).
 				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document^].").
+				ShortDescription("Optional endpoint overriding the default pubsub.googleapis.com:443, for region-specific endpoints.").
 				Example("us-central1-pubsub.googleapis.com:443").
 				Example("us-west3-pubsub.googleapis.com:443").
 				Default(""),

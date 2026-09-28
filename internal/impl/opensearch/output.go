@@ -160,7 +160,8 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewInterpolatedStringField(esoFieldIndex).
 				Description("The index to place messages."),
 			service.NewInterpolatedStringField(esoFieldAction).
-				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`."),
+				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`.").
+				ShortDescription("The action to take on the document: index, update or delete."),
 			service.NewInterpolatedStringField(esoFieldID).
 				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
 				Example(`${!counter()}-${!timestamp_unix()}`),

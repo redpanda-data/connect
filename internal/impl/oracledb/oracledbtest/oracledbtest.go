@@ -9,9 +9,11 @@
 package oracledbtest
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"sync"
@@ -21,6 +23,7 @@ import (
 	"github.com/moby/moby/api/types/network"
 	_ "github.com/sijms/go-ora/v2"
 	"github.com/testcontainers/testcontainers-go"
+	tcexec "github.com/testcontainers/testcontainers-go/exec"
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
@@ -75,6 +78,23 @@ func (db *TestDB) MustExec(query string, args ...any) {
 func (db *TestDB) MustExecContext(ctx context.Context, query string, args ...any) {
 	_, err := db.ExecContext(ctx, query, args...)
 	require.NoError(db.T, err)
+}
+
+// MustExecInContainer enables executing SQL against the running contanier.
+func MustExecInContainer(t *testing.T, ctx context.Context, ctr testcontainers.Container, script string, opts ...tcexec.ProcessOption) string {
+	t.Helper()
+
+	opts = append(opts, tcexec.Multiplexed())
+	code, reader, err := ctr.Exec(ctx, []string{"bash", "-c", script}, opts...)
+	require.NoError(t, err)
+
+	outBytes, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	out := string(outBytes)
+
+	t.Logf("container exec %q exited with code %d, output:\n%s", script, code, out)
+	require.Zero(t, code, "container exec failed (%q): %s", script, out)
+	return out
 }
 
 // MustEnableSupplementalLogging enables supplemental logging on the specified table.
@@ -183,6 +203,19 @@ func (db *TestDB) CreateTableWithSupplementalLoggingIfNotExists(ctx context.Cont
 // logging for CDC, and returns the connection string and TestDB wrapper.
 // The container is automatically cleaned up when the test completes.
 func SetupTestWithOracleDBVersion(t *testing.T) (string, *TestDB) {
+	connStr, db, _ := setupTestWithOracleDBVersion(t)
+	return connStr, db
+}
+
+// SetupTestWithOracleDBVersionAndContainer is SetupTestWithOracleDBVersion, but also
+// returns the container handle so tests can Exec admin commands (e.g. SQL*Plus
+// SHUTDOWN/STARTUP MOUNT/FLASHBACK DATABASE/OPEN RESETLOGS) that a plain SQL connection
+// can't issue.
+func SetupTestWithOracleDBVersionAndContainer(t *testing.T) (string, *TestDB, testcontainers.Container) {
+	return setupTestWithOracleDBVersion(t)
+}
+
+func setupTestWithOracleDBVersion(t *testing.T) (string, *TestDB, testcontainers.Container) {
 	ctx := t.Context()
 	cfg := startContainer(t, ctx)
 
@@ -227,7 +260,7 @@ func SetupTestWithOracleDBVersion(t *testing.T) (string, *TestDB) {
 	_, err = cfg.dbConn.ExecContext(t.Context(), sql)
 	assert.NoError(t, err, "Creating 'testdb2' schema for testing across multiple schemas")
 
-	return cfg.connStr, &TestDB{cfg.dbConn, t}
+	return cfg.connStr, &TestDB{cfg.dbConn, t}, cfg.container
 }
 
 // ---------------------------------------------------------------------------
@@ -384,10 +417,11 @@ func (db *TestDB) CreatePDBTableWithSupplementalLoggingIfNotExists(ctx context.C
 }
 
 type containerCfg struct {
-	dbConn  *sql.DB
-	host    string
-	connStr string
-	port    network.Port
+	container testcontainers.Container
+	dbConn    *sql.DB
+	host      string
+	connStr   string
+	port      network.Port
 }
 
 func startContainer(t *testing.T, ctx context.Context) containerCfg {
@@ -424,9 +458,28 @@ func startContainer(t *testing.T, ctx context.Context) containerCfg {
 	})
 
 	return containerCfg{
-		dbConn:  dbConn,
-		host:    host,
-		connStr: connStr,
-		port:    port,
+		container: container,
+		dbConn:    dbConn,
+		host:      host,
+		connStr:   connStr,
+		port:      port,
 	}
+}
+
+// SyncBuffer a buffer used for buffering log output
+type SyncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *SyncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *SyncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }

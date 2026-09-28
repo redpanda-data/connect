@@ -52,7 +52,8 @@ Cross-partition queries are currently not supported by the underlying driver. Fo
 		Field(cosmosdb.PartitionKeysField(true)).
 		Field(service.NewStringField(cdbiFieldQuery).Description("The query to execute").Example(`SELECT c.foo FROM testcontainer AS c WHERE c.bar = "baz" AND c.timestamp < @timestamp`)).
 		Field(service.NewBloblangField(cdbiFieldArgsMapping).
-			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that, for each message, creates a list of arguments to use with the query.").Optional().Example(`root = [
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that, for each message, creates a list of arguments to use with the query.").
+			ShortDescription("Bloblang mapping creating the list of arguments to use with the query, per message.").Optional().Example(`root = [
   { "Name": "@name", "Value": "benthos" },
 ]`)).
 		Field(service.NewIntField(cdbiFieldBatchCount).

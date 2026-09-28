@@ -1,0 +1,39 @@
+name: postgres-arms-bad
+description: |
+  Multi-stream arms on a source scenario must be rejected. Single-pipeline arms
+  on a source ARE legal (they render through the topology-agnostic
+  renderPipelineConfig — see scenarios/oracle/orders-5table-split.yaml); it is
+  streams > 1 and fan_in that stay sink-only, because their renderers derive
+  per-topic names and sink tables.
+direction: source
+connector: postgres_cdc
+stack: postgres
+
+infra:
+  runner:
+    instance_type: c7i.4xlarge
+  source:
+    instance_class: db.m7i.2xlarge
+    storage_gb: 500
+
+dataset:
+  initial_rows: 1000000
+  row_size_bytes: 256
+  tables: [orders]
+  seeder: cdc-rows
+
+workload:
+  write_rate_per_sec: 1000
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  input:
+    postgres_cdc: {}
+
+matrix:
+  cpu_points: [2]
+  arms:
+    - id: a0
+      gomaxprocs: 2
+      streams: 2

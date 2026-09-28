@@ -29,7 +29,7 @@ services:
 
   # ── MinIO (S3-compatible object storage) ─────────────────────────────────────
   minio:
-    image: minio/minio:latest
+    image: pgsty/silo:latest
     container_name: kc-minio
     ports:
       - "19000:9000"
@@ -47,7 +47,7 @@ services:
 
   # ── Create the 'warehouse' S3 bucket ─────────────────────────────────────────
   minio-setup:
-    image: minio/mc:latest
+    image: pgsty/mc:latest
     container_name: kc-minio-setup
     depends_on:
       minio:

@@ -141,10 +141,12 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Default("/"),
 			service.NewStringField(hsiFieldRateLimit).
 				Description("An optional xref:components:rate_limits/about.adoc[rate limit] to throttle requests by.").
+				ShortDescription("An optional rate limit resource to throttle requests by.").
 				Default(""),
 			service.NewObjectField(hsiFieldResponse,
 				service.NewInterpolatedStringField(hsiFieldResponseStatus).
 					Description("Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.").
+					ShortDescription("The status code returned with synchronous responses.").
 					Examples(`${! json("status") }`, `${! meta("status") }`).
 					Default("200"),
 				service.NewInterpolatedStringMapField(hsiFieldResponseHeaders).
@@ -157,6 +159,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			),
 			netutil.ListenerConfigSpec().
 				Description("Customize messages returned via xref:guides:sync_responses.adoc[synchronous responses].").
+				ShortDescription("Customize messages returned via synchronous responses.").
 				Advanced(),
 		)
 }

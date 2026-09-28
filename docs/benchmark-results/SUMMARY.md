@@ -37,6 +37,22 @@ For full methodology, raw output, environment details, and bottleneck analysis, 
 - [Oracle CDC](oracledb-cdc.md)
 - [DynamoDB CDC](dynamodb-cdc.md)
 
+<!-- bench:aws:start - auto-generated, do not edit by hand -->
+<!-- Copyright 2025 Redpanda Data, Inc. -->
+## AWS Bench Results
+
+Last refreshed: 2026-08-20
+
+| Connector / Scenario  | Best vCPU | Connect MB/s | Last Run    |
+|-----------------------|-----------|--------------|-------------|
+| *(no AWS runs yet)*   |        —  |          —   | —           |
+
+Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
+
+To regenerate without running a bench: `task aws:summary`
+
+<!-- bench:aws:end -->
+
 ## How Benchmarks Are Run
 
 See the [Benchmarking Guide](../benchmarking.md) for the full process. In short: each connector has a reproducible benchmark suite that stands up the source system in Docker, generates test data, and measures throughput using Redpanda Connect's built-in benchmark processor.

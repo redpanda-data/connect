@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	goora "github.com/sijms/go-ora/v2/network"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
@@ -25,18 +26,25 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
+// errCodeInvalidIdentifier is Oracle's ORA-00904, raised when a query references a
+// column that doesn't exist in its source. Used to detect a custom snapshot filter
+// that doesn't project all of a table's primary key columns - see querySnapshotTable.
+const errCodeInvalidIdentifier = 904
+
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables
 // configuration value.
 type Snapshot struct {
 	dbPool                  *sql.DB
 	tables                  []UserTable
+	filters                 map[string]string
 	publisher               ChangePublisher
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
 	snapshotRowsTotalMetric *service.MetricCounter
 	lobEnabled              bool
 	pdbName                 string
-	scn                     SCN // published as part of snapshot read metadata
+	scn                     SCN       // published as part of snapshot read metadata
+	commitTimestamp         time.Time // Oracle server time at snapshot prepare
 }
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
@@ -45,6 +53,7 @@ type Snapshot struct {
 func NewSnapshot(ctx context.Context,
 	connectionString string,
 	tables []UserTable,
+	filters map[string]string,
 	publisher ChangePublisher,
 	lobEnabled bool,
 	pdbName string,
@@ -64,6 +73,7 @@ func NewSnapshot(ctx context.Context,
 	s := &Snapshot{
 		dbPool:                  db,
 		tables:                  tables,
+		filters:                 filters,
 		publisher:               publisher,
 		lobEnabled:              lobEnabled,
 		pdbName:                 pdbName,
@@ -83,7 +93,7 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 	}
 
 	var currentSCN SCN
-	if err := s.dbPool.QueryRowContext(ctx, `SELECT CURRENT_SCN FROM V$DATABASE`).Scan(&currentSCN); err != nil {
+	if err := s.dbPool.QueryRowContext(ctx, `SELECT CURRENT_SCN, SYSTIMESTAMP FROM V$DATABASE`).Scan(&currentSCN, &s.commitTimestamp); err != nil {
 		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
 	}
 
@@ -128,7 +138,12 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 			tableName = table.FullName()
 		)
 		l := s.log.With("src_table", tableName)
-		l.Infof("Launching snapshot of table '%s'", tableName)
+		customQuery, hasFilter := s.filters[tableName]
+		if hasFilter {
+			l.Infof("Launching snapshot of table '%s' with snapshot filter", tableName)
+		} else {
+			l.Infof("Launching snapshot of table '%s'", tableName)
+		}
 
 		switch {
 		case s.pdbName != "":
@@ -182,34 +197,43 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 			}
 		}()
 
-		var tablePks []string
-		if tablePks, err = getTablePrimaryKeys(ctx, tx, table); err != nil {
-			return err
-		}
-
-		l.Debugf("Found primary keys for table '%s': %v", table, tablePks)
-		lastSeenPksValues := map[string]any{}
-		for _, pk := range tablePks {
-			lastSeenPksValues[pk] = nil
-		}
-
-		var (
-			numRowsProcessed int
-			batchCount       int
-		)
-		for {
-			var pksForQuery map[string]any
-			if numRowsProcessed > 0 {
-				pksForQuery = lastSeenPksValues
-			}
-			batchCount, err = s.processBatch(ctx, tx, table, tablePks, pksForQuery, lastSeenPksValues, maxBatchSize, tableName)
-			if err != nil {
-				return fmt.Errorf("processing snapshot batch: %w", err)
+		var numRowsProcessed int
+		if hasFilter {
+			// Custom filters may join or aggregate, so a physical-order scan can't safely
+			// assume every row maps to a stable ROWID/heap position; keep the PK-keyset
+			// pagination path for these.
+			var tablePks []string
+			if tablePks, err = getTablePrimaryKeys(ctx, tx, table); err != nil {
+				return err
 			}
 
-			numRowsProcessed += batchCount
-			if batchCount < maxBatchSize {
-				break
+			l.Debugf("Found primary keys for table '%s': %v", table, tablePks)
+			lastSeenPksValues := map[string]any{}
+			for _, pk := range tablePks {
+				lastSeenPksValues[pk] = nil
+			}
+
+			var batchCount int
+			for {
+				var pksForQuery map[string]any
+				if numRowsProcessed > 0 {
+					pksForQuery = lastSeenPksValues
+				}
+				batchCount, err = s.processBatch(ctx, tx, table, tablePks, pksForQuery, lastSeenPksValues, maxBatchSize, tableName, customQuery)
+				if err != nil {
+					return fmt.Errorf("processing snapshot batch: %w", err)
+				}
+
+				numRowsProcessed += batchCount
+				if batchCount < maxBatchSize {
+					break
+				}
+			}
+		} else {
+			// No Filter: whole table scan through single unordered cursor is faster due to no
+			// random i/o that ORDER BY forces
+			if numRowsProcessed, err = s.snapshotTableFullScan(ctx, tx, table, maxBatchSize, tableName); err != nil {
+				return fmt.Errorf("processing snapshot table scan: %w", err)
 			}
 		}
 
@@ -227,8 +251,8 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 // pksForQuery is passed to querySnapshotTable for cursor-based pagination (nil on first batch).
 // lastSeenPksValues is mutated in place with the PK values from the last row of the batch,
 // so the caller can pass it as pksForQuery on the next iteration.
-func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable, tablePks []string, pksForQuery map[string]any, lastSeenPksValues map[string]any, maxBatchSize int, tableName string) (batchCount int, err error) {
-	batchRows, err := querySnapshotTable(ctx, tx, table, tablePks, pksForQuery, maxBatchSize)
+func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable, tablePks []string, pksForQuery map[string]any, lastSeenPksValues map[string]any, maxBatchSize int, tableName, customQuery string) (batchCount int, err error) {
+	batchRows, err := querySnapshotTable(ctx, tx, table, tablePks, pksForQuery, maxBatchSize, customQuery)
 	if err != nil {
 		return 0, fmt.Errorf("execute snapshot table query: %w", err)
 	}
@@ -259,37 +283,8 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 			return 0, err
 		}
 
-		var (
-			v      any
-			mapErr error
-		)
-		row := map[string]any{}
-		for idx, value := range values {
-			if v, mapErr = mappers[idx](value); mapErr != nil {
-				return 0, mapErr
-			}
-			if !s.lobEnabled && isLOBType(types[idx].DatabaseTypeName()) {
-				v = nil
-			}
-			row[columns[idx]] = v
-			if _, ok := lastSeenPksValues[columns[idx]]; ok {
-				lastSeenPksValues[columns[idx]] = value
-			}
-		}
-
-		m := MessageEvent{
-			Table:      table.Name,
-			Schema:     table.Schema,
-			Data:       row,
-			Operation:  MessageOperationRead,
-			ColumnMeta: colMeta,
-		}
-		if s.scn != InvalidSCN {
-			m.SCN = s.scn
-		}
-
-		if err = s.publisher.Publish(ctx, &m); err != nil {
-			return 0, fmt.Errorf("handling snapshot table row: %w", err)
+		if err := s.publishRow(ctx, table, columns, types, values, mappers, colMeta, lastSeenPksValues); err != nil {
+			return 0, err
 		}
 	}
 
@@ -298,6 +293,99 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 	}
 	s.snapshotRowsTotalMetric.Incr(int64(batchCount), tableName)
 	return batchCount, nil
+}
+
+func (s *Snapshot) publishRow(ctx context.Context, table UserTable, columns []string, types []*sql.ColumnType, values []any, mappers []func(any) (any, error), colMeta []ColumnMeta, lastSeenPksValues map[string]any) error {
+	row := map[string]any{}
+	for idx, value := range values {
+		v, err := mappers[idx](value)
+		if err != nil {
+			return err
+		}
+		if !s.lobEnabled && IsLOBTypeName(types[idx].DatabaseTypeName()) {
+			v = nil
+		}
+		row[columns[idx]] = v
+		if _, ok := lastSeenPksValues[columns[idx]]; ok {
+			lastSeenPksValues[columns[idx]] = value
+		}
+	}
+
+	m := MessageEvent{
+		Table:      table.Name,
+		Schema:     table.Schema,
+		Data:       row,
+		Operation:  MessageOperationRead,
+		ColumnMeta: colMeta,
+	}
+	if s.scn != InvalidSCN {
+		m.SCN = s.scn
+	}
+	if !s.commitTimestamp.IsZero() {
+		m.CommitTimestamp = s.commitTimestamp
+	}
+
+	if err := s.publisher.Publish(ctx, &m); err != nil {
+		return fmt.Errorf("handling snapshot table row: %w", err)
+	}
+	return nil
+}
+
+// snapshotTableFullScan performs a single, full unordered scan so Oracle's optimizer
+// picks a full table scan (sequential multiblock reads) over random disk I/O when ordered.
+func (s *Snapshot) snapshotTableFullScan(ctx context.Context, tx *sql.Tx, table UserTable, maxBatchSize int, tableName string) (numRowsProcessed int, err error) {
+	q := fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name)
+	rows, err := tx.QueryContext(ctx, q)
+	if err != nil {
+		return 0, fmt.Errorf("execute snapshot table scan: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("closing snapshot rows: %w", closeErr)
+		}
+	}()
+
+	types, err := rows.ColumnTypes()
+	if err != nil {
+		return 0, fmt.Errorf("fetch column types: %w", err)
+	}
+
+	values, mappers := prepSnapshotScannerAndMappers(types)
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return 0, fmt.Errorf("fetch columns: %w", err)
+	}
+
+	colMeta := buildColumnMeta(types)
+
+	var sinceCancelCheck int
+	for rows.Next() {
+		if err = rows.Scan(values...); err != nil {
+			return numRowsProcessed, err
+		}
+
+		if err = s.publishRow(ctx, table, columns, types, values, mappers, colMeta, nil); err != nil {
+			return numRowsProcessed, err
+		}
+
+		numRowsProcessed++
+		s.snapshotRowsTotalMetric.Incr(1, tableName)
+
+		sinceCancelCheck++
+		if sinceCancelCheck >= maxBatchSize {
+			sinceCancelCheck = 0
+			if err = ctx.Err(); err != nil {
+				return numRowsProcessed, err
+			}
+		}
+	}
+
+	if err = rows.Err(); err != nil {
+		return numRowsProcessed, fmt.Errorf("iterating snapshot table row: %w", err)
+	}
+
+	return numRowsProcessed, nil
 }
 
 func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]string, error) {
@@ -338,18 +426,30 @@ func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]st
 	return pks, nil
 }
 
-func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []string, lastSeenPkVal map[string]any, limit int) (*sql.Rows, error) {
+func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []string, lastSeenPkVal map[string]any, limit int, customQuery string) (*sql.Rows, error) {
 	// Oracle uses FETCH FIRST instead of TOP, and it comes at the end
-	snapshotQueryParts := []string{
-		fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name),
+	if lastSeenPkVal == nil {
+		// No cursor: use custom query directly to avoid a redundant wrapping subquery.
+		var base string
+		if customQuery != "" {
+			base = customQuery
+		} else {
+			base = fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name)
+		}
+		q := strings.Join([]string{base, buildOrderByClause(pk), fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit)}, " ")
+		return tx.QueryContext(ctx, q)
 	}
 
-	if lastSeenPkVal == nil {
-		snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
-		snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit))
-
-		q := strings.Join(snapshotQueryParts, " ")
-		return tx.QueryContext(ctx, q)
+	// Cursor pagination requires a WHERE clause; wrap the custom query in a subquery so the
+	// added WHERE does not conflict with any WHERE already present in customQuery.
+	var tableSource string
+	if customQuery != "" {
+		tableSource = fmt.Sprintf("(%s) t", customQuery)
+	} else {
+		tableSource = fmt.Sprintf(`"%s"."%s"`, table.Schema, table.Name)
+	}
+	snapshotQueryParts := []string{
+		"SELECT * FROM " + tableSource,
 	}
 
 	// Build lexicographic comparison for composite keys
@@ -391,7 +491,18 @@ func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []s
 	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
 	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit))
 	q := strings.Join(snapshotQueryParts, " ")
-	return tx.QueryContext(ctx, q, lastSeenPkVals...)
+	rows, err := tx.QueryContext(ctx, q, lastSeenPkVals...)
+	if err != nil {
+		var oraErr *goora.OracleError
+		if customQuery != "" && errors.As(err, &oraErr) && oraErr.ErrCode == errCodeInvalidIdentifier {
+			return nil, fmt.Errorf("%w\n\nThis usually means the snapshot filter for table '%s' doesn't project all of its primary key columns (%s). "+
+				"Cursor-based pagination filters and sorts on the full primary key against the filter's own result set, "+
+				"so every primary key column must be included in the filter's SELECT list even if it otherwise selects only a subset of columns",
+				err, table.FullName(), strings.Join(pk, ", "))
+		}
+		return nil, err
+	}
+	return rows, nil
 }
 
 // Close safely closes all open connections opened for the snapshotting process.
@@ -406,6 +517,22 @@ func (s *Snapshot) Close() error {
 }
 
 func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {
+	for _, col := range cols {
+		precision, scale, ok := col.DecimalSize()
+		val, mapper := SnapshotScanDest(col.DatabaseTypeName(), col.Name(), precision, scale, ok)
+		values = append(values, val)
+		mappers = append(mappers, mapper)
+	}
+	return
+}
+
+// SnapshotScanDest returns the scan destination and value mapper for a column
+// with the given go-ora driver type name (sql.ColumnType.DatabaseTypeName())
+// and decimal metadata. It is exported so tests can pin its classification of
+// every driver type-name spelling against the schema mapping's — the two are
+// separate case-sensitive enumerations of the same fact and have drifted
+// before (see TestSnapshotScannerSchemaParity).
+func SnapshotScanDest(dbTypeName, colName string, precision, scale int64, hasDecimalSize bool) (val any, mapper func(any) (any, error)) {
 	stringMapping := func(mapper func(s string) (any, error)) func(any) (any, error) {
 		return func(v any) (any, error) {
 			s, ok := v.(*sql.NullString)
@@ -418,80 +545,63 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 			return mapper(s.String)
 		}
 	}
-	for _, col := range cols {
-		var val any
-		var mapper func(any) (any, error)
 
-		// Oracle database type names
-		switch col.DatabaseTypeName() {
-		case "RAW", "LONG RAW", "BLOB", "LongRaw":
-			val = new(sql.Null[[]byte])
-			mapper = snapshotValueMapper[[]byte]
-		case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE",
-			"TimeStampTZ", "TimeStampDTY", "TimeStampTZ_DTY", "TimeStampLTZ_DTY", "TimeStampeLTZ", "TIMESTAMPTZ":
-			val = new(sql.NullTime)
-			mapper = func(v any) (any, error) {
-				s, ok := v.(*sql.NullTime)
-				if !ok {
-					return nil, fmt.Errorf("expected %T got %T", time.Time{}, v)
-				}
-				if !s.Valid {
-					return nil, nil
-				}
-				return s.Time, nil
+	// Oracle database type names
+	switch dbTypeName {
+	case "RAW", "LONG RAW", "BLOB", "VarRaw", "LongRaw", "LongVarRaw", "OCIBlobLocator":
+		return new(sql.Null[[]byte]), snapshotValueMapper[[]byte]
+	case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE",
+		"TimeStampTZ", "TimeStampDTY", "TimeStampTZ_DTY", "TimeStampLTZ_DTY", "TimeStampeLTZ", "TIMESTAMPTZ":
+		return new(sql.NullTime), func(v any) (any, error) {
+			s, ok := v.(*sql.NullTime)
+			if !ok {
+				return nil, fmt.Errorf("expected %T got %T", time.Time{}, v)
 			}
-		case "NUMBER", "INTEGER", "INT", "SMALLINT", "FLOAT":
-			// Classify the column with the same NumberToCommon the streaming
-			// schema cache uses, so snapshot and streaming agree on whether a
-			// NUMBER is an Int64, a bounded Decimal, or a BigDecimal — and so
-			// the emitted value type matches the schema in both modes.
-			precision, scale, ok := col.DecimalSize()
-			colName := col.Name()
-			common := NumberToCommon(colName, precision, scale, ok)
-			switch common.Type {
-			case schema.Int64:
-				// Scan integer-width columns natively; go-ora handles the
-				// NUMBER → int64 conversion robustly without a string round-trip.
-				val = new(sql.Null[int64])
-				mapper = snapshotValueMapper[int64]
-			default:
-				// Decimal / BigDecimal: scan as text and canonicalise to a
-				// string via the shared coercion (never a bare number), so
-				// downstream Avro string-field encoding accepts the value.
-				val = new(sql.NullString)
-				mapper = stringMapping(func(text string) (any, error) {
-					out, err := sqlutil.CoerceToCommon(common, text)
-					if err != nil {
-						return nil, fmt.Errorf("column %s: %w", colName, err)
-					}
-					return out, nil
-				})
+			if !s.Valid {
+				return nil, nil
 			}
-		case "BINARY_FLOAT", "IBFloat", "BFloat", "BINARY_DOUBLE", "IBDouble", "BDouble":
-			val = new(sql.Null[float64])
-			mapper = snapshotValueMapper[float64]
-		case "CLOB", "NCLOB", "LONG", "LongVarChar":
-			// Character large objects - handle as string
-			val = new(sql.NullString)
-			mapper = stringMapping(func(s string) (any, error) {
-				return s, nil
-			})
-		case "JSON":
-			// Oracle 21c+ native JSON type
-			val = new(sql.NullString)
-			mapper = stringMapping(func(s string) (v any, err error) {
-				err = json.Unmarshal([]byte(s), &v)
-				return
-			})
-		default:
-			// Default to string for VARCHAR2, CHAR, NVARCHAR2, NCHAR, etc.
-			val = new(sql.Null[string])
-			mapper = snapshotValueMapper[string]
+			return s.Time, nil
 		}
-		values = append(values, val)
-		mappers = append(mappers, mapper)
+	case "NUMBER", "INTEGER", "INT", "SMALLINT", "FLOAT":
+		// Classify the column with the same NumberToCommon the streaming
+		// schema cache uses, so snapshot and streaming agree on whether a
+		// NUMBER is an Int64, a bounded Decimal, or a BigDecimal — and so
+		// the emitted value type matches the schema in both modes.
+		common := NumberToCommon(colName, precision, scale, hasDecimalSize)
+		if common.Type == schema.Int64 {
+			// Scan integer-width columns natively; go-ora handles the
+			// NUMBER → int64 conversion robustly without a string round-trip.
+			return new(sql.Null[int64]), snapshotValueMapper[int64]
+		}
+		// Decimal / BigDecimal: scan as text and canonicalise to a
+		// string via the shared coercion (never a bare number), so
+		// downstream Avro string-field encoding accepts the value.
+		return new(sql.NullString), stringMapping(func(text string) (any, error) {
+			out, err := sqlutil.CoerceToCommon(common, text)
+			if err != nil {
+				return nil, fmt.Errorf("column %s: %w", colName, err)
+			}
+			return out, nil
+		})
+	case "BINARY_FLOAT", "IBFloat", "BFloat", "BINARY_DOUBLE", "IBDouble", "BDouble":
+		return new(sql.Null[float64]), snapshotValueMapper[float64]
+	case "CLOB", "NCLOB", "LONG", "LongVarChar", "OCIClobLocator":
+		// Character large objects - handle as string
+		return new(sql.NullString), stringMapping(func(s string) (any, error) {
+			return s, nil
+		})
+	case "JSON", "TNSType(119)":
+		// Oracle 21c+ native JSON type. go-ora v2.9.0's TNSType stringer
+		// has no entry for it (119), so DatabaseTypeName() renders the
+		// raw "TNSType(119)" form.
+		return new(sql.NullString), stringMapping(func(s string) (v any, err error) {
+			err = json.Unmarshal([]byte(s), &v)
+			return
+		})
+	default:
+		// Default to string for VARCHAR2, CHAR, NVARCHAR2, NCHAR, etc.
+		return new(sql.Null[string]), snapshotValueMapper[string]
 	}
-	return
 }
 
 func buildOrderByClause(pk []string) string {
@@ -520,10 +630,16 @@ func buildColumnMeta(types []*sql.ColumnType) []ColumnMeta {
 	return meta
 }
 
-func isLOBType(dbType string) bool {
+// IsLOBTypeName reports whether the given go-ora driver type name denotes a
+// large-object column, whose value is nulled in snapshot rows when
+// lob_enabled is false. Exported so tests can pin its classification against
+// the schema mapping and scan-destination enumerations of the same spellings
+// (see TestSnapshotScannerSchemaParity).
+func IsLOBTypeName(dbType string) bool {
 	switch dbType {
 	case "CLOB", "NCLOB", "BLOB", "LONG", "LONG RAW",
-		"LongVarChar", "LongRaw": // go-ora driver-level names for CLOB/NCLOB/LONG and BLOB/LONG RAW
+		"LongVarChar", "LongRaw", "LongVarRaw", // go-ora driver-level names for CLOB/NCLOB/LONG and BLOB/LONG RAW (inline LOB mode)
+		"OCIClobLocator", "OCIBlobLocator": // go-ora driver-level LOB locator names (non-inline mode)
 		return true
 	}
 	return false

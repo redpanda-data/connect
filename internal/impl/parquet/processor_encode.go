@@ -38,6 +38,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 			parquetSchemaConfig().Optional(),
 			service.NewStringField("schema_metadata").
 				Description("Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages, the first message's schema will be applied to all subsequent messages of the batch.").
+				ShortDescription("A metadata field containing a schema definition to encode with, instead of a static schema.").
 				Default(""),
 			service.NewStringEnumField("default_compression",
 				"uncompressed", "snappy", "gzip", "brotli", "zstd", "lz4raw",
@@ -48,6 +49,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 				"DELTA_LENGTH_BYTE_ARRAY", "PLAIN",
 			).
 				Description("The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY` and is therefore best left unset where possible.").
+				ShortDescription("The default encoding type for fields. Best left unset unless readers lack DELTA_LENGTH_BYTE_ARRAY.").
 				Default("DELTA_LENGTH_BYTE_ARRAY").
 				Advanced().
 				Version("4.11.0"),
@@ -55,6 +57,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 				"NANOSECOND", "MICROSECOND", "MILLISECOND",
 			).
 				Description("The precision used when encoding TIMESTAMP logical types. The default `NANOSECOND` matches historical behaviour, but `TIMESTAMP(NANOS)` is not readable by Apache Spark (Databricks), AWS Athena or DuckDB; set this to `MICROSECOND` (or `MILLISECOND`) when writing Parquet files intended for consumption by those engines.").
+				ShortDescription("Precision used when encoding TIMESTAMP logical types. NANOSECOND is not readable by all engines.").
 				Default("NANOSECOND").
 				Advanced().
 				Version("4.89.0"),
@@ -102,7 +105,8 @@ func parquetSchemaConfig() *service.ConfigField {
 	return service.NewObjectListField("schema",
 		service.NewStringField("name").Description("The name of the column."),
 		service.NewStringEnumField("type", "BOOLEAN", "INT32", "INT64", "FLOAT", "DOUBLE", "BYTE_ARRAY", "UTF8", "TIMESTAMP", "BSON", "ENUM", "JSON", "UUID").
-			Description("The type of the column, only applicable for leaf columns with no child fields. Some logical types can be specified here such as UTF8.").Optional(),
+			Description("The type of the column, only applicable for leaf columns with no child fields. Some logical types can be specified here such as UTF8.").
+			ShortDescription("The type of the column, for leaf columns only. Some logical types such as UTF8 may be given.").Optional(),
 		service.NewBoolField("repeated").Description("Whether the field is repeated.").Default(false),
 		service.NewBoolField("optional").Description("Whether the field is optional.").Default(false),
 		service.NewAnyListField("fields").Description("A list of child fields.").Optional().Example([]any{

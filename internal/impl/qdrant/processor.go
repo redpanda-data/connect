@@ -64,6 +64,7 @@ func processorSpec() *service.ConfigSpec {
 			service.NewBloblangField(qpFieldFilter).
 				Optional().
 				Description("Additional filtering to perform on the results. The mapping should return a valid filter (using the proto3 encoded form) in qdrant. See the https://qdrant.tech/documentation/concepts/filtering/[^Qdrant documentation] for examples.").
+				ShortDescription("Additional filtering applied to results. Must return a valid qdrant filter in proto3 encoded form.").
 				Example(`
 root.must = [
 	{"has_id":{"has_id":[{"num": 8}, { "uuid":"1234-5678-90ab-cdef" }]}},
@@ -79,13 +80,15 @@ root.must_not = [
 `),
 			service.NewStringListField(qpFieldPayloadFields).
 				Default([]any{}).
-				Description("The fields to include or exclude in returned result based on the `payload_filter`."),
+				Description("The fields to include or exclude in returned result based on the `payload_filter`.").
+				ShortDescription("The fields to include or exclude in the result, based on payload_filter."),
 			service.NewStringAnnotatedEnumField(qpFieldPayloadFilter, map[string]string{
 				"include": "Include the payload fields specified in `payload_fields`.",
 				"exclude": "Exclude the payload fields specified in `payload_fields`.",
 			}).
 				Default("include").
-				Description("The way the fields in `payload_fields` are filtered in the result."),
+				Description("The way the fields in `payload_fields` are filtered in the result.").
+				ShortDescription("How the fields in payload_fields are filtered in the result."),
 			service.NewIntField(qpFieldLimit).
 				Default(10).
 				Description("The maximum number of points to return."),

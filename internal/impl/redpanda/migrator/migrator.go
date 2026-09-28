@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ const (
 	rmoFieldSyncTopicInterval      = "sync_topic_interval"
 	rmoFieldSyncTopicACLs          = "sync_topic_acls"
 	rmoFieldServerless             = "serverless"
+	rmoFieldHeaders                = "headers"
 	rmoFieldProvenanceHeader       = "provenance_header"
 	rmoFieldOffsetHeader           = "offset_header"
 	rmoFieldMaxInFlight            = "max_in_flight"
@@ -143,7 +144,7 @@ What gets synchronised:
 How it runs:
 
 - Topics: synced on demand. The first write triggers discovery and creation; subsequent writes create on first encounter per topic.
-- Schema Registry: one sync at connect, then triggered when topic record has unknown schema; optional background loop controlled by `+"`schema_registry.interval`"+`.
+- Schema Registry: one sync at connect, then periodic syncing via the background loop controlled by `+"`schema_registry.interval`"+` (set to `+"`0s`"+` to sync only once at connect). Schema IDs unknown at write time are not resynced on demand; they are handled per `+"`schema_registry.strict`"+`.
 - Consumer Groups: background loop controlled by `+"`consumer_groups.interval`"+` and filtered by the current topic mappings.
 
 Guarantees:
@@ -252,15 +253,18 @@ output:
 		// Topic fields
 		Field(service.NewInterpolatedStringField(rmoFieldTopic).
 			Description("The topic to write messages to. Use interpolation to derive destination topic names from source topics. The source topic name is available as 'kafka_topic' metadata.").
+			ShortDescription("The topic to write messages to. Interpolation can derive it from the kafka_topic metadata.").
 			Default("${! @kafka_topic }").
 			Example("prod_${! @kafka_topic }")).
 		Field(service.NewIntField(rmoFieldTopicReplicationFactor).
 			Description("The replication factor for created topics. If not specified, inherits the replication factor from source topics. Useful when migrating to clusters with different sizes.").
+			ShortDescription("Replication factor for created topics. Inherits from the source topics if unset.").
 			Example("3").
 			Example("1  # For single-node clusters").
 			Optional()).
 		Field(service.NewDurationField(rmoFieldSyncTopicInterval).
 			Description("How often to synchronize topics from the source cluster to the destination. This creates destination topics for any new source topics, including empty topics with no message flow. Set to 0s to disable periodic sync (topics are still created on first message).").
+			ShortDescription("How often to synchronise topics from source to destination. Set to 0s to disable periodic syncing.").
 			Example("0s     # Disable periodic sync").
 			Example("1m     # Sync every minute").
 			Example("5m     # Sync every 5 minutes").
@@ -268,11 +272,22 @@ output:
 			Advanced()).
 		Field(service.NewBoolField(rmoFieldSyncTopicACLs).
 			Description("Whether to synchronise topic ACLs from source to destination cluster. ACLs are transformed safely: ALLOW WRITE permissions are excluded, and ALLOW ALL is downgraded to ALLOW READ to prevent conflicts.").
+			ShortDescription("Whether to synchronise topic ACLs from source to destination. WRITE permissions are excluded.").
 			Default(false)).
 		Field(service.NewBoolField(rmoFieldServerless).
 			Description("Enable serverless mode for Redpanda Cloud serverless clusters. This restricts topic configurations and schema features to those supported by serverless environments.").
+			ShortDescription("Enable serverless mode, restricting topic and schema features to those Redpanda Cloud serverless supports.").
 			Default(false).
 			Advanced()).
+		Field(service.NewInterpolatedStringMapField(rmoFieldHeaders).
+			Description("Custom headers to add to migrated records, keyed by header name with interpolated string values. " +
+				"Useful for injecting metadata such as processing timestamps or latency measurements that should surface as header values on the destination cluster. " +
+				"A custom header name that collides with `" + rmoFieldProvenanceHeader + "` or `" + rmoFieldOffsetHeader + "` is ignored, so those migration-critical headers are always protected.").
+			Example(map[string]any{
+				"x-migration-processed-at": "${! timestamp_unix_milli() }",
+				"x-migration-latency-ms":   "${! timestamp_unix_milli() - meta(\"kafka_timestamp_ms\") }",
+			}).
+			Optional()).
 		Field(service.NewStringField(rmoFieldProvenanceHeader).
 			Description("Header name to add to migrated records indicating their source cluster. If empty, no provenance header is added.").
 			Default(DefaultProvenanceHeader).
@@ -282,10 +297,12 @@ output:
 				"If empty, no offset header is added and exact offset translation is disabled. " +
 				"When disabled, consumer groups are still migrated but precision for empty groups may not be ideal if there are multiple records with the same timestamp, as timestamps have millisecond resolution. " +
 				"When consumer group migration is disabled, this header is not added.").
+			ShortDescription("Header added to migrated records carrying the source offset. Leave empty to disable exact offset translation.").
 			Default(DefaultOffsetHeader).
 			Advanced()).
 		Field(service.NewIntField(rmoFieldMaxInFlight).
 			Description("Maximum number of batches to have in flight at any given time. For optimal throughput, set this to the total number of partitions being copied in parallel (up to all partitions in the cluster). Setting it higher than the number of consumed partitions is ineffective.").
+			ShortDescription("Maximum number of batches in flight at any given time.").
 			Default(10).
 			Example("64  # For a cluster with 64 partitions").
 			Example("128 # For multiple topics with combined 128 partitions")).
@@ -419,6 +436,7 @@ type Migrator struct {
 	groups groupsMigrator
 	log    *service.Logger
 
+	headers          map[string]*service.InterpolatedString
 	provenanceHeader string
 	offsetHeader     string
 	plumbing         uint8
@@ -480,6 +498,13 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 
 	if err := m.topic.conf.initFromParsed(pConf); err != nil {
 		return err
+	}
+
+	if pConf.Contains(rmoFieldHeaders) {
+		m.headers, err = pConf.FieldInterpolatedStringMap(rmoFieldHeaders)
+		if err != nil {
+			return err
+		}
 	}
 
 	m.provenanceHeader, err = pConf.FieldString(rmoFieldProvenanceHeader)
@@ -676,6 +701,22 @@ func (m *Migrator) messageBatchToFranzRecords(batch service.MessageBatch) ([]kgo
 
 		// Headers (optional)
 		r.Headers = kafka.ExtractHeaders(msg)
+
+		// Custom headers (optional). Names matching provenance_header or
+		// offset_header are skipped so a colliding custom header can never
+		// masquerade as (or overwrite) those migration-critical headers,
+		// which are set below.
+		for name, interp := range m.headers {
+			if name == m.provenanceHeader || name == m.offsetHeader {
+				continue
+			}
+			val, err := interp.TryString(msg)
+			if err != nil {
+				return nil, fmt.Errorf("headers interpolation: %w", err)
+			}
+			r.Headers = kafka.SetHeaderValue(r.Headers, name, []byte(val))
+		}
+
 		if m.provenanceHeader != "" {
 			origin, ok := kafka.GetHeaderValue(r.Headers, m.provenanceHeader)
 			if ok {

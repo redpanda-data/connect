@@ -53,7 +53,8 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Description("The name of the Ollama LLM to use.").
 				Examples("llama-guard3", "shieldgemma"),
 			service.NewInterpolatedStringField(ompFieldUserPrompt).
-				Description("The input prompt that was used with the LLM. If using `ollama_chat` the you can use `save_prompt_metadata` to safe the prompt as metadata."),
+				Description("The input prompt that was used with the LLM. If using `ollama_chat` the you can use `save_prompt_metadata` to safe the prompt as metadata.").
+				ShortDescription("The input prompt used with the LLM. With ollama_chat, save_prompt_metadata can store it as metadata."),
 			service.NewInterpolatedStringField(ompFieldAssistantResponse).
 				Description("The LLM's response to classify if it contains safe or unsafe content."),
 		).Fields(commonFields()...).

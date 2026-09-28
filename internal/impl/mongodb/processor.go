@@ -93,7 +93,19 @@ func ProcessorFromParsed(conf *service.ParsedConfig, res *service.Resources) (mp
 	mp = &Processor{
 		log: res.Logger(),
 	}
-	if mp.client, mp.database, err = getClient(conf); err != nil {
+	// The processor has no connection lifecycle of its own, so the client (and
+	// with it any AWS credentials) is established once here. See the docs on the
+	// `aws` field for the refresh implications.
+	var cc *ClientConfig
+	if cc, err = ClientConfigFromParsed(conf, res.Logger()); err != nil {
+		return
+	}
+	if cc.AssumesRole() || cc.UsesSessionToken() {
+		return nil, errors.New("aws.role, aws.roles and aws.token cannot be used with the mongodb processor: session credentials expire and this component has no reconnect lifecycle to refresh them; use the ambient credential chain or long-lived access keys instead")
+	}
+	connectCtx, cancel := context.WithTimeout(context.Background(), clientConstructTimeout)
+	defer cancel()
+	if mp.client, mp.database, err = cc.Connect(connectCtx); err != nil {
 		return
 	}
 	if mp.collection, err = conf.FieldInterpolatedString(mpFieldCollection); err != nil {
@@ -114,8 +126,8 @@ func ProcessorFromParsed(conf *service.ParsedConfig, res *service.Resources) (mp
 	}
 	mp.marshalMode = JSONMarshalMode(marshalModeStr)
 
-	if err = mp.client.Ping(context.Background(), nil); err != nil {
-		_ = mp.client.Disconnect(context.Background())
+	if err = mp.client.Ping(connectCtx, nil); err != nil {
+		_ = mp.client.Disconnect(connectCtx)
 		return nil, fmt.Errorf("ping failed: %v", err)
 	}
 	return

@@ -164,10 +164,12 @@ output:
 				Advanced(),
 			service.NewInterpolatedStringEnumField(csoFieldCollisionMode, "overwrite", "append", "error-if-exists", "ignore").
 				Description(`Determines how file path collisions should be dealt with. Options are "overwrite", which replaces the existing file with the new one, "append", which appends the message bytes to the original file, "error-if-exists", which returns an error and rejects the message if the file exists, and "ignore", does not modify the original file and drops the message.`).
+				ShortDescription("How file path collisions are handled, such as overwriting or appending to the existing file.").
 				Version("3.53.0").
 				Default(GCPCloudStorageOverwriteCollisionMode),
 			service.NewIntField(csoFieldChunkSize).
 				Description("An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled.").
+				ShortDescription("Maximum bytes of the object sent to the server per request. Set to 0 to disable chunking.").
 				Advanced().
 				Default(16*1024*1024), // googleapi.DefaultUploadChunkSize
 			service.NewDurationField(csoFieldTimeout).

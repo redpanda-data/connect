@@ -1,0 +1,27 @@
+version: '3'
+
+tasks:
+  init:
+    desc: Initialize Terraform
+    cmds:
+      - terraform init
+
+  # Extra terraform arguments pass through after `--`, e.g.
+  #   task terraform:apply -- -var create_storage=true -var aws_region=us-east-1
+  # Prefer TF_VAR_* environment variables for anything destroy needs to see
+  # again (see README).
+
+  plan:
+    desc: Plan infrastructure changes
+    cmds:
+      - terraform plan {{.CLI_ARGS}}
+
+  apply:
+    desc: Provision infrastructure
+    cmds:
+      - terraform apply -auto-approve {{.CLI_ARGS}}
+
+  destroy:
+    desc: Tear down infrastructure
+    cmds:
+      - terraform destroy -auto-approve {{.CLI_ARGS}}

@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIntegration_Snapshot_(t *testing.T) {
+func TestIntegration_Snapshot(t *testing.T) {
 	integration.CheckSkip(t)
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -155,6 +155,10 @@ func (m *publisherStub) Publish(_ context.Context, msg replication.MessageEvent)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.messages = append(m.messages, msg)
+	return nil
+}
+
+func (*publisherStub) CheckpointWindow(context.Context, replication.LSN) error {
 	return nil
 }
 

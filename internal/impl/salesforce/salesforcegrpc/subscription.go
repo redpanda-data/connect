@@ -9,6 +9,7 @@
 package salesforcegrpc
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -30,6 +31,18 @@ import (
 // provides safety margin without meaningfully slowing startup.
 const subscribeSettleDelay = 5 * time.Second
 
+// maxDeterministicPositionFailures bounds redelivery attempts for an event
+// that keeps failing DETERMINISTICALLY at the same replay position: an Avro
+// decode failure against a successfully fetched schema, or a schema fetch
+// rejected with a verdict retrying cannot change (NotFound, InvalidArgument,
+// PermissionDenied, Unimplemented, or an uncompilable SchemaJson). The
+// replay anchor advances per delivered event, so each reconnect redelivers
+// from exactly the failing event; once the same position has failed this
+// many times in a row the stream fails loudly (failTerminal). Only TRANSIENT
+// schema-fetch failures (transport-class statuses, context cancellations)
+// are instead governed by the reconnect policy.
+const maxDeterministicPositionFailures = 5
+
 // Subscription owns one subscribe stream for a single Pub/Sub topic. It reuses
 // the parent Client's connection, auth, and schema cache.
 type Subscription struct {
@@ -46,6 +59,14 @@ type Subscription struct {
 	ready        chan struct{}
 	streamErr    error
 	state        StreamState
+	// decodeFailures and schemaFailures count consecutive failures pinned to
+	// one replay position each (guarded by mu). Deterministic failures (any
+	// decode failure, and schema fetches whose verdict retrying cannot
+	// change) are bounded by maxDeterministicPositionFailures; transient
+	// schema-fetch failures by the reconnect policy (reconnect_max_attempts).
+	// Position-scoped so an unrelated event's success never resets them.
+	decodeFailures positionFailures
+	schemaFailures positionFailures
 
 	// Atomic counters for health reporting.
 	eventsReceived     atomic.Int64
@@ -121,21 +142,194 @@ func (s *Subscription) connectLocked(ctx context.Context) error {
 	// so waiting for the first Recv would block indefinitely on idle topics.
 	s.markReadyLocked()
 
-	go s.receiveLoop(ctx)
+	go s.receiveLoop(ctx, streamCtx)
 
 	return nil
 }
 
+// anchored reports whether a replay resume position exists: only then can a
+// reconnect redeliver the current batch (CUSTOM replay is exclusive-after).
+// On a fresh stream with no anchor, a reconnect falls back to the configured
+// preset - with LATEST that silently drops the batch, so unanchored failures
+// must never take the reconnect path.
+func (s *Subscription) anchored() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.lastReplayID) > 0
+}
+
+// failTerminal fails the stream permanently: streamErr surfaces through the
+// health tick and no reconnect is attempted.
+func (s *Subscription) failTerminal(err error) {
+	terminal := &TerminalStreamError{Err: err}
+	s.lastError.Store(storedErr{err: terminal})
+	s.lastErrorTime.Store(time.Now().UnixNano())
+	s.mu.Lock()
+	s.streamErr = terminal
+	s.state = StreamStateDisconnected
+	s.mu.Unlock()
+	s.client.log.Errorf("Pub/Sub stream failed permanently (topic=%s): %v", s.config.TopicName, err)
+}
+
+// failDecode routes an Avro decode failure: reconnect-and-redeliver while the
+// position is under the consecutive-failure bound, terminal stream failure
+// once it is exceeded. Schema-fetch failures do NOT come through here - they
+// have their own classification (deterministic ones share this bound via
+// recordSchemaFailure, transient ones are governed by the reconnect policy).
+func (s *Subscription) failDecode(replayID []byte, failStream func(error), err error) {
+	if !s.recordDecodeFailure(replayID) {
+		failStream(err)
+		return
+	}
+	s.failTerminal(fmt.Errorf("decoding event at replay position %x: %d consecutive failures, treating as permanently undecodable: %w", replayID, maxDeterministicPositionFailures, err))
+}
+
+// storedErr boxes errors for the lastError atomic.Value: Store panics when
+// concrete types differ across calls, and the errors recorded here span
+// wrapped fmt errors, gRPC status errors, and TerminalStreamError.
+type storedErr struct{ err error }
+
+// TerminalStreamError wraps a failure that is a terminal verdict by the
+// subscription itself (a permanently undecodable payload or unfetchable
+// schema) rather than a stream transport error. Consumers must treat it as
+// fatal for the topic and must NOT reinterpret the wrapped cause - in
+// particular, a gRPC InvalidArgument inside a terminal schema error is a
+// statement about the schema, not a stale replay ID, and must never clear
+// the persisted checkpoint.
+type TerminalStreamError struct{ Err error }
+
+func (e *TerminalStreamError) Error() string { return e.Err.Error() }
+func (e *TerminalStreamError) Unwrap() error { return e.Err }
+
+// deterministicSchemaFailure reports whether a schema-fetch error can never
+// heal by retrying: the schema itself is bad or inaccessible (NotFound,
+// InvalidArgument, PermissionDenied, Unimplemented), or the fetched
+// SchemaJson failed to compile (no gRPC status at all). Transport-class
+// statuses (Unavailable, Unauthenticated, ResourceExhausted, ...) and
+// context cancellations are transient.
+func deterministicSchemaFailure(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	if st, ok := status.FromError(err); ok {
+		switch st.Code() {
+		case codes.NotFound, codes.InvalidArgument, codes.PermissionDenied, codes.Unimplemented:
+			return true
+		default:
+			return false
+		}
+	}
+	// No gRPC status and not a context error: the fetch itself succeeded but
+	// the schema failed to compile (avro.Parse) - deterministic.
+	return true
+}
+
+// positionFailures counts consecutive failures pinned to one replay
+// position. A failure at a different position resets the count (the stream
+// has moved on); a success clears it only when it lands at the tracked
+// position - successes elsewhere must not reset it, since a redelivery cycle
+// decodes the events around a permanently failing one successfully every
+// time, which would keep the count oscillating below any bound forever.
+// Callers must hold Subscription.mu.
+type positionFailures struct {
+	count    int
+	replayID []byte
+}
+
+func (p *positionFailures) record(replayID []byte) int {
+	if !bytes.Equal(replayID, p.replayID) {
+		p.replayID = append([]byte(nil), replayID...)
+		p.count = 0
+	}
+	p.count++
+	return p.count
+}
+
+func (p *positionFailures) clear(replayID []byte) {
+	if p.replayID != nil && bytes.Equal(replayID, p.replayID) {
+		p.count = 0
+		p.replayID = nil
+	}
+}
+
+// recordDecodeFailure counts an Avro-decode failure at the given replay
+// position and reports whether the position has now failed
+// maxDeterministicPositionFailures times in a row.
+func (s *Subscription) recordDecodeFailure(replayID []byte) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.decodeFailures.record(replayID) >= maxDeterministicPositionFailures
+}
+
+// clearDecodeFailures resets the decode-failure count when the event at the
+// tracked failing position decodes successfully.
+func (s *Subscription) clearDecodeFailures(replayID []byte) {
+	s.mu.Lock()
+	s.decodeFailures.clear(replayID)
+	s.mu.Unlock()
+}
+
+// recordSchemaFailure counts a schema-fetch failure at the given replay
+// position. Deterministic failures - the schema itself is bad or
+// inaccessible, so no amount of retrying heals it - are bounded by
+// maxDeterministicPositionFailures regardless of the reconnect policy (with the
+// shipped default reconnect_max_attempts: 0 a policy-based budget would
+// never engage and the livelock would persist out of the box). Transient
+// failures stay governed by the reconnect policy: bounded policies bound
+// this path too (each reconnect here succeeds, so reconnectWithBackoff's
+// per-call budget never accumulates), 0 retries indefinitely.
+func (s *Subscription) recordSchemaFailure(replayID []byte, deterministic bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	count := s.schemaFailures.record(replayID)
+	if deterministic {
+		return count >= maxDeterministicPositionFailures
+	}
+	// budget grants that many redelivery attempts (failures may number
+	// budget+1, matching the unanchored inline retry and
+	// reconnectWithBackoff): reconnect_max_attempts 1 must mean one retry,
+	// not terminal on the first blip.
+	budget := s.client.maxReconnect
+	return budget > 0 && count > budget
+}
+
+// clearSchemaFailures resets the schema-failure count when a fetch succeeds
+// at the tracked failing position.
+func (s *Subscription) clearSchemaFailures(replayID []byte) {
+	s.mu.Lock()
+	s.schemaFailures.clear(replayID)
+	s.mu.Unlock()
+}
+
 // receiveLoop reads from the gRPC stream and pushes decoded events into the
 // buffer. On stream errors it attempts reconnection with backoff instead of
-// exiting.
-func (s *Subscription) receiveLoop(ctx context.Context) {
+// exiting. streamCtx is this stream's cancellation context: it unblocks a
+// backpressured buffer send when the subscription closes or reconnects.
+func (s *Subscription) receiveLoop(ctx, streamCtx context.Context) {
 	// Capture done at goroutine start. reconnectWithBackoff → connectLocked
 	// replaces s.done with a fresh channel for the new goroutine; closing the
 	// old reference here prevents a double-close panic when both goroutines
 	// eventually return.
 	done := s.done
 	defer close(done)
+
+	// failStream logs err and hands control to the reconnect path. The
+	// replay anchor advances only past DELIVERED events, never past the
+	// failing one, so the reconnected stream redelivers from exactly the
+	// failing event: duplicates at most, never loss, no re-emitted prefix.
+	failStream := func(err error) {
+		s.client.log.Errorf("Pub/Sub stream error (topic=%s), reconnecting: %v", s.config.TopicName, err)
+		s.lastError.Store(storedErr{err: err})
+		s.lastErrorTime.Store(time.Now().UnixNano())
+
+		if reconnErr := s.reconnectWithBackoff(ctx); reconnErr != nil {
+			s.mu.Lock()
+			s.streamErr = reconnErr
+			s.state = StreamStateDisconnected
+			s.mu.Unlock()
+			s.client.log.Errorf("Reconnection failed permanently (topic=%s): %v", s.config.TopicName, reconnErr)
+		}
+	}
 
 	for {
 		resp, err := s.stream.Recv()
@@ -148,17 +342,7 @@ func (s *Subscription) receiveLoop(ctx context.Context) {
 			}
 			s.mu.Unlock()
 
-			s.client.log.Errorf("Pub/Sub stream error (topic=%s): %v", s.config.TopicName, err)
-			s.lastError.Store(err)
-			s.lastErrorTime.Store(time.Now().UnixNano())
-
-			if reconnErr := s.reconnectWithBackoff(ctx); reconnErr != nil {
-				s.mu.Lock()
-				s.streamErr = reconnErr
-				s.state = StreamStateDisconnected
-				s.mu.Unlock()
-				s.client.log.Errorf("Reconnection failed permanently (topic=%s): %v", s.config.TopicName, reconnErr)
-			}
+			failStream(err)
 			return
 		}
 
@@ -177,19 +361,99 @@ func (s *Subscription) receiveLoop(ctx context.Context) {
 				continue
 			}
 
+			// A schema fetch or decode failure must not skip the event: the
+			// batch's replay ID would advance past it and the event would be
+			// silently lost. When a replay anchor exists, reconnect instead —
+			// lastReplayID advances per delivered event, so redelivery resumes
+			// exactly at the failing event. Every failure is bounded per
+			// replay position: DETERMINISTIC failures (an undecodable payload,
+			// or a schema that is bad or inaccessible) trip
+			// maxDeterministicPositionFailures regardless of policy, since
+			// retrying cannot heal them; TRANSIENT schema-fetch failures are
+			// governed by the reconnect policy (reconnect_max_attempts,
+			// counted per position here because each individual reconnect
+			// succeeds; 0 = retry forever). On a fresh stream with NO anchor
+			// a reconnect would fall back to the configured preset and could
+			// silently drop the batch (LATEST), so schema fetches retry
+			// inline under the same rules and decode failures fail the
+			// stream terminally instead.
 			schema, err := s.client.schemaCache.GetSchema(ctx, event.SchemaId)
-			if err != nil {
-				s.client.log.Errorf("get schema for event (schemaID=%s): %v", event.SchemaId, err)
-				s.eventsDecodeErrors.Add(1)
-				continue
+			if err != nil && !s.anchored() {
+				// A reconnect here would resume via the configured preset and
+				// could silently drop this batch (LATEST), so the fetch retries
+				// inline instead - governed by the same reconnect policy a
+				// reconnect would use (reconnect_min_delay/_max_delay and
+				// reconnect_max_attempts; 0 = retry indefinitely).
+				for attempt := 0; err != nil; attempt++ {
+					if deterministicSchemaFailure(err) && attempt >= maxDeterministicPositionFailures-1 {
+						// A bad or inaccessible schema cannot heal by retrying.
+						break
+					}
+					if s.client.maxReconnect > 0 && attempt >= s.client.maxReconnect {
+						break
+					}
+					// Record the failure so Health() sees the stall - this
+					// branch never reaches the reconnect path that would
+					// otherwise do it.
+					s.lastError.Store(storedErr{err: err})
+					s.lastErrorTime.Store(time.Now().UnixNano())
+					delay := grpcBackoffWithJitter(s.client.baseBackoff, s.client.maxBackoff, attempt)
+					s.client.log.Warnf("Schema fetch failed on a fresh stream with no replay anchor to redeliver from (topic=%s, schemaID=%s), retrying inline in %v (attempt %d): %v", s.config.TopicName, event.SchemaId, delay, attempt+1, err)
+					t := time.NewTimer(delay)
+					select {
+					case <-t.C:
+					case <-streamCtx.Done():
+						t.Stop()
+						return
+					case <-ctx.Done():
+						t.Stop()
+						return
+					}
+					// An expired token only heals with fresh credentials. The
+					// anchored path gets this from reconnectWithBackoff; this
+					// branch deliberately avoids reconnecting, so it must
+					// refresh explicitly (propagates to the schema cache via
+					// UpdateAuth).
+					if st, ok := status.FromError(err); ok && st.Code() == codes.Unauthenticated {
+						if refreshErr := s.client.refreshAuth(ctx); refreshErr != nil {
+							s.client.log.Warnf("Refreshing credentials for schema retry (topic=%s): %v", s.config.TopicName, refreshErr)
+						}
+					}
+					schema, err = s.client.schemaCache.GetSchema(ctx, event.SchemaId)
+				}
+				if err != nil {
+					s.eventsDecodeErrors.Add(1)
+					s.failTerminal(fmt.Errorf("fetching schema for the first event of a fresh stream (schemaID=%s): no replay anchor to redeliver from and the retry budget is exhausted: %w", event.SchemaId, err))
+					return
+				}
 			}
+			if err != nil {
+				s.eventsDecodeErrors.Add(1)
+				// Deterministic failures (bad or inaccessible schema) are
+				// bounded by maxDeterministicPositionFailures - retrying cannot
+				// heal them, and each reconnect below succeeds, so no
+				// reconnect budget would ever accumulate. Transient failures
+				// stay governed by the reconnect policy (0 = retry forever).
+				if s.recordSchemaFailure(consumerEvent.ReplayId, deterministicSchemaFailure(err)) {
+					s.failTerminal(fmt.Errorf("fetching schema (schemaID=%s) failed repeatedly at replay position %x with no sign of healing: %w", event.SchemaId, consumerEvent.ReplayId, err))
+					return
+				}
+				failStream(fmt.Errorf("get schema for event (schemaID=%s): %w", event.SchemaId, err))
+				return
+			}
+			s.clearSchemaFailures(consumerEvent.ReplayId)
 
 			decoded, err := DecodeAvroPayload(schema, event.Payload)
 			if err != nil {
-				s.client.log.Errorf("decode Avro payload (schemaID=%s): %v", event.SchemaId, err)
 				s.eventsDecodeErrors.Add(1)
-				continue
+				if !s.anchored() {
+					s.failTerminal(fmt.Errorf("decoding the first event of a fresh stream (schemaID=%s, replay position %x): payload is undecodable and no replay anchor exists to redeliver from: %w", event.SchemaId, consumerEvent.ReplayId, err))
+					return
+				}
+				s.failDecode(consumerEvent.ReplayId, failStream, fmt.Errorf("decode Avro payload (schemaID=%s): %w", event.SchemaId, err))
+				return
 			}
+			s.clearDecodeFailures(consumerEvent.ReplayId)
 
 			pubsubEvent := &PubSubEvent{
 				ReplayID:   consumerEvent.ReplayId,
@@ -209,14 +473,27 @@ func (s *Subscription) receiveLoop(ctx context.Context) {
 				}
 			}
 
+			// A full buffer applies backpressure instead of dropping: while
+			// this send blocks, no flow-control FetchRequest is issued, so
+			// Salesforce stops sending and the replay cursor cannot advance
+			// past an undelivered event. The stream context unblocks the send
+			// on close or reconnect.
 			select {
 			case s.eventBuffer <- pubsubEvent:
 				s.eventsReceived.Add(1)
 				s.lastEventTime.Store(time.Now().UnixNano())
+				// Advance the replay anchor past this event: CUSTOM replay is
+				// exclusive-after, so a reconnect now redelivers from exactly
+				// the next (possibly failing) event - no lost first batch, no
+				// re-emitted prefix.
+				s.mu.Lock()
+				s.lastReplayID = pubsubEvent.ReplayID
+				s.mu.Unlock()
 				s.client.log.Debugf("Pub/Sub event received (topic=%s, schemaID=%s, replayID=%x)", pubsubEvent.TopicName, pubsubEvent.SchemaID, pubsubEvent.ReplayID)
-			default:
-				s.eventsDropped.Add(1)
-				s.client.log.Warnf("Pub/Sub event buffer full (topic=%s), dropping event", s.config.TopicName)
+			case <-streamCtx.Done():
+				return
+			case <-ctx.Done():
+				return
 			}
 		}
 
@@ -233,7 +510,7 @@ func (s *Subscription) receiveLoop(ctx context.Context) {
 			}
 			if err := s.stream.Send(flowReq); err != nil {
 				s.client.log.Errorf("send flow control FetchRequest (topic=%s): %v", s.config.TopicName, err)
-				s.lastError.Store(err)
+				s.lastError.Store(storedErr{err: err})
 				s.lastErrorTime.Store(time.Now().UnixNano())
 
 				if reconnErr := s.reconnectWithBackoff(ctx); reconnErr != nil {
@@ -282,7 +559,8 @@ func (s *Subscription) reconnectWithBackoff(ctx context.Context) error {
 		}
 
 		// If the last error was Unauthenticated, ask the client to refresh auth.
-		if lastErr, ok := s.lastError.Load().(error); ok && lastErr != nil {
+		if boxed, ok := s.lastError.Load().(storedErr); ok && boxed.err != nil {
+			lastErr := boxed.err
 			if grpcErr, isGRPC := status.FromError(lastErr); isGRPC {
 				switch grpcErr.Code() {
 				case codes.Unauthenticated:
@@ -311,7 +589,7 @@ func (s *Subscription) reconnectWithBackoff(ctx context.Context) error {
 			return nil
 		}
 		s.client.log.Warnf("Reconnect attempt %d failed (topic=%s): %v", attempt+1, s.config.TopicName, err)
-		s.lastError.Store(err)
+		s.lastError.Store(storedErr{err: err})
 		s.lastErrorTime.Store(time.Now().UnixNano())
 	}
 }
@@ -443,8 +721,8 @@ func (s *Subscription) Health() SubscriptionHealth {
 	if t := s.lastErrorTime.Load(); t > 0 {
 		h.LastErrorTime = time.Unix(0, t)
 	}
-	if e, ok := s.lastError.Load().(error); ok {
-		h.LastError = e
+	if boxed, ok := s.lastError.Load().(storedErr); ok {
+		h.LastError = boxed.err
 	}
 
 	bufLen := len(s.eventBuffer)

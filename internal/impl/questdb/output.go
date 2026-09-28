@@ -56,17 +56,20 @@ func questdbOutputConfig() *service.ConfigSpec {
 			service.NewDurationField("retry_timeout").
 				Description("The time to continue retrying after a failed HTTP request. The interval between retries is an exponential "+
 					"backoff starting at 10ms and doubling after each failed attempt up to a maximum of 1 second.").
+				ShortDescription("How long to keep retrying after a failed HTTP request, with exponential backoff.").
 				Optional().
 				Advanced(),
 			service.NewDurationField("request_timeout").
 				Description("The time to wait for a response from the server. This is in addition to the calculation "+
 					"derived from the request_min_throughput parameter.").
+				ShortDescription("How long to wait for a response from the server, in addition to the request_min_throughput allowance.").
 				Optional().
 				Advanced(),
 			service.NewIntField("request_min_throughput").
 				Description("Minimum expected throughput in bytes per second for HTTP requests. If the throughput is lower than this value, "+
 					"the connection will time out. This is used to calculate an additional timeout on top of request_timeout. This is useful for large requests. "+
 					"You can set this value to 0 to disable this logic.").
+				ShortDescription("Minimum expected request throughput in bytes per second. Slower connections time out.").
 				Optional().
 				Advanced(),
 			service.NewStringField("table").

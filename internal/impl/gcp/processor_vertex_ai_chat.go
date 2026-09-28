@@ -91,6 +91,7 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				Examples("us-central1"),
 			service.NewStringField(vaicpFieldModel).
 				Description("The name of the LLM to use. For a full list of models, see the https://console.cloud.google.com/vertex-ai/model-garden[Vertex AI Model Garden].").
+				ShortDescription("The name of the LLM to use.").
 				Examples("gemini-1.5-pro-001", "gemini-1.5-flash-001"),
 			service.NewInterpolatedStringField(vaicpFieldPrompt).
 				Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
@@ -101,9 +102,11 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				Optional(),
 			service.NewBloblangField(vaicpFieldHistory).
 				Description(`Historical messages to include in the chat request. The result of the bloblang query should be an array of objects of the form of [{"role": "", "content":""}], where role is "user" or "model".`).
+				ShortDescription("Historical messages to include in the chat request, as an array of role and content objects.").
 				Optional(),
 			service.NewBloblangField(vaicpFieldAttachment).
 				Description("Additional data like an image to send with the prompt to the model. The result of the mapping must be a byte array, and the content type is automatically detected.").
+				ShortDescription("Additional data, such as an image, to send with the prompt. Must map to a byte array.").
 				Version("4.38.0").
 				Example(`root = this.image.decode("base64") # decode base64 encoded image`).
 				Optional(),
@@ -134,11 +137,13 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 			service.NewFloatField(vaicpFieldPresencePenalty).
 				Advanced().
 				Description("Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.").
+				ShortDescription("Penalise tokens that already appear, encouraging the model to raise new topics.").
 				Optional().
 				LintRule(`root = if this < -2 || this > 2 { ["field must be greater than -2.0 and less than 2.0"] }`),
 			service.NewFloatField(vaicpFieldFrequencyPenalty).
 				Advanced().
 				Description("Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.").
+				ShortDescription("Penalise tokens by how often they already appear, reducing verbatim repetition.").
 				Optional().
 				LintRule(`root = if this < -2 || this > 2 { ["field must be greater than -2.0 and less than 2.0"] }`),
 			service.NewIntField(vaicpFieldMaxToolCalls).
@@ -162,6 +167,7 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				).Description("The parameters the LLM needs to provide to invoke this tool."),
 				service.NewProcessorListField(vaicpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
 			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.").
+				ShortDescription("The tools the LLM may invoke, allowing subpipelines to be called for agentic actions.").
 				Default([]any{}),
 		).
 		Example(

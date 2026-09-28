@@ -91,7 +91,7 @@ In order to set the `+"`table_name`"+`,  `+"`partition_key`"+` and `+"`row_key`"
 
 If the `+"`properties`"+` are not set in the config, all the `+"`json`"+` fields are marshalled and stored in the table, which will be created if it does not exist.
 
-The `+"`object`"+` and `+"`array`"+` fields are marshaled as strings. e.g.:
+The `+"`object`"+` and `+"`array`"+` fields are marshaled as strings. For example:
 
 The JSON message:
 
@@ -114,7 +114,7 @@ bar: '{ "baz": "a", "bez": "b" }'
 diz: '["a", "b"]'
 `+"```"+`
 
-It's also possible to use function interpolations to get or transform the properties values, e.g.:
+It's also possible to use function interpolations to get or transform the properties values. For example:
 
 `+"```yml"+`
 properties:
@@ -138,6 +138,7 @@ properties:
 				Default(map[string]any{}),
 			service.NewInterpolatedStringEnumField(tsoFieldInsertType, `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`).
 				Description("Type of insert operation. Valid options are `INSERT`, `INSERT_MERGE` and `INSERT_REPLACE`").
+				ShortDescription("Type of insert operation: INSERT, INSERT_MERGE or INSERT_REPLACE.").
 				Example(`${! json("operation") }`).Example(`${! meta("operation") }`).Example(`INSERT`).
 				Advanced().Deprecated().
 				Default(""),

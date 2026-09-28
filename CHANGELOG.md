@@ -3,6 +3,245 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.111.0 - 2026-09-24
+
+### Added
+
+- mssqlserver_cdc: Exposed seqval and command_id metadata fields alongside lsn to enable proper ordering of changes within transactions. ([@Leward](https://github.com/Leward), [#4831](https://github.com/redpanda-data/connect/pull/4831))
+- oracledb_cdc: Added prefetch_rows configuration option to optimize LogMiner query performance. ([@josephwoodward](https://github.com/josephwoodward), [#4698](https://github.com/redpanda-data/connect/pull/4698))
+- websocket: Enabled websocket input and output components for cloud distributions. ([@prakhargarg105](https://github.com/prakhargarg105), [#4708](https://github.com/redpanda-data/connect/pull/4708))
+
+### Fixed
+
+- oracledb_cdc: Fixed redelivery issue where ORA-01368 errors caused by reused online redo logs resulted in duplicate transaction publication. ([@josephwoodward](https://github.com/josephwoodward), [#4850](https://github.com/redpanda-data/connect/pull/4850))
+- postgres_cdc: Fixed validation to allow heartbeat_interval and pg_wal_monitor_interval to be set to 0s as documented to disable these features. ([@Leward](https://github.com/Leward), [#4846](https://github.com/redpanda-data/connect/pull/4846))
+- redpanda_migrator: Reduced schema registry fan-out from O(N²) to O(N) requests during translate_ids sync by using RegisterSchema instead of CreateSchema, preventing request bursts that overwhelmed single-node registries. ([@prakhargarg105](https://github.com/prakhargarg105), [#4734](https://github.com/redpanda-data/connect/pull/4734))
+- sftp: Fixed SSH channel leak on write failures that exhausted the server's channel limit and prevented reconnection. ([@brokenjacobs](https://github.com/brokenjacobs), [#4839](https://github.com/redpanda-data/connect/pull/4839))
+
+## 4.110.0 - 2026-09-17
+
+### Added
+
+- oracledb_cdc: Oracle CDC connector now includes username as metadata in events for better traceability. ([@josephwoodward](https://github.com/josephwoodward), [#4674](https://github.com/redpanda-data/connect/pull/4674))
+
+### Fixed
+
+- iceberg: Replaced MinIO with silo fork in tests to work around MinIO's removal from Docker Hub. ([@Leward](https://github.com/Leward), [#4819](https://github.com/redpanda-data/connect/pull/4819))
+- snowflake_streaming: Fixed offset token comparison to handle unpadded numeric tokens correctly, preventing duplicate rows or missed deliveries when crossing digit-count boundaries. ([@Jeffail](https://github.com/Jeffail), [#4816](https://github.com/redpanda-data/connect/pull/4816))
+
+### Changed
+
+- oracledb_cdc: Oracle CDC connector now uses prepared statements for improved performance and resource management. ([@josephwoodward](https://github.com/josephwoodward), [#4821](https://github.com/redpanda-data/connect/pull/4821))
+- snowflake: Upgraded Snowflake driver from v1.19.0 to v2.2.0, fixing security vulnerability CVE-2026-85525 and removing deprecated RaisePutGetError option. ([@squiidz](https://github.com/squiidz), [#4822](https://github.com/redpanda-data/connect/pull/4822))
+
+## 4.109.0 - 2026-09-10
+
+### Added
+
+- avro: Added max_decompressed_block_bytes configuration field to cap OCF block decompression and prevent decompression-bomb denial-of-service attacks. ([@Jeffail](https://github.com/Jeffail), [#4773](https://github.com/redpanda-data/connect/pull/4773))
+- aws_kinesis: Added a `poll_period` field to bound the rate of `GetRecords` calls per shard, and an `enhanced_fan_out` configuration block that consumes streams via a dedicated enhanced fan-out consumer with 2MB/s per shard of read throughput, avoiding the shared 5 reads per second per shard limit. ([@squiidz](https://github.com/squiidz), [#4724](https://github.com/redpanda-data/connect/pull/4724))
+- iceberg: Added optional parquet compression codec configuration supporting snappy, gzip, and zstd compression, with fallback to table properties for compatibility. ([@Jeffail](https://github.com/Jeffail), [#4785](https://github.com/redpanda-data/connect/pull/4785))
+
+### Fixed
+
+- general: Bumped amqp091-go dependency to address CVE-2026-79921. ([@josephwoodward](https://github.com/josephwoodward), [#4795](https://github.com/redpanda-data/connect/pull/4795))
+- mysql_cdc: Fixed MySQL CDC to accept Unicode characters in table names, including accented Latin, CJK, and Cyrillic identifiers that MySQL permits. ([@samarth70](https://github.com/samarth70), [#4745](https://github.com/redpanda-data/connect/pull/4745))
+- aws_kinesis: The input now falls back to the oldest retained record when a stored sequence has aged out of the stream's retention window, instead of retrying the stale position indefinitely. ([@squiidz](https://github.com/squiidz), [#4724](https://github.com/redpanda-data/connect/pull/4724))
+
+### Changed
+
+- iceberg: Optimized Iceberg shredder to eliminate unnecessary allocations on case-sensitive record matching, reducing memory usage and CPU overhead by 42% in the shredding step. ([@Jeffail](https://github.com/Jeffail), [#4784](https://github.com/redpanda-data/connect/pull/4784))
+- sftp: Improved SFTP input to advance to the next file without reconnecting, eliminating unnecessary delays when rotating through files. ([@Leward](https://github.com/Leward), [#4777](https://github.com/redpanda-data/connect/pull/4777))
+- `websocket` input/output: A config that sets `tls.enabled: true` against a `ws://` URL is now rejected at startup. Previously the TLS settings were silently ignored, the connection was plaintext, and any configured `basic_auth`, `jwt` or `oauth` credentials were sent in the clear. Use a `wss://` URL to connect with TLS. (@Leward)
+
+## 4.108.0 - 2026-09-03
+
+### Fixed
+
+- aws_dynamodb_cdc: Settle acks by handle and isolate per-shard backpressure ([@squiidz](https://github.com/squiidz), [#4739](https://github.com/redpanda-data/connect/pull/4739))
+- prometheus: Fixed prometheus exporter accumulating frozen metric series for deleted streams by purging their labels when streams are deleted. ([@squiidz](https://github.com/squiidz), [#4742](https://github.com/redpanda-data/connect/pull/4742))
+- aws_dynamodb_cdc: Fixed shard discovery aborting on transient failures by allowing partial success and retrying failed shards on the next cycle, enabling convergence with large shard backlogs. ([@squiidz](https://github.com/squiidz), [#4737](https://github.com/redpanda-data/connect/pull/4737))
+- oracledb_cdc: Fix handling of flashback / redo log resets ([@josephwoodward](https://github.com/josephwoodward), [#4760](https://github.com/redpanda-data/connect/pull/4760))
+- websocket input/output: Connection attempts (dial and upgrade handshake) and input reads now honor context
+  cancellation, preventing graceful shutdown from hanging on unresponsive servers or idle connections. ([@Leward](https://github.com/Leward), [#490](https://github.com/redpanda-data/benthos/pull/490))
+- websocket output: A failed write now closes the connection instead of leaking it before the reconnect. ([@Leward](https://github.com/Leward), [#492](https://github.com/redpanda-data/benthos/pull/492))
+
+### Changed
+
+- websocket input: The default value of `max_message_size` has changed from `0` (unlimited) to `33554432` (32 MiB). An unlimited read allows the websocket server to make the process allocate an unbounded amount of memory with a single streamed message. Pipelines that receive larger messages must now set `max_message_size` explicitly; a value of `0` restores the previous unlimited behaviour. ([@Leward](https://github.com/Leward), [#491](https://github.com/redpanda-data/benthos/pull/491))
+- avro: Added avro.input_encoding config to explicitly declare whether messages should be read as Avro JSON or native Go values, replacing automatic inference that could misinterpret bytes fields. ([@twmb](https://github.com/twmb), [#4704](https://github.com/redpanda-data/connect/pull/4704))
+
+## 4.107.0 - 2026-08-27
+
+### Fixed
+
+- aws_dynamodb_cdc: Fixed snapshot_throttle lint rule that was comparing duration string to numeric literal, causing configuration validation to fail. ([@squiidz](https://github.com/squiidz), [#4723](https://github.com/redpanda-data/connect/pull/4723))
+- aws_dynamodb_cdc: Fixed infinite retry loop when a DynamoDB shard iterator expires after the shard has been deleted by properly classifying the error as permanent. ([@squiidz](https://github.com/squiidz), [#4727](https://github.com/redpanda-data/connect/pull/4727))
+- cdc: Fixed nack handling contract violations, marshal error recovery, and streaming checkpoint persistence across MongoDB and PostgreSQL CDC connectors. ([@squiidz](https://github.com/squiidz), [#4676](https://github.com/redpanda-data/connect/pull/4676))
+- gcp_spanner_cdc: Fixed out-of-order watermark persistence and partition batcher lifecycle issues that could skip records on restart. ([@squiidz](https://github.com/squiidz), [#4686](https://github.com/redpanda-data/connect/pull/4686))
+- mssqlserver_cdc: Fixed a series of critical issues in snapshot barrier behavior, batch ordering, and publisher lifecycle management to prevent data loss and infinite retries after failures. ([@squiidz](https://github.com/squiidz), [#4677](https://github.com/redpanda-data/connect/pull/4677))
+- mssqlserver_cdc: Fixed silent stall when the flush loop fails by detecting the failure and triggering reconnection to resume from the last durable checkpoint. ([@squiidz](https://github.com/squiidz), [#4729](https://github.com/redpanda-data/connect/pull/4729))
+- oracledb_cdc: Fixed a series of critical issues in snapshot barrier behavior, batch ordering, and publisher lifecycle management to prevent data loss and infinite retries after failures. ([@squiidz](https://github.com/squiidz), [#4675](https://github.com/redpanda-data/connect/pull/4675))
+- sftp: Fixed SFTP host key negotiation with modern OpenSSH servers by advertising rsa-sha2 algorithms for pinned RSA keys. ([@prakhargarg105](https://github.com/prakhargarg105), [#4725](https://github.com/redpanda-data/connect/pull/4725))
+
+### Changed
+
+- oracledb_cdc: Removed snapshot primary key ordering to boost snapshot performance. ([@josephwoodward](https://github.com/josephwoodward), [#4696](https://github.com/redpanda-data/connect/pull/4696))
+
+## 4.106.0 - 2026-08-20
+
+### Added
+
+- salesforce_cdc: Added decode-failure bounds and classification of schema-fetch errors (deterministic vs transient) to prevent infinite retry loops and livelocks, with terminal failures surfaced clearly to the health check. ([@squiidz](https://github.com/squiidz), [#4689](https://github.com/redpanda-data/connect/pull/4689))
+- mongodb, mongodb_cdc: Added AWS IAM authentication (`MONGODB-AWS`) for MongoDB Atlas to the `mongodb` input, output, processor and cache, and to the `mongodb_cdc` input, via a new `aws` configuration block supporting the ambient credential chain, static keys, and assume-role chaining. ([@squiidz](https://github.com/squiidz), [#4690](https://github.com/redpanda-data/connect/pull/4690))
+- mongodb_cdc: The input now checkpoints as soon as the initial snapshot completes and is fully acknowledged, so restarts resume the stream instead of re-running the snapshot; a stream position that can no longer be resumed from (for example one that has aged out of the oplog) is recovered by re-running the snapshot, bounded by a breaker that fails loudly instead of churning, with a new `on_unresumable_position` field controlling the lossy no-snapshot case (default `fail`) and a new `checkpoint_write_timeout` field bounding the detached checkpoint writes (the post-snapshot store and the recovery clear). ([@squiidz](https://github.com/squiidz), [#4690](https://github.com/redpanda-data/connect/pull/4690))
+
+### Fixed
+
+- aws_dynamodb_cdc: Fixed silent data loss in snapshot handling by gating checkpoint persistence on downstream acknowledgments, ensuring rejected batches are redelivered instead of skipped. ([@squiidz](https://github.com/squiidz), [#4687](https://github.com/redpanda-data/connect/pull/4687))
+- aws_dynamodb_cdc: Fixed stream rotation and restart scenarios where start_from: latest was incorrectly applied to child shards and checkpoint-less shards discovered after initial setup, causing silent loss of backlog. ([@squiidz](https://github.com/squiidz), [#4687](https://github.com/redpanda-data/connect/pull/4687))
+- cockroachdb_changefeed: Fixed unbounded silent data loss where transaction rows and backfill batches sharing timestamps could skip data on restart; now checkpoints only persist resolved timestamps to guarantee no loss. ([@squiidz](https://github.com/squiidz), [#4688](https://github.com/redpanda-data/connect/pull/4688))
+- salesforce_cdc: Fixed multiple silent-loss paths in Pub/Sub gRPC handling and ack functions: full buffer now applies backpressure instead of dropping events, schema/decode failures reconnect without losing batches, and nacks now pin checkpoints. ([@squiidz](https://github.com/squiidz), [#4689](https://github.com/redpanda-data/connect/pull/4689))
+- salesforce_cdc: Fixed off-by-one error in schema-retry budgeting and credential refresh in unanchored schema retries to prevent indefinite stalls under the default unlimited reconnect policy. ([@squiidz](https://github.com/squiidz), [#4689](https://github.com/redpanda-data/connect/pull/4689))
+
+### Changed
+
+- aws_dynamodb_cdc: Added auto_replay_nacks support to automatically retry transient downstream failures in-process, with nacks now advancing checkpoints when auto_replay_nacks is disabled. ([@squiidz](https://github.com/squiidz), [#4687](https://github.com/redpanda-data/connect/pull/4687))
+- cockroachdb_changefeed: Changed nack handling to advance cursors when auto_replay_nacks is disabled, treating it as an opt-in to drop rejected messages per the framework contract. ([@squiidz](https://github.com/squiidz), [#4688](https://github.com/redpanda-data/connect/pull/4688))
+- general: Updated CDC connector documentation across Microsoft SQL Server, MongoDB, and OracleDB with measured performance characteristics, scaling limitations, and configuration guidance based on real-world benchmarking. ([@prakhargarg105](https://github.com/prakhargarg105), [#4691](https://github.com/redpanda-data/connect/pull/4691))
+
+## 4.105.0 - 2026-08-13
+
+### Added
+
+- postgres_cdc: Added support for control signals in PostgreSQL CDC by detecting and forwarding rows inserted into a configurable signal table downstream like regular messages. ([@josephwoodward](https://github.com/josephwoodward), [#4637](https://github.com/redpanda-data/connect/pull/4637))
+- iceberg: Added an opt-in `merge_strategy: copy-on-write` for row-level `upsert`/`delete`, which materialises mutations by rewriting whole data files so the table only ever contains plain data files. This makes mutations readable by engine-backed catalogs that cannot handle merge-on-read equality deletes, such as the Databricks Unity Catalog and Snowflake. The default remains `merge-on-read`. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+- iceberg: Added a `commit.cleanup_on_failure` field (default `true`) to disable connector-side cleanup of files written by failed commits, as an escape hatch for incident recovery. Disabling it can only leak orphan files, which regular orphan-file maintenance reclaims. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+
+### Fixed
+
+- iceberg: Fixed a regression introduced in 4.99.0 where a commit that landed server-side but was reported as failed (ambiguous 5xx, timeout, lost acknowledgement, or an unclassified error) had its just-written parquet files deleted by the failure-path cleanup, leaving the table unreadable. Failure cleanup is now gated on a provable catalog rejection, and commits detected as landed are reported as success, which also prevents the duplicate rows that redelivery produced. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+- iceberg: Fixed no-timezone `timestamp` columns being written to parquet with `isAdjustedToUTC=true`, which is spec-incorrect and made them read back as `timestamptz`. New tables are written correctly; the encoding is pinned per table via a `redpanda-connect.timestamp-encoding` property so an existing table never changes or mixes encodings. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+- iceberg: Fixed commits failing against catalogs that prohibit clients setting particular table properties (for example the Databricks Unity Catalog and `schema.name-mapping.default`) by learning the prohibited keys from the catalog's rejection and stripping them from subsequent commits. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+- iceberg: Fixed several `identifier_fields` value shapes that silently matched no rows on `upsert`/`delete` — non-UTC `time` values, decimal floating-point ties, and `[]byte` values for string key columns — and fixed base64 mangling of binary and fixed column values during copy-on-write rewrites. All write paths now share a single value canonicaliser with the insert path. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+
+### Change
+
+- oracledb_cdc: Snapshot performance improvements by reusing seeded schema metadata [@josephwoodward](https://github.com/josephwoodward), [#4695](https://github.com/redpanda-data/connect/pull/4695))
+- iceberg: Merge-key input strictness now matches the insert path: string-typed values for integer and boolean key columns (for example `{"id": "42"}` against a `BIGINT` key) previously matched by accident and are now rejected with an actionable error, and nanosecond-precision timestamp `identifier_fields` are now rejected under `merge-on-read` as they already were under copy-on-write. A table whose `write.delete.mode` property is explicitly `merge-on-read` also now rejects `copy-on-write` mutations rather than silently overriding the property. ([@Jeffail](https://github.com/Jeffail), [#4666](https://github.com/redpanda-data/connect/pull/4666))
+
+## 4.104.0 - 2026-08-06
+
+### Fixed
+
+- kafka: Fixed incorrect validation of max_in_flight_requests with idempotent_write enabled, which was causing silent failures instead of configuration errors. ([@prakhargarg105](https://github.com/prakhargarg105), [#4645](https://github.com/redpanda-data/connect/pull/4645))
+- oracledb_cdc: Improved Oracle CDC snapshot handling by skipping unnecessary checkpointing during snapshot reads. ([@josephwoodward](https://github.com/josephwoodward), [#4670](https://github.com/redpanda-data/connect/pull/4670))
+- redpanda: Fixed redpanda_lag metric name to remain consistent when unordered_processing is enabled, preventing silent metric name changes that broke existing dashboards and alerts. ([@prakhargarg105](https://github.com/prakhargarg105), [#4664](https://github.com/redpanda-data/connect/pull/4664))
+- oracledb_cdc: Derive identical message schemas from catalog and driver meta. ([@Jeffail](https://github.com/Jeffail), [#4661](https://github.com/redpanda-data/connect/pull/4661))
+
+### Changed
+
+- s3: Added handling for S3 TestEvent messages to prevent message redelivery and improved logging for misconfigured bucket events. ([@josephwoodward](https://github.com/josephwoodward), [#4667](https://github.com/redpanda-data/connect/pull/4667))
+
+### Added
+
+- oracledb_cdc: Support the ability to configure a log miner session age [@josephwoodward](https://github.com/josephwoodward), [#4673](https://github.com/redpanda-data/connect/pull/4673))
+
+## 4.103.2 - TBD
+
+### Fixed
+
+- redpanda: Enabling `unordered_processing` no longer renames the consumer lag gauge from `redpanda_lag` to `kafka_lag`. The `redpanda` input now emits `redpanda_lag` in both modes, as documented. ([@prakhargarg105](https://github.com/prakhargarg105), [#4663](https://github.com/redpanda-data/connect/issues/4663))
+
+## 4.103.1 - 2026-07-31
+
+### Added
+
+- oracledb_cdc: Add additional debug log for LogMiner queries. ([@josephwoodward](https://github.com/josephwoodward), [#4653](https://github.com/redpanda-data/connect/pull/4653))
+
+## 4.103.0 - 2026-07-30
+
+### Fixed
+
+- mssqlserver_cdc: Convert reading of LSN from checkpoint cache to binary to avoid LSN corruption due to read collation decoding. ([@josephwoodward](https://github.com/josephwoodward), [#4644](https://github.com/redpanda-data/connect/pull/4644))
+
+### Changed
+
+- oracledb_cdc: Improved ability to debug logminer query performance with better debug logging for redo log file loading. ([@josephwoodward](https://github.com/josephwoodward), [#4629](https://github.com/redpanda-data/connect/pull/4629))
+- postgres_cdc: Clarified behavior of postgres_cdc when the tables configuration is empty. ([@josephwoodward](https://github.com/josephwoodward), [#4621](https://github.com/redpanda-data/connect/pull/4621))
+
+### Added
+
+- docs: Add short descriptions to component config fields. ([@prakhargarg105](https://github.com/prakhargarg105), [#4638](https://github.com/redpanda-data/connect/pull/4638))
+
+## 4.102.0 - 2026-07-23
+
+### Added
+
+- aws_dynamodb_partiql: Added `use_batch` field (default true) to enable single ExecuteStatement calls for PartiQL SELECT queries against Global Secondary Indexes, since BatchExecuteStatement does not support GSI queries. ([@squiidz](https://github.com/squiidz), [#4588](https://github.com/redpanda-data/connect/pull/4588))
+- migrator: Support ability to set headers via config. ([@josephwoodward](https://github.com/josephwoodward), [#4615](https://github.com/redpanda-data/connect/pull/4615))
+
+### Fixed
+
+- iceberg: Fixed table_location prefix handling to work correctly both with and without trailing slashes, resolving CreateTable failures on schema-evolved tables. ([@david-yu](https://github.com/david-yu), [#4604](https://github.com/redpanda-data/connect/pull/4604))
+
+## 4.101.0 - 2026-07-17
+
+### Added
+
+- aws_dynamodb_cdc: Added optional checkpoint_namespace field to allow multiple independent pipelines to safely share a single DynamoDB checkpoint table without overwriting each other's state. ([@squiidz](https://github.com/squiidz), [#4602](https://github.com/redpanda-data/connect/pull/4602))
+- oracledb_cdc: Added snapshot_filters configuration to enable per-table SQL SELECT overrides during initial snapshot capture. ([@josephwoodward](https://github.com/josephwoodward), [#4606](https://github.com/redpanda-data/connect/pull/4606))
+
+### Fixed
+
+- snowflake_streaming: Fixed potential silent data corruption by verifying parquet row counts match actual serialized rows before upload to Snowflake. ([@squiidz](https://github.com/squiidz), [#4605](https://github.com/redpanda-data/connect/pull/4605))
+
+## 4.100.0 - 2026-07-09
+
+### Added
+
+- jira: Added a new Jira input component that streams issues, comments, and changelog events into Connect pipelines with cursor-based incremental polling and deduplication of boundary issues. ([@squiidz](https://github.com/squiidz), [#4484](https://github.com/redpanda-data/connect/pull/4484))
+
+### Fixed
+
+- general: Embedded the IANA timezone database in the CGO-enabled build to ensure timezone-aware features work correctly in minimal container runtimes. ([@squiidz](https://github.com/squiidz), [#4583](https://github.com/redpanda-data/connect/pull/4583))
+- iceberg: Made Iceberg commit retries idempotent to prevent duplicate data files when a commit lands server-side but the client observes a transient failure. ([@Jeffail](https://github.com/Jeffail), [#4591](https://github.com/redpanda-data/connect/pull/4591))
+- oracledb_cdc: Added support for bare rowid-based predicates in Oracle LogMiner SQL_REDO parsing and improved debug logging for query failures. ([@josephwoodward](https://github.com/josephwoodward), [#4585](https://github.com/redpanda-data/connect/pull/4585))
+- oracledb_cdc: Hardened Oracle LogMiner SQL_REDO parser and LOB assembly against panics and data corruption by fixing hex decoding, adding UNISTR national character support, validating LOB offsets, and preventing empty primary key sets from matching vacuously. ([@Jeffail](https://github.com/Jeffail), [#4586](https://github.com/redpanda-data/connect/pull/4586))
+- postgres_cdc: Fixed data loss during crashes by adding an acknowledgement barrier that ensures snapshot rows are fully acknowledged before promoting the replication slot. ([@squiidz](https://github.com/squiidz), [#4584](https://github.com/redpanda-data/connect/pull/4584))
+- splunk: Fixed Splunk integration test TLS configuration and startup timeout to properly verify certificates and allow sufficient time for Splunk to boot. ([@squiidz](https://github.com/squiidz), [#4582](https://github.com/redpanda-data/connect/pull/4582))
+
+### Changed
+
+- iceberg: Optimized Iceberg sink performance by caching schema field metadata to reduce per-record allocations, and added tuning documentation with recommended configuration for throughput optimization. ([@Jeffail](https://github.com/Jeffail), [#4590](https://github.com/redpanda-data/connect/pull/4590))
+
+## Unreleased
+
+### Added
+
+- aws_dynamodb_cdc: DynamoDB CDC now supports an optional checkpoint_namespace field, allowing multiple independent pipelines to share a single checkpoint table without overwriting each other's checkpoints. ([@squiidz](https://github.com/squiidz), [#4602](https://github.com/redpanda-data/connect/pull/4602))
+
+### Fixed
+
+- general: The CGO-enabled distribution binary now embeds the IANA time zone database via the `timetzdata` build tag, matching the other distributions, so `time.LoadLocation` works in minimal runtimes without system tzdata instead of silently falling back to UTC (which shifts JQL date predicates in the `jira` input). ([@squiidz](https://github.com/squiidz), [#4583](https://github.com/redpanda-data/connect/pull/4583))
+- snowflake_streaming: BDEC parquet files are now verified for internally consistent row counts (footer, row groups, and column chunks) before upload, so an inconsistent file fails the batch instead of being registered with Snowflake. ([@squiidz](https://github.com/squiidz))
+
+## 4.99.0 - 2026-07-02
+
+### Added
+
+- aws_dynamodb_cdc: DynamoDB CDC now supports Global Tables for checkpoint tables, enabling multi-region failover with low RPO by replicating shard checkpoints across regions. ([@squiidz](https://github.com/squiidz), [#4529](https://github.com/redpanda-data/connect/pull/4529))
+- iceberg: Iceberg output now supports row-level operations (insert/upsert/delete) with configurable mappings and equality-delete files for mutable workloads. ([@Jeffail](https://github.com/Jeffail), [#4567](https://github.com/redpanda-data/connect/pull/4567))
+- oracledb_cdc: Oracle CDC now supports snapshot_only mode via a new snapshot_mode enum, replacing the deprecated boolean stream_snapshot option. ([@josephwoodward](https://github.com/josephwoodward), [#4570](https://github.com/redpanda-data/connect/pull/4570))
+- oracledb_cdc: Oracle CDC snapshot reads now emit commit_ts_ms metadata captured from SYSTIMESTAMP for consistent timestamp tracking. ([@josephwoodward](https://github.com/josephwoodward), [#4571](https://github.com/redpanda-data/connect/pull/4571))
+- postgres_cdc: Postgres CDC now emits 'before' metadata for update and delete events, enabling change data capture to track previous values. ([@josephwoodward](https://github.com/josephwoodward), [#4555](https://github.com/redpanda-data/connect/pull/4555))
+
+### Fixed
+
+- oracledb_cdc: Oracle CDC now correctly handles out-of-order LOB writes by deferring and replaying them at commit time. ([@josephwoodward](https://github.com/josephwoodward), [#4574](https://github.com/redpanda-data/connect/pull/4574))
+- salesforce: Salesforce sink now correctly includes createable fields in the writable field set and makes field cache operation-aware. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4553](https://github.com/redpanda-data/connect/pull/4553))
+- kafka: Broker connectivity failures (connection, read, and write errors such as `i/o timeout`) from the franz-go client are now logged at WARN instead of only at debug level, so they can be alerted on without enabling debug logging. Emissions are throttled per broker. Affects all franz-based connectors (`kafka_franz`, `redpanda`, `redpanda_migrator`, ...).
+
 ## 4.98.0 - 2026-06-26
 
 ### Added

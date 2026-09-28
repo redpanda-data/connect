@@ -24,7 +24,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/snowflakedb/gosnowflake"
+	"github.com/snowflakedb/gosnowflake/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -180,40 +180,47 @@ The underlying https://github.com/snowflakedb/gosnowflake[`+"`gosnowflake`"+` dr
 the default directory to use for temporary files. Please consult the https://pkg.go.dev/os#TempDir[`+"`os.TempDir`"+`^]
 docs for details on how to change this directory via environment variables.
 
-A silent failure can occur due to https://github.com/snowflakedb/gosnowflake/issues/701[this issue^], where the
-underlying https://github.com/snowflakedb/gosnowflake[`+"`gosnowflake`"+` driver^] doesn't return an error and doesn't
-log a failure if it can't figure out the current username. One way to trigger this behavior is by running Redpanda Connect in a
-Docker container with a non-existent user ID (such as `+"`--user 1000:1000`"+`).
+A failed upload to the stage is returned as an error and the batch is not acknowledged. Older versions of the
+underlying https://github.com/snowflakedb/gosnowflake[`+"`gosnowflake`"+` driver^] could fail silently in some
+environments (https://github.com/snowflakedb/gosnowflake/issues/701[gosnowflake#701^]); this is no longer the case
+with the v2 driver, which always raises PUT errors.
 `+service.OutputPerformanceDocs(true, true)).
 		Field(service.NewStringField("account").Description(`Account name, which is the same as the https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#where-are-account-identifiers-used[Account Identifier^].
 However, when using an https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account Locator^],
 the Account Identifier is formatted as `+"`<account_locator>.<region_id>.<cloud>`"+` and this field needs to be
 populated using the `+"`<account_locator>`"+` part.
-`)).
+`).
+			ShortDescription("Account name, the same as the Snowflake Account Identifier.")).
 		Field(service.NewStringField("region").Description(`Optional region field which needs to be populated when using
 an https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account Locator^]
 and it must be set to the `+"`<region_id>`"+` part of the Account Identifier
 (`+"`<account_locator>.<region_id>.<cloud>`"+`).
-`).Example("us-west-2").Optional()).
+`).
+			ShortDescription("The region_id part of the Account Identifier. Required when using an Account Locator.").Example("us-west-2").Optional()).
 		Field(service.NewStringField("cloud").Description(`Optional cloud platform field which needs to be populated
 when using an https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account Locator^]
 and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 (`+"`<account_locator>.<region_id>.<cloud>`"+`).
-`).Example("aws").Example("gcp").Example("azure").Optional()).
+`).
+			ShortDescription("The cloud part of the Account Identifier. Required when using an Account Locator.").Example("aws").Example("gcp").Example("azure").Optional()).
 		Field(service.NewStringField("user").Description("Username.")).
 		Field(service.NewStringField("password").Description("An optional password.").Optional().Secret()).
-		Field(service.NewStringField("private_key").Description("The private SSH key. `private_key_pass` is required when using encrypted keys.").Optional().Secret()).
-		Field(service.NewStringField("private_key_file").Description("The path to a file containing the private SSH key. `private_key_pass` is required when using encrypted keys.").Optional()).
+		Field(service.NewStringField("private_key").Description("The private SSH key. `private_key_pass` is required when using encrypted keys.").
+			ShortDescription("The private SSH key. Encrypted keys also need private_key_pass.").Optional().Secret()).
+		Field(service.NewStringField("private_key_file").Description("The path to a file containing the private SSH key. `private_key_pass` is required when using encrypted keys.").
+			ShortDescription("Path to a file containing the private SSH key. Encrypted keys also need private_key_pass.").Optional()).
 		Field(service.NewStringField("private_key_pass").Description("An optional private SSH key passphrase.").Optional().Secret()).
 		Field(service.NewStringField("role").Description("Role.")).
 		Field(service.NewStringField("database").Description("Database.")).
 		Field(service.NewStringField("warehouse").Description("Warehouse.")).
 		Field(service.NewStringField("schema").Description("Schema.")).
 		Field(service.NewInterpolatedStringField("stage").Description(`Stage name. Use either one of the
-		https://docs.snowflake.com/en/user-guide/data-load-local-file-system-create-stage.html[supported^] stage types.`)).
+		https://docs.snowflake.com/en/user-guide/data-load-local-file-system-create-stage.html[supported^] stage types.`).
+			ShortDescription("Stage name, using one of the supported stage types.")).
 		Field(service.NewInterpolatedStringField("path").Description("Stage path.").Default("")).
 		Field(service.NewInterpolatedStringField("file_name").Description("Stage file name. Will be equal to the Request ID if not set or empty.").Optional().Default("").Version("v4.12.0")).
-		Field(service.NewInterpolatedStringField("file_extension").Description("Stage file extension. Will be derived from the configured `compression` if not set or empty.").Optional().Default("").Example("csv").Example("parquet").Version("v4.12.0")).
+		Field(service.NewInterpolatedStringField("file_extension").Description("Stage file extension. Will be derived from the configured `compression` if not set or empty.").
+			ShortDescription("Stage file extension. Derived from the configured compression if unset.").Optional().Default("").Example("csv").Example("parquet").Version("v4.12.0")).
 		Field(service.NewIntField("upload_parallel_threads").Description("Specifies the number of threads to use for uploading files.").Advanced().Default(4).LintRule(`root = if this < 1 || this > 99 { [ "upload_parallel_threads must be between 1 and 99" ] }`)).
 		Field(service.NewStringAnnotatedEnumField("compression", map[string]string{
 			string(CompressionTypeNone):       "No compression is applied and messages must contain plain-text JSON. Default `file_extension`: `json`.",
@@ -224,7 +231,8 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 			string(CompressionTypeZstandard):  "Messages must be pre-compressed using the Zstandard algorithm. Default `file_extension`: `zst`.",
 		}).Description("Compression type.").Default(string(CompressionTypeAuto))).
 		Field(service.NewInterpolatedStringField("request_id").Description("Request ID. Will be assigned a random UUID (v4) string if not set or empty.").Optional().Default("").Version("v4.12.0")).
-		Field(service.NewInterpolatedStringField("snowpipe").Description("An optional Snowpipe name. Use the `<snowpipe>` part from `<database>.<schema>.<snowpipe>`. `private_key` or `private_key_file` must be set when using this feature.").Optional()).
+		Field(service.NewInterpolatedStringField("snowpipe").Description("An optional Snowpipe name. Use the `<snowpipe>` part from `<database>.<schema>.<snowpipe>`. `private_key` or `private_key_file` must be set when using this feature.").
+			ShortDescription("An optional Snowpipe name. Requires private_key or private_key_file to be set.").Optional()).
 		Field(service.NewBoolField("client_session_keep_alive").Description("Enable Snowflake keepalive mechanism to prevent the client session from expiring after 4 hours (error 390114).").Advanced().Default(false)).
 		Field(service.NewBatchPolicyField("batching")).
 		Field(service.NewIntField("max_in_flight").Description("The maximum number of parallel message batches to have in flight at any given time.").Default(1)).
@@ -540,7 +548,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 	compression := CompressionType(compressionStr)
 	var autoCompress, sourceCompression string
-	// Should match file extensions in https://github.com/snowflakedb/gosnowflake/blob/2648a83699492c0613a888e66298157fc1e45bf5/file_compression_type.go
+	// Should match file extensions in https://github.com/snowflakedb/gosnowflake/blob/v2.2.0/file_compression_type.go
 	switch compression {
 	case CompressionTypeNone:
 		s.defaultStageFileExtension = "json"
@@ -825,9 +833,10 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 
 		filePath := path.Join(f.stagePath, fileName+"."+f.fileExtension)
 
-		_, err := s.db.ExecContext(gosnowflake.WithFileStream(
-			gosnowflake.WithFileTransferOptions(ctx, &gosnowflake.SnowflakeFileTransferOptions{RaisePutGetError: true}),
-			bytes.NewReader(fBytes)), fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
+		// gosnowflake v2 always raises PUT/GET failures as errors; the v1
+		// RaisePutGetError opt-in no longer exists.
+		_, err := s.db.ExecContext(gosnowflake.WithFilePutStream(ctx, bytes.NewReader(fBytes)),
+			fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
 		if err != nil {
 			return fmt.Errorf("running query: %s", err)
 		}

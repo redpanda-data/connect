@@ -78,6 +78,11 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 		defer cancel()
 		offsets, err := gm.ListGroupOffsets(ctx, topics)
 		require.NoError(t, err)
+
+		// TopicID populated by broker and is not deterministic so it's excluded from comparison.
+		for i := range offsets {
+			offsets[i].TopicID = kadm.TopicID{}
+		}
 		return offsets
 	}
 

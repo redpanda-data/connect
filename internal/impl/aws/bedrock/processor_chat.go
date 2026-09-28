@@ -53,7 +53,8 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 		Fields(config.SessionFields()...).
 		Field(service.NewStringField(bedcpFieldModel).
 			Examples("amazon.titan-text-express-v1", "anthropic.claude-3-5-sonnet-20240620-v1:0", "cohere.command-text-v14", "meta.llama3-1-70b-instruct-v1:0", "mistral.mistral-large-2402-v1:0").
-			Description("The model ID to use. For a full list see the https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html[AWS Bedrock documentation^].")).
+			Description("The model ID to use. For a full list see the https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html[AWS Bedrock documentation^].").
+			ShortDescription("The model ID to use.")).
 		Field(service.NewStringField(bedcpFieldUserPrompt).
 			Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
 			Optional()).
@@ -67,15 +68,18 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 		Field(service.NewFloatField(bedcpFieldTemp).
 			Optional().
 			Description("The likelihood of the model selecting higher-probability options while generating a response. A lower value makes the model more likely to choose higher-probability options, while a higher value makes the model more likely to choose lower-probability options.").
+			ShortDescription("How likely the model is to select higher-probability options while generating a response.").
 			LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`)).
 		Field(service.NewStringListField(bedcpFieldStop).
 			Optional().
 			Advanced().
-			Description("A list of stop sequences. A stop sequence is a sequence of characters that causes the model to stop generating the response.")).
+			Description("A list of stop sequences. A stop sequence is a sequence of characters that causes the model to stop generating the response.").
+			ShortDescription("Character sequences that cause the model to stop generating a response.")).
 		Field(service.NewFloatField(bedcpFieldTopP).
 			Optional().
 			Advanced().
 			Description("The percentage of most-likely candidates that the model considers for the next token. For example, if you choose a value of 0.8, the model selects from the top 80% of the probability distribution of tokens that could be next in the sequence. ").
+			ShortDescription("The percentage of most-likely candidates the model considers for the next token.").
 			LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`))
 }
 

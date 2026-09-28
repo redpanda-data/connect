@@ -129,6 +129,7 @@ Supports multiple authentication methods:
 			service.NewBoolField(hoFieldFollowRedirects).
 				Description("Transparently follow redirects, i.e. responses with 300-399 status codes. "+
 					"If disabled, the response message will contain the body, status, and headers from the redirect response and the processor will not make a request to the URL set in the Location header of the response.").
+				ShortDescription("Transparently follow redirects, meaning responses with 300-399 status codes.").
 				Advanced().
 				Default(false),
 			service.NewBoolField(hoFieldDisableHTTP2).

@@ -47,6 +47,7 @@ func ockamKafkaInputConfig() *service.ConfigSpec {
 			[]*service.ConfigField{
 				service.NewStringListField("seed_brokers").Optional().
 					Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
+					ShortDescription("Broker addresses used to establish connections. Items containing commas are expanded.").
 					Example([]string{"localhost:9092"}).
 					Example([]string{"foo:9092", "bar:9092"}).
 					Example([]string{"foo:9092,bar:9092"}),
@@ -65,6 +66,7 @@ func ockamKafkaInputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("node_address").Default("127.0.0.1:6262")).
 		Field(service.NewStringListField("encrypted_fields").
 			Description("The fields to encrypt in the kafka messages, assuming the record is a valid JSON map. By default, the whole record is encrypted.").
+			ShortDescription("Fields to encrypt within JSON records. The whole record is encrypted by default.").
 			Default([]string{}))
 }
 

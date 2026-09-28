@@ -35,11 +35,13 @@ func parquetInputConfig() *service.ConfigSpec {
 		Summary("Reads and decodes https://parquet.apache.org/docs/[Parquet files^] into a stream of structured messages.").
 		Field(service.NewStringListField("paths").
 			Description("A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).").
+			ShortDescription("File paths to read from, in sequence until exhausted. Glob patterns are supported.").
 			Example("/tmp/foo.parquet").
 			Example("/tmp/bar/*.parquet").
 			Example("/tmp/data/**/*.parquet")).
 		Field(service.NewIntField("batch_count").
 			Description(`Optionally process records in batches. This can help to speed up the consumption of exceptionally large files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`).
+			ShortDescription("Process records in batches, which can speed up consumption of very large files.").
 			Default(1).
 			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).

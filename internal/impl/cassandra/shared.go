@@ -74,6 +74,7 @@ func clientFields() []*service.ConfigField {
 			Advanced(),
 		service.NewBoolField(cFieldDisableIHL).
 			Description("If enabled the driver will not attempt to get host info from the system.peers table. This can speed up queries but will mean that data_centre, rack and token information will not be available.").
+			ShortDescription("Do not read host info from system.peers. Faster, but data centre, rack and token info is unavailable.").
 			Advanced().
 			Default(false),
 		service.NewIntField(cFieldMaxRetries).
@@ -106,6 +107,7 @@ func clientFields() []*service.ConfigField {
 				"Host selection is always token aware if the token can be calculated from query. " +
 				"By default the underlying policy is round robin over all nodes. " +
 				"Users can specify a local DC and rack to use for the DC Aware & Rack Aware policies. ").
+			ShortDescription("Host selection policy, strongly recommended in deployments spanning multiple data centres.").
 			LintRule(`root = if this.local_rack != "" && (!this.exists("local_dc") || this.local_dc == "") { "local_dc must be set if local_rack is set" }`).
 			Advanced(),
 		service.NewDurationField(cFieldReconnectInterval).
