@@ -1306,8 +1306,6 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	for i, f := range logFiles {
 		types[i] = f.Type
 	}
-	lm.log.Debugf("Collected %d redo log file(s) for LogMiner: %v", len(logFiles), types)
-
 	// On databases where redo log switches are infrequent, a LogMiner session can stay
 	// open for hours, accumulating server-side PGA (notably around online catalog
 	// dictionary lookups) until Oracle kills it outright with ORA-04036.

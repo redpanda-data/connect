@@ -29,7 +29,7 @@ type logFileSelector struct {
 }
 
 // selectForSession picks the log files to mine next, erroring if an open
-// thread has no files, and capping the session (endSCN = the smallest
+// thread (mounted oracle instance in RAC mode) has no files, and capping the session (endSCN = the smallest
 // per-thread tightened boundary) unless every thread is complete - open by
 // reaching its current log, closed by covering everything available.
 func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, dbCurrentSCN, maxRedoLogSizeInBytes uint64) (selected []*LogFile, endSCN uint64, capped bool, err error) {
