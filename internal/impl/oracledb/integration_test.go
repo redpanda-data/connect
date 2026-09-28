@@ -1156,6 +1156,7 @@ oracledb_cdc:
   logminer:
     lob_enabled: false
     min_scn_window_size: 0
+    backoff_interval: 1s
   include: ["` + db.Schema + `.LOBDISABLED"]`
 			stream = oracledbtest.StartPipelineWithLogLevel(t, cfg, "WARN", consumeWithUsername(t, &batch, usernameByID, hasUsernameByID))
 		}
@@ -1240,6 +1241,7 @@ oracledb_cdc:
   logminer:
     lob_enabled: true
     min_scn_window_size: 0
+    backoff_interval: 1s
   include: ["` + db.Schema + `.LOBENABLED"]`
 			stream = oracledbtest.StartPipeline(t, cfg, consumeWithUsername(t, &batch, usernameByID, hasUsernameByID))
 		}
@@ -1338,6 +1340,7 @@ oracledb_cdc:
   logminer:
     lob_enabled: %t
     min_scn_window_size: 0
+    backoff_interval: 1s
   include: ["%s"]`, streamFetchConnStr, strings.ReplaceAll(table, ".", "_"), lobEnabled, strings.ToUpper(table))
 		leg := oracledbtest.StartPipelineWithLogLevel(t, cfg, "WARN", batch.Consumer(t))
 		// Cleanup rather than a caller-side StopWithin: a require failure
