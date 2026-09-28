@@ -230,7 +230,7 @@ use_histogram_timing: true
 
 	body = getPage(t, handler)
 	assert.NotContains(t, body, "stream=\"foo\"")
-	assert.Contains(t, body, "\ninput_latency_seconds_count{stream=\"bar\"} 1")
+	assert.Contains(t, body, "\ninput_latency_ns_count{stream=\"bar\"} 1")
 }
 
 func TestPrometheusHistMetrics(t *testing.T) {
@@ -258,33 +258,52 @@ use_histogram_timing: true
 // variant uses a distinct series name from the summary variant emitted by nodes
 // with use_histogram_timing disabled, avoiding remote-write metric-kind
 // conflicts in a mixed fleet. See INC-1095.
-func TestPrometheusHistMetricsNanosecondSuffixRenamedToSeconds(t *testing.T) {
-	nm := promFromYAML(t, `
-use_histogram_timing: true
-`)
+func TestPrometheusHistogramTimingSecondsSuffix(t *testing.T) {
+	tests := []struct {
+		name        string
+		conf        string
+		wantType    string
+		wantSum     string
+		wantMissing string
+	}{
+		{
+			name:        "histogram with suffix rewrite renames _ns to _seconds",
+			conf:        "use_histogram_timing: true\nhistogram_timing_seconds_suffix: true\n",
+			wantType:    "\n# TYPE processor_latency_seconds histogram",
+			wantSum:     "\nprocessor_latency_seconds_sum 2",
+			wantMissing: "processor_latency_ns",
+		},
+		{
+			// The default keeps existing histogram series names so upgrades
+			// don't silently break dashboards and alerts.
+			name:        "histogram without suffix rewrite keeps _ns",
+			conf:        "use_histogram_timing: true\n",
+			wantType:    "\n# TYPE processor_latency_ns histogram",
+			wantSum:     "\nprocessor_latency_ns_sum 2",
+			wantMissing: "processor_latency_seconds",
+		},
+		{
+			name:        "summary ignores suffix rewrite",
+			conf:        "histogram_timing_seconds_suffix: true\n",
+			wantType:    "\n# TYPE processor_latency_ns summary",
+			wantSum:     "\nprocessor_latency_ns_sum 2e+09",
+			wantMissing: "processor_latency_seconds",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nm := promFromYAML(t, "%s", tt.conf)
 
-	tmr := nm.NewTimerCtor("processor_latency_ns")()
-	tmr.Timing(2_000_000_000) // 2s expressed in nanoseconds
+			tmr := nm.NewTimerCtor("processor_latency_ns")()
+			tmr.Timing(2_000_000_000) // 2s expressed in nanoseconds
 
-	body := getPage(t, nm.HandlerFunc())
+			body := getPage(t, nm.HandlerFunc())
 
-	assert.Contains(t, body, "\n# TYPE processor_latency_seconds histogram")
-	assert.Contains(t, body, "\nprocessor_latency_seconds_sum 2")
-	assert.Contains(t, body, "\nprocessor_latency_seconds_count 1")
-	assert.NotContains(t, body, "processor_latency_ns")
-}
-
-func TestPrometheusSummaryMetricsKeepNanosecondSuffix(t *testing.T) {
-	nm := promFromYAML(t, ``) // use_histogram_timing defaults to false
-
-	tmr := nm.NewTimerCtor("processor_latency_ns")()
-	tmr.Timing(2_000_000_000)
-
-	body := getPage(t, nm.HandlerFunc())
-
-	assert.Contains(t, body, "\n# TYPE processor_latency_ns summary")
-	assert.Contains(t, body, "\nprocessor_latency_ns_sum 2e+09")
-	assert.NotContains(t, body, "processor_latency_seconds")
+			assert.Contains(t, body, tt.wantType)
+			assert.Contains(t, body, tt.wantSum)
+			assert.NotContains(t, body, tt.wantMissing)
+		})
+	}
 }
 
 func TestPrometheusWithFileOutputPath(t *testing.T) {
