@@ -282,7 +282,10 @@ The maximum SCN range that can be mined in a single cycle. The window starts at 
 
 === `logminer.window_strategy`
 
-Controls how the SCN range mined per cycle is sized. `scn_window` (default) grows/shrinks the mined SCN range by a fixed increment (scn_window_size) based on backlog, bounded by min_scn_window_size/max_scn_window_size. `redo_volume` instead bounds the range by a fixed redo-volume budget (redo_volume_min/redo_volume_growth_max), decoupling session cost from raw SCN movement. Use `redo_volume` when the database's current SCN can advance independently of real transaction volume against the monitored tables - for example a CDB-shared SCN advanced by another PDB, or Oracle's automatic maintenance window generating many small internal commits - since scn_window would otherwise burn many cycles ramping the window up to its ceiling, paying LogMiner's fixed per-cycle overhead on ranges that are mostly empty of real changes, whereas redo_volume absorbs the same event in however much redo it actually touches. On multi-thread (RAC) databases, redo_volume applies its budget independently to each open redo thread, so the effective volume mined per cycle scales with the number of open threads.
+Controls how the SCN range mined per cycle is sized:
+
+- `scn_window` (default): Grows and shrinks a fixed SCN increment (`scn_window_size`) based on its backlog, bounded by `min_scn_window_size` and `max_scn_window_size`.
+- `redo_volume`: Sizes the range by a fixed redo-volume budget calculated by log size (configured by `redo_volume_min` and `redo_volume_growth_max`), independent of raw SCN movement. This can be helpful when a databases's SCN can advance without matching real transaction volume - for example a CDB-shared SCN bumped by another PDB - since `scn_window` would otherwise burn cycles growing its window over mostly-empty ranges, while `redo_volume` sizes each cycle by the redo it actually reads. On RAC, `redo_volume`'s budget applies per open thread, so volume mined per cycle scales with the number of open threads.
 
 
 *Type*: `string`
