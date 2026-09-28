@@ -534,6 +534,7 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 			return nil, fmt.Errorf("creating multiModuleWatcher: %w", err)
 		}
 		if p.operator, err = strToProtobufBSROperator(p.multiModuleWatcher, operatorStr, message, opts); err != nil {
+			p.multiModuleWatcher.close()
 			return nil, err
 		}
 	} else {
@@ -557,6 +558,9 @@ func (p *protobufProc) Process(_ context.Context, msg *service.Message) (service
 	return service.MessageBatch{msg}, nil
 }
 
-func (*protobufProc) Close(context.Context) error {
+func (p *protobufProc) Close(context.Context) error {
+	if p.multiModuleWatcher != nil {
+		p.multiModuleWatcher.close()
+	}
 	return nil
 }

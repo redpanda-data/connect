@@ -44,6 +44,7 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
+	"time"
 
 	"buf.build/gen/go/bufbuild/reflect/connectrpc/go/buf/reflect/v1beta1/reflectv1beta1connect"
 	v1beta1 "buf.build/gen/go/bufbuild/reflect/protocolbuffers/go/buf/reflect/v1beta1"
@@ -133,6 +134,7 @@ discard_unknown: %t
 
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, proc.Close(context.Background())) })
 
 			msgs, res := proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			require.NoError(t, res)
@@ -163,6 +165,7 @@ discard_unknown: %t
 
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, proc.Close(context.Background())) })
 
 			msgs, res := proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			require.NoError(t, res)
@@ -278,6 +281,7 @@ use_enum_numbers: %t
 
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, proc.Close(context.Background())) })
 
 			msgs, res := proc.Process(t.Context(), service.NewMessage(test.input))
 			require.NoError(t, res)
@@ -306,6 +310,7 @@ use_enum_numbers: %t
 
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, proc.Close(context.Background())) })
 
 			msgs, res := proc.Process(t.Context(), service.NewMessage(test.input))
 			require.NoError(t, res)
@@ -368,6 +373,7 @@ import_paths: [ %v ]
 
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, proc.Close(context.Background())) })
 
 			_, err = proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			require.Error(t, err)
@@ -462,11 +468,122 @@ func runMockBSRServer(t *testing.T, importPath string) string {
 	mux := http.NewServeMux()
 	fileDescriptorSetServer := &fileDescriptorSetServer{fileDescriptorSet: files}
 	mux.Handle(reflectv1beta1connect.NewFileDescriptorSetServiceHandler(fileDescriptorSetServer))
+	server := &http.Server{Handler: h2c.NewHandler(mux, &http2.Server{})} //nolint:gosec,staticcheck // test server, no timeouts needed; h2c matches the pre-existing usage
+	// Close (rather than Shutdown) so that all connections are torn down,
+	// otherwise the package-level goroutine leak check trips on lingering
+	// HTTP connection goroutines.
+	t.Cleanup(func() { _ = server.Close() })
 	go func() {
-		if err := http.Serve(listener, h2c.NewHandler(mux, &http2.Server{})); err != nil && !errors.Is(err, http.ErrServerClosed) { //nolint:staticcheck
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			require.NoError(t, err)
 		}
 	}()
 
 	return listener.Addr().String()
+}
+
+// TestProtobufBSRConstructionFailureStopsWatchers ensures that a
+// construction-time failure after the BSR watchers have started (in this
+// case, an operator that references a message the loaded module doesn't
+// resolve) still stops those watchers rather than leaking their background
+// polling goroutines. newProtobuf returns nil on error so there's no
+// processor to Close here; the package's goleak TestMain is what proves the
+// watchers were actually stopped.
+func TestProtobufBSRConstructionFailureStopsWatchers(t *testing.T) {
+	mockBSRServerAddress := runMockBSRServer(t, "../../../config/test/protobuf/schema")
+
+	conf, err := protobufProcessorSpec().ParseYAML(fmt.Sprintf(`
+operator: from_json
+message: does.not.Exist
+bsr:
+  - module: "testing"
+    url: %s
+`, "http://"+mockBSRServerAddress), nil)
+	require.NoError(t, err)
+
+	proc, err := newProtobuf(conf, service.MockResources())
+	require.Error(t, err)
+	require.Nil(t, proc)
+}
+
+// TestProtobufBSRPartialModuleFailureStopsWatchers ensures that when
+// newMultiModuleWatcher fails partway through constructing watchers for
+// multiple `bsr` modules, any watcher that had already started for an
+// earlier module is stopped rather than leaked. The second module here
+// ("invalid") has no `url` and fails to even parse in newSchemaWatcher
+// (before a watcher for it is created), which triggers the `ok`/deferred
+// close() guard in newMultiModuleWatcher for the first module's
+// already-running watcher. newProtobuf returns nil on error so there's no
+// processor to Close here; the package's goleak TestMain is what proves the
+// first module's watcher was actually stopped.
+func TestProtobufBSRPartialModuleFailureStopsWatchers(t *testing.T) {
+	mockBSRServerAddress := runMockBSRServer(t, "../../../config/test/protobuf/schema")
+
+	conf, err := protobufProcessorSpec().ParseYAML(fmt.Sprintf(`
+operator: from_json
+message: testing.Person
+bsr:
+  - module: "testing"
+    url: %s
+  - module: "invalid"
+`, "http://"+mockBSRServerAddress), nil)
+	require.NoError(t, err)
+
+	proc, err := newProtobuf(conf, service.MockResources())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "expected three segments")
+	require.Nil(t, proc)
+}
+
+// TestProtobufBSRDuplicateModuleStopsWatchers ensures that when the `bsr`
+// config lists the same module twice, newMultiModuleWatcher rejects the
+// config instead of silently overwriting the first module's map entry with
+// the second, which would otherwise leave the first watcher's background
+// polling goroutine unreachable by close(). newProtobuf returns nil on error
+// so there's no processor to Close here; the package's goleak TestMain is
+// what proves the first watcher was actually stopped.
+func TestProtobufBSRDuplicateModuleStopsWatchers(t *testing.T) {
+	mockBSRServerAddress := runMockBSRServer(t, "../../../config/test/protobuf/schema")
+
+	conf, err := protobufProcessorSpec().ParseYAML(fmt.Sprintf(`
+operator: from_json
+message: testing.Person
+bsr:
+  - module: "testing"
+    url: %[1]s
+  - module: "testing"
+    url: %[1]s
+`, "http://"+mockBSRServerAddress), nil)
+	require.NoError(t, err)
+
+	proc, err := newProtobuf(conf, service.MockResources())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate BSR module")
+	require.Nil(t, proc)
+}
+
+// TestProtobufBSRAwaitReadyFailureStopsWatcher ensures that when a schema
+// watcher's AwaitReady call fails (e.g. because the BSR endpoint is
+// unreachable), newSchemaWatcher stops the watcher before returning an error
+// rather than leaking its background polling goroutine. newProtobuf returns
+// nil on error so there's no processor to Close here; the package's goleak
+// TestMain is what proves the watcher was actually stopped.
+func TestProtobufBSRAwaitReadyFailureStopsWatcher(t *testing.T) {
+	original := watcherTimeout
+	watcherTimeout = 250 * time.Millisecond
+	t.Cleanup(func() { watcherTimeout = original })
+
+	conf, err := protobufProcessorSpec().ParseYAML(`
+operator: from_json
+message: testing.Person
+bsr:
+  - module: "testing"
+    url: http://127.0.0.1:1
+`, nil)
+	require.NoError(t, err)
+
+	proc, err := newProtobuf(conf, service.MockResources())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "schema watcher never became ready")
+	require.Nil(t, proc)
 }
