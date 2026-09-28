@@ -189,21 +189,11 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		} else {
 			lm.caughtUpLogged = false
 		}
-		if err := sleepCtx(ctx, wait); err != nil {
-			return err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
 		}
-	}
-}
-
-// sleepCtx waits for d. It returns ctx.Err() if ctx is cancelled before d is over.
-func sleepCtx(ctx context.Context, d time.Duration) error {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
 	}
 }
 
