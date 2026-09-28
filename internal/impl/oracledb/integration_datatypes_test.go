@@ -67,6 +67,7 @@ func decodeWithNumber(t *testing.T, raw string) map[string]any {
 // encoding rejects json.Number for string-typed fields.
 func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 

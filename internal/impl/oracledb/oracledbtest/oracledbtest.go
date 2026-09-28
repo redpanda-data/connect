@@ -340,8 +340,9 @@ func SetupTestWithOracleDBVersion(t *testing.T) (string, *TestDB) {
 // can't issue.
 //
 // The next test uses the same container. A test that restarts or changes the
-// database instance must make it available again before it returns, and undo
-// its instance-level changes in a t.Cleanup.
+// database instance must not call t.Parallel(). It must make the database
+// available again before it returns, and undo its instance-level changes in a
+// t.Cleanup.
 func SetupTestWithOracleDBVersionAndContainer(t *testing.T) (string, *TestDB, testcontainers.Container) {
 	t.Helper()
 	connStr, db := SetupTestWithOracleDBVersion(t)
@@ -351,7 +352,7 @@ func SetupTestWithOracleDBVersionAndContainer(t *testing.T) (string, *TestDB, te
 		// them, so that the next test opens new ones.
 		for _, pool := range []*sql.DB{cfg.dbConn, cfg.pdbConn} {
 			pool.SetMaxIdleConns(0)
-			pool.SetMaxIdleConns(5)
+			pool.SetMaxIdleConns(maxIdleConns)
 		}
 	})
 	return connStr, db, cfg.container
@@ -488,6 +489,9 @@ func ChildByName(t *testing.T, c schema.Common, name string) schema.Common {
 // It drops C##RPCN when the test ends, because the connector auto-derives the
 // same checkpoint table name for every CDB mode test.
 //
+// Two tests that call this function must not run at the same time, because
+// they share C##RPCN. At most one of them can call t.Parallel().
+//
 // Returns:
 //   - cdbConnStr: connection string targeting CDB$ROOT (use as connection_string in the connector config with pdb_name set)
 //   - pdbDB: TestDB connected to FREEPDB1 for creating tables and inserting test data
@@ -562,6 +566,19 @@ type containerCfg struct {
 // shared is the Oracle Free container that all tests in a package use. Oracle
 // Free takes up to three minutes to boot, and a small Docker VM, such as the
 // one on a developer laptop, has memory for one instance only.
+//
+// Tests that call SetupTestWithOracleDBVersion can call t.Parallel(). The SCN
+// is global to the database, so each pipeline mines the redo of all tests, but
+// this does not change what a pipeline delivers or checkpoints:
+//   - LogMiner returns DML only for the tables in the include list, and each
+//     test has its own schemas and checkpoint table.
+//   - An open transaction holds back the checkpoint only if it has events for
+//     a captured table (see logminer.TransactionCache.LowWatermarkSCN). So an
+//     open transaction in one test cannot hold back the checkpoint of another.
+//
+// Tests that restart or change the instance must not call t.Parallel(). Go runs
+// them before the parallel tests start, so they never overlap. For the tests
+// that call SetupCDBTestWithPDB, see there.
 var shared struct {
 	once sync.Once
 	cfg  containerCfg
@@ -656,13 +673,20 @@ func startContainer(ctx context.Context) (cfg containerCfg, err error) {
 	return cfg, nil
 }
 
+// The parallel tests share the connection pools of the shared container, so
+// the pools are large enough for all of them at the same time.
+const (
+	maxOpenConns = 50
+	maxIdleConns = 20
+)
+
 func openDB(ctx context.Context, connStr string) (*sql.DB, error) {
 	db, err := sql.Open("oracle", connStr)
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxIdleConns)
 	db.SetConnMaxLifetime(time.Minute * 5)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()

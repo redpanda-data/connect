@@ -29,6 +29,8 @@ import (
 // TestIntegrationMigrateCheckpointCache can be deleted once we're happy customers have migrated.
 func TestIntegrationMigrateCheckpointCache(t *testing.T) {
 	integration.CheckSkip(t)
+	// Not parallel: TestIntegrationOracleDBCDCSnapshotAndStreaming also uses
+	// C##RPCN, and it is parallel (see SetupCDBTestWithPDB).
 
 	cdbConnStr, pdbDB, pdbName := oracledbtest.SetupCDBTestWithPDB(t)
 	require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), pdbDB.Schema+".mtfoo", "CREATE TABLE "+pdbDB.Schema+".mtfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
