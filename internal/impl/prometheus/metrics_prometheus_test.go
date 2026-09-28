@@ -230,7 +230,7 @@ use_histogram_timing: true
 
 	body = getPage(t, handler)
 	assert.NotContains(t, body, "stream=\"foo\"")
-	assert.Contains(t, body, "\ninput_latency_ns_count{stream=\"bar\"} 1")
+	assert.Contains(t, body, "\ninput_latency_seconds_count{stream=\"bar\"} 1")
 }
 
 func TestPrometheusHistMetrics(t *testing.T) {
