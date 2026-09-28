@@ -173,6 +173,8 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		}
 	}()
 
+	timer := time.NewTimer(0) // re-used timer, reduces memory allocations
+	defer timer.Stop()
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -190,10 +192,11 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 			}
 		}
 		lm.caughtUpLogged = caughtUp
+		timer.Reset(wait)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(wait):
+		case <-timer.C:
 		}
 	}
 }
