@@ -119,7 +119,7 @@ func (rv *redoVolumeStrategy) GetOpenThreads(ctx context.Context, conn *sql.Conn
 		threads = append(threads, thread)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("iterating open redo thread rows: %w", err)
 	}
 	return threads, nil
 }
