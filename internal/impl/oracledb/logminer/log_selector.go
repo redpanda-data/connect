@@ -131,10 +131,17 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 		threadFiles := byThread[t]
 
 		// Stop once bytes reach the threshold, inclusive of the crossing
-		// file, so one oversized file still selects itself.
+		// file, so one oversized file still selects itself. A file already
+		// fully behind the ratchet boundary was mined in an earlier cycle
+		// and only re-qualified via NEXT_CHANGE# >= startSCN - charging its
+		// bytes again double-counts completed work and can stall forever
+		// on an oversized file, so it rides along for free instead.
 		var accumulated uint64
 		stopIdx := len(threadFiles)
 		for i, f := range threadFiles {
+			if s.prevUpperBoundSCN > 0 && f.NextSCN-1 <= s.prevUpperBoundSCN {
+				continue
+			}
 			accumulated += f.SizeBytes
 			if accumulated >= threshold {
 				stopIdx = i + 1
@@ -175,14 +182,17 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 
 	budgetKeys = logKeysOf(budgetCombined)
 
-	if !truncated {
-		// Nothing to cap - everyone fits (extension is then a no-op too).
-		return files, dbCurrentSCN, false, false, budgetKeys, nil
-	}
+	// capped tracks allCaughtUp, not truncated: a thread can ride along
+	// untruncated (nothing charged against its threshold, per the ratchet
+	// exemption above) while still not having reached its own completeness
+	// criterion, so completeness - not the budget accounting - decides
+	// whether the session is done. combined already equals files whenever
+	// every thread was untruncated (extension is then a no-op), so there's
+	// no separate "nothing to cap" shortcut to keep in sync with that.
 	if allCaughtUp {
-		return combined, dbCurrentSCN, false, true, budgetKeys, nil
+		return combined, dbCurrentSCN, false, truncated, budgetKeys, nil
 	}
-	return combined, tightestEndSCN, true, true, budgetKeys, nil
+	return combined, tightestEndSCN, true, truncated, budgetKeys, nil
 }
 
 // extendThreadPastBoundary extends past prevUpperBoundSCN (a no-op at 0)
