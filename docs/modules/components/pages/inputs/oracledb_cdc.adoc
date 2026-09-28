@@ -285,7 +285,7 @@ The maximum SCN range that can be mined in a single cycle. The window starts at 
 Controls how the SCN range mined per cycle is sized:
 
 - `scn_window` (default): Grows and shrinks a fixed SCN increment (`scn_window_size`) based on its backlog, bounded by `min_scn_window_size` and `max_scn_window_size`.
-- `redo_volume`: Sizes the range by a fixed redo-volume budget calculated by log size (configured by `redo_volume_min` and `redo_volume_growth_max`), independent of raw SCN movement. This can be helpful when a databases's SCN can advance without matching real transaction volume - for example a CDB-shared SCN bumped by another PDB - since `scn_window` would otherwise burn cycles growing its window over mostly-empty ranges, while `redo_volume` sizes each cycle by the redo it actually reads. On RAC, `redo_volume`'s budget applies per open thread, so volume mined per cycle scales with the number of open threads.
+- `redo_volume`: Sizes the range by a fixed redo-volume budget calculated by log size (configured by `redo_volume_min` and `redo_volume_growth_max`), independent of raw SCN movement. This can be helpful when a databases's SCN can advance without matching real transaction volume - for example a Multitenant Container Database (CDB) shared SCN bumped by another Pluggable Database (PDB) - since `scn_window` would otherwise burn cycles growing its window over mostly-empty ranges, while `redo_volume` sizes each cycle by the redo it actually reads. On Real Application Clusters (RAC), `redo_volume`'s budget applies per open thread, so volume mined per cycle scales with the number of open threads.
 
 
 *Type*: `string`
@@ -308,7 +308,7 @@ The minimum redo volume mined per cycle, in multiples of the online redo log's c
 
 === `logminer.redo_volume_growth_max`
 
-The maximum redo volume the per-thread budget automatically grows to, in multiples of the online redo log's configured size; like `redo_volume_min`, this is applied independently to each open redo thread. The budget starts at `redo_volume_min` and grows each cycle in which a thread reselects the same set of files as the previous cycle (typically caused by a mining cycle retrying without making progress, such as after an ORA-01368 redo log recycle) - normally by one unit, or in a single larger jump when a thread's backlog below the already-mined boundary is large enough that a bigger jump would clear it outright - up to this limit. This bounds automatic growth only: once a cycle has committed to mining up to some SCN, a thread's selection can still be extended past this limit on a later cycle to avoid leaving a gap in that already-committed range. Only applies when `window_strategy` is `redo_volume`.
+The ceiling the per-thread redo-volume budget can grow to, applied independently to each open redo thread (enabling the total volume mined per cycle to scale with thread count on RAC (Real Application Clusters) configurations). The budget starts at `redo_volume_min` and grows whenever mining stalls making no progress (such as after an ORA-01368 redo log recycle) up to this limit. This only limits automatic growth - if an earlier cycle already committed to covering further than this, a later cycle will still read that far even if it means going over the limit, rather than silently skip data it already promised to mine. Only applies when `window_strategy` is `redo_volume`.
 
 
 *Type*: `int`
