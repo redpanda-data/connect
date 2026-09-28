@@ -173,7 +173,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		}
 	}()
 
-	timer := time.NewTimer(0) // re-used timer, reduces memory allocations
+	timer := time.NewTimer(0) // reused timer, reduces memory allocations
 	defer timer.Stop()
 	for {
 		if err := ctx.Err(); err != nil {
