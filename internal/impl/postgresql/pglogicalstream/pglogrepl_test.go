@@ -29,6 +29,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
@@ -237,111 +238,314 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	publicationName := "test_publication"
-	schema := `"public"`
-	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
-	require.NoError(t, err)
+	logger := service.MockResources().Logger()
 
-	tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
-	require.NoError(t, err)
-	assert.Empty(t, tables)
-	assert.True(t, forAllTables)
+	createSchema := func(t *testing.T, name string) {
+		t.Helper()
+		_, err := conn.Exec(t.Context(), fmt.Sprintf("CREATE SCHEMA %s;", name)).ReadAll()
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_, _ = conn.Exec(cleanupCtx, fmt.Sprintf("DROP SCHEMA %s CASCADE;", name)).ReadAll()
+		})
+	}
 
-	multiReader := conn.Exec(t.Context(), "CREATE TABLE test_table (id serial PRIMARY KEY, name text);")
-	_, err = multiReader.ReadAll()
-	require.NoError(t, err)
+	// isForAllTables checks directly against pg_publication rather than via
+	// GetPublicationTables, which is a better source of truth.
+	isForAllTables := func(t *testing.T, publicationName string) bool {
+		t.Helper()
+		rows, err := conn.Exec(t.Context(), fmt.Sprintf(
+			"SELECT puballtables FROM pg_publication WHERE pubname = '%s';", publicationName,
+		)).ReadAll()
+		require.NoError(t, err)
+		require.Len(t, rows[0].Rows, 1)
+		return string(rows[0].Rows[0][0]) == "t"
+	}
 
-	publicationWithTables := "test_pub_with_tables"
-	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{{schema, `"test_table"`}})
-	require.NoError(t, err)
+	t.Run("creates a FOR ALL TABLES publication when tables is empty", func(t *testing.T) {
+		const publicationName = "pub_all_tables_empty"
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
-	require.NoError(t, err)
-	assert.NotEmpty(t, tables)
-	assert.Len(t, tables, 1)
-	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
-	assert.False(t, forAllTables)
+		err := CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{})
+		require.NoError(t, err)
 
-	// Add more tables to publication
-	multiReader = conn.Exec(t.Context(), "CREATE TABLE test_table2 (id serial PRIMARY KEY, name text);")
-	_, err = multiReader.ReadAll()
-	require.NoError(t, err)
-
-	// Pass more tables to the publication
-	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{
-		{schema, "test_table2"},
-		{schema, "test_table"},
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+		require.NoError(t, err)
+		assert.Empty(t, tables)
+		assert.True(t, forAllTables)
 	})
-	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
-	require.NoError(t, err)
-	assert.NotEmpty(t, tables)
-	assert.Len(t, tables, 2)
-	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
-	assert.Contains(t, tables, TableFQN{schema, `"test_table2"`})
-	assert.False(t, forAllTables)
+	t.Run("narrowing an existing FOR ALL TABLES publication to an explicit table list narrows it", func(t *testing.T) {
+		const (
+			publicationName = "pub_narrow"
+			schema          = `"sch_narrow"`
+		)
+		createSchema(t, schema)
 
-	// Remove one table from the publication
-	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{
-		{schema, "test_table"},
+		multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.orders (id serial PRIMARY KEY, name text);", schema))
+		_, err := multiReader.ReadAll()
+		require.NoError(t, err)
+
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{})
+		require.NoError(t, err)
+
+		require.True(t, isForAllTables(t, publicationName))
+
+		// user updates tables in config and restarts connector - since
+		// Postgres can't ALTER a FOR ALL TABLES publication down to a
+		// named table list, this drops and recreates the publication as a
+		// named-table one containing just "orders".
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{{schema, `"orders"`}})
+		require.NoError(t, err)
+		assert.False(t, isForAllTables(t, publicationName), "narrowing an existing FOR ALL TABLES publication to an explicit table list should actually take effect, not silently leave it as FOR ALL TABLES")
+
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+		require.NoError(t, err)
+		assert.Len(t, tables, 1)
+		assert.Contains(t, tables, TableFQN{schema, `"orders"`})
+		assert.False(t, forAllTables)
 	})
-	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
-	require.NoError(t, err)
-	assert.NotEmpty(t, tables)
-	assert.Len(t, tables, 1)
-	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
-	assert.False(t, forAllTables)
+	t.Run("moving from a named-table publication to an empty table list converts it to FOR ALL TABLES", func(t *testing.T) {
+		const (
+			publicationName = "pub_named_to_all"
+			schema          = `"sch_named_to_all"`
+		)
+		createSchema(t, schema)
 
-	// Add one table and remove one at the same time
-	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{
-		{schema, "test_table2"},
+		for _, name := range []string{"widgets", "gadgets"} {
+			multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", schema, name))
+			_, err := multiReader.ReadAll()
+			require.NoError(t, err)
+		}
+
+		err := CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
+			{schema, `"widgets"`},
+			{schema, `"gadgets"`},
+		})
+		require.NoError(t, err)
+
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+		require.NoError(t, err)
+		assert.Len(t, tables, 2)
+		assert.False(t, forAllTables)
+
+		require.False(t, isForAllTables(t, publicationName))
+
+		// user changes config to publish everything (empty tables list) and
+		// restarts the connector - since Postgres has no ALTER PUBLICATION
+		// form to convert a named-table publication to FOR ALL TABLES
+		// either, this drops and recreates the publication as FOR ALL
+		// TABLES.
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{})
+		require.NoError(t, err)
+		assert.True(t, isForAllTables(t, publicationName), "moving an existing named-table publication to an empty table list should make it FOR ALL TABLES")
 	})
-	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
-	require.NoError(t, err)
-	assert.NotEmpty(t, tables)
-	assert.Contains(t, tables, TableFQN{schema, `"test_table2"`})
-	assert.False(t, forAllTables)
+	t.Run("widening to FOR ALL TABLES without superuser returns a guidance error and leaves the publication intact", func(t *testing.T) {
+		const (
+			publicationName = "pub_no_superuser"
+			schema          = `"sch_no_superuser"`
+			roleName        = "no_superuser_role"
+		)
+		createSchema(t, schema)
 
-	// Create a schema with a quoted identifier
-	caseSensitiveSchema := `"FooBar"`
-	multiReader = conn.Exec(t.Context(), fmt.Sprintf("CREATE SCHEMA %s;", caseSensitiveSchema))
-	_, err = multiReader.ReadAll()
-	require.NoError(t, err)
+		multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.orders (id serial PRIMARY KEY, name text);", schema))
+		_, err := multiReader.ReadAll()
+		require.NoError(t, err)
 
-	caseSensitiveTable := `"Foo"`
-	multiReader = conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable))
-	_, err = multiReader.ReadAll()
-	require.NoError(t, err)
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{{schema, `"orders"`}})
+		require.NoError(t, err)
 
-	caseSensitiveTable2 := `"Bar"`
-	multiReader = conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable2))
-	_, err = multiReader.ReadAll()
-	require.NoError(t, err)
+		_, err = conn.Exec(t.Context(), fmt.Sprintf("CREATE ROLE %s LOGIN REPLICATION PASSWORD 'x';", roleName)).ReadAll()
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_, _ = conn.Exec(cleanupCtx, fmt.Sprintf("DROP ROLE %s;", roleName)).ReadAll()
+		})
 
-	// Pass tables to the schema with quoted identifiers
-	publicationQuotedIdentifiers := "quoted_identifiers"
-	err = CreatePublication(t.Context(), conn, publicationQuotedIdentifiers, []TableFQN{
-		{caseSensitiveSchema, caseSensitiveTable},
-		{caseSensitiveSchema, caseSensitiveTable2},
+		// Ownership is enough to let the role DROP the publication, but not
+		// enough to let it CREATE a new FOR ALL TABLES one - only superuser
+		// can do that - so this sets up exactly the failure this subtest
+		// targets.
+		_, err = conn.Exec(t.Context(), fmt.Sprintf("ALTER PUBLICATION %s OWNER TO %s;", publicationName, roleName)).ReadAll()
+		require.NoError(t, err)
+
+		roleConfig, err := pgconn.ParseConfig(dbURL)
+		require.NoError(t, err)
+		roleConfig.User = roleName
+		roleConfig.Password = "x"
+
+		roleConn, err := pgconn.ConnectConfig(t.Context(), roleConfig)
+		require.NoError(t, err)
+		defer closeConn(t, roleConn)
+
+		err = CreatePublication(t.Context(), roleConn, logger, publicationName, []TableFQN{})
+		require.ErrorContains(t, err, "requires superuser")
+
+		// The DROP and CREATE are sent as a single implicitly-transactional
+		// Exec call, so the failed CREATE should have rolled the DROP back
+		// too - the pre-existing publication must still exist, unchanged.
+		require.False(t, isForAllTables(t, publicationName))
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+		require.NoError(t, err)
+		assert.Len(t, tables, 1)
+		assert.Contains(t, tables, TableFQN{schema, `"orders"`})
+		assert.False(t, forAllTables)
 	})
-	require.NoError(t, err)
 
-	// Remove one table with a quoted identifier from the publication
-	err = CreatePublication(t.Context(), conn, publicationQuotedIdentifiers, []TableFQN{
-		{caseSensitiveSchema, caseSensitiveTable},
+	t.Run("creates a named-table publication with one table", func(t *testing.T) {
+		const (
+			publicationName = "pub_single_table"
+			schema          = `"sch_single_table"`
+		)
+		createSchema(t, schema)
+
+		multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.single_table (id serial PRIMARY KEY, name text);", schema))
+		_, err := multiReader.ReadAll()
+		require.NoError(t, err)
+
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{{schema, `"single_table"`}})
+		require.NoError(t, err)
+
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+		require.NoError(t, err)
+		assert.NotEmpty(t, tables)
+		assert.Len(t, tables, 1)
+		assert.Contains(t, tables, TableFQN{schema, `"single_table"`})
+		assert.False(t, forAllTables)
 	})
-	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationQuotedIdentifiers)
-	require.NoError(t, err)
-	assert.Len(t, tables, 1)
-	assert.Contains(t, tables, TableFQN{`"FooBar"`, `"Foo"`})
-	assert.False(t, forAllTables)
+	t.Run("adds a table to an existing named-table publication", func(t *testing.T) {
+		const (
+			publicationName = "pub_add_table"
+			schema          = `"sch_add_table"`
+		)
+		createSchema(t, schema)
+
+		for _, name := range []string{"add_table1", "add_table2"} {
+			multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", schema, name))
+			_, err := multiReader.ReadAll()
+			require.NoError(t, err)
+		}
+
+		err := CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{{schema, `"add_table1"`}})
+		require.NoError(t, err)
+
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
+			{schema, `"add_table2"`},
+			{schema, `"add_table1"`},
+		})
+		require.NoError(t, err)
+
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+		require.NoError(t, err)
+		assert.NotEmpty(t, tables)
+		assert.Len(t, tables, 2)
+		assert.Contains(t, tables, TableFQN{schema, `"add_table1"`})
+		assert.Contains(t, tables, TableFQN{schema, `"add_table2"`})
+		assert.False(t, forAllTables)
+	})
+
+	t.Run("removes a table from an existing named-table publication", func(t *testing.T) {
+		const (
+			publicationName = "pub_remove_table"
+			schema          = `"sch_remove_table"`
+		)
+		createSchema(t, schema)
+
+		for _, name := range []string{"remove_table1", "remove_table2"} {
+			multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", schema, name))
+			_, err := multiReader.ReadAll()
+			require.NoError(t, err)
+		}
+
+		err := CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
+			{schema, `"remove_table1"`},
+			{schema, `"remove_table2"`},
+		})
+		require.NoError(t, err)
+
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
+			{schema, `"remove_table1"`},
+		})
+		require.NoError(t, err)
+
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+		require.NoError(t, err)
+		assert.NotEmpty(t, tables)
+		assert.Len(t, tables, 1)
+		assert.Contains(t, tables, TableFQN{schema, `"remove_table1"`})
+		assert.False(t, forAllTables)
+	})
+
+	t.Run("adds and removes tables in the same call", func(t *testing.T) {
+		const (
+			publicationName = "pub_add_remove"
+			schema          = `"sch_add_remove"`
+		)
+		createSchema(t, schema)
+
+		for _, name := range []string{"addremove_old", "addremove_new"} {
+			multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", schema, name))
+			_, err := multiReader.ReadAll()
+			require.NoError(t, err)
+		}
+
+		err := CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
+			{schema, `"addremove_old"`},
+		})
+		require.NoError(t, err)
+
+		err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{
+			{schema, `"addremove_new"`},
+		})
+		require.NoError(t, err)
+
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+		require.NoError(t, err)
+		assert.Len(t, tables, 1)
+		assert.Contains(t, tables, TableFQN{schema, `"addremove_new"`})
+		assert.False(t, forAllTables)
+	})
+
+	t.Run("supports quoted, case-sensitive schema and table identifiers", func(t *testing.T) {
+		const (
+			publicationQuotedIdentifiers = "quoted_identifiers"
+			caseSensitiveSchema          = `"FooBar"`
+			caseSensitiveTable           = `"Foo"`
+			caseSensitiveTable2          = `"Bar"`
+		)
+
+		createSchema(t, caseSensitiveSchema)
+
+		multiReader := conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable))
+		_, err := multiReader.ReadAll()
+		require.NoError(t, err)
+
+		multiReader = conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable2))
+		_, err = multiReader.ReadAll()
+		require.NoError(t, err)
+
+		err = CreatePublication(t.Context(), conn, logger, publicationQuotedIdentifiers, []TableFQN{
+			{caseSensitiveSchema, caseSensitiveTable},
+			{caseSensitiveSchema, caseSensitiveTable2},
+		})
+		require.NoError(t, err)
+
+		// Remove one table with a quoted identifier from the publication.
+		err = CreatePublication(t.Context(), conn, logger, publicationQuotedIdentifiers, []TableFQN{
+			{caseSensitiveSchema, caseSensitiveTable},
+		})
+		require.NoError(t, err)
+
+		tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationQuotedIdentifiers)
+		require.NoError(t, err)
+		assert.Len(t, tables, 1)
+		assert.Contains(t, tables, TableFQN{`"FooBar"`, `"Foo"`})
+		assert.False(t, forAllTables)
+	})
 }
 
 func TestIntegrationStartReplication(t *testing.T) {
@@ -360,9 +564,11 @@ func TestIntegrationStartReplication(t *testing.T) {
 	sysident, err := IdentifySystem(ctx, conn)
 	require.NoError(t, err)
 
+	logger := service.MockResources().Logger()
+
 	// create publication
 	publicationName := "test_publication"
-	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
+	err = CreatePublication(t.Context(), conn, logger, publicationName, []TableFQN{})
 	require.NoError(t, err)
 
 	_, _, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
