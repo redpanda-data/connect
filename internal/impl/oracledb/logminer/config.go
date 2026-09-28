@@ -62,6 +62,12 @@ var (
 	// file forever, since that file's own boundary re-qualifies it next
 	// cycle, so growth is its only way to make progress.
 	MinRedoVolumeGrowthCeiling = 2
+	// redoVolumeStallWarnThreshold is how many consecutive stalled cycles
+	// (see logFileSelector.consecutiveStalls) trigger a warning log. This is
+	// proven unreachable for every known failure mode, so reaching it is a
+	// signal to investigate, not routine backoff - the threshold is only
+	// above 1 to give a single incidental stall room without logging.
+	redoVolumeStallWarnThreshold = 3
 )
 
 // WindowStrategy selects how the SCN range mined per LogMiner cycle is sized.

@@ -289,8 +289,15 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	switch lm.cfg.WindowStrategy {
 	case WindowStrategyRedoVolume:
-		if logFiles, endSCN, err = lm.redoVolume.selectSession(ctx, conn, lm.logCollector, lm.currentSCN, dbCurrentSCN); err != nil {
+		var consecutiveStalls int
+		if logFiles, endSCN, consecutiveStalls, err = lm.redoVolume.selectSession(ctx, conn, lm.logCollector, lm.currentSCN, dbCurrentSCN); err != nil {
 			return false, err
+		}
+		// Proven unreachable for the known failure modes (see
+		// logFileSelector.consecutiveStalls) - this should never fire, so
+		// treat it as a bug report rather than routine backoff.
+		if consecutiveStalls >= redoVolumeStallWarnThreshold {
+			lm.log.Warnf("redo_volume selector has made no forward progress for %d consecutive cycles at SCN %d - this should not happen and likely indicates a bug; please report it", consecutiveStalls, lm.currentSCN)
 		}
 	default:
 		endSCN = dbCurrentSCN

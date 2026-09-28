@@ -26,6 +26,11 @@ type logFileSelector struct {
 	count             int
 	prevKeys          []logKey
 	prevUpperBoundSCN uint64
+	// consecutiveStalls counts cycles in a row with an identical
+	// pre-extension selection - a stuck budget. Should stay low; climbing
+	// past redoVolumeStallWarnThreshold signals a genuine misconfiguration
+	// or bug worth investigating, not routine backoff.
+	consecutiveStalls int
 }
 
 // selectForSession picks the log files to mine next, erroring if an open
@@ -45,6 +50,7 @@ func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, 
 	// Compare the pre-extension selection, not the extended one - extension
 	// is progress, not a stall.
 	if truncated && slices.Equal(budgetKeys, s.prevKeys) {
+		s.consecutiveStalls++
 		// No progress - grow the budget by deriving the jump that would clear the backlog in one step, rather than a flat +1.
 		derived := s.deriveGrowthCount(files, maxRedoLogSizeInBytes)
 		growTo := max(derived, s.count+1)
@@ -58,6 +64,8 @@ func (s *logFileSelector) selectForSession(files []*LogFile, openThreads []int, 
 		if selected, endSCN, capped, truncated, budgetKeys, err = s.budgetPerThread(files, openThreads, dbCurrentSCN, maxRedoLogSizeInBytes); err != nil {
 			return nil, 0, false, err
 		}
+	} else {
+		s.consecutiveStalls = 0
 	}
 
 	if truncated {
@@ -156,6 +164,15 @@ func (s *logFileSelector) budgetPerThread(files []*LogFile, openThreads []int, d
 		budgetCombined = append(budgetCombined, budgetCapped...)
 
 		extended := extendThreadPastBoundary(threadFiles, budgetCapped, s.prevUpperBoundSCN)
+
+		// Last resort past the stall warning threshold: force in the next
+		// file regardless of budget/ceiling. Distinct from the ratchet
+		// extension above (committed ground, not a stuck budget) - and
+		// captured before budgetKeys, so it never masks the warning.
+		if s.consecutiveStalls >= redoVolumeStallWarnThreshold && len(extended) < len(threadFiles) {
+			extended = append(extended, threadFiles[len(extended)])
+		}
+
 		combined = append(combined, extended...)
 
 		// A closed thread completes once fully covered, an open thread once

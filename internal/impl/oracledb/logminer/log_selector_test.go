@@ -141,19 +141,22 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.True(t, capped)
 		assert.Equal(t, 4, s.count)
 
-		// Cycle 4: still stalled, but growthMax is already reached -> budget plateaus at 4 rather than growing to 5.
+		// Cycle 4: growth itself plateaus at 4 rather than growing to 5 -
+		// but this is also the 3rd consecutive forced stall, crossing
+		// redoVolumeStallWarnThreshold, so the last-resort fallback forces
+		// file #5 in too, despite growth's own ceiling not covering it.
 		s.prevUpperBoundSCN = 0
 		selected, _, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
-		require.Len(t, selected, 4)
+		require.Len(t, selected, 5, "growth's own 4 plus the fallback's forced file #5")
 		assert.True(t, capped)
-		assert.Equal(t, 4, s.count)
+		assert.Equal(t, 4, s.count, "growth's own ceiling is unaffected by the fallback")
 
-		// Cycle 5: one more forced stall for good measure, confirming the plateau holds.
+		// Cycle 5: one more forced stall - nothing left for the fallback to add (file #5 was the last), so the selection holds at 5.
 		s.prevUpperBoundSCN = 0
 		selected, _, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
-		require.Len(t, selected, 4)
+		require.Len(t, selected, 5)
 		assert.True(t, capped)
 		assert.Equal(t, 4, s.count)
 	})
@@ -527,15 +530,21 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.Len(t, selected, 6, "thread 1's 2 files plus thread 2's grown budget of 4")
 		assert.Equal(t, 4, s.count)
 
-		// Cycle 4: budget plateaus at growthMax (4), one short of the 5-file backlog - a safe stall (file #5 stays pending, not skipped), not silent data loss; see the next test for the one-shot-sweep case.
+		// Cycle 4: growth itself plateaus at growthMax (4) as before - but
+		// this is also the 3rd consecutive forced stall, crossing
+		// redoVolumeStallWarnThreshold, so the last-resort fallback (see
+		// "a last-resort fallback..." below) now forces file #5 in too,
+		// despite growth's own ceiling not covering it. That happens to
+		// be thread 2's entire backlog, so it's now fully covered too -
+		// uncapped, not just tightened further.
 		s.prevUpperBoundSCN = 0
 		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
 		require.NoError(t, err)
-		assert.True(t, capped)
-		assert.Equal(t, uint64(1399), endSCN, "plateaued - growth cannot exceed growthMax, and nothing else pushes the boundary further")
-		assert.Len(t, selected, 6)
-		assert.Equal(t, 4, s.count)
-		assert.NotContains(t, selected, closedThreadBacklog[4], "file #5 is never silently included without either budget covering it or a boundary already past it")
+		assert.False(t, capped, "the fallback's forced file #5 completes thread 2's entire backlog")
+		assert.Equal(t, uint64(9000), endSCN)
+		assert.Len(t, selected, 7, "thread 1's 2 files plus thread 2's grown budget of 4 plus the fallback's forced file #5")
+		assert.Equal(t, 4, s.count, "growth's own ceiling is unaffected by the fallback - it still plateaus at growthMax")
+		assert.Contains(t, selected, closedThreadBacklog[4], "the fallback forces file #5 in once the stall has persisted past the warning threshold")
 	})
 
 	t.Run("closed thread's backlog is swept up in one shot once a boundary already exceeds it", func(t *testing.T) {
@@ -708,6 +717,71 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.True(t, capped)
 		assert.Equal(t, uint64(1999), endSCN)
 		assert.Equal(t, 3, s.count, "growthMax must clamp the derived jump, not just a flat +1 step")
+	})
+
+	t.Run("consecutiveStalls tracks a persistent stall and resets once one clears", func(t *testing.T) {
+		// redo_volume_growth_max configured too small to ever cover thread
+		// 1's oversized file (6 units, ceiling clamps to 3) is a genuine,
+		// ongoing misconfiguration - not a bug Fix A can paper over - so
+		// the stall (and consecutiveStalls climbing) legitimately persists
+		// across many cycles here, unlike every scenario elsewhere in this
+		// file where it resolves within one or two cycles.
+		s := &logFileSelector{minCount: 1, growthMax: 3}
+		stuck := []*LogFile{
+			mkLogFile(1, 1, 0, 6000, "ARCHIVED", 6*testRedoLogSize),
+			mkLogFile(1, 2, 6000, 6100, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 1, 0, 2000, "ARCHIVED", 7*testRedoLogSize),
+		}
+
+		_, _, _, err := s.selectForSession(stuck, []int{1, 2}, 9000, testRedoLogSize)
+		require.NoError(t, err)
+		assert.Equal(t, 0, s.consecutiveStalls, "first sighting of a backlog is never a stall")
+
+		for cycle, want := range []int{1, 2, 3, 4} {
+			_, _, capped, err := s.selectForSession(stuck, []int{1, 2}, 9000, testRedoLogSize)
+			require.NoError(t, err)
+			require.True(t, capped)
+			assert.Equal(t, want, s.consecutiveStalls, "cycle %d", cycle+2)
+		}
+
+		// A genuinely different, resolvable backlog clears the stall - the counter must reset, not keep climbing.
+		cleared := []*LogFile{
+			mkLogFile(1, 1, 0, 6000, "ARCHIVED", 6*testRedoLogSize),
+			mkLogFile(1, 2, 6000, 6100, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 2, 2000, 3000, "ARCHIVED", testRedoLogSize),
+		}
+		_, _, _, err = s.selectForSession(cleared, []int{1, 2}, 9000, testRedoLogSize)
+		require.NoError(t, err)
+		assert.Equal(t, 0, s.consecutiveStalls, "a genuinely different selection must reset the stall counter")
+	})
+
+	t.Run("a last-resort fallback forces progress once a stall has crossed the warning threshold", func(t *testing.T) {
+		// Same misconfiguration as above (growthMax too small for thread
+		// 1's oversized file), but thread 2 here deliberately never
+		// reaches a genuinely open current log, so nothing about the
+		// shared ratchet ever changes on its own - isolating whether the
+		// fallback itself forces thread 1 past its stuck file, independent
+		// of any other thread eventually resolving and moving things along.
+		s := &logFileSelector{minCount: 1, growthMax: 3}
+		files := []*LogFile{
+			mkLogFile(1, 1, 0, 6000, "ARCHIVED", 6*testRedoLogSize),
+			mkLogFile(1, 2, 6000, 6100, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 1, 0, 2000, "ARCHIVED", 7*testRedoLogSize),
+		}
+
+		for range 3 {
+			selected, _, _, err := s.selectForSession(files, []int{1, 2}, 9000, testRedoLogSize)
+			require.NoError(t, err)
+			require.Len(t, selected, 2, "below the warning threshold, thread 1 stays stuck on its oversized file alone")
+		}
+		require.Equal(t, 2, s.consecutiveStalls)
+
+		// The 4th cycle crosses redoVolumeStallWarnThreshold (3) - the fallback forces thread 1's next file in despite the ceiling.
+		selected, _, capped, err := s.selectForSession(files, []int{1, 2}, 9000, testRedoLogSize)
+		require.NoError(t, err)
+		assert.True(t, capped)
+		assert.Len(t, selected, 3, "thread 1's oversized file plus its next file, forced in despite growthMax")
+		assert.Contains(t, selected, files[1], "the fallback must add thread 1's actual next file, not skip past it")
 	})
 
 	t.Run("a sequence missing from the archived branch does not get skipped when a later sequence is already archived", func(t *testing.T) {
