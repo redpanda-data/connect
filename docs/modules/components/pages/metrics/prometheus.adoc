@@ -48,6 +48,7 @@ Advanced::
 metrics:
   prometheus:
     use_histogram_timing: false
+    histogram_timing_seconds_suffix: false
     histogram_buckets: []
     summary_quantiles_objectives:
       - quantile: 0.5
@@ -82,6 +83,16 @@ Whether to export timing metrics as a histogram, if `false` a summary is used in
 
 *Default*: `false`
 Requires version 3.63.0 or newer
+
+=== `histogram_timing_seconds_suffix`
+
+Whether to rewrite a `_ns` timing metric name suffix to `_seconds` when `use_histogram_timing` is `true` (for example `processor_latency_ns` becomes `processor_latency_seconds`), reflecting that histogram timings are recorded in seconds. This also keeps the histogram series distinct from the summary series emitted when `use_histogram_timing` is `false`, which avoids Prometheus remote-write "multiple metric kinds" rejections when a fleet mixes the setting. Enabling this renames existing histogram timing series, so dashboards and alerts that query the `_ns` names must be updated. Has no effect when `use_histogram_timing` is `false`.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+Requires version 4.112.0 or newer
 
 === `histogram_buckets`
 
