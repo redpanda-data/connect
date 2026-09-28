@@ -390,6 +390,34 @@ func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
 		"a second Close() must not attempt to close the already-closed CURRENT_SCN statement again")
 }
 
+func TestReadChangesReturnsOnCancelDuringBackoff(t *testing.T) {
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cfg := NewDefaultConfig()
+	cfg.MiningBackoffInterval = time.Minute
+
+	db, fc := newFakeSQLDB(t, nil)
+	// The database SCN is equal to the start SCN, so each mining cycle is caught up and the loop backs off.
+	fc.currentSCN = 100
+	lm := NewMiner(db, nil, &publisherStub{}, cfg, nil, service.MockResources().Metrics(), logger)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- lm.ReadChanges(ctx, 100) }()
+
+	require.Eventually(t, func() bool {
+		return fc.queryCount("SELECT CURRENT_SCN FROM V$DATABASE") >= 1
+	}, 5*time.Second, 10*time.Millisecond, "the first mining cycle did not run")
+
+	cancel()
+	select {
+	case err := <-errCh:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(2 * time.Second):
+		t.Fatal("ReadChanges did not return after the context was cancelled during the backoff")
+	}
+}
+
 // --- fake database/sql driver used to exercise SessionManager/LogMiner
 // session logic without a real Oracle connection. Only the subset of
 // database/sql/driver behaviour exercised by prepareLogsAndStartSession
@@ -398,7 +426,7 @@ func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
 
 var fakeDriverSeq atomic.Int64
 
-func newFakeSQLConn(t *testing.T, files []*LogFile) (*sql.Conn, *fakeConn) {
+func newFakeSQLDB(t *testing.T, files []*LogFile) (*sql.DB, *fakeConn) {
 	t.Helper()
 
 	fc := &fakeConn{logFiles: files}
@@ -409,6 +437,13 @@ func newFakeSQLConn(t *testing.T, files []*LogFile) (*sql.Conn, *fakeConn) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
+	return db, fc
+}
+
+func newFakeSQLConn(t *testing.T, files []*LogFile) (*sql.Conn, *fakeConn) {
+	t.Helper()
+
+	db, fc := newFakeSQLDB(t, files)
 	conn, err := db.Conn(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })

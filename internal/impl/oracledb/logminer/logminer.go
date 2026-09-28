@@ -173,23 +173,30 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		}
 	}()
 
+	timer := time.NewTimer(0) // reused timer, reduces memory allocations
+	defer timer.Stop()
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		caughtUp, err := lm.miningCycle(ctx, conn)
+		if err != nil {
+			return fmt.Errorf("mining logs: %w", err)
+		}
+
+		wait := lm.cfg.MiningInterval
+		if caughtUp {
+			wait = lm.cfg.MiningBackoffInterval
+			if !lm.caughtUpLogged {
+				lm.log.Debugf("Caught up with redo logs, backing off for %s...", wait)
+			}
+		}
+		lm.caughtUpLogged = caughtUp
+		timer.Reset(wait)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
-			if caughtUp, err := lm.miningCycle(ctx, conn); err != nil {
-				return fmt.Errorf("mining logs: %w", err)
-			} else if caughtUp {
-				if !lm.caughtUpLogged {
-					lm.log.Debugf("Caught up with redo logs, backing off for %s...", lm.cfg.MiningBackoffInterval)
-					lm.caughtUpLogged = true
-				}
-				time.Sleep(lm.cfg.MiningBackoffInterval)
-			} else {
-				lm.caughtUpLogged = false
-				time.Sleep(lm.cfg.MiningInterval)
-			}
+		case <-timer.C:
 		}
 	}
 }
