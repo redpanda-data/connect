@@ -174,23 +174,36 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 	}()
 
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			if caughtUp, err := lm.miningCycle(ctx, conn); err != nil {
-				return fmt.Errorf("mining logs: %w", err)
-			} else if caughtUp {
-				if !lm.caughtUpLogged {
-					lm.log.Debugf("Caught up with redo logs, backing off for %s...", lm.cfg.MiningBackoffInterval)
-					lm.caughtUpLogged = true
-				}
-				time.Sleep(lm.cfg.MiningBackoffInterval)
-			} else {
-				lm.caughtUpLogged = false
-				time.Sleep(lm.cfg.MiningInterval)
-			}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
+		wait := lm.cfg.MiningInterval
+		if caughtUp, err := lm.miningCycle(ctx, conn); err != nil {
+			return fmt.Errorf("mining logs: %w", err)
+		} else if caughtUp {
+			if !lm.caughtUpLogged {
+				lm.log.Debugf("Caught up with redo logs, backing off for %s...", lm.cfg.MiningBackoffInterval)
+				lm.caughtUpLogged = true
+			}
+			wait = lm.cfg.MiningBackoffInterval
+		} else {
+			lm.caughtUpLogged = false
+		}
+		if err := sleepCtx(ctx, wait); err != nil {
+			return err
+		}
+	}
+}
+
+// sleepCtx waits for d. It returns ctx.Err() if ctx is cancelled before d is over.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
 	}
 }
 
