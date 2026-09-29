@@ -95,6 +95,9 @@ input:
       scn_window_size: 20000
       min_scn_window_size: 1000
       max_scn_window_size: 100000
+      window_strategy: scn_window
+      redo_volume_min: 2
+      redo_volume_growth_max: 4
       backoff_interval: 5s
       mining_interval: 300ms
       strategy: online_catalog
@@ -261,7 +264,7 @@ The SCN range to mine per cycle. Each cycle reads changes between the current SC
 
 === `logminer.min_scn_window_size`
 
-The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.
+The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. This gate applies regardless of `window_strategy`. Set to 0 to disable.
 
 
 *Type*: `int`
@@ -276,6 +279,38 @@ The maximum SCN range that can be mined in a single cycle. The window starts at 
 *Type*: `int`
 
 *Default*: `100000`
+
+=== `logminer.window_strategy`
+
+Controls how the SCN range mined per cycle is sized. `scn_window` (default) grows/shrinks the mined SCN range by a fixed increment (scn_window_size) based on backlog, bounded by min_scn_window_size/max_scn_window_size. `redo_volume` instead bounds the range by a fixed redo-volume budget (redo_volume_min/redo_volume_growth_max), decoupling session cost from raw SCN movement. Use `redo_volume` when the database's current SCN can advance independently of real transaction volume against the monitored tables - for example a CDB-shared SCN advanced by another PDB, or Oracle's automatic maintenance window generating many small internal commits - since scn_window would otherwise burn many cycles ramping the window up to its ceiling, paying LogMiner's fixed per-cycle overhead on ranges that are mostly empty of real changes, whereas redo_volume absorbs the same event in however much redo it actually touches. On multi-thread (RAC) databases, redo_volume applies its budget independently to each open redo thread, so the effective volume mined per cycle scales with the number of open threads.
+
+
+*Type*: `string`
+
+*Default*: `"scn_window"`
+
+Options:
+`scn_window`
+, `redo_volume`
+.
+
+=== `logminer.redo_volume_min`
+
+The minimum redo volume mined per cycle, in multiples of the online redo log's configured size, applied independently to each open redo thread - on a multi-thread (RAC) database the total volume mined per cycle scales with the number of open threads. Only applies when `window_strategy` is `redo_volume`.
+
+
+*Type*: `int`
+
+*Default*: `2`
+
+=== `logminer.redo_volume_growth_max`
+
+The maximum redo volume the per-thread budget automatically grows to, in multiples of the online redo log's configured size; like `redo_volume_min`, this is applied independently to each open redo thread. The budget starts at `redo_volume_min` and grows each cycle in which a thread reselects the same set of files as the previous cycle (typically caused by a mining cycle retrying without making progress, such as after an ORA-01368 redo log recycle) - normally by one unit, or in a single larger jump when a thread's backlog below the already-mined boundary is large enough that a bigger jump would clear it outright - up to this limit. This bounds automatic growth only: once a cycle has committed to mining up to some SCN, a thread's selection can still be extended past this limit on a later cycle to avoid leaving a gap in that already-committed range. Only applies when `window_strategy` is `redo_volume`.
+
+
+*Type*: `int`
+
+*Default*: `4`
 
 === `logminer.backoff_interval`
 
