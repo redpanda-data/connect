@@ -101,7 +101,6 @@ func newCheckpointCache(
 	}
 
 	// The connection has no open transaction, so go-ora commits every execution (autocommit is on by default).
-	// Note: go-ora driver handles []byte parameters as RAW type
 	upsertQuery := fmt.Sprintf(`
 		MERGE INTO %s t
 		USING (SELECT :1 AS cache_key, :2 AS cache_val FROM dual) s
