@@ -119,7 +119,7 @@ func previousRelease(t *testing.T) (string, [3]int) {
 		t.Skip("no release tags reachable from HEAD")
 	}
 	best, bestV := "", [3]int{-1}
-	for _, tag := range strings.Fields(string(out)) {
+	for tag := range strings.FieldsSeq(string(out)) {
 		if v, ok := parseVersion(strings.TrimPrefix(tag, "v")); ok && newer(fmt.Sprintf("%d.%d.%d", v[0], v[1], v[2]), bestV) {
 			best, bestV = tag, v
 		}
@@ -183,7 +183,7 @@ func releasedSpecs(t *testing.T, tag string) map[string]bool {
 			m := fieldsPartial.FindStringSubmatch(f)
 			comp := pageTypeDir(m[1]) + "/" + m[2]
 			released[comp] = true
-			for _, line := range strings.Split(contents[f], "\n") {
+			for line := range strings.SplitSeq(contents[f], "\n") {
 				if h := fieldHeading.FindStringSubmatch(line); h != nil {
 					released[comp+":"+headingPath(h[1])] = true
 				}
