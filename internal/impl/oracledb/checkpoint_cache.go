@@ -48,11 +48,8 @@ func (t cacheTable) String() string {
 // We have a custom cache because the cache_sql component doesn't support Oracle due to its
 // inability to support upserting (meaning it can't be expressed in the cache_sql configs).
 //
-// Set runs a MERGE statement against the cache table. Older versions called a stored procedure,
-// <schema>.CDC_CHECKPOINT_CACHE_UPDATE, whose body contained the table name of the first pipeline
-// that started in the schema. A second pipeline with another table in the same schema wrote its
-// checkpoints to the wrong table. The MERGE removes the shared object. The old procedure stays in
-// the schema, unused.
+// Set upserts with a MERGE statement. Older versions used a stored procedure,
+// <schema>.CDC_CHECKPOINT_CACHE_UPDATE, which can still exist in the schema. It is unused.
 type checkpointCache struct {
 	db             *sql.DB
 	cacheSetStmt   *sql.Stmt
@@ -103,8 +100,7 @@ func newCheckpointCache(
 		log.Infof("Found existing checkpoint cache table '%s'", cacheTable.String())
 	}
 
-	// Prepare the upsert once, so that Set does not parse it on every checkpoint. The connection has
-	// no open transaction, so go-ora commits every execution (autocommit is on by default).
+	// The connection has no open transaction, so go-ora commits every execution (autocommit is on by default).
 	// Note: go-ora driver handles []byte parameters as RAW type
 	upsertQuery := fmt.Sprintf(`
 		MERGE INTO %s t
@@ -214,7 +210,7 @@ func migrateCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey
 	return nil
 }
 
-// cacheTableExists reports whether the table exists and is visible to the connected user.
+// cacheTableExists is false for a table that the connected user has no privilege on.
 func cacheTableExists(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, error) {
 	var count int
 	checkQuery := `SELECT COUNT(*) FROM all_tables WHERE owner = :1 AND table_name = :2`
@@ -248,9 +244,7 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey 
 
 	if _, err := db.ExecContext(ctx, createQuery); err != nil {
 		// Another pipeline can create the table after our check. Its table has the current layout, so no
-		// migration is necessary. Confirm that the object is a table that we can see: the name can also
-		// belong to a view or to a table of another user, and then the MERGE fails later, at the first
-		// checkpoint, with a less clear error.
+		// migration is necessary. Re-check because the name can also belong to a view or to another user's table.
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeNameAlreadyUsed {
 			if exists, checkErr := cacheTableExists(ctx, db, tbl); checkErr == nil && exists {

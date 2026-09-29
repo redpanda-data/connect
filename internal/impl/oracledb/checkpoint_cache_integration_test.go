@@ -152,7 +152,6 @@ func TestIntegrationCheckpointCacheTablesInSameSchema(t *testing.T) {
 	tableA := db.Schema + ".CDC_CHECKPOINT_A"
 	tableB := db.Schema + ".CDC_CHECKPOINT_B"
 
-	// queryKeyCount returns the number of rows with the key in the table.
 	queryKeyCount := func(table, key string) (int, error) {
 		var n int
 		err := db.QueryRowContext(t.Context(), fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE cache_key = :1`, table), key).Scan(&n)
@@ -165,7 +164,8 @@ func TestIntegrationCheckpointCacheTablesInSameSchema(t *testing.T) {
 	}
 
 	// runPipeline starts a pipeline, inserts rows until a checkpoint for the key is in one of pollTables, then stops
-	// the pipeline.
+	// the pipeline. Pipeline B also polls the table of pipeline A: with the bug, its checkpoint lands there, and the
+	// test then fails on the assertion instead of the timeout.
 	runPipeline := func(table, key string, pollTables ...string) {
 		cfg := `
 oracledb_cdc:
