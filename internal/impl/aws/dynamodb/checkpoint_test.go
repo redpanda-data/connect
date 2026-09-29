@@ -32,6 +32,7 @@ type fakeCheckpointAPI struct {
 	getItem       func(context.Context, *dynamodb.GetItemInput, ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
 	putItem       func(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
 	query         func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error)
+	deleteItem    func(context.Context, *dynamodb.DeleteItemInput, ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error)
 }
 
 func (f *fakeCheckpointAPI) DescribeTable(ctx context.Context, in *dynamodb.DescribeTableInput, o ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
@@ -56,6 +57,10 @@ func (f *fakeCheckpointAPI) PutItem(ctx context.Context, in *dynamodb.PutItemInp
 
 func (f *fakeCheckpointAPI) Query(ctx context.Context, in *dynamodb.QueryInput, o ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
 	return f.query(ctx, in, o...)
+}
+
+func (f *fakeCheckpointAPI) DeleteItem(ctx context.Context, in *dynamodb.DeleteItemInput, o ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
+	return f.deleteItem(ctx, in, o...)
 }
 
 func checkpointTestLogger() *service.Logger { return service.MockResources().Logger() }
