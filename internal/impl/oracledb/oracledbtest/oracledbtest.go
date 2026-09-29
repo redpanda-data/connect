@@ -173,10 +173,10 @@ func startPipeline(t *testing.T, cfg string, consume service.MessageBatchHandler
 	return stream
 }
 
-// StartStreamingPipeline is StartPipeline, but it returns only after the input
-// starts streaming (see WaitForStreaming). Use it when the test writes the rows
-// to capture after the pipeline starts.
-func StartStreamingPipeline(t *testing.T, cfg string, consume service.MessageBatchHandlerFunc) *service.Stream {
+// StartPipelineAndWaitForStreaming is StartPipeline, but it returns only after
+// the input enters its streaming phase (see WaitForStreaming). Use it when the
+// test writes the rows to capture as change events after the pipeline starts.
+func StartPipelineAndWaitForStreaming(t *testing.T, cfg string, consume service.MessageBatchHandlerFunc) *service.Stream {
 	t.Helper()
 	var logs SyncBuffer
 	logger := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logs), &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -186,11 +186,16 @@ func StartStreamingPipeline(t *testing.T, cfg string, consume service.MessageBat
 }
 
 // WaitForStreaming waits until logs, the INFO log output of one pipeline,
-// shows that its input started to stream changes. The input logs this line
-// after it sets its start SCN, so it captures each transaction that starts
-// after this function returns. Without a checkpoint and without a snapshot,
-// the start SCN is the current SCN when the input connects, so a row that the
-// test writes before that is not captured.
+// shows that its input entered its streaming phase. Streaming means reading
+// change events from LogMiner, as opposed to the snapshot phase. The input
+// logs this line after any snapshot completes and its SCN is checkpointed, and
+// after it sets the start SCN for LogMiner, so it captures each transaction
+// that starts after this function returns. Without a checkpoint and without a
+// snapshot, the start SCN is the current SCN when the input connects, so a row
+// that the test writes before that is not captured.
+//
+// The line is never logged with snapshot_mode snapshot_only, so this function
+// times out for such a pipeline.
 func WaitForStreaming(t *testing.T, logs *SyncBuffer) {
 	t.Helper()
 	require.Eventually(t, func() bool {

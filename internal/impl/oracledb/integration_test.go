@@ -332,7 +332,7 @@ oracledb_cdc:
 
 	t.Log("Launching component to stream initial data...")
 	{
-		stream := oracledbtest.StartStreamingPipeline(t, cfg, batch.Consumer(t))
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer(t))
 
 		_, err := db.Exec(`
 		BEGIN
@@ -454,7 +454,7 @@ oracledb_cdc:
 	const phase1Rows = 20
 
 	t.Log("Launching component to stream pre-incident data...")
-	stream := oracledbtest.StartStreamingPipeline(t, cfg, consume)
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, consume)
 
 	for range phase1Rows {
 		db.MustExec("INSERT INTO " + db.Schema + ".resetlogs_probe (note) VALUES ('phase1')")
@@ -1752,7 +1752,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.SCHEMA_INS"]`
 
-		stream := oracledbtest.StartStreamingPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
 				msgChan <- msg
 			}
@@ -1800,7 +1800,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.SCHEMA_UPD"]`
 
-		stream := oracledbtest.StartStreamingPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
 				msgChan <- msg
 			}
@@ -1852,7 +1852,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.SCHEMA_DEL"]`
 
-		stream := oracledbtest.StartStreamingPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
 				msgChan <- msg
 			}
@@ -1960,7 +1960,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.SCHEMA_DRIFT"]`
 
-	stream := oracledbtest.StartStreamingPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
 			msgChan <- msg
 		}
@@ -2022,7 +2022,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.SCHEMA_T1", "` + db.Schema + `.SCHEMA_T2"]`
 
-	stream := oracledbtest.StartStreamingPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
 			msgChan <- msg
 		}
@@ -2241,7 +2241,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.LOBTRIM"]`
 
-		stream := oracledbtest.StartStreamingPipeline(t, cfg, batch.Consumer(t))
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer(t))
 
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
@@ -2301,7 +2301,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.LOBTRIMBASIC"]`
 
-		stream := oracledbtest.StartStreamingPipeline(t, cfg, batch.Consumer(t))
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer(t))
 
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
@@ -2358,7 +2358,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.LOBTRIMBASICOOR"]`
 
-		stream := oracledbtest.StartStreamingPipeline(t, cfg, batch.Consumer(t))
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer(t))
 
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
@@ -2416,7 +2416,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.LOBFILTER_INCLUDED"]`
 
-		stream := oracledbtest.StartStreamingPipeline(t, cfg, batch.Consumer(t))
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer(t))
 
 		lobVal := strings.Repeat("X", 5000)
 		for range 5 {
