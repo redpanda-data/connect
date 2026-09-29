@@ -82,8 +82,8 @@ type descLiteral struct {
 }
 
 func rel(pos, benthos string) string {
-	if strings.HasPrefix(pos, benthos) {
-		return "benthos" + strings.TrimPrefix(pos, benthos)
+	if rest, ok := strings.CutPrefix(pos, benthos); ok {
+		return "benthos" + rest
 	}
 	return strings.TrimPrefix(pos, "../../../")
 }
