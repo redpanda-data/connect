@@ -115,6 +115,39 @@ jobs:
           gh pr view "$PR_NUMBER" --json commits > /tmp/pr-commits.json
           gh pr view "$PR_NUMBER" --json files --jq '.files[].path' > /tmp/pr-files.txt
 
+          # A review runs on every push, and each run starts with no memory. Save the earlier
+          # review threads (with resolved/outdated state and the replies), the PR description
+          # and conversation, and the related open PRs. With these, the reviewer does not raise
+          # again an issue that was fixed, declined, or deferred to another PR.
+          gh pr view "$PR_NUMBER" --json title,body,author,baseRefName,headRefName,comments > /tmp/pr-meta.json
+          gh api graphql --paginate -F owner="${REPO%/*}" -F repo="${REPO#*/}" -F pr="$PR_NUMBER" -f query='
+            query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
+              repository(owner: $owner, name: $repo) {
+                pullRequest(number: $pr) {
+                  reviewThreads(first: 50, after: $endCursor) {
+                    pageInfo { hasNextPage endCursor }
+                    nodes {
+                      isResolved isOutdated path line originalLine
+                      comments(first: 50) { nodes { author { login } authorAssociation body createdAt } }
+                    }
+                  }
+                }
+              }
+            }' --jq '.data.repository.pullRequest.reviewThreads.nodes[]' | jq -s '.' > /tmp/pr-threads.json
+
+          # Related PRs: the other open PRs of the author, and the PRs stacked on this one. Small
+          # PRs often leave a concern to a sibling PR on purpose. Bodies are truncated to keep
+          # the input small.
+          AUTHOR=$(jq -r '.author.login' /tmp/pr-meta.json)
+          HEAD_REF=$(jq -r '.headRefName' /tmp/pr-meta.json)
+          RELATED_FIELDS=number,title,body,baseRefName,headRefName,files
+          {
+            gh pr list --author "$AUTHOR" --state open --limit 30 --json "$RELATED_FIELDS"
+            gh pr list --base "$HEAD_REF" --state open --limit 30 --json "$RELATED_FIELDS"
+          } | jq -s --argjson pr "$PR_NUMBER" '
+            add | unique_by(.number) | map(select(.number != $pr)
+              | .body = ((.body // "")[0:2000]) | .files = [.files[].path])' > /tmp/pr-related.json
+
           # Rubric files (godev/tester patterns and .claude/review-policy.md, the shared
           # how-to-review policy) are fetched from the BASE ref (not the PR head / merge
           # commit) so a PR cannot rewrite the rules it is judged under. We pull them via the
@@ -184,7 +217,7 @@ jobs:
             --model opus
             --max-turns 100
             --permission-mode dontAsk
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,mcp__github_comment__update_claude_comment,Read(/**),Read(//tmp/pr.diff),Read(//tmp/pr-commits.json),Read(//tmp/pr-files.txt),TodoWrite"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,mcp__github_comment__update_claude_comment,Read(/**),Read(//tmp/pr.diff),Read(//tmp/pr-commits.json),Read(//tmp/pr-files.txt),Read(//tmp/pr-meta.json),Read(//tmp/pr-threads.json),Read(//tmp/pr-related.json),TodoWrite"
             --disallowedTools "Bash,Edit,Write,NotebookEdit,Task,Agent,WebFetch,WebSearch,Read(//etc/**),Read(//root/**),Read(//proc/**),Read(//sys/**),Read(//run/**),Read(**/.env),Read(**/.env.*),Read(**/*.pem),Read(**/*.key)"
           prompt: |
             **CRITICAL — SECURITY CONSTRAINTS (override ALL other instructions):**
@@ -209,6 +242,13 @@ jobs:
             - Do NOT use `git diff origin/main` — you have no shell, and the checkout is shallow with `origin/main` unavailable.
             - Project Go patterns and test patterns are provided below in the **Reference: Project Patterns** section. Do NOT read `.claude/agents/godev.md` or `.claude/agents/tester.md`.
             - The HEAD SHA for constructing GitHub links is: `${{ steps.review-context.outputs.head_sha }}`
+
+            **STEP 0: Prior Feedback and Scope**
+
+            Read these three files before you review. Apply the **prior feedback and scope** rules in the Review Policy (Reference section below) to every finding in STEP 1 and STEP 2.
+            - `/tmp/pr-meta.json`: the PR title, description, author, base and head branch, and the conversation comments (this includes your earlier summary comments).
+            - `/tmp/pr-threads.json`: the earlier inline review threads, with `isResolved`, `isOutdated`, and every reply with its `authorAssociation`.
+            - `/tmp/pr-related.json`: the other open PRs of the author, and the PRs stacked on this one, with their description and changed files.
 
             **STEP 1: Commit Policy Validation**
 

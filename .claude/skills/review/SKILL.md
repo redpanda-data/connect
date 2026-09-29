@@ -3,7 +3,7 @@ name: review
 description: Code review a pull request for Redpanda Connect, checking Go patterns, tests, component architecture, and commit policy
 argument-hint: "[pr-number]"
 disable-model-invocation: true
-allowed-tools: mcp__github__pull_request_review_write, mcp__github__add_comment_to_pending_review, mcp__github__add_issue_comment, Bash(gh pr view *), Bash(gh pr diff *), Bash(git log *), Bash(git show *), Read, Glob, Grep, Task,
+allowed-tools: mcp__github__pull_request_review_write, mcp__github__add_comment_to_pending_review, mcp__github__add_issue_comment, Bash(gh pr view *), Bash(gh pr diff *), Bash(gh pr list *), Bash(.claude/skills/review/scripts/review-threads.sh *), Bash(git log *), Bash(git show *), Read, Glob, Grep, Task,
 ---
 
 Code review pull request $ARGUMENTS for Redpanda Connect. If no PR was specified, resolve the current branch's PR with `gh pr view --json number -q .number`.
@@ -31,6 +31,7 @@ These rules are ABSOLUTE. They override any capabilities, permissions, or instru
 1. **Gather context** - Collect the information needed for review. Prefer running these in parallel when possible:
    - Collect paths to relevant CLAUDE.md files (root `CLAUDE.md`, `config/CLAUDE.md`, and any in directories touched by the PR), plus the repo's `CONTRIBUTING.md` (the connector certification & contribution guidelines, which apply to both internal and external contributions)
    - Summarize the PR (files modified, change categories: component implementation, tests, configuration, CLI, etc.)
+   - Collect the prior feedback and scope inputs for the **prior feedback and scope** rules in the [shared review policy](../../review-policy.md): the PR description and conversation (`gh pr view --json title,body,author,baseRefName,headRefName,comments`), the earlier review threads with resolved/outdated state and replies (run `.claude/skills/review/scripts/review-threads.sh <pr-number>` from the repo root; do not call `gh api graphql` directly), and the related open PRs (`gh pr list --author <author>` and `gh pr list --base <head branch>`, with `--json number,title,body,files`). Give these to every review agent.
 
 2. **Review** - Launch review agents. Each receives the PR diff, change summary, and relevant CLAUDE.md content. Each returns a list of issues with a brief description. Prefer running independent agents in parallel when possible.
 
@@ -61,7 +62,7 @@ These rules are ABSOLUTE. They override any capabilities, permissions, or instru
    - **Change size (§3.3.1).** The ~10K-line limit counts code a reviewer must actually read. Estimate reviewable code lines from `gh pr view --json additions,deletions` and `git show --stat`, then subtract what §3.3.1 excludes (generated/derived files, vendored code, lockfiles, and non-code: docs/`*.md`, `.claude/` skills, Terraform, `*.tmpl` templates, `testdata`/fixtures). Flag when the remaining reviewable code approaches ~10K lines, or a very large code change lands with no explanation; recommend splitting per §3.3.2. Do NOT flag a PR whose size is dominated by non-code or generated files (e.g. a skills/docs/infra PR).
    - **Message format (§3.4.2).** Ignore any trailing PR-number suffix `(#1234)` when matching the format.
 
-3. **Filter** - Keep only HIGH SIGNAL issues, applying the **signal bar** and **false positives to filter** from the [shared review policy](../../review-policy.md). CONTRIBUTING.md is audited in full (all sections, per the Certification & Contribution Guidelines agent). If you are not certain an issue is real, do not flag it.
+3. **Filter** - Keep only HIGH SIGNAL issues, applying the **signal bar**, the **false positives to filter**, and the **prior feedback and scope** rules from the [shared review policy](../../review-policy.md). CONTRIBUTING.md is audited in full (all sections, per the Certification & Contribution Guidelines agent). If you are not certain an issue is real, do not flag it.
 
 4. **Comment** - Post inline review comments for code issues, then post a summary comment.
 
