@@ -180,13 +180,13 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 			Default(string(logminer.WindowStrategySCNWindow)).
 			Advanced(),
 		service.NewIntField(ociFieldRedoVolumeMin).
-			Description("The minimum redo volume mined per cycle, in multiples of the online redo log's configured size, applied independently to each open redo thread - on a multi-thread (RAC) database the total volume mined per cycle scales with the number of open threads. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
+			Description("Whilst not exact, this value represents the minimum number of redo logs to read per redo thread in each mining cycle. Consider increasing this value if redo logs are small and rotate frequently, decreasing if redo logs are very large. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
 			ShortDescription("The minimum redo volume, in multiples of the online redo log size, mined per cycle per redo thread, under the "+string(logminer.WindowStrategyRedoVolume)+" window strategy.").
 			Default(logminer.DefaultRedoVolumeMin).
 			Advanced(),
 		service.NewIntField(ociFieldRedoVolumeGrowthMax).
-			Description("The ceiling the per-thread redo-volume budget can grow to, applied independently to each open redo thread (enabling the total volume mined per cycle to scale with thread count on RAC (Real Application Clusters) configurations). The budget starts at `"+ociFieldRedoVolumeMin+"` and grows whenever mining stalls making no progress (such as after an ORA-01368 redo log recycle) up to this limit. This only limits automatic growth - if an earlier cycle already committed to covering further than this, a later cycle will still read that far even if it means going over the limit, rather than silently skip data it already promised to mine. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
-			ShortDescription("The maximum redo volume the per-thread budget grows to, under the "+string(logminer.WindowStrategyRedoVolume)+" window strategy (may be exceeded when re-covering already-committed ground).").
+			Description("The ceiling the per-thread redo-volume budget can grow to, applied independently to each open redo thread (enabling the total volume mined per cycle to scale with thread count on RAC (Real Application Clusters) configurations). The budget starts at `"+ociFieldRedoVolumeMin+"` and grows automatically whenever something prevents the mining window from advancing - for example a long-running transaction holding it in place, or a redo log being recycled mid-query - up to this limit. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
+			ShortDescription("The maximum redo volume the per-thread budget grows to, under the "+string(logminer.WindowStrategyRedoVolume)+" window strategy.").
 			Default(logminer.DefaultRedoVolumeGrowthMax).
 			Advanced(),
 		service.NewDurationField(ociFieldBackoffInterval).
