@@ -980,7 +980,7 @@ func TestIntegrationOracleDBCDCRedoVolumeWindowStrategy(t *testing.T) {
 	integration.CheckSkip(t)
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.logcount", "CREATE TABLE testdb.logcount (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".logcount", "CREATE TABLE "+db.Schema+".logcount (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
 	msgChan := make(chan *service.Message, 1)
 
@@ -989,6 +989,7 @@ func TestIntegrationOracleDBCDCRedoVolumeWindowStrategy(t *testing.T) {
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   snapshot_mode: none
   logminer:
     window_strategy: redo_volume
@@ -996,7 +997,7 @@ oracledb_cdc:
     redo_volume_growth_max: 4
     backoff_interval: 1s
     min_scn_window_size: 0
-  include: ["TESTDB.LOGCOUNT"]
+  include: ["` + db.Schema + `.LOGCOUNT"]
   batching:
     count: 10`
 
@@ -1033,7 +1034,7 @@ oracledb_cdc:
 
 	t.Run("Streaming insert changes across a forced log switch", func(t *testing.T) {
 		for range want / 2 {
-			db.MustExec("INSERT INTO testdb.logcount (val) VALUES (1)")
+			db.MustExec("INSERT INTO " + db.Schema + ".logcount (val) VALUES (1)")
 		}
 
 		// Force a log switch mid-scenario so a later cycle must select across
@@ -1041,7 +1042,7 @@ oracledb_cdc:
 		db.MustExec("ALTER SYSTEM SWITCH LOGFILE")
 
 		for range want / 2 {
-			db.MustExec("INSERT INTO testdb.logcount (val) VALUES (1)")
+			db.MustExec("INSERT INTO " + db.Schema + ".logcount (val) VALUES (1)")
 		}
 
 		msgs := oracledbtest.CollectMessages(t, msgChan, want)
@@ -1056,7 +1057,7 @@ oracledb_cdc:
 	})
 
 	t.Run("Streaming update changes", func(t *testing.T) {
-		db.MustExec("UPDATE testdb.logcount SET val = 2")
+		db.MustExec("UPDATE " + db.Schema + ".logcount SET val = 2")
 
 		msgs := oracledbtest.CollectMessages(t, msgChan, want)
 		assertOperation(t, "update", msgs)
@@ -1070,7 +1071,7 @@ oracledb_cdc:
 
 	t.Run("Streaming delete changes across another forced log switch", func(t *testing.T) {
 		db.MustExec("ALTER SYSTEM SWITCH LOGFILE")
-		db.MustExec("DELETE FROM testdb.logcount")
+		db.MustExec("DELETE FROM " + db.Schema + ".logcount")
 
 		msgs := oracledbtest.CollectMessages(t, msgChan, want)
 		assertOperation(t, "delete", msgs)
