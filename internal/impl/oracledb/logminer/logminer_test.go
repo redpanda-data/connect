@@ -412,6 +412,122 @@ func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 	assert.Empty(t, lm.pendingLOBWrites, "no LOB_WRITEs should remain deferred after COMMIT")
 }
 
+// TestLOBOnlyUpdateSuppressionIsPerRowNotPerTable verifies that a LOB-only UPDATE is
+// only suppressed when ITS OWN row was actually merged into a matching INSERT, not
+// merely because some other row in the same table had an INSERT in the transaction.
+func TestLOBOnlyUpdateSuppressionIsPerRowNotPerTable(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	lm.lobColTypes = map[string]string{"TESTDB.T.DESC": "CLOB"}
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+
+	// Row 1: INSERT (LOB column omitted, as Oracle does) followed by its inline
+	// LOB-init UPDATE - merges into the INSERT and is suppressed.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           101,
+		Operation:     sqlredo.OpInsert,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T" ("ID","NAME") values ('1','foo')`, Valid: true},
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           102,
+		Operation:     sqlredo.OpUpdate,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "DESC" = 'row1 desc' where "ID" = '1'`, Valid: true},
+	}))
+
+	// Row 2: a LOB-only UPDATE with no matching INSERT anywhere in the transaction,
+	// despite being in the same table as row 1's INSERT.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           103,
+		Operation:     sqlredo.OpUpdate,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "DESC" = 'row2 desc' where "ID" = '2'`, Valid: true},
+	}))
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	require.Len(t, pub.messages, 2, "row 1's merged INSERT and row 2's unmerged UPDATE must both be published")
+
+	row1 := pub.messages[0].Data.(map[string]any)
+	assert.Equal(t, "row1 desc", row1["DESC"], "row 1's LOB-only UPDATE should be merged into its INSERT")
+
+	row2 := pub.messages[1].Data.(map[string]any)
+	assert.Equal(t, "2", row2["ID"], "row 2's unmerged LOB-only UPDATE should be published as-is")
+	assert.Equal(t, "row2 desc", row2["DESC"])
+}
+
+// TestLOBOnlyUpdateSuppressionFallsBackToTableLevelWhenLOBDisabled verifies that with
+// LOBEnabled=false, Oracle's internal LOB-initialisation UPDATEs are still suppressed
+// via the table-level check, since no per-row merge is ever attempted in that mode -
+// mergedIntoInsert is only populated when LOBEnabled is true, so gating suppression on
+// it alone would leave every LOB-init UPDATE unsuppressed and published as a spurious
+// extra event whenever LOB support is disabled.
+func TestLOBOnlyUpdateSuppressionFallsBackToTableLevelWhenLOBDisabled(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = false
+	lm.lobColTypes = map[string]string{"TESTDB.T.DESC": "CLOB"}
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+
+	// Row 1: INSERT followed by its inline LOB-init UPDATE. No merge is attempted
+	// with LOBEnabled=false, but the UPDATE must still be suppressed.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           101,
+		Operation:     sqlredo.OpInsert,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T" ("ID","NAME") values ('1','foo')`, Valid: true},
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           102,
+		Operation:     sqlredo.OpUpdate,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "DESC" = 'row1 desc' where "ID" = '1'`, Valid: true},
+	}))
+
+	// Row 2: a LOB-only UPDATE with no INSERT of its own, but the table still has row
+	// 1's INSERT. The table-level fallback suppresses this too - unlike LOBEnabled=true,
+	// there is no per-row merge outcome here that could be lost by suppressing it.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           103,
+		Operation:     sqlredo.OpUpdate,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "DESC" = 'row2 desc' where "ID" = '2'`, Valid: true},
+	}))
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	require.Len(t, pub.messages, 1, "both LOB-only UPDATEs must be suppressed, leaving only row 1's INSERT")
+
+	row1 := pub.messages[0].Data.(map[string]any)
+	assert.NotContains(t, row1, "DESC", "LOBEnabled=false must not merge or leak LOB column data")
+}
+
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
 	return &LogMiner{
 		publisher:        pub,

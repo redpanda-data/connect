@@ -621,6 +621,13 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 			}
 
+			// Tracks, per LOB-only UPDATE event, whether the pre-pass below actually
+			// found a matching INSERT to merge its values into. Keyed by pointer
+			// identity rather than schema.table: a table having *some* INSERT in the
+			// transaction doesn't mean *this row's* INSERT was found, so suppression
+			// must be decided per event, not per table.
+			mergedIntoInsert := make(map[*sqlredo.DMLEvent]bool)
+
 			if lm.cfg.LOBEnabled {
 				// Pre-pass: for each LOB-only UPDATE that accompanies an INSERT in this transaction,
 				// merge the actual LOB values into the INSERT before we start publishing.
@@ -635,18 +642,30 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 					if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; !hasInsert {
 						continue
 					}
-					sqlredo.MergeInlineLOBValues(dmlEvent.Data, dmlEvent.Schema, dmlEvent.Table, dmlEvent.OldValues, txn.Events, lm.log)
+					mergedIntoInsert[dmlEvent] = sqlredo.MergeInlineLOBValues(dmlEvent.Data, dmlEvent.Schema, dmlEvent.Table, dmlEvent.OldValues, txn.Events, lm.log)
 				}
 			}
 
 			for _, dmlEvent := range txn.Events {
-				// Suppress Oracle-internal LOB-initialisation UPDATEs. Their LOB values have
-				// already been merged into the corresponding INSERT by the pre-pass above.
-				if dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent) {
-					if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; hasInsert {
-						lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s — values merged into INSERT", dmlEvent.Schema, dmlEvent.Table)
-						continue
+				// Suppress Oracle-internal LOB-initialisation UPDATEs. With LOBEnabled,
+				// only once confirmed merged: the table having some other row's INSERT
+				// is not enough - if the pre-pass found no matching INSERT for THIS row,
+				// the UPDATE is the only remaining record of its LOB data and must be
+				// published rather than silently dropped. Without LOBEnabled, no merge
+				// is ever attempted (mergedIntoInsert stays empty), so this instead
+				// falls back to the table-level check: the LOB values are being
+				// discarded either way, so there is no per-row content to lose.
+				suppress := dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent)
+				if suppress {
+					if lm.cfg.LOBEnabled {
+						suppress = mergedIntoInsert[dmlEvent]
+					} else {
+						_, suppress = insertTables[dmlEvent.Schema+"."+dmlEvent.Table]
 					}
+				}
+				if suppress {
+					lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s", dmlEvent.Schema, dmlEvent.Table)
+					continue
 				}
 				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN, redoEvent.Timestamp)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
