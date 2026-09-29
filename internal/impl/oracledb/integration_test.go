@@ -160,8 +160,6 @@ oracledb_cdc:
 				return strings.Contains(logBuf.String(), "Using PREFETCH_ROWS value of 2000 from configuration")
 			}, time.Minute*3, time.Millisecond*500, "expected prefetch rows of 5000")
 
-			time.Sleep(10 * time.Second)
-
 			t.Log("Verifying snapshot changes...")
 			oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
 		}
@@ -230,8 +228,6 @@ oracledb_cdc:
 
 		stream = oracledbtest.StartPipeline(t, cfg, batch.Consumer())
 
-		time.Sleep(10 * time.Second)
-
 		t.Log("Verifying snapshot changes...")
 		oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
 
@@ -272,9 +268,6 @@ func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
 		db.MustExec("INSERT INTO " + db.Schema + ".foo (id, name, excluded_col) VALUES (DEFAULT, 'foo_name', 'should_not_appear')")
 		db.MustExec("INSERT INTO " + db.Schema + ".foo2 (id, name, excluded_col) VALUES (DEFAULT, 'foo2_name', 'should_not_appear')")
 	}
-
-	// wait for changes to propagate to redo logs
-	time.Sleep(5 * time.Second)
 
 	var (
 		batch  oracledbtest.Batch
@@ -339,10 +332,7 @@ oracledb_cdc:
 
 	t.Log("Launching component to stream initial data...")
 	{
-		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
-
-		// Wait for component to start
-		time.Sleep(5 * time.Second)
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer(t))
 
 		_, err := db.Exec(`
 		BEGIN
@@ -464,10 +454,7 @@ oracledb_cdc:
 	const phase1Rows = 20
 
 	t.Log("Launching component to stream pre-incident data...")
-	stream := oracledbtest.StartPipeline(t, cfg, consume)
-
-	// Wait for component to start.
-	time.Sleep(5 * time.Second)
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, consume)
 
 	for range phase1Rows {
 		db.MustExec("INSERT INTO " + db.Schema + ".resetlogs_probe (note) VALUES ('phase1')")
@@ -799,7 +786,7 @@ oracledb_cdc:
 			}()
 		}
 
-		time.Sleep(10 * time.Second)
+		oracledbtest.WaitForStreaming(t, &logBuf)
 
 		// insert initial test data
 		want := 3000
@@ -893,12 +880,13 @@ label: foocache
 file:
   directory: ` + t.TempDir()
 
+		var startLogs oracledbtest.SyncBuffer
 		t.Log("Launching component...")
 		{
 			streamBuilder := service.NewStreamBuilder()
 			require.NoError(t, streamBuilder.AddInputYAML(cfg))
 			require.NoError(t, streamBuilder.AddCacheYAML(cacheConf))
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+			streamBuilder.SetLogger(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &startLogs), &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				for _, msg := range mb {
@@ -922,7 +910,7 @@ file:
 			}()
 		}
 
-		time.Sleep(10 * time.Second)
+		oracledbtest.WaitForStreaming(t, &startLogs)
 
 		// insert initial test data
 		want := 3000
@@ -1012,7 +1000,7 @@ oracledb_cdc:
     count: 10`
 
 	t.Log("Launching component...")
-	stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
 			msgChan <- msg
 		}
@@ -1022,10 +1010,6 @@ oracledb_cdc:
 		<-t.Context().Done()
 		close(msgChan)
 	}()
-
-	// Give the connector time to establish its first LogMiner session before
-	// generating redo.
-	time.Sleep(10 * time.Second)
 
 	assertOperation := func(t *testing.T, operation string, msgs []*service.Message) {
 		t.Helper()
@@ -1168,6 +1152,7 @@ oracledb_cdc:
   logminer:
     lob_enabled: false
     min_scn_window_size: 0
+    backoff_interval: 1s
   include: ["` + db.Schema + `.LOBDISABLED"]`
 			stream = oracledbtest.StartPipelineWithLogLevel(t, cfg, "WARN", consumeWithUsername(t, &batch, usernameByID, hasUsernameByID))
 		}
@@ -1252,6 +1237,7 @@ oracledb_cdc:
   logminer:
     lob_enabled: true
     min_scn_window_size: 0
+    backoff_interval: 1s
   include: ["` + db.Schema + `.LOBENABLED"]`
 			stream = oracledbtest.StartPipeline(t, cfg, consumeWithUsername(t, &batch, usernameByID, hasUsernameByID))
 		}
@@ -1350,6 +1336,7 @@ oracledb_cdc:
   logminer:
     lob_enabled: %t
     min_scn_window_size: 0
+    backoff_interval: 1s
   include: ["%s"]`, streamFetchConnStr, strings.ReplaceAll(table, ".", "_"), lobEnabled, strings.ToUpper(table))
 		leg := oracledbtest.StartPipelineWithLogLevel(t, cfg, "WARN", batch.Consumer(t))
 		// Cleanup rather than a caller-side StopWithin: a require failure
@@ -1761,15 +1748,13 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.SCHEMA_INS"]`
 
-		stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
 				msgChan <- msg
 			}
 			return nil
 		})
 		go func() { <-t.Context().Done(); close(msgChan) }()
-
-		time.Sleep(10 * time.Second)
 
 		db.MustExec("INSERT INTO " + db.Schema + ".schema_ins VALUES (1, 'hello')")
 		db.MustExec("INSERT INTO " + db.Schema + ".schema_ins VALUES (2, 'world')")
@@ -1811,15 +1796,13 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.SCHEMA_UPD"]`
 
-		stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
 				msgChan <- msg
 			}
 			return nil
 		})
 		go func() { <-t.Context().Done(); close(msgChan) }()
-
-		time.Sleep(10 * time.Second)
 
 		// INSERT a row (all columns), then UPDATE only column B
 		db.MustExec("INSERT INTO " + db.Schema + ".schema_upd VALUES (1, 'x', 'y', 'z')")
@@ -1865,15 +1848,13 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.SCHEMA_DEL"]`
 
-		stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
 				msgChan <- msg
 			}
 			return nil
 		})
 		go func() { <-t.Context().Done(); close(msgChan) }()
-
-		time.Sleep(10 * time.Second)
 
 		db.MustExec("INSERT INTO " + db.Schema + ".schema_del VALUES (1, 'doomed')")
 		db.MustExec("DELETE FROM " + db.Schema + ".schema_del WHERE id = 1")
@@ -1975,15 +1956,13 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.SCHEMA_DRIFT"]`
 
-	stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
 			msgChan <- msg
 		}
 		return nil
 	})
 	go func() { <-t.Context().Done(); close(msgChan) }()
-
-	time.Sleep(10 * time.Second)
 
 	// INSERT before ALTER — schema has [ID, NAME]
 	db.MustExec("INSERT INTO " + db.Schema + ".schema_drift VALUES (1, 'before')")
@@ -2039,15 +2018,13 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.SCHEMA_T1", "` + db.Schema + `.SCHEMA_T2"]`
 
-	stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
 			msgChan <- msg
 		}
 		return nil
 	})
 	go func() { <-t.Context().Done(); close(msgChan) }()
-
-	time.Sleep(10 * time.Second)
 
 	db.MustExec("INSERT INTO " + db.Schema + ".schema_t1 VALUES (1, 'hello')")
 	db.MustExec("INSERT INTO " + db.Schema + ".schema_t2 VALUES (SYSDATE, HEXTORAW('DEADBEEFCAFEBABE0000000000000000'), 1.5)")
@@ -2260,9 +2237,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.LOBTRIM"]`
 
-		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
-
-		time.Sleep(10 * time.Second)
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer(t))
 
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
@@ -2322,9 +2297,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.LOBTRIMBASIC"]`
 
-		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
-
-		time.Sleep(10 * time.Second)
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer(t))
 
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
@@ -2381,9 +2354,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.LOBTRIMBASICOOR"]`
 
-		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
-
-		time.Sleep(10 * time.Second)
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer(t))
 
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
@@ -2441,10 +2412,7 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["` + db.Schema + `.LOBFILTER_INCLUDED"]`
 
-		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
-
-		// Allow LogMiner to start up and reach the current SCN before producing data.
-		time.Sleep(10 * time.Second)
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer(t))
 
 		lobVal := strings.Repeat("X", 5000)
 		for range 5 {
@@ -2492,9 +2460,10 @@ oracledb_cdc:
   batching:
     count: 1`
 
+	var startLogs oracledbtest.SyncBuffer
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+	streamBuilder.SetLogger(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &startLogs), &slog.HandlerOptions{Level: slog.LevelInfo})))
 	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
 			select {
@@ -2509,7 +2478,7 @@ oracledb_cdc:
 	license.InjectTestService(stream.Resources())
 	go func() { _ = stream.Run(ctx) }()
 
-	time.Sleep(10 * time.Second)
+	oracledbtest.WaitForStreaming(t, &startLogs)
 	// café (BMP) and 😀 (U+1F600, requires a UTF-16 surrogate pair).
 	db.MustExec("INSERT INTO "+db.Schema+".natchar (nv) VALUES (:1)", "café 😀")
 
@@ -2644,8 +2613,9 @@ oracledb_cdc:
 	}
 
 	t.Log("Launching component to establish a checkpoint before the test data...")
-	stream := runStream(os.Stdout)
-	time.Sleep(5 * time.Second)
+	var startLogs oracledbtest.SyncBuffer
+	stream := runStream(io.MultiWriter(os.Stdout, &startLogs))
+	oracledbtest.WaitForStreaming(t, &startLogs)
 	db.MustExec("INSERT INTO " + db.Schema + ".log_recycle (note) VALUES ('warmup')")
 	db.MustExec("COMMIT")
 	require.Eventually(t, func() bool {
