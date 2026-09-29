@@ -183,7 +183,9 @@ oracledb_cdc:
 		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer())
 
 		require.Eventually(t, func() bool {
-			db.MustExecContext(t.Context(), "INSERT INTO "+db.Schema+".cpfoo (id) VALUES (DEFAULT)")
+			// No require in here: Eventually runs the condition on another goroutine.
+			_, err := db.ExecContext(t.Context(), "INSERT INTO "+db.Schema+".cpfoo (id) VALUES (DEFAULT)")
+			assert.NoError(t, err)
 			// The pipeline creates its table at start up, so ignore query errors until the table exists.
 			for _, pt := range pollTables {
 				if n, err := queryKeyCount(pt, key); err == nil && n > 0 {
