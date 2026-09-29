@@ -365,6 +365,52 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		assert.Equal(t, uint64(1999), endSCN, "endSCN must be the smaller of the two threads' tightened boundaries")
 	})
 
+	t.Run("three simultaneous open threads all contribute to the tightest boundary", func(t *testing.T) {
+		s := &logFileSelector{minCount: 2, growthMax: 4}
+		files := []*LogFile{
+			// thread 1: caught up, contributes no boundary at all.
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, logStatusCurrent, testRedoLogSize),
+			// thread 2: capped, boundary 2499.
+			mkLogFile(2, 1, 500, 1500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 2, 1500, 2500, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 3, 2500, 3500, logStatusCurrent, testRedoLogSize),
+			// thread 3: capped, boundary 2199 - the smallest of the three.
+			mkLogFile(3, 1, 700, 1700, "ARCHIVED", testRedoLogSize),
+			mkLogFile(3, 2, 1700, 2200, "ARCHIVED", testRedoLogSize),
+			mkLogFile(3, 3, 2200, 3200, logStatusCurrent, testRedoLogSize),
+		}
+
+		selected, endSCN, capped, err := s.selectForSession(files, []int{1, 2, 3}, 9000, testRedoLogSize)
+
+		require.NoError(t, err)
+		require.Len(t, selected, 6, "thread 1's 2 files plus thread 2's and thread 3's budgeted 2 files each")
+		assert.True(t, capped)
+		assert.Equal(t, uint64(2199), endSCN, "endSCN must be the smallest of all three threads' boundaries, not just the first two considered")
+	})
+
+	t.Run("two threads sharing the same sequence number are not conflated", func(t *testing.T) {
+		// Oracle RAC threads number their own redo sequences independently,
+		// so "sequence 1" on thread 1 and "sequence 1" on thread 2 are
+		// unrelated files - logKey is {thread, sequence} precisely so a
+		// same-numbered pair across threads is never mistaken for the same
+		// or a duplicate file.
+		s := &logFileSelector{minCount: 2, growthMax: 4}
+		files := []*LogFile{
+			mkLogFile(1, 1, 0, 1000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(1, 2, 1000, 2000, logStatusCurrent, testRedoLogSize),
+			mkLogFile(2, 1, 5000, 6000, "ARCHIVED", testRedoLogSize),
+			mkLogFile(2, 2, 6000, 7000, logStatusCurrent, testRedoLogSize),
+		}
+
+		selected, endSCN, capped, err := s.selectForSession(files, []int{1, 2}, 9000, testRedoLogSize)
+
+		require.NoError(t, err)
+		assert.ElementsMatch(t, files, selected, "both threads' sequence-1 and sequence-2 files must all survive independently")
+		assert.False(t, capped)
+		assert.Equal(t, uint64(9000), endSCN)
+	})
+
 	t.Run("open thread with zero matching files returns an error", func(t *testing.T) {
 		s := &logFileSelector{minCount: 2, growthMax: 4}
 		files := []*LogFile{
@@ -479,6 +525,70 @@ func TestLogFileSelectorSelectForSession(t *testing.T) {
 		require.Len(t, selected, 5)
 		assert.True(t, capped)
 		assert.Equal(t, 2, s.count, "a different combined selection must not be mistaken for a stall")
+	})
+
+	t.Run("an open thread that closes mid-run switches to full-coverage completeness", func(t *testing.T) {
+		s := &logFileSelector{minCount: 2, growthMax: 4}
+
+		// Thread 1: open throughout, always caught up on its own current log.
+		thread1 := []*LogFile{
+			mkLogFile(1, 1, 0, 1000, logStatusCurrent, testRedoLogSize),
+		}
+
+		// Cycle 1: thread 2's RAC instance is open with its own current log.
+		thread2Open := []*LogFile{
+			mkLogFile(2, 1, 500, 1500, logStatusCurrent, testRedoLogSize),
+		}
+		files := append(append([]*LogFile{}, thread1...), thread2Open...)
+		selected, endSCN, capped, err := s.selectForSession(files, []int{1, 2}, 9000, testRedoLogSize)
+		require.NoError(t, err)
+		assert.False(t, capped, "both threads are caught up on their own current log")
+		assert.Equal(t, uint64(9000), endSCN)
+		assert.ElementsMatch(t, files, selected)
+
+		// Cycle 2: thread 2's instance shuts down - its current log is sealed
+		// (same sequence, now ARCHIVED) and V$THREAD reports it CLOSED, so it
+		// drops out of openThreads. Its completeness criterion must switch
+		// from "reached its own current log" to "every known file selected",
+		// which this now-archived file trivially satisfies - not an error,
+		// and not mistaken for an incomplete thread.
+		thread2Closed := []*LogFile{
+			mkLogFile(2, 1, 500, 1500, "ARCHIVED", testRedoLogSize),
+		}
+		files = append(append([]*LogFile{}, thread1...), thread2Closed...)
+		selected, endSCN, capped, err = s.selectForSession(files, openThread1, 9000, testRedoLogSize)
+		require.NoError(t, err)
+		assert.False(t, capped, "thread 2's sole file is fully covered once judged by full-coverage, not open-current")
+		assert.Equal(t, uint64(9000), endSCN)
+		assert.ElementsMatch(t, files, selected)
+	})
+
+	t.Run("a new RAC instance opening mid-run is picked up without error", func(t *testing.T) {
+		s := &logFileSelector{minCount: 2, growthMax: 4}
+
+		// Cycle 1: only thread 1 exists - thread 2's instance hasn't started yet.
+		thread1 := []*LogFile{
+			mkLogFile(1, 1, 0, 1000, logStatusCurrent, testRedoLogSize),
+		}
+		selected, endSCN, capped, err := s.selectForSession(thread1, openThread1, 9000, testRedoLogSize)
+		require.NoError(t, err)
+		assert.False(t, capped)
+		assert.Equal(t, uint64(9000), endSCN)
+		assert.Equal(t, thread1, selected)
+
+		// Cycle 2: a second RAC instance starts, opening thread 2 for the
+		// first time with its own fresh current log. Having no history in
+		// any earlier cycle must not be treated as an error or as a
+		// completeness gap - it's picked up like any other open thread.
+		thread2 := []*LogFile{
+			mkLogFile(2, 1, 9500, 10500, logStatusCurrent, testRedoLogSize),
+		}
+		files := append(append([]*LogFile{}, thread1...), thread2...)
+		selected, endSCN, capped, err = s.selectForSession(files, []int{1, 2}, 11000, testRedoLogSize)
+		require.NoError(t, err)
+		assert.False(t, capped, "both threads are caught up on their own current log")
+		assert.Equal(t, uint64(11000), endSCN)
+		assert.ElementsMatch(t, files, selected)
 	})
 
 	// --- boundary ratchet (anti-regression) scenarios ---
