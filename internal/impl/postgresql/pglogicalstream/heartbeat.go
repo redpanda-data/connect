@@ -25,8 +25,21 @@ type heartbeat struct {
 	task          *asyncroutine.Periodic
 	logger        *service.Logger
 	prefix, value string
-	// transactional reports whether this tick needs a transactional
-	// message used to advance incremental snapshot on a quiet table.
+	// transactional determines whether the next tick emits a transactional or
+	// non-transactional message via pg_logical_emit_message:
+	//
+	// - Non-transactional (false): Emits directly into WAL without allocating an
+	//   XID or generating a COMMIT record. Conserves finite 32-bit transaction IDs
+	//   and advances confirmed_flush_lsn during idle streaming.
+	// - Transactional (true): Allocates a 32-bit XID and emits BEGIN/COMMIT frames.
+	//   Required during incremental snapshotting because the DBLog watermark
+	//   algorithm closes chunk windows only upon observing a commit where
+	//   xid > high.Xmax. On quiet tables without write traffic, synthetic commits
+	//   from this message serve as the clock ticks that advance the snapshot.
+	//
+	// Because continuously burning XIDs risks transaction ID exhaustion and
+	// aggressive autovacuum freezes, this predicate returns true only while
+	// snapshot backfills are actively queued.
 	transactional func() bool
 }
 
