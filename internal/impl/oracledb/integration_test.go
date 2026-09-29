@@ -1000,7 +1000,7 @@ oracledb_cdc:
     count: 10`
 
 	t.Log("Launching component...")
-	stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
 			msgChan <- msg
 		}
@@ -1010,10 +1010,6 @@ oracledb_cdc:
 		<-t.Context().Done()
 		close(msgChan)
 	}()
-
-	// Give the connector time to establish its first LogMiner session before
-	// generating redo.
-	time.Sleep(10 * time.Second)
 
 	assertOperation := func(t *testing.T, operation string, msgs []*service.Message) {
 		t.Helper()
