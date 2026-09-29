@@ -40,6 +40,7 @@ import (
 
 func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// multi-tenanted mode, allowing users access to logs across various PDBs
 	t.Run("CDB Mode", func(t *testing.T) {
@@ -191,6 +192,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -257,6 +259,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -313,6 +316,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create table
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -393,6 +397,7 @@ oracledb_cdc:
 // guidance text.
 func TestIntegrationOracleDBCDCResetlogsSurfacesGuidedError(t *testing.T) {
 	integration.CheckSkip(t)
+	// Not parallel: this test restarts the instance.
 
 	ctx := t.Context()
 	connStr, db, ctr := oracledbtest.SetupTestWithOracleDBVersionAndContainer(t)
@@ -574,6 +579,7 @@ oracledb_cdc:
 // on restart. See CON-504.
 func TestIntegrationOracleDBCDCSnapshotAckBarrier(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".ackbarrier", "CREATE TABLE "+db.Schema+".ackbarrier (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
@@ -680,6 +686,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
 	var (
@@ -978,6 +985,9 @@ file:
 
 func TestIntegrationOracleDBCDCRedoVolumeWindowStrategy(t *testing.T) {
 	integration.CheckSkip(t)
+	// Parallel: ALTER SYSTEM SWITCH LOGFILE is instance-wide, but a log switch
+	// does not disturb the other pipelines. They mine archived logs as well.
+	t.Parallel()
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".logcount", "CREATE TABLE "+db.Schema+".logcount (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
@@ -1106,6 +1116,7 @@ func consumeWithUsername(t *testing.T, batch *oracledbtest.Batch, usernameByID m
 
 func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	findMsgByID := func(t *testing.T, msgs []string, id string) string {
 		t.Helper()
@@ -1379,6 +1390,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	q := `
@@ -1658,6 +1670,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCReplicateTableSchema(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
 	t.Run("Snapshot Schema", func(t *testing.T) {
@@ -1890,6 +1903,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCSchemaConsistentAcrossPhases(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_phases",
@@ -1943,6 +1957,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCSchemaColumnAdded(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_drift",
@@ -2004,6 +2019,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCMultiTableSchema(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_t1",
@@ -2065,6 +2081,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_types",
@@ -2215,6 +2232,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCLOB(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
@@ -2453,6 +2471,7 @@ oracledb_cdc:
 // SQL_REDO — is decoded to the correct UTF-8 string end-to-end.
 func TestIntegrationOracleDBCDCNationalCharset(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	ctx := t.Context()
 
@@ -2527,6 +2546,7 @@ oracledb_cdc:
 // log, and asserts every row is delivered with only a few redelivered.
 func TestIntegrationOracleDBCDCOnlineLogRecycledMidQuery(t *testing.T) {
 	integration.CheckSkip(t)
+	// Not parallel: this test restarts the instance.
 
 	ctx := t.Context()
 	connStr, db, ctr := oracledbtest.SetupTestWithOracleDBVersionAndContainer(t)
