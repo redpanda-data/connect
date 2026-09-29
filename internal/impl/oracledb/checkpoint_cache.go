@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/shutdown"
+	goora "github.com/sijms/go-ora/v2/network"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
@@ -26,9 +27,8 @@ import (
 const (
 	// defaultCheckpointCache can be configured by the user
 	defaultCheckpointCache = "RPCN.CDC_CHECKPOINT_CACHE"
-	// defaultStoredProcName schema is inferred from the provided checkpoint cache config
-	// the stored procedure name cannot be configured by the user
-	defaultStoredProcName = "CDC_CHECKPOINT_CACHE_UPDATE"
+	// errCodeNameAlreadyUsed is ORA-00955: "name is already used by an existing object".
+	errCodeNameAlreadyUsed = 955
 	// checkpointCacheKeyLimit specifies the maximum length of the checkpoint cache key
 	checkpointCacheKeyLimit = 128
 )
@@ -47,6 +47,12 @@ func (t cacheTable) String() string {
 // checkpointCache is an Oracle specific cache created for the CDC component.
 // We have a custom cache because the cache_sql component doesn't support Oracle due to its
 // inability to support upserting (meaning it can't be expressed in the cache_sql configs).
+//
+// Set runs a MERGE statement against the cache table. Older versions called a stored procedure,
+// <schema>.CDC_CHECKPOINT_CACHE_UPDATE, whose body contained the table name of the first pipeline
+// that started in the schema. A second pipeline with another table in the same schema wrote its
+// checkpoints to the wrong table. The MERGE removes the shared object. The old procedure stays in
+// the schema, unused.
 type checkpointCache struct {
 	db             *sql.DB
 	cacheSetStmt   *sql.Stmt
@@ -57,8 +63,8 @@ type checkpointCache struct {
 }
 
 // newCheckpointCache create a new instance of the Oracle cache specific for CDC purposes.
-// It initialises the state of the oracle based checkpoint cache, first creating the
-// checkpoint cache table if it doesn't already exist then the checkpoint upsert stored procedure.
+// It initialises the state of the oracle based checkpoint cache, creating the checkpoint cache
+// table if it doesn't already exist.
 func newCheckpointCache(
 	ctx context.Context,
 	connStr string,
@@ -97,13 +103,16 @@ func newCheckpointCache(
 		log.Infof("Found existing checkpoint cache table '%s'", cacheTable.String())
 	}
 
-	if err := createUpsertStoredProc(ctx, db, cacheTable); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("creating checkpoint cache write stored procedure: %w", err)
-	}
-
-	// create a prepared statement for calling the stored proc (created in same schema as cache table) during Set operations to remove avoidable overhead
-	if cacheSetStmt, err = db.PrepareContext(ctx, fmt.Sprintf("BEGIN %s.%s(:1, :2); END;", cacheTable.schema, defaultStoredProcName)); err != nil {
+	// Prepare the upsert once, so that Set does not parse it on every checkpoint. The connection has
+	// no open transaction, so go-ora commits every execution (autocommit is on by default).
+	// Note: go-ora driver handles []byte parameters as RAW type
+	upsertQuery := fmt.Sprintf(`
+		MERGE INTO %s t
+		USING (SELECT :1 AS cache_key, :2 AS cache_val FROM dual) s
+		ON (t.cache_key = s.cache_key)
+		WHEN MATCHED THEN UPDATE SET t.cache_val = s.cache_val
+		WHEN NOT MATCHED THEN INSERT (cache_key, cache_val) VALUES (s.cache_key, s.cache_val)`, cacheTable.String())
+	if cacheSetStmt, err = db.PrepareContext(ctx, upsertQuery); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("preparing checkpoint cache statement: %w", err)
 	}
@@ -205,15 +214,23 @@ func migrateCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey
 	return nil
 }
 
-func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey string, log *service.Logger) (bool, error) {
-	// Check if table exists
+// cacheTableExists reports whether the table exists and is visible to the connected user.
+func cacheTableExists(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, error) {
 	var count int
 	checkQuery := `SELECT COUNT(*) FROM all_tables WHERE owner = :1 AND table_name = :2`
 	if err := db.QueryRowContext(ctx, checkQuery, strings.ToUpper(tbl.schema), strings.ToUpper(tbl.name)).Scan(&count); err != nil {
 		return false, fmt.Errorf("checking if table exists: %w", err)
 	}
+	return count > 0, nil
+}
 
-	if count > 0 {
+func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey string, log *service.Logger) (bool, error) {
+	exists, err := cacheTableExists(ctx, db, tbl)
+	if err != nil {
+		return false, err
+	}
+
+	if exists {
 		if err := migrateCacheTable(ctx, db, tbl, cacheKey, log); err != nil {
 			return false, fmt.Errorf("applying migration to cache table: %w", err)
 		}
@@ -230,52 +247,20 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey 
 		)`, tbl.String())
 
 	if _, err := db.ExecContext(ctx, createQuery); err != nil {
+		// Another pipeline can create the table after our check. Its table has the current layout, so no
+		// migration is necessary. Confirm that the object is a table that we can see: the name can also
+		// belong to a view or to a table of another user, and then the MERGE fails later, at the first
+		// checkpoint, with a less clear error.
+		var oraErr *goora.OracleError
+		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeNameAlreadyUsed {
+			if exists, checkErr := cacheTableExists(ctx, db, tbl); checkErr == nil && exists {
+				return false, nil
+			}
+		}
 		return false, fmt.Errorf("creating table: %w", err)
 	}
 
 	return true, nil
-}
-
-func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTable) error {
-	// Check if stored proc already exists
-	var count int
-	q := `SELECT COUNT(*) FROM ALL_PROCEDURES WHERE OWNER = :1 AND OBJECT_NAME = :2 AND OBJECT_TYPE = 'PROCEDURE'`
-	if err := db.QueryRowContext(ctx, q, strings.ToUpper(cacheTable.schema), strings.ToUpper(defaultStoredProcName)).Scan(&count); err != nil {
-		return fmt.Errorf("checking if stored procedure exists: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-
-	// Create the upsert procedure
-	// Note: go-ora driver handles []byte parameters as RAW type
-	storedProcFullName := fmt.Sprintf("%s.%s", cacheTable.schema, defaultStoredProcName)
-	tableName := cacheTable.String()
-
-	createQuery := fmt.Sprintf(`
-		CREATE PROCEDURE %s (
-			p_key IN VARCHAR2,
-			p_value IN RAW
-		)
-		AS
-			v_count NUMBER;
-		BEGIN
-			SELECT COUNT(*) INTO v_count FROM %s WHERE cache_key = p_key;
-
-			IF v_count > 0 THEN
-				UPDATE %s SET cache_val = p_value WHERE cache_key = p_key;
-			ELSE
-				INSERT INTO %s (cache_key, cache_val) VALUES (p_key, p_value);
-			END IF;
-
-			COMMIT;
-		END;`, storedProcFullName, tableName, tableName, tableName)
-
-	if _, err := db.ExecContext(ctx, createQuery); err != nil {
-		return fmt.Errorf("creating procedure: %w", err)
-	}
-
-	return nil
 }
 
 // Add is unused
