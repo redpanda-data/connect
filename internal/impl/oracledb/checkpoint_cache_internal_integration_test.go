@@ -23,6 +23,7 @@ import (
 // created the table first, so the cache must not mistake the view for that table.
 func TestIntegrationCheckpointCacheNameIsAView(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	viewName := db.Schema + ".CDC_CHECKPOINT_VIEW"
