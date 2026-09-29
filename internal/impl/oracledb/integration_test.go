@@ -985,6 +985,9 @@ file:
 
 func TestIntegrationOracleDBCDCRedoVolumeWindowStrategy(t *testing.T) {
 	integration.CheckSkip(t)
+	// Parallel: ALTER SYSTEM SWITCH LOGFILE is instance-wide, but a log switch
+	// does not disturb the other pipelines. They mine archived logs as well.
+	t.Parallel()
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".logcount", "CREATE TABLE "+db.Schema+".logcount (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
