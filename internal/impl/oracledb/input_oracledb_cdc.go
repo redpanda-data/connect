@@ -65,6 +65,9 @@ const (
 	ociFieldTransactionCache     = "transaction_cache"
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
 	ociFieldMaxSessionAge        = "max_session_age"
+	ociFieldWindowStrategy       = "window_strategy"
+	ociFieldRedoVolumeMin        = "redo_volume_min"
+	ociFieldRedoVolumeGrowthMax  = "redo_volume_growth_max"
 
 	//-- snapshot specific
 	ociFieldSnapshotFilters = "snapshot_filters"
@@ -162,12 +165,30 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 			Description(`The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + `+ociFieldSCNWindowSize+`. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.`).
 			Default(logminer.DefaultSCNWindowSize),
 		service.NewIntField(ociFieldMinSCNWindowSize).
-			Description("The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.").
+			Description("The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. This gate applies regardless of `"+ociFieldWindowStrategy+"`. Set to 0 to disable.").
 			ShortDescription("The minimum SCN gap required before a new LogMiner session is started.").
 			Default(logminer.DefaultMinSCNWindowSize),
 		service.NewIntField(ociFieldMaxSCNWindowSize).
 			Description(`The maximum SCN range that can be mined in a single cycle. The window starts at `+ociFieldSCNWindowSize+` and grows by `+ociFieldSCNWindowSize+` each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.`).
 			Default(logminer.DefaultMaxSCNWindowSize),
+		service.NewStringEnumField(ociFieldWindowStrategy, string(logminer.WindowStrategySCNWindow), string(logminer.WindowStrategyRedoVolume)).
+			Description(`Controls how the SCN range mined per cycle is sized:
+
+- `+"`"+string(logminer.WindowStrategySCNWindow)+"` (default): Grows and shrinks a fixed SCN increment (`"+ociFieldSCNWindowSize+"`) based on its backlog, bounded by `"+ociFieldMinSCNWindowSize+"` and `"+ociFieldMaxSCNWindowSize+"`"+`.
+- `+"`"+string(logminer.WindowStrategyRedoVolume)+"`: Sizes the range by a fixed redo-volume budget calculated by log size (configured by `"+ociFieldRedoVolumeMin+"` and `"+ociFieldRedoVolumeGrowthMax+"`), independent of raw SCN movement. This can be helpful when a databases's SCN can advance without matching real transaction volume - for example a Multitenant Container Database (CDB) shared SCN bumped by another Pluggable Database (PDB) - since `"+string(logminer.WindowStrategySCNWindow)+"` would otherwise burn cycles growing its window over mostly-empty ranges, while `"+string(logminer.WindowStrategyRedoVolume)+"` sizes each cycle by the redo it actually reads. On Real Application Clusters (RAC), `"+string(logminer.WindowStrategyRedoVolume)+"`'s budget applies per open thread, so volume mined per cycle scales with the number of open threads.").
+			ShortDescription("How the mined SCN range per cycle is sized: by a growing/shrinking SCN window, or by a fixed redo-volume budget.").
+			Default(string(logminer.WindowStrategySCNWindow)).
+			Advanced(),
+		service.NewIntField(ociFieldRedoVolumeMin).
+			Description("Whilst not exact, this value represents the minimum number of redo logs to read per redo thread in each mining cycle. Consider increasing this value if redo logs are small and rotate frequently, decreasing if redo logs are very large. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
+			ShortDescription("The minimum redo volume, in multiples of the online redo log size, mined per cycle per redo thread, under the "+string(logminer.WindowStrategyRedoVolume)+" window strategy.").
+			Default(logminer.DefaultRedoVolumeMin).
+			Advanced(),
+		service.NewIntField(ociFieldRedoVolumeGrowthMax).
+			Description("The ceiling the per-thread redo-volume budget can grow to, applied independently to each open redo thread (enabling the total volume mined per cycle to scale with thread count on RAC (Real Application Clusters) configurations). The budget starts at `"+ociFieldRedoVolumeMin+"` and grows automatically whenever something prevents the mining window from advancing - for example a long-running transaction holding it in place, or a redo log being recycled mid-query - up to this limit. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
+			ShortDescription("The maximum redo volume the per-thread budget grows to, under the "+string(logminer.WindowStrategyRedoVolume)+" window strategy.").
+			Default(logminer.DefaultRedoVolumeGrowthMax).
+			Advanced(),
 		service.NewDurationField(ociFieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
 			ShortDescription("Interval between checks for new changes once all data is processed.").
@@ -951,24 +972,73 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 	if conf.Contains(ociFieldLogMiner) {
 		lmConf := conf.Namespace(ociFieldLogMiner)
 		cfg = logminer.NewDefaultConfig()
-		if cfg.SCNWindowSize, err = lmConf.FieldInt(ociFieldSCNWindowSize); err != nil {
+
+		if strategy, err := lmConf.FieldString(ociFieldWindowStrategy); err != nil {
 			return nil, err
+		} else {
+			cfg.WindowStrategy = logminer.WindowStrategy(strategy)
 		}
-		if cfg.SCNWindowSize <= 0 {
-			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldSCNWindowSize, cfg.SCNWindowSize)
+
+		// redo_volume or scn_window
+		switch cfg.WindowStrategy {
+		case logminer.WindowStrategyRedoVolume:
+			if cfg.RedoVolumeMin, err = lmConf.FieldInt(ociFieldRedoVolumeMin); err != nil {
+				return nil, err
+			} else if cfg.RedoVolumeMin <= 0 {
+				return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldRedoVolumeMin, cfg.RedoVolumeMin)
+			}
+			if cfg.RedoVolumeGrowthMax, err = lmConf.FieldInt(ociFieldRedoVolumeGrowthMax); err != nil {
+				return nil, err
+			} else if cfg.RedoVolumeGrowthMax < cfg.RedoVolumeMin {
+				return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldRedoVolumeGrowthMax, cfg.RedoVolumeGrowthMax, ociFieldRedoVolumeMin, cfg.RedoVolumeMin)
+			} else if cfg.RedoVolumeGrowthMax < logminer.MinRedoVolumeGrowthCeiling {
+				return nil, fmt.Errorf("logminer.%s (%d) must be at least %d, since 1 can never grow past a single reselected file, permanently stalling progress", ociFieldRedoVolumeGrowthMax, cfg.RedoVolumeGrowthMax, logminer.MinRedoVolumeGrowthCeiling)
+			}
+			// ensure scn_window configs aren't set
+			if scnWindowSize, err := lmConf.FieldInt(ociFieldSCNWindowSize); err != nil {
+				return nil, err
+			} else if scnWindowSize != logminer.DefaultSCNWindowSize {
+				return nil, fmt.Errorf("logminer.%s has no effect when logminer.%s is %q", ociFieldSCNWindowSize, ociFieldWindowStrategy, string(logminer.WindowStrategyRedoVolume))
+			}
+			if maxSCNWindowSize, err := lmConf.FieldInt(ociFieldMaxSCNWindowSize); err != nil {
+				return nil, err
+			} else if maxSCNWindowSize != logminer.DefaultMaxSCNWindowSize {
+				return nil, fmt.Errorf("logminer.%s has no effect when logminer.%s is %q", ociFieldMaxSCNWindowSize, ociFieldWindowStrategy, string(logminer.WindowStrategyRedoVolume))
+			}
+		case logminer.WindowStrategySCNWindow:
+			if cfg.SCNWindowSize, err = lmConf.FieldInt(ociFieldSCNWindowSize); err != nil {
+				return nil, err
+			} else if cfg.SCNWindowSize <= 0 {
+				return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldSCNWindowSize, cfg.SCNWindowSize)
+			}
+			if cfg.MaxSCNWindowSize, err = lmConf.FieldInt(ociFieldMaxSCNWindowSize); err != nil {
+				return nil, err
+			} else if cfg.MaxSCNWindowSize < cfg.SCNWindowSize {
+				return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldMaxSCNWindowSize, cfg.MaxSCNWindowSize, ociFieldSCNWindowSize, cfg.SCNWindowSize)
+			}
+			// ensure redo_volume configs aren't set
+			if redoVolumeMin, err := lmConf.FieldInt(ociFieldRedoVolumeMin); err != nil {
+				return nil, err
+			} else if redoVolumeMin != logminer.DefaultRedoVolumeMin {
+				return nil, fmt.Errorf("logminer.%s has no effect when logminer.%s is %q", ociFieldRedoVolumeMin, ociFieldWindowStrategy, string(logminer.WindowStrategySCNWindow))
+			}
+			if redoVolumeGrowthMax, err := lmConf.FieldInt(ociFieldRedoVolumeGrowthMax); err != nil {
+				return nil, err
+			} else if redoVolumeGrowthMax != logminer.DefaultRedoVolumeGrowthMax {
+				return nil, fmt.Errorf("logminer.%s has no effect when logminer.%s is %q", ociFieldRedoVolumeGrowthMax, ociFieldWindowStrategy, string(logminer.WindowStrategySCNWindow))
+			}
+		default:
+			return nil, fmt.Errorf("logminer.%s unrecognized strategy", ociFieldWindowStrategy)
 		}
+
+		// Applies regardless of window_strategy - it gates whether a mining
+		// cycle starts at all, before either strategy sizes the window.
 		if cfg.MinSCNWindowSize, err = lmConf.FieldInt(ociFieldMinSCNWindowSize); err != nil {
 			return nil, err
-		}
-		if cfg.MinSCNWindowSize < 0 {
+		} else if cfg.MinSCNWindowSize < 0 {
 			return nil, fmt.Errorf("logminer.%s must be 0 or greater, got %d", ociFieldMinSCNWindowSize, cfg.MinSCNWindowSize)
 		}
-		if cfg.MaxSCNWindowSize, err = lmConf.FieldInt(ociFieldMaxSCNWindowSize); err != nil {
-			return nil, err
-		}
-		if cfg.MaxSCNWindowSize < cfg.SCNWindowSize {
-			return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldMaxSCNWindowSize, cfg.MaxSCNWindowSize, ociFieldSCNWindowSize, cfg.SCNWindowSize)
-		}
+
 		if cfg.MiningBackoffInterval, err = lmConf.FieldDuration(ociFieldBackoffInterval); err != nil {
 			return nil, err
 		}

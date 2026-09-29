@@ -40,6 +40,46 @@ var (
 	// before being forcibly restarted, independent of redo log switches. 0 disables this,
 	// restarting only on log switches (the previous, and still default, behaviour).
 	DefaultMaxSessionAge = 0 * time.Second
+	// DefaultRedoVolumeMin is how much redo one mining cycle reads per redo
+	// thread under WindowStrategyRedoVolume, when nothing else applies.
+	//
+	// The unit is the size of the largest online redo log group, read once at
+	// start with MAX(BYTES) over V$LOG. Groups are normally all the same size,
+	// so this is usually just the redo log size. For each thread, log files
+	// are added in sequence order until their total size reaches this many
+	// units. The file that crosses the limit is kept, so one very large file
+	// is still selected.
+	//
+	// After a cycle that reads everything available, the budget goes back to
+	// this value.
+	DefaultRedoVolumeMin = 2
+	// DefaultRedoVolumeGrowthMax is the ceiling the per-thread redo volume
+	// budget can grow to under the WindowStrategyRedoVolume window strategy,
+	// once forward progress stalls.
+	DefaultRedoVolumeGrowthMax = 4
+	// MinRedoVolumeGrowthCeiling is the smallest growth ceiling that avoids a
+	// permanent stall: a budget of 1 file always reselects its own single
+	// file forever, since that file's own boundary re-qualifies it next
+	// cycle, so growth is its only way to make progress.
+	MinRedoVolumeGrowthCeiling = 2
+	// redoVolumeStallWarnThreshold is how many consecutive stalled cycles
+	// (see logFileSelector.consecutiveStalls) trigger a warning log. This is
+	// proven unreachable for every known failure mode, so reaching it is a
+	// signal to investigate, not routine backoff - the threshold is only
+	// above 1 to give a single incidental stall room without logging.
+	redoVolumeStallWarnThreshold = 3
+)
+
+// WindowStrategy selects how the SCN range mined per LogMiner cycle is sized.
+type WindowStrategy string
+
+const (
+	// WindowStrategySCNWindow sizes the mined range by growing/shrinking a fixed
+	// SCN-count window each cycle.
+	WindowStrategySCNWindow WindowStrategy = "scn_window"
+	// WindowStrategyRedoVolume sizes the mined range by a bounded redo volume
+	// budget per cycle, per redo thread.
+	WindowStrategyRedoVolume WindowStrategy = "redo_volume"
 )
 
 // MiningStrategy defines how LogMiner accesses dictionary information
@@ -70,6 +110,9 @@ type Config struct {
 	PDBName                string
 	TransactionCacheConfig TransactionCacheConfig
 	MaxSessionAge          time.Duration
+	WindowStrategy         WindowStrategy
+	RedoVolumeMin          int
+	RedoVolumeGrowthMax    int
 }
 
 // NewDefaultConfig returns a Config with default values
@@ -84,5 +127,8 @@ func NewDefaultConfig() *Config {
 		MaxTransactionEvents:  DefaultMaxTransactionEvents,
 		LOBEnabled:            DefaultLOBEnabled,
 		MaxSessionAge:         DefaultMaxSessionAge,
+		WindowStrategy:        WindowStrategySCNWindow,
+		RedoVolumeMin:         DefaultRedoVolumeMin,
+		RedoVolumeGrowthMax:   DefaultRedoVolumeGrowthMax,
 	}
 }
