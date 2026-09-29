@@ -116,7 +116,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			Description("Whether schema registry migration is enabled. When disabled, no schema operations are performed.").
 			Default(true),
 		service.NewDurationField(srFieldInterval).
-			Description("How often to synchronise schema registry subjects. Set to 0s for one-time sync at startup only.").
+			Description("How often to synchronise schema registry subjects. Subjects that fail to sync are logged and retried on the next sync. Set to 0s for one-time sync at startup only, in which case failed subjects are not retried.").
 			Example("0s     # One-time sync only").
 			Example("5m     # Sync every 5 minutes").
 			Example("30m    # Sync every 30 minutes").
@@ -664,7 +664,26 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 	})
 
 	// Workers: process subjects with DFS traversal
-	var total atomic.Int64
+	var (
+		total  atomic.Int64
+		failMu sync.Mutex
+		failed []error
+	)
+	// A subject that cannot be registered at the destination (e.g. an
+	// incompatible evolution) is recorded and skipped rather than returned, so
+	// that it neither cancels the remaining subjects nor, via the initial sync,
+	// fails the output connect. It is retried on the next sync since it is not
+	// added to knownSubjects.
+	subjectFailed := func(err error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		m.log.Errorf("Schema migration: %v", err)
+		failMu.Lock()
+		failed = append(failed, err)
+		failMu.Unlock()
+		return nil
+	}
 	for range m.conf.MaxParallelHTTPRequests {
 		g.Go(func() error {
 			for ss := range workCh {
@@ -676,13 +695,13 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 					}
 					info, err := m.syncSubjectSchema(ctx, s)
 					if err != nil {
-						return fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err)
+						return subjectFailed(fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err))
 					}
 					if err := m.checkSchemaIDConflict(s.ID, info); err != nil {
-						return err
+						return subjectFailed(fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err))
 					}
 					if err := m.syncSubjectCompatibility(ctx, s.Subject); err != nil {
-						return fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err)
+						return subjectFailed(fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err))
 					}
 
 					m.mu.Lock()
@@ -704,7 +723,29 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		})
 	}
 
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return err
+	}
+	if len(failed) > 0 {
+		return &partialSyncError{Synced: int(total.Load()), Failed: failed}
+	}
+	return nil
+}
+
+// partialSyncError is returned by Sync when the sync ran to completion but
+// some subjects could not be synced. Any other error returned by Sync means the
+// sync itself could not run, e.g. a misconfigured or unreachable registry.
+type partialSyncError struct {
+	Synced int
+	Failed []error
+}
+
+func (e *partialSyncError) Error() string {
+	return fmt.Sprintf("%d schemas synced, %d failed: %v", e.Synced, len(e.Failed), errors.Join(e.Failed...))
+}
+
+func (e *partialSyncError) Unwrap() []error {
+	return e.Failed
 }
 
 func (m *schemaRegistryMigrator) checkSchemaIDConflict(srcID int, dstInfo schemaInfo) error {
