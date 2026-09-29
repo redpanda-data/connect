@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 )
 
 // Config is the configuration for the pglogicalstream plugin
@@ -54,4 +55,16 @@ type Config struct {
 	UnchangedToastValue any
 	// The interval to send logical messages
 	HeartbeatInterval time.Duration
+	// IncrementalSnapshot holds the incremental snapshot configuration. Its
+	// zero value is a disabled incremental snapshot.
+	IncrementalSnapshot incrementalsnapshot.Cfg
+}
+
+// IncrementalSnapshotCfg returns the incremental snapshot configuration. A
+// disabled snapshot is the zero value, so there is no nil case.
+func (c *Config) IncrementalSnapshotCfg() incrementalsnapshot.Cfg {
+	if c == nil {
+		return incrementalsnapshot.Cfg{}
+	}
+	return c.IncrementalSnapshot
 }
