@@ -35,6 +35,8 @@ var (
 	EncodeOffsetHeader     = encodeOffsetHeader
 )
 
+type PartialSyncError = partialSyncError
+
 func ReadRecordTimestamp(
 	ctx context.Context,
 	client *kgo.Client,

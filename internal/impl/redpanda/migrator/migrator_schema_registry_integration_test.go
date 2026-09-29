@@ -16,6 +16,7 @@ package migrator_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"testing"
@@ -1201,4 +1202,116 @@ func TestIntegrationSchemaRegistryMigratorDFS(t *testing.T) {
 		t.Log("Then: error propagated")
 		assert.ErrorIs(t, err, expectedErr)
 	})
+}
+
+// Regression test for CON-530: a subject that cannot be registered at the
+// destination must not abort the sync of the remaining subjects.
+func TestIntegrationSchemaRegistryMigratorSyncIncompatibleSubject(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		badSubj   = "bad-value"
+		badV1     = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"string"}]}`
+		badV2     = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"int"}]}`
+		numGood   = 20
+		goodTmpl  = `{"type":"record","name":"Good%d","fields":[{"name":"g","type":"string"}]}`
+		goodSubjF = "good-%d-value"
+	)
+
+	t.Log("Given: source and destination Schema Registry")
+	src, dst := startSchemaRegistrySourceAndDestination(t)
+
+	t.Log("And: a subject evolved incompatibly at source")
+	set := src.SetCompatibility(t.Context(), sr.SetCompatibility{Level: sr.CompatNone})
+	require.NoError(t, set[0].Err)
+	_, err := src.CreateSchema(t.Context(), badSubj, sr.Schema{Schema: badV1})
+	require.NoError(t, err)
+	_, err = src.CreateSchema(t.Context(), badSubj, sr.Schema{Schema: badV2})
+	require.NoError(t, err)
+
+	t.Log("And: healthy subjects exist at source")
+	for i := range numGood {
+		_, err := src.CreateSchema(t.Context(), fmt.Sprintf(goodSubjF, i), sr.Schema{Schema: fmt.Sprintf(goodTmpl, i)})
+		require.NoError(t, err)
+	}
+
+	t.Log("And: destination holds only the old version of the subject under BACKWARD compatibility")
+	_, err = dst.CreateSchema(t.Context(), badSubj, sr.Schema{Schema: badV1})
+	require.NoError(t, err)
+
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:      true,
+		Versions:     migrator.VersionsAll,
+		TranslateIDs: true,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer cancel()
+
+	t.Log("When: migrator is run")
+	err = m.Sync(ctx)
+
+	t.Log("Then: sync reports a partial failure naming only the incompatible subject")
+	var pErr *migrator.PartialSyncError
+	require.ErrorAs(t, err, &pErr)
+	require.Len(t, pErr.Failed, 1)
+	assert.Contains(t, pErr.Failed[0].Error(), badSubj+" version 2")
+
+	t.Log("And: every healthy subject is registered at destination")
+	for i := range numGood {
+		_, err := dst.SchemaByVersion(ctx, fmt.Sprintf(goodSubjF, i), 1)
+		assert.NoError(t, err, "subject %d", i)
+	}
+
+	t.Log("When: migrator is run again")
+	err = m.Sync(ctx)
+
+	t.Log("Then: the failed subject is retried and fails again")
+	require.ErrorAs(t, err, &pErr)
+	require.Len(t, pErr.Failed, 1)
+
+	t.Log("When: destination subject compatibility is relaxed and migrator is run again")
+	set = dst.SetCompatibility(ctx, sr.SetCompatibility{Level: sr.CompatNone}, badSubj)
+	require.NoError(t, set[0].Err)
+	require.NoError(t, m.Sync(ctx))
+
+	t.Log("Then: the subject is fully synced")
+	_, err = dst.SchemaByVersion(ctx, badSubj, 2)
+	require.NoError(t, err)
+}
+
+// Registry misconfiguration must still fail the sync outright rather than be
+// reported as a partial failure, so that it keeps failing the output connect.
+func TestIntegrationSchemaRegistryMigratorSyncReadOnlyDestination(t *testing.T) {
+	integration.CheckSkip(t)
+
+	t.Log("Given: source and destination Schema Registry")
+	src, dst := startSchemaRegistrySourceAndDestination(t)
+
+	t.Log("And: a subject exists at source")
+	_, err := src.CreateSchema(t.Context(), "foo", sr.Schema{Schema: `{"type":"string"}`})
+	require.NoError(t, err)
+
+	t.Log("And: destination is read-only")
+	modeRes := dst.SetMode(t.Context(), sr.ModeReadOnly)
+	require.NoError(t, modeRes[0].Err)
+
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:  true,
+		Versions: migrator.VersionsLatest,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer cancel()
+
+	t.Log("When: migrator is run")
+	err = m.Sync(ctx)
+
+	t.Log("Then: sync fails and the failure is not partial")
+	require.Error(t, err)
+	var pErr *migrator.PartialSyncError
+	assert.False(t, errors.As(err, &pErr))
+	assert.Contains(t, err.Error(), "READWRITE or IMPORT")
 }

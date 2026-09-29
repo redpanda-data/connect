@@ -642,10 +642,23 @@ func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 		return srcAdm, src.GetConsumeTopics
 	})
 
-	// Sync the schema registry once
+	// Sync the schema registry once. Subjects that fail to sync must not fail
+	// the output connect: topic and consumer group migration do not depend on
+	// them, and a failed connect restarts the whole pipeline, so no topic would
+	// ever be created. Errors that prevent the sync from running at all, such
+	// as a misconfigured destination registry, still fail the connect.
 	if err := m.sr.Sync(ctx); err != nil {
-		cancel()
-		return err
+		var pErr *partialSyncError
+		if !errors.As(err, &pErr) {
+			cancel()
+			return err
+		}
+		retry := fmt.Sprintf("retrying every %s", m.sr.conf.Interval)
+		if m.sr.conf.Interval <= 0 {
+			retry = "not retrying because schema_registry.interval is 0s"
+		}
+		m.log.Errorf("Schema migration: initial sync incomplete, %d schemas synced, %d failed; topic and data migration continues, failed subjects %s",
+			pErr.Synced, len(pErr.Failed), retry)
 	}
 	go m.sr.SyncLoop(ctx)
 
