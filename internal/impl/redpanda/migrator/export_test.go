@@ -85,6 +85,7 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 		}))),
 		knownSubjects: make(map[schemaSubjectVersion]struct{}),
 		knownSchemas:  make(map[int]schemaInfo),
+		failedSchemas: make(map[int]error),
 	}
 }
 

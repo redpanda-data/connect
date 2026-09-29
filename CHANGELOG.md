@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- redpanda_migrator: Fixed the initial schema registry sync failing the output connect when a single subject could not be registered at the destination (for example an incompatible schema evolution), which restarted the pipeline indefinitely without creating any topics. Failed subjects are now logged and skipped so topic, data and consumer group migration proceed, and are retried on the next schema_registry.interval (not retried when interval is 0s); registry-level errors such as authorization failures still fail the connect, and with `translate_ids` records using a schema that failed to sync are rejected instead of being written with an untranslated ID. ([@rjustice-rp](https://github.com/rjustice-rp), [#TBD](https://github.com/redpanda-data/connect/pull/TBD))
+
 ## 4.111.0 - 2026-09-24
 
 ### Added

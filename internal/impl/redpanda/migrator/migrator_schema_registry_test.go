@@ -15,6 +15,10 @@
 package migrator
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -108,6 +112,32 @@ func TestSchemaEquals(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.eq, schemaEquals(tt.a, tt.b))
+		})
+	}
+}
+
+func TestIsSubjectError(t *testing.T) {
+	respErr := func(code int) error {
+		return fmt.Errorf("create schema: %w", &sr.ResponseError{StatusCode: code})
+	}
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"incompatible", respErr(http.StatusConflict), true},
+		{"invalid schema", respErr(http.StatusUnprocessableEntity), true},
+		{"not found", respErr(http.StatusNotFound), true},
+		{"unauthorized", respErr(http.StatusUnauthorized), false},
+		{"forbidden", respErr(http.StatusForbidden), false},
+		{"server error", respErr(http.StatusInternalServerError), false},
+		{"unavailable", respErr(http.StatusServiceUnavailable), false},
+		{"network", errors.New("dial tcp: connection refused"), false},
+		{"canceled", context.Canceled, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isSubjectError(tc.err))
 		})
 	}
 }
