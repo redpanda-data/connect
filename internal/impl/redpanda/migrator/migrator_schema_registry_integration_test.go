@@ -16,7 +16,6 @@ package migrator_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"testing"
@@ -1226,7 +1225,7 @@ func TestIntegrationSchemaRegistryMigratorSyncIncompatibleSubject(t *testing.T) 
 	require.NoError(t, set[0].Err)
 	_, err := src.CreateSchema(t.Context(), badSubj, sr.Schema{Schema: badV1})
 	require.NoError(t, err)
-	_, err = src.CreateSchema(t.Context(), badSubj, sr.Schema{Schema: badV2})
+	badSS, err := src.CreateSchema(t.Context(), badSubj, sr.Schema{Schema: badV2})
 	require.NoError(t, err)
 
 	t.Log("And: healthy subjects exist at source")
@@ -1264,6 +1263,10 @@ func TestIntegrationSchemaRegistryMigratorSyncIncompatibleSubject(t *testing.T) 
 		assert.NoError(t, err, "subject %d", i)
 	}
 
+	t.Log("And: records encoded with the failed schema are rejected rather than written with the source ID")
+	_, err = m.DestinationSchemaID(badSS.ID)
+	require.Error(t, err)
+
 	t.Log("When: migrator is run again")
 	err = m.Sync(ctx)
 
@@ -1277,8 +1280,13 @@ func TestIntegrationSchemaRegistryMigratorSyncIncompatibleSubject(t *testing.T) 
 	require.NoError(t, m.Sync(ctx))
 
 	t.Log("Then: the subject is fully synced")
-	_, err = dst.SchemaByVersion(ctx, badSubj, 2)
+	dstSS, err := dst.SchemaByVersion(ctx, badSubj, 2)
 	require.NoError(t, err)
+
+	t.Log("And: records encoded with the schema are translated to its destination ID")
+	id, err := m.DestinationSchemaID(badSS.ID)
+	require.NoError(t, err)
+	assert.Equal(t, dstSS.ID, id)
 }
 
 // Registry misconfiguration must still fail the sync outright rather than be
@@ -1312,6 +1320,58 @@ func TestIntegrationSchemaRegistryMigratorSyncReadOnlyDestination(t *testing.T) 
 	t.Log("Then: sync fails and the failure is not partial")
 	require.Error(t, err)
 	var pErr *migrator.PartialSyncError
-	assert.False(t, errors.As(err, &pErr))
+	assert.NotErrorAs(t, err, &pErr)
 	assert.Contains(t, err.Error(), "READWRITE or IMPORT")
+}
+
+// A later version of a subject must not be registered after an earlier version
+// failed: with translated IDs the destination assigns version numbers, so it
+// would take the failed version's place.
+func TestIntegrationSchemaRegistryMigratorSyncFailedVersionBlocksLaterVersions(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		subj = "evolving-value"
+		v1   = `{"type":"record","name":"Evolving","fields":[{"name":"a","type":"string"}]}`
+		v2   = `{"type":"record","name":"Evolving","fields":[{"name":"a","type":"int"}]}`
+		v3   = `{"type":"record","name":"Evolving","fields":[{"name":"a","type":"string"},{"name":"b","type":"string","default":""}]}`
+	)
+
+	t.Log("Given: source and destination Schema Registry")
+	src, dst := startSchemaRegistrySourceAndDestination(t)
+
+	t.Log("And: a subject at source whose v2 is incompatible with v1 but whose v3 is compatible with v1")
+	set := src.SetCompatibility(t.Context(), sr.SetCompatibility{Level: sr.CompatNone})
+	require.NoError(t, set[0].Err)
+	for _, s := range []string{v1, v2, v3} {
+		_, err := src.CreateSchema(t.Context(), subj, sr.Schema{Schema: s})
+		require.NoError(t, err)
+	}
+
+	t.Log("And: destination holds only v1 under BACKWARD compatibility")
+	_, err := dst.CreateSchema(t.Context(), subj, sr.Schema{Schema: v1})
+	require.NoError(t, err)
+
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:      true,
+		Versions:     migrator.VersionsAll,
+		TranslateIDs: true,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer cancel()
+
+	t.Log("When: migrator is run")
+	err = m.Sync(ctx)
+
+	t.Log("Then: v2 fails and v3 is skipped")
+	var pErr *migrator.PartialSyncError
+	require.ErrorAs(t, err, &pErr)
+	assert.Len(t, pErr.Failed, 2)
+
+	t.Log("And: destination still holds only v1")
+	vers, err := dst.SubjectVersions(ctx, subj)
+	require.NoError(t, err)
+	assert.Equal(t, []int{1}, vers)
 }

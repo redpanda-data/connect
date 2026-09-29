@@ -322,9 +322,9 @@ sequenceDiagram
 
 ### Schema Sync Characteristics
 
-- **Initial sync on connect** - One sync when output connects
-- **Optional periodic sync** - Background loop controlled by `interval` setting
-- **Unknown schema handling** - A record whose schema ID is not yet synced to the destination is passed through unchanged, or rejected when `strict` is enabled (there is no on-demand resync)
+- **Initial sync on connect** - One sync when output connects; subjects the destination rejects (HTTP 404/409/422, e.g. an incompatible schema) are logged and do not fail the connect, while registry-level errors (unreachable, unauthorized, 5xx, misconfigured) do
+- **Optional periodic sync** - Background loop controlled by `interval` setting; subjects that failed to sync are retried on each iteration (not retried with `interval: 0s`)
+- **Unknown schema handling** - A record whose schema ID is not yet synced to the destination is passed through unchanged, or rejected when `strict` is enabled (there is no on-demand resync). A record whose schema failed to sync is always rejected, so the output retries it until a later sync registers the schema; later versions of a subject are not synced until its failed version is
 - **ID translation modes** - Create-or-reuse (translate) vs fixed IDs
 - **Compatibility propagation** - Only when explicitly set per-subject
 
@@ -448,7 +448,7 @@ sequenceDiagram
 
 1. **Input connects** - Source cluster metadata fetched, admin clients initialized
 2. **Output connects** - Destination cluster metadata fetched, admin clients initialized
-3. **Initial schema sync** - One-shot schema registry synchronization
+3. **Initial schema sync** - One-shot schema registry synchronization; subjects that fail to sync are logged and skipped so topic, data and consumer group migration proceed, while registry validation errors (unreachable, same URL, destination not READWRITE/IMPORT) fail the output connect
 4. **Start background loops** - Schema sync loop (optional), consumer groups sync loop
 
 ### Message Processing
@@ -741,6 +741,6 @@ migrator/
 ### Error Handling
 
 - **Topic creation** - Errors fail message batch, retry on next batch
-- **Schema sync** - Errors logged, retry on next sync iteration
+- **Schema sync** - Per-subject rejections logged and skipped in both initial and periodic sync, retry on next sync iteration (no retry with `interval: 0s`); registry-level errors fail the output connect on the initial sync
 - **Consumer group sync** - Errors logged, retry on next sync iteration
 - **Offset translation** - Partition skipped on error, other partitions continue
