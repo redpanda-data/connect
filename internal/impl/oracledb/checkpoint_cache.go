@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/shutdown"
-	goora "github.com/sijms/go-ora/v2/network"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
@@ -27,8 +26,6 @@ import (
 const (
 	// defaultCheckpointCache can be configured by the user
 	defaultCheckpointCache = "RPCN.CDC_CHECKPOINT_CACHE"
-	// errCodeNameAlreadyUsed is ORA-00955: "name is already used by an existing object".
-	errCodeNameAlreadyUsed = 955
 	// checkpointCacheKeyLimit specifies the maximum length of the checkpoint cache key
 	checkpointCacheKeyLimit = 128
 )
@@ -209,23 +206,15 @@ func migrateCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey
 	return nil
 }
 
-// cacheTableExists is false for a table that the connected user has no privilege on.
-func cacheTableExists(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, error) {
+func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey string, log *service.Logger) (bool, error) {
+	// Check if table exists
 	var count int
 	checkQuery := `SELECT COUNT(*) FROM all_tables WHERE owner = :1 AND table_name = :2`
 	if err := db.QueryRowContext(ctx, checkQuery, strings.ToUpper(tbl.schema), strings.ToUpper(tbl.name)).Scan(&count); err != nil {
 		return false, fmt.Errorf("checking if table exists: %w", err)
 	}
-	return count > 0, nil
-}
 
-func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey string, log *service.Logger) (bool, error) {
-	exists, err := cacheTableExists(ctx, db, tbl)
-	if err != nil {
-		return false, err
-	}
-
-	if exists {
+	if count > 0 {
 		if err := migrateCacheTable(ctx, db, tbl, cacheKey, log); err != nil {
 			return false, fmt.Errorf("applying migration to cache table: %w", err)
 		}
@@ -242,14 +231,6 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey 
 		)`, tbl.String())
 
 	if _, err := db.ExecContext(ctx, createQuery); err != nil {
-		// Another pipeline can create the table after our check. Its table has the current layout, so no
-		// migration is necessary. Re-check because the name can also belong to a view or to another user's table.
-		var oraErr *goora.OracleError
-		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeNameAlreadyUsed {
-			if exists, checkErr := cacheTableExists(ctx, db, tbl); checkErr == nil && exists {
-				return false, nil
-			}
-		}
 		return false, fmt.Errorf("creating table: %w", err)
 	}
 
