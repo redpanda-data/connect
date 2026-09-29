@@ -983,37 +983,17 @@ oracledb_cdc:
   batching:
     count: 10`
 
-	var (
-		err    error
-		stream *service.Stream
-	)
-
 	t.Log("Launching component...")
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			for _, msg := range mb {
-				msgChan <- msg
-			}
-			return nil
-		}))
-
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
-		go func() {
-			<-t.Context().Done()
-			close(msgChan)
-		}()
-	}
+	stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			msgChan <- msg
+		}
+		return nil
+	})
+	go func() {
+		<-t.Context().Done()
+		close(msgChan)
+	}()
 
 	// Give the connector time to establish its first LogMiner session before
 	// generating redo.
