@@ -209,7 +209,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			ShortDescription("Maximum gap between the in-flight sequence and the latest acknowledged sequence.").
 			Default(1024),
 		service.NewDurationField(kiFieldPollPeriod).
-			Description("An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so setting this to e.g. `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. A shard is polled at most once per period, so the committed sequence advances no faster than that; values above `lease_period` are rejected.").
+			Description("An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so a value such as `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. A shard is polled at most once per period, so the committed sequence advances no faster than that; values above `lease_period` are rejected.").
 			ShortDescription("Minimum period between record polls of a shard, for staying under the shared Kinesis read limit.").
 			Default("0s").
 			Version("4.109.0").

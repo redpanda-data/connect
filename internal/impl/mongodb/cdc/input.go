@@ -42,7 +42,11 @@ import (
 // no checkpoint, so a credential expiry part-way through costs the whole
 // snapshot. The other MongoDB components have no snapshot phase, which is why
 // this is passed in rather than living on the shared field.
-const awsSessionDurationSnapshotNote = "When using role assumption with this input, credentials are freshly resolved after the initial snapshot completes, so the streaming phase starts with a full session. The snapshot itself must still complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. Once the snapshot completes and is fully acknowledged, its position is checkpointed, so later restarts resume the stream without re-running the snapshot. For very large snapshots prefer the ambient credential chain."
+//
+// The shared half already recommends the ambient credential chain for
+// long-running pipelines, so this note states only the snapshot-specific
+// reasoning and does not repeat the recommendation.
+const awsSessionDurationSnapshotNote = "When using role assumption with this input, credentials are freshly resolved after the initial snapshot completes, so the streaming phase starts with a full session. The snapshot itself must still complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. Once the snapshot completes and is fully acknowledged, its position is checkpointed, so later restarts resume the stream without re-running the snapshot."
 
 const (
 	fieldClientURL              = "url"
