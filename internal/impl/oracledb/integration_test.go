@@ -47,14 +47,14 @@ func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 		// connector, and returns a FREEPDB1 connection for test data setup.
 		cdbConnStr, pdbDB, pdbName := oracledbtest.SetupCDBTestWithPDB(t)
 
-		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.mtfoo", "CREATE TABLE testdb.mtfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.mtbar", "CREATE TABLE testdb2.mtbar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), pdbDB.Schema+".mtfoo", "CREATE TABLE "+pdbDB.Schema+".mtfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), pdbDB.Schema2+".mtbar", "CREATE TABLE "+pdbDB.Schema2+".mtbar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
 		// Insert 1000 rows into each table for snapshot verification (2000 total).
 		want := 2000
 		for range 1000 {
-			pdbDB.MustExec("INSERT INTO testdb.mtfoo (id) VALUES (DEFAULT)")
-			pdbDB.MustExec("INSERT INTO testdb2.mtbar (id) VALUES (DEFAULT)")
+			pdbDB.MustExec("INSERT INTO " + pdbDB.Schema + ".mtfoo (id) VALUES (DEFAULT)")
+			pdbDB.MustExec("INSERT INTO " + pdbDB.Schema2 + ".mtbar (id) VALUES (DEFAULT)")
 		}
 
 		var (
@@ -75,7 +75,7 @@ oracledb_cdc:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.MTFOO", "TESTDB2.MTBAR"]
+  include: ["` + pdbDB.Schema + `.MTFOO", "` + pdbDB.Schema2 + `.MTBAR"]
   batching:
     count: 500`
 
@@ -97,8 +97,8 @@ oracledb_cdc:
 			_, err = pdbDB.Exec(`
 BEGIN
 	FOR i IN 1..1000 LOOP
-		INSERT INTO testdb.mtfoo (id) VALUES (DEFAULT);
-		INSERT INTO testdb2.mtbar (id) VALUES (DEFAULT);
+		INSERT INTO ` + pdbDB.Schema + `.mtfoo (id) VALUES (DEFAULT);
+		INSERT INTO ` + pdbDB.Schema2 + `.mtbar (id) VALUES (DEFAULT);
 	END LOOP;
 	COMMIT;
 END;`)
@@ -116,16 +116,16 @@ END;`)
 	t.Run("Non-CDB Mode", func(t *testing.T) {
 		// Create tables
 		connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema2+".bar", "CREATE TABLE "+db.Schema2+".bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
 		// Insert 3000 rows across tables for initial snapshot streaming
 		want := 3000
 		for range 1000 {
-			db.MustExec("INSERT INTO testdb.foo (id) VALUES (DEFAULT)")
-			db.MustExec("INSERT INTO testdb.foo2 (id) VALUES (DEFAULT)")
-			db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
+			db.MustExec("INSERT INTO " + db.Schema + ".foo (id) VALUES (DEFAULT)")
+			db.MustExec("INSERT INTO " + db.Schema + ".foo2 (id) VALUES (DEFAULT)")
+			db.MustExec("INSERT INTO " + db.Schema2 + ".bar (id) VALUES (DEFAULT)")
 		}
 
 		var (
@@ -137,6 +137,7 @@ END;`)
 			cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: true
   max_parallel_snapshot_tables: 3
   snapshot_max_batch_size: 10
@@ -145,8 +146,8 @@ oracledb_cdc:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
-  exclude: ["TESTDB.DOESNOTEXIST"]
+  include: ["` + db.Schema + `.FOO", "` + db.Schema + `.FOO2", "` + db.Schema2 + `.BAR"]
+  exclude: ["` + db.Schema + `.DOESNOTEXIST"]
   batching:
     count: 500`
 
@@ -171,9 +172,9 @@ oracledb_cdc:
 			_, err := db.Exec(`
 	BEGIN
 		FOR i IN 1..1000 LOOP
-			INSERT INTO testdb.foo (id) VALUES (DEFAULT);
-			INSERT INTO testdb.foo2 (id) VALUES (DEFAULT);
-			INSERT INTO testdb2.bar (id) VALUES (DEFAULT);
+			INSERT INTO ` + db.Schema + `.foo (id) VALUES (DEFAULT);
+			INSERT INTO ` + db.Schema + `.foo2 (id) VALUES (DEFAULT);
+			INSERT INTO ` + db.Schema2 + `.bar (id) VALUES (DEFAULT);
 		END LOOP;
 		COMMIT;
 	END;`)
@@ -193,16 +194,16 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema2+".bar", "CREATE TABLE "+db.Schema2+".bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
 	// Insert 3000 rows across tables for initial snapshot streaming
 	want := 3000
 	for range 1000 {
-		db.MustExec("INSERT INTO testdb.foo (id) VALUES (DEFAULT)")
-		db.MustExec("INSERT INTO testdb.foo2 (id) VALUES (DEFAULT)")
-		db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
+		db.MustExec("INSERT INTO " + db.Schema + ".foo (id) VALUES (DEFAULT)")
+		db.MustExec("INSERT INTO " + db.Schema + ".foo2 (id) VALUES (DEFAULT)")
+		db.MustExec("INSERT INTO " + db.Schema2 + ".bar (id) VALUES (DEFAULT)")
 	}
 
 	var (
@@ -214,6 +215,7 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   snapshot_mode: snapshot_only
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
@@ -221,8 +223,8 @@ oracledb_cdc:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
-  exclude: ["TESTDB.DOESNOTEXIST"]`
+  include: ["` + db.Schema + `.FOO", "` + db.Schema + `.FOO2", "` + db.Schema2 + `.BAR"]
+  exclude: ["` + db.Schema + `.DOESNOTEXIST"]`
 
 		stream = oracledbtest.StartPipeline(t, cfg, batch.Consumer())
 
@@ -258,14 +260,14 @@ func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
 
 	// Insert 2000 rows across tables for initial snapshot streaming
 	want := 1000
 	for range 1000 {
-		db.MustExec("INSERT INTO testdb.foo (id, name, excluded_col) VALUES (DEFAULT, 'foo_name', 'should_not_appear')")
-		db.MustExec("INSERT INTO testdb.foo2 (id, name, excluded_col) VALUES (DEFAULT, 'foo2_name', 'should_not_appear')")
+		db.MustExec("INSERT INTO " + db.Schema + ".foo (id, name, excluded_col) VALUES (DEFAULT, 'foo_name', 'should_not_appear')")
+		db.MustExec("INSERT INTO " + db.Schema + ".foo2 (id, name, excluded_col) VALUES (DEFAULT, 'foo2_name', 'should_not_appear')")
 	}
 
 	// wait for changes to propagate to redo logs
@@ -280,17 +282,18 @@ func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: %s
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: true
   snapshot_filters:
-    testdb.foo: "SELECT ID, NAME FROM TESTDB.FOO WHERE ID > 500"
-    TESTDB.FOO2: "SELECT ID, NAME FROM TESTDB.FOO2 WHERE ID > 500"
+    ` + strings.ToLower(db.Schema) + `.foo: "SELECT ID, NAME FROM ` + db.Schema + `.FOO WHERE ID > 500"
+    ` + db.Schema + `.FOO2: "SELECT ID, NAME FROM ` + db.Schema + `.FOO2 WHERE ID > 500"
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
   logminer:
     scn_window_size: 20000
     backoff_interval: 1s
-  include: ["TESTDB.FOO", "TESTDB.FOO2"]
-  exclude: ["TESTDB.DOESNOTEXIST"]`
+  include: ["` + db.Schema + `.FOO", "` + db.Schema + `.FOO2"]
+  exclude: ["` + db.Schema + `.DOESNOTEXIST"]`
 
 		stream = oracledbtest.StartPipelineWithLogLevel(t, fmt.Sprintf(cfg, connStr), "DEBUG", batch.Consumer(t))
 
@@ -313,19 +316,20 @@ func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 
 	// Create table
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
 	var batch oracledbtest.Batch
 
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.FOO"]
+  include: ["` + db.Schema + `.FOO"]
   batching:
     count: 500`
 
@@ -339,7 +343,7 @@ oracledb_cdc:
 		_, err := db.Exec(`
 		BEGIN
 			FOR i IN 1..1000 LOOP
-				INSERT INTO testdb.foo (id) VALUES (DEFAULT);
+				INSERT INTO ` + db.Schema + `.foo (id) VALUES (DEFAULT);
 			END LOOP;
 			COMMIT;
 		END;`)
@@ -360,7 +364,7 @@ oracledb_cdc:
 		_, err := db.Exec(`
 		BEGIN
 			FOR i IN 1..1000 LOOP
-				INSERT INTO testdb.foo (id) VALUES (DEFAULT);
+				INSERT INTO ` + db.Schema + `.foo (id) VALUES (DEFAULT);
 			END LOOP;
 			COMMIT;
 		END;`)
@@ -392,18 +396,28 @@ func TestIntegrationOracleDBCDCResetlogsSurfacesGuidedError(t *testing.T) {
 
 	ctx := t.Context()
 	connStr, db, ctr := oracledbtest.SetupTestWithOracleDBVersionAndContainer(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, "testdb.resetlogs_probe",
-		"CREATE TABLE testdb.resetlogs_probe (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, note VARCHAR2(64))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, db.Schema+".resetlogs_probe",
+		"CREATE TABLE "+db.Schema+".resetlogs_probe (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, note VARCHAR2(64))"))
+
+	// The next test uses the same container. Undo the instance-level changes
+	// below (guaranteed restore point, FLASHBACK, recovery area). The new
+	// incarnation from OPEN RESETLOGS stays, but it has no effect on the other
+	// tests, because they mine forward from the current SCN.
+	t.Cleanup(func() {
+		script := `echo -e "DROP RESTORE POINT before_reset;\nALTER DATABASE FLASHBACK OFF;\nALTER SYSTEM SET db_recovery_file_dest='' SCOPE=BOTH;\nexit;" | sqlplus -S / as sysdba`
+		oracledbtest.MustExecInContainer(t, context.Background(), ctr, script, tcexec.WithUser("oracle"))
+	})
 
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.RESETLOGS_PROBE"]
+  include: ["` + db.Schema + `.RESETLOGS_PROBE"]
   batching:
     count: 10
     period: 500ms`
@@ -451,7 +465,7 @@ oracledb_cdc:
 	time.Sleep(5 * time.Second)
 
 	for range phase1Rows {
-		db.MustExec("INSERT INTO testdb.resetlogs_probe (note) VALUES ('phase1')")
+		db.MustExec("INSERT INTO " + db.Schema + ".resetlogs_probe (note) VALUES ('phase1')")
 	}
 	db.MustExec("COMMIT")
 
@@ -478,7 +492,7 @@ oracledb_cdc:
 		tcexec.WithUser("oracle"))
 	require.NotContains(t, restorePointOut, "ORA-", "unexpected Oracle error creating restore point")
 	for range 5 {
-		db.MustExec("INSERT INTO testdb.resetlogs_probe (note) VALUES ('throwaway')")
+		db.MustExec("INSERT INTO " + db.Schema + ".resetlogs_probe (note) VALUES ('throwaway')")
 	}
 	db.MustExec("COMMIT")
 	// Generate a stale prior-incarnation archived log before the reset.
@@ -507,7 +521,7 @@ oracledb_cdc:
 
 	// Trigger a mining cycle on the relaunched pipeline below; not asserted on delivery,
 	// since seamless recovery isn't what this test expects (see doc comment above).
-	db.MustExec("INSERT INTO testdb.resetlogs_probe (note) VALUES ('phase2')")
+	db.MustExec("INSERT INTO " + db.Schema + ".resetlogs_probe (note) VALUES ('phase2')")
 	db.MustExec("COMMIT")
 
 	t.Log("Relaunching component after RESETLOGS to verify it surfaces a guided ORA-01291 error rather than ORA-01287...")
@@ -562,11 +576,11 @@ func TestIntegrationOracleDBCDCSnapshotAckBarrier(t *testing.T) {
 	integration.CheckSkip(t)
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.ackbarrier", "CREATE TABLE testdb.ackbarrier (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".ackbarrier", "CREATE TABLE "+db.Schema+".ackbarrier (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
 	const rowCount = 5
 	for range rowCount {
-		db.MustExec("INSERT INTO testdb.ackbarrier (id) VALUES (DEFAULT)")
+		db.MustExec("INSERT INTO " + db.Schema + ".ackbarrier (id) VALUES (DEFAULT)")
 	}
 	db.MustExec("COMMIT")
 
@@ -576,12 +590,13 @@ func TestIntegrationOracleDBCDCSnapshotAckBarrier(t *testing.T) {
 	cfg := fmt.Sprintf(`
 oracledb_cdc:
   connection_string: %s
+  checkpoint_cache_table_name: `+db.CheckpointTable()+`
   snapshot_mode: snapshot_and_stream
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.ACKBARRIER"]
+  include: ["`+db.Schema+`.ACKBARRIER"]
   batching:
     count: %d
     period: 1h`, connStr, rowCount)
@@ -633,7 +648,7 @@ oracledb_cdc:
 	// core guarantee: without it a cached SCN would exist here and the
 	// snapshot would be skipped on restart, silently losing the un-acked rows.
 	var checkpoints int
-	require.NoError(t, db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM RPCN.CDC_CHECKPOINT_CACHE").Scan(&checkpoints))
+	require.NoError(t, db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+db.CheckpointTable()).Scan(&checkpoints))
 	require.Zero(t, checkpoints, "post-snapshot SCN must not be persisted before snapshot rows are acknowledged")
 
 	// Run 2: restart against the same checkpoint cache. Since run 1 never
@@ -721,7 +736,7 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 			assert.Equalf(t, "SYSTEM", username, "message %d: expected username 'SYSTEM', got %q", i, username)
 		}
 
-		for _, expectedKey := range []string{"TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"} {
+		for _, expectedKey := range []string{db.Schema + ".FOO", db.Schema + ".FOO2", db.Schema2 + ".BAR"} {
 			assert.Containsf(t, results, expectedKey, "no messages received for table %q", expectedKey)
 		}
 	}
@@ -729,21 +744,22 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	t.Run("With internal transaction buffer", func(t *testing.T) {
 		msgChan := make(chan *service.Message, 1)
 
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema2+".bar", "CREATE TABLE "+db.Schema2+".bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
     max_session_age: 5s
-  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
-  exclude: ["TESTDB.DOESNOTEXIST"]
+  include: ["` + db.Schema + `.FOO", "` + db.Schema + `.FOO2", "` + db.Schema2 + `.BAR"]
+  exclude: ["` + db.Schema + `.DOESNOTEXIST"]
   batching:
     count: 500`
 
@@ -781,9 +797,9 @@ oracledb_cdc:
 		// insert initial test data
 		want := 3000
 		for range 1000 {
-			db.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
-			db.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
-			db.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
+			db.MustExec("INSERT INTO " + db.Schema + ".foo (val) VALUES (1)")
+			db.MustExec("INSERT INTO " + db.Schema + ".foo2 (val) VALUES (1)")
+			db.MustExec("INSERT INTO " + db.Schema2 + ".bar (val) VALUES (1)")
 		}
 
 		t.Run("Streaming insert changes...", func(t *testing.T) {
@@ -807,9 +823,9 @@ oracledb_cdc:
 		})
 
 		t.Run("Streaming update changes...", func(t *testing.T) {
-			db.MustExec("UPDATE testdb.foo SET val = 2")
-			db.MustExec("UPDATE testdb.foo2 SET val = 2")
-			db.MustExec("UPDATE testdb2.bar SET val = 2")
+			db.MustExec("UPDATE " + db.Schema + ".foo SET val = 2")
+			db.MustExec("UPDATE " + db.Schema + ".foo2 SET val = 2")
+			db.MustExec("UPDATE " + db.Schema2 + ".bar SET val = 2")
 
 			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "update", msgs)
@@ -824,9 +840,9 @@ oracledb_cdc:
 		})
 
 		t.Run("Streaming delete changes...", func(t *testing.T) {
-			db.MustExec("DELETE FROM testdb.foo")
-			db.MustExec("DELETE FROM testdb.foo2")
-			db.MustExec("DELETE FROM testdb2.bar")
+			db.MustExec("DELETE FROM " + db.Schema + ".foo")
+			db.MustExec("DELETE FROM " + db.Schema + ".foo2")
+			db.MustExec("DELETE FROM " + db.Schema2 + ".bar")
 
 			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "delete", msgs)
@@ -846,21 +862,22 @@ oracledb_cdc:
 	t.Run("With cache_resource transaction buffer", func(t *testing.T) {
 		msgChan := make(chan *service.Message, 1)
 
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema2+".bar", "CREATE TABLE "+db.Schema2+".bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
     transaction_cache: "foocache"
-  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
-  exclude: ["TESTDB.DOESNOTEXIST"]
+  include: ["` + db.Schema + `.FOO", "` + db.Schema + `.FOO2", "` + db.Schema2 + `.BAR"]
+  exclude: ["` + db.Schema + `.DOESNOTEXIST"]
   batching:
     count: 500`
 
@@ -903,9 +920,9 @@ file:
 		// insert initial test data
 		want := 3000
 		for range 1000 {
-			db.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
-			db.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
-			db.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
+			db.MustExec("INSERT INTO " + db.Schema + ".foo (val) VALUES (1)")
+			db.MustExec("INSERT INTO " + db.Schema + ".foo2 (val) VALUES (1)")
+			db.MustExec("INSERT INTO " + db.Schema2 + ".bar (val) VALUES (1)")
 		}
 
 		t.Run("Streaming insert changes...", func(t *testing.T) {
@@ -922,9 +939,9 @@ file:
 		})
 
 		t.Run("Streaming update changes...", func(t *testing.T) {
-			db.MustExec("UPDATE testdb.foo SET val = 2")
-			db.MustExec("UPDATE testdb.foo2 SET val = 2")
-			db.MustExec("UPDATE testdb2.bar SET val = 2")
+			db.MustExec("UPDATE " + db.Schema + ".foo SET val = 2")
+			db.MustExec("UPDATE " + db.Schema + ".foo2 SET val = 2")
+			db.MustExec("UPDATE " + db.Schema2 + ".bar SET val = 2")
 
 			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "update", msgs)
@@ -939,9 +956,9 @@ file:
 		})
 
 		t.Run("Streaming delete changes...", func(t *testing.T) {
-			db.MustExec("DELETE FROM testdb.foo")
-			db.MustExec("DELETE FROM testdb.foo2")
-			db.MustExec("DELETE FROM testdb2.bar")
+			db.MustExec("DELETE FROM " + db.Schema + ".foo")
+			db.MustExec("DELETE FROM " + db.Schema + ".foo2")
+			db.MustExec("DELETE FROM " + db.Schema2 + ".bar")
 
 			msgs := oracledbtest.CollectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "delete", msgs)
@@ -963,7 +980,7 @@ func TestIntegrationOracleDBCDCRedoVolumeWindowStrategy(t *testing.T) {
 	integration.CheckSkip(t)
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.logcount", "CREATE TABLE testdb.logcount (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".logcount", "CREATE TABLE "+db.Schema+".logcount (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
 	msgChan := make(chan *service.Message, 1)
 
@@ -972,6 +989,7 @@ func TestIntegrationOracleDBCDCRedoVolumeWindowStrategy(t *testing.T) {
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   snapshot_mode: none
   logminer:
     window_strategy: redo_volume
@@ -979,7 +997,7 @@ oracledb_cdc:
     redo_volume_growth_max: 4
     backoff_interval: 1s
     min_scn_window_size: 0
-  include: ["TESTDB.LOGCOUNT"]
+  include: ["` + db.Schema + `.LOGCOUNT"]
   batching:
     count: 10`
 
@@ -1016,7 +1034,7 @@ oracledb_cdc:
 
 	t.Run("Streaming insert changes across a forced log switch", func(t *testing.T) {
 		for range want / 2 {
-			db.MustExec("INSERT INTO testdb.logcount (val) VALUES (1)")
+			db.MustExec("INSERT INTO " + db.Schema + ".logcount (val) VALUES (1)")
 		}
 
 		// Force a log switch mid-scenario so a later cycle must select across
@@ -1024,7 +1042,7 @@ oracledb_cdc:
 		db.MustExec("ALTER SYSTEM SWITCH LOGFILE")
 
 		for range want / 2 {
-			db.MustExec("INSERT INTO testdb.logcount (val) VALUES (1)")
+			db.MustExec("INSERT INTO " + db.Schema + ".logcount (val) VALUES (1)")
 		}
 
 		msgs := oracledbtest.CollectMessages(t, msgChan, want)
@@ -1039,7 +1057,7 @@ oracledb_cdc:
 	})
 
 	t.Run("Streaming update changes", func(t *testing.T) {
-		db.MustExec("UPDATE testdb.logcount SET val = 2")
+		db.MustExec("UPDATE " + db.Schema + ".logcount SET val = 2")
 
 		msgs := oracledbtest.CollectMessages(t, msgChan, want)
 		assertOperation(t, "update", msgs)
@@ -1053,7 +1071,7 @@ oracledb_cdc:
 
 	t.Run("Streaming delete changes across another forced log switch", func(t *testing.T) {
 		db.MustExec("ALTER SYSTEM SWITCH LOGFILE")
-		db.MustExec("DELETE FROM testdb.logcount")
+		db.MustExec("DELETE FROM " + db.Schema + ".logcount")
 
 		msgs := oracledbtest.CollectMessages(t, msgChan, want)
 		assertOperation(t, "delete", msgs)
@@ -1106,10 +1124,10 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
-	sql := `CREATE TABLE testdb.lobdisabled (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobdisabled", sql))
-	sql = `CREATE TABLE testdb.lobenabled (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobenabled", sql))
+	sql := `CREATE TABLE ` + db.Schema + `.lobdisabled (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".lobdisabled", sql))
+	sql = `CREATE TABLE ` + db.Schema + `.lobenabled (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".lobenabled", sql))
 
 	var (
 		inline       = strings.Repeat("A", 50)
@@ -1121,7 +1139,7 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 
 	t.Run("lob_enabled=false", func(t *testing.T) {
 		for range snapshotRows {
-			db.MustExec("INSERT INTO testdb.lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "snapshot", inline, outofline)
+			db.MustExec("INSERT INTO "+db.Schema+".lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "snapshot", inline, outofline)
 		}
 
 		var (
@@ -1134,11 +1152,12 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 			cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   snapshot_mode: snapshot_and_stream
   logminer:
     lob_enabled: false
     min_scn_window_size: 0
-  include: ["TESTDB.LOBDISABLED"]`
+  include: ["` + db.Schema + `.LOBDISABLED"]`
 			stream = oracledbtest.StartPipelineWithLogLevel(t, cfg, "WARN", consumeWithUsername(t, &batch, usernameByID, hasUsernameByID))
 		}
 
@@ -1170,7 +1189,7 @@ oracledb_cdc:
 		{
 			streamingRows := 50
 			for range streamingRows {
-				db.MustExec("INSERT INTO testdb.lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "streaming", inline, outofline)
+				db.MustExec("INSERT INTO "+db.Schema+".lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "streaming", inline, outofline)
 			}
 
 			var got int
@@ -1199,11 +1218,11 @@ oracledb_cdc:
 
 	// The checkpoint cache table is created lazily during Connect(), so it may
 	// not exist if the first subtest failed before the stream was launched.
-	_, _ = db.Exec(`TRUNCATE TABLE RPCN.CDC_CHECKPOINT_CACHE`)
+	_, _ = db.Exec("TRUNCATE TABLE " + db.CheckpointTable())
 
 	t.Run("lob_enabled=true", func(t *testing.T) {
 		for range snapshotRows {
-			db.MustExec("INSERT INTO testdb.lobenabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "snapshot", inline, outofline)
+			db.MustExec("INSERT INTO "+db.Schema+".lobenabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "snapshot", inline, outofline)
 		}
 
 		var (
@@ -1216,12 +1235,13 @@ oracledb_cdc:
 			cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: true
   snapshot_mode: snapshot_and_stream
   logminer:
     lob_enabled: true
     min_scn_window_size: 0
-  include: ["TESTDB.LOBENABLED"]`
+  include: ["` + db.Schema + `.LOBENABLED"]`
 			stream = oracledbtest.StartPipeline(t, cfg, consumeWithUsername(t, &batch, usernameByID, hasUsernameByID))
 		}
 
@@ -1253,7 +1273,7 @@ oracledb_cdc:
 		{
 			streamingRows := 50
 			for range streamingRows {
-				db.MustExec("INSERT INTO testdb.lobenabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "streaming", inline, outofline)
+				db.MustExec("INSERT INTO "+db.Schema+".lobenabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "streaming", inline, outofline)
 			}
 
 			var got int
@@ -1313,6 +1333,7 @@ oracledb_cdc:
 		cfg := fmt.Sprintf(`
 oracledb_cdc:
   connection_string: %s
+  checkpoint_cache_table_name: `+db.CheckpointTable()+`
   snapshot_mode: snapshot_and_stream
   checkpoint_cache_key: %s
   logminer:
@@ -1338,7 +1359,7 @@ oracledb_cdc:
 	}
 
 	t.Run("lob_enabled=false lob-fetch=stream", func(t *testing.T) {
-		runLobStreamLeg(t, "testdb.lobstreamdisabled", false, `{
+		runLobStreamLeg(t, db.Schema+".lobstreamdisabled", false, `{
 		"ID": "1",
 		"VARCHARCOL": "snapshot",
 		"CLOBLOB": null,
@@ -1347,7 +1368,7 @@ oracledb_cdc:
 	})
 
 	t.Run("lob_enabled=true lob-fetch=stream", func(t *testing.T) {
-		runLobStreamLeg(t, "testdb.lobstreamenabled", true, `{
+		runLobStreamLeg(t, db.Schema+".lobstreamenabled", true, `{
 		"ID": "1",
 		"VARCHARCOL": "snapshot",
 		"CLOBLOB": "`+outofline+`",
@@ -1361,7 +1382,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	q := `
-	CREATE TABLE testdb.all_data_types (
+	CREATE TABLE ` + db.Schema + `.all_data_types (
 		-- Numeric Data Types
 		tinyint_col       NUMBER(3)      PRIMARY KEY,   -- 0 to 255
 		smallint_col      NUMBER(5),                    -- -32,768 to 32,767
@@ -1404,14 +1425,14 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		nullable_num      NUMBER(11,0),                 -- nullable number to verify NULL handling
 		nonnullable_num   NUMBER(11,0) NOT NULL         -- NOT NULL
 	) LOB(oolvarcharmax_col) STORE AS BASICFILE (DISABLE STORAGE IN ROW NOCACHE LOGGING)`
-	err := db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.all_data_types", q)
+	err := db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".all_data_types", q)
 	require.NoError(t, err)
 
 	// disable supplemental logging before we insert snapshot data
-	db.MustDisableSupplementalLogging(t.Context(), "testdb.all_data_types")
+	db.MustDisableSupplementalLogging(t.Context(), db.Schema+".all_data_types")
 
 	query := `
-	INSERT INTO testdb.all_data_types (
+	INSERT INTO ` + db.Schema + `.all_data_types (
 		tinyint_col, smallint_col, int_col, bigint_col,
 		decimal_col, numeric_col, float_col, real_col,
 		date_col, datetime_col, datetime2_col, smalldatetime_col,
@@ -1466,7 +1487,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		)
 	}
 
-	db.MustEnableSupplementalLogging(t.Context(), "testdb.all_data_types")
+	db.MustEnableSupplementalLogging(t.Context(), db.Schema+".all_data_types")
 
 	var (
 		batch  oracledbtest.Batch
@@ -1477,6 +1498,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: true
   snapshot_max_batch_size: 100
   logminer:
@@ -1484,7 +1506,7 @@ oracledb_cdc:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.ALL_DATA_TYPES"]`
+  include: ["` + db.Schema + `.ALL_DATA_TYPES"]`
 
 		stream = oracledbtest.StartPipelineWithLogLevel(t, cfg, "DEBUG", batch.Consumer(t))
 
@@ -1639,23 +1661,24 @@ func TestIntegrationOracleDBCDCReplicateTableSchema(t *testing.T) {
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
 	t.Run("Snapshot Schema", func(t *testing.T) {
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_snap",
-			"CREATE TABLE testdb.schema_snap (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100), created_at DATE, data RAW(16), score BINARY_FLOAT)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_snap",
+			"CREATE TABLE "+db.Schema+".schema_snap (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100), created_at DATE, data RAW(16), score BINARY_FLOAT)"))
 
-		db.MustExec("INSERT INTO testdb.schema_snap VALUES (1, 'Alice', SYSDATE, HEXTORAW('DEADBEEF'), 1.5)")
-		db.MustExec("INSERT INTO testdb.schema_snap VALUES (2, 'Bob', SYSDATE, HEXTORAW('CAFEBABE'), 2.5)")
+		db.MustExec("INSERT INTO " + db.Schema + ".schema_snap VALUES (1, 'Alice', SYSDATE, HEXTORAW('DEADBEEF'), 1.5)")
+		db.MustExec("INSERT INTO " + db.Schema + ".schema_snap VALUES (2, 'Bob', SYSDATE, HEXTORAW('CAFEBABE'), 2.5)")
 
 		msgChan := make(chan *service.Message, 10)
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: true
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_SNAP"]`
+  include: ["` + db.Schema + `.SCHEMA_SNAP"]`
 
 		stream := oracledbtest.StartPipelineWithLogLevel(t, cfg, "DEBUG", func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
@@ -1710,19 +1733,20 @@ oracledb_cdc:
 	})
 
 	t.Run("Streaming Insert Schema", func(t *testing.T) {
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_ins",
-			"CREATE TABLE testdb.schema_ins (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_ins",
+			"CREATE TABLE "+db.Schema+".schema_ins (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 
 		msgChan := make(chan *service.Message, 10)
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_INS"]`
+  include: ["` + db.Schema + `.SCHEMA_INS"]`
 
 		stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
@@ -1734,8 +1758,8 @@ oracledb_cdc:
 
 		time.Sleep(10 * time.Second)
 
-		db.MustExec("INSERT INTO testdb.schema_ins VALUES (1, 'hello')")
-		db.MustExec("INSERT INTO testdb.schema_ins VALUES (2, 'world')")
+		db.MustExec("INSERT INTO " + db.Schema + ".schema_ins VALUES (1, 'hello')")
+		db.MustExec("INSERT INTO " + db.Schema + ".schema_ins VALUES (2, 'world')")
 
 		var msgs []*service.Message
 		for msg := range msgChan {
@@ -1759,19 +1783,20 @@ oracledb_cdc:
 	})
 
 	t.Run("Streaming update schema", func(t *testing.T) {
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_upd",
-			"CREATE TABLE testdb.schema_upd (id NUMBER(10) PRIMARY KEY, a VARCHAR2(50), b VARCHAR2(50), c VARCHAR2(50))"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_upd",
+			"CREATE TABLE "+db.Schema+".schema_upd (id NUMBER(10) PRIMARY KEY, a VARCHAR2(50), b VARCHAR2(50), c VARCHAR2(50))"))
 
 		msgChan := make(chan *service.Message, 10)
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_UPD"]`
+  include: ["` + db.Schema + `.SCHEMA_UPD"]`
 
 		stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
@@ -1784,8 +1809,8 @@ oracledb_cdc:
 		time.Sleep(10 * time.Second)
 
 		// INSERT a row (all columns), then UPDATE only column B
-		db.MustExec("INSERT INTO testdb.schema_upd VALUES (1, 'x', 'y', 'z')")
-		db.MustExec("UPDATE testdb.schema_upd SET b = 'updated' WHERE id = 1")
+		db.MustExec("INSERT INTO " + db.Schema + ".schema_upd VALUES (1, 'x', 'y', 'z')")
+		db.MustExec("UPDATE " + db.Schema + ".schema_upd SET b = 'updated' WHERE id = 1")
 
 		var msgs []*service.Message
 		for msg := range msgChan {
@@ -1812,19 +1837,20 @@ oracledb_cdc:
 	})
 
 	t.Run("Streaming Delete Schema", func(t *testing.T) {
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_del",
-			"CREATE TABLE testdb.schema_del (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_del",
+			"CREATE TABLE "+db.Schema+".schema_del (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 
 		msgChan := make(chan *service.Message, 10)
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_DEL"]`
+  include: ["` + db.Schema + `.SCHEMA_DEL"]`
 
 		stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 			for _, msg := range mb {
@@ -1836,8 +1862,8 @@ oracledb_cdc:
 
 		time.Sleep(10 * time.Second)
 
-		db.MustExec("INSERT INTO testdb.schema_del VALUES (1, 'doomed')")
-		db.MustExec("DELETE FROM testdb.schema_del WHERE id = 1")
+		db.MustExec("INSERT INTO " + db.Schema + ".schema_del VALUES (1, 'doomed')")
+		db.MustExec("DELETE FROM " + db.Schema + ".schema_del WHERE id = 1")
 
 		var msgs []*service.Message
 		for msg := range msgChan {
@@ -1866,23 +1892,24 @@ func TestIntegrationOracleDBCDCSchemaConsistentAcrossPhases(t *testing.T) {
 	integration.CheckSkip(t)
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_phases",
-		"CREATE TABLE testdb.schema_phases (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_phases",
+		"CREATE TABLE "+db.Schema+".schema_phases (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 
-	db.MustExec("INSERT INTO testdb.schema_phases VALUES (1, 'snapshot')")
+	db.MustExec("INSERT INTO " + db.Schema + ".schema_phases VALUES (1, 'snapshot')")
 
 	var batch oracledbtest.MsgBatch
 
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: true
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_PHASES"]`
+  include: ["` + db.Schema + `.SCHEMA_PHASES"]`
 
 	stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer())
 
@@ -1895,7 +1922,7 @@ oracledb_cdc:
 	batch.Reset()
 
 	// Now insert via streaming
-	db.MustExec("INSERT INTO testdb.schema_phases VALUES (2, 'streaming')")
+	db.MustExec("INSERT INTO " + db.Schema + ".schema_phases VALUES (2, 'streaming')")
 
 	assert.Eventually(t, func() bool {
 		return batch.Count() >= 1
@@ -1918,19 +1945,20 @@ func TestIntegrationOracleDBCDCSchemaColumnAdded(t *testing.T) {
 	integration.CheckSkip(t)
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_drift",
-		"CREATE TABLE testdb.schema_drift (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_drift",
+		"CREATE TABLE "+db.Schema+".schema_drift (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100))"))
 
 	msgChan := make(chan *service.Message, 10)
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_DRIFT"]`
+  include: ["` + db.Schema + `.SCHEMA_DRIFT"]`
 
 	stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
@@ -1943,7 +1971,7 @@ oracledb_cdc:
 	time.Sleep(10 * time.Second)
 
 	// INSERT before ALTER — schema has [ID, NAME]
-	db.MustExec("INSERT INTO testdb.schema_drift VALUES (1, 'before')")
+	db.MustExec("INSERT INTO " + db.Schema + ".schema_drift VALUES (1, 'before')")
 
 	msg1 := <-msgChan
 	require.NotNil(t, msg1)
@@ -1953,12 +1981,12 @@ oracledb_cdc:
 
 	// ALTER TABLE to add a column, then drop and re-enable supplemental logging
 	// to cover the new column (ORA-32588 if we just re-add without dropping first)
-	db.MustExec("ALTER TABLE testdb.schema_drift ADD (email VARCHAR2(255))")
-	db.MustDisableSupplementalLogging(t.Context(), "testdb.schema_drift")
-	db.MustEnableSupplementalLogging(t.Context(), "testdb.schema_drift")
+	db.MustExec("ALTER TABLE " + db.Schema + ".schema_drift ADD (email VARCHAR2(255))")
+	db.MustDisableSupplementalLogging(t.Context(), db.Schema+".schema_drift")
+	db.MustEnableSupplementalLogging(t.Context(), db.Schema+".schema_drift")
 
 	// INSERT with new column — schema should now have [ID, NAME, EMAIL]
-	db.MustExec("INSERT INTO testdb.schema_drift VALUES (2, 'after', 'test@example.com')")
+	db.MustExec("INSERT INTO " + db.Schema + ".schema_drift VALUES (2, 'after', 'test@example.com')")
 
 	msg2 := <-msgChan
 	require.NotNil(t, msg2)
@@ -1978,21 +2006,22 @@ func TestIntegrationOracleDBCDCMultiTableSchema(t *testing.T) {
 	integration.CheckSkip(t)
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_t1",
-		"CREATE TABLE testdb.schema_t1 (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_t2",
-		"CREATE TABLE testdb.schema_t2 (x DATE, y RAW(16), z BINARY_FLOAT)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_t1",
+		"CREATE TABLE "+db.Schema+".schema_t1 (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_t2",
+		"CREATE TABLE "+db.Schema+".schema_t2 (x DATE, y RAW(16), z BINARY_FLOAT)"))
 
 	msgChan := make(chan *service.Message, 10)
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_T1", "TESTDB.SCHEMA_T2"]`
+  include: ["` + db.Schema + `.SCHEMA_T1", "` + db.Schema + `.SCHEMA_T2"]`
 
 	stream := oracledbtest.StartPipeline(t, cfg, func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
@@ -2004,8 +2033,8 @@ oracledb_cdc:
 
 	time.Sleep(10 * time.Second)
 
-	db.MustExec("INSERT INTO testdb.schema_t1 VALUES (1, 'hello')")
-	db.MustExec("INSERT INTO testdb.schema_t2 VALUES (SYSDATE, HEXTORAW('DEADBEEFCAFEBABE0000000000000000'), 1.5)")
+	db.MustExec("INSERT INTO " + db.Schema + ".schema_t1 VALUES (1, 'hello')")
+	db.MustExec("INSERT INTO " + db.Schema + ".schema_t2 VALUES (SYSDATE, HEXTORAW('DEADBEEFCAFEBABE0000000000000000'), 1.5)")
 
 	// Collect 2 messages (one from each table)
 	byTable := map[string]*service.Message{}
@@ -2038,8 +2067,8 @@ func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 	integration.CheckSkip(t)
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_types",
-		`CREATE TABLE testdb.schema_types (
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".schema_types",
+		`CREATE TABLE `+db.Schema+`.schema_types (
 			int_col       NUMBER(10)      PRIMARY KEY,
 			bigint_col    NUMBER(18),
 			decimal_col   NUMBER(20, 5),
@@ -2055,10 +2084,10 @@ func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 		)`))
 
 	// Disable supplemental logging before snapshot insert
-	db.MustDisableSupplementalLogging(t.Context(), "testdb.schema_types")
+	db.MustDisableSupplementalLogging(t.Context(), db.Schema+".schema_types")
 
 	// Insert row for snapshot
-	db.MustExecContext(t.Context(), `INSERT INTO testdb.schema_types VALUES (
+	db.MustExecContext(t.Context(), `INSERT INTO `+db.Schema+`.schema_types VALUES (
 		1, 999999999999999999, 12345.67890,
 		1.5, 2.5,
 		TO_DATE('2020-06-15','YYYY-MM-DD'),
@@ -2069,20 +2098,21 @@ func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 		1
 	)`)
 
-	db.MustEnableSupplementalLogging(t.Context(), "testdb.schema_types")
+	db.MustEnableSupplementalLogging(t.Context(), db.Schema+".schema_types")
 
 	var batch oracledbtest.MsgBatch
 
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: true
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_TYPES"]`
+  include: ["` + db.Schema + `.SCHEMA_TYPES"]`
 
 	stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer())
 
@@ -2097,7 +2127,7 @@ oracledb_cdc:
 
 	// Insert same row via DML for streaming
 	t.Log("Inserting streaming row...")
-	db.MustExecContext(t.Context(), `INSERT INTO testdb.schema_types VALUES (
+	db.MustExecContext(t.Context(), `INSERT INTO `+db.Schema+`.schema_types VALUES (
 		2, 999999999999999999, 12345.67890,
 		1.5, 2.5,
 		TO_DATE('2020-06-15','YYYY-MM-DD'),
@@ -2192,8 +2222,8 @@ func TestIntegrationOracleDBCDCLOB(t *testing.T) {
 		// Use default storage (SecureFile on Oracle Free 23c) so that Oracle emits
 		// the SELECT_LOB_LOCATOR → LOB_WRITE(s) → LOB_TRIM(N) sequence on UPDATE.
 		// The LOB_TRIM finalisation step must not discard already-accumulated fragments.
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobtrim",
-			`CREATE TABLE testdb.lobtrim (
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".lobtrim",
+			`CREATE TABLE `+db.Schema+`.lobtrim (
 			id      NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,
 			clobcol CLOB
 		)`))
@@ -2203,13 +2233,14 @@ func TestIntegrationOracleDBCDCLOB(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: false
   logminer:
     lob_enabled: true
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.LOBTRIM"]`
+  include: ["` + db.Schema + `.LOBTRIM"]`
 
 		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
@@ -2218,7 +2249,7 @@ oracledb_cdc:
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
 			initialClob := strings.Repeat("A", 5000)
-			db.MustExec("INSERT INTO testdb.lobtrim (clobcol) VALUES (:1)", initialClob)
+			db.MustExec("INSERT INTO "+db.Schema+".lobtrim (clobcol) VALUES (:1)", initialClob)
 
 			assert.Eventually(t, func() bool {
 				return batch.Count() >= 1
@@ -2230,7 +2261,7 @@ oracledb_cdc:
 			// UPDATE the row — Oracle emits SELECT_LOB_LOCATOR → LOB_WRITE(s) → LOB_TRIM.
 			// The assembled CLOB value should equal the new content, not the old value.
 			updatedClob := strings.Repeat("B", 5000)
-			db.MustExec("UPDATE testdb.lobtrim SET clobcol = :1 WHERE id = 1", updatedClob)
+			db.MustExec("UPDATE "+db.Schema+".lobtrim SET clobcol = :1 WHERE id = 1", updatedClob)
 
 			assert.Eventually(t, func() bool {
 				for _, msg := range batch.Clone() {
@@ -2253,8 +2284,8 @@ oracledb_cdc:
 		// whereas SecureFile emits LOB_WRITE(s) → LOB_TRIM(N). The LOB_TRIM(0) must not
 		// discard the fragments written after it, and the assembled value should appear in
 		// the UPDATE CDC event merged via MergeLOBsIntoDMLEvents.
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobtrimbasic",
-			`CREATE TABLE testdb.lobtrimbasic (
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".lobtrimbasic",
+			`CREATE TABLE `+db.Schema+`.lobtrimbasic (
 			id      NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,
 			clobcol CLOB
 		) LOB(clobcol) STORE AS BASICFILE`))
@@ -2264,13 +2295,14 @@ oracledb_cdc:
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: false
   logminer:
     lob_enabled: true
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.LOBTRIMBASIC"]`
+  include: ["` + db.Schema + `.LOBTRIMBASIC"]`
 
 		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
@@ -2279,7 +2311,7 @@ oracledb_cdc:
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
 			initialClob := strings.Repeat("A", 5000)
-			db.MustExec("INSERT INTO testdb.lobtrimbasic (clobcol) VALUES (:1)", initialClob)
+			db.MustExec("INSERT INTO "+db.Schema+".lobtrimbasic (clobcol) VALUES (:1)", initialClob)
 
 			assert.Eventually(t, func() bool {
 				return batch.Count() >= 1
@@ -2289,7 +2321,7 @@ oracledb_cdc:
 		t.Log("Updating LOB row and waiting for CDC event")
 		{
 			updatedClob := strings.Repeat("B", 5000)
-			db.MustExec("UPDATE testdb.lobtrimbasic SET clobcol = :1 WHERE id = 1", updatedClob)
+			db.MustExec("UPDATE "+db.Schema+".lobtrimbasic SET clobcol = :1 WHERE id = 1", updatedClob)
 
 			assert.Eventually(t, func() bool {
 				for _, msg := range batch.Clone() {
@@ -2311,8 +2343,8 @@ oracledb_cdc:
 		// BASICFILE with DISABLE STORAGE IN ROW stores the LOB out-of-row and does not
 		// emit SELECT_LOB_LOCATOR. The inferLOBLocator path must create the accumulator
 		// from an existing DML event, and the assembled value must appear in the UPDATE.
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobtrimbasicoor",
-			`CREATE TABLE testdb.lobtrimbasicoor (
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".lobtrimbasicoor",
+			`CREATE TABLE `+db.Schema+`.lobtrimbasicoor (
 			id      NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,
 			clobcol CLOB
 		) LOB(clobcol) STORE AS BASICFILE (DISABLE STORAGE IN ROW NOCACHE)`))
@@ -2322,13 +2354,14 @@ oracledb_cdc:
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: false
   logminer:
     lob_enabled: true
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.LOBTRIMBASICOOR"]`
+  include: ["` + db.Schema + `.LOBTRIMBASICOOR"]`
 
 		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
@@ -2337,7 +2370,7 @@ oracledb_cdc:
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
 			initialClob := strings.Repeat("A", 5000)
-			db.MustExec("INSERT INTO testdb.lobtrimbasicoor (clobcol) VALUES (:1)", initialClob)
+			db.MustExec("INSERT INTO "+db.Schema+".lobtrimbasicoor (clobcol) VALUES (:1)", initialClob)
 
 			assert.Eventually(t, func() bool {
 				return batch.Count() >= 1
@@ -2347,7 +2380,7 @@ oracledb_cdc:
 		t.Log("Updating LOB row and waiting for CDC event")
 		{
 			updatedClob := strings.Repeat("B", 5000)
-			db.MustExec("UPDATE testdb.lobtrimbasicoor SET clobcol = :1 WHERE id = 1", updatedClob)
+			db.MustExec("UPDATE "+db.Schema+".lobtrimbasicoor SET clobcol = :1 WHERE id = 1", updatedClob)
 
 			assert.Eventually(t, func() bool {
 				for _, msg := range batch.Clone() {
@@ -2370,10 +2403,10 @@ oracledb_cdc:
 		// emit SELECT_LOB_LOCATOR / LOB_WRITE op codes (9/10/11) on every insert — exactly
 		// the operation class that was previously unfiltered by the LogMiner SQL query, allowing
 		// LOB writes to unmonitored tables to leak into the output.
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobfilter_included",
-			`CREATE TABLE testdb.lobfilter_included (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY, data NCLOB) LOB(data) STORE AS BASICFILE (DISABLE STORAGE IN ROW)`))
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobfilter_excluded",
-			`CREATE TABLE testdb.lobfilter_excluded (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY, data NCLOB) LOB(data) STORE AS BASICFILE (DISABLE STORAGE IN ROW)`))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".lobfilter_included",
+			`CREATE TABLE `+db.Schema+`.lobfilter_included (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY, data NCLOB) LOB(data) STORE AS BASICFILE (DISABLE STORAGE IN ROW)`))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".lobfilter_excluded",
+			`CREATE TABLE `+db.Schema+`.lobfilter_excluded (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY, data NCLOB) LOB(data) STORE AS BASICFILE (DISABLE STORAGE IN ROW)`))
 
 		var batch oracledbtest.Batch
 
@@ -2381,13 +2414,14 @@ oracledb_cdc:
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: false
   logminer:
     lob_enabled: true
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.LOBFILTER_INCLUDED"]`
+  include: ["` + db.Schema + `.LOBFILTER_INCLUDED"]`
 
 		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer(t))
 
@@ -2396,8 +2430,8 @@ oracledb_cdc:
 
 		lobVal := strings.Repeat("X", 5000)
 		for range 5 {
-			db.MustExec("INSERT INTO testdb.lobfilter_included (data) VALUES (:1)", lobVal)
-			db.MustExec("INSERT INTO testdb.lobfilter_excluded (data) VALUES (:1)", lobVal)
+			db.MustExec("INSERT INTO "+db.Schema+".lobfilter_included (data) VALUES (:1)", lobVal)
+			db.MustExec("INSERT INTO "+db.Schema+".lobfilter_excluded (data) VALUES (:1)", lobVal)
 		}
 
 		// Exactly 5 messages must arrive — those from lobfilter_included only.
@@ -2422,19 +2456,20 @@ func TestIntegrationOracleDBCDCNationalCharset(t *testing.T) {
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	ctx := t.Context()
 
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, "testdb.natchar",
-		"CREATE TABLE testdb.natchar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, nv NVARCHAR2(50))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, db.Schema+".natchar",
+		"CREATE TABLE "+db.Schema+".natchar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, nv NVARCHAR2(50))"))
 
 	msgChan := make(chan *service.Message, 64)
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.NATCHAR"]
+  include: ["` + db.Schema + `.NATCHAR"]
   batching:
     count: 1`
 
@@ -2457,7 +2492,7 @@ oracledb_cdc:
 
 	time.Sleep(10 * time.Second)
 	// café (BMP) and 😀 (U+1F600, requires a UTF-16 surrogate pair).
-	db.MustExec("INSERT INTO testdb.natchar (nv) VALUES (:1)", "café 😀")
+	db.MustExec("INSERT INTO "+db.Schema+".natchar (nv) VALUES (:1)", "café 😀")
 
 	var got string
 	require.Eventually(t, func() bool {
@@ -2495,8 +2530,8 @@ func TestIntegrationOracleDBCDCOnlineLogRecycledMidQuery(t *testing.T) {
 
 	ctx := t.Context()
 	connStr, db, ctr := oracledbtest.SetupTestWithOracleDBVersionAndContainer(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, "testdb.log_recycle",
-		"CREATE TABLE testdb.log_recycle (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, note VARCHAR2(64))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(ctx, db.Schema+".log_recycle",
+		"CREATE TABLE "+db.Schema+".log_recycle (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, note VARCHAR2(64))"))
 
 	// Without ARCHIVELOG mode a reused online log's redo is gone for good, so
 	// there would be nothing for the retry to recover from.
@@ -2518,13 +2553,14 @@ func TestIntegrationOracleDBCDCOnlineLogRecycledMidQuery(t *testing.T) {
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   snapshot_mode: none
   logminer:
     scn_window_size: 1000000
     max_scn_window_size: 1000000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.LOG_RECYCLE"]
+  include: ["` + db.Schema + `.LOG_RECYCLE"]
   batching:
     count: 100
     period: 500ms`
@@ -2590,7 +2626,7 @@ oracledb_cdc:
 	t.Log("Launching component to establish a checkpoint before the test data...")
 	stream := runStream(os.Stdout)
 	time.Sleep(5 * time.Second)
-	db.MustExec("INSERT INTO testdb.log_recycle (note) VALUES ('warmup')")
+	db.MustExec("INSERT INTO " + db.Schema + ".log_recycle (note) VALUES ('warmup')")
 	db.MustExec("COMMIT")
 	require.Eventually(t, func() bool {
 		_, all := delivered()
@@ -2613,7 +2649,7 @@ oracledb_cdc:
 	BEGIN
 		FOR t IN 1..%d LOOP
 			FOR i IN 1..%d LOOP
-				INSERT INTO testdb.log_recycle (note) VALUES ('archived');
+				INSERT INTO `+db.Schema+`.log_recycle (note) VALUES ('archived');
 			END LOOP;
 			COMMIT;
 		END LOOP;
@@ -2624,7 +2660,7 @@ oracledb_cdc:
 	db.MustExec(fmt.Sprintf(`
 	BEGIN
 		FOR i IN 1..%d LOOP
-			INSERT INTO testdb.log_recycle (note) VALUES ('online');
+			INSERT INTO `+db.Schema+`.log_recycle (note) VALUES ('online');
 		END LOOP;
 		COMMIT;
 	END;`, onlineRows))
