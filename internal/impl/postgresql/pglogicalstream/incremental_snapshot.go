@@ -1013,3 +1013,24 @@ func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMess
 	}
 	return nil
 }
+
+// primaryKeyColumnTypesQuery reports the primary key columns of a table with
+// their type names, resolving a domain to the type it is built on so a domain
+// over an unusable type is not mistaken for a usable one. It also reports
+// typtype through the same domain resolution, because range and multirange
+// types are user-definable and so can't be recognised by name alone -- a
+// domain over a range type needs the same structural check as the range type
+// itself.
+func primaryKeyColumnTypesQuery(table string) (string, error) {
+	return sanitize.SQLQuery(`
+        SELECT a.attname, COALESCE(bt.typname, t.typname), COALESCE(bt.typtype, t.typtype)
+        FROM   pg_index i
+        JOIN   pg_attribute a ON a.attrelid = i.indrelid
+            AND a.attnum = ANY(i.indkey)
+        JOIN   pg_type t ON t.oid = a.atttypid
+        LEFT JOIN pg_type bt ON bt.oid = NULLIF(t.typbasetype, 0)
+        WHERE  i.indrelid = $1::regclass
+        AND    i.indisprimary
+        ORDER BY array_position(i.indkey, a.attnum);
+    `, table)
+}
