@@ -2,7 +2,8 @@
 # Prints the review threads of a pull request as one JSON array: the resolved and outdated
 # state, the path and line, and each comment with its author and authorAssociation.
 #
-# The /review skill allows this script instead of `gh api graphql *`. That pattern also matches
+# Used by the /review skill and by the CI reviewer (.github/workflows/claude-code-review.yml).
+# The skill allows this script instead of `gh api graphql *`. That pattern also matches
 # mutations, so a prompt injection in PR content could write to GitHub with the user's token.
 # Here the query is fixed and the only input is a PR number, so the script can only read.
 set -euo pipefail

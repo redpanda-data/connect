@@ -102,6 +102,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -115,49 +116,37 @@ jobs:
           gh pr view "$PR_NUMBER" --json commits > /tmp/pr-commits.json
           gh pr view "$PR_NUMBER" --json files --jq '.files[].path' > /tmp/pr-files.txt
 
-          # A review runs on every push, and each run starts with no memory. Save the earlier
-          # review threads (with resolved/outdated state and the replies), the PR description
-          # and conversation, and the related open PRs. With these, the reviewer does not raise
-          # again an issue that was fixed, declined, or deferred to another PR.
-          gh pr view "$PR_NUMBER" --json title,body,author,baseRefName,headRefName,comments > /tmp/pr-meta.json
-          gh api graphql --paginate -F owner="${REPO%/*}" -F repo="${REPO#*/}" -F pr="$PR_NUMBER" -f query='
-            query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
-              repository(owner: $owner, name: $repo) {
-                pullRequest(number: $pr) {
-                  reviewThreads(first: 50, after: $endCursor) {
-                    pageInfo { hasNextPage endCursor }
-                    nodes {
-                      isResolved isOutdated path line originalLine
-                      comments(first: 50) { nodes { author { login } authorAssociation body createdAt } }
-                    }
-                  }
-                }
-              }
-            }' --jq '.data.repository.pullRequest.reviewThreads.nodes[]' | jq -s '.' > /tmp/pr-threads.json
-
-          # Related PRs: the other open PRs of the author, and the PRs stacked on this one. Small
-          # PRs often leave a concern to a sibling PR on purpose. Bodies are truncated to keep
-          # the input small.
-          AUTHOR=$(jq -r '.author.login' /tmp/pr-meta.json)
-          HEAD_REF=$(jq -r '.headRefName' /tmp/pr-meta.json)
-          RELATED_FIELDS=number,title,body,baseRefName,headRefName,files
-          {
-            gh pr list --author "$AUTHOR" --state open --limit 30 --json "$RELATED_FIELDS"
-            gh pr list --base "$HEAD_REF" --state open --limit 30 --json "$RELATED_FIELDS"
-          } | jq -s --argjson pr "$PR_NUMBER" '
-            add | unique_by(.number) | map(select(.number != $pr)
-              | .body = ((.body // "")[0:2000]) | .files = [.files[].path])' > /tmp/pr-related.json
-
           # Rubric files (godev/tester patterns and .claude/review-policy.md, the shared
           # how-to-review policy) are fetched from the BASE ref (not the PR head / merge
           # commit) so a PR cannot rewrite the rules it is judged under. We pull them via the
           # contents API at base.sha rather than from the checkout, which contains the PR's
           # changes. CONTRIBUTING.md is intentionally HEAD-sourced (from the checkout):
           # contributors may legitimately update it in the same PR, and human review catches
-          # abuse.
+          # abuse. The context scripts below come from the BASE ref for the same reason: the
+          # prep step has a write token, so it must not run code that the PR can change.
           fetch_base() {
             gh api "repos/$REPO/contents/$1?ref=$BASE_SHA" -H "Accept: application/vnd.github.raw"
           }
+
+          # A review runs on every push, and each run starts with no memory. Save the PR
+          # description and conversation, the earlier review threads with their replies, and the
+          # related open PRs. With these, the reviewer does not raise again an issue that was
+          # fixed, declined, or deferred to another PR. The scripts are shared with the /review
+          # skill. When the base does not have a script yet (the PR that adds them), write the
+          # empty value and continue, so that PR can still get a review.
+          run_base_script() {
+            local name=$1 out=$2 empty=$3 script
+            script=$(mktemp)
+            if ! fetch_base ".claude/skills/review/scripts/$name" > "$script"; then
+              echo "::warning::$name is not on the base ref; $out is empty."
+              echo "$empty" > "$out"
+              return
+            fi
+            bash "$script" "$PR_NUMBER" > "$out"
+          }
+          run_base_script pr-meta.sh /tmp/pr-meta.json '{}'
+          run_base_script pr-threads.sh /tmp/pr-threads.json '[]'
+          run_base_script pr-related.sh /tmp/pr-related.json '[]'
 
           # Inject review guides into env so they appear directly in the prompt (no Read calls needed)
           {

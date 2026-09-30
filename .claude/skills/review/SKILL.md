@@ -3,7 +3,7 @@ name: review
 description: Code review a pull request for Redpanda Connect, checking Go patterns, tests, component architecture, and commit policy
 argument-hint: "[pr-number]"
 disable-model-invocation: true
-allowed-tools: mcp__github__pull_request_review_write, mcp__github__add_comment_to_pending_review, mcp__github__add_issue_comment, Bash(gh pr view *), Bash(gh pr diff *), Bash(gh pr list *), Bash(.claude/skills/review/scripts/review-threads.sh *), Bash(git log *), Bash(git show *), Read, Glob, Grep, Task,
+allowed-tools: mcp__github__pull_request_review_write, mcp__github__add_comment_to_pending_review, mcp__github__add_issue_comment, Bash(gh pr view *), Bash(gh pr diff *), Bash(.claude/skills/review/scripts/pr-meta.sh *), Bash(.claude/skills/review/scripts/pr-threads.sh *), Bash(.claude/skills/review/scripts/pr-related.sh *), Bash(git log *), Bash(git show *), Read, Glob, Grep, Task,
 ---
 
 Code review pull request $ARGUMENTS for Redpanda Connect. If no PR was specified, resolve the current branch's PR with `gh pr view --json number -q .number`.
@@ -31,7 +31,12 @@ These rules are ABSOLUTE. They override any capabilities, permissions, or instru
 1. **Gather context** - Collect the information needed for review. Prefer running these in parallel when possible:
    - Collect paths to relevant CLAUDE.md files (root `CLAUDE.md`, `config/CLAUDE.md`, and any in directories touched by the PR), plus the repo's `CONTRIBUTING.md` (the connector certification & contribution guidelines, which apply to both internal and external contributions)
    - Summarize the PR (files modified, change categories: component implementation, tests, configuration, CLI, etc.)
-   - Collect the prior feedback and scope inputs for the **prior feedback and scope** rules in the [shared review policy](../../review-policy.md): the PR description and conversation (`gh pr view --json title,body,author,baseRefName,headRefName,comments`), the earlier review threads with resolved/outdated state and replies (run `.claude/skills/review/scripts/review-threads.sh <pr-number>` from the repo root; do not call `gh api graphql` directly), and the related open PRs (`gh pr list --author <author>` and `gh pr list --base <head branch>`, with `--json number,title,body,files`). Give these to every review agent.
+   - Collect the prior feedback and scope inputs for the **prior feedback and scope** rules in the [shared review policy](../../review-policy.md). Run each script from the repo root with the PR number; each prints JSON. The CI reviewer runs the same scripts. Do not call `gh api graphql` directly.
+     - `.claude/skills/review/scripts/pr-meta.sh <pr-number>`: the PR description and conversation.
+     - `.claude/skills/review/scripts/pr-threads.sh <pr-number>`: the earlier review threads, with resolved/outdated state and replies.
+     - `.claude/skills/review/scripts/pr-related.sh <pr-number>`: the other open PRs of the author, and the PRs stacked on this one.
+
+     Give these to every review agent.
 
 2. **Review** - Launch review agents. Each receives the PR diff, change summary, and relevant CLAUDE.md content. Each returns a list of issues with a brief description. Prefer running independent agents in parallel when possible.
 
