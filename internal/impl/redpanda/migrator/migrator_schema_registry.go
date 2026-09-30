@@ -116,7 +116,8 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			Description("Whether schema registry migration is enabled. When disabled, no schema operations are performed.").
 			Default(true),
 		service.NewDurationField(srFieldInterval).
-			Description("How often to synchronise schema registry subjects. Subjects that fail to sync are logged and retried on the next sync. Set to 0s for one-time sync at startup only, in which case failed subjects are not retried.").
+			Description("How often to synchronise schema registry subjects. Subjects that fail to sync are logged and retried on the next sync. Set to 0s for one-time sync at startup only, in which case failed subjects are not retried. " +
+				"With translate_ids enabled, a record encoded with a schema that failed to sync blocks the output until the schema is synced, so with 0s it blocks the output indefinitely.").
 			Example("0s     # One-time sync only").
 			Example("5m     # Sync every 5 minutes").
 			Example("30m    # Sync every 30 minutes").
@@ -161,6 +162,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 				"When false (default), unknown schema IDs are passed through unchanged, " +
 				"allowing migration of topics with mixed message formats. " +
 				"IDs of schemas that failed to sync to the destination are always rejected, regardless of this setting, and the write is retried until a later sync registers the schema. " +
+				"Since the output writes in order, this blocks the output, indefinitely when interval is 0s. " +
 				"Note: messages with 0-byte prefixes (for example, protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
 			ShortDescription("Error on unknown schema IDs. Only relevant when translate_ids is true.").
 			Default(false),
