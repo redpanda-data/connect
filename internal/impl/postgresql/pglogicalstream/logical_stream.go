@@ -946,10 +946,14 @@ func partitionDedupQuery(table, publication string) (string, error) {
 
 // primaryKeyColumnTypesQuery reports the primary key columns of a table with
 // their type names, resolving a domain to the type it is built on so a domain
-// over an unusable type is not mistaken for a usable one.
+// over an unusable type is not mistaken for a usable one. It also reports
+// typtype through the same domain resolution, because range and multirange
+// types are user-definable and so can't be recognised by name alone -- a
+// domain over a range type needs the same structural check as the range type
+// itself.
 func primaryKeyColumnTypesQuery(table string) (string, error) {
 	return sanitize.SQLQuery(`
-        SELECT a.attname, COALESCE(bt.typname, t.typname)
+        SELECT a.attname, COALESCE(bt.typname, t.typname), COALESCE(bt.typtype, t.typtype)
         FROM   pg_index i
         JOIN   pg_attribute a ON a.attrelid = i.indrelid
             AND a.attnum = ANY(i.indkey)

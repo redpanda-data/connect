@@ -685,6 +685,8 @@ Progress is driven by the replication stream: each streamed transaction releases
 
 A row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.
 
+The following primary keys are currently not supported and a signal naming such a table is rejected and logged rather than started: `bytea`, `interval`, `bit`, `bit varying`, and any range or multirange type. Every other key type is supported, composite keys included.
+
 
 *Type*: `bool`
 
