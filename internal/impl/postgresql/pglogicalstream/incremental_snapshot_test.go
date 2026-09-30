@@ -489,16 +489,31 @@ func newFakeQueryDB(t *testing.T, columns []string, rows [][]driver.Value, queri
 	return newFakeQueryDBCapturing(t, columns, rows, queries, nil)
 }
 
+// newFakeQueryDBWithKeyTypes answers the attname query with rows and the
+// primary key type query with keyTypes, so a test can drive
+// checkKeyTypesBindable's decision independently of the column names
+// themselves.
+func newFakeQueryDBWithKeyTypes(t *testing.T, columns []string, rows [][]driver.Value, keyTypes [][]driver.Value) *sql.DB {
+	t.Helper()
+	name := fmt.Sprintf("fake_pglog_test_%d", fakeQueryDriverSeq.Add(1))
+	sql.Register(name, &fakeQueryDriver{columns: columns, rows: rows, keyTypes: keyTypes})
+	db, err := sql.Open(name, "")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
 type fakeQueryDriver struct {
 	columns  []string
 	rows     [][]driver.Value
 	queries  *int
 	prepared *[]string
 	queryErr error
-	// keyTypes answers the primary key type query as {column, type name}
-	// rows. Left nil, each configured key column is reported as int8, which
-	// the chunk query can bind -- so a test that only cares about the key
-	// columns needs to say nothing about their types.
+	// keyTypes answers the primary key type query as {column, type name,
+	// typtype} rows. Left nil, each configured key column is reported as
+	// int8 with typtype "b" (base type), which the chunk query can bind and
+	// the incremental snapshot can dedup by -- so a test that only cares
+	// about the key columns needs to say nothing about their types.
 	keyTypes [][]driver.Value
 	// partitioned and pubViaRoot answer the partition query. The zero values
 	// describe an ordinary table, which is what most tests want.
@@ -549,7 +564,7 @@ func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
 	// The key type query has its own shape, so it needs its own result.
 	if strings.Contains(s.query, "pg_type") {
 		return &fakeQueryRows{
-			columns: []string{"attname", "typname"},
+			columns: []string{"attname", "typname", "typtype"},
 			rows:    s.conn.driver.keyTypeRows(),
 		}, nil
 	}
@@ -563,7 +578,7 @@ func (d *fakeQueryDriver) keyTypeRows() [][]driver.Value {
 	rows := make([][]driver.Value, 0, len(d.rows))
 	for _, row := range d.rows {
 		if len(row) > 0 {
-			rows = append(rows, []driver.Value{row[0], "int8"})
+			rows = append(rows, []driver.Value{row[0], "int8", "b"})
 		}
 	}
 	return rows
@@ -586,6 +601,148 @@ func (r *fakeQueryRows) Next(dest []driver.Value) error {
 	return nil
 }
 
+func TestCheckKeyTypesBindableRejectionRules(t *testing.T) {
+	table := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
+
+	tests := []struct {
+		name     string
+		columns  []string
+		keyTypes [][]driver.Value
+		// errContains is empty for a key that must be accepted.
+		errContains string
+	}{
+		{
+			name:        "interval rejected by name",
+			columns:     []string{"id"},
+			keyTypes:    [][]driver.Value{{"id", "interval", "b"}},
+			errContains: "do not support",
+		},
+		{
+			// A multi-column key is checked column by column, so an
+			// unusable type is rejected wherever it sits. Without a case
+			// like this the loop could stop after the first column and
+			// every test here would still pass.
+			name:        "a later column of a composite key is still rejected",
+			columns:     []string{"tenant", "id"},
+			keyTypes:    [][]driver.Value{{"tenant", "int8", "b"}, {"id", "interval", "b"}},
+			errContains: "do not support",
+		},
+		{
+			name:        "a later column carrying a range is still rejected",
+			columns:     []string{"tenant", "id"},
+			keyTypes:    [][]driver.Value{{"tenant", "int8", "b"}, {"id", "myrange", "r"}},
+			errContains: "do not support",
+		},
+		{
+			name:        "varbit rejected by name",
+			columns:     []string{"id"},
+			keyTypes:    [][]driver.Value{{"id", "varbit", "b"}},
+			errContains: "do not support",
+		},
+		{
+			name:        "bit rejected by name",
+			columns:     []string{"id"},
+			keyTypes:    [][]driver.Value{{"id", "bit", "b"}},
+			errContains: "do not support",
+		},
+		{
+			// myrange is not in any hardcoded name list, so this only
+			// passes if the rejection is driven by typtype rather than by
+			// recognising known range type names -- a name-based check
+			// would let a custom range through.
+			name:        "custom range rejected by typtype, not by name",
+			columns:     []string{"id"},
+			keyTypes:    [][]driver.Value{{"id", "myrange", "r"}},
+			errContains: "do not support",
+		},
+		{
+			name:        "multirange rejected by typtype",
+			columns:     []string{"id"},
+			keyTypes:    [][]driver.Value{{"id", "mymultirange", "m"}},
+			errContains: "do not support",
+		},
+		{
+			// This is what the query's domain join resolves a domain over
+			// int4range to: the base type's own name and typtype. Feeding
+			// that resolved pair in directly pins that the rejection relies
+			// on the join having already happened, not on seeing the
+			// domain's own name.
+			name:        "domain over a range resolves to the base type and is rejected",
+			columns:     []string{"id"},
+			keyTypes:    [][]driver.Value{{"id", "int4range", "r"}},
+			errContains: "do not support",
+		},
+		{
+			name:        "bytea rejected",
+			columns:     []string{"id"},
+			keyTypes:    [][]driver.Value{{"id", "bytea", "b"}},
+			errContains: "do not support",
+		},
+		{
+			name:     "clean single column key accepted",
+			columns:  []string{"id"},
+			keyTypes: [][]driver.Value{{"id", "int8", "b"}},
+		},
+		{
+			// Multi-column keys of clean types are reported elsewhere as
+			// working, so this pins that the loop over key columns does not
+			// misfire on the second or third column.
+			name:    "clean multi column key accepted",
+			columns: []string{"tenant_id", "id", "created_at"},
+			keyTypes: [][]driver.Value{
+				{"tenant_id", "numeric", "b"},
+				{"id", "uuid", "b"},
+				{"created_at", "timestamptz", "b"},
+			},
+		},
+		{
+			// Composite types are plausibly affected by the same struct-vs-
+			// text mismatch as ranges, but that is unverified, so this pins
+			// the deliberate decision to leave them unrejected rather than
+			// assumed unusable.
+			name:     "composite type not rejected",
+			columns:  []string{"id"},
+			keyTypes: [][]driver.Value{{"id", "my_composite", "c"}},
+		},
+		{
+			// Arrays decode as typtype 'b' with a category the check never
+			// queries, so an array key must pass through untouched too.
+			name:     "array type not rejected",
+			columns:  []string{"id"},
+			keyTypes: [][]driver.Value{{"id", "_int4", "b"}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rows := make([][]driver.Value, len(test.columns))
+			for i, c := range test.columns {
+				rows[i] = []driver.Value{c}
+			}
+			db := newFakeQueryDBWithKeyTypes(t, []string{"attname"}, rows, test.keyTypes)
+			s := &Stream{incSnapshot: incrementalSnapshot{conn: db, pkCache: map[string][]string{}}}
+
+			_, err := s.incrementalPKColumns(t.Context(), table)
+			if test.errContains == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			require.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable)
+			assert.Contains(t, err.Error(), test.errContains)
+		})
+	}
+}
+
+// TestIntegrationIncrementalSnapshotRejectsUnbindableKey pins checkKeyTypesBindable's
+// rejections against a real database, across every type the rule set covers:
+// bytea (including composite and domain wrappers), interval, bit and
+// varbit, the built-in range and multirange types, a user-defined range
+// type, and a domain over a range. Each rejected table uses its own name, so
+// a leaked pgx prepared-statement plan from a same-named table recreated
+// with a different column type cannot produce a false result. At least one
+// clean-key table is asserted as accepted too, so an over-broad rule would
+// be caught here rather than only in the unit tests.
 func TestIntegrationIncrementalSnapshotRejectsUnbindableKey(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -602,12 +759,32 @@ func TestIntegrationIncrementalSnapshotRejectsUnbindableKey(t *testing.T) {
 	_, err = db.Exec(`CREATE DOMAIN blob_key AS bytea`)
 	require.NoError(t, err)
 
+	// A user-defined range type, so the range rejection is shown to reach
+	// custom ranges and not just the built-in ones its structural check was
+	// written to cover.
+	_, err = db.Exec(`CREATE TYPE custom_range AS RANGE (subtype = int4)`)
+	require.NoError(t, err)
+
+	// A domain over a range, so the rejection is shown to survive the
+	// query's domain-to-base-type resolution rather than only matching the
+	// range type's own name.
+	_, err = db.Exec(`CREATE DOMAIN int4range_domain AS int4range`)
+	require.NoError(t, err)
+
 	for _, ddl := range []string{
 		`CREATE TABLE bytea_key (id bytea PRIMARY KEY, payload text)`,
 		`CREATE TABLE composite_bytea_key (tenant bigint, id bytea, payload text, PRIMARY KEY (tenant, id))`,
 		`CREATE TABLE domain_bytea_key (id blob_key PRIMARY KEY, payload text)`,
 		`CREATE TABLE bigint_key (id bigint PRIMARY KEY, payload text)`,
 		`CREATE TABLE text_key (id text PRIMARY KEY, payload text)`,
+		`CREATE TABLE interval_key (id interval PRIMARY KEY, payload text)`,
+		`CREATE TABLE varbit_key (id varbit(8) PRIMARY KEY, payload text)`,
+		`CREATE TABLE bit_key (id bit(8) PRIMARY KEY, payload text)`,
+		`CREATE TABLE int4range_key (id int4range PRIMARY KEY, payload text)`,
+		`CREATE TABLE daterange_key (id daterange PRIMARY KEY, payload text)`,
+		`CREATE TABLE customrange_key (id custom_range PRIMARY KEY, payload text)`,
+		`CREATE TABLE int4multirange_key (id int4multirange PRIMARY KEY, payload text)`,
+		`CREATE TABLE domain_range_key (id int4range_domain PRIMARY KEY, payload text)`,
 	} {
 		_, err := db.Exec(ddl)
 		require.NoError(t, err, ddl)
@@ -623,7 +800,12 @@ func TestIntegrationIncrementalSnapshotRejectsUnbindableKey(t *testing.T) {
 		return incrementalsnapshot.TableID{Schema: "public", Table: name}
 	}
 
-	for _, name := range []string{"bytea_key", "composite_bytea_key", "domain_bytea_key"} {
+	for _, name := range []string{
+		"bytea_key", "composite_bytea_key", "domain_bytea_key",
+		"interval_key", "varbit_key", "bit_key",
+		"int4range_key", "daterange_key", "customrange_key", "int4multirange_key",
+		"domain_range_key",
+	} {
 		t.Run("rejects "+name, func(t *testing.T) {
 			_, err := stream.incrementalPKColumns(t.Context(), tableID(name))
 			require.Error(t, err)

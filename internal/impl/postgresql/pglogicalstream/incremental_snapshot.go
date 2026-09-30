@@ -264,7 +264,10 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 	return cols, nil
 }
 
-// checkKeyTypesBindable rejects a primary key the chunk query cannot page by.
+// checkKeyTypesBindable rejects a primary key the incremental snapshot
+// cannot support: one the chunk query cannot page by, and one whose window
+// keys can never match between a buffered snapshot row and a streamed
+// change -- refer to the cases below for which is which.
 func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsnapshot.TableID) error {
 	q, err := primaryKeyColumnTypesQuery(TableFQN{
 		Schema: sanitize.QuotePostgresIdentifier(table.Schema),
@@ -280,15 +283,32 @@ func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsna
 	}
 	defer rows.Close()
 
+	// check for unsupported primary keys
 	for rows.Next() {
-		var column, typeName string
-		if err := rows.Scan(&column, &typeName); err != nil {
+		var column, typeName, typType string
+		if err := rows.Scan(&column, &typeName, &typType); err != nil {
 			return fmt.Errorf("scanning primary key types for table %s: %w", table, err)
 		}
-		if typeName == "bytea" {
-			return fmt.Errorf("%w: primary key column %q of table %s has type bytea, which the incremental snapshot cannot page by",
-				incrementalsnapshot.ErrTableUnusable, column, table)
+
+		switch {
+		// Cannot be a chunk bound, so the table cannot be paged at all.
+		case typeName == "bytea":
+		// Page fine, but decode as structs over the stream (pgtype.Interval,
+		// pgtype.Bits) and as text over the chunk query, so the two sides'
+		// window keys never match and nothing is ever deduplicated. bit
+		// shares varbit's decoder, so it shares the mismatch.
+		case typeName == "interval", typeName == "varbit", typeName == "bit":
+		// Same mismatch. Structural on typtype because ranges are
+		// user-definable, so a name list would miss custom ones. Composite
+		// types ('c') and arrays are likely affected too but unverified, so
+		// they stay accepted rather than assumed broken.
+		case typType == "r", typType == "m":
+
+		default:
+			continue
 		}
+		return fmt.Errorf("%w: table %s contains a primary key which we currently do not support: column %q has type %s",
+			incrementalsnapshot.ErrTableUnusable, table, column, typeName)
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("reading primary key types for table %s: %w", table, err)
@@ -992,4 +1012,25 @@ func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMess
 		s.logger.Warnf("Incremental snapshot: signal asked for %v but this run already covers some of them, so only %v was queued", tables, added)
 	}
 	return nil
+}
+
+// primaryKeyColumnTypesQuery reports the primary key columns of a table with
+// their type names, resolving a domain to the type it is built on so a domain
+// over an unusable type is not mistaken for a usable one. It also reports
+// typtype through the same domain resolution, because range and multirange
+// types are user-definable and so can't be recognised by name alone -- a
+// domain over a range type needs the same structural check as the range type
+// itself.
+func primaryKeyColumnTypesQuery(table string) (string, error) {
+	return sanitize.SQLQuery(`
+        SELECT a.attname, COALESCE(bt.typname, t.typname), COALESCE(bt.typtype, t.typtype)
+        FROM   pg_index i
+        JOIN   pg_attribute a ON a.attrelid = i.indrelid
+            AND a.attnum = ANY(i.indkey)
+        JOIN   pg_type t ON t.oid = a.atttypid
+        LEFT JOIN pg_type bt ON bt.oid = NULLIF(t.typbasetype, 0)
+        WHERE  i.indrelid = $1::regclass
+        AND    i.indisprimary
+        ORDER BY array_position(i.indkey, a.attnum);
+    `, table)
 }
