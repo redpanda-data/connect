@@ -43,57 +43,8 @@ type Config struct {
 	EndpointParams map[string][]string
 }
 
-// FieldSpec returns the configuration spec for OAuth2 authentication.
-func FieldSpec() *service.ConfigField {
-	return service.NewObjectField("oauth2",
-		service.NewBoolField(fieldEnabled).
-			Description(service.OAuth2EnabledDescription).
-			Default(false),
-
-		service.NewStringField(fieldClientKey).
-			Description(service.OAuth2ClientKeyDescription).
-			Default(""),
-
-		service.NewStringField(fieldClientSecret).
-			Description(service.OAuth2ClientSecretDescription).
-			Default("").Secret(),
-
-		service.NewURLField(fieldTokenURL).
-			Description(service.OAuth2TokenURLDescription).
-			Default(""),
-
-		service.NewStringListField(fieldScopes).
-			Description(service.OAuth2ScopesDescription).
-			Default([]any{}).
-			Advanced(),
-
-		service.NewAnyMapField(fieldEndpointParams).
-			Description(service.OAuth2EndpointParamsDescription).
-			Advanced().
-			Example(map[string]any{
-				"audience": []string{"https://example.com"},
-				"resource": []string{"https://api.example.com"},
-			}).
-			Default(map[string]any{}).
-			Optional().
-			LintRule(`
-root = if this.type() == "object" {
-  this.values().map_each(ele -> if ele.type() != "array" {
-    "field must be an object containing arrays of strings, got %s (%v)".format(ele.format_json(no_indent: true), ele.type())
-  } else {
-    ele.map_each(str -> if str.type() != "string" {
-      "field values must be strings, got %s (%v)".format(str.format_json(no_indent: true), str.type())
-    } else { deleted() })
-  }).
-    flatten()
-}
-`),
-	).
-		Description(service.OAuth2Description).
-		Optional().Advanced()
-}
-
-// ParseConfig parses OAuth2 configuration from a parsed config.
+// ParseConfig parses OAuth2 configuration from a parsed config of a field
+// defined with service.NewOAuth2Field.
 func ParseConfig(pConf *service.ParsedConfig) (Config, error) {
 	var conf Config
 	var err error

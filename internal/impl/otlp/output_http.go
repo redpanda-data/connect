@@ -149,7 +149,7 @@ This output supports the following authentication methods:
 			netutil.DialerConfigSpec(),
 		).
 		Fields(service.NewHTTPRequestAuthSignerFields()...).
-		Fields(oauth2.FieldSpec()).
+		Fields(service.NewOAuth2Field("oauth2")).
 		Fields(service.NewOutputMaxInFlightField())
 }
 

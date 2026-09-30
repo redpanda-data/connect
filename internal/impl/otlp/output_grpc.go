@@ -110,7 +110,7 @@ To send a static bearer token, add an `+"`authorization`"+` header using the `+"
 				Optional(),
 			netutil.DialerConfigSpec(),
 		).
-		Fields(oauth2.FieldSpec()).
+		Fields(service.NewOAuth2Field("oauth2")).
 		Fields(service.NewOutputMaxInFlightField())
 }
 
