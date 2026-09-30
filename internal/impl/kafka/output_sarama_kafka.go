@@ -154,9 +154,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				ShortDescription("Retry the entire batch when any message fails to send, rather than only the failed messages.").
 				Advanced().Default(false),
 			service.NewBatchPolicyField(oskFieldBatching),
-			service.NewIntField(oskFieldMaxRetries).
-				Description(service.RetryMaxRetriesDescription).
-				Advanced().Default(0),
+			service.NewMaxRetriesField(0),
 			service.NewBackOffField(oskFieldBackoff, true, &backoff.ExponentialBackOff{
 				InitialInterval: time.Second * 3,
 				MaxInterval:     time.Second * 10,

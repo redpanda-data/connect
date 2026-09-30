@@ -27,7 +27,7 @@ import (
 func tlsField() *service.ConfigField {
 	return service.NewObjectField("tls",
 		service.NewStringField("root_cas_file").
-			Description(service.TLSRootCASFileDescription).
+			Description("The path of a PEM file containing the certificate authority certificates that the client trusts when it verifies the TLS certificate of the broker. Leave empty to trust the certificate authorities of the host system.").
 			ShortDescription("An optional path to a root certificate authority file, often a `.pem` file containing a certificate chain.").
 			Default("").
 			Example("./root_cas.pem")).

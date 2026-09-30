@@ -49,7 +49,7 @@ func ConfigFields() []*service.ConfigField {
 			Advanced(),
 		service.NewTLSToggledField(fieldTLS),
 	}
-	fields = append(fields, oauth2.FieldSpec().Version("4.82.0"))
+	fields = append(fields, service.NewOAuth2Field("oauth2").Version("4.82.0"))
 	fields = append(fields, service.NewHTTPRequestAuthSignerFields()...)
 	return fields
 }
