@@ -324,7 +324,7 @@ sequenceDiagram
 
 - **Initial sync on connect** - One sync when output connects; subjects the destination rejects (HTTP 404/409/422, e.g. an incompatible schema) are logged and do not fail the connect, while registry-level errors (unreachable, unauthorized, 5xx, misconfigured) do
 - **Optional periodic sync** - Background loop controlled by `interval` setting; subjects that failed to sync are retried on each iteration (not retried with `interval: 0s`)
-- **Unknown schema handling** - A record whose schema ID is not yet synced to the destination is passed through unchanged, or rejected when `strict` is enabled (there is no on-demand resync). A record whose schema failed to sync is always rejected, so the output retries it until a later sync registers the schema; later versions of a subject are not synced until its failed version is
+- **Unknown schema handling** - A record whose schema ID is not yet synced to the destination is passed through unchanged, or rejected when `strict` is enabled (there is no on-demand resync). A record whose schema failed to sync is always rejected, so the output retries it until a later sync registers the schema; later versions of a subject are not synced until its failed version is. Because the output writes in order, such a record blocks all data migration until then, and with `interval: 0s` it blocks it indefinitely since failed subjects are never retried
 - **ID translation modes** - Create-or-reuse (translate) vs fixed IDs
 - **Compatibility propagation** - Only when explicitly set per-subject
 
