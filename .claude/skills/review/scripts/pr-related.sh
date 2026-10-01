@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prints the pull requests related to a pull request as one JSON array: the other open PRs of
-# its author, and the open PRs stacked on it (their base is its head branch). Small PRs often
+# its author, and the open PRs stacked on it (their base is its head branch; same-repo PRs only). Small PRs often
 # leave a concern to a sibling PR on purpose, so the reviewer checks these before it flags one.
 # Bodies are truncated to 2000 characters to keep the review input small.
 #
@@ -26,14 +26,21 @@ if [[ $# -ne 1 || ! "$1" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
-pr=$(gh pr view "$1" --json author,headRefName)
+pr=$(gh pr view "$1" --json author,headRefName,isCrossRepository)
 author=$(jq -r '.author.login' <<<"$pr")
 head_ref=$(jq -r '.headRefName' <<<"$pr")
+cross_repo=$(jq -r '.isCrossRepository' <<<"$pr")
 fields=number,title,body,baseRefName,headRefName,files
 
 {
   gh pr list --author "$author" --state open --limit 30 --json "$fields"
-  gh pr list --base "$head_ref" --state open --limit 30 --json "$fields"
+  # A PR in this repo cannot be stacked on a fork branch. A fork PR from its own `main` would
+  # otherwise match every open PR on `main`, and those unrelated PRs could close real findings.
+  if [[ "$cross_repo" == "true" ]]; then
+    echo '[]'
+  else
+    gh pr list --base "$head_ref" --state open --limit 30 --json "$fields"
+  fi
 } | jq -s --argjson pr "$1" '
   add | unique_by(.number) | map(select(.number != $pr)
     | .body = ((.body // "")[0:2000]) | .files = [.files[].path])'
