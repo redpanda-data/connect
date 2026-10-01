@@ -350,7 +350,7 @@ Whether to skip server side certificate verification.
 
 === `translate_ids`
 
-When set to `true`, this field automatically translates the schema ID in each message to match the corresponding schema in the destination schema registry. The updated message is then written to the destination schema registry.
+Translate schema IDs. When `false`, schemas are created on the destination with their original IDs and versions, which requires the destination schema registry to be in `IMPORT` mode (Redpanda v25.3 or later, or Confluent Schema Registry). When `true`, the destination assigns new IDs and must be in `READWRITE` mode, since schemas registered without an explicit ID are rejected in `IMPORT` mode.
 
 *Type*: `bool`
 
