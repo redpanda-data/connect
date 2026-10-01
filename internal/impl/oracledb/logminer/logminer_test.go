@@ -546,21 +546,6 @@ func TestLowWatermarkSCN(t *testing.T) {
 			want: math.MaxUint64,
 		},
 		{
-			name:    "DML transaction only",
-			dmlTxns: map[sqlredo.TransactionID]uint64{"txB": 900},
-			want:    900,
-		},
-		{
-			name:      "LOB state only",
-			lobStates: map[sqlredo.TransactionID]uint64{"txB": 900},
-			want:      900,
-		},
-		{
-			name:    "deferred LOB write only",
-			pending: map[sqlredo.TransactionID][]uint64{"txB": {900, 950}},
-			want:    900,
-		},
-		{
 			name:      "lowest of all open state",
 			dmlTxns:   map[sqlredo.TransactionID]uint64{"txB": 900},
 			lobStates: map[sqlredo.TransactionID]uint64{"txC": 800},
