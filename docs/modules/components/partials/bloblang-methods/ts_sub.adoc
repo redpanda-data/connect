@@ -4,6 +4,10 @@
 
 Calculates the duration in nanoseconds between two timestamps (t1 - t2). Returns a signed integer: positive if t1 is after t2, negative if t1 is before t2. Use .abs() for absolute duration.
 
+ifndef::env-cloud[]
+Introduced in version 4.23.0.
+endif::[]
+
 
 == Parameters
 

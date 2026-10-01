@@ -4,6 +4,10 @@
 
 Removes a specified suffix from the end of a string.
 
+ifndef::env-cloud[]
+Introduced in version 4.12.0.
+endif::[]
+
 
 == Parameters
 

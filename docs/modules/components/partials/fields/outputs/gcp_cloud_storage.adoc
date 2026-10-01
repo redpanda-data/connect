@@ -172,6 +172,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 include::connect:components:partial$secret_warning.adoc[]
 
+ifndef::env-cloud[]
+Requires version 4.33.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -211,6 +215,10 @@ path: ${!json("doc.namespace")}/${!json("doc.id")}.json
 === `timeout`
 
 The maximum period to wait for a message batch to be written to Cloud Storage, including any collision checks and appends. When the timeout is reached, the write is abandoned and reattempted.
+
+ifndef::env-cloud[]
+Requires version 4.17.0 or later.
+endif::[]
 
 *Type*: `string`
 

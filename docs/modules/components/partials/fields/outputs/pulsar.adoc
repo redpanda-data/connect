@@ -54,6 +54,10 @@ The path to a file containing a private key.
 
 OAuth2 scope to request.
 
+ifndef::env-cloud[]
+Requires version 4.29.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -111,6 +115,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 === `tls`
 
 Specify the path to a custom CA certificate to trust the broker TLS service.
+
+ifndef::env-cloud[]
+Requires version 4.11.0 or later.
+endif::[]
 
 *Type*: `object`
 

@@ -30,6 +30,10 @@ Metrics tagging is supported in a variety of formats.
 
 Global tags added to each metric.
 
+ifndef::env-cloud[]
+Requires version 4.76.0 or later.
+endif::[]
+
 *Type*: `object`
 
 *Default*: `{}`

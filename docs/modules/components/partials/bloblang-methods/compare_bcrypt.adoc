@@ -4,6 +4,10 @@
 
 Checks whether a string matches a hashed secret using bcrypt.
 
+ifndef::env-cloud[]
+Introduced in version 4.12.0.
+endif::[]
+
 
 == Parameters
 

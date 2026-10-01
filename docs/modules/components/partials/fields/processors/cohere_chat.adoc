@@ -40,6 +40,10 @@ The maximum number of tokens to allow in the chat completion.
 
 The maximum number of tool calls the model can perform.
 
+ifndef::env-cloud[]
+Requires version 4.53.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `10`
@@ -415,6 +419,10 @@ The sampling temperature, between `0` and `2`, that tunes the randomness of the 
 === `tools[]`
 
 External tools that the model can invoke, such as functions, APIs, or web browsing. You can define subpipelines of processors that implement these tools, enabling the model to use agent-like behavior to decide when and how to invoke them to enhance response generation.
+
+ifndef::env-cloud[]
+Requires version 4.53.0 or later.
+endif::[]
 
 *Type*: `array<object>`
 

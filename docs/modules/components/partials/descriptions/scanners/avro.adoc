@@ -11,6 +11,10 @@
 // tag::body[]
 Consume a stream of Avro OCF datum.
 
+ifndef::env-cloud[]
+Introduced in version 4.25.0.
+endif::[]
+
 == Avro JSON format
 
 This scanner yields documents formatted as https://avro.apache.org/docs/current/specification/#json-encoding[Avro JSON^] when decoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:

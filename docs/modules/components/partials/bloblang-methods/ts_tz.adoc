@@ -4,6 +4,10 @@
 
 Converts a timestamp to a different timezone while preserving the moment in time. Accepts unix timestamps (seconds with optional decimal precision) or RFC 3339 formatted strings.
 
+ifndef::env-cloud[]
+Introduced in version 4.3.0.
+endif::[]
+
 
 == Parameters
 

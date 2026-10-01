@@ -4,6 +4,10 @@
 
 Parses a claims object from a JWT string encoded with HS256. This method does not validate JWT claims.
 
+ifndef::env-cloud[]
+Introduced in version 4.12.0.
+endif::[]
+
 
 == Parameters
 

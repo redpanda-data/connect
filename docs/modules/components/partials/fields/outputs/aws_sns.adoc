@@ -124,6 +124,10 @@ An optional subject to set for messages.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.81.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `tcp`

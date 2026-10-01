@@ -38,6 +38,10 @@ The environment to be sent with events. If left empty, then SENTRY_ENVIRONMENT i
 
 A mapping that must evaluate to an object. If this mapping produces a value, then it is attached to the sentry event as a context named `extras`. (Prior to v4.x this populated the event's deprecated Additional Data section, which the upstream sentry-go SDK removed.)
 
+ifndef::env-cloud[]
+Requires version 4.55.0 or later.
+endif::[]
+
 *Type*: `string`
 
 [source,yaml]

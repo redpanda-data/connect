@@ -6,6 +6,10 @@
 
 Maximum bytes of request/response body to include in logs. 0 to skip body logging.
 
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `0`
@@ -13,6 +17,10 @@ Maximum bytes of request/response body to include in logs. 0 to skip body loggin
 === `access_log_level`
 
 Log level for HTTP request/response logging. Empty disables logging.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -51,6 +59,10 @@ Whether messages that are rejected (nacked) at the output level should be automa
 === `backoff`
 
 Adaptive backoff configuration for 429 (Too Many Requests) responses. Always active.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -116,6 +128,10 @@ Widens `updated >= cursor - overlap` to absorb minute-boundary effects. Jira JQL
 
 Disable HTTP/2 and force HTTP/1.1.
 
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `false`
@@ -143,6 +159,10 @@ Jira `fields` query parameter - narrow this for throughput.
 === `http`
 
 HTTP transport settings controlling connection pooling, timeouts, and HTTP/2.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -356,6 +376,10 @@ Time to wait between polls once the input has caught up. Minimum 10s.
 
 HTTP proxy URL. Empty string disables proxying.
 
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -373,6 +397,10 @@ Which Jira resource to emit.
 === `tcp`
 
 TCP socket configuration.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -426,6 +454,10 @@ Maximum time to wait for acknowledgment of transmitted data before killing the c
 
 HTTP request timeout.
 
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `5s`
@@ -433,6 +465,10 @@ HTTP request timeout.
 === `tls`
 
 Custom TLS settings can be used to override system defaults.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -582,6 +618,10 @@ Whether to skip server side certificate verification.
 
 Maximum burst size for rate limiting.
 
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `1`
@@ -589,6 +629,10 @@ Maximum burst size for rate limiting.
 === `tps_limit`
 
 Rate limit in requests per second. 0 disables rate limiting.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `float`
 

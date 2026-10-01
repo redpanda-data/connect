@@ -4,6 +4,10 @@
 
 Generates a Universally Unique Lexicographically Sortable Identifier (ULID). ULIDs are 128-bit identifiers that are sortable by creation time, URL-safe, and case-insensitive. They consist of a 48-bit timestamp (millisecond precision) and 80 bits of randomness, making them ideal for distributed systems that need time-ordered unique IDs without coordination.
 
+ifndef::env-cloud[]
+Introduced in version 4.16.0.
+endif::[]
+
 
 == Parameters
 

@@ -11,5 +11,9 @@
 // tag::body[]
 Send tracing events to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].
 
+ifndef::env-cloud[]
+Introduced in version 4.5.0.
+endif::[]
+
 
 // end::body[]

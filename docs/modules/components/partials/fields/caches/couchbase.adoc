@@ -32,6 +32,10 @@ include::connect:components:partial$secret_warning.adoc[]
 
 Bucket scope.
 
+ifndef::env-cloud[]
+Requires version 4.56.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `timeout`

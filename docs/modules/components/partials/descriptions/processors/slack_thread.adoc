@@ -11,5 +11,9 @@
 // tag::body[]
 Reads a Slack thread using the Slack API method conversations.replies.
 
+ifndef::env-cloud[]
+Introduced in version 4.52.0.
+endif::[]
+
 This processor calls the https://api.slack.com/methods/conversations.replies[`conversations.replies`^] Slack API method and replaces the message content with a JSON array of all messages in the thread.
 // end::body[]

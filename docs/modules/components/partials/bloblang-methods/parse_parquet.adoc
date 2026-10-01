@@ -4,6 +4,10 @@
 
 Parses Apache Parquet binary data into an array of objects. Parquet is a columnar storage format optimized for analytics, commonly used with big data systems like Apache Spark, Hive, and cloud data warehouses. Each row in the Parquet file becomes an object in the output array.
 
+ifndef::env-cloud[]
+Introduced in version 4.4.0.
+endif::[]
+
 
 == Parameters
 

@@ -8,6 +8,10 @@ Set an application ID for each message using a dynamic interpolated expression.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.22.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -38,6 +42,10 @@ Set a unique correlation ID for each message using a dynamic interpolated expres
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.22.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -59,6 +67,10 @@ Declares the target exchange (`exchange`) to check whether an exchange with the 
 === `exchange_declare.arguments`
 
 Arguments for server-specific implementations of the exchange (optional). You can use arguments to configure additional parameters for exchange types that require them.
+
+ifndef::env-cloud[]
+Requires version 4.46.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -100,6 +112,10 @@ The type of the exchange, which determines how messages are routed to queues. Fo
 Set the TTL of each message in milliseconds.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.22.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -144,6 +160,10 @@ The maximum number of messages to have in flight at a given time. Increase this 
 Set a message ID for each message using a dynamic interpolated expression.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.22.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -201,6 +221,10 @@ Set the name of the queue to which responses are sent using a dynamic interpolat
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.22.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -208,6 +232,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 === `timeout`
 
 The maximum period to wait for a message acknowledgment before abandoning it and attempting a resend. If this value is not set, the system waits indefinitely.
+
+ifndef::env-cloud[]
+Requires version 4.5.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -406,6 +434,10 @@ urls:
 Set the user ID to the name of the publisher. If this property is set by a publisher, its value must match the name of the user that opened the connection.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.22.0 or later.
+endif::[]
 
 *Type*: `string`
 

@@ -152,6 +152,10 @@ Arguments for server-specific implementations of the queue (optional). You can u
 
 |===
 
+ifndef::env-cloud[]
+Requires version 4.46.0 or later.
+endif::[]
+
 *Type*: `object`
 
 [source,yaml]
@@ -166,6 +170,10 @@ arguments:
 === `queue_declare.auto_delete`
 
 Whether the declared queue auto-deletes when there are no active consumers.
+
+ifndef::env-cloud[]
+Requires version 4.5.0 or later.
+endif::[]
 
 *Type*: `bool`
 

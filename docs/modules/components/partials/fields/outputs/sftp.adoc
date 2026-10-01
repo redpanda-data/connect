@@ -52,6 +52,10 @@ codec: delim:foobar
 
 The connection timeout to use when connecting to the target server.
 
+ifndef::env-cloud[]
+Requires version 4.59.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `30s`
@@ -66,11 +70,19 @@ The credentials required to log in to the SFTP server. This can include a userna
 
 The raw contents of the SFTP server's public key, used for host key verification.
 
+ifndef::env-cloud[]
+Requires version 4.59.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `credentials.host_public_key_file`
 
 The path to the SFTP server's public key file, used for host key verification.
+
+ifndef::env-cloud[]
+Requires version 4.59.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -89,6 +101,10 @@ include::connect:components:partial$secret_warning.adoc[]
 The raw contents of the private key used to authenticate with the SFTP server. This field provides an alternative to `private_key_file`.
 
 include::connect:components:partial$secret_warning.adoc[]
+
+ifndef::env-cloud[]
+Requires version 4.51.0 or later.
+endif::[]
 
 *Type*: `string`
 

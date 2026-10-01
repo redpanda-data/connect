@@ -18,6 +18,10 @@ An API key to authenticate with. If set, it supersedes basic authentication.
 
 include::connect:components:partial$secret_warning.adoc[]
 
+ifndef::env-cloud[]
+Requires version 4.96.2 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`

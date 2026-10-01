@@ -6,11 +6,19 @@
 
 Configuration for how to decode schemas that are of type AVRO.
 
+ifndef::env-cloud[]
+Requires version 4.46.0 or later.
+endif::[]
+
 *Type*: `object`
 
 === `avro.mapping`
 
 Define a custom mapping to apply to the JSON representation of Avro schemas. You can use mappings to convert custom types emitted by other tools, such as Debezium, into standard Avro types.
+
+ifndef::env-cloud[]
+Requires version 4.47.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -75,6 +83,10 @@ For example, the same union schema `["null","string","Transaction"]` is decoded 
 
 Optionally store the schema used to decode messages as a metadata field under the given name. This field can later be referenced in other components such as a `parquet_encode` processor in order to automatically infer their schema.
 
+ifndef::env-cloud[]
+Requires version 4.62.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `avro.translate_kafka_connect_types`
@@ -127,6 +139,10 @@ Types that are currently translated:
 
 
 
+ifndef::env-cloud[]
+Requires version 4.55.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `false`
@@ -171,6 +187,10 @@ A username to authenticate as.
 
 The duration after which a cached schema is considered stale and is removed from the cache.
 
+ifndef::env-cloud[]
+Requires version 4.54.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `10m`
@@ -193,11 +213,19 @@ This configuration does not work with protobuf schemas.
 
 TIP: You can also use the xref:guides:bloblang/functions.adoc#with_schema_registry_header[`with_schema_registry_header`] bloblang function to add a schema ID to messages.
 
+ifndef::env-cloud[]
+Requires version 4.64.0 or later.
+endif::[]
+
 *Type*: `int`
 
 === `json`
 
 Configuration for how to decode schemas that are of type JSON.
+
+ifndef::env-cloud[]
+Requires version 4.97.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -323,6 +351,10 @@ Whether to use OAuth version 1 in requests.
 
 Configuration for how to decode schemas that are of type PROTOBUF.
 
+ifndef::env-cloud[]
+Requires version 4.57.0 or later.
+endif::[]
+
 *Type*: `object`
 
 === `protobuf.emit_default_values`
@@ -344,6 +376,10 @@ Whether to emit unpopulated fields. It does not emit unpopulated oneof fields or
 === `protobuf.serialize_to_json`
 
 If messages should be serialized to JSON bytes. If false then the message is kept in decoded form, which means that 64 bit integers are not converted to strings and types for bytes and google.protobuf.Timestamp are preserved (as they are not serialized to JSON strings).
+
+ifndef::env-cloud[]
+Requires version 4.69.0 or later.
+endif::[]
 
 *Type*: `bool`
 

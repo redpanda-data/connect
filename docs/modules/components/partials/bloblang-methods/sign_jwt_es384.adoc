@@ -4,6 +4,10 @@
 
 Hash and sign an object representing JSON Web Token (JWT) claims using ES384.
 
+ifndef::env-cloud[]
+Introduced in version 4.20.0.
+endif::[]
+
 
 == Parameters
 

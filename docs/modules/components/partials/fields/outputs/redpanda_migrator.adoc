@@ -6,6 +6,10 @@
 
 The number of acknowledgements the leader broker must receive from ISR brokers before responding to the produce request. When `idempotent_write` is enabled this must be set to `all`.
 
+ifndef::env-cloud[]
+Requires version 4.92.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `all`
@@ -29,6 +33,10 @@ The number of acknowledgements the leader broker must receive from ISR brokers b
 
 Enables topics to be auto created if they do not exist when fetching their metadata. If set to `false`, the topic must already exist.
 
+ifndef::env-cloud[]
+Requires version 4.58.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `true`
@@ -36,6 +44,10 @@ Enables topics to be auto created if they do not exist when fetching their metad
 === `broker_write_max_bytes`
 
 The maximum number of bytes this output can write to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.
+
+ifndef::env-cloud[]
+Requires version 4.35.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -55,6 +67,10 @@ broker_write_max_bytes: 50mib
 
 An identifier for the client connection. This identifier appears in broker logs and metrics, which helps you identify the Redpanda Connect instance that is connecting.
 
+ifndef::env-cloud[]
+Requires version 4.21.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `redpanda-connect`
@@ -70,6 +86,10 @@ Set an explicit compression type (optional). By default, the client uses `snappy
 === `conn_idle_timeout`
 
 The approximate maximum duration that connections can remain idle before they are automatically closed. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.
+
+ifndef::env-cloud[]
+Requires version 4.53.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -173,6 +193,10 @@ Custom headers to add to migrated records, keyed by header name with interpolate
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.102.0 or later.
+endif::[]
+
 *Type*: `object`
 
 [source,yaml]
@@ -187,6 +211,10 @@ headers:
 
 Enable the idempotent write producer option. When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition, so retries do not produce duplicates. This option requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. Disable this option if the `IDEMPOTENT_WRITE` permission is unavailable, for example in some managed Kafka services or Redpanda clusters with strict ACLs. Disabling this option only affects retry behavior: duplicates may occur on producer retries, but the pipeline continues to function normally.
 
+ifndef::env-cloud[]
+Requires version 4.24.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `true`
@@ -194,6 +222,10 @@ Enable the idempotent write producer option. When enabled, the producer initiali
 === `max_buffered_bytes`
 
 The maximum number of bytes the client will buffer in memory before blocking. When this limit is reached, `Produce()` calls will block until buffered records are delivered. Set to `0` to disable the byte-level limit (only `max_buffered_records` applies). This limit is checked after `max_buffered_records`.
+
+ifndef::env-cloud[]
+Requires version 4.92.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -212,6 +244,10 @@ max_buffered_bytes: 50mib
 === `max_buffered_records`
 
 The maximum number of records the client will buffer in memory before blocking. When this limit is reached, `Produce()` calls will block until buffered records are delivered and space frees up. Increase this value for high-throughput pipelines to avoid back-pressure stalls.
+
+ifndef::env-cloud[]
+Requires version 4.92.0 or later.
+endif::[]
 
 *Type*: `int`
 
@@ -242,6 +278,10 @@ max_in_flight: "128 # For multiple topics with combined 128 partitions"
 === `max_in_flight_requests`
 
 The maximum number of produce requests in flight per broker connection. While `idempotent_write` is enabled (the default) this must be `1`, as the client relies on a single in-flight request per broker to guarantee ordering. To use higher values you must set `idempotent_write` to `false`, which allows requests to be pipelined for throughput but may cause duplicate and out-of-order delivery on retries. Note that this is distinct from the output's `max_in_flight` field, which counts message batches being written in parallel rather than produce requests on the wire. A value of `1` is not a throughput ceiling: records from concurrent writes are coalesced into fewer, larger produce requests.
+
+ifndef::env-cloud[]
+Requires version 4.92.0 or later.
+endif::[]
 
 *Type*: `int`
 
@@ -287,6 +327,10 @@ Set this field to enable precise offset translation, especially when migrating c
 
 This header is only added when consumer group migration is enabled.
 
+ifndef::env-cloud[]
+Requires version 4.71.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `redpanda-migrator-offset`
@@ -319,6 +363,10 @@ Override the default murmur2 hashing partitioner.
 
 Header name to add to migrated records indicating their source cluster. When set, each migrated record that does not already carry this header receives it, with the source cluster's ID (from the cluster metadata) as the value. Downstream systems can use the header to track record origins. A record that already carries the header keeps its existing value. A record whose header value is the destination cluster's ID is skipped, so it is not sent back to the cluster it came from. A record whose header value is empty or equal to the source cluster's ID causes an error. If empty, no provenance header is added and no provenance checks run.
 
+ifndef::env-cloud[]
+Requires version 4.69.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `redpanda-migrator-provenance`
@@ -327,6 +375,10 @@ Header name to add to migrated records indicating their source cluster. When set
 
 The maximum time a record can sit in the producer buffer before it is failed, roughly equivalent to Kafka's `delivery.timeout.ms`. This is evaluated before writing a request or after a produce response. When a record times out, all records in the same partition are also failed. Set to `0s` for no timeout (the default). With `idempotent_write` enabled, timeouts are only enforced when safe to do so without creating invalid sequence numbers.
 
+ifndef::env-cloud[]
+Requires version 4.92.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `0s`
@@ -334,6 +386,10 @@ The maximum time a record can sit in the producer buffer before it is failed, ro
 === `record_retries`
 
 The maximum number of times a record produce is retried on failure before the record is failed. When a record fails, all records buffered in the same partition are also failed to preserve gapless ordering. Set to `0` for unlimited retries (the default). With `idempotent_write` enabled, retries are only enforced when safe to do so without creating invalid sequence numbers.
+
+ifndef::env-cloud[]
+Requires version 4.92.0 or later.
+endif::[]
 
 *Type*: `int`
 
@@ -344,6 +400,10 @@ The maximum number of times a record produce is retried on failure before the re
 Additional time to apply as overhead when calculating request deadlines. For most requests, the deadline is this overhead alone. For requests that define their own timeout field, the overhead is added on top of that timeout, which helps prevent premature timeouts.
 
 This field is roughly equivalent to Apache Kafka's `request.timeout.ms` parameter, but grants extra time to requests that have timeout fields.
+
+ifndef::env-cloud[]
+Requires version 4.53.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -368,6 +428,10 @@ sasl:
 === `sasl[].aws`
 
 Contains AWS-specific fields for when `sasl.mechanism` is set to `AWS_MSK_IAM`.
+
+ifndef::env-cloud[]
+Requires version 4.3.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -714,6 +778,10 @@ A method used to sign the token such as RS256, RS384, RS512 or EdDSA.
 
 Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.
 
+ifndef::env-cloud[]
+Requires version 4.80.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `10`
@@ -805,6 +873,10 @@ subject: ${! metadata("schema_registry_subject") | replace("dev_", "prod_") }
 === `schema_registry.timeout`
 
 HTTP client timeout for schema registry requests.
+
+ifndef::env-cloud[]
+Requires version 4.72.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -1036,6 +1108,10 @@ Whether to synchronise topic ACLs from source to destination cluster. ACLs are t
 
 How often to synchronize topics from the source cluster to the destination. This creates destination topics for any new source topics, including empty topics with no message flow. Set to 0s to disable periodic sync (topics are still created on first message).
 
+ifndef::env-cloud[]
+Requires version 4.82.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `5m`
@@ -1109,6 +1185,10 @@ Maximum time to wait for acknowledgment of transmitted data before killing the c
 === `timeout`
 
 The maximum period of time to wait for message sends before abandoning the request and retrying.
+
+ifndef::env-cloud[]
+Requires version 4.3.0 or later.
+endif::[]
 
 *Type*: `string`
 

@@ -6,6 +6,10 @@
 
 If `server_address` is not set, download the Ollama binary to this directory and use it as a model cache.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `string`
 
 [source,yaml]
@@ -18,11 +22,19 @@ cache_directory: /opt/cache/connect/ollama
 
 If `server_address` is not set, download the Ollama binary from this URL. The default value is the official Ollama GitHub release for this platform.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `frequency_penalty`
 
 A number between `-2.0` and `2.0` that the processor sends to the Ollama server as the `frequency_penalty` model option. Positive values penalize each token in proportion to how often it has already appeared in the text, which makes the model less likely to repeat the same line verbatim. A value of `0` is not sent, so the server's default applies.
+
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
 
 *Type*: `float`
 
@@ -32,6 +44,10 @@ Include historical messages in a chat request. You must use a Bloblang query to 
 
 - `role` is the sender of the original messages, either `system`, `user`, `assistant`, or `tool`.
 - `content` is the text of the original messages.
+
+ifndef::env-cloud[]
+Requires version 4.51.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -55,11 +71,19 @@ image: 'root = this.image.decode("base64") # decode base64 encoded image'
 
 The maximum number of tokens to predict and output. Limiting the amount of output means that requests are processed faster and have a fixed limit on the cost.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `int`
 
 === `max_tool_calls`
 
 The maximum number of sequential calls you can make to external tools to retrieve additional information to answer a prompt.
+
+ifndef::env-cloud[]
+Requires version 4.45.0 or later.
+endif::[]
 
 *Type*: `int`
 
@@ -93,11 +117,19 @@ model: phi3
 
 Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to `4`. Use `-1` to retain all tokens from the initial prompt.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `int`
 
 === `presence_penalty`
 
 A number between `-2.0` and `2.0` that the processor sends to the Ollama server as the `presence_penalty` model option. Positive values penalize every token that has already appeared in the text, regardless of how often, which makes the model more likely to move on to new topics. A value of `0` is not sent, so the server's default applies.
+
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
 
 *Type*: `float`
 
@@ -113,11 +145,19 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 Sets how strongly to penalize repetitions. A higher value, for example 1.5, will penalize repetitions more strongly. A lower value, for example 0.9, will be more lenient.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `float`
 
 === `response_format`
 
 The format of the response the Ollama model generates. If specifying JSON output, then the `prompt` should specify that the output should be in JSON as well.
+
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -128,6 +168,10 @@ The format of the response the Ollama model generates. If specifying JSON output
 === `runner`
 
 Options for the model runner that are used when the model is first loaded into memory.
+
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -165,6 +209,10 @@ Map the model into memory. Set to `true` to load only the necessary parts of the
 
 Set to `true` to save the prompt value to a metadata field (`@prompt`) on the corresponding output message. If you use the `system_prompt` field, its value is also saved to an `@system_prompt` metadata field on each output message.
 
+ifndef::env-cloud[]
+Requires version 4.42.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `false`
@@ -172,6 +220,10 @@ Set to `true` to save the prompt value to a metadata field (`@prompt`) on the co
 === `seed`
 
 Sets the random number seed to use for generation. Setting this to a specific number will make the model generate the same text for the same prompt.
+
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
 
 *Type*: `int`
 
@@ -197,6 +249,10 @@ server_address: http://127.0.0.1:11434
 
 Sets the stop sequences to use. When this pattern is encountered, the LLM stops generating text and returns the final response.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `array<string>`
 
 === `system_prompt`
@@ -211,11 +267,19 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 The temperature of the model. Increasing the temperature makes the model answer more creatively.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `int`
 
 === `tools[]`
 
 The external tools the LLM can invoke, such as functions, APIs, or web browsing. You can build subpipelines of processors that include definitions of these tools, and the specified LLM can choose when to invoke them to help answer a prompt.
+
+ifndef::env-cloud[]
+Requires version 4.45.0 or later.
+endif::[]
 
 *Type*: `array<object>`
 
@@ -283,11 +347,19 @@ The processors to run when the LLM invokes this tool. They receive a message who
 
 Reduces the probability of generating nonsense. A higher value, for example `100`, will give more diverse answers. A lower value, for example `10`, will be more conservative.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `int`
 
 === `top_p`
 
 Works together with `top-k`. A higher value, for example 0.95, will lead to more diverse text. A lower value, for example 0.5, will generate more focused and conservative text.
+
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
 
 *Type*: `float`
 

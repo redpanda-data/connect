@@ -4,6 +4,10 @@
 
 Splits text into segments based on Unicode text segmentation rules. Returns an array of strings representing individual graphemes (visual characters), words (including punctuation and whitespace), or sentences. Handles complex Unicode correctly, including emoji with skin tone modifiers and zero-width joiners.
 
+ifndef::env-cloud[]
+Introduced in version 4.50.0.
+endif::[]
+
 
 == Parameters
 

@@ -132,6 +132,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 The algorithm used to create the checksum for each object, which Amazon S3 uses to validate the object during upload.
 
+ifndef::env-cloud[]
+Requires version 4.38.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -279,6 +283,10 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 === `object_canned_acl`
 
 The object canned ACL value. Leave empty to omit the ACL from upload requests, which is required for buckets that have ACLs disabled (the AWS default since 2023).
+
+ifndef::env-cloud[]
+Requires version 4.56.0 or later.
+endif::[]
 
 *Type*: `string`
 

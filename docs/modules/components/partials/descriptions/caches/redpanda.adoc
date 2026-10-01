@@ -11,6 +11,10 @@
 // tag::body[]
 A Kafka cache implemented using the https://github.com/twmb/franz-go[Franz Kafka client library^].
 
+ifndef::env-cloud[]
+Introduced in version 4.55.0.
+endif::[]
+
 A cache that stores data in a Kafka topic.
 
 This cache is useful for data that is written frequently and queried infrequently.

@@ -126,6 +126,10 @@ processors:
 
 Enable Snowflake keepalive mechanism to prevent the client session from expiring after 4 hours (error 390114).
 
+ifndef::env-cloud[]
+Requires version 4.11.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `false`
@@ -199,7 +203,7 @@ Stage file extension. Will be derived from the configured `compression` if not s
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 ifndef::env-cloud[]
-Requires version v4.12.0 or later.
+Requires version 4.12.0 or later.
 endif::[]
 
 *Type*: `string`
@@ -223,7 +227,7 @@ Stage file name. Will be equal to the Request ID if not set or empty.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 ifndef::env-cloud[]
-Requires version v4.12.0 or later.
+Requires version 4.12.0 or later.
 endif::[]
 
 *Type*: `string`
@@ -261,6 +265,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 Your private SSH key. When using encrypted keys, you must also set a value for `private_key_pass`.
 
 include::connect:components:partial$secret_warning.adoc[]
+
+ifndef::env-cloud[]
+Requires version 4.38.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -301,7 +309,7 @@ Request ID. Will be assigned a random UUID (v4) string if not set or empty.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 ifndef::env-cloud[]
-Requires version v4.12.0 or later.
+Requires version 4.12.0 or later.
 endif::[]
 
 *Type*: `string`

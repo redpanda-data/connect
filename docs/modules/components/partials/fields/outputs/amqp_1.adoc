@@ -6,6 +6,10 @@
 
 An optional Bloblang mapping that can be defined in order to set the `application-properties` on output messages.
 
+ifndef::env-cloud[]
+Requires version 4.11.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `content_type`
@@ -13,6 +17,10 @@ An optional Bloblang mapping that can be defined in order to set the `applicatio
 The content type of the message body.
 
 Set this field value to `string` to transfer each message as an AMQP string. Consider using the `string` option if you want to write UTF-8 string messages, such as JSON messages, to your data destination.
+
+ifndef::env-cloud[]
+Requires version 4.45.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -34,6 +42,10 @@ Set the content-encoding property on outgoing AMQP messages. This field supports
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `message_properties_content_type`
@@ -41,6 +53,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 Set the content-type property on outgoing AMQP messages. This field supports Bloblang interpolation.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -60,6 +76,10 @@ Set the correlation-id property on outgoing AMQP messages. The value is auto-det
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
+
 *Type*: `string`
 
 [source,yaml]
@@ -74,6 +94,10 @@ Set the group-id property on outgoing AMQP messages. This field supports Bloblan
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `message_properties_group_sequence`
@@ -82,6 +106,10 @@ Set the group-sequence property on outgoing AMQP messages. Must be a valid uint3
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `message_properties_message_id`
@@ -89,6 +117,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 Set the message-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -108,6 +140,10 @@ Set the reply-to property on outgoing AMQP messages. This field supports Bloblan
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `message_properties_reply_to_group_id`
@@ -115,6 +151,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 Set the reply-to-group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -124,6 +164,10 @@ Set the subject property on outgoing AMQP messages. This field supports Bloblang
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `message_properties_to`
@@ -131,6 +175,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 The field specifies the node that is the intended destination of the message, which may differ from the node currently receiving the transfer. This field supports Bloblang interpolation.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.70.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -149,6 +197,10 @@ message_properties_to: ${! meta("target_address") }
 Set the user-id property on outgoing AMQP messages. This field supports Bloblang interpolation.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -169,6 +221,10 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 === `persistent`
 
 If set to true, the message will be marked as persistent, ensuring it is stored durably and not lost if an intermediary (such as a broker) restarts. By default, messages are not durable.
+
+ifndef::env-cloud[]
+Requires version 4.70.0 or later.
+endif::[]
 
 *Type*: `bool`
 
@@ -262,6 +318,10 @@ target_address: ""
 === `target_capabilities[]`
 
 Lists the extension capabilities the sender desires from the target, such as support for queues, topics, durability, sharing, or temporary destinations.
+
+ifndef::env-cloud[]
+Requires version 4.70.0 or later.
+endif::[]
 
 *Type*: `array<string>`
 

@@ -11,5 +11,9 @@
 // tag::body[]
 Splits a string by a delimiter into an array. Generally, using bloblang's `split` method is preferred. In some high performance use cases this processor can be faster than the equivalent bloblang if there is no additional logic.
 
+ifndef::env-cloud[]
+Introduced in version 4.86.0.
+endif::[]
+
 
 // end::body[]

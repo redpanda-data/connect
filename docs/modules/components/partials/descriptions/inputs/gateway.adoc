@@ -11,6 +11,10 @@
 // tag::body[]
 Receive messages delivered over HTTP.
 
+ifndef::env-cloud[]
+Introduced in version 4.51.0.
+endif::[]
+
 The `gateway` input is a Cloud-only component that receives messages over HTTP and injects them into a running Redpanda Connect pipeline.
 
 Use this input to:

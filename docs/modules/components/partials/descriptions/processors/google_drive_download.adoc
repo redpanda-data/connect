@@ -11,6 +11,10 @@
 // tag::body[]
 Downloads files from Google Drive
 
+ifndef::env-cloud[]
+Introduced in version 4.53.0.
+endif::[]
+
 Can download a file from Google Drive based on a file ID.
 
 == Authentication

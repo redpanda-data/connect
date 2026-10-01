@@ -6,6 +6,10 @@
 
 Enables topics to be auto created if they do not exist when fetching their metadata.
 
+ifndef::env-cloud[]
+Requires version 4.59.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `true`
@@ -14,6 +18,10 @@ Enables topics to be auto created if they do not exist when fetching their metad
 
 An identifier for the client connection. This identifier appears in broker logs and metrics, which helps you identify the Redpanda Connect instance that is connecting.
 
+ifndef::env-cloud[]
+Requires version 4.21.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `redpanda-connect`
@@ -21,6 +29,10 @@ An identifier for the client connection. This identifier appears in broker logs 
 === `conn_idle_timeout`
 
 The approximate maximum duration that connections can remain idle before they are automatically closed. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.
+
+ifndef::env-cloud[]
+Requires version 4.53.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -43,6 +55,10 @@ This interval also controls how frequently regex topic patterns are re-evaluated
 Additional time to apply as overhead when calculating request deadlines. For most requests, the deadline is this overhead alone. For requests that define their own timeout field, the overhead is added on top of that timeout, which helps prevent premature timeouts.
 
 This field is roughly equivalent to Apache Kafka's `request.timeout.ms` parameter, but grants extra time to requests that have timeout fields.
+
+ifndef::env-cloud[]
+Requires version 4.53.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -67,6 +83,10 @@ sasl:
 === `sasl[].aws`
 
 Contains AWS-specific fields for when `sasl.mechanism` is set to `AWS_MSK_IAM`.
+
+ifndef::env-cloud[]
+Requires version 4.3.0 or later.
+endif::[]
 
 *Type*: `object`
 

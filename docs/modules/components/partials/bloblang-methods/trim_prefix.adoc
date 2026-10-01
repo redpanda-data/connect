@@ -4,6 +4,10 @@
 
 Removes a specified prefix from the beginning of a string.
 
+ifndef::env-cloud[]
+Introduced in version 4.12.0.
+endif::[]
+
 
 == Parameters
 

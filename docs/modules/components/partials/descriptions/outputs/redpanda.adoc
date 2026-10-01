@@ -11,5 +11,9 @@
 // tag::body[]
 A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].
 
+ifndef::env-cloud[]
+Introduced in version 4.39.0.
+endif::[]
+
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 // end::body[]

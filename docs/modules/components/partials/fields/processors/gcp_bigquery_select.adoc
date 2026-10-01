@@ -26,6 +26,10 @@ The Google Service Account credentials in JSON format (optional). Provide the co
 
 include::connect:components:partial$secret_warning.adoc[]
 
+ifndef::env-cloud[]
+Requires version 4.33.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`

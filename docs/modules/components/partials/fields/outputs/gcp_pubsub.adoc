@@ -6,6 +6,10 @@
 
 Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can further trade-off some latency for throughput.
 
+ifndef::env-cloud[]
+Requires version 4.16.0 or later.
+endif::[]
+
 *Type*: `object`
 
 [source,yaml]
@@ -115,6 +119,10 @@ processors:
 
 Publish a batch when its size in bytes reaches this value.
 
+ifndef::env-cloud[]
+Requires version 4.16.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `1000000`
@@ -122,6 +130,10 @@ Publish a batch when its size in bytes reaches this value.
 === `count_threshold`
 
 Publish a pubsub buffer when it has this many messages
+
+ifndef::env-cloud[]
+Requires version 4.16.0 or later.
+endif::[]
 
 *Type*: `int`
 
@@ -133,6 +145,10 @@ The Google Service Account credentials in JSON format (optional). Provide the co
 
 include::connect:components:partial$secret_warning.adoc[]
 
+ifndef::env-cloud[]
+Requires version 4.33.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -141,6 +157,10 @@ include::connect:components:partial$secret_warning.adoc[]
 
 Publish a non-empty pubsub buffer after this delay has passed.
 
+ifndef::env-cloud[]
+Requires version 4.16.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `10ms`
@@ -148,6 +168,10 @@ Publish a non-empty pubsub buffer after this delay has passed.
 === `endpoint`
 
 An optional endpoint that overrides the default of `pubsub.googleapis.com:443`. Use this field to connect to a region-specific Pub/Sub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[Pub/Sub regional endpoints^].
+
+ifndef::env-cloud[]
+Requires version 4.12.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -166,6 +190,10 @@ endpoint: us-west3-pubsub.googleapis.com:443
 === `flow_control`
 
 For a given topic, configures the PubSub client's internal buffer for messages to be published.
+
+ifndef::env-cloud[]
+Requires version 4.12.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -264,6 +292,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 === `validate_topic`
 
 Whether to validate the existence of the topic before publishing. If set to false and the topic does not exist, messages will be lost.
+
+ifndef::env-cloud[]
+Requires version 4.59.0 or later.
+endif::[]
 
 *Type*: `bool`
 

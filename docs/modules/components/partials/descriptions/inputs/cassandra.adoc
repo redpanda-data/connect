@@ -11,5 +11,9 @@
 // tag::body[]
 Executes a find query and creates a message for each row received.
 
+ifndef::env-cloud[]
+Introduced in version 4.10.0.
+endif::[]
+
 
 // end::body[]

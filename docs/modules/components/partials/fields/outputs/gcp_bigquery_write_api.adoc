@@ -6,6 +6,10 @@
 
 If true and the target table does not exist, the output creates it using the configured `schema`, `time_partitioning`, and `clustering`. AlreadyExists errors from concurrent creators are treated as success. When the table name is interpolated, every auto-created table receives the same schema and partition/clustering settings.
 
+ifndef::env-cloud[]
+Requires version 4.94.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `false`
@@ -126,6 +130,10 @@ Optional Bloblang expression resolving to the `_CHANGE_SEQUENCE_NUMBER` pseudo-c
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.96.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `change_type`
@@ -134,11 +142,19 @@ Bloblang expression resolving to the `_CHANGE_TYPE` pseudo-column value for each
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.96.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `clustering[]`
 
 Optional clustering columns (up to 4) applied during `auto_create_table`. All names must appear in `schema`.
+
+ifndef::env-cloud[]
+Requires version 4.94.0 or later.
+endif::[]
 
 *Type*: `array<string>`
 
@@ -194,6 +210,10 @@ Override the BigQuery HTTP endpoint. Useful for local emulators.
 
 Soft cap on the number of cached streams. When the cache exceeds this size, the least-recently-used stream is evicted. Set to 0 for unlimited (rely on idle-timeout sweeping only). Relevant when the table field uses interpolation to route to many tables.
 
+ifndef::env-cloud[]
+Requires version 4.93.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `1024`
@@ -220,6 +240,10 @@ The format of input messages. Use 'json' to have the component convert JSON to p
 
 Optional list of primary-key column names. Required when `auto_create_table` is true and `write_mode` is `upsert` or `upsert_delete`. A pre-existing table must already declare its PRIMARY KEY: this field cannot add one; when both are set they must match exactly (same columns, same order). Up to 16 columns; composite keys are supported in the same order they are listed.
 
+ifndef::env-cloud[]
+Requires version 4.96.0 or later.
+endif::[]
+
 *Type*: `array<string>`
 
 === `project`
@@ -233,6 +257,10 @@ The GCP project ID. If empty, the project is auto-detected from the environment.
 === `schema[]`
 
 Column definitions used by `auto_create_table`. Required when `auto_create_table` is true.
+
+ifndef::env-cloud[]
+Requires version 4.94.0 or later.
+endif::[]
 
 *Type*: `array<object>`
 
@@ -268,6 +296,10 @@ BigQuery column type (STRING, BYTES, INTEGER/INT64, FLOAT/FLOAT64, NUMERIC, BIGN
 
 Total time budget for a single schema evolution attempt (Metadata + Update across all CAS retries on HTTP 412). Bounds how long the WriteBatch retry loop can be starved by a wedged backend.
 
+ifndef::env-cloud[]
+Requires version 4.93.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `30s`
@@ -275,6 +307,10 @@ Total time budget for a single schema evolution attempt (Metadata + Update acros
 === `schema_resolve_timeout`
 
 How long a single BigQuery table-metadata fetch can run before being aborted. Coalesced concurrent resolves share one fetch, so this bounds the time a wedged backend can stall every batch routing to the same table. On the auto_create_table path the budget covers Metadata→Create→Metadata, so it needs to absorb transient backend slowness on top of the metadata fetch itself.
+
+ifndef::env-cloud[]
+Requires version 4.93.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -314,6 +350,10 @@ Service account email to impersonate. When set, the output obtains tokens acting
 
 Optional time-partitioning settings applied during `auto_create_table`. Setting `type` is the trigger: when omitted, the block is treated as absent.
 
+ifndef::env-cloud[]
+Requires version 4.94.0 or later.
+endif::[]
+
 *Type*: `object`
 
 === `time_partitioning.expiration`
@@ -351,6 +391,10 @@ Partitioning granularity.
 === `write_mode`
 
 How the output writes to BigQuery. `default_stream` uses the multiplexed default stream (at-least-once, lowest latency). `pending_stream` allocates a per-batch pending stream that commits atomically, providing exactly-once semantics within a single committed batch. `upsert` writes UPSERT-only rows to a BigQuery CDC-enabled table; the target table must have a PRIMARY KEY. `upsert_delete` allows both UPSERT and DELETE rows. Both CDC modes use the default stream as required by BigQuery.
+
+ifndef::env-cloud[]
+Requires version 4.94.0 or later.
+endif::[]
 
 *Type*: `string`
 

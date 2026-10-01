@@ -6,6 +6,10 @@
 
 Configuration for Avro encoding.
 
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
+
 *Type*: `object`
 
 === `avro.input_encoding`
@@ -19,6 +23,10 @@ Avro JSON and plain JSON disagree about strings, and neither reading is a supers
 - `native` reads every message as Go and plain JSON values. Set this for hand-written JSON and for sources that spell decimals in decimal notation.
 
 This is independent of `raw_json`, which does not affect how values are read.
+
+ifndef::env-cloud[]
+Requires version 4.108.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -88,6 +96,10 @@ A username to authenticate as.
 
 The encoding format to use when converting a common schema from metadata. Required when `schema_metadata` is set.
 
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Options*: `avro`, `json_schema`
@@ -147,6 +159,10 @@ A method used to sign the token such as RS256, RS384, RS512 or EdDSA.
 === `normalize`
 
 Whether to normalize the schema before registering with the schema registry (schema_metadata mode only).
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `bool`
 
@@ -227,6 +243,10 @@ refresh_period: 1h
 === `schema_metadata`
 
 When set, the processor reads a schema in benthos common schema format from this metadata key on each message, converts it to the format specified by `format`, registers it with the schema registry under the configured subject, and encodes the message. When empty (the default), the processor pulls the latest schema from the registry instead.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `string`
 

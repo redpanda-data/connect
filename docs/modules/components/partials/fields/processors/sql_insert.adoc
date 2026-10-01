@@ -208,6 +208,10 @@ init_statement: |-
 
 A list of keyword options to add before the INTO clause of the query.
 
+ifndef::env-cloud[]
+Requires version 4.40.0 or later.
+endif::[]
+
 *Type*: `array<string>`
 
 [source,yaml]

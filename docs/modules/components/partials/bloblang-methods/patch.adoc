@@ -4,6 +4,10 @@
 
 Applies a changelog (created by the diff method) to the current value, transforming it according to the specified operations. This enables you to synchronize data, replay changes, or implement event sourcing patterns by applying recorded changes to reconstruct state.
 
+ifndef::env-cloud[]
+Introduced in version 4.25.0.
+endif::[]
+
 
 == Parameters
 

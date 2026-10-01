@@ -11,5 +11,9 @@
 // tag::body[]
 Uses Ockam to encrypt and write end-to-end encrypted messages to a Kafka topic.
 
+ifndef::env-cloud[]
+Introduced in version 4.33.0.
+endif::[]
+
 
 // end::body[]

@@ -11,6 +11,10 @@
 // tag::body[]
 Executes a Salesforce SOQL query once and emits a message for each record.
 
+ifndef::env-cloud[]
+Introduced in version 4.90.3.
+endif::[]
+
 Runs a SOQL query against the Salesforce REST API, paginates through all result pages, and emits one message per record. When results are exhausted the input shuts down, letting the pipeline terminate gracefully (or the next input in a xref:components:inputs/sequence.adoc[sequence] to take over).
 
 == When to use this input

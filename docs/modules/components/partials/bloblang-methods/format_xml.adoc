@@ -4,6 +4,10 @@
 
 Serializes an object into an XML document. Converts structured data to XML format with support for attributes (prefixed with hyphen), custom indentation, and configurable root element. Returns XML as a byte array.
 
+ifndef::env-cloud[]
+Introduced in version 4.11.0.
+endif::[]
+
 
 == Parameters
 

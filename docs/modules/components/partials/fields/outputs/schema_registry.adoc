@@ -6,6 +6,10 @@
 
 Backfill missing schema references and previous schema versions. If set to `true`, you must also configure a xref:components:inputs/schema_registry.adoc[`schema_registry`] input to read source schemas.
 
+ifndef::env-cloud[]
+Requires version 4.40.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `true`
@@ -45,6 +49,10 @@ A username to authenticate as.
 === `input_resource`
 
 The label of the xref:components:inputs/schema_registry.adoc[`schema_registry` input] from which to read source schemas.
+
+ifndef::env-cloud[]
+Requires version 4.40.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -172,6 +180,10 @@ Whether to use OAuth version 1 in requests.
 
 Removes metadata fields from schema output. Use this to produce leaner schema definitions for downstream consumers or when metadata is not required.
 
+ifndef::env-cloud[]
+Requires version 4.61.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `true`
@@ -179,6 +191,10 @@ Removes metadata fields from schema output. Use this to produce leaner schema de
 === `remove_rule_set`
 
 Removes rule set definitions from schema output. Useful for simplifying schemas when rule sets are not required by consumers or applications.
+
+ifndef::env-cloud[]
+Requires version 4.61.0 or later.
+endif::[]
 
 *Type*: `bool`
 
@@ -197,6 +213,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 The compatibility level for the subject. Can be one of `BACKWARD`, `BACKWARD_TRANSITIVE`, `FORWARD`, `FORWARD_TRANSITIVE`, `FULL`, `FULL_TRANSITIVE`, `NONE`.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.62.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -351,6 +371,10 @@ Whether to skip server side certificate verification.
 === `translate_ids`
 
 Translate schema IDs. When `false`, schemas are created on the destination with their original IDs and versions, which requires the destination schema registry to be in `IMPORT` mode (Redpanda v25.3 or later, or Confluent Schema Registry). When `true`, the destination assigns new IDs and must be in `READWRITE` mode, since schemas registered without an explicit ID are rejected in `IMPORT` mode.
+
+ifndef::env-cloud[]
+Requires version 4.50.0 or later.
+endif::[]
 
 *Type*: `bool`
 

@@ -28,6 +28,10 @@ Splunk search query.
 
 Custom TLS settings can be used to override system defaults.
 
+ifndef::env-cloud[]
+Requires version 4.31.0 or later.
+endif::[]
+
 *Type*: `object`
 
 === `tls.client_certs[]`

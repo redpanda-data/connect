@@ -11,5 +11,9 @@
 // tag::body[]
 A processor that allows chunking and splitting text based on some strategy. Usually used for creating vector embeddings of large documents.
 
+ifndef::env-cloud[]
+Introduced in version 4.51.0.
+endif::[]
+
 A processor allowing splitting text into chunks based on several different strategies.
 // end::body[]

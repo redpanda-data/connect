@@ -226,6 +226,10 @@ The compression algorithm to use.
 
 If enabled, topics will be created with the specified number of partitions and replication factor if they do not already exist.
 
+ifndef::env-cloud[]
+Requires version 4.23.0 or later.
+endif::[]
+
 *Type*: `object`
 
 === `custom_topic_creation.enabled`
@@ -255,6 +259,10 @@ The replication factor to use for new topics. Leave at -1 to use the broker conf
 === `idempotent_write`
 
 Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.
+
+ifndef::env-cloud[]
+Requires version 4.26.0 or later.
+endif::[]
 
 *Type*: `bool`
 
@@ -496,6 +504,10 @@ The maximum period of time to wait for message sends before abandoning the reque
 An optional timestamp to set for each message, in milliseconds since the Unix epoch. When left empty, the current timestamp is used. You cannot set both `timestamp` and `timestamp_ms`.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.40.0 or later.
+endif::[]
 
 *Type*: `string`
 

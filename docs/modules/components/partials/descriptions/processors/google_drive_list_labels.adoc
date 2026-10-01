@@ -11,6 +11,10 @@
 // tag::body[]
 Lists labels for a file in Google Drive
 
+ifndef::env-cloud[]
+Introduced in version 4.53.0.
+endif::[]
+
 Can list all labels from Google Drive.
 		== Authentication
 By default, this connector will use Google Application Default Credentials (ADC) to authenticate with Google APIs.

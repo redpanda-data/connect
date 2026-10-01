@@ -18,6 +18,10 @@ A list of nsqlookupd addresses to connect to.
 
 The maximum number of attempts to successfully consume a messages.
 
+ifndef::env-cloud[]
+Requires version 4.11.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `5`

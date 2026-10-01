@@ -64,6 +64,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 Whether or not to include shared drives.
 
+ifndef::env-cloud[]
+Requires version 4.80.1 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `false`

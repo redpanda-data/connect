@@ -44,6 +44,10 @@ An optional plain text password (given along with the corresponding user name).
 
 include::connect:components:partial$secret_warning.adoc[]
 
+ifndef::env-cloud[]
+Requires version 4.84.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `auth.token`
@@ -52,11 +56,19 @@ An optional plain text token.
 
 include::connect:components:partial$secret_warning.adoc[]
 
+ifndef::env-cloud[]
+Requires version 4.84.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `auth.user`
 
 An optional plain text user name (given along with the corresponding user password).
+
+ifndef::env-cloud[]
+Requires version 4.84.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -78,6 +90,10 @@ An optional plaintext user JWT to use along with the corresponding user NKey see
 
 include::connect:components:partial$secret_warning.adoc[]
 
+ifndef::env-cloud[]
+Requires version 4.16.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `auth.user_nkey_seed`
@@ -85,6 +101,10 @@ include::connect:components:partial$secret_warning.adoc[]
 An optional plaintext user NKey seed to use along with the corresponding user JWT.
 
 include::connect:components:partial$secret_warning.adoc[]
+
+ifndef::env-cloud[]
+Requires version 4.16.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -122,11 +142,19 @@ inbox_prefix: _INBOX_joe
 
 The maximum number of times to attempt to reconnect to the server. If negative, it will never stop trying to reconnect.
 
+ifndef::env-cloud[]
+Requires version 4.56.0 or later.
+endif::[]
+
 *Type*: `int`
 
 === `metadata`
 
 Specify which metadata values are added to messages as NATS headers, alongside any explicit `headers`.
+
+ifndef::env-cloud[]
+Requires version 4.22.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -357,6 +385,10 @@ Whether to skip server side certificate verification.
 === `tls_handshake_first`
 
 Whether to perform the initial TLS handshake before sending the NATS INFO protocol message. This is required when connecting to some NATS servers that expect TLS to be established immediately after connection, before any protocol negotiation.
+
+ifndef::env-cloud[]
+Requires version 4.60.0 or later.
+endif::[]
 
 *Type*: `bool`
 

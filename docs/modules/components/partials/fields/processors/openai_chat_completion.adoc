@@ -14,6 +14,10 @@ include::connect:components:partial$secret_warning.adoc[]
 
 Specify a number between `-2.0` and `2.0`. Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `float`
 
 === `history`
@@ -22,6 +26,10 @@ Include messages from a prior conversation. You must use a Bloblang query to cre
 
 - `role` is the sender of the original messages, either `system`, `user`, or `assistant`.
 - `content` is the text of the original messages.
+
+ifndef::env-cloud[]
+Requires version 4.51.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -44,6 +52,10 @@ image: 'root = this.image.decode("base64") # decode base64 encoded image'
 === `json_schema`
 
 The JSON schema used by the model when generating responses in `json_schema` format. To learn more about supported JSON schema features, see the https://platform.openai.com/docs/guides/structured-outputs#supported-schemas[OpenAI documentation^].
+
+ifndef::env-cloud[]
+Requires version 4.35.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -68,6 +80,10 @@ The JSON schema for the model to use when generating the output.
 === `max_tokens`
 
 The maximum number of tokens to generate for chat completion.
+
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
 
 *Type*: `int`
 
@@ -99,6 +115,10 @@ model: gpt4-turbo
 
 Specify a number between `-2.0` and `2.0`. Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `float`
 
 === `prompt`
@@ -115,6 +135,10 @@ Specify the output format of the configured `model`.
 
 If you choose the `json_schema` option, you must also configure a `json_schema` or `schema_registry`.
 
+ifndef::env-cloud[]
+Requires version 4.35.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `text`
@@ -124,6 +148,10 @@ If you choose the `json_schema` option, you must also configure a `json_schema` 
 === `schema_registry`
 
 The schema registry to dynamically load schemas for model responses in `json_schema` format. Schemas must be in JSON format. To learn more about supported JSON schema features, see the https://platform.openai.com/docs/guides/structured-outputs#supported-schemas[OpenAI documentation^].
+
+ifndef::env-cloud[]
+Requires version 4.35.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -427,6 +455,10 @@ The base URL of the schema registry service.
 
 When set to a specific number, the model makes a best effort to generate consistent responses for requests that use the same prompt, seed, and parameters. Determinism is not guaranteed.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `int`
 
 === `server_address`
@@ -440,6 +472,10 @@ The OpenAI API endpoint to which the processor sends requests. Update the defaul
 === `stop[]`
 
 Specify up to four stop sequences to use. When the model encounters a stop pattern, it stops generating text and returns the final response.
+
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
 
 *Type*: `array<string>`
 
@@ -460,6 +496,10 @@ Choose a sampling temperature between `0` and `2`:
 
 Redpanda recommends adding a value for this field or `top_p`, but not both.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `float`
 
 === `tools[]`
@@ -467,6 +507,10 @@ Redpanda recommends adding a value for this field or `top_p`, but not both.
 External tools the model can invoke, such as functions, APIs, or web browsing. You can build subpipelines of processors that include definitions of these tools, and the specified model can choose when to invoke them to help answer a prompt.
 
 NOTE: If you don't want to use external tools, enter an empty array `tools:[]`.
+
+ifndef::env-cloud[]
+Requires version 4.50.0 or later.
+endif::[]
 
 *Type*: `array<object>`
 
@@ -536,6 +580,10 @@ An alternative to sampling with temperature, called nucleus sampling, where the 
 
 Redpanda recommends adding a value for this field or `temperature`, but not both.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `float`
 
 === `user`
@@ -543,6 +591,10 @@ Redpanda recommends adding a value for this field or `temperature`, but not both
 A unique identifier that represents the end-user generating the prompt. This value can help OpenAI monitor and detect https://openai.com/policies/usage-policies/[platform abuse^].
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
 
 *Type*: `string`
 

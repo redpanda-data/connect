@@ -11,5 +11,9 @@
 // tag::body[]
 Query items within a https://qdrant.tech/[Qdrant^] collection.
 
+ifndef::env-cloud[]
+Introduced in version 4.54.0.
+endif::[]
+
 
 // end::body[]
