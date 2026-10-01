@@ -1,0 +1,5 @@
+outputs:
+  label: ""
+  switch:
+    retry_until_success: false
+    cases: [] # No default (required)

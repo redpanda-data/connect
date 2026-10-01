@@ -1,0 +1,9 @@
+inputs:
+  label: ""
+  aws_dynamodb_cdc:
+    tables: []
+    checkpoint_table: redpanda_dynamodb_checkpoints
+    checkpoint_namespace: ""
+    start_from: trim_horizon
+    auto_replay_nacks: true
+    snapshot_mode: none

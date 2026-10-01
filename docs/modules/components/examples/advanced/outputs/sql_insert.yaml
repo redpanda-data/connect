@@ -1,0 +1,24 @@
+outputs:
+  label: ""
+  sql_insert:
+    driver: "" # No default (required)
+    dsn: "" # No default (required)
+    table: "" # No default (required)
+    columns: [] # No default (required)
+    args_mapping: "" # No default (required)
+    prefix: "" # No default (optional)
+    suffix: "" # No default (optional)
+    options: [] # No default (optional)
+    max_in_flight: 64
+    init_files: [] # No default (optional)
+    init_statement: "" # No default (optional)
+    conn_max_idle_time: "" # No default (optional)
+    conn_max_life_time: "" # No default (optional)
+    conn_max_idle: 2
+    conn_max_open: "" # No default (optional)
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

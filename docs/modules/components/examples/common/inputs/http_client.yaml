@@ -1,0 +1,15 @@
+inputs:
+  label: ""
+  http_client:
+    url: "" # No default (required)
+    verb: GET
+    headers: {}
+    rate_limit: "" # No default (optional)
+    timeout: 5s
+    payload: "" # No default (optional)
+    stream:
+      enabled: false
+      reconnect: true
+      scanner:
+        lines: {}
+    auto_replay_nacks: true

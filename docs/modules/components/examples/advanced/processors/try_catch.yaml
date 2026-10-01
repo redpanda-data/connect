@@ -1,0 +1,6 @@
+processors:
+  label: ""
+  try_catch:
+    processors: []
+    catch: []
+    error_metadata: error

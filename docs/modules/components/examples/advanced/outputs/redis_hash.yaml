@@ -1,0 +1,19 @@
+outputs:
+  label: ""
+  redis_hash:
+    url: "" # No default (required)
+    kind: simple
+    master: ""
+    client_name: redpanda-connect
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    key: "" # No default (required)
+    walk_metadata: false
+    walk_json_object: false
+    fields: {}
+    max_in_flight: 64

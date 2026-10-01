@@ -1,0 +1,10 @@
+processors:
+  label: ""
+  couchbase:
+    url: "" # No default (required)
+    username: "" # No default (optional)
+    password: "" # No default (optional)
+    bucket: "" # No default (required)
+    id: "" # No default (required)
+    content: "" # No default (optional)
+    operation: get

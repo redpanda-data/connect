@@ -1,0 +1,3 @@
+metrics:
+  aws_cloudwatch:
+    namespace: Benthos

@@ -1,0 +1,5 @@
+processors:
+  label: ""
+  a2a_message:
+    agent_card_url: "" # No default (required)
+    prompt: "" # No default (optional)

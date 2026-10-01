@@ -1,0 +1,9 @@
+inputs:
+  label: ""
+  broker:
+    inputs: [] # No default (required)
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""

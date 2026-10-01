@@ -1,0 +1,9 @@
+inputs:
+  label: ""
+  kafka:
+    addresses: [] # No default (required)
+    topics: [] # No default (required)
+    target_version: "" # No default (optional)
+    consumer_group: ""
+    checkpoint_limit: 1024
+    auto_replay_nacks: true

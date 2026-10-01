@@ -1,0 +1,8 @@
+inputs:
+  label: ""
+  azure_table_storage:
+    storage_account: ""
+    storage_access_key: ""
+    storage_connection_string: ""
+    storage_sas_token: ""
+    table_name: "" # No default (required)

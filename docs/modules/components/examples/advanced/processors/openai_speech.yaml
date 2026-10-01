@@ -1,0 +1,9 @@
+processors:
+  label: ""
+  openai_speech:
+    server_address: https://api.openai.com/v1
+    api_key: "" # No default (required)
+    model: "" # No default (required)
+    input: "" # No default (optional)
+    voice: "" # No default (required)
+    response_format: "" # No default (optional)

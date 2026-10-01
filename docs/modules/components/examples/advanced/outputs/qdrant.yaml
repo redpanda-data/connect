@@ -1,0 +1,23 @@
+outputs:
+  label: ""
+  qdrant:
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
+    grpc_host: "" # No default (required)
+    api_token: ""
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    collection_name: "" # No default (required)
+    id: "" # No default (required)
+    vector_mapping: "" # No default (required)
+    payload_mapping: root = {}

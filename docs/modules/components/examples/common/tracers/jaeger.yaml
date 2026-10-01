@@ -1,0 +1,6 @@
+tracers:
+  jaeger:
+    agent_address: ""
+    collector_url: ""
+    sampler_type: const
+    flush_interval: "" # No default (optional)

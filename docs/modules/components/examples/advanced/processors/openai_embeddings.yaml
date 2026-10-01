@@ -1,0 +1,8 @@
+processors:
+  label: ""
+  openai_embeddings:
+    server_address: https://api.openai.com/v1
+    api_key: "" # No default (required)
+    model: "" # No default (required)
+    text_mapping: "" # No default (optional)
+    dimensions: "" # No default (optional)

@@ -1,0 +1,15 @@
+inputs:
+  label: ""
+  splunk:
+    url: "" # No default (required)
+    user: "" # No default (required)
+    password: "" # No default (required)
+    query: "" # No default (required)
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    auto_replay_nacks: true

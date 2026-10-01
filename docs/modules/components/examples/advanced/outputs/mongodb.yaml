@@ -1,0 +1,35 @@
+outputs:
+  label: ""
+  mongodb:
+    url: "" # No default (required)
+    database: "" # No default (required)
+    username: ""
+    password: ""
+    app_name: benthos
+    aws:
+      enabled: false
+      region: "" # No default (optional)
+      session_duration: 1h
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
+      role: "" # No default (optional)
+      role_external_id: "" # No default (optional)
+      roles: [] # No default (optional)
+    collection: "" # No default (required)
+    operation: update-one
+    write_concern:
+      w: majority
+      j: false
+      w_timeout: ""
+    document_map: ""
+    filter_map: ""
+    hint_map: ""
+    upsert: false
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

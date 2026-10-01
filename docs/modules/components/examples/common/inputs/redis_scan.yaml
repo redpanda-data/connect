@@ -1,0 +1,6 @@
+inputs:
+  label: ""
+  redis_scan:
+    url: "" # No default (required)
+    auto_replay_nacks: true
+    match: ""

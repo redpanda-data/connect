@@ -1,0 +1,13 @@
+inputs:
+  label: ""
+  aws_s3:
+    bucket: ""
+    prefix: ""
+    scanner:
+      to_the_end: {}
+    sqs:
+      url: ""
+      key_path: Records.*.s3.object.key
+      bucket_path: Records.*.s3.bucket.name
+      envelope_path: ""
+      nack_visibility_timeout: 0

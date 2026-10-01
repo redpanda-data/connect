@@ -1,0 +1,8 @@
+outputs:
+  label: ""
+  amqp_1:
+    urls: [] # No default (optional)
+    target_address: ""
+    max_in_flight: 64
+    metadata:
+      exclude_prefixes: []

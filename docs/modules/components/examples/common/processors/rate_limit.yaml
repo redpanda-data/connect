@@ -1,0 +1,4 @@
+processors:
+  label: ""
+  rate_limit:
+    resource: "" # No default (required)

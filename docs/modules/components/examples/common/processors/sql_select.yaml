@@ -1,0 +1,9 @@
+processors:
+  label: ""
+  sql_select:
+    driver: "" # No default (required)
+    dsn: "" # No default (required)
+    table: "" # No default (required)
+    columns: [] # No default (required)
+    where: "" # No default (optional)
+    args_mapping: "" # No default (optional)

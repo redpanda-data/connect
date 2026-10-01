@@ -1,0 +1,8 @@
+inputs:
+  label: ""
+  nats:
+    urls: [] # No default (required)
+    subject: "" # No default (required)
+    queue: "" # No default (optional)
+    auto_replay_nacks: true
+    send_ack: true

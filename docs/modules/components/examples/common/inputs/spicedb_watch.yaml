@@ -1,0 +1,6 @@
+inputs:
+  label: ""
+  spicedb_watch:
+    endpoint: "" # No default (required)
+    bearer_token: ""
+    cache: "" # No default (required)

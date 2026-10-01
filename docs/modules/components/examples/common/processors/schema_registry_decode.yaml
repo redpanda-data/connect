@@ -1,0 +1,19 @@
+processors:
+  label: ""
+  schema_registry_decode:
+    avro:
+      raw_unions: "" # No default (optional)
+      preserve_logical_types: false
+      translate_kafka_connect_types: false
+      store_schema_metadata: "" # No default (optional)
+    protobuf:
+      use_proto_names: false
+      use_enum_numbers: false
+      emit_unpopulated: false
+      emit_default_values: false
+      serialize_to_json: true
+    json:
+      coerce_data: false
+    cache_duration: 10m
+    url: "" # No default (required)
+    default_schema_id: "" # No default (optional)

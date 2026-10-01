@@ -88,17 +88,19 @@ Returns the current Redpanda Connect version in rpk.
 
 ### Online Component Documentation
 
-Links to official documentation for detailed component reference.
+Every docs page has a Markdown version for agents. Fetch that instead of the HTML page.
 
 ```
 # URL pattern:
-https://github.com/redpanda-data/connect/blob/v{version}/docs/modules/components/pages/{category}/{component}.adoc
+https://docs.redpanda.com/redpanda-connect/components/{category}/{component}.md
 
 # Examples:
-https://github.com/redpanda-data/connect/blob/v4.70.0/docs/modules/components/pages/inputs/kafka_franz.adoc
-https://github.com/redpanda-data/connect/blob/v4.70.0/docs/modules/components/pages/outputs/postgres.adoc
+https://docs.redpanda.com/redpanda-connect/components/inputs/kafka_franz.md
+https://docs.redpanda.com/redpanda-connect/components/outputs/sql_insert.md
 ```
-- `{version}` - Connect version from rpk-version.sh (e.g., "4.70.0")
+The published docs always describe the latest release. For the exact fields of the installed version, use `rpk connect list --format json-full` or the component's `--help`.
+
+For questions that span components or other Redpanda products, use the Redpanda Docs MCP server if it's connected: its `ask_redpanda_question` tool searches all of the documentation. To add it in Claude Code, run `claude mcp add --scope user --transport http redpanda https://docs.redpanda.com/mcp`. Anonymous use is limited to 10 tool calls every 24 hours per network address; signing in with a Redpanda Cloud account through `/mcp` removes the limit.
 - `{category}` - Component category (inputs, outputs, processors, etc.)
 - `{component}` - Component name with underscores (e.g., "kafka_franz")
 

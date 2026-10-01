@@ -1,0 +1,4 @@
+scanners:
+  skip_bom:
+    into:
+      to_the_end: {}

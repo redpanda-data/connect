@@ -1,0 +1,8 @@
+inputs:
+  label: ""
+  splunk:
+    url: "" # No default (required)
+    user: "" # No default (required)
+    password: "" # No default (required)
+    query: "" # No default (required)
+    auto_replay_nacks: true

@@ -1,0 +1,21 @@
+processors:
+  label: ""
+  gcp_vertex_ai_chat:
+    project: "" # No default (required)
+    credentials_json: "" # No default (optional)
+    location: "" # No default (required)
+    model: "" # No default (required)
+    prompt: "" # No default (optional)
+    system_prompt: "" # No default (optional)
+    history: "" # No default (optional)
+    attachment: "" # No default (optional)
+    temperature: "" # No default (optional)
+    max_tokens: "" # No default (optional)
+    response_format: text
+    top_p: "" # No default (optional)
+    top_k: "" # No default (optional)
+    stop: [] # No default (optional)
+    presence_penalty: "" # No default (optional)
+    frequency_penalty: "" # No default (optional)
+    max_tool_calls: 10
+    tools: []

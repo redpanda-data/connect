@@ -1,0 +1,10 @@
+processors:
+  label: ""
+  ollama_moderation:
+    model: "" # No default (required)
+    prompt: "" # No default (required)
+    response: "" # No default (required)
+    runner:
+      context_size: "" # No default (optional)
+      batch_size: "" # No default (optional)
+    server_address: "" # No default (optional)

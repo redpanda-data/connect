@@ -1,0 +1,10 @@
+processors:
+  label: ""
+  protobuf:
+    operator: "" # No default (required)
+    message: "" # No default (required)
+    discard_unknown: false
+    use_proto_names: false
+    import_paths: []
+    use_enum_numbers: false
+    bsr: []

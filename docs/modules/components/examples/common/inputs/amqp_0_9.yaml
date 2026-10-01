@@ -1,0 +1,7 @@
+inputs:
+  label: ""
+  amqp_0_9:
+    urls: [] # No default (required)
+    queue: "" # No default (required)
+    consumer_tag: ""
+    prefetch_count: 10

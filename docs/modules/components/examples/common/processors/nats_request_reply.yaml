@@ -1,0 +1,10 @@
+processors:
+  label: ""
+  nats_request_reply:
+    urls: [] # No default (required)
+    subject: "" # No default (required)
+    headers: {}
+    metadata:
+      include_prefixes: []
+      include_patterns: []
+    timeout: 3s

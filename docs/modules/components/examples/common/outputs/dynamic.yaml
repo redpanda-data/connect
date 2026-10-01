@@ -1,0 +1,5 @@
+outputs:
+  label: ""
+  dynamic:
+    outputs: {}
+    prefix: ""

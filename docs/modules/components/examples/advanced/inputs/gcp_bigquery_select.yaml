@@ -1,0 +1,14 @@
+inputs:
+  label: ""
+  gcp_bigquery_select:
+    project: "" # No default (required)
+    credentials_json: ""
+    table: "" # No default (required)
+    columns: [] # No default (required)
+    where: "" # No default (optional)
+    auto_replay_nacks: true
+    job_labels: {}
+    priority: ""
+    args_mapping: "" # No default (optional)
+    prefix: "" # No default (optional)
+    suffix: "" # No default (optional)

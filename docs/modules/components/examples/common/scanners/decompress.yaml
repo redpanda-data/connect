@@ -1,0 +1,5 @@
+scanners:
+  decompress:
+    algorithm: "" # No default (required)
+    into:
+      to_the_end: {}

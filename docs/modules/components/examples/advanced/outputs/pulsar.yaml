@@ -1,0 +1,20 @@
+outputs:
+  label: ""
+  pulsar:
+    url: "" # No default (required)
+    topic: "" # No default (required)
+    tls:
+      root_cas_file: ""
+    key: ""
+    ordering_key: ""
+    max_in_flight: 64
+    auth:
+      oauth2:
+        enabled: false
+        audience: ""
+        issuer_url: ""
+        scope: ""
+        private_key_file: ""
+      token:
+        enabled: false
+        token: ""

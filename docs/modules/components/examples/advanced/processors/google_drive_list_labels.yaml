@@ -1,0 +1,4 @@
+processors:
+  label: ""
+  google_drive_list_labels:
+    credentials_json: "" # No default (optional)

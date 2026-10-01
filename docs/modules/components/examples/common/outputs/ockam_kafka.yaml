@@ -1,0 +1,25 @@
+outputs:
+  label: ""
+  ockam_kafka:
+    kafka:
+      seed_brokers: [] # No default (optional)
+      max_in_flight: 10
+      batching:
+        count: 0
+        byte_size: 0
+        period: ""
+        check: ""
+      topic: "" # No default (required)
+      key: "" # No default (optional)
+      partition: "" # No default (optional)
+      metadata:
+        include_prefixes: []
+        include_patterns: []
+    disable_content_encryption: false
+    enrollment_ticket: "" # No default (optional)
+    identity_name: "" # No default (optional)
+    allow: self
+    route_to_kafka_outlet: self
+    allow_consumer: self
+    route_to_consumer: /ip4/127.0.0.1/tcp/6262
+    encrypted_fields: []

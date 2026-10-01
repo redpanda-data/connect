@@ -1,0 +1,40 @@
+outputs:
+  label: ""
+  cassandra:
+    addresses: [] # No default (required)
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    password_authenticator:
+      enabled: false
+      username: ""
+      password: ""
+    disable_initial_host_lookup: false
+    max_retries: 3
+    backoff:
+      initial_interval: 1s
+      max_interval: 5s
+    timeout: 600ms
+    host_selection_policy:
+      local_dc: "" # No default (optional)
+      local_rack: "" # No default (optional)
+    reconnect_interval: 60s
+    exponential_reconnection:
+      max_retries: "" # No default (required)
+      initial_interval: "" # No default (required)
+      max_interval: "" # No default (required)
+    query: "" # No default (required)
+    args_mapping: "" # No default (optional)
+    consistency: QUORUM
+    logged_batch: true
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

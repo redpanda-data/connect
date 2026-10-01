@@ -1,0 +1,9 @@
+outputs:
+  label: ""
+  retry:
+    max_retries: 0
+    backoff:
+      initial_interval: 500ms
+      max_interval: 3s
+      max_elapsed_time: 0s
+    output: "" # No default (required)

@@ -1,0 +1,20 @@
+inputs:
+  label: ""
+  jira:
+    auth:
+      email: "" # No default (required)
+      api_token: "" # No default (required)
+    resource: issues
+    jql: ""
+    fields:
+      - "*all"
+    expand: []
+    page_size: 50
+    poll_interval: 60s
+    cursor:
+      cache: "" # No default (required)
+      key: ""
+      overlap: 60s
+    auto_replay_nacks: true
+    base_url: "" # No default (required)
+    timeout: 5s

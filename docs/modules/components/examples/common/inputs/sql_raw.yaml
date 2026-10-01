@@ -1,0 +1,8 @@
+inputs:
+  label: ""
+  sql_raw:
+    driver: "" # No default (required)
+    dsn: "" # No default (required)
+    query: "" # No default (required)
+    args_mapping: "" # No default (optional)
+    auto_replay_nacks: true

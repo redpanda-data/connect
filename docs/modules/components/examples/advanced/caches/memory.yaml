@@ -1,0 +1,6 @@
+caches:
+  memory:
+    default_ttl: 5m
+    compaction_interval: 60s
+    init_values: {}
+    shards: 1

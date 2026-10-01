@@ -1,0 +1,6 @@
+processors:
+  label: ""
+  javascript:
+    code: "" # No default (optional)
+    file: "" # No default (optional)
+    global_folders: []

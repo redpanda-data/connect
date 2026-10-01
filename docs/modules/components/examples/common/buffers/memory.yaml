@@ -1,0 +1,9 @@
+buffers:
+  memory:
+    limit: 524288000
+    batch_policy:
+      enabled: false
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""

@@ -1,0 +1,5 @@
+inputs:
+  label: ""
+  parquet:
+    paths: [] # No default (required)
+    auto_replay_nacks: true

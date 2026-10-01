@@ -1,0 +1,37 @@
+inputs:
+  label: ""
+  aws_s3:
+    bucket: ""
+    prefix: ""
+    region: "" # No default (optional)
+    endpoint: "" # No default (optional)
+    tcp:
+      connect_timeout: 0s
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
+    credentials:
+      profile: "" # No default (optional)
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
+      from_ec2_role: "" # No default (optional)
+      role: "" # No default (optional)
+      role_external_id: "" # No default (optional)
+    force_path_style_urls: false
+    delete_objects: false
+    scanner:
+      to_the_end: {}
+    sqs:
+      url: ""
+      endpoint: ""
+      key_path: Records.*.s3.object.key
+      bucket_path: Records.*.s3.bucket.name
+      envelope_path: ""
+      delay_period: ""
+      max_messages: 10
+      wait_time_seconds: 0
+      nack_visibility_timeout: 0
+      zero_key_warn_interval: 30s

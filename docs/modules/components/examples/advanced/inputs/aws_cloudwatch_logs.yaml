@@ -1,0 +1,30 @@
+inputs:
+  label: ""
+  aws_cloudwatch_logs:
+    log_group_name: "" # No default (required)
+    log_stream_names: [] # No default (optional)
+    log_stream_prefix: "" # No default (optional)
+    filter_pattern: "" # No default (optional)
+    start_time: "" # No default (optional)
+    poll_interval: 5s
+    limit: 1000
+    structured_log: true
+    api_timeout: 30s
+    auto_replay_nacks: true
+    region: "" # No default (optional)
+    endpoint: "" # No default (optional)
+    tcp:
+      connect_timeout: 0s
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
+    credentials:
+      profile: "" # No default (optional)
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
+      from_ec2_role: "" # No default (optional)
+      role: "" # No default (optional)
+      role_external_id: "" # No default (optional)

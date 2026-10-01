@@ -1,0 +1,15 @@
+processors:
+  label: ""
+  couchbase:
+    url: "" # No default (required)
+    username: "" # No default (optional)
+    password: "" # No default (optional)
+    bucket: "" # No default (required)
+    collection: "" # No default (optional)
+    scope: "" # No default (optional)
+    transcoder: legacy
+    timeout: 15s
+    id: "" # No default (required)
+    content: "" # No default (optional)
+    ttl: "" # No default (optional)
+    operation: get

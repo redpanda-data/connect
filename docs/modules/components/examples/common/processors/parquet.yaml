@@ -1,0 +1,7 @@
+processors:
+  label: ""
+  parquet:
+    operator: "" # No default (required)
+    compression: snappy
+    schema_file: "" # No default (optional)
+    schema: "" # No default (optional)

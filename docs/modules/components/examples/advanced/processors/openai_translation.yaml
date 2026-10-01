@@ -1,0 +1,8 @@
+processors:
+  label: ""
+  openai_translation:
+    server_address: https://api.openai.com/v1
+    api_key: "" # No default (required)
+    model: "" # No default (required)
+    file: "" # No default (optional)
+    prompt: "" # No default (optional)

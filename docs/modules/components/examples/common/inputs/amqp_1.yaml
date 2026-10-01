@@ -1,0 +1,5 @@
+inputs:
+  label: ""
+  amqp_1:
+    urls: [] # No default (optional)
+    source_address: "" # No default (required)

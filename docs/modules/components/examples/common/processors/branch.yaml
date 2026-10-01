@@ -1,0 +1,6 @@
+processors:
+  label: ""
+  branch:
+    request_map: ""
+    processors: [] # No default (required)
+    result_map: ""

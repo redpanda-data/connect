@@ -1,0 +1,13 @@
+inputs:
+  label: ""
+  redpanda_migrator:
+    seed_brokers: [] # No default (required)
+    topics: [] # No default (optional)
+    regexp_topics_include: [] # No default (optional)
+    regexp_topics_exclude: [] # No default (optional)
+    transaction_isolation_level: read_uncommitted
+    consumer_group: "" # No default (optional)
+    schema_registry:
+      url: "" # No default (required)
+      timeout: 5s
+    auto_replay_nacks: true

@@ -1,0 +1,14 @@
+processors:
+  label: ""
+  sentry_capture:
+    dsn: ""
+    message: "" # No default (required)
+    context: "" # No default (optional)
+    extras: "" # No default (optional)
+    tags: "" # No default (optional)
+    environment: ""
+    release: ""
+    level: INFO
+    transport_mode: async
+    flush_timeout: 5s
+    sampling_rate: 1

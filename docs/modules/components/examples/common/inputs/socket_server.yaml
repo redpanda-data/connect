@@ -1,0 +1,14 @@
+inputs:
+  label: ""
+  socket_server:
+    network: "" # No default (required)
+    address: "" # No default (required)
+    address_cache: "" # No default (optional)
+    tls:
+      cert_file: "" # No default (optional)
+      key_file: "" # No default (optional)
+      self_signed: false
+      client_auth: no
+    auto_replay_nacks: true
+    scanner:
+      lines: {}

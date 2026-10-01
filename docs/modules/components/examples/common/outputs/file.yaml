@@ -1,0 +1,5 @@
+outputs:
+  label: ""
+  file:
+    path: "" # No default (required)
+    codec: lines

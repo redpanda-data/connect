@@ -1,0 +1,6 @@
+rate-limits:
+  redis:
+    url: "" # No default (required)
+    count: 1000
+    interval: 1s
+    key: "" # No default (required)

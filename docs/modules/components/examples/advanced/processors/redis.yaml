@@ -1,0 +1,18 @@
+processors:
+  label: ""
+  redis:
+    url: "" # No default (required)
+    kind: simple
+    master: ""
+    client_name: redpanda-connect
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
+    command: "" # No default (optional)
+    args_mapping: "" # No default (optional)
+    retries: 3
+    retry_period: 500ms

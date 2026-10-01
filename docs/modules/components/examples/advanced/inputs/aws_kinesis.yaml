@@ -1,0 +1,63 @@
+inputs:
+  label: ""
+  aws_kinesis:
+    streams: [] # No default (required)
+    dynamodb:
+      table: ""
+      create: false
+      billing_mode: PAY_PER_REQUEST
+      read_capacity_units: 0
+      write_capacity_units: 0
+      region: "" # No default (optional)
+      endpoint: "" # No default (optional)
+      tcp:
+        connect_timeout: 0s
+        keep_alive:
+          idle: 15s
+          interval: 15s
+          count: 9
+        tcp_user_timeout: 0s
+      credentials:
+        profile: "" # No default (optional)
+        id: "" # No default (optional)
+        secret: "" # No default (optional)
+        token: "" # No default (optional)
+        from_ec2_role: "" # No default (optional)
+        role: "" # No default (optional)
+        role_external_id: "" # No default (optional)
+    checkpoint_limit: 1024
+    poll_period: 0s
+    enhanced_fan_out:
+      enabled: false
+      consumer_name: ""
+      consumer_activation_timeout: 1m
+      max_resubscribe_interval: 30s
+    auto_replay_nacks: true
+    commit_period: 5s
+    steal_grace_period: 2s
+    rebalance_period: 30s
+    lease_period: 30s
+    start_from_oldest: true
+    region: "" # No default (optional)
+    endpoint: "" # No default (optional)
+    tcp:
+      connect_timeout: 0s
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
+    credentials:
+      profile: "" # No default (optional)
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
+      from_ec2_role: "" # No default (optional)
+      role: "" # No default (optional)
+      role_external_id: "" # No default (optional)
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)

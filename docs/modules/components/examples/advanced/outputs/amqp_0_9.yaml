@@ -1,0 +1,35 @@
+outputs:
+  label: ""
+  amqp_0_9:
+    urls: [] # No default (required)
+    exchange: "" # No default (required)
+    exchange_declare:
+      enabled: false
+      type: direct
+      durable: true
+      arguments: "" # No default (optional)
+    key: ""
+    type: ""
+    content_type: application/octet-stream
+    content_encoding: ""
+    correlation_id: ""
+    reply_to: ""
+    expiration: ""
+    message_id: ""
+    user_id: ""
+    app_id: ""
+    metadata:
+      exclude_prefixes: []
+    priority: ""
+    max_in_flight: 64
+    persistent: false
+    mandatory: false
+    immediate: false
+    timeout: ""
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []

@@ -1,0 +1,15 @@
+inputs:
+  label: ""
+  spicedb_watch:
+    endpoint: "" # No default (required)
+    bearer_token: ""
+    max_receive_message_bytes: 4MB
+    cache: "" # No default (required)
+    cache_key: authzed.com/spicedb/watch/last_zed_token
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []

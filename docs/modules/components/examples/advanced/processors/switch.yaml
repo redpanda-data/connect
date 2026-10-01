@@ -1,0 +1,7 @@
+processors:
+  label: ""
+  switch:
+    check: ""
+    processors: []
+    fallthrough: false
+    continue: false
