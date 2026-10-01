@@ -45,8 +45,9 @@ const (
 	esoFieldAuthEnabled  = "enabled"
 	esoFieldAuthUsername = "username"
 	esoFieldAuthPassword = "password"
-	esoFieldBatching     = "batching"
-	esoFieldAWS          = "aws"
+	esoFieldBatching            = "batching"
+	esoFieldAWS                 = "aws"
+	esoFieldCompressRequestBody = "compress_request_body"
 	// ESOFieldAWSEnabled enabled field.
 	ESOFieldAWSEnabled = "enabled"
 )
@@ -121,6 +122,10 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 		}
 	}
 
+	if conf.clientOpts.Client.CompressRequestBody, err = pConf.FieldBool(esoFieldCompressRequestBody); err != nil {
+		return
+	}
+
 	if conf.actionStr, err = pConf.FieldInterpolatedString(esoFieldAction); err != nil {
 		return
 	}
@@ -174,6 +179,10 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 				Advanced().
 				Default(""),
 			service.NewTLSToggledField(esoFieldTLS),
+			service.NewBoolField(esoFieldCompressRequestBody).
+				Description("Enable gzip compression of HTTP request bodies on the OpenSearch client. OpenSearch 2.x servers accept `Content-Encoding: gzip` natively; this is useful to reduce bandwidth on cross-cloud or cross-region bulk writes.").
+				Default(false).
+				Advanced(),
 			service.NewOutputMaxInFlightField(),
 		).
 		Fields(
