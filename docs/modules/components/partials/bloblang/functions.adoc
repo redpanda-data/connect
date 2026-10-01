@@ -8,13 +8,17 @@ include::connect:components:partial$bloblang-functions/bytes.adoc[leveloffset=+1
 
 include::connect:components:partial$bloblang-functions/content.adoc[leveloffset=+1]
 
+ifndef::env-cloud[]
 include::connect:components:partial$bloblang-functions/count.adoc[leveloffset=+1]
+endif::[]
 
 include::connect:components:partial$bloblang-functions/counter.adoc[leveloffset=+1]
 
 include::connect:components:partial$bloblang-functions/deleted.adoc[leveloffset=+1]
 
+ifndef::env-cloud[]
 include::connect:components:partial$bloblang-functions/env.adoc[leveloffset=+1]
+endif::[]
 
 include::connect:components:partial$bloblang-functions/error.adoc[leveloffset=+1]
 
@@ -28,11 +32,17 @@ include::connect:components:partial$bloblang-functions/errored.adoc[leveloffset=
 
 include::connect:components:partial$bloblang-functions/fake.adoc[leveloffset=+1]
 
+ifndef::env-cloud[]
 include::connect:components:partial$bloblang-functions/file.adoc[leveloffset=+1]
+endif::[]
 
+ifndef::env-cloud[]
 include::connect:components:partial$bloblang-functions/file_rel.adoc[leveloffset=+1]
+endif::[]
 
+ifndef::env-cloud[]
 include::connect:components:partial$bloblang-functions/hostname.adoc[leveloffset=+1]
+endif::[]
 
 include::connect:components:partial$bloblang-functions/json.adoc[leveloffset=+1]
 

@@ -112,8 +112,18 @@ func main() {
 			w.write(filepath.Join("partials/bloblang-methods", m.Name+".adoc"), renderBloblangSpec(m, "method"))
 		}
 	}
-	w.write("partials/bloblang/functions.adoc", renderFunctionsList(full.BloblangFunctions))
-	w.write("partials/bloblang/methods.adoc", renderMethodsList(full.BloblangMethods))
+	// The Cloud build only allows pure Bloblang, so its schema decides which
+	// functions and methods the Cloud docs list.
+	cloudRaw, err := schema.Cloud("", "").MarshalJSONV0()
+	if err != nil {
+		panic(err)
+	}
+	cloud, err := parseFullSchema(cloudRaw)
+	if err != nil {
+		panic(err)
+	}
+	w.write("partials/bloblang/functions.adoc", renderFunctionsList(full.BloblangFunctions, bloblangNames(cloud.BloblangFunctions)))
+	w.write("partials/bloblang/methods.adoc", renderMethodsList(full.BloblangMethods, bloblangNames(cloud.BloblangMethods)))
 
 	fmt.Printf("Wrote %v files to %v\n", w.count, root)
 }
@@ -192,4 +202,12 @@ func renderDescriptionPartial(c componentSpec, typeDir string) string {
 	}
 	b.WriteString(renderDescriptionBody(c.Description, typeDir, c.Name) + "\n// end::body[]\n")
 	return b.String()
+}
+
+func bloblangNames(specs []bloblangSpec) map[string]bool {
+	names := make(map[string]bool, len(specs))
+	for _, s := range specs {
+		names[s.Name] = true
+	}
+	return names
 }
