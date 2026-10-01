@@ -260,6 +260,25 @@ func (c *ConnectCacheResource) RollbackTransaction(ctx context.Context, txnID sq
 	return nil
 }
 
+// HoldWatermark starts tracking the start SCN of the open transaction so that
+// LowWatermarkSCN counts it before it has any events.
+func (c *ConnectCacheResource) HoldWatermark(ctx context.Context, txnID sqlredo.TransactionID) error {
+	if _, discarded := c.discarded[txnID]; discarded {
+		return nil
+	}
+	if _, tracked := c.startSCNs[txnID]; tracked {
+		return nil
+	}
+	m, err := c.readMetadata(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("reading transaction metadata %s: %w", txnID, err)
+	}
+	if m != nil {
+		c.startSCNs[txnID] = m.SCN
+	}
+	return nil
+}
+
 // LowWatermarkSCN returns the lowest start SCN among all currently open
 // (uncommitted) transactions, excluding excludeTxnID. Returns math.MaxUint64
 // if no other open transactions exist.

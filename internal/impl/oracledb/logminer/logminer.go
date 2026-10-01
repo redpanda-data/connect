@@ -388,6 +388,19 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 // processRedoEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
 func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.RedoEvent) error {
+	// LOB rows are buffered in lobStates rather than the transaction cache, so a
+	// transaction that has only written LOB rows (e.g. an out-of-row SecureFile
+	// UPDATE) would otherwise not hold back the checkpoint, and its LOB rows
+	// would be skipped on restart.
+	switch redoEvent.Operation {
+	case sqlredo.OpSelectLobLocator, sqlredo.OpLobWrite, sqlredo.OpLobTrim:
+		if lm.cfg.LOBEnabled {
+			if err := lm.txnCache.HoldWatermark(ctx, redoEvent.TransactionID); err != nil {
+				return fmt.Errorf("holding watermark for transaction %s: %w", redoEvent.TransactionID, err)
+			}
+		}
+	}
+
 	switch redoEvent.Operation {
 	case sqlredo.OpStart:
 		// Transaction started
