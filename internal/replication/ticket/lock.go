@@ -75,11 +75,11 @@ type Lock struct {
 	// serving is the "now serving" display: the number of the ticket whose
 	// turn it is.
 	serving uint64
-	// held is true from the moment Wait returns nil for the ticket at
-	// serving, until the Release of that ticket. Release reads it to choose
-	// between the end of a turn and an abandon. serving alone is not
-	// enough: a ticket can get its turn before its Wait is called, and a
-	// Release on that path must abandon the ticket, not end its turn.
+	// held tells the Turn and Held states of the ticket at serving apart
+	// (see Ticket). Wait sets it when it returns nil, and the next turn
+	// clears it. Release reads it: in Held, Release ends the turn. In Turn,
+	// Release abandons the ticket, because its work never ran. serving alone
+	// cannot tell the two states apart.
 	held bool
 	// waiters holds one channel for each parked Wait, by ticket number.
 	// advanceLocked closes the channel when it is that ticket's turn, and
@@ -227,6 +227,18 @@ func (l *Lock) advanceLocked() {
 // hand it out. The holder calls Wait to get its turn, and Release when it
 // is done with the ticket.
 //
+// A ticket goes through these states:
+//
+//   - Waiting: an earlier ticket still has the turn.
+//   - Turn: it is the turn of the ticket, but Wait has not returned nil
+//     yet. For example, the caller has not called Wait.
+//   - Held: Wait returned nil. The caller does its work.
+//   - Done: Release ended the turn, or the ticket was abandoned.
+//
+// A ticket is abandoned when the caller gives up before Held: its Wait is
+// cancelled, or it calls Release first. The lock skips an abandoned ticket.
+// For a ticket from Take, the abandon also seals the lock.
+//
 // A Ticket is a small value. You can copy it, but all copies are the same
 // ticket and get one turn only. The zero Ticket is not valid.
 type Ticket struct {
@@ -329,14 +341,14 @@ func (l *Lock) wokenLocked() error {
 
 // Release ends the use of t. Call it once for each ticket, also on error
 // paths. The best place is a defer right after the take. What Release does
-// depends on the state of t:
+// depends on the state of t (see Ticket):
 //
-//   - Wait returned nil, so t holds the turn: Release gives the turn to the
-//     next ticket that is not abandoned.
-//   - Wait was not called, or did not return nil: Release abandons t. The
-//     lock skips t when its turn comes. For a Take ticket, the abandon also
-//     seals the lock, because the work of t is lost.
-//   - t was already released, abandoned or skipped: Release does nothing.
+//   - Held: Release gives the turn to the next ticket that is not
+//     abandoned.
+//   - Waiting or Turn: Release abandons t. The lock skips t when its turn
+//     comes. For a Take ticket, the abandon also seals the lock, because
+//     the work of t is lost.
+//   - Done: Release does nothing.
 //
 // If a ticket is never released, no later ticket ever gets a turn.
 func (t Ticket) Release() {
