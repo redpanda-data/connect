@@ -36,8 +36,8 @@ if [[ $# -ne 1 || ! "$1" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
-repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-gh api graphql --paginate -F owner="${repo%/*}" -F repo="${repo#*/}" -F pr="$1" -f query='
+# gh fills {owner} and {repo} from GH_REPO, or else from the git remote of the current directory.
+gh api graphql --paginate -F owner='{owner}' -F repo='{repo}' -F pr="$1" -f query='
   query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
     repository(owner: $owner, name: $repo) {
       pullRequest(number: $pr) {
