@@ -28,7 +28,12 @@ const (
 	walletPasswordKey = "WALLET PASSWORD"
 	sslKey            = "SSL"
 	prefetchRowsKey   = "PREFETCH_ROWS"
+	socketTimeoutKey  = "TIMEOUT"
 )
+
+// socketTimeoutKeys are the names go-ora accepts for its socket timeout, which
+// bounds each network read and write.
+var socketTimeoutKeys = []string{socketTimeoutKey, "READ TIMEOUT", "SOCKET TIMEOUT"}
 
 // buildConnectionString parses connStr (oracle://user:password@host:port/service) supporting
 // overriding of of connectio parameters.
@@ -142,6 +147,41 @@ func parsePrefetchRowsConfig(conf *service.ParsedConfig, overrides map[string]st
 
 	overrides[prefetchRowsKey] = strconv.Itoa(prefetchRows)
 	return prefetchRows, nil
+}
+
+// parseSocketTimeoutConfig adds a go-ora TIMEOUT override bounding each socket read
+// and write, unless connection_string already sets a socket timeout.
+func parseSocketTimeoutConfig(conf *service.ParsedConfig, overrides map[string]string, log *service.Logger) error {
+	socketTimeout, err := conf.FieldInt(ociFieldSocketTimeout)
+	if err != nil {
+		return err
+	}
+	if socketTimeout < 0 {
+		return fmt.Errorf("%s must be greater than or equal to 0, got %d", ociFieldSocketTimeout, socketTimeout)
+	}
+
+	connStr, err := conf.FieldString(ociFieldConnectionString)
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse(connStr)
+	if err != nil {
+		return fmt.Errorf("parsing %s: %w", ociFieldConnectionString, err)
+	}
+	for key, vals := range u.Query() {
+		for _, name := range socketTimeoutKeys {
+			// go-ora matches option names case-insensitively.
+			if strings.EqualFold(key, name) {
+				log.Debugf("Using %s value of %s from %s; %s configuration is ignored", key, vals[0], ociFieldConnectionString, ociFieldSocketTimeout)
+				return nil
+			}
+		}
+	}
+
+	log.Debugf("Using %s value of %d from configuration", socketTimeoutKey, socketTimeout)
+
+	overrides[socketTimeoutKey] = strconv.Itoa(socketTimeout)
+	return nil
 }
 
 // SnapshotMode controls whether and how an initial table snapshot is taken before streaming begins.
