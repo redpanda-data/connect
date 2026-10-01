@@ -45,17 +45,18 @@ func TestCheckRunningEnterprise(t *testing.T) {
 		// license is the license the license service holds. Nil means that no
 		// license service is registered, as in redpanda-connect-community.
 		license license.RedpandaLicense
-		wantErr bool
+		// wantErr is a substring of the expected error. Empty means no error.
+		wantErr string
 	}{
 		{
 			name:    "no license service",
 			license: nil,
-			wantErr: true,
+			wantErr: "this feature requires a valid Redpanda Enterprise Edition license that includes the Connect product",
 		},
 		{
 			name:    "open source license",
 			license: openSourceLicense,
-			wantErr: true,
+			wantErr: "this feature requires a valid Redpanda Enterprise Edition license that includes the Connect product",
 		},
 		{
 			name: "v1 enterprise license with Connect",
@@ -64,7 +65,7 @@ func TestCheckRunningEnterprise(t *testing.T) {
 				Expiry:   validExpiry,
 				Products: []license.Product{license.ProductConnect},
 			},
-			wantErr: false,
+			wantErr: "",
 		},
 		{
 			name: "v1 free trial license with Connect",
@@ -73,7 +74,7 @@ func TestCheckRunningEnterprise(t *testing.T) {
 				Expiry:   validExpiry,
 				Products: []license.Product{license.ProductConnect},
 			},
-			wantErr: false,
+			wantErr: "",
 		},
 		{
 			name: "v1 enterprise license without Connect",
@@ -82,7 +83,7 @@ func TestCheckRunningEnterprise(t *testing.T) {
 				Expiry:   validExpiry,
 				Products: []license.Product{"OTHER"},
 			},
-			wantErr: true,
+			wantErr: "this feature requires a valid Redpanda Enterprise Edition license that includes the Connect product",
 		},
 		{
 			name: "v1 expired enterprise license with Connect",
@@ -91,7 +92,7 @@ func TestCheckRunningEnterprise(t *testing.T) {
 				Expiry:   pastExpiry,
 				Products: []license.Product{license.ProductConnect},
 			},
-			wantErr: true,
+			wantErr: "this feature requires a valid Redpanda Enterprise Edition license that includes the Connect product",
 		},
 		{
 			name: "v0 enterprise license",
@@ -99,7 +100,7 @@ func TestCheckRunningEnterprise(t *testing.T) {
 				Type:   license.V0LicenseTypeEnterprise,
 				Expiry: validExpiry,
 			},
-			wantErr: false,
+			wantErr: "",
 		},
 	}
 
@@ -121,10 +122,10 @@ func TestCheckRunningEnterprise(t *testing.T) {
 			}
 
 			err := CheckRunningEnterprise(res)
-			if test.wantErr {
-				require.ErrorIs(t, err, errEnterpriseLicenseRequired)
-			} else {
+			if test.wantErr == "" {
 				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, test.wantErr)
 			}
 		})
 	}
