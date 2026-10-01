@@ -208,7 +208,7 @@ func (l *Lock) advanceLocked() {
 	// of them the turn, nobody releases it and the sequence stops. For
 	// example, if 3 and 4 are abandoned and 2 releases, the turn goes to 5.
 	for {
-		if _, ok := l.abandoned[l.serving]; !ok {
+		if _, abandoned := l.abandoned[l.serving]; !abandoned {
 			break
 		}
 		delete(l.abandoned, l.serving)
@@ -217,7 +217,7 @@ func (l *Lock) advanceLocked() {
 
 	// Wake the new holder if it is parked. If it is not parked yet, that is
 	// fine: its Wait sees serving == t and returns at once.
-	if ch, ok := l.waiters[l.serving]; ok {
+	if ch, parked := l.waiters[l.serving]; parked {
 		close(ch)
 		delete(l.waiters, l.serving)
 	}
@@ -366,7 +366,7 @@ func (t Ticket) Release() {
 		return
 	}
 	// t was abandoned by a cancelled Wait.
-	if _, ok := l.abandoned[t.n]; ok {
+	if _, abandoned := l.abandoned[t.n]; abandoned {
 		return
 	}
 	// t never held the turn. Abandon it.
