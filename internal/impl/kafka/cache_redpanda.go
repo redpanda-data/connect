@@ -34,16 +34,16 @@ func redpandaCacheConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Summary(`A Kafka cache using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
+		Summary(`A Kafka cache implemented using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
 A cache that stores data in a Kafka topic.
 
 This cache is useful for data that is written frequently and queried infrequently.
-Reads of the cache require reading the entire topic partition, so if there is a need for frequent reads, it's recommended to put an in memory caching layer in front of this cache.
+Reads from the cache require scanning the entire topic partition. If you expect frequent access, consider placing an in-memory caching layer in front of this one.
 
-Topics that are used as caches should be compacted so that reads are less expensive when they rescan the topic, as only the latest value is needed.
+Because only the latest values are needed, configure compaction for topics used as caches so that reads are less expensive when topics are rescanned. See xref:streaming:manage:cluster-maintenance/compaction-settings.adoc[].
 
-This cache does not support any special TTL mechanism, any TTL should be handled by the Kafka topic itself using data retention policies.
+The cache does not have any time-to-live (TTL) mechanism. Use the Kafka topic retention policies to manage TTL.
 `).
 		Fields(FranzConnectionFields()...).
 		Fields(

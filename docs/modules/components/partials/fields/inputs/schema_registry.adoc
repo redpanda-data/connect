@@ -44,7 +44,7 @@ A username to authenticate as.
 
 === `fetch_in_order`
 
-Fetch all schemas on connect and sort them by ID. Should be set to `true` when schema references are used.
+Indicate whether to fetch all schemas from the schema registry service and sort them by ID. Set this value to `true` if you use schemas that refer to other schemas (schema references).
 
 ifndef::env-cloud[]
 Requires version 4.37.0 or later.
@@ -162,7 +162,7 @@ Whether to use OAuth version 1 in requests.
 
 === `subject_filter`
 
-Include only subjects which match the regular expression filter. All subjects are selected when not set.
+Include only subjects which match the regular expression filter, or leave this field value blank to select all subjects.
 
 *Type*: `string`
 

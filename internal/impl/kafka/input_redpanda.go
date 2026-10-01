@@ -23,44 +23,33 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-func redpandaInputConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Stable().
-		Categories("Services").
-		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
-		Description(`
-When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
+// RedpandaInputDescription returns the description shared by the Redpanda
+// inputs that consume with the franz-go readers. The fallbackExample is a YAML
+// config that routes failed deliveries to a DLQ topic, and batchTuningFields
+// names the config fields that tune batch sizes.
+func RedpandaInputDescription(fallbackExample, batchTuningFields string) string {
+	return `
+When a consumer group is specified this input consumes one or more topics, and partitions automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified, topics can either be consumed in their entirety or with explicit partitions.
 
 == Delivery Guarantees
 
-When using consumer groups the offsets of "delivered" records will be committed automatically and continuously, and in the event of restarts these committed offsets will be used in order to resume from where the input left off. Redpanda Connect guarantees at least once delivery by ensuring that records are only considered to be delivered when all configured outputs that the record is routed to have confirmed delivery.
+When using consumer groups, the offsets of "delivered" records are committed automatically and continuously, and in the event of restarts these committed offsets are used to resume from where the input left off. Redpanda Connect guarantees at least once delivery by ensuring that records are only considered to be delivered when all configured outputs that the record is routed to have confirmed delivery.
 
 == Ordering
 
-In order to preserve ordering of topic partitions, records consumed from each partition are processed and delivered in the order that they are received, and only one batch of records of a given partition will ever be processed at a time. This means that parallel processing can only occur when multiple topic partitions are being consumed, but ensures that data is processed in a sequential order as determined from the source partition.
+To preserve ordering of topic partitions, records consumed from each partition are processed and delivered in the order that they are received, and only one batch of records of a given partition is ever processed at a time. This means that parallel processing can only occur when multiple topic partitions are being consumed, but ensures that data is processed in a sequential order as determined from the source partition.
 
 However, one way in which the order of records can be mixed is when delivery errors occur and error handling mechanisms kick in. Redpanda Connect always leans towards at least once delivery unless instructed otherwise, and this includes reattempting delivery of data when the ordering of that data can no longer be guaranteed.
 
-For example, a batch of records may have been sent to an output broker and only a subset of records were delivered, in this case Redpanda Connect by default will reattempt to deliver the records that failed, even though these failed records may have come before records that were previously delivered successfully.
+For example, a batch of records may have been sent to an output broker and only a subset of records were delivered. In this case Redpanda Connect by default reattempts to deliver the records that failed, even though these failed records may have come before records that were previously delivered successfully.
 
-In order to avoid this scenario you must specify in your configuration an alternative way to handle delivery errors in the form of a ` + "xref:components:outputs/fallback.adoc[`fallback`] output" + `. It is good practice to also disable the field ` + "`auto_retry_nacks` by setting it to `false`" + ` when you've added an explicit fallback output as this will improve the throughput of your pipeline. For example, the following config avoids ordering issues by specifying a fallback output into a DLQ topic, which is also retried indefinitely as a way to apply back pressure during connectivity issues:
+To avoid this scenario you must specify in your configuration an alternative way to handle delivery errors in the form of a ` + "xref:components:outputs/fallback.adoc[`fallback`] output" + `. It is good practice to also disable the field ` + "`auto_retry_nacks` by setting it to `false`" + ` when you've added an explicit fallback output as this improves the throughput of your pipeline. For example, the following config avoids ordering issues by specifying a fallback output into a DLQ topic, which is also retried indefinitely as a way to apply back pressure during connectivity issues:
 
-` + "```yaml" + `
-output:
-  fallback:
-    - redpanda:
-        seed_brokers: [ localhost:9092 ]
-        topic: foo
-    - retry:
-        output:
-          redpanda:
-            seed_brokers: [ localhost:9092 ]
-            topic: foo_dlq
-` + "```" + `
+` + "```yaml" + fallbackExample + "```" + `
 
 == Batching
 
-Records are processed and delivered from each partition in batches as received from brokers. These batch sizes are therefore dynamically sized in order to optimise throughput, but can be tuned with the config field ` + "`max_yield_batch_bytes`, or `unordered_processing.batching` when unordered processing is enabled" + `. Batches can be further broken down using the ` + "xref:components:processors/split.adoc[`split`] processor" + `.
+Records are processed and delivered from each partition in batches as received from brokers. These batch sizes are therefore dynamically sized in order to optimise throughput, but can be tuned with the config fields ` + batchTuningFields + `. Batches can be further broken down using the ` + "xref:components:processors/split.adoc[`split`] processor" + `.
 
 == Metrics
 
@@ -81,7 +70,26 @@ This input adds the following metadata fields to each message:
 - kafka_tombstone_message
 - All record headers
 ` + "```" + `
-`).
+`
+}
+
+func redpandaInputConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Services").
+		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
+		Description(RedpandaInputDescription(`
+output:
+  fallback:
+    - redpanda:
+        seed_brokers: [ localhost:9092 ]
+        topic: foo
+    - retry:
+        output:
+          redpanda:
+            seed_brokers: [ localhost:9092 ]
+            topic: foo_dlq
+`, "`fetch_max_bytes`, `fetch_max_partition_bytes`, and `max_yield_batch_bytes`, or `unordered_processing.batching` when unordered processing is enabled")).
 		Fields(redpandaInputConfigFields()...).
 		LintRule(FranzConsumerFieldLintRules)
 }

@@ -50,6 +50,29 @@ const (
 	iskFieldBatching                      = "batching"
 )
 
+// saramaAddressesField returns the broker addresses field shared by the
+// Sarama based Kafka input and output.
+func saramaAddressesField(name string) *service.ConfigField {
+	return service.NewStringListField(name).
+		Description("A list of broker addresses to connect to. List items that contain commas are expanded into multiple addresses.").
+		ShortDescription("A list of broker addresses to connect to. Items containing commas are expanded into multiple addresses.").
+		Examples(
+			[]string{"localhost:9092"},
+			[]string{"localhost:9041,localhost:9042"},
+			[]string{"localhost:9041", "localhost:9042"},
+		)
+}
+
+// saramaTargetVersionField returns the Kafka protocol version field shared by
+// the Sarama based Kafka input and output.
+func saramaTargetVersionField(name string) *service.ConfigField {
+	return service.NewStringField(name).
+		Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
+		ShortDescription("The version of the Kafka protocol to use. Ideally matches the version of your brokers.").
+		Examples(sarama.DefaultVersion.String(), "3.1.0").
+		Optional()
+}
+
 func iskConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Deprecated().
@@ -94,14 +117,7 @@ If you're seeing issues writing to or reading from Kafka with this component the
 
 Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tlsenabled, enabled TLS>> if applicable.`).
 		Fields(
-			service.NewStringListField(iskFieldAddresses).
-				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").
-				ShortDescription("A list of broker addresses to connect to. Items containing commas are expanded into multiple addresses.").
-				Examples(
-					[]string{"localhost:9092"},
-					[]string{"localhost:9041,localhost:9042"},
-					[]string{"localhost:9041", "localhost:9042"},
-				),
+			saramaAddressesField(iskFieldAddresses),
 			service.NewStringListField(iskFieldTopics).
 				Description("A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name. For example `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges. For example `foo:0-10` would consume partitions 0 through to 10 inclusive.").
 				ShortDescription("A list of topics to consume from, optionally with explicit partitions. Comma-separated topics may share one element.").
@@ -113,11 +129,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 					[]string{"foo:0-5"},
 				).
 				Version("3.33.0"),
-			service.NewStringField(iskFieldTargetVersion).
-				Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
-				ShortDescription("The version of the Kafka protocol to use. Ideally matches the version of your brokers.").
-				Examples(sarama.DefaultVersion.String(), "3.1.0").
-				Optional(),
+			saramaTargetVersionField(iskFieldTargetVersion),
 			service.NewTLSToggledField(iskFieldTLS),
 			SaramaSASLField(),
 			service.NewStringField(iskFieldConsumerGroup).
@@ -128,7 +140,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("An identifier for the client connection.").
 				Advanced().Default("benthos"),
 			service.NewStringField(iskFieldInstanceID).
-				Description("When using consumer groups, an identifier for this specific input so that it can be identified over restarts of this process. This should be unique per input.").
+				Description("When you specify a `consumer_group`, assign a unique value to `instance_id` for each input so that brokers can identify it across restarts of this process and avoid unnecessary rebalances.").
 				ShortDescription("An identifier for this input that persists across restarts. Must be unique per input.").
 				Advanced().
 				Optional(),
@@ -136,8 +148,8 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("A rack identifier for this client.").
 				Advanced().Default(""),
 			service.NewBoolField(iskFieldStartFromOldest).
-				Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
-				ShortDescription("Consume from the oldest available offset rather than the latest. Applied when the consumer group is new.").
+				Description(startFromOldestDescription).
+				ShortDescription(startFromOldestShortDescription).
 				Advanced().Default(true),
 			service.NewIntField(iskFieldCheckpointLimit).
 				Description("The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").

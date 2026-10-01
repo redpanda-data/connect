@@ -252,7 +252,7 @@ output:
 		Field(service.NewObjectField(groupsObjectField, groupsMigratorFields()...).Optional()).
 		// Topic fields
 		Field(service.NewInterpolatedStringField(rmoFieldTopic).
-			Description("The topic to write messages to. Use interpolation to derive destination topic names from source topics. The source topic name is available as 'kafka_topic' metadata.").
+			Description("The topic to write messages to. To derive destination topic names from source topics, use interpolation. The source topic name is available in the `kafka_topic` metadata field.").
 			ShortDescription("The topic to write messages to. Interpolation can derive it from the kafka_topic metadata.").
 			Default("${! @kafka_topic }").
 			Example("prod_${! @kafka_topic }")).
@@ -289,19 +289,32 @@ output:
 			}).
 			Optional()).
 		Field(service.NewStringField(rmoFieldProvenanceHeader).
-			Description("Header name to add to migrated records indicating their source cluster. If empty, no provenance header is added.").
+			Description("Header name to add to migrated records indicating their source cluster. " +
+				"When set, each migrated record that does not already carry this header receives it, with the source cluster's ID (from the cluster metadata) as the value. " +
+				"Downstream systems can use the header to track record origins. " +
+				"A record that already carries the header keeps its existing value. " +
+				"A record whose header value is the destination cluster's ID is skipped, so it is not sent back to the cluster it came from. " +
+				"A record whose header value is empty or equal to the source cluster's ID causes an error. " +
+				"If empty, no provenance header is added and no provenance checks run.").
 			Default(DefaultProvenanceHeader).
 			Advanced()).
 		Field(service.NewStringField(rmoFieldOffsetHeader).
-			Description("Header name to add to migrated records containing the source offset for exact consumer group migration. " +
-				"If empty, no offset header is added and exact offset translation is disabled. " +
-				"When disabled, consumer groups are still migrated but precision for empty groups may not be ideal if there are multiple records with the same timestamp, as timestamps have millisecond resolution. " +
-				"When consumer group migration is disabled, this header is not added.").
+			Description(`The name of a message header to add to migrated records. This header contains the source offset, enabling exact consumer group offset translation during migration.
+
+If this field is empty, no offset header is added and exact offset translation is disabled. Consumer groups are still migrated using timestamp-based positioning, which works well for most cases but may be imprecise for empty consumer groups when multiple records share the same timestamp (timestamps have millisecond resolution).
+
+Set this field to enable precise offset translation, especially when migrating consumer groups that are caught up or have minimal lag.
+
+This header is only added when consumer group migration is enabled.`).
 			ShortDescription("Header added to migrated records carrying the source offset. Leave empty to disable exact offset translation.").
 			Default(DefaultOffsetHeader).
 			Advanced()).
 		Field(service.NewIntField(rmoFieldMaxInFlight).
-			Description("Maximum number of batches to have in flight at any given time. For optimal throughput, set this to the total number of partitions being copied in parallel (up to all partitions in the cluster). Setting it higher than the number of consumed partitions is ineffective.").
+			Description(`The maximum number of batches to send in parallel at any given time. Increase this value to improve throughput during migration.
+
+For optimal performance, set this to the total number of partitions being migrated in parallel (up to all partitions in the cluster). Setting it higher than the number of consumed partitions provides no additional benefit.
+
+For example, if you are migrating 100 partitions, set ` + "`" + `max_in_flight: 100` + "`" + ` for maximum throughput.`).
 			ShortDescription("Maximum number of batches in flight at any given time.").
 			Default(10).
 			Example("64  # For a cluster with 64 partitions").

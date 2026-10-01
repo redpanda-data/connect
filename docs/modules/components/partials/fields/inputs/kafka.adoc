@@ -4,7 +4,7 @@
 
 === `addresses[]`
 
-A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.
+A list of broker addresses to connect to. List items that contain commas are expanded into multiple addresses.
 
 *Type*: `array<string>`
 
@@ -240,7 +240,7 @@ A period after which a consumer of the group is kicked after no heartbeats.
 
 === `instance_id`
 
-When using consumer groups, an identifier for this specific input so that it can be identified over restarts of this process. This should be unique per input.
+When you specify a `consumer_group`, assign a unique value to `instance_id` for each input so that brokers can identify it across restarts of this process and avoid unnecessary rebalances.
 
 *Type*: `string`
 

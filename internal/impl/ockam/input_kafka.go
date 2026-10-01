@@ -41,33 +41,35 @@ func init() {
 
 func ockamKafkaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Ockam").
+		Summary("Uses Ockam to decrypt and read end-to-end encrypted messages from Kafka topics.").
 		Categories("Services").
 		Field(service.NewObjectField("kafka", slices.Concat(
 			[]*service.ConfigField{
-				service.NewStringListField("seed_brokers").Optional().
-					Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
-					ShortDescription("Broker addresses used to establish connections. Items containing commas are expanded.").
-					Example([]string{"localhost:9092"}).
-					Example([]string{"foo:9092", "bar:9092"}).
-					Example([]string{"foo:9092,bar:9092"}),
+				seedBrokersField(),
 				service.NewTLSToggledField("tls"),
 			},
 			kafka.FranzConsumerFields(),
 			kafka.FranzReaderUnorderedConfigFields(), //nolint:staticcheck // intentional use of deprecated API
 		)...).LintRule(kafka.FranzConsumerFieldLintRules)).
-		Field(service.NewBoolField("disable_content_encryption").Default(false)).
-		Field(service.NewStringField("enrollment_ticket").Optional()).
-		Field(service.NewStringField("identity_name").Optional()).
-		Field(service.NewStringField("allow").Default("self")).
-		Field(service.NewStringField("route_to_kafka_outlet").Default("self")).
-		Field(service.NewStringField("allow_producer").Default("self")).
-		Field(service.NewStringField("relay").Optional()).
-		Field(service.NewStringField("node_address").Default("127.0.0.1:6262")).
-		Field(service.NewStringListField("encrypted_fields").
-			Description("The fields to encrypt in the kafka messages, assuming the record is a valid JSON map. By default, the whole record is encrypted.").
-			ShortDescription("Fields to encrypt within JSON records. The whole record is encrypted by default.").
-			Default([]string{}))
+		Field(disableContentEncryptionField()).
+		Field(enrollmentTicketField()).
+		Field(identityNameField()).
+		Field(allowField()).
+		Field(routeToKafkaOutletField()).
+		Field(service.NewStringField("allow_producer").
+			Description(`Specify an access control policy for producers.
+
+For example, setting this value to ` + "`orders_producer`" + ` forces the producer to present an Ockam credential, which confirms that the producer has the attribute ` + "`orders_producer=true`" + `.`).
+			Default("self")).
+		Field(service.NewStringField("relay").
+			Description(`Make the Ockam node accessible through a relay with the supplied name (optional). This field only takes effect when ` + "`enrollment_ticket`" + ` is set.
+
+For example, setting this value to ` + "`orders_consumer`" + ` requires you to set ` + "`route_to_consumer`" + ` on any producer to ` + "`/project/default/service/forward_to_orders_consumer/secure/api`" + `.`).
+			Optional()).
+		Field(service.NewStringField("node_address").
+			Description("The TCP listening address of the Ockam node.").
+			Default("127.0.0.1:6262")).
+		Field(encryptedFieldsField())
 }
 
 //------------------------------------------------------------------------------
