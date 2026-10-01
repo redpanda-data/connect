@@ -47,9 +47,9 @@ func basicAuthField() *service.ConfigField {
 			Default(false),
 		service.NewStringField(coFieldBasicAuthUsername).
 			Default("").
-			Description("The username of the account credentials to authenticate as. Used together with `password` for basic authentication."),
+			Description("The graph database user to authenticate as, with `password` and, optionally, `realm`."),
 		service.NewStringField(coFieldBasicAuthPassword).
-			Description("The password to use for authentication. Used together with `username` for basic authentication.").
+			Description("The password of the graph database user set in `username`.").
 			Default("").
 			Secret(),
 		service.NewStringField(coFieldBasicAuthRealm).

@@ -19,14 +19,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-
-	"github.com/redpanda-data/connect/v4/internal/retries"
 )
 
 const (
@@ -57,7 +57,11 @@ func ProcessorSpec() *service.ConfigSpec {
 			Advanced().
 			Version("3.60.0").
 			Default(string(JSONMarshalModeCanonical)))
-	for _, f := range retries.CommonRetryBackOffFields(3, "1s", "5s", "30s") {
+	for _, f := range service.NewRetryBackOffFields(3, &backoff.ExponentialBackOff{
+		InitialInterval: time.Second,
+		MaxInterval:     5 * time.Second,
+		MaxElapsedTime:  30 * time.Second,
+	}) {
 		spec = spec.Field(f.Deprecated())
 	}
 	return spec
