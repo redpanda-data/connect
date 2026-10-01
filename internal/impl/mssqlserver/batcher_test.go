@@ -534,7 +534,7 @@ func TestFlushCurrentBarriersParkedFlusher(t *testing.T) {
 
 // TestShutdownUnwindsWedgedTicketChain encodes the shutdown wedge: the timed
 // flush loop parks in sendTracked holding its ticket (nothing drains msgChan
-// once ReadBatch stops), and another flusher waits in queue.Acquire with no escape
+// once ReadBatch stops), and another flusher waits in Ticket.Wait with no escape
 // of its own. Triggering the publisher's soft stop - which the input's Close
 // now does - must release the loop's ticket and let the chain drain via each
 // caller's cancelled context, instead of leaking both goroutines past the
@@ -784,6 +784,8 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 	}()
 	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an LSN that skips them")
+	require.ErrorContains(t, laterErr, "tracking flushed batch",
+		"the refusal must show why the queue was sealed")
 }
 
 // mssqlTestFilterAllRegistered registers a processor that drops every batch,
