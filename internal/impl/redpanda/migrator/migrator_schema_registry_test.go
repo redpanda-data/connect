@@ -128,6 +128,7 @@ func TestIsSubjectError(t *testing.T) {
 		{"incompatible", respErr(http.StatusConflict), true},
 		{"invalid schema", respErr(http.StatusUnprocessableEntity), true},
 		{"not found", respErr(http.StatusNotFound), true},
+		{"fixed ID collision", &fixedIDError{respErr(http.StatusConflict)}, false},
 		{"unauthorized", respErr(http.StatusUnauthorized), false},
 		{"forbidden", respErr(http.StatusForbidden), false},
 		{"server error", respErr(http.StatusInternalServerError), false},

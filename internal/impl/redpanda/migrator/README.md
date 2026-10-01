@@ -322,9 +322,9 @@ sequenceDiagram
 
 ### Schema Sync Characteristics
 
-- **Initial sync on connect** - One sync when output connects; subjects the destination rejects (HTTP 404/409/422, e.g. an incompatible schema) are logged and do not fail the connect, while registry-level errors (unreachable, unauthorized, 5xx, misconfigured) do
-- **Optional periodic sync** - Background loop controlled by `interval` setting; subjects that failed to sync are retried on each iteration (not retried with `interval: 0s`)
-- **Unknown schema handling** - A record whose schema ID is not yet synced to the destination is passed through unchanged, or rejected when `strict` is enabled (there is no on-demand resync). A record whose schema failed to sync is always rejected, so the output retries it until a later sync registers the schema; later versions of a subject are not synced until its failed version is. Because the output writes in order, such a record blocks all data migration until then, and with `interval: 0s` it blocks it indefinitely since failed subjects are never retried
+- **Initial sync on connect** - One sync when output connects; subjects the destination rejects (HTTP 404/409/422, e.g. an incompatible schema) are logged and do not fail the connect, while registry-level errors (unreachable, unauthorized, 5xx, misconfigured) and ID conflicts (with fixed IDs, a different schema already holds the source ID at the destination; or a source ID maps to two destination IDs) do
+- **Optional periodic sync** - Background loop controlled by `interval` setting; subjects that failed to sync are retried on each iteration; with `interval: 0s` only the subjects that failed the initial sync are retried, with backoff from 10s up to 5m, until they sync
+- **Unknown schema handling** - A record whose schema ID is not yet synced to the destination is passed through unchanged, or rejected when `strict` is enabled (there is no on-demand resync). A record whose schema failed to sync is always rejected, so the output retries it until a later sync registers the schema; later versions of a subject, and schemas that reference a failed version, are not synced until it is. Because the output writes in order, such a record blocks all data migration until then
 - **ID translation modes** - Create-or-reuse (translate) vs fixed IDs
 - **Compatibility propagation** - Only when explicitly set per-subject
 
@@ -741,6 +741,6 @@ migrator/
 ### Error Handling
 
 - **Topic creation** - Errors fail message batch, retry on next batch
-- **Schema sync** - Per-subject rejections logged and skipped in both initial and periodic sync, retry on next sync iteration (no retry with `interval: 0s`); registry-level errors fail the output connect on the initial sync
+- **Schema sync** - Per-subject rejections logged and skipped in both initial and periodic sync, retry on next sync iteration (with `interval: 0s`, failed subjects are retried with backoff until they sync); registry-level errors and ID conflicts fail the output connect on the initial sync
 - **Consumer group sync** - Errors logged, retry on next sync iteration
 - **Offset translation** - Partition skipped on error, other partitions continue
