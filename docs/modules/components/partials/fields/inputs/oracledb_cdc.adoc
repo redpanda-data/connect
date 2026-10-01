@@ -136,7 +136,7 @@ The key to use to store the snapshot position in `checkpoint_cache`. An alternat
 
 === `checkpoint_cache_table_name`
 
-The identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `pdb_name` is set and this field is left at its default value, the table name is automatically derived per PDB (e.g. `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.
+The identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `pdb_name` is set and this field is left at its default value, the table name is automatically derived per PDB (for example, `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.
 
 *Type*: `string`
 
@@ -260,7 +260,7 @@ The maximum number of events that can be buffered for a single transaction. If a
 
 === `logminer.min_scn_window_size`
 
-The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.
+The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. This gate applies regardless of `window_strategy`. Set to 0 to disable.
 
 *Type*: `int`
 
@@ -283,6 +283,22 @@ mining_interval: 100ms
 
 mining_interval: 1s
 ----
+
+=== `logminer.redo_volume_growth_max`
+
+The ceiling the per-thread redo-volume budget can grow to, applied independently to each open redo thread (enabling the total volume mined per cycle to scale with thread count on RAC (Real Application Clusters) configurations). The budget starts at `redo_volume_min` and grows automatically whenever something prevents the mining window from advancing - for example a long-running transaction holding it in place, or a redo log being recycled mid-query - up to this limit. Only applies when `window_strategy` is `redo_volume`.
+
+*Type*: `int`
+
+*Default*: `4`
+
+=== `logminer.redo_volume_min`
+
+Whilst not exact, this value represents the minimum number of redo logs to read per redo thread in each mining cycle. Consider increasing this value if redo logs are small and rotate frequently, decreasing if redo logs are very large. Only applies when `window_strategy` is `redo_volume`.
+
+*Type*: `int`
+
+*Default*: `2`
 
 === `logminer.scn_window_size`
 
@@ -317,6 +333,19 @@ The key prefix used when storing transactions in `transaction_cache`. An alterna
 *Type*: `string`
 
 *Default*: `oracledb_cdc`
+
+=== `logminer.window_strategy`
+
+Controls how the SCN range mined per cycle is sized:
+
+- `scn_window` (default): Grows and shrinks a fixed SCN increment (`scn_window_size`) based on its backlog, bounded by `min_scn_window_size` and `max_scn_window_size`.
+- `redo_volume`: Sizes the range by a fixed redo-volume budget calculated by log size (configured by `redo_volume_min` and `redo_volume_growth_max`), independent of raw SCN movement. This can be helpful when a databases's SCN can advance without matching real transaction volume - for example a Multitenant Container Database (CDB) shared SCN bumped by another Pluggable Database (PDB) - since `scn_window` would otherwise burn cycles growing its window over mostly-empty ranges, while `redo_volume` sizes each cycle by the redo it actually reads. On Real Application Clusters (RAC), `redo_volume`'s budget applies per open thread, so volume mined per cycle scales with the number of open threads.
+
+*Type*: `string`
+
+*Default*: `scn_window`
+
+*Options*: `scn_window`, `redo_volume`
 
 === `max_parallel_snapshot_tables`
 

@@ -33,6 +33,13 @@ inputs:
       role_external_id: "" # No default (optional)
       roles: [] # No default (optional)
     signal_table_name: ""
+    incremental_snapshot:
+      enabled: false
+      chunk_size: 1024
+      heartbeat_interval: 1s
+      retry_cooldown: 30s
+      checkpoint_cache: "" # No default (optional)
+      checkpoint_cache_key: postgres_cdc_incremental_snapshot
     auto_replay_nacks: true
     batching:
       count: 0

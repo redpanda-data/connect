@@ -1,6 +1,7 @@
 metrics:
   prometheus:
     use_histogram_timing: false
+    histogram_timing_seconds_suffix: false
     histogram_buckets: []
     summary_quantiles_objectives:
       - error: 0.05

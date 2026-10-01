@@ -38,6 +38,18 @@ endif::[]
 
 *Default*: `[]`
 
+=== `histogram_timing_seconds_suffix`
+
+Whether to rewrite a `_ns` timing metric name suffix to `_seconds` when `use_histogram_timing` is `true` (for example `processor_latency_ns` becomes `processor_latency_seconds`), reflecting that histogram timings are recorded in seconds. This also keeps the histogram series distinct from the summary series emitted when `use_histogram_timing` is `false`, which avoids Prometheus remote-write "multiple metric kinds" rejections when a fleet mixes the setting. Enabling this renames existing histogram timing series, so dashboards and alerts that query the `_ns` names must be updated. Has no effect when `use_histogram_timing` is `false`.
+
+ifndef::env-cloud[]
+Requires version 4.112.0 or later.
+endif::[]
+
+*Type*: `bool`
+
+*Default*: `false`
+
 === `push_basic_auth`
 
 The Basic Authentication credentials.

@@ -12,6 +12,9 @@ inputs:
       scn_window_size: 20000
       min_scn_window_size: 1000
       max_scn_window_size: 100000
+      window_strategy: scn_window
+      redo_volume_min: 2
+      redo_volume_growth_max: 4
       backoff_interval: 5s
       mining_interval: 300ms
       strategy: online_catalog
