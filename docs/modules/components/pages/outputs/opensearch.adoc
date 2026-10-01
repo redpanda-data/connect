@@ -72,6 +72,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    compress_request_body: false
     max_in_flight: 64
     basic_auth:
       enabled: false
@@ -370,6 +371,15 @@ password: foo
 
 password: ${KEY_PASSWORD}
 ```
+
+=== `compress_request_body`
+
+Enable gzip compression of HTTP request bodies on the OpenSearch client. OpenSearch 2.x servers accept `Content-Encoding: gzip` natively; this is useful to reduce bandwidth on cross-cloud or cross-region bulk writes.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `max_in_flight`
 
