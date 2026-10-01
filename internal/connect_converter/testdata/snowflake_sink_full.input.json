@@ -1,0 +1,19 @@
+{
+  "name": "sf-full",
+  "config": {
+    "connector.class": "com.snowflake.kafka.connector.SnowflakeSinkConnector",
+    "snowflake.url.name": "myorg-myacct.snowflakecomputing.com",
+    "snowflake.user.name": "loader",
+    "snowflake.role.name": "LOADER_ROLE",
+    "snowflake.database.name": "PROD",
+    "snowflake.schema.name": "PUBLIC",
+    "snowflake.private.key": "MYPRIVKEY",
+    "snowflake.private.key.passphrase": "s3cr3t",
+    "topics": "events",
+    "buffer.count.records": "10000",
+    "buffer.flush.time": "10",
+    "buffer.size.bytes": "5000000",
+    "behavior.on.null.values": "IGNORE",
+    "snowflake.metadata.all": "true"
+  }
+}
