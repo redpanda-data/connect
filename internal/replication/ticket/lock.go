@@ -19,10 +19,11 @@ package ticket
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 )
 
-// ErrSealed is returned by Acquire after the lock is sealed.
+// ErrSealed is returned by Wait after the lock is sealed.
 var ErrSealed = errors.New("ticket lock sealed")
 
 // Lock is a FIFO ticket lock. It works like the "take a number" counter at
@@ -31,12 +32,15 @@ var ErrSealed = errors.New("ticket lock sealed")
 //
 // Two extras make it fit for CDC publishers:
 //
-//   - A waiter can give up, for example on shutdown. We say it "abandons"
-//     its ticket. When the ticket's turn comes, the lock skips it, so the
+//   - A caller can give up its ticket, for example on shutdown. The ticket
+//     is then "abandoned". When its turn comes, the lock skips it, so the
 //     tickets behind it do not wait forever.
 //   - The lock can be "sealed". A sealed lock refuses all further turns.
-//     Use this when a ticket's work was lost, and no later ticket may pass
-//     that gap.
+//     Use this when the work of a ticket was lost, and no later ticket may
+//     pass that gap.
+//
+// The caller states at take time what an abandon does. With Take, an
+// abandon seals the lock. With TakeSkippable, the lock skips the ticket.
 //
 // Why not a plain sync.Mutex? A mutex does not hand out turns in a fixed
 // order, and a wait for it cannot be cancelled. Here the order is the whole
@@ -48,12 +52,12 @@ var ErrSealed = errors.New("ticket lock sealed")
 //
 //  1. Lock the batcher, flush, call Take, unlock the batcher. Take happens
 //     under the batcher lock, so ticket order is the same as flush order.
-//  2. Call Acquire to wait for its turn. If ctx is cancelled here, the
-//     ticket is abandoned: stop, and do NOT call Release.
-//  3. Track and send the batch. This step can block.
-//  4. Call Release, also on error paths.
+//  2. Defer Ticket.Release. It is safe in every state of the ticket.
+//  3. Call Ticket.Wait to wait for its turn. If Wait returns an error,
+//     stop.
+//  4. Track and send the batch. This step can block.
 //
-// The batcher lock is free during step 3, so other goroutines can continue
+// The batcher lock is free during step 4, so other goroutines can continue
 // to add and flush while one flusher is blocked.
 //
 // If a flushed batch is dropped, for example because Track failed, seal the
@@ -64,171 +68,71 @@ var ErrSealed = errors.New("ticket lock sealed")
 type Lock struct {
 	// mu guards all the fields below.
 	mu sync.Mutex
-	// next is the number on the next ticket that Take hands out.
+	// next is the number on the next ticket that a take hands out.
 	next uint64
-	// serving is the "now serving" display: the ticket whose turn it is.
+	// serving is the "now serving" display: the number of the ticket whose
+	// turn it is.
 	serving uint64
-	// waiters holds one channel for each parked Acquire, by ticket. Release
-	// closes the channel when it is that ticket's turn, and Seal closes all
-	// of them.
+	// held is true from the moment Wait returns nil for the ticket at
+	// serving, until the Release of that ticket. Release reads it to choose
+	// between the end of a turn and an abandon. serving alone is not
+	// enough: a ticket can get its turn before its Wait is called, and a
+	// Release on that path must abandon the ticket, not end its turn.
+	held bool
+	// waiters holds one channel for each parked Wait, by ticket number.
+	// advanceLocked closes the channel when it is that ticket's turn, and
+	// sealLocked closes all of them.
 	waiters map[uint64]chan struct{}
-	// abandoned holds the tickets whose Acquire was cancelled before their
-	// turn. Release skips each one when its turn comes, and removes it.
+	// abandoned holds the numbers of the tickets that were abandoned before
+	// their turn. advanceLocked skips each one when its turn comes, and
+	// removes it.
 	abandoned map[uint64]struct{}
 	// sealed refuses all further turns. It is never cleared.
 	sealed bool
 }
 
-// Take draws the next ticket.
+// Take draws the next ticket. If the ticket is abandoned, the lock is
+// sealed: no later ticket ever gets a turn. Use Take when the work of the
+// ticket must not be lost silently, for example a flushed batch that the
+// checkpoint must not pass. If you are not sure, use Take: an unnecessary
+// seal costs a rebuild, but an incorrect skip can lose data.
 //
 // Call Take inside the same critical section as the work that the ticket
-// orders, for example a batch flush. Ticket order is then equal to the order
-// of that work. If you call Take after that critical section, another
-// goroutine can flush and take a ticket in between, and the two batches then
-// get their turns in the wrong order.
+// orders. Ticket order is then equal to the order of that work. If you call
+// it after that critical section, another goroutine can do its work and
+// take a ticket in between, and the two get their turns in the wrong order.
 //
-// You can hold that caller lock while you call Take or Seal. This cannot
-// deadlock, because Acquire and Release never take the caller lock.
-func (l *Lock) Take() uint64 {
+// You can hold that caller lock while you call Take, TakeSkippable or Seal.
+// This cannot deadlock, because Wait and Release never take the caller
+// lock.
+func (l *Lock) Take() Ticket {
+	return l.take(true)
+}
+
+// TakeSkippable draws the next ticket. If the ticket is abandoned, the lock
+// skips it and the sequence continues. Use it when nothing is lost if the
+// turn of the ticket never happens, for example a ticket that only waits
+// for all earlier tickets to finish.
+//
+// The same critical section rule as for Take applies.
+func (l *Lock) TakeSkippable() Ticket {
+	return l.take(false)
+}
+
+func (l *Lock) take(sealOnAbandon bool) Ticket {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	t := l.next
+	t := Ticket{l: l, n: l.next, sealOnAbandon: sealOnAbandon}
 	l.next++
 	return t
 }
 
-// Acquire waits for the turn of ticket t. It returns when one of these
-// happens first:
+// Seal refuses all further turns, for good. Every parked Wait wakes up and
+// returns ErrSealed, and every later Wait returns ErrSealed at once.
 //
-//   - It is t's turn. Acquire returns nil, and the caller now holds the turn.
-//     The caller must call Release exactly once when it is done.
-//   - ctx is cancelled. Acquire marks t as "abandoned" and returns ctx.Err().
-//     The caller must NOT call Release. When t's turn comes, Release skips
-//     t, so the tickets behind t do not wait forever.
-//   - The lock is sealed. Acquire returns ErrSealed.
-//
-// If it is already t's turn, Acquire returns nil and does not look at ctx.
-//
-// sealOnAbandon is for a ticket that must not be skipped. For example, t
-// holds a flushed batch. If we skip t, the next batch gets its turn, is
-// tracked and acked, and the checkpoint moves past rows that were never
-// sent. With sealOnAbandon, an abandon seals the lock instead, so no later
-// ticket ever gets a turn.
-//
-// The seal happens in the same critical section that marks t as abandoned.
-// It cannot happen later: as soon as t is marked, the holder before t can
-// call Release, skip t, and give the turn to t+1. A seal after that is too
-// late, because t+1 already passed the gap.
-//
-// Without sealOnAbandon (for example, a barrier ticket with no batch), an
-// abandoned ticket is skipped and the sequence continues.
-func (l *Lock) Acquire(ctx context.Context, t uint64, sealOnAbandon bool) error {
-	// Lock is sealed, return immediately with ErrSealed.
-	l.mu.Lock()
-	if l.sealed {
-		l.mu.Unlock()
-		return ErrSealed
-	}
-
-	// It's our turn, good to go.
-	if l.serving == t {
-		l.mu.Unlock()
-		return nil
-	}
-
-	// It's not our turn yet, so we need to "park".
-	// Parking here means registering a channel that Release closes when it's
-	// our turn, or Seal closes when the lock is sealed.
-	if l.waiters == nil {
-		l.waiters = make(map[uint64]chan struct{})
-	}
-	ch := make(chan struct{})
-	l.waiters[t] = ch
-	l.mu.Unlock()
-
-	// Blocking section: wait for our turn or the lock to be sealed.
-	select {
-	case <-ch:
-		// We were woken up. Check why: a Seal, or our turn.
-		l.mu.Lock()
-		defer l.mu.Unlock()
-		if l.sealed {
-			return ErrSealed
-		}
-		return nil
-	case <-ctx.Done():
-		// We were cancelled, but we can be too late to abandon. Between
-		// ctx.Done and l.mu.Lock, a Release can give us the turn, or a Seal
-		// can close ch. So check ch again, now that we hold mu.
-		l.mu.Lock()
-		defer l.mu.Unlock()
-		select {
-		case <-ch:
-			// The wake came first. If it was a Release, we hold the turn:
-			// return nil, and the caller must Release it. If we abandon here
-			// instead, nobody releases our turn, and no later ticket ever
-			// gets one.
-			if l.sealed {
-				return ErrSealed
-			}
-			return nil
-		default:
-		}
-
-		// Nobody woke us, so we "abandon" the ticket. Abandoning here means
-		// removing our channel and adding t to the abandoned set. When t's
-		// turn comes, Release skips it and gives the turn to the next ticket.
-		delete(l.waiters, t)
-		if l.abandoned == nil {
-			l.abandoned = make(map[uint64]struct{})
-		}
-		l.abandoned[t] = struct{}{}
-
-		// The caller says t must not be skipped: seal now, while we still
-		// hold mu. See the Acquire doc for why this cannot wait.
-		if sealOnAbandon {
-			l.sealLocked()
-		}
-		return ctx.Err()
-	}
-}
-
-// Release ends the current turn and gives the turn to the next ticket that
-// is not abandoned. Call it exactly once for each Acquire that returned nil,
-// also on error paths. If a turn is never released, no later ticket ever
-// gets a turn.
-func (l *Lock) Release() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	// Our turn is done, so the next ticket is up.
-	l.serving++
-
-	// Skip the abandoned tickets. Nobody waits for them, so if we give one
-	// of them the turn, nobody releases it and the sequence stops. For
-	// example, if 3 and 4 are abandoned and 2 releases, the turn goes to 5.
-	for {
-		if _, ok := l.abandoned[l.serving]; !ok {
-			break
-		}
-		delete(l.abandoned, l.serving)
-		l.serving++
-	}
-
-	// Wake the new holder if it is parked. If it is not parked yet, that is
-	// fine: its Acquire sees serving == t and returns at once.
-	if ch, ok := l.waiters[l.serving]; ok {
-		close(ch)
-		delete(l.waiters, l.serving)
-	}
-}
-
-// Seal refuses all further turns, for good. Every parked Acquire wakes up
-// and returns ErrSealed, and every later Acquire returns ErrSealed at once.
-//
-// A holder whose Acquire already returned nil keeps its turn, and must
-// still call Release. For example, a holder whose Track fails seals the
-// lock, and then releases its turn as usual.
+// A holder whose Wait already returned nil keeps its turn, and must still
+// call Release. For example, a holder whose Track fails seals the lock, and
+// then releases its turn as usual.
 //
 // You can call Seal while you hold the caller lock of Take.
 func (l *Lock) Seal() {
@@ -244,7 +148,7 @@ func (l *Lock) Sealed() bool {
 	return l.sealed
 }
 
-// sealLocked seals the lock and wakes every parked Acquire. Each one sees
+// sealLocked seals the lock and wakes every parked Wait. Each one sees
 // sealed and returns ErrSealed. The caller must hold mu.
 func (l *Lock) sealLocked() {
 	l.sealed = true
@@ -252,4 +156,188 @@ func (l *Lock) sealLocked() {
 		close(ch)
 		delete(l.waiters, t)
 	}
+}
+
+// abandonLocked marks ticket t as abandoned. If t is a Take ticket, it also
+// seals the lock. If it is already the turn of t, the turn goes at once to
+// the next ticket. The caller must hold mu.
+//
+// The seal happens in the same critical section that marks t as abandoned.
+// It cannot happen later: as soon as t is marked, the holder before t can
+// call Release, skip t, and give the turn to t+1. A seal after that is too
+// late, because t+1 already passed the gap.
+func (l *Lock) abandonLocked(t Ticket) {
+	if t.sealOnAbandon {
+		l.sealLocked()
+	}
+	if l.serving == t.n {
+		l.advanceLocked()
+		return
+	}
+	if l.abandoned == nil {
+		l.abandoned = make(map[uint64]struct{})
+	}
+	l.abandoned[t.n] = struct{}{}
+}
+
+// advanceLocked gives the turn to the next ticket that is not abandoned,
+// and wakes it if it is parked. The caller must hold mu.
+func (l *Lock) advanceLocked() {
+	l.held = false
+	l.serving++
+
+	// Skip the abandoned tickets. Nobody waits for them, so if we give one
+	// of them the turn, nobody releases it and the sequence stops. For
+	// example, if 3 and 4 are abandoned and 2 releases, the turn goes to 5.
+	for {
+		if _, ok := l.abandoned[l.serving]; !ok {
+			break
+		}
+		delete(l.abandoned, l.serving)
+		l.serving++
+	}
+
+	// Wake the new holder if it is parked. If it is not parked yet, that is
+	// fine: its Wait sees serving == t and returns at once.
+	if ch, ok := l.waiters[l.serving]; ok {
+		close(ch)
+		delete(l.waiters, l.serving)
+	}
+}
+
+// Ticket is one place in the turn order of a Lock. Take and TakeSkippable
+// hand it out. The holder calls Wait to get its turn, and Release when it
+// is done with the ticket.
+//
+// A Ticket is a small value. You can copy it, but all copies are the same
+// ticket and get one turn only. The zero Ticket is not valid.
+type Ticket struct {
+	// l is the Lock that issued the ticket.
+	l *Lock
+	// n is the place of the ticket in the turn order. Wait and Release
+	// compare it with l.serving to find the state of the ticket.
+	n uint64
+	// sealOnAbandon is true for a Take ticket. abandonLocked reads it: if it
+	// is true, the abandon seals l. The lock cannot find this value itself,
+	// because only the taker knows if the work of the ticket can be lost.
+	sealOnAbandon bool
+}
+
+// Wait waits for the turn of t. It returns when one of these happens
+// first:
+//
+//   - It is the turn of t. Wait returns nil, and t holds the turn. Call
+//     Release when you are done.
+//   - ctx is cancelled. Wait abandons t and returns ctx.Err(). For a Take
+//     ticket, the abandon also seals the lock.
+//   - The lock is sealed. Wait returns ErrSealed.
+//
+// If it is already the turn of t, Wait returns nil and does not look at
+// ctx. After an error, Release is still safe to call, and does nothing.
+//
+// Call Wait at most once for each ticket. A Wait after the Release of t
+// returns an error at once.
+func (t Ticket) Wait(ctx context.Context) error {
+	l := t.l
+	l.mu.Lock()
+	if l.sealed {
+		l.mu.Unlock()
+		return ErrSealed
+	}
+
+	// The turn of t already passed, or t is abandoned: nobody can wake a
+	// parked Wait, so refuse at once.
+	if _, abandoned := l.abandoned[t.n]; abandoned || t.n < l.serving {
+		l.mu.Unlock()
+		return fmt.Errorf("ticket %d is already released", t.n)
+	}
+
+	// It's our turn, good to go.
+	if l.serving == t.n {
+		l.held = true
+		l.mu.Unlock()
+		return nil
+	}
+
+	// It's not our turn yet, so we need to "park".
+	// Parking here means registering a channel that advanceLocked closes when
+	// it's our turn, or sealLocked closes when the lock is sealed.
+	if l.waiters == nil {
+		l.waiters = make(map[uint64]chan struct{})
+	}
+	ch := make(chan struct{})
+	l.waiters[t.n] = ch
+	l.mu.Unlock()
+
+	// Blocking section: wait for our turn or the lock to be sealed.
+	select {
+	case <-ch:
+		// We were woken up. Check why: a seal, or our turn.
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		return l.wokenLocked()
+	case <-ctx.Done():
+		// We were cancelled, but we can be too late to abandon. Between
+		// ctx.Done and l.mu.Lock, a Release can give us the turn, or a Seal
+		// can close ch. So check ch again, now that we hold mu.
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		select {
+		case <-ch:
+			// The wake came first. If it was our turn, we hold it and
+			// return nil, the same as when the turn is ours at the start.
+			return l.wokenLocked()
+		default:
+		}
+
+		// Nobody woke us, so we abandon the ticket.
+		delete(l.waiters, t.n)
+		l.abandonLocked(t)
+		return ctx.Err()
+	}
+}
+
+// wokenLocked is the result of a parked Wait after its channel was closed.
+// The channel is closed by a seal, or because it is the turn of the ticket.
+// The caller must hold mu.
+func (l *Lock) wokenLocked() error {
+	if l.sealed {
+		return ErrSealed
+	}
+	l.held = true
+	return nil
+}
+
+// Release ends the use of t. Call it once for each ticket, also on error
+// paths. The best place is a defer right after the take. What Release does
+// depends on the state of t:
+//
+//   - Wait returned nil, so t holds the turn: Release gives the turn to the
+//     next ticket that is not abandoned.
+//   - Wait was not called, or did not return nil: Release abandons t. The
+//     lock skips t when its turn comes. For a Take ticket, the abandon also
+//     seals the lock, because the work of t is lost.
+//   - t was already released, abandoned or skipped: Release does nothing.
+//
+// If a ticket is never released, no later ticket ever gets a turn.
+func (t Ticket) Release() {
+	l := t.l
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	// The turn of t already passed: t was released or skipped.
+	if t.n < l.serving {
+		return
+	}
+	// t holds the turn: end it.
+	if t.n == l.serving && l.held {
+		l.advanceLocked()
+		return
+	}
+	// t was abandoned by a cancelled Wait.
+	if _, ok := l.abandoned[t.n]; ok {
+		return
+	}
+	// t never held the turn. Abandon it.
+	l.abandonLocked(t)
 }

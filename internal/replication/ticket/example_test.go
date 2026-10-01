@@ -28,22 +28,24 @@ func ExampleLock() {
 	for range 4 {
 		wg.Go(func() {
 			// Step 1: flush and draw a ticket in the same critical section.
+			// The ticket holds a batch, so it comes from Take: an abandon
+			// must seal the lock.
 			batcherMu.Lock()
 			batch := nextBatch
 			nextBatch++
 			t := queue.Take()
 			batcherMu.Unlock()
 
-			// Step 2: wait for our turn. The ticket owns a batch, so an
-			// abandon must seal the lock.
-			if err := queue.Acquire(context.Background(), t, true); err != nil {
+			// Step 2: release the ticket when we are done, also on error
+			// paths.
+			defer t.Release()
+
+			// Step 3: wait for our turn.
+			if err := t.Wait(context.Background()); err != nil {
 				return
 			}
 
-			// Step 4, deferred: release our turn, also on error paths.
-			defer queue.Release()
-
-			// Step 3: the slow work, for example track and send. The
+			// Step 4: the slow work, for example track and send. The
 			// goroutines start in any order, but this runs in flush order.
 			fmt.Println("tracked batch", batch)
 		})
@@ -57,24 +59,25 @@ func ExampleLock() {
 	// tracked batch 3
 }
 
-// This example shows an abandoned ticket. The Acquire of t1 is cancelled, so
-// Release skips t1 and gives the turn to t2.
-func ExampleLock_Acquire_abandon() {
+// This example shows an abandoned ticket. The Wait of t1 is cancelled, so
+// the lock skips t1 and gives the turn to t2. t1 is from TakeSkippable, so
+// the abandon does not seal the lock.
+func ExampleTicket_Wait_abandon() {
 	var queue ticket.Lock
-	t0, t1, t2 := queue.Take(), queue.Take(), queue.Take()
+	t0, t1, t2 := queue.Take(), queue.TakeSkippable(), queue.Take()
 
 	// t0 gets the turn at once.
-	fmt.Println("t0:", queue.Acquire(context.Background(), t0, false))
+	fmt.Println("t0:", t0.Wait(context.Background()))
 
 	// The caller of t1 gives up, for example on shutdown.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	fmt.Println("t1:", queue.Acquire(ctx, t1, false))
+	fmt.Println("t1:", t1.Wait(ctx))
 
 	// t0 releases. The turn skips t1 and goes to t2.
-	queue.Release()
-	fmt.Println("t2:", queue.Acquire(context.Background(), t2, false))
-	queue.Release()
+	t0.Release()
+	fmt.Println("t2:", t2.Wait(context.Background()))
+	t2.Release()
 
 	// Output:
 	// t0: <nil>
@@ -89,11 +92,11 @@ func ExampleLock_Seal() {
 	var queue ticket.Lock
 	t0, t1 := queue.Take(), queue.Take()
 
-	fmt.Println("t0:", queue.Acquire(context.Background(), t0, false))
+	fmt.Println("t0:", t0.Wait(context.Background()))
 	queue.Seal()
-	queue.Release() // The holder still releases its turn.
+	t0.Release() // The holder still releases its turn.
 
-	fmt.Println("t1:", queue.Acquire(context.Background(), t1, false))
+	fmt.Println("t1:", t1.Wait(context.Background()))
 	fmt.Println("sealed:", queue.Sealed())
 
 	// Output:
