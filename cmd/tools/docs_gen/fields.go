@@ -16,6 +16,7 @@ package main
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode"
@@ -30,6 +31,9 @@ var (
 	yamlBoolLike   = regexp.MustCompile(`(?i)^(true|false|null|yes|no|on|off)$`)
 	yamlSpecial    = regexp.MustCompile("[:\\[\\]{},&>|%@`\"]")
 	yamlSpecialNQ  = regexp.MustCompile("[:\\[\\]{},&>|%@`]")
+	// interpolationPhrase finds a description that mentions interpolation
+	// functions without linking them.
+	interpolationPhrase = regexp.MustCompile(`(?i)interpolation functions`)
 )
 
 // fieldName is the field's name with [] appended for array fields.
@@ -45,7 +49,11 @@ func fieldDisplayType(f fieldSpec) string {
 	case strings.HasSuffix(f.Name, "[]"):
 		return "array<object>"
 	case f.Kind == "map":
-		return "object"
+		// A map whose values have a known type shows it, as arrays do.
+		if f.Type == "" || f.Type == "unknown" || f.Type == "object" {
+			return "object"
+		}
+		return "object<" + f.Type + ">"
 	case f.Kind == "array" || f.Kind == "list" || f.Kind == "2darray":
 		if f.Type == "" || f.Type == "unknown" || f.Type == "array" {
 			return "array"
@@ -79,13 +87,7 @@ func renderFields(fields []fieldSpec, prefix string) string {
 			desc = "badge::[label=Beta, size=large, tooltip={page-beta-text}]\n\n" + betaPrefix.ReplaceAllString(desc, "")
 		}
 		if f.Interpolated {
-			if !strings.Contains(strings.ToLower(desc), "interpolation functions") {
-				trimmed := strings.TrimSpace(desc)
-				if trimmed != "" {
-					trimmed += "\n\n"
-				}
-				desc = trimmed + interpolationNotice
-			}
+			desc = withInterpolationNotice(desc)
 		} else {
 			desc = blankLineRuns.ReplaceAllString(strings.ReplaceAll(desc, interpolationNotice, ""), "\n\n")
 		}
@@ -129,6 +131,23 @@ func renderFields(fields []fieldSpec, prefix string) string {
 	return out.String()
 }
 
+// withInterpolationNotice links interpolation functions from the description
+// of an interpolated field. A description that already names them gets the
+// link on its first mention. Any other description gets the standard notice.
+func withInterpolationNotice(desc string) string {
+	if strings.Contains(desc, "xref:configuration:interpolation.adoc") {
+		return desc
+	}
+	if loc := interpolationPhrase.FindStringIndex(desc); loc != nil {
+		return desc[:loc[0]] + "xref:configuration:interpolation.adoc#bloblang-queries[" + desc[loc[0]:loc[1]] + "]" + desc[loc[1]:]
+	}
+	trimmed := strings.TrimSpace(desc)
+	if trimmed != "" {
+		trimmed += "\n\n"
+	}
+	return trimmed + interpolationNotice
+}
+
 func renderFieldDefault(v any) string {
 	switch t := v.(type) {
 	case []any:
@@ -141,11 +160,15 @@ func renderFieldDefault(v any) string {
 		}
 	case string:
 		display := t
-		if t == "" {
-			display = `""`
+		// An empty, whitespace-only, or control-character default would
+		// render as an empty or broken code span, so it is shown quoted and
+		// escaped, for example `"\n"`.
+		if strings.TrimSpace(t) == "" || strings.IndexFunc(t, unicode.IsControl) >= 0 {
+			display = jsonStringify(t)
 		}
 		return "*Default*: `" + display + "`\n\n"
 	case nil:
+		return "*Default*: `null`\n\n"
 	default:
 		return "*Default*: `" + jsString(t) + "`\n\n"
 	}
@@ -157,25 +180,21 @@ func renderFieldExamples(f fieldSpec) string {
 	b.WriteString("[source,yaml]\n----\n# Examples:\n")
 	for i, raw := range f.Examples {
 		ex := decodeValue(raw)
-		if f.Kind == "array" {
-			if arr, ok := ex.([]any); ok {
-				hasObjects := false
-				for _, item := range arr {
-					switch item.(type) {
-					case map[string]any, []any:
-						hasObjects = true
-					}
+		if arr, ok := ex.([]any); ok && f.Kind == "array" {
+			hasObjects := false
+			for _, item := range arr {
+				switch item.(type) {
+				case map[string]any, []any:
+					hasObjects = true
 				}
-				if hasObjects {
-					b.WriteString(renderYAMLList(f.Name, arr))
-				} else {
-					b.WriteString(f.Name + ":\n")
-					for _, item := range arr {
-						b.WriteString("  - " + quoteListScalar(item) + "\n")
-					}
-				}
+			}
+			if hasObjects {
+				b.WriteString(renderYAMLList(f.Name, arr))
 			} else {
-				b.WriteString(f.Name + ": " + jsString(ex) + "\n")
+				b.WriteString(f.Name + ":\n")
+				for _, item := range arr {
+					b.WriteString("  - " + quoteListScalar(item) + "\n")
+				}
 			}
 		} else {
 			switch t := ex.(type) {
@@ -183,12 +202,9 @@ func renderFieldExamples(f fieldSpec) string {
 				b.WriteString(f.Name + ":\n")
 				b.WriteString(indentLines(strings.TrimSpace(yamlStringify(t, yamlPlain)), "  ") + "\n")
 			case string:
-				if strings.Contains(t, "\n") {
-					b.WriteString(f.Name + ": |-\n")
-					b.WriteString(indentLines(t, "  ") + "\n")
-				} else {
-					b.WriteString(f.Name + ": " + yamlScalar(t, "  ") + "\n")
-				}
+				// yamlScalar picks the block chomping and indentation
+				// indicators that keep trailing newlines and leading spaces.
+				b.WriteString(f.Name + ": " + yamlScalar(t, "  ") + "\n")
 			default:
 				b.WriteString(f.Name + ": " + jsString(t) + "\n")
 			}
@@ -204,8 +220,11 @@ func renderFieldExamples(f fieldSpec) string {
 // quoteListScalar renders one item of a list of scalars.
 func quoteListScalar(item any) string {
 	if s, ok := item.(string); ok {
-		if strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`) {
-			return s
+		// A value that starts with a quote keeps it, as in the Postgres
+		// example `"MyCaseSensitiveTable"`, so it is wrapped in the other
+		// kind of quotes.
+		if strings.HasPrefix(s, `"`) || strings.HasPrefix(s, "'") {
+			return yamlQuotedString(s, "    ", false)
 		}
 		if s == "" || s == "*" || yamlBoolLike.MatchString(s) || numericLooking.MatchString(s) ||
 			yamlSpecial.MatchString(s) || strings.IndexFunc(s, jsIsSpace) >= 0 {
@@ -249,8 +268,8 @@ func renderYAMLList(name string, items []any) string {
 }
 
 func quoteSpecialScalar(s string) string {
-	if strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`) {
-		return s
+	if strings.HasPrefix(s, `"`) || strings.HasPrefix(s, "'") {
+		return yamlQuotedString(s, "    ", false)
 	}
 	if s == "*" || yamlSpecialNQ.MatchString(s) {
 		return `"` + s + `"`
@@ -279,36 +298,43 @@ func jsIsSpace(r rune) bool {
 
 // The Common and Advanced config snippets.
 
-var typesWithLabel = map[string]bool{"inputs": true, "outputs": true, "processors": true}
+// typesWithLabel are the component types that take a `label` field, as in
+// benthos docs.ReservedFieldsByType.
+var typesWithLabel = map[string]bool{
+	"input": true, "output": true, "processor": true, "cache": true, "rate_limit": true,
+}
 
-func buildConfigYAML(key, name string, fields []fieldSpec, includeAdvanced bool) string {
-	lines := []string{key + ":"}
-	if typesWithLabel[key] {
+// snippets writes the Common and Advanced config snippets for a component.
+// The group key only decides the directory. Each snippet nests the config
+// under the singular component type, as benthos genExampleConfigs does.
+func (w *writer) snippets(key string, c componentSpec) {
+	base := filepath.Join(key, c.Name+".yaml")
+	common, advanced := componentSnippets(c)
+	w.write(filepath.Join("examples/common", base), common)
+	w.write(filepath.Join("examples/advanced", base), advanced)
+}
+
+// componentSnippets renders the Common and Advanced snippets for a component.
+// Components whose config is a single value, a list, or an object with no
+// fields (such as resource, fallback, and drop) have no Common or Advanced
+// split, so both snippets are the same.
+func componentSnippets(c componentSpec) (common, advanced string) {
+	if c.Config.Children == nil {
+		snippet := buildValueConfigYAML(c.Type, c.Name, c.Config)
+		return snippet, snippet
+	}
+	return buildConfigYAML(c.Type, c.Name, c.Config, false), buildConfigYAML(c.Type, c.Name, c.Config, true)
+}
+
+// buildConfigYAML renders a snippet for a component whose config has fields,
+// nested under root, the component type.
+func buildConfigYAML(root, name string, conf fieldSpec, includeAdvanced bool) string {
+	lines := []string{root + ":"}
+	if typesWithLabel[root] {
 		lines = append(lines, `  label: ""`)
 	}
-	var render []fieldSpec
-	for _, f := range fields {
-		if f.IsDeprecated || (!includeAdvanced && f.IsAdvanced) {
-			continue
-		}
-		render = append(render, f)
-	}
-	if len(render) == 0 {
-		lines = append(lines, "  "+name+": {}")
-	} else {
-		lines = append(lines, "  "+name+":")
-	}
-	for _, f := range render {
-		switch {
-		case f.Kind == "array" && f.Type == "object" && f.Children != nil:
-			lines = append(lines, configLeaf(f, 4))
-		case f.Type == "object" && f.Children != nil:
-			lines = append(lines, configObject(f, 4, includeAdvanced)...)
-		default:
-			lines = append(lines, configLeaf(f, 4))
-		}
-	}
-	return strings.Join(lines, "\n")
+	lines = append(lines, configNamed(name, conf, 2, includeAdvanced)...)
+	return strings.Join(lines, "\n") + "\n"
 }
 
 // componentTypes are config types whose value is itself a component config,
@@ -321,9 +347,11 @@ var componentTypes = map[string]bool{
 // buildValueConfigYAML renders the config snippet for a component whose config
 // is not an object with fields: a scalar such as `resource: ""`, a list such
 // as `fallback: []`, or an empty object such as `drop: {}`.
-func buildValueConfigYAML(key, name string, conf fieldSpec) string {
-	lines := []string{key + ":"}
-	if typesWithLabel[key] {
+func buildValueConfigYAML(root, name string, conf fieldSpec) string {
+	lines := []string{root + ":"}
+	// A resource reference takes its label from the resource it points to,
+	// and the linter rejects a label on it.
+	if typesWithLabel[root] && name != "resource" {
 		lines = append(lines, `  label: ""`)
 	}
 	switch {
@@ -335,58 +363,92 @@ func buildValueConfigYAML(key, name string, conf fieldSpec) string {
 		conf.Name = name
 		lines = append(lines, configLeaf(conf, 2))
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(lines, "\n") + "\n"
 }
 
-func configObject(f fieldSpec, indent int, includeAdvanced bool) []string {
-	lines := []string{strings.Repeat(" ", indent) + f.Name + ":"}
-	for _, c := range f.Children {
-		if c.IsDeprecated || (!includeAdvanced && c.IsAdvanced) {
+// configNamed renders `name:` and the fields of an object, map, or list of
+// objects, at the given indent.
+//
+//   - An object lists its fields under the key.
+//   - A map has one placeholder entry, `<name>:`, that lists the fields of
+//     each value.
+//   - A list of objects has one item that lists the fields.
+//
+// When every field is filtered out, the value is `{}` or `[]` so the key is
+// never left as a bare `name:`, which YAML reads as null.
+func configNamed(name string, f fieldSpec, indent int, includeAdvanced bool) []string {
+	pad := strings.Repeat(" ", indent)
+	switch f.Kind {
+	case "array":
+		children := configFields(f.Children, indent+4, includeAdvanced)
+		if len(children) == 0 {
+			return []string{pad + name + ": []"}
+		}
+		children[0] = pad + "  - " + children[0][indent+4:]
+		return append([]string{pad + name + ":"}, children...)
+	case "map":
+		children := configFields(f.Children, indent+4, includeAdvanced)
+		if len(children) == 0 {
+			return []string{pad + name + ": {}"}
+		}
+		return append([]string{pad + name + ":", pad + "  <name>:"}, children...)
+	}
+	children := configFields(f.Children, indent+2, includeAdvanced)
+	if len(children) == 0 {
+		return []string{pad + name + ": {}"}
+	}
+	return append([]string{pad + name + ":"}, children...)
+}
+
+// configFields renders each field that the snippet shows, at the given
+// indent. A field that is a list of objects shows its default, usually `[]`,
+// rather than an example item.
+func configFields(fields []fieldSpec, indent int, includeAdvanced bool) []string {
+	var lines []string
+	for _, f := range fields {
+		if f.IsDeprecated || (!includeAdvanced && f.IsAdvanced) {
 			continue
 		}
 		switch {
-		case c.Kind == "array" && c.Type == "object" && c.Children != nil:
-			lines = append(lines, configLeaf(c, indent+2))
-		case len(c.Children) > 0:
-			lines = append(lines, configObject(c, indent+2, includeAdvanced)...)
+		case f.Kind == "array" || f.Kind == "2darray" || len(f.Children) == 0:
+			lines = append(lines, configLeaf(f, indent))
 		default:
-			lines = append(lines, configLeaf(c, indent+2))
+			lines = append(lines, configNamed(f.Name, f, indent, includeAdvanced)...)
 		}
 	}
 	return lines
 }
 
+// configPlaceholder is the value a snippet shows for a field with no default,
+// chosen by type so the snippet still has the right shape.
+func configPlaceholder(f fieldSpec) string {
+	switch {
+	case f.Kind == "array" || f.Kind == "2darray":
+		return "[]"
+	case f.Kind == "map" || f.Type == "object" || componentTypes[f.Type]:
+		return "{}"
+	case f.Type == "bool":
+		return "false"
+	case f.Type == "int" || f.Type == "float":
+		return "0"
+	}
+	return `""`
+}
+
 func configLeaf(f fieldSpec, indent int) string {
 	pad := strings.Repeat(" ", indent)
-	comment := "# No default (required)"
-	if f.IsOptional {
-		comment = "# No default (optional)"
-	}
 	if !f.hasDefault() {
-		if f.Kind == "array" {
-			return pad + f.Name + ": [] " + comment
+		comment := "# No default (required)"
+		if f.IsOptional {
+			comment = "# No default (optional)"
 		}
-		return pad + f.Name + `: "" ` + comment
+		return pad + f.Name + ": " + configPlaceholder(f) + " " + comment
 	}
-	switch t := f.defaultValue().(type) {
-	case []any:
-		if len(t) == 0 {
-			return pad + f.Name + ": []"
-		}
-	case map[string]any:
-		if len(t) == 0 {
-			return pad + f.Name + ": {}"
-		}
-	case string:
-		if t == "" {
-			return pad + f.Name + `: ""`
-		}
-		return pad + f.Name + ": " + yamlScalar(t, strings.Repeat(" ", indent+2))
-	case nil:
-	default:
-		return pad + f.Name + ": " + jsString(t)
+	v := f.defaultValue()
+	if !isNonEmptyCollection(v) {
+		return pad + f.Name + ": " + yamlEmitter{style: yamlPlain}.scalar(v, strings.Repeat(" ", indent+2), false)
 	}
-	body := strings.TrimSpace(yamlStringify(f.defaultValue(), yamlDoubleQuoted))
+	body := strings.TrimSpace(yamlStringify(v, yamlDoubleQuoted))
 	return pad + f.Name + ":\n" + indentLines(body, strings.Repeat(" ", indent+2))
 }
 
@@ -404,4 +466,44 @@ func renderComponentExamples(examples []componentExample) string {
 		}
 	}
 	return b.String()
+}
+
+// configObjects writes the field reference and the Common and Advanced
+// snippets for each top-level config object that has fields, such as http,
+// logger, and redpanda. The list comes from the schema, so a new object gets
+// its partials without a change here.
+func (w *writer) configObjects(raw []byte) {
+	objects, err := topLevelConfigObjects(raw)
+	if err != nil {
+		panic(err)
+	}
+	for _, f := range objects {
+		w.write(filepath.Join("partials/fields/config", f.Name+".adoc"),
+			generatedBanner+"\n\n== Fields\n\n"+renderFields(f.Children, "")+"\n")
+		w.write(filepath.Join("examples/common/config", f.Name+".yaml"), buildTopLevelConfigYAML(f, false))
+		w.write(filepath.Join("examples/advanced/config", f.Name+".yaml"), buildTopLevelConfigYAML(f, true))
+	}
+}
+
+// topLevelConfigObjects returns the top-level config fields of a schema that
+// have child fields. Component slots such as input and metrics, and scalars
+// such as shutdown_timeout, have none.
+func topLevelConfigObjects(raw []byte) ([]fieldSpec, error) {
+	var doc struct {
+		Config []fieldSpec `json:"config"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, err
+	}
+	var objects []fieldSpec
+	for _, f := range doc.Config {
+		if !f.IsDeprecated && len(f.Children) > 0 {
+			objects = append(objects, f)
+		}
+	}
+	return objects, nil
+}
+
+func buildTopLevelConfigYAML(f fieldSpec, includeAdvanced bool) string {
+	return strings.Join(configNamed(f.Name, f, 0, includeAdvanced), "\n") + "\n"
 }

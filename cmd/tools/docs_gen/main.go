@@ -143,6 +143,7 @@ func main() {
 	}
 	w.write("partials/bloblang/functions.adoc", renderFunctionsList(full.BloblangFunctions, bloblangNames(cloud.BloblangFunctions)))
 	w.write("partials/bloblang/methods.adoc", renderMethodsList(full.BloblangMethods, bloblangNames(cloud.BloblangMethods)))
+	w.configObjects(raw)
 
 	fmt.Printf("Wrote %v files to %v\n", w.count, root)
 }
@@ -204,18 +205,7 @@ func (w *writer) component(key string, c componentSpec) {
 	} else {
 		w.write(filepath.Join("partials/descriptions", typeDir, file), emptyDescriptionPartial)
 	}
-	base := filepath.Join(key, c.Name+".yaml")
-	if c.Config.Children != nil {
-		w.write(filepath.Join("examples/common", base), buildConfigYAML(key, c.Name, c.Config.Children, false))
-		w.write(filepath.Join("examples/advanced", base), buildConfigYAML(key, c.Name, c.Config.Children, true))
-		return
-	}
-	// Components whose config is a single value, a list, or an object with no
-	// fields (such as resource, fallback, and drop) have no Common or Advanced
-	// split, so both snippets show the same line.
-	snippet := buildValueConfigYAML(key, c.Name, c.Config)
-	w.write(filepath.Join("examples/common", base), snippet)
-	w.write(filepath.Join("examples/advanced", base), snippet)
+	w.snippets(key, c)
 }
 
 func bloblangNames(specs []bloblangSpec) map[string]bool {
