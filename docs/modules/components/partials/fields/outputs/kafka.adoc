@@ -36,7 +36,7 @@ addresses:
 
 === `backoff`
 
-Control time intervals between retry attempts.
+The exponential backoff between attempts to resend messages that failed to send.
 
 *Type*: `object`
 

@@ -4,7 +4,7 @@
 
 === `bind`
 
-Whether to bind to the specified URLs (otherwise they are connected to).
+Whether to bind to the URLs and wait for peers to connect, instead of connecting to them.
 
 *Type*: `bool`
 
@@ -36,7 +36,7 @@ The socket type to connect as.
 
 === `sub_filters[]`
 
-A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.
+The topics that the socket subscribes to when `socket_type` is `SUB`. ZeroMQ delivers a message only when its first frame begins with one of these prefixes, so specifying a single sub_filter of `''` subscribes to everything. At least one filter is required with a SUB socket.
 
 *Type*: `array<string>`
 
@@ -44,7 +44,7 @@ A list of subscription topic filters to use when consuming from a SUB socket. Sp
 
 === `urls[]`
 
-A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of ZeroMQ endpoints to connect to, or to bind when `bind` is `true`, using a transport such as `tcp://`, `ipc://`, or `inproc://`. If an item in the list contains commas, it is split into multiple endpoints.
 
 *Type*: `array<string>`
 

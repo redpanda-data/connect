@@ -4,7 +4,7 @@
 
 === `bind`
 
-Whether to bind to the specified URLs (otherwise they are connected to).
+Whether to bind to the URLs and wait for peers to connect, instead of connecting to them.
 
 *Type*: `bool`
 
@@ -36,7 +36,7 @@ The socket type to connect as.
 
 === `urls[]`
 
-A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of ZeroMQ endpoints to connect to, or to bind when `bind` is `true`, using a transport such as `tcp://`, `ipc://`, or `inproc://`. If an item in the list contains commas, it is split into multiple endpoints.
 
 *Type*: `array<string>`
 

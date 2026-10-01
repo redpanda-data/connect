@@ -4,7 +4,7 @@
 
 === `backoff`
 
-Control time intervals between retry attempts.
+The exponential backoff between retry attempts. The wait starts at `initial_interval` and grows with each failed attempt, up to `max_interval`.
 
 *Type*: `object`
 
