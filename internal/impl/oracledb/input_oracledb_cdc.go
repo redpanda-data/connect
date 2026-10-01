@@ -37,6 +37,7 @@ const (
 	ociFieldWalletPath                = "wallet_path"
 	ociFieldWalletPassword            = "wallet_password"
 	ociFieldPrefetchRows              = "prefetch_rows"
+	ociFieldReadTimeout               = "read_timeout"
 	ociFieldStreamSnapshot            = "stream_snapshot"
 	ociFieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	ociFieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
@@ -108,6 +109,8 @@ Streaming throughput is bounded by the LogMiner session, not by CPU: each pipeli
 
 Large transactions and driver fetch size: left to itself, the Oracle driver sizes each fetch to roughly 128 KiB based on the declared maximum width of the selected columns, so wide columns such as LogMiner's redo SQL yield only a handful of rows per network round trip. This can make large committed transactions appear minutes late while the database, network and connector all look idle: each round trip costs a full network exchange, and a large transaction requires thousands of them. The connector therefore fetches ` + "`" + ociFieldPrefetchRows + "`" + ` rows per round trip (500 by default); raise it for large transactions over high-latency links. A ` + "`PREFETCH_ROWS`" + ` query parameter in ` + "`" + ociFieldConnectionString + "`" + ` takes precedence over the field.
 
+Unresponsive databases: if the database stops responding without closing the connection, a query can wait indefinitely while the input still reports as connected. The connector therefore limits each read from the database to ` + "`" + ociFieldReadTimeout + "`" + ` (300 seconds by default); when it's exceeded, the query fails, the input reconnects and resumes from its last checkpoint. The limit applies to every individual read on every connection the input opens, including snapshot queries, so it must exceed the longest time Oracle takes to return the first rows of any query. A ` + "`TIMEOUT`" + ` query parameter in ` + "`" + ociFieldConnectionString + "`" + ` takes precedence over the field.
+
 Redo log retention must cover idle periods, not just outages: the SCN checkpoint only advances when messages are delivered, so a monitored table set that goes idle leaves the checkpoint stationary while the database ages out redo/archive logs. If the checkpointed SCN is no longer available when activity resumes or the pipeline restarts, the input cannot resume and repeatedly fails with ORA-01292. Ensure archive log retention exceeds the longest plausible idle period, and alert on a stagnant checkpoint SCN or repeated ORA errors.
 
 A flashback or point-in-time recovery on the source database followed by ` + "`OPEN RESETLOGS`" + ` permanently invalidates any checkpoint taken before that event: the checkpoint belongs to a prior database incarnation, and no log file from either incarnation covers the gap. This is a different failure from the retention case above and surfaces as ORA-01291; increasing retention will not help, because the problem is incarnation identity rather than log availability. Recovery always requires clearing the connector's checkpoint so it resumes from the database's current SCN: with the default Oracle-based checkpoint cache the checkpoint row lives in the same database, so the flashback rolls it back rather than clearing it, and it must be deleted explicitly. Clearing the checkpoint alone loses any changes committed between the last checkpoint and the restart; to avoid that gap, clear the checkpoint and set ` + "`" + ociFieldSnapshotMode + "`" + ` to ` + "`snapshot_and_stream`" + ` together: setting ` + "`" + ociFieldSnapshotMode + "`" + ` alone has no effect, since a checkpoint that is still present skips snapshotting entirely.
@@ -135,6 +138,12 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		ShortDescription("Rows fetched per network round-trip from Oracle; raising this can reduce round-trip-bound read latency for wide rows at the cost of increased memory.").
 		Default(500).
 		LintRule(`root = if this <= 0 { [ "` + ociFieldPrefetchRows + ` must be greater than 0" ] }`),
+	).
+	Field(service.NewIntField(ociFieldReadTimeout).
+		Description("The maximum number of seconds to wait for each read from the database, on every connection the input opens, for both snapshot and streaming reads. When it's exceeded, the query fails and the input reconnects, resuming from its last checkpoint. This prevents the input from hanging indefinitely if the database stops responding without closing the connection. It must exceed the longest time Oracle takes to return the first rows of any query, such as a snapshot query against a large table. Set to `0` to disable. A `TIMEOUT` query parameter in `connection_string` takes precedence.").
+		ShortDescription("Maximum seconds to wait for each read from Oracle before failing and reconnecting; 0 disables it.").
+		Default(300).
+		LintRule(`root = if this < 0 { [ "` + ociFieldReadTimeout + ` must be greater than or equal to 0" ] }`),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
@@ -448,6 +457,9 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	}
 	if err := parsePrefetchRowsConfig(conf, overrides, logger); err != nil {
 		return nil, fmt.Errorf("parsing oracle %s config: %w", ociFieldPrefetchRows, err)
+	}
+	if err := parseReadTimeoutConfig(conf, overrides, logger); err != nil {
+		return nil, fmt.Errorf("parsing oracle %s config: %w", ociFieldReadTimeout, err)
 	}
 
 	if connectionString, err = buildConnectionString(connectionString, overrides, logger); err != nil {
