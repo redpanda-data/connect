@@ -35,6 +35,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	oracledbtest "github.com/redpanda-data/connect/v4/internal/impl/oracledb/oracledbtest"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -376,6 +377,72 @@ oracledb_cdc:
 
 		require.NoError(t, streamResume.StopWithin(time.Second*10))
 	}
+}
+
+// TestIntegrationOracleDBCDCIdleCheckpoint regression-tests CON-583. The monitored table
+// stays quiet while another table commits changes. The saved checkpoint must still move
+// forward, or a restart fails with ORA-01291 after the archive logs are purged.
+func TestIntegrationOracleDBCDCIdleCheckpoint(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	tracked := db.Schema + ".idle_tracked"
+	untracked := db.Schema + ".idle_untracked"
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), tracked,
+		"CREATE TABLE "+tracked+" (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	db.MustExec("CREATE TABLE " + untracked + " (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)")
+
+	const checkpointKey = "idle_checkpoint_test"
+	savedSCN := func() (replication.SCN, error) {
+		var raw []byte
+		if err := db.QueryRowContext(t.Context(),
+			"SELECT cache_val FROM "+db.CheckpointTable()+" WHERE cache_key = :1", checkpointKey,
+		).Scan(&raw); err != nil {
+			return replication.InvalidSCN, err
+		}
+		return replication.SCNFromBytes(raw)
+	}
+
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, `
+oracledb_cdc:
+  connection_string: `+connStr+`
+  checkpoint_cache_table_name: `+db.CheckpointTable()+`
+  snapshot_mode: none
+  logminer:
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["`+strings.ToUpper(tracked)+`"]
+  checkpoint_cache_key: `+checkpointKey+`
+  batching:
+    count: 1`, func(context.Context, service.MessageBatch) error { return nil })
+	t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+	// Step 1: get a first checkpoint from a change on the monitored table.
+	db.MustExec("INSERT INTO " + tracked + " (id) VALUES (DEFAULT)")
+	require.Eventually(t, func() bool {
+		_, err := savedSCN()
+		return err == nil
+	}, 30*time.Second, 500*time.Millisecond, "no checkpoint saved for the monitored table")
+
+	// Step 2: move the database SCN forward with commits on a table the input does not
+	// monitor. The input mines this range but delivers no messages.
+	db.MustExec(`
+	BEGIN
+		FOR i IN 1..100 LOOP
+			INSERT INTO ` + untracked + ` (id) VALUES (DEFAULT);
+			COMMIT;
+		END LOOP;
+	END;`)
+	var targetSCN replication.SCN
+	require.NoError(t, db.QueryRowContext(t.Context(), "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&targetSCN))
+
+	// Step 3: the saved checkpoint must reach the SCN from step 2 with no new message.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		scn, err := savedSCN()
+		require.NoError(c, err)
+		assert.GreaterOrEqual(c, scn, targetSCN, "saved checkpoint must reach the database SCN")
+	}, 15*time.Second, time.Second)
 }
 
 // TestIntegrationOracleDBCDCResetlogsSurfacesGuidedError regression-tests a flashback +

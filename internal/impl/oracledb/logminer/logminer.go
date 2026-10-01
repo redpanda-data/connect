@@ -185,6 +185,9 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		if err != nil {
 			return fmt.Errorf("mining logs: %w", err)
 		}
+		if err := lm.checkpointMinedPosition(ctx); err != nil {
+			return fmt.Errorf("checkpointing mined position: %w", err)
+		}
 
 		wait := lm.cfg.MiningInterval
 		if caughtUp {
@@ -385,6 +388,41 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	return endSCN >= dbCurrentSCN, nil
 }
 
+// checkpointMinedPosition marks the mined position with the publisher after
+// each mining cycle, also a cycle with no rows for the monitored tables. See
+// ChangePublisher.CheckpointWindow.
+func (lm *LogMiner) checkpointMinedPosition(ctx context.Context) error {
+	lobInFlight := len(lm.lobStates) > 0 || len(lm.pendingLOBWrites) > 0
+	scn, ok := minedCheckpointSCN(lm.currentSCN, lm.txnCache.LowWatermarkSCN(""), lobInFlight)
+	if !ok {
+		return nil
+	}
+	return lm.publisher.CheckpointWindow(ctx, replication.SCN(scn))
+}
+
+// minedCheckpointSCN returns the SCN that is safe to checkpoint after a mining
+// cycle, and false if there is none. It stays below open transactions, as the
+// commit path does. The low watermark does not see a transaction that has only
+// LOB writes so far, so lobInFlight skips the checkpoint until LOB state drains.
+func minedCheckpointSCN(currentSCN, lowWatermark uint64, lobInFlight bool) (uint64, bool) {
+	if lobInFlight {
+		return 0, false
+	}
+	scn := capBelowOpenTxn(currentSCN, lowWatermark)
+	return scn, scn > 0
+}
+
+// capBelowOpenTxn caps scn at lowWatermark-1, the last SCN before the oldest
+// open transaction started. A higher checkpoint skips the DML events of that
+// transaction on restart, because the query resumes from SCN > checkpoint.
+// lowWatermark is math.MaxUint64 when no transaction is open.
+func capBelowOpenTxn(scn, lowWatermark uint64) uint64 {
+	if lowWatermark != math.MaxUint64 && lowWatermark > 0 && lowWatermark-1 < scn {
+		return lowWatermark - 1
+	}
+	return scn
+}
+
 // processRedoEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
 func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.RedoEvent) error {
@@ -559,17 +597,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return fmt.Errorf("fetching transaction %s on commit: %w", redoEvent.TransactionID, err)
 		}
 		if txn != nil {
-			safeCheckpointSCN := redoEvent.SCN
-
 			// If other transactions are still open, we must not advance the
-			// checkpoint past their start SCN - 1. Doing so would cause their
-			// already-seen DML events to be skipped on restart (the query resumes
-			// from SCN > checkpoint). We subtract 1 because the query is exclusive.
-			if lowestOpenSCN := lm.txnCache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
-				if lowestOpenSCN-1 < safeCheckpointSCN {
-					safeCheckpointSCN = lowestOpenSCN - 1
-				}
-			}
+			// checkpoint past their start SCN - 1.
+			safeCheckpointSCN := capBelowOpenTxn(redoEvent.SCN, lm.txnCache.LowWatermarkSCN(redoEvent.TransactionID))
 
 			if lm.cfg.LOBEnabled {
 				// Replay deferred LOB_WRITEs (BASICFILE DISABLE STORAGE IN ROW) before
