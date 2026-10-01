@@ -30,6 +30,13 @@ type TransactionCache interface {
 	// if no other open transactions exist. Used to compute a safe checkpoint SCN
 	// on commit: advancing the checkpoint past an open transaction's start SCN
 	// would cause its already-seen DML events to be missed on restart.
+	//
+	// Only transactions with at least one DML event count. The LogMiner query
+	// returns START, COMMIT and ROLLBACK rows for all transactions in the
+	// database, not only for the monitored tables. If a transaction with zero
+	// events counted, a long transaction on a table that is not monitored would
+	// hold the checkpoint back. LogMiner.lowWatermarkSCN adds the transactions
+	// that have only LOB events.
 	LowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64
 }
 

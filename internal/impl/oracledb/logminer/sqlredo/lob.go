@@ -126,6 +126,12 @@ func (a *LobAccumulator) Assemble() any {
 type TxnLOBState struct {
 	ActiveKey    *LobKey
 	Accumulators map[LobKey]*LobAccumulator
+	// FirstSCN is the SCN of the first LOB event that created this state. The
+	// commit checkpoint of other transactions stays below it while this
+	// transaction is open, because the transaction cache low watermark does not
+	// see a transaction that has only LOB events. It is not derivable from the
+	// accumulators, which do not keep SCNs.
+	FirstSCN uint64
 }
 
 // NewTxnLOBState creates a new TxnLOBState.
