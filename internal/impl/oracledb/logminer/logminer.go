@@ -388,18 +388,19 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 // processRedoEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
 func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.RedoEvent) error {
-	switch redoEvent.Operation {
-	case sqlredo.OpSelectLobLocator, sqlredo.OpLobTrim, sqlredo.OpLobWrite:
-		// AddEvent creates a missing transaction only for a DML event. After a
-		// restart past its START, a transaction with only LOB events is not in
-		// the cache. Then the commit finds no transaction and drops the LOB data.
-		// To prevent this, start the transaction on its first LOB event.
-		// StartTransaction does nothing if the transaction exists or was discarded.
-		_, hasState := lm.lobStates[redoEvent.TransactionID]
-		if lm.cfg.LOBEnabled && !hasState && len(lm.pendingLOBWrites[redoEvent.TransactionID]) == 0 {
-			if err := lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
-				return fmt.Errorf("starting transaction %s on LOB event: %w", redoEvent.TransactionID, err)
-			}
+	// AddEvent creates a missing transaction only for a DML event. After a
+	// restart past its START, a transaction with only LOB events is not in the
+	// cache. Then the commit finds no transaction and drops the LOB data. To
+	// prevent this, start the transaction on its first LOB event.
+	// StartTransaction does nothing if the transaction exists or was discarded.
+	// This check is before the switch because each LOB case has early returns,
+	// and it must run before the case creates the LOB state.
+	op := redoEvent.Operation
+	isLOBEvent := op == sqlredo.OpSelectLobLocator || op == sqlredo.OpLobTrim || op == sqlredo.OpLobWrite
+	_, hasState := lm.lobStates[redoEvent.TransactionID]
+	if lm.cfg.LOBEnabled && isLOBEvent && !hasState && len(lm.pendingLOBWrites[redoEvent.TransactionID]) == 0 {
+		if err := lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
+			return fmt.Errorf("starting transaction %s on LOB event: %w", redoEvent.TransactionID, err)
 		}
 	}
 
