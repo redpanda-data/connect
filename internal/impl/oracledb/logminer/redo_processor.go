@@ -78,11 +78,11 @@ type redoProcessor struct {
 
 // processRedoEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
-func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlredo.RedoEvent) error {
+func (rp *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlredo.RedoEvent) error {
 	switch redoEvent.Operation {
 	case sqlredo.OpStart:
 		// Transaction started
-		if err := lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
+		if err := rp.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
 			return fmt.Errorf("starting transaction %s: %w", redoEvent.TransactionID, err)
 		}
 
@@ -90,41 +90,41 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 		// SQL_REDO should always be present for DML operations. If not, it's likely a temporary
 		// table (Oracle doesn't generate redo for these) or an unsupported operation.
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
-			lm.log.Warnf("Skipping DML event with no SQL_REDO (operation=%s, table=%s.%s, scn=%d, txn=%s) - likely temporary table or unsupported operation",
+			rp.log.Warnf("Skipping DML event with no SQL_REDO (operation=%s, table=%s.%s, scn=%d, txn=%s) - likely temporary table or unsupported operation",
 				redoEvent.Operation, redoEvent.SchemaName.String, redoEvent.TableName.String, redoEvent.SCN, redoEvent.TransactionID)
 			return nil
 		}
 
 		// Parse sql insert/update/delete sql statements into key/value object
-		event, err := lm.dmlParser.RedoEventToDMLEvent(redoEvent)
+		event, err := rp.dmlParser.RedoEventToDMLEvent(redoEvent)
 		if err != nil {
-			lm.log.Debugf("failed to parse SQL_REDO (scn=%d, op=%s, table=%s.%s, txn=%s): %s",
+			rp.log.Debugf("failed to parse SQL_REDO (scn=%d, op=%s, table=%s.%s, txn=%s): %s",
 				redoEvent.SCN, redoEvent.Operation, redoEvent.SchemaName.String, redoEvent.TableName.String, redoEvent.TransactionID, redoEvent.SQLRedo.String)
 			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
 		}
 
-		if err := lm.txnCache.AddEvent(ctx, redoEvent.TransactionID, redoEvent.SCN, &event); err != nil {
+		if err := rp.txnCache.AddEvent(ctx, redoEvent.TransactionID, redoEvent.SCN, &event); err != nil {
 			return fmt.Errorf("adding event to transaction %s: %w", redoEvent.TransactionID, err)
 		}
 
 	case sqlredo.OpSelectLobLocator:
-		if !lm.lobEnabled {
+		if !rp.lobEnabled {
 			return nil
 		}
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
-			lm.log.Warnf("Skipping SELECT_LOB_LOCATOR with no SQL_REDO (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+			rp.log.Warnf("Skipping SELECT_LOB_LOCATOR with no SQL_REDO (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
 			return nil
 		}
 		info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String)
 		if err != nil {
-			lm.log.Warnf("Failed to parse SELECT_LOB_LOCATOR SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
+			rp.log.Warnf("Failed to parse SELECT_LOB_LOCATOR SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
 			return nil
 		}
 		// Resolve LOB type from the schema cache populated at startup.
 		colKey := fmt.Sprintf("%s.%s.%s", info.Schema, info.Table, info.Column)
-		lobType := lm.lobColTypes[strings.ToUpper(colKey)] // "CLOB", "BLOB", "NCLOB", or "" if unknown
+		lobType := rp.lobColTypes[strings.ToUpper(colKey)] // "CLOB", "BLOB", "NCLOB", or "" if unknown
 
-		state := lm.getOrCreateLOBState(redoEvent.TransactionID)
+		state := rp.getOrCreateLOBState(redoEvent.TransactionID)
 		key := sqlredo.LobKey{
 			Schema:   info.Schema,
 			Table:    info.Table,
@@ -143,7 +143,7 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 		state.ActiveKey = &key
 
 	case sqlredo.OpLobTrim:
-		if !lm.lobEnabled {
+		if !rp.lobEnabled {
 			return nil
 		}
 		// LOB_TRIM (op 11) comes in two forms depending on Oracle LOB type:
@@ -165,8 +165,8 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 			if info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String); err == nil {
 				// Form A: establish (or reset) the accumulator for this LOB column.
 				colKey := fmt.Sprintf("%s.%s.%s", info.Schema, info.Table, info.Column)
-				lobType := lm.lobColTypes[strings.ToUpper(colKey)]
-				state := lm.getOrCreateLOBState(redoEvent.TransactionID)
+				lobType := rp.lobColTypes[strings.ToUpper(colKey)]
+				state := rp.getOrCreateLOBState(redoEvent.TransactionID)
 				key := sqlredo.LobKey{
 					Schema:   info.Schema,
 					Table:    info.Table,
@@ -191,7 +191,7 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 		//   - Before LOB_WRITE: accumulator is empty anyway, so there is nothing to clear.
 		//   - After LOB_WRITE:  fragments are already accumulated; clearing them would
 		//     destroy the data before commit.
-		state, exists := lm.lobStates[redoEvent.TransactionID]
+		state, exists := rp.lobStates[redoEvent.TransactionID]
 		if !exists || state.ActiveKey == nil {
 			return nil
 		}
@@ -206,29 +206,29 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 				// all bytes then trim to the exact final length, so assembled==N in
 				// practice. Partial-update patterns are not supported by this path.
 				if acc := state.Accumulators[*state.ActiveKey]; acc != nil && len(acc.Fragments) == 0 {
-					lm.log.Warnf("LOB_TRIM to non-zero length %d with no prior LOB_WRITE (scn=%d, txn=%s): assembled value may be incomplete", trimLen, redoEvent.SCN, redoEvent.TransactionID)
+					rp.log.Warnf("LOB_TRIM to non-zero length %d with no prior LOB_WRITE (scn=%d, txn=%s): assembled value may be incomplete", trimLen, redoEvent.SCN, redoEvent.TransactionID)
 				}
 			}
 		}
 
 	case sqlredo.OpLobWrite:
-		if !lm.lobEnabled {
+		if !rp.lobEnabled {
 			return nil
 		}
-		state, exists := lm.lobStates[redoEvent.TransactionID]
+		state, exists := rp.lobStates[redoEvent.TransactionID]
 		if !exists || state.ActiveKey == nil {
-			if !lm.inferLOBLocator(ctx, redoEvent) {
+			if !rp.inferLOBLocator(ctx, redoEvent) {
 				// INSERT may arrive later in the same LogMiner batch (BASICFILE
 				// DISABLE STORAGE IN ROW ordering). Defer and replay after DML.
-				lm.log.Debugf("LOB_WRITE before INSERT (scn=%d, txn=%s): deferring", redoEvent.SCN, redoEvent.TransactionID)
-				lm.pendingLOBWrites[redoEvent.TransactionID] = append(lm.pendingLOBWrites[redoEvent.TransactionID], redoEvent)
+				rp.log.Debugf("LOB_WRITE before INSERT (scn=%d, txn=%s): deferring", redoEvent.SCN, redoEvent.TransactionID)
+				rp.pendingLOBWrites[redoEvent.TransactionID] = append(rp.pendingLOBWrites[redoEvent.TransactionID], redoEvent)
 				return nil
 			}
-			state = lm.lobStates[redoEvent.TransactionID]
+			state = rp.lobStates[redoEvent.TransactionID]
 		}
 		acc := state.Accumulators[*state.ActiveKey]
 		if acc == nil {
-			lm.log.Warnf("LOB_WRITE has active key but no accumulator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+			rp.log.Warnf("LOB_WRITE has active key but no accumulator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
 			return nil
 		}
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
@@ -238,14 +238,14 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 		// not as HEXTORAW. Only BLOB uses binary/hex encoding.
 		writeInfo, err := sqlredo.ParseLobWrite(redoEvent.SQLRedo.String, acc.IsBinary)
 		if err != nil {
-			lm.log.Warnf("Failed to parse LOB_WRITE SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
+			rp.log.Warnf("Failed to parse LOB_WRITE SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
 			return nil
 		}
 		acc.AddFragment(writeInfo.Offset, writeInfo.Data)
 
 	case sqlredo.OpCommit:
 		// Flush all buffered events for given transaction ID
-		txn, err := lm.txnCache.GetTransaction(ctx, redoEvent.TransactionID)
+		txn, err := rp.txnCache.GetTransaction(ctx, redoEvent.TransactionID)
 		if err != nil {
 			return fmt.Errorf("fetching transaction %s on commit: %w", redoEvent.TransactionID, err)
 		}
@@ -256,24 +256,24 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 			// checkpoint past their start SCN - 1. Doing so would cause their
 			// already-seen DML events to be skipped on restart (the query resumes
 			// from SCN > checkpoint). We subtract 1 because the query is exclusive.
-			if lowestOpenSCN := lm.txnCache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
+			if lowestOpenSCN := rp.txnCache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
 				if lowestOpenSCN-1 < safeCheckpointSCN {
 					safeCheckpointSCN = lowestOpenSCN - 1
 				}
 			}
 
-			if lm.lobEnabled {
+			if rp.lobEnabled {
 				// Replay deferred LOB_WRITEs (BASICFILE DISABLE STORAGE IN ROW) before
 				// merging. At commit time, SELECT_LOB_LOCATOR has already claimed all
 				// SecureFile LOB columns, so inferLOBLocator can identify the unclaimed
 				// BASICFILE column by excluding columns that already have accumulators.
-				if err := lm.replayDeferredLOBWrites(ctx, redoEvent.TransactionID); err != nil {
+				if err := rp.replayDeferredLOBWrites(ctx, redoEvent.TransactionID); err != nil {
 					return err
 				}
 
 				// Merge any accumulated LOB data into DML events before publishing.
-				if state, ok := lm.lobStates[redoEvent.TransactionID]; ok {
-					unmerged := sqlredo.MergeLOBsIntoDMLEvents(state, txn.Events, lm.log)
+				if state, ok := rp.lobStates[redoEvent.TransactionID]; ok {
+					unmerged := sqlredo.MergeLOBsIntoDMLEvents(state, txn.Events, rp.log)
 					// Synthesize UPDATE events for LOB accumulators that had no matching DML
 					// event. This handles Oracle SecureFile out-of-row LOBs where Oracle does
 					// not emit a DML UPDATE in LogMiner — only SELECT_LOB_LOCATOR + LOB_WRITE
@@ -305,7 +305,7 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 							Username:      redoEvent.Username.String,
 						}
 						txn.Events = append(txn.Events, synthetic)
-						lm.log.Debugf("LOB merge: synthesized UPDATE for %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
+						rp.log.Debugf("LOB merge: synthesized UPDATE for %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
 					}
 				}
 			}
@@ -326,7 +326,7 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 			// must be decided per event, not per table.
 			mergedIntoInsert := make(map[*sqlredo.DMLEvent]bool)
 
-			if lm.lobEnabled {
+			if rp.lobEnabled {
 				// Pre-pass: for each LOB-only UPDATE that accompanies an INSERT in this transaction,
 				// merge the actual LOB values into the INSERT before we start publishing.
 				//
@@ -334,13 +334,13 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 				// separate UPDATE whose SET clause carries the real LOB data. We must propagate
 				// those values into the INSERT event before suppressing the UPDATE.
 				for _, dmlEvent := range txn.Events {
-					if dmlEvent.Operation != sqlredo.OpUpdate || !lm.isLOBOnlyEvent(dmlEvent) {
+					if dmlEvent.Operation != sqlredo.OpUpdate || !rp.isLOBOnlyEvent(dmlEvent) {
 						continue
 					}
 					if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; !hasInsert {
 						continue
 					}
-					mergedIntoInsert[dmlEvent] = sqlredo.MergeInlineLOBValues(dmlEvent.Data, dmlEvent.Schema, dmlEvent.Table, dmlEvent.OldValues, txn.Events, lm.log)
+					mergedIntoInsert[dmlEvent] = sqlredo.MergeInlineLOBValues(dmlEvent.Data, dmlEvent.Schema, dmlEvent.Table, dmlEvent.OldValues, txn.Events, rp.log)
 				}
 			}
 
@@ -353,26 +353,26 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 				// is ever attempted (mergedIntoInsert stays empty), so this instead
 				// falls back to the table-level check: the LOB values are being
 				// discarded either way, so there is no per-row content to lose.
-				suppress := dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent)
+				suppress := dmlEvent.Operation == sqlredo.OpUpdate && rp.isLOBOnlyEvent(dmlEvent)
 				if suppress {
-					if lm.lobEnabled {
+					if rp.lobEnabled {
 						suppress = mergedIntoInsert[dmlEvent]
 					} else {
 						_, suppress = insertTables[dmlEvent.Schema+"."+dmlEvent.Table]
 					}
 				}
 				if suppress {
-					lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s", dmlEvent.Schema, dmlEvent.Table)
+					rp.log.Debugf("suppressing LOB-only UPDATE for %s.%s", dmlEvent.Schema, dmlEvent.Table)
 					continue
 				}
 				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN, redoEvent.Timestamp)
-				if err := lm.publisher.Publish(ctx, msg); err != nil {
+				if err := rp.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
-				lm.publishLagMetric.Timing(time.Since(redoEvent.Timestamp).Nanoseconds())
+				rp.publishLagMetric.Timing(time.Since(redoEvent.Timestamp).Nanoseconds())
 			}
 
-			if err := lm.txnCache.CommitTransaction(ctx, redoEvent.TransactionID); err != nil {
+			if err := rp.txnCache.CommitTransaction(ctx, redoEvent.TransactionID); err != nil {
 				return fmt.Errorf("committing transaction %s: %w", redoEvent.TransactionID, err)
 			}
 		}
@@ -381,24 +381,24 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 		// the cache (GetTransaction returns nil when MaxTransactionEvents is exceeded).
 		// Without this, LOB events that bypass the cache continue to accumulate in
 		// lobStates and are never freed.
-		if lm.lobEnabled {
-			delete(lm.lobStates, redoEvent.TransactionID)
-			if pending := lm.pendingLOBWrites[redoEvent.TransactionID]; len(pending) > 0 {
+		if rp.lobEnabled {
+			delete(rp.lobStates, redoEvent.TransactionID)
+			if pending := rp.pendingLOBWrites[redoEvent.TransactionID]; len(pending) > 0 {
 				for _, p := range pending {
-					lm.log.Warnf("Dropping deferred LOB_WRITE on commit: txn=%s scn=%d schema=%s table=%s sql=%.200s",
+					rp.log.Warnf("Dropping deferred LOB_WRITE on commit: txn=%s scn=%d schema=%s table=%s sql=%.200s",
 						redoEvent.TransactionID, p.SCN, p.SchemaName.String, p.TableName.String, p.SQLRedo.String)
 				}
-				delete(lm.pendingLOBWrites, redoEvent.TransactionID)
+				delete(rp.pendingLOBWrites, redoEvent.TransactionID)
 			}
 		}
 
 	case sqlredo.OpRollback:
 		// Discard all buffered events for this transaction
-		if lm.lobEnabled {
-			delete(lm.lobStates, redoEvent.TransactionID)
-			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
+		if rp.lobEnabled {
+			delete(rp.lobStates, redoEvent.TransactionID)
+			delete(rp.pendingLOBWrites, redoEvent.TransactionID)
 		}
-		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
+		if err := rp.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
 			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
 		}
 	}
@@ -409,39 +409,39 @@ func (lm *redoProcessor) processRedoEvent(ctx context.Context, redoEvent *sqlred
 // replayDeferredLOBWrites replays LOB_WRITE events that were buffered because
 // their INSERT had not yet arrived. Called after each DML event is added to the
 // transaction cache so that inferLOBLocator can now find the INSERT.
-func (lm *redoProcessor) replayDeferredLOBWrites(ctx context.Context, txnID sqlredo.TransactionID) error {
-	pending := lm.pendingLOBWrites[txnID]
+func (rp *redoProcessor) replayDeferredLOBWrites(ctx context.Context, txnID sqlredo.TransactionID) error {
+	pending := rp.pendingLOBWrites[txnID]
 	if len(pending) == 0 {
 		return nil
 	}
-	lm.log.Debugf("replayDeferredLOBWrites: replaying %d LOB_WRITE(s) for txn %s", len(pending), txnID)
+	rp.log.Debugf("replayDeferredLOBWrites: replaying %d LOB_WRITE(s) for txn %s", len(pending), txnID)
 	// Clear before replaying so re-buffering during the loop appends to a fresh slice.
-	delete(lm.pendingLOBWrites, txnID)
+	delete(rp.pendingLOBWrites, txnID)
 	// Clear ActiveKey so inferLOBLocator is invoked for the first deferred write.
 	// The prior SELECT_LOB_LOCATOR may have left ActiveKey pointing at a SecureFile
 	// column; without this reset, deferred LOB_WRITEs would land on that column
 	// instead of the unclaimed BASICFILE out-of-row column.
-	if state, ok := lm.lobStates[txnID]; ok {
+	if state, ok := rp.lobStates[txnID]; ok {
 		state.ActiveKey = nil
 	}
 	for _, ev := range pending {
-		if err := lm.processRedoEvent(ctx, ev); err != nil {
+		if err := rp.processRedoEvent(ctx, ev); err != nil {
 			return err
 		}
 	}
-	if reDeferred := len(lm.pendingLOBWrites[txnID]); reDeferred > 0 {
-		lm.log.Warnf("replayDeferredLOBWrites: %d LOB_WRITE(s) re-deferred after replay for txn %s — inferLOBLocator still failing", reDeferred, txnID)
+	if reDeferred := len(rp.pendingLOBWrites[txnID]); reDeferred > 0 {
+		rp.log.Warnf("replayDeferredLOBWrites: %d LOB_WRITE(s) re-deferred after replay for txn %s — inferLOBLocator still failing", reDeferred, txnID)
 	}
 	return nil
 }
 
-func (lm *redoProcessor) getOrCreateLOBState(txnID sqlredo.TransactionID) *sqlredo.TxnLOBState {
-	if state, ok := lm.lobStates[txnID]; ok {
+func (rp *redoProcessor) getOrCreateLOBState(txnID sqlredo.TransactionID) *sqlredo.TxnLOBState {
+	if state, ok := rp.lobStates[txnID]; ok {
 		return state
 	}
 
 	s := sqlredo.NewTxnLOBState()
-	lm.lobStates[txnID] = s
+	rp.lobStates[txnID] = s
 	return s
 }
 
@@ -449,13 +449,13 @@ func (lm *redoProcessor) getOrCreateLOBState(txnID sqlredo.TransactionID) *sqlre
 // This identifies Oracle's internal LOB-initialisation UPDATE events, which carry
 // only LOB column values and should be suppressed when a matching INSERT already
 // exists in the same transaction.
-func (lm *redoProcessor) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
+func (rp *redoProcessor) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 	if len(ev.Data) == 0 {
 		return false
 	}
 	for col := range ev.Data {
 		key := strings.ToUpper(ev.Schema + "." + ev.Table + "." + col)
-		if _, exists := lm.lobColTypes[key]; !exists {
+		if _, exists := rp.lobColTypes[key]; !exists {
 			return false
 		}
 	}
@@ -469,7 +469,7 @@ func (lm *redoProcessor) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 // The method searches backward through the transaction's buffered DML events for
 // a LOB-only UPDATE or INSERT that can act as an anchor for the LOB data.
 // Returns true if a locator was successfully created.
-func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEvent) bool {
+func (rp *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEvent) bool {
 	if !event.SchemaName.Valid || !event.TableName.Valid {
 		return false
 	}
@@ -479,13 +479,13 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 		return false
 	}
 
-	txn, err := lm.txnCache.GetTransaction(ctx, event.TransactionID)
+	txn, err := rp.txnCache.GetTransaction(ctx, event.TransactionID)
 	if err != nil {
-		lm.log.Errorf("Failed to get transaction %s for LOB locator inference: %v", event.TransactionID, err)
+		rp.log.Errorf("Failed to get transaction %s for LOB locator inference: %v", event.TransactionID, err)
 		return false
 	}
 	if txn == nil {
-		lm.log.Debugf("inferLOBLocator: txn %s not in cache (scn=%d, schema=%s, table=%s) — no DML events yet",
+		rp.log.Debugf("inferLOBLocator: txn %s not in cache (scn=%d, schema=%s, table=%s) — no DML events yet",
 			event.TransactionID, event.SCN, schema, table)
 		return false
 	}
@@ -500,7 +500,7 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 		emptyClaimedKeys      = make(map[string]sqlredo.LobKey)
 		claimedFragmentCounts = make(map[string]int)
 	)
-	if existingState := lm.lobStates[event.TransactionID]; existingState != nil {
+	if existingState := rp.lobStates[event.TransactionID]; existingState != nil {
 		for k, acc := range existingState.Accumulators {
 			if k.Schema == schema && k.Table == table {
 				claimedCols[k.Column] = struct{}{}
@@ -520,7 +520,7 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 		for c := range emptyClaimedKeys {
 			empty = append(empty, c)
 		}
-		lm.log.Debugf("inferLOBLocator: claimedCols=%v emptyClaimedKeys=%v (txn=%s, scn=%d, table=%s.%s)",
+		rp.log.Debugf("inferLOBLocator: claimedCols=%v emptyClaimedKeys=%v (txn=%s, scn=%d, table=%s.%s)",
 			claimed, empty, event.TransactionID, event.SCN, schema, table)
 	}
 
@@ -532,7 +532,7 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 
 		var pkValues map[string]any
 		switch {
-		case ev.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(ev):
+		case ev.Operation == sqlredo.OpUpdate && rp.isLOBOnlyEvent(ev):
 			pkValues = ev.OldValues
 		case ev.Operation == sqlredo.OpInsert:
 			// Use the INSERT's non-LOB columns as the PK identifier so that
@@ -541,7 +541,7 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 			// (important when an INSERT has multiple out-of-line LOBs).
 			pkValues = make(map[string]any, len(ev.Data))
 			for col, val := range ev.Data {
-				if _, isLOB := lm.lobColTypes[prefix+strings.ToUpper(col)]; isLOB {
+				if _, isLOB := rp.lobColTypes[prefix+strings.ToUpper(col)]; isLOB {
 					continue
 				}
 				pkValues[col] = val
@@ -556,7 +556,7 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 			for c := range ev.Data {
 				evDataCols = append(evDataCols, c)
 			}
-			lm.log.Debugf("inferLOBLocator: examining event op=%s nDataCols=%d dataCols=%v (txn=%s, scn=%d)",
+			rp.log.Debugf("inferLOBLocator: examining event op=%s nDataCols=%d dataCols=%v (txn=%s, scn=%d)",
 				ev.Operation, len(ev.Data), evDataCols, event.TransactionID, event.SCN)
 		}
 
@@ -566,7 +566,7 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 		//     omits them from its SET clause (they never appear there for BASICFILE OOR)
 		//   - present with nil (Oracle writes NULL in INSERT SQL_REDO for out-of-row LOBs)
 		//   - present with an empty []byte (EMPTY_CLOB()/EMPTY_BLOB() placeholder)
-		for k, lobType := range lm.lobColTypes {
+		for k, lobType := range rp.lobColTypes {
 			if !strings.HasPrefix(k, prefix) {
 				continue
 			}
@@ -577,13 +577,13 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 			// sitting in the deferred queue. Route them to the existing accumulator.
 			if _, claimed := claimedCols[col]; claimed {
 				if existingKey, hasEmptyAcc := emptyClaimedKeys[col]; hasEmptyAcc {
-					state := lm.getOrCreateLOBState(event.TransactionID)
+					state := rp.getOrCreateLOBState(event.TransactionID)
 					state.ActiveKey = &existingKey
-					lm.log.Debugf("Inferred LOB locator for %s.%s.%s from empty SELECT_LOB_LOCATOR accumulator (txn=%s)",
+					rp.log.Debugf("Inferred LOB locator for %s.%s.%s from empty SELECT_LOB_LOCATOR accumulator (txn=%s)",
 						schema, table, col, event.TransactionID)
 					return true
 				}
-				lm.log.Debugf("inferLOBLocator: skip %s.%s.%s — claimed with %d fragment(s) (txn=%s)",
+				rp.log.Debugf("inferLOBLocator: skip %s.%s.%s — claimed with %d fragment(s) (txn=%s)",
 					schema, table, col, claimedFragmentCounts[col], event.TransactionID)
 				continue
 			}
@@ -594,7 +594,7 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 				// (BASICFILE DISABLE STORAGE IN ROW). Treat it as a valid candidate.
 				if val != nil {
 					if b, ok := val.([]byte); !ok || len(b) != 0 {
-						lm.log.Debugf("inferLOBLocator: skip %s.%s.%s — INSERT value type=%T val=%.40v (txn=%s)",
+						rp.log.Debugf("inferLOBLocator: skip %s.%s.%s — INSERT value type=%T val=%.40v (txn=%s)",
 							schema, table, col, val, val, event.TransactionID)
 						continue
 					}
@@ -603,7 +603,7 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 				// Column absent from a LOB-only UPDATE.
 			}
 
-			lm.log.Debugf("inferLOBLocator: CANDIDATE %s.%s.%s present=%v val=%T (txn=%s)",
+			rp.log.Debugf("inferLOBLocator: CANDIDATE %s.%s.%s present=%v val=%T (txn=%s)",
 				schema, table, col, present, val, event.TransactionID)
 
 			key := sqlredo.LobKey{
@@ -615,9 +615,9 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 
 			// Defer state creation until we have a match to avoid leaking
 			// empty TxnLOBState entries when inference fails.
-			state := lm.getOrCreateLOBState(event.TransactionID)
+			state := rp.getOrCreateLOBState(event.TransactionID)
 			if _, exists := state.Accumulators[key]; exists {
-				lm.log.Debugf("inferLOBLocator: skip %s.%s.%s — accumulator already exists for pkString=%q (txn=%s)",
+				rp.log.Debugf("inferLOBLocator: skip %s.%s.%s — accumulator already exists for pkString=%q (txn=%s)",
 					schema, table, col, pkString, event.TransactionID)
 				continue
 			}
@@ -631,7 +631,7 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 			}
 			state.ActiveKey = &key
 
-			lm.log.Debugf("Inferred LOB locator for %s.%s.%s from %s (txn=%s)",
+			rp.log.Debugf("Inferred LOB locator for %s.%s.%s from %s (txn=%s)",
 				schema, table, col, ev.Operation, event.TransactionID)
 			return true
 		}
@@ -645,12 +645,12 @@ func (lm *redoProcessor) inferLOBLocator(ctx context.Context, event *sqlredo.Red
 		}
 	}
 	var knownLOBCols []string
-	for k := range lm.lobColTypes {
+	for k := range rp.lobColTypes {
 		if strings.HasPrefix(k, prefix) {
 			knownLOBCols = append(knownLOBCols, k)
 		}
 	}
-	lm.log.Debugf("inferLOBLocator: no match for %s.%s (txn=%s, scn=%d): txnEvents=%d, eventsForTable=%d, knownLOBCols=%v",
+	rp.log.Debugf("inferLOBLocator: no match for %s.%s (txn=%s, scn=%d): txnEvents=%d, eventsForTable=%d, knownLOBCols=%v",
 		schema, table, event.TransactionID, event.SCN, len(txn.Events), eventsForTable, knownLOBCols)
 	return false
 }
