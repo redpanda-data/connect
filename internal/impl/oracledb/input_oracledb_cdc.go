@@ -512,7 +512,11 @@ func (o *oracleDBCDCInput) rebuildPublisherIfPoisoned() (*batchPublisher, error)
 	if !publisher.poisoned() {
 		return publisher, nil
 	}
-	o.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	if err := publisher.queue.Err(); err != nil {
+		o.log.Warnf("Rebuilding publisher: rows were dropped, so the flush queue is sealed: %v", err)
+	} else {
+		o.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	}
 	publisher.Close()
 	batcher, err := o.batching.NewBatcher(o.res)
 	if err != nil {

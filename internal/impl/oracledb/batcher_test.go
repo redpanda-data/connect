@@ -614,6 +614,8 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 	}()
 	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
+	require.ErrorContains(t, laterErr, "tracking flushed batch",
+		"the refusal must show why the queue was sealed")
 }
 
 // TestFailedSendPoisonsPublisher verifies that a tracked batch that cannot be

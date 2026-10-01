@@ -11,7 +11,6 @@ package oracledb
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -88,7 +87,7 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 // queue is sealed) or when a checkpoint slot can never resolve (a failed
 // send).
 func (b *batchPublisher) poisoned() bool {
-	return b.queue.Sealed() || b.sendFailed.Load()
+	return b.queue.Err() != nil || b.sendFailed.Load()
 }
 
 // loop creates a long-running process that periodically flushes batches by configured interval.
@@ -163,11 +162,12 @@ func (p *batchPublisher) loop() {
 					// tracked. Seal BEFORE releasing batcherMu: in the gap
 					// after the unlock another flusher could take the next
 					// ticket and be admitted past the dropped rows.
-					p.queue.Seal()
+					flushErr = fmt.Errorf("flushing timed batch: %w", flushErr)
+					p.queue.Seal(flushErr)
 				}
 				p.batcherMu.Unlock()
 				if flushErr != nil {
-					return fmt.Errorf("flushing timed batch: %w", flushErr)
+					return flushErr
 				}
 				if len(sendBatch) == 0 {
 					return nil
@@ -292,11 +292,12 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		// releasing batcherMu: in the gap after the unlock another flusher
 		// could flush, take the next ticket, and be admitted past the
 		// dropped rows.
-		b.queue.Seal()
+		err = fmt.Errorf("flushing batch due to reaching count limit: %w", err)
+		b.queue.Seal(err)
 	}
 	b.batcherMu.Unlock()
 	if err != nil {
-		return fmt.Errorf("flushing batch due to reaching count limit: %w", err)
+		return err
 	}
 	if len(flushedBatch) == 0 {
 		return nil
@@ -322,9 +323,6 @@ type trackedBatch struct {
 func (b *batchPublisher) dispatch(ctx context.Context, tkt ticket.Ticket, batch service.MessageBatch) error {
 	defer tkt.Release()
 	if err := tkt.Wait(ctx); err != nil {
-		if errors.Is(err, ticket.ErrSealed) {
-			return fmt.Errorf("publisher flush queue sealed after an abandoned batch; reconnecting rebuilds the publisher: %w", err)
-		}
 		return err
 	}
 	if len(batch) == 0 {
@@ -335,7 +333,7 @@ func (b *batchPublisher) dispatch(ctx context.Context, tkt ticket.Ticket, batch 
 		// The rows left the batcher but were never tracked, and the deferred
 		// release lets later tickets proceed: seal so nothing can be tracked
 		// (and persisted) past the gap.
-		b.queue.Seal()
+		b.queue.Seal(fmt.Errorf("tracking flushed batch: %w", err))
 		return err
 	}
 	return b.sendTracked(ctx, tracked)
@@ -499,7 +497,7 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 		// turn past the dropped rows. Return the real flush error, not the
 		// seal error of a later Wait: the operator needs the
 		// batching.processors failure.
-		b.queue.Seal()
+		b.queue.Seal(fmt.Errorf("flushing remaining batch: %w", err))
 		b.batcherMu.Unlock()
 		return err
 	}

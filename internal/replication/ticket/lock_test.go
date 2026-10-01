@@ -10,6 +10,7 @@ package ticket
 
 import (
 	"context"
+	"errors"
 	"math/rand/v2"
 	"runtime"
 	"sync"
@@ -22,6 +23,8 @@ import (
 )
 
 const waitTimeout = 5 * time.Second
+
+var errTestSeal = errors.New("test seal")
 
 // waitAsync starts Wait in a goroutine and returns its result channel.
 func waitAsync(ctx context.Context, tkt Ticket) <-chan error {
@@ -100,7 +103,7 @@ func TestReleaseSkipsAbandonedTicket(t *testing.T) {
 	waitParked(t, &l, 2)
 	cancel1()
 	require.ErrorIs(t, requireResult(t, r1), context.Canceled)
-	assert.False(t, l.Sealed(), "an abandon of a skippable ticket must not seal")
+	assert.NoError(t, l.Err(), "an abandon of a skippable ticket must not seal")
 
 	t0.Release()
 	require.NoError(t, requireResult(t, r2), "the abandoned ticket must be skipped")
@@ -118,7 +121,7 @@ func TestAbandonSeals(t *testing.T) {
 	waitParked(t, &l, 2)
 	cancel1()
 	require.ErrorIs(t, requireResult(t, r1), context.Canceled)
-	assert.True(t, l.Sealed())
+	assert.ErrorIs(t, l.Err(), ErrSealed)
 
 	// The seal wakes the waiter behind the abandoned ticket before any
 	// Release, so it cannot pass the gap.
@@ -137,7 +140,7 @@ func TestSealWakesEveryWaiter(t *testing.T) {
 	}
 	waitParked(t, &l, len(results))
 
-	l.Seal()
+	l.Seal(errTestSeal)
 	for _, r := range results {
 		require.ErrorIs(t, requireResult(t, r), ErrSealed)
 	}
@@ -147,8 +150,8 @@ func TestSealWakesEveryWaiter(t *testing.T) {
 func TestWaitAfterSeal(t *testing.T) {
 	var l Lock
 	t0 := l.Take()
-	l.Seal()
-	assert.True(t, l.Sealed())
+	l.Seal(errTestSeal)
+	assert.ErrorIs(t, l.Err(), ErrSealed)
 	require.ErrorIs(t, t0.Wait(t.Context()), ErrSealed,
 		"a seal refuses even the ticket whose turn it is")
 }
@@ -161,7 +164,7 @@ func TestWaitCancelledAfterWake(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	require.NoError(t, t0.Wait(ctx))
-	assert.False(t, l.Sealed())
+	assert.NoError(t, l.Err())
 	t0.Release()
 
 	t1 := l.Take()
@@ -206,7 +209,7 @@ func TestSealWhileHolding(t *testing.T) {
 	next := waitAsync(t.Context(), l.Take())
 	waitParked(t, &l, 1)
 
-	l.Seal()
+	l.Seal(errTestSeal)
 	require.ErrorIs(t, requireResult(t, next), ErrSealed)
 	t0.Release()
 
@@ -241,7 +244,7 @@ func TestReleaseBeforeTurn(t *testing.T) {
 
 			// t1 gives up before its turn, without a Wait.
 			t1.Release()
-			assert.Equal(t, tc.wantSealed, l.Sealed())
+			assert.Equal(t, tc.wantSealed, l.Err() != nil)
 
 			t0.Release()
 			err := t2.Wait(t.Context())
@@ -282,7 +285,7 @@ func TestReleaseAtTurnWithoutWait(t *testing.T) {
 			t1 := l.TakeSkippable()
 
 			t0.Release()
-			assert.Equal(t, tc.wantSealed, l.Sealed())
+			assert.Equal(t, tc.wantSealed, l.Err() != nil)
 
 			err := t1.Wait(t.Context())
 			if tc.wantSealed {
@@ -315,7 +318,7 @@ func TestSecondReleaseDoesNothing(t *testing.T) {
 	t1.Release()
 	require.NoError(t, requireResult(t, r2))
 	t2.Release()
-	assert.False(t, l.Sealed())
+	assert.NoError(t, l.Err())
 }
 
 func TestReleaseAfterCancelledWait(t *testing.T) {
@@ -328,7 +331,7 @@ func TestReleaseAfterCancelledWait(t *testing.T) {
 	require.ErrorIs(t, t1.Wait(ctx), context.Canceled)
 	// t1 is already abandoned, so this Release does nothing.
 	t1.Release()
-	assert.False(t, l.Sealed())
+	assert.NoError(t, l.Err())
 
 	t0.Release()
 	require.NoError(t, t2.Wait(t.Context()))
@@ -340,7 +343,7 @@ func TestReleaseAfterCancelledWait(t *testing.T) {
 	defer l.mu.Unlock()
 	assert.Equal(t, uint64(3), l.serving)
 	assert.Empty(t, l.abandoned)
-	assert.False(t, l.sealed)
+	assert.NoError(t, l.err)
 }
 
 func TestWaitAfterRelease(t *testing.T) {
@@ -469,7 +472,7 @@ func runConcurrentRound(t *testing.T, n int) {
 	assert.Equal(t, uint64(n), l.serving)
 	assert.Empty(t, l.waiters)
 	assert.Empty(t, l.abandoned)
-	assert.False(t, l.sealed)
+	assert.NoError(t, l.err)
 }
 
 // requireWait waits for wg, and fails the test after waitTimeout.
@@ -485,4 +488,52 @@ func requireWait(t *testing.T, wg *sync.WaitGroup, msg string) {
 	case <-time.After(waitTimeout):
 		require.FailNow(t, msg)
 	}
+}
+
+func TestSealCause(t *testing.T) {
+	var l Lock
+	t0 := l.Take()
+	l.Seal(errTestSeal)
+
+	err := l.Err()
+	require.ErrorIs(t, err, ErrSealed)
+	require.ErrorIs(t, err, errTestSeal)
+	assert.EqualError(t, err, "ticket lock sealed: test seal")
+	assert.Equal(t, err, t0.Wait(t.Context()), "Wait must return the seal error")
+}
+
+func TestFirstSealCauseWins(t *testing.T) {
+	var l Lock
+	l.Seal(errTestSeal)
+	l.Seal(errors.New("second seal"))
+	assert.EqualError(t, l.Err(), "ticket lock sealed: test seal")
+}
+
+func TestSealNilCause(t *testing.T) {
+	var l Lock
+	l.Seal(nil)
+	assert.Equal(t, ErrSealed, l.Err())
+}
+
+func TestAbandonSealCause(t *testing.T) {
+	t.Run("cancelled wait", func(t *testing.T) {
+		var l Lock
+		t0, t1 := l.Take(), l.Take()
+		require.NoError(t, t0.Wait(t.Context()))
+
+		ctx, cancel := context.WithCancelCause(t.Context())
+		cancel(errors.New("shutting down"))
+		require.ErrorIs(t, t1.Wait(ctx), context.Canceled)
+		assert.EqualError(t, l.Err(), "ticket lock sealed: ticket 1 abandoned: shutting down")
+		t0.Release()
+	})
+	t.Run("release before the turn", func(t *testing.T) {
+		var l Lock
+		t0, t1 := l.Take(), l.Take()
+		require.NoError(t, t0.Wait(t.Context()))
+
+		t1.Release()
+		assert.EqualError(t, l.Err(), "ticket lock sealed: ticket 1 released before its turn")
+		t0.Release()
+	})
 }
